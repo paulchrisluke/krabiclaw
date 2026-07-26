@@ -7,6 +7,7 @@ import type {
   ThreadDetailSourceModel,
   ThreadSummaryProjection,
 } from '../types'
+import { formatOperationalStatusLabel } from '../status-labels'
 
 export interface ContactSource {
   id: string
@@ -104,6 +105,10 @@ export const contactAdapter: GuestThreadSourceAdapter<ContactSource, ContactOpen
     return source.status
   },
 
+  getOperationalStatusLabel(status: string): string {
+    return formatOperationalStatusLabel('contact', status)
+  },
+
   listAvailableActions(): ContactAction[] {
     return []
   },
@@ -117,7 +122,7 @@ export const contactAdapter: GuestThreadSourceAdapter<ContactSource, ContactOpen
       submissionType: 'contact',
       submissionId: source.id,
       operationalStatus: source.status,
-      operationalStatusLabel: source.status.charAt(0).toUpperCase() + source.status.slice(1),
+      operationalStatusLabel: this.getOperationalStatusLabel(source.status),
       fields: {
         subject: source.subject,
         message: source.message,

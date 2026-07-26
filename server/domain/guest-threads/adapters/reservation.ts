@@ -8,6 +8,7 @@ import type {
   ThreadDetailSourceModel,
   ThreadSummaryProjection,
 } from '../types'
+import { formatOperationalStatusLabel } from '../status-labels'
 
 export interface ReservationSource {
   id: string
@@ -42,13 +43,6 @@ export interface ReservationOpeningSnapshot {
 }
 
 export type ReservationAction = 'confirm' | 'cancel' | 'complete'
-
-const RESERVATION_STATUS_LABELS: Record<string, string> = {
-  new: 'Pending',
-  confirmed: 'Confirmed',
-  completed: 'Completed',
-  cancelled: 'Cancelled',
-}
 
 // Locked Decision #7: fixed transition matrix. Terminal states (completed/cancelled)
 // expose no actions.
@@ -132,6 +126,10 @@ export const reservationAdapter: GuestThreadSourceAdapter<ReservationSource, Res
     return source.status
   },
 
+  getOperationalStatusLabel(status: string): string {
+    return formatOperationalStatusLabel('reservation', status)
+  },
+
   listAvailableActions(source: ReservationSource): ReservationAction[] {
     return RESERVATION_TRANSITIONS[source.status] ?? []
   },
@@ -162,7 +160,7 @@ export const reservationAdapter: GuestThreadSourceAdapter<ReservationSource, Res
       submissionType: 'reservation',
       submissionId: source.id,
       operationalStatus: source.status,
-      operationalStatusLabel: RESERVATION_STATUS_LABELS[source.status] ?? source.status,
+      operationalStatusLabel: this.getOperationalStatusLabel(source.status),
       fields: {
         date: source.date,
         time: source.time,

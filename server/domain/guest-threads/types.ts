@@ -128,6 +128,7 @@ export interface GuestThreadSourceAdapter<TSource, TSnapshot, TAction extends st
   createOpeningSnapshot(_source: TSource): TSnapshot
   summarize(_source: TSource): ThreadSummaryProjection
   getOperationalStatus(_source: TSource): string
+  getOperationalStatusLabel(_status: string): string
   listAvailableActions(_source: TSource): TAction[]
   executeAction(_ctx: OperationExecutionContext, _source: TSource, _action: TAction): Promise<OperationExecutionResult>
   buildCurrentDetail(_source: TSource): ThreadDetailSourceModel

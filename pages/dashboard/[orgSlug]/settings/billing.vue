@@ -211,7 +211,7 @@
                       <td class="px-3 py-2 text-right tabular-nums text-muted">{{ Number(row.input_tokens).toLocaleString() }}</td>
                       <td class="px-3 py-2 text-right tabular-nums text-muted">{{ Number(row.output_tokens).toLocaleString() }}</td>
                       <td class="px-3 py-2 text-right font-medium tabular-nums">{{ row.credits_charged }}</td>
-                      <td class="px-3 py-2 text-right text-muted">{{ formatRelative(String(row.created_at)) }}</td>
+                      <td class="px-3 py-2 text-right text-muted">{{ formatRelativeTime(String(row.created_at)) }}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -421,7 +421,7 @@ const loadCredits = async () => {
   }
 }
 
-const { formatRelativeTime: formatRelative, formatExactDateTime: formatDate } = useHumanTime()
+const { formatRelativeTime, formatExactDateTime: formatDate } = useHumanTime()
 
 const loadBillingData = async () => {
   loading.value = true

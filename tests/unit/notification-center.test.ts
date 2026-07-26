@@ -177,7 +177,7 @@ test('canonical guest-reply deep link targets the exact dashboard inbox thread',
     orgSlug: 'krabi-team',
     siteSlug: 'sunset-cafe',
     locationSlug: 'ao-nang',
-  }, 'thread/with spaces'), 'https://staging.krabiclaw.com/dashboard/krabi-team/sites/sunset-cafe/locations/ao-nang/inbox?thread=thread%2Fwith+spaces')
+  }, 'thread/with spaces'), 'https://staging.krabiclaw.com/dashboard/krabi-team/sites/sunset-cafe/locations/ao-nang/inbox/thread%2Fwith%20spaces')
 
   assert.equal(composeOwnerThreadInboxUrl({
     NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://staging.krabiclaw.com/',
@@ -185,7 +185,7 @@ test('canonical guest-reply deep link targets the exact dashboard inbox thread',
     orgSlug: 'krabi-team',
     siteSlug: 'sunset-cafe',
     locationSlug: null,
-  }, 'site-thread'), 'https://staging.krabiclaw.com/dashboard/krabi-team/sites/sunset-cafe/inbox?thread=site-thread')
+  }, 'site-thread'), 'https://staging.krabiclaw.com/dashboard/krabi-team/sites/sunset-cafe/inbox/site-thread')
 })
 
 test('notification migration preserves legacy rows while adding per-user read and delivery relations', () => {

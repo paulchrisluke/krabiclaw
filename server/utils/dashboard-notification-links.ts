@@ -50,10 +50,9 @@ export function composeOwnerThreadInboxUrl(
   slugs: SiteLocationSlugs,
   threadId: string,
 ): string {
-  const query = new URLSearchParams({ thread: threadId })
   const base = `https://${getPlatformDomain(env)}/dashboard/${slugs.orgSlug}/sites/${slugs.siteSlug}`
   const inboxPath = slugs.locationSlug ? `/locations/${slugs.locationSlug}/inbox` : '/inbox'
-  return `${base}${inboxPath}?${query.toString()}`
+  return `${base}${inboxPath}/${encodeURIComponent(threadId)}`
 }
 
 export async function buildOwnerThreadInboxUrl(

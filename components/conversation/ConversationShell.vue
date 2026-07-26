@@ -99,6 +99,20 @@
         </button>
       </div>
 
+      <div v-else-if="$slots['prompt-submit']" class="flex items-start gap-2">
+        <UChatPrompt
+          class="min-w-0 flex-1"
+          :model-value="input"
+          :placeholder="placeholder"
+          :disabled="disabled"
+          :loading="loading"
+          :maxrows="maxrows"
+          @update:model-value="$emit('update:input', $event)"
+          @submit="$emit('submit')"
+        />
+        <slot name="prompt-submit" />
+      </div>
+
       <UChatPrompt
         v-else
         :model-value="input"

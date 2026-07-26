@@ -8,6 +8,7 @@ import type {
   ThreadDetailSourceModel,
   ThreadSummaryProjection,
 } from '../types'
+import { formatOperationalStatusLabel } from '../status-labels'
 
 export interface ExperienceBookingSource {
   id: string
@@ -44,13 +45,6 @@ export interface ExperienceBookingOpeningSnapshot {
 }
 
 export type ExperienceBookingAction = 'confirm' | 'cancel'
-
-const EXPERIENCE_BOOKING_STATUS_LABELS: Record<string, string> = {
-  pending: 'Pending',
-  confirmed: 'Confirmed',
-  completed: 'Completed',
-  cancelled: 'Cancelled',
-}
 
 // updateBookingStatusForSite only supports pending/confirmed/cancelled — there is no
 // backend-supported "complete" transition for experience bookings through the canonical
@@ -139,6 +133,10 @@ export const experienceBookingAdapter: GuestThreadSourceAdapter<ExperienceBookin
     return source.status
   },
 
+  getOperationalStatusLabel(status: string): string {
+    return formatOperationalStatusLabel('experience_booking', status)
+  },
+
   listAvailableActions(source: ExperienceBookingSource): ExperienceBookingAction[] {
     return EXPERIENCE_BOOKING_TRANSITIONS[source.status] ?? []
   },
@@ -171,7 +169,7 @@ export const experienceBookingAdapter: GuestThreadSourceAdapter<ExperienceBookin
       submissionType: 'experience_booking',
       submissionId: source.id,
       operationalStatus: source.status,
-      operationalStatusLabel: EXPERIENCE_BOOKING_STATUS_LABELS[source.status] ?? source.status,
+      operationalStatusLabel: this.getOperationalStatusLabel(source.status),
       fields: {
         bookingDate: source.booking_date,
         timeSlot: source.time_slot,

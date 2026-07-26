@@ -9,6 +9,7 @@ import { getAdapter } from '~/server/domain/guest-threads/adapters/registry'
 import { ensureGuestThread, updateThreadProjection } from '~/server/domain/guest-threads/repository'
 import { appendEntry } from '~/server/domain/guest-threads/entries'
 import { nextConversationState } from '~/server/domain/guest-threads/state-machine'
+import { notifyGuestThreadReply } from '~/server/utils/notifications'
 
 const enc = new TextEncoder()
 
@@ -86,6 +87,24 @@ export default defineEventHandler(async (event) => {
   if (entry.body === body.body.trim()) {
     const conversationState = nextConversationState(thread.conversation_state, { type: 'inbound_guest_message' })
     await updateThreadProjection(db, thread.id, { conversationState })
+
+    const source = await adapter.loadSource({ db }, body.submissionId)
+    if (source) {
+      const summary = adapter.summarize(source)
+      await notifyGuestThreadReply(env, db, {
+        organizationId: orgSite.organizationId,
+        siteId: orgSite.siteId,
+        locationId: summary.locationId,
+        threadId: thread.id,
+        submissionType: body.submissionType,
+        submissionId: body.submissionId,
+        guestName: summary.guestName,
+        guestEmail: summary.guestEmail,
+        guestPhone: summary.guestPhone,
+        inboundChannel: 'email',
+        messagePreview: body.body.trim(),
+      })
+    }
   }
 
   return jsonResponse({ received: true, replyTo, messageId })

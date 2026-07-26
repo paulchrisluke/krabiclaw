@@ -1,8 +1,7 @@
 import { onMounted, onUnmounted, readonly, ref } from 'vue'
 
 // Shared human-readable time formatting (issue #442). Generalizes the relative-time
-// behavior previously duplicated in useSiteEventLabels().timeAgo() and the local
-// formatRelative()/formatDate() helpers in the billing settings page.
+// behavior previously duplicated in useSiteEventLabels().timeAgo() and billing.
 //
 // The live-refresh timer is a single shared interval (module-scoped), not one per
 // component instance — every mounted consumer of useHumanTime() shares the same tick,

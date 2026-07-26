@@ -10,6 +10,7 @@ import type {
   ListGuestThreadsOptions,
 } from './types'
 import { computeUnreadForMember } from './read-state'
+import { formatOperationalStatusLabel } from './status-labels'
 
 export async function getGuestThreadBySubmission(
   db: DbClient,
@@ -275,7 +276,7 @@ export async function listGuestThreads(
       conversationState: row.conversation_state,
       conversationStateLabel: CONVERSATION_STATE_LABELS[row.conversation_state],
       operationalStatus: row.operational_status,
-      operationalStatusLabel: row.operational_status,
+      operationalStatusLabel: row.operational_status ? formatOperationalStatusLabel(row.submission_type, row.operational_status) : null,
       unread,
       unreadCount: unread ? 1 : 0,
       preview: row.latest_message_kind === 'message'
