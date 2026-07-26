@@ -496,7 +496,7 @@ async function routeManagerWhatsAppMessage(
         await sendWhatsAppText(env, opts.toPhone, 'Your WhatsApp access has been revoked. Please contact your organization administrator.')
         return { handled: true }
       }
-      const actorMemberId = await resolveMemberId(db, { organizationId: pendingState.organizationId, userId: opts.userId })
+      const actorMemberId = await resolveMemberId({ organizationId: pendingState.organizationId, userId: opts.userId, env })
       const result = actorMemberId
         ? await executeGuestThreadOperation(db, {
             threadId: pendingState.threadId,
