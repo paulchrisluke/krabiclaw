@@ -7,8 +7,8 @@ const INBOX_DEEP_LINK_PATH = /^\/dashboard\/[^/]+\/sites\/[^/]+(?:\/locations\/[
 
 /**
  * True when `path` is the WhatsApp-notification-driven guest-thread deep link
- * (`/dashboard/{org}/sites/{site}/inbox` or
- * `/dashboard/{org}/sites/{site}/locations/{location}/inbox`) — the dashboard
+ * (`/dashboard/{org}/sites/{site}/inbox[/threadId]` or
+ * `/dashboard/{org}/sites/{site}/locations/{location}/inbox[/threadId]`) — the dashboard
  * route reached from an outbound WhatsApp notification link (issue #293,
  * Section B: "an expired/absent session triggers WhatsApp OTP and returns to
  * that same validated thread").

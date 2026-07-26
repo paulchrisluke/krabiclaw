@@ -405,5 +405,6 @@ async function submitHomeInput() {
   await chowBot.sendMessage(text)
 }
 
-const { eventLabel, timeAgo } = useSiteEventLabels()
+const { eventLabel } = useSiteEventLabels()
+const { formatRelativeTime: timeAgo } = useHumanTime()
 </script>

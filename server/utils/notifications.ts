@@ -1,7 +1,6 @@
 import { useRender } from 'vue-email'
 import { execute, queryFirst, type DbClient } from '~/server/db'
 import { hashEmail, isReservedTestDomain, logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
-import { ensureGuestThread } from '~/server/utils/guest-threads'
 import { getOrgWhatsAppPhone, sendWhatsAppNotification, toDashboardButtonPath, type WhatsAppTemplate } from '~/server/utils/whatsapp'
 import { buildReplyToAddress } from '~/server/utils/submission-messages'
 import { isAuthorizedWhatsAppRecipient } from '~/server/utils/member-access'
@@ -235,13 +234,27 @@ async function buildOwnerInboxUrl(
     submissionId: string
   }
 ): Promise<string | null> {
-  const thread = await ensureGuestThread(db, opts.tab === 'contact' ? 'contact' : opts.tab === 'reservations' ? 'reservation' : 'experience_booking', opts.submissionId)
-  return await buildOwnerThreadInboxUrl(env, db, {
-    organizationId: opts.organizationId,
-    siteId: opts.siteId,
-    locationId: opts.locationId,
-    threadId: thread.id,
-  })
+  const submissionType = opts.tab === 'contact' ? 'contact' : opts.tab === 'reservations' ? 'reservation' : 'experience_booking'
+  try {
+    // Deferred import: the reservation/experience-booking adapters pull in mcp-workflows.ts
+    // and experiences.ts, whose own dependency graphs (google-business.ts) import this file —
+    // a static top-level import here would be a circular import.
+    const [{ ensureGuestThread }, { getAdapter }] = await Promise.all([
+      import('~/server/domain/guest-threads/repository'),
+      import('~/server/domain/guest-threads/adapters/registry'),
+    ])
+    const thread = await ensureGuestThread(db, getAdapter(submissionType), opts.submissionId)
+    return await buildOwnerThreadInboxUrl(env, db, {
+      organizationId: opts.organizationId,
+      siteId: opts.siteId,
+      locationId: opts.locationId,
+      threadId: thread.id,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (message.includes('Submission not found')) return null
+    return null
+  }
 }
 
 // Deep-links an owner notification straight to the dashboard reviews page for that location,
@@ -1412,6 +1425,18 @@ async function notifyGuestThreadReplyInner(
     replyUrl,
   })
 
+  // Guarantees a dashboard bell entry for the guest reply itself, independent of whether
+  // the owner's configured delivery channels below are enabled/succeed — each channel send
+  // further down logs its own separate delivery-attempt notification record.
+  await insertDashboardNotification(db, {
+    organizationId: opts.organizationId,
+    siteId: opts.siteId,
+    locationId: opts.locationId ?? null,
+    template: opts.inboundChannel === 'email' ? 'submission_reply_email' : 'submission_reply_whatsapp',
+    title,
+    payload,
+  })
+
   const sitePhone = await getOrgWhatsAppPhone(db, opts.organizationId, opts.siteId)
   const locationPhone = opts.locationId ? await getLocationNotificationPhone(db, opts.locationId, opts.organizationId, opts.siteId) : null
   const ownerEmail = await getOwnerEmail(db, opts.organizationId)
@@ -1510,13 +1535,13 @@ export async function getNotificationCopyPreviews(): Promise<NotificationCopyPre
     ownerBooking,
     guestBooking,
   ] = await Promise.all([
-    useRender(ReservationOwnerNew, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Tue, Jul 14, 2026', time: '7:00 PM', guests: '2', phone: '+1 555 123 4567', email: 'alex@example.com', platformDomain, replyUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/sites/ember-slice/locations/main/inbox?thread=res-preview-1' } }),
+    useRender(ReservationOwnerNew, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Tue, Jul 14, 2026', time: '7:00 PM', guests: '2', phone: '+1 555 123 4567', email: 'alex@example.com', platformDomain, replyUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/sites/ember-slice/locations/main/inbox/res-preview-1' } }),
     useRender(ReservationGuestReceived, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Tue, Jul 14, 2026', time: '7:00 PM', guests: '2', contactPhone: '+1 555 000 0000', contactEmail: 'hello@emberslice.example', cancelUrl: 'https://demo.krabiclaw.com/reservations/cancel?id=res-preview-1', platformDomain } }),
     useRender(ReservationGuestCancelled, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Tue, Jul 14, 2026', time: '7:00 PM', guests: '2', locationName: 'Main Dining Room', specialRequests: 'Window seat', wasConfirmed: false, platformDomain } }),
     useRender(ReservationOwnerCancelled, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Tue, Jul 14, 2026', time: '7:00 PM', guests: '2', phone: '+1 555 123 4567', email: 'alex@example.com', locationName: 'Main Dining Room', specialRequests: 'Window seat', wasConfirmed: false, platformDomain } }),
-    useRender(ContactOwnerNew, { props: { guestName: 'Jordan Lee', email: 'jordan@example.com', message: 'Hi, do you have vegan options and parking nearby?', siteName: restaurant, platformDomain, replyUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/sites/ember-slice/inbox?thread=contact-preview-1', consentAcknowledged: true } }),
+    useRender(ContactOwnerNew, { props: { guestName: 'Jordan Lee', email: 'jordan@example.com', message: 'Hi, do you have vegan options and parking nearby?', siteName: restaurant, platformDomain, replyUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/sites/ember-slice/inbox/contact-preview-1', consentAcknowledged: true } }),
     useRender(ContactGuestReceived, { props: { guestName: 'Jordan Lee', siteName: restaurant, subject: 'general', message: 'Hi, do you have vegan options and parking nearby?', platformDomain, consentAcknowledged: true } }),
-    useRender(BookingOwnerNew, { props: { guestName: 'Mina Park', siteName: studio, experienceTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, email: 'mina@example.com', phone: '+66 76 000 0002', platformDomain, replyUrl: 'https://demo.krabiclaw.com/dashboard/pottery-house-krabi/sites/pottery-house/locations/main/inbox?thread=booking-preview-1' } }),
+    useRender(BookingOwnerNew, { props: { guestName: 'Mina Park', siteName: studio, experienceTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, email: 'mina@example.com', phone: '+66 76 000 0002', platformDomain, replyUrl: 'https://demo.krabiclaw.com/dashboard/pottery-house-krabi/sites/pottery-house/locations/main/inbox/booking-preview-1' } }),
     useRender(BookingGuestReceived, { props: { guestName: 'Mina Park', siteName: studio, experienceTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, contactPhone: '+66 76 000 0001', contactEmail: 'hello@example.com', cancelUrl: 'https://demo.krabiclaw.com/experiences/cancel?id=booking-preview-1', platformDomain } }),
   ])
 

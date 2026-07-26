@@ -1,5 +1,7 @@
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { getOrgAdapter } from 'better-auth/plugins'
 import { parsePhoneOrThrow } from '~/utils/phone'
+import type { CloudflareEnv } from '~/server/utils/auth'
 
 // Tenant-scoped authorization is Better Auth organization role plus Better
 // Auth Teams membership. Owner/admin are organization-wide. Editors are scoped
@@ -58,6 +60,23 @@ export interface MemberAccessPrincipal {
 }
 
 export type DashboardSiteAccess = 'organization' | 'site' | 'location'
+
+export async function resolveMemberId(
+  input: { organizationId: string; userId: string; env: CloudflareEnv },
+): Promise<string | null> {
+  if (!input.env) {
+    throw new Error('resolveMemberId requires CloudflareEnv so Better Auth can resolve organization membership')
+  }
+  const { createAuth } = await import('~/server/utils/auth')
+  const auth = createAuth(input.env)
+  const authContext = await auth.$context
+  const orgAdapter = getOrgAdapter(authContext as Parameters<typeof getOrgAdapter>[0], {})
+  const member = await orgAdapter.findMemberByOrgId({
+    userId: input.userId,
+    organizationId: input.organizationId,
+  })
+  return member?.id ?? null
+}
 
 export async function findLocationInSite(
   db: DbClient,

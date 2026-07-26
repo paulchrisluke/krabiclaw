@@ -6,8 +6,10 @@ import { isWhatsAppInboxDeepLinkPath } from '../../utils/dashboard-reauth.ts'
 test('isWhatsAppInboxDeepLinkPath matches the WhatsApp-notification guest-thread inbox route', () => {
   assert.equal(isWhatsAppInboxDeepLinkPath('/dashboard/pottery-house/sites/main/inbox'), true)
   assert.equal(isWhatsAppInboxDeepLinkPath('/dashboard/pottery-house/sites/main/inbox/'), true)
+  assert.equal(isWhatsAppInboxDeepLinkPath('/dashboard/pottery-house/sites/main/inbox/thread-123'), true)
   assert.equal(isWhatsAppInboxDeepLinkPath('/dashboard/pottery-house/sites/main/locations/downtown/inbox'), true)
   assert.equal(isWhatsAppInboxDeepLinkPath('/dashboard/pottery-house/sites/main/locations/downtown/inbox/'), true)
+  assert.equal(isWhatsAppInboxDeepLinkPath('/dashboard/pottery-house/sites/main/locations/downtown/inbox/thread-123'), true)
 })
 
 test('isWhatsAppInboxDeepLinkPath rejects other dashboard routes', () => {
