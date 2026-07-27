@@ -6,6 +6,7 @@ export function validatedInternalPath(value: unknown): string | undefined {
   if (typeof value !== 'string' || !value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return undefined
   try {
     const resolved = new URL(value, 'https://krabiclaw.internal')
+    if (resolved.pathname === '/admin' || resolved.pathname.startsWith('/admin/')) return undefined
     return resolved.origin === 'https://krabiclaw.internal'
       ? `${resolved.pathname}${resolved.search}${resolved.hash}`
       : undefined

@@ -8,6 +8,13 @@ test('ordinary authentication routes valid internal destinations through post-lo
   assert.equal(buildPostLoginUrl(), '/api/post-login')
 })
 
+test('ordinary authentication does not preserve admin destinations', () => {
+  assert.equal(validatedInternalPath('/admin'), undefined)
+  assert.equal(validatedInternalPath('/admin/users'), undefined)
+  assert.equal(buildPostLoginUrl({ redirect: '/admin' }), '/api/post-login')
+  assert.equal(buildLoginUrl({ redirect: '/admin/users' }), '/login')
+})
+
 test('transfer email authentication preserves its original token route', () => {
   assert.equal(buildLoginUrl({ redirect: '/transfer/token-123' }), '/login?redirect=%2Ftransfer%2Ftoken-123')
 })
