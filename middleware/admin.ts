@@ -2,7 +2,7 @@
 // CLAUDE.md's "Nested SSR self-fetch loses Cloudflare bindings" rule — call the
 // exact same resolver GET /api/admin/access uses, directly against the request
 // event. Client-side (client-only navigation): fall back to $fetch.
-export default defineNuxtRouteMiddleware(async () => {
+export default defineNuxtRouteMiddleware(async (to) => {
   let allowed = false
 
   if (import.meta.server) {
@@ -18,6 +18,6 @@ export default defineNuxtRouteMiddleware(async () => {
   }
 
   if (!allowed) {
-    return navigateTo('/login')
+    return navigateTo({ path: '/login', query: { redirect: to.fullPath } })
   }
 })

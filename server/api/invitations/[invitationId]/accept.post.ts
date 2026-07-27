@@ -4,6 +4,7 @@ import { createAuth, getAuthSession } from '~/server/utils/auth'
 import { execute, queryAll, queryFirst } from '~/server/db'
 import { buildInvitationRedirectUrl, sanitizeInvitationReturnTo } from '~/server/utils/invitations'
 import { addMemberResourceAccess } from '~/server/utils/member-access'
+import { isPhoneInvitationEmail } from '~/server/utils/phone-invitations'
 
 interface AcceptInvitationApi {
   acceptInvitation(_input: {
@@ -64,7 +65,12 @@ export default defineEventHandler(async (event) => {
     const preferredSite = preferredSiteId
       ? orgSites.find(site => site.id === preferredSiteId) ?? null
       : null
-    return buildInvitationRedirectUrl({ orgSlug, preferredSite, fallbackSites: orgSites })
+    return buildInvitationRedirectUrl({
+      orgSlug,
+      preferredSite,
+      fallbackSites: orgSites,
+      bypassOnboardingGate: isPhoneInvitationEmail(invitation.email),
+    })
   }
 
   // Idempotent double-submit / stale-tab guard: if this invitation was already

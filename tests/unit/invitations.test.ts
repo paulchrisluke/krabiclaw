@@ -46,6 +46,18 @@ test('buildInvitationRedirectUrl sends non-active sites through onboarding', () 
   )
 })
 
+test('buildInvitationRedirectUrl can bypass onboarding for accepted phone invitations', () => {
+  assert.equal(
+    buildInvitationRedirectUrl({
+      orgSlug: 'pottery-house',
+      preferredSite: { id: 's1', subdomain: 'pottery-house', onboarding_status: 'pending' },
+      fallbackSites: [],
+      bypassOnboardingGate: true,
+    }),
+    '/dashboard/pottery-house/sites/pottery-house',
+  )
+})
+
 test('buildInvitationRedirectUrl lands on the single active site when none is preferred', () => {
   assert.equal(
     buildInvitationRedirectUrl({
@@ -65,6 +77,18 @@ test('buildInvitationRedirectUrl sends the single fallback site through onboardi
       fallbackSites: [{ id: 's1', subdomain: 'pottery-house', onboarding_status: 'pending' }],
     }),
     '/dashboard/pottery-house/onboarding',
+  )
+})
+
+test('buildInvitationRedirectUrl can bypass onboarding for a single phone-invite fallback site', () => {
+  assert.equal(
+    buildInvitationRedirectUrl({
+      orgSlug: 'pottery-house',
+      preferredSite: null,
+      fallbackSites: [{ id: 's1', subdomain: 'pottery-house', onboarding_status: 'pending' }],
+      bypassOnboardingGate: true,
+    }),
+    '/dashboard/pottery-house/sites/pottery-house',
   )
 })
 
