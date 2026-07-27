@@ -20,7 +20,7 @@ mock.module('../../server/utils/guest-claims.ts', {
   namedExports: { userHasLinkedCustomers },
 })
 
-const { isImpersonationSession, resolvePostLoginDestination } = await import('../../server/utils/post-login-routing.ts')
+const { resolvePostLoginDestination } = await import('../../server/utils/post-login-routing.ts')
 
 const db = {} as D1Database
 
@@ -29,36 +29,14 @@ test.beforeEach(() => {
   linkedCustomerUserIds = new Set<string>()
 })
 
-test('post-login sends non-impersonated platform admins to admin when there is no explicit redirect', async () => {
-  const destination = await resolvePostLoginDestination(db, { id: 'admin-1' }, {}, { isPlatformAdmin: true })
-  assert.equal(destination, '/admin')
-})
-
-test('post-login preserves impersonation context before applying platform admin routing', async () => {
-  membershipSlug = 'client-org'
-  const destination = await resolvePostLoginDestination(
-    db,
-    { id: 'admin-shaped-target' },
-    { impersonatedBy: 'platform-admin-1' },
-    { isPlatformAdmin: true },
-  )
-  assert.equal(destination, '/dashboard/client-org')
-})
-
 test('post-login sends organization members to their canonical dashboard', async () => {
   membershipSlug = 'pottery-house-krabi'
-  const destination = await resolvePostLoginDestination(db, { id: 'owner-1' }, {}, { isPlatformAdmin: false })
+  const destination = await resolvePostLoginDestination(db, { id: 'owner-1' })
   assert.equal(destination, '/dashboard/pottery-house-krabi')
 })
 
 test('post-login distinguishes guest accounts from new users', async () => {
   linkedCustomerUserIds.add('guest-1')
-  assert.equal(await resolvePostLoginDestination(db, { id: 'guest-1' }, {}, { isPlatformAdmin: false }), '/account')
-  assert.equal(await resolvePostLoginDestination(db, { id: 'new-1' }, {}, { isPlatformAdmin: false }), '/dashboard/onboarding')
-})
-
-test('impersonation sessions require a Better Auth impersonatedBy marker', () => {
-  assert.equal(isImpersonationSession({ impersonatedBy: 'admin-1' }), true)
-  assert.equal(isImpersonationSession({ impersonatedBy: ' ' }), false)
-  assert.equal(isImpersonationSession({}), false)
+  assert.equal(await resolvePostLoginDestination(db, { id: 'guest-1' }), '/account')
+  assert.equal(await resolvePostLoginDestination(db, { id: 'new-1' }), '/dashboard/onboarding')
 })

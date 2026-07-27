@@ -1,9 +1,7 @@
-// GET /api/post-login — server-side smart redirect after OAuth / sign-in.
-// Reads the session role and routes: admin → /admin, owner → /dashboard/[slug].
+// GET /api/post-login — server-side redirect after OAuth / sign-in.
 import { getQuery } from 'h3'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 import { resolvePostLoginDestination } from '~/server/utils/post-login-routing'
 import { validatedInternalPath } from '~/shared/auth/return-target'
 
@@ -22,14 +20,7 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const destination = await resolvePostLoginDestination(
-      db,
-      session.user,
-      session.session as typeof session.session & { impersonatedBy?: string | null },
-      {
-        isPlatformAdmin: await hasPlatformEventPermission(event, env, { platform: ['access'] }),
-      },
-    )
+    const destination = await resolvePostLoginDestination(db, session.user)
     return sendRedirect(event, destination)
   } catch (error) {
     console.error('Failed to resolve organization slug in post-login:', error)
