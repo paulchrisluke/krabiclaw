@@ -87,7 +87,7 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'dashboard', middleware: 'admin' })
+definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Work Queue | KrabiClaw Admin', robots: 'noindex, nofollow' })
 
 const toast = useToast()

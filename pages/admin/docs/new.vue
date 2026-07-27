@@ -230,7 +230,7 @@ interface CreateDocResponse {
   [key: string]: ApiValue
 }
 
-definePageMeta({ layout: 'dashboard', middleware: 'admin' })
+definePageMeta({ layout: 'dashboard' })
 
 const { form, canSave, canPublish, handleImageChange } = useDocForm()
 const categoryItems = computed(() => categories.map((item) => ({ label: item, value: item })))

@@ -43,7 +43,7 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'dashboard', middleware: 'admin' })
+definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Users | KrabiClaw Admin', robots: 'noindex, nofollow' })
 
 const toast = useToast()
