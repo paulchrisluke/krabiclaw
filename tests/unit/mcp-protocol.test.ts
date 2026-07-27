@@ -11,13 +11,19 @@ import {
 } from '../../server/utils/mcp-protocol.ts'
 
 test('MCP protocol versions advertise only supported spec revisions', () => {
-  assert.equal(MCP_PROTOCOL_VERSION, '2025-06-18')
-  assert.deepEqual(SUPPORTED_PROTOCOL_VERSIONS, ['2025-06-18', '2025-03-26', '2024-11-05'])
+  assert.equal(MCP_PROTOCOL_VERSION, '2025-11-25')
+  assert.deepEqual(SUPPORTED_PROTOCOL_VERSIONS, ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'])
   assert.equal(Array.from(SUPPORTED_PROTOCOL_VERSIONS).includes('2026-07-28'), false)
-  assert.equal(Array.from(SUPPORTED_PROTOCOL_VERSIONS).includes('2025-11-25'), false)
+  assert.equal(Array.from(SUPPORTED_PROTOCOL_VERSIONS).includes('2025-11-25'), true)
 })
 
 test('negotiatedMcpProtocolVersion returns the client version when supported', () => {
+  assert.equal(
+    negotiatedMcpProtocolVersion({
+      _meta: { 'io.modelcontextprotocol/version': '2025-11-25' },
+    }),
+    '2025-11-25',
+  )
   assert.equal(
     negotiatedMcpProtocolVersion({
       _meta: { 'io.modelcontextprotocol/version': '2025-03-26' },
