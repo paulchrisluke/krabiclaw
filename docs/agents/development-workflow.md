@@ -38,6 +38,46 @@ Fresh worktrees usually do not have `node_modules`.
 
 3. If the install fails because the sandbox cannot reach the package registry, rerun the same command with network approval instead of continuing with broken local validation.
 
+## Local Runtime Baseline
+
+Before calling typecheck, lint, build, or Playwright blocked by the local environment, verify which Node runtime is executing the command:
+
+```bash
+which node
+node -v
+node -e "console.log(v8.getHeapStatistics().heap_size_limit)" -r v8
+```
+
+Codex desktop sessions may inherit the machine's default shell `node` instead of the bundled workspace runtime. If `yarn typecheck`, `yarn lint`, or `yarn build` fails with V8 heap exhaustion or the process is killed without a product error, rerun with the bundled Codex Node runtime first and give Node enough heap:
+
+```bash
+PATH="$HOME/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin:$PATH" \
+NODE_OPTIONS=--max-old-space-size=8192 \
+yarn typecheck
+```
+
+Use the same `PATH` and `NODE_OPTIONS` prefix for `yarn lint`, `yarn build`, and other heavy local checks. Do this before describing the check as blocked; local validation is still required.
+
+## Cloudflare Resource Readiness
+
+When adding or changing `wrangler.toml` bindings, validate the remote
+provisioning surface before opening or updating a PR:
+
+```bash
+yarn cloudflare:resources
+```
+
+For first-time provisioning of required Queues, run:
+
+```bash
+yarn cloudflare:resources --create
+```
+
+Durable Object classes are registered through Wrangler deploy migrations, so
+also run `wrangler deploy --dry-run` for every affected environment
+(`--env preview`, `--env staging`, and the top-level production config) after a
+production build exists.
+
 ## Fresh Worktree Browser Setup
 
 Do this before the first local browser/E2E run in a new worktree. Do not skip to selectors or app-code changes until this baseline is healthy.

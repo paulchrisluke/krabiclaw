@@ -11,7 +11,7 @@ export type ConversationTrigger =
   | { type: 'owner_reply_sent' }
   | { type: 'manual_resolve' }
   | { type: 'manual_reopen' }
-  | { type: 'operation_succeeded'; notificationOutcome: 'not_required' | 'sent' | 'failed' }
+  | { type: 'operation_succeeded'; notificationOutcome: 'not_required' | 'queued' | 'sent' | 'failed' }
 
 export function nextConversationState(
   current: ConversationState,

@@ -293,6 +293,7 @@ export const guest_threads = sqliteTable("guest_threads", {
 	// (e.g. reservation 'confirmed'). Not independently editable; refreshed only by
 	// server/domain/guest-threads/operations.ts after a successful source mutation.
 	operational_status: text(),
+	version: integer().default(0).notNull(),
 	resolved_at: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
@@ -302,6 +303,7 @@ export const guest_threads = sqliteTable("guest_threads", {
 	index("guest_threads_location_updated_idx").on(table.location_id, table.updated_at),
 	index("guest_threads_inbox_status_idx").on(table.site_id, table.inbox_status, table.updated_at),
 	index("guest_threads_conversation_state_idx").on(table.site_id, table.conversation_state, table.updated_at),
+	index("guest_threads_site_version_idx").on(table.site_id, table.version),
 	check("guest_threads_submission_type_check", sql`submission_type IN ('contact', 'reservation', 'experience_booking')`),
 	check("guest_threads_inbox_status_check", sql`inbox_status IN ('open', 'waiting_on_owner', 'waiting_on_guest', 'closed')`),
 	check("guest_threads_conversation_state_check", sql`conversation_state IN ('needs_attention', 'waiting_on_guest', 'resolved')`),
@@ -324,10 +326,12 @@ export const guest_thread_entries = sqliteTable("guest_thread_entries", {
 	event_name: text(),
 	payload_json: text(),
 	external_id: text(),
+	sequence: integer(),
 	occurred_at: text().notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
 	index("guest_thread_entries_thread_occurred_idx").on(table.thread_id, table.occurred_at),
+	unique("guest_thread_entries_thread_sequence_unique").on(table.thread_id, table.sequence),
 	uniqueIndex("guest_thread_entries_external_id_unique").on(table.external_id).where(sql`external_id IS NOT NULL`),
 	index("guest_thread_entries_site_kind_occurred_idx").on(table.site_id, table.kind, table.occurred_at),
 	index("guest_thread_entries_organization_id_idx").on(table.organization_id),
@@ -336,13 +340,19 @@ export const guest_thread_entries = sqliteTable("guest_thread_entries", {
 	check("guest_thread_entries_channel_check", sql`channel IS NULL OR channel IN ('web', 'email', 'whatsapp', 'system')`),
 ]);
 
+export const guest_thread_sequence_counters = sqliteTable("guest_thread_sequence_counters", {
+	thread_id: text().primaryKey().references(() => guest_threads.id, { onDelete: "cascade" } ),
+	next_sequence: integer().default(1).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+});
+
 // Per-member read cursor for a thread (issue #442). Keyed on member.id (not raw user.id) to
 // match how server/utils/location-access.ts resolves identity everywhere else.
 export const guest_thread_member_state = sqliteTable("guest_thread_member_state", {
 	thread_id: text().notNull().references(() => guest_threads.id, { onDelete: "cascade" } ),
 	member_id: text().notNull().references(() => member.id, { onDelete: "cascade" } ),
 	last_read_entry_id: text().references(() => guest_thread_entries.id, { onDelete: "set null" } ),
-	last_read_at: text(),
+	last_read_sequence: integer().default(0).notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
@@ -365,6 +375,16 @@ export const guest_thread_deliveries = sqliteTable("guest_thread_deliveries", {
 	last_error: text(),
 	provider_message_id: text(),
 	to_address: text(),
+	from_name: text(),
+	subject: text(),
+	text_body: text(),
+	reply_to: text(),
+	locale: text(),
+	template_version: text(),
+	source_snapshot_json: text(),
+	payload_hash: text(),
+	provider_idempotency_key: text(),
+	processing_lease_until: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
@@ -372,7 +392,47 @@ export const guest_thread_deliveries = sqliteTable("guest_thread_deliveries", {
 	index("guest_thread_deliveries_thread_status_idx").on(table.thread_id, table.status),
 	index("guest_thread_deliveries_status_updated_idx").on(table.status, table.updated_at),
 	check("guest_thread_deliveries_channel_check", sql`channel IN ('email', 'whatsapp')`),
-	check("guest_thread_deliveries_status_check", sql`status IN ('queued', 'sent', 'failed')`),
+		check("guest_thread_deliveries_status_check", sql`status IN ('queued', 'sent', 'failed')`),
+]);
+
+export const guest_thread_commands = sqliteTable("guest_thread_commands", {
+	id: text().primaryKey(),
+	thread_id: text().notNull().references(() => guest_threads.id, { onDelete: "cascade" } ),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	action: text().notNull(),
+	idempotency_key: text().notNull(),
+	actor_kind: text().notNull(),
+	actor_user_id: text().references(() => user.id, { onDelete: "set null" } ),
+	actor_member_id: text().references(() => member.id, { onDelete: "set null" } ),
+	request_hash: text().notNull(),
+		status: text().default("pending").notNull(),
+	result_json: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	completed_at: text(),
+}, (table) => [
+	unique("guest_thread_commands_thread_idempotency_unique").on(table.thread_id, table.idempotency_key),
+	index("guest_thread_commands_site_created_idx").on(table.site_id, table.created_at),
+	check("guest_thread_commands_actor_kind_check", sql`actor_kind IN ('member', 'guest', 'system')`),
+		check("guest_thread_commands_status_check", sql`status IN ('pending', 'completed', 'failed')`),
+]);
+
+export const guest_thread_outbox = sqliteTable("guest_thread_outbox", {
+	id: text().primaryKey(),
+	thread_id: text().notNull().references(() => guest_threads.id, { onDelete: "cascade" } ),
+	delivery_id: text().references(() => guest_thread_deliveries.id, { onDelete: "cascade" } ),
+	event_type: text().notNull(),
+	status: text().default("pending").notNull(),
+	attempt_count: integer().default(0).notNull(),
+	next_attempt_at: text(),
+	locked_at: text(),
+	last_error: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	index("guest_thread_outbox_status_next_idx").on(table.status, table.next_attempt_at),
+	index("guest_thread_outbox_thread_idx").on(table.thread_id),
+		check("guest_thread_outbox_status_check", sql`status IN ('pending', 'publishing', 'published', 'failed', 'dead')`),
 ]);
 
 
