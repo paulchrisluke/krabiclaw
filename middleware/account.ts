@@ -1,6 +1,4 @@
-// Auth guard for the guest/end-customer surface — mirrors middleware/admin.ts's
-// shape but only requires an authenticated session, not platform-admin role or
-// organization membership. See
+// Auth guard for the guest/end-customer surface. See
 // docs/adr/0017-guest-account-model-separate-from-tenant-org-membership.md.
 //
 // Server-side: bypass useRequestFetch()'s internal self-fetch entirely per

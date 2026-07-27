@@ -185,7 +185,7 @@
 <script setup lang="ts">
 import { getErrorMessage } from '~/utils/errors'
 
-definePageMeta({ layout: 'dashboard', middleware: 'admin' })
+definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Members | KrabiClaw Admin', robots: 'noindex, nofollow' })
 
 const toast = useToast()

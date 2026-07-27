@@ -1,6 +1,6 @@
 // Centralized dashboard auth-check (issue #293, Section B). Unlike
-// middleware/account.ts and middleware/admin.ts — each wired via
-// definePageMeta to a small, fixed set of pages — the dashboard area spans
+// middleware/account.ts — wired via definePageMeta to a small, fixed set of
+// pages — the dashboard area spans
 // 40+ page files under pages/dashboard/**. Registering this as a Nuxt
 // `.global.ts` middleware (auto-run on every navigation; Nuxt's own
 // filename-convention feature, not a new mechanism) lets it cover every
