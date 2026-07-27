@@ -1,5 +1,6 @@
 import { createError, getHeader, getHeaders, type H3Event } from 'h3'
-import { oauthProviderResourceClient } from '@better-auth/oauth-provider/resource-client'
+import { verifyJwsAccessToken } from 'better-auth/oauth2'
+import type { JSONWebKeySet, JWTPayload } from 'jose'
 import { createAuth, getAuthSession, type CloudflareEnv } from '~/server/utils/auth'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 import { hasPlatformAdminPermission } from '~/utils/platform-admin-access'
@@ -13,6 +14,8 @@ const ROLE_RANK: Record<McpToolRole, number> = {
   admin: 2,
   owner: 3,
 }
+
+const MCP_AUTH_JWKS_CACHE_KEY = {}
 
 export interface McpUserContext {
   env: CloudflareEnv
@@ -100,14 +103,6 @@ export async function requireMcpUser(
   return user
 }
 
-// Delegates local JWT verification (JWKS fetch/cache, issuer/audience/expiry,
-// scope check) to Better Auth's own resource-server helper instead of a
-// hand-rolled jose-based implementation reading raw key rows directly.
-// Opaque (non-JWT) access tokens are not supported here: every resource
-// currently issues RS256 JWTs (see the `resources` config in createAuth),
-// and any pre-JWT opaque token still on file is rejected cleanly as
-// `no token payload` rather than carrying forward a second, direct-SQL
-// verification path alongside it.
 async function verifyBearerToken(
   event: H3Event,
   token: string,
@@ -127,15 +122,19 @@ async function verifyBearerToken(
   // scope claim alone.
   const requiredScopes = options.requiredScopes ?? ['tenant']
 
-  const auth = createAuth(env)
-  const { verifyBearerToken: verify } = oauthProviderResourceClient(auth).getActions()
-
-  let payload: { sub?: unknown; scope?: unknown; client_id?: unknown }
+  let payload: JWTPayload & { client_id?: unknown }
   try {
-    payload = await verify(token, {
-      verifyOptions: { audience: audiences },
-      scopes: requiredScopes,
+    payload = await verifyJwsAccessToken(token, {
+      jwksFetch: () => getAuthJwks(event, env),
+      jwksCacheKey: MCP_AUTH_JWKS_CACHE_KEY,
+      verifyOptions: {
+        audience: audiences,
+        issuer: baseUrl,
+      },
     })
+    if (hasDpopBinding(payload)) {
+      throw new Error('DPoP-bound access token requires request verification')
+    }
   } catch (error) {
     const authChallenge = mcpAuthChallengeFromVerifyError(error, requiredScopes)
     // claimed_* fields are decoded WITHOUT signature verification — never use
@@ -168,6 +167,22 @@ async function verifyBearerToken(
   }
 
   const scopes = parseScopesFromJwtPayload(payload.scope)
+  const missingScope = requiredScopes.find(requiredScope => !scopes.includes(requiredScope))
+  if (missingScope) {
+    logMcpAuth(event, 'warn', 'credential_rejected', {
+      path: event.path,
+      token_fingerprint: tokenFingerprint,
+      reason: 'scope_missing',
+      missing_scope: missingScope,
+      audiences_checked: audiences,
+      required_scopes: requiredScopes,
+    })
+    throw createError({
+      statusCode: 401,
+      statusMessage: `${missingScope} scope required`,
+      data: { mcpAuth: { error: 'insufficient_scope', description: `${missingScope} scope required`, scope: missingScope } },
+    })
+  }
   ensureForbiddenScopesAbsent(scopes, options.forbiddenScopes)
 
   const userId = typeof payload.sub === 'string' ? payload.sub : null
@@ -214,6 +229,21 @@ async function verifyBearerToken(
     isPlatformAdmin: hasPlatformAdminPermission(user.role),
     scopes,
   }
+}
+
+async function getAuthJwks(event: H3Event, env: CloudflareEnv): Promise<JSONWebKeySet | undefined> {
+  const baseUrl = (env.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
+  const response = await createAuth(env).handler(new Request(`${baseUrl}/api/auth/jwks`, {
+    method: 'GET',
+    headers: getHeaders(event) as HeadersInit,
+  }))
+  if (!response.ok) return undefined
+  return await response.json() as JSONWebKeySet
+}
+
+function hasDpopBinding(payload: JWTPayload): boolean {
+  const cnf = payload.cnf
+  return !!cnf && typeof cnf === 'object' && 'jkt' in cnf
 }
 
 // Better Auth's verifyBearerToken throws a better-call APIError: status

@@ -102,14 +102,70 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
     }
     case "open_video_upload": {
       const category = optionalString(args, "category") ?? null;
+      const assignTo = optionalString(args, "assign_to") ?? null;
+      const locationId = optionalString(args, "location_id") ?? null;
+      const experienceId = optionalString(args, "experience_id") ?? null;
+      if (assignTo && !["home", "location", "experience"].includes(assignTo)) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, "open_video_upload assign_to must be \"home\", \"location\", or \"experience\" when provided.");
+      }
+      if (assignTo === "location" && !locationId) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, "open_video_upload requires location_id when assign_to is \"location\".");
+      }
+      if (assignTo === "experience" && !experienceId) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, "open_video_upload requires experience_id when assign_to is \"experience\".");
+      }
+      const assignment = assignTo === "home"
+        ? {
+            target: "home",
+            tool: "set_home_hero_video",
+            args: {
+              site_id: site.siteId,
+              ...(locationId ? { location_id: locationId } : {}),
+            },
+          }
+        : assignTo === "location" && locationId
+          ? {
+              target: "location",
+              tool: "set_location_hero_video",
+              args: {
+                site_id: site.siteId,
+                location_id: locationId,
+              },
+            }
+          : assignTo === "experience" && experienceId
+            ? {
+                target: "experience",
+                tool: "set_experience_video",
+                args: {
+                  site_id: site.siteId,
+                  experience_id: experienceId,
+                },
+              }
+            : null;
       return renderStructuredResponse(
         {
           launched: true,
+          ...(assignment
+            ? {
+                assignment: {
+                  target: assignment.target,
+                  tool: assignment.tool,
+                  ...(locationId ? { location_id: locationId } : {}),
+                  ...(experienceId ? { experience_id: experienceId } : {}),
+                },
+              }
+            : {}),
         },
         "Video upload widget launched.",
         {
+          ui: { resourceUri: VIDEO_UPLOAD_WIDGET_RESOURCE_URI, visibility: ["app"] },
+          "openai/outputTemplate": VIDEO_UPLOAD_WIDGET_RESOURCE_URI,
           resourceUri: VIDEO_UPLOAD_WIDGET_RESOURCE_URI,
-          context: { site_id: site.siteId, category },
+          context: {
+            site_id: site.siteId,
+            category,
+            ...(assignment ? { assignment } : {}),
+          },
         },
       );
     }

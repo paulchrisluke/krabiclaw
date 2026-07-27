@@ -63,9 +63,6 @@ export function readMcpRequest(event: H3Event, body: unknown): McpRpcRequest {
     : null
   const version = headerVersion ?? metaString(request, 'io.modelcontextprotocol/version') ?? bodyVersion
   const isNotification = typeof method === 'string' && method.startsWith('notifications/')
-  if (!version && !isNotification) {
-    throw mcpProtocolError(MCP_ERROR.invalidRequest, 'Missing MCP protocol version.')
-  }
   if (version && !SUPPORTED_PROTOCOL_VERSION_SET.has(version)) {
     throw mcpProtocolError(MCP_ERROR.invalidRequest, `Unsupported MCP protocol version: ${version}`)
   }
@@ -90,7 +87,7 @@ export function readMcpRequest(event: H3Event, body: unknown): McpRpcRequest {
   request.method = method
   request._meta = {
     ...(request._meta ?? {}),
-    'io.modelcontextprotocol/version': version,
+    'io.modelcontextprotocol/version': version ?? MCP_PROTOCOL_VERSION,
   }
   return request
 }

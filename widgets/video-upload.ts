@@ -6,6 +6,7 @@ type ToolResult = {
 
 type OpenAIHost = {
   toolInput?: Record<string, unknown>
+  toolResponseMetadata?: Record<string, unknown>
   uploadFile(_file: File): Promise<{ fileId: string }>
   getFileDownloadUrl(_input: { fileId: string }): Promise<{ downloadUrl: string }>
   callTool(_name: string, _args: Record<string, unknown>): Promise<ToolResult>
@@ -35,6 +36,17 @@ const styles = `
 
 function textFromResult(result: ToolResult): string {
   return result.content?.find(item => item.type === 'text')?.text ?? 'The upload tool returned an error.'
+}
+
+function objectValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? value as Record<string, unknown> : null
+}
+
+function assignmentLabel(target: unknown): string {
+  if (target === 'home') return 'the home page'
+  if (target === 'location') return 'the location'
+  if (target === 'experience') return 'the experience'
+  return 'the page'
 }
 
 function render() {
@@ -80,7 +92,10 @@ function render() {
     }
 
     const host = window.openai
-    const siteId = host?.toolInput?.site_id
+    const responseContext = objectValue(host?.toolResponseMetadata?.context)
+    const siteId = responseContext
+      ? responseContext.site_id
+      : host?.toolInput?.site_id
     if (!host || typeof siteId !== 'string' || !siteId) {
       status.className = 'error'
       status.textContent = 'The ChatGPT host did not provide a site. Re-open the widget and try again.'
@@ -108,6 +123,23 @@ function render() {
       const publicUrl = output.public_url ?? output.publicUrl
       if (typeof assetId !== 'string' || typeof publicUrl !== 'string') {
         throw new Error('Upload completed without an assignable media asset.')
+      }
+      const assignment = objectValue(responseContext?.assignment)
+      const assignmentArgs = objectValue(assignment?.args)
+      const assignmentTool = assignment?.tool
+      if (
+        typeof assignmentTool === 'string'
+        && ['set_home_hero_video', 'set_location_hero_video', 'set_experience_video'].includes(assignmentTool)
+        && assignmentArgs
+      ) {
+        const assignmentResult = await host.callTool(assignmentTool, {
+          ...assignmentArgs,
+          asset_id: assetId,
+        })
+        if (assignmentResult.isError) throw new Error(textFromResult(assignmentResult))
+        status.className = 'success'
+        status.textContent = `Uploaded ${file.name} and assigned it to ${assignmentLabel(assignment.target)}.`
+        return
       }
       status.className = 'success'
       status.textContent = `Uploaded ${file.name}. Asset ${assetId} is ready to assign.`

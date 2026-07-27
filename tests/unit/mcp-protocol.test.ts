@@ -7,6 +7,7 @@ import {
   MCP_PROTOCOL_VERSION,
   mcpProtocolError,
   negotiatedMcpProtocolVersion,
+  readMcpRequest,
   SUPPORTED_PROTOCOL_VERSIONS,
 } from '../../server/utils/mcp-protocol.ts'
 
@@ -34,6 +35,29 @@ test('negotiatedMcpProtocolVersion returns the client version when supported', (
 
 test('negotiatedMcpProtocolVersion falls back to the current server revision', () => {
   assert.equal(negotiatedMcpProtocolVersion({ _meta: {} }), MCP_PROTOCOL_VERSION)
+})
+
+test('readMcpRequest defaults missing protocol version to the current server revision', () => {
+  const event = {
+    node: {
+      req: {
+        headers: {},
+      },
+    },
+  } as any
+  const request = readMcpRequest(event, {
+    jsonrpc: '2.0',
+    id: 'missing-version-call',
+    method: 'tools/call',
+    params: {
+      name: 'list_sites',
+      arguments: {},
+    },
+    _meta: {},
+  })
+
+  assert.equal(request.method, 'tools/call')
+  assert.equal(request._meta?.['io.modelcontextprotocol/version'], MCP_PROTOCOL_VERSION)
 })
 
 test('asMcpError maps a plain mcpProtocolError through unchanged', () => {

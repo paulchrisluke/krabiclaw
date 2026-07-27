@@ -53,18 +53,31 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'open_video_upload',
-      description: 'Launch the inline KrabiClaw video upload widget. Use this only when a video upload is required; images should arrive as direct ChatGPT attachments or through native image generation. The widget returns an active assetId and publicUrl. Then call the appropriate video assignment tool, such as set_home_hero_video, set_location_hero_video, or set_experience_video.',
+      description: 'Launch the inline KrabiClaw video upload widget. Use this only when a video upload is required; images should arrive as direct ChatGPT attachments or through native image generation. When the uploaded video should be placed immediately, pass assign_to="home" for the home hero video, assign_to="location" with location_id for a location hero video, or assign_to="experience" with experience_id for an experience video. The widget uploads and assigns the video in one flow.',
       domain: 'media',
       minimumRole: 'editor',
       confirmRequired: false,
       uiResourceUri: VIDEO_UPLOAD_WIDGET_RESOURCE_URI,
       inputSchema: {
         category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'blog', 'other'], description: 'What this media will be used for.' },
+        assign_to: { type: 'string', enum: ['home', 'location', 'experience'], description: 'Optional target to assign after upload: "home", "location", or "experience".' },
+        location_id: { type: 'string', description: 'Location id or slug. Required when assign_to is "location"; optional with assign_to "home" to scope the home hero video to a location.' },
+        experience_id: { type: 'string', description: 'Experience id or slug. Required when assign_to is "experience".' },
       },
+      required: ['site_id'],
       outputSchema: {
         type: 'object',
         properties: {
           launched: { type: 'boolean' },
+          assignment: {
+            type: 'object',
+            properties: {
+              tool: { type: 'string' },
+              target: { type: 'string', enum: ['home', 'location', 'experience'] },
+              location_id: { type: 'string' },
+              experience_id: { type: 'string' },
+            },
+          },
         },
         required: ['launched'],
         additionalProperties: false,

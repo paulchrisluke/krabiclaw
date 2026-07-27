@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { normalizeLocationNotificationPhone } from '../../server/utils/location-management.ts'
+import { normalizeLocationNotificationPhone, serializeOpeningHours } from '../../server/utils/location-management.ts'
 
 // createLocation/updateLocation (server/utils/location-management.ts) are the
 // one write boundary shared by the dashboard HTTP routes AND the MCP/ChowBot
@@ -35,4 +35,32 @@ test('normalizeLocationNotificationPhone: valid non-Thai E.164 input is preserve
 test('normalizeLocationNotificationPhone: invalid/impossible input throws instead of storing raw value', () => {
   assert.throws(() => normalizeLocationNotificationPhone('not a phone number'), /valid phone number/)
   assert.throws(() => normalizeLocationNotificationPhone('123'), /valid phone number/)
+})
+
+test('serializeOpeningHours: object input stores canonical weekdayDescriptions JSON', () => {
+  assert.equal(
+    serializeOpeningHours({ weekdayDescriptions: ['Monday: Closed', 'Tuesday: 9:00 AM - 5:00 PM'] }),
+    '{"weekdayDescriptions":["Monday: Closed","Tuesday: 9:00 AM - 5:00 PM"]}',
+  )
+})
+
+test('serializeOpeningHours: JSON string input is parsed instead of stored as a weekday line', () => {
+  assert.equal(
+    serializeOpeningHours('{"weekdayDescriptions":["Monday: Closed","Tuesday: 9:00 AM - 5:00 PM"]}'),
+    '{"weekdayDescriptions":["Monday: Closed","Tuesday: 9:00 AM - 5:00 PM"]}',
+  )
+})
+
+test('serializeOpeningHours: bare string array input is parsed to canonical object JSON', () => {
+  assert.equal(
+    serializeOpeningHours('["Monday: Closed","Tuesday: 9:00 AM - 5:00 PM"]'),
+    '{"weekdayDescriptions":["Monday: Closed","Tuesday: 9:00 AM - 5:00 PM"]}',
+  )
+})
+
+test('serializeOpeningHours: multiline text input remains supported', () => {
+  assert.equal(
+    serializeOpeningHours('Monday: Closed\nTuesday: 9:00 AM - 5:00 PM'),
+    '{"weekdayDescriptions":["Monday: Closed","Tuesday: 9:00 AM - 5:00 PM"]}',
+  )
 })

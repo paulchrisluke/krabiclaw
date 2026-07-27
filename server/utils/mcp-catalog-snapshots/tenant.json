@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:d9c4b48f69b614e629414b9893a541e0ac5bb2d783a2c89dcdc8ac21d7fbf94f",
+  "fingerprint": "sha256:6dee911e497e15df66a178cb48dbff3448b6667cf8209178b63a58c71d383251",
   "tools": [
     {
       "name": "add_menu_items_batch",
@@ -8233,6 +8233,15 @@
       "inputSchema": {
         "additionalProperties": true,
         "properties": {
+          "assign_to": {
+            "description": "Optional target to assign after upload: \"home\", \"location\", or \"experience\".",
+            "enum": [
+              "home",
+              "location",
+              "experience"
+            ],
+            "type": "string"
+          },
           "category": {
             "description": "What this media will be used for.",
             "enum": [
@@ -8247,17 +8256,49 @@
             ],
             "type": "string"
           },
+          "experience_id": {
+            "description": "Experience id or slug. Required when assign_to is \"experience\".",
+            "type": "string"
+          },
+          "location_id": {
+            "description": "Location id or slug. Required when assign_to is \"location\"; optional with assign_to \"home\" to scope the home hero video to a location.",
+            "type": "string"
+          },
           "site_id": {
             "description": "Site id, subdomain, or custom domain.",
             "type": "string"
           }
         },
-        "required": [],
+        "required": [
+          "site_id"
+        ],
         "type": "object"
       },
       "outputSchema": {
         "additionalProperties": false,
         "properties": {
+          "assignment": {
+            "properties": {
+              "experience_id": {
+                "type": "string"
+              },
+              "location_id": {
+                "type": "string"
+              },
+              "target": {
+                "enum": [
+                  "home",
+                  "location",
+                  "experience"
+                ],
+                "type": "string"
+              },
+              "tool": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
           "launched": {
             "type": "boolean"
           }

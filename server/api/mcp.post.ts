@@ -225,8 +225,8 @@ This entire flow runs within the current conversation — do not tell the user t
 8. Reply with the exact site, placement, assetId, and publicUrl that were updated.
 
 **Videos:**
-- Call open_video_upload only when a video is required — this is the one and only widget-launching tool, and it is video-only. After it reports a completed upload, call the matching assignment tool (set_home_hero_video, set_location_hero_video, set_experience_video, etc.) with the returned assetId.
-- For images, always use upload_user_media (step 5 above) or native image generation — never open_video_upload, and there is no "open_media_upload"/"open_image_upload" tool.
+- Call open_video_upload with site_id only when a video is required — this is the one and only widget-launching tool, and it is video-only. After it reports a completed upload, call the matching assignment tool (set_home_hero_video, set_location_hero_video, set_experience_video, etc.) with the returned assetId.
+- For images, always use upload_user_media (step 5 above) or native image generation — never open_video_upload.
 - If you already have a resolved ChatGPT file reference for a video, you can call upload_user_media directly instead of opening the widget.
 - The dashboard media library remains a fallback only for chat clients that do not support inline widgets.
 

@@ -16,10 +16,9 @@ const redirects: Record<string, string> = {
   // found" 404s from a live tenant domain. Nothing in this codebase emits
   // these URLs, so the most likely source is an LLM (e.g. ChatGPT, asked
   // "how do I connect KrabiClaw to ChatGPT") guessing a plausible-looking
-  // docs path and telling a real business owner to visit it — same class of
-  // hallucination as the open_media_upload MCP tool-name issue. Redirecting
-  // to the closest real doc turns a dead link real users are hitting into a
-  // working one, without us controlling what the LLM says elsewhere.
+  // docs path and telling a real business owner to visit it. Redirecting to
+  // the closest real doc turns a dead link real users are hitting into a
+  // working one.
   '/docs/getting-started/getting-started-with-krabiclaw-in-chatgpt': '/docs/getting-started/getting-started',
   '/docs/getting-started/getting-started-with-krabiclaw': '/docs/getting-started/getting-started',
   '/docs/getting-started/connect-krabiclaw-to-chatgpt': '/docs/integrations/mcp-setup',

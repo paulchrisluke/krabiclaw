@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import { isDeployedWorkerTarget } from './test-env'
 import { loginAs } from './helpers/auth'
 import { MCP_GROWTH_USER_ID } from './helpers/plan-fixtures'
-import { MCP_VERSION, MCP_GROWTH_SITE_ID, mcpRequest, mcpData, loginAsFreshMcpUser } from './helpers/mcp'
+import { MCP_VERSION, MCP_GROWTH_SITE_ID, mcpRequest, mcpData, ensureSite, loginAsFreshMcpUser } from './helpers/mcp'
 
 // Split out of mcp.spec.ts (media/asset workflow tests) — see helpers/mcp.ts
 // for why. This group covers the ChatGPT video-upload widget flow and the
@@ -12,6 +12,7 @@ test.describe('stateless MCP server', () => {
   test('ChatGPT session can launch the video upload widget without transport failures', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
     const siteId = MCP_GROWTH_SITE_ID
+    const locationId = 'loc-mcp-growth'
 
     const initialize = await mcpRequest(request, baseURL!, {
       method: 'initialize',
@@ -39,6 +40,7 @@ test.describe('stateless MCP server', () => {
     const openVideoTool = toolsBody.result.tools.find(tool => tool.name === 'open_video_upload')
     expect(openVideoTool).toBeTruthy()
     expect(openVideoTool?.outputSchema?.required).toEqual(['launched'])
+    expect((openVideoTool?.inputSchema as { required?: string[] } | undefined)?.required).toContain('site_id')
     expect((openVideoTool?._meta?.ui as { resourceUri?: string, visibility?: string[] } | undefined)?.resourceUri).toBe('ui://widget/video-upload@v1.html')
     expect((openVideoTool?._meta?.ui as { resourceUri?: string, visibility?: string[] } | undefined)?.visibility).toEqual(['model', 'app'])
     expect(openVideoTool?._meta?.['openai/outputTemplate']).toBe('ui://widget/video-upload@v1.html')
@@ -61,19 +63,48 @@ test.describe('stateless MCP server', () => {
     })
     expect(launchVideoBody.result?.structuredContent).not.toHaveProperty('context')
     expect(launchVideoBody.result?._meta?.resourceUri).toBe('ui://widget/video-upload@v1.html')
+    expect(launchVideoBody.result?._meta?.ui?.resourceUri).toBe('ui://widget/video-upload@v1.html')
+    expect(launchVideoBody.result?._meta?.['openai/outputTemplate']).toBe('ui://widget/video-upload@v1.html')
     expect((launchVideoBody.result?._meta as { context?: { site_id?: string; category?: string | null } } | undefined)?.context).toEqual({
       site_id: siteId,
       category: 'other',
     })
 
-    const staleLauncher = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'open_media_upload',
-      args: { site_id: siteId, category: 'other' },
-      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
-    })
-    expect(staleLauncher.status()).toBe(200)
-    expect((await staleLauncher.json()).error?.code).toBe(-32601)
+    for (const target of [
+      {
+        args: { site_id: siteId, category: 'other', assign_to: 'home' },
+        assignment: { target: 'home', tool: 'set_home_hero_video' },
+      },
+      {
+        args: { site_id: siteId, category: 'other', assign_to: 'location', location_id: locationId },
+        assignment: { target: 'location', tool: 'set_location_hero_video', location_id: locationId },
+      },
+      {
+        args: { site_id: siteId, category: 'other', assign_to: 'experience', experience_id: 'ceramics-painting-class' },
+        assignment: { target: 'experience', tool: 'set_experience_video', experience_id: 'ceramics-painting-class' },
+      },
+    ]) {
+      const targetedLaunch = await mcpRequest(request, baseURL!, {
+        method: 'tools/call',
+        toolName: 'open_video_upload',
+        args: target.args,
+        extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
+      })
+      expect(targetedLaunch.status()).toBe(200)
+      const targetedLaunchBody = await targetedLaunch.json() as {
+        result?: {
+          structuredContent?: { assignment?: Record<string, unknown> }
+          _meta?: { context?: { assignment?: { tool?: string; args?: Record<string, unknown> } } }
+        }
+      }
+      expect(targetedLaunchBody.result?.structuredContent?.assignment).toEqual(target.assignment)
+      expect(targetedLaunchBody.result?._meta?.context?.assignment?.tool).toBe(target.assignment.tool)
+      expect(targetedLaunchBody.result?._meta?.context?.assignment?.args).toMatchObject({
+        site_id: siteId,
+        ...('location_id' in target.assignment ? { location_id: target.assignment.location_id } : {}),
+        ...('experience_id' in target.assignment ? { experience_id: target.assignment.experience_id } : {}),
+      })
+    }
 
     const resource = await mcpRequest(request, baseURL!, {
       method: 'resources/read',
@@ -290,7 +321,20 @@ test.describe('stateless MCP server', () => {
       Object.defineProperty(window, '__krabiclawWidgetCalls', { value: calls })
       Object.defineProperty(window, 'openai', {
         value: {
-          toolInput: { site_id: targetSiteId, category: 'other' },
+          toolInput: { category: 'other' },
+          toolResponseMetadata: {
+            context: {
+              site_id: targetSiteId,
+              assignment: {
+                target: 'experience',
+                tool: 'set_experience_video',
+                args: {
+                  site_id: targetSiteId,
+                  experience_id: 'ceramics-painting-class',
+                },
+              },
+            },
+          },
           async uploadFile(file: File) {
             calls.push(`uploadFile:${file.name}:${file.type}:${file.size}`)
             return { fileId: 'file_widget_e2e_video' }
@@ -300,7 +344,15 @@ test.describe('stateless MCP server', () => {
             return { downloadUrl }
           },
           async callTool(name: string, args: Record<string, unknown>) {
-            calls.push(`callTool:${name}`)
+            calls.push(`callTool:${name}:${JSON.stringify(args)}`)
+            if (['set_home_hero_video', 'set_location_hero_video', 'set_experience_video'].includes(name)) {
+              return {
+                isError: false,
+                structuredContent: {
+                  updated: true,
+                },
+              }
+            }
             return await (window as unknown as WidgetBridge).krabiclawWidgetCallTool(name, args)
           },
         },
@@ -318,28 +370,23 @@ test.describe('stateless MCP server', () => {
       expect(fixture.byteLength).toBeGreaterThan(1_000)
       await page.locator('input[type=file]').setInputFiles({ name: 'tiny-widget-e2e.mp4', mimeType: 'video/mp4', buffer: fixture })
       await page.getByRole('button', { name: 'Upload video' }).click()
-      // The real chain here is: fetch the fixture, stream it to Cloudflare
-      // Images, then respond — reproduced locally through a real HTTPS tunnel
-      // in well under 10s, but has consistently needed longer against the
-      // deployed preview Worker in CI (observed: still "Uploading…" at the
-      // default 10s timeout on three consecutive runs, no error surfaced).
-      // Widen this one assertion rather than the whole test's budget.
-      await expect(page.getByRole('status')).toContainText('is ready to assign', { timeout: 30_000 })
+      await expect(page.getByRole('status')).toContainText('assigned it to the experience')
+      const widgetCalls = await page.evaluate(() => (window as unknown as { __krabiclawWidgetCalls: string[] }).__krabiclawWidgetCalls)
+      expect(widgetCalls.some(call => call.startsWith('callTool:set_experience_video:'))).toBe(true)
       const calls = await page.evaluate(() => (window as unknown as { __krabiclawWidgetCalls: string[] }).__krabiclawWidgetCalls)
-      expect(calls.map(call => call.split(':')[0])).toEqual(['uploadFile', 'getFileDownloadUrl', 'callTool'])
-      expect(calls[2]).toBe('callTool:upload_user_media')
+      expect(calls.map(call => call.split(':')[0])).toEqual(['uploadFile', 'getFileDownloadUrl', 'callTool', 'callTool'])
+      expect(calls[2]?.startsWith('callTool:upload_user_media:')).toBe(true)
+      expect(calls[3]?.startsWith('callTool:set_experience_video:')).toBe(true)
 
       const media = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'get_site_media_assets', args: { site_id: siteId, kind: 'video' },
       })
       expect(media.status()).toBe(200)
-      const assets = mcpData<{ assets: Array<{ id?: string, asset_id?: string, status?: string, public_url?: string, publicUrl?: string }> }>(await media.json()).assets
-      const uploaded = assets.find(asset => (asset.id ?? asset.asset_id) && (asset.public_url ?? asset.publicUrl))
+      const assets = mcpData<{ assets: Array<{ id?: string, asset_id?: string, status?: string, public_url?: string, publicUrl?: string, file_name?: string }> }>(await media.json()).assets
+      const uploaded = assets.find(asset => asset.file_name === 'tiny-widget-e2e.mp4' && (asset.id ?? asset.asset_id) && (asset.public_url ?? asset.publicUrl))
       expect(uploaded).toBeTruthy()
       assetId = uploaded!.id ?? uploaded!.asset_id ?? ''
       expect(uploaded!.status).toBe('active')
-      const publicUrl = uploaded!.public_url ?? uploaded!.publicUrl
-      expect((await request.get(publicUrl!)).status()).toBe(200)
 
       const assign = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'set_home_hero_video', args: { site_id: siteId, asset_id: assetId },

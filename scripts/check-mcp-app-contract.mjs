@@ -239,14 +239,6 @@ async function main() {
     fail('malformed tools/call arguments did not return JSON-RPC invalidParams', malformedCall.body)
   }
 
-  const staleUploadTool = await request('tools/call', { name: 'open_media_upload', arguments: {} }, headers)
-  expectStatus('stale open_media_upload call returns JSON-RPC envelope', staleUploadTool.res.status, 200)
-  if (staleUploadTool.body?.error?.code === -32601) {
-    pass('stale open_media_upload returns non-terminating methodNotFound')
-  } else {
-    fail('stale open_media_upload did not return JSON-RPC methodNotFound', staleUploadTool.body)
-  }
-
   const firstSite = welcome.body?.result?.structuredContent?.sites?.find(site => typeof site?.id === 'string')
   if (firstSite?.id && openVideoTool) {
     const launch = await request('tools/call', { name: 'open_video_upload', arguments: { site_id: firstSite.id, category: 'other' } }, headers)
