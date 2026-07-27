@@ -1,18 +1,24 @@
-import { queryFirst, type DbClient } from '~/server/db'
+import { createHash } from 'node:crypto'
+import { execute, queryFirst, type DbClient } from '~/server/db'
 import type { ReplyEmailEnv } from '~/server/utils/submission-messages'
 import { getAdapter } from './adapters/registry'
-import { appendEntry, getEntryById, getLatestEntryByKind, parseEntryPayload } from './entries'
-import { attemptEmailDelivery, createDeliveryIntent, getDeliveryById } from './deliveries'
+import { appendEntry } from './entries'
+import { createDeliveryIntent, createDeliveryOutbox, getDeliveryById } from './deliveries'
 import { getGuestThreadById, updateThreadProjection } from './repository'
 import { advanceMemberCursor } from './read-state'
 import { nextConversationState } from './state-machine'
-import type { AnyGuestThreadSourceAdapter, GuestThreadRow } from './types'
+import type { AnyGuestThreadSourceAdapter, GuestThreadCommandRow, GuestThreadRow } from './types'
 
 export type OperationOutcome =
   | { ok: true; thread: GuestThreadRow; availableActions: string[] }
   | { ok: false; status: 404; reason: 'thread_not_found' | 'source_not_found' | 'delivery_not_found' }
   | { ok: false; status: 409; reason: 'invalid_transition'; message: string }
   | { ok: false; status: 400; reason: 'no_guest_email' | 'empty_body' | 'missing_delivery_id' }
+  | { ok: false; status: 400; reason: 'missing_idempotency_key' }
+
+type StoredCommandResult =
+  | { ok: true }
+  | { ok: false; status: 400 | 404 | 409; reason: Exclude<OperationOutcome, { ok: true }>['reason']; message?: string }
 
 export interface ExecuteOperationInput {
   threadId: string
@@ -23,6 +29,7 @@ export interface ExecuteOperationInput {
   body?: string
   deliveryId?: string
   env: ReplyEmailEnv
+  idempotencyKey?: string
 }
 
 async function loadThreadContext(db: DbClient, threadId: string, siteId: string) {
@@ -32,6 +39,119 @@ async function loadThreadContext(db: DbClient, threadId: string, siteId: string)
   const source = await adapter.loadSource({ db }, thread.submission_id)
   if (!source) return null
   return { thread, adapter, source }
+}
+
+function commandRequestHash(input: ExecuteOperationInput): string {
+  return createHash('sha256').update(JSON.stringify({
+    action: input.action,
+    body: input.body ?? null,
+    deliveryId: input.deliveryId ?? null,
+  })).digest('hex')
+}
+
+async function getStoredCommandOutcome(
+  db: DbClient,
+  thread: GuestThreadRow,
+  input: ExecuteOperationInput,
+): Promise<OperationOutcome | null> {
+  if (!input.idempotencyKey) return { ok: false, status: 400, reason: 'missing_idempotency_key' }
+  const existing = await queryFirst<GuestThreadCommandRow>(db, `
+    SELECT * FROM guest_thread_commands
+    WHERE thread_id = ? AND idempotency_key = ?
+    LIMIT 1
+  `, [thread.id, input.idempotencyKey])
+  if (!existing) return null
+  if (existing.request_hash !== commandRequestHash(input)) {
+    return { ok: false, status: 409, reason: 'invalid_transition', message: 'Idempotency key was reused with a different request' }
+  }
+  if (existing.status === 'pending') {
+    return { ok: false, status: 409, reason: 'invalid_transition', message: 'This operation is already in progress' }
+  }
+  const storedResult: StoredCommandResult = existing.result_json ? JSON.parse(existing.result_json) as StoredCommandResult : { ok: true }
+  if (!storedResult.ok) {
+    if (storedResult.reason === 'invalid_transition') {
+      return { ok: false, status: 409, reason: storedResult.reason, message: storedResult.message ?? 'Operation failed' }
+    }
+    if (storedResult.reason === 'thread_not_found' || storedResult.reason === 'source_not_found' || storedResult.reason === 'delivery_not_found') {
+      return { ok: false, status: 404, reason: storedResult.reason }
+    }
+    if (storedResult.reason === 'no_guest_email' || storedResult.reason === 'empty_body' || storedResult.reason === 'missing_delivery_id' || storedResult.reason === 'missing_idempotency_key') {
+      return { ok: false, status: 400, reason: storedResult.reason }
+    }
+  }
+  const adapter = getAdapter(thread.submission_type)
+  const source = await adapter.loadSource({ db }, thread.submission_id)
+  const refreshedThread = await getGuestThreadById(db, thread.id, thread.site_id)
+  return { ok: true, thread: refreshedThread ?? thread, availableActions: source ? adapter.listAvailableActions(source) : [] }
+}
+
+function commandResultJson(outcome: OperationOutcome): string {
+  return JSON.stringify(outcome.ok
+    ? { ok: true }
+    : {
+        ok: false,
+        status: outcome.status,
+        reason: outcome.reason,
+        message: 'message' in outcome ? outcome.message : undefined,
+      })
+}
+
+async function reserveCommand(
+  db: DbClient,
+  thread: GuestThreadRow,
+  input: ExecuteOperationInput,
+): Promise<OperationOutcome | null> {
+  if (!input.idempotencyKey) return { ok: false, status: 400, reason: 'missing_idempotency_key' }
+  const now = new Date().toISOString()
+  try {
+    await execute(db, `
+      INSERT INTO guest_thread_commands
+        (id, thread_id, organization_id, site_id, action, idempotency_key, actor_kind, actor_user_id, actor_member_id, request_hash, status, result_json, created_at, completed_at)
+      VALUES (?, ?, ?, ?, ?, ?, 'member', ?, ?, ?, 'pending', NULL, ?, NULL)
+    `, [
+      crypto.randomUUID(),
+      thread.id,
+      thread.organization_id,
+      thread.site_id,
+      input.action,
+      input.idempotencyKey,
+      input.actorUserId,
+      input.actorMemberId,
+      commandRequestHash(input),
+      now,
+    ])
+    return null
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (/UNIQUE constraint failed/i.test(message)) {
+      return await getStoredCommandOutcome(db, thread, input)
+    }
+    throw error instanceof Error ? error : new Error(message)
+  }
+}
+
+async function storeCommandResult(
+  db: DbClient,
+  thread: GuestThreadRow,
+  input: ExecuteOperationInput,
+  outcome: OperationOutcome,
+): Promise<void> {
+  if (!input.idempotencyKey) return
+  const now = new Date().toISOString()
+  await execute(db, `
+    UPDATE guest_thread_commands
+    SET status = ?, result_json = ?, completed_at = ?, actor_user_id = ?, actor_member_id = ?
+    WHERE thread_id = ? AND idempotency_key = ? AND request_hash = ?
+  `, [
+    outcome.ok ? 'completed' : 'failed',
+    commandResultJson(outcome),
+    now,
+    input.actorUserId,
+    input.actorMemberId,
+    thread.id,
+    input.idempotencyKey,
+    commandRequestHash(input),
+  ])
 }
 
 async function getSiteBrandName(db: DbClient, siteId: string): Promise<string> {
@@ -72,28 +192,42 @@ export async function executeGuestThreadOperation(db: DbClient, input: ExecuteOp
   const context = await loadThreadContext(db, input.threadId, input.siteId)
   if (!context) return { ok: false, status: 404, reason: 'thread_not_found' }
   const { thread, adapter, source } = context
+  const stored = await getStoredCommandOutcome(db, thread, input)
+  if (stored) return stored
+  const reserved = await reserveCommand(db, thread, input)
+  if (reserved) return reserved
 
   if (input.action === 'reply') {
-    return await executeReply(db, input, thread, adapter, source)
+    const outcome = await executeReply(db, input, thread, adapter, source)
+    await storeCommandResult(db, thread, input, outcome)
+    return outcome
   }
   if (input.action === 'resolve') {
-    return await executeManualTransition(db, thread, 'manual_resolve', 'resolved', input.actorUserId)
+    const outcome = await executeManualTransition(db, thread, 'manual_resolve', 'resolved', input.actorUserId)
+    await storeCommandResult(db, thread, input, outcome)
+    return outcome
   }
   if (input.action === 'reopen') {
-    return await executeManualTransition(db, thread, 'manual_reopen', 'reopened', input.actorUserId)
+    const outcome = await executeManualTransition(db, thread, 'manual_reopen', 'reopened', input.actorUserId)
+    await storeCommandResult(db, thread, input, outcome)
+    return outcome
   }
   if (input.action === 'retry_delivery') {
-    return await executeRetryDelivery(db, input, thread, adapter, source)
+    const outcome = await executeRetryDelivery(db, input, thread, adapter, source)
+    await storeCommandResult(db, thread, input, outcome)
+    return outcome
   }
 
   const availableActions = adapter.listAvailableActions(source)
   if (!availableActions.includes(input.action)) {
-    return {
+    const outcome: OperationOutcome = {
       ok: false,
       status: 409,
       reason: 'invalid_transition',
       message: `"${input.action}" is not a valid action for the current state`,
     }
+    await storeCommandResult(db, thread, input, outcome)
+    return outcome
   }
 
   const result = await adapter.executeAction(
@@ -102,7 +236,9 @@ export async function executeGuestThreadOperation(db: DbClient, input: ExecuteOp
     input.action,
   )
   if (!result.ok) {
-    return { ok: false, status: 409, reason: 'invalid_transition', message: result.message }
+    const outcome: OperationOutcome = { ok: false, status: 409, reason: 'invalid_transition', message: result.message }
+    await storeCommandResult(db, thread, input, outcome)
+    return outcome
   }
 
   await updateThreadProjection(db, thread.id, { operationalStatus: result.afterStatus })
@@ -141,21 +277,17 @@ export async function executeGuestThreadOperation(db: DbClient, input: ExecuteOp
         entryId: operationEntry.id,
         channel: 'email',
         idempotencyKey,
-        toAddress: summary.guestEmail,
+        payload: {
+          toAddress: summary.guestEmail,
+          fromName,
+          subject: operationSubject(input.action, fromName),
+          textBody: operationBody(input.action, adapter, source),
+          templateVersion: `guest-thread-operation:${adapter.type}:${input.action}:1`,
+          sourceSnapshot: adapter.buildCurrentDetail(source) as unknown as Record<string, unknown>,
+        },
       })
-
-      const { success, error } = await attemptEmailDelivery(db, {
-        delivery,
-        env: input.env,
-        to: summary.guestEmail,
-        fromName,
-        subject: operationSubject(input.action, fromName),
-        body: operationBody(input.action, adapter, source),
-        submissionType: adapter.type,
-        submissionId: thread.submission_id,
-      })
-
-      notificationOutcome = success ? 'sent' : 'failed'
+      await createDeliveryOutbox(db, { threadId: thread.id, deliveryId: delivery.id })
+      notificationOutcome = 'failed'
       await appendEntry(db, {
         threadId: thread.id,
         organizationId: thread.organization_id,
@@ -163,8 +295,8 @@ export async function executeGuestThreadOperation(db: DbClient, input: ExecuteOp
         kind: 'delivery',
         actorKind: 'system',
         channel: 'email',
-        eventName: success ? 'delivery.sent' : 'delivery.failed',
-        payloadJson: { action: input.action, deliveryId: delivery.id, error: error ?? null },
+        eventName: 'delivery.queued',
+        payloadJson: { action: input.action, deliveryId: delivery.id },
       })
     }
   }
@@ -179,7 +311,9 @@ export async function executeGuestThreadOperation(db: DbClient, input: ExecuteOp
   const refreshedSource = await adapter.loadSource({ db }, thread.submission_id)
   const refreshedActions = refreshedSource ? adapter.listAvailableActions(refreshedSource) : []
 
-  return { ok: true, thread: refreshedThread ?? thread, availableActions: refreshedActions }
+  const outcome: OperationOutcome = { ok: true, thread: refreshedThread ?? thread, availableActions: refreshedActions }
+  await storeCommandResult(db, thread, input, outcome)
+  return outcome
 }
 
 async function executeManualTransition(
@@ -207,15 +341,6 @@ async function executeManualTransition(
   return { ok: true, thread: refreshedThread ?? thread, availableActions }
 }
 
-/**
- * Retries a previously failed delivery using the same durable intent row (no new
- * idempotency key/entry is created — this is a re-attempt of the existing intent, not a
- * new send). Reconstructs the message content from the delivery's associated ledger
- * entry: a `message` entry's body is resent verbatim; an `operation` entry's
- * confirm/cancel/complete notification is recomposed from the adapter's *current*
- * source detail (the transactional content, e.g. reservation date/time, is still
- * accurate even if other fields changed since).
- */
 async function executeRetryDelivery(
   db: DbClient,
   input: ExecuteOperationInput,
@@ -237,34 +362,7 @@ async function executeRetryDelivery(
     return { ok: false, status: 409, reason: 'invalid_transition', message: 'Only failed deliveries with remaining retry attempts can be retried' }
   }
 
-  const entry = delivery.entry_id ? await getEntryById(db, delivery.entry_id) : null
-  const fromName = await getSiteBrandName(db, thread.site_id)
-
-  let subject: string
-  let body: string
-  if (entry?.kind === 'message' && entry.body) {
-    subject = thread.submission_type === 'contact'
-      ? `Re: your message to ${fromName}`
-      : thread.submission_type === 'reservation'
-        ? `Re: your reservation at ${fromName}`
-        : `Re: your booking at ${fromName}`
-    body = entry.body
-  } else {
-    const action = entry ? (parseEntryPayload(entry)?.action as string | undefined) ?? 'confirm' : 'confirm'
-    subject = operationSubject(action, fromName)
-    body = operationBody(action, adapter, source)
-  }
-
-  const { success, error } = await attemptEmailDelivery(db, {
-    delivery,
-    env: input.env,
-    to: delivery.to_address,
-    fromName,
-    subject,
-    body,
-    submissionType: adapter.type,
-    submissionId: thread.submission_id,
-  })
+  await createDeliveryOutbox(db, { threadId: thread.id, deliveryId: delivery.id })
 
   await appendEntry(db, {
     threadId: thread.id,
@@ -274,22 +372,9 @@ async function executeRetryDelivery(
     actorKind: 'member',
     actorUserId: input.actorUserId,
     channel: 'email',
-    eventName: success ? 'delivery.retry_sent' : 'delivery.retry_failed',
-    payloadJson: { deliveryId: delivery.id, error: error ?? null },
+    eventName: 'delivery.retry_queued',
+    payloadJson: { deliveryId: delivery.id },
   })
-
-  // A successful reply-message retry doesn't itself change conversation state further —
-  // the original reply already moved the thread to waiting_on_guest when it was first
-  // sent (or attempted). Only an operation-notification retry (confirm/cancel/complete)
-  // completes the state-machine's "operation succeeded + notification sent" transition,
-  // since that transition was deliberately withheld while the notification was failing.
-  if (success && entry?.kind !== 'message') {
-    const conversationState = nextConversationState(thread.conversation_state, {
-      type: 'operation_succeeded',
-      notificationOutcome: 'sent',
-    })
-    await updateThreadProjection(db, thread.id, { conversationState })
-  }
 
   const refreshedThread = await getGuestThreadById(db, thread.id, thread.site_id)
   const availableActions = adapter.listAvailableActions(source)
@@ -308,21 +393,6 @@ async function executeReply(
 
   const replyBody = (input.body ?? '').trim()
   if (!replyBody) return { ok: false, status: 400, reason: 'empty_body' }
-
-  // Duplicate-send guard: an identical reply within the last 30s is treated as the same
-  // submission (client retry after a network error), not sent again.
-  const recent = await getLatestEntryByKind(db, thread.id, ['message'])
-  const dedupeWindowStart = Date.now() - 30_000
-  if (
-    recent
-    && recent.actor_kind === 'member'
-    && recent.body === replyBody
-    && new Date(recent.created_at).getTime() > dedupeWindowStart
-  ) {
-    const refreshedThread = await getGuestThreadById(db, thread.id, thread.site_id)
-    const availableActions = adapter.listAvailableActions(source)
-    return { ok: true, thread: refreshedThread ?? thread, availableActions }
-  }
 
   // Message + delivery intent are persisted before the send attempt — the canonical
   // history entry exists even if the provider call subsequently fails (issue #442
@@ -350,20 +420,17 @@ async function executeReply(
     threadId: thread.id,
     entryId: messageEntry.id,
     channel: 'email',
-    idempotencyKey: `guest-thread-reply:${messageEntry.id}`,
-    toAddress: summary.guestEmail,
+    idempotencyKey: input.idempotencyKey ?? `guest-thread-reply:${messageEntry.id}`,
+    payload: {
+      toAddress: summary.guestEmail,
+      fromName,
+      subject,
+      textBody: replyBody,
+      templateVersion: `guest-thread-reply:${thread.submission_type}:1`,
+      sourceSnapshot: adapter.buildCurrentDetail(source) as unknown as Record<string, unknown>,
+    },
   })
-
-  const { success, error } = await attemptEmailDelivery(db, {
-    delivery,
-    env: input.env,
-    to: summary.guestEmail,
-    fromName,
-    subject,
-    body: replyBody,
-    submissionType: adapter.type,
-    submissionId: thread.submission_id,
-  })
+  await createDeliveryOutbox(db, { threadId: thread.id, deliveryId: delivery.id })
 
   await appendEntry(db, {
     threadId: thread.id,
@@ -372,14 +439,11 @@ async function executeReply(
     kind: 'delivery',
     actorKind: 'system',
     channel: 'email',
-    eventName: success ? 'delivery.sent' : 'delivery.failed',
-    payloadJson: { action: 'reply', deliveryId: delivery.id, error: error ?? null },
+    eventName: 'delivery.queued',
+    payloadJson: { action: 'reply', deliveryId: delivery.id },
   })
 
   await advanceMemberCursor(db, thread.id, input.actorMemberId, messageEntry.id)
-
-  const conversationState = nextConversationState(thread.conversation_state, { type: 'owner_reply_sent' })
-  await updateThreadProjection(db, thread.id, { conversationState })
 
   const refreshedThread = await getGuestThreadById(db, thread.id, thread.site_id)
   const availableActions = adapter.listAvailableActions(source)

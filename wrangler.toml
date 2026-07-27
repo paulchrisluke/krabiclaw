@@ -1,5 +1,5 @@
 name = "krabiclaw"
-main = ".output/server/index.mjs"
+main = "workers/app-entry.ts"
 compatibility_date = "2024-11-01"
 compatibility_flags = ["nodejs_compat_v2"]
 
@@ -78,6 +78,27 @@ database_id = "0d0cd133-1914-48b1-b010-8fe574fede0c"
 migrations_dir = "migrations"
 remote = false
 
+[[durable_objects.bindings]]
+name = "GUEST_THREAD_COMMANDS"
+class_name = "GuestThreadCommandObject"
+
+[[durable_objects.bindings]]
+name = "GUEST_INBOX_HUBS"
+class_name = "GuestInboxHubObject"
+
+[[migrations]]
+tag = "v1_guest_inbox_infra"
+new_sqlite_classes = ["GuestThreadCommandObject", "GuestInboxHubObject"]
+
+[[queues.producers]]
+binding = "GUEST_DELIVERY_QUEUE"
+queue = "krabiclaw-guest-delivery"
+
+[[queues.consumers]]
+queue = "krabiclaw-guest-delivery"
+dead_letter_queue = "krabiclaw-guest-delivery-dlq"
+max_retries = 5
+
 [[r2_buckets]]
 binding = "MEDIA_BUCKET"
 bucket_name = "krabiclaw-media"
@@ -148,6 +169,27 @@ database_id = "abda2264-f84f-4cc7-8483-930fe9fc288d"
 migrations_dir = "migrations"
 remote = false
 
+[[env.preview.durable_objects.bindings]]
+name = "GUEST_THREAD_COMMANDS"
+class_name = "GuestThreadCommandObject"
+
+[[env.preview.durable_objects.bindings]]
+name = "GUEST_INBOX_HUBS"
+class_name = "GuestInboxHubObject"
+
+[[env.preview.migrations]]
+tag = "v1_guest_inbox_infra"
+new_sqlite_classes = ["GuestThreadCommandObject", "GuestInboxHubObject"]
+
+[[env.preview.queues.producers]]
+binding = "GUEST_DELIVERY_QUEUE"
+queue = "krabiclaw-guest-delivery-preview"
+
+[[env.preview.queues.consumers]]
+queue = "krabiclaw-guest-delivery-preview"
+dead_letter_queue = "krabiclaw-guest-delivery-preview-dlq"
+max_retries = 5
+
 [[env.preview.r2_buckets]]
 binding = "MEDIA_BUCKET"
 bucket_name = "krabiclaw-media-preview"
@@ -206,6 +248,27 @@ database_name = "krabiclaw-db-staging"
 database_id = "b6e29548-155d-43ce-81ba-f6f6c5473069"
 migrations_dir = "migrations"
 remote = false
+
+[[env.staging.durable_objects.bindings]]
+name = "GUEST_THREAD_COMMANDS"
+class_name = "GuestThreadCommandObject"
+
+[[env.staging.durable_objects.bindings]]
+name = "GUEST_INBOX_HUBS"
+class_name = "GuestInboxHubObject"
+
+[[env.staging.migrations]]
+tag = "v1_guest_inbox_infra"
+new_sqlite_classes = ["GuestThreadCommandObject", "GuestInboxHubObject"]
+
+[[env.staging.queues.producers]]
+binding = "GUEST_DELIVERY_QUEUE"
+queue = "krabiclaw-guest-delivery-staging"
+
+[[env.staging.queues.consumers]]
+queue = "krabiclaw-guest-delivery-staging"
+dead_letter_queue = "krabiclaw-guest-delivery-staging-dlq"
+max_retries = 5
 
 [[env.staging.r2_buckets]]
 binding = "MEDIA_BUCKET"

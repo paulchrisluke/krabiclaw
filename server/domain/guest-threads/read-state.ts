@@ -24,17 +24,20 @@ export async function advanceMemberCursor(
   threadId: string,
   memberId: string,
   entryId: string | null,
-  readAt: string = new Date().toISOString(),
 ): Promise<void> {
   const now = new Date().toISOString()
+  const entry = entryId
+    ? await queryFirst<{ sequence: number }>(db, `SELECT sequence FROM guest_thread_entries WHERE id = ? AND thread_id = ? LIMIT 1`, [entryId, threadId])
+    : await queryFirst<{ sequence: number }>(db, `SELECT COALESCE(MAX(sequence), 0) AS sequence FROM guest_thread_entries WHERE thread_id = ?`, [threadId])
+  const sequence = entry?.sequence ?? 0
   await execute(db, `
-    INSERT INTO guest_thread_member_state (thread_id, member_id, last_read_entry_id, last_read_at, created_at, updated_at)
+    INSERT INTO guest_thread_member_state (thread_id, member_id, last_read_entry_id, last_read_sequence, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT (thread_id, member_id) DO UPDATE SET
       last_read_entry_id = excluded.last_read_entry_id,
-      last_read_at = excluded.last_read_at,
+      last_read_sequence = excluded.last_read_sequence,
       updated_at = excluded.updated_at
-  `, [threadId, memberId, entryId, readAt, now, now])
+  `, [threadId, memberId, entryId, sequence, now, now])
 }
 
 /**
@@ -47,7 +50,7 @@ export async function computeUnreadForMember(
   memberId: string,
 ): Promise<boolean> {
   const cursor = await getMemberCursor(db, threadId, memberId)
-  if (!cursor || !cursor.last_read_at) {
+  if (!cursor || cursor.last_read_sequence <= 0) {
     const anyEntry = await queryFirst<{ id: string }>(db, `
       SELECT id FROM guest_thread_entries WHERE thread_id = ? LIMIT 1
     `, [threadId])
@@ -56,9 +59,9 @@ export async function computeUnreadForMember(
 
   const newer = await queryFirst<{ id: string }>(db, `
     SELECT id FROM guest_thread_entries
-    WHERE thread_id = ? AND occurred_at > ?
+    WHERE thread_id = ? AND sequence > ?
     LIMIT 1
-  `, [threadId, cursor.last_read_at])
+  `, [threadId, cursor.last_read_sequence])
   return Boolean(newer)
 }
 
@@ -96,7 +99,7 @@ export async function countUnreadForMemberInScope(
       AND EXISTS (
         SELECT 1 FROM guest_thread_entries e
         WHERE e.thread_id = gt.id
-          AND (gms.last_read_at IS NULL OR e.occurred_at > gms.last_read_at)
+          AND e.sequence > COALESCE(gms.last_read_sequence, 0)
       )
   `, params)
 

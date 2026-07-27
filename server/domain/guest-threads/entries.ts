@@ -40,8 +40,8 @@ export async function appendEntry(db: DbClient, input: AppendEntryInput): Promis
   try {
     await execute(db, `
       INSERT INTO guest_thread_entries
-        (id, thread_id, organization_id, site_id, kind, actor_kind, actor_user_id, channel, body, event_name, payload_json, external_id, occurred_at, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (id, thread_id, organization_id, site_id, kind, actor_kind, actor_user_id, channel, body, event_name, payload_json, external_id, sequence, occurred_at, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sequence), 0) + 1 FROM guest_thread_entries WHERE thread_id = ?), ?, ?)
     `, [
       id,
       input.threadId,
@@ -55,6 +55,7 @@ export async function appendEntry(db: DbClient, input: AppendEntryInput): Promis
       input.eventName ?? null,
       payloadJson,
       input.externalId ?? null,
+      input.threadId,
       occurredAt,
       createdAt,
     ])
@@ -86,7 +87,7 @@ export async function listThreadEntries(db: DbClient, threadId: string): Promise
   const rows = await queryAll<GuestThreadEntryRow>(db, `
     SELECT * FROM guest_thread_entries
     WHERE thread_id = ?
-    ORDER BY occurred_at ASC, created_at ASC
+    ORDER BY sequence ASC
   `, [threadId])
   return rows ?? []
 }
@@ -95,7 +96,7 @@ export async function getLatestEntry(db: DbClient, threadId: string): Promise<Gu
   return await queryFirst<GuestThreadEntryRow>(db, `
     SELECT * FROM guest_thread_entries
     WHERE thread_id = ?
-    ORDER BY occurred_at DESC, created_at DESC
+    ORDER BY sequence DESC
     LIMIT 1
   `, [threadId])
 }
@@ -109,7 +110,7 @@ export async function getLatestEntryByKind(
   return await queryFirst<GuestThreadEntryRow>(db, `
     SELECT * FROM guest_thread_entries
     WHERE thread_id = ? AND kind IN (${placeholders})
-    ORDER BY occurred_at DESC, created_at DESC
+    ORDER BY sequence DESC
     LIMIT 1
   `, [threadId, ...kinds])
 }
