@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import { isDeployedWorkerTarget } from './test-env'
 import { loginAs } from './helpers/auth'
 import { MCP_GROWTH_USER_ID } from './helpers/plan-fixtures'
-import { MCP_VERSION, MCP_GROWTH_SITE_ID, mcpRequest, mcpData, ensureSite, loginAsFreshMcpUser } from './helpers/mcp'
+import { MCP_VERSION, MCP_GROWTH_SITE_ID, mcpRequest, mcpData, loginAsFreshMcpUser } from './helpers/mcp'
 
 // Split out of mcp.spec.ts (media/asset workflow tests) — see helpers/mcp.ts
 // for why. This group covers the ChatGPT video-upload widget flow and the
@@ -10,8 +10,8 @@ import { MCP_VERSION, MCP_GROWTH_SITE_ID, mcpRequest, mcpData, ensureSite, login
 
 test.describe('stateless MCP server', () => {
   test('ChatGPT session can launch the video upload widget without transport failures', async ({ request, baseURL }) => {
-    await loginAsFreshMcpUser(request, baseURL!)
-    const siteId = await ensureSite(request, baseURL!)
+    await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
+    const siteId = MCP_GROWTH_SITE_ID
 
     const initialize = await mcpRequest(request, baseURL!, {
       method: 'initialize',
