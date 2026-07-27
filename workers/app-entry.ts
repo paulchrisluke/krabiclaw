@@ -1,3 +1,4 @@
+import { DurableObject } from 'cloudflare:workers'
 import nitroApp from '../.output/server/index.mjs'
 import { createDb, execute, queryFirst } from '../server/db'
 import { appendEntry } from '../server/domain/guest-threads/entries'
