@@ -310,7 +310,11 @@ function serializeOpeningHours(value: unknown) {
         "opening_hours must be a string, a string[], or an object like { weekdayDescriptions: string[] }.",
       );
     }
-    return JSON.stringify(value);
+    const weekdayDescriptions = (value as { weekdayDescriptions?: unknown }).weekdayDescriptions;
+    if (!Array.isArray(weekdayDescriptions) || !weekdayDescriptions.every((item) => typeof item === "string")) {
+      throw new Error("opening_hours.weekdayDescriptions must be an array of strings.");
+    }
+    return weekdayDescriptions.length ? JSON.stringify({ weekdayDescriptions }) : null;
   }
   const weekdayDescriptions = value
     .split(/\r?\n/)

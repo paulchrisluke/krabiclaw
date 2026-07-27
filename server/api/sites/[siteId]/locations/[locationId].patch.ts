@@ -1,5 +1,5 @@
 import { jsonResponse } from '~/server/utils/api-response'
-import { updateLocation } from '~/server/utils/location-management'
+import { updateLocation, type UpdateLocationInput } from '~/server/utils/location-management'
 import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
 import { requireLocationAccess } from '~/server/utils/location-access'
 
@@ -57,7 +57,7 @@ export default defineEventHandler(async (event) => {
       hero_video_asset_id: typeof body.hero_video_asset_id === 'string' ? body.hero_video_asset_id : body.hero_video_asset_id === null ? null : undefined,
       website_url: typeof body.website_url === 'string' ? body.website_url : body.website_url === null ? null : undefined,
       maps_url: typeof body.maps_url === 'string' ? body.maps_url : body.maps_url === null ? null : undefined,
-      opening_hours: body.opening_hours === undefined ? undefined : body.opening_hours ? JSON.stringify(body.opening_hours) : null,
+      opening_hours: body.opening_hours === undefined ? undefined : (body.opening_hours || null) as UpdateLocationInput['opening_hours'],
       description: typeof body.description === 'string' ? body.description : body.description === null ? null : undefined,
       short_description: typeof body.short_description === 'string' ? body.short_description : body.short_description === null ? null : undefined,
       price_level: typeof body.price_level === 'string' ? body.price_level : body.price_level === null ? null : undefined,

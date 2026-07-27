@@ -2,7 +2,7 @@
 import { getHeaders } from 'h3'
 import { jsonResponse } from '~/server/utils/api-response'
 import { getDashboardLocationContext } from '~/server/utils/dashboard-context'
-import { resolveLocationCapabilitySummary, syncLocationWhatsAppAccess, updateLocation } from '~/server/utils/location-management'
+import { resolveLocationCapabilitySummary, syncLocationWhatsAppAccess, updateLocation, type UpdateLocationInput } from '~/server/utils/location-management'
 import { parseLocationPayload } from './location-helpers'
 import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
 import { queryFirst } from '~/server/db'
@@ -106,9 +106,7 @@ export default defineEventHandler(async (event) => {
         ? undefined
         : body.opening_hours === null
           ? null
-          : typeof body.opening_hours === 'string'
-            ? body.opening_hours
-            : JSON.stringify(body.opening_hours),
+          : body.opening_hours as UpdateLocationInput['opening_hours'],
       description: typeof body.description === 'string' ? body.description : body.description === null ? null : undefined,
       short_description: typeof body.short_description === 'string' ? body.short_description : body.short_description === null ? null : undefined,
       price_level: typeof body.price_level === 'string' ? body.price_level : body.price_level === null ? null : undefined,
