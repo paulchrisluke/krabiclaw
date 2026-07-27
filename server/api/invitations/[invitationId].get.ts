@@ -2,6 +2,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { queryAll, queryFirst } from '~/server/db'
 import { buildInvitationRedirectUrl, sanitizeInvitationReturnTo } from '~/server/utils/invitations'
+import { isPhoneInvitationEmail } from '~/server/utils/phone-invitations'
 
 export default defineEventHandler(async (event) => {
   const invitationId = String(getRouterParam(event, 'invitationId') || '').trim()
@@ -67,7 +68,12 @@ export default defineEventHandler(async (event) => {
           ORDER BY created_at ASC
         `, [invitation.organizationId])
         const preferredSite = preferredSiteId ? orgSites.find(site => site.id === preferredSiteId) ?? null : null
-        redirectTo = buildInvitationRedirectUrl({ orgSlug, preferredSite, fallbackSites: orgSites })
+        redirectTo = buildInvitationRedirectUrl({
+          orgSlug,
+          preferredSite,
+          fallbackSites: orgSites,
+          bypassOnboardingGate: isPhoneInvitationEmail(invitation.email),
+        })
       }
       return jsonResponse({ status: 'accepted', redirectTo, organization: { id: invitation.organizationId, slug: invitation.organizationSlug } })
     }
