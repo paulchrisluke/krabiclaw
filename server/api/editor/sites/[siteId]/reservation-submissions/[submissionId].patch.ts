@@ -33,7 +33,7 @@ export default defineEventHandler(async (event) => {
   const site = await loadMemberSiteRow(db, siteId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
-  const submission = await queryFirst<{ location_id: string }>(db, `SELECT location_id FROM reservation_submissions WHERE id = ? AND site_id = ? LIMIT 1`, [submissionId, siteId])
+  const submission = await queryFirst<{ location_id: string; status: string; updated_at: string }>(db, `SELECT location_id, status, updated_at FROM reservation_submissions WHERE id = ? AND site_id = ? LIMIT 1`, [submissionId, siteId])
   if (!submission) return jsonResponse({ error: 'Reservation not found' }, { status: 404 })
 
   await assertResourceAccess(db, {
@@ -60,6 +60,7 @@ export default defineEventHandler(async (event) => {
     actorUserId: session.user.id,
     actorMemberId: site.member_id,
     env,
+    idempotencyKey: `editor:reservation:${submissionId}:${submission.status}:${submission.updated_at}:${action}`,
   })
 
   if (!outcome.ok) {

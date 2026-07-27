@@ -8,6 +8,8 @@ export type ConversationState = 'needs_attention' | 'waiting_on_guest' | 'resolv
 export type GuestThreadSubmissionType = 'contact' | 'reservation' | 'experience_booking'
 export type GuestThreadDeliveryChannel = 'email' | 'whatsapp'
 export type GuestThreadDeliveryStatus = 'queued' | 'sent' | 'failed'
+export type GuestThreadCommandStatus = 'pending' | 'completed' | 'failed'
+export type GuestThreadOutboxStatus = 'pending' | 'publishing' | 'published' | 'failed' | 'dead'
 
 export const CONVERSATION_STATE_LABELS: Record<ConversationState, string> = {
   needs_attention: 'Needs reply',
@@ -31,6 +33,7 @@ export interface GuestThreadRow {
   last_message_preview: string | null
   conversation_state: ConversationState
   operational_status: string | null
+  version: number
   resolved_at: string | null
   created_at: string
   updated_at: string
@@ -49,6 +52,7 @@ export interface GuestThreadEntryRow {
   event_name: string | null
   payload_json: string | null
   external_id: string | null
+  sequence: number | null
   occurred_at: string
   created_at: string
 }
@@ -57,7 +61,7 @@ export interface GuestThreadMemberStateRow {
   thread_id: string
   member_id: string
   last_read_entry_id: string | null
-  last_read_at: string | null
+  last_read_sequence: number
   created_at: string
   updated_at: string
 }
@@ -74,6 +78,47 @@ export interface GuestThreadDeliveryRow {
   last_error: string | null
   provider_message_id: string | null
   to_address: string | null
+  from_name: string | null
+  subject: string | null
+  text_body: string | null
+  reply_to: string | null
+  locale: string | null
+  template_version: string | null
+  source_snapshot_json: string | null
+  payload_hash: string | null
+  provider_idempotency_key: string | null
+  processing_lease_until: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface GuestThreadCommandRow {
+  id: string
+  thread_id: string
+  organization_id: string
+  site_id: string
+  action: string
+  idempotency_key: string
+  actor_kind: GuestThreadActorKind
+  actor_user_id: string | null
+  actor_member_id: string | null
+  request_hash: string
+  status: GuestThreadCommandStatus
+  result_json: string | null
+  created_at: string
+  completed_at: string | null
+}
+
+export interface GuestThreadOutboxRow {
+  id: string
+  thread_id: string
+  delivery_id: string | null
+  event_type: string
+  status: GuestThreadOutboxStatus
+  attempt_count: number
+  next_attempt_at: string | null
+  locked_at: string | null
+  last_error: string | null
   created_at: string
   updated_at: string
 }
@@ -167,6 +212,7 @@ export interface GuestThreadEntryViewModel {
   body: string | null
   eventName: string | null
   payload: Record<string, unknown> | null
+  sequence: number | null
   occurredAt: string
 }
 
@@ -194,7 +240,7 @@ export interface GuestThreadDetailViewModel {
   entries: GuestThreadEntryViewModel[]
   availableActions: string[]
   deliveryFailures: GuestThreadDeliveryFailureViewModel[]
-  memberReadCursor: { lastReadEntryId: string | null; lastReadAt: string | null }
+  memberReadCursor: { lastReadEntryId: string | null; lastReadSequence: number }
   createdAt: string
   updatedAt: string
   resolvedAt: string | null

@@ -170,6 +170,7 @@ export async function sendReplyEmail(env: ReplyEmailEnv, opts: {
   body: string
   submissionType: SubmissionType
   submissionId: string
+  idempotencyKey?: string
 }): Promise<SendReplyEmailResult> {
   const replyTo = await buildReplyToAddress(env, opts.submissionType, opts.submissionId)
 
@@ -197,6 +198,7 @@ export async function sendReplyEmail(env: ReplyEmailEnv, opts: {
       headers: {
         Authorization: `Bearer ${env.RESEND_API_KEY}`,
         'Content-Type': 'application/json',
+        ...(opts.idempotencyKey ? { 'Idempotency-Key': opts.idempotencyKey } : {}),
       },
       body: JSON.stringify({
         from: fromValue,
@@ -220,4 +222,3 @@ export async function sendReplyEmail(env: ReplyEmailEnv, opts: {
   const data = await response.json().catch(() => ({})) as { id?: string }
   return { success: true, messageId: data.id }
 }
-

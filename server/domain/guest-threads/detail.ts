@@ -48,6 +48,7 @@ export async function getGuestThreadDetail(
     body: entry.body,
     eventName: entry.event_name,
     payload: parseEntryPayload(entry),
+    sequence: entry.sequence,
     occurredAt: entry.occurred_at,
   }))
 
@@ -77,7 +78,7 @@ export async function getGuestThreadDetail(
     })),
     memberReadCursor: {
       lastReadEntryId: cursor?.last_read_entry_id ?? null,
-      lastReadAt: cursor?.last_read_at ?? null,
+      lastReadSequence: cursor?.last_read_sequence ?? 0,
     },
     createdAt: thread.created_at,
     updatedAt: thread.updated_at,

@@ -193,7 +193,7 @@ async function countUnreadThreadIds(
       AND EXISTS (
         SELECT 1 FROM guest_thread_entries e
         WHERE e.thread_id = gt.id
-          AND (gms.last_read_at IS NULL OR e.occurred_at > gms.last_read_at)
+          AND e.sequence > COALESCE(gms.last_read_sequence, 0)
       )
   `, [memberId, ...params])
   return rows.length
@@ -248,7 +248,7 @@ export async function listGuestThreads(
         FROM guest_thread_entries e
         LEFT JOIN guest_thread_member_state gms ON gms.thread_id = gt.id AND gms.member_id = ?
         WHERE e.thread_id = gt.id
-          AND (gms.last_read_at IS NULL OR e.occurred_at > gms.last_read_at)
+          AND e.sequence > COALESCE(gms.last_read_sequence, 0)
       )
     `
     : ''
@@ -260,12 +260,12 @@ export async function listGuestThreads(
       (
         SELECT body FROM guest_thread_entries
         WHERE thread_id = gt.id AND kind = 'message'
-        ORDER BY occurred_at DESC LIMIT 1
+        ORDER BY sequence DESC LIMIT 1
       ) AS latest_message_body,
       (
         SELECT kind FROM guest_thread_entries
         WHERE thread_id = gt.id AND kind = 'message'
-        ORDER BY occurred_at DESC LIMIT 1
+        ORDER BY sequence DESC LIMIT 1
       ) AS latest_message_kind
     FROM guest_threads gt
     LEFT JOIN business_locations bl ON bl.id = gt.location_id
@@ -314,7 +314,7 @@ async function listUnreadThreadIds(db: DbClient, threadIds: string[], memberId: 
       AND EXISTS (
         SELECT 1 FROM guest_thread_entries e
         WHERE e.thread_id = gt.id
-          AND (gms.last_read_at IS NULL OR e.occurred_at > gms.last_read_at)
+          AND e.sequence > COALESCE(gms.last_read_sequence, 0)
       )
   `, [memberId, ...threadIds])
   return (rows ?? []).map(row => row.thread_id)

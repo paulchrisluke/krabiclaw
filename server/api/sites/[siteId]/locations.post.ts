@@ -1,5 +1,5 @@
 import { jsonResponse } from '~/server/utils/api-response'
-import { createLocation } from '~/server/utils/location-management'
+import { createLocation, type CreateLocationInput } from '~/server/utils/location-management'
 import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
 import { requireSiteAccess } from '~/server/utils/location-access'
 
@@ -75,7 +75,7 @@ export default defineEventHandler(async (event) => {
       google_place_id: body?.google_place_id ?? null,
       rating,
       review_count: reviewCount,
-      opening_hours: body?.opening_hours ? JSON.stringify(body.opening_hours) : null,
+      opening_hours: (body?.opening_hours || null) as CreateLocationInput['opening_hours'],
       is_primary: body?.is_primary === true,
     },
     session.user.id,

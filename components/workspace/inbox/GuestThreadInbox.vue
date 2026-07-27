@@ -161,6 +161,7 @@ interface ThreadEntry {
   body: string | null
   eventName: string | null
   payload: Record<string, unknown> | null
+  sequence: number | null
   occurredAt: string
 }
 
@@ -194,7 +195,7 @@ interface ThreadDetail {
   entries: ThreadEntry[]
   availableActions: string[]
   deliveryFailures: DeliveryFailure[]
-  memberReadCursor: { lastReadEntryId: string | null; lastReadAt: string | null }
+  memberReadCursor: { lastReadEntryId: string | null; lastReadSequence: number }
   createdAt: string
   updatedAt: string
   resolvedAt: string | null
@@ -254,6 +255,10 @@ const replySaving = ref(false)
 const search = ref('')
 const operationActionPending = ref<string | null>(null)
 const retryingDeliveryId = ref<string | null>(null)
+const replyAttemptKey = ref<string | null>(null)
+const replyAttemptDraft = ref<string | null>(null)
+const operationAttemptKeys = ref<Record<string, string>>({})
+const retryAttemptKeys = ref<Record<string, string>>({})
 
 const conversationEntries = computed<GuestThreadEntryMessage[]>(() => (selectedDetail.value?.entries ?? []).map(entry => ({
   ...entry,
@@ -311,6 +316,22 @@ function threadRoute(threadId: string) {
   return `${listRoute.value}/${encodeURIComponent(threadId)}`
 }
 
+function activeReplyAttemptKey() {
+  replyAttemptKey.value ||= crypto.randomUUID()
+  replyAttemptDraft.value = replyDraft.value
+  return replyAttemptKey.value
+}
+
+function activeAttemptMapKey(keys: Ref<Record<string, string>>, name: string) {
+  keys.value[name] ||= crypto.randomUUID()
+  return keys.value[name]
+}
+
+function clearAttemptMapKey(keys: Ref<Record<string, string>>, name: string) {
+  const { [name]: _completedAttempt, ...remaining } = keys.value
+  keys.value = remaining
+}
+
 async function goBackToList() {
   await router.push(listRoute.value)
 }
@@ -363,13 +384,16 @@ async function refreshThread(threadId: string) {
 
 async function sendReply() {
   if (!props.threadId || !replyDraft.value.trim()) return
+  const idempotencyKey = activeReplyAttemptKey()
   replySaving.value = true
   try {
     await $fetch(`/api/dashboard/sites/${siteId}/guest-threads/${props.threadId}/operations/reply`, {
       method: 'POST',
       headers: dashboardRequestHeaders.value,
-      body: { body: replyDraft.value },
+      body: { body: replyDraft.value, idempotencyKey },
     })
+    replyAttemptKey.value = null
+    replyAttemptDraft.value = null
     toast.add({ description: 'Reply sent', color: 'success' })
     await refreshThread(props.threadId)
   } catch (error) {
@@ -387,12 +411,16 @@ async function runOperationalAction(action: string) {
     if (!confirmed) return
   }
   const threadId = selectedDetail.value.id
+  const attemptName = `${threadId}:${action}`
+  const idempotencyKey = activeAttemptMapKey(operationAttemptKeys, attemptName)
   operationActionPending.value = action
   try {
     await $fetch(`/api/dashboard/sites/${siteId}/guest-threads/${threadId}/operations/${action}`, {
       method: 'POST',
       headers: dashboardRequestHeaders.value,
+      body: { idempotencyKey },
     })
+    clearAttemptMapKey(operationAttemptKeys, attemptName)
     toast.add({ description: `${meta.label} applied`, color: 'success' })
     await refreshThread(threadId)
   } catch (error) {
@@ -409,13 +437,16 @@ async function runThreadAction(action: string) {
 async function retryDelivery(deliveryId: string) {
   if (!selectedDetail.value) return
   const threadId = selectedDetail.value.id
+  const attemptName = `${threadId}:${deliveryId}`
+  const idempotencyKey = activeAttemptMapKey(retryAttemptKeys, attemptName)
   retryingDeliveryId.value = deliveryId
   try {
     await $fetch(`/api/dashboard/sites/${siteId}/guest-threads/${threadId}/operations/retry_delivery`, {
       method: 'POST',
       headers: dashboardRequestHeaders.value,
-      body: { deliveryId },
+      body: { deliveryId, idempotencyKey },
     })
+    clearAttemptMapKey(retryAttemptKeys, attemptName)
     await refreshThread(threadId)
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Retry failed', color: 'error' })
@@ -448,6 +479,13 @@ watch(search, () => {
   searchTimer = setTimeout(() => {
     void loadThreads()
   }, 250)
+})
+
+watch(replyDraft, (draft) => {
+  if (replyAttemptKey.value && replyAttemptDraft.value !== null && draft !== replyAttemptDraft.value) {
+    replyAttemptKey.value = null
+    replyAttemptDraft.value = null
+  }
 })
 
 watch(() => dashboardLocation.currentLocationId.value, async () => {

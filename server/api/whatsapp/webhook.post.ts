@@ -506,6 +506,7 @@ async function routeManagerWhatsAppMessage(
             actorMemberId,
             body: pendingState.replyBody,
             env,
+            idempotencyKey: `whatsapp:${opts.messageId}:reply`,
           })
         : { ok: false as const, status: 404 as const, reason: 'thread_not_found' as const }
       await clearPending()
