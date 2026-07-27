@@ -17,6 +17,19 @@ export interface AppendEntryInput {
   id?: string
 }
 
+const MAX_SEQUENCE_RETRIES = 3
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return /UNIQUE constraint failed/i.test(error instanceof Error ? error.message : String(error))
+}
+
+function isSequenceCollision(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /UNIQUE constraint failed/i.test(message)
+    && message.includes('guest_thread_entries.thread_id')
+    && message.includes('guest_thread_entries.sequence')
+}
+
 /**
  * Appends one immutable fact to the canonical guest-thread ledger. Entries are never
  * updated in place — corrections are new entries (issue #442 Locked Decision #2).
@@ -37,35 +50,39 @@ export async function appendEntry(db: DbClient, input: AppendEntryInput): Promis
   const createdAt = new Date().toISOString()
   const payloadJson = input.payloadJson ? JSON.stringify(input.payloadJson) : null
 
-  try {
-    await execute(db, `
-      INSERT INTO guest_thread_entries
-        (id, thread_id, organization_id, site_id, kind, actor_kind, actor_user_id, channel, body, event_name, payload_json, external_id, sequence, occurred_at, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sequence), 0) + 1 FROM guest_thread_entries WHERE thread_id = ?), ?, ?)
-    `, [
-      id,
-      input.threadId,
-      input.organizationId,
-      input.siteId,
-      input.kind,
-      input.actorKind,
-      input.actorUserId ?? null,
-      input.channel ?? null,
-      input.body ?? null,
-      input.eventName ?? null,
-      payloadJson,
-      input.externalId ?? null,
-      input.threadId,
-      occurredAt,
-      createdAt,
-    ])
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    if (input.externalId && /UNIQUE constraint failed/i.test(message)) {
-      const concurrent = await findEntryByExternalId(db, input.externalId)
-      if (concurrent) return concurrent
+  for (let attempt = 1; attempt <= MAX_SEQUENCE_RETRIES; attempt += 1) {
+    try {
+      await execute(db, `
+        INSERT INTO guest_thread_entries
+          (id, thread_id, organization_id, site_id, kind, actor_kind, actor_user_id, channel, body, event_name, payload_json, external_id, sequence, occurred_at, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sequence), 0) + 1 FROM guest_thread_entries WHERE thread_id = ?), ?, ?)
+      `, [
+        id,
+        input.threadId,
+        input.organizationId,
+        input.siteId,
+        input.kind,
+        input.actorKind,
+        input.actorUserId ?? null,
+        input.channel ?? null,
+        input.body ?? null,
+        input.eventName ?? null,
+        payloadJson,
+        input.externalId ?? null,
+        input.threadId,
+        occurredAt,
+        createdAt,
+      ])
+      break
+    } catch (error) {
+      if (input.externalId && isUniqueConstraintError(error)) {
+        const concurrent = await findEntryByExternalId(db, input.externalId)
+        if (concurrent) return concurrent
+      }
+      if (attempt < MAX_SEQUENCE_RETRIES && isSequenceCollision(error)) continue
+      const message = error instanceof Error ? error.message : String(error)
+      throw error instanceof Error ? error : new Error(message)
     }
-    throw error instanceof Error ? error : new Error(message)
   }
 
   const created = await queryFirst<GuestThreadEntryRow>(db, `SELECT * FROM guest_thread_entries WHERE id = ? LIMIT 1`, [id])
@@ -87,7 +104,7 @@ export async function listThreadEntries(db: DbClient, threadId: string): Promise
   const rows = await queryAll<GuestThreadEntryRow>(db, `
     SELECT * FROM guest_thread_entries
     WHERE thread_id = ?
-    ORDER BY sequence ASC
+    ORDER BY sequence ASC, occurred_at ASC, id ASC
   `, [threadId])
   return rows ?? []
 }
@@ -96,7 +113,7 @@ export async function getLatestEntry(db: DbClient, threadId: string): Promise<Gu
   return await queryFirst<GuestThreadEntryRow>(db, `
     SELECT * FROM guest_thread_entries
     WHERE thread_id = ?
-    ORDER BY sequence DESC
+    ORDER BY sequence DESC, occurred_at DESC, id DESC
     LIMIT 1
   `, [threadId])
 }
@@ -110,7 +127,7 @@ export async function getLatestEntryByKind(
   return await queryFirst<GuestThreadEntryRow>(db, `
     SELECT * FROM guest_thread_entries
     WHERE thread_id = ? AND kind IN (${placeholders})
-    ORDER BY sequence DESC
+    ORDER BY sequence DESC, occurred_at DESC, id DESC
     LIMIT 1
   `, [threadId, ...kinds])
 }

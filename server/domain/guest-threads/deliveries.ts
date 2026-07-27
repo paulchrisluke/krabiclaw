@@ -46,8 +46,14 @@ export async function createDeliveryIntent(
     provider?: string | null
   },
 ): Promise<GuestThreadDeliveryRow> {
+  const incomingPayloadHash = payloadHash(input.payload)
   const existing = await getDeliveryByIdempotencyKey(db, input.idempotencyKey)
-  if (existing) return existing
+  if (existing) {
+    if (existing.payload_hash !== incomingPayloadHash) {
+      throw new Error('Idempotency key was reused with a different delivery payload')
+    }
+    return existing
+  }
 
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
@@ -74,7 +80,7 @@ export async function createDeliveryIntent(
       input.payload.locale ?? null,
       input.payload.templateVersion,
       input.payload.sourceSnapshot ? JSON.stringify(input.payload.sourceSnapshot) : null,
-      payloadHash(input.payload),
+      incomingPayloadHash,
       input.idempotencyKey,
       now,
       now,
@@ -122,8 +128,8 @@ export async function createDeliveryOutbox(
 export async function listPendingDeliveryOutbox(db: DbClient, limit = 25): Promise<GuestThreadOutboxRow[]> {
   const now = new Date().toISOString()
   const leaseExpiredAt = new Date(Date.now() - OUTBOX_LOCK_MS).toISOString()
-  const candidates = await queryAll<{ id: string }>(db, `
-    SELECT id FROM guest_thread_outbox
+  const candidates = await queryAll<GuestThreadOutboxRow>(db, `
+    SELECT * FROM guest_thread_outbox
     WHERE status IN ('pending', 'failed')
       AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
       AND attempt_count < ?
@@ -134,7 +140,7 @@ export async function listPendingDeliveryOutbox(db: DbClient, limit = 25): Promi
 
   const claimed: GuestThreadOutboxRow[] = []
   for (const candidate of candidates) {
-    await execute(db, `
+    const result = await execute(db, `
       UPDATE guest_thread_outbox
       SET status = 'publishing', locked_at = ?, updated_at = ?
       WHERE id = ?
@@ -144,12 +150,10 @@ export async function listPendingDeliveryOutbox(db: DbClient, limit = 25): Promi
         AND (locked_at IS NULL OR locked_at <= ?)
     `, [now, now, candidate.id, now, OUTBOX_MAX_ATTEMPTS, leaseExpiredAt])
 
-    const row = await queryFirst<GuestThreadOutboxRow>(db, `
-      SELECT * FROM guest_thread_outbox
-      WHERE id = ? AND status = 'publishing' AND locked_at = ?
-      LIMIT 1
-    `, [candidate.id, now])
-    if (row) claimed.push(row)
+    const changes = Number(result?.meta?.changes ?? 0)
+    if (changes > 0) {
+      claimed.push({ ...candidate, status: 'publishing', locked_at: now, updated_at: now })
+    }
   }
   return claimed
 }
@@ -202,6 +206,11 @@ export interface DeliverGuestEmailInput {
  */
 export async function attemptEmailDelivery(db: DbClient, input: DeliverGuestEmailInput): Promise<{ success: boolean; error?: string }> {
   if (!input.delivery.to_address || !input.delivery.from_name || !input.delivery.subject || !input.delivery.text_body) {
+    await markDeliveryAttempt(db, input.delivery.id, {
+      status: 'failed',
+      providerMessageId: null,
+      lastError: 'Delivery payload is incomplete',
+    })
     return { success: false, error: 'Delivery payload is incomplete' }
   }
   try {

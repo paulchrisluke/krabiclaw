@@ -256,6 +256,7 @@ const search = ref('')
 const operationActionPending = ref<string | null>(null)
 const retryingDeliveryId = ref<string | null>(null)
 const replyAttemptKey = ref<string | null>(null)
+const replyAttemptDraft = ref<string | null>(null)
 const operationAttemptKeys = ref<Record<string, string>>({})
 const retryAttemptKeys = ref<Record<string, string>>({})
 
@@ -315,9 +316,10 @@ function threadRoute(threadId: string) {
   return `${listRoute.value}/${encodeURIComponent(threadId)}`
 }
 
-function activeAttemptKey(key: Ref<string | null>) {
-  key.value ||= crypto.randomUUID()
-  return key.value
+function activeReplyAttemptKey() {
+  replyAttemptKey.value ||= crypto.randomUUID()
+  replyAttemptDraft.value = replyDraft.value
+  return replyAttemptKey.value
 }
 
 function activeAttemptMapKey(keys: Ref<Record<string, string>>, name: string) {
@@ -382,7 +384,7 @@ async function refreshThread(threadId: string) {
 
 async function sendReply() {
   if (!props.threadId || !replyDraft.value.trim()) return
-  const idempotencyKey = activeAttemptKey(replyAttemptKey)
+  const idempotencyKey = activeReplyAttemptKey()
   replySaving.value = true
   try {
     await $fetch(`/api/dashboard/sites/${siteId}/guest-threads/${props.threadId}/operations/reply`, {
@@ -391,6 +393,7 @@ async function sendReply() {
       body: { body: replyDraft.value, idempotencyKey },
     })
     replyAttemptKey.value = null
+    replyAttemptDraft.value = null
     toast.add({ description: 'Reply sent', color: 'success' })
     await refreshThread(props.threadId)
   } catch (error) {
@@ -476,6 +479,13 @@ watch(search, () => {
   searchTimer = setTimeout(() => {
     void loadThreads()
   }, 250)
+})
+
+watch(replyDraft, (draft) => {
+  if (replyAttemptKey.value && replyAttemptDraft.value !== null && draft !== replyAttemptDraft.value) {
+    replyAttemptKey.value = null
+    replyAttemptDraft.value = null
+  }
 })
 
 watch(() => dashboardLocation.currentLocationId.value, async () => {

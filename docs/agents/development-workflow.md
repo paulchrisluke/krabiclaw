@@ -58,6 +58,26 @@ yarn typecheck
 
 Use the same `PATH` and `NODE_OPTIONS` prefix for `yarn lint`, `yarn build`, and other heavy local checks. Do this before describing the check as blocked; local validation is still required.
 
+## Cloudflare Resource Readiness
+
+When adding or changing `wrangler.toml` bindings, validate the remote
+provisioning surface before opening or updating a PR:
+
+```bash
+yarn cloudflare:resources
+```
+
+For first-time provisioning of required Queues, run:
+
+```bash
+yarn cloudflare:resources --create
+```
+
+Durable Object classes are registered through Wrangler deploy migrations, so
+also run `wrangler deploy --dry-run` for every affected environment
+(`--env preview`, `--env staging`, and the top-level production config) after a
+production build exists.
+
 ## Fresh Worktree Browser Setup
 
 Do this before the first local browser/E2E run in a new worktree. Do not skip to selectors or app-code changes until this baseline is healthy.

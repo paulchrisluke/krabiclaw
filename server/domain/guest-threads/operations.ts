@@ -9,6 +9,8 @@ import { advanceMemberCursor } from './read-state'
 import { nextConversationState } from './state-machine'
 import type { AnyGuestThreadSourceAdapter, GuestThreadCommandRow, GuestThreadRow } from './types'
 
+const COMMAND_PENDING_LEASE_MS = 2 * 60_000
+
 export type OperationOutcome =
   | { ok: true; thread: GuestThreadRow; availableActions: string[] }
   | { ok: false; status: 404; reason: 'thread_not_found' | 'source_not_found' | 'delivery_not_found' }
@@ -65,6 +67,8 @@ async function getStoredCommandOutcome(
     return { ok: false, status: 409, reason: 'invalid_transition', message: 'Idempotency key was reused with a different request' }
   }
   if (existing.status === 'pending') {
+    const leaseExpiresAt = new Date(Date.now() - COMMAND_PENDING_LEASE_MS).toISOString()
+    if (existing.created_at <= leaseExpiresAt) return null
     return { ok: false, status: 409, reason: 'invalid_transition', message: 'This operation is already in progress' }
   }
   const storedResult: StoredCommandResult = existing.result_json ? JSON.parse(existing.result_json) as StoredCommandResult : { ok: true }
@@ -124,6 +128,25 @@ async function reserveCommand(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     if (/UNIQUE constraint failed/i.test(message)) {
+      const stored = await queryFirst<GuestThreadCommandRow>(db, `
+        SELECT * FROM guest_thread_commands
+        WHERE thread_id = ? AND idempotency_key = ?
+        LIMIT 1
+      `, [thread.id, input.idempotencyKey])
+      if (stored?.status === 'pending' && stored.request_hash === commandRequestHash(input)) {
+        const leaseExpiresAt = new Date(Date.now() - COMMAND_PENDING_LEASE_MS).toISOString()
+        const claimed = await execute(db, `
+          UPDATE guest_thread_commands
+          SET actor_user_id = ?, actor_member_id = ?, created_at = ?
+          WHERE thread_id = ?
+            AND idempotency_key = ?
+            AND request_hash = ?
+            AND status = 'pending'
+            AND created_at <= ?
+        `, [input.actorUserId, input.actorMemberId, now, thread.id, input.idempotencyKey, commandRequestHash(input), leaseExpiresAt])
+        const changes = Number(claimed?.meta?.changes ?? 0)
+        if (changes > 0) return null
+      }
       return await getStoredCommandOutcome(db, thread, input)
     }
     throw error instanceof Error ? error : new Error(message)
@@ -254,7 +277,7 @@ export async function executeGuestThreadOperation(db: DbClient, input: ExecuteOp
     payloadJson: { action: input.action, beforeStatus: result.beforeStatus, afterStatus: result.afterStatus },
   })
 
-  let notificationOutcome: 'not_required' | 'sent' | 'failed' = 'not_required'
+  let notificationOutcome: 'not_required' | 'queued' | 'sent' | 'failed' = 'not_required'
 
   if (result.requiresNotification) {
     const summary = adapter.summarize(source)
@@ -287,7 +310,7 @@ export async function executeGuestThreadOperation(db: DbClient, input: ExecuteOp
         },
       })
       await createDeliveryOutbox(db, { threadId: thread.id, deliveryId: delivery.id })
-      notificationOutcome = 'failed'
+      notificationOutcome = 'queued'
       await appendEntry(db, {
         threadId: thread.id,
         organizationId: thread.organization_id,
@@ -420,7 +443,7 @@ async function executeReply(
     threadId: thread.id,
     entryId: messageEntry.id,
     channel: 'email',
-    idempotencyKey: input.idempotencyKey ?? `guest-thread-reply:${messageEntry.id}`,
+    idempotencyKey: input.idempotencyKey ? `guest-thread-reply:${thread.id}:${input.idempotencyKey}` : `guest-thread-reply:${messageEntry.id}`,
     payload: {
       toAddress: summary.guestEmail,
       fromName,

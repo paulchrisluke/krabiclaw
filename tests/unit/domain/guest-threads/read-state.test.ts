@@ -20,9 +20,12 @@ async function execute(_db: unknown, query: string, params: unknown[] = []) {
   state.execute.push({ query, params })
   if (query.includes('INSERT INTO guest_thread_member_state')) {
     const [threadId, memberId, entryId, sequence] = params as [string, string, string | null, number]
-    state.cursors.set(cursorKey(threadId, memberId), {
-      thread_id: threadId, member_id: memberId, last_read_entry_id: entryId, last_read_sequence: sequence,
-    })
+    const existing = state.cursors.get(cursorKey(threadId, memberId))
+    if (!existing || sequence >= existing.last_read_sequence) {
+      state.cursors.set(cursorKey(threadId, memberId), {
+        thread_id: threadId, member_id: memberId, last_read_entry_id: entryId, last_read_sequence: sequence,
+      })
+    }
   }
   return { meta: { changes: 1 } }
 }
@@ -36,6 +39,11 @@ async function queryFirst<T>(_db: unknown, query: string, params: unknown[] = []
     const [entryId, threadId] = params as [string, string]
     const hit = state.entries.find(e => e.id === entryId && e.thread_id === threadId)
     return (hit ? { sequence: hit.sequence } : null) as T | null
+  }
+  if (query.includes('COALESCE(MAX(sequence), 0)')) {
+    const [threadId] = params as [string]
+    const maxSequence = Math.max(0, ...state.entries.filter(e => e.thread_id === threadId).map(e => e.sequence))
+    return { sequence: maxSequence } as T
   }
   if (query.includes('sequence > ?')) {
     const [threadId, since] = params as [string, number]
@@ -98,4 +106,30 @@ test('a new entry after a member read the thread makes it unread again for that 
 
   state.entries.push({ id: 'e2', thread_id: 't1', sequence: 2 })
   assert.equal(await computeUnreadForMember(db, 't1', 'member-a'), true)
+})
+
+test('advancing a whole-thread cursor uses the current max sequence', async () => {
+  reset()
+  state.entries.push({ id: 'e1', thread_id: 't1', sequence: 1 })
+  state.entries.push({ id: 'e2', thread_id: 't1', sequence: 2 })
+
+  await advanceMemberCursor(db, 't1', 'member-a', null)
+
+  const cursor = await getMemberCursor(db, 't1', 'member-a')
+  assert.equal(cursor?.last_read_entry_id, null)
+  assert.equal(cursor?.last_read_sequence, 2)
+  assert.equal(await computeUnreadForMember(db, 't1', 'member-a'), false)
+})
+
+test('advancing a cursor cannot rewind to an older sequence', async () => {
+  reset()
+  state.entries.push({ id: 'e1', thread_id: 't1', sequence: 1 })
+  state.entries.push({ id: 'e2', thread_id: 't1', sequence: 2 })
+
+  await advanceMemberCursor(db, 't1', 'member-a', 'e2')
+  await advanceMemberCursor(db, 't1', 'member-a', 'e1')
+
+  const cursor = await getMemberCursor(db, 't1', 'member-a')
+  assert.equal(cursor?.last_read_entry_id, 'e2')
+  assert.equal(cursor?.last_read_sequence, 2)
 })

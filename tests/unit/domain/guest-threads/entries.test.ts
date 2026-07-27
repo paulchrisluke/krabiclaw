@@ -21,10 +21,11 @@ async function execute(_db: unknown, query: string, params: unknown[] = []) {
       calls.throwOnInsert = null
       throw err
     }
-    const [id, thread_id, organization_id, site_id, kind, actor_kind, actor_user_id, channel, body, event_name, payload_json, external_id, occurred_at, created_at] = params
+    const [id, thread_id, organization_id, site_id, kind, actor_kind, actor_user_id, channel, body, event_name, payload_json, external_id, sequenceThreadId, occurred_at, created_at] = params
+    const sequence = [...calls.rows.values()].filter(row => row.thread_id === sequenceThreadId).length + 1
     calls.rows.set(id as string, {
       id, thread_id, organization_id, site_id, kind, actor_kind, actor_user_id, channel, body,
-      event_name, payload_json, external_id, occurred_at, created_at,
+      event_name, payload_json, external_id, sequence, occurred_at, created_at,
     })
   }
   return { meta: { changes: 1 } }
@@ -41,9 +42,9 @@ async function queryFirst<T>(_db: unknown, query: string, params: unknown[] = []
     }
     return null
   }
-  if (query.includes('ORDER BY occurred_at DESC')) {
+  if (query.includes('ORDER BY sequence DESC')) {
     const rows = [...calls.rows.values()].filter(r => r.thread_id === params[0])
-    rows.sort((a, b) => String(b.occurred_at).localeCompare(String(a.occurred_at)))
+    rows.sort((a, b) => Number(b.sequence ?? 0) - Number(a.sequence ?? 0) || String(b.occurred_at).localeCompare(String(a.occurred_at)))
     return (rows[0] ?? null) as T | null
   }
   return null
@@ -53,7 +54,7 @@ async function queryAll<T>(_db: unknown, query: string, params: unknown[] = []):
   calls.execute.push({ query, params })
   if (query.includes('FROM guest_thread_entries')) {
     const rows = [...calls.rows.values()].filter(r => r.thread_id === params[0])
-    rows.sort((a, b) => String(a.occurred_at).localeCompare(String(b.occurred_at)))
+    rows.sort((a, b) => Number(a.sequence ?? 0) - Number(b.sequence ?? 0) || String(a.occurred_at).localeCompare(String(b.occurred_at)))
     return rows as T[]
   }
   return []

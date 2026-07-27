@@ -34,9 +34,15 @@ export async function advanceMemberCursor(
     INSERT INTO guest_thread_member_state (thread_id, member_id, last_read_entry_id, last_read_sequence, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT (thread_id, member_id) DO UPDATE SET
-      last_read_entry_id = excluded.last_read_entry_id,
-      last_read_sequence = excluded.last_read_sequence,
-      updated_at = excluded.updated_at
+      last_read_entry_id = CASE
+        WHEN excluded.last_read_sequence >= guest_thread_member_state.last_read_sequence THEN excluded.last_read_entry_id
+        ELSE guest_thread_member_state.last_read_entry_id
+      END,
+      last_read_sequence = MAX(guest_thread_member_state.last_read_sequence, excluded.last_read_sequence),
+      updated_at = CASE
+        WHEN excluded.last_read_sequence >= guest_thread_member_state.last_read_sequence THEN excluded.updated_at
+        ELSE guest_thread_member_state.updated_at
+      END
   `, [threadId, memberId, entryId, sequence, now, now])
 }
 

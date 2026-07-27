@@ -7,6 +7,7 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { requireSiteAccess } from '~/server/utils/location-access'
 import { assertMemberScope } from '~/server/utils/member-access'
+import { getCloudflareWaitUntil } from '~/server/utils/mcp-route-helpers'
 import { getGuestThreadById } from '~/server/domain/guest-threads/repository'
 import { getGuestThreadDetail } from '~/server/domain/guest-threads/detail'
 import { executeGuestThreadOperation } from '~/server/domain/guest-threads/operations'
@@ -69,9 +70,10 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Operation failed' }, { status: 400 })
   }
 
-  await publishPendingGuestDeliveryOutbox(db, env as GuestDeliveryQueueEnv, 10).catch((error) => {
+  const publishOutbox = publishPendingGuestDeliveryOutbox(db, env as GuestDeliveryQueueEnv, 10).catch((error) => {
     console.warn('[guest-threads] delivery outbox publish skipped after committed operation', error)
   })
+  getCloudflareWaitUntil(event)?.(publishOutbox)
 
   const detail = await getGuestThreadDetail(db, threadId, siteId, site.member_id)
   return jsonResponse({ thread: detail, availableActions: outcome.availableActions })
