@@ -340,6 +340,12 @@ export const guest_thread_entries = sqliteTable("guest_thread_entries", {
 	check("guest_thread_entries_channel_check", sql`channel IS NULL OR channel IN ('web', 'email', 'whatsapp', 'system')`),
 ]);
 
+export const guest_thread_sequence_counters = sqliteTable("guest_thread_sequence_counters", {
+	thread_id: text().primaryKey().references(() => guest_threads.id, { onDelete: "cascade" } ),
+	next_sequence: integer().default(1).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+});
+
 // Per-member read cursor for a thread (issue #442). Keyed on member.id (not raw user.id) to
 // match how server/utils/location-access.ts resolves identity everywhere else.
 export const guest_thread_member_state = sqliteTable("guest_thread_member_state", {

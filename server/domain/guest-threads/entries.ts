@@ -17,17 +17,26 @@ export interface AppendEntryInput {
   id?: string
 }
 
-const MAX_SEQUENCE_RETRIES = 3
-
 function isUniqueConstraintError(error: unknown): boolean {
   return /UNIQUE constraint failed/i.test(error instanceof Error ? error.message : String(error))
 }
 
-function isSequenceCollision(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error)
-  return /UNIQUE constraint failed/i.test(message)
-    && message.includes('guest_thread_entries.thread_id')
-    && message.includes('guest_thread_entries.sequence')
+async function reserveThreadSequence(db: DbClient, threadId: string): Promise<number> {
+  const now = new Date().toISOString()
+  await execute(db, `
+    INSERT INTO guest_thread_sequence_counters (thread_id, next_sequence, updated_at)
+    VALUES (?, COALESCE((SELECT MAX(sequence) + 1 FROM guest_thread_entries WHERE thread_id = ?), 1), ?)
+    ON CONFLICT(thread_id) DO NOTHING
+  `, [threadId, threadId, now])
+
+  const reserved = await queryFirst<{ sequence: number }>(db, `
+    UPDATE guest_thread_sequence_counters
+    SET next_sequence = next_sequence + 1, updated_at = ?
+    WHERE thread_id = ?
+    RETURNING next_sequence - 1 AS sequence
+  `, [now, threadId])
+  if (!reserved) throw new Error('Failed to reserve guest thread entry sequence')
+  return reserved.sequence
 }
 
 /**
@@ -50,39 +59,36 @@ export async function appendEntry(db: DbClient, input: AppendEntryInput): Promis
   const createdAt = new Date().toISOString()
   const payloadJson = input.payloadJson ? JSON.stringify(input.payloadJson) : null
 
-  for (let attempt = 1; attempt <= MAX_SEQUENCE_RETRIES; attempt += 1) {
-    try {
-      await execute(db, `
-        INSERT INTO guest_thread_entries
-          (id, thread_id, organization_id, site_id, kind, actor_kind, actor_user_id, channel, body, event_name, payload_json, external_id, sequence, occurred_at, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sequence), 0) + 1 FROM guest_thread_entries WHERE thread_id = ?), ?, ?)
-      `, [
-        id,
-        input.threadId,
-        input.organizationId,
-        input.siteId,
-        input.kind,
-        input.actorKind,
-        input.actorUserId ?? null,
-        input.channel ?? null,
-        input.body ?? null,
-        input.eventName ?? null,
-        payloadJson,
-        input.externalId ?? null,
-        input.threadId,
-        occurredAt,
-        createdAt,
-      ])
-      break
-    } catch (error) {
-      if (input.externalId && isUniqueConstraintError(error)) {
-        const concurrent = await findEntryByExternalId(db, input.externalId)
-        if (concurrent) return concurrent
-      }
-      if (attempt < MAX_SEQUENCE_RETRIES && isSequenceCollision(error)) continue
-      const message = error instanceof Error ? error.message : String(error)
-      throw error instanceof Error ? error : new Error(message)
+  const sequence = await reserveThreadSequence(db, input.threadId)
+  try {
+    await execute(db, `
+      INSERT INTO guest_thread_entries
+        (id, thread_id, organization_id, site_id, kind, actor_kind, actor_user_id, channel, body, event_name, payload_json, external_id, sequence, occurred_at, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      id,
+      input.threadId,
+      input.organizationId,
+      input.siteId,
+      input.kind,
+      input.actorKind,
+      input.actorUserId ?? null,
+      input.channel ?? null,
+      input.body ?? null,
+      input.eventName ?? null,
+      payloadJson,
+      input.externalId ?? null,
+      sequence,
+      occurredAt,
+      createdAt,
+    ])
+  } catch (error) {
+    if (input.externalId && isUniqueConstraintError(error)) {
+      const concurrent = await findEntryByExternalId(db, input.externalId)
+      if (concurrent) return concurrent
     }
+    const message = error instanceof Error ? error.message : String(error)
+    throw error instanceof Error ? error : new Error(message)
   }
 
   const created = await queryFirst<GuestThreadEntryRow>(db, `SELECT * FROM guest_thread_entries WHERE id = ? LIMIT 1`, [id])

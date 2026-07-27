@@ -9,20 +9,27 @@ interface Call {
 const calls = {
   execute: [] as Call[],
   rows: new Map<string, Record<string, unknown>>(),
+  counters: new Map<string, number>(),
   nextInsertId: '',
   throwOnInsert: null as Error | null,
 }
 
 async function execute(_db: unknown, query: string, params: unknown[] = []) {
   calls.execute.push({ query, params })
+  if (query.includes('INSERT INTO guest_thread_sequence_counters')) {
+    const [threadId, sequenceThreadId] = params as [string, string]
+    if (!calls.counters.has(threadId)) {
+      const maxSequence = Math.max(0, ...[...calls.rows.values()].filter(row => row.thread_id === sequenceThreadId).map(row => Number(row.sequence ?? 0)))
+      calls.counters.set(threadId, maxSequence + 1)
+    }
+  }
   if (query.includes('INSERT INTO guest_thread_entries')) {
     if (calls.throwOnInsert) {
       const err = calls.throwOnInsert
       calls.throwOnInsert = null
       throw err
     }
-    const [id, thread_id, organization_id, site_id, kind, actor_kind, actor_user_id, channel, body, event_name, payload_json, external_id, sequenceThreadId, occurred_at, created_at] = params
-    const sequence = [...calls.rows.values()].filter(row => row.thread_id === sequenceThreadId).length + 1
+    const [id, thread_id, organization_id, site_id, kind, actor_kind, actor_user_id, channel, body, event_name, payload_json, external_id, sequence, occurred_at, created_at] = params
     calls.rows.set(id as string, {
       id, thread_id, organization_id, site_id, kind, actor_kind, actor_user_id, channel, body,
       event_name, payload_json, external_id, sequence, occurred_at, created_at,
@@ -33,6 +40,13 @@ async function execute(_db: unknown, query: string, params: unknown[] = []) {
 
 async function queryFirst<T>(_db: unknown, query: string, params: unknown[] = []): Promise<T | null> {
   calls.execute.push({ query, params })
+  if (query.includes('UPDATE guest_thread_sequence_counters')) {
+    const threadId = params[1] as string
+    const sequence = calls.counters.get(threadId)
+    if (!sequence) return null
+    calls.counters.set(threadId, sequence + 1)
+    return { sequence } as T
+  }
   if (query.includes('WHERE id = ?')) {
     return (calls.rows.get(params[0] as string) ?? null) as T | null
   }
@@ -69,6 +83,7 @@ const { appendEntry, listThreadEntries, findEntryByExternalId } = await import('
 function reset() {
   calls.execute = []
   calls.rows = new Map()
+  calls.counters = new Map()
   calls.throwOnInsert = null
 }
 
