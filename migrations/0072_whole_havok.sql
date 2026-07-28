@@ -1,4 +1,4 @@
-PRAGMA foreign_keys=OFF;--> statement-breakpoint
+PRAGMA defer_foreign_keys=ON;--> statement-breakpoint
 CREATE TABLE `__new_blog_posts` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text,
@@ -46,7 +46,6 @@ CREATE TABLE `__new_blog_posts` (
 INSERT INTO `__new_blog_posts`("id", "organization_id", "site_id", "title", "slug", "body", "excerpt", "category", "tags_json", "nav_section", "nav_title", "nav_order", "nav_section_order", "hide_from_nav", "featured_order", "status", "visibility", "author_id", "featured_image_asset_id", "social_image_asset_id", "published_at", "first_published_at", "scheduled_for", "scheduled_revision_id", "slug_manually_overridden", "created_at", "updated_at", "seo_title", "seo_description", "seo_keywords", "canonical_url", "robots") SELECT "id", "organization_id", "site_id", "title", "slug", "body", "excerpt", "category", "tags_json", "nav_section", "nav_title", "nav_order", "nav_section_order", "hide_from_nav", "featured_order", "status", "visibility", "author_id", "featured_image_asset_id", "social_image_asset_id", "published_at", "first_published_at", "scheduled_for", "scheduled_revision_id", "slug_manually_overridden", "created_at", "updated_at", "seo_title", "seo_description", "seo_keywords", "canonical_url", "robots" FROM `blog_posts`;--> statement-breakpoint
 DROP TABLE `blog_posts`;--> statement-breakpoint
 ALTER TABLE `__new_blog_posts` RENAME TO `blog_posts`;--> statement-breakpoint
-PRAGMA foreign_keys=ON;--> statement-breakpoint
 CREATE UNIQUE INDEX `blog_posts_platform_slug_idx` ON `blog_posts` (`slug`) WHERE site_id IS NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX `blog_posts_site_slug_idx` ON `blog_posts` (`site_id`,`slug`) WHERE site_id IS NOT NULL;--> statement-breakpoint
 CREATE INDEX `blog_posts_org_site_idx` ON `blog_posts` (`organization_id`,`site_id`);--> statement-breakpoint

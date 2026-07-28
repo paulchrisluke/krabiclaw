@@ -49,6 +49,8 @@ type PlacementDefinition = {
   requireCoverPoster: boolean
 }
 
+const MAX_ORDERED_MEDIA_ASSETS = 50
+
 export function mediaPlacementDefinition(target: MediaPlacementTarget): PlacementDefinition {
   switch (target.type) {
     case 'site_logo':
@@ -83,6 +85,9 @@ export async function validateAndHydrateMediaPlacement(
   if (definition.cardinality === 'single' && assetIds.length > 1) {
     throw createError({ statusCode: 400, statusMessage: `${input.target.type} accepts zero or one asset_id` })
   }
+  if (definition.cardinality === 'ordered' && assetIds.length > MAX_ORDERED_MEDIA_ASSETS) {
+    throw createError({ statusCode: 400, statusMessage: `${input.target.type} accepts at most ${MAX_ORDERED_MEDIA_ASSETS} asset_ids` })
+  }
   const refs: MediaAssetRefInput[] = assetIds.map(asset_id => ({ asset_id }))
   return hydrateMediaAssetRefs(db, {
     organizationId: input.organizationId,
@@ -106,12 +111,15 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
 
   switch (input.target.type) {
     case 'site_logo': {
-      await execute(db, `UPDATE sites SET logo_asset_id = ?, updated_at = ? WHERE organization_id = ? AND id = ?`, [
+      const result = await execute(db, `UPDATE sites SET logo_asset_id = ?, updated_at = ? WHERE organization_id = ? AND id = ?`, [
         assetId,
         now,
         input.organizationId,
         input.siteId,
       ])
+      if (!result?.success || Number(result.meta?.changes ?? 0) === 0) {
+        throw createError({ statusCode: 404, statusMessage: 'Site not found' })
+      }
       return placementResult(input.target, media, 'site', input.siteId, now)
     }
     case 'home_hero': {
@@ -181,11 +189,11 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
       const experience = await queryFirst<{ id: string; location_id: string | null; updated_at: string | null }>(db, `
         SELECT id, location_id, updated_at
         FROM experiences
-        WHERE site_id = ? AND (id = ? OR slug = ?)
+        WHERE organization_id = ? AND site_id = ? AND (id = ? OR slug = ?)
         LIMIT 1
-      `, [input.siteId, input.target.experience_id, input.target.experience_id])
+      `, [input.organizationId, input.siteId, input.target.experience_id, input.target.experience_id])
       if (!experience) throw createError({ statusCode: 404, statusMessage: 'Experience not found' })
-      await executeBatch(db, [
+      const [updateResult] = await executeBatch(db, [
         {
           query: `UPDATE experiences SET updated_at = ? WHERE organization_id = ? AND site_id = ? AND id = ?`,
           params: [now, input.organizationId, input.siteId, experience.id],
@@ -198,6 +206,9 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
           now,
         }),
       ])
+      if (!updateResult?.success || Number(updateResult.meta?.changes ?? 0) === 0) {
+        throw createError({ statusCode: 404, statusMessage: 'Experience not found' })
+      }
       return placementResult(input.target, media, 'experience', experience.id, now, experience.location_id)
     }
   }
