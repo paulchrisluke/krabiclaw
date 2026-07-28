@@ -48,7 +48,10 @@ test.describe('stateless MCP server', () => {
         method: 'resources/read',
         params: { uri },
       })
-      expect(resource.status()).toBe(400)
+      expect(resource.status()).toBe(200)
+      const body = await resource.json() as { error?: { code?: number, message?: string } }
+      expect(body.error?.code).toBe(-32602)
+      expect(body.error?.message).toContain('Unknown MCP app resource')
     }
   })
 
