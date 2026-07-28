@@ -314,6 +314,11 @@ export function serializeOpeningHours(value: unknown) {
     if (!Array.isArray(weekdayDescriptions) || !weekdayDescriptions.every((item) => typeof item === "string")) {
       throw new Error("opening_hours.weekdayDescriptions must be an array of strings.");
     }
+    if (weekdayDescriptions.length === 1) {
+      const [onlyDescription] = weekdayDescriptions;
+      const normalized = serializeOpeningHours(onlyDescription);
+      if (normalized) return normalized;
+    }
     return weekdayDescriptions.length ? JSON.stringify({ weekdayDescriptions }) : null;
   }
   const trimmed = value.trim();

@@ -419,6 +419,7 @@ Common workflows: update menus and items, create and publish site posts, triage 
       } catch (toolError) {
         const mcpErr = asMcpError(toolError);
         if (mcpErr.kind === "protocol") {
+          const telemetryErrorMessage = describeErrorForTelemetry(toolError);
           logMcpEventDetached(event, cfEnv.DB, {
             userId: mcpUser.userId,
             organizationId: mcpUser.activeOrganizationId ?? null,
@@ -431,10 +432,10 @@ Common workflows: update menus and items, create and publish site posts, triage 
             arguments: rawArgs,
             status: "error",
             errorCode: mcpErr.code,
-            errorMessage: mcpErr.message,
+            errorMessage: telemetryErrorMessage,
             httpStatus: 200,
             jsonrpcErrorCode: mcpErr.code,
-            jsonrpcErrorMessage: mcpErr.message,
+            jsonrpcErrorMessage: telemetryErrorMessage,
             unknownToolName: toolName || null,
             oauthClientId: mcpUser.oauthClientId ?? null,
             durationMs: Date.now() - toolStartedAt,

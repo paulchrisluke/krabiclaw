@@ -51,6 +51,17 @@ test('serializeOpeningHours: JSON string input is parsed instead of stored as a 
   )
 })
 
+test('serializeOpeningHours: nested JSON weekday line is unwrapped to canonical weekdayDescriptions', () => {
+  assert.equal(
+    serializeOpeningHours({
+      weekdayDescriptions: [
+        '{"weekdayDescriptions":["Monday: Closed","Tuesday: Closed","Wednesday: Closed","Thursday: Closed","Friday: Closed","Saturday: Closed","Sunday: 9:00 AM - 10:00 PM"]}',
+      ],
+    }),
+    '{"weekdayDescriptions":["Monday: Closed","Tuesday: Closed","Wednesday: Closed","Thursday: Closed","Friday: Closed","Saturday: Closed","Sunday: 9:00 AM - 10:00 PM"]}',
+  )
+})
+
 test('serializeOpeningHours: bare string array input is parsed to canonical object JSON', () => {
   assert.equal(
     serializeOpeningHours('["Monday: Closed","Tuesday: 9:00 AM - 5:00 PM"]'),
