@@ -235,7 +235,7 @@ if (isPlatform) {
       faviconUrl: config.value?.favicon_url || null,
       primaryColor: config.value?.brand_color || null,
     },
-    heroImage: locations.value[0]?.hero_image_public_url ? { url: locations.value[0].hero_image_public_url } : null,
+    heroImage: locations.value[0]?.public_url && locations.value[0]?.kind !== 'video' ? { url: String(locations.value[0].public_url) } : null,
     ogImageOverride: config.value?.og_image_url ? { url: config.value.og_image_url } : null,
   }))
 }

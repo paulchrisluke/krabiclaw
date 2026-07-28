@@ -184,7 +184,7 @@ async function handleMediaSelect(event: Event) {
       if (file.type.startsWith('image/')) {
         if (imageCount.value >= 5) throw new Error('You can upload up to 5 photos.')
         await uploadImage(file)
-      } else if (file.type.startsWith('video/')) {
+      } else if (file.type === 'video/mp4' || file.type === 'video/webm') {
         if (videoCount.value >= 2) throw new Error('You can upload up to 2 videos.')
         await uploadVideo(file)
       } else {

@@ -348,8 +348,7 @@ interface BusinessLocation {
   status: string
   google_location_id: string | null
   last_synced_at: string | null
-  hero_image_asset_id?: string | null
-  hero_video_asset_id?: string | null
+  hero_media_asset_id?: string | null
   notification_phone?: string | null
   timezone?: string | null
 }

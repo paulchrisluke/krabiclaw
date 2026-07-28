@@ -3,13 +3,11 @@ import { execute, executeBatch, queryFirst, type BatchQuery, type DbClient } fro
 import {
   buildReplaceExperienceMediaQueries,
   hydrateMediaAssetRefs,
+  MAX_ORDERED_MEDIA_ASSETS,
   type MediaAssetRefInput,
   type ResolvedMediaAsset,
 } from '~/server/utils/media-asset-manager'
 import { updatePageContent } from '~/server/utils/mcp-workflows'
-import { updatePost } from '~/server/utils/post-management'
-import { updatePlatformBlogPost } from '~/server/utils/platform-content'
-import { updateMenuItem } from '~/server/utils/menu-management'
 
 export type MediaPlacementTarget =
   | { type: 'site_logo' }
@@ -48,8 +46,6 @@ type PlacementDefinition = {
   allowedKinds: Array<ResolvedMediaAsset['kind']>
   requireCoverPoster: boolean
 }
-
-const MAX_ORDERED_MEDIA_ASSETS = 50
 
 export function mediaPlacementDefinition(target: MediaPlacementTarget): PlacementDefinition {
   switch (target.type) {
@@ -123,13 +119,12 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
       return placementResult(input.target, media, 'site', input.siteId, now)
     }
     case 'home_hero': {
-      await updatePageContent(db as unknown as D1Database, input.organizationId, input.siteId, {
+      await updatePageContent(db, input.organizationId, input.siteId, {
         page: 'home',
         location_id: input.target.location_id ?? null,
         changes: {
           hero: {
-            hero_image_asset_id: media[0]?.kind === 'image' ? assetId : null,
-            hero_video_asset_id: media[0]?.kind === 'video' ? assetId : null,
+            hero_media_asset_id: assetId,
           },
         },
       })
@@ -138,7 +133,7 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
     case 'home_story_image':
     case 'about_story_image': {
       const page = input.target.type === 'home_story_image' ? 'home' : 'about'
-      await updatePageContent(db as unknown as D1Database, input.organizationId, input.siteId, {
+      await updatePageContent(db, input.organizationId, input.siteId, {
         page,
         location_id: null,
         changes: { 'story.image': assetId },
@@ -148,11 +143,10 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
     case 'location_hero': {
       const updateQueries: BatchQuery[] = [{
         query: `UPDATE business_locations
-           SET hero_image_asset_id = ?, hero_video_asset_id = ?, updated_at = ?
+           SET hero_media_asset_id = ?, updated_at = ?
          WHERE organization_id = ? AND site_id = ? AND id = ?`,
         params: [
-          media[0]?.kind === 'image' ? assetId : null,
-          media[0]?.kind === 'video' ? assetId : null,
+          assetId,
           now,
           input.organizationId,
           input.siteId,
@@ -166,24 +160,55 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
       return placementResult(input.target, media, 'location', input.target.location_id, now, input.target.location_id)
     }
     case 'menu_item_image': {
-      await updateMenuItem(db, input.organizationId, input.siteId, input.target.menu_item_id, { image_asset_id: assetId } as never, input.userId)
+      const updateResult = await execute(db, `
+        UPDATE menu_items
+           SET image_asset_id = ?, updated_at = ?
+         WHERE id = ?
+           AND menu_id IN (
+             SELECT id
+               FROM menus
+              WHERE organization_id = ? AND site_id = ?
+           )
+      `, [assetId, now, input.target.menu_item_id, input.organizationId, input.siteId])
+      if (!updateResult?.success || Number(updateResult.meta?.changes ?? 0) === 0) {
+        throw createError({ statusCode: 404, statusMessage: 'Menu item not found' })
+      }
       const menu = await queryFirst<{ location_id: string | null; updated_at: string | null }>(db, `
         SELECT m.location_id, mi.updated_at
         FROM menu_items mi
         JOIN menus m ON m.id = mi.menu_id
-        WHERE mi.organization_id = ? AND mi.site_id = ? AND mi.id = ?
+        WHERE m.organization_id = ? AND m.site_id = ? AND mi.id = ?
         LIMIT 1
       `, [input.organizationId, input.siteId, input.target.menu_item_id])
       return placementResult(input.target, media, 'menu_item', input.target.menu_item_id, menu?.updated_at ?? now, menu?.location_id ?? null)
     }
     case 'post_image': {
-      const post = await updatePost(db, input.organizationId, input.siteId, input.target.post_id, { image_asset_id: assetId }, input.userId, input.env as never)
-      if (!post) throw createError({ statusCode: 404, statusMessage: 'Post not found' })
-      return placementResult(input.target, media, 'post', input.target.post_id, post.updated_at ?? now, typeof post.location_id === 'string' ? post.location_id : null)
+      const updateResult = await execute(db, `
+        UPDATE posts
+           SET image_asset_id = ?, updated_at = ?, source = 'manual'
+         WHERE organization_id = ? AND site_id = ? AND id = ?
+      `, [assetId, now, input.organizationId, input.siteId, input.target.post_id])
+      if (!updateResult?.success || Number(updateResult.meta?.changes ?? 0) === 0) {
+        throw createError({ statusCode: 404, statusMessage: 'Post not found' })
+      }
+      const post = await queryFirst<{ location_id: string | null; updated_at: string | null }>(db, `
+        SELECT location_id, updated_at
+          FROM posts
+         WHERE organization_id = ? AND site_id = ? AND id = ?
+         LIMIT 1
+      `, [input.organizationId, input.siteId, input.target.post_id])
+      return placementResult(input.target, media, 'post', input.target.post_id, post?.updated_at ?? now, post?.location_id ?? null)
     }
     case 'blog_post_image': {
-      const result = await updatePlatformBlogPost(db as unknown as D1Database, input.target.post_id, { featured_image_asset_id: assetId } as never, input.siteId)
-      return placementResult(input.target, media, 'blog_post', input.target.post_id, result.post.updated_at ?? now)
+      const updateResult = await execute(db, `
+        UPDATE blog_posts
+           SET featured_image_asset_id = ?, updated_at = ?
+         WHERE site_id = ? AND id = ?
+      `, [assetId, now, input.siteId, input.target.post_id])
+      if (!updateResult?.success || Number(updateResult.meta?.changes ?? 0) === 0) {
+        throw createError({ statusCode: 404, statusMessage: 'Blog post not found' })
+      }
+      return placementResult(input.target, media, 'blog_post', input.target.post_id, now)
     }
     case 'experience_media': {
       const experience = await queryFirst<{ id: string; location_id: string | null; updated_at: string | null }>(db, `

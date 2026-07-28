@@ -52,9 +52,10 @@ export default defineEventHandler(async (event) => {
              bl.grab_url, bl.uber_eats_url, bl.foodpanda_url,
              bl.rating, bl.review_count, bl.is_primary, bl.status,
              bl.last_synced_at, bl.google_location_id, bl.google_connection_id,
-             bl.hero_image_asset_id, bl.hero_video_asset_id, ma.public_url, ma.kind
+             bl.hero_media_asset_id, ma.public_url, ma.thumbnail_url, ma.kind
       FROM business_locations bl
-      LEFT JOIN media_assets ma ON bl.hero_image_asset_id = ma.id AND ma.status = 'active'
+      LEFT JOIN media_assets ma ON bl.hero_media_asset_id = ma.id AND ma.status = 'active'
+        AND ma.organization_id = bl.organization_id AND ma.site_id = bl.site_id
       WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'
       ORDER BY bl.is_primary DESC, bl.title ASC
     `, [site.organization_id, siteId])

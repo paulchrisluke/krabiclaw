@@ -144,7 +144,6 @@ export const SITES_TOOLS: McpToolDefinition[] = [
         brand_name: { type: 'string' },
         brand_description: { type: 'string' },
         logo_url: { type: 'string' },
-        logo_asset_id: { type: 'string' },
         contact_email: { type: ['string', 'null'], description: 'Public contact email shown to guests. Pass null to clear it.' },
         default_currency: { type: 'string', enum: [...SUPPORTED_CURRENCIES] },
         social_facebook: { type: 'string', description: 'Full Facebook page URL, e.g. https://facebook.com/yourpage. Must include the https:// scheme — bare domains or handles are rejected.' },
@@ -162,7 +161,6 @@ export const SITES_TOOLS: McpToolDefinition[] = [
         seo_description: { type: ['string', 'null'], description: 'Optional site-wide default SEO description override. Falls back to brand_description if unset.' },
         canonical_url: { type: ['string', 'null'], description: 'Optional site-wide canonical URL override for the homepage.' },
         robots: { type: ['string', 'null'], enum: [...ROBOTS_DIRECTIVE_ENUM, null], description: 'Search engine indexing directive for the homepage. Leave unset for the default index,follow.' },
-        og_image_asset_id: { type: ['string', 'null'], description: 'Asset id from get_site_media_assets used as the default social share image site-wide when a page has no more specific image set.' },
       },
       outputSchema: {
         type: 'object',

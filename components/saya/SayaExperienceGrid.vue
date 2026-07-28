@@ -19,11 +19,9 @@
       class="group block no-underline"
     >
       <div class="relative aspect-[4/3] overflow-hidden rounded-lg bg-muted">
-        <template v-if="coverMedia(experience)">
+        <template v-if="coverImageUrl(experience)">
           <img
-            :src="coverMedia(experience)!.kind === 'video'
-              ? (coverMedia(experience)!.thumbnail_url || '')
-              : coverMedia(experience)!.public_url"
+            :src="coverImageUrl(experience)!"
             :alt="coverMedia(experience)!.alt_text || experience.title"
             class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           >
@@ -37,12 +35,6 @@
             </span>
           </span>
         </template>
-        <img
-          v-else-if="experience.image_url"
-          :src="experience.image_url"
-          :alt="experience.title"
-          class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-        >
         <div v-else class="flex h-full items-center justify-center">
           <SayaIcon name="sparkles" class="size-12 text-dimmed" />
         </div>
@@ -104,6 +96,14 @@ const props = defineProps<{
 
 function coverMedia(experience: Experience) {
   return experience.media?.[0] ?? null
+}
+
+function coverImageUrl(experience: Experience): string | null {
+  const cover = coverMedia(experience)
+  if (!cover) return null
+  return cover.kind === 'video'
+    ? cover.thumbnail_url || null
+    : cover.public_url || null
 }
 
 function unavailabilityBadge(experience: Experience): string | null {

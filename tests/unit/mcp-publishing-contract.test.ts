@@ -28,7 +28,8 @@ test('blog, post, and media MCP schemas expose the canonical writable contract',
 
   for (const name of ['create_post', 'update_post']) {
     const post = tool(POSTS_TOOLS, name)
-    assert.ok(post.inputSchema.properties?.image_asset_id)
+    assert.equal(post.inputSchema.properties?.image_asset_id, undefined)
+    assert.equal(post.inputSchema.properties?.gallery_media, undefined)
   }
 
   const upload = tool(MEDIA_TOOLS, 'upload_user_media')

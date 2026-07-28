@@ -53,8 +53,6 @@ export default defineEventHandler(async (event) => {
       neighborhood: typeof body.neighborhood === 'string' ? body.neighborhood : undefined,
       phone: typeof body.phone === 'string' ? body.phone : undefined,
       email: typeof body.email === 'string' ? body.email : undefined,
-      hero_image_asset_id: typeof body.hero_image_asset_id === 'string' ? body.hero_image_asset_id : body.hero_image_asset_id === null ? null : undefined,
-      hero_video_asset_id: typeof body.hero_video_asset_id === 'string' ? body.hero_video_asset_id : body.hero_video_asset_id === null ? null : undefined,
       website_url: typeof body.website_url === 'string' ? body.website_url : body.website_url === null ? null : undefined,
       maps_url: typeof body.maps_url === 'string' ? body.maps_url : body.maps_url === null ? null : undefined,
       opening_hours: body.opening_hours === undefined ? undefined : (body.opening_hours || null) as UpdateLocationInput['opening_hours'],

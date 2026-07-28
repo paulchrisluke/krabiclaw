@@ -473,9 +473,9 @@ const featuredItems = computed(() => {
 
 function experienceCoverImage(exp: Experience): string | null {
   const cover = exp.media?.[0]
-  if (cover?.kind === 'image') return cover.public_url
-  if (cover?.kind === 'video') return cover.thumbnail_url
-  return exp.image_url || null
+  if (cover?.kind === 'image') return cover.public_url || null
+  if (cover?.kind === 'video') return cover.thumbnail_url || null
+  return null
 }
 
 // Content hero fields take precedence; fall back to Google Business primary photo

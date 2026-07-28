@@ -178,7 +178,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
         text: [
           `Call create_post with this body: ${body}`,
           postType ? `Use post_type "${postType}".` : "",
-          "If the user has supplied or approved media for this post, pass it to create_post as image_asset_id for the cover and gallery_media for any additional public gallery items.",
+          "If the user has supplied or approved media for this post, create the post first, then use set_media with target type post_image for the selected cover asset.",
           channels
             ? `Immediately after create_post succeeds, call publish_post with channels [${channels}] — do not stop to describe the publish step instead of executing it.`
             : "Immediately after create_post succeeds, call publish_post (defaults to the site channel) — do not stop to describe the publish step instead of executing it.",

@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:c81cf71469ce0ff1d64f2f58c682f5bceb14353081f337953d895d9a34931a82",
+  "fingerprint": "sha256:9ea8ed7a1c506ef79ab4bb3329f0e84e7f99d1129d5c3c661a6c79a9cb74a9ec",
   "tools": [
     {
       "name": "add_menu_items_batch",
@@ -46,12 +46,6 @@
                 },
                 "featured_sort_order": {
                   "type": "number"
-                },
-                "image_asset_id": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
                 },
                 "ingredients": {
                   "items": {
@@ -1228,7 +1222,7 @@
             "type": "number"
           },
           "og_image_asset_id": {
-            "description": "Asset id from get_site_media_assets for this page's social share image. Falls back to hero_image_asset_id, then the site-level og image, if unset.",
+            "description": "Asset id from get_site_media_assets for this page's social share image. Falls back to location hero media, then the site-level og image, if unset.",
             "type": [
               "string",
               "null"
@@ -1526,12 +1520,6 @@
           "featured_sort_order": {
             "type": "number"
           },
-          "image_asset_id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "ingredients": {
             "items": {
               "type": "string"
@@ -1545,7 +1533,7 @@
             "type": "string"
           },
           "og_image_asset_id": {
-            "description": "Asset id from get_site_media_assets for this page's social share image. Falls back to image_asset_id, then the site-level og image, if unset.",
+            "description": "Asset id from get_site_media_assets for this page's social share image. Falls back to the site-level og image if unset.",
             "type": [
               "string",
               "null"
@@ -1793,38 +1781,6 @@
             "description": "Event name. Use with post_type \"event\".",
             "type": "string"
           },
-          "gallery_media": {
-            "description": "Optional ordered gallery media for the public post page. Use active media asset ids from get_site_media_assets or uploaded/generated media.",
-            "items": {
-              "properties": {
-                "alt_text": {
-                  "type": "string"
-                },
-                "caption": {
-                  "type": "string"
-                },
-                "media_asset_id": {
-                  "type": "string"
-                },
-                "role": {
-                  "enum": [
-                    "gallery",
-                    "cover"
-                  ],
-                  "type": "string"
-                }
-              },
-              "required": [
-                "media_asset_id"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "image_asset_id": {
-            "description": "Optional active image asset id to use as the canonical post cover.",
-            "type": "string"
-          },
           "location_id": {
             "description": "Restrict this post to a specific location. Omit to apply site-wide.",
             "type": "string"
@@ -1835,10 +1791,6 @@
           },
           "offer_terms": {
             "description": "Terms and conditions for the promotion. Use with post_type \"offer\".",
-            "type": "string"
-          },
-          "og_image_asset_id": {
-            "description": "Optional Open Graph image asset id. Defaults to the cover image when omitted.",
             "type": "string"
           },
           "post_type": {
@@ -3779,13 +3731,7 @@
                   "null"
                 ]
               },
-              "hero_image_asset_id": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "hero_video_asset_id": {
+              "hero_media_asset_id": {
                 "type": [
                   "string",
                   "null"
@@ -10839,6 +10785,12 @@
           "id": {
             "type": "string"
           },
+          "location_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "media": {
             "items": {
               "properties": {
@@ -10848,18 +10800,15 @@
                     "null"
                   ]
                 },
-                "category": {
+                "duration": {
                   "type": [
-                    "string",
+                    "number",
                     "null"
                   ]
                 },
-                "created_at": {
-                  "type": "string"
-                },
-                "file_name": {
+                "height": {
                   "type": [
-                    "string",
+                    "number",
                     "null"
                   ]
                 },
@@ -10873,7 +10822,7 @@
                   ],
                   "type": "string"
                 },
-                "location_id": {
+                "mime_type": {
                   "type": [
                     "string",
                     "null"
@@ -10883,19 +10832,11 @@
                   "type": "string"
                 },
                 "public_url": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "source": {
                   "type": "string"
                 },
                 "status": {
                   "enum": [
-                    "pending",
-                    "active",
-                    "deleted"
+                    "active"
                   ],
                   "type": "string"
                 },
@@ -10904,8 +10845,20 @@
                     "string",
                     "null"
                   ]
+                },
+                "width": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
                 }
               },
+              "required": [
+                "id",
+                "kind",
+                "public_url",
+                "status"
+              ],
               "type": "object"
             },
             "type": "array"
@@ -11740,13 +11693,7 @@
                     "null"
                   ]
                 },
-                "hero_image_asset_id": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "hero_video_asset_id": {
+                "hero_media_asset_id": {
                   "type": [
                     "string",
                     "null"
@@ -11940,12 +11887,6 @@
                     "type": "string"
                   },
                   "type": "array"
-                },
-                "image_asset_id": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
                 },
                 "ingredients": {
                   "items": {
@@ -14115,9 +14056,6 @@
       "inputSchema": {
         "additionalProperties": true,
         "properties": {
-          "image_asset_id": {
-            "type": "string"
-          },
           "location_id": {
             "description": "Optional location scope when the homepage content is location-specific.",
             "type": "string"
@@ -14130,9 +14068,6 @@
             "type": "string"
           },
           "title": {
-            "type": "string"
-          },
-          "video_asset_id": {
             "type": "string"
           }
         },
@@ -14199,14 +14134,6 @@
             "description": "Grab delivery/booking URL for this location. Must be a full http:// or https:// URL — bare domains are rejected.",
             "type": "string"
           },
-          "hero_image_asset_id": {
-            "description": "Initial hero image asset id for new locations. For media placement on an existing location, use set_media with target location_hero.",
-            "type": "string"
-          },
-          "hero_video_asset_id": {
-            "description": "Initial hero video asset id for new locations. For media placement on an existing location, use set_media with target location_hero.",
-            "type": "string"
-          },
           "instagram_url": {
             "description": "Full Instagram profile URL for this location, e.g. https://instagram.com/yourhandle. Include the https:// scheme.",
             "type": "string"
@@ -14227,7 +14154,7 @@
             "type": "string"
           },
           "og_image_asset_id": {
-            "description": "Asset id from get_site_media_assets for this page's social share image. Falls back to hero_image_asset_id, then the site-level og image, if unset.",
+            "description": "Asset id from get_site_media_assets for this page's social share image. Falls back to location hero media, then the site-level og image, if unset.",
             "type": [
               "string",
               "null"
@@ -14643,12 +14570,6 @@
           "featured_sort_order": {
             "type": "number"
           },
-          "image_asset_id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "ingredients": {
             "items": {
               "type": "string"
@@ -14662,7 +14583,7 @@
             "type": "string"
           },
           "og_image_asset_id": {
-            "description": "Asset id from get_site_media_assets for this page's social share image. Falls back to image_asset_id, then the site-level og image, if unset.",
+            "description": "Asset id from get_site_media_assets for this page's social share image. Falls back to the site-level og image if unset.",
             "type": [
               "string",
               "null"
@@ -15031,47 +14952,6 @@
             "description": "Event name. Use with post_type \"event\".",
             "type": "string"
           },
-          "gallery_media": {
-            "description": "Replace the ordered public post gallery. Omit to leave unchanged.",
-            "items": {
-              "properties": {
-                "alt_text": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "caption": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "media_asset_id": {
-                  "type": "string"
-                },
-                "role": {
-                  "enum": [
-                    "gallery",
-                    "cover"
-                  ],
-                  "type": "string"
-                }
-              },
-              "required": [
-                "media_asset_id"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "image_asset_id": {
-            "description": "Active image asset id for the canonical post cover. Pass null to clear it.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "location_id": {
             "description": "Restrict this post to a specific location. Pass null to clear it.",
             "type": [
@@ -15086,12 +14966,6 @@
           "offer_terms": {
             "description": "Terms and conditions for the promotion. Use with post_type \"offer\".",
             "type": "string"
-          },
-          "og_image_asset_id": {
-            "type": [
-              "string",
-              "null"
-            ]
           },
           "post_id": {
             "type": "string"
@@ -15514,18 +15388,8 @@
           "google_site_verification": {
             "type": "string"
           },
-          "logo_asset_id": {
-            "type": "string"
-          },
           "logo_url": {
             "type": "string"
-          },
-          "og_image_asset_id": {
-            "description": "Asset id from get_site_media_assets used as the default social share image site-wide when a page has no more specific image set.",
-            "type": [
-              "string",
-              "null"
-            ]
           },
           "partnerships_email": {
             "type": "string"

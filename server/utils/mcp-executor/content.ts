@@ -170,8 +170,6 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
         const updated = await updateHomeHero(site.db, site.organizationId, site.siteId, {
           title: optionalString(args, "title"),
           subtitle: optionalString(args, "subtitle"),
-          image_asset_id: optionalString(args, "image_asset_id"),
-          video_asset_id: optionalString(args, "video_asset_id"),
           location_id: locationId,
         });
         return {

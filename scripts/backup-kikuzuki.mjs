@@ -80,7 +80,7 @@ out.push(inserts('site_domains', query(`SELECT * FROM site_domains WHERE organiz
 console.log('Fetching business_locations...')
 const locRows = query(`SELECT * FROM business_locations WHERE organization_id = '${ORG}'`)
 out.push('-- business_locations (hero asset FKs deferred)')
-out.push(inserts('business_locations', locRows, ['hero_image_asset_id', 'hero_video_asset_id']))
+out.push(inserts('business_locations', locRows, ['hero_media_asset_id']))
 
 // --- Media (no circular deps once site + location exist) ---
 console.log('Fetching media_assets...')
@@ -95,11 +95,10 @@ for (const row of siteRows) {
   }
 }
 for (const row of locRows) {
-  if (row.hero_image_asset_id || row.hero_video_asset_id) {
+  if (row.hero_media_asset_id) {
     out.push(
       `UPDATE business_locations SET ` +
-      `hero_image_asset_id = ${esc(row.hero_image_asset_id)}, ` +
-      `hero_video_asset_id = ${esc(row.hero_video_asset_id)} ` +
+      `hero_media_asset_id = ${esc(row.hero_media_asset_id)} ` +
       `WHERE id = ${esc(row.id)};`
     )
   }

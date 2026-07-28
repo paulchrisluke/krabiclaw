@@ -17,6 +17,7 @@ const MP4_BRANDS = new Set([
   "iso4",
   "iso5",
   "iso6",
+  "iso8",
   "isom",
   "m4v ",
   "mp41",

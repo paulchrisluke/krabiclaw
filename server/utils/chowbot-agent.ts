@@ -553,8 +553,8 @@ async function executeTool(
     // (readHeroContentState/heroColumnForField/isEmptyHeroState), duplicating
     // what mcp-workflows.ts's updatePageContent/deleteContentField already
     // do correctly via a CASE-based partial upsert — that shared function
-    // accepts the exact same "hero.title"/"hero.subtitle"/"hero.image"/
-    // "hero.video" field keys via HERO_FIELD_ALIASES. deleteContentField's
+    // accepts the exact same "hero.title"/"hero.subtitle"/"hero.media"
+    // field keys via HERO_FIELD_ALIASES. deleteContentField's
     // hero handling didn't exist at all before this branch (see the fix in
     // mcp-workflows.ts) — MCP's delete_content_field silently deleted
     // nothing for hero sub-fields, since they live as columns on a single

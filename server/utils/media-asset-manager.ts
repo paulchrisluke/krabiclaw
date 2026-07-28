@@ -56,6 +56,8 @@ export interface MediaAssetRefInput {
 export type CreateInput = Pick<MediaAsset, 'id' | 'organization_id' | 'site_id' | 'kind' | 'provider' | 'source'> &
   Partial<Omit<MediaAsset, 'id' | 'organization_id' | 'site_id' | 'kind' | 'provider' | 'source' | 'created_at' | 'updated_at'>>
 
+export const MAX_ORDERED_MEDIA_ASSETS = 50
+
 function toResolvedMediaAsset(row: MediaAsset): ResolvedMediaAsset {
   if (row.kind !== 'image' && row.kind !== 'video') {
     throw createError({ statusCode: 400, statusMessage: `Media asset ${row.id} is not assignable image/video media` })
@@ -95,6 +97,9 @@ export async function hydrateMediaAssetRefs(
 ): Promise<ResolvedMediaAsset[]> {
   const fieldName = input.fieldName ?? 'media'
   const ids = input.refs.map(ref => ref.asset_id?.trim()).filter(Boolean)
+  if (input.refs.length > MAX_ORDERED_MEDIA_ASSETS) {
+    throw createError({ statusCode: 400, statusMessage: `${fieldName} accepts at most ${MAX_ORDERED_MEDIA_ASSETS} assets` })
+  }
   if (ids.length !== input.refs.length) {
     throw createError({ statusCode: 400, statusMessage: `${fieldName} items must contain asset_id` })
   }

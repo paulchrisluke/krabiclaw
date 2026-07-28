@@ -38,7 +38,6 @@ function buildMenuItemUpdates(itemRecord: Record<string, unknown>, match?: MenuI
   const compareAtPriceAmount = toolString(itemRecord, 'compare_at_price_amount', 50)
   const saleStartsAt = toolString(itemRecord, 'sale_starts_at', 50)
   const saleEndsAt = toolString(itemRecord, 'sale_ends_at', 50)
-  const imageAssetId = toolString(itemRecord, 'image_asset_id', 120)
   const available = toolBoolean(itemRecord, 'available')
 
   const allergens = Array.isArray(itemRecord.allergens) ? itemRecord.allergens as string[] : undefined
@@ -54,7 +53,6 @@ function buildMenuItemUpdates(itemRecord: Record<string, unknown>, match?: MenuI
   if (compareAtPriceAmount !== undefined && compareAtPriceAmount !== match?.compare_at_price_amount) updates.compare_at_price_amount = compareAtPriceAmount
   if (saleStartsAt !== undefined && saleStartsAt !== match?.sale_starts_at) updates.sale_starts_at = saleStartsAt
   if (saleEndsAt !== undefined && saleEndsAt !== match?.sale_ends_at) updates.sale_ends_at = saleEndsAt
-  if (imageAssetId !== undefined && imageAssetId !== match?.image_asset_id) updates.image_asset_id = imageAssetId
   if (available !== undefined && available !== Boolean(match?.available)) updates.available = available
   if (allergens !== undefined && !stringArraysEqual(allergens, match?.allergens)) updates.allergens = allergens
   if (ingredients !== undefined && !stringArraysEqual(ingredients, match?.ingredients)) updates.ingredients = ingredients
@@ -369,7 +367,6 @@ export async function handleMenusTools(ctx: McpExecutorContext): Promise<unknown
               compare_at_price_amount: toolString(itemRecord, "compare_at_price_amount", 50),
               sale_starts_at: toolString(itemRecord, "sale_starts_at", 50),
               sale_ends_at: toolString(itemRecord, "sale_ends_at", 50),
-              image_asset_id: toolString(itemRecord, "image_asset_id", 120),
               available: toolBoolean(itemRecord, "available"),
             } as never,
             site.userId,

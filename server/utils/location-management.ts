@@ -156,8 +156,7 @@ export interface CreateLocationInput {
   grab_url?: string | null;
   uber_eats_url?: string | null;
   foodpanda_url?: string | null;
-  hero_image_asset_id?: string | null;
-  hero_video_asset_id?: string | null;
+  hero_media_asset_id?: string | null;
   notification_phone?: string | null;
   timezone?: string | null;
   max_capacity?: number | null;
@@ -198,8 +197,7 @@ export interface LocationRecord {
   address?: string | null;
   opening_hours?: string | null;
   special_hours?: string | null;
-  hero_image_asset_id?: string | null;
-  hero_video_asset_id?: string | null;
+  hero_media_asset_id?: string | null;
   price_level?: string | null;
   facebook_url?: string | null;
   instagram_url?: string | null;
@@ -399,23 +397,27 @@ export async function validateMediaAsset(
   organizationId: string,
   siteId: string,
   assetId: string | null | undefined,
-  kind: "image" | "video",
+  kind: "image" | "video" | undefined,
   fieldName: string,
 ) {
   if (!assetId) return;
+  const kindClause = kind ? "AND kind = ?" : "AND kind IN ('image', 'video')";
+  const params = kind
+    ? [assetId, organizationId, siteId, kind]
+    : [assetId, organizationId, siteId];
   const asset = await queryFirst(
     db,
     `
     SELECT id
     FROM media_assets
-    WHERE id = ? AND organization_id = ? AND site_id = ? AND status = 'active' AND kind = ?
+    WHERE id = ? AND organization_id = ? AND site_id = ? AND status = 'active' ${kindClause}
     LIMIT 1
   `,
-    [assetId, organizationId, siteId, kind],
+    params,
   );
 
   if (!asset) {
-    throw new Error(`${fieldName} not found, unauthorized, or not a ${kind}`);
+    throw new Error(`${fieldName} not found, unauthorized, or not valid media`);
   }
 }
 
@@ -543,7 +545,7 @@ async function loadLocation(
 ) {
   const columns = `id, slug, title, city, neighborhood, phone, email, website_url, maps_url, google_review_url, google_place_id,
            rating, review_count, description, short_description, status, is_primary,
-           address, opening_hours, special_hours, hero_image_asset_id, hero_video_asset_id, price_level,
+           address, opening_hours, special_hours, hero_media_asset_id, price_level,
            facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
            notification_phone, timezone, max_capacity, seo_title, seo_description, canonical_url, robots, og_image_asset_id,
            feature_overrides, created_at, updated_at`;
@@ -644,17 +646,9 @@ export async function createLocation(
       db,
       organizationId,
       siteId,
-      input.hero_image_asset_id,
-      "image",
-      "hero_image_asset_id",
-    );
-    await validateMediaAsset(
-      db,
-      organizationId,
-      siteId,
-      input.hero_video_asset_id,
-      "video",
-      "hero_video_asset_id",
+      input.hero_media_asset_id,
+      undefined,
+      "hero_media_asset_id",
     );
     await validateMediaAsset(
       db,
@@ -730,10 +724,10 @@ export async function createLocation(
             id, organization_id, site_id, title, slug, city, neighborhood, phone, email, website_url, maps_url,
             google_review_url, google_place_id, description, short_description, address, opening_hours, special_hours, rating, review_count,
             price_level, facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
-            hero_image_asset_id, hero_video_asset_id, notification_phone, timezone, max_capacity, is_primary, status,
+            hero_media_asset_id, notification_phone, timezone, max_capacity, is_primary, status,
             seo_title, seo_description, canonical_url, robots, og_image_asset_id, feature_overrides, created_at, updated_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         params: [
           id,
@@ -763,8 +757,7 @@ export async function createLocation(
           normalizeOrderingUrl(input.grab_url, "grab_url"),
           normalizeOrderingUrl(input.uber_eats_url, "uber_eats_url"),
           normalizeOrderingUrl(input.foodpanda_url, "foodpanda_url"),
-          input.hero_image_asset_id ?? null,
-          input.hero_video_asset_id ?? null,
+          input.hero_media_asset_id ?? null,
           normalizedNotificationPhone,
           normalizedTimezone ?? null,
           input.max_capacity ?? null,
@@ -943,17 +936,9 @@ export async function updateLocation(
       db,
       organizationId,
       siteId,
-      input.hero_image_asset_id,
-      "image",
-      "hero_image_asset_id",
-    );
-    await validateMediaAsset(
-      db,
-      organizationId,
-      siteId,
-      input.hero_video_asset_id,
-      "video",
-      "hero_video_asset_id",
+      input.hero_media_asset_id,
+      undefined,
+      "hero_media_asset_id",
     );
     await validateMediaAsset(
       db,
@@ -1017,8 +1002,7 @@ export async function updateLocation(
     "maps_url",
     "google_review_url",
     "google_place_id",
-    "hero_image_asset_id",
-    "hero_video_asset_id",
+    "hero_media_asset_id",
     "notification_phone",
     "timezone",
     "max_capacity",

@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { chatgptFileInput, mediaAssetObject, siteTool } from './shared'
+import { chatgptFileInput, mediaAssetObject, resolvedMediaAssetObject, siteTool } from './shared'
 
 export const MEDIA_TOOLS: McpToolDefinition[] = [
   siteTool({
@@ -39,9 +39,10 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
           id: { type: 'string' },
           target: { type: 'object' },
           asset_ids: { type: 'array', items: { type: 'string' } },
-          media: { type: 'array', items: mediaAssetObject },
+          media: { type: 'array', items: resolvedMediaAssetObject },
           cleared: { type: 'boolean' },
           updated_at: { type: ['string', 'null'] },
+          location_id: { type: ['string', 'null'] },
           context: { type: 'object' },
         },
         required: ['ok', 'entity', 'id', 'target', 'asset_ids', 'media', 'cleared'],

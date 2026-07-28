@@ -520,12 +520,12 @@ function openEdit(exp: ApiRecord) {
     location_id: currentLocationId.value ?? exp.location_id ?? '',
     tagline: exp.tagline ?? '',
     body: exp.body ?? '',
-    media: Array.isArray(exp.media) ? exp.media.map(asset => ({
+    media: exp.media.map(asset => ({
       _key: crypto.randomUUID(),
       asset_id: asset.id,
       url: asset.public_url ?? asset.thumbnail_url ?? null,
       kind: asset.kind === 'video' ? 'video' : 'image',
-    })) : [],
+    })),
     price: exp.price ?? '',
     price_amount: exp.price_amount ?? null,
     compare_at_price_amount: exp.compare_at_price_amount ?? null,

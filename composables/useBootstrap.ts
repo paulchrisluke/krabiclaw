@@ -34,8 +34,6 @@ interface ContentRow {
   hero_subtitle: string | null;
   hero_public_url: string | null;
   hero_kind: string | null;
-  hero_video_public_url: string | null;
-  hero_video_kind: string | null;
   thumbnail_url: string | null;
   component: string | null;
   [key: string]: unknown;
@@ -210,7 +208,7 @@ export const useBootstrap = async (options: { enabled?: boolean | Ref<boolean> }
       return previewOverrides.value[field] ?? null;
     }
     if (
-      ["hero.title", "hero.subtitle", "hero.image", "hero.video"].includes(
+      ["hero.title", "hero.subtitle", "hero.media"].includes(
         field,
       )
     ) {
@@ -220,17 +218,12 @@ export const useBootstrap = async (options: { enabled?: boolean | Ref<boolean> }
         return heroRow?.hero_title ?? fieldRow?.content ?? defaultValue;
       if (field === "hero.subtitle")
         return heroRow?.hero_subtitle ?? fieldRow?.content ?? defaultValue;
-      if (field === "hero.image")
+      if (field === "hero.media")
         return heroRow?.hero_public_url ?? fieldRow?.content ?? defaultValue;
-      if (field === "hero.video")
-        return (
-          heroRow?.hero_video_public_url ?? fieldRow?.content ?? defaultValue
-        );
     }
     const row = contentMap.value[field];
     if (!row) return defaultValue;
-    const mediaValue =
-      row.hero_public_url || row.hero_video_public_url || row.content;
+    const mediaValue = row.hero_public_url || row.content;
     const val = row.type === "media" ? mediaValue : row.content;
     return val && val.trim() !== "" ? val : defaultValue;
   };
@@ -242,6 +235,8 @@ export const useBootstrap = async (options: { enabled?: boolean | Ref<boolean> }
     defaults = { title: "", subtitle: "", image: "", video: "" },
   ) => {
     const row = contentMap.value["hero"];
+    const heroMedia = row?.hero_public_url || "";
+    const isVideo = row?.hero_kind === "video";
     return {
       title:
         getField("hero.title", row?.hero_title ?? defaults.title) ??
@@ -250,14 +245,14 @@ export const useBootstrap = async (options: { enabled?: boolean | Ref<boolean> }
         getField("hero.subtitle", row?.hero_subtitle ?? defaults.subtitle) ??
         defaults.subtitle,
       image:
-        getField("hero.image", row?.hero_public_url ?? defaults.image) ??
+        (isVideo ? defaults.image : getField("hero.media", heroMedia || defaults.image)) ??
         defaults.image,
       video:
-        getField("hero.video", row?.hero_video_public_url ?? defaults.video) ??
+        (isVideo ? getField("hero.media", heroMedia || defaults.video) : defaults.video) ??
         defaults.video,
       thumbnail_url: row?.thumbnail_url || null,
-      imageKind: row?.hero_kind || "image",
-      videoKind: row?.hero_video_kind || "video",
+      imageKind: isVideo ? "image" : (row?.hero_kind || "image"),
+      videoKind: isVideo ? "video" : "video",
     };
   };
 

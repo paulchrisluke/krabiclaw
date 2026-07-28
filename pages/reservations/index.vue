@@ -235,19 +235,19 @@ function getLocationLabel(location: ApiRecord): string | null {
 }
 
 function getLocationMediaKind(location: ApiRecord): 'image' | 'video' | null {
-  if (location.kind === 'video' || location.hero_video_public_url) return 'video'
-  if (location.kind === 'image' || location.hero_image_public_url || location.public_url || location.thumbnail_url) return 'image'
+  if (location.kind === 'video') return 'video'
+  if (location.kind === 'image' || location.public_url || location.thumbnail_url) return 'image'
   return null
 }
 
 function getLocationMediaUrl(location: ApiRecord): string | null {
   const kind = getLocationMediaKind(location)
-  if (kind === 'video') return String(location.hero_video_public_url ?? location.public_url ?? '') || null
-  return String(location.hero_image_public_url ?? location.public_url ?? location.thumbnail_url ?? '') || null
+  if (kind === 'video') return String(location.public_url ?? '') || null
+  return String(location.public_url ?? location.thumbnail_url ?? '') || null
 }
 
 function getLocationPoster(location: ApiRecord): string | null {
-  return String(location.thumbnail_url ?? location.hero_image_public_url ?? '') || null
+  return String(location.thumbnail_url ?? (location.kind === 'image' ? location.public_url : '') ?? '') || null
 }
 
 const heroSubtitle = computed(() => {
@@ -445,7 +445,7 @@ useTenantSocialMetadata(() => ({
     faviconUrl: config.value?.favicon_url || null,
     primaryColor: config.value?.brand_color || null,
   },
-  heroImage: locations.value[0]?.hero_image_public_url ? { url: locations.value[0].hero_image_public_url } : null,
+  heroImage: locations.value[0]?.public_url && locations.value[0]?.kind !== 'video' ? { url: String(locations.value[0].public_url) } : null,
 }))
 
 useSchemaOrg([

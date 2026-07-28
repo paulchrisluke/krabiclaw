@@ -53,7 +53,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
           site.db,
           site.organizationId,
           site.siteId,
-          args as never,
+          omit(args, ["image_asset_id", "gallery_media", "og_image_asset_id"]) as never,
           site.userId,
           site.env,
         ));
@@ -82,7 +82,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
           site.organizationId,
           site.siteId,
           requiredString(args, "post_id"),
-          omit(args, ["post_id"]) as never,
+          omit(args, ["post_id", "image_asset_id", "gallery_media", "og_image_asset_id"]) as never,
           site.userId,
           site.env,
         ));

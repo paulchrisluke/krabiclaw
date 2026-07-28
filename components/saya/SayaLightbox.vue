@@ -31,7 +31,8 @@
         >
           <!-- Blurred fill behind letterboxed media, TikTok-style -->
           <img
-            :src="backgroundUrl(item)"
+            v-if="backgroundUrl(item)"
+            :src="backgroundUrl(item)!"
             alt=""
             aria-hidden="true"
             class="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-2xl select-none"
@@ -141,10 +142,12 @@ function syncVideos() {
   }
 }
 
-function backgroundUrl(item: LightboxItem): string {
+function backgroundUrl(item: LightboxItem): string | null {
   return item.kind === 'video' && typeof item.poster === 'string' && item.poster
     ? item.poster
-    : item.url
+    : item.kind === 'video'
+      ? null
+      : item.url
 }
 
 function getPageHeight() {

@@ -214,8 +214,6 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       inputSchema: {
         title: { type: 'string' },
         subtitle: { type: 'string' },
-        image_asset_id: { type: 'string' },
-        video_asset_id: { type: 'string' },
         location_id: { type: 'string', description: 'Optional location scope when the homepage content is location-specific.' },
       },
       outputSchema: {

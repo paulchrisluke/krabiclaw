@@ -248,7 +248,7 @@
           <div v-else-if="activeFieldDef?.type === 'media'" class="space-y-2">
             <label class="block text-sm font-medium text-default">{{ activeFieldDef.label }}</label>
             <MediaPicker
-              :model-value="(activeField === 'hero.image' || activeField === 'hero.video') ? editingValue || null : pendingMediaAssetId"
+              :model-value="activeField === 'hero.media' ? editingValue || null : pendingMediaAssetId"
               :site-id="props.siteId"
               :accept="activeFieldDef?.mediaKind ?? 'any'"
               :title="activeFieldDef.label"
@@ -576,7 +576,7 @@ watch(editingValue, () => {
 const pendingMediaAssetId = ref<string | null>(null)
 
 function onMediaChange(asset: { id: string; publicUrl: string } | null) {
-  const isHeroMedia = activeField.value === 'hero.image' || activeField.value === 'hero.video'
+  const isHeroMedia = activeField.value === 'hero.media'
   // Hero media: backend stores asset ID in a dedicated column and resolves URL via JOIN.
   // Other media fields: store the public URL in the content column so it's directly
   // usable as an <img src> on public pages without an additional API round-trip.
@@ -626,13 +626,9 @@ const loadPageContent = async () => {
     const map: Record<string, string> = {}
     for (const row of res.fields) {
       if (row.field === 'hero') {
-        // Hero fields use dedicated columns, support both asset_id and url for migration
         if (row.hero_title) map['hero.title'] = row.hero_title
         if (row.hero_subtitle) map['hero.subtitle'] = row.hero_subtitle
-        if (row.hero_image_asset_id) map['hero.image'] = row.hero_image_asset_id
-        else if (row.hero_public_url) map['hero.image'] = row.hero_public_url
-        if (row.hero_video_asset_id) map['hero.video'] = row.hero_video_asset_id
-        else if (row.hero_video_public_url) map['hero.video'] = row.hero_video_public_url
+        if (row.hero_media_asset_id) map['hero.media'] = row.hero_media_asset_id
       } else {
         map[row.field] = row.content || ''
       }

@@ -331,7 +331,7 @@ async function main() {
     location_id: locationId,
   })
   expectStatus('get_location succeeds', locationRead)
-  expectValue('set_media updates location hero', data(locationRead.body)?.location?.hero_image_asset_id === assetId, data(locationRead.body))
+  expectValue('set_media updates location hero', data(locationRead.body)?.location?.hero_media_asset_id === assetId, data(locationRead.body))
 
   const menuRead = await mcp(headers, 'get_menu', {
     site_id: siteId,

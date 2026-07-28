@@ -146,7 +146,7 @@ function editorRow(input: {
     source: 'manual',
     hero_title: input.heroTitle ?? undefined,
     hero_subtitle: input.heroSubtitle ?? undefined,
-    hero_image_asset_id: input.heroImageAssetId ?? undefined,
+    hero_media_asset_id: input.heroImageAssetId ?? undefined,
     hero_public_url: input.heroPublicUrl ?? null,
     updated_at: input.row.updated_at,
   }
@@ -290,7 +290,7 @@ export async function updateProfessionalServiceEditorPageContent(
       summary = cleanString(value, 700) || null
       continue
     }
-    if (field === 'hero.image') {
+    if (field === 'hero.media') {
       if (input.page !== 'home') validationError(`Field "${field}" is not editable on page "${input.page}".`)
       hero.background = await resolveAssetPointer(db, input.siteId, value)
       continue

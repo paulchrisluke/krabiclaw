@@ -136,8 +136,8 @@ test('professional_services page editor reads rendered Blawby tenant_page fields
   const hero = content.fields.find((field: { field: string }) => field.field === 'hero')
   assert.equal(hero?.hero_title, 'Legal help when it matters')
   assert.equal(hero?.hero_subtitle, 'Support for families across North Carolina.')
-  assert.equal(hero?.hero_image_asset_id, 'asset-home')
-  assert.deepEqual(content.schema.fields, ['hero.title', 'hero.subtitle', 'hero.image', 'cta.title', 'cta.description'])
+  assert.equal(hero?.hero_media_asset_id, 'asset-home')
+  assert.deepEqual(content.schema.fields, ['hero.title', 'hero.subtitle', 'hero.media', 'cta.title', 'cta.description'])
 })
 
 test('professional_services page editor updates tenant_page components without dropping existing blocks', async () => {
@@ -148,7 +148,7 @@ test('professional_services page editor updates tenant_page components without d
     page: 'home',
     changes: {
       'hero.title': 'Updated legal help',
-      'hero.image': 'asset-home-new',
+      'hero.media': 'asset-home-new',
       'cta.description': 'A new consultation note.',
     },
     updatedBy: 'user-ncls-blawby',

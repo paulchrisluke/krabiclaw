@@ -535,9 +535,9 @@ const mediaItems = computed(() => {
 
 const experienceCoverImageUrl = computed(() => {
   const cover = experience.value?.media?.[0]
-  if (cover?.kind === 'image') return cover.public_url
-  if (cover?.kind === 'video') return cover.thumbnail_url
-  return experience.value?.image_url ?? null
+  if (cover?.kind === 'image') return cover.public_url || null
+  if (cover?.kind === 'video') return cover.thumbnail_url || null
+  return null
 })
 
 function formatDuration(minutes: number): string {

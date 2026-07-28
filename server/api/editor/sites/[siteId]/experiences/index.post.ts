@@ -11,23 +11,7 @@ const optionalInteger = (value: unknown) => {
   return Number.isFinite(parsed) && Number.isInteger(parsed) ? parsed : null
 }
 
-type ExperienceMediaItem = { url: string; kind: 'image' | 'video' }
-class InvalidImagesError extends Error {}
 class InvalidMediaError extends Error {}
-
-function normalizeExperienceImages(value: unknown): ExperienceMediaItem[] | undefined {
-  if (value === null || value === undefined) return undefined
-  if (!Array.isArray(value)) {
-    throw new InvalidImagesError()
-  }
-  return value
-    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object' && !Array.isArray(item))
-    .map((item): ExperienceMediaItem => ({
-      url: String(item.url ?? '').trim(),
-      kind: item.kind === 'video' ? 'video' : 'image',
-    }))
-    .filter(item => item.url)
-}
 
 function normalizeExperienceMedia(value: unknown): Array<{ asset_id: string }> | undefined {
   if (value === null || value === undefined) return undefined
@@ -86,17 +70,14 @@ export default defineEventHandler(async (event) => {
   let highlights: string[] | null
   let includedItems: string[] | null
   let whatToBring: string[] | null
-  let images: ExperienceMediaItem[] | undefined
   let media: Array<{ asset_id: string }> | undefined
   try {
     highlights = stringArrayOrNull(body.highlights)
     includedItems = stringArrayOrNull(body.included_items)
     whatToBring = stringArrayOrNull(body.what_to_bring)
-    images = normalizeExperienceImages(body.images)
     media = normalizeExperienceMedia(body.media)
   } catch (err) {
     if (err instanceof InvalidMediaError) return jsonResponse({ error: 'media must be an array of { asset_id } items' }, { status: 400 })
-    if (err instanceof InvalidImagesError) return jsonResponse({ error: 'images must be an array' }, { status: 400 })
     if (err instanceof InvalidFieldError) return jsonResponse({ error: 'highlights, included_items, and what_to_bring must be arrays' }, { status: 400 })
     throw err
   }
@@ -111,9 +92,6 @@ export default defineEventHandler(async (event) => {
     title,
     tagline: body.tagline ? String(body.tagline).trim() : null,
     body: body.body ? String(body.body).trim() : null,
-    image_asset_id: body.image_asset_id ? String(body.image_asset_id) : null,
-    video_asset_id: body.video_asset_id ? String(body.video_asset_id) : null,
-    images,
     media,
     highlights,
     included_items: includedItems,

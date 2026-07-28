@@ -1132,8 +1132,7 @@ export async function getCurrentHomeHeroState(
   );
   const hero = content.find((entry) => entry.field === "hero");
   return {
-    hero_image_asset_id: hero?.hero_image_asset_id ?? null,
-    hero_video_asset_id: hero?.hero_video_asset_id ?? null,
+    hero_media_asset_id: hero?.hero_media_asset_id ?? null,
   };
 }
 
