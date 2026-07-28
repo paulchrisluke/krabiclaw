@@ -86,27 +86,9 @@
           <UFormField label="Description">
             <UTextarea v-model="form.body" :rows="5" placeholder="Describe the experience in detail." class="w-full" />
           </UFormField>
-          <UFormField label="Primary image">
-            <MediaPicker
-              v-model="form.image_asset_id"
-              :site-id="siteId"
-              accept="image"
-              title="Select experience image"
-              @change="handleImageChange"
-            />
-          </UFormField>
-          <UFormField label="Video (optional)">
-            <MediaPicker
-              v-model="form.video_asset_id"
-              :site-id="siteId"
-              accept="video"
-              title="Select experience video"
-              @change="handleVideoChange"
-            />
-          </UFormField>
-          <UFormField label="Additional media gallery" help="Add more images or videos to show in a carousel.">
+          <UFormField label="Media gallery" help="Order images and videos exactly as they should appear publicly. The first item is the cover.">
             <div class="space-y-3">
-              <div v-for="(media, index) in form.images" :key="media._key" class="flex items-center gap-3">
+              <div v-for="(media, index) in form.media" :key="media._key" class="flex items-center gap-3">
                 <div class="flex-1">
                   <MediaPicker
                     v-model="media.asset_id"
@@ -121,7 +103,7 @@
                   color="neutral"
                   variant="ghost"
                   icon="i-lucide-chevron-up"
-                  aria-label="Move image up"
+                  aria-label="Move media up"
                   :disabled="index === 0"
                   @click="moveGalleryMedia(index, -1)"
                 />
@@ -130,8 +112,8 @@
                   color="neutral"
                   variant="ghost"
                   icon="i-lucide-chevron-down"
-                  aria-label="Move image down"
-                  :disabled="index === form.images.length - 1"
+                  aria-label="Move media down"
+                  :disabled="index === form.media.length - 1"
                   @click="moveGalleryMedia(index, 1)"
                 />
                 <UButton size="sm" color="error" variant="ghost" icon="i-lucide-x" @click="removeGalleryMedia(index)" />
@@ -468,11 +450,7 @@ const emptyForm = () => ({
   location_id: '',
   tagline: '',
   body: '',
-  image_asset_id: null as string | null,
-  image_url: null as string | null,
-  video_asset_id: null as string | null,
-  video_url: null as string | null,
-  images: [] as Array<{ _key: string; asset_id: string | null; url: string | null; kind: 'image' | 'video' }>,
+  media: [] as Array<{ _key: string; asset_id: string | null; url: string | null; kind: 'image' | 'video' }>,
   price: '',
   price_amount: null as number | null,
   compare_at_price_amount: null as number | null,
@@ -512,31 +490,23 @@ function openCreate() {
   sliderOpen.value = true
 }
 
-function handleImageChange(asset: { id: string; publicUrl: string; thumbnailUrl: string; kind?: string } | null) {
-  form.image_url = asset?.publicUrl ?? asset?.thumbnailUrl ?? null
-}
-
-function handleVideoChange(asset: { id: string; publicUrl: string; thumbnailUrl: string; kind?: string } | null) {
-  form.video_url = asset?.publicUrl ?? null
-}
-
 function addGalleryMedia() {
-  form.images.push({ _key: crypto.randomUUID(), asset_id: null, url: null, kind: 'image' })
+  form.media.push({ _key: crypto.randomUUID(), asset_id: null, url: null, kind: 'image' })
 }
 
 function removeGalleryMedia(index: number) {
-  form.images.splice(index, 1)
+  form.media.splice(index, 1)
 }
 
 function moveGalleryMedia(index: number, direction: -1 | 1) {
   const target = index + direction
-  if (target < 0 || target >= form.images.length) return
-  const [item] = form.images.splice(index, 1)
-  if (item) form.images.splice(target, 0, item)
+  if (target < 0 || target >= form.media.length) return
+  const [item] = form.media.splice(index, 1)
+  if (item) form.media.splice(target, 0, item)
 }
 
 function handleGalleryMediaChange(index: number, asset: { id: string; publicUrl: string; thumbnailUrl: string; kind?: string } | null) {
-  const item = form.images[index]
+  const item = form.media[index]
   if (!item) return
   item.asset_id = asset?.id ?? null
   item.url = asset?.publicUrl ?? asset?.thumbnailUrl ?? null
@@ -550,11 +520,12 @@ function openEdit(exp: ApiRecord) {
     location_id: currentLocationId.value ?? exp.location_id ?? '',
     tagline: exp.tagline ?? '',
     body: exp.body ?? '',
-    image_asset_id: exp.image_asset_id ?? null,
-    image_url: exp.image_url ?? null,
-    video_asset_id: exp.video_asset_id ?? null,
-    video_url: exp.video_url ?? null,
-    images: Array.isArray(exp.images) ? exp.images.map((img: { asset_id?: string | null; url: string | null; kind: 'image' | 'video' }) => ({ _key: crypto.randomUUID(), asset_id: img.asset_id ?? null, url: img.url, kind: img.kind })) : [],
+    media: Array.isArray(exp.media) ? exp.media.map(asset => ({
+      _key: crypto.randomUUID(),
+      asset_id: asset.id,
+      url: asset.public_url ?? asset.thumbnail_url ?? null,
+      kind: asset.kind === 'video' ? 'video' : 'image',
+    })) : [],
     price: exp.price ?? '',
     price_amount: exp.price_amount ?? null,
     compare_at_price_amount: exp.compare_at_price_amount ?? null,
@@ -640,9 +611,8 @@ async function save() {
       highlights: linesToArray(form.highlights_input),
       included_items: linesToArray(form.included_items_input),
       what_to_bring: linesToArray(form.what_to_bring_input),
-      images: form.images.filter(img => img.url).map(img => ({
-        url: img.url,
-        kind: img.kind,
+      media: form.media.filter(item => item.asset_id).map(item => ({
+        asset_id: item.asset_id,
       })),
     }
     let experienceResult: ApiRecord | null = null
