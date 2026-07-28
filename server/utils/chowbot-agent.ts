@@ -1058,8 +1058,7 @@ async function executeTool(
     }
 
     case "get_experience":
-    case "set_experience_image":
-    case "set_experience_video": {
+    case "set_experience_media": {
       return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 

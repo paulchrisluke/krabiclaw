@@ -3,17 +3,14 @@ import { EXPERIENCES_TOOLS } from '~/server/utils/mcp-tools/experiences'
 import { chowbotToolFromMcp } from './from-mcp'
 
 // Video widget launchers are tenant-MCP-only and live in mcp-tools/media.ts.
-// reorder_experience_gallery and list_all_experience_bookings (site-wide
-// summary, distinct from the per-experience list_experience_bookings) were
-// never offered to ChowBot — not added here to stay within migrating
-// existing overlap.
+// list_all_experience_bookings (site-wide summary, distinct from the
+// per-experience list_experience_bookings) was never offered to ChowBot.
 const EXPERIENCES_DOMAIN_TOOL_NAMES = new Set([
   'list_experiences',
   'get_experience',
   'create_experience',
   'update_experience',
-  'set_experience_image',
-  'set_experience_video',
+  'set_experience_media',
   'delete_experience',
   'list_experience_bookings',
   'update_experience_booking',

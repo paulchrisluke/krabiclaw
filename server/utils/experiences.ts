@@ -5,6 +5,13 @@ import { getActiveSpecialClosure } from '~/utils/formatters'
 import { assertValidSaleWindow } from '~/shared/money'
 import { revokeReviewRequestForBooking } from '~/server/utils/review-requests'
 import { validateMediaAsset } from '~/server/utils/location-management'
+import {
+  hydrateMediaAssetsForExperiences,
+  hydrateMediaAssetRefs,
+  replaceExperienceMedia,
+  type MediaAssetRefInput,
+  type ResolvedMediaAsset,
+} from '~/server/utils/media-asset-manager'
 
 export const WEEKDAY_NAMES = [
   'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
@@ -29,6 +36,7 @@ export interface Experience {
   video_asset_id: string | null
   video_url: string | null
   images: Array<{ url: string; kind: 'image' | 'video' }>
+  media: ResolvedMediaAsset[]
   price: string | null
   price_amount: number | null
   compare_at_price_amount: number | null
@@ -148,8 +156,17 @@ function parseRow(row: ExperienceRow): Experience {
     time_slots,
     recurring_slots,
     images,
+    media: [],
     featured: Boolean(row.featured)
   }
+}
+
+async function attachExperienceMedia<T extends Experience>(db: DbClient, siteId: string, experiences: T[]): Promise<T[]> {
+  const mediaByExperience = await hydrateMediaAssetsForExperiences(db, siteId, experiences.map(experience => experience.id))
+  return experiences.map(experience => ({
+    ...experience,
+    media: mediaByExperience.get(experience.id) ?? [],
+  }))
 }
 
 const SELECT = `
@@ -187,7 +204,7 @@ export async function listExperiences(
   sql += ` ORDER BY e.sort_order ASC, e.created_at ASC`
 
   const results = await queryAll<ExperienceRow>(db, sql, params)
-  return (results ?? []).map(parseRow)
+  return attachExperienceMedia(db, siteId, (results ?? []).map(parseRow))
 }
 
 export async function getExperienceBySlug(
@@ -196,7 +213,9 @@ export async function getExperienceBySlug(
   slug: string,
 ): Promise<Experience | null> {
   const row = await queryFirst<ExperienceRow>(db, SELECT + ` WHERE e.site_id = ? AND e.slug = ? LIMIT 1`, [siteId, slug])
-  return row ? parseRow(row) : null
+  if (!row) return null
+  const [experience] = await attachExperienceMedia(db, siteId, [parseRow(row)])
+  return experience ?? null
 }
 
 export async function getExperienceById(
@@ -207,9 +226,14 @@ export async function getExperienceById(
   // Check id first so a slug that happens to collide with another row's id can
   // never shadow the row actually addressed by that id.
   const byId = await queryFirst<ExperienceRow>(db, SELECT + ` WHERE e.site_id = ? AND e.id = ? LIMIT 1`, [siteId, idOrSlug])
-  if (byId) return parseRow(byId)
+  if (byId) {
+    const [experience] = await attachExperienceMedia(db, siteId, [parseRow(byId)])
+    return experience ?? null
+  }
   const bySlug = await queryFirst<ExperienceRow>(db, SELECT + ` WHERE e.site_id = ? AND e.slug = ? LIMIT 1`, [siteId, idOrSlug])
-  return bySlug ? parseRow(bySlug) : null
+  if (!bySlug) return null
+  const [experience] = await attachExperienceMedia(db, siteId, [parseRow(bySlug)])
+  return experience ?? null
 }
 
 // Used by callers (update/delete/bookings) that need the canonical row id before
@@ -246,6 +270,7 @@ export interface CreateExperienceInput {
   image_asset_id?: string | null
   video_asset_id?: string | null
   images?: Array<{ url: string; kind: 'image' | 'video' }>
+  media?: MediaAssetRefInput[] | null
   price?: string | null
   price_amount?: number | null
   compare_at_price_amount?: number | null
@@ -396,6 +421,17 @@ export async function createExperience(
   await validateMediaAsset(db, organizationId, siteId, input.image_asset_id, 'image', 'image_asset_id')
   await validateMediaAsset(db, organizationId, siteId, input.video_asset_id, 'video', 'video_asset_id')
   await validateMediaAsset(db, organizationId, siteId, input.og_image_asset_id, 'image', 'og_image_asset_id')
+  const mediaRefs = input.media ?? []
+  if (input.media !== undefined) {
+    await hydrateMediaAssetRefs(db, {
+      organizationId,
+      siteId,
+      refs: mediaRefs,
+      allowedKinds: ['image', 'video'],
+      requireCoverPoster: true,
+      fieldName: 'media',
+    })
+  }
   const id = crypto.randomUUID()
   const slug = await uniqueSlug(db, siteId, slugify(input.title))
   const now = new Date().toISOString()
@@ -456,6 +492,9 @@ export async function createExperience(
   if (!result || !result.success) {
     throw new Error('Failed to create experience in the database.')
   }
+  if (input.media !== undefined) {
+    await replaceExperienceMedia(db, { organizationId, siteId, experienceId: id, refs: mediaRefs })
+  }
 
   const created = await getExperienceById(db, siteId, id)
   if (!created) {
@@ -499,6 +538,19 @@ export async function updateExperience(
       await validateMediaAsset(db, owner.organization_id, siteId, input.og_image_asset_id, 'image', 'og_image_asset_id')
     }
   }
+  const owner = input.media !== undefined
+    ? await queryFirst<{ organization_id: string }>(db, `SELECT organization_id FROM experiences WHERE site_id = ? AND id = ? LIMIT 1`, [siteId, id])
+    : null
+  if (input.media !== undefined && owner) {
+    await hydrateMediaAssetRefs(db, {
+      organizationId: owner.organization_id,
+      siteId,
+      refs: input.media ?? [],
+      allowedKinds: ['image', 'video'],
+      requireCoverPoster: true,
+      fieldName: 'media',
+    })
+  }
   const sets: string[] = []
   const params: (string | number | null)[] = []
 
@@ -520,6 +572,7 @@ export async function updateExperience(
     sets.push('images = ?')
     params.push(input.images?.length ? JSON.stringify(input.images) : null)
   }
+  const mediaRefs = input.media ?? null
   if (input.price !== undefined) { sets.push('price = ?'); params.push(input.price ?? null) }
   if (input.price_amount !== undefined) { sets.push('price_amount = ?'); params.push(input.price_amount ?? null) }
   if (input.compare_at_price_amount !== undefined) { sets.push('compare_at_price_amount = ?'); params.push(input.compare_at_price_amount ?? null) }
@@ -561,13 +614,31 @@ export async function updateExperience(
   if (input.robots !== undefined) { sets.push('robots = ?'); params.push(input.robots ?? null) }
   if (input.og_image_asset_id !== undefined) { sets.push('og_image_asset_id = ?'); params.push(input.og_image_asset_id ?? null) }
 
-  if (sets.length === 0) return getExperienceById(db, siteId, id)
+  if (sets.length === 0) {
+    if (input.media !== undefined && owner) {
+      await replaceExperienceMedia(db, {
+        organizationId: owner.organization_id,
+        siteId,
+        experienceId: id,
+        refs: mediaRefs ?? [],
+      })
+    }
+    return getExperienceById(db, siteId, id)
+  }
 
   sets.push('updated_at = ?')
   params.push(new Date().toISOString())
   params.push(siteId, id)
 
   await execute(db, `UPDATE experiences SET ${sets.join(', ')} WHERE site_id = ? AND id = ?`, params)
+  if (input.media !== undefined && owner) {
+    await replaceExperienceMedia(db, {
+      organizationId: owner.organization_id,
+      siteId,
+      experienceId: id,
+      refs: mediaRefs ?? [],
+    })
+  }
 
   return getExperienceById(db, siteId, id)
 }

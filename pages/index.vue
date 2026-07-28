@@ -689,7 +689,7 @@ const featuredContent = computed(() => {
       return {
         name: item.title,
         ...resolveOverridePriceDisplay(item, defaultCurrency.value),
-        image: item.image_url || null,
+        image: experienceCoverImage(item),
         imageKind: 'image',
         alt: item.title ? `${item.title} experience` : 'Featured experience image',
         href: item.slug ? `/experiences/${item.slug}` : '/experiences',
@@ -698,5 +698,12 @@ const featuredContent = computed(() => {
     }
   })
 })
+
+function experienceCoverImage(item) {
+  const cover = item.media?.[0]
+  if (cover?.kind === 'image') return cover.public_url
+  if (cover?.kind === 'video') return cover.thumbnail_url
+  return item.image_url || null
+}
 
 </script>

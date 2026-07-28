@@ -30,19 +30,8 @@
           class="relative h-dvh w-full snap-start snap-always overflow-hidden bg-black"
         >
           <!-- Blurred fill behind letterboxed media, TikTok-style -->
-          <video
-            v-if="item.kind === 'video'"
-            :src="item.url"
-            muted
-            playsinline
-            preload="metadata"
-            aria-hidden="true"
-            tabindex="-1"
-            class="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-2xl select-none"
-          />
           <img
-            v-else
-            :src="item.url"
+            :src="backgroundUrl(item)"
             alt=""
             aria-hidden="true"
             class="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-2xl select-none"
@@ -52,9 +41,9 @@
             v-if="item.kind === 'video'"
             :ref="el => setVideoRef(el, i)"
             :src="item.url"
-            muted
-            loop
             playsinline
+            controls
+            :poster="typeof item.poster === 'string' ? item.poster : undefined"
             preload="metadata"
             class="relative z-10 h-full w-full object-contain"
           />
@@ -145,11 +134,17 @@ function syncVideos() {
     const i = Number(key)
 
     if (i === currentIndex.value) {
-      video.play().catch(() => {})
+      video.pause()
     } else {
       video.pause()
     }
   }
+}
+
+function backgroundUrl(item: LightboxItem): string {
+  return item.kind === 'video' && typeof item.poster === 'string' && item.poster
+    ? item.poster
+    : item.url
 }
 
 function getPageHeight() {
@@ -223,6 +218,11 @@ onUnmounted(() => {
   if (import.meta.client) {
     document.removeEventListener('keydown', handleKeyDown)
     releaseScrollLock()
+    Object.values(videoRefs.value).forEach((video) => {
+      video.pause()
+      video.removeAttribute('src')
+      video.load()
+    })
   }
 })
 

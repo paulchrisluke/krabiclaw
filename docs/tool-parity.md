@@ -60,7 +60,7 @@ These groups are hidden by default on both conversational surfaces where present
 | `show_generated_images`, `save_generated_image`, `save_generated_image_file`, `upload_user_photo` | ChatGPT native image/file flow |
 | `resolve_agent_guidance`, `review_agent_guidance_candidate` | Client MCP exposes scoped Agent Skill guidance and advisory review for ChatGPT blog/image workflows; ChowBot should call the same shared resolver/review service when its matching UX is added |
 | `get_booking_policy`, `preview_booking_policy`, `update_booking_policy` | Structured booking-policy editing is currently exposed in Client MCP first; ChowBot should use the same backend resolver/formatter when a chat-safe editing flow is added |
-| `get_site`, `update_site_settings`, `set_brand_color`, `clear_home_hero_image`, `clear_home_hero_video`, `clear_location_hero_image`, `clear_location_hero_video`, `copy_location_batch`, `reorder_experience_gallery`, `get_site_analytics` | Client MCP-specific granularity or dashboard-backed utility not currently present in ChowBot |
+| `get_site`, `update_site_settings`, `set_brand_color`, `clear_home_hero_image`, `clear_home_hero_video`, `clear_location_hero_image`, `clear_location_hero_video`, `copy_location_batch`, `get_site_analytics` | Client MCP-specific granularity or dashboard-backed utility not currently present in ChowBot |
 
 ## Verification
 

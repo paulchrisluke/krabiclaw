@@ -3,7 +3,7 @@ import { createExperience, deleteExperience, getExperienceBookingsSummary, getEx
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { loadSettingsPayload, SiteNotFoundError } from '~/server/utils/site-settings'
-import { attachViewUrlToRecord, NOT_HANDLED, expandSlotGeneratorArgs, mutationContextPayload, objectArray, omit, optionalDaysWindow, optionalString, requireActiveImageAsset, requireActiveVideoAsset, requiredString } from './shared'
+import { attachViewUrlToRecord, NOT_HANDLED, expandSlotGeneratorArgs, mutationContextPayload, objectArray, omit, optionalDaysWindow, optionalString, requiredString } from './shared'
 
 function attachExperienceViewUrl(experience: object, site: McpExecutorContext["site"]) {
   const experienceRecord = experience as Record<string, unknown>;
@@ -135,14 +135,12 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
         { experience: hydrated },
       );
     }
-    case "set_experience_image": {
-      const assetId = requiredString(args, "asset_id");
-      await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
+    case "set_experience_media": {
       const experience = await updateExperience(
           site.db,
           site.siteId,
           requiredString(args, "experience_id"),
-          { image_asset_id: assetId },
+          { media: objectArray(args.media, "media").map((item) => ({ asset_id: requiredString(item, "asset_id") })) },
         );
       if (!experience) {
         return renderStructuredResponse(
@@ -150,95 +148,18 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
           "No experience found with that id or slug — nothing was changed.",
         );
       }
-      const hydratedImageExperience = attachExperienceViewUrl(experience, site);
-      const setImageExperienceContext = await mutationContextPayload(site, { locationId: experience.location_id });
+      const hydratedMediaExperience = attachExperienceViewUrl(experience, site);
+      const setMediaExperienceContext = await mutationContextPayload(site, { locationId: experience.location_id });
       return renderStructuredResponse(
         {
           ok: true,
           entity: "experience",
           id: experience.id,
           updated_at: experience.updated_at,
-          context: setImageExperienceContext,
+          context: setMediaExperienceContext,
         },
-        `Updated image for "${experience.title}".`,
-        { experience: hydratedImageExperience },
-      );
-    }
-    case "set_experience_video": {
-      const assetId = requiredString(args, "asset_id");
-      await requireActiveVideoAsset(site.db, site.siteId, assetId, "asset_id");
-      const experience = await updateExperience(
-          site.db,
-          site.siteId,
-          requiredString(args, "experience_id"),
-          { video_asset_id: assetId },
-        );
-      if (!experience) {
-        return renderStructuredResponse(
-          { ok: false, entity: "experience", id: requiredString(args, "experience_id") },
-          "No experience found with that id or slug — nothing was changed.",
-        );
-      }
-      const hydratedVideoExperience = attachExperienceViewUrl(experience, site);
-      const setVideoExperienceContext = await mutationContextPayload(site, { locationId: experience.location_id });
-      return renderStructuredResponse(
-        {
-          ok: true,
-          entity: "experience",
-          id: experience.id,
-          updated_at: experience.updated_at,
-          context: setVideoExperienceContext,
-        },
-        `Updated video for "${experience.title}".`,
-        { experience: hydratedVideoExperience },
-      );
-    }
-    case "reorder_experience_gallery": {
-      const experienceId = requiredString(args, "experience_id");
-      const current = await getExperienceById(site.db, site.siteId, experienceId);
-      if (!current) {
-        throw mcpProtocolError(MCP_ERROR.invalidParams, `No experience found with id "${experienceId}".`);
-      }
-      const raw = objectArray(args.images, "images");
-      const images = raw.map((img) => {
-        if (typeof img.url !== "string" || !img.url) {
-          throw mcpProtocolError(MCP_ERROR.invalidParams, "Each gallery item must have a non-empty url string");
-        }
-        if (img.kind !== "image" && img.kind !== "video") {
-          throw mcpProtocolError(MCP_ERROR.invalidParams, 'Each gallery item must have kind "image" or "video"');
-        }
-        return { url: img.url, kind: img.kind as "image" | "video" };
-      });
-      const key = (item: { url: string; kind: string }) => `${item.kind}:${item.url}`;
-      const currentKeys = (current.images ?? []).map(key).sort();
-      const nextKeys = images.map(key).sort();
-      const isSamePermutation =
-        currentKeys.length === nextKeys.length && currentKeys.every((k, i) => k === nextKeys[i]);
-      if (!isSamePermutation) {
-        throw mcpProtocolError(
-          MCP_ERROR.invalidParams,
-          "images must be a reordering of the experience's existing gallery (same url/kind values, new order). To add or remove gallery items, use update_experience instead.",
-        );
-      }
-      const experience = await updateExperience(site.db, site.siteId, experienceId, { images });
-      if (!experience) {
-        return renderStructuredResponse(
-          { ok: false, entity: "experience", id: experienceId },
-          "No experience found with that id or slug — nothing was changed.",
-        );
-      }
-      const hydratedGalleryExperience = attachExperienceViewUrl(experience, site);
-      const reorderGalleryContext = await mutationContextPayload(site, { locationId: experience.location_id });
-      return renderStructuredResponse(
-        {
-          ok: true,
-          entity: "experience",
-          id: experience.id,
-          updated_at: experience.updated_at,
-          context: reorderGalleryContext,
-        },
-        `Reordered gallery for "${experience.title}".`,
-        { experience: hydratedGalleryExperience },
+        `Updated media for "${experience.title}".`,
+        { experience: hydratedMediaExperience },
       );
     }
     case "delete_experience":

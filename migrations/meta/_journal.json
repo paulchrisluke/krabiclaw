@@ -449,6 +449,13 @@
       "when": 1785134861181,
       "tag": "0070_early_hellion",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "6",
+      "when": 1785215472413,
+      "tag": "0071_bored_satana",
+      "breakpoints": true
     }
   ]
 }

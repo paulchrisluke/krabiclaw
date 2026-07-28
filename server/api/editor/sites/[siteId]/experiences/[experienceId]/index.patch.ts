@@ -17,6 +17,7 @@ const optionalInteger = (value: unknown) => {
 }
 
 type ExperienceMediaItem = { url: string; kind: 'image' | 'video' }
+class InvalidMediaError extends Error {}
 
 function normalizeExperienceImages(value: unknown): ExperienceMediaItem[] | null {
   if (value === null || value === undefined) return null
@@ -30,6 +31,17 @@ function normalizeExperienceImages(value: unknown): ExperienceMediaItem[] | null
       kind: item.kind === 'video' ? 'video' : 'image',
     }))
     .filter(item => item.url)
+}
+
+function normalizeExperienceMedia(value: unknown): Array<{ asset_id: string }> | null {
+  if (value === null || value === undefined) return null
+  if (!Array.isArray(value)) throw new InvalidMediaError()
+  return value.map((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item) || typeof (item as Record<string, unknown>).asset_id !== 'string') {
+      throw new InvalidMediaError()
+    }
+    return { asset_id: String((item as Record<string, unknown>).asset_id).trim() }
+  })
 }
 
 export default defineEventHandler(async (event) => {
@@ -62,6 +74,14 @@ export default defineEventHandler(async (event) => {
       updates.images = normalizeExperienceImages(body.images)
     } catch (err) {
       if (err instanceof InvalidFieldError) return jsonResponse({ error: 'images must be an array' }, { status: 400 })
+      throw err
+    }
+  }
+  if ('media' in body) {
+    try {
+      updates.media = normalizeExperienceMedia(body.media)
+    } catch (err) {
+      if (err instanceof InvalidMediaError) return jsonResponse({ error: 'media must be an array of { asset_id } items' }, { status: 400 })
       throw err
     }
   }

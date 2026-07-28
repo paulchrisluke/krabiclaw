@@ -313,13 +313,13 @@ async function main() {
     expectValue('set_post_image returns site context', payload?.context?.site_id === siteId, payload)
   })
 
-  await assertImageAssignmentTool(headers, 'set_experience_image', {
+  await assertImageAssignmentTool(headers, 'set_experience_media', {
     site_id: siteId,
     experience_id: experienceId,
-    asset_id: assetId,
+    media: [{ asset_id: assetId }],
   }, (payload) => {
-    expectValue('set_experience_image returns experience id', payload?.id === experienceId, payload)
-    expectValue('set_experience_image returns site context', payload?.context?.site_id === siteId, payload)
+    expectValue('set_experience_media returns experience id', payload?.id === experienceId, payload)
+    expectValue('set_experience_media returns site context', payload?.context?.site_id === siteId, payload)
   })
 
   const locationRead = await mcp(headers, 'get_location', {
@@ -350,7 +350,7 @@ async function main() {
     experience_id: experienceId,
   })
   expectStatus('get_experience succeeds', experienceRead)
-  expectValue('set_experience_image updates experience image', data(experienceRead.body)?.experience?.image_asset_id === assetId, data(experienceRead.body))
+  expectValue('set_experience_media updates experience media', data(experienceRead.body)?.experience?.media?.[0]?.id === assetId, data(experienceRead.body))
 
   process.exit(failed ? 1 : 0)
 }

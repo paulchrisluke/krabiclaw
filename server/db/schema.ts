@@ -2378,6 +2378,22 @@ export const experiences = sqliteTable("experiences", {
 	index("experiences_org_site_idx").on(table.organization_id, table.site_id),
 ]);
 
+export const experience_media = sqliteTable("experience_media", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	experience_id: text().notNull().references(() => experiences.id, { onDelete: "cascade" } ),
+	asset_id: text().notNull().references(() => media_assets.id, { onDelete: "cascade" } ),
+	sort_order: integer().notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	unique("experience_media_experience_asset_unique").on(table.experience_id, table.asset_id),
+	unique("experience_media_experience_sort_unique").on(table.experience_id, table.sort_order),
+	index("experience_media_experience_order_idx").on(table.experience_id, table.sort_order),
+	index("experience_media_site_experience_idx").on(table.site_id, table.experience_id),
+]);
+
 export const mcp_workspace_preferences = sqliteTable("mcp_workspace_preferences", {
 	user_id: text().primaryKey().references(() => user.id, { onDelete: "cascade" } ),
 	organization_id: text().references(() => organization.id, { onDelete: "set null" } ),

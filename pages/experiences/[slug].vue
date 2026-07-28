@@ -67,13 +67,14 @@
               <div
                 v-else-if="mediaItems.length === 1"
                 class="relative aspect-4/3 lg:h-[520px] overflow-hidden"
-                :class="mediaItems[0]?.kind === 'image' ? 'cursor-zoom-in' : ''"
-                @click="mediaItems[0]?.kind === 'image' && openLightbox(0)"
+                :class="mediaItems[0] ? 'cursor-zoom-in' : ''"
+                @click="openLightbox(0)"
               >
                 <video
-                  v-if="mediaItems[0]?.kind === 'video'"
-                  :src="mediaItems[0]?.url"
-                  autoplay muted loop playsinline
+                  v-if="mediaItems[0]?.kind === 'video' && mediaItems[0]?.url"
+                  :src="mediaItems[0].url"
+                  :poster="mediaItems[0].poster || undefined"
+                  muted loop playsinline controls
                   class="h-full w-full object-cover"
                 />
                 <img
@@ -95,14 +96,15 @@
                     class="relative overflow-hidden"
                     :class="[
                       mediaItems.length >= 3 ? 'row-span-2' : '',
-                      mediaItems[0]?.kind === 'image' ? 'cursor-zoom-in' : ''
+                      mediaItems[0] ? 'cursor-zoom-in' : ''
                     ]"
-                    @click="mediaItems[0]?.kind === 'image' && openLightbox(0)"
+                    @click="openLightbox(0)"
                   >
                     <video
-                      v-if="mediaItems[0]?.kind === 'video'"
-                      :src="mediaItems[0]?.url"
-                      autoplay muted loop playsinline
+                      v-if="mediaItems[0]?.kind === 'video' && mediaItems[0]?.url"
+                      :src="mediaItems[0].url"
+                      :poster="mediaItems[0].poster || undefined"
+                      muted loop playsinline
                       class="h-full w-full object-cover"
                     />
                     <img
@@ -118,13 +120,14 @@
                     v-for="(item, i) in mediaItems.slice(1, 4)"
                     :key="item.url"
                     class="relative overflow-hidden"
-                    :class="item.kind === 'image' ? 'cursor-zoom-in' : ''"
-                    @click="item.kind === 'image' && openLightbox(i + 1)"
+                    :class="item.url ? 'cursor-zoom-in' : ''"
+                    @click="openLightbox(i + 1)"
                   >
                     <video
                       v-if="item.kind === 'video'"
                       :src="item.url"
-                      autoplay muted loop playsinline
+                      :poster="item.poster || undefined"
+                      muted loop playsinline
                       class="h-full w-full object-cover"
                     />
                     <img
@@ -141,7 +144,7 @@
                       @click.stop="openLightbox(0)"
                     >
                       <SayaIcon name="squares-2x2" class="size-5" />
-                      Show all {{ mediaItems.length }} photos
+                      Show all {{ mediaItems.length }} media
                     </button>
                   </div>
                 </div>
@@ -151,7 +154,7 @@
 
 
             <!-- Lightbox -->
-            <SayaLightbox v-model:open="lightboxOpen" v-model:index="lightboxIdx" :items="imageItems" :title="experience.title">
+            <SayaLightbox v-model:open="lightboxOpen" v-model:index="lightboxIdx" :items="mediaItems" :title="experience.title">
               <template v-if="experience.tagline" #caption>
                 <p class="text-sm text-white/80">{{ experience.tagline }}</p>
               </template>
@@ -509,14 +512,23 @@ const sanitizedBody = computed(() => {
   return DOMPurify.sanitize(raw)
 })
 
-// Media items for carousel - supports both images and videos
 const mediaItems = computed(() => {
   const exp = experience.value
   if (!exp) return []
 
-  const items: Array<{ url: string; kind: 'image' | 'video' }> = []
+  const items: Array<{ url: string; kind: 'image' | 'video'; poster?: string; alt?: string }> = []
 
-  // Add primary image/video
+  if (Array.isArray(exp.media) && exp.media.length) {
+    return exp.media
+      .map(item => ({
+        url: item.kind === 'video' ? (item.public_url || '') : item.public_url,
+        kind: item.kind,
+        poster: item.kind === 'video' ? (item.thumbnail_url || undefined) : undefined,
+        alt: item.alt_text || exp.title,
+      }))
+      .filter(item => item.url && (item.kind === 'image' || item.poster))
+  }
+
   if (exp.image_url) {
     items.push({ url: exp.image_url, kind: 'image' })
   }
@@ -536,6 +548,13 @@ const mediaItems = computed(() => {
   }
 
   return items
+})
+
+const experienceCoverImageUrl = computed(() => {
+  const cover = experience.value?.media?.[0]
+  if (cover?.kind === 'image') return cover.public_url
+  if (cover?.kind === 'video') return cover.thumbnail_url
+  return experience.value?.image_url ?? null
 })
 
 function formatDuration(minutes: number): string {
@@ -579,17 +598,13 @@ function handleContactSubmit(contactData: ContactFormState) {
   submitBooking()
 }
 
-// ── Lightbox ──────────────────────────────────────────────────────────────────
-
-const imageItems = computed(() => mediaItems.value.filter(i => i.kind === 'image'))
 const lightboxOpen = ref(false)
 const lightboxIdx = ref(0)
 
 function openLightbox(mediaIdx: number) {
   const item = mediaItems.value[mediaIdx]
   if (!item) return
-  const imgIdx = imageItems.value.findIndex(i => i.url === item.url)
-  lightboxIdx.value = imgIdx >= 0 ? imgIdx : 0
+  lightboxIdx.value = mediaIdx
   lightboxOpen.value = true
 }
 
@@ -707,7 +722,7 @@ const seoDescription = computed(() =>
 )
 
 const { canonicalUrl } = useTenantSocialMetadata(() => {
-  const heroImageUrl = experience.value?.og_image_public_url || experience.value?.image_url || null
+  const heroImageUrl = experience.value?.og_image_public_url || experienceCoverImageUrl.value
   return {
     path: experience.value?.canonical_url || `/experiences/${slug}`,
     title: seoTitle.value,
@@ -750,10 +765,9 @@ useHead({
         // Collect all image URLs in order: og override, then primary, then gallery images
         const images = [
           ...(val.og_image_public_url ? [val.og_image_public_url] : []),
-          ...(val.image_url ? [val.image_url] : []),
-          ...(Array.isArray(val.images)
-            ? val.images.filter((i: { kind?: string }) => i.kind !== 'video').map((i: { url: string }) => i.url)
-            : []),
+          ...mediaItems.value
+            .map(item => item.kind === 'video' ? item.poster : item.url)
+            .filter((url): url is string => Boolean(url)),
         ]
 
         // Use price_amount (canonical numeric) directly; fall back to parsing price string for legacy rows

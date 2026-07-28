@@ -63,6 +63,13 @@ useTenantSocialMetadata(() => ({
     faviconUrl: config.value?.favicon_url || null,
     primaryColor: config.value?.brand_color || null,
   },
-  heroImage: experiences.value[0]?.image_url ? { url: experiences.value[0].image_url } : null,
+  heroImage: experienceSocialImage(experiences.value[0]) ? { url: experienceSocialImage(experiences.value[0])! } : null,
 }))
+
+function experienceSocialImage(experience: Experience | undefined): string | null {
+  const cover = experience?.media?.[0]
+  if (cover?.kind === 'image') return cover.public_url
+  if (cover?.kind === 'video') return cover.thumbnail_url
+  return experience?.image_url ?? null
+}
 </script>

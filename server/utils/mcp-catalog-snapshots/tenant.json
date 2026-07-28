@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:d9c4b48f69b614e629414b9893a541e0ac5bb2d783a2c89dcdc8ac21d7fbf94f",
+  "fingerprint": "sha256:e9275583eaf75fee748adcc10bd26933a851e65e559f2ba89dc1e160b228e148",
   "tools": [
     {
       "name": "add_menu_items_batch",
@@ -1157,36 +1157,6 @@
               "null"
             ]
           },
-          "image_asset_id": {
-            "description": "Primary image asset id from get_site_media_assets.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "images": {
-            "description": "Optional additional media gallery for this experience. Use this for extra photos or videos beyond the primary image/video.",
-            "items": {
-              "properties": {
-                "kind": {
-                  "enum": [
-                    "image",
-                    "video"
-                  ],
-                  "type": "string"
-                },
-                "url": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "url",
-                "kind"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
           "included_items": {
             "description": "Explicit list of what is included. Use one concise string per included item.",
             "items": {
@@ -1207,6 +1177,22 @@
               "number",
               "null"
             ]
+          },
+          "media": {
+            "description": "Ordered image/video media asset references. Position 0 is the cover everywhere. Videos in cover position must already have thumbnail_url/poster metadata.",
+            "items": {
+              "properties": {
+                "asset_id": {
+                  "description": "Active image or video asset id from get_site_media_assets.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "asset_id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
           },
           "meeting_point": {
             "description": "Specific arrival or check-in instruction for guests.",
@@ -1352,13 +1338,6 @@
           "title": {
             "description": "Public name of the experience.",
             "type": "string"
-          },
-          "video_asset_id": {
-            "description": "Primary video asset id from get_site_media_assets.",
-            "type": [
-              "string",
-              "null"
-            ]
           },
           "what_to_bring": {
             "description": "Explicit list of what guests should bring or prepare. Use one concise string per item.",
@@ -6886,40 +6865,6 @@
                 "id": {
                   "type": "string"
                 },
-                "image_asset_id": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "image_url": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "images": {
-                  "items": {
-                    "properties": {
-                      "kind": {
-                        "enum": [
-                          "image",
-                          "video"
-                        ],
-                        "type": "string"
-                      },
-                      "url": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "url",
-                      "kind"
-                    ],
-                    "type": "object"
-                  },
-                  "type": "array"
-                },
                 "included_items": {
                   "items": {
                     "type": "string"
@@ -6937,6 +6882,78 @@
                     "number",
                     "null"
                   ]
+                },
+                "media": {
+                  "items": {
+                    "properties": {
+                      "alt_text": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "duration": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "height": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "enum": [
+                          "image",
+                          "video"
+                        ],
+                        "type": "string"
+                      },
+                      "mime_type": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "provider": {
+                        "type": "string"
+                      },
+                      "public_url": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "enum": [
+                          "active"
+                        ],
+                        "type": "string"
+                      },
+                      "thumbnail_url": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "width": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "kind",
+                      "public_url",
+                      "status"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
                 },
                 "meeting_point": {
                   "type": [
@@ -7050,18 +7067,6 @@
                 },
                 "updated_at": {
                   "type": "string"
-                },
-                "video_asset_id": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "video_url": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
                 },
                 "view_url": {
                   "type": [
@@ -9483,93 +9488,6 @@
       }
     },
     {
-      "name": "reorder_experience_gallery",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "experience_id": {
-            "description": "Experience id or slug.",
-            "type": "string"
-          },
-          "images": {
-            "description": "Optional additional media gallery for this experience. Use this for extra photos or videos beyond the primary image/video.",
-            "items": {
-              "properties": {
-                "kind": {
-                  "enum": [
-                    "image",
-                    "video"
-                  ],
-                  "type": "string"
-                },
-                "url": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "url",
-                "kind"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "experience_id",
-          "images"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "changed_fields": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "context": {
-            "type": "object"
-          },
-          "entity": {
-            "enum": [
-              "experience"
-            ],
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "ok": {
-            "type": "boolean"
-          },
-          "public_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "slug": {
-            "type": "string"
-          },
-          "updated_at": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "ok",
-          "entity",
-          "id"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "reorder_location_qa",
       "inputSchema": {
         "additionalProperties": true,
@@ -11402,86 +11320,30 @@
       }
     },
     {
-      "name": "set_experience_image",
+      "name": "set_experience_media",
       "inputSchema": {
         "additionalProperties": true,
         "properties": {
-          "asset_id": {
-            "description": "Active image asset id from get_site_media_assets.",
-            "type": "string"
-          },
           "experience_id": {
             "description": "Experience id or slug.",
             "type": "string"
           },
-          "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "experience_id",
-          "asset_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "changed_fields": {
+          "media": {
+            "description": "Ordered image/video media asset references. Position 0 is the cover everywhere. Videos in cover position must already have thumbnail_url/poster metadata.",
             "items": {
-              "type": "string"
+              "properties": {
+                "asset_id": {
+                  "description": "Active image or video asset id from get_site_media_assets.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "asset_id"
+              ],
+              "type": "object"
             },
             "type": "array"
           },
-          "context": {
-            "type": "object"
-          },
-          "entity": {
-            "enum": [
-              "experience"
-            ],
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "ok": {
-            "type": "boolean"
-          },
-          "public_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "slug": {
-            "type": "string"
-          },
-          "updated_at": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "ok",
-          "entity",
-          "id"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "set_experience_video",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "asset_id": {
-            "description": "Active video asset id from get_site_media_assets.",
-            "type": "string"
-          },
-          "experience_id": {
-            "description": "Experience id or slug.",
-            "type": "string"
-          },
           "site_id": {
             "description": "Site id, subdomain, or custom domain.",
             "type": "string"
@@ -11489,7 +11351,7 @@
         },
         "required": [
           "experience_id",
-          "asset_id"
+          "media"
         ],
         "type": "object"
       },
@@ -14828,36 +14690,6 @@
               "null"
             ]
           },
-          "image_asset_id": {
-            "description": "Primary image asset id from get_site_media_assets.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "images": {
-            "description": "Optional additional media gallery for this experience. Use this for extra photos or videos beyond the primary image/video.",
-            "items": {
-              "properties": {
-                "kind": {
-                  "enum": [
-                    "image",
-                    "video"
-                  ],
-                  "type": "string"
-                },
-                "url": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "url",
-                "kind"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          },
           "included_items": {
             "description": "Explicit list of what is included. Use one concise string per included item.",
             "items": {
@@ -14878,6 +14710,22 @@
               "number",
               "null"
             ]
+          },
+          "media": {
+            "description": "Ordered image/video media asset references. Position 0 is the cover everywhere. Videos in cover position must already have thumbnail_url/poster metadata.",
+            "items": {
+              "properties": {
+                "asset_id": {
+                  "description": "Active image or video asset id from get_site_media_assets.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "asset_id"
+              ],
+              "type": "object"
+            },
+            "type": "array"
           },
           "meeting_point": {
             "description": "Specific arrival or check-in instruction for guests.",
@@ -15023,13 +14871,6 @@
           "title": {
             "description": "Public name of the experience.",
             "type": "string"
-          },
-          "video_asset_id": {
-            "description": "Primary video asset id from get_site_media_assets.",
-            "type": [
-              "string",
-              "null"
-            ]
           },
           "what_to_bring": {
             "description": "Explicit list of what guests should bring or prepare. Use one concise string per item.",

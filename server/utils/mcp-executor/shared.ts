@@ -329,12 +329,12 @@ export function assignmentForGeneratedTarget(
     case "experience_image": {
       const experienceId = requiredString(args, "experience_id");
       return {
-        assignTool: "set_experience_image",
-        assignArgs: { site_id: siteId, experience_id: experienceId },
-        title: "Experience Images",
-        subtitle: "Choose the image that best captures the experience.",
+        assignTool: "set_experience_media",
+        assignArgs: { site_id: siteId, experience_id: experienceId, media: [] },
+        title: "Experience Media",
+        subtitle: "Choose the media that best captures the experience.",
         useLabel: `Use for this experience${forSite}`,
-        successMessage: `Experience image updated${forSite}.`,
+        successMessage: `Experience media updated${forSite}.`,
       };
     }
   }

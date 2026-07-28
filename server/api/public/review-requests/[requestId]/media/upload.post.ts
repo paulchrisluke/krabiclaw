@@ -5,7 +5,7 @@ import { uploadResolvedMediaToAssetStore } from '~/server/utils/media-upload'
 import { sniffMediaMimeType } from '~/server/utils/media-mime'
 import { getReviewRequestByToken } from '~/server/utils/review-requests'
 
-const REVIEW_VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/quicktime', 'video/webm'])
+const REVIEW_VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm'])
 const REVIEW_VIDEO_MAX_BYTES = 250 * 1024 * 1024
 
 function sanitizeFilename(raw: string | undefined): string {
@@ -63,7 +63,7 @@ export default defineEventHandler(async (event) => {
     ? filePart.type.split(';', 1)[0]?.toLowerCase().trim() || ''
     : ''
   if (!REVIEW_VIDEO_MIME_TYPES.has(detectedContentType)) {
-    return jsonResponse({ error: 'Accepted video formats are MP4, MOV, and WebM.' }, { status: 415 })
+    return jsonResponse({ error: 'Accepted video formats are MP4 and WebM.' }, { status: 415 })
   }
   if (declaredContentType && declaredContentType !== detectedContentType) {
     return jsonResponse({ error: 'File type mismatch' }, { status: 400 })

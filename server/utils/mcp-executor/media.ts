@@ -96,7 +96,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         posterWarning: uploaded.posterWarning,
         nextStep: resolved.kind === "file"
           ? "Upload complete. Call analyze_document with this assetId to summarize it or answer questions grounded in it."
-          : "Upload complete. This asset is in the media library but not assigned yet. Call the matching assignment tool next (e.g. set_home_hero_image, set_home_hero_video, set_experience_image, set_experience_video).",
+          : "Upload complete. This asset is in the media library but not assigned yet. Call the matching assignment tool next (e.g. set_home_hero_image, set_home_hero_video, set_experience_media).",
         context: await mutationContextPayload(site),
       };
     }

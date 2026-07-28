@@ -583,6 +583,24 @@ export const chatgptFileInput = {
   description: 'Authorized file reference supplied by ChatGPT after rewriting the declared top-level file argument, including a temporary download_url and file_id.',
 }
 
+export const resolvedMediaAssetObject = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    kind: { type: 'string', enum: ['image', 'video'] },
+    public_url: { type: 'string' },
+    thumbnail_url: { type: ['string', 'null'] },
+    mime_type: { type: ['string', 'null'] },
+    width: { type: ['number', 'null'] },
+    height: { type: ['number', 'null'] },
+    duration: { type: ['number', 'null'] },
+    alt_text: { type: ['string', 'null'] },
+    provider: { type: 'string' },
+    status: { type: 'string', enum: ['active'] },
+  },
+  required: ['id', 'kind', 'public_url', 'status'],
+}
+
 export const experienceObject = {
   type: 'object',
   properties: {
@@ -600,20 +618,9 @@ export const experienceObject = {
     max_capacity: { type: ['number', 'null'] },
     status: { type: 'string', enum: [...EXPERIENCE_STATUSES] },
     location_id: { type: ['string', 'null'] },
-    image_asset_id: { type: ['string', 'null'] },
-    image_url: { type: ['string', 'null'] },
-    video_asset_id: { type: ['string', 'null'] },
-    video_url: { type: ['string', 'null'] },
-    images: {
+    media: {
       type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          url: { type: 'string' },
-          kind: { type: 'string', enum: ['image', 'video'] },
-        },
-        required: ['url', 'kind'],
-      },
+      items: resolvedMediaAssetObject,
     },
     time_slots: { type: ['array', 'null'], items: { type: 'string' } },
     recurring_slots: {
@@ -665,18 +672,15 @@ export const experienceWriteSchema = {
   title: { type: 'string', description: 'Public name of the experience.' },
   tagline: { type: ['string', 'null'], description: 'Short one-line hook shown in cards and summaries. Keep this concise; do not dump the full description here.' },
   body: { type: ['string', 'null'], description: 'Main long-form description for the experience. Use this for the full narrative, inclusions, what guests can expect, and important details that do not have a dedicated field.' },
-  image_asset_id: { type: ['string', 'null'], description: 'Primary image asset id from get_site_media_assets.' },
-  video_asset_id: { type: ['string', 'null'], description: 'Primary video asset id from get_site_media_assets.' },
-  images: {
+  media: {
     type: 'array',
-    description: 'Optional additional media gallery for this experience. Use this for extra photos or videos beyond the primary image/video.',
+    description: 'Ordered image/video media asset references. Position 0 is the cover everywhere. Videos in cover position must already have thumbnail_url/poster metadata.',
     items: {
       type: 'object',
       properties: {
-        url: { type: 'string' },
-        kind: { type: 'string', enum: ['image', 'video'] },
+        asset_id: { type: 'string', description: 'Active image or video asset id from get_site_media_assets.' },
       },
-      required: ['url', 'kind'],
+      required: ['asset_id'],
     },
   },
   price: { type: ['string', 'null'], description: 'Optional display override for pricing text, e.g. "Ask us" or "Free". Leave both price and price_amount unset entirely (not "Ask us") for group/custom-quote experiences — that triggers the public page\'s "Contact us" inquiry flow instead of a Reserve Now button; setting price to text like "Ask us" instead just shows that text as the price label with normal booking still enabled.' },
@@ -1170,8 +1174,7 @@ export const BOUNDED_WRITE_TOOL_NAMES = [
   'set_blog_post_image',
   'publish_blog_post',
   'unpublish_blog_post',
-  'set_experience_image',
-  'set_experience_video',
+  'set_experience_media',
   'create_site',
   'create_post',
   'update_post',
@@ -1220,7 +1223,6 @@ export const OPEN_WORLD_WRITE_TOOL_NAMES = [
   'reply_to_review',
   'create_experience',
   'update_experience',
-  'reorder_experience_gallery',
   'publish_translations',
   'sync_google_business_locations',
   'create_domain',
