@@ -428,7 +428,7 @@ Common workflows: update menus and items, create and publish site posts, triage 
             arguments: rawArgs,
             status: "error",
             errorCode: mcpErr.code,
-            errorMessage: describeErrorForTelemetry(toolError),
+            errorMessage: mcpErr.message,
             httpStatus: 200,
             jsonrpcErrorCode: mcpErr.code,
             jsonrpcErrorMessage: mcpErr.message,

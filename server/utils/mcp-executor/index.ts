@@ -75,7 +75,7 @@ export async function executeMcpToolCall(
 ) {
   const tool = getMcpTool(toolName);
   if (!tool) {
-    const message = toolName === 'open_media_upload' || toolName === 'open_home_hero_media_upload'
+    const message = /^open_.*media_upload$/.test(toolName)
       ? `Unknown tool: ${toolName}. Use open_video_upload with a confirmed site_id; if no site is confirmed, call list_sites and ask the user which site to use.`
       : `Unknown tool: ${toolName}`;
     throw mcpProtocolError(
