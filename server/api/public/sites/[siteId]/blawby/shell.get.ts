@@ -1,23 +1,16 @@
-import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getPublicBlawbyShellData } from '~/server/utils/professional-services'
-import { siteSupportsBlawbyTemplate } from '~/utils/template-registry'
+import { getActiveBlawbySite, getPublicBlawbyShellData } from '~/server/utils/professional-services'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'siteId required' }, { status: 400 })
 
   const env = cloudflareEnv(event)
-  const db = env.DB
+  const db = env.db
   if (!db) return jsonResponse({ error: 'Database unavailable' }, { status: 503 })
 
-  const site = await queryFirst<{ vertical: string; theme_id: string }>(db, `
-    SELECT vertical, theme_id
-      FROM sites
-     WHERE id = ? AND status = 'active' AND onboarding_status = 'active'
-     LIMIT 1
-  `, [siteId])
-  if (!siteSupportsBlawbyTemplate({ vertical: site?.vertical, themeId: site?.theme_id })) {
+  const site = await getActiveBlawbySite(db, siteId)
+  if (!site) {
     return jsonResponse({ error: 'Blawby is not enabled for this site' }, { status: 404 })
   }
 
