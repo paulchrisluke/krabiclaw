@@ -717,7 +717,7 @@ export const experienceWriteSchema = {
   seo_description: { type: ['string', 'null'], description: 'Optional SEO description override.' },
   canonical_url: { type: ['string', 'null'], description: 'Optional canonical URL override. Leave unset for the default self-referencing canonical.' },
   robots: { type: ['string', 'null'], enum: [...ROBOTS_DIRECTIVE_ENUM, null], description: 'Search engine indexing directive. Leave unset for the default index,follow.' },
-  og_image_asset_id: { type: ['string', 'null'], description: 'Asset id from get_site_media_assets for this experience\'s social share image. Falls back to the first gallery image, then image_asset_id, if unset.' },
+  og_image_asset_id: { type: ['string', 'null'], description: 'Asset id from get_site_media_assets for this experience\'s social share image. If unset, social sharing uses the first image or video poster from the ordered media list.' },
 } as const
 
 export const renderedBookingPolicySummaryObject = {

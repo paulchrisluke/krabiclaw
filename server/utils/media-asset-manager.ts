@@ -178,21 +178,35 @@ export async function replaceExperienceMedia(
     requireCoverPoster: true,
     fieldName: 'media',
   })
-  const now = new Date().toISOString()
-  const queries: BatchQuery[] = [
+  await executeBatch(db, buildReplaceExperienceMediaQueries({
+    organizationId: input.organizationId,
+    siteId: input.siteId,
+    experienceId: input.experienceId,
+    media,
+  }))
+  return media
+}
+
+export function buildReplaceExperienceMediaQueries(input: {
+  organizationId: string
+  siteId: string
+  experienceId: string
+  media: ResolvedMediaAsset[]
+  now?: string
+}): BatchQuery[] {
+  const now = input.now ?? new Date().toISOString()
+  return [
     {
       query: `DELETE FROM experience_media WHERE site_id = ? AND experience_id = ?`,
       params: [input.siteId, input.experienceId],
     },
-    ...media.map((asset, index) => ({
+    ...input.media.map((asset, index) => ({
       query: `INSERT INTO experience_media
          (id, organization_id, site_id, experience_id, asset_id, sort_order, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       params: [crypto.randomUUID(), input.organizationId, input.siteId, input.experienceId, asset.id, index, now, now],
     })),
   ]
-  await executeBatch(db, queries)
-  return media
 }
 
 export async function createMediaAsset(db: DbClient, data: CreateInput): Promise<void> {

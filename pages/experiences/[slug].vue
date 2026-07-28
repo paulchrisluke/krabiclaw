@@ -516,9 +516,7 @@ const mediaItems = computed(() => {
   const exp = experience.value
   if (!exp) return []
 
-  const items: Array<{ url: string; kind: 'image' | 'video'; poster?: string; alt?: string }> = []
-
-  if (Array.isArray(exp.media) && exp.media.length) {
+  if (Array.isArray(exp.media)) {
     return exp.media
       .map(item => ({
         url: item.kind === 'video' ? (item.public_url || '') : item.public_url,
@@ -526,28 +524,10 @@ const mediaItems = computed(() => {
         poster: item.kind === 'video' ? (item.thumbnail_url || undefined) : undefined,
         alt: item.alt_text || exp.title,
       }))
-      .filter(item => item.url && (item.kind === 'image' || item.poster))
+      .filter(item => item.url)
   }
 
-  if (exp.image_url) {
-    items.push({ url: exp.image_url, kind: 'image' })
-  }
-  if (exp.video_url) {
-    items.push({ url: exp.video_url, kind: 'video' })
-  }
-
-  // Add additional images/videos if they exist in the data
-  if (exp.images && Array.isArray(exp.images)) {
-    type ExperienceMedia = { url?: string; kind?: string }
-    exp.images.forEach((img) => {
-      const media = img as ExperienceMedia
-      if (media.url && !items.find(i => i.url === media.url)) {
-        items.push({ url: media.url, kind: media.kind === 'video' ? 'video' : 'image' })
-      }
-    })
-  }
-
-  return items
+  return []
 })
 
 const experienceCoverImageUrl = computed(() => {

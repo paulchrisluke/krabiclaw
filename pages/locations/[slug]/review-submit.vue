@@ -188,7 +188,7 @@ async function handleMediaSelect(event: Event) {
         if (videoCount.value >= 2) throw new Error('You can upload up to 2 videos.')
         await uploadVideo(file)
       } else {
-        throw new Error('Use JPG, PNG, WebP, MP4, MOV, or WebM files.')
+        throw new Error('Use JPG, PNG, WebP, MP4, or WebM files.')
       }
     }
   } catch (error) {

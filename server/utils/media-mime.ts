@@ -9,6 +9,20 @@ export const R2_IMAGE_MIME_TYPES = new Set(["image/avif"]);
 
 export const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 export const MAX_POSTER_BYTES = 10 * 1024 * 1024;
+const MP4_BRANDS = new Set([
+  "avc1",
+  "dash",
+  "iso2",
+  "iso3",
+  "iso4",
+  "iso5",
+  "iso6",
+  "isom",
+  "m4v ",
+  "mp41",
+  "mp42",
+  "mp4v",
+])
 
 export function sniffMediaMimeType(data: Uint8Array): string {
   if (
@@ -58,7 +72,8 @@ export function sniffMediaMimeType(data: Uint8Array): string {
     const brand = String.fromCharCode(data[8] ?? 0, data[9] ?? 0, data[10] ?? 0, data[11] ?? 0).toLowerCase();
     if (brand.startsWith("avif") || brand.startsWith("avis")) return "image/avif";
     if (brand.startsWith("qt")) return "application/octet-stream";
-    return "video/mp4";
+    if (MP4_BRANDS.has(brand)) return "video/mp4";
+    return "application/octet-stream";
   }
 
   const sample = new TextDecoder().decode(data.slice(0, Math.min(data.byteLength, 1024))).trimStart().toLowerCase();

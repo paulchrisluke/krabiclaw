@@ -173,7 +173,7 @@ const pendingConfirmIds = ref<string[]>([])
 
 const computedAccept = computed(() => {
   if (props.accept === 'video') return 'video/mp4,video/webm'
-  if (props.accept === 'any') return 'image/*,video/*'
+  if (props.accept === 'any') return 'image/*,video/mp4,video/webm'
   return 'image/*'
 })
 

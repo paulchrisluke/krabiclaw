@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:e9275583eaf75fee748adcc10bd26933a851e65e559f2ba89dc1e160b228e148",
+  "fingerprint": "sha256:052f7a04b9f1852dbc43bcb0250c1e58373789e3e15b2e33f079efb0af4a1d51",
   "tools": [
     {
       "name": "add_menu_items_batch",
@@ -1202,7 +1202,7 @@
             ]
           },
           "og_image_asset_id": {
-            "description": "Asset id from get_site_media_assets for this experience's social share image. Falls back to the first gallery image, then image_asset_id, if unset.",
+            "description": "Asset id from get_site_media_assets for this experience's social share image. If unset, social sharing uses the first image or video poster from the ordered media list.",
             "type": [
               "string",
               "null"
@@ -14735,7 +14735,7 @@
             ]
           },
           "og_image_asset_id": {
-            "description": "Asset id from get_site_media_assets for this experience's social share image. Falls back to the first gallery image, then image_asset_id, if unset.",
+            "description": "Asset id from get_site_media_assets for this experience's social share image. If unset, social sharing uses the first image or video poster from the ordered media list.",
             "type": [
               "string",
               "null"

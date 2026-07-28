@@ -1,14 +1,14 @@
 import { resolveLocationTimezone, isTimeSlotInPast } from '~/server/utils/site-config'
-import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { fireSiteEventSafe } from '~/server/utils/site-events'
 import { getActiveSpecialClosure } from '~/utils/formatters'
 import { assertValidSaleWindow } from '~/shared/money'
 import { revokeReviewRequestForBooking } from '~/server/utils/review-requests'
 import { validateMediaAsset } from '~/server/utils/location-management'
 import {
+  buildReplaceExperienceMediaQueries,
   hydrateMediaAssetsForExperiences,
   hydrateMediaAssetRefs,
-  replaceExperienceMedia,
   type MediaAssetRefInput,
   type ResolvedMediaAsset,
 } from '~/server/utils/media-asset-manager'
@@ -422,8 +422,8 @@ export async function createExperience(
   await validateMediaAsset(db, organizationId, siteId, input.video_asset_id, 'video', 'video_asset_id')
   await validateMediaAsset(db, organizationId, siteId, input.og_image_asset_id, 'image', 'og_image_asset_id')
   const mediaRefs = input.media ?? []
-  if (input.media !== undefined) {
-    await hydrateMediaAssetRefs(db, {
+  const media = input.media !== undefined
+    ? await hydrateMediaAssetRefs(db, {
       organizationId,
       siteId,
       refs: mediaRefs,
@@ -431,7 +431,7 @@ export async function createExperience(
       requireCoverPoster: true,
       fieldName: 'media',
     })
-  }
+    : null
   const id = crypto.randomUUID()
   const slug = await uniqueSlug(db, siteId, slugify(input.title))
   const now = new Date().toISOString()
@@ -444,56 +444,59 @@ export async function createExperience(
   const whatToBringJson = input.what_to_bring?.length ? JSON.stringify(input.what_to_bring) : null
   const status = input.status !== undefined ? assertExperienceStatus(input.status, 'status') : 'active'
 
-  const result = await execute(
-    db,
-    `INSERT INTO experiences
+  const queries: BatchQuery[] = [
+    {
+      query: `INSERT INTO experiences
        (id, organization_id, site_id, location_id, title, slug, tagline, body,
         image_asset_id, video_asset_id, images, price, price_amount, compare_at_price_amount, sale_starts_at, sale_ends_at, duration_minutes, max_capacity, time_slots, recurring_slots,
         available_note, highlights, included_items, what_to_bring, meeting_point, status, sort_order, featured, featured_sort_order,
         seo_title, seo_description, canonical_url, robots, og_image_asset_id, created_at, updated_at, created_by)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [
-      id, organizationId, siteId,
-      input.location_id,
-      input.title,
-      slug,
-      input.tagline ?? null,
-      input.body ?? null,
-      input.image_asset_id ?? null,
-      input.video_asset_id ?? null,
-      imagesJson,
-      input.price ?? null,
-      input.price_amount ?? null,
-      input.compare_at_price_amount ?? null,
-      input.sale_starts_at ?? null,
-      input.sale_ends_at ?? null,
-      input.duration_minutes ?? null,
-      input.max_capacity ?? null,
-      slotsJson,
-      recurringSlotsJson,
-      input.available_note ?? null,
-      highlightsJson,
-      includedItemsJson,
-      whatToBringJson,
-      input.meeting_point ?? null,
-      status,
-      input.sort_order ?? 0,
-      input.featured ? 1 : 0,
-      input.featured_sort_order ?? 0,
-      input.seo_title ?? null,
-      input.seo_description ?? null,
-      input.canonical_url ?? null,
-      input.robots ?? null,
-      input.og_image_asset_id ?? null,
-      now, now, userId,
-    ],
-  )
+      params: [
+        id, organizationId, siteId,
+        input.location_id,
+        input.title,
+        slug,
+        input.tagline ?? null,
+        input.body ?? null,
+        input.image_asset_id ?? null,
+        input.video_asset_id ?? null,
+        imagesJson,
+        input.price ?? null,
+        input.price_amount ?? null,
+        input.compare_at_price_amount ?? null,
+        input.sale_starts_at ?? null,
+        input.sale_ends_at ?? null,
+        input.duration_minutes ?? null,
+        input.max_capacity ?? null,
+        slotsJson,
+        recurringSlotsJson,
+        input.available_note ?? null,
+        highlightsJson,
+        includedItemsJson,
+        whatToBringJson,
+        input.meeting_point ?? null,
+        status,
+        input.sort_order ?? 0,
+        input.featured ? 1 : 0,
+        input.featured_sort_order ?? 0,
+        input.seo_title ?? null,
+        input.seo_description ?? null,
+        input.canonical_url ?? null,
+        input.robots ?? null,
+        input.og_image_asset_id ?? null,
+        now, now, userId,
+      ],
+    },
+  ]
+  if (media) {
+    queries.push(...buildReplaceExperienceMediaQueries({ organizationId, siteId, experienceId: id, media, now }))
+  }
+
+  const [result] = await executeBatch(db, queries)
 
   if (!result || !result.success) {
     throw new Error('Failed to create experience in the database.')
-  }
-  if (input.media !== undefined) {
-    await replaceExperienceMedia(db, { organizationId, siteId, experienceId: id, refs: mediaRefs })
   }
 
   const created = await getExperienceById(db, siteId, id)
@@ -541,8 +544,8 @@ export async function updateExperience(
   const owner = input.media !== undefined
     ? await queryFirst<{ organization_id: string }>(db, `SELECT organization_id FROM experiences WHERE site_id = ? AND id = ? LIMIT 1`, [siteId, id])
     : null
-  if (input.media !== undefined && owner) {
-    await hydrateMediaAssetRefs(db, {
+  const media = input.media !== undefined && owner
+    ? await hydrateMediaAssetRefs(db, {
       organizationId: owner.organization_id,
       siteId,
       refs: input.media ?? [],
@@ -550,7 +553,7 @@ export async function updateExperience(
       requireCoverPoster: true,
       fieldName: 'media',
     })
-  }
+    : null
   const sets: string[] = []
   const params: (string | number | null)[] = []
 
@@ -572,7 +575,6 @@ export async function updateExperience(
     sets.push('images = ?')
     params.push(input.images?.length ? JSON.stringify(input.images) : null)
   }
-  const mediaRefs = input.media ?? null
   if (input.price !== undefined) { sets.push('price = ?'); params.push(input.price ?? null) }
   if (input.price_amount !== undefined) { sets.push('price_amount = ?'); params.push(input.price_amount ?? null) }
   if (input.compare_at_price_amount !== undefined) { sets.push('compare_at_price_amount = ?'); params.push(input.compare_at_price_amount ?? null) }
@@ -615,29 +617,39 @@ export async function updateExperience(
   if (input.og_image_asset_id !== undefined) { sets.push('og_image_asset_id = ?'); params.push(input.og_image_asset_id ?? null) }
 
   if (sets.length === 0) {
-    if (input.media !== undefined && owner) {
-      await replaceExperienceMedia(db, {
+    if (media && owner) {
+      await executeBatch(db, buildReplaceExperienceMediaQueries({
         organizationId: owner.organization_id,
         siteId,
         experienceId: id,
-        refs: mediaRefs ?? [],
-      })
+        media,
+      }))
     }
     return getExperienceById(db, siteId, id)
   }
 
+  const now = new Date().toISOString()
   sets.push('updated_at = ?')
-  params.push(new Date().toISOString())
+  params.push(now)
   params.push(siteId, id)
 
-  await execute(db, `UPDATE experiences SET ${sets.join(', ')} WHERE site_id = ? AND id = ?`, params)
-  if (input.media !== undefined && owner) {
-    await replaceExperienceMedia(db, {
-      organizationId: owner.organization_id,
-      siteId,
-      experienceId: id,
-      refs: mediaRefs ?? [],
-    })
+  const updateQuery: BatchQuery = {
+    query: `UPDATE experiences SET ${sets.join(', ')} WHERE site_id = ? AND id = ?`,
+    params,
+  }
+  if (media && owner) {
+    await executeBatch(db, [
+      updateQuery,
+      ...buildReplaceExperienceMediaQueries({
+        organizationId: owner.organization_id,
+        siteId,
+        experienceId: id,
+        media,
+        now,
+      }),
+    ])
+  } else {
+    await execute(db, updateQuery.query, updateQuery.params)
   }
 
   return getExperienceById(db, siteId, id)

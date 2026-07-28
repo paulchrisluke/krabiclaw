@@ -53,7 +53,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'open_video_upload',
-      description: 'Launch the inline KrabiClaw video upload widget. Use this only when a video upload is required; images should arrive as direct ChatGPT attachments or through native image generation. The widget returns an active assetId and publicUrl. Then call the appropriate video assignment tool, such as set_home_hero_video, set_location_hero_video, or set_experience_media.',
+      description: 'Launch the inline KrabiClaw video upload widget. Use this only when a video upload is required; images should arrive as direct ChatGPT attachments or through native image generation. The widget returns an active assetId and publicUrl. Then call the appropriate video assignment tool, such as set_home_hero_video, set_location_hero_video, or set_experience_media. set_experience_media replaces the full ordered list, so fetch current media and append/merge the new asset first.',
       domain: 'media',
       minimumRole: 'editor',
       confirmRequired: false,
