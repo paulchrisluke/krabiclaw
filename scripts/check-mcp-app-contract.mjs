@@ -162,29 +162,15 @@ async function main() {
     if (standardUri && standardUri === openaiUri) pass(`${tool.name} has matching ui.resourceUri and openai/outputTemplate`)
     else fail(`${tool.name} metadata mismatch`, tool._meta)
   }
-  const openVideoTool = toolList.find(tool => tool?.name === 'open_video_upload')
-  if (openVideoTool) {
-    pass('open_video_upload is advertised')
-    if (openVideoTool.outputSchema?.required?.length === 1 && openVideoTool.outputSchema.required[0] === 'launched') {
-      pass('open_video_upload output requires launched only')
-    } else {
-      fail('open_video_upload has unexpected output required fields', openVideoTool.outputSchema)
-    }
-    const outputProperties = Object.keys(openVideoTool.outputSchema?.properties ?? {})
-    if (outputProperties.length === 1 && outputProperties[0] === 'launched' && openVideoTool.outputSchema?.additionalProperties === false) {
-      pass('open_video_upload output schema is exact')
-    } else {
-      fail('open_video_upload output schema is not exact', openVideoTool.outputSchema)
-    }
-  } else {
-    fail('open_video_upload is not advertised')
-  }
+  const staleUploadLaunchers = toolList.filter(tool => /^open_.*upload$/.test(tool?.name ?? ''))
+  if (staleUploadLaunchers.length === 0) pass('no widget upload launcher tools are advertised')
+  else fail('stale widget upload launcher tools are advertised', staleUploadLaunchers.map(tool => tool.name))
 
   const resources = await request('resources/list', {}, headers)
   expectStatus('resources/list succeeds', resources.res.status, 200)
   const resourceList = resources.body?.result?.resources ?? []
-  if (resourceList.length > 0) pass(`found ${resourceList.length} MCP resources`)
-  else skip('no resources advertised; Client MCP currently uses structured text results only')
+  if (resourceList.length === 0) pass('no MCP app resources are advertised')
+  else fail(`unexpected MCP app resources advertised`, resourceList)
 
   for (const resource of resourceList) {
     if (resource.mimeType === 'text/html;profile=mcp-app') pass(`${resource.uri} uses MCP Apps MIME type`)
@@ -231,32 +217,12 @@ async function main() {
     fail('list_sites missing structuredContent.sites', welcome.body)
   }
 
-  const malformedCall = await request('tools/call', { name: 'open_video_upload', arguments: null }, headers)
+  const malformedCall = await request('tools/call', { name: 'upload_user_media', arguments: null }, headers)
   expectStatus('malformed tools/call arguments return JSON-RPC envelope', malformedCall.res.status, 200)
   if (malformedCall.body?.error?.code === -32602 && String(malformedCall.body?.error?.message ?? '').includes('arguments must be an object')) {
     pass('malformed tools/call arguments are non-terminating JSON-RPC invalidParams')
   } else {
     fail('malformed tools/call arguments did not return JSON-RPC invalidParams', malformedCall.body)
-  }
-
-  const firstSite = welcome.body?.result?.structuredContent?.sites?.find(site => typeof site?.id === 'string')
-  if (firstSite?.id && openVideoTool) {
-    const launch = await request('tools/call', { name: 'open_video_upload', arguments: { site_id: firstSite.id, category: 'other' } }, headers)
-    expectStatus('open_video_upload tools/call succeeds', launch.res.status, 200)
-    const structured = launch.body?.result?.structuredContent
-    if (
-      structured?.launched === true
-      && Object.keys(structured).length === 1
-      && launch.body?.result?._meta?.resourceUri === 'ui://media-upload'
-      && launch.body?.result?._meta?.ui?.resourceUri === 'ui://media-upload'
-      && launch.body?.result?._meta?.context?.site_id === firstSite.id
-    ) {
-      pass('open_video_upload returns schema-valid structuredContent and private widget context')
-    } else {
-      fail('open_video_upload returned unexpected widget launch payload', launch.body)
-    }
-  } else {
-    skip('open_video_upload launch check needs an authenticated account with at least one site')
   }
 
   process.exit(failed ? 1 : 0)

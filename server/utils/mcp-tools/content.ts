@@ -259,7 +259,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'set_home_hero_video',
-      description: 'Assign a saved video asset as the homepage hero video. Upload the video first via open_video_upload (or upload_user_media if you already have a resolved file reference), then pass its asset id here. Hero videos take display priority over any existing hero image for the same page.',
+      description: 'Assign a saved video asset as the homepage hero video. Upload the video first via upload_user_media with a native ChatGPT attachment, then pass its asset id here. Hero videos take display priority over any existing hero image for the same page.',
       domain: 'content',
       minimumRole: 'editor',
       confirmRequired: false,

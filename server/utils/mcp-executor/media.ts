@@ -2,8 +2,6 @@ import type { McpExecutorContext } from './shared'
 import { deleteMediaAsset, listMediaAssets, updateMediaAssetMetadata } from '~/server/utils/media-asset-manager'
 import { hasCloudflareImagesConfig } from '~/server/utils/cloudflare-images'
 import { uploadResolvedMediaToAssetStore } from '~/server/utils/media-upload'
-import { VIDEO_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
-import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import {
   NOT_HANDLED,
@@ -99,76 +97,6 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
           : "Upload complete. This asset is in the media library but not assigned yet. Call the matching assignment tool next (e.g. set_home_hero_image, set_home_hero_video, set_experience_image, set_experience_video).",
         context: await mutationContextPayload(site),
       };
-    }
-    case "open_video_upload": {
-      const category = optionalString(args, "category") ?? null;
-      const assignTo = optionalString(args, "assign_to") ?? null;
-      const locationId = optionalString(args, "location_id") ?? null;
-      const experienceId = optionalString(args, "experience_id") ?? null;
-      if (assignTo && !["home", "location", "experience"].includes(assignTo)) {
-        throw mcpProtocolError(MCP_ERROR.invalidParams, "open_video_upload assign_to must be \"home\", \"location\", or \"experience\" when provided.");
-      }
-      if (assignTo === "location" && !locationId) {
-        throw mcpProtocolError(MCP_ERROR.invalidParams, "open_video_upload requires location_id when assign_to is \"location\".");
-      }
-      if (assignTo === "experience" && !experienceId) {
-        throw mcpProtocolError(MCP_ERROR.invalidParams, "open_video_upload requires experience_id when assign_to is \"experience\".");
-      }
-      const assignment = assignTo === "home"
-        ? {
-            target: "home",
-            tool: "set_home_hero_video",
-            args: {
-              site_id: site.siteId,
-              ...(locationId ? { location_id: locationId } : {}),
-            },
-          }
-        : assignTo === "location" && locationId
-          ? {
-              target: "location",
-              tool: "set_location_hero_video",
-              args: {
-                site_id: site.siteId,
-                location_id: locationId,
-              },
-            }
-          : assignTo === "experience" && experienceId
-            ? {
-                target: "experience",
-                tool: "set_experience_video",
-                args: {
-                  site_id: site.siteId,
-                  experience_id: experienceId,
-                },
-              }
-            : null;
-      return renderStructuredResponse(
-        {
-          launched: true,
-          ...(assignment
-            ? {
-                assignment: {
-                  target: assignment.target,
-                  tool: assignment.tool,
-                  ...Object.fromEntries(
-                    Object.entries(assignment.args).filter(([key]) => key !== "site_id"),
-                  ),
-                },
-              }
-            : {}),
-        },
-        "Video upload widget launched.",
-        {
-          ui: { resourceUri: VIDEO_UPLOAD_WIDGET_RESOURCE_URI, visibility: ["app"] },
-          "openai/outputTemplate": VIDEO_UPLOAD_WIDGET_RESOURCE_URI,
-          resourceUri: VIDEO_UPLOAD_WIDGET_RESOURCE_URI,
-          context: {
-            site_id: site.siteId,
-            category,
-            ...(assignment ? { assignment } : {}),
-          },
-        },
-      );
     }
     case "update_media_asset": {
       const updated = await updateMediaAssetMetadata(

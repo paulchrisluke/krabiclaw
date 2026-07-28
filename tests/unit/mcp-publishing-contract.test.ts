@@ -33,9 +33,8 @@ test('blog, post, and media MCP schemas expose the canonical writable contract',
     assert.ok(upload.outputSchema?.properties?.[property], `missing upload output ${property}`)
   }
 
-  const openVideo = tool(MEDIA_TOOLS, 'open_video_upload')
-  assert.deepEqual(Object.keys(openVideo.outputSchema?.properties ?? {}), ['launched', 'assignment'])
-  assert.deepEqual(openVideo.outputSchema?.required, ['launched'])
+  assert.equal((MEDIA_TOOLS as ToolContract[]).some(candidate => candidate.name === 'open_video_upload'), false)
+  assert.equal((MEDIA_TOOLS as ToolContract[]).some(candidate => candidate.name.startsWith('open_') && candidate.name.includes('upload')), false)
 })
 
 test('post validation rejects invalid event and offer states with field-specific errors', () => {

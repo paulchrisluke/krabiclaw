@@ -5,14 +5,11 @@ import { MCP_GROWTH_USER_ID } from './helpers/plan-fixtures'
 import { MCP_VERSION, MCP_GROWTH_SITE_ID, mcpRequest, mcpData, ensureSite, loginAsFreshMcpUser } from './helpers/mcp'
 
 // Split out of mcp.spec.ts (media/asset workflow tests) — see helpers/mcp.ts
-// for why. This group covers the ChatGPT video-upload widget flow and the
-// full sequence/video-widget-to-published-asset lifecycle.
+// for why. This group covers the native ChatGPT attachment upload path.
 
 test.describe('stateless MCP server', () => {
-  test('ChatGPT session can launch the video upload widget without transport failures', async ({ request, baseURL }) => {
+  test('ChatGPT session exposes native media upload without widget launchers', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!, MCP_GROWTH_USER_ID)
-    const siteId = MCP_GROWTH_SITE_ID
-    const locationId = 'loc-mcp-growth'
 
     const initialize = await mcpRequest(request, baseURL!, {
       method: 'initialize',
@@ -37,103 +34,22 @@ test.describe('stateless MCP server', () => {
     })
     expect(tools.status()).toBe(200)
     const toolsBody = await tools.json() as { result: { tools: Array<{ name: string, outputSchema?: Record<string, unknown>, _meta?: Record<string, unknown> }> } }
-    const openVideoTool = toolsBody.result.tools.find(tool => tool.name === 'open_video_upload')
-    expect(openVideoTool).toBeTruthy()
-    expect(openVideoTool?.outputSchema?.required).toEqual(['launched'])
-    expect((openVideoTool?.inputSchema as { required?: string[] } | undefined)?.required).toContain('site_id')
-    expect(openVideoTool?._meta?.ui).toBeUndefined()
-    expect(openVideoTool?._meta?.['openai/outputTemplate']).toBeUndefined()
+    expect(toolsBody.result.tools.filter(tool => tool.name.startsWith('open_') && tool.name.includes('upload')).map(tool => tool.name)).toEqual([])
+    expect(toolsBody.result.tools.find(tool => tool.name === 'upload_user_media')).toBeTruthy()
+    expect(toolsBody.result.tools.filter(tool => tool._meta?.ui || tool._meta?.['openai/outputTemplate'])).toEqual([])
 
-    const launchVideo = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'open_video_upload',
-      args: { site_id: siteId, category: 'other' },
-      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
-    })
-    expect(launchVideo.status()).toBe(200)
-    const launchVideoBody = await launchVideo.json() as {
-      result?: {
-        structuredContent?: Record<string, unknown>
-        _meta?: Record<string, unknown>
-      }
-    }
-    expect(launchVideoBody.result?.structuredContent).toEqual({
-      launched: true,
-    })
-    expect(launchVideoBody.result?.structuredContent).not.toHaveProperty('context')
-    expect(launchVideoBody.result?._meta?.resourceUri).toBe('ui://media-upload')
-    expect(launchVideoBody.result?._meta?.ui?.resourceUri).toBe('ui://media-upload')
-    expect(launchVideoBody.result?._meta?.['openai/outputTemplate']).toBe('ui://media-upload')
-    expect((launchVideoBody.result?._meta as { context?: { site_id?: string; category?: string | null } } | undefined)?.context).toEqual({
-      site_id: siteId,
-      category: 'other',
-    })
+    const resources = await mcpRequest(request, baseURL!, { method: 'resources/list' })
+    expect(resources.status()).toBe(200)
+    const resourcesBody = await resources.json() as { result: { resources: Array<{ uri: string }> } }
+    expect(resourcesBody.result.resources).toHaveLength(0)
 
-    for (const target of [
-      {
-        args: { site_id: siteId, category: 'other', assign_to: 'home' },
-        assignment: { target: 'home', tool: 'set_home_hero_video' },
-      },
-      {
-        args: { site_id: siteId, category: 'other', assign_to: 'location', location_id: locationId },
-        assignment: { target: 'location', tool: 'set_location_hero_video', location_id: locationId },
-      },
-      {
-        args: { site_id: siteId, category: 'other', assign_to: 'experience', experience_id: 'ceramics-painting-class' },
-        assignment: { target: 'experience', tool: 'set_experience_video', experience_id: 'ceramics-painting-class' },
-      },
-    ]) {
-      const targetedLaunch = await mcpRequest(request, baseURL!, {
-        method: 'tools/call',
-        toolName: 'open_video_upload',
-        args: target.args,
-        extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
+    for (const uri of ['ui://media-upload', 'ui://video-upload']) {
+      const resource = await mcpRequest(request, baseURL!, {
+        method: 'resources/read',
+        params: { uri },
       })
-      expect(targetedLaunch.status()).toBe(200)
-      const targetedLaunchBody = await targetedLaunch.json() as {
-        result?: {
-          structuredContent?: { assignment?: Record<string, unknown> }
-          _meta?: { context?: { assignment?: { tool?: string; args?: Record<string, unknown> } } }
-        }
-      }
-      expect(targetedLaunchBody.result?.structuredContent?.assignment).toEqual(target.assignment)
-      expect(targetedLaunchBody.result?._meta?.context?.assignment?.tool).toBe(target.assignment.tool)
-      expect(targetedLaunchBody.result?._meta?.context?.assignment?.args).toMatchObject({
-        site_id: siteId,
-        ...('location_id' in target.assignment ? { location_id: target.assignment.location_id } : {}),
-        ...('experience_id' in target.assignment ? { experience_id: target.assignment.experience_id } : {}),
-      })
+      expect(resource.status()).toBe(400)
     }
-
-    const resource = await mcpRequest(request, baseURL!, {
-      method: 'resources/read',
-      params: { uri: 'ui://media-upload' },
-      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
-    })
-    expect(resource.status()).toBe(200)
-    const resourceBody = await resource.json() as {
-      result: {
-        contents: Array<{
-          text: string
-          _meta?: {
-            ui?: {
-              csp?: { resourceDomains?: string[]; connectDomains?: string[] }
-              domain?: string
-            }
-            'openai/widgetDomain'?: string
-            'openai/widgetCSP'?: { resource_domains?: string[]; connect_domains?: string[] }
-          }
-        }>
-      }
-    }
-    const content = resourceBody.result.contents[0]!
-    const baseOrigin = new URL(baseURL!).origin
-    expect(content._meta?.ui?.csp?.resourceDomains).toContain(baseOrigin)
-    expect(content._meta?.ui?.csp?.connectDomains).toContain(baseOrigin)
-    expect(content._meta?.['openai/widgetDomain']).toBe(baseOrigin)
-    expect(content._meta?.['openai/widgetCSP']?.resource_domains).toContain(baseOrigin)
-    expect(content._meta?.['openai/widgetCSP']?.connect_domains).toContain(baseOrigin)
-    expect(content.text).toContain('/mcp-assets/video-upload-widget.v1.js')
   })
 
   test('ChatGPT session can resolve and review scoped agent guidance', async ({ request, baseURL }) => {
@@ -197,197 +113,42 @@ test.describe('stateless MCP server', () => {
     expect(reviewBody.review.findings.some(finding => finding.message.includes('file reference'))).toBe(true)
   })
 
-  test('ChatGPT sequence and video widget produce an active, public, assignable asset', async ({ page, request, baseURL }) => {
-    // The widget's downloadUrl points at this same app's own /api/mcp-test/tiny-video
-    // fixture, so the server-side upload_user_media executor's fetch(downloadUrl) is a
-    // same-zone Worker self-fetch on a deployed Cloudflare Worker — the same platform
-    // restriction already documented and skipped for in oauth-discovery.spec.ts's CIMD
-    // tests (reproduces deterministically as a Cloudflare 522, not app logic; confirmed
-    // by reproducing the exact same code successfully through a real public tunnel
-    // locally). In real ChatGPT usage the download_url is externally hosted (OpenAI's
-    // servers), never same-zone, so this is a test-fixture artifact, not a product bug.
-    // Covered instead by the local MCP harness (yarn test:mcp:chatgpt, docs/local-mcp-harness.md).
-    test.skip(isDeployedWorkerTarget(baseURL!), 'Same-zone self-fetch of the tiny-video test fixture is not supported on deployed Cloudflare Workers — verify via the local MCP tunnel harness instead')
+  test('native ChatGPT attachment upload produces an active, public, assignable video asset', async ({ request, baseURL }) => {
+    // The test fixture download_url points at this same app's own /api/mcp-test/tiny-video
+    // route. On deployed Cloudflare Workers this becomes a same-zone self-fetch and
+    // can fail independently of app logic. Real ChatGPT attachments use OpenAI-hosted
+    // download URLs, so deployed verification happens through the live connector.
+    test.skip(isDeployedWorkerTarget(baseURL!), 'Same-zone self-fetch of the tiny-video test fixture is not supported on deployed Cloudflare Workers')
     test.setTimeout(90_000)
     await loginAsFreshMcpUser(request, baseURL!)
     const siteId = await ensureSite(request, baseURL!)
     let assetId = ''
 
-    const initialize = await mcpRequest(request, baseURL!, {
-      method: 'initialize',
-      params: { protocolVersion: MCP_VERSION, capabilities: {}, clientInfo: { name: 'openai-mcp', version: '1.0.0' } },
-      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
-    })
-    expect(initialize.status()).toBe(200)
-    const initializeBody = await initialize.json() as { result?: { protocolVersion?: string; capabilities?: { tools?: unknown } } }
-    expect(initializeBody.result?.protocolVersion).toBe(MCP_VERSION)
-    expect(initializeBody.result?.capabilities?.tools).toBeDefined()
-
-    const initialized = await mcpRequest(request, baseURL!, {
-      method: 'notifications/initialized',
-      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
-    })
-    expect(initialized.status()).toBe(202)
-
-    const tools = await mcpRequest(request, baseURL!, {
-      method: 'tools/list',
-      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
-    })
-    expect(tools.status()).toBe(200)
-    const toolsBody = await tools.json() as { result: { tools: Array<{ name: string, outputSchema?: Record<string, unknown>, _meta?: Record<string, unknown> }> } }
-    expect(toolsBody.result.tools.filter(tool => tool.name.startsWith('open_') && tool.name.includes('upload')).map(tool => tool.name)).toEqual(['open_video_upload'])
-    const openVideoTool = toolsBody.result.tools.find(tool => tool.name === 'open_video_upload')
-    expect(openVideoTool?.outputSchema?.required).toEqual(['launched'])
-    expect(openVideoTool?._meta?.ui).toBeUndefined()
-
-    const launchVideo = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'open_video_upload',
-      args: { site_id: siteId, category: 'other' },
-      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
-    })
-    expect(launchVideo.status()).toBe(200)
-    const launchVideoBody = await launchVideo.json() as {
-      result?: {
-        structuredContent?: Record<string, unknown>
-        _meta?: Record<string, unknown>
-      }
-    }
-    expect(launchVideoBody.result?.structuredContent).toEqual({
-      launched: true,
-    })
-    expect(launchVideoBody.result?.structuredContent).not.toHaveProperty('context')
-    expect(launchVideoBody.result?._meta?.resourceUri).toBe('ui://media-upload')
-    expect((launchVideoBody.result?._meta as { context?: { site_id?: string; category?: string | null } } | undefined)?.context).toEqual({
-      site_id: siteId,
-      category: 'other',
-    })
-
-    const currentUser = await mcpRequest(request, baseURL!, {
-      method: 'tools/call', toolName: 'get_current_user', args: {},
-      extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
-    })
-    expect(currentUser.status()).toBe(200)
-
-    const resources = await mcpRequest(request, baseURL!, { method: 'resources/list' })
-    expect(resources.status()).toBe(200)
-    const resourcesBody = await resources.json() as { result: { resources: Array<{ uri: string }> } }
-    expect(resourcesBody.result.resources).toHaveLength(0)
-
-    const resource = await mcpRequest(request, baseURL!, {
-      method: 'resources/read',
-      params: { uri: 'ui://media-upload' },
-    })
-    expect(resource.status()).toBe(200)
-    const resourceBody = await resource.json() as {
-      result: {
-        contents: Array<{
-          text: string
-          _meta?: {
-            ui?: {
-              csp?: { resourceDomains?: string[]; connectDomains?: string[] }
-              domain?: string
-            }
-            'openai/widgetCSP'?: { resource_domains?: string[]; connect_domains?: string[] }
-          }
-        }>
-      }
-    }
-    const html = resourceBody.result.contents[0]!.text
-    const resourceMeta = resourceBody.result.contents[0]!._meta
-    const baseOrigin = new URL(baseURL!).origin
-    expect(resourceMeta?.ui?.csp?.resourceDomains).toContain(baseOrigin)
-    expect(resourceMeta?.ui?.csp?.connectDomains).toContain(baseOrigin)
-    expect(resourceMeta?.['openai/widgetCSP']?.resource_domains).toContain(baseOrigin)
-    expect(resourceMeta?.['openai/widgetCSP']?.connect_domains).toContain(baseOrigin)
-    const scriptSrc = html.match(/<script[^>]+src="([^"]+)"/)?.[1]
-    expect(scriptSrc).toBeTruthy()
-    const script = await request.get(scriptSrc!)
-    expect(script.status()).toBe(200)
-
-    await page.exposeFunction('krabiclawWidgetCallTool', async (name: string, args: Record<string, unknown>) => {
-      const response = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: name, args })
-      const body = await response.json()
-      if (response.status() !== 200) throw new Error(`MCP ${name} returned ${response.status()}: ${JSON.stringify(body)}`)
-      return body.result
-    })
-    type WidgetBridge = {
-      krabiclawWidgetCallTool(_name: string, _args: Record<string, unknown>): Promise<unknown>
-    }
-    const installHostMock = ({ targetSiteId, downloadUrl }: { targetSiteId: string, downloadUrl: string }) => {
-      const calls: string[] = []
-      Object.defineProperty(window, '__krabiclawWidgetCalls', { value: calls })
-      Object.defineProperty(window, 'openai', {
-        value: {
-          toolInput: { category: 'other' },
-          toolResponseMetadata: {
-            context: {
-              site_id: targetSiteId,
-              assignment: {
-                target: 'experience',
-                tool: 'set_experience_video',
-                args: {
-                  site_id: targetSiteId,
-                  experience_id: 'ceramics-painting-class',
-                },
-              },
-            },
-          },
-          async uploadFile(file: File) {
-            calls.push(`uploadFile:${file.name}:${file.type}:${file.size}`)
-            return { fileId: 'file_widget_e2e_video' }
-          },
-          async getFileDownloadUrl({ fileId }: { fileId: string }) {
-            calls.push(`getFileDownloadUrl:${fileId}`)
-            return { downloadUrl }
-          },
-          async callTool(name: string, args: Record<string, unknown>) {
-            calls.push(`callTool:${name}:${JSON.stringify(args)}`)
-            if (['set_home_hero_video', 'set_location_hero_video', 'set_experience_video'].includes(name)) {
-              return {
-                isError: false,
-                structuredContent: {
-                  updated: true,
-                },
-              }
-            }
-            return await (window as unknown as WidgetBridge).krabiclawWidgetCallTool(name, args)
+    try {
+      const upload = await mcpRequest(request, baseURL!, {
+        method: 'tools/call',
+        toolName: 'upload_user_media',
+        args: {
+          site_id: siteId,
+          category: 'other',
+          file: {
+            download_url: `${baseURL}/api/mcp-test/tiny-video`,
+            file_id: 'sediment://file_widget_e2e_video',
           },
         },
       })
-    }
-
-    try {
-      const htmlWithoutScript = html.replace(/<script[^>]+src="[^"]+"><\/script>/, '')
-      await page.setContent(htmlWithoutScript)
-      await page.evaluate(installHostMock, { targetSiteId: siteId, downloadUrl: `${baseURL}/api/mcp-test/tiny-video` })
-      await page.addScriptTag({ url: scriptSrc })
-      const fixtureResponse = await request.get(`${baseURL}/api/mcp-test/tiny-video`)
-      expect(fixtureResponse.status()).toBe(200)
-      const fixture = await fixtureResponse.body()
-      expect(fixture.byteLength).toBeGreaterThan(1_000)
-      await page.locator('input[type=file]').setInputFiles({ name: 'tiny-widget-e2e.mp4', mimeType: 'video/mp4', buffer: fixture })
-      await page.getByRole('button', { name: 'Upload video' }).click()
-      await expect(page.getByRole('status')).toContainText('assigned it to the experience')
-      const widgetCalls = await page.evaluate(() => (window as unknown as { __krabiclawWidgetCalls: string[] }).__krabiclawWidgetCalls)
-      expect(widgetCalls.some(call => call.startsWith('callTool:set_experience_video:'))).toBe(true)
-      const calls = await page.evaluate(() => (window as unknown as { __krabiclawWidgetCalls: string[] }).__krabiclawWidgetCalls)
-      expect(calls.map(call => call.split(':')[0])).toEqual(['uploadFile', 'getFileDownloadUrl', 'callTool', 'callTool'])
-      expect(calls[2]?.startsWith('callTool:upload_user_media:')).toBe(true)
-      expect(calls[3]?.startsWith('callTool:set_experience_video:')).toBe(true)
-
-      const media = await mcpRequest(request, baseURL!, {
-        method: 'tools/call', toolName: 'get_site_media_assets', args: { site_id: siteId, kind: 'video' },
-      })
-      expect(media.status()).toBe(200)
-      const assets = mcpData<{ assets: Array<{ id?: string, asset_id?: string, status?: string, public_url?: string, publicUrl?: string, file_name?: string }> }>(await media.json()).assets
-      const uploaded = assets.find(asset => asset.file_name === 'tiny-widget-e2e.mp4' && (asset.id ?? asset.asset_id) && (asset.public_url ?? asset.publicUrl))
-      expect(uploaded).toBeTruthy()
-      assetId = uploaded!.id ?? uploaded!.asset_id ?? ''
-      expect(uploaded!.status).toBe('active')
+      if (upload.status() !== 200) console.error(await upload.text())
+      expect(upload.status()).toBe(200)
+      const uploaded = mcpData<{ asset_id: string; public_url: string; status: string; kind: string }>(await upload.json())
+      expect(uploaded.status).toBe('active')
+      expect(uploaded.kind).toBe('video')
+      expect(uploaded.public_url).toContain('/sites/')
+      assetId = uploaded.asset_id
 
       const assign = await mcpRequest(request, baseURL!, {
-        method: 'tools/call', toolName: 'set_home_hero_video', args: { site_id: siteId, asset_id: assetId },
+        method: 'tools/call',
+        toolName: 'set_home_hero_video',
+        args: { site_id: siteId, asset_id: assetId },
       })
       if (assign.status() !== 200) console.error(await assign.text())
       expect(assign.status()).toBe(200)
@@ -398,5 +159,4 @@ test.describe('stateless MCP server', () => {
       }
     }
   })
-
 })

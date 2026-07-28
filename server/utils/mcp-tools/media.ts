@@ -1,11 +1,10 @@
 import type { McpToolDefinition } from './shared'
 import { chatgptFileInput, mediaAssetObject, siteTool } from './shared'
-import { VIDEO_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 
 export const MEDIA_TOOLS: McpToolDefinition[] = [
   siteTool({
       name: 'get_site_media_assets',
-      description: 'Use this to see the photos and videos already uploaded for a site — "what pictures do I have", "show me my photos". Use it first to find asset IDs before assigning images through business-level tools like set_logo, set_home_hero_image, set_about_story_image, set_home_story_image, set_location_hero_image, set_menu_item_image, set_post_image, or set_experience_image. Filter by kind="image" to narrow results. For video, call open_video_upload to launch the inline upload widget. Images use direct ChatGPT attachments or native image generation. After upload, call get_site_media_assets to get the public_url and place it on the page.',
+      description: 'Use this to see the photos and videos already uploaded for a site — "what pictures do I have", "show me my photos". Use it first to find asset IDs before assigning media through business-level tools like set_logo, set_home_hero_image, set_location_hero_image, set_post_image, set_experience_image, set_home_hero_video, set_location_hero_video, or set_experience_video. Filter by kind="image" or kind="video" to narrow results. New user-provided media uses upload_user_media with a native ChatGPT attachment.',
       domain: 'media',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -49,38 +48,6 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
           nextStep: { type: 'string' },
         },
         required: ['asset_id', 'assetId', 'status', 'public_url', 'publicUrl', 'kind'],
-      },
-    }),
-  siteTool({
-      name: 'open_video_upload',
-      description: 'Launch the inline KrabiClaw video upload widget. Use this only when a video upload is required; images should arrive as direct ChatGPT attachments or through native image generation. When the uploaded video should be placed immediately, pass assign_to="home" for the home hero video, assign_to="location" with location_id for a location hero video, or assign_to="experience" with experience_id for an experience video. The widget uploads and assigns the video in one flow.',
-      domain: 'media',
-      minimumRole: 'editor',
-      confirmRequired: false,
-      uiResourceUri: VIDEO_UPLOAD_WIDGET_RESOURCE_URI,
-      inputSchema: {
-        category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'blog', 'other'], description: 'What this media will be used for.' },
-        assign_to: { type: 'string', enum: ['home', 'location', 'experience'], description: 'Optional target to assign after upload: "home", "location", or "experience".' },
-        location_id: { type: 'string', description: 'Location id or slug. Required when assign_to is "location"; optional with assign_to "home" to scope the home hero video to a location.' },
-        experience_id: { type: 'string', description: 'Experience id or slug. Required when assign_to is "experience".' },
-      },
-      required: ['site_id'],
-      outputSchema: {
-        type: 'object',
-        properties: {
-          launched: { type: 'boolean' },
-          assignment: {
-            type: 'object',
-            properties: {
-              tool: { type: 'string' },
-              target: { type: 'string', enum: ['home', 'location', 'experience'] },
-              location_id: { type: 'string' },
-              experience_id: { type: 'string' },
-            },
-          },
-        },
-        required: ['launched'],
-        additionalProperties: false,
       },
     }),
   siteTool({

@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:6dee911e497e15df66a178cb48dbff3448b6667cf8209178b63a58c71d383251",
+  "fingerprint": "sha256:c2f9f41db96ebcc9d0d4ee5961027be0ba5be8ef26e9548b3738aebbea67b5aa",
   "tools": [
     {
       "name": "add_menu_items_batch",
@@ -8224,87 +8224,6 @@
         },
         "required": [
           "requests"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "open_video_upload",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "assign_to": {
-            "description": "Optional target to assign after upload: \"home\", \"location\", or \"experience\".",
-            "enum": [
-              "home",
-              "location",
-              "experience"
-            ],
-            "type": "string"
-          },
-          "category": {
-            "description": "What this media will be used for.",
-            "enum": [
-              "exterior",
-              "interior",
-              "food",
-              "menu",
-              "team",
-              "logo",
-              "blog",
-              "other"
-            ],
-            "type": "string"
-          },
-          "experience_id": {
-            "description": "Experience id or slug. Required when assign_to is \"experience\".",
-            "type": "string"
-          },
-          "location_id": {
-            "description": "Location id or slug. Required when assign_to is \"location\"; optional with assign_to \"home\" to scope the home hero video to a location.",
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "site_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "assignment": {
-            "properties": {
-              "experience_id": {
-                "type": "string"
-              },
-              "location_id": {
-                "type": "string"
-              },
-              "target": {
-                "enum": [
-                  "home",
-                  "location",
-                  "experience"
-                ],
-                "type": "string"
-              },
-              "tool": {
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
-          "launched": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "launched"
         ],
         "type": "object"
       }

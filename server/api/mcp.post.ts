@@ -1,4 +1,4 @@
-import { getHeader, getRequestURL, setResponseStatus } from "h3";
+import { getHeader, setResponseStatus } from "h3";
 import type { H3Event } from "h3";
 import {
   asMcpError,
@@ -20,7 +20,6 @@ import {
 } from "~/server/utils/mcp-auth";
 import { MCP_PUBLIC_TOOLS, MCP_TOOLS } from "~/server/utils/mcp-tools";
 import { MCP_PROMPTS, renderMcpPrompt } from "~/server/utils/mcp-prompts";
-import { readMcpAppResource } from "~/server/utils/mcp-widgets";
 import { cloudflareEnv } from "~/server/utils/api-response";
 import { queryAll } from "~/server/db";
 import { purgeSiteKvCache } from "~/server/utils/edge-cache";
@@ -225,10 +224,9 @@ This entire flow runs within the current conversation — do not tell the user t
 8. Reply with the exact site, placement, assetId, and publicUrl that were updated.
 
 **Videos:**
-- Call open_video_upload with site_id only when a video is required — this is the one and only widget-launching tool, and it is video-only. After it reports a completed upload, call the matching assignment tool (set_home_hero_video, set_location_hero_video, set_experience_video, etc.) with the returned assetId.
-- For images, always use upload_user_media (step 5 above) or native image generation — never open_video_upload.
-- If you already have a resolved ChatGPT file reference for a video, you can call upload_user_media directly instead of opening the widget.
-- The dashboard media library remains a fallback only for chat clients that do not support inline widgets.
+- Ask the user to attach the video directly in ChatGPT with the paperclip.
+- Call upload_user_media({ site_id, file: <resolved ChatGPT file reference>, category, description }) once the host supplies the file reference. Do not use a video upload widget or stale open_*upload tools.
+- After upload_user_media returns assetId/publicUrl, call the matching assignment tool such as set_home_hero_video, set_location_hero_video, or set_experience_video.
 
 ## Choosing a content type
 KrabiClaw has three distinct content-creation tools — do not default to whichever one comes to mind first. Ask yourself whether the request is time-boxed, narrative, or a permanent offering:
@@ -288,7 +286,9 @@ Common workflows: update menus and items, create and publish site posts, triage 
     const standardResponse = await dispatchStandardMcpMethod(event, request, runtimeDeps, {
       resources: {
         list: [],
-        read: (uri: string, evt: H3Event) => readMcpAppResource(uri, getRequestURL(evt).origin),
+        read: (uri: string) => {
+          throw mcpProtocolError(MCP_ERROR.invalidParams, `Unknown MCP app resource: ${uri}`);
+        },
       },
       prompts: { list: MCP_PROMPTS, render: renderMcpPrompt },
       discover: {
