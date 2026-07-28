@@ -378,7 +378,7 @@ async function loadExperiences() {
       query: { location_id: locationId },
     })
     if (generation !== experiencesLoadGeneration || currentLocationId.value !== locationId) return
-    experiences.value = res.experiences ?? []
+    experiences.value = res.experiences
   } catch (error) {
     if (generation !== experiencesLoadGeneration || currentLocationId.value !== locationId) return
     loadError.value = error instanceof Error && error.message ? error.message : 'The server did not return the experiences list.'
