@@ -23,10 +23,11 @@ test('unified media preflight includes every destructive migration blocker', () 
     'posterless_cover_videos',
     'dual_location_hero_assets',
     'dual_site_content_hero_assets',
-    'remaining_media_assets_old_table',
   ]) {
     assert.match(sql, new RegExp(check))
   }
+  assert.doesNotMatch(sql, /FROM experience_media/)
+  assert.doesNotMatch(sql, /remaining_media_assets_old_table/)
 })
 
 test('unified media final preflight checks migrated media integrity', () => {
@@ -36,10 +37,10 @@ test('unified media final preflight checks migrated media integrity', () => {
     'posterless_cover_videos',
     'cross_scope_experience_media_assets',
     'orphaned_experience_media_rows',
-    'remaining_media_assets_old_table',
   ]) {
     assert.match(sql, new RegExp(check))
   }
+  assert.doesNotMatch(sql, /remaining_media_assets_old_table/)
 })
 
 test('unified media preflight probes for legacy experience columns', () => {
@@ -47,6 +48,7 @@ test('unified media preflight probes for legacy experience columns', () => {
   assert.match(sql, /image_asset_id/)
   assert.match(sql, /video_asset_id/)
   assert.match(sql, /images/)
+  assert.match(sql, /experience_media/)
 })
 
 test('unified media preflight reports failures from wrangler json rows', () => {

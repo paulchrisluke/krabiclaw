@@ -88,7 +88,19 @@
           </UFormField>
           <UFormField label="Media gallery" help="Order images and videos exactly as they should appear publicly. The first item is the cover.">
             <div class="space-y-3">
-              <div v-for="(media, index) in form.media" :key="media._key" class="flex items-center gap-3">
+              <div
+                v-for="(media, index) in form.media"
+                :key="media._key"
+                class="flex items-center gap-3 rounded-lg border border-default p-2"
+                draggable="true"
+                @dragstart="startGalleryMediaDrag(index)"
+                @dragover.prevent
+                @drop.prevent="dropGalleryMedia(index)"
+                @dragend="endGalleryMediaDrag"
+              >
+                <UIcon name="i-lucide-grip-vertical" class="size-4 shrink-0 text-muted" />
+                <UBadge v-if="index === 0" color="primary" variant="soft" size="xs" class="shrink-0">Cover</UBadge>
+                <span v-else class="w-11 shrink-0 text-center text-xs text-muted">{{ index + 1 }}</span>
                 <div class="flex-1">
                   <MediaPicker
                     v-model="media.asset_id"
@@ -117,6 +129,18 @@
                   @click="moveGalleryMedia(index, 1)"
                 />
                 <UButton size="sm" color="error" variant="ghost" icon="i-lucide-x" @click="removeGalleryMedia(index)" />
+              </div>
+              <div v-if="posterlessCoverVideo" class="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
+                <div class="flex items-start gap-3">
+                  <UIcon name="i-lucide-image-off" class="mt-0.5 size-4 shrink-0 text-warning" />
+                  <div class="min-w-0 flex-1">
+                    <p class="font-medium text-highlighted">Cover video needs a poster image</p>
+                    <p class="mt-1 text-muted">Upload or replace the video from the media library with a poster before saving it as the first gallery item.</p>
+                  </div>
+                  <UButton size="xs" color="warning" variant="soft" icon="i-lucide-images" :to="mediaLibraryPath">
+                    Media
+                  </UButton>
+                </div>
               </div>
               <UButton size="sm" color="neutral" variant="soft" icon="i-lucide-plus" @click="addGalleryMedia">
                 Add media
@@ -331,6 +355,7 @@ definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.experiences' }
 type ApiRecord = Experience
 
 const toast = useToast()
+const route = useRoute()
 const siteId = await useDashboardSiteId()
 const dashboardLocation = useDashboardLocation()
 
@@ -402,6 +427,12 @@ const intervalOptions = [
   { label: '60 min', value: 60 },
 ]
 const generating = ref(false)
+const draggingMediaIndex = ref<number | null>(null)
+const mediaLibraryPath = computed(() => {
+  const orgSlug = String(route.params.orgSlug ?? '')
+  const siteSlug = String(route.params.siteSlug ?? '')
+  return `/dashboard/${orgSlug}/sites/${siteSlug}/media`
+})
 
 async function runGenerator(target: 'flat' | 'recurring', day?: WeekdayName) {
   generating.value = true
@@ -450,7 +481,7 @@ const emptyForm = () => ({
   location_id: '',
   tagline: '',
   body: '',
-  media: [] as Array<{ _key: string; asset_id: string | null; url: string | null; kind: 'image' | 'video' }>,
+  media: [] as Array<{ _key: string; asset_id: string | null; url: string | null; thumbnail_url: string | null; kind: 'image' | 'video' }>,
   price: '',
   price_amount: null as number | null,
   compare_at_price_amount: null as number | null,
@@ -471,6 +502,10 @@ const emptyForm = () => ({
 const form = reactive(emptyForm())
 const bookingPolicyDraft = ref<BookingPolicyPatch>({})
 const bookingPolicySummary = ref<RenderedBookingPolicySummary | null>(null)
+const posterlessCoverVideo = computed(() => {
+  const cover = form.media[0]
+  return cover?.kind === 'video' && !cover.thumbnail_url
+})
 
 watch(currentLocationId, () => {
   sliderOpen.value = false
@@ -491,7 +526,7 @@ function openCreate() {
 }
 
 function addGalleryMedia() {
-  form.media.push({ _key: crypto.randomUUID(), asset_id: null, url: null, kind: 'image' })
+  form.media.push({ _key: crypto.randomUUID(), asset_id: null, url: null, thumbnail_url: null, kind: 'image' })
 }
 
 function removeGalleryMedia(index: number) {
@@ -505,11 +540,29 @@ function moveGalleryMedia(index: number, direction: -1 | 1) {
   if (item) form.media.splice(target, 0, item)
 }
 
+function startGalleryMediaDrag(index: number) {
+  draggingMediaIndex.value = index
+}
+
+function endGalleryMediaDrag() {
+  draggingMediaIndex.value = null
+}
+
+function dropGalleryMedia(targetIndex: number) {
+  const sourceIndex = draggingMediaIndex.value
+  draggingMediaIndex.value = null
+  if (sourceIndex === null || sourceIndex === targetIndex) return
+  if (sourceIndex < 0 || sourceIndex >= form.media.length || targetIndex < 0 || targetIndex >= form.media.length) return
+  const [item] = form.media.splice(sourceIndex, 1)
+  if (item) form.media.splice(targetIndex, 0, item)
+}
+
 function handleGalleryMediaChange(index: number, asset: { id: string; publicUrl: string; thumbnailUrl: string; kind?: string } | null) {
   const item = form.media[index]
   if (!item) return
   item.asset_id = asset?.id ?? null
   item.url = asset?.publicUrl ?? asset?.thumbnailUrl ?? null
+  item.thumbnail_url = asset?.thumbnailUrl ?? null
   item.kind = asset?.kind === 'video' ? 'video' : 'image'
 }
 
@@ -524,6 +577,7 @@ function openEdit(exp: ApiRecord) {
       _key: crypto.randomUUID(),
       asset_id: asset.id,
       url: asset.public_url ?? asset.thumbnail_url ?? null,
+      thumbnail_url: asset.thumbnail_url ?? null,
       kind: asset.kind === 'video' ? 'video' : 'image',
     })),
     price: exp.price ?? '',
@@ -652,11 +706,27 @@ async function save() {
     if (currentLocationId.value !== locationId) return
     sliderOpen.value = false
     await loadExperiences()
-  } catch {
-    toast.add({ description: 'Failed to save experience.', color: 'error' })
+  } catch (error) {
+    const message = getApiErrorMessage(error, 'Failed to save experience.')
+    toast.add({ description: message, color: 'error' })
   } finally {
     saving.value = false
   }
+}
+
+function getApiErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object') {
+    const data = (error as Record<string, unknown>).data
+    if (data && typeof data === 'object') {
+      const dataError = (data as Record<string, unknown>).error
+      if (typeof dataError === 'string' && dataError.trim()) return dataError
+      const statusMessage = (data as Record<string, unknown>).statusMessage
+      if (typeof statusMessage === 'string' && statusMessage.trim()) return statusMessage
+    }
+    const message = (error as Record<string, unknown>).message
+    if (typeof message === 'string' && message.trim()) return message
+  }
+  return fallback
 }
 
 // ── Delete ────────────────────────────────────────────────

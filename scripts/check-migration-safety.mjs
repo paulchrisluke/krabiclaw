@@ -2,11 +2,27 @@ import { readdir, readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
-const PROTECTED_PARENT_TABLES = new Set(['media_assets'])
+const PROTECTED_PARENT_TABLES = new Set([
+  'blog_posts',
+  'business_locations',
+  'experiences',
+  'media_assets',
+  'menu_items',
+  'posts',
+  'site_content',
+])
 const IMMUTABLE_ALLOWLIST = new Set(['0047_free_molecule_man.sql'])
+const FIRST_ENFORCED_MIGRATION = 72
+
+function migrationNumber(fileName) {
+  const match = fileName.match(/^(\d{4})_/)
+  return match ? Number(match[1]) : null
+}
 
 export function findUnsafeMigrationStatements(fileName, sql) {
   if (IMMUTABLE_ALLOWLIST.has(fileName)) return []
+  const number = migrationNumber(fileName)
+  if (number !== null && number < FIRST_ENFORCED_MIGRATION) return []
 
   const findings = []
   const dropPattern = /\bDROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?[`"[]?([a-zA-Z0-9_]+)[`"\]]?/gi

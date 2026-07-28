@@ -34,94 +34,69 @@ url_matches AS (
   WHERE gi.url IS NOT NULL AND trim(gi.url) != ''
   GROUP BY gi.experience_id, gi.position, gi.url
 ),
-checks AS (
-  SELECT 'malformed_experience_gallery_json' AS check_name, COUNT(*) AS failures
-  FROM experience_gallery
-  WHERE images IS NOT NULL AND trim(images) != '' AND NOT json_valid(images)
-  UNION ALL
-  SELECT 'experience_gallery_items_missing_urls', COUNT(*)
-  FROM gallery_items
-  WHERE url IS NULL OR trim(url) = ''
-  UNION ALL
-  SELECT 'unsupported_experience_gallery_kinds', COUNT(*)
-  FROM gallery_items
-  WHERE kind NOT IN ('image', 'video')
-  UNION ALL
-  SELECT 'missing_legacy_experience_asset_ids', COUNT(*)
-  FROM (
-    SELECT e.id
-    FROM experiences e
-    LEFT JOIN media_assets ma ON ma.id = e.image_asset_id
-    WHERE e.image_asset_id IS NOT NULL AND ma.id IS NULL
-    UNION ALL
-    SELECT e.id
-    FROM experiences e
-    LEFT JOIN media_assets ma ON ma.id = e.video_asset_id
-    WHERE e.video_asset_id IS NOT NULL AND ma.id IS NULL
-  )
-  UNION ALL
-  SELECT 'inactive_legacy_experience_assets', COUNT(*)
-  FROM (
-    SELECT e.id
-    FROM experiences e
-    JOIN media_assets ma ON ma.id = e.image_asset_id
-    WHERE e.image_asset_id IS NOT NULL AND ma.status != 'active'
-    UNION ALL
-    SELECT e.id
-    FROM experiences e
-    JOIN media_assets ma ON ma.id = e.video_asset_id
-    WHERE e.video_asset_id IS NOT NULL AND ma.status != 'active'
-  )
-  UNION ALL
-  SELECT 'cross_scope_legacy_experience_assets', COUNT(*)
-  FROM (
-    SELECT e.id
-    FROM experiences e
-    JOIN media_assets ma ON ma.id = e.image_asset_id
-    WHERE e.image_asset_id IS NOT NULL AND (ma.organization_id != e.organization_id OR ma.site_id != e.site_id)
-    UNION ALL
-    SELECT e.id
-    FROM experiences e
-    JOIN media_assets ma ON ma.id = e.video_asset_id
-    WHERE e.video_asset_id IS NOT NULL AND (ma.organization_id != e.organization_id OR ma.site_id != e.site_id)
-  )
-  UNION ALL
-  SELECT 'unmatched_experience_gallery_urls', COUNT(*)
-  FROM url_matches
-  WHERE matches = 0
-  UNION ALL
-  SELECT 'ambiguous_experience_gallery_urls', COUNT(*)
-  FROM url_matches
-  WHERE matches > 1
-  UNION ALL
-  SELECT 'unsupported_video_mime_records', COUNT(*)
-  FROM media_assets
-  WHERE kind = 'video' AND COALESCE(mime_type, '') NOT IN ('video/mp4', 'video/webm')
-  UNION ALL
-  SELECT 'posterless_cover_videos', COUNT(*)
-  FROM (
-    SELECT e.id
-    FROM experiences e
-    JOIN media_assets ma ON ma.id = e.video_asset_id
-    WHERE e.video_asset_id IS NOT NULL AND (ma.thumbnail_url IS NULL OR trim(ma.thumbnail_url) = '')
-    UNION ALL
-    SELECT em.experience_id
-    FROM experience_media em
-    JOIN media_assets ma ON ma.id = em.asset_id
-    WHERE em.sort_order = 0 AND ma.kind = 'video' AND (ma.thumbnail_url IS NULL OR trim(ma.thumbnail_url) = '')
-  )
-  UNION ALL
-  SELECT 'dual_location_hero_assets', COUNT(*)
-  FROM business_locations
-  WHERE hero_image_asset_id IS NOT NULL AND hero_video_asset_id IS NOT NULL
-  UNION ALL
-  SELECT 'dual_site_content_hero_assets', COUNT(*)
-  FROM site_content
-  WHERE hero_image_asset_id IS NOT NULL AND hero_video_asset_id IS NOT NULL
-  UNION ALL
-  SELECT 'remaining_media_assets_old_table', COUNT(*)
-  FROM sqlite_master
-  WHERE type = 'table' AND name = 'media_assets_old'
+checks(check_name, failures) AS (
+  VALUES
+    ('malformed_experience_gallery_json', (
+      SELECT COUNT(*)
+      FROM experience_gallery
+      WHERE images IS NOT NULL AND trim(images) != '' AND NOT json_valid(images)
+    )),
+    ('experience_gallery_items_missing_urls', (
+      SELECT COUNT(*)
+      FROM gallery_items
+      WHERE url IS NULL OR trim(url) = ''
+    )),
+    ('unsupported_experience_gallery_kinds', (
+      SELECT COUNT(*)
+      FROM gallery_items
+      WHERE kind NOT IN ('image', 'video')
+    )),
+    ('missing_legacy_experience_asset_ids', (
+      SELECT
+        (SELECT COUNT(*) FROM experiences e LEFT JOIN media_assets ma ON ma.id = e.image_asset_id WHERE e.image_asset_id IS NOT NULL AND ma.id IS NULL)
+        + (SELECT COUNT(*) FROM experiences e LEFT JOIN media_assets ma ON ma.id = e.video_asset_id WHERE e.video_asset_id IS NOT NULL AND ma.id IS NULL)
+    )),
+    ('inactive_legacy_experience_assets', (
+      SELECT
+        (SELECT COUNT(*) FROM experiences e JOIN media_assets ma ON ma.id = e.image_asset_id WHERE e.image_asset_id IS NOT NULL AND ma.status != 'active')
+        + (SELECT COUNT(*) FROM experiences e JOIN media_assets ma ON ma.id = e.video_asset_id WHERE e.video_asset_id IS NOT NULL AND ma.status != 'active')
+    )),
+    ('cross_scope_legacy_experience_assets', (
+      SELECT
+        (SELECT COUNT(*) FROM experiences e JOIN media_assets ma ON ma.id = e.image_asset_id WHERE e.image_asset_id IS NOT NULL AND (ma.organization_id != e.organization_id OR ma.site_id != e.site_id))
+        + (SELECT COUNT(*) FROM experiences e JOIN media_assets ma ON ma.id = e.video_asset_id WHERE e.video_asset_id IS NOT NULL AND (ma.organization_id != e.organization_id OR ma.site_id != e.site_id))
+    )),
+    ('unmatched_experience_gallery_urls', (
+      SELECT COUNT(*)
+      FROM url_matches
+      WHERE matches = 0
+    )),
+    ('ambiguous_experience_gallery_urls', (
+      SELECT COUNT(*)
+      FROM url_matches
+      WHERE matches > 1
+    )),
+    ('unsupported_video_mime_records', (
+      SELECT COUNT(*)
+      FROM media_assets
+      WHERE kind = 'video' AND COALESCE(mime_type, '') NOT IN ('video/mp4', 'video/webm')
+    )),
+    ('posterless_cover_videos', (
+      SELECT COUNT(*)
+      FROM experiences e
+      JOIN media_assets ma ON ma.id = e.video_asset_id
+      WHERE e.video_asset_id IS NOT NULL AND (ma.thumbnail_url IS NULL OR trim(ma.thumbnail_url) = '')
+    )),
+    ('dual_location_hero_assets', (
+      SELECT COUNT(*)
+      FROM business_locations
+      WHERE hero_image_asset_id IS NOT NULL AND hero_video_asset_id IS NOT NULL
+    )),
+    ('dual_site_content_hero_assets', (
+      SELECT COUNT(*)
+      FROM site_content
+      WHERE hero_image_asset_id IS NOT NULL AND hero_video_asset_id IS NOT NULL
+    ))
 )
 SELECT check_name, failures FROM checks WHERE failures > 0 ORDER BY check_name;
 `.trim()
@@ -129,32 +104,34 @@ SELECT check_name, failures FROM checks WHERE failures > 0 ORDER BY check_name;
 
 export function buildFinalUnifiedMediaPreflightSql() {
   return `
-WITH checks AS (
-  SELECT 'unsupported_video_mime_records' AS check_name, COUNT(*) AS failures
-  FROM media_assets
-  WHERE kind = 'video' AND COALESCE(mime_type, '') NOT IN ('video/mp4', 'video/webm')
-  UNION ALL
-  SELECT 'posterless_cover_videos', COUNT(*)
-  FROM experience_media em
-  JOIN media_assets ma ON ma.id = em.asset_id
-  WHERE em.sort_order = 0 AND ma.kind = 'video' AND (ma.thumbnail_url IS NULL OR trim(ma.thumbnail_url) = '')
-  UNION ALL
-  SELECT 'cross_scope_experience_media_assets', COUNT(*)
-  FROM experience_media em
-  JOIN media_assets ma ON ma.id = em.asset_id
-  WHERE ma.organization_id != em.organization_id OR ma.site_id != em.site_id
-  UNION ALL
-  SELECT 'orphaned_experience_media_rows', COUNT(*)
-  FROM experience_media em
-  LEFT JOIN experiences e
-    ON e.organization_id = em.organization_id
-   AND e.site_id = em.site_id
-   AND e.id = em.experience_id
-  WHERE e.id IS NULL
-  UNION ALL
-  SELECT 'remaining_media_assets_old_table', COUNT(*)
-  FROM sqlite_master
-  WHERE type = 'table' AND name = 'media_assets_old'
+WITH checks(check_name, failures) AS (
+  VALUES
+    ('unsupported_video_mime_records', (
+      SELECT COUNT(*)
+      FROM media_assets
+      WHERE kind = 'video' AND COALESCE(mime_type, '') NOT IN ('video/mp4', 'video/webm')
+    )),
+    ('posterless_cover_videos', (
+      SELECT COUNT(*)
+      FROM experience_media em
+      JOIN media_assets ma ON ma.id = em.asset_id
+      WHERE em.sort_order = 0 AND ma.kind = 'video' AND (ma.thumbnail_url IS NULL OR trim(ma.thumbnail_url) = '')
+    )),
+    ('cross_scope_experience_media_assets', (
+      SELECT COUNT(*)
+      FROM experience_media em
+      JOIN media_assets ma ON ma.id = em.asset_id
+      WHERE ma.organization_id != em.organization_id OR ma.site_id != em.site_id
+    )),
+    ('orphaned_experience_media_rows', (
+      SELECT COUNT(*)
+      FROM experience_media em
+      LEFT JOIN experiences e
+        ON e.organization_id = em.organization_id
+       AND e.site_id = em.site_id
+       AND e.id = em.experience_id
+      WHERE e.id IS NULL
+    ))
 )
 SELECT check_name, failures FROM checks WHERE failures > 0 ORDER BY check_name;
 `.trim()
@@ -162,9 +139,17 @@ SELECT check_name, failures FROM checks WHERE failures > 0 ORDER BY check_name;
 
 export function buildLegacyColumnProbeSql() {
   return `
-SELECT COUNT(*) AS legacy_columns
-FROM pragma_table_info('experiences')
-WHERE name IN ('image_asset_id', 'video_asset_id', 'images');
+SELECT
+  (
+    SELECT COUNT(*)
+    FROM pragma_table_info('experiences')
+    WHERE name IN ('image_asset_id', 'video_asset_id', 'images')
+  ) AS legacy_columns,
+  (
+    SELECT COUNT(*)
+    FROM sqlite_master
+    WHERE type = 'table' AND name = 'experience_media'
+  ) AS experience_media_tables;
 `.trim()
 }
 
@@ -211,10 +196,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     buildLegacyColumnProbeSql(),
   ]))
   const hasLegacyColumns = Number(probeRows[0]?.legacy_columns ?? 0) > 0
+  const hasExperienceMedia = Number(probeRows[0]?.experience_media_tables ?? 0) > 0
   const rows = parseWranglerJson(runWrangler([
     ...baseCommand,
     '--command',
-    hasLegacyColumns ? buildUnifiedMediaPreflightSql() : buildFinalUnifiedMediaPreflightSql(),
+    hasLegacyColumns && !hasExperienceMedia ? buildUnifiedMediaPreflightSql() : buildFinalUnifiedMediaPreflightSql(),
   ]))
   if (rows.length) {
     console.table(rows)
