@@ -153,8 +153,8 @@ async function main() {
     else fail(`${tool.name} missing tenant OAuth security scheme`, { securitySchemes, metaSecuritySchemes })
   }
   const renderTools = toolList.filter(tool => tool?._meta?.ui?.resourceUri || tool?._meta?.['openai/outputTemplate'])
-  if (renderTools.length > 0) pass(`found ${renderTools.length} render tools`)
-  else skip('no render tools advertised; Client MCP currently uses structured text results')
+  if (renderTools.length === 0) pass('no render tools are advertised in tools/list')
+  else fail('render tools must be attached to tool results, not tools/list', renderTools.map(tool => tool.name))
 
   for (const tool of renderTools) {
     const standardUri = tool._meta?.ui?.resourceUri
@@ -247,7 +247,8 @@ async function main() {
     if (
       structured?.launched === true
       && Object.keys(structured).length === 1
-      && launch.body?.result?._meta?.resourceUri === openVideoTool._meta?.ui?.resourceUri
+      && launch.body?.result?._meta?.resourceUri === 'ui://media-upload'
+      && launch.body?.result?._meta?.ui?.resourceUri === 'ui://media-upload'
       && launch.body?.result?._meta?.context?.site_id === firstSite.id
     ) {
       pass('open_video_upload returns schema-valid structuredContent and private widget context')

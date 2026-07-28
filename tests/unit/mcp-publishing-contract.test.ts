@@ -34,7 +34,7 @@ test('blog, post, and media MCP schemas expose the canonical writable contract',
   }
 
   const openVideo = tool(MEDIA_TOOLS, 'open_video_upload')
-  assert.deepEqual(Object.keys(openVideo.outputSchema?.properties ?? {}), ['launched'])
+  assert.deepEqual(Object.keys(openVideo.outputSchema?.properties ?? {}), ['launched', 'assignment'])
   assert.deepEqual(openVideo.outputSchema?.required, ['launched'])
 })
 

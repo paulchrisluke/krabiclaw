@@ -41,9 +41,8 @@ test.describe('stateless MCP server', () => {
     expect(openVideoTool).toBeTruthy()
     expect(openVideoTool?.outputSchema?.required).toEqual(['launched'])
     expect((openVideoTool?.inputSchema as { required?: string[] } | undefined)?.required).toContain('site_id')
-    expect((openVideoTool?._meta?.ui as { resourceUri?: string, visibility?: string[] } | undefined)?.resourceUri).toBe('ui://widget/video-upload@v1.html')
-    expect((openVideoTool?._meta?.ui as { resourceUri?: string, visibility?: string[] } | undefined)?.visibility).toEqual(['model', 'app'])
-    expect(openVideoTool?._meta?.['openai/outputTemplate']).toBe('ui://widget/video-upload@v1.html')
+    expect(openVideoTool?._meta?.ui).toBeUndefined()
+    expect(openVideoTool?._meta?.['openai/outputTemplate']).toBeUndefined()
 
     const launchVideo = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -62,9 +61,9 @@ test.describe('stateless MCP server', () => {
       launched: true,
     })
     expect(launchVideoBody.result?.structuredContent).not.toHaveProperty('context')
-    expect(launchVideoBody.result?._meta?.resourceUri).toBe('ui://widget/video-upload@v1.html')
-    expect(launchVideoBody.result?._meta?.ui?.resourceUri).toBe('ui://widget/video-upload@v1.html')
-    expect(launchVideoBody.result?._meta?.['openai/outputTemplate']).toBe('ui://widget/video-upload@v1.html')
+    expect(launchVideoBody.result?._meta?.resourceUri).toBe('ui://media-upload')
+    expect(launchVideoBody.result?._meta?.ui?.resourceUri).toBe('ui://media-upload')
+    expect(launchVideoBody.result?._meta?.['openai/outputTemplate']).toBe('ui://media-upload')
     expect((launchVideoBody.result?._meta as { context?: { site_id?: string; category?: string | null } } | undefined)?.context).toEqual({
       site_id: siteId,
       category: 'other',
@@ -239,7 +238,7 @@ test.describe('stateless MCP server', () => {
     expect(toolsBody.result.tools.filter(tool => tool.name.startsWith('open_') && tool.name.includes('upload')).map(tool => tool.name)).toEqual(['open_video_upload'])
     const openVideoTool = toolsBody.result.tools.find(tool => tool.name === 'open_video_upload')
     expect(openVideoTool?.outputSchema?.required).toEqual(['launched'])
-    expect((openVideoTool?._meta?.ui as { resourceUri?: string, visibility?: string[] } | undefined)?.resourceUri).toBe('ui://widget/video-upload@v1.html')
+    expect(openVideoTool?._meta?.ui).toBeUndefined()
 
     const launchVideo = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -258,7 +257,7 @@ test.describe('stateless MCP server', () => {
       launched: true,
     })
     expect(launchVideoBody.result?.structuredContent).not.toHaveProperty('context')
-    expect(launchVideoBody.result?._meta?.resourceUri).toBe('ui://widget/video-upload@v1.html')
+    expect(launchVideoBody.result?._meta?.resourceUri).toBe('ui://media-upload')
     expect((launchVideoBody.result?._meta as { context?: { site_id?: string; category?: string | null } } | undefined)?.context).toEqual({
       site_id: siteId,
       category: 'other',

@@ -364,12 +364,6 @@ Common workflows: update menus and items, create and publish site posts, triage 
             ...(tool.fileParams?.length
               ? { "openai/fileParams": tool.fileParams }
               : {}),
-            ...(tool.uiResourceUri
-              ? {
-                  ui: { resourceUri: tool.uiResourceUri, visibility: ["model", "app"] },
-                  "openai/outputTemplate": tool.uiResourceUri,
-                }
-              : {}),
           },
         }
 

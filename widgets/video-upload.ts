@@ -42,6 +42,25 @@ function objectValue(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' ? value as Record<string, unknown> : null
 }
 
+function findStringKey(value: unknown, key: string, depth = 0): string | null {
+  if (!value || typeof value !== 'object' || depth > 4) return null
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const nested = findStringKey(item, key, depth + 1)
+      if (nested) return nested
+    }
+    return null
+  }
+  const record = value as Record<string, unknown>
+  const direct = record[key]
+  if (typeof direct === 'string' && direct) return direct
+  for (const nestedValue of Object.values(record)) {
+    const nested = findStringKey(nestedValue, key, depth + 1)
+    if (nested) return nested
+  }
+  return null
+}
+
 function assignmentLabel(target: unknown): string {
   if (target === 'home') return 'the home page'
   if (target === 'location') return 'the location'
@@ -93,9 +112,9 @@ function render() {
 
     const host = window.openai
     const responseContext = objectValue(host?.toolResponseMetadata?.context)
-    const siteId = responseContext
-      ? responseContext.site_id
-      : host?.toolInput?.site_id
+    const siteId = findStringKey(responseContext, 'site_id')
+      ?? findStringKey(host?.toolResponseMetadata, 'site_id')
+      ?? findStringKey(host?.toolInput, 'site_id')
     if (!host || typeof siteId !== 'string' || !siteId) {
       status.className = 'error'
       status.textContent = 'The ChatGPT host did not provide a site. Re-open the widget and try again.'
