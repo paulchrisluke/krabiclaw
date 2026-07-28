@@ -3,6 +3,7 @@ import { listPageQa } from '~/server/utils/location-qa'
 import { listSiteReviews } from '~/server/utils/site-reviews'
 import { getPublishedSiteBlogPost } from '~/server/utils/platform-content'
 import type { SiteConversionEventName } from '~/utils/site-conversion-events'
+import { siteSupportsBlawbyTemplate } from '~/utils/template-registry'
 import type {
   PublicBlawbyData,
   PublicBlawbyIdentity,
@@ -48,6 +49,19 @@ type OfferingRow = ApiRecord & {
 
 type TenantPageRow = ApiRecord & {
   components_json: string | null
+}
+
+export async function getActiveBlawbySite(db: DbClient, siteId: string): Promise<{ vertical: string; theme_id: string } | null> {
+  const site = await queryFirst<{ vertical: string; theme_id: string }>(db, `
+    SELECT vertical, theme_id
+      FROM sites
+     WHERE id = ? AND status = 'active' AND onboarding_status = 'active'
+     LIMIT 1
+  `, [siteId])
+
+  return siteSupportsBlawbyTemplate({ vertical: site?.vertical, themeId: site?.theme_id })
+    ? site
+    : null
 }
 
 async function loadMediaById(db: DbClient, siteId: string, mediaIds: string[]) {
@@ -560,6 +574,12 @@ export async function getPublicBlawbyRouteData(
     posts,
     post: mapPublicBlogPost(postRow),
   }
+}
+
+export function hasPublicBlawbyRouteContent(route: PublicBlawbyRouteData): boolean {
+  if (route.recipe === 'offering') return Boolean(route.offering)
+  if (route.recipe === 'article') return Boolean(route.post)
+  return Boolean(route.page)
 }
 
 export async function getPublicBlawbyData(db: DbClient, siteId: string): Promise<PublicBlawbyData> {

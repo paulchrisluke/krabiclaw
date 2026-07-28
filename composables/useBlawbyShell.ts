@@ -35,12 +35,14 @@ export async function useBlawbyShell() {
           if (import.meta.server) {
             const requestEvent = useRequestEvent()
             if (!requestEvent) return emptyShellPayload()
-            const [{ cloudflareEnv }, { getPublicBlawbyShellData }] = await Promise.all([
+            const [{ cloudflareEnv }, { getActiveBlawbySite, getPublicBlawbyShellData }] = await Promise.all([
               import('~/server/utils/api-response'),
               import('~/server/utils/professional-services'),
             ])
             const db = cloudflareEnv(requestEvent).db
             if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+            const site = await getActiveBlawbySite(db, siteId)
+            if (!site) throw createError({ statusCode: 404, statusMessage: 'Blawby is not enabled for this site' })
             return { success: true, ...(await getPublicBlawbyShellData(db, siteId)) }
           }
           const fetchShell = $fetch as unknown as (_url: string) => Promise<BlawbyShellPayload>
