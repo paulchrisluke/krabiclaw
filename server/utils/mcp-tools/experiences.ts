@@ -65,7 +65,7 @@ export const EXPERIENCES_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'set_experience_video',
-      description: 'Assign a saved video asset as an experience video. Upload the video first via open_video_upload (or upload_user_media if you already have a resolved file reference), then pass its asset id here.',
+      description: 'Assign a saved video asset as an experience video. Upload the video first via upload_user_media with a native ChatGPT attachment, then pass its asset id here.',
       domain: 'experiences',
       minimumRole: 'editor',
       confirmRequired: false,

@@ -59,9 +59,18 @@ const emptyShell = (): SiteShellPayload => ({
 
 export const useSiteShell = () => {
   const { isPlatform, siteId, draftId } = useTenantSite();
+  const requestEvent = useRequestEvent();
   const requestFetch = useRequestFetch();
   const route = useRoute();
   const { locale } = useI18n();
+  const isSyntheticServerAssetFetch = import.meta.server
+    && !requestEvent?.context.cloudflare?.env
+    && (
+      requestEvent?.path?.startsWith('/_i18n/')
+      || requestEvent?.path?.startsWith('/_nuxt/')
+      || requestEvent?.path?.startsWith('/api/_nuxt_icon/')
+      || requestEvent?.path?.startsWith('/__nuxt_error')
+    );
 
   const entityId = computed(() => siteId || draftId || null);
 
@@ -83,7 +92,7 @@ export const useSiteShell = () => {
   const empty = emptyShell();
 
   const { data, error } =
-    isPlatform || (!siteId && !draftId)
+    isSyntheticServerAssetFetch || isPlatform || (!siteId && !draftId)
       ? { data: ref<SiteShellPayload>(empty), error: ref<Error | null>(null) }
       : useAsyncData<SiteShellPayload>(
           key,

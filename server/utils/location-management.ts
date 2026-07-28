@@ -290,7 +290,7 @@ function serializeAddress(value: unknown) {
   return addressLines.length ? JSON.stringify({ addressLines }) : null;
 }
 
-function serializeOpeningHours(value: unknown) {
+export function serializeOpeningHours(value: unknown): string | null {
   if (value === undefined || value === null) return null;
   if (typeof value !== "string") {
     // Google Places returns a bare weekdayDescriptions string[] — normalize to the
@@ -314,7 +314,23 @@ function serializeOpeningHours(value: unknown) {
     if (!Array.isArray(weekdayDescriptions) || !weekdayDescriptions.every((item) => typeof item === "string")) {
       throw new Error("opening_hours.weekdayDescriptions must be an array of strings.");
     }
+    if (weekdayDescriptions.length === 1) {
+      const [onlyDescription] = weekdayDescriptions;
+      const normalized: string | null = serializeOpeningHours(onlyDescription);
+      if (normalized) return normalized;
+    }
     return weekdayDescriptions.length ? JSON.stringify({ weekdayDescriptions }) : null;
+  }
+  const trimmed = value.trim();
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      // Not valid JSON — fall through and treat as one line per day.
+      parsed = undefined;
+    }
+    if (parsed !== undefined) return serializeOpeningHours(parsed);
   }
   const weekdayDescriptions = value
     .split(/\r?\n/)

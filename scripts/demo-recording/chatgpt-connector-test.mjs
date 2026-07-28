@@ -174,7 +174,6 @@ async function main() {
     fs.writeFileSync(fixturePath, Buffer.from(await fixtureResponse.arrayBuffer()))
     evidence.videoFixture = fixturePath
 
-    await runPrompt(rl, 'Open video widget', `For KrabiClaw site_id ${siteId}, open the video upload widget now. Do not use an image upload tool.`, 'open_video_upload', { siteId, arguments: { site_id: siteId } })
 
     const uploadSince = new Date(Date.now() - 1_000).toISOString()
     console.log(`\n# Upload video\nIn the ChatGPT video widget, choose this fixture and click Upload video:\n${fixturePath}\n`)

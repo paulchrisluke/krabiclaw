@@ -203,7 +203,6 @@ async function main() {
     localCredentials.set('LOCAL_MCP_TEST_EMAIL', localEmail)
     localCredentials.set('LOCAL_MCP_TEST_PASSWORD', localPassword)
   }
-  await run('yarn', ['build:widgets'])
 
   console.log('# Starting a Cloudflare quick tunnel')
   const port = await availablePort()

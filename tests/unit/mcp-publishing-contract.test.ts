@@ -4,6 +4,7 @@ import test from 'node:test'
 import { BLOG_TOOLS } from '../../server/utils/mcp-tools/blog.ts'
 import { MEDIA_TOOLS } from '../../server/utils/mcp-tools/media.ts'
 import { POSTS_TOOLS } from '../../server/utils/mcp-tools/posts.ts'
+import { siteIdSchema } from '../../server/utils/mcp-tools/shared.ts'
 import { PostValidationError, validatePostInput } from '../../server/utils/post-management.ts'
 
 type ToolContract = {
@@ -33,9 +34,21 @@ test('blog, post, and media MCP schemas expose the canonical writable contract',
     assert.ok(upload.outputSchema?.properties?.[property], `missing upload output ${property}`)
   }
 
-  const openVideo = tool(MEDIA_TOOLS, 'open_video_upload')
-  assert.deepEqual(Object.keys(openVideo.outputSchema?.properties ?? {}), ['launched'])
-  assert.deepEqual(openVideo.outputSchema?.required, ['launched'])
+  assert.equal((MEDIA_TOOLS as ToolContract[]).some(candidate => candidate.name === 'open_video_upload'), false)
+  assert.equal((MEDIA_TOOLS as ToolContract[]).some(candidate => candidate.name.startsWith('open_') && candidate.name.includes('upload')), false)
+
+  assert.match(upload.description, /only upload path/i)
+  assert.match(upload.description, /native ChatGPT file reference/i)
+  assert.match(upload.description, /Do not call upload widget tools/i)
+  assert.match(upload.description, /no tool whose name starts with "open_"/i)
+})
+
+test('MCP site_id schema requires the internal site id, not a public locator', () => {
+  const description = siteIdSchema.site_id.description
+  assert.match(description, /Internal KrabiClaw site ID/)
+  assert.match(description, /site-pottery-house/)
+  assert.match(description, /Do not pass a public URL/)
+  assert.doesNotMatch(description, /subdomain, or custom domain/)
 })
 
 test('post validation rejects invalid event and offer states with field-specific errors', () => {

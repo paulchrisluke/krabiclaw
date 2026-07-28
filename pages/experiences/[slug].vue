@@ -74,6 +74,7 @@
                   v-if="mediaItems[0]?.kind === 'video'"
                   :src="mediaItems[0]?.url"
                   autoplay muted loop playsinline
+                  preload="none"
                   class="h-full w-full object-cover"
                 />
                 <img
@@ -103,6 +104,7 @@
                       v-if="mediaItems[0]?.kind === 'video'"
                       :src="mediaItems[0]?.url"
                       autoplay muted loop playsinline
+                      preload="none"
                       class="h-full w-full object-cover"
                     />
                     <img
@@ -125,6 +127,7 @@
                       v-if="item.kind === 'video'"
                       :src="item.url"
                       autoplay muted loop playsinline
+                      preload="none"
                       class="h-full w-full object-cover"
                     />
                     <img

@@ -2,8 +2,8 @@ import type { AiTool } from '~/server/utils/ai-gateway'
 import { MEDIA_TOOLS } from '~/server/utils/mcp-tools/media'
 import { chowbotToolFromMcp } from './from-mcp'
 
-// upload_user_media and open_video_upload are ChatGPT-attachment/UI-widget
-// specific (chatgptFileInput, uiResourceUri) — not applicable to ChowBot,
+// upload_user_media is ChatGPT-attachment-specific (chatgptFileInput),
+// so it is not applicable to ChowBot,
 // which has its own generate_image/WhatsApp-pending-media upload paths.
 const MEDIA_DOMAIN_TOOL_NAMES = new Set([
   'get_site_media_assets',
