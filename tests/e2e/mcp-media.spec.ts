@@ -107,7 +107,7 @@ test.describe('stateless MCP server', () => {
 
     const resource = await mcpRequest(request, baseURL!, {
       method: 'resources/read',
-      params: { uri: 'ui://widget/video-upload@v1.html' },
+      params: { uri: 'ui://media-upload' },
       extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
     })
     expect(resource.status()).toBe(200)
@@ -272,12 +272,11 @@ test.describe('stateless MCP server', () => {
     const resources = await mcpRequest(request, baseURL!, { method: 'resources/list' })
     expect(resources.status()).toBe(200)
     const resourcesBody = await resources.json() as { result: { resources: Array<{ uri: string }> } }
-    expect(resourcesBody.result.resources).toHaveLength(1)
-    expect(resourcesBody.result.resources[0]?.uri).toBe('ui://widget/video-upload@v1.html')
+    expect(resourcesBody.result.resources).toHaveLength(0)
 
     const resource = await mcpRequest(request, baseURL!, {
       method: 'resources/read',
-      params: { uri: resourcesBody.result.resources[0]!.uri },
+      params: { uri: 'ui://media-upload' },
     })
     expect(resource.status()).toBe(200)
     const resourceBody = await resource.json() as {

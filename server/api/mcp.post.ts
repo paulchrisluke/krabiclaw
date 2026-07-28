@@ -20,7 +20,7 @@ import {
 } from "~/server/utils/mcp-auth";
 import { MCP_PUBLIC_TOOLS, MCP_TOOLS } from "~/server/utils/mcp-tools";
 import { MCP_PROMPTS, renderMcpPrompt } from "~/server/utils/mcp-prompts";
-import { MCP_APP_RESOURCES, readMcpAppResource } from "~/server/utils/mcp-widgets";
+import { readMcpAppResource } from "~/server/utils/mcp-widgets";
 import { cloudflareEnv } from "~/server/utils/api-response";
 import { queryAll } from "~/server/db";
 import { purgeSiteKvCache } from "~/server/utils/edge-cache";
@@ -287,7 +287,7 @@ Common workflows: update menus and items, create and publish site posts, triage 
 
     const standardResponse = await dispatchStandardMcpMethod(event, request, runtimeDeps, {
       resources: {
-        list: MCP_APP_RESOURCES,
+        list: [],
         read: (uri: string, evt: H3Event) => readMcpAppResource(uri, getRequestURL(evt).origin),
       },
       prompts: { list: MCP_PROMPTS, render: renderMcpPrompt },
