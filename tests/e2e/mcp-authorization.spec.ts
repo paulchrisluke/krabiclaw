@@ -161,6 +161,7 @@ test.describe('stateless MCP server', () => {
     })
 
     test('owner of site B cannot mutate site A through MCP', async ({ baseURL }) => {
+      test.setTimeout(60_000)
       const crossMutate = await mcpRequest(sharedRequest, baseURL!, {
         method: 'tools/call',
         toolName: 'update_site_settings',

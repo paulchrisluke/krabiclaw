@@ -74,6 +74,7 @@
                   v-if="mediaItems[0]?.kind === 'video' && mediaItems[0]?.url"
                   :src="mediaItems[0].url"
                   :poster="mediaItems[0].poster || undefined"
+                  preload="none"
                   muted loop playsinline controls
                   class="h-full w-full object-cover"
                 />
@@ -104,6 +105,7 @@
                       v-if="mediaItems[0]?.kind === 'video' && mediaItems[0]?.url"
                       :src="mediaItems[0].url"
                       :poster="mediaItems[0].poster || undefined"
+                      preload="none"
                       muted loop playsinline
                       class="h-full w-full object-cover"
                     />
@@ -127,6 +129,7 @@
                       v-if="item.kind === 'video'"
                       :src="item.url"
                       :poster="item.poster || undefined"
+                      preload="none"
                       muted loop playsinline
                       class="h-full w-full object-cover"
                     />

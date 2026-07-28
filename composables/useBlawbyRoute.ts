@@ -29,13 +29,16 @@ export async function useBlawbyRoute(recipe: BlawbyRouteRecipe, slug?: string | 
           if (import.meta.server) {
             const requestEvent = useRequestEvent()
             if (!requestEvent) return emptyRoutePayload(recipe)
-            const [{ cloudflareEnv }, { getPublicBlawbyRouteData }] = await Promise.all([
+            const [{ cloudflareEnv }, { getActiveBlawbySite, getPublicBlawbyRouteData, hasPublicBlawbyRouteContent }] = await Promise.all([
               import('~/server/utils/api-response'),
               import('~/server/utils/professional-services'),
             ])
             const db = cloudflareEnv(requestEvent).db
             if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+            const site = await getActiveBlawbySite(db, siteId)
+            if (!site) throw createError({ statusCode: 404, statusMessage: 'Blawby is not enabled for this site' })
             const route = await getPublicBlawbyRouteData(db, siteId, recipe, { slug: normalizedSlug })
+            if (!hasPublicBlawbyRouteContent(route)) throw createError({ statusCode: 404, statusMessage: 'Route content not found' })
             return { success: true, ...route }
           }
           const fetchRoute = $fetch as unknown as (

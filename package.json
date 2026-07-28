@@ -8,8 +8,6 @@
   },
   "scripts": {
     "build": "nuxi build --preset=cloudflare-module",
-    "prebuild": "yarn build:widgets",
-    "build:widgets": "vite build --config vite.config.widgets.ts",
     "postbuild": "node patch.cjs",
     "build:cf": "nuxt build",
     "ai-search:sync": "node --experimental-strip-types scripts/ai-search-sync.ts",

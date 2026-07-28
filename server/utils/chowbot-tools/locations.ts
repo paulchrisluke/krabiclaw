@@ -2,9 +2,8 @@ import type { AiTool } from '~/server/utils/ai-gateway'
 import { LOCATIONS_TOOLS } from '~/server/utils/mcp-tools/locations'
 import { chowbotToolFromMcp } from './from-mcp'
 
-// copy_location_batch, clear_location_hero_image/video, and
-// open_video_upload (ChatGPT-app UI widget) is never offered to
-// ChowBot — not added here to stay within migrating existing overlap.
+// copy_location_batch and clear_location_hero_image/video are never offered
+// to ChowBot — not added here to stay within migrating existing overlap.
 const LOCATIONS_DOMAIN_TOOL_NAMES = new Set([
   'list_locations',
   'get_location',

@@ -1,11 +1,10 @@
 import type { McpToolDefinition } from './shared'
 import { chatgptFileInput, mediaAssetObject, siteTool } from './shared'
-import { VIDEO_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
 
 export const MEDIA_TOOLS: McpToolDefinition[] = [
   siteTool({
       name: 'get_site_media_assets',
-      description: 'Use this to see the photos and videos already uploaded for a site — "what pictures do I have", "show me my photos". Use it first to find asset IDs before assigning images through business-level tools like set_logo, set_home_hero_image, set_about_story_image, set_home_story_image, set_location_hero_image, set_menu_item_image, set_post_image, or set_experience_media. Filter by kind="image" to narrow results. For video, call open_video_upload to launch the inline upload widget. Images use direct ChatGPT attachments or native image generation. After upload, call get_site_media_assets to get the public_url and place it on the page.',
+      description: 'Use this to see the photos and videos already uploaded for a site — "what pictures do I have", "show me my photos". Use it first to find asset IDs before assigning media through business-level tools like set_logo, set_home_hero_image, set_about_story_image, set_home_story_image, set_location_hero_image, set_menu_item_image, set_post_image, or set_experience_media. Filter by kind="image" or kind="video" to narrow results. New user-provided media uses upload_user_media with a native ChatGPT attachment. There are no upload widget tools in this connector: no tool whose name starts with "open_" and contains "upload" exists.',
       domain: 'media',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -18,7 +17,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'upload_user_media',
-      description: 'Canonical inline upload path for user-provided images, videos, and Markdown documents (.md/.markdown). Accepts a resolved ChatGPT file reference and validates the actual bytes. The returned asset_id is active and immediately assignable. For a video, poster_file may provide a thumbnail. Only call this tool when the host supplied a real file/file_id reference; never invent one.',
+      description: 'The only upload path for user-provided images, videos, and Markdown documents (.md/.markdown). Accepts a resolved native ChatGPT file reference and validates the actual bytes. The returned asset_id is active and immediately assignable. For a video, poster_file may provide a thumbnail. Only call this tool when the host supplied a real file/file_id reference; never invent one. Do not call upload widget tools; no tool whose name starts with "open_" and contains "upload" exists.',
       domain: 'media',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -49,25 +48,6 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
           nextStep: { type: 'string' },
         },
         required: ['asset_id', 'assetId', 'status', 'public_url', 'publicUrl', 'kind'],
-      },
-    }),
-  siteTool({
-      name: 'open_video_upload',
-      description: 'Launch the inline KrabiClaw video upload widget. Use this only when a video upload is required; images should arrive as direct ChatGPT attachments or through native image generation. The widget returns an active assetId and publicUrl. Then call the appropriate video assignment tool, such as set_home_hero_video, set_location_hero_video, or set_experience_media. set_experience_media replaces the full ordered list, so fetch current media and append/merge the new asset first.',
-      domain: 'media',
-      minimumRole: 'editor',
-      confirmRequired: false,
-      uiResourceUri: VIDEO_UPLOAD_WIDGET_RESOURCE_URI,
-      inputSchema: {
-        category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'blog', 'other'], description: 'What this media will be used for.' },
-      },
-      outputSchema: {
-        type: 'object',
-        properties: {
-          launched: { type: 'boolean' },
-        },
-        required: ['launched'],
-        additionalProperties: false,
       },
     }),
   siteTool({

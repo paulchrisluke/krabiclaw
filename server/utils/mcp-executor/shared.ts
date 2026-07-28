@@ -410,6 +410,48 @@ export interface ToolFileReference {
   file_name?: string;
 }
 
+function filenameExtension(contentType: string, fallback = "bin"): string {
+  switch (contentType) {
+    case "image/jpeg":
+      return "jpg";
+    case "image/png":
+      return "png";
+    case "image/webp":
+      return "webp";
+    case "image/gif":
+      return "gif";
+    case "image/avif":
+      return "avif";
+    case "video/mp4":
+      return "mp4";
+    case "video/webm":
+      return "webm";
+    case "video/quicktime":
+      return "mov";
+    case "video/x-msvideo":
+      return "avi";
+    case "text/markdown":
+      return "md";
+    default:
+      return fallback;
+  }
+}
+
+function safeAttachmentFilename(file: Pick<ToolFileReference, "file_id" | "file_name">, contentType: string): string {
+  const fallbackBase = file.file_id
+    .trim()
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//i, "")
+    .replace(/^\/+/, "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 96) || "attachment";
+  const rawName = file.file_name?.trim() || "";
+  const candidate = rawName && !rawName.includes("/") && !rawName.includes("\\") && !rawName.includes("..")
+    ? rawName
+    : `${fallbackBase}.${filenameExtension(contentType)}`;
+  return candidate.replace(/[^a-zA-Z0-9._ -]+/g, "-").slice(0, 160);
+}
+
 export function toolFileReference(value: unknown, key: string): ToolFileReference {
   if (typeof value === "string" && value.trim()) {
     throw mcpProtocolError(
@@ -513,7 +555,7 @@ export async function resolveUserUploadedImageFile(
     bytes,
     `file ${normalizedFileId}`,
   );
-  const filename = `${normalizedFileId}.${detectedContentType.split("/")[1] ?? "png"}`;
+  const filename = safeAttachmentFilename({ file_id: normalizedFileId }, detectedContentType);
   return { buffer, contentType: detectedContentType, filename };
 }
 
@@ -533,7 +575,7 @@ export async function resolveUserUploadedMediaFileById(
   if (markdownType) {
     assertMarkdownSize(bytes.byteLength);
     decodeMarkdownText(buffer);
-    return { buffer, contentType: markdownType, filename: `${normalizedFileId}.md`, kind: "file" };
+    return { buffer, contentType: markdownType, filename: safeAttachmentFilename({ file_id: normalizedFileId }, markdownType), kind: "file" };
   }
   if (bytes.byteLength < 64) {
     throw createError({
@@ -558,7 +600,7 @@ export async function resolveUserUploadedMediaFileById(
     });
   }
 
-  const filename = `${normalizedFileId}.${sniffedContentType.split("/")[1] ?? "bin"}`;
+  const filename = safeAttachmentFilename({ file_id: normalizedFileId }, sniffedContentType);
   return { buffer, contentType: sniffedContentType, filename, kind: isVideo ? "video" : "image" };
 }
 
@@ -593,9 +635,7 @@ export async function resolveGeneratedImageFile(
     bytes,
     `attachment ${file.file_id}`,
   );
-  const filename =
-    file.file_name ??
-    `${file.file_id}.${detectedContentType.split("/")[1] ?? "png"}`;
+  const filename = safeAttachmentFilename(file, detectedContentType);
   return { buffer, contentType: detectedContentType, filename };
 }
 
@@ -689,7 +729,7 @@ export async function resolveUserUploadedMediaFile(
     return {
       buffer,
       contentType: markdownType,
-      filename: file.file_name ?? `${file.file_id}.md`,
+      filename: safeAttachmentFilename(file, markdownType),
       kind: "file",
     };
   }
@@ -716,7 +756,7 @@ export async function resolveUserUploadedMediaFile(
     });
   }
 
-  const filename = file.file_name ?? `${file.file_id}.${sniffedContentType.split("/")[1] ?? "bin"}`;
+  const filename = safeAttachmentFilename(file, sniffedContentType);
   return { buffer, contentType: sniffedContentType, filename, kind: isVideo ? "video" : "image" };
 }
 

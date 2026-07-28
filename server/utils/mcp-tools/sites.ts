@@ -5,7 +5,7 @@ import { ALL_VERTICALS } from '~/utils/vertical-copy'
 export const SITES_TOOLS: McpToolDefinition[] = [
   globalTool(withToolAnnotations({
       name: 'list_sites',
-      description: 'List the caller\'s accessible sites and current authenticated account identity.',
+      description: 'List the caller\'s accessible sites and current authenticated account identity. Use this to choose the internal site id for site_id. If the user provides a public URL, hostname, custom domain, subdomain, slug, or site name, match it against the returned sites and pass the matching site.id as site_id; never pass the URL/domain/name itself as site_id.',
       domain: 'sites',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -53,7 +53,7 @@ export const SITES_TOOLS: McpToolDefinition[] = [
     })),
   siteTool({
       name: 'get_site',
-      description: 'Get site details.',
+      description: 'Get site details for an internal KrabiClaw site_id. Do not pass a public URL, hostname, custom domain, subdomain, slug, or site name as site_id; call get_workspace_context or list_sites first and use the returned site.id.',
       domain: 'sites',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -84,7 +84,7 @@ export const SITES_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'get_site_settings',
-      description: 'Get editable site settings.',
+      description: 'Get editable site settings for an internal KrabiClaw site_id. Do not pass a public URL, hostname, custom domain, subdomain, slug, or site name as site_id; call get_workspace_context or list_sites first and use the returned site.id.',
       domain: 'sites',
       minimumRole: 'editor',
       confirmRequired: false,

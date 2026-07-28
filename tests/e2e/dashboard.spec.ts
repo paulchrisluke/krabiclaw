@@ -167,6 +167,10 @@ test.describe('dashboard functional smoke', () => {
     const experiences = await page.goto(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi/experiences`, { waitUntil: 'load' })
     expect(experiences?.status(), 'location.experiences should resolve for an experience-vertical site').toBe(200)
     expect(new URL(page.url()).pathname).toBe('/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi/experiences')
+    await expect(page.getByText('Experiences', { exact: true }).first()).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Add experience' }).first()).toBeVisible()
+    await expect(page.getByText('Handbuilding Class')).toBeVisible()
+    await expect(page.getByText('Pottery Wheel Class')).toBeVisible()
 
     const services = await page.request.get(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/professional-services`)
     expect(services.status(), 'site.services has no catalog entry for saya and must 404, never redirect or render').toBe(404)
@@ -188,5 +192,37 @@ test.describe('dashboard functional smoke', () => {
 
     const locationPhotos = await page.request.get(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi/photos`)
     expect(locationPhotos.status(), 'location photos remain the location-specific gallery manager').toBe(200)
+  })
+
+  test('location experiences page distinguishes populated, empty, and failed list states', async ({ page, baseURL }) => {
+    test.setTimeout(60_000)
+    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
+    await page.goto(devLoginUrl(baseURL!, 'user-pottery-house'), { waitUntil: 'load' })
+
+    await page.route('**/api/editor/sites/site-pottery-house/experiences?**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ experiences: [] }),
+      })
+    })
+    const empty = await page.goto(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi/experiences`, { waitUntil: 'load' })
+    expect(empty?.status()).toBe(200)
+    await expect(page.getByText('Experiences', { exact: true }).first()).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Add experience' }).first()).toBeVisible()
+    await expect(page.getByText('No experiences yet')).toBeVisible()
+
+    await page.unroute('**/api/editor/sites/site-pottery-house/experiences?**')
+    await page.route('**/api/editor/sites/site-pottery-house/experiences?**', async (route) => {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Test failure' }),
+      })
+    })
+    await page.reload({ waitUntil: 'load' })
+    await expect(page.getByText('Experiences', { exact: true }).first()).toBeVisible()
+    await expect(page.getByText('Could not load experiences')).toBeVisible()
+    await expect(page.getByText('No experiences yet')).toBeHidden()
   })
 })

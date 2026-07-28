@@ -1,4 +1,4 @@
-import { getHeader, getRequestURL, setResponseStatus } from "h3";
+import { getHeader, setResponseStatus } from "h3";
 import type { H3Event } from "h3";
 import {
   asMcpError,
@@ -20,7 +20,6 @@ import {
 } from "~/server/utils/mcp-auth";
 import { MCP_PUBLIC_TOOLS, MCP_TOOLS } from "~/server/utils/mcp-tools";
 import { MCP_PROMPTS, renderMcpPrompt } from "~/server/utils/mcp-prompts";
-import { MCP_APP_RESOURCES, readMcpAppResource } from "~/server/utils/mcp-widgets";
 import { cloudflareEnv } from "~/server/utils/api-response";
 import { queryAll } from "~/server/db";
 import { purgeSiteKvCache } from "~/server/utils/edge-cache";
@@ -225,10 +224,10 @@ This entire flow runs within the current conversation — do not tell the user t
 8. Reply with the exact site, placement, assetId, and publicUrl that were updated.
 
 **Videos:**
-- Call open_video_upload only when a video is required — this is the one and only widget-launching tool, and it is video-only. After it reports a completed upload, call the matching assignment tool (set_home_hero_video, set_location_hero_video, set_experience_media, etc.) with the returned assetId. For set_experience_media, preserve existing media by fetching get_experience first, appending the returned assetId, and sending the complete ordered media list.
-- For images, always use upload_user_media (step 5 above) or native image generation — never open_video_upload, and there is no "open_media_upload"/"open_image_upload" tool.
-- If you already have a resolved ChatGPT file reference for a video, you can call upload_user_media directly instead of opening the widget.
-- The dashboard media library remains a fallback only for chat clients that do not support inline widgets.
+- Ask the user to attach the video directly in ChatGPT with the paperclip.
+- Call upload_user_media({ site_id, file: <resolved ChatGPT file reference>, category, description }) once the host supplies the file reference. This is the only video upload tool.
+- Never call or mention upload widget tools. No tool whose name starts with "open_" and contains "upload" exists in this connector.
+- After upload_user_media returns assetId/publicUrl, call the matching assignment tool such as set_home_hero_video, set_location_hero_video, or set_experience_media. For set_experience_media, preserve existing media by fetching get_experience first, appending the returned assetId, and sending the complete ordered media list.
 
 ## Choosing a content type
 KrabiClaw has three distinct content-creation tools — do not default to whichever one comes to mind first. Ask yourself whether the request is time-boxed, narrative, or a permanent offering:
@@ -255,6 +254,8 @@ Start every conversation by calling get_workspace_context. If no active site is 
 - Use set_workspace_context whenever the user chooses a site or location.
 - Use get_workspace_context whenever you need to confirm the active organization/site/location before mutating content.
 - If a location-scoped action is requested and the active location is missing, call list_locations and then set_workspace_context with the chosen location_id.
+- site_id means the internal KrabiClaw site ID returned by get_workspace_context, list_sites, or create_site, such as site-pottery-house. A public URL, hostname, custom domain, subdomain, slug, or site name is never a valid site_id.
+- If the user gives a public URL such as https://www.potteryhousekrabi.com/experiences/ceramics-painting-class, first call get_workspace_context or list_sites and match the URL to the returned site's public_url/domain context before calling site-scoped tools.
 
 ## Site confirmation policy — enforced before every mutation
 
@@ -279,7 +280,7 @@ After applying, always confirm: "[Placement] updated for [site name]." — never
 
 When a public-facing tool result includes \`view_url\` or \`public_url\`, include that URL in your reply so the user can open the live page immediately. Prefer \`view_url\` when both are present.
 
-All other tools require a site_id obtained from list_sites. Never guess or invent site IDs. Use get_current_user when the user asks which account is connected.
+All other tools require a site_id obtained from get_workspace_context, list_sites, or create_site. Never guess, invent, derive, or pass through site IDs from URLs/domains. Use get_current_user when the user asks which account is connected.
 
 Common workflows: update menus and items, create and publish site posts, triage contact and reservation submissions, update page content directly, upload media, reply to reviews, manage experiences and bookings, and generate or replace images for any content section. Translations, social publishing, domains, and managed-service requests are available only when explicitly enabled for this connector; otherwise direct the user to the dashboard.`,
       });
@@ -287,15 +288,17 @@ Common workflows: update menus and items, create and publish site posts, triage 
 
     const standardResponse = await dispatchStandardMcpMethod(event, request, runtimeDeps, {
       resources: {
-        list: MCP_APP_RESOURCES,
-        read: (uri: string, evt: H3Event) => readMcpAppResource(uri, getRequestURL(evt).origin),
+        list: [],
+        read: (uri: string) => {
+          throw mcpProtocolError(MCP_ERROR.invalidParams, `Unknown MCP app resource: ${uri}`);
+        },
       },
       prompts: { list: MCP_PROMPTS, render: renderMcpPrompt },
       discover: {
         serverName: "krabiclaw-mcp",
         serverVersion: "phase-5",
         instructions:
-          "KrabiClaw MCP. Call get_workspace_context at the start of every conversation. If no active site is set yet, call list_sites, let the user choose, then persist it with set_workspace_context before mutating tools.",
+          "KrabiClaw MCP. Call get_workspace_context at the start of every conversation. site_id must be an internal id from get_workspace_context/list_sites/create_site, never a URL/domain/subdomain/name. Native ChatGPT attachments upload only through upload_user_media; never call stale open_*upload widget tools. If no active site is set yet, call list_sites, let the user choose, then persist it with set_workspace_context before mutating tools.",
       },
     });
     if (standardResponse !== undefined) return standardResponse;
@@ -364,12 +367,6 @@ Common workflows: update menus and items, create and publish site posts, triage 
             ...(tool.fileParams?.length
               ? { "openai/fileParams": tool.fileParams }
               : {}),
-            ...(tool.uiResourceUri
-              ? {
-                  ui: { resourceUri: tool.uiResourceUri, visibility: ["model", "app"] },
-                  "openai/outputTemplate": tool.uiResourceUri,
-                }
-              : {}),
           },
         }
 
@@ -422,6 +419,7 @@ Common workflows: update menus and items, create and publish site posts, triage 
       } catch (toolError) {
         const mcpErr = asMcpError(toolError);
         if (mcpErr.kind === "protocol") {
+          const telemetryErrorMessage = describeErrorForTelemetry(toolError);
           logMcpEventDetached(event, cfEnv.DB, {
             userId: mcpUser.userId,
             organizationId: mcpUser.activeOrganizationId ?? null,
@@ -434,10 +432,10 @@ Common workflows: update menus and items, create and publish site posts, triage 
             arguments: rawArgs,
             status: "error",
             errorCode: mcpErr.code,
-            errorMessage: describeErrorForTelemetry(toolError),
+            errorMessage: telemetryErrorMessage,
             httpStatus: 200,
             jsonrpcErrorCode: mcpErr.code,
-            jsonrpcErrorMessage: mcpErr.message,
+            jsonrpcErrorMessage: telemetryErrorMessage,
             unknownToolName: toolName || null,
             oauthClientId: mcpUser.oauthClientId ?? null,
             durationMs: Date.now() - toolStartedAt,

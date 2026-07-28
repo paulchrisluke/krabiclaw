@@ -2,8 +2,6 @@ import type { McpExecutorContext } from './shared'
 import { deleteMediaAsset, listMediaAssets, updateMediaAssetMetadata } from '~/server/utils/media-asset-manager'
 import { hasCloudflareImagesConfig } from '~/server/utils/cloudflare-images'
 import { uploadResolvedMediaToAssetStore } from '~/server/utils/media-upload'
-import { VIDEO_UPLOAD_WIDGET_RESOURCE_URI } from '~/server/utils/mcp-widgets'
-import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import {
   NOT_HANDLED,
@@ -99,19 +97,6 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
           : "Upload complete. This asset is in the media library but not assigned yet. Call the matching assignment tool next (e.g. set_home_hero_image, set_home_hero_video, set_experience_media).",
         context: await mutationContextPayload(site),
       };
-    }
-    case "open_video_upload": {
-      const category = optionalString(args, "category") ?? null;
-      return renderStructuredResponse(
-        {
-          launched: true,
-        },
-        "Video upload widget launched.",
-        {
-          resourceUri: VIDEO_UPLOAD_WIDGET_RESOURCE_URI,
-          context: { site_id: site.siteId, category },
-        },
-      );
     }
     case "update_media_asset": {
       const updated = await updateMediaAssetMetadata(

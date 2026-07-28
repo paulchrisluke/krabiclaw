@@ -24,13 +24,6 @@ const DEPRECATED_RELEASED_TOOLS: McpReleasedToolManifestEntry[] = [
     replacementTools: ['update_platform_blog_metadata', 'replace_platform_blog_content'],
     compatibilityHandler: 'server/utils/mcp-compat/platform-blog.ts:updatePlatformBlogPostCompatibility',
   },
-  {
-    surface: 'tenant',
-    name: 'open_media_upload',
-    firstReleasedAt: '2026-07-06',
-    status: 'retired',
-    replacementTools: ['upload_user_media', 'open_video_upload'],
-  },
 ]
 
 export const MCP_RELEASED_TOOLS: McpReleasedToolManifestEntry[] = [

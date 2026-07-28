@@ -17,6 +17,19 @@
         <USkeleton v-for="i in 3" :key="i" class="h-20 w-full rounded-lg" />
       </div>
 
+      <UCard v-else-if="!currentLocationId" class="border border-dashed border-default" :ui="{ body: 'py-20 sm:py-20 text-center' }">
+        <UIcon name="i-lucide-map-pin" class="mx-auto size-10 text-muted" />
+        <p class="mt-4 text-sm font-semibold text-highlighted">Choose a location first</p>
+        <p class="mt-1 text-sm text-muted">Experiences are managed per location.</p>
+      </UCard>
+
+      <UCard v-else-if="loadError" class="border border-error/40" :ui="{ body: 'py-20 sm:py-20 text-center' }">
+        <UIcon name="i-lucide-circle-alert" class="mx-auto size-10 text-error" />
+        <p class="mt-4 text-sm font-semibold text-highlighted">Could not load experiences</p>
+        <p class="mt-1 text-sm text-muted">{{ loadError }}</p>
+        <UButton class="mt-6" color="neutral" variant="soft" icon="i-lucide-refresh-cw" @click="loadExperiences">Try again</UButton>
+      </UCard>
+
       <UCard v-else-if="experiences.length === 0" class="border border-dashed border-default" :ui="{ body: 'py-20 sm:py-20 text-center' }">
         <UIcon name="i-lucide-ticket" class="mx-auto size-10 text-muted" />
         <p class="mt-4 text-sm font-semibold text-highlighted">No experiences yet</p>
@@ -58,6 +71,7 @@
         </UCard>
       </div>
     </template>
+  </UDashboardPanel>
 
     <!-- Create / Edit slide-over -->
     <USlideover v-model:open="sliderOpen" :title="editing ? 'Edit experience' : 'New experience'" side="right">
@@ -321,7 +335,6 @@
         </div>
       </template>
     </UModal>
-  </UDashboardPanel>
 </template>
 
 <script setup lang="ts">
@@ -344,6 +357,7 @@ const defaultCurrency = ref('THB')
 
 // ── List ──────────────────────────────────────────────────
 const loading = ref(true)
+const loadError = ref<string | null>(null)
 const experiences = ref<ApiRecord[]>([])
 const currentLocationId = computed(() => dashboardLocation.currentLocationId.value)
 let experiencesLoadGeneration = 0
@@ -353,19 +367,21 @@ async function loadExperiences() {
   const generation = ++experiencesLoadGeneration
   if (!locationId) {
     experiences.value = []
+    loadError.value = null
     loading.value = false
     return
   }
   loading.value = true
+  loadError.value = null
   try {
     const res = await $fetch<{ experiences: ApiRecord[] }>(`/api/editor/sites/${siteId}/experiences`, {
       query: { location_id: locationId },
     })
     if (generation !== experiencesLoadGeneration || currentLocationId.value !== locationId) return
-    experiences.value = res.experiences ?? []
-  } catch {
+    experiences.value = res.experiences
+  } catch (error) {
     if (generation !== experiencesLoadGeneration || currentLocationId.value !== locationId) return
-    experiences.value = []
+    loadError.value = error instanceof Error && error.message ? error.message : 'The server did not return the experiences list.'
   } finally {
     if (generation === experiencesLoadGeneration && currentLocationId.value === locationId) {
       loading.value = false
