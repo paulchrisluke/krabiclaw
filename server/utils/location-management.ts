@@ -290,7 +290,7 @@ function serializeAddress(value: unknown) {
   return addressLines.length ? JSON.stringify({ addressLines }) : null;
 }
 
-export function serializeOpeningHours(value: unknown) {
+export function serializeOpeningHours(value: unknown): string | null {
   if (value === undefined || value === null) return null;
   if (typeof value !== "string") {
     // Google Places returns a bare weekdayDescriptions string[] — normalize to the
@@ -316,7 +316,7 @@ export function serializeOpeningHours(value: unknown) {
     }
     if (weekdayDescriptions.length === 1) {
       const [onlyDescription] = weekdayDescriptions;
-      const normalized = serializeOpeningHours(onlyDescription);
+      const normalized: string | null = serializeOpeningHours(onlyDescription);
       if (normalized) return normalized;
     }
     return weekdayDescriptions.length ? JSON.stringify({ weekdayDescriptions }) : null;
