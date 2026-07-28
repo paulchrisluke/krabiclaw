@@ -23,7 +23,7 @@ test('Blawby SSR composables read public data directly instead of self-fetching 
   ]) {
     const branch = serverBranch(read(file))
     assert.match(branch, /cloudflareEnv\(requestEvent\)\.db/, `${file} should use Cloudflare db binding directly`)
-    assert.match(branch, /getActiveBlawbySite/, `${file} should share the public Blawby site contract`)
+    assert.match(branch, /getActiveBlawbySite\(db, siteId\)/, `${file} should call the shared Blawby site contract`)
     assert.doesNotMatch(branch, /\/api\/public\/sites\/\$\{siteId\}\/blawby/, `${file} must not self-fetch Blawby public APIs during SSR`)
   }
 })
@@ -34,6 +34,6 @@ test('Blawby public API routes use the same enabled-site source of truth as SSR'
     'server/api/public/sites/[siteId]/blawby/shell.get.ts',
     'server/api/public/sites/[siteId]/blawby/route.get.ts',
   ]) {
-    assert.match(read(file), /getActiveBlawbySite/, `${file} should use getActiveBlawbySite`)
+    assert.match(read(file), /getActiveBlawbySite\(db, siteId\)/, `${file} should call getActiveBlawbySite`)
   }
 })
