@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:15180f8e26316fff80f99c047492f8ccfd4094ec2e80cf755458187d8cb78f50",
+  "fingerprint": "sha256:c81cf71469ce0ff1d64f2f58c682f5bceb14353081f337953d895d9a34931a82",
   "tools": [
     {
       "name": "add_menu_items_batch",
@@ -267,210 +267,6 @@
           "answer",
           "creditsRemaining",
           "stats"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "clear_home_hero_image",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "location_id": {
-            "description": "Optional location scope when the homepage content is location-specific.",
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "changes_count": {
-            "type": "number"
-          },
-          "page": {
-            "type": "string"
-          },
-          "public_path": {
-            "type": "string"
-          },
-          "success": {
-            "type": "boolean"
-          },
-          "view_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "success",
-          "page",
-          "changes_count"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "clear_home_hero_video",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "location_id": {
-            "description": "Optional location scope when the homepage content is location-specific.",
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "changes_count": {
-            "type": "number"
-          },
-          "page": {
-            "type": "string"
-          },
-          "public_path": {
-            "type": "string"
-          },
-          "success": {
-            "type": "boolean"
-          },
-          "view_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "success",
-          "page",
-          "changes_count"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "clear_location_hero_image",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "location_id": {
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "location_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "changed_fields": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "context": {
-            "type": "object"
-          },
-          "entity": {
-            "enum": [
-              "location"
-            ],
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "ok": {
-            "type": "boolean"
-          },
-          "slug": {
-            "type": "string"
-          },
-          "updated_at": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "ok",
-          "entity",
-          "id"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "clear_location_hero_video",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "location_id": {
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "location_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "changed_fields": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "context": {
-            "type": "object"
-          },
-          "entity": {
-            "enum": [
-              "location"
-            ],
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "ok": {
-            "type": "boolean"
-          },
-          "slug": {
-            "type": "string"
-          },
-          "updated_at": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "ok",
-          "entity",
-          "id"
         ],
         "type": "object"
       }
@@ -10744,407 +10540,6 @@
       }
     },
     {
-      "name": "set_about_story_image",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "asset_id": {
-            "description": "Active image asset id from get_site_media_assets.",
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "asset_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "changes_count": {
-            "type": "number"
-          },
-          "page": {
-            "type": "string"
-          },
-          "public_path": {
-            "type": "string"
-          },
-          "success": {
-            "type": "boolean"
-          },
-          "view_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "success",
-          "page",
-          "changes_count"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "set_blog_post_image",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "asset_id": {
-            "description": "Active image asset id from get_site_media_assets.",
-            "type": "string"
-          },
-          "post_id": {
-            "description": "Post id or slug.",
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "post_id",
-          "asset_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "post": {
-            "additionalProperties": false,
-            "properties": {
-              "admin_edit_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "author_name": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "canonical_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "category": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "content_blocks": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "data": {
-                      "type": "object"
-                    },
-                    "id": {
-                      "type": "string"
-                    },
-                    "level": {
-                      "type": [
-                        "number",
-                        "null"
-                      ]
-                    },
-                    "parent_block_id": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    },
-                    "position": {
-                      "type": "number"
-                    },
-                    "type": {
-                      "enum": [
-                        "heading",
-                        "markdown",
-                        "image",
-                        "gallery",
-                        "faq",
-                        "how_to",
-                        "divider",
-                        "ai_assistance",
-                        "cta",
-                        "callout"
-                      ],
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "parent_block_id",
-                    "type",
-                    "position",
-                    "level",
-                    "data"
-                  ],
-                  "type": "object"
-                },
-                "type": "array"
-              },
-              "created_at": {
-                "type": "string"
-              },
-              "document_updated_at": {
-                "description": "Concurrency token required when replacing content_blocks.",
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "edit_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "excerpt": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "featured_image": {
-                "additionalProperties": false,
-                "properties": {
-                  "asset_id": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "height": {
-                    "type": [
-                      "number",
-                      "null"
-                    ]
-                  },
-                  "kind": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "public_url": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "width": {
-                    "type": [
-                      "number",
-                      "null"
-                    ]
-                  }
-                },
-                "type": [
-                  "object",
-                  "null"
-                ]
-              },
-              "featured_order": {
-                "description": "Sort position in featured/homepage placements, independent of nav ordering.",
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "hide_from_nav": {
-                "description": "Excludes this post from nav rendering only. Does NOT deindex it or remove it from the sitemap — use robots=\"noindex,...\" for that.",
-                "type": [
-                  "boolean",
-                  "null"
-                ]
-              },
-              "id": {
-                "type": "string"
-              },
-              "nav_order": {
-                "description": "Sort position within its section. Lower sorts first.",
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "nav_section": {
-                "description": "Top-level sidebar section label for this site's blog. Falls back to category if unset. Does not affect the public URL.",
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "nav_section_order": {
-                "description": "Sort position of the section itself among all sections.",
-                "type": [
-                  "number",
-                  "null"
-                ]
-              },
-              "nav_title": {
-                "description": "Sidebar label override. Falls back to the post title if unset. Does not affect the public URL.",
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "preview_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "public_path": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "public_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "published": {
-                "type": "boolean"
-              },
-              "published_at": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "robots": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "scheduled_for": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "seo_description": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "seo_keywords": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "seo_title": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "slug": {
-                "type": "string"
-              },
-              "status": {
-                "enum": [
-                  "draft",
-                  "published",
-                  "scheduled",
-                  "archived"
-                ],
-                "type": "string"
-              },
-              "tags": {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              "title": {
-                "type": "string"
-              },
-              "updated_at": {
-                "type": "string"
-              },
-              "view_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "visibility": {
-                "enum": [
-                  "public",
-                  "unlisted"
-                ],
-                "type": "string"
-              }
-            },
-            "required": [
-              "id",
-              "title",
-              "slug",
-              "excerpt",
-              "category",
-              "tags",
-              "nav_section",
-              "nav_title",
-              "nav_order",
-              "nav_section_order",
-              "hide_from_nav",
-              "featured_order",
-              "seo_title",
-              "seo_description",
-              "seo_keywords",
-              "canonical_url",
-              "robots",
-              "author_name",
-              "published",
-              "published_at",
-              "status",
-              "visibility",
-              "scheduled_for",
-              "created_at",
-              "updated_at",
-              "featured_image",
-              "admin_edit_url",
-              "edit_url",
-              "public_path",
-              "public_url",
-              "preview_url",
-              "view_url",
-              "content_blocks",
-              "document_updated_at"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "post"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "set_brand_color",
       "inputSchema": {
         "additionalProperties": true,
@@ -11280,553 +10675,262 @@
       }
     },
     {
-      "name": "set_experience_media",
+      "name": "set_media",
       "inputSchema": {
         "additionalProperties": true,
         "properties": {
-          "experience_id": {
-            "description": "Experience id or slug.",
+          "asset_ids": {
+            "description": "Complete desired asset-id state for the target. Empty clears. Duplicates are rejected.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          },
+          "target": {
+            "description": "Discriminated media placement target. Supported types: site_logo, home_hero, home_story_image, about_story_image, location_hero, menu_item_image, post_image, blog_post_image, experience_media.",
+            "oneOf": [
+              {
+                "properties": {
+                  "type": {
+                    "const": "site_logo"
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              },
+              {
+                "properties": {
+                  "location_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "type": {
+                    "const": "home_hero"
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              },
+              {
+                "properties": {
+                  "type": {
+                    "const": "home_story_image"
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              },
+              {
+                "properties": {
+                  "type": {
+                    "const": "about_story_image"
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              },
+              {
+                "properties": {
+                  "location_id": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "const": "location_hero"
+                  }
+                },
+                "required": [
+                  "type",
+                  "location_id"
+                ]
+              },
+              {
+                "properties": {
+                  "menu_item_id": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "const": "menu_item_image"
+                  }
+                },
+                "required": [
+                  "type",
+                  "menu_item_id"
+                ]
+              },
+              {
+                "properties": {
+                  "post_id": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "const": "post_image"
+                  }
+                },
+                "required": [
+                  "type",
+                  "post_id"
+                ]
+              },
+              {
+                "properties": {
+                  "post_id": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "const": "blog_post_image"
+                  }
+                },
+                "required": [
+                  "type",
+                  "post_id"
+                ]
+              },
+              {
+                "properties": {
+                  "experience_id": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "const": "experience_media"
+                  }
+                },
+                "required": [
+                  "type",
+                  "experience_id"
+                ]
+              }
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "target",
+          "asset_ids"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "asset_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "cleared": {
+            "type": "boolean"
+          },
+          "context": {
+            "type": "object"
+          },
+          "entity": {
+            "type": "string"
+          },
+          "id": {
             "type": "string"
           },
           "media": {
-            "description": "Ordered image/video media asset references. Position 0 is the cover everywhere. Videos in cover position must already have thumbnail_url/poster metadata.",
             "items": {
               "properties": {
-                "asset_id": {
-                  "description": "Active image or video asset id from get_site_media_assets.",
+                "alt_text": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "category": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "created_at": {
                   "type": "string"
+                },
+                "file_name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "enum": [
+                    "image",
+                    "video"
+                  ],
+                  "type": "string"
+                },
+                "location_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "provider": {
+                  "type": "string"
+                },
+                "public_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "source": {
+                  "type": "string"
+                },
+                "status": {
+                  "enum": [
+                    "pending",
+                    "active",
+                    "deleted"
+                  ],
+                  "type": "string"
+                },
+                "thumbnail_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 }
               },
-              "required": [
-                "asset_id"
-              ],
               "type": "object"
             },
             "type": "array"
           },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "experience_id",
-          "media"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "changed_fields": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "context": {
-            "type": "object"
-          },
-          "entity": {
-            "enum": [
-              "experience"
-            ],
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
           "ok": {
             "type": "boolean"
           },
-          "public_url": {
+          "target": {
+            "type": "object"
+          },
+          "updated_at": {
             "type": [
               "string",
               "null"
             ]
-          },
-          "slug": {
-            "type": "string"
-          },
-          "updated_at": {
-            "type": "string"
           }
         },
         "required": [
           "ok",
           "entity",
-          "id"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "set_home_hero_image",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "asset_id": {
-            "description": "Active image asset id from get_site_media_assets.",
-            "type": "string"
-          },
-          "location_id": {
-            "description": "Optional location scope when the homepage content is location-specific.",
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "asset_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "asset_id": {
-            "type": "string"
-          },
-          "asset_public_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "changes_count": {
-            "type": "number"
-          },
-          "page": {
-            "type": "string"
-          },
-          "public_path": {
-            "type": "string"
-          },
-          "public_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "success": {
-            "type": "boolean"
-          },
-          "view_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "warning": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "success",
-          "page",
-          "changes_count",
-          "asset_id"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "set_home_hero_video",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "asset_id": {
-            "description": "Active video asset id from get_site_media_assets.",
-            "type": "string"
-          },
-          "location_id": {
-            "description": "Optional location scope when the homepage content is location-specific.",
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "asset_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "changes_count": {
-            "type": "number"
-          },
-          "page": {
-            "type": "string"
-          },
-          "public_path": {
-            "type": "string"
-          },
-          "success": {
-            "type": "boolean"
-          },
-          "view_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "warning": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "success",
-          "page",
-          "changes_count"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "set_home_story_image",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "asset_id": {
-            "description": "Active image asset id from get_site_media_assets.",
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "asset_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "changes_count": {
-            "type": "number"
-          },
-          "page": {
-            "type": "string"
-          },
-          "public_path": {
-            "type": "string"
-          },
-          "success": {
-            "type": "boolean"
-          },
-          "view_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
-          "success",
-          "page",
-          "changes_count"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "set_location_hero_image",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "asset_id": {
-            "description": "Active image asset id from get_site_media_assets.",
-            "type": "string"
-          },
-          "location_id": {
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "location_id",
-          "asset_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "changed_fields": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "context": {
-            "type": "object"
-          },
-          "entity": {
-            "enum": [
-              "location"
-            ],
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "ok": {
-            "type": "boolean"
-          },
-          "slug": {
-            "type": "string"
-          },
-          "updated_at": {
-            "type": "string"
-          },
-          "warning": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "ok",
-          "entity",
-          "id"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "set_location_hero_video",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "asset_id": {
-            "description": "Active video asset id from get_site_media_assets.",
-            "type": "string"
-          },
-          "location_id": {
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "location_id",
-          "asset_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "changed_fields": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "context": {
-            "type": "object"
-          },
-          "entity": {
-            "enum": [
-              "location"
-            ],
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "ok": {
-            "type": "boolean"
-          },
-          "slug": {
-            "type": "string"
-          },
-          "updated_at": {
-            "type": "string"
-          },
-          "warning": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "ok",
-          "entity",
-          "id"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "set_logo",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "asset_id": {
-            "description": "Active image asset id from get_site_media_assets.",
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "asset_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "logo_asset_id": {
-            "type": "string"
-          },
-          "updated": {
-            "type": "boolean"
-          }
-        },
-        "required": [
           "id",
-          "updated",
-          "logo_asset_id"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "set_menu_item_image",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "asset_id": {
-            "description": "Active image asset id from get_site_media_assets.",
-            "type": "string"
-          },
-          "menu_item_id": {
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "menu_item_id",
-          "asset_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "changed_fields": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "context": {
-            "type": "object"
-          },
-          "entity": {
-            "enum": [
-              "menu_item"
-            ],
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "ok": {
-            "type": "boolean"
-          },
-          "slug": {
-            "type": "string"
-          },
-          "updated_at": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "ok",
-          "entity",
-          "id"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "set_post_image",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "asset_id": {
-            "description": "Active image asset id from get_site_media_assets.",
-            "type": "string"
-          },
-          "post_id": {
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "post_id",
-          "asset_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "changed_fields": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "context": {
-            "type": "object"
-          },
-          "entity": {
-            "enum": [
-              "post"
-            ],
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "ok": {
-            "type": "boolean"
-          },
-          "public_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "slug": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "updated_at": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "ok",
-          "entity",
-          "id"
+          "target",
+          "asset_ids",
+          "media",
+          "cleared"
         ],
         "type": "object"
       }
@@ -15096,11 +14200,11 @@
             "type": "string"
           },
           "hero_image_asset_id": {
-            "description": "Asset ID from get_site_media_assets. Assigns the hero image for this location.",
+            "description": "Initial hero image asset id for new locations. For media placement on an existing location, use set_media with target location_hero.",
             "type": "string"
           },
           "hero_video_asset_id": {
-            "description": "Asset ID from get_site_media_assets. Assigns the hero video for this location.",
+            "description": "Initial hero video asset id for new locations. For media placement on an existing location, use set_media with target location_hero.",
             "type": "string"
           },
           "instagram_url": {
@@ -16608,9 +15712,6 @@
       },
       "outputSchema": {
         "properties": {
-          "assetId": {
-            "type": "string"
-          },
           "asset_id": {
             "type": "string"
           },
@@ -16622,17 +15723,14 @@
             ],
             "type": "string"
           },
-          "nextStep": {
+          "next_step": {
             "type": "string"
           },
-          "posterWarning": {
+          "poster_warning": {
             "type": [
               "string",
               "null"
             ]
-          },
-          "publicUrl": {
-            "type": "string"
           },
           "public_url": {
             "type": "string"
@@ -16643,7 +15741,7 @@
             ],
             "type": "string"
           },
-          "thumbnailUrl": {
+          "thumbnail_url": {
             "type": [
               "string",
               "null"
@@ -16652,10 +15750,8 @@
         },
         "required": [
           "asset_id",
-          "assetId",
           "status",
           "public_url",
-          "publicUrl",
           "kind"
         ],
         "type": "object"

@@ -3,8 +3,53 @@ import { chatgptFileInput, mediaAssetObject, siteTool } from './shared'
 
 export const MEDIA_TOOLS: McpToolDefinition[] = [
   siteTool({
+      name: 'set_media',
+      description: 'Assign existing media assets to a CMS placement. Uploading and placement are separate: call upload_user_media to create reusable media_assets, get_site_media_assets to choose asset ids, then set_media to replace the complete desired media state for the target. asset_ids order is authoritative; empty asset_ids clears the target. Position 0 is the cover for ordered mixed-media targets. Video cover/hero assets must already have thumbnail_url/poster metadata.',
+      domain: 'media',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: {
+        target: {
+          type: 'object',
+          description: 'Discriminated media placement target. Supported types: site_logo, home_hero, home_story_image, about_story_image, location_hero, menu_item_image, post_image, blog_post_image, experience_media.',
+          oneOf: [
+            { properties: { type: { const: 'site_logo' } }, required: ['type'] },
+            { properties: { type: { const: 'home_hero' }, location_id: { type: ['string', 'null'] } }, required: ['type'] },
+            { properties: { type: { const: 'home_story_image' } }, required: ['type'] },
+            { properties: { type: { const: 'about_story_image' } }, required: ['type'] },
+            { properties: { type: { const: 'location_hero' }, location_id: { type: 'string' } }, required: ['type', 'location_id'] },
+            { properties: { type: { const: 'menu_item_image' }, menu_item_id: { type: 'string' } }, required: ['type', 'menu_item_id'] },
+            { properties: { type: { const: 'post_image' }, post_id: { type: 'string' } }, required: ['type', 'post_id'] },
+            { properties: { type: { const: 'blog_post_image' }, post_id: { type: 'string' } }, required: ['type', 'post_id'] },
+            { properties: { type: { const: 'experience_media' }, experience_id: { type: 'string' } }, required: ['type', 'experience_id'] },
+          ],
+        },
+        asset_ids: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Complete desired asset-id state for the target. Empty clears. Duplicates are rejected.',
+        },
+      },
+      required: ['target', 'asset_ids'],
+      outputSchema: {
+        type: 'object',
+        properties: {
+          ok: { type: 'boolean' },
+          entity: { type: 'string' },
+          id: { type: 'string' },
+          target: { type: 'object' },
+          asset_ids: { type: 'array', items: { type: 'string' } },
+          media: { type: 'array', items: mediaAssetObject },
+          cleared: { type: 'boolean' },
+          updated_at: { type: ['string', 'null'] },
+          context: { type: 'object' },
+        },
+        required: ['ok', 'entity', 'id', 'target', 'asset_ids', 'media', 'cleared'],
+      },
+    }),
+  siteTool({
       name: 'get_site_media_assets',
-      description: 'Use this to see the photos and videos already uploaded for a site — "what pictures do I have", "show me my photos". Use it first to find asset IDs before assigning media through business-level tools like set_logo, set_home_hero_image, set_about_story_image, set_home_story_image, set_location_hero_image, set_menu_item_image, set_post_image, or set_experience_media. Filter by kind="image" or kind="video" to narrow results. New user-provided media uses upload_user_media with a native ChatGPT attachment. There are no upload widget tools in this connector: no tool whose name starts with "open_" and contains "upload" exists.',
+      description: 'Use this to see the photos and videos already uploaded for a site — "what pictures do I have", "show me my photos". Use it first to find asset IDs before assigning media with set_media. Filter by kind="image" or kind="video" to narrow results. New user-provided media uses upload_user_media with a native ChatGPT attachment. There are no upload widget tools in this connector.',
       domain: 'media',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -37,17 +82,15 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
       outputSchema: {
         type: 'object',
         properties: {
-          assetId: { type: 'string' },
           asset_id: { type: 'string' },
-          publicUrl: { type: 'string' },
           public_url: { type: 'string' },
           status: { type: 'string', enum: ['active'] },
-          thumbnailUrl: { type: ['string', 'null'] },
+          thumbnail_url: { type: ['string', 'null'] },
           kind: { type: 'string', enum: ['image', 'video', 'file'] },
-          posterWarning: { type: ['string', 'null'] },
-          nextStep: { type: 'string' },
+          poster_warning: { type: ['string', 'null'] },
+          next_step: { type: 'string' },
         },
-        required: ['asset_id', 'assetId', 'status', 'public_url', 'publicUrl', 'kind'],
+        required: ['asset_id', 'status', 'public_url', 'kind'],
       },
     }),
   siteTool({

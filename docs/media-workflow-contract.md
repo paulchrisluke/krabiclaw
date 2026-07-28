@@ -58,8 +58,8 @@ Related workflow helpers:
 - Do not bypass the ChatGPT file-argument rewrite by fabricating `download_url` objects or inventing attachment transport.
 - Prefer business-level image workflows over generic file handoff when the user intent is domain-specific:
   - Generate into KrabiClaw first, persist to Cloudflare Images immediately, then assign by `assetId`
-  - Assignment should happen through the canonical entity mutation tools such as `set_logo`, `set_home_hero_image`, `set_about_story_image`, `set_home_story_image`, `set_location_hero_image`, `set_menu_item_image`, `set_post_image`, and `set_experience_media`
-  - `set_about_story_image` and `set_home_story_image` are separate tools because `/about` and `/` each have their own `story.image` content field — they commonly point at the same asset, but the page is never inferred
+  - Assignment should happen through the canonical `set_media` tool with a discriminated target and complete `asset_ids` state.
+  - `set_media` uses explicit targets for `/about` and `/` story images because each page has its own `story.image` content field — they commonly point at the same asset, but the page is never inferred
 - MCP tools should be coarse-grained and business-level:
   - `get_site_media_assets`
   - `upload_user_photo`

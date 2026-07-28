@@ -568,11 +568,11 @@ Restaurant draft coverage:
 
 - Site setup and previews: `import_from_maps`, `create_site`, `show_site_preview`, `finish_my_site_setup`
 - Page content: `get_page_fields`, `update_page_content`, `update_home_hero`, `improve_my_homepage`
-- Media placement: `upload_user_photo`, `get_site_media_assets`, `set_home_hero_image`, `set_home_story_image`, `set_logo`, `set_location_hero_image`, `set_menu_item_image`
+- Media placement: `upload_user_photo`, `get_site_media_assets`, `set_media`
 - Menu workflows: `list_menus`, `get_menu`, `create_menu`, `update_menu`, `create_menu_item`, `add_menu_items_batch`, `update_menu_item`, `rename_menu_section`, `delete_menu_section`, `reorder_menu_items`, `import_menu_from_media`
-- Locations: `list_locations`, `create_location`, `update_location`, `copy_location_batch`, `set_location_hero_image`
-- Posts and social: `create_post`, `update_post`, `set_post_image`, `publish_post`, Facebook connection tools
-- Tenant blog: `create_blog_post`, `update_blog_post`, `set_blog_post_image`
+- Locations: `list_locations`, `create_location`, `update_location`, `copy_location_batch`
+- Posts and social: `create_post`, `update_post`, `set_media`, `publish_post`, Facebook connection tools
+- Tenant blog: `create_blog_post`, `update_blog_post`, `set_media`
 - Reviews and Q&A: `list_location_reviews`, `reply_to_review`, `list_location_qa`, `create_location_qa`, `update_location_qa`, `reorder_location_qa`
 - Inbox/reservations: `triage_inbox`, reservation/contact listing behavior described in issue 145
 - Analytics and growth: `get_site_analytics`, `grow_my_bookings`, `make_site_more_bookable`
@@ -586,14 +586,14 @@ Experience draft coverage:
 - Site setup and previews: `import_from_maps`, `create_site`, `show_site_preview`, `finish_my_site_setup`
 - Experience listings: `list_experiences`, `get_experience`, `create_experience`, `update_experience`, `set_up_experience`
 - Structured booking page fields: `create_experience` and `update_experience` fields for title, tagline, body, highlights, included items, what to bring, meeting point, cancellation policy, price, duration, capacity, schedule, status, and media
-- Experience media: `upload_user_photo`, `get_site_media_assets`, `set_experience_media`, `set_location_hero_image`
+- Experience media: `upload_user_photo`, `get_site_media_assets`, `set_media`
 - Bookings: `list_experience_bookings`, `update_experience_booking`, `triage_inbox`
 - Page content: `get_page_fields`, `update_page_content`, `update_home_hero`, `improve_my_homepage`
 - Locations/meeting points: `list_locations`, `create_location`, `update_location`, `copy_location_batch`
 - Reviews and Q&A: `list_location_reviews`, `reply_to_review`, `list_location_qa`, `create_location_qa`, `update_location_qa`, `reorder_location_qa`
 - Analytics and growth: `get_site_analytics`, `grow_my_bookings`, `make_site_more_bookable`
-- Posts/social: `create_post`, `update_post`, `set_post_image`, `publish_post`, Facebook connection tools
-- Tenant blog: `create_blog_post`, `update_blog_post`, `set_blog_post_image`
+- Posts/social: `create_post`, `update_post`, `set_media`, `publish_post`, Facebook connection tools
+- Tenant blog: `create_blog_post`, `update_blog_post`, `set_media`
 - Google Business: `get_google_business_connection`, `get_google_business_auth_url`, `list_google_business_accounts`, `sync_google_business_locations`
 - Translation: `list_locales`, `upsert_locale`, `get_translation_inventory`, `start_translation_job`, `list_translation_jobs`, `get_translation_job`, review/publish translation tools listed in issue 145
 - Domains and dashboard links: `get_site_domains`, `create_domain`, `sync_domain`, `set_canonical_domain`, `get_dashboard_link`

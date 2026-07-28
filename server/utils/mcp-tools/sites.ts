@@ -216,24 +216,4 @@ export const SITES_TOOLS: McpToolDefinition[] = [
         required: ['brand_color', 'updated', 'description'],
       },
     }),
-  siteTool({
-      name: 'set_logo',
-      description: 'Use this when the user wants to change their logo or business mark. Call get_site_media_assets first to find an active image asset id, then pass it here as asset_id.',
-      domain: 'sites',
-      minimumRole: 'admin',
-      confirmRequired: false,
-      inputSchema: {
-        asset_id: { type: 'string', description: 'Active image asset id from get_site_media_assets.' },
-      },
-      required: ['asset_id'],
-      outputSchema: {
-        type: 'object',
-        properties: {
-          id: { type: 'string' },
-          updated: { type: 'boolean' },
-          logo_asset_id: { type: 'string' },
-        },
-        required: ['id', 'updated', 'logo_asset_id'],
-      },
-    }),
 ]

@@ -2,7 +2,6 @@ import type { AiTool } from '~/server/utils/ai-gateway'
 import { EXPERIENCES_TOOLS } from '~/server/utils/mcp-tools/experiences'
 import { chowbotToolFromMcp } from './from-mcp'
 
-// Video widget launchers are tenant-MCP-only and live in mcp-tools/media.ts.
 // list_all_experience_bookings (site-wide summary, distinct from the
 // per-experience list_experience_bookings) was never offered to ChowBot.
 const EXPERIENCES_DOMAIN_TOOL_NAMES = new Set([
@@ -10,7 +9,6 @@ const EXPERIENCES_DOMAIN_TOOL_NAMES = new Set([
   'get_experience',
   'create_experience',
   'update_experience',
-  'set_experience_media',
   'delete_experience',
   'list_experience_bookings',
   'update_experience_booking',

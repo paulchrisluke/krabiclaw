@@ -8,7 +8,7 @@ import { chowbotToolFromMcp } from './from-mcp'
 // rotation risk), so it's excluded here rather than derived wholesale.
 const SETTINGS_DOMAIN_TOOL_NAMES = new Set(['get_dashboard_link'])
 
-// get_site_settings/set_logo (mcp-tools/sites.ts) and update_media_asset
+// get_site_settings (mcp-tools/sites.ts) and update_media_asset
 // (mcp-tools/media.ts) used to be hand-written here too, duplicating what's
 // now properly derived in chowbot-tools/sites.ts and chowbot-tools/media.ts
 // respectively — two chowbot-tools files each registering the same tool

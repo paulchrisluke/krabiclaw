@@ -4,7 +4,7 @@ import { getSiteForMcp } from '~/server/utils/mcp-workflows'
 import { resolveMcpWorkspace } from '~/server/utils/mcp-context'
 import { loadSettingsPayload, updateSiteSettingsFields } from '~/server/utils/site-settings'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
-import { NOT_HANDLED, assertDomainSuccess, mutationContextPayload, requireActiveImageAsset, requiredString, workspaceContextPayload } from './shared'
+import { NOT_HANDLED, assertDomainSuccess, mutationContextPayload, requiredString, workspaceContextPayload } from './shared'
 
 export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, site } = ctx
@@ -87,25 +87,6 @@ export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown
       return {
         default_currency: currency,
         updated: true,
-        context: await mutationContextPayload(site),
-      };
-    }
-    case "set_logo": {
-      const assetId = requiredString(args, "asset_id");
-      await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
-      const result = await updateSiteSettingsFields(
-        site.db,
-        site.env,
-        site.siteId,
-        site.organizationId,
-        { logo_asset_id: assetId },
-        site.userId,
-      );
-      assertDomainSuccess(result);
-      return {
-        id: site.siteId,
-        updated: true,
-        logo_asset_id: assetId,
         context: await mutationContextPayload(site),
       };
     }

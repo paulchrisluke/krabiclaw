@@ -338,19 +338,6 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
       outputSchema: menuItemMutationResultObject,
     }),
   siteTool({
-      name: 'set_menu_item_image',
-      description: 'Use this when the user wants to add or change the photo of a specific dish or menu item — "add a picture of this dish". Call get_site_media_assets first to find an active image asset id, then pass it here with the target menu_item_id.',
-      domain: 'menus',
-      minimumRole: 'editor',
-      confirmRequired: false,
-      inputSchema: {
-        menu_item_id: { type: 'string' },
-        asset_id: { type: 'string', description: 'Active image asset id from get_site_media_assets.' },
-      },
-      required: ['menu_item_id', 'asset_id'],
-      outputSchema: menuItemMutationResultObject,
-    }),
-  siteTool({
       name: 'delete_menu_item',
       description: 'Delete a menu item.',
       domain: 'menus',

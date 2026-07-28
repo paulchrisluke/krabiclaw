@@ -4,7 +4,7 @@ import { queryFirst } from '~/server/db'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { createMenu, createMenuItem, deleteMenu, deleteMenuItem, deleteMenuSection, getMenuWithItems, getMenus, MenuNotFoundError, renameMenuSection, reorderMenuItems, updateMenu, updateMenuItem } from '~/server/utils/menu-management'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
-import { NOT_HANDLED, isUniqueConstraintError, menuItemLookupKey, mutationContextPayload, normalizeMenuItemArgs, objectArray, omit, optionalString, requireActiveImageAsset, requiredString, resolveMenuLocationId, toolString } from './shared'
+import { NOT_HANDLED, isUniqueConstraintError, menuItemLookupKey, mutationContextPayload, normalizeMenuItemArgs, objectArray, omit, optionalString, requiredString, resolveMenuLocationId, toolString } from './shared'
 
 function toolBoolean(record: Record<string, unknown>, key: string): boolean | undefined {
   const value = record[key]
@@ -454,37 +454,6 @@ export async function handleMenusTools(ctx: McpExecutorContext): Promise<unknown
           context: updateItemContext,
         },
         `Updated "${item.name}".`,
-        { item },
-      );
-    }
-    case "set_menu_item_image": {
-      const assetId = requiredString(args, "asset_id");
-      await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
-      const item = await updateMenuItem(
-          site.db,
-          site.organizationId,
-          site.siteId,
-          requiredString(args, "menu_item_id"),
-          { image_asset_id: assetId } as never,
-          site.userId,
-        );
-      const setImageContext = await mutationContextPayload(site, {
-        locationId: await resolveMenuLocationId(
-          site.db,
-          site.organizationId,
-          site.siteId,
-          item.menu_id,
-        ),
-      });
-      return renderStructuredResponse(
-        {
-          ok: true,
-          entity: "menu_item",
-          id: item.id,
-          updated_at: item.updated_at,
-          context: setImageContext,
-        },
-        `Updated image for "${item.name}".`,
         { item },
       );
     }

@@ -164,7 +164,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
             ? `If none exists, call create_menu with name "${menuName}".`
             : "If none exists, call create_menu with a sensible name based on the business.",
           `Parse the following into individual menu items (name, section, price, and description where given), then call add_menu_items_batch with all of them in one call rather than creating items one at a time: ${itemsDescription}`,
-          "If the user has photos for any dish, offer to attach them with set_menu_item_image after the items are created — do not block creating the menu on having images.",
+          "If the user has photos for any dish, offer to attach them after the items are created, then place them with set_media using target type menu_item_image — do not block creating the menu on having images.",
           "Report back the menu name and the items that were added.",
         ].join(" "),
       };
@@ -193,7 +193,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
         text: [
           `Based on this description, call create_experience with a sensible title, tagline, body, and any of price_amount/duration_minutes/max_capacity/time_slots that are implied or stated: ${description}`,
           "Use a status appropriate to whether this should go live immediately or stay as a draft — ask the user if it's not obvious.",
-          "If the user has media ready, call set_experience_media after creation with the ordered asset refs.",
+          "If the user has media ready, call set_media after creation with target type experience_media and the complete ordered asset_ids list.",
           "Report back what was created, its current status, and the live URL when one is available.",
         ].join(" "),
       };
@@ -218,7 +218,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
           "Call get_workspace_context to confirm the active site, then call get_page_fields with page \"home\" to see the current homepage content, and get_site_media_assets to see what photos are already available.",
           "Look at the main photo at the top of the page (the hero/cover photo), the headline and call-to-action button text, and the story section photo and text.",
           "Suggest 2-3 concrete, highest-impact changes — for example a stronger call-to-action, a better main photo, or a punchier headline. Explain each suggestion in plain language, not in terms of field names.",
-          "Ask the user which suggestion to act on first rather than changing everything at once. Apply it with update_page_content, set_home_hero_image, or the relevant tool only after they confirm.",
+          "Ask the user which suggestion to act on first rather than changing everything at once. Apply media suggestions with set_media and copy/text suggestions with update_page_content only after they confirm.",
         ].join(" "),
       };
     }
@@ -229,7 +229,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
           "If the user hasn't already attached photos in this conversation, ask them to attach the photos they want to add directly in ChatGPT.",
           "For each attached photo, inspect it visually first, then ask the user (or infer from context) where it should go: the homepage main photo, a specific location's main photo, the about/story section, a menu item, an experience, or a post.",
           "Confirm the target site and placement with the user before uploading anything.",
-          "After confirmation, call upload_user_media with file (the resolved ChatGPT file reference for the attachment) or file_id for each photo, then call the matching assignment tool (set_home_hero_image, set_location_hero_image, set_menu_item_image, set_experience_media, set_post_image, set_about_story_image, set_home_story_image, or set_logo). For set_experience_media, first call get_experience, merge each uploaded asset into the existing ordered media ids, then assign the complete list.",
+          "After confirmation, call upload_user_media with file (the resolved ChatGPT file reference for the attachment) or file_id for each photo, then call set_media with the matching target type. For ordered targets such as experience_media, first call the read tool, merge each uploaded asset into the existing ordered media ids, then assign the complete asset_ids list.",
           "Reply confirming exactly where each photo was placed.",
         ].join(" "),
       };

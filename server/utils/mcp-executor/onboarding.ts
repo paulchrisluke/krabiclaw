@@ -105,7 +105,7 @@ export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<un
         publicUrl: uploaded.publicUrl,
         thumbnailUrl: uploaded.thumbnailUrl,
         nextStep:
-          "Upload complete. This image is in the media library but not assigned yet. Call a placement tool like set_home_hero_image or set_logo next.",
+          "Upload complete. This image is in the media library but not assigned yet. Call set_media with the desired target next.",
         context: await mutationContextPayload(site),
       };
     }

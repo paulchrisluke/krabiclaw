@@ -259,8 +259,8 @@ export function assignmentForGeneratedTarget(
   switch (target) {
     case "logo":
       return {
-        assignTool: "set_logo",
-        assignArgs: { site_id: siteId },
+        assignTool: "set_media",
+        assignArgs: { site_id: siteId, target: { type: "site_logo" }, asset_ids: [] },
         title: "Logo Concepts",
         subtitle: "Choose the mark that feels most like the brand.",
         useLabel: `Use as logo${forSite}`,
@@ -268,8 +268,8 @@ export function assignmentForGeneratedTarget(
       };
     case "home_hero":
       return {
-        assignTool: "set_home_hero_image",
-        assignArgs: { site_id: siteId },
+        assignTool: "set_media",
+        assignArgs: { site_id: siteId, target: { type: "home_hero" }, asset_ids: [] },
         title: "Homepage Hero Images",
         subtitle: "Choose the image that best sets the tone for the homepage.",
         useLabel: `Use as homepage hero${forSite}`,
@@ -277,8 +277,8 @@ export function assignmentForGeneratedTarget(
       };
     case "about_story_image":
       return {
-        assignTool: "set_about_story_image",
-        assignArgs: { site_id: siteId },
+        assignTool: "set_media",
+        assignArgs: { site_id: siteId, target: { type: "about_story_image" }, asset_ids: [] },
         title: "Story Images",
         subtitle: "Choose the image that best tells the brand story on the About page.",
         useLabel: `Use as About story image${forSite}`,
@@ -286,8 +286,8 @@ export function assignmentForGeneratedTarget(
       };
     case "home_story_image":
       return {
-        assignTool: "set_home_story_image",
-        assignArgs: { site_id: siteId },
+        assignTool: "set_media",
+        assignArgs: { site_id: siteId, target: { type: "home_story_image" }, asset_ids: [] },
         title: "Story Images",
         subtitle: "Choose the image that best tells the brand story on the homepage.",
         useLabel: `Use as homepage story image${forSite}`,
@@ -296,8 +296,8 @@ export function assignmentForGeneratedTarget(
     case "location_hero": {
       const locationId = requiredString(args, "location_id");
       return {
-        assignTool: "set_location_hero_image",
-        assignArgs: { site_id: siteId, location_id: locationId },
+        assignTool: "set_media",
+        assignArgs: { site_id: siteId, target: { type: "location_hero", location_id: locationId }, asset_ids: [] },
         title: "Location Hero Images",
         subtitle: "Choose the image that best represents this location.",
         useLabel: `Use as location hero${forSite}`,
@@ -307,8 +307,8 @@ export function assignmentForGeneratedTarget(
     case "post_image": {
       const postId = requiredString(args, "post_id");
       return {
-        assignTool: "set_post_image",
-        assignArgs: { site_id: siteId, post_id: postId },
+        assignTool: "set_media",
+        assignArgs: { site_id: siteId, target: { type: "post_image", post_id: postId }, asset_ids: [] },
         title: "Post Images",
         subtitle: "Choose the image that best fits this post.",
         useLabel: `Use for this post${forSite}`,
@@ -318,8 +318,8 @@ export function assignmentForGeneratedTarget(
     case "menu_item_image": {
       const menuItemId = requiredString(args, "menu_item_id");
       return {
-        assignTool: "set_menu_item_image",
-        assignArgs: { site_id: siteId, menu_item_id: menuItemId },
+        assignTool: "set_media",
+        assignArgs: { site_id: siteId, target: { type: "menu_item_image", menu_item_id: menuItemId }, asset_ids: [] },
         title: "Menu Item Images",
         subtitle: "Choose the image that best sells this item.",
         useLabel: `Use for this menu item${forSite}`,
@@ -329,8 +329,8 @@ export function assignmentForGeneratedTarget(
     case "experience_image": {
       const experienceId = requiredString(args, "experience_id");
       return {
-        assignTool: "set_experience_media",
-        assignArgs: { site_id: siteId, experience_id: experienceId, media: [] },
+        assignTool: "set_media",
+        assignArgs: { site_id: siteId, target: { type: "experience_media", experience_id: experienceId }, asset_ids: [] },
         title: "Experience Media",
         subtitle: "Choose the media that best captures the experience.",
         useLabel: `Use for this experience${forSite}`,

@@ -3,7 +3,7 @@ import { createExperience, deleteExperience, getExperienceBookingsSummary, getEx
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { loadSettingsPayload, SiteNotFoundError } from '~/server/utils/site-settings'
-import { attachViewUrlToRecord, NOT_HANDLED, expandSlotGeneratorArgs, mutationContextPayload, objectArray, omit, optionalDaysWindow, optionalString, requiredString } from './shared'
+import { attachViewUrlToRecord, NOT_HANDLED, expandSlotGeneratorArgs, mutationContextPayload, omit, optionalDaysWindow, optionalString, requiredString } from './shared'
 
 function attachExperienceViewUrl(experience: object, site: McpExecutorContext["site"]) {
   const experienceRecord = experience as Record<string, unknown>;
@@ -133,36 +133,6 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
         },
         `Updated "${experience.title}".`,
         { experience: hydrated },
-      );
-    }
-    case "set_experience_media": {
-      const experience = await updateExperience(
-          site.db,
-          site.siteId,
-          requiredString(args, "experience_id"),
-          { media: objectArray(args.media, "media").map((item) => ({ asset_id: requiredString(item, "asset_id") })) },
-        );
-      if (!experience) {
-        return renderStructuredResponse(
-          { ok: false, entity: "experience", id: requiredString(args, "experience_id") },
-          "No experience found with that id or slug — nothing was changed.",
-        );
-      }
-      const hydratedMediaExperience = attachExperienceViewUrl(experience, site);
-      const setMediaExperienceContext = await mutationContextPayload(site, { locationId: experience.location_id });
-      return renderStructuredResponse(
-        {
-          ok: true,
-          entity: "experience",
-          id: experience.id,
-          slug: experience.slug,
-          public_url: (hydratedMediaExperience as { public_url?: unknown }).public_url,
-          changed_fields: ["media"],
-          updated_at: experience.updated_at,
-          context: setMediaExperienceContext,
-        },
-        `Updated media for "${experience.title}".`,
-        { experience: hydratedMediaExperience },
       );
     }
     case "delete_experience":

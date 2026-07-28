@@ -118,19 +118,6 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
       outputSchema: postMutationResultObject,
     }),
   siteTool({
-      name: 'set_post_image',
-      description: 'Use this when the user wants to add or change the photo on a post or update. Call get_site_media_assets first to find an active image asset id, then pass it here with the target post_id.',
-      domain: 'posts',
-      minimumRole: 'editor',
-      confirmRequired: false,
-      inputSchema: {
-        post_id: { type: 'string' },
-        asset_id: { type: 'string', description: 'Active image asset id from get_site_media_assets.' },
-      },
-      required: ['post_id', 'asset_id'],
-      outputSchema: postMutationResultObject,
-    }),
-  siteTool({
       name: 'publish_post',
       description: 'Publish a post to one or more channels. channels defaults to ["site"]. Pass ["site","facebook"] or ["site","instagram"] or all three to simultaneously publish to social — requires a connected Facebook Page (get_facebook_connection). Instagram additionally requires the post to have an image. targets is accepted as a deprecated alias for channels.',
       domain: 'posts',

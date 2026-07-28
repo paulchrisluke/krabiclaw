@@ -51,19 +51,6 @@ export const EXPERIENCES_TOOLS: McpToolDefinition[] = [
       outputSchema: experienceMutationResultObject,
     }),
   siteTool({
-      name: 'set_experience_media',
-      description: 'Replace the ordered media list for a bookable experience or activity. Call get_site_media_assets first to find active image/video asset ids. Position 0 is the cover; if the cover is a video, it must already have a thumbnail_url/poster.',
-      domain: 'experiences',
-      minimumRole: 'editor',
-      confirmRequired: false,
-      inputSchema: {
-        experience_id: { type: 'string', description: 'Experience id or slug.' },
-        media: experienceWriteSchema.media,
-      },
-      required: ['experience_id', 'media'],
-      outputSchema: experienceMutationResultObject,
-    }),
-  siteTool({
       name: 'delete_experience',
       description: 'Delete an experience.',
       domain: 'experiences',

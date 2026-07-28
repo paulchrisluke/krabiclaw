@@ -2,9 +2,11 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { BLOG_TOOLS } from '../../server/utils/mcp-tools/blog.ts'
+import { MCP_PUBLIC_TOOLS } from '../../server/utils/mcp-tools/index.ts'
 import { MEDIA_TOOLS } from '../../server/utils/mcp-tools/media.ts'
 import { POSTS_TOOLS } from '../../server/utils/mcp-tools/posts.ts'
 import { siteIdSchema } from '../../server/utils/mcp-tools/shared.ts'
+import { CHOWBOT_TOOLS } from '../../server/utils/chowbot-tools/index.ts'
 import { PostValidationError, validatePostInput } from '../../server/utils/post-management.ts'
 
 type ToolContract = {
@@ -30,17 +32,48 @@ test('blog, post, and media MCP schemas expose the canonical writable contract',
   }
 
   const upload = tool(MEDIA_TOOLS, 'upload_user_media')
-  for (const property of ['asset_id', 'assetId', 'status', 'public_url', 'publicUrl']) {
+  for (const property of ['asset_id', 'status', 'public_url', 'thumbnail_url']) {
     assert.ok(upload.outputSchema?.properties?.[property], `missing upload output ${property}`)
+  }
+  for (const property of ['assetId', 'publicUrl', 'thumbnailUrl']) {
+    assert.equal(upload.outputSchema?.properties?.[property], undefined, `upload output must not expose ${property}`)
   }
 
   assert.equal((MEDIA_TOOLS as ToolContract[]).some(candidate => candidate.name === 'open_video_upload'), false)
   assert.equal((MEDIA_TOOLS as ToolContract[]).some(candidate => candidate.name.startsWith('open_') && candidate.name.includes('upload')), false)
+  assert.equal((MEDIA_TOOLS as ToolContract[]).some(candidate => candidate.name === 'set_media'), true)
 
   assert.match(upload.description, /only upload path/i)
   assert.match(upload.description, /native ChatGPT file reference/i)
   assert.match(upload.description, /Do not call upload widget tools/i)
   assert.match(upload.description, /no tool whose name starts with "open_"/i)
+})
+
+test('media placement contract does not reintroduce entity-specific assignment tools', () => {
+  const removedToolNames = [
+    'set_experience_media',
+    'set_experience_image',
+    'set_experience_video',
+    'reorder_experience_gallery',
+    'set_home_hero_image',
+    'set_home_hero_video',
+    'set_location_hero_image',
+    'set_location_hero_video',
+    'set_menu_item_image',
+    'set_post_image',
+    'set_blog_post_image',
+    'set_logo',
+    'clear_home_hero_image',
+    'clear_home_hero_video',
+    'clear_location_hero_image',
+    'clear_location_hero_video',
+  ]
+  const mcpNames = new Set(MCP_PUBLIC_TOOLS.map(tool => tool.name))
+  const chowbotNames = new Set(CHOWBOT_TOOLS.map(tool => tool.name))
+  for (const name of removedToolNames) {
+    assert.equal(mcpNames.has(name), false, `${name} must not be exposed by MCP`)
+    assert.equal(chowbotNames.has(name), false, `${name} must not be exposed by ChowBot`)
+  }
 })
 
 test('MCP site_id schema requires the internal site id, not a public locator', () => {
