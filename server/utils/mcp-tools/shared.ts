@@ -987,7 +987,7 @@ export const organizationListItemObject = {
 // ---
 
 export const siteIdSchema = {
-  site_id: { type: 'string', description: 'Site id, subdomain, or custom domain.' },
+  site_id: { type: 'string', description: 'Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.' },
 }
 
 export const generatedImagePickerOutputSchema = {

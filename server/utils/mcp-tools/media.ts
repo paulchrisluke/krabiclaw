@@ -4,7 +4,7 @@ import { chatgptFileInput, mediaAssetObject, siteTool } from './shared'
 export const MEDIA_TOOLS: McpToolDefinition[] = [
   siteTool({
       name: 'get_site_media_assets',
-      description: 'Use this to see the photos and videos already uploaded for a site — "what pictures do I have", "show me my photos". Use it first to find asset IDs before assigning media through business-level tools like set_logo, set_home_hero_image, set_location_hero_image, set_post_image, set_experience_image, set_home_hero_video, set_location_hero_video, or set_experience_video. Filter by kind="image" or kind="video" to narrow results. New user-provided media uses upload_user_media with a native ChatGPT attachment.',
+      description: 'Use this to see the photos and videos already uploaded for a site — "what pictures do I have", "show me my photos". Use it first to find asset IDs before assigning media through business-level tools like set_logo, set_home_hero_image, set_location_hero_image, set_post_image, set_experience_image, set_home_hero_video, set_location_hero_video, or set_experience_video. Filter by kind="image" or kind="video" to narrow results. New user-provided media uses upload_user_media with a native ChatGPT attachment. There are no upload widget tools in this connector: no tool whose name starts with "open_" and contains "upload" exists.',
       domain: 'media',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -17,7 +17,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'upload_user_media',
-      description: 'Canonical inline upload path for user-provided images, videos, and Markdown documents (.md/.markdown). Accepts a resolved ChatGPT file reference and validates the actual bytes. The returned asset_id is active and immediately assignable. For a video, poster_file may provide a thumbnail. Only call this tool when the host supplied a real file/file_id reference; never invent one.',
+      description: 'The only upload path for user-provided images, videos, and Markdown documents (.md/.markdown). Accepts a resolved native ChatGPT file reference and validates the actual bytes. The returned asset_id is active and immediately assignable. For a video, poster_file may provide a thumbnail. Only call this tool when the host supplied a real file/file_id reference; never invent one. Do not call upload widget tools; no tool whose name starts with "open_" and contains "upload" exists.',
       domain: 'media',
       minimumRole: 'editor',
       confirmRequired: false,

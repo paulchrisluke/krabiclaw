@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:c2f9f41db96ebcc9d0d4ee5961027be0ba5be8ef26e9548b3738aebbea67b5aa",
+  "fingerprint": "sha256:ddcea3a6512651b218c08e6f1c918375d6c6f5b97b1ab970bc4143fc3e0c4c12",
   "tools": [
     {
       "name": "add_menu_items_batch",
@@ -124,7 +124,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -219,7 +219,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -281,7 +281,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -327,7 +327,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -372,7 +372,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -428,7 +428,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -518,7 +518,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "source_location_id": {
@@ -679,7 +679,7 @@
             ]
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "tags": {
@@ -1050,7 +1050,7 @@
             "type": "boolean"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -1292,7 +1292,7 @@
             ]
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "slot_end": {
@@ -1496,7 +1496,7 @@
             ]
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "special_hours": {
@@ -1607,7 +1607,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -1660,7 +1660,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -1851,7 +1851,7 @@
             ]
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "sort_order": {
@@ -1943,7 +1943,7 @@
             "type": "number"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "status": {
@@ -2089,7 +2089,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "slug": {
@@ -2231,7 +2231,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "status": {
@@ -2283,7 +2283,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "title": {
@@ -2379,7 +2379,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -2420,7 +2420,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -2464,7 +2464,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -2503,7 +2503,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -2533,7 +2533,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -2567,7 +2567,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -2600,7 +2600,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -2631,7 +2631,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -2661,7 +2661,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -2691,7 +2691,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -2724,7 +2724,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -2756,7 +2756,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -2790,7 +2790,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -2829,7 +2829,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -2860,7 +2860,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -3231,7 +3231,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -3567,7 +3567,7 @@
         "additionalProperties": true,
         "properties": {
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -3708,7 +3708,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -3739,7 +3739,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -3798,7 +3798,7 @@
         "additionalProperties": true,
         "properties": {
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -3846,7 +3846,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -3877,7 +3877,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -3940,7 +3940,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -4170,7 +4170,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -4422,7 +4422,7 @@
         "additionalProperties": true,
         "properties": {
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -4475,7 +4475,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -4575,7 +4575,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -4891,7 +4891,7 @@
         "additionalProperties": true,
         "properties": {
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -4955,7 +4955,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -5071,7 +5071,7 @@
         "additionalProperties": true,
         "properties": {
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -5158,7 +5158,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "start_date": {
@@ -5236,7 +5236,7 @@
         "additionalProperties": true,
         "properties": {
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -5302,7 +5302,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -5395,7 +5395,7 @@
         "additionalProperties": true,
         "properties": {
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -5606,7 +5606,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -5677,7 +5677,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -5814,7 +5814,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "status": {
@@ -6248,7 +6248,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -6300,7 +6300,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -6435,7 +6435,7 @@
         "additionalProperties": true,
         "properties": {
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "status": {
@@ -6723,7 +6723,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -6826,7 +6826,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -7093,7 +7093,7 @@
         "additionalProperties": true,
         "properties": {
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -7154,7 +7154,7 @@
         "additionalProperties": true,
         "properties": {
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -7200,7 +7200,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -7256,7 +7256,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -7360,7 +7360,7 @@
         "additionalProperties": true,
         "properties": {
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -7423,7 +7423,7 @@
         "additionalProperties": true,
         "properties": {
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -7482,7 +7482,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "status": {
@@ -7809,7 +7809,7 @@
             ]
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -7860,7 +7860,7 @@
         "additionalProperties": true,
         "properties": {
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -8070,7 +8070,7 @@
         "additionalProperties": true,
         "properties": {
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -8160,7 +8160,7 @@
         "additionalProperties": true,
         "properties": {
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -8324,7 +8324,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "special_requests_allowed": {
@@ -8536,7 +8536,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -8896,7 +8896,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "targets": {
@@ -9005,7 +9005,7 @@
             "type": "boolean"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -9049,7 +9049,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -9089,7 +9089,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -9166,7 +9166,7 @@
             "type": "array"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -9475,7 +9475,7 @@
             "type": "array"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -9538,7 +9538,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "updates": {
@@ -9572,7 +9572,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "updates": {
@@ -9609,7 +9609,7 @@
             ]
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "updates": {
@@ -9701,7 +9701,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -10056,7 +10056,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -10102,7 +10102,7 @@
         "additionalProperties": false,
         "properties": {
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "task": {
@@ -10316,7 +10316,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "task": {
@@ -10633,7 +10633,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -10682,7 +10682,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -10742,7 +10742,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -10794,7 +10794,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -10835,7 +10835,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -10887,7 +10887,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -11236,7 +11236,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -11277,7 +11277,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -11336,7 +11336,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -11375,7 +11375,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -11443,7 +11443,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -11511,7 +11511,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -11582,7 +11582,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -11633,7 +11633,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -11684,7 +11684,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -11748,7 +11748,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -11809,7 +11809,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -11851,7 +11851,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -11912,7 +11912,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -11999,7 +11999,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, custom domain, subdomain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -12372,7 +12372,7 @@
         "additionalProperties": true,
         "properties": {
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -12458,7 +12458,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -12567,7 +12567,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -12619,7 +12619,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -12708,7 +12708,7 @@
             "type": "array"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -13042,7 +13042,7 @@
             "type": "boolean"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -13226,7 +13226,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -13679,7 +13679,7 @@
             ]
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "slug": {
@@ -14169,7 +14169,7 @@
             ]
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "slug": {
@@ -14630,7 +14630,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "special_requests_allowed": {
@@ -14923,7 +14923,7 @@
             ]
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "slot_end": {
@@ -15064,7 +15064,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "status": {
@@ -15178,7 +15178,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "subtitle": {
@@ -15329,7 +15329,7 @@
             ]
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "special_hours": {
@@ -15443,7 +15443,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -15492,7 +15492,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -15600,7 +15600,7 @@
             "type": "array"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "status": {
@@ -15797,7 +15797,7 @@
             ]
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "sort_order": {
@@ -15864,7 +15864,7 @@
             "type": "array"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "whatsapp_phone": {
@@ -15955,7 +15955,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "status": {
@@ -16013,7 +16013,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -16178,7 +16178,7 @@
             ]
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "slug": {
@@ -16419,7 +16419,7 @@
             "type": "array"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "tenantPages": {
@@ -16475,7 +16475,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "sort_order": {
@@ -16617,7 +16617,7 @@
             ]
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "social_facebook": {
@@ -16758,7 +16758,7 @@
             "type": "object"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -16882,7 +16882,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           }
         },
@@ -16933,7 +16933,7 @@
             "type": "string"
           },
           "site_id": {
-            "description": "Site id, subdomain, or custom domain.",
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
           "status": {
