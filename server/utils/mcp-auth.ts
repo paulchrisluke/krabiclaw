@@ -167,20 +167,21 @@ async function verifyBearerToken(
   }
 
   const scopes = parseScopesFromJwtPayload(payload.scope)
-  const missingScope = requiredScopes.find(requiredScope => !scopes.includes(requiredScope))
-  if (missingScope) {
+  const missingScopes = requiredScopes.filter(requiredScope => !scopes.includes(requiredScope))
+  if (missingScopes.length > 0) {
+    const requiredScopeValue = requiredScopes.join(' ')
     logMcpAuth(event, 'warn', 'credential_rejected', {
       path: event.path,
       token_fingerprint: tokenFingerprint,
       reason: 'scope_missing',
-      missing_scope: missingScope,
+      missing_scopes: missingScopes,
       audiences_checked: audiences,
       required_scopes: requiredScopes,
     })
     throw createError({
       statusCode: 401,
-      statusMessage: `${missingScope} scope required`,
-      data: { mcpAuth: { error: 'insufficient_scope', description: `${missingScope} scope required`, scope: missingScope } },
+      statusMessage: `${requiredScopeValue} scopes required`,
+      data: { mcpAuth: { error: 'insufficient_scope', description: `${requiredScopeValue} scopes required`, scope: requiredScopeValue } },
     })
   }
   ensureForbiddenScopesAbsent(scopes, options.forbiddenScopes)

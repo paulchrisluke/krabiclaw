@@ -132,14 +132,21 @@ function render() {
         && ['set_home_hero_video', 'set_location_hero_video', 'set_experience_video'].includes(assignmentTool)
         && assignmentArgs
       ) {
-        const assignmentResult = await host.callTool(assignmentTool, {
-          ...assignmentArgs,
-          asset_id: assetId,
-        })
-        if (assignmentResult.isError) throw new Error(textFromResult(assignmentResult))
-        status.className = 'success'
-        status.textContent = `Uploaded ${file.name} and assigned it to ${assignmentLabel(assignment.target)}.`
-        return
+        try {
+          const assignmentResult = await host.callTool(assignmentTool, {
+            ...assignmentArgs,
+            asset_id: assetId,
+          })
+          if (assignmentResult.isError) throw new Error(textFromResult(assignmentResult))
+          status.className = 'success'
+          status.textContent = `Uploaded ${file.name} and assigned it to ${assignmentLabel(assignment.target)}.`
+          return
+        } catch (assignmentError) {
+          const reason = assignmentError instanceof Error ? assignmentError.message : 'assignment failed'
+          status.className = 'success'
+          status.textContent = `Uploaded ${file.name}. Asset ${assetId} is ready to assign. Auto-assign failed: ${reason}`
+          return
+        }
       }
       status.className = 'success'
       status.textContent = `Uploaded ${file.name}. Asset ${assetId} is ready to assign.`

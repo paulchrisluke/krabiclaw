@@ -5,7 +5,7 @@
 
 import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 
-export const VIDEO_UPLOAD_WIDGET_RESOURCE_URI = "ui://widget/video-upload@v1.html";
+export const VIDEO_UPLOAD_WIDGET_RESOURCE_URI = "ui://media-upload";
 export const VIDEO_UPLOAD_WIDGET_ASSET_PATH = "/mcp-assets/video-upload-widget.v1.js";
 
 export interface McpAppResourceDefinition {

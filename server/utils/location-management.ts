@@ -318,12 +318,14 @@ export function serializeOpeningHours(value: unknown) {
   }
   const trimmed = value.trim();
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    let parsed: unknown;
     try {
-      const parsed = JSON.parse(trimmed);
-      return serializeOpeningHours(parsed);
+      parsed = JSON.parse(trimmed);
     } catch {
       // Not valid JSON — fall through and treat as one line per day.
+      parsed = undefined;
     }
+    if (parsed !== undefined) return serializeOpeningHours(parsed);
   }
   const weekdayDescriptions = value
     .split(/\r?\n/)

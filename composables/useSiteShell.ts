@@ -67,6 +67,7 @@ export const useSiteShell = () => {
     && !requestEvent?.context.cloudflare?.env
     && (
       requestEvent?.path?.startsWith('/_i18n/')
+      || requestEvent?.path?.startsWith('/_nuxt/')
       || requestEvent?.path?.startsWith('/api/_nuxt_icon/')
       || requestEvent?.path?.startsWith('/__nuxt_error')
     );

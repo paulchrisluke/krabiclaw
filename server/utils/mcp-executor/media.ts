@@ -150,8 +150,9 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
                 assignment: {
                   target: assignment.target,
                   tool: assignment.tool,
-                  ...(locationId ? { location_id: locationId } : {}),
-                  ...(experienceId ? { experience_id: experienceId } : {}),
+                  ...Object.fromEntries(
+                    Object.entries(assignment.args).filter(([key]) => key !== "site_id"),
+                  ),
                 },
               }
             : {}),

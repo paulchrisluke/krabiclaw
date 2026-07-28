@@ -4,7 +4,6 @@ import test from 'node:test'
 import { catalogFingerprint } from '../../server/utils/mcp-catalog.ts'
 import { mcpHttpStatusForError } from '../../server/utils/mcp-http-response.ts'
 import { MCP_ERROR } from '../../server/utils/mcp-protocol.ts'
-import { MCP_PUBLIC_TOOLS, MCP_TOOLS } from '../../server/utils/mcp-tools/index.ts'
 import { PLATFORM_MCP_TOOLS, PLATFORM_PUBLIC_MCP_TOOLS } from '../../server/utils/platform-mcp-tools.ts'
 import { MCP_RELEASED_TOOLS } from '../../server/utils/mcp-released-tools.ts'
 

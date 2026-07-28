@@ -58,6 +58,13 @@ test('serializeOpeningHours: bare string array input is parsed to canonical obje
   )
 })
 
+test('serializeOpeningHours: malformed structured JSON fails instead of becoming a weekday line', () => {
+  assert.throws(
+    () => serializeOpeningHours('{"weekdayDescriptions":[1]}'),
+    /opening_hours\.weekdayDescriptions must be an array of strings/,
+  )
+})
+
 test('serializeOpeningHours: multiline text input remains supported', () => {
   assert.equal(
     serializeOpeningHours('Monday: Closed\nTuesday: 9:00 AM - 5:00 PM'),
