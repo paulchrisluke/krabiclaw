@@ -107,6 +107,7 @@
         :show-empty-state="false"
         :render-markdown="renderMarkdown"
         :quick-replies="importError ? [] : replies"
+        :show-prompt="showComposer"
         @submit="handleTextSubmit"
         @quick-reply="handleReply"
       >
@@ -125,6 +126,24 @@
 
       <template #assistant-after="{ index }">
         <template v-if="messages[index]">
+          <div v-if="messages[index].choiceCard" class="mt-2 grid gap-2">
+            <button
+              v-for="choice in messages[index].choiceCard.choices"
+              :key="choice.action"
+              type="button"
+              class="flex w-full items-center gap-3 rounded-lg border border-default bg-elevated px-3 py-3 text-left transition-colors hover:border-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              @click="handleReply(choice)"
+            >
+              <span class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-default bg-default text-primary">
+                <UIcon :name="choice.icon || 'i-lucide-circle'" class="size-4" />
+              </span>
+              <span class="min-w-0 flex-1">
+                <span class="block text-[13px] font-semibold leading-5 text-highlighted">{{ choice.label }}</span>
+                <span v-if="choice.sub" class="mt-0.5 block text-[12px] leading-5 text-muted">{{ choice.sub }}</span>
+              </span>
+              <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0 text-dimmed" />
+            </button>
+          </div>
           <!-- Place preview / confirm card -->
           <div
             v-if="messages[index].placePreview"
@@ -290,6 +309,7 @@ interface WizardMessage {
   polishCard?: boolean
   mcpCard?: boolean
   brandCard?: boolean
+  choiceCard?: { choices: QuickReply[] }
   placePreview?: { name: string; address: string; phone?: string | null; mapsUrl?: string | null }
   detailsCard?: {
     title: string
@@ -427,6 +447,7 @@ const inputPlaceholder = computed(() => {
   if (step.value === 'awaiting_manual_name') return 'Your business name…'
   return 'Paste your Google Maps link…'
 })
+const showComposer = computed(() => !['vertical', 'source'].includes(step.value))
 const totalProgressSteps = 9
 const progressStep = computed(() => {
   if (step.value === 'vertical') return 1
@@ -576,6 +597,7 @@ async function pushBot(text: string, extra?: {
   polishCard?: boolean
   mcpCard?: boolean
   brandCard?: boolean
+  choiceCard?: WizardMessage['choiceCard']
   placePreview?: WizardMessage['placePreview']
   detailsCard?: WizardMessage['detailsCard']
 }) {
@@ -636,20 +658,26 @@ async function advance(target: WizardStep) {
   importError.value = null
 
   if (target === 'vertical') {
-    await pushBot("First — what kind of business is this?")
-    replies.value = [
-      { label: 'Restaurant, café or bar', icon: 'i-lucide-flame', primary: true, action: 'set_vertical_restaurant' },
-      { label: 'Experience, class or activity', icon: 'i-lucide-graduation-cap', action: 'set_vertical_experience' },
-      { label: 'Legal or professional services', sub: 'Law firms, consultancies, and similar practices', icon: 'i-lucide-briefcase', action: 'set_vertical_professional_service' },
-    ]
+    await pushBot("First — what kind of business is this?", {
+      choiceCard: {
+        choices: [
+          { label: 'Restaurant, café or bar', icon: 'i-lucide-flame', primary: true, action: 'set_vertical_restaurant' },
+          { label: 'Experience, class or activity', icon: 'i-lucide-graduation-cap', action: 'set_vertical_experience' },
+          { label: 'Legal or professional services', sub: 'Law firms, consultancies, and similar practices', icon: 'i-lucide-briefcase', action: 'set_vertical_professional_service' },
+        ],
+      },
+    })
   }
 
   if (target === 'source') {
-    await pushBot("Got it. How would you like to add your business details?")
-    replies.value = [
-      { label: 'Google Maps', sub: 'Paste your Maps link', icon: 'i-lucide-globe', primary: true, action: 'ask_url' },
-      { label: 'Start manually', sub: 'Type your business name', icon: 'i-lucide-pencil', action: 'ask_manual' },
-    ]
+    await pushBot("Got it. How would you like to add your business details?", {
+      choiceCard: {
+        choices: [
+          { label: 'Google Maps', sub: 'Paste your Maps link', icon: 'i-lucide-globe', primary: true, action: 'ask_url' },
+          { label: 'Start manually', sub: 'Type your business name', icon: 'i-lucide-pencil', action: 'ask_manual' },
+        ],
+      },
+    })
   }
 
   if (target === 'awaiting_url') {

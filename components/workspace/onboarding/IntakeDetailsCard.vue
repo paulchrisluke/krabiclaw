@@ -13,14 +13,14 @@
     </template>
 
     <div class="px-4 pb-4">
-      <div class="grid gap-4 sm:grid-cols-2">
+      <div class="grid gap-4">
         <UFormField label="Name">
           <UInput v-model="form.name" />
         </UFormField>
         <UFormField label="City" :required="requireLocationBasics">
           <UInput v-model="form.city" placeholder="Ao Nang" />
         </UFormField>
-        <UFormField label="Address" class="sm:col-span-2" :required="requireLocationBasics">
+        <UFormField label="Address" :required="requireLocationBasics">
           <UTextarea v-model="form.address" :rows="2" placeholder="Street, ward, district" />
         </UFormField>
         <UFormField label="Phone" :required="requireLocationBasics">
@@ -29,17 +29,17 @@
         <UFormField label="Website URL">
           <UInput v-model="form.websiteUrl" type="url" placeholder="https://..." />
         </UFormField>
-        <UFormField label="Hours" class="sm:col-span-2" :required="requireLocationBasics">
+        <UFormField label="Hours" :required="requireLocationBasics">
           <UTextarea
             v-model="form.openingHours"
             :rows="4"
             placeholder="Monday: 9:00 AM - 6:00 PM&#10;Tuesday: 9:00 AM - 6:00 PM"
           />
         </UFormField>
-        <UFormField label="Manager alert number" required help="Bookings get sent here by WhatsApp. Without it, alerts fall back to email only — easy to miss.">
+        <UFormField label="Manager alert number" required help="We'll text you here when someone books.">
           <UInput v-model="form.notificationPhone" type="tel" placeholder="+66..." />
         </UFormField>
-        <UFormField label="Timezone" required help="Used to validate booking dates against your local time.">
+        <UFormField label="Timezone" required>
           <USelectMenu
             v-model="form.timezone"
             :items="timezoneOptions"
@@ -47,7 +47,7 @@
             placeholder="Select timezone"
           />
         </UFormField>
-        <UFormField v-if="!showPrimaryToggle" label="Currency" required help="Affects how menu and experience prices are displayed site-wide.">
+        <UFormField v-if="!showPrimaryToggle" label="Currency" required>
           <USelect
             v-model="form.currency"
             :items="currencyOptions"
@@ -55,19 +55,20 @@
             label-attribute="label"
           />
         </UFormField>
-        <div v-if="showPrimaryToggle" class="sm:col-span-2">
+        <div v-if="showPrimaryToggle">
           <UCheckbox v-model="form.isPrimary" label="Make this the primary location" />
         </div>
       </div>
 
-      <div class="mt-4 flex items-center justify-between gap-3">
+      <div class="mt-4 grid gap-3 sm:flex sm:items-center sm:justify-between">
         <p class="text-[11px] text-muted">
           {{ requireLocationBasics
             ? 'I need the basics before I can create this draft.'
-            : 'You can leave anything blank and edit it later in the dashboard.' }}
+            : 'You can edit anything later.' }}
         </p>
         <UButton
           color="primary"
+          class="justify-center"
           :loading="loading"
           :disabled="disabled || !canSubmit"
           @click="$emit('submit')"
