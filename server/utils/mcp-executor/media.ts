@@ -2,10 +2,13 @@ import type { McpExecutorContext } from './shared'
 import { deleteMediaAsset, listMediaAssets, updateMediaAssetMetadata } from '~/server/utils/media-asset-manager'
 import { hasCloudflareImagesConfig } from '~/server/utils/cloudflare-images'
 import { uploadResolvedMediaToAssetStore } from '~/server/utils/media-upload'
+import { setMediaPlacement, type MediaPlacementTarget } from '~/server/utils/media-placement'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
+import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import {
   NOT_HANDLED,
   mutationContextPayload,
+  objectRecord,
   optionalString,
   requiredString,
   resolveImageUploadProvider,
@@ -17,6 +20,29 @@ import {
 export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, site } = ctx
   switch (toolName) {
+    case "set_media": {
+      const target = mediaPlacementTarget(objectRecord(args.target, "target"));
+      const assetIdsRaw = args.asset_ids;
+      if (!Array.isArray(assetIdsRaw) || !assetIdsRaw.every((item): item is string => typeof item === "string")) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, "asset_ids must be an array of strings.");
+      }
+      const result = await setMediaPlacement(site.db, {
+        organizationId: site.organizationId,
+        siteId: site.siteId,
+        userId: site.userId,
+        env: site.env,
+        target,
+        assetIds: assetIdsRaw,
+      });
+      return renderStructuredResponse(
+        {
+          ok: true,
+          ...result,
+          context: await mutationContextPayload(site, { locationId: result.location_id }),
+        },
+        result.cleared ? "Cleared media placement." : "Updated media placement.",
+      );
+    }
     case "get_site_media_assets":
       return {
         assets: await listMediaAssets(site.db, site.siteId, {
@@ -85,16 +111,14 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
 
       return {
         asset_id: uploaded.assetId,
-        assetId: uploaded.assetId,
         status: "active",
         public_url: uploaded.publicUrl,
-        publicUrl: uploaded.publicUrl,
-        thumbnailUrl: uploaded.thumbnailUrl,
+        thumbnail_url: uploaded.thumbnailUrl,
         kind: resolved.kind,
-        posterWarning: uploaded.posterWarning,
-        nextStep: resolved.kind === "file"
-          ? "Upload complete. Call analyze_document with this assetId to summarize it or answer questions grounded in it."
-          : "Upload complete. This asset is in the media library but not assigned yet. Call the matching assignment tool next (e.g. set_home_hero_image, set_home_hero_video, set_experience_image, set_experience_video).",
+        poster_warning: uploaded.posterWarning,
+        next_step: resolved.kind === "file"
+          ? "Upload complete. Call analyze_document with this asset_id to summarize it or answer questions grounded in it."
+          : "Upload complete. This asset is in the media library but not assigned yet. Call set_media with this asset_id and the desired target.",
         context: await mutationContextPayload(site),
       };
     }
@@ -150,4 +174,16 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
     default:
       return NOT_HANDLED
   }
+}
+
+function mediaPlacementTarget(raw: Record<string, unknown>): MediaPlacementTarget {
+  const type = requiredString(raw, "type") as MediaPlacementTarget["type"];
+  if (type === "site_logo" || type === "home_story_image" || type === "about_story_image") return { type };
+  if (type === "home_hero") return { type, location_id: optionalString(raw, "location_id") ?? null };
+  if (type === "location_hero") return { type, location_id: requiredString(raw, "location_id") };
+  if (type === "menu_item_image") return { type, menu_item_id: requiredString(raw, "menu_item_id") };
+  if (type === "post_image") return { type, post_id: requiredString(raw, "post_id") };
+  if (type === "blog_post_image") return { type, post_id: requiredString(raw, "post_id") };
+  if (type === "experience_media") return { type, experience_id: requiredString(raw, "experience_id") };
+  throw mcpProtocolError(MCP_ERROR.invalidParams, `Unsupported media placement target: ${type}`);
 }

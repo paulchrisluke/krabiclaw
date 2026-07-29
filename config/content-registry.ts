@@ -93,7 +93,7 @@ export const professionalServiceFieldEditorPages = ['home', 'about', 'contact'] 
 export type ProfessionalServiceFieldEditorPage = typeof professionalServiceFieldEditorPages[number]
 
 export const professionalServiceEditableFields: Record<ProfessionalServiceFieldEditorPage, readonly string[]> = {
-  home: ['hero.title', 'hero.subtitle', 'hero.image', 'cta.title', 'cta.description'],
+  home: ['hero.title', 'hero.subtitle', 'hero.media', 'cta.title', 'cta.description'],
   about: ['hero.title', 'hero.subtitle', 'cta.title'],
   contact: ['hero.title', 'hero.subtitle', 'contact.title', 'contact.description', 'contact.cards', 'cta.title', 'cta.description'],
 }
@@ -217,7 +217,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
     verticals: ['restaurant', 'experience', 'professional_service'],
     scope: 'site',
     groups: [
-      { id: 'hero', label: 'Hero Section', icon: 'i-lucide-image', fields: ['hero.eyebrow', 'hero.title', 'hero.subtitle', 'hero.image', 'hero.video'] },
+      { id: 'hero', label: 'Hero Section', icon: 'i-lucide-image', fields: ['hero.eyebrow', 'hero.title', 'hero.subtitle', 'hero.media'] },
       { id: 'story', label: 'Brand Story', icon: 'i-lucide-book-open', fields: ['story.headline', 'story.body', 'story.image'] },
       { id: 'cta', label: 'Call to Action', icon: 'i-lucide-megaphone', fields: ['cta.title', 'cta.description'] },
     ],
@@ -264,17 +264,10 @@ export const contentRegistry: Record<string, PageDefinition> = {
         sources: ['manual'],
         defaultValue: ''
       },
-      'hero.image': {
-        label: 'Hero Background Image',
+      'hero.media': {
+        label: 'Hero Background Media',
         type: 'media',
-        mediaKind: 'image',
-        sources: ['manual'],
-        defaultValue: ''
-      },
-      'hero.video': {
-        label: 'Hero Background Video',
-        type: 'media',
-        mediaKind: 'video',
+        mediaKind: 'any',
         sources: ['manual'],
         defaultValue: ''
       },
@@ -503,7 +496,7 @@ export const contentRegistry: Record<string, PageDefinition> = {
     verticals: ['restaurant', 'experience', 'professional_service'],
     scope: 'location',
     groups: [
-      { id: 'hero', label: 'Hero Section', icon: 'i-lucide-image', fields: ['hero.title', 'hero.subtitle', 'hero.image', 'hero.video'] },
+      { id: 'hero', label: 'Hero Section', icon: 'i-lucide-image', fields: ['hero.title', 'hero.subtitle', 'hero.media'] },
       { id: 'content', label: 'Additional Info', icon: 'i-lucide-file-text', fields: ['parking.info', 'extra.notes'] },
     ],
     preview: {
@@ -512,17 +505,10 @@ export const contentRegistry: Record<string, PageDefinition> = {
     fields: {
       'hero.title': { label: 'Page Title', type: 'text', sources: ['manual'], defaultValue: 'Location & Hours' },
       'hero.subtitle': { label: 'Page Subtitle', type: 'textarea', sources: ['manual'], defaultValue: 'Find us and see when we’re open.' },
-      'hero.image': {
-        label: 'Hero Image',
+      'hero.media': {
+        label: 'Hero Media',
         type: 'media',
-        mediaKind: 'image',
-        sources: ['manual'],
-        defaultValue: ''
-      },
-      'hero.video': {
-        label: 'Hero Background Video',
-        type: 'media',
-        mediaKind: 'video',
+        mediaKind: 'any',
         sources: ['manual'],
         defaultValue: ''
       },

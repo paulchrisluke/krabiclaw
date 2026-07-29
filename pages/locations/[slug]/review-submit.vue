@@ -74,7 +74,7 @@
             ref="mediaInput"
             class="sr-only"
             type="file"
-            accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm"
+            accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"
             multiple
             @change="handleMediaSelect"
           >
@@ -184,11 +184,11 @@ async function handleMediaSelect(event: Event) {
       if (file.type.startsWith('image/')) {
         if (imageCount.value >= 5) throw new Error('You can upload up to 5 photos.')
         await uploadImage(file)
-      } else if (file.type.startsWith('video/')) {
+      } else if (file.type === 'video/mp4' || file.type === 'video/webm') {
         if (videoCount.value >= 2) throw new Error('You can upload up to 2 videos.')
         await uploadVideo(file)
       } else {
-        throw new Error('Use JPG, PNG, WebP, MP4, MOV, or WebM files.')
+        throw new Error('Use JPG, PNG, WebP, MP4, or WebM files.')
       }
     }
   } catch (error) {

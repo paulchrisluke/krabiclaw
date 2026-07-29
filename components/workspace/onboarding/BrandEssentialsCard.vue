@@ -228,7 +228,7 @@ async function save() {
     if (heroAssetId.value) {
       await $fetch<unknown>(`${siteApiBase.value}/content/save`, {
         method: 'POST',
-        body: { page: 'home', changes: { 'hero.image': heroAssetId.value } },
+        body: { page: 'home', changes: { 'hero.media': heroAssetId.value } },
       })
     }
     

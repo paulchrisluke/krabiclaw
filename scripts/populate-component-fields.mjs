@@ -7,8 +7,7 @@ const fieldToComponentMap = {
   'hero.title': 'SayaHero',
   'hero.subtitle': 'SayaHero',
   'hero.eyebrow': 'SayaHero',
-  'hero.image': 'SayaHero',
-  'hero.video': 'SayaHero',
+  'hero.media': 'SayaHero',
   
   // Story section
   'story.headline': 'SayaAbout',

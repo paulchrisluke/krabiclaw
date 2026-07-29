@@ -41,7 +41,7 @@ test.describe('stateless MCP server', () => {
   })
 
   test('a post publishes immediately, stays idempotent on repeat, and matches the public API', async ({ request, baseURL }) => {
-    test.setTimeout(60_000)
+    test.setTimeout(90_000)
     await loginAs(request, baseURL!, MCP_MANAGED_USER_ID)
     const siteId = MCP_MANAGED_SITE_ID
     let createdPostId: string | undefined
@@ -63,14 +63,20 @@ test.describe('stateless MCP server', () => {
           site_id: siteId,
           title: `MCP immediate publication ${now}`,
           body: 'Visible immediately through MCP and the public API.',
-          image_asset_id: imageAssetId,
-          gallery_media: [{ media_asset_id: imageAssetId, role: 'cover', alt_text: 'MCP seeded image' }],
         },
       })
       if (create.status() !== 200) console.error(await create.text())
       expect(create.status()).toBe(200)
       const created = mcpData<{ id: string, slug: string }>(await create.json())
       createdPostId = created.id
+
+      const placement = await mcpRequest(request, baseURL!, {
+        method: 'tools/call',
+        toolName: 'set_media',
+        args: { site_id: siteId, target: { type: 'post_image', post_id: created.id }, asset_ids: [imageAssetId] },
+      })
+      if (placement.status() !== 200) console.error(await placement.text())
+      expect(placement.status()).toBe(200)
 
       const read = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'get_post', args: { site_id: siteId, post_id: created.id },

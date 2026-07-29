@@ -9,7 +9,6 @@ const BLOG_DOMAIN_TOOL_NAMES = new Set([
   'get_blog_post',
   'create_blog_post',
   'update_blog_post',
-  'set_blog_post_image',
   'delete_blog_post',
 ])
 

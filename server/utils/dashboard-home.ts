@@ -98,7 +98,8 @@ export async function getDashboardHomeData(
              bl.is_primary, bl.status, bl.updated_at,
              COALESCE(ma_hero.thumbnail_url, ma_hero.public_url) as hero_url
       FROM business_locations bl
-      LEFT JOIN media_assets ma_hero ON ma_hero.id = bl.hero_image_asset_id
+      LEFT JOIN media_assets ma_hero ON ma_hero.id = bl.hero_media_asset_id
+        AND ma_hero.organization_id = bl.organization_id AND ma_hero.site_id = bl.site_id
       WHERE bl.organization_id = ? AND bl.site_id = ?
       ${locationScopeClause}
       ORDER BY bl.is_primary DESC, bl.title ASC

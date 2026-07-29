@@ -75,7 +75,7 @@ export async function getSiteForMcp(
 
 const HERO_FIELD_ALIASES: Record<
   string,
-  "hero.title" | "hero.subtitle" | "hero.image" | "hero.video"
+  "hero.title" | "hero.subtitle" | "hero.media"
 > = {
   hero_heading: "hero.title",
   hero_title: "hero.title",
@@ -83,10 +83,8 @@ const HERO_FIELD_ALIASES: Record<
   hero_subheading: "hero.subtitle",
   hero_subtitle: "hero.subtitle",
   "hero.subtitle": "hero.subtitle",
-  hero_image_asset_id: "hero.image",
-  "hero.image": "hero.image",
-  hero_video_asset_id: "hero.video",
-  "hero.video": "hero.video",
+  hero_media_asset_id: "hero.media",
+  "hero.media": "hero.media",
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -98,7 +96,7 @@ function editableFieldKeys(page: string, editor: "site_content" | "professional_
 }
 
 async function assertSiteContentPage(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   page: string,
@@ -158,8 +156,7 @@ function normalizeContentChanges(
 
       const heroTitle = rawValue.hero_title;
       const heroSubtitle = rawValue.hero_subtitle;
-      const heroImageAssetId = rawValue.hero_image_asset_id;
-      const heroVideoAssetId = rawValue.hero_video_asset_id;
+      const heroMediaAssetId = rawValue.hero_media_asset_id;
 
       if (heroTitle !== undefined)
         heroChange.hero_title =
@@ -167,24 +164,17 @@ function normalizeContentChanges(
       if (heroSubtitle !== undefined)
         heroChange.hero_subtitle =
           normalizeStringField(heroSubtitle, "hero.hero_subtitle") || undefined;
-      if (heroImageAssetId !== undefined)
-        heroChange.hero_image_asset_id =
+      if (heroMediaAssetId !== undefined)
+        heroChange.hero_media_asset_id =
           normalizeHeroAssetField(
-            heroImageAssetId,
-            "hero.hero_image_asset_id",
-          );
-      if (heroVideoAssetId !== undefined)
-        heroChange.hero_video_asset_id =
-          normalizeHeroAssetField(
-            heroVideoAssetId,
-            "hero.hero_video_asset_id",
+            heroMediaAssetId,
+            "hero.hero_media_asset_id",
           );
 
       if (
         heroTitle !== undefined ||
         heroSubtitle !== undefined ||
-        heroImageAssetId !== undefined ||
-        heroVideoAssetId !== undefined
+        heroMediaAssetId !== undefined
       ) {
         hasHeroChange = true;
       }
@@ -202,13 +192,8 @@ function normalizeContentChanges(
         const value = normalizeStringField(rawValue, rawField);
         heroChange.hero_subtitle = value || undefined;
       }
-      if (heroAlias === "hero.image")
-        heroChange.hero_image_asset_id = normalizeHeroAssetField(
-          rawValue,
-          rawField,
-        );
-      if (heroAlias === "hero.video")
-        heroChange.hero_video_asset_id = normalizeHeroAssetField(
+      if (heroAlias === "hero.media")
+        heroChange.hero_media_asset_id = normalizeHeroAssetField(
           rawValue,
           rawField,
         );
@@ -219,8 +204,11 @@ function normalizeContentChanges(
     if (!fieldDef) {
       const supported = editableFieldKeys(page);
       throw new Error(
-        `Field "${rawField}" is not editable on page "${page}". Supported fields: ${supported.join(", ")}${supported.length ? ", " : ""}hero.title, hero.subtitle, hero.image, hero.video.`,
+        `Field "${rawField}" is not editable on page "${page}". Supported fields: ${supported.join(", ")}${supported.length ? ", " : ""}hero.title, hero.subtitle, hero.media.`,
       );
+    }
+    if (fieldDef.type === "media") {
+      throw new Error(`Field "${rawField}" is a media placement. Use set_media instead.`);
     }
 
     normalizedFields.set(rawField, normalizeStringField(rawValue, rawField));
@@ -236,16 +224,18 @@ export async function getLocationForMcp(
   locationIdOrSlug: string,
 ) {
   const byId = await queryFirst<Record<string, unknown>>(db, `
-    SELECT bl.*, img.public_url AS hero_public_url, img.kind AS hero_kind
+    SELECT bl.*, img.public_url AS hero_public_url, img.thumbnail_url AS hero_thumbnail_url, img.kind AS hero_kind
     FROM business_locations bl
-    LEFT JOIN media_assets img ON bl.hero_image_asset_id = img.id AND img.status = 'active'
+    LEFT JOIN media_assets img ON bl.hero_media_asset_id = img.id AND img.status = 'active'
+      AND img.organization_id = bl.organization_id AND img.site_id = bl.site_id
     WHERE bl.id = ? AND bl.organization_id = ? AND bl.site_id = ?
     LIMIT 1
   `, [locationIdOrSlug, organizationId, siteId]);
   const row = byId ?? await queryFirst<Record<string, unknown>>(db, `
-    SELECT bl.*, img.public_url AS hero_public_url, img.kind AS hero_kind
+    SELECT bl.*, img.public_url AS hero_public_url, img.thumbnail_url AS hero_thumbnail_url, img.kind AS hero_kind
     FROM business_locations bl
-    LEFT JOIN media_assets img ON bl.hero_image_asset_id = img.id AND img.status = 'active'
+    LEFT JOIN media_assets img ON bl.hero_media_asset_id = img.id AND img.status = 'active'
+      AND img.organization_id = bl.organization_id AND img.site_id = bl.site_id
     WHERE bl.slug = ? AND bl.organization_id = ? AND bl.site_id = ?
     LIMIT 1
   `, [locationIdOrSlug, organizationId, siteId]);
@@ -556,7 +546,7 @@ function buildContentId(
 }
 
 async function resolvePublicPath(
-  db: D1Database,
+  db: DbClient,
   siteId: string,
   page: string,
   locationId?: string,
@@ -587,7 +577,7 @@ async function resolvePublicPath(
 }
 
 export async function updatePageContent(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   input: {
@@ -659,10 +649,9 @@ export async function updatePageContent(
       content: value,
       hero_title: undefined,
       hero_subtitle: undefined,
-      // Clear stale hero_image_asset_id/hero_video_asset_id so a leftover seed-time
+      // Clear stale hero_media_asset_id so a leftover seed-time
       // reference doesn't win over this field's new content value on read.
-      hero_image_asset_id: isMediaField ? null : undefined,
-      hero_video_asset_id: isMediaField ? null : undefined,
+      hero_media_asset_id: isMediaField ? null : undefined,
     });
   }
 
@@ -750,19 +739,18 @@ export async function getEditorContent(
 
   if (page === "location" && locationId) {
     const locHero = await queryFirst<{
-      hero_image_asset_id: string | null;
-      hero_video_asset_id: string | null;
+      hero_media_asset_id: string | null;
       hero_public_url: string | null;
       hero_kind: string | null;
-      hero_video_public_url: string | null;
-      hero_video_kind: string | null;
     }>(db, `
-      SELECT bl.hero_image_asset_id, bl.hero_video_asset_id,
-             img.public_url AS hero_public_url, img.kind AS hero_kind,
-             vid.public_url AS hero_video_public_url, vid.kind AS hero_video_kind
+      SELECT bl.hero_media_asset_id,
+             media.public_url AS hero_public_url, media.kind AS hero_kind
       FROM business_locations bl
-      LEFT JOIN media_assets img ON bl.hero_image_asset_id = img.id AND img.status = 'active'
-      LEFT JOIN media_assets vid ON bl.hero_video_asset_id = vid.id AND vid.status = 'active'
+      LEFT JOIN media_assets media
+        ON bl.hero_media_asset_id = media.id
+       AND media.organization_id = bl.organization_id
+       AND media.site_id = bl.site_id
+       AND media.status = 'active'
       WHERE bl.id = ? AND bl.site_id = ?
       LIMIT 1
     `, [locationId, siteId]);
@@ -785,12 +773,9 @@ export async function getEditorContent(
         value: existing?.value,
         hero_title: existing?.hero_title,
         hero_subtitle: existing?.hero_subtitle,
-        hero_image_asset_id: locHero.hero_image_asset_id ?? undefined,
+        hero_media_asset_id: locHero.hero_media_asset_id ?? undefined,
         hero_public_url: locHero.hero_public_url ?? null,
         hero_kind: locHero.hero_kind ?? null,
-        hero_video_asset_id: locHero.hero_video_asset_id ?? undefined,
-        hero_video_public_url: locHero.hero_video_public_url ?? null,
-        hero_video_kind: locHero.hero_video_kind ?? null,
         updated_at: existing?.updated_at ?? new Date().toISOString(),
       };
       if (heroIdx !== -1) mergedContent[heroIdx] = overlaid;
@@ -807,7 +792,7 @@ export async function getEditorContent(
       ...item,
       render_status: isEditableField ? "rendered" : "orphan",
       editable_keys: isStructuredHero
-        ? ["hero.title", "hero.subtitle", "hero.image", "hero.video"]
+        ? ["hero.title", "hero.subtitle", "hero.media"]
         : getFieldDef(page, item.field)
           ? [item.field]
           : [],
@@ -823,7 +808,7 @@ export async function getEditorContent(
     schema: {
       page,
       fields: editableKeys,
-      structured: ["hero.title", "hero.subtitle", "hero.image", "hero.video"],
+      structured: ["hero.title", "hero.subtitle", "hero.media"],
     },
   };
 }
@@ -835,8 +820,6 @@ export async function updateHomeHero(
   input: {
     title?: string | null;
     subtitle?: string | null;
-    image_asset_id?: string | null;
-    video_asset_id?: string | null;
     location_id?: string | null;
   },
 ) {
@@ -845,12 +828,6 @@ export async function updateHomeHero(
       ...(input.title !== undefined ? { hero_title: input.title ?? "" } : {}),
       ...(input.subtitle !== undefined
         ? { hero_subtitle: input.subtitle ?? "" }
-        : {}),
-      ...(input.image_asset_id !== undefined
-        ? { hero_image_asset_id: input.image_asset_id }
-        : {}),
-      ...(input.video_asset_id !== undefined
-        ? { hero_video_asset_id: input.video_asset_id }
         : {}),
     },
   };

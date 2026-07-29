@@ -268,7 +268,7 @@ export async function seedNewSite(
   // No stock hero/story media seeded here: a generic stock photo isn't actually
   // theirs. The homepage hero renders a brand-color + icon treatment instead
   // (SayaHomeHero.vue), and the public location page falls back to the same
-  // treatment (pages/locations/[slug]/index.vue) when hero_image_asset_id is unset.
+  // treatment (pages/locations/[slug]/index.vue) when hero_media_asset_id is unset.
 
   // ── Sample menu (restaurant only) ─────────────────────────────────────────
   const menuItems = VERTICAL_MENU_SECTIONS[vertical];

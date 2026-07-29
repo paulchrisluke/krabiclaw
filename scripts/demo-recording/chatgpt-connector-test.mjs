@@ -176,18 +176,18 @@ async function main() {
 
 
     const uploadSince = new Date(Date.now() - 1_000).toISOString()
-    console.log(`\n# Upload video\nIn the ChatGPT video widget, choose this fixture and click Upload video:\n${fixturePath}\n`)
-    await waitForManualAction(rl, 'Complete the widget upload in ChatGPT.')
+    console.log(`\n# Upload video\nAttach this fixture in ChatGPT with the paperclip:\n${fixturePath}\n`)
+    await waitForManualAction(rl, 'Complete the ChatGPT attachment upload.')
     const uploadEvent = await pollTelemetry('upload_user_media', uploadSince, { siteId, arguments: { site_id: siteId } })
-    evidence.prompts.push({ title: 'Widget video upload', prompt: `Upload ${fixturePath} through the widget`, expectedTool: 'upload_user_media', event: uploadEvent })
+    evidence.prompts.push({ title: 'Video attachment upload', prompt: `Upload ${fixturePath} as a ChatGPT attachment`, expectedTool: 'upload_user_media', event: uploadEvent })
     const uploadedVideo = parseSummary(uploadEvent.result_summary_json)
     videoAssetId = uploadedVideo.asset_id || uploadedVideo.assetId
     const publicUrl = uploadedVideo.public_url || uploadedVideo.publicUrl
     evidence.created.video = { assetId: videoAssetId, publicUrl }
-    if (!videoAssetId || uploadedVideo.status !== 'active') throw new Error('Widget upload did not return an active video asset.')
-    if (!publicUrl || !(await fetch(publicUrl)).ok) throw new Error('Widget video public URL did not return 200.')
+    if (!videoAssetId || uploadedVideo.status !== 'active') throw new Error('Attachment upload did not return an active video asset.')
+    if (!publicUrl || !(await fetch(publicUrl)).ok) throw new Error('Attachment video public URL did not return 200.')
 
-    await runPrompt(rl, 'Assign uploaded video', `I explicitly confirm this change. Assign KrabiClaw video asset_id ${videoAssetId} as the homepage hero video for site_id ${siteId} now.`, 'set_home_hero_video', { siteId, arguments: { site_id: siteId, asset_id: videoAssetId } })
+    await runPrompt(rl, 'Assign uploaded video', `I explicitly confirm this change. Assign KrabiClaw video asset_id ${videoAssetId} as the homepage hero video for site_id ${siteId} now.`, 'set_media', { siteId, arguments: { site_id: siteId, target: { type: 'home_hero' }, asset_ids: [videoAssetId] } })
 
     console.log(`# Actual ChatGPT connector behavior passed. Cleaning up created content...`)
   } catch (error) {
@@ -199,7 +199,7 @@ async function main() {
       try {
         const cookie = await devSession(userId)
         if (videoAssetId) {
-          await mcpCall(cookie, 'clear_home_hero_video', { site_id: siteId })
+          await mcpCall(cookie, 'set_media', { site_id: siteId, target: { type: 'home_hero' }, asset_ids: [] })
           await mcpCall(cookie, 'delete_media_asset', { site_id: siteId, asset_id: videoAssetId })
           evidence.cleanup.video = 'cleared and deleted'
         }

@@ -158,7 +158,7 @@ Both Saya and Blawby support a blog: Saya's is the shared `posts` primitive rend
 | Google Places API sync | ✅ Live — hours, address, rating, reviews (up to 5) |
 | Google Business Profile API | ⏳ API approval pending — RPM quota locked at 0 |
 | Google Places API | ✅ Live — location autocomplete + `import_from_maps` MCP tool |
-| Cloudflare Stream | ✅ Built — video upload/playback |
+| Cloudflare R2 media host | ✅ Built — video upload/playback |
 | ChatGPT Client MCP | ✅ Live — primary customer creation surface |
 | ChatGPT Platform Admin MCP | ✅ Live — internal platform operations only |
 | ChatGPT image generation | ✅ Live — `gpt-image-1`/`gpt-image-2` via Responses API |

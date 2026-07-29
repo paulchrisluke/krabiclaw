@@ -93,7 +93,7 @@ test('tenant blog read and mutation output schemas expose only canonical content
 })
 
 test('tenant blog output schemas match one structured envelope for canonical mutations', () => {
-  for (const name of ['get_blog_post', 'create_blog_post', 'update_blog_post', 'update_blog_metadata', 'replace_blog_content', 'publish_blog_post', 'unpublish_blog_post', 'set_blog_post_image']) {
+  for (const name of ['get_blog_post', 'create_blog_post', 'update_blog_post', 'update_blog_metadata', 'replace_blog_content', 'publish_blog_post', 'unpublish_blog_post']) {
     const outputSchema = blogTool(name).outputSchema as typeof blogPostMutationResultObject
     assert.deepEqual(Object.keys(outputSchema.properties), ['post'], `${name} should only return the post envelope`)
     assert.deepEqual(outputSchema.required, ['post'])

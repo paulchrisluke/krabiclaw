@@ -49,12 +49,11 @@ export default defineEventHandler(async (event) => {
       SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.website_url, bl.maps_url,
              bl.latitude, bl.longitude, bl.opening_hours, bl.rating, bl.review_count,
              bl.is_primary, bl.status, bl.last_synced_at, bl.google_place_id, bl.city,
-             bl.hero_image_asset_id, bl.hero_video_asset_id,
-             ma_img.public_url AS hero_image_public_url, ma_img.kind AS hero_image_kind,
-             ma_vid.public_url AS hero_video_public_url, ma_vid.kind AS hero_video_kind
+             bl.hero_media_asset_id,
+             ma.public_url AS hero_public_url, ma.kind AS hero_kind, ma.thumbnail_url
       FROM business_locations bl
-      LEFT JOIN media_assets ma_img ON bl.hero_image_asset_id = ma_img.id AND ma_img.status = 'active'
-      LEFT JOIN media_assets ma_vid ON bl.hero_video_asset_id = ma_vid.id AND ma_vid.status = 'active'
+      LEFT JOIN media_assets ma ON bl.hero_media_asset_id = ma.id AND ma.status = 'active'
+        AND ma.organization_id = bl.organization_id AND ma.site_id = bl.site_id
       WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.slug = ? AND bl.status = 'active'
       LIMIT 1
     `,
@@ -91,8 +90,8 @@ export default defineEventHandler(async (event) => {
 
 
     // Parse JSON fields and return public-safe data (email excluded)
-    const public_url = (location.hero_video_public_url || location.hero_image_public_url || null) as string | null
-    const kind = public_url ? (location.hero_video_public_url ? 'video' : 'image') : null
+    const public_url = (location.hero_public_url || null) as string | null
+    const kind = public_url ? (location.hero_kind as string | null) : null
 
     const parsedLocation = {
       id: location.id,
@@ -121,8 +120,8 @@ export default defineEventHandler(async (event) => {
       status: location.status,
       public_url,
       kind,
-      hero_image_public_url: location.hero_image_public_url,
-      hero_video_public_url: location.hero_video_public_url,
+      hero_public_url: public_url,
+      thumbnail_url: location.thumbnail_url ?? null,
       city: location.city,
       currency: site.default_currency || DEFAULT_CURRENCY,
       google_place_id: location.google_place_id,
