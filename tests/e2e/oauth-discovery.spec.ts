@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { createHash } from 'node:crypto'
 import { decodeProtectedHeader, importJWK, SignJWT } from 'jose'
-import { devLoginHeaders, isDeployedWorkerTarget } from './test-env'
+import { devLoginHeaders, isDeployedWorkerTarget, testEnv } from './test-env'
 
 const PRIVATE_CLIENT_TEST_KEY_ID = 'krabiclaw-cimd-e2e-rs256'
 const PRIVATE_CLIENT_TEST_JWK = {
@@ -25,12 +25,16 @@ function oauthAuthorizeUrl(baseURL: string, params: Record<string, string>) {
   return `${baseURL}/api/auth/oauth2/authorize?${new URLSearchParams(params).toString()}`
 }
 
+function oauthMetadataBaseURL(baseURL: string) {
+  return (testEnv('BETTER_AUTH_URL') || baseURL).replace(/\/$/, '')
+}
+
 test.describe('OAuth discovery endpoints', () => {
   test('/.well-known/oauth-protected-resource returns valid document', async ({ request, baseURL }) => {
     const res = await request.get(`${baseURL}/.well-known/oauth-protected-resource`)
     expect(res.status()).toBe(200)
     const body = await res.json() as Record<string, unknown>
-    expect(body.resource).toBe(`${baseURL}/api/mcp`)
+    expect(body.resource).toBe(`${oauthMetadataBaseURL(baseURL!)}/api/mcp`)
     expect(Array.isArray(body.authorization_servers)).toBe(true)
     expect((body.authorization_servers as string[]).length).toBeGreaterThan(0)
     expect(Array.isArray(body.bearer_methods_supported)).toBe(true)
@@ -41,7 +45,7 @@ test.describe('OAuth discovery endpoints', () => {
     const res = await request.get(`${baseURL}/.well-known/oauth-protected-resource/platform-mcp`)
     expect(res.status()).toBe(200)
     const body = await res.json() as Record<string, unknown>
-    expect(body.resource).toBe(`${baseURL}/api/mcp/platform`)
+    expect(body.resource).toBe(`${oauthMetadataBaseURL(baseURL!)}/api/mcp/platform`)
     expect(Array.isArray(body.authorization_servers)).toBe(true)
     expect((body.authorization_servers as string[]).length).toBeGreaterThan(0)
     expect(Array.isArray(body.bearer_methods_supported)).toBe(true)

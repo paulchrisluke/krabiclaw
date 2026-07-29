@@ -112,24 +112,15 @@
         @submit="handleTextSubmit"
         @quick-reply="handleReply"
       >
-      <template #prompt-before>
-        <!-- Error banner -->
-        <div
-          v-if="importError"
-          data-testid="wizard-error-banner"
-          class="mb-3 flex items-center gap-2 rounded-lg border border-error-200 dark:border-error-800 bg-error-50 dark:bg-error-950 px-3 py-2 text-xs text-error-600 dark:text-error-400"
-        >
-          <UIcon name="i-lucide-triangle-alert" class="size-3.5 shrink-0" />
-          <span>{{ importError }}</span>
-          <button class="ml-auto shrink-0 underline underline-offset-2" @click="retryImport">Try again</button>
-        </div>
-      </template>
-
-      <template #assistant-after="{ index }">
-        <template v-if="messages[index]">
-          <div v-if="messages[index].choiceCard" class="mt-2 grid gap-2">
+      <template #message="{ index }">
+        <div v-if="isWidgetMessage(messages[index])" class="px-4 py-2">
+          <div v-if="messages[index]?.text" class="mb-2 max-w-[30rem] rounded-xl bg-elevated px-4 py-3 text-[14px] leading-relaxed text-highlighted">
+            <!-- eslint-disable-next-line vue/no-v-html -->
+            <div class="prose prose-sm dark:prose-invert max-w-none" v-html="renderMarkdown(messages[index]!.text!)" />
+          </div>
+          <div v-if="messages[index]?.choiceCard" class="grid gap-2">
             <button
-              v-for="choice in messages[index].choiceCard.choices"
+              v-for="choice in messages[index]?.choiceCard?.choices"
               :key="choice.action"
               type="button"
               class="flex w-full items-center gap-3 rounded-lg border border-default bg-elevated px-3 py-3 text-left transition-colors hover:border-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
@@ -145,10 +136,9 @@
               <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0 text-dimmed" />
             </button>
           </div>
-          <!-- Place preview / confirm card -->
           <div
-            v-if="messages[index].placePreview"
-            class="mt-2 overflow-hidden rounded-xl border border-default bg-elevated"
+            v-if="messages[index]?.placePreview"
+            class="overflow-hidden rounded-xl border border-default bg-elevated"
           >
             <div class="flex h-24 items-center justify-center border-b border-default bg-muted text-muted">
               <div class="flex items-center gap-2 text-xs font-medium">
@@ -161,43 +151,69 @@
                 <UIcon name="i-lucide-map-pin" class="size-4" />
               </div>
               <div class="min-w-0 flex-1">
-              <p class="truncate text-[13px] font-semibold text-highlighted">{{ messages[index].placePreview.name }}</p>
-              <p class="mt-0.5 text-[12px] leading-relaxed text-muted">{{ messages[index].placePreview.address }}</p>
-              <p v-if="messages[index].placePreview.phone" class="mt-0.5 text-[12px] text-muted">{{ messages[index].placePreview.phone }}</p>
-              <a
-                v-if="messages[index].placePreview.mapsUrl"
-                :href="messages[index].placePreview.mapsUrl"
-                target="_blank"
-                rel="noopener"
-                class="mt-1 inline-flex items-center gap-1 text-[11.5px] text-primary hover:underline"
-              >
-                <UIcon name="i-lucide-external-link" class="size-3" />
-                View on Google Maps
-              </a>
+                <p class="truncate text-[13px] font-semibold text-highlighted">{{ messages[index]?.placePreview?.name }}</p>
+                <p class="mt-0.5 text-[12px] leading-relaxed text-muted">{{ messages[index]?.placePreview?.address }}</p>
+                <p v-if="messages[index]?.placePreview?.phone" class="mt-0.5 text-[12px] text-muted">{{ messages[index]?.placePreview?.phone }}</p>
+                <a
+                  v-if="messages[index]?.placePreview?.mapsUrl"
+                  :href="messages[index]?.placePreview?.mapsUrl ?? undefined"
+                  target="_blank"
+                  rel="noopener"
+                  class="mt-1 inline-flex items-center gap-1 text-[11.5px] text-primary hover:underline"
+                >
+                  <UIcon name="i-lucide-external-link" class="size-3" />
+                  View on Google Maps
+                </a>
               </div>
             </div>
           </div>
+          <IntakeDetailsCard
+            v-if="messages[index]?.detailsCard"
+            v-model:form="detailsForm"
+            :title="messages[index]!.detailsCard!.title"
+            :description="messages[index]!.detailsCard!.description"
+            :action-label="messages[index]!.detailsCard!.actionLabel"
+            :require-location-basics="messages[index]!.detailsCard!.requireLocationBasics"
+            :show-primary-toggle="messages[index]!.detailsCard!.showPrimaryToggle"
+            :section="messages[index]!.detailsCard!.section"
+            :loading="importing"
+            :disabled="importing"
+            @submit="submitDetailsCard(messages[index]!.detailsCard!.section)"
+          />
+          <HoursTimezoneCard
+            v-if="messages[index]?.hoursCard"
+            v-model:form="hoursForm"
+            :title="messages[index]!.hoursCard!.title"
+            :description="messages[index]!.hoursCard!.description"
+            action-label="Continue"
+            :loading="importing"
+            :disabled="importing"
+            @submit="submitHoursCard"
+          />
+          <DraftBrandCard
+            v-if="messages[index]?.brandDraftCard"
+            v-model:form="brandDraftForm"
+            :title="messages[index]!.brandDraftCard!.title"
+            :description="messages[index]!.brandDraftCard!.description"
+            action-label="Continue"
+            :section="messages[index]!.brandDraftCard!.section"
+            :loading="importing"
+            :disabled="importing"
+            @submit="submitBrandDraftCard(messages[index]!.brandDraftCard!.section)"
+          />
+          <NotificationRoutingCard
+            v-if="messages[index]?.notificationCard"
+            v-model:form="notificationForm"
+            title="Manager alerts"
+            description="Choose where booking and message alerts should go."
+            action-label="Create site"
+            :loading="importing"
+            :disabled="importing"
+            @submit="submitDetails"
+          />
           <div
-            v-if="messages[index].detailsCard"
-            class="mt-2"
-          >
-            <IntakeDetailsCard
-              v-model:form="detailsForm"
-              :title="messages[index].detailsCard.title"
-              :description="messages[index].detailsCard.description"
-              :action-label="messages[index].detailsCard.actionLabel"
-              :require-location-basics="messages[index].detailsCard.requireLocationBasics"
-              :show-primary-toggle="messages[index].detailsCard.showPrimaryToggle"
-              :section="messages[index].detailsCard.section"
-              :loading="importing"
-              :disabled="importing"
-              @submit="submitDetailsCard(messages[index].detailsCard.section)"
-            />
-          </div>
-          <!-- Handoff card -->
-          <div
-            v-if="messages[index].handoff"
-            class="mt-2 flex items-start gap-3 rounded-xl border border-default bg-elevated px-4 py-3"
+            v-if="messages[index]?.handoff"
+            class="flex items-start gap-3 rounded-xl border border-default bg-elevated px-4 py-3"
           >
             <div class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
               <UIcon name="i-lucide-messages-square" class="size-4" />
@@ -209,7 +225,7 @@
               </p>
             </div>
           </div>
-          <UCard v-if="messages[index].socialCard" class="mt-2" :ui="{ body: 'px-4 py-3 space-y-3' }">
+          <UCard v-if="messages[index]?.socialCard" :ui="{ body: 'px-4 py-3 space-y-3' }">
             <div class="flex items-center gap-2">
               <UIcon name="i-simple-icons-facebook" class="size-4 text-[#1877F2] shrink-0" />
               <span class="text-[13px] font-semibold text-highlighted">Facebook & Instagram</span>
@@ -260,29 +276,69 @@
               </UButton>
             </div>
           </UCard>
-          <div v-if="messages[index].brandCard && importedSiteId" class="mt-2">
-            <BrandEssentialsCard :site-id="importedSiteId" @done="handleBrandCardDone" />
-          </div>
-          <div v-if="messages[index].polishCard" class="mt-2">
-            <PolishSuggestionsCard
-              :vertical="selectedVertical"
-              :primary-to="workspaceEntryPath"
-              primary-label="Open the dashboard"
-              :secondary-to="brandWorkspacePath"
-              secondary-label="Open brand pages"
-            />
-          </div>
-          <div v-if="messages[index].mcpCard" class="mt-2">
-            <McpEditCard
-              :guide-to="chatgptGuidePath"
-              guide-label="ChatGPT setup guide"
-              :starter-prompt="chatgptStarterPrompt"
-              :examples="quickActionExamples"
-              :dashboard-to="workspaceEntryPath"
-              dashboard-label="Open the dashboard"
-            />
-          </div>
-        </template>
+          <BrandEssentialsCard v-if="messages[index]?.brandCard && importedSiteId" :site-id="importedSiteId" @done="handleBrandCardDone" />
+          <PolishSuggestionsCard
+            v-if="messages[index]?.polishCard"
+            :vertical="selectedVertical"
+            :primary-to="workspaceEntryPath"
+            primary-label="Open the dashboard"
+            :secondary-to="brandWorkspacePath"
+            secondary-label="Open brand pages"
+          />
+          <McpEditCard
+            v-if="messages[index]?.mcpCard"
+            :guide-to="chatgptGuidePath"
+            guide-label="ChatGPT setup guide"
+            :starter-prompt="chatgptStarterPrompt"
+            :examples="quickActionExamples"
+            :dashboard-to="workspaceEntryPath"
+            dashboard-label="Open the dashboard"
+          />
+        </div>
+        <UChatMessage
+          v-else
+          :id="String(index)"
+          :role="messages[index]?.from === 'user' ? 'user' : 'assistant'"
+          :parts="[{ type: 'text', text: messages[index]?.text ?? '' }]"
+          :side="messages[index]?.from === 'user' ? 'right' : 'left'"
+          :variant="messages[index]?.from === 'user' ? 'solid' : 'subtle'"
+          :ui="messages[index]?.from === 'user' ? { content: 'bg-primary text-(--primary-foreground,#fff)' } : {}"
+        >
+          <template #content>
+            <div v-if="messages[index]?.from === 'bot'" class="space-y-2">
+              <div v-if="messages[index]?.tools?.length" class="flex flex-col gap-1">
+                <UChatTool
+                  v-for="(tool, toolIndex) in messages[index]?.tools"
+                  :key="tool.label + index + toolIndex"
+                  :text="tool.label"
+                  :loading="!tool.done"
+                />
+              </div>
+              <!-- eslint-disable vue/no-v-html -->
+              <div
+                v-if="messages[index]?.text"
+                class="prose prose-sm dark:prose-invert max-w-none"
+                v-html="renderMarkdown(messages[index]!.text!)"
+              />
+              <!-- eslint-enable vue/no-v-html -->
+            </div>
+            <div v-else class="prose prose-sm dark:prose-invert max-w-none text-(--primary-foreground,#fff)">
+              {{ messages[index]?.text ?? '' }}
+            </div>
+          </template>
+        </UChatMessage>
+      </template>
+      <template #prompt-before>
+        <!-- Error banner -->
+        <div
+          v-if="importError"
+          data-testid="wizard-error-banner"
+          class="mb-3 flex items-center gap-2 rounded-lg border border-error-200 dark:border-error-800 bg-error-50 dark:bg-error-950 px-3 py-2 text-xs text-error-600 dark:text-error-400"
+        >
+          <UIcon name="i-lucide-triangle-alert" class="size-3.5 shrink-0" />
+          <span>{{ importError }}</span>
+          <button class="ml-auto shrink-0 underline underline-offset-2" @click="retryImport">Try again</button>
+        </div>
       </template>
       </ChowBotConversation>
     </div>
@@ -292,7 +348,6 @@
 <script setup lang="ts">
 import { getLocalTimezone } from '~/utils/timezone'
 import { marked } from 'marked'
-import { DEFAULT_CURRENCY } from '~/shared/currencies'
 import ChowBotConversation from '~/components/chowbot/ChowBotConversation.vue'
 import {
   buildOnboardingStarterPrompt,
@@ -313,13 +368,23 @@ interface WizardMessage {
   brandCard?: boolean
   choiceCard?: { choices: QuickReply[] }
   placePreview?: { name: string; address: string; phone?: string | null; mapsUrl?: string | null }
+  hoursCard?: {
+    title: string
+    description: string
+  }
+  brandDraftCard?: {
+    title: string
+    description: string
+    section: 'brand' | 'hero'
+  }
+  notificationCard?: boolean
   detailsCard?: {
     title: string
     description: string
     actionLabel: string
     requireLocationBasics: boolean
     showPrimaryToggle: boolean
-    section: 'basics' | 'operations'
+    section: 'basics'
   }
 }
 
@@ -339,7 +404,7 @@ interface DraftSavedPayload {
   subdomainCandidate: string
 }
 
-type WizardStep = 'welcome' | 'vertical' | 'source' | 'awaiting_url' | 'awaiting_manual_name' | 'confirm' | 'details' | 'operations' | 'importing' | 'imported'
+type WizardStep = 'welcome' | 'vertical' | 'source' | 'awaiting_url' | 'awaiting_manual_name' | 'confirm' | 'details' | 'hours' | 'brand' | 'hero' | 'create' | 'importing' | 'imported'
 type DetailsSource = 'imported' | 'manual'
 
 type WizardMode = 'new-site' | 'add-location'
@@ -410,7 +475,6 @@ const pendingPreview = ref<{
   city?: string | null
   phone?: string | null
   mapsUrl?: string | null
-  websiteUrl?: string | null
   openingHours?: string[] | null
 } | null>(null)
 const detailsSource = ref<DetailsSource>('imported')
@@ -420,12 +484,23 @@ const detailsForm = reactive({
   city: '',
   address: '',
   phone: '',
-  websiteUrl: '',
-  openingHours: '',
-  notificationPhone: '',
-  timezone: '',
-  currency: DEFAULT_CURRENCY,
   isPrimary: true,
+})
+const hoursForm = reactive({
+  timezone: '',
+  hours: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    .map(day => ({ day, open: '09:00', close: '18:00', closed: false })),
+})
+const brandDraftForm = reactive({
+  brandColor: '#3F3F46',
+  logoNote: '',
+  heroPhotoNote: '',
+  heroHeadline: '',
+})
+const notificationForm = reactive({
+  ownerPhone: '',
+  channels: ['whatsapp'],
+  locations: [] as { id: string; title: string; notificationPhone: string }[],
 })
 
 // Drag support
@@ -436,17 +511,20 @@ const inputPlaceholder = computed(() => {
   if (step.value === 'awaiting_manual_name') return 'Your business name…'
   return 'Paste your Google Maps link…'
 })
-const showComposer = computed(() => !['vertical', 'source'].includes(step.value))
-const totalProgressSteps = 9
+const showComposer = computed(() => Boolean(importError.value || awaitingInput.value || replies.value.length))
+const totalProgressSteps = 11
 const progressStep = computed(() => {
   if (step.value === 'vertical') return 1
   if (step.value === 'source') return 2
   if (step.value === 'awaiting_url' || step.value === 'awaiting_manual_name') return 3
   if (step.value === 'confirm') return 4
   if (step.value === 'details') return 5
-  if (step.value === 'operations') return 6
-  if (step.value === 'importing') return onboardingDraftId.value ? 8 : 6
-  if (step.value === 'imported') return 9
+  if (step.value === 'hours') return 6
+  if (step.value === 'brand') return 7
+  if (step.value === 'hero') return 8
+  if (step.value === 'create') return 9
+  if (step.value === 'importing') return onboardingDraftId.value ? 10 : 9
+  if (step.value === 'imported') return 11
   return 1
 })
 const progressLabel = computed(() => {
@@ -456,7 +534,10 @@ const progressLabel = computed(() => {
   if (step.value === 'awaiting_manual_name') return 'Add business name'
   if (step.value === 'confirm') return 'Confirm listing'
   if (step.value === 'details') return 'Business basics'
-  if (step.value === 'operations') return 'Operations'
+  if (step.value === 'hours') return 'Hours'
+  if (step.value === 'brand') return 'Brand identity'
+  if (step.value === 'hero') return 'Hero photo'
+  if (step.value === 'create') return 'Create site'
   if (step.value === 'importing') return 'Building'
   if (step.value === 'imported') return 'Next steps'
   return 'Onboarding'
@@ -468,11 +549,6 @@ const detailsCardDescription = computed(() => detailsSource.value === 'manual'
   : 'Check what Google found.'
 )
 const detailsRequireBasics = computed(() => detailsSource.value === 'manual')
-const operationsTitle = computed(() => isAddingLocation.value ? 'Alerts' : 'Operations')
-const operationsDescription = computed(() => isAddingLocation.value
-  ? 'Choose where booking alerts should go.'
-  : 'Set the defaults for bookings and prices.'
-)
 
 watch(previewState, state => emit('preview-state', state), { immediate: true })
 watch(selectedVertical, vertical => emit('vertical-selected', vertical), { immediate: true })
@@ -523,6 +599,22 @@ function renderMarkdown(text: string): string {
   }
   const html = marked.parse(text, { breaks: true, gfm: true }) as string
   return _dompurify.sanitize(html)
+}
+
+function isWidgetMessage(message: WizardMessage | undefined) {
+  return Boolean(
+    message?.choiceCard
+    || message?.placePreview
+    || message?.detailsCard
+    || message?.hoursCard
+    || message?.brandDraftCard
+    || message?.notificationCard
+    || message?.handoff
+    || message?.socialCard
+    || message?.brandCard
+    || message?.polishCard
+    || message?.mcpCard
+  )
 }
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
@@ -593,6 +685,9 @@ async function pushBot(text: string, extra?: {
   brandCard?: boolean
   choiceCard?: WizardMessage['choiceCard']
   placePreview?: WizardMessage['placePreview']
+  hoursCard?: WizardMessage['hoursCard']
+  brandDraftCard?: WizardMessage['brandDraftCard']
+  notificationCard?: boolean
   detailsCard?: WizardMessage['detailsCard']
 }) {
   typing.value = true
@@ -685,29 +780,51 @@ async function advance(target: WizardStep) {
   }
 
   if (target === 'details') {
-    await pushBot("Here's what I need:", {
-        detailsCard: {
-          title: isAddingLocation.value ? 'Location basics' : 'Business basics',
-          description: detailsCardDescription.value,
-          actionLabel: 'Continue',
-          requireLocationBasics: detailsRequireBasics.value,
-          showPrimaryToggle: !!isAddingLocation.value,
-          section: 'basics',
-        },
-      })
+    await pushBot('', {
+      detailsCard: {
+        title: isAddingLocation.value ? 'Location basics' : 'Business basics',
+        description: detailsCardDescription.value,
+        actionLabel: 'Continue',
+        requireLocationBasics: detailsRequireBasics.value,
+        showPrimaryToggle: !!isAddingLocation.value,
+        section: 'basics',
+      },
+    })
   }
 
-  if (target === 'operations') {
-    await pushBot(operationsDescription.value, {
-        detailsCard: {
-          title: operationsTitle.value,
-          description: operationsDescription.value,
-          actionLabel: isAddingLocation.value ? 'Add location' : 'Show preview',
-          requireLocationBasics: false,
-          showPrimaryToggle: !!isAddingLocation.value,
-          section: 'operations',
-        },
-      })
+  if (target === 'hours') {
+    await pushBot('', {
+      hoursCard: {
+        title: 'Hours & timezone',
+        description: 'Add your weekly hours so bookings and visit details line up.',
+      },
+    })
+  }
+
+  if (target === 'brand') {
+    await pushBot('', {
+      brandDraftCard: {
+        title: 'Brand identity',
+        description: 'Choose the first color direction and note anything important about your logo.',
+        section: 'brand',
+      },
+    })
+  }
+
+  if (target === 'hero') {
+    await pushBot('', {
+      brandDraftCard: {
+        title: 'Hero photo',
+        description: 'Describe the photo or headline direction for the top of your home page.',
+        section: 'hero',
+      },
+    })
+  }
+
+  if (target === 'create') {
+    await pushBot('', {
+      notificationCard: true,
+    })
   }
 }
 
@@ -744,8 +861,20 @@ async function goBack() {
     }
     return
   }
-  if (step.value === 'operations') {
+  if (step.value === 'hours') {
     await advance('details')
+    return
+  }
+  if (step.value === 'brand') {
+    await advance('hours')
+    return
+  }
+  if (step.value === 'hero') {
+    await advance('brand')
+    return
+  }
+  if (step.value === 'create') {
+    await advance('hero')
   }
 }
 
@@ -852,23 +981,37 @@ async function handleTextSubmit() {
   }
 }
 
-async function submitDetailsCard(section: 'basics' | 'operations') {
+async function submitDetailsCard(section: 'basics') {
   if (section === 'basics') {
     await submitBasics()
-    return
   }
-  await submitDetails()
 }
 
 async function submitBasics() {
   const requiredFields = detailsRequireBasics.value
-    ? [detailsForm.name, detailsForm.city, detailsForm.address, detailsForm.phone, detailsForm.openingHours]
+    ? [detailsForm.name, detailsForm.city, detailsForm.address, detailsForm.phone]
     : [detailsForm.name]
   if (!requiredFields.every(value => value.trim().length > 0)) {
     importError.value = 'Add the required details before continuing.'
     return
   }
-  await advance('operations')
+  await advance('hours')
+}
+
+async function submitHoursCard() {
+  if (!hoursForm.timezone.trim()) {
+    importError.value = 'Choose a timezone before continuing.'
+    return
+  }
+  if (!hoursForm.hours.every(day => day.closed || (day.open && day.close))) {
+    importError.value = 'Add opening and closing times, or mark the day closed.'
+    return
+  }
+  await advance('brand')
+}
+
+async function submitBrandDraftCard(section: 'brand' | 'hero') {
+  await advance(section === 'brand' ? 'hero' : 'create')
 }
 
 // ─── Import flow ──────────────────────────────────────────────────────────────
@@ -902,7 +1045,7 @@ async function runLookup(mapsUrl: string) {
   try {
     const res = await $fetch<{
       success: boolean
-      preview?: { placeId: string; name: string; address: string; city?: string | null; phone?: string | null; mapsUrl?: string | null; websiteUrl?: string | null; openingHours?: string[] | null }
+      preview?: { placeId: string; name: string; address: string; city?: string | null; phone?: string | null; mapsUrl?: string | null; openingHours?: string[] | null }
       error?: string
     }>(lookupEndpoint.value, { method: 'POST', body: { mapsUrl, previewOnly: true } })
 
@@ -923,8 +1066,7 @@ async function runLookup(mapsUrl: string) {
 }
 
 async function submitDetails() {
-  const requiredFields = [detailsForm.notificationPhone, detailsForm.timezone]
-  if (!isAddingLocation.value) requiredFields.push(detailsForm.currency)
+  const requiredFields = [notificationForm.ownerPhone, hoursForm.timezone]
   if (!requiredFields.every(value => value.trim().length > 0)) {
     importError.value = 'Add the required details before continuing.'
     return
@@ -1024,7 +1166,7 @@ async function submitDetails() {
     await finishCreation(res.orgSlug, res.siteSlug ?? importedSiteSlug.value ?? props.existingSiteSlug ?? null, res.locationSlug)
   } catch (err) {
     importError.value = err instanceof Error ? err.message : 'Something went wrong. Please try again.'
-    step.value = 'details'
+    step.value = 'create'
   } finally {
     importing.value = false
   }
@@ -1071,7 +1213,7 @@ async function commitDraft() {
     await finishCreation(res.orgSlug, res.siteSlug ?? importedSiteSlug.value ?? props.existingSiteSlug ?? null, res.locationSlug)
   } catch (error) {
     importError.value = error instanceof Error ? error.message : 'Something went wrong. Please try again.'
-    step.value = 'details'
+    step.value = 'create'
   } finally {
     importing.value = false
     committing = false
@@ -1084,12 +1226,28 @@ function serializeDetails() {
     city: detailsForm.city.trim() || null,
     address: detailsForm.address.trim() || null,
     phone: detailsForm.phone.trim() || null,
-    websiteUrl: detailsForm.websiteUrl.trim() || null,
-    openingHours: detailsForm.openingHours.trim() || null,
-    notificationPhone: detailsForm.notificationPhone.trim() || null,
-    timezone: detailsForm.timezone.trim() || null,
+    openingHours: serializeOpeningHours(),
+    notificationPhone: notificationForm.ownerPhone.trim() || null,
+    timezone: hoursForm.timezone.trim() || null,
     isPrimary: isAddingLocation.value ? detailsForm.isPrimary : true,
   }
+}
+
+function serializeOpeningHours() {
+  const lines = hoursForm.hours.map((day) => {
+    if (day.closed) return `${day.day}: Closed`
+    return `${day.day}: ${formatTime(day.open)} - ${formatTime(day.close)}`
+  })
+  return lines.join('\n')
+}
+
+function formatTime(value: string) {
+  const [hourValue, minute = '00'] = value.split(':')
+  const hour = Number(hourValue)
+  if (!Number.isFinite(hour)) return value
+  const hour12 = hour % 12 || 12
+  const suffix = hour < 12 ? 'AM' : 'PM'
+  return `${hour12}:${minute} ${suffix}`
 }
 
 function guessLocalTimezone(): string {
@@ -1101,14 +1259,8 @@ function seedDetailsFromPreview(preview: NonNullable<typeof pendingPreview.value
   detailsForm.city = preview.city ?? ''
   detailsForm.address = preview.address ?? ''
   detailsForm.phone = preview.phone ?? ''
-  detailsForm.websiteUrl = preview.websiteUrl ?? ''
-  detailsForm.openingHours = Array.isArray(preview.openingHours) ? preview.openingHours.join('\n') : ''
-  // Default the alert number to the business phone and guess the timezone from the
-  // browser — both are required now (a missing notification phone silently degrades
-  // booking alerts to email-only), so default them instead of leaving them blank.
-  detailsForm.notificationPhone = preview.phone ?? ''
-  detailsForm.timezone = guessLocalTimezone()
-  detailsForm.currency = DEFAULT_CURRENCY
+  seedHoursFromPreview(preview.openingHours)
+  notificationForm.ownerPhone = preview.phone ?? ''
   detailsForm.isPrimary = !isAddingLocation.value
 }
 
@@ -1117,12 +1269,40 @@ function seedDetailsFromManual(name: string) {
   detailsForm.city = ''
   detailsForm.address = ''
   detailsForm.phone = ''
-  detailsForm.websiteUrl = ''
-  detailsForm.openingHours = ''
-  detailsForm.notificationPhone = ''
-  detailsForm.timezone = guessLocalTimezone()
-  detailsForm.currency = DEFAULT_CURRENCY
+  seedHoursFromPreview(null)
+  notificationForm.ownerPhone = ''
   detailsForm.isPrimary = !isAddingLocation.value
+}
+
+function seedHoursFromPreview(openingHours: string[] | null | undefined) {
+  hoursForm.timezone = guessLocalTimezone()
+  const byDay = new Map((openingHours ?? []).map((line) => {
+    const [day, hours] = line.split(/:\s*/, 2)
+    return [day, hours]
+  }))
+  for (const row of hoursForm.hours) {
+    const value = byDay.get(row.day)
+    if (!value) {
+      row.open = '09:00'
+      row.close = '18:00'
+      row.closed = false
+      continue
+    }
+    row.closed = /closed/i.test(value)
+    const range = value.match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?\s*[-–]\s*(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/i)
+    if (range) {
+      row.open = normalizeTime(range[1]!, range[2] ?? '00', range[3])
+      row.close = normalizeTime(range[4]!, range[5] ?? '00', range[6])
+    }
+  }
+}
+
+function normalizeTime(hourInput: string, minute: string, suffix?: string) {
+  let hour = Number(hourInput)
+  if (suffix?.toUpperCase() === 'PM' && hour < 12) hour += 12
+  if (suffix?.toUpperCase() === 'AM' && hour === 12) hour = 0
+  if (!Number.isFinite(hour)) hour = 9
+  return `${String(hour).padStart(2, '0')}:${minute}`
 }
 
 async function finishCreation(orgSlug: string | null | undefined, siteSlug: string | null | undefined, locationSlug?: string | null) {
@@ -1132,21 +1312,6 @@ async function finishCreation(orgSlug: string | null | undefined, siteSlug: stri
   // Track site creation
   if (importedSiteId.value && !isAddingLocation.value) {
     trackSiteCreated(importedSiteId.value)
-  }
-
-  // Currency is site-level (not asked again on add-location) and otherwise
-  // silently defaults to THB — persist the onboarding choice explicitly.
-  if (importedSiteId.value && !isAddingLocation.value) {
-    try {
-      await $fetch(`/api/sites/${importedSiteId.value}/settings`, {
-        method: 'PATCH',
-        body: { default_currency: detailsForm.currency },
-      })
-    } catch (error) {
-      console.error('onboarding_currency_save_failed', error)
-      // Don't abort the onboarding flow - the site was already created successfully
-      // Log the failure but continue; currency can be fixed in dashboard settings later
-    }
   }
 
   await refreshSocialStatus(importedSiteId.value)

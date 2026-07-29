@@ -23,6 +23,9 @@
     @starter="$emit('starter', $event)"
     @quick-reply="$emit('quick-reply', $event)"
   >
+    <template #message="slotProps">
+      <slot name="message" v-bind="slotProps" />
+    </template>
     <template #assistant-after="slotProps">
       <slot name="assistant-after" v-bind="slotProps" />
     </template>

@@ -26,36 +26,7 @@
         <UFormField v-if="section === 'basics'" label="Phone" :required="requireLocationBasics">
           <UInput v-model="form.phone" type="tel" placeholder="+66..." />
         </UFormField>
-        <UFormField v-if="section === 'basics'" label="Website URL">
-          <UInput v-model="form.websiteUrl" type="url" placeholder="https://..." />
-        </UFormField>
-        <UFormField v-if="section === 'basics'" label="Hours" :required="requireLocationBasics">
-          <UTextarea
-            v-model="form.openingHours"
-            :rows="4"
-            placeholder="Monday: 9:00 AM - 6:00 PM&#10;Tuesday: 9:00 AM - 6:00 PM"
-          />
-        </UFormField>
-        <UFormField v-if="section === 'operations'" label="Manager alert number" required help="We'll text you here when someone books.">
-          <UInput v-model="form.notificationPhone" type="tel" placeholder="+66..." />
-        </UFormField>
-        <UFormField v-if="section === 'operations'" label="Timezone" required>
-          <USelectMenu
-            v-model="form.timezone"
-            :items="timezoneOptions"
-            searchable
-            placeholder="Select timezone"
-          />
-        </UFormField>
-        <UFormField v-if="section === 'operations' && !showPrimaryToggle" label="Currency" required>
-          <USelect
-            v-model="form.currency"
-            :items="currencyOptions"
-            value-attribute="value"
-            label-attribute="label"
-          />
-        </UFormField>
-        <div v-if="section === 'operations' && showPrimaryToggle">
+        <div v-if="section === 'basics' && showPrimaryToggle">
           <UCheckbox v-model="form.isPrimary" label="Make this the primary location" />
         </div>
       </div>
@@ -77,19 +48,11 @@
 </template>
 
 <script setup lang="ts">
-import { CURRENCY_OPTIONS, type CurrencyCode } from '~/shared/currencies'
-import { TIMEZONE_OPTIONS } from '~/utils/timezone'
-
 type IntakeForm = {
   name: string
   city: string
   address: string
   phone: string
-  websiteUrl: string
-  openingHours: string
-  notificationPhone: string
-  timezone: string
-  currency: CurrencyCode
   isPrimary: boolean
 }
 
@@ -101,35 +64,22 @@ const props = defineProps<{
   actionLabel: string
   requireLocationBasics: boolean
   showPrimaryToggle: boolean
-  section: 'basics' | 'operations'
+  section: 'basics'
   loading?: boolean
   disabled?: boolean
 }>()
 
 defineEmits<{ submit: [] }>()
 
-const timezoneOptions = TIMEZONE_OPTIONS
-const currencyOptions = CURRENCY_OPTIONS
-const helperText = computed(() => props.section === 'basics'
-  ? 'You can adjust these later.'
-  : 'Used for bookings, alerts, and prices.'
-)
+const helperText = computed(() => 'You can adjust these later.')
 
 const canSubmit = computed(() => {
-  if (props.section === 'basics') {
-    if (!props.requireLocationBasics) return !!form.value.name.trim()
-    return [
-      form.value.name,
-      form.value.city,
-      form.value.address,
-      form.value.phone,
-      form.value.openingHours,
-    ].every(value => value.trim().length > 0)
-  }
-
-  const hasNotificationBasics = form.value.notificationPhone.trim().length > 0
-    && form.value.timezone.trim().length > 0
-  const hasCurrency = props.showPrimaryToggle || form.value.currency.trim().length > 0
-  return hasNotificationBasics && hasCurrency
+  if (!props.requireLocationBasics) return !!form.value.name.trim()
+  return [
+    form.value.name,
+    form.value.city,
+    form.value.address,
+    form.value.phone,
+  ].every(value => value.trim().length > 0)
 })
 </script>
