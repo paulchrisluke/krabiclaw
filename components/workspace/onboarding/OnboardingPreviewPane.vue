@@ -77,60 +77,37 @@
       </div>
     </div>
 
-    <div v-if="!iframeSrc && placeholderState === 'building'" class="flex flex-1 items-center justify-center p-5">
-      <div class="w-full max-w-[430px] overflow-hidden rounded-2xl border border-default bg-default shadow-sm">
-        <div class="relative min-h-52 overflow-hidden" :style="{ backgroundColor: previewBrandColor }">
-          <img
-            :src="demoPreviewImage"
-            alt=""
-            class="absolute inset-0 h-full w-full object-cover opacity-35 mix-blend-luminosity"
-          >
-          <div class="absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-black/65" />
-          <div class="relative flex min-h-52 flex-col justify-between p-5 text-white">
-            <div class="flex items-center justify-between gap-3">
-              <div class="flex items-center gap-2">
-                <div class="flex size-9 items-center justify-center rounded-xl bg-white/15 text-sm font-bold backdrop-blur">
-                  {{ previewInitials }}
-                </div>
-                <p class="max-w-[14rem] truncate text-sm font-bold">{{ previewName }}</p>
-              </div>
-              <UButton color="neutral" variant="soft" size="xs">
-                {{ demoPrimaryAction }}
-              </UButton>
-            </div>
-            <div class="space-y-3">
-              <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-white/75">{{ demoEyebrow }}</p>
-              <h2 class="text-2xl font-extrabold leading-tight">{{ demoHeadline }}</h2>
-              <p class="max-w-[28ch] text-sm leading-relaxed text-white/85">{{ demoDescription }}</p>
-            </div>
-          </div>
+    <div v-if="!iframeSrc && placeholderState === 'building'" class="relative min-h-0 flex-1 overflow-hidden bg-default">
+      <img
+        :src="demoPreviewImage"
+        alt=""
+        class="h-full w-full object-cover"
+      >
+      <div class="absolute inset-x-0 top-0 flex items-center justify-between gap-3 bg-gradient-to-b from-black/70 to-transparent p-5 text-white">
+        <div class="min-w-0">
+          <p class="truncate text-lg font-extrabold">{{ previewName }}</p>
+          <p class="mt-1 text-xs font-bold uppercase tracking-[0.18em] text-white/75">{{ demoEyebrow }}</p>
         </div>
-        <div class="space-y-4 p-5">
-          <div class="grid gap-2">
-            <div
-              v-for="item in demoSections"
-              :key="item.title"
-              class="rounded-xl bg-muted px-4 py-3"
-            >
-              <p class="text-[12px] font-bold text-highlighted">{{ item.title }}</p>
-              <p class="mt-0.5 text-[11.5px] leading-5 text-muted">{{ item.body }}</p>
-            </div>
-          </div>
-          <div class="grid gap-2 border-t border-default pt-4 text-[12px] text-muted">
-            <p v-if="previewDetails?.address || previewDetails?.city" class="flex items-center gap-2">
-              <UIcon name="i-lucide-map-pin" class="size-3.5 text-primary" />
-              {{ previewAddress }}
-            </p>
-            <p v-if="previewDetails?.phone" class="flex items-center gap-2">
-              <UIcon name="i-lucide-phone" class="size-3.5 text-primary" />
-              {{ previewDetails.phone }}
-            </p>
-            <p v-if="previewDetails?.openingHours" class="flex items-center gap-2">
-              <UIcon name="i-lucide-clock-3" class="size-3.5 text-primary" />
-              {{ previewHoursSummary }}
-            </p>
-          </div>
+        <div class="flex size-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white" :style="{ backgroundColor: previewBrandColor }">
+          {{ previewInitials }}
         </div>
+      </div>
+      <div
+        v-if="previewHasDetails"
+        class="absolute inset-x-0 bottom-0 grid gap-2 bg-gradient-to-t from-black/75 to-transparent p-5 pt-16 text-sm text-white"
+      >
+        <p v-if="previewAddress" class="flex items-center gap-2">
+          <UIcon name="i-lucide-map-pin" class="size-4 text-primary" />
+          {{ previewAddress }}
+        </p>
+        <p v-if="previewDetails?.phone" class="flex items-center gap-2">
+          <UIcon name="i-lucide-phone" class="size-4 text-primary" />
+          {{ previewDetails.phone }}
+        </p>
+        <p v-if="previewHoursSummary" class="flex items-center gap-2">
+          <UIcon name="i-lucide-clock-3" class="size-4 text-primary" />
+          {{ previewHoursSummary }}
+        </p>
       </div>
     </div>
     <div v-else-if="!iframeSrc" class="flex flex-1 flex-col items-center justify-center gap-5 p-8 text-center text-muted">
@@ -265,26 +242,9 @@ const previewBrandColor = computed(() => props.previewDetails?.brandColor || '#1
 const previewInitials = computed(() => previewName.value.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'KC')
 const demoPreviewImage = computed(() => demoContent.value.image)
 const demoEyebrow = computed(() => demoContent.value.eyebrow)
-const demoHeadline = computed(() => props.previewDetails?.heroPhotoNote
-  ? `${previewName.value} is taking shape`
-  : demoContent.value.headline
-)
-const demoDescription = computed(() => {
-  const details = props.previewDetails
-  if (details?.city && details?.phone) return `${previewName.value} in ${details.city} now has the first guest-facing details in place.`
-  if (details?.city) return `${previewName.value} is ready to show guests where to find you in ${details.city}.`
-  return demoContent.value.description
-})
-const demoPrimaryAction = computed(() => demoContent.value.action)
-const demoSections = computed(() => {
-  const sections = [...demoContent.value.sections]
-  if (props.previewDetails?.currency) {
-    sections[0] = { ...sections[0]!, body: `${sections[0]!.body} Pricing will display in ${props.previewDetails.currency}.` }
-  }
-  return sections
-})
 const previewAddress = computed(() => [props.previewDetails?.address, props.previewDetails?.city].filter(Boolean).join(', '))
 const previewHoursSummary = computed(() => props.previewDetails?.openingHours.split('\n').find(Boolean) ?? '')
+const previewHasDetails = computed(() => Boolean(previewAddress.value || props.previewDetails?.phone || previewHoursSummary.value))
 
 const displayUrl = computed(() => {
   const template = resolvePublicTemplate({ vertical: props.vertical })
