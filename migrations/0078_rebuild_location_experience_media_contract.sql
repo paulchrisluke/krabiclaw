@@ -11,6 +11,7 @@ DROP TABLE IF EXISTS `__new_experiences`;--> statement-breakpoint
 DROP TABLE IF EXISTS `__um_backup_booking_policies`;--> statement-breakpoint
 DROP TABLE IF EXISTS `__um_backup_business_location_translations`;--> statement-breakpoint
 DROP TABLE IF EXISTS `__um_backup_business_locations`;--> statement-breakpoint
+DROP TABLE IF EXISTS `__um_backup_chowbot_conversations`;--> statement-breakpoint
 DROP TABLE IF EXISTS `__um_backup_contact_submissions`;--> statement-breakpoint
 DROP TABLE IF EXISTS `__um_backup_dashboard_preferences`;--> statement-breakpoint
 DROP TABLE IF EXISTS `__um_backup_experience_bookings`;--> statement-breakpoint
@@ -44,6 +45,7 @@ DROP TABLE IF EXISTS `__um_backup_site_pageview_events`;--> statement-breakpoint
 CREATE TABLE `__um_backup_booking_policies` AS SELECT * FROM `booking_policies`;--> statement-breakpoint
 CREATE TABLE `__um_backup_business_location_translations` AS SELECT * FROM `business_location_translations`;--> statement-breakpoint
 CREATE TABLE `__um_backup_business_locations` AS SELECT * FROM `business_locations`;--> statement-breakpoint
+CREATE TABLE `__um_backup_chowbot_conversations` AS SELECT * FROM `chowbot_conversations`;--> statement-breakpoint
 CREATE TABLE `__um_backup_contact_submissions` AS SELECT * FROM `contact_submissions`;--> statement-breakpoint
 CREATE TABLE `__um_backup_dashboard_preferences` AS SELECT * FROM `dashboard_preferences`;--> statement-breakpoint
 CREATE TABLE `__um_backup_experience_bookings` AS SELECT * FROM `experience_bookings`;--> statement-breakpoint
@@ -329,6 +331,7 @@ WHERE `id` NOT IN (SELECT `id` FROM `site_content_translations`)
   );--> statement-breakpoint
 
 UPDATE `contact_submissions` SET `location_id` = (SELECT `location_id` FROM `__um_backup_contact_submissions` WHERE `__um_backup_contact_submissions`.`id` = `contact_submissions`.`id`), `experience_id` = (SELECT `experience_id` FROM `__um_backup_contact_submissions` WHERE `__um_backup_contact_submissions`.`id` = `contact_submissions`.`id`) WHERE EXISTS (SELECT 1 FROM `__um_backup_contact_submissions` WHERE `__um_backup_contact_submissions`.`id` = `contact_submissions`.`id`);--> statement-breakpoint
+UPDATE `chowbot_conversations` SET `selected_location_id` = (SELECT `selected_location_id` FROM `__um_backup_chowbot_conversations` WHERE `__um_backup_chowbot_conversations`.`id` = `chowbot_conversations`.`id`) WHERE EXISTS (SELECT 1 FROM `__um_backup_chowbot_conversations` WHERE `__um_backup_chowbot_conversations`.`id` = `chowbot_conversations`.`id`);--> statement-breakpoint
 UPDATE `dashboard_preferences` SET `selected_location_id` = (SELECT `selected_location_id` FROM `__um_backup_dashboard_preferences` WHERE `__um_backup_dashboard_preferences`.`id` = `dashboard_preferences`.`id`) WHERE EXISTS (SELECT 1 FROM `__um_backup_dashboard_preferences` WHERE `__um_backup_dashboard_preferences`.`id` = `dashboard_preferences`.`id`);--> statement-breakpoint
 UPDATE `google_business_connections` SET `location_id` = (SELECT `location_id` FROM `__um_backup_google_business_connections` WHERE `__um_backup_google_business_connections`.`id` = `google_business_connections`.`id`) WHERE EXISTS (SELECT 1 FROM `__um_backup_google_business_connections` WHERE `__um_backup_google_business_connections`.`id` = `google_business_connections`.`id`);--> statement-breakpoint
 UPDATE `google_place_snapshots` SET `location_id` = (SELECT `location_id` FROM `__um_backup_google_place_snapshots` WHERE `__um_backup_google_place_snapshots`.`id` = `google_place_snapshots`.`id`) WHERE EXISTS (SELECT 1 FROM `__um_backup_google_place_snapshots` WHERE `__um_backup_google_place_snapshots`.`id` = `google_place_snapshots`.`id`);--> statement-breakpoint
@@ -356,6 +359,22 @@ LIMIT 1;--> statement-breakpoint
 INSERT INTO `__um_assert_0078` (`violation`)
 SELECT 'site_content_backup_count_mismatch'
 WHERE (SELECT COUNT(*) FROM `__um_backup_site_content`) != (SELECT COUNT(*) FROM `site_content`)
+LIMIT 1;--> statement-breakpoint
+INSERT INTO `__um_assert_0078` (`violation`)
+SELECT 'chowbot_conversations_selected_location_restore_mismatch'
+WHERE EXISTS (
+	SELECT 1
+	FROM `__um_backup_chowbot_conversations`
+	WHERE `selected_location_id` IS NOT NULL
+	  AND (
+		`id` NOT IN (SELECT `id` FROM `chowbot_conversations`)
+		OR `selected_location_id` IS NOT (
+			SELECT `selected_location_id`
+			FROM `chowbot_conversations`
+			WHERE `chowbot_conversations`.`id` = `__um_backup_chowbot_conversations`.`id`
+		)
+	  )
+)
 LIMIT 1;--> statement-breakpoint
 INSERT INTO `__um_assert_0078` (`violation`)
 SELECT 'invitation_access_scope_restore_id_mismatch'
@@ -413,6 +432,7 @@ DROP TABLE `__um_assert_0078`;--> statement-breakpoint
 DROP TABLE `__um_backup_booking_policies`;--> statement-breakpoint
 DROP TABLE `__um_backup_business_location_translations`;--> statement-breakpoint
 DROP TABLE `__um_backup_business_locations`;--> statement-breakpoint
+DROP TABLE `__um_backup_chowbot_conversations`;--> statement-breakpoint
 DROP TABLE `__um_backup_contact_submissions`;--> statement-breakpoint
 DROP TABLE `__um_backup_dashboard_preferences`;--> statement-breakpoint
 DROP TABLE `__um_backup_experience_bookings`;--> statement-breakpoint
