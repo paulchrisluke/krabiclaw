@@ -49,7 +49,7 @@ export function findUnsafeMigrationStatements(fileName, sql) {
       const dropsBackup = new RegExp(`DROP\\s+TABLE\\s+\`?${backupName}\`?`, 'i').test(sql)
       const hasRelationshipPreservation = createsBackup
         ? restoresBackup && countAssertion && dropsBackup
-        : createsNewTable && restoresBackup
+        : createsNewTable && restoresBackup && countAssertion
 
       if (!hasRelationshipPreservation || !fkAssertion || !dropsAssert) {
         findings.push(`DROP TABLE ${table} must be a bounded rebuild with backup, restore, count assertion, foreign_key_check, and post-assert backup cleanup`)

@@ -17,12 +17,17 @@ const MP4_BRANDS = new Set([
   "iso4",
   "iso5",
   "iso6",
+  "iso7",
   "iso8",
+  "iso9",
   "isom",
   "m4v ",
+  "m4vp",
+  "mmp4",
   "mp41",
   "mp42",
   "mp4v",
+  "msnv",
 ])
 
 export function sniffMediaMimeType(data: Uint8Array): string {

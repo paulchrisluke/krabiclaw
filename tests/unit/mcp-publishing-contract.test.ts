@@ -71,6 +71,8 @@ test('media placement contract does not reintroduce entity-specific assignment t
   ]
   const mcpNames = new Set(MCP_PUBLIC_TOOLS.map(tool => tool.name))
   const chowbotNames = new Set(CHOWBOT_TOOLS.map(tool => tool.name))
+  assert.equal(mcpNames.has('set_media'), true, 'set_media must be exposed by MCP')
+  assert.equal(chowbotNames.has('set_media'), true, 'set_media must be exposed by ChowBot')
   for (const name of removedToolNames) {
     assert.equal(mcpNames.has(name), false, `${name} must not be exposed by MCP`)
     assert.equal(chowbotNames.has(name), false, `${name} must not be exposed by ChowBot`)

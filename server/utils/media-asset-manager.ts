@@ -161,7 +161,12 @@ export async function hydrateMediaAssetsForExperiences(
   )
   for (const row of rows ?? []) {
     const list = result.get(row.experience_id)
-    if (list) list.push(toResolvedMediaAsset(row))
+    if (!list || !row.public_url || (row.kind !== 'image' && row.kind !== 'video')) continue
+    try {
+      list.push(toResolvedMediaAsset(row))
+    } catch {
+      continue
+    }
   }
   return result
 }

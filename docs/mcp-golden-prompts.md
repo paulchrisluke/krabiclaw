@@ -67,7 +67,7 @@ described flow when invoked via `prompts/get`:
 | Prompt name | Should route through |
 | --- | --- |
 | `improve_my_homepage` | `get_page_fields` (home) → `get_site_media_assets` → suggestions → confirm → `update_page_content`/`set_media` |
-| `add_photos_to_site` | attach → `upload_user_photo` → placement-specific `set_*_image` |
+| `add_photos_to_site` | attach → `upload_user_photo` → `set_media` with target `experience_media`, `menu_item_image`, or the confirmed placement |
 | `finish_my_site_setup` | `get_workspace_context` → media/page/menu/experience checks → single next step |
 | `make_site_more_bookable` | `get_page_fields` (home) → `list_locations` → `list_menus`/`list_experiences` → suggestions |
 | `make_my_site_look_better` | `get_page_fields` → `get_site_media_assets` → suggestions, biggest visual impact first |

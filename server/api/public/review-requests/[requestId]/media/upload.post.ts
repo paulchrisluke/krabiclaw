@@ -62,7 +62,7 @@ export default defineEventHandler(async (event) => {
     ? filePart.type.split(';', 1)[0]?.toLowerCase().trim() || ''
     : ''
   if (!VIDEO_MIME_TYPES.has(detectedContentType)) {
-    return jsonResponse({ error: 'Accepted video formats are MP4 and WebM.' }, { status: 415 })
+    return jsonResponse({ error: 'Accepted video formats are MP4 and WebM. .mov files are not supported.' }, { status: 415 })
   }
   if (declaredContentType && declaredContentType !== detectedContentType) {
     return jsonResponse({ error: 'File type mismatch' }, { status: 400 })

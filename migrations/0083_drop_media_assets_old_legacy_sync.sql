@@ -2,10 +2,6 @@
 -- mirror table and its sync triggers. Fail before the drop if any old FK target
 -- remains.
 
-DROP TRIGGER IF EXISTS `sync_media_assets_old_delete`;--> statement-breakpoint
-DROP TRIGGER IF EXISTS `sync_media_assets_old_insert`;--> statement-breakpoint
-DROP TRIGGER IF EXISTS `sync_media_assets_old_update`;--> statement-breakpoint
-
 CREATE TABLE `__um_assert_0080` (`violation` text NOT NULL CHECK (`violation` = ''));--> statement-breakpoint
 INSERT INTO `__um_assert_0080` (`violation`)
 SELECT 'foreign keys still target media_assets_old'
@@ -30,5 +26,9 @@ SELECT 'media_assets_old cleanup foreign key check failed'
 WHERE EXISTS (SELECT 1 FROM pragma_foreign_key_check)
 LIMIT 1;--> statement-breakpoint
 DROP TABLE `__um_assert_0080`;--> statement-breakpoint
+
+DROP TRIGGER IF EXISTS `sync_media_assets_old_delete`;--> statement-breakpoint
+DROP TRIGGER IF EXISTS `sync_media_assets_old_insert`;--> statement-breakpoint
+DROP TRIGGER IF EXISTS `sync_media_assets_old_update`;--> statement-breakpoint
 
 DROP TABLE IF EXISTS `media_assets_old`;

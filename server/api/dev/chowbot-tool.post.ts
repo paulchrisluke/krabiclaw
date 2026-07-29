@@ -40,6 +40,7 @@ export default defineEventHandler(async (event) => {
     orgId: site.organization_id,
     siteId: body.siteId,
     userId: session.user.id,
+    memberId: site.member_id,
     userRole: site.role,
     agentMessages: (body.messages ?? []).filter(
       (m): m is { role: 'user' | 'assistant'; content: string } =>

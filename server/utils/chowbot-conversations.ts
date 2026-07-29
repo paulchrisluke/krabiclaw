@@ -11,6 +11,7 @@ export interface ChowBotSiteAccess {
   brand_name: string | null
   default_currency: string
   role: string
+  member_id: string
 }
 
 export interface ChowBotConversation {

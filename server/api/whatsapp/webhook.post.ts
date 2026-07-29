@@ -196,6 +196,7 @@ async function runChowBotAndReply(
     organizationId: string
     siteId: string
     userId: string
+    memberId: string
     userRole?: string
     siteName: string | null
     pendingMedia: { assetId: string; siteId: string } | null
@@ -213,6 +214,7 @@ async function runChowBotAndReply(
     orgId: opts.organizationId,
     siteId: opts.siteId,
     userId: opts.userId,
+    memberId: opts.memberId,
     userRole: opts.userRole,
     siteName: opts.siteName ?? 'your site',
     defaultCurrency: site?.default_currency || 'THB',
@@ -761,6 +763,7 @@ async function handleManagerChowBotMessage(
         organizationId: site.organization_id,
         siteId: site.id,
         userId: user.id,
+        memberId: site.member_id,
         userRole: site.role,
         siteName: site.brand_name,
         pendingMedia: { assetId: asset.id, siteId: site.id },
@@ -788,6 +791,7 @@ async function handleManagerChowBotMessage(
       toPhone,
       conversation,
       userId: user.id,
+      memberId: site.member_id,
       organizationId: site.organization_id,
       siteId: site.id,
       userRole: site.role,

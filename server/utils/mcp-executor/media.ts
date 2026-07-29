@@ -29,6 +29,8 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
       const result = await setMediaPlacement(site.db, {
         organizationId: site.organizationId,
         siteId: site.siteId,
+        memberId: site.memberId,
+        role: site.role,
         userId: site.userId,
         env: site.env,
         target,

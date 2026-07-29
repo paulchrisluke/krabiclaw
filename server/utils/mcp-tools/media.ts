@@ -27,8 +27,16 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
         asset_ids: {
           type: 'array',
           items: { type: 'string' },
+          uniqueItems: true,
           description: 'Complete desired asset-id state for the target. Empty clears. Duplicates are rejected.',
         },
+        allOf: [
+          {
+            if: { properties: { target: { properties: { type: { const: 'experience_media' } } } } },
+            then: {},
+            else: { properties: { asset_ids: { maxItems: 1 } } },
+          },
+        ],
       },
       required: ['target', 'asset_ids'],
       outputSchema: {

@@ -273,6 +273,18 @@ UPDATE `site_pageview_events` SET `location_id` = (SELECT `location_id` FROM `__
 
 CREATE TABLE `__um_assert_0079` (`violation` text NOT NULL CHECK (`violation` = ''));--> statement-breakpoint
 INSERT INTO `__um_assert_0079` (`violation`)
+SELECT 'business_locations_backup_count_mismatch'
+WHERE (SELECT COUNT(*) FROM `__um_backup_business_locations`) != (SELECT COUNT(*) FROM `business_locations`)
+LIMIT 1;--> statement-breakpoint
+INSERT INTO `__um_assert_0079` (`violation`)
+SELECT 'experiences_backup_count_mismatch'
+WHERE (SELECT COUNT(*) FROM `__um_backup_experiences`) != (SELECT COUNT(*) FROM `experiences`)
+LIMIT 1;--> statement-breakpoint
+INSERT INTO `__um_assert_0079` (`violation`)
+SELECT 'site_content_backup_count_mismatch'
+WHERE (SELECT COUNT(*) FROM `__um_backup_site_content`) != (SELECT COUNT(*) FROM `site_content`)
+LIMIT 1;--> statement-breakpoint
+INSERT INTO `__um_assert_0079` (`violation`)
 SELECT 'location rebuild foreign key check failed'
 WHERE EXISTS (SELECT 1 FROM pragma_foreign_key_check)
 LIMIT 1;--> statement-breakpoint

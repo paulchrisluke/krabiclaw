@@ -28,6 +28,7 @@ WHERE e.image_asset_id IS NOT NULL
 		SELECT 1
 		FROM media_assets ma
 		WHERE ma.id = e.image_asset_id
+			AND ma.organization_id = e.organization_id
 			AND ma.site_id = e.site_id
 			AND ma.status = 'active'
 			AND ma.kind = 'image'
@@ -41,6 +42,7 @@ WHERE e.video_asset_id IS NOT NULL
 		SELECT 1
 		FROM media_assets ma
 		WHERE ma.id = e.video_asset_id
+			AND ma.organization_id = e.organization_id
 			AND ma.site_id = e.site_id
 			AND ma.status = 'active'
 			AND ma.kind = 'video'
@@ -66,7 +68,8 @@ WHERE e.images IS NOT NULL
 		OR (
 			SELECT COUNT(*)
 			FROM media_assets ma
-			WHERE ma.site_id = e.site_id
+			WHERE ma.organization_id = e.organization_id
+				AND ma.site_id = e.site_id
 				AND ma.status = 'active'
 				AND ma.kind IN ('image', 'video')
 				AND ma.public_url = json_extract(gallery.value, '$.url')
@@ -87,7 +90,7 @@ WITH candidate_media AS (
 		e.created_at,
 		e.updated_at
 	FROM experiences e
-	JOIN media_assets ma ON ma.id = e.image_asset_id AND ma.site_id = e.site_id AND ma.status = 'active'
+	JOIN media_assets ma ON ma.id = e.image_asset_id AND ma.organization_id = e.organization_id AND ma.site_id = e.site_id AND ma.status = 'active'
 	WHERE e.image_asset_id IS NOT NULL
 
 	UNION ALL
@@ -101,7 +104,7 @@ WITH candidate_media AS (
 		e.created_at,
 		e.updated_at
 	FROM experiences e
-	JOIN media_assets ma ON ma.id = e.video_asset_id AND ma.site_id = e.site_id AND ma.status = 'active'
+	JOIN media_assets ma ON ma.id = e.video_asset_id AND ma.organization_id = e.organization_id AND ma.site_id = e.site_id AND ma.status = 'active'
 	WHERE e.video_asset_id IS NOT NULL
 
 	UNION ALL
@@ -116,7 +119,7 @@ WITH candidate_media AS (
 		e.updated_at
 	FROM experiences e
 	JOIN json_each(e.images) gallery ON json_valid(e.images)
-	JOIN media_assets ma ON ma.site_id = e.site_id AND ma.status = 'active' AND ma.kind IN ('image', 'video') AND ma.public_url = json_extract(gallery.value, '$.url')
+	JOIN media_assets ma ON ma.organization_id = e.organization_id AND ma.site_id = e.site_id AND ma.status = 'active' AND ma.kind IN ('image', 'video') AND ma.public_url = json_extract(gallery.value, '$.url')
 	WHERE e.images IS NOT NULL
 ),
 deduped_media AS (

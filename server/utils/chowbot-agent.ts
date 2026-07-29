@@ -65,6 +65,7 @@ export interface RunChowBotOptions {
   orgId: string;
   siteId: string;
   userId: string;
+  memberId: string;
   userRole?: string;
   siteName: string;
   defaultCurrency: string;
@@ -155,6 +156,7 @@ async function executeTool(
     orgId: string;
     siteId: string;
     userId: string;
+    memberId: string;
     userRole?: string;
     agentMessages?: AiMessage[];
     locationId?: string | null;
@@ -180,6 +182,7 @@ async function executeTool(
     db,
     env: env as CloudflareEnv,
     userId,
+    memberId: ctx.memberId,
     organizationId: orgId,
     siteId,
     role: normalizedRole,
@@ -1070,6 +1073,7 @@ export async function executeChowBotToolForTest(
     orgId: string;
     siteId: string;
     userId: string;
+    memberId: string;
     userRole?: string;
     agentMessages?: AiMessage[];
     locationId?: string | null;
@@ -1219,6 +1223,7 @@ ${translationConfirmationGuidance}- Before publish_post, delete_post, publish_me
     orgId,
     siteId,
     userId,
+    memberId: opts.memberId,
     userRole: opts.userRole,
     agentMessages,
     locationId,
