@@ -1,8 +1,9 @@
 <template>
   <div class="flex min-h-0 flex-col bg-elevated">
-    <!-- Preview toolbar -->
-    <div class="flex shrink-0 items-center gap-2.5 border-b border-default bg-default px-[18px] py-3">
-      <!-- Page tabs -->
+    <div
+      v-if="!homeOnly"
+      class="flex shrink-0 items-center gap-2.5 border-b border-default bg-default px-[18px] py-3"
+    >
       <div class="flex gap-0.5 rounded-[11px] border border-default bg-muted p-1">
         <button
           v-for="tab in tabs"
@@ -21,7 +22,6 @@
         </button>
       </div>
 
-      <!-- Location switcher (only for location-scoped pages) -->
       <button
         v-if="currentTabIsLocationScoped && siteLocations.length > 0"
         class="inline-flex items-center gap-1.5 rounded-[10px] border border-default bg-default px-3 py-2 text-[12.5px] font-semibold text-highlighted shadow-sm transition-colors hover:border-default/80"
@@ -31,7 +31,6 @@
         {{ selectedLocationLabel }}
       </button>
 
-      <!-- Status badge (pushed right) -->
       <div class="ml-auto flex items-center gap-2">
         <UBadge
           v-if="siteStatus === 'live'"
@@ -64,7 +63,6 @@
           Building
         </UBadge>
 
-        <!-- Open in new tab -->
         <UButton
           v-if="iframeSrc"
           :href="iframeSrc"
@@ -79,18 +77,47 @@
       </div>
     </div>
 
-    <!-- Empty state (no site yet) -->
-    <div v-if="!iframeSrc" class="flex flex-1 flex-col items-center justify-center gap-4 p-10 text-center text-muted">
-      <div class="flex size-[60px] items-center justify-center rounded-2xl border border-default bg-default text-dimmed">
-        <UIcon name="i-lucide-globe" class="size-7" />
+    <div v-if="!iframeSrc && placeholderState === 'building'" class="flex flex-1 items-center justify-center p-5">
+      <div class="w-full max-w-[420px] overflow-hidden rounded-2xl border border-default bg-default shadow-sm">
+        <div class="relative flex min-h-48 flex-col justify-end overflow-hidden bg-inverted p-5 text-inverted">
+          <div class="absolute inset-0 opacity-20">
+            <div class="absolute left-6 top-6 h-4 w-32 rounded-full bg-white/70" />
+            <div class="absolute left-6 top-14 h-3 w-48 rounded-full bg-white/35" />
+            <div class="absolute right-5 top-5 size-16 rounded-2xl bg-white/20" />
+          </div>
+          <div class="relative space-y-3">
+            <div class="h-3 w-24 animate-pulse rounded-full bg-white/35" />
+            <div class="h-7 w-4/5 animate-pulse rounded-full bg-white/75" />
+            <div class="h-7 w-2/3 animate-pulse rounded-full bg-white/55" />
+          </div>
+        </div>
+        <div class="space-y-4 p-5">
+          <div>
+            <p class="text-sm font-semibold text-highlighted">{{ skeletonTitle }}</p>
+            <p class="mt-1 text-xs leading-relaxed text-muted">{{ skeletonDescription }}</p>
+          </div>
+          <div class="grid gap-2">
+            <div class="h-11 animate-pulse rounded-xl bg-muted" />
+            <div class="h-11 animate-pulse rounded-xl bg-muted" />
+            <div class="h-24 animate-pulse rounded-xl bg-muted" />
+          </div>
+        </div>
       </div>
-      <p class="text-[15px] font-semibold text-highlighted">Your site shows up here.</p>
-      <p class="max-w-[30ch] text-[12.5px] leading-relaxed">
-        Tell me where to start and I'll build your homepage live as we chat.
-      </p>
+    </div>
+    <div v-else-if="!iframeSrc" class="flex flex-1 flex-col items-center justify-center gap-5 p-8 text-center text-muted">
+      <img
+        src="/krabiclaw-login-mascot.png"
+        alt=""
+        class="size-32 rounded-[28px] object-contain"
+      >
+      <div>
+        <p class="text-[15px] font-semibold text-highlighted">Let's give your business a proper home.</p>
+        <p class="mt-2 max-w-[30ch] text-[12.5px] leading-relaxed">
+          Pick the kind of site you need and the homepage will start taking shape here.
+        </p>
+      </div>
     </div>
 
-    <!-- Preview scroll area -->
     <div v-else class="min-h-0 flex-1 overflow-auto p-5">
       <SitePreviewFrame :iframe-src="iframeSrc" :display-url="displayUrl" />
     </div>
@@ -110,8 +137,12 @@ const props = withDefaults(defineProps<{
   siteStatus: 'setup' | 'progress' | 'ready' | 'live'
   siteDomain?: string
   vertical?: SiteVertical
+  homeOnly?: boolean
+  placeholderState?: 'empty' | 'building'
 }>(), {
   vertical: 'restaurant',
+  homeOnly: false,
+  placeholderState: 'empty',
 })
 
 const emit = defineEmits<{
@@ -119,12 +150,6 @@ const emit = defineEmits<{
   'select-location': [id: string]
 }>()
 
-// Derives the "core offering" tab (Menu / Experiences / Services) from the
-// same page registry the main CMS editor uses, instead of a hardcoded
-// Saya-shaped "Menu" tab. professional_service has no menu/experiences
-// registry entry (see #276/#277), so it falls through to the resolved
-// public template's offerings route (/services for Blawby) — site-level,
-// not location-scoped, per #285.
 const secondaryTab = computed(() => {
   if (props.vertical === 'professional_service') {
     const offeringsPath = resolvePublicTemplate({ vertical: props.vertical }).serviceRoutes.offeringsIndex
@@ -135,15 +160,13 @@ const secondaryTab = computed(() => {
   const match = getEditablePages(props.vertical, template.slug).find(page => page.id === 'menu' || page.id === 'experiences')
   if (!match) return null
   const locationScoped = match.scope === 'location'
-  // A location-scoped tab has no page to preview until a location exists —
-  // resolvePreviewPath has no path to substitute the location slug into
-  // otherwise, so disable rather than show a broken :location placeholder URL.
   const enabled = !!props.iframeSrc && (!locationScoped || props.siteLocations.length > 0)
   return { id: match.id, label: match.label, enabled, locationScoped }
 })
 
 const tabs = computed(() => {
   const list = [{ id: 'home', label: 'Home', enabled: !!props.iframeSrc, locationScoped: false }]
+  if (props.homeOnly) return list
   if (secondaryTab.value) list.push(secondaryTab.value)
   list.push({ id: 'about', label: 'About', enabled: !!props.iframeSrc, locationScoped: false })
   list.push({ id: 'contact', label: 'Contact', enabled: !!props.iframeSrc, locationScoped: false })
@@ -151,14 +174,16 @@ const tabs = computed(() => {
 })
 
 const currentTabIsLocationScoped = computed(() => tabs.value.find(tab => tab.id === props.selectedPage)?.locationScoped === true)
+const verticalLabel = computed(() => {
+  if (props.vertical === 'professional_service') return 'professional services'
+  if (props.vertical === 'experience') return 'experience'
+  return 'restaurant'
+})
+const skeletonTitle = computed(() => `Sketching the ${verticalLabel.value} homepage`)
+const skeletonDescription = computed(() => 'I will fill this in with real business details as soon as the draft is ready.')
 
-// The URL a real visitor would see — distinct from iframeSrc, which points at
-// the internal /preview/site/:id route that actually serves draft content.
 const displayUrl = computed(() => {
   const template = resolvePublicTemplate({ vertical: props.vertical })
-  // professional_service's "Services" tab id is the offerings route itself
-  // (see secondaryTab above), not a content-registry page id — resolve it
-  // the same way before falling back to the registry lookup for other pages.
   if (props.vertical === 'professional_service' && props.selectedPage === secondaryTab.value?.id) {
     return buildDisplayUrl(props.siteDomain ?? '', template.serviceRoutes.offeringsIndex ?? '/')
   }

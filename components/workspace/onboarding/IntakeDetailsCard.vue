@@ -12,34 +12,34 @@
       </div>
     </template>
 
-    <div class="px-4 pb-4">
-      <div class="grid gap-4">
-        <UFormField label="Name">
+    <div class="@container px-4 pb-4">
+      <div class="grid gap-4 @sm:grid-cols-2">
+        <UFormField v-if="section === 'basics'" label="Name">
           <UInput v-model="form.name" />
         </UFormField>
-        <UFormField label="City" :required="requireLocationBasics">
+        <UFormField v-if="section === 'basics'" label="City" :required="requireLocationBasics">
           <UInput v-model="form.city" placeholder="Ao Nang" />
         </UFormField>
-        <UFormField label="Address" :required="requireLocationBasics">
+        <UFormField v-if="section === 'basics'" label="Address" :required="requireLocationBasics">
           <UTextarea v-model="form.address" :rows="2" placeholder="Street, ward, district" />
         </UFormField>
-        <UFormField label="Phone" :required="requireLocationBasics">
+        <UFormField v-if="section === 'basics'" label="Phone" :required="requireLocationBasics">
           <UInput v-model="form.phone" type="tel" placeholder="+66..." />
         </UFormField>
-        <UFormField label="Website URL">
+        <UFormField v-if="section === 'basics'" label="Website URL">
           <UInput v-model="form.websiteUrl" type="url" placeholder="https://..." />
         </UFormField>
-        <UFormField label="Hours" :required="requireLocationBasics">
+        <UFormField v-if="section === 'basics'" label="Hours" :required="requireLocationBasics">
           <UTextarea
             v-model="form.openingHours"
             :rows="4"
             placeholder="Monday: 9:00 AM - 6:00 PM&#10;Tuesday: 9:00 AM - 6:00 PM"
           />
         </UFormField>
-        <UFormField label="Manager alert number" required help="We'll text you here when someone books.">
+        <UFormField v-if="section === 'operations'" label="Manager alert number" required help="We'll text you here when someone books.">
           <UInput v-model="form.notificationPhone" type="tel" placeholder="+66..." />
         </UFormField>
-        <UFormField label="Timezone" required>
+        <UFormField v-if="section === 'operations'" label="Timezone" required>
           <USelectMenu
             v-model="form.timezone"
             :items="timezoneOptions"
@@ -47,7 +47,7 @@
             placeholder="Select timezone"
           />
         </UFormField>
-        <UFormField v-if="!showPrimaryToggle" label="Currency" required>
+        <UFormField v-if="section === 'operations' && !showPrimaryToggle" label="Currency" required>
           <USelect
             v-model="form.currency"
             :items="currencyOptions"
@@ -55,17 +55,13 @@
             label-attribute="label"
           />
         </UFormField>
-        <div v-if="showPrimaryToggle">
+        <div v-if="section === 'operations' && showPrimaryToggle">
           <UCheckbox v-model="form.isPrimary" label="Make this the primary location" />
         </div>
       </div>
 
       <div class="mt-4 grid gap-3 sm:flex sm:items-center sm:justify-between">
-        <p class="text-[11px] text-muted">
-          {{ requireLocationBasics
-            ? 'I need the basics before I can create this draft.'
-            : 'You can edit anything later.' }}
-        </p>
+        <p class="text-[11px] text-muted">{{ helperText }}</p>
         <UButton
           color="primary"
           class="justify-center"
@@ -105,6 +101,7 @@ const props = defineProps<{
   actionLabel: string
   requireLocationBasics: boolean
   showPrimaryToggle: boolean
+  section: 'basics' | 'operations'
   loading?: boolean
   disabled?: boolean
 }>()
@@ -113,24 +110,26 @@ defineEmits<{ submit: [] }>()
 
 const timezoneOptions = TIMEZONE_OPTIONS
 const currencyOptions = CURRENCY_OPTIONS
+const helperText = computed(() => props.section === 'basics'
+  ? 'You can adjust these later.'
+  : 'Used for bookings, alerts, and prices.'
+)
 
 const canSubmit = computed(() => {
-  // notificationPhone + timezone are never supplied by Google Maps import, and
-  // a missing notification phone silently degrades booking alerts to email-only
-  // with no error surfaced anywhere — so these are required on every path, not
-  // just the manual-entry one. Currency is site-level (not asked again when
-  // adding a location, see showPrimaryToggle) but still required up front —
-  // it silently defaults to THB otherwise, wrong for any non-Thai client.
+  if (props.section === 'basics') {
+    if (!props.requireLocationBasics) return !!form.value.name.trim()
+    return [
+      form.value.name,
+      form.value.city,
+      form.value.address,
+      form.value.phone,
+      form.value.openingHours,
+    ].every(value => value.trim().length > 0)
+  }
+
   const hasNotificationBasics = form.value.notificationPhone.trim().length > 0
     && form.value.timezone.trim().length > 0
   const hasCurrency = props.showPrimaryToggle || form.value.currency.trim().length > 0
-  if (!props.requireLocationBasics) return !!form.value.name.trim() && hasNotificationBasics && hasCurrency
-  return [
-    form.value.name,
-    form.value.city,
-    form.value.address,
-    form.value.phone,
-    form.value.openingHours,
-  ].every(value => value.trim().length > 0) && hasNotificationBasics && hasCurrency
+  return hasNotificationBasics && hasCurrency
 })
 </script>

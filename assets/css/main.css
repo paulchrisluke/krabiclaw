@@ -104,8 +104,7 @@
 .platform-theme {
   --ui-primary:           var(--kc-coral);
 
-  /* WCAG foreground: coral-500 (#FB7461) with navy (#1F2547) gives ~5.5:1 contrast (passes AA). */
-  --primary-foreground:   var(--kc-navy);
+  --primary-foreground:   #FFFFFF;
   --ui-secondary:         var(--kc-teal-600);
   --ui-success:           var(--kc-success);
   --ui-info:              #3B82F6;
@@ -116,12 +115,12 @@
   --ui-bg-muted:          #F2EFEA;
   --ui-bg-accented:       #F5F0EB;
   --ui-bg-inverted:       var(--kc-navy);
-  --ui-text:              var(--kc-navy);
-  --ui-text-muted:        var(--kc-navy-500);
-  --ui-text-dimmed:       #6B7198;
-  --ui-text-toned:        #52525B;
+  --ui-text:              #454864;
+  --ui-text-muted:        #5B5E73;
+  --ui-text-dimmed:       #6E7189;
+  --ui-text-toned:        #383B52;
   --ui-text-highlighted:  var(--kc-navy);
-  --ui-text-inverted:     var(--kc-cream-elev);
+  --ui-text-inverted:     #FFFFFF;
   --ui-border:            var(--kc-border);
   --ui-border-muted:      var(--kc-border-muted);
   --ui-border-accented:   #D8D3CB;
@@ -151,8 +150,7 @@
 .dark .platform-theme {
   --ui-primary:           #FB7461;
 
-  /* WCAG foreground: #FB7461 has ~2.7:1 with white/cream (fails AA), but ~5.5:1 with navy */
-  --primary-foreground:   var(--kc-navy);
+  --primary-foreground:   #F5F4FB;
   --ui-secondary:         #5DCBCB;
   --ui-success:           #34D399;
   --ui-info:              #60A5FA;
@@ -163,12 +161,12 @@
   --ui-bg-muted:          #141836;
   --ui-bg-accented:       #1A1E3A;
   --ui-bg-inverted:       var(--kc-cream-elev);
-  --ui-text:              #EEF0F8;
-  --ui-text-muted:        #9CA4C6;
-  --ui-text-dimmed:       #6B7198;
-  --ui-text-toned:        #A1A1AA;
-  --ui-text-highlighted:  #FFFFFF;
-  --ui-text-inverted:     var(--kc-navy);
+  --ui-text:              #C4C6DE;
+  --ui-text-muted:        #A0A3C4;
+  --ui-text-dimmed:       #9092B8;
+  --ui-text-toned:        #DBDBEA;
+  --ui-text-highlighted:  #F5F4FB;
+  --ui-text-inverted:     #F5F4FB;
   --ui-border:            rgba(255,255,255,9%);
   --ui-border-muted:      rgba(255,255,255,5%);
   --ui-border-accented:   rgba(255,255,255,12%);
@@ -254,6 +252,38 @@
 .prose {
   max-width: 100%;
   overflow-wrap: anywhere;
+  --tw-prose-body: var(--ui-text-highlighted);
+  --tw-prose-headings: var(--ui-text-highlighted);
+  --tw-prose-lead: var(--ui-text);
+  --tw-prose-links: var(--ui-primary);
+  --tw-prose-bold: var(--ui-text-highlighted);
+  --tw-prose-counters: var(--ui-text-muted);
+  --tw-prose-bullets: var(--ui-text-muted);
+  --tw-prose-hr: var(--ui-border);
+  --tw-prose-quotes: var(--ui-text-highlighted);
+  --tw-prose-quote-borders: var(--ui-border-accented);
+  --tw-prose-captions: var(--ui-text-muted);
+  --tw-prose-code: var(--ui-text-highlighted);
+  --tw-prose-pre-code: var(--ui-text-highlighted);
+  --tw-prose-pre-bg: var(--ui-bg-muted);
+  --tw-prose-th-borders: var(--ui-border-accented);
+  --tw-prose-td-borders: var(--ui-border);
+  --tw-prose-invert-body: var(--ui-text-highlighted);
+  --tw-prose-invert-headings: var(--ui-text-highlighted);
+  --tw-prose-invert-lead: var(--ui-text);
+  --tw-prose-invert-links: var(--ui-primary);
+  --tw-prose-invert-bold: var(--ui-text-highlighted);
+  --tw-prose-invert-counters: var(--ui-text-muted);
+  --tw-prose-invert-bullets: var(--ui-text-muted);
+  --tw-prose-invert-hr: var(--ui-border);
+  --tw-prose-invert-quotes: var(--ui-text-highlighted);
+  --tw-prose-invert-quote-borders: var(--ui-border-accented);
+  --tw-prose-invert-captions: var(--ui-text-muted);
+  --tw-prose-invert-code: var(--ui-text-highlighted);
+  --tw-prose-invert-pre-code: var(--ui-text-highlighted);
+  --tw-prose-invert-pre-bg: var(--ui-bg-muted);
+  --tw-prose-invert-th-borders: var(--ui-border-accented);
+  --tw-prose-invert-td-borders: var(--ui-border);
 }
 
 .prose code {

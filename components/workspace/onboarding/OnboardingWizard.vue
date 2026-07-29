@@ -108,6 +108,7 @@
         :render-markdown="renderMarkdown"
         :quick-replies="importError ? [] : replies"
         :show-prompt="showComposer"
+        :show-assistant-avatar="false"
         @submit="handleTextSubmit"
         @quick-reply="handleReply"
       >
@@ -187,9 +188,10 @@
               :action-label="messages[index].detailsCard.actionLabel"
               :require-location-basics="messages[index].detailsCard.requireLocationBasics"
               :show-primary-toggle="messages[index].detailsCard.showPrimaryToggle"
+              :section="messages[index].detailsCard.section"
               :loading="importing"
               :disabled="importing"
-              @submit="submitDetails"
+              @submit="submitDetailsCard(messages[index].detailsCard.section)"
             />
           </div>
           <!-- Handoff card -->
@@ -317,6 +319,7 @@ interface WizardMessage {
     actionLabel: string
     requireLocationBasics: boolean
     showPrimaryToggle: boolean
+    section: 'basics' | 'operations'
   }
 }
 
@@ -336,21 +339,9 @@ interface DraftSavedPayload {
   subdomainCandidate: string
 }
 
-type WizardStep = 'welcome' | 'vertical' | 'source' | 'awaiting_url' | 'awaiting_manual_name' | 'confirm' | 'details' | 'importing' | 'imported'
+type WizardStep = 'welcome' | 'vertical' | 'source' | 'awaiting_url' | 'awaiting_manual_name' | 'confirm' | 'details' | 'operations' | 'importing' | 'imported'
 type DetailsSource = 'imported' | 'manual'
 
-// Discriminated intent, replacing the previous generic endpoint-injection
-// props (endpoint-per-Places-preview-call, endpoint-per-manual-call, plus a
-// separate skip-the-vertical-step flag and an add-a-location flag):
-// - 'new-site': Places preview goes through the dedicated
-//   /api/dashboard/onboarding/places-preview lookup endpoint; the actual
-//   mutation always goes through the draft endpoints
-//   (drafts/from-place|manual -> drafts/[draftId]/commit), never through a
-//   prop-injected endpoint.
-// - 'add-location': both preview and mutation go through the single
-//   /api/dashboard/locations/add endpoint (it owns both for an existing
-//   site), and the vertical picker step is skipped — a location doesn't
-//   have its own vertical, the site does.
 type WizardMode = 'new-site' | 'add-location'
 
 const props = defineProps<{
@@ -363,6 +354,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   'site-created': [orgSlug: string | null, locationSlug?: string | null]
   'draft-saved': [draft: DraftSavedPayload]
+  'preview-state': [state: 'empty' | 'building']
+  'vertical-selected': [vertical: SiteVertical]
 }>()
 
 const router = useRouter()
@@ -373,11 +366,7 @@ const facebookConnected = ref(false)
 const hasFacebookAccess = ref(false)
 
 const isAddingLocation = computed(() => props.mode === 'add-location')
-// Add-location has no vertical step (the site already has one); new-site
-// always asks.
 const skipVertical = computed(() => props.mode === 'add-location')
-// New-site preview lookup uses the dedicated single-purpose preview endpoint;
-// add-location preview/mutation both go through the location endpoint.
 const lookupEndpoint = computed(() => isAddingLocation.value
   ? '/api/dashboard/locations/add'
   : '/api/dashboard/onboarding/places-preview')
@@ -454,7 +443,8 @@ const progressStep = computed(() => {
   if (step.value === 'source') return 2
   if (step.value === 'awaiting_url' || step.value === 'awaiting_manual_name') return 3
   if (step.value === 'confirm') return 4
-  if (step.value === 'details') return onboardingDraftId.value ? 7 : 5
+  if (step.value === 'details') return 5
+  if (step.value === 'operations') return 6
   if (step.value === 'importing') return onboardingDraftId.value ? 8 : 6
   if (step.value === 'imported') return 9
   return 1
@@ -465,23 +455,27 @@ const progressLabel = computed(() => {
   if (step.value === 'awaiting_url') return 'Add Maps link'
   if (step.value === 'awaiting_manual_name') return 'Add business name'
   if (step.value === 'confirm') return 'Confirm listing'
-  if (step.value === 'details') return onboardingDraftId.value ? 'Preview ready' : 'Business details'
+  if (step.value === 'details') return 'Business basics'
+  if (step.value === 'operations') return 'Operations'
   if (step.value === 'importing') return 'Building'
   if (step.value === 'imported') return 'Next steps'
   return 'Onboarding'
 })
 const canGoBack = computed(() => !importing.value && !typing.value && !['welcome', 'importing', 'imported'].includes(step.value))
-const detailsActionLabel = computed(() => isAddingLocation.value ? 'Add location' : 'Create site')
-const detailsCardTitle = computed(() => isAddingLocation.value ? 'Location details' : 'Business details')
+const previewState = computed<'empty' | 'building'>(() => ['welcome', 'vertical'].includes(step.value) ? 'empty' : 'building')
 const detailsCardDescription = computed(() => detailsSource.value === 'manual'
-  ? (isAddingLocation.value
-    ? 'I still need the branch basics before I can add it to your site.'
-    : 'I still need the basics before I can create this site.')
-  : (isAddingLocation.value
-    ? 'I pulled the location data from Google. Fix anything that looks off, then add it.'
-    : 'I pulled the business data from Google. Fix anything that looks off, then create it.')
+  ? 'Add the details guests will see first.'
+  : 'Check what Google found.'
 )
 const detailsRequireBasics = computed(() => detailsSource.value === 'manual')
+const operationsTitle = computed(() => isAddingLocation.value ? 'Alerts' : 'Operations')
+const operationsDescription = computed(() => isAddingLocation.value
+  ? 'Choose where booking alerts should go.'
+  : 'Set the defaults for bookings and prices.'
+)
+
+watch(previewState, state => emit('preview-state', state), { immediate: true })
+watch(selectedVertical, vertical => emit('vertical-selected', vertical), { immediate: true })
 
 const importedSiteId = ref<string | null>(props.siteId ?? null)
 const importedOrgSlug = ref<string | null>(null)
@@ -691,13 +685,27 @@ async function advance(target: WizardStep) {
   }
 
   if (target === 'details') {
-    await pushBot(detailsCardDescription.value, {
+    await pushBot("Here's what I need:", {
         detailsCard: {
-          title: detailsCardTitle.value,
+          title: isAddingLocation.value ? 'Location basics' : 'Business basics',
           description: detailsCardDescription.value,
-          actionLabel: detailsActionLabel.value,
+          actionLabel: 'Continue',
           requireLocationBasics: detailsRequireBasics.value,
           showPrimaryToggle: !!isAddingLocation.value,
+          section: 'basics',
+        },
+      })
+  }
+
+  if (target === 'operations') {
+    await pushBot(operationsDescription.value, {
+        detailsCard: {
+          title: operationsTitle.value,
+          description: operationsDescription.value,
+          actionLabel: isAddingLocation.value ? 'Add location' : 'Show preview',
+          requireLocationBasics: false,
+          showPrimaryToggle: !!isAddingLocation.value,
+          section: 'operations',
         },
       })
   }
@@ -734,6 +742,10 @@ async function goBack() {
     } else {
       await advance('awaiting_manual_name')
     }
+    return
+  }
+  if (step.value === 'operations') {
+    await advance('details')
   }
 }
 
@@ -840,6 +852,25 @@ async function handleTextSubmit() {
   }
 }
 
+async function submitDetailsCard(section: 'basics' | 'operations') {
+  if (section === 'basics') {
+    await submitBasics()
+    return
+  }
+  await submitDetails()
+}
+
+async function submitBasics() {
+  const requiredFields = detailsRequireBasics.value
+    ? [detailsForm.name, detailsForm.city, detailsForm.address, detailsForm.phone, detailsForm.openingHours]
+    : [detailsForm.name]
+  if (!requiredFields.every(value => value.trim().length > 0)) {
+    importError.value = 'Add the required details before continuing.'
+    return
+  }
+  await advance('operations')
+}
+
 // ─── Import flow ──────────────────────────────────────────────────────────────
 
 async function showLookupTools(label: string): Promise<{ label: string; done: boolean }[]> {
@@ -892,12 +923,10 @@ async function runLookup(mapsUrl: string) {
 }
 
 async function submitDetails() {
-  const basicRequired = detailsRequireBasics.value
-  const requiredFields = basicRequired
-    ? [detailsForm.name, detailsForm.city, detailsForm.address, detailsForm.phone, detailsForm.notificationPhone, detailsForm.openingHours]
-    : [detailsForm.name]
+  const requiredFields = [detailsForm.notificationPhone, detailsForm.timezone]
+  if (!isAddingLocation.value) requiredFields.push(detailsForm.currency)
   if (!requiredFields.every(value => value.trim().length > 0)) {
-    importError.value = 'Please fill in the required fields before continuing.'
+    importError.value = 'Add the required details before continuing.'
     return
   }
 
@@ -907,7 +936,7 @@ async function submitDetails() {
   const tools = await showLookupTools(
     isAddingLocation.value
       ? 'Adding your location…'
-      : 'Saving your private draft preview…'
+      : 'Building your preview…'
   )
 
   try {
@@ -951,9 +980,7 @@ async function submitDetails() {
       }
       emit('draft-saved', draftPreviewPayload.value)
 
-      await pushBot(
-        'Draft ready. The preview on the right now shows a private working copy, so you can review the site before reserving a live subdomain.'
-      )
+      await pushBot('Preview ready. Take a look on the right, then create the site when it feels right.')
       replies.value = [
         { label: 'Create site', icon: 'i-lucide-badge-check', primary: true, action: 'commit_draft' },
         { label: 'Edit details', icon: 'i-lucide-square-pen', action: 'edit_draft' },
@@ -962,10 +989,6 @@ async function submitDetails() {
       return
     }
 
-    // This branch only runs in add-location mode (new-site always returns
-    // above via the draft endpoints) — both the Places and manual-name paths
-    // create through the same /api/dashboard/locations/add endpoint, since it
-    // owns add-location creation regardless of source.
     const endpoint = addLocationEndpoint
 
     const body = pendingPreview.value
@@ -1138,7 +1161,7 @@ async function finishCreation(orgSlug: string | null | undefined, siteSlug: stri
   await pushBot(`Done. Your workspace is live at ${domain}.`)
   if (!isAddingLocation.value && importedSiteId.value) {
     await pushBot(
-      `One last thing before you go — a logo, real photo, and brand color take this from "a template" to "your site" in under a minute.`,
+      'Add a logo, brand color, and hero photo before you head into the dashboard.',
       { brandCard: true },
     )
   }

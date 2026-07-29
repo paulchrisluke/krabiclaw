@@ -1,11 +1,9 @@
 <template>
   <div class="flex h-screen flex-col overflow-hidden bg-muted text-highlighted">
 
-    <!-- ─── Body ─────────────────────────────────────────────────────────── -->
     <div
       v-if="contextLoaded"
-      class="grid min-h-0 flex-1 overflow-hidden"
-      style="grid-template-columns: minmax(24rem, 45%) 1fr; grid-template-rows: minmax(0, 1fr)"
+      class="grid min-h-0 flex-1 overflow-hidden md:grid-cols-[minmax(24rem,45%)_1fr]"
     >
       <OnboardingWizard
         mode="new-site"
@@ -14,8 +12,11 @@
         :existing-site-slug="siteData?.subdomain ?? null"
         @site-created="onSiteCreated"
         @draft-saved="onDraftSaved"
+        @preview-state="previewPlaceholderState = $event"
+        @vertical-selected="selectedOnboardingVertical = $event"
       />
       <OnboardingPreviewPane
+        class="hidden md:flex"
         :iframe-src="iframeSrc"
         :site-locations="previewLocations"
         :selected-location-id="selectedLocationId"
@@ -23,13 +24,53 @@
         :site-status="computedSiteStatus"
         :site-domain="siteDomain"
         :vertical="previewVertical"
+        :placeholder-state="previewPlaceholderState"
+        home-only
         @select-page="onSelectPage"
         @select-location="onSelectLocation"
       />
     </div>
 
-    <!-- Loading state -->
-    <div v-else class="flex min-h-0 flex-1 items-center justify-center">
+    <div
+      v-if="mobilePreviewOpen"
+      class="fixed inset-0 z-50 bg-black/45 md:hidden"
+      role="presentation"
+      @click="mobilePreviewOpen = false"
+    />
+    <section
+      v-if="mobilePreviewOpen"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Site preview"
+      class="fixed inset-x-0 bottom-0 z-50 flex h-[82vh] flex-col overflow-hidden rounded-t-2xl border border-default bg-elevated shadow-xl md:hidden"
+    >
+      <UButton
+        icon="i-lucide-x"
+        color="neutral"
+        variant="soft"
+        size="sm"
+        square
+        aria-label="Close preview"
+        class="absolute right-3 top-3 z-10"
+        @click="mobilePreviewOpen = false"
+      />
+      <OnboardingPreviewPane
+        class="min-h-0 flex-1"
+        :iframe-src="iframeSrc"
+        :site-locations="previewLocations"
+        :selected-location-id="selectedLocationId"
+        :selected-page="selectedPreviewPage"
+        :site-status="computedSiteStatus"
+        :site-domain="siteDomain"
+        :vertical="previewVertical"
+        :placeholder-state="previewPlaceholderState"
+        home-only
+        @select-page="onSelectPage"
+        @select-location="onSelectLocation"
+      />
+    </section>
+
+    <div v-if="!contextLoaded" class="flex min-h-0 flex-1 items-center justify-center">
       <div class="flex items-center gap-3 text-muted">
         <UIcon name="i-lucide-refresh-cw" class="size-5 animate-spin" />
         <span class="text-sm">Loading workspace…</span>
@@ -49,7 +90,13 @@ const toast = useToast()
 
 // ─── State ────────────────────────────────────────────────────────────────────
 const siteData = ref<ApiRecord | null>(null)
-const previewVertical = computed<SiteVertical>(() => normalizeVertical(siteData.value?.vertical as string | undefined) as SiteVertical)
+const selectedOnboardingVertical = ref<SiteVertical>('restaurant')
+const previewPlaceholderState = ref<'empty' | 'building'>('empty')
+const previewVertical = computed<SiteVertical>(() =>
+  siteData.value
+    ? normalizeVertical(siteData.value.vertical as string | undefined) as SiteVertical
+    : selectedOnboardingVertical.value
+)
 const siteLocations = ref<Array<{ id: string; slug: string; title: string; is_primary: boolean }>>([])
 const orgSlug = ref<string | null>(null)
 const previewToken = ref('')
@@ -59,6 +106,7 @@ const draftPreview = ref<{
   draftName: string
   subdomainCandidate: string
 } | null>(null)
+const mobilePreviewOpen = ref(false)
 const contextLoaded = ref(false)
 type ReadinessState = 'complete' | 'attention' | 'missing'
 
@@ -114,7 +162,6 @@ const currentPageIsLocationScoped = computed(() => locationScopedPages.has(selec
 
 const previewPagePath = computed(() => {
   if (draftPreview.value) {
-    // Draft previews don't support location-scoped routes
     if (selectedPreviewPage.value === 'location') return '/'
     if (selectedPreviewPage.value === 'menu') return '/menu'
     return selectedPreviewPage.value === 'home' ? '/' : `/${selectedPreviewPage.value}`
@@ -230,7 +277,6 @@ const onSelectLocation = (id: string) => {
   selectedLocationId.value = id
 }
 
-// Called by OnboardingWizard after the site is created — reload context + preview token, populate preview pane
 const onSiteCreated = async (_orgSlug: string | null) => {
   draftPreview.value = null
   await loadContext()        // sets siteData + calls loadPreviewToken()
@@ -247,6 +293,7 @@ const onDraftSaved = (draft: {
   draftPreview.value = draft
   selectedLocationId.value = draft.draftId
   previewReloadToken.value = Date.now()
+  mobilePreviewOpen.value = true
 }
 
 // ─── Toast from query params ──────────────────────────────────────────────────

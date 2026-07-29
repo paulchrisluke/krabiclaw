@@ -16,6 +16,7 @@
     :tool-label="toolLabel"
     :quick-replies="quickReplies"
     :show-prompt="showPrompt"
+    :show-assistant-avatar="showAssistantAvatar"
     @update:input="$emit('update:input', $event)"
     @submit="$emit('submit')"
     @stop="$emit('stop')"
@@ -54,6 +55,7 @@ withDefaults(defineProps<{
   toolLabel?: (_name: string) => string
   quickReplies?: ConversationQuickReplyOption[]
   showPrompt?: boolean
+  showAssistantAvatar?: boolean
 }>(), {
   loading: false,
   disabled: false,
@@ -67,6 +69,7 @@ withDefaults(defineProps<{
   messagesStatus: undefined,
   quickReplies: () => [],
   showPrompt: true,
+  showAssistantAvatar: true,
 })
 
 defineEmits<{

@@ -37,7 +37,7 @@
               :variant="message.role === 'user' ? 'solid' : 'subtle'"
               :ui="message.role === 'user' ? { content: 'bg-primary text-(--primary-foreground,#fff)' } : {}"
             >
-              <template v-if="message.role === 'assistant'" #leading>
+              <template v-if="showAssistantAvatar && message.role === 'assistant'" #leading>
                 <div class="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                   <UIcon name="i-lucide-sparkles" class="size-3.5" />
                 </div>
@@ -62,7 +62,7 @@
                   <!-- eslint-enable vue/no-v-html -->
                   <slot name="assistant-after" :message="message" :index="index" />
                 </div>
-                <div v-else class="prose prose-sm dark:prose-invert max-w-none">
+                <div v-else class="prose prose-sm dark:prose-invert max-w-none text-(--primary-foreground,#fff)">
                   {{ message.content ?? '' }}
                 </div>
               </template>
@@ -183,6 +183,7 @@ const props = withDefaults(defineProps<{
   // request) so the submit button just shows a loading spinner instead of a dead stop control.
   cancelable?: boolean
   showPrompt?: boolean
+  showAssistantAvatar?: boolean
 }>(), {
   loading: false,
   disabled: false,
@@ -200,6 +201,7 @@ const props = withDefaults(defineProps<{
   toolLabel: (name: string) => name,
   cancelable: true,
   showPrompt: true,
+  showAssistantAvatar: true,
 })
 
 defineEmits<{

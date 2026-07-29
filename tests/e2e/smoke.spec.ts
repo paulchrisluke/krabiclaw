@@ -23,12 +23,8 @@ test.describe('representative tenant routes', () => {
   // instead of masking the issue with a longer shared timeout.
   for (const path of ['/', '/locations/brooklyn']) {
     test(`${path === '/' ? 'home' : path} renders without hydration errors`, async ({ page }) => {
-      // Preview is a shared hostname redeployed on every PR. A unique query keeps
-      // Cloudflare from serving HTML cached before the current deploy, which can
-      // reference Nuxt asset hashes that no longer exist in the Assets binding.
       const errors = collectPageErrors(page)
       const url = new URL(path, `${tenantBaseURL}/`)
-      url.searchParams.set('e2e', `e2e-deploy-${Date.now()}`)
       const response = await page.goto(url.toString(), { waitUntil: 'load' })
       expect(response?.status()).toBeLessThan(400)
       await expectHealthyPage(page, errors)
