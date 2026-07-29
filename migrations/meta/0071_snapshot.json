@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "e774306a-c315-4936-8f59-1ef40cc299dc",
+  "id": "4a8919e1-a349-49c8-8ab0-2bdf33452113",
   "prevId": "c8e384d0-dbe0-4a1c-b2bf-aee5f6a3c093",
   "tables": {
     "account": {
@@ -3827,6 +3827,160 @@
           "value": "completion_source IS NULL OR completion_source IN ('manual', 'auto')"
         }
       }
+    },
+    "experience_media": {
+      "name": "experience_media",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "experience_id": {
+          "name": "experience_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "asset_id": {
+          "name": "asset_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        }
+      },
+      "indexes": {
+        "experience_media_experience_order_idx": {
+          "name": "experience_media_experience_order_idx",
+          "columns": [
+            "experience_id",
+            "sort_order"
+          ],
+          "isUnique": false
+        },
+        "experience_media_site_experience_idx": {
+          "name": "experience_media_site_experience_idx",
+          "columns": [
+            "site_id",
+            "experience_id"
+          ],
+          "isUnique": false
+        },
+        "experience_media_experience_asset_unique": {
+          "name": "experience_media_experience_asset_unique",
+          "columns": [
+            "experience_id",
+            "asset_id"
+          ],
+          "isUnique": true
+        },
+        "experience_media_experience_sort_unique": {
+          "name": "experience_media_experience_sort_unique",
+          "columns": [
+            "experience_id",
+            "sort_order"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "experience_media_organization_id_organization_id_fk": {
+          "name": "experience_media_organization_id_organization_id_fk",
+          "tableFrom": "experience_media",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "experience_media_site_id_sites_id_fk": {
+          "name": "experience_media_site_id_sites_id_fk",
+          "tableFrom": "experience_media",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "experience_media_experience_id_experiences_id_fk": {
+          "name": "experience_media_experience_id_experiences_id_fk",
+          "tableFrom": "experience_media",
+          "tableTo": "experiences",
+          "columnsFrom": [
+            "experience_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "experience_media_asset_id_media_assets_id_fk": {
+          "name": "experience_media_asset_id_media_assets_id_fk",
+          "tableFrom": "experience_media",
+          "tableTo": "media_assets",
+          "columnsFrom": [
+            "asset_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
     },
     "experience_slot_overrides": {
       "name": "experience_slot_overrides",
@@ -10715,7 +10869,7 @@
           "name": "slug",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "logo": {

@@ -24,8 +24,6 @@ interface ContentRow {
   hero_subtitle: string | null;
   hero_public_url: string | null;
   hero_kind: string | null;
-  hero_video_public_url: string | null;
-  hero_video_kind: string | null;
   thumbnail_url: string | null;
   component: string | null;
   [key: string]: unknown;

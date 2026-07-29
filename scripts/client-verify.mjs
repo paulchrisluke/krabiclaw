@@ -375,9 +375,8 @@ if (SITE_ID) {
   if (data) {
     const imageUrls = new Set();
     for (const loc of data.locations ?? []) {
-      if (loc.hero_image_public_url) imageUrls.add(loc.hero_image_public_url);
-      if (loc.hero_video_public_url) imageUrls.add(loc.hero_video_public_url);
       if (loc.public_url) imageUrls.add(loc.public_url);
+      if (loc.thumbnail_url) imageUrls.add(loc.thumbnail_url);
     }
     for (const exp of data.experiencesList ?? []) {
       if (exp.image_url) imageUrls.add(exp.image_url);

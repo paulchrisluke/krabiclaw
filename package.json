@@ -49,6 +49,7 @@
     "migrate:preview": "yarn migrate:check && wrangler d1 migrations apply DB --env preview --remote",
     "migrate:staging": "yarn migrate:check && wrangler d1 migrations apply DB --env staging --remote",
     "migrate:prod": "yarn migrate:check && wrangler d1 migrations apply DB --remote",
+    "migrate:preflight:unified-media": "node scripts/preflight-unified-media-migration.mjs",
     "deploy:preview:worker": "wrangler deploy --env preview || (echo \"Deploy failed, retrying once...\" && sleep 10 && wrangler deploy --env preview)",
     "deploy:staging:worker": "wrangler deploy --env staging || (echo \"Deploy failed, retrying once...\" && sleep 10 && wrangler deploy --env staging)",
     "deploy:prod:worker": "wrangler deploy || (echo \"Deploy failed, retrying once...\" && sleep 10 && wrangler deploy)",

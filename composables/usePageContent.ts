@@ -12,8 +12,6 @@ interface ContentRow {
   hero_subtitle: string | null
   hero_public_url: string | null
   hero_kind: string | null
-  hero_video_public_url: string | null
-  hero_video_kind: string | null
   thumbnail_url: string | null
   updated_at: string
 }
@@ -160,17 +158,16 @@ export const usePageContent = (pageName?: string) => {
       return previewOverrides.value[field] ?? null
     }
 
-    if (['hero.title', 'hero.subtitle', 'hero.image', 'hero.video'].includes(field)) {
+    if (['hero.title', 'hero.subtitle', 'hero.media'].includes(field)) {
       const heroRow = contentMap.value['hero']
       const fieldRow = contentMap.value[field]
       if (field === 'hero.title') return heroRow?.hero_title ?? fieldRow?.content ?? fallback
       if (field === 'hero.subtitle') return heroRow?.hero_subtitle ?? fieldRow?.content ?? fallback
-      if (field === 'hero.image') return heroRow?.hero_public_url ?? fieldRow?.content ?? fallback
-      if (field === 'hero.video') return heroRow?.hero_video_public_url ?? fieldRow?.content ?? fallback
+      if (field === 'hero.media') return heroRow?.hero_public_url ?? fieldRow?.content ?? fallback
     }
     const row = contentMap.value[field]
     if (!row) return fallback
-    const mediaValue = row.content || row.hero_public_url || row.hero_video_public_url
+    const mediaValue = row.content || row.hero_public_url
     const val = row.type === 'media' ? mediaValue : row.content
     if (val && val.trim() !== '') return val
     return fallback
@@ -188,14 +185,16 @@ export const usePageContent = (pageName?: string) => {
    */
   const getHero = (defaults = { title: '', subtitle: '', image: '', video: '' }) => {
     const row = contentMap.value['hero']
+    const heroMedia = row?.hero_public_url || ''
+    const isVideo = row?.hero_kind === 'video'
     return {
       title: getField('hero.title', row?.hero_title ?? defaults.title) ?? defaults.title,
       subtitle: getField('hero.subtitle', row?.hero_subtitle ?? defaults.subtitle) ?? defaults.subtitle,
-      image: getField('hero.image', row?.hero_public_url ?? defaults.image) ?? defaults.image,
-      video: getField('hero.video', row?.hero_video_public_url ?? defaults.video) ?? defaults.video,
+      image: (isVideo ? defaults.image : getField('hero.media', heroMedia || defaults.image)) ?? defaults.image,
+      video: (isVideo ? getField('hero.media', heroMedia || defaults.video) : defaults.video) ?? defaults.video,
       thumbnail_url: row?.thumbnail_url || null,
-      imageKind: row?.hero_kind || 'image',
-      videoKind: row?.hero_video_kind || 'video',
+      imageKind: isVideo ? 'image' : (row?.hero_kind || 'image'),
+      videoKind: 'video',
     }
   }
 

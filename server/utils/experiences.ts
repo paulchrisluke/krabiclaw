@@ -1,10 +1,17 @@
 import { resolveLocationTimezone, isTimeSlotInPast } from '~/server/utils/site-config'
-import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { fireSiteEventSafe } from '~/server/utils/site-events'
 import { getActiveSpecialClosure } from '~/utils/formatters'
 import { assertValidSaleWindow } from '~/shared/money'
 import { revokeReviewRequestForBooking } from '~/server/utils/review-requests'
 import { validateMediaAsset } from '~/server/utils/location-management'
+import {
+  buildReplaceExperienceMediaQueries,
+  hydrateMediaAssetsForExperiences,
+  hydrateMediaAssetRefs,
+  type MediaAssetRefInput,
+  type ResolvedMediaAsset,
+} from '~/server/utils/media-asset-manager'
 
 export const WEEKDAY_NAMES = [
   'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
@@ -24,11 +31,7 @@ export interface Experience {
   slug: string
   tagline: string | null
   body: string | null
-  image_asset_id: string | null
-  image_url: string | null
-  video_asset_id: string | null
-  video_url: string | null
-  images: Array<{ url: string; kind: 'image' | 'video' }>
+  media: ResolvedMediaAsset[]
   price: string | null
   price_amount: number | null
   compare_at_price_amount: number | null
@@ -76,11 +79,6 @@ interface ExperienceRow {
   slug: string
   tagline: string | null
   body: string | null
-  image_asset_id: string | null
-  image_url: string | null
-  video_asset_id: string | null
-  video_url: string | null
-  images: string | null
   price: string | null
   price_amount: number | null
   compare_at_price_amount: number | null
@@ -128,16 +126,6 @@ function parseRow(row: ExperienceRow): Experience {
   if (row.recurring_slots) {
     try { recurring_slots = JSON.parse(row.recurring_slots) } catch { recurring_slots = null }
   }
-  let images: Array<{ url: string; kind: 'image' | 'video' }> = []
-  if (row.images) {
-    try { 
-      const parsed = JSON.parse(row.images) 
-      if (Array.isArray(parsed)) {
-        images = parsed.filter(item => typeof item === 'object' && item !== null && typeof item.url === 'string' && (item.kind === 'image' || item.kind === 'video'))
-      }
-    } catch { images = [] }
-  }
-  // NOTE: Ensure the same validation/normalization is applied in the create/update handlers that write Experience.images so malformed shapes are rejected at source.
   return {
     ...row,
     status: row.status as Experience['status'],
@@ -147,24 +135,27 @@ function parseRow(row: ExperienceRow): Experience {
     meeting_point: row.meeting_point ?? null,
     time_slots,
     recurring_slots,
-    images,
+    media: [],
     featured: Boolean(row.featured)
   }
 }
 
+async function attachExperienceMedia<T extends Experience>(db: DbClient, siteId: string, experiences: T[]): Promise<T[]> {
+  const mediaByExperience = await hydrateMediaAssetsForExperiences(db, siteId, experiences.map(experience => experience.id))
+  return experiences.map(experience => ({
+    ...experience,
+    media: mediaByExperience.get(experience.id) ?? [],
+  }))
+}
+
 const SELECT = `
   SELECT e.id, e.organization_id, e.site_id, e.location_id,
-         e.title, e.slug, e.tagline, e.body, e.image_asset_id,
-         e.video_asset_id, e.images,
+         e.title, e.slug, e.tagline, e.body,
          e.price, e.price_amount, e.compare_at_price_amount, e.sale_starts_at, e.sale_ends_at, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
          e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point, e.status, e.sort_order,
          e.featured, e.featured_sort_order,
-         e.seo_title, e.seo_description, e.canonical_url, e.robots, e.og_image_asset_id, e.created_at, e.updated_at,
-         img.public_url AS image_url,
-         vid.public_url AS video_url
+         e.seo_title, e.seo_description, e.canonical_url, e.robots, e.og_image_asset_id, e.created_at, e.updated_at
   FROM experiences e
-  LEFT JOIN media_assets img ON img.id = e.image_asset_id AND img.status = 'active'
-  LEFT JOIN media_assets vid ON vid.id = e.video_asset_id AND vid.status = 'active'
 `
 
 export async function listExperiences(
@@ -187,7 +178,7 @@ export async function listExperiences(
   sql += ` ORDER BY e.sort_order ASC, e.created_at ASC`
 
   const results = await queryAll<ExperienceRow>(db, sql, params)
-  return (results ?? []).map(parseRow)
+  return attachExperienceMedia(db, siteId, (results ?? []).map(parseRow))
 }
 
 export async function getExperienceBySlug(
@@ -196,7 +187,9 @@ export async function getExperienceBySlug(
   slug: string,
 ): Promise<Experience | null> {
   const row = await queryFirst<ExperienceRow>(db, SELECT + ` WHERE e.site_id = ? AND e.slug = ? LIMIT 1`, [siteId, slug])
-  return row ? parseRow(row) : null
+  if (!row) return null
+  const [experience] = await attachExperienceMedia(db, siteId, [parseRow(row)])
+  return experience ?? null
 }
 
 export async function getExperienceById(
@@ -207,9 +200,14 @@ export async function getExperienceById(
   // Check id first so a slug that happens to collide with another row's id can
   // never shadow the row actually addressed by that id.
   const byId = await queryFirst<ExperienceRow>(db, SELECT + ` WHERE e.site_id = ? AND e.id = ? LIMIT 1`, [siteId, idOrSlug])
-  if (byId) return parseRow(byId)
+  if (byId) {
+    const [experience] = await attachExperienceMedia(db, siteId, [parseRow(byId)])
+    return experience ?? null
+  }
   const bySlug = await queryFirst<ExperienceRow>(db, SELECT + ` WHERE e.site_id = ? AND e.slug = ? LIMIT 1`, [siteId, idOrSlug])
-  return bySlug ? parseRow(bySlug) : null
+  if (!bySlug) return null
+  const [experience] = await attachExperienceMedia(db, siteId, [parseRow(bySlug)])
+  return experience ?? null
 }
 
 // Used by callers (update/delete/bookings) that need the canonical row id before
@@ -243,9 +241,7 @@ export interface CreateExperienceInput {
   title: string
   tagline?: string | null
   body?: string | null
-  image_asset_id?: string | null
-  video_asset_id?: string | null
-  images?: Array<{ url: string; kind: 'image' | 'video' }>
+  media?: MediaAssetRefInput[] | null
   price?: string | null
   price_amount?: number | null
   compare_at_price_amount?: number | null
@@ -393,65 +389,76 @@ export async function createExperience(
   assertFiniteNonNegative(input.compare_at_price_amount, 'compare_at_price_amount')
   assertFiniteNonNegative(input.duration_minutes, 'duration_minutes')
   assertValidSaleWindow(input.sale_starts_at, input.sale_ends_at)
-  await validateMediaAsset(db, organizationId, siteId, input.image_asset_id, 'image', 'image_asset_id')
-  await validateMediaAsset(db, organizationId, siteId, input.video_asset_id, 'video', 'video_asset_id')
   await validateMediaAsset(db, organizationId, siteId, input.og_image_asset_id, 'image', 'og_image_asset_id')
+  const mediaRefs = input.media ?? []
+  const media = input.media !== undefined
+    ? await hydrateMediaAssetRefs(db, {
+      organizationId,
+      siteId,
+      refs: mediaRefs,
+      allowedKinds: ['image', 'video'],
+      requireCoverPoster: true,
+      fieldName: 'media',
+    })
+    : null
   const id = crypto.randomUUID()
   const slug = await uniqueSlug(db, siteId, slugify(input.title))
   const now = new Date().toISOString()
   const slotsJson = input.time_slots?.length ? JSON.stringify(input.time_slots) : null
   const validRecurringSlots = assertRecurringSlots(input.recurring_slots)
   const recurringSlotsJson = validRecurringSlots ? JSON.stringify(validRecurringSlots) : null
-  const imagesJson = input.images?.length ? JSON.stringify(input.images) : null
   const highlightsJson = input.highlights?.length ? JSON.stringify(input.highlights) : null
   const includedItemsJson = input.included_items?.length ? JSON.stringify(input.included_items) : null
   const whatToBringJson = input.what_to_bring?.length ? JSON.stringify(input.what_to_bring) : null
   const status = input.status !== undefined ? assertExperienceStatus(input.status, 'status') : 'active'
 
-  const result = await execute(
-    db,
-    `INSERT INTO experiences
+  const queries: BatchQuery[] = [
+    {
+      query: `INSERT INTO experiences
        (id, organization_id, site_id, location_id, title, slug, tagline, body,
-        image_asset_id, video_asset_id, images, price, price_amount, compare_at_price_amount, sale_starts_at, sale_ends_at, duration_minutes, max_capacity, time_slots, recurring_slots,
+        price, price_amount, compare_at_price_amount, sale_starts_at, sale_ends_at, duration_minutes, max_capacity, time_slots, recurring_slots,
         available_note, highlights, included_items, what_to_bring, meeting_point, status, sort_order, featured, featured_sort_order,
         seo_title, seo_description, canonical_url, robots, og_image_asset_id, created_at, updated_at, created_by)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [
-      id, organizationId, siteId,
-      input.location_id,
-      input.title,
-      slug,
-      input.tagline ?? null,
-      input.body ?? null,
-      input.image_asset_id ?? null,
-      input.video_asset_id ?? null,
-      imagesJson,
-      input.price ?? null,
-      input.price_amount ?? null,
-      input.compare_at_price_amount ?? null,
-      input.sale_starts_at ?? null,
-      input.sale_ends_at ?? null,
-      input.duration_minutes ?? null,
-      input.max_capacity ?? null,
-      slotsJson,
-      recurringSlotsJson,
-      input.available_note ?? null,
-      highlightsJson,
-      includedItemsJson,
-      whatToBringJson,
-      input.meeting_point ?? null,
-      status,
-      input.sort_order ?? 0,
-      input.featured ? 1 : 0,
-      input.featured_sort_order ?? 0,
-      input.seo_title ?? null,
-      input.seo_description ?? null,
-      input.canonical_url ?? null,
-      input.robots ?? null,
-      input.og_image_asset_id ?? null,
-      now, now, userId,
-    ],
-  )
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      params: [
+        id, organizationId, siteId,
+        input.location_id,
+        input.title,
+        slug,
+        input.tagline ?? null,
+        input.body ?? null,
+        input.price ?? null,
+        input.price_amount ?? null,
+        input.compare_at_price_amount ?? null,
+        input.sale_starts_at ?? null,
+        input.sale_ends_at ?? null,
+        input.duration_minutes ?? null,
+        input.max_capacity ?? null,
+        slotsJson,
+        recurringSlotsJson,
+        input.available_note ?? null,
+        highlightsJson,
+        includedItemsJson,
+        whatToBringJson,
+        input.meeting_point ?? null,
+        status,
+        input.sort_order ?? 0,
+        input.featured ? 1 : 0,
+        input.featured_sort_order ?? 0,
+        input.seo_title ?? null,
+        input.seo_description ?? null,
+        input.canonical_url ?? null,
+        input.robots ?? null,
+        input.og_image_asset_id ?? null,
+        now, now, userId,
+      ],
+    },
+  ]
+  if (media) {
+    queries.push(...buildReplaceExperienceMediaQueries({ organizationId, siteId, experienceId: id, media, now }))
+  }
+
+  const [result] = await executeBatch(db, queries)
 
   if (!result || !result.success) {
     throw new Error('Failed to create experience in the database.')
@@ -491,14 +498,21 @@ export async function updateExperience(
   assertFiniteNonNegative(input.compare_at_price_amount, 'compare_at_price_amount')
   assertFiniteNonNegative(input.duration_minutes, 'duration_minutes')
   assertValidSaleWindow(input.sale_starts_at, input.sale_ends_at)
-  if (input.image_asset_id !== undefined || input.video_asset_id !== undefined || input.og_image_asset_id !== undefined) {
-    const owner = await queryFirst<{ organization_id: string }>(db, `SELECT organization_id FROM experiences WHERE site_id = ? AND id = ? LIMIT 1`, [siteId, id])
-    if (owner) {
-      await validateMediaAsset(db, owner.organization_id, siteId, input.image_asset_id, 'image', 'image_asset_id')
-      await validateMediaAsset(db, owner.organization_id, siteId, input.video_asset_id, 'video', 'video_asset_id')
-      await validateMediaAsset(db, owner.organization_id, siteId, input.og_image_asset_id, 'image', 'og_image_asset_id')
-    }
+  const owner = await queryFirst<{ organization_id: string }>(db, `SELECT organization_id FROM experiences WHERE site_id = ? AND id = ? LIMIT 1`, [siteId, id])
+  if (!owner) return null
+  if (input.og_image_asset_id !== undefined) {
+    await validateMediaAsset(db, owner.organization_id, siteId, input.og_image_asset_id, 'image', 'og_image_asset_id')
   }
+  const media = input.media !== undefined
+    ? await hydrateMediaAssetRefs(db, {
+      organizationId: owner.organization_id,
+      siteId,
+      refs: input.media ?? [],
+      allowedKinds: ['image', 'video'],
+      requireCoverPoster: true,
+      fieldName: 'media',
+    })
+    : null
   const sets: string[] = []
   const params: (string | number | null)[] = []
 
@@ -514,12 +528,6 @@ export async function updateExperience(
   if (input.slug !== undefined) { sets.push('slug = ?'); params.push(input.slug) }
   if (input.tagline !== undefined) { sets.push('tagline = ?'); params.push(input.tagline ?? null) }
   if (input.body !== undefined) { sets.push('body = ?'); params.push(input.body ?? null) }
-  if (input.image_asset_id !== undefined) { sets.push('image_asset_id = ?'); params.push(input.image_asset_id ?? null) }
-  if (input.video_asset_id !== undefined) { sets.push('video_asset_id = ?'); params.push(input.video_asset_id ?? null) }
-  if (input.images !== undefined) {
-    sets.push('images = ?')
-    params.push(input.images?.length ? JSON.stringify(input.images) : null)
-  }
   if (input.price !== undefined) { sets.push('price = ?'); params.push(input.price ?? null) }
   if (input.price_amount !== undefined) { sets.push('price_amount = ?'); params.push(input.price_amount ?? null) }
   if (input.compare_at_price_amount !== undefined) { sets.push('compare_at_price_amount = ?'); params.push(input.compare_at_price_amount ?? null) }
@@ -561,13 +569,52 @@ export async function updateExperience(
   if (input.robots !== undefined) { sets.push('robots = ?'); params.push(input.robots ?? null) }
   if (input.og_image_asset_id !== undefined) { sets.push('og_image_asset_id = ?'); params.push(input.og_image_asset_id ?? null) }
 
-  if (sets.length === 0) return getExperienceById(db, siteId, id)
+  if (sets.length === 0) {
+    if (media) {
+      const now = new Date().toISOString()
+      const [result] = await executeBatch(db, [
+        {
+          query: `UPDATE experiences SET updated_at = ? WHERE organization_id = ? AND site_id = ? AND id = ?`,
+          params: [now, owner.organization_id, siteId, id],
+        },
+        ...buildReplaceExperienceMediaQueries({
+          organizationId: owner.organization_id,
+          siteId,
+          experienceId: id,
+          media,
+          now,
+        }),
+      ])
+      if (!result?.success || Number(result.meta?.changes ?? 0) === 0) return null
+    }
+    return getExperienceById(db, siteId, id)
+  }
 
+  const now = new Date().toISOString()
   sets.push('updated_at = ?')
-  params.push(new Date().toISOString())
-  params.push(siteId, id)
+  params.push(now)
+  params.push(owner.organization_id, siteId, id)
 
-  await execute(db, `UPDATE experiences SET ${sets.join(', ')} WHERE site_id = ? AND id = ?`, params)
+  const updateQuery: BatchQuery = {
+    query: `UPDATE experiences SET ${sets.join(', ')} WHERE organization_id = ? AND site_id = ? AND id = ?`,
+    params,
+  }
+  if (media) {
+    const [result] = await executeBatch(db, [
+      updateQuery,
+      ...buildReplaceExperienceMediaQueries({
+        organizationId: owner.organization_id,
+        siteId,
+        experienceId: id,
+        media,
+        now,
+      }),
+    ])
+    if (!result?.success || Number(result.meta?.changes ?? 0) === 0) return null
+  } else {
+    const result = await execute(db, updateQuery.query, updateQuery.params)
+    if (!result?.success || Number(result.meta?.changes ?? 0) === 0) return null
+  }
 
   return getExperienceById(db, siteId, id)
 }

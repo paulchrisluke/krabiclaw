@@ -86,27 +86,21 @@
           <UFormField label="Description">
             <UTextarea v-model="form.body" :rows="5" placeholder="Describe the experience in detail." class="w-full" />
           </UFormField>
-          <UFormField label="Primary image">
-            <MediaPicker
-              v-model="form.image_asset_id"
-              :site-id="siteId"
-              accept="image"
-              title="Select experience image"
-              @change="handleImageChange"
-            />
-          </UFormField>
-          <UFormField label="Video (optional)">
-            <MediaPicker
-              v-model="form.video_asset_id"
-              :site-id="siteId"
-              accept="video"
-              title="Select experience video"
-              @change="handleVideoChange"
-            />
-          </UFormField>
-          <UFormField label="Additional media gallery" help="Add more images or videos to show in a carousel.">
+          <UFormField label="Media gallery" help="Order images and videos exactly as they should appear publicly. The first item is the cover.">
             <div class="space-y-3">
-              <div v-for="(media, index) in form.images" :key="media._key" class="flex items-center gap-3">
+              <div
+                v-for="(media, index) in form.media"
+                :key="media._key"
+                class="flex items-center gap-3 rounded-lg border border-default p-2"
+                draggable="true"
+                @dragstart="startGalleryMediaDrag(index)"
+                @dragover.prevent
+                @drop.prevent="dropGalleryMedia(index)"
+                @dragend="endGalleryMediaDrag"
+              >
+                <UIcon name="i-lucide-grip-vertical" class="size-4 shrink-0 text-muted" />
+                <UBadge v-if="index === 0" color="primary" variant="soft" size="xs" class="shrink-0">Cover</UBadge>
+                <span v-else class="w-11 shrink-0 text-center text-xs text-muted">{{ index + 1 }}</span>
                 <div class="flex-1">
                   <MediaPicker
                     v-model="media.asset_id"
@@ -121,7 +115,7 @@
                   color="neutral"
                   variant="ghost"
                   icon="i-lucide-chevron-up"
-                  aria-label="Move image up"
+                  aria-label="Move media up"
                   :disabled="index === 0"
                   @click="moveGalleryMedia(index, -1)"
                 />
@@ -130,11 +124,23 @@
                   color="neutral"
                   variant="ghost"
                   icon="i-lucide-chevron-down"
-                  aria-label="Move image down"
-                  :disabled="index === form.images.length - 1"
+                  aria-label="Move media down"
+                  :disabled="index === form.media.length - 1"
                   @click="moveGalleryMedia(index, 1)"
                 />
                 <UButton size="sm" color="error" variant="ghost" icon="i-lucide-x" @click="removeGalleryMedia(index)" />
+              </div>
+              <div v-if="posterlessCoverVideo" class="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
+                <div class="flex items-start gap-3">
+                  <UIcon name="i-lucide-image-off" class="mt-0.5 size-4 shrink-0 text-warning" />
+                  <div class="min-w-0 flex-1">
+                    <p class="font-medium text-highlighted">Cover video needs a poster image</p>
+                    <p class="mt-1 text-muted">Upload or replace the video from the media library with a poster before saving it as the first gallery item.</p>
+                  </div>
+                  <UButton size="xs" color="warning" variant="soft" icon="i-lucide-image-plus" :loading="posterUploading" @click="openCoverPosterPrompt">
+                    Add poster
+                  </UButton>
+                </div>
               </div>
               <UButton size="sm" color="neutral" variant="soft" icon="i-lucide-plus" @click="addGalleryMedia">
                 Add media
@@ -255,10 +261,19 @@
       <template #footer>
         <div class="flex justify-end gap-3 px-6 py-4">
           <UButton color="neutral" variant="ghost" @click="sliderOpen = false">Cancel</UButton>
-          <UButton :loading="saving" @click="save">{{ editing ? 'Save changes' : 'Create' }}</UButton>
+          <UButton :loading="saving" :disabled="posterlessCoverVideo" @click="save">{{ editing ? 'Save changes' : 'Create' }}</UButton>
         </div>
       </template>
     </USlideover>
+
+    <VideoPosterPrompt
+      :open="coverPosterPromptOpen"
+      :uploading="posterUploading"
+      :video-name="posterlessCoverVideoAsset?.asset_id ?? null"
+      :allow-skip="false"
+      @update:open="coverPosterPromptOpen = $event"
+      @submit="submitCoverPoster"
+    />
 
     <!-- Delete confirm -->
     <UModal v-model:open="deleteOpen" title="Delete experience">
@@ -341,6 +356,7 @@
 import type { Experience, SlotAvailability, SlotOverride, WeekdayName } from '~/server/utils/experiences'
 import type { BookingPolicyPatch, RenderedBookingPolicySummary } from '~/server/utils/booking-policies'
 import BookingPolicyForm from '~/components/dashboard/BookingPolicyForm.vue'
+import VideoPosterPrompt from '~/components/workspace/media/VideoPosterPrompt.vue'
 
 const weekdayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const satisfies WeekdayName[]
 
@@ -420,6 +436,9 @@ const intervalOptions = [
   { label: '60 min', value: 60 },
 ]
 const generating = ref(false)
+const draggingMediaIndex = ref<number | null>(null)
+const coverPosterPromptOpen = ref(false)
+const posterUploading = ref(false)
 
 async function runGenerator(target: 'flat' | 'recurring', day?: WeekdayName) {
   generating.value = true
@@ -468,11 +487,7 @@ const emptyForm = () => ({
   location_id: '',
   tagline: '',
   body: '',
-  image_asset_id: null as string | null,
-  image_url: null as string | null,
-  video_asset_id: null as string | null,
-  video_url: null as string | null,
-  images: [] as Array<{ _key: string; asset_id: string | null; url: string | null; kind: 'image' | 'video' }>,
+  media: [] as Array<{ _key: string; asset_id: string | null; url: string | null; thumbnail_url: string | null; kind: 'image' | 'video' }>,
   price: '',
   price_amount: null as number | null,
   compare_at_price_amount: null as number | null,
@@ -493,6 +508,11 @@ const emptyForm = () => ({
 const form = reactive(emptyForm())
 const bookingPolicyDraft = ref<BookingPolicyPatch>({})
 const bookingPolicySummary = ref<RenderedBookingPolicySummary | null>(null)
+const posterlessCoverVideo = computed(() => {
+  const cover = form.media[0]
+  return cover?.kind === 'video' && !cover.thumbnail_url
+})
+const posterlessCoverVideoAsset = computed(() => posterlessCoverVideo.value ? form.media[0] : null)
 
 watch(currentLocationId, () => {
   sliderOpen.value = false
@@ -512,34 +532,72 @@ function openCreate() {
   sliderOpen.value = true
 }
 
-function handleImageChange(asset: { id: string; publicUrl: string; thumbnailUrl: string; kind?: string } | null) {
-  form.image_url = asset?.publicUrl ?? asset?.thumbnailUrl ?? null
-}
-
-function handleVideoChange(asset: { id: string; publicUrl: string; thumbnailUrl: string; kind?: string } | null) {
-  form.video_url = asset?.publicUrl ?? null
-}
-
 function addGalleryMedia() {
-  form.images.push({ _key: crypto.randomUUID(), asset_id: null, url: null, kind: 'image' })
+  form.media.push({ _key: crypto.randomUUID(), asset_id: null, url: null, thumbnail_url: null, kind: 'image' })
 }
 
 function removeGalleryMedia(index: number) {
-  form.images.splice(index, 1)
+  form.media.splice(index, 1)
 }
 
 function moveGalleryMedia(index: number, direction: -1 | 1) {
   const target = index + direction
-  if (target < 0 || target >= form.images.length) return
-  const [item] = form.images.splice(index, 1)
-  if (item) form.images.splice(target, 0, item)
+  if (target < 0 || target >= form.media.length) return
+  const [item] = form.media.splice(index, 1)
+  if (item) form.media.splice(target, 0, item)
+}
+
+function startGalleryMediaDrag(index: number) {
+  draggingMediaIndex.value = index
+}
+
+function endGalleryMediaDrag() {
+  draggingMediaIndex.value = null
+}
+
+function dropGalleryMedia(targetIndex: number) {
+  const sourceIndex = draggingMediaIndex.value
+  draggingMediaIndex.value = null
+  if (sourceIndex === null || sourceIndex === targetIndex) return
+  if (sourceIndex < 0 || sourceIndex >= form.media.length || targetIndex < 0 || targetIndex >= form.media.length) return
+  const [item] = form.media.splice(sourceIndex, 1)
+  if (item) form.media.splice(targetIndex, 0, item)
+}
+
+function openCoverPosterPrompt() {
+  if (!posterlessCoverVideoAsset.value?.asset_id) return
+  coverPosterPromptOpen.value = true
+}
+
+async function submitCoverPoster(poster: File | null) {
+  if (!poster) return
+  const cover = posterlessCoverVideoAsset.value
+  if (!cover?.asset_id) return
+  posterUploading.value = true
+  try {
+    const body = new FormData()
+    body.append('poster', poster)
+    const response = await $fetch<{ thumbnailUrl: string }>(`/api/editor/sites/${siteId}/media/${cover.asset_id}/poster`, {
+      method: 'POST',
+      body,
+    })
+    cover.thumbnail_url = response.thumbnailUrl
+    cover.url = cover.url ?? response.thumbnailUrl
+    coverPosterPromptOpen.value = false
+    toast.add({ description: 'Poster image added.', color: 'success' })
+  } catch (error) {
+    toast.add({ description: getApiErrorMessage(error, 'Failed to add poster image.'), color: 'error' })
+  } finally {
+    posterUploading.value = false
+  }
 }
 
 function handleGalleryMediaChange(index: number, asset: { id: string; publicUrl: string; thumbnailUrl: string; kind?: string } | null) {
-  const item = form.images[index]
+  const item = form.media[index]
   if (!item) return
   item.asset_id = asset?.id ?? null
   item.url = asset?.publicUrl ?? asset?.thumbnailUrl ?? null
+  item.thumbnail_url = asset?.thumbnailUrl ?? null
   item.kind = asset?.kind === 'video' ? 'video' : 'image'
 }
 
@@ -550,11 +608,13 @@ function openEdit(exp: ApiRecord) {
     location_id: currentLocationId.value ?? exp.location_id ?? '',
     tagline: exp.tagline ?? '',
     body: exp.body ?? '',
-    image_asset_id: exp.image_asset_id ?? null,
-    image_url: exp.image_url ?? null,
-    video_asset_id: exp.video_asset_id ?? null,
-    video_url: exp.video_url ?? null,
-    images: Array.isArray(exp.images) ? exp.images.map((img: { asset_id?: string | null; url: string | null; kind: 'image' | 'video' }) => ({ _key: crypto.randomUUID(), asset_id: img.asset_id ?? null, url: img.url, kind: img.kind })) : [],
+    media: (Array.isArray(exp.media) ? exp.media : []).map(asset => ({
+      _key: crypto.randomUUID(),
+      asset_id: asset.id,
+      url: asset.public_url ?? asset.thumbnail_url ?? null,
+      thumbnail_url: asset.thumbnail_url ?? null,
+      kind: asset.kind === 'video' ? 'video' : 'image',
+    })),
     price: exp.price ?? '',
     price_amount: exp.price_amount ?? null,
     compare_at_price_amount: exp.compare_at_price_amount ?? null,
@@ -599,6 +659,10 @@ async function loadExperiencePolicy(experienceId: string, locationId: string | n
 }
 
 async function save() {
+  if (posterlessCoverVideo.value) {
+    toast.add({ description: 'Add a poster image before saving a video as the cover.', color: 'error' })
+    return
+  }
   if (!form.title.trim()) {
     toast.add({ description: 'Title is required.', color: 'error' })
     return
@@ -640,9 +704,8 @@ async function save() {
       highlights: linesToArray(form.highlights_input),
       included_items: linesToArray(form.included_items_input),
       what_to_bring: linesToArray(form.what_to_bring_input),
-      images: form.images.filter(img => img.url).map(img => ({
-        url: img.url,
-        kind: img.kind,
+      media: form.media.filter(item => item.asset_id).map(item => ({
+        asset_id: item.asset_id,
       })),
     }
     let experienceResult: ApiRecord | null = null
@@ -682,11 +745,27 @@ async function save() {
     if (currentLocationId.value !== locationId) return
     sliderOpen.value = false
     await loadExperiences()
-  } catch {
-    toast.add({ description: 'Failed to save experience.', color: 'error' })
+  } catch (error) {
+    const message = getApiErrorMessage(error, 'Failed to save experience.')
+    toast.add({ description: message, color: 'error' })
   } finally {
     saving.value = false
   }
+}
+
+function getApiErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object') {
+    const data = (error as Record<string, unknown>).data
+    if (data && typeof data === 'object') {
+      const dataError = (data as Record<string, unknown>).error
+      if (typeof dataError === 'string' && dataError.trim()) return dataError
+      const statusMessage = (data as Record<string, unknown>).statusMessage
+      if (typeof statusMessage === 'string' && statusMessage.trim()) return statusMessage
+    }
+    const message = (error as Record<string, unknown>).message
+    if (typeof message === 'string' && message.trim()) return message
+  }
+  return fallback
 }
 
 // ── Delete ────────────────────────────────────────────────

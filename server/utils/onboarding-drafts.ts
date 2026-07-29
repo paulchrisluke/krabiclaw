@@ -80,8 +80,6 @@ export interface DraftContentRecord {
   hero_subtitle: string | null
   hero_public_url: string | null
   hero_kind: string | null
-  hero_video_public_url: string | null
-  hero_video_kind: string | null
   thumbnail_url: string | null
   component: string | null
   updated_at: string
@@ -275,8 +273,6 @@ function buildDraftContent(brandName: string, vertical: SiteVertical, heroImageU
       hero_subtitle: baseHeroSubtitle,
       hero_public_url: heroImageUrl,
       hero_kind: heroImageUrl ? 'image' : null,
-      hero_video_public_url: null,
-      hero_video_kind: null,
       thumbnail_url: heroThumbnailUrl,
       component: null,
       updated_at: updatedAt,
@@ -291,8 +287,6 @@ function buildDraftContent(brandName: string, vertical: SiteVertical, heroImageU
       hero_subtitle: null,
       hero_public_url: null,
       hero_kind: null,
-      hero_video_public_url: null,
-      hero_video_kind: null,
       thumbnail_url: null,
       component: null,
       updated_at: updatedAt,
@@ -307,8 +301,6 @@ function buildDraftContent(brandName: string, vertical: SiteVertical, heroImageU
       hero_subtitle: baseHeroSubtitle,
       hero_public_url: null,
       hero_kind: null,
-      hero_video_public_url: null,
-      hero_video_kind: null,
       thumbnail_url: null,
       component: null,
       updated_at: updatedAt,
@@ -325,8 +317,6 @@ function buildDraftContent(brandName: string, vertical: SiteVertical, heroImageU
       hero_subtitle: null,
       hero_public_url: null,
       hero_kind: null,
-      hero_video_public_url: null,
-      hero_video_kind: null,
       thumbnail_url: null,
       component: null,
       updated_at: updatedAt,
@@ -341,8 +331,6 @@ function buildDraftContent(brandName: string, vertical: SiteVertical, heroImageU
       hero_subtitle: null,
       hero_public_url: null,
       hero_kind: null,
-      hero_video_public_url: null,
-      hero_video_kind: null,
       thumbnail_url: null,
       component: null,
       updated_at: updatedAt,
@@ -357,8 +345,6 @@ function buildDraftContent(brandName: string, vertical: SiteVertical, heroImageU
       hero_subtitle: null,
       hero_public_url: null,
       hero_kind: null,
-      hero_video_public_url: null,
-      hero_video_kind: null,
       thumbnail_url: null,
       component: null,
       updated_at: updatedAt,
@@ -373,8 +359,6 @@ function buildDraftContent(brandName: string, vertical: SiteVertical, heroImageU
       hero_subtitle: null,
       hero_public_url: null,
       hero_kind: null,
-      hero_video_public_url: null,
-      hero_video_kind: null,
       thumbnail_url: null,
       component: null,
       updated_at: updatedAt,
@@ -389,8 +373,6 @@ function buildDraftContent(brandName: string, vertical: SiteVertical, heroImageU
       hero_subtitle: null,
       hero_public_url: null,
       hero_kind: null,
-      hero_video_public_url: null,
-      hero_video_kind: null,
       thumbnail_url: null,
       component: null,
       updated_at: updatedAt,
@@ -405,8 +387,6 @@ function buildDraftContent(brandName: string, vertical: SiteVertical, heroImageU
       hero_subtitle: null,
       hero_public_url: null,
       hero_kind: null,
-      hero_video_public_url: null,
-      hero_video_kind: null,
       thumbnail_url: null,
       component: null,
       updated_at: updatedAt,

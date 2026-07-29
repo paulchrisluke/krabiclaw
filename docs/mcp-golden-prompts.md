@@ -34,10 +34,10 @@ and plain-language requests, not just exact/technical phrasing.
 
 | User says | Expected behavior |
 | --- | --- |
-| "Change the big photo" | Calls `get_site_media_assets`, then `set_home_hero_image` (or asks which page/location if ambiguous) |
-| "Change the cover photo for my downtown location" | Calls `list_locations` to resolve the location, then `set_location_hero_image` |
-| "Add pictures of my food" | Asks the user to attach photos, then `upload_user_photo` followed by `set_menu_item_image` or a placement question |
-| "Change our logo" | Calls `get_site_media_assets`, then `set_logo` |
+| "Change the big photo" | Calls `get_site_media_assets`, then `set_media` with target `home_hero` (or asks which page/location if ambiguous) |
+| "Change the cover photo for my downtown location" | Calls `list_locations` to resolve the location, then `set_media` with target `location_hero` |
+| "Add pictures of my food" | Asks the user to attach photos, then `upload_user_photo` followed by `set_media` with target `menu_item_image` or a placement question |
+| "Change our logo" | Calls `get_site_media_assets`, then `set_media` with target `site_logo` |
 | "Post this on my site" | Calls `create_post`, then `publish_post` without stopping to just describe the step |
 
 ## Indirect / fuzzy-intent prompts
@@ -66,7 +66,7 @@ described flow when invoked via `prompts/get`:
 
 | Prompt name | Should route through |
 | --- | --- |
-| `improve_my_homepage` | `get_page_fields` (home) → `get_site_media_assets` → suggestions → confirm → `update_page_content`/`set_home_hero_image` |
+| `improve_my_homepage` | `get_page_fields` (home) → `get_site_media_assets` → suggestions → confirm → `update_page_content`/`set_media` |
 | `add_photos_to_site` | attach → `upload_user_photo` → placement-specific `set_*_image` |
 | `finish_my_site_setup` | `get_workspace_context` → media/page/menu/experience checks → single next step |
 | `make_site_more_bookable` | `get_page_fields` (home) → `list_locations` → `list_menus`/`list_experiences` → suggestions |

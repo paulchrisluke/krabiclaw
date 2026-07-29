@@ -304,6 +304,7 @@ import { formatGoogleHours, getTodayGoogleHours, getIsOpenNow, getActiveSpecialC
 import { formatMoneyAmount, isSaleActive, resolveOverridePriceDisplay } from '~/shared/money'
 import { useDynamicComponent } from '~/composables/useDynamicComponent'
 import { resolveLocationExperienceHref } from '~/utils/experience-navigation'
+import type { Experience } from '~/server/utils/experiences'
 
 const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: string) => s }
 
@@ -461,7 +462,7 @@ const featuredItems = computed(() => {
     return toUse.slice(0, 4).map(exp => ({
       name: exp.title,
       ...resolveOverridePriceDisplay(exp, defaultCurrency),
-      image: exp.image_url || null,
+      image: experienceCoverImage(exp),
       imageKind: 'image',
       alt: exp.title ? `${exp.title} experience` : 'Featured experience image',
       href: exp.slug ? `/experiences/${exp.slug}` : locationExperienceHref.value || undefined,
@@ -469,6 +470,13 @@ const featuredItems = computed(() => {
     }))
   }
 })
+
+function experienceCoverImage(exp: Experience): string | null {
+  const cover = exp.media?.[0]
+  if (cover?.kind === 'image') return cover.public_url || null
+  if (cover?.kind === 'video') return cover.thumbnail_url || null
+  return null
+}
 
 // Content hero fields take precedence; fall back to Google Business primary photo
 const contentHero = computed(() => getContentHero({ title: '', subtitle: '', image: '', video: '' }))

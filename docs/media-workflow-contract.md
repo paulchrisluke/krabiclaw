@@ -54,17 +54,16 @@ Related workflow helpers:
   - Raw base64 from a non-native image source: `save_generated_image({ site_id, image_data_base64, prompt })`
 - For user-attached ChatGPT images, use `upload_user_photo({ site_id, file, category, description })` and pass the attachment via the `file` argument so ChatGPT can rewrite the local mounted path into an authorized file reference before KrabiClaw receives it.
 - `upload_user_media({ site_id, file, poster_file?, category, description })` is the canonical generic upload path for both images and videos — the content type is auto-detected from the file bytes. `upload_user_photo` remains a thin, image-only back-compat wrapper over the same underlying upload utility.
-- `open_video_upload` launches the single inline MCP Apps widget. It requires `site_id`, accepts video only, and calls `window.openai.uploadFile`, `window.openai.getFileDownloadUrl`, then `window.openai.callTool('upload_user_media', ...)`. Images stay on direct ChatGPT attachments or native image generation. The dashboard media library remains a fallback only for chat clients that do not support inline widgets. Upload first, then place the asset with the appropriate assignment tool.
+- ChatGPT MCP uploads use native file attachments. There are no upload widget tools in the connector; no tool whose name starts with `open_` and contains `upload` exists.
 - Do not bypass the ChatGPT file-argument rewrite by fabricating `download_url` objects or inventing attachment transport.
 - Prefer business-level image workflows over generic file handoff when the user intent is domain-specific:
   - Generate into KrabiClaw first, persist to Cloudflare Images immediately, then assign by `assetId`
-  - Assignment should happen through the canonical entity mutation tools such as `set_logo`, `set_home_hero_image`, `set_about_story_image`, `set_home_story_image`, `set_location_hero_image`, `set_menu_item_image`, `set_post_image`, and `set_experience_image`
-  - `set_about_story_image` and `set_home_story_image` are separate tools because `/about` and `/` each have their own `story.image` content field — they commonly point at the same asset, but the page is never inferred
+  - Assignment should happen through the canonical `set_media` tool with a discriminated target and complete `asset_ids` state.
+  - `set_media` uses explicit targets for `/about` and `/` story images because each page has its own `story.image` content field — they commonly point at the same asset, but the page is never inferred
 - MCP tools should be coarse-grained and business-level:
   - `get_site_media_assets`
   - `upload_user_photo`
   - `upload_user_media`
-  - `open_video_upload`
   - `update_media_asset`
   - `delete_media_asset`
   - `save_generated_image`

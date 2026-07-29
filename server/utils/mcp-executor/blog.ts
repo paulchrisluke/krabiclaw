@@ -2,7 +2,7 @@ import type { McpExecutorContext } from './shared'
 import { createPlatformBlogPost, deletePlatformBlogPost, getPlatformBlogPost, listPlatformBlogPosts, reorderPlatformBlogPosts, updatePlatformBlogPost } from '~/server/utils/platform-content'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
-import { attachViewUrlToRecord, NOT_HANDLED, objectArray, omit, optionalString, requireActiveImageAsset, requiredString } from './shared'
+import { attachViewUrlToRecord, NOT_HANDLED, objectArray, omit, optionalString, requiredString } from './shared'
 
 const UPDATE_BLOG_MUTATION_FIELDS = [
   'title',
@@ -239,21 +239,6 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
       const result = await updatePlatformBlogPost(site.db, requiredString(args, "post_id"), publish ? { publish: true } : { unpublish: true }, site.siteId);
       const post = attachViewUrlToRecord(result.post, site, {}, site.env);
       return renderStructuredResponse({ post: toBlogPostProjection(post) }, `${publish ? "Published" : "Unpublished"} blog post "${result.post.title ?? result.post.id}".`);
-    }
-    case "set_blog_post_image": {
-      const assetId = requiredString(args, "asset_id");
-      await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
-      const result = await updatePlatformBlogPost(
-        site.db,
-        requiredString(args, "post_id"),
-        { featured_image_asset_id: assetId } as never,
-        site.siteId,
-      );
-      const hydratedImageBlogPost = attachViewUrlToRecord(result.post, site, {}, site.env);
-      return renderStructuredResponse(
-        { post: toBlogPostProjection(hydratedImageBlogPost) },
-        `Updated image for "${result.post.title ?? result.post.id}".`,
-      );
     }
     case "reorder_blog_posts": {
       const items = objectArray(args.items, "items").map((item) => {

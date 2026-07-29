@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm"
-import { sqliteTable, integer, text, numeric, real, unique, primaryKey, uniqueIndex, index, check } from "drizzle-orm/sqlite-core"
+import { sqliteTable, integer, text, numeric, real, unique, primaryKey, uniqueIndex, index, check, foreignKey } from "drizzle-orm/sqlite-core"
 import type { AnySQLiteColumn } from "drizzle-orm/sqlite-core"
 
 export const account = sqliteTable("account", {
@@ -167,8 +167,7 @@ export const business_locations = sqliteTable("business_locations", {
 	foodpanda_url: text(),
 	google_place_id: text(),
 	google_review_url: text(),
-	hero_image_asset_id: text().references(() => media_assets_old.id, { onDelete: "set null" } ),
-	hero_video_asset_id: text().references(() => media_assets_old.id, { onDelete: "set null" } ),
+	hero_media_asset_id: text().references((): AnySQLiteColumn => media_assets.id, { onDelete: "set null" } ),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 	notification_phone: text(),
@@ -272,7 +271,7 @@ export const guest_threads = sqliteTable("guest_threads", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	location_id: text().references(() => business_locations.id, { onDelete: "set null" } ),
+	location_id: text().references((): AnySQLiteColumn => business_locations.id, { onDelete: "set null" } ),
 	submission_type: text().notNull(),
 	submission_id: text().notNull(),
 	guest_name: text().notNull(),
@@ -697,36 +696,10 @@ export const media_assets = sqliteTable("media_assets", {
 	// immutable migrations/0001_initial.sql (pre-dates schema.ts as source of truth) and were
 	// never mirrored back here. organization_id adds no separate selectivity once site_id is
 	// fixed (a site belongs to exactly one org), so no additional index is needed.
-}, () => [
+}, (table) => [
 	check("media_assets_category_check", sql`category IS NULL OR category IN ('exterior', 'interior', 'food', 'menu', 'team', 'other', 'logo', 'blog')`),
+	uniqueIndex("media_assets_org_site_id_unique").on(table.organization_id, table.site_id, table.id),
 ]);
-
-export const media_assets_old = sqliteTable("media_assets_old", {
-	id: text().primaryKey(),
-	organization_id: text().notNull(),
-	site_id: text().notNull(),
-	location_id: text(),
-	kind: text().notNull(),
-	provider: text().notNull(),
-	source: text().notNull(),
-	cloudflare_image_id: text(),
-	r2_key: text(),
-	google_media_name: text(),
-	public_url: text(),
-	thumbnail_url: text(),
-	mime_type: text(),
-	file_name: text(),
-	file_size: integer(),
-	width: integer(),
-	height: integer(),
-	duration: integer(),
-	alt_text: text(),
-	category: text(),
-	status: text().default("active").notNull(),
-	created_by_user_id: text(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-});
 
 export const member = sqliteTable("member", {
 	id: text().primaryKey(),
@@ -802,7 +775,7 @@ export const menu_items = sqliteTable("menu_items", {
 	compare_at_price_amount: numeric(),
 	sale_starts_at: text(),
 	sale_ends_at: text(),
-	image_asset_id: text().references(() => media_assets_old.id, { onDelete: "set null" } ),
+	image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 	available: numeric().default(sql`1`).notNull(),
 	featured: numeric().default(sql`false`).notNull(),
 	featured_sort_order: integer().default(0).notNull(),
@@ -1170,7 +1143,7 @@ export const blog_posts = sqliteTable("blog_posts", {
 	status: text().default("draft").notNull(), // draft | published | scheduled | archived
 	visibility: text().default("public").notNull(), // public | unlisted
 	author_id: text().references(() => user.id, { onDelete: "set null" } ),
-	featured_image_asset_id: text().references(() => media_assets_old.id, { onDelete: "set null" } ),
+	featured_image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 	social_image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 	published_at: text(),
 	first_published_at: text(),
@@ -1247,7 +1220,7 @@ export const platform_docs = sqliteTable("platform_docs", {
 	author_id: text().references(() => user.id, { onDelete: "set null" } ),
 	seo_description: text(),
 	seo_keywords: text(),
-	featured_image_asset_id: text().references(() => media_assets_old.id, { onDelete: "set null" } ),
+	featured_image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 	sort_order: integer().default(0),
 	parent_doc_id: text(),
 	difficulty_level: text(),
@@ -1306,7 +1279,7 @@ export const posts = sqliteTable("posts", {
 	post_type: text().default("standard").notNull(),
 	title: text(),
 	body: text().notNull(),
-	image_asset_id: text().references(() => media_assets_old.id, { onDelete: "set null" } ),
+	image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 	seo_title: text(),
 	seo_description: text(),
 	og_image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
@@ -1624,8 +1597,7 @@ export const site_content = sqliteTable("site_content", {
 	content: text(),
 	hero_title: text(),
 	hero_subtitle: text(),
-	hero_image_asset_id: text().references(() => media_assets_old.id, { onDelete: "set null" } ),
-	hero_video_asset_id: text().references(() => media_assets_old.id, { onDelete: "set null" } ),
+	hero_media_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 	value: text(),
 	type: text().default("text").notNull(),
 	source: text().default("manual").notNull(),
@@ -2342,9 +2314,6 @@ export const experiences = sqliteTable("experiences", {
 	slug: text().notNull(),
 	tagline: text(),
 	body: text(),
-	image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
-	video_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
-	images: text(),
 	price: text(),
 	price_amount: numeric(),
 	compare_at_price_amount: numeric(),
@@ -2376,6 +2345,34 @@ export const experiences = sqliteTable("experiences", {
 }, (table) => [
 	check("experiences_source_check", sql`source IN ('manual', 'template')`),
 	index("experiences_org_site_idx").on(table.organization_id, table.site_id),
+	uniqueIndex("experiences_org_site_id_unique").on(table.organization_id, table.site_id, table.id),
+]);
+
+export const experience_media = sqliteTable("experience_media", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	experience_id: text().notNull(),
+	asset_id: text().notNull(),
+	sort_order: integer().notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	foreignKey({
+		columns: [table.organization_id, table.site_id, table.experience_id],
+		foreignColumns: [experiences.organization_id, experiences.site_id, experiences.id],
+		name: "experience_media_experience_scope_fk",
+	}).onDelete("cascade"),
+	foreignKey({
+		columns: [table.organization_id, table.site_id, table.asset_id],
+		foreignColumns: [media_assets.organization_id, media_assets.site_id, media_assets.id],
+		name: "experience_media_asset_scope_fk",
+	}).onDelete("cascade"),
+	unique("experience_media_experience_asset_unique").on(table.experience_id, table.asset_id),
+	unique("experience_media_experience_sort_unique").on(table.experience_id, table.sort_order),
+	index("experience_media_experience_order_idx").on(table.experience_id, table.sort_order),
+	index("experience_media_asset_scope_idx").on(table.organization_id, table.site_id, table.asset_id),
+	index("experience_media_site_experience_idx").on(table.site_id, table.experience_id),
 ]);
 
 export const mcp_workspace_preferences = sqliteTable("mcp_workspace_preferences", {

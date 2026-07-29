@@ -150,14 +150,14 @@ test.describe('stateless MCP server', () => {
 
       const assign = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
-        toolName: 'set_home_hero_video',
-        args: { site_id: siteId, asset_id: assetId },
+        toolName: 'set_media',
+        args: { site_id: siteId, target: { type: 'home_hero' }, asset_ids: [assetId] },
       })
       if (assign.status() !== 200) console.error(await assign.text())
       expect(assign.status()).toBe(200)
     } finally {
       if (assetId) {
-        await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'clear_home_hero_video', args: { site_id: siteId } })
+        await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'set_media', args: { site_id: siteId, target: { type: 'home_hero' }, asset_ids: [] } })
         await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'delete_media_asset', args: { site_id: siteId, asset_id: assetId } })
       }
     }

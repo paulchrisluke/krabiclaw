@@ -6,6 +6,7 @@ import { chowbotToolFromMcp } from './from-mcp'
 // so it is not applicable to ChowBot,
 // which has its own generate_image/WhatsApp-pending-media upload paths.
 const MEDIA_DOMAIN_TOOL_NAMES = new Set([
+  'set_media',
   'get_site_media_assets',
   'update_media_asset',
   'delete_media_asset',

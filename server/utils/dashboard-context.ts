@@ -429,7 +429,8 @@ export async function listDashboardLocations(db: DbClient, organizationId: strin
            business_locations.city, business_locations.address, business_locations.feature_overrides,
            COALESCE(ma_hero.thumbnail_url, ma_hero.public_url) as hero_url
     FROM business_locations
-    LEFT JOIN media_assets ma_hero ON ma_hero.id = business_locations.hero_image_asset_id
+    LEFT JOIN media_assets ma_hero ON ma_hero.id = business_locations.hero_media_asset_id
+      AND ma_hero.organization_id = business_locations.organization_id AND ma_hero.site_id = business_locations.site_id
     WHERE business_locations.organization_id = ? AND business_locations.site_id = ? AND business_locations.status = 'active'
       ${principal && !isOrganizationWideRole(principal.role) ? 'AND EXISTS (SELECT 1 FROM member m JOIN sites s ON s.id = business_locations.site_id JOIN teamMember tm ON tm.userId = m.userId AND tm.teamId IN (s.team_id, business_locations.team_id) WHERE m.id = ? AND m.organizationId = business_locations.organization_id)' : ''}
     ORDER BY is_primary DESC, title ASC

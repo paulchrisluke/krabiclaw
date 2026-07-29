@@ -2,9 +2,8 @@ import type { McpExecutorContext } from './shared'
 import { applyBookingPolicyPatch, getDirectBookingPolicy, renderBookingPolicySummary, resolveBookingPolicy, upsertBookingPolicy, validateBookingPolicyPatch, type BookingPolicyScopeType, type BookingPolicyType } from '~/server/utils/booking-policies'
 import { deleteContentField, getEditorContent, updateHomeHero, updatePageContent } from '~/server/utils/mcp-workflows'
 import { getProfessionalServiceContent, upsertProfessionalServiceContent } from '~/server/utils/professional-services-editor'
-import { getMediaAsset } from '~/server/utils/media-asset-manager'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
-import { attachViewUrlToRecord, NOT_HANDLED, getCurrentHomeHeroState, mutationContextPayload, objectRecord, optionalString, requireActiveImageAsset, requireActiveVideoAsset, requiredString, rethrowAsInvalidParams } from './shared'
+import { attachViewUrlToRecord, NOT_HANDLED, mutationContextPayload, objectRecord, optionalString, requiredString, rethrowAsInvalidParams } from './shared'
 
 export async function handleContentTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, site } = ctx
@@ -171,163 +170,12 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
         const updated = await updateHomeHero(site.db, site.organizationId, site.siteId, {
           title: optionalString(args, "title"),
           subtitle: optionalString(args, "subtitle"),
-          image_asset_id: optionalString(args, "image_asset_id"),
-          video_asset_id: optionalString(args, "video_asset_id"),
           location_id: locationId,
         });
         return {
           ...attachViewUrlToRecord(updated, site, {}, site.env),
           context: await mutationContextPayload(site, { locationId }),
         };
-      } catch (error) {
-        return rethrowAsInvalidParams(error);
-      }
-    case "set_home_hero_image":
-      try {
-        const assetId = requiredString(args, "asset_id");
-        const locationId = optionalString(args, "location_id");
-        await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
-        const currentHero = await getCurrentHomeHeroState(
-          site.db,
-          site.organizationId,
-          site.siteId,
-          locationId,
-        );
-        const update = await updateHomeHero(site.db, site.organizationId, site.siteId, {
-          image_asset_id: assetId,
-          location_id: locationId,
-        });
-        const asset = await getMediaAsset(site.db, assetId, site.siteId);
-        return {
-          ...attachViewUrlToRecord(update, site, {}, site.env),
-          asset_id: assetId,
-          asset_public_url: asset?.public_url ?? null,
-          ...(currentHero.hero_video_asset_id
-            ? {
-                warning:
-                  "This page already has a hero video, which takes display priority over a hero image. The video will keep showing. Call clear_home_hero_video first if you want this image to display instead.",
-              }
-            : {}),
-          context: await mutationContextPayload(site, { locationId }),
-        };
-      } catch (error) {
-        return rethrowAsInvalidParams(error);
-      }
-    case "set_home_hero_video":
-      try {
-        const assetId = requiredString(args, "asset_id");
-        const locationId = optionalString(args, "location_id");
-        await requireActiveVideoAsset(site.db, site.siteId, assetId, "asset_id");
-        const currentHero = await getCurrentHomeHeroState(
-          site.db,
-          site.organizationId,
-          site.siteId,
-          locationId,
-        );
-        const updated = await updateHomeHero(site.db, site.organizationId, site.siteId, {
-          video_asset_id: assetId,
-          location_id: locationId,
-        });
-        return {
-          ...attachViewUrlToRecord(updated, site, {}, site.env),
-          ...(currentHero.hero_image_asset_id
-            ? {
-                warning:
-                  "This page already has a hero image, but the new hero video will take display priority over it.",
-              }
-            : {}),
-          context: await mutationContextPayload(site, { locationId }),
-        };
-      } catch (error) {
-        return rethrowAsInvalidParams(error);
-      }
-    case "clear_home_hero_image":
-      try {
-        const locationId = optionalString(args, "location_id");
-        const updated = await updateHomeHero(site.db, site.organizationId, site.siteId, {
-          image_asset_id: null,
-          location_id: locationId,
-        });
-        return {
-          ...attachViewUrlToRecord(updated, site, {}, site.env),
-          context: await mutationContextPayload(site, { locationId }),
-        };
-      } catch (error) {
-        return rethrowAsInvalidParams(error);
-      }
-    case "clear_home_hero_video":
-      try {
-        const locationId = optionalString(args, "location_id");
-        const updated = await updateHomeHero(site.db, site.organizationId, site.siteId, {
-          video_asset_id: null,
-          location_id: locationId,
-        });
-        return {
-          ...attachViewUrlToRecord(updated, site, {}, site.env),
-          context: await mutationContextPayload(site, { locationId }),
-        };
-      } catch (error) {
-        return rethrowAsInvalidParams(error);
-      }
-    case "set_about_story_image":
-      try {
-        const assetId = requiredString(args, "asset_id");
-        await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
-        const updated = await updatePageContent(
-          site.db,
-          site.organizationId,
-          site.siteId,
-          {
-            page: "about",
-            changes: { "story.image": assetId },
-            location_id: null,
-          },
-        );
-        const hydratedAboutStory = attachViewUrlToRecord(updated, site, {}, site.env);
-        const aboutStoryContext = await mutationContextPayload(site);
-        return renderStructuredResponse(
-          {
-            success: true,
-            page: "about",
-            changes_count: 1,
-            public_path: updated.public_path,
-            view_url: hydratedAboutStory.view_url,
-            context: aboutStoryContext,
-          },
-          "Updated About page story image.",
-          { page_content: hydratedAboutStory },
-        );
-      } catch (error) {
-        return rethrowAsInvalidParams(error);
-      }
-    case "set_home_story_image":
-      try {
-        const assetId = requiredString(args, "asset_id");
-        await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
-        const updated = await updatePageContent(
-          site.db,
-          site.organizationId,
-          site.siteId,
-          {
-            page: "home",
-            changes: { "story.image": assetId },
-            location_id: null,
-          },
-        );
-        const hydratedHomeStory = attachViewUrlToRecord(updated, site, {}, site.env);
-        const homeStoryContext = await mutationContextPayload(site);
-        return renderStructuredResponse(
-          {
-            success: true,
-            page: "home",
-            changes_count: 1,
-            public_path: updated.public_path,
-            view_url: hydratedHomeStory.view_url,
-            context: homeStoryContext,
-          },
-          "Updated homepage story image.",
-          { page_content: hydratedHomeStory },
-        );
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
