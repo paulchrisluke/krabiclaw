@@ -228,7 +228,18 @@ INSERT INTO `business_location_translations` SELECT * FROM `__um_backup_business
 INSERT INTO `experience_bookings` SELECT * FROM `__um_backup_experience_bookings`;--> statement-breakpoint
 INSERT INTO `experience_media` SELECT * FROM `__um_backup_experience_media`;--> statement-breakpoint
 INSERT INTO `experience_slot_overrides` SELECT * FROM `__um_backup_experience_slot_overrides`;--> statement-breakpoint
-INSERT INTO `invitation_access_scope` SELECT * FROM `__um_backup_invitation_access_scope`;--> statement-breakpoint
+UPDATE `invitation_access_scope`
+SET
+	`invitation_id` = (SELECT `invitation_id` FROM `__um_backup_invitation_access_scope` WHERE `__um_backup_invitation_access_scope`.`id` = `invitation_access_scope`.`id`),
+	`organization_id` = (SELECT `organization_id` FROM `__um_backup_invitation_access_scope` WHERE `__um_backup_invitation_access_scope`.`id` = `invitation_access_scope`.`id`),
+	`site_id` = (SELECT `site_id` FROM `__um_backup_invitation_access_scope` WHERE `__um_backup_invitation_access_scope`.`id` = `invitation_access_scope`.`id`),
+	`location_id` = (SELECT `location_id` FROM `__um_backup_invitation_access_scope` WHERE `__um_backup_invitation_access_scope`.`id` = `invitation_access_scope`.`id`),
+	`grant_source` = (SELECT `grant_source` FROM `__um_backup_invitation_access_scope` WHERE `__um_backup_invitation_access_scope`.`id` = `invitation_access_scope`.`id`),
+	`created_at` = (SELECT `created_at` FROM `__um_backup_invitation_access_scope` WHERE `__um_backup_invitation_access_scope`.`id` = `invitation_access_scope`.`id`)
+WHERE EXISTS (SELECT 1 FROM `__um_backup_invitation_access_scope` WHERE `__um_backup_invitation_access_scope`.`id` = `invitation_access_scope`.`id`);--> statement-breakpoint
+INSERT INTO `invitation_access_scope`
+SELECT * FROM `__um_backup_invitation_access_scope`
+WHERE `id` NOT IN (SELECT `id` FROM `invitation_access_scope`);--> statement-breakpoint
 INSERT INTO `location_qa` SELECT * FROM `__um_backup_location_qa`;--> statement-breakpoint
 INSERT INTO `menus` SELECT * FROM `__um_backup_menus`;--> statement-breakpoint
 INSERT INTO `menu_items` SELECT * FROM `__um_backup_menu_items`;--> statement-breakpoint
@@ -266,6 +277,14 @@ LIMIT 1;--> statement-breakpoint
 INSERT INTO `__um_assert_0078` (`violation`)
 SELECT 'site_content_backup_count_mismatch'
 WHERE (SELECT COUNT(*) FROM `__um_backup_site_content`) != (SELECT COUNT(*) FROM `site_content`)
+LIMIT 1;--> statement-breakpoint
+INSERT INTO `__um_assert_0078` (`violation`)
+SELECT 'invitation_access_scope_restore_id_mismatch'
+WHERE EXISTS (
+	SELECT 1
+	FROM `__um_backup_invitation_access_scope`
+	WHERE `id` NOT IN (SELECT `id` FROM `invitation_access_scope`)
+)
 LIMIT 1;--> statement-breakpoint
 INSERT INTO `__um_assert_0078` (`violation`)
 SELECT 'location cleanup foreign key check failed'
