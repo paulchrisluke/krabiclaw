@@ -24,8 +24,8 @@ async function queryAll<T>(_db: unknown, query: string, params: unknown[] = []):
   }
 
   if (query.includes('FROM media_assets')) {
-    const [siteId, assetId] = params
-    return store.media.filter(asset => asset.site_id === siteId && asset.id === assetId) as T[]
+    const [organizationId, siteId, assetId] = params
+    return store.media.filter(asset => asset.organization_id === organizationId && asset.site_id === siteId && asset.id === assetId) as T[]
   }
 
   if (query.includes('FROM offerings')) return [] as T[]
@@ -120,7 +120,7 @@ function resetStore() {
       updated_at: '2026-07-21T00:00:00.000Z',
     },
   ]
-  store.media = [{ id: 'asset-home-new', site_id: 'site-ncls-blawby', public_url: 'https://images.example/new-home.webp' }]
+  store.media = [{ id: 'asset-home-new', organization_id: 'org-ncls-blawby', site_id: 'site-ncls-blawby', public_url: 'https://images.example/new-home.webp', kind: 'image' }]
   store.batches = []
 }
 
@@ -161,6 +161,7 @@ test('professional_services page editor updates tenant_page components without d
   assert.deepEqual(components.find(component => component.type === 'home_hero')?.background, {
     asset_id: 'asset-home-new',
     url: 'https://images.example/new-home.webp',
+    kind: 'image',
   })
   assert.equal(components.find(component => component.type === 'consultation_cta')?.description, 'A new consultation note.')
 })

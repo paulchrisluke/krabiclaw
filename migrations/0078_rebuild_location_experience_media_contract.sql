@@ -239,7 +239,17 @@ SET
 WHERE EXISTS (SELECT 1 FROM `__um_backup_invitation_access_scope` WHERE `__um_backup_invitation_access_scope`.`id` = `invitation_access_scope`.`id`);--> statement-breakpoint
 INSERT INTO `invitation_access_scope`
 SELECT * FROM `__um_backup_invitation_access_scope`
-WHERE `id` NOT IN (SELECT `id` FROM `invitation_access_scope`);--> statement-breakpoint
+WHERE `id` NOT IN (SELECT `id` FROM `invitation_access_scope`)
+  AND NOT EXISTS (
+    SELECT 1
+    FROM `invitation_access_scope`
+    WHERE `invitation_access_scope`.`invitation_id` = `__um_backup_invitation_access_scope`.`invitation_id`
+      AND `invitation_access_scope`.`site_id` = `__um_backup_invitation_access_scope`.`site_id`
+      AND (
+        (`invitation_access_scope`.`location_id` IS NULL AND `__um_backup_invitation_access_scope`.`location_id` IS NULL)
+        OR `invitation_access_scope`.`location_id` = `__um_backup_invitation_access_scope`.`location_id`
+      )
+  );--> statement-breakpoint
 UPDATE `location_qa`
 SET
 	`organization_id` = (SELECT `organization_id` FROM `__um_backup_location_qa` WHERE `__um_backup_location_qa`.`id` = `location_qa`.`id`),
@@ -266,7 +276,17 @@ SELECT * FROM `__um_backup_location_qa`
 WHERE `id` NOT IN (SELECT `id` FROM `location_qa`);--> statement-breakpoint
 INSERT INTO `menus` SELECT * FROM `__um_backup_menus` WHERE id NOT IN (SELECT id FROM `menus`);--> statement-breakpoint
 INSERT INTO `menu_items` SELECT * FROM `__um_backup_menu_items` WHERE id NOT IN (SELECT id FROM `menu_items`);--> statement-breakpoint
-INSERT INTO `menu_item_translations` SELECT * FROM `__um_backup_menu_item_translations` WHERE id NOT IN (SELECT id FROM `menu_item_translations`);--> statement-breakpoint
+INSERT INTO `menu_item_translations`
+SELECT * FROM `__um_backup_menu_item_translations`
+WHERE id NOT IN (SELECT id FROM `menu_item_translations`)
+  AND NOT EXISTS (
+    SELECT 1
+    FROM `menu_item_translations`
+    WHERE `menu_item_translations`.`organization_id` = `__um_backup_menu_item_translations`.`organization_id`
+      AND `menu_item_translations`.`site_id` = `__um_backup_menu_item_translations`.`site_id`
+      AND `menu_item_translations`.`menu_item_id` = `__um_backup_menu_item_translations`.`menu_item_id`
+      AND `menu_item_translations`.`locale` = `__um_backup_menu_item_translations`.`locale`
+  );--> statement-breakpoint
 INSERT INTO `reservation_slot_overrides` SELECT * FROM `__um_backup_reservation_slot_overrides` WHERE id NOT IN (SELECT id FROM `reservation_slot_overrides`);--> statement-breakpoint
 INSERT INTO `reservation_submissions` SELECT * FROM `__um_backup_reservation_submissions` WHERE id NOT IN (SELECT id FROM `reservation_submissions`);--> statement-breakpoint
 INSERT INTO `reviews` SELECT * FROM `__um_backup_reviews` WHERE id NOT IN (SELECT id FROM `reviews`);--> statement-breakpoint
@@ -293,7 +313,20 @@ SET
 WHERE EXISTS (SELECT 1 FROM `__um_backup_site_content_translations` WHERE `__um_backup_site_content_translations`.`id` = `site_content_translations`.`id`);--> statement-breakpoint
 INSERT INTO `site_content_translations`
 SELECT * FROM `__um_backup_site_content_translations`
-WHERE `id` NOT IN (SELECT `id` FROM `site_content_translations`);--> statement-breakpoint
+WHERE `id` NOT IN (SELECT `id` FROM `site_content_translations`)
+  AND NOT EXISTS (
+    SELECT 1
+    FROM `site_content_translations`
+    WHERE `site_content_translations`.`organization_id` = `__um_backup_site_content_translations`.`organization_id`
+      AND `site_content_translations`.`site_id` = `__um_backup_site_content_translations`.`site_id`
+      AND `site_content_translations`.`locale` = `__um_backup_site_content_translations`.`locale`
+      AND `site_content_translations`.`page` = `__um_backup_site_content_translations`.`page`
+      AND `site_content_translations`.`field` = `__um_backup_site_content_translations`.`field`
+      AND (
+        (`site_content_translations`.`location_id` IS NULL AND `__um_backup_site_content_translations`.`location_id` IS NULL)
+        OR `site_content_translations`.`location_id` = `__um_backup_site_content_translations`.`location_id`
+      )
+  );--> statement-breakpoint
 
 UPDATE `contact_submissions` SET `location_id` = (SELECT `location_id` FROM `__um_backup_contact_submissions` WHERE `__um_backup_contact_submissions`.`id` = `contact_submissions`.`id`), `experience_id` = (SELECT `experience_id` FROM `__um_backup_contact_submissions` WHERE `__um_backup_contact_submissions`.`id` = `contact_submissions`.`id`) WHERE EXISTS (SELECT 1 FROM `__um_backup_contact_submissions` WHERE `__um_backup_contact_submissions`.`id` = `contact_submissions`.`id`);--> statement-breakpoint
 UPDATE `dashboard_preferences` SET `selected_location_id` = (SELECT `selected_location_id` FROM `__um_backup_dashboard_preferences` WHERE `__um_backup_dashboard_preferences`.`id` = `dashboard_preferences`.`id`) WHERE EXISTS (SELECT 1 FROM `__um_backup_dashboard_preferences` WHERE `__um_backup_dashboard_preferences`.`id` = `dashboard_preferences`.`id`);--> statement-breakpoint
@@ -330,6 +363,16 @@ WHERE EXISTS (
 	SELECT 1
 	FROM `__um_backup_invitation_access_scope`
 	WHERE `id` NOT IN (SELECT `id` FROM `invitation_access_scope`)
+	  AND NOT EXISTS (
+		SELECT 1
+		FROM `invitation_access_scope`
+		WHERE `invitation_access_scope`.`invitation_id` = `__um_backup_invitation_access_scope`.`invitation_id`
+		  AND `invitation_access_scope`.`site_id` = `__um_backup_invitation_access_scope`.`site_id`
+		  AND (
+			(`invitation_access_scope`.`location_id` IS NULL AND `__um_backup_invitation_access_scope`.`location_id` IS NULL)
+			OR `invitation_access_scope`.`location_id` = `__um_backup_invitation_access_scope`.`location_id`
+		  )
+	  )
 )
 LIMIT 1;--> statement-breakpoint
 INSERT INTO `__um_assert_0078` (`violation`)
@@ -346,6 +389,19 @@ WHERE EXISTS (
 	SELECT 1
 	FROM `__um_backup_site_content_translations`
 	WHERE `id` NOT IN (SELECT `id` FROM `site_content_translations`)
+	  AND NOT EXISTS (
+		SELECT 1
+		FROM `site_content_translations`
+		WHERE `site_content_translations`.`organization_id` = `__um_backup_site_content_translations`.`organization_id`
+		  AND `site_content_translations`.`site_id` = `__um_backup_site_content_translations`.`site_id`
+		  AND `site_content_translations`.`locale` = `__um_backup_site_content_translations`.`locale`
+		  AND `site_content_translations`.`page` = `__um_backup_site_content_translations`.`page`
+		  AND `site_content_translations`.`field` = `__um_backup_site_content_translations`.`field`
+		  AND (
+			(`site_content_translations`.`location_id` IS NULL AND `__um_backup_site_content_translations`.`location_id` IS NULL)
+			OR `site_content_translations`.`location_id` = `__um_backup_site_content_translations`.`location_id`
+		  )
+	  )
 )
 LIMIT 1;--> statement-breakpoint
 INSERT INTO `__um_assert_0078` (`violation`)
