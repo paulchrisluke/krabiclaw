@@ -240,7 +240,30 @@ WHERE EXISTS (SELECT 1 FROM `__um_backup_invitation_access_scope` WHERE `__um_ba
 INSERT INTO `invitation_access_scope`
 SELECT * FROM `__um_backup_invitation_access_scope`
 WHERE `id` NOT IN (SELECT `id` FROM `invitation_access_scope`);--> statement-breakpoint
-INSERT INTO `location_qa` SELECT * FROM `__um_backup_location_qa`;--> statement-breakpoint
+UPDATE `location_qa`
+SET
+	`organization_id` = (SELECT `organization_id` FROM `__um_backup_location_qa` WHERE `__um_backup_location_qa`.`id` = `location_qa`.`id`),
+	`site_id` = (SELECT `site_id` FROM `__um_backup_location_qa` WHERE `__um_backup_location_qa`.`id` = `location_qa`.`id`),
+	`location_id` = (SELECT `location_id` FROM `__um_backup_location_qa` WHERE `__um_backup_location_qa`.`id` = `location_qa`.`id`),
+	`page_path` = (SELECT `page_path` FROM `__um_backup_location_qa` WHERE `__um_backup_location_qa`.`id` = `location_qa`.`id`),
+	`google_question_id` = (SELECT `google_question_id` FROM `__um_backup_location_qa` WHERE `__um_backup_location_qa`.`id` = `location_qa`.`id`),
+	`question` = (SELECT `question` FROM `__um_backup_location_qa` WHERE `__um_backup_location_qa`.`id` = `location_qa`.`id`),
+	`question_author` = (SELECT `question_author` FROM `__um_backup_location_qa` WHERE `__um_backup_location_qa`.`id` = `location_qa`.`id`),
+	`question_date` = (SELECT `question_date` FROM `__um_backup_location_qa` WHERE `__um_backup_location_qa`.`id` = `location_qa`.`id`),
+	`answer` = (SELECT `answer` FROM `__um_backup_location_qa` WHERE `__um_backup_location_qa`.`id` = `location_qa`.`id`),
+	`answer_author` = (SELECT `answer_author` FROM `__um_backup_location_qa` WHERE `__um_backup_location_qa`.`id` = `location_qa`.`id`),
+	`answer_date` = (SELECT `answer_date` FROM `__um_backup_location_qa` WHERE `__um_backup_location_qa`.`id` = `location_qa`.`id`),
+	`is_owner_answer` = (SELECT `is_owner_answer` FROM `__um_backup_location_qa` WHERE `__um_backup_location_qa`.`id` = `location_qa`.`id`),
+	`upvote_count` = (SELECT `upvote_count` FROM `__um_backup_location_qa` WHERE `__um_backup_location_qa`.`id` = `location_qa`.`id`),
+	`source` = (SELECT `source` FROM `__um_backup_location_qa` WHERE `__um_backup_location_qa`.`id` = `location_qa`.`id`),
+	`status` = (SELECT `status` FROM `__um_backup_location_qa` WHERE `__um_backup_location_qa`.`id` = `location_qa`.`id`),
+	`sort_order` = (SELECT `sort_order` FROM `__um_backup_location_qa` WHERE `__um_backup_location_qa`.`id` = `location_qa`.`id`),
+	`created_at` = (SELECT `created_at` FROM `__um_backup_location_qa` WHERE `__um_backup_location_qa`.`id` = `location_qa`.`id`),
+	`updated_at` = (SELECT `updated_at` FROM `__um_backup_location_qa` WHERE `__um_backup_location_qa`.`id` = `location_qa`.`id`)
+WHERE EXISTS (SELECT 1 FROM `__um_backup_location_qa` WHERE `__um_backup_location_qa`.`id` = `location_qa`.`id`);--> statement-breakpoint
+INSERT INTO `location_qa`
+SELECT * FROM `__um_backup_location_qa`
+WHERE `id` NOT IN (SELECT `id` FROM `location_qa`);--> statement-breakpoint
 INSERT INTO `menus` SELECT * FROM `__um_backup_menus`;--> statement-breakpoint
 INSERT INTO `menu_items` SELECT * FROM `__um_backup_menu_items`;--> statement-breakpoint
 INSERT INTO `menu_item_translations` SELECT * FROM `__um_backup_menu_item_translations`;--> statement-breakpoint
@@ -284,6 +307,14 @@ WHERE EXISTS (
 	SELECT 1
 	FROM `__um_backup_invitation_access_scope`
 	WHERE `id` NOT IN (SELECT `id` FROM `invitation_access_scope`)
+)
+LIMIT 1;--> statement-breakpoint
+INSERT INTO `__um_assert_0078` (`violation`)
+SELECT 'location_qa_restore_id_mismatch'
+WHERE EXISTS (
+	SELECT 1
+	FROM `__um_backup_location_qa`
+	WHERE `id` NOT IN (SELECT `id` FROM `location_qa`)
 )
 LIMIT 1;--> statement-breakpoint
 INSERT INTO `__um_assert_0078` (`violation`)
