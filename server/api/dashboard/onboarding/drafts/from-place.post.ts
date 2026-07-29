@@ -6,7 +6,14 @@ import { chargeFlatCredits } from '~/server/utils/ai-credits'
 import { buildOnboardingDraftPayload, upsertActiveOnboardingDraft } from '~/server/utils/onboarding-drafts'
 import { createScopedPreviewToken } from '~/server/utils/preview-token'
 import { VALID_VERTICALS } from '~/server/utils/site-creation'
+import { DEFAULT_CURRENCY, isCurrencyCode } from '~/shared/currencies'
 import type { SiteVertical } from '~/utils/vertical-copy'
+
+function parseCurrency(value: unknown) {
+  if (typeof value !== 'string') return DEFAULT_CURRENCY
+  const currency = value.toUpperCase()
+  return isCurrencyCode(currency) ? currency : DEFAULT_CURRENCY
+}
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -41,6 +48,7 @@ export default defineEventHandler(async (event) => {
   const details = body.details && typeof body.details === 'object' ? body.details : null
   const detailName = typeof details?.name === 'string' ? details.name.trim() : ''
   if (!detailName) return jsonResponse({ error: 'Business name is required' }, { status: 400 })
+  const currency = parseCurrency(details?.currency)
 
   let place
   try {
@@ -76,6 +84,7 @@ export default defineEventHandler(async (event) => {
       openingHours: typeof details?.openingHours === 'string' && details.openingHours.trim() ? details.openingHours.trim() : null,
       notificationPhone: typeof details?.notificationPhone === 'string' && details.notificationPhone.trim() ? details.notificationPhone.trim() : null,
       timezone: typeof details?.timezone === 'string' && details.timezone.trim() ? details.timezone.trim() : null,
+      currency,
       isPrimary: typeof details?.isPrimary === 'boolean' ? details.isPrimary : true,
     },
   })

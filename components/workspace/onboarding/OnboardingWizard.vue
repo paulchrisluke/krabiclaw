@@ -348,6 +348,7 @@
 <script setup lang="ts">
 import { getLocalTimezone } from '~/utils/timezone'
 import { marked } from 'marked'
+import { DEFAULT_CURRENCY } from '~/shared/currencies'
 import ChowBotConversation from '~/components/chowbot/ChowBotConversation.vue'
 import {
   buildOnboardingStarterPrompt,
@@ -384,7 +385,7 @@ interface WizardMessage {
     actionLabel: string
     requireLocationBasics: boolean
     showPrimaryToggle: boolean
-    section: 'basics'
+    section: 'location' | 'contact' | 'currency'
   }
 }
 
@@ -404,7 +405,7 @@ interface DraftSavedPayload {
   subdomainCandidate: string
 }
 
-type WizardStep = 'welcome' | 'vertical' | 'source' | 'awaiting_url' | 'awaiting_manual_name' | 'confirm' | 'details' | 'hours' | 'brand' | 'hero' | 'create' | 'importing' | 'imported'
+type WizardStep = 'welcome' | 'vertical' | 'source' | 'awaiting_url' | 'awaiting_manual_name' | 'confirm' | 'location' | 'contact' | 'currency' | 'hours' | 'brand' | 'hero' | 'create' | 'importing' | 'imported'
 type DetailsSource = 'imported' | 'manual'
 
 type WizardMode = 'new-site' | 'add-location'
@@ -484,6 +485,7 @@ const detailsForm = reactive({
   city: '',
   address: '',
   phone: '',
+  currency: DEFAULT_CURRENCY,
   isPrimary: true,
 })
 const hoursForm = reactive({
@@ -512,19 +514,21 @@ const inputPlaceholder = computed(() => {
   return 'Paste your Google Maps link…'
 })
 const showComposer = computed(() => Boolean(importError.value || awaitingInput.value || replies.value.length))
-const totalProgressSteps = 11
+const totalProgressSteps = 13
 const progressStep = computed(() => {
   if (step.value === 'vertical') return 1
   if (step.value === 'source') return 2
   if (step.value === 'awaiting_url' || step.value === 'awaiting_manual_name') return 3
   if (step.value === 'confirm') return 4
-  if (step.value === 'details') return 5
-  if (step.value === 'hours') return 6
-  if (step.value === 'brand') return 7
-  if (step.value === 'hero') return 8
-  if (step.value === 'create') return 9
-  if (step.value === 'importing') return onboardingDraftId.value ? 10 : 9
-  if (step.value === 'imported') return 11
+  if (step.value === 'location') return 5
+  if (step.value === 'contact') return 6
+  if (step.value === 'currency') return 7
+  if (step.value === 'hours') return 8
+  if (step.value === 'brand') return 9
+  if (step.value === 'hero') return 10
+  if (step.value === 'create') return 11
+  if (step.value === 'importing') return onboardingDraftId.value ? 12 : 11
+  if (step.value === 'imported') return 13
   return 1
 })
 const progressLabel = computed(() => {
@@ -533,7 +537,9 @@ const progressLabel = computed(() => {
   if (step.value === 'awaiting_url') return 'Add Maps link'
   if (step.value === 'awaiting_manual_name') return 'Add business name'
   if (step.value === 'confirm') return 'Confirm listing'
-  if (step.value === 'details') return 'Business basics'
+  if (step.value === 'location') return 'Location'
+  if (step.value === 'contact') return 'Contact'
+  if (step.value === 'currency') return 'Currency'
   if (step.value === 'hours') return 'Hours'
   if (step.value === 'brand') return 'Brand identity'
   if (step.value === 'hero') return 'Hero photo'
@@ -779,15 +785,41 @@ async function advance(target: WizardStep) {
     awaitingInput.value = true
   }
 
-  if (target === 'details') {
+  if (target === 'location') {
     await pushBot('', {
       detailsCard: {
-        title: isAddingLocation.value ? 'Location basics' : 'Business basics',
-        description: detailsCardDescription.value,
+        title: 'Location',
+        description: detailsSource.value === 'manual' ? 'Where should guests find you?' : detailsCardDescription.value,
         actionLabel: 'Continue',
         requireLocationBasics: detailsRequireBasics.value,
         showPrimaryToggle: !!isAddingLocation.value,
-        section: 'basics',
+        section: 'location',
+      },
+    })
+  }
+
+  if (target === 'contact') {
+    await pushBot('', {
+      detailsCard: {
+        title: 'Contact',
+        description: 'Add the number guests should use first.',
+        actionLabel: 'Continue',
+        requireLocationBasics: detailsRequireBasics.value,
+        showPrimaryToggle: false,
+        section: 'contact',
+      },
+    })
+  }
+
+  if (target === 'currency') {
+    await pushBot('', {
+      detailsCard: {
+        title: 'Currency',
+        description: 'Choose how guests will see prices.',
+        actionLabel: 'Continue',
+        requireLocationBasics: false,
+        showPrimaryToggle: false,
+        section: 'currency',
       },
     })
   }
@@ -853,7 +885,7 @@ async function goBack() {
     await advance(preConfirmStep.value)
     return
   }
-  if (step.value === 'details') {
+  if (step.value === 'location') {
     if (pendingPreview.value) {
       showConfirm(pendingPreview.value, preConfirmStep.value)
     } else {
@@ -861,8 +893,16 @@ async function goBack() {
     }
     return
   }
+  if (step.value === 'contact') {
+    await advance('location')
+    return
+  }
+  if (step.value === 'currency') {
+    await advance('contact')
+    return
+  }
   if (step.value === 'hours') {
-    await advance('details')
+    await advance('currency')
     return
   }
   if (step.value === 'brand') {
@@ -924,7 +964,7 @@ async function handleReply(reply: QuickReply) {
     if (pendingPreview.value) {
       detailsSource.value = 'imported'
       seedDetailsFromPreview(pendingPreview.value)
-      await advance('details')
+      await advance('location')
     }
     return
   }
@@ -954,7 +994,7 @@ async function handleReply(reply: QuickReply) {
 
   if (reply.action === 'edit_draft') {
     pushUser(reply.label)
-    await advance('details')
+    await advance('location')
     return
   }
 
@@ -977,25 +1017,39 @@ async function handleTextSubmit() {
   } else if (step.value === 'awaiting_manual_name') {
     detailsSource.value = 'manual'
     seedDetailsFromManual(input)
-    await advance('details')
+    await advance('location')
   }
 }
 
-async function submitDetailsCard(section: 'basics') {
-  if (section === 'basics') {
-    await submitBasics()
+async function submitDetailsCard(section: 'location' | 'contact' | 'currency') {
+  if (section === 'location') {
+    await submitLocation()
+    return
   }
+  if (section === 'contact') {
+    await submitContact()
+    return
+  }
+  await advance('hours')
 }
 
-async function submitBasics() {
+async function submitLocation() {
   const requiredFields = detailsRequireBasics.value
-    ? [detailsForm.name, detailsForm.city, detailsForm.address, detailsForm.phone]
-    : [detailsForm.name]
+    ? [detailsForm.city, detailsForm.address]
+    : []
   if (!requiredFields.every(value => value.trim().length > 0)) {
     importError.value = 'Add the required details before continuing.'
     return
   }
-  await advance('hours')
+  await advance('contact')
+}
+
+async function submitContact() {
+  if (detailsRequireBasics.value && !detailsForm.phone.trim()) {
+    importError.value = 'Add the required details before continuing.'
+    return
+  }
+  await advance('currency')
 }
 
 async function submitHoursCard() {
@@ -1122,12 +1176,12 @@ async function submitDetails() {
       }
       emit('draft-saved', draftPreviewPayload.value)
 
-      await pushBot('Preview ready. Take a look on the right, then create the site when it feels right.')
+      await pushBot('Preview ready. Take a look on the right, then launch when it feels right.')
       replies.value = [
-        { label: 'Create site', icon: 'i-lucide-badge-check', primary: true, action: 'commit_draft' },
+        { label: 'Launch site', icon: 'i-lucide-badge-check', primary: true, action: 'commit_draft' },
         { label: 'Edit details', icon: 'i-lucide-square-pen', action: 'edit_draft' },
       ]
-      step.value = 'details'
+      step.value = 'location'
       return
     }
 
@@ -1178,7 +1232,7 @@ async function commitDraft() {
   if (committing) return
   if (!onboardingDraftId.value) {
     importError.value = 'No draft is ready yet. Save the preview first.'
-    await advance('details')
+    await advance('location')
     return
   }
 
@@ -1229,6 +1283,7 @@ function serializeDetails() {
     openingHours: serializeOpeningHours(),
     notificationPhone: notificationForm.ownerPhone.trim() || null,
     timezone: hoursForm.timezone.trim() || null,
+    currency: detailsForm.currency,
     isPrimary: isAddingLocation.value ? detailsForm.isPrimary : true,
   }
 }
@@ -1259,6 +1314,7 @@ function seedDetailsFromPreview(preview: NonNullable<typeof pendingPreview.value
   detailsForm.city = preview.city ?? ''
   detailsForm.address = preview.address ?? ''
   detailsForm.phone = preview.phone ?? ''
+  detailsForm.currency = DEFAULT_CURRENCY
   seedHoursFromPreview(preview.openingHours)
   notificationForm.ownerPhone = preview.phone ?? ''
   detailsForm.isPrimary = !isAddingLocation.value
@@ -1269,6 +1325,7 @@ function seedDetailsFromManual(name: string) {
   detailsForm.city = ''
   detailsForm.address = ''
   detailsForm.phone = ''
+  detailsForm.currency = DEFAULT_CURRENCY
   seedHoursFromPreview(null)
   notificationForm.ownerPhone = ''
   detailsForm.isPrimary = !isAddingLocation.value

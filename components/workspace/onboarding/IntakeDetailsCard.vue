@@ -13,20 +13,26 @@
     </template>
 
     <div class="@container px-4 pb-4">
-      <div class="grid gap-4 @sm:grid-cols-2">
-        <UFormField v-if="section === 'basics'" label="Name">
-          <UInput v-model="form.name" />
-        </UFormField>
-        <UFormField v-if="section === 'basics'" label="City" :required="requireLocationBasics">
+      <div class="grid gap-4">
+        <UFormField v-if="section === 'location'" label="City" :required="requireLocationBasics">
           <UInput v-model="form.city" placeholder="Ao Nang" />
         </UFormField>
-        <UFormField v-if="section === 'basics'" label="Address" :required="requireLocationBasics">
+        <UFormField v-if="section === 'location'" label="Address" :required="requireLocationBasics">
           <UTextarea v-model="form.address" :rows="2" placeholder="Street, ward, district" />
         </UFormField>
-        <UFormField v-if="section === 'basics'" label="Phone" :required="requireLocationBasics">
+        <UFormField v-if="section === 'contact'" label="Phone" :required="requireLocationBasics">
           <UInput v-model="form.phone" type="tel" placeholder="+66..." />
         </UFormField>
-        <div v-if="section === 'basics' && showPrimaryToggle">
+        <UFormField v-if="section === 'currency'" label="Currency" required>
+          <USelectMenu
+            v-model="form.currency"
+            :items="currencyOptions"
+            value-key="value"
+            label-key="label"
+            placeholder="Select currency"
+          />
+        </UFormField>
+        <div v-if="section === 'location' && showPrimaryToggle">
           <UCheckbox v-model="form.isPrimary" label="Make this the primary location" />
         </div>
       </div>
@@ -48,11 +54,14 @@
 </template>
 
 <script setup lang="ts">
+import { CURRENCY_OPTIONS, type CurrencyCode } from '~/shared/currencies'
+
 type IntakeForm = {
   name: string
   city: string
   address: string
   phone: string
+  currency: CurrencyCode
   isPrimary: boolean
 }
 
@@ -64,7 +73,7 @@ const props = defineProps<{
   actionLabel: string
   requireLocationBasics: boolean
   showPrimaryToggle: boolean
-  section: 'basics'
+  section: 'location' | 'contact' | 'currency'
   loading?: boolean
   disabled?: boolean
 }>()
@@ -72,14 +81,14 @@ const props = defineProps<{
 defineEmits<{ submit: [] }>()
 
 const helperText = computed(() => 'You can adjust these later.')
+const currencyOptions = CURRENCY_OPTIONS
 
 const canSubmit = computed(() => {
-  if (!props.requireLocationBasics) return !!form.value.name.trim()
-  return [
-    form.value.name,
-    form.value.city,
-    form.value.address,
-    form.value.phone,
-  ].every(value => value.trim().length > 0)
+  if (props.section === 'currency') return !!form.value.currency
+  if (!props.requireLocationBasics) return true
+  if (props.section === 'location') {
+    return [form.value.city, form.value.address].every(value => value.trim().length > 0)
+  }
+  return form.value.phone.trim().length > 0
 })
 </script>

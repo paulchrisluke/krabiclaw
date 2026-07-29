@@ -1,6 +1,7 @@
 import type { SiteVertical } from '~/utils/vertical-copy'
 import { execute, queryFirst } from '~/server/db'
 import type { PlaceDetails } from '~/server/utils/google-places'
+import type { CurrencyCode } from '~/shared/currencies'
 
 type DraftSourceType = 'google_places' | 'manual'
 
@@ -123,6 +124,7 @@ export interface DraftDetailsInput {
   openingHours: string | null
   notificationPhone: string | null
   timezone: string | null
+  currency: CurrencyCode
   isPrimary: boolean
 }
 
@@ -192,8 +194,24 @@ function draftUid(prefix: string) {
 }
 
 function isUniqueConstraintError(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error || '')
-  return /UNIQUE constraint failed/i.test(message)
+  const messages: string[] = []
+  let current: unknown = error
+  while (current) {
+    if (current instanceof Error) {
+      messages.push(current.message)
+      current = current.cause
+      continue
+    }
+    if (typeof current === 'object' && current && 'cause' in current) {
+      const record = current as { message?: unknown; cause?: unknown }
+      if (typeof record.message === 'string') messages.push(record.message)
+      current = record.cause
+      continue
+    }
+    messages.push(String(current))
+    break
+  }
+  return messages.some(message => /UNIQUE constraint failed/i.test(message))
 }
 
 function asPlaceSnapshot(place: PlaceDetails): PlaceDetailsSnapshot {

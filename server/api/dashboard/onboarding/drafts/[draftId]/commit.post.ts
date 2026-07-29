@@ -91,6 +91,11 @@ export default defineEventHandler(async (event) => {
     organizationId = result.data.organizationId as string
     siteId = result.data.siteId as string
     siteSlug = result.data.subdomain as string | null
+    await execute(db, `
+      UPDATE sites
+      SET default_currency = ?, updated_at = ?
+      WHERE id = ? AND organization_id = ?
+    `, [payload.source.details.currency, new Date().toISOString(), siteId, organizationId])
 
     const locationRow = await queryFirst<{ id: string; slug: string | null }>(db, `
       SELECT id, slug FROM business_locations
