@@ -1,4 +1,4 @@
-CREATE INDEX `experience_media_asset_scope_idx` ON `experience_media` (`organization_id`,`site_id`,`asset_id`);--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS `experience_media_asset_scope_idx` ON `experience_media` (`organization_id`,`site_id`,`asset_id`);--> statement-breakpoint
 
 CREATE TRIGGER `business_locations_hero_media_scope_insert`
 BEFORE INSERT ON `business_locations`
