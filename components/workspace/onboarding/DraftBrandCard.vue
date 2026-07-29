@@ -1,18 +1,16 @@
 <template>
-  <UCard :ui="{ body: 'p-0 sm:p-0' }">
-    <template #header>
-      <div class="flex items-start gap-3 px-4 pt-4">
-        <div class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <UIcon :name="icon" class="size-4" />
+  <UCard class="onboarding-intake-card" :ui="{ body: 'p-0 sm:p-0' }">
+    <div class="space-y-5 p-6 sm:p-7">
+      <div class="flex items-start gap-4">
+        <div class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <UIcon :name="icon" class="size-5" />
         </div>
-        <div class="min-w-0">
-          <p class="text-[13px] font-semibold text-highlighted">{{ title }}</p>
-          <p class="mt-0.5 text-[12px] leading-relaxed text-muted">{{ description }}</p>
+        <div class="min-w-0 pt-0.5">
+          <p class="text-[17px] font-bold leading-6 text-highlighted">{{ title }}</p>
+          <p class="mt-1 text-[15px] leading-6 text-muted">{{ description }}</p>
         </div>
       </div>
-    </template>
 
-    <div class="space-y-4 px-4 pb-4">
       <template v-if="section === 'brand'">
         <UFormField label="Brand color">
           <div class="flex flex-wrap items-center gap-2">
@@ -29,23 +27,25 @@
           </div>
         </UFormField>
         <UFormField label="Logo">
-          <UInput v-model="form.logoNote" placeholder="Describe it, or skip for now" />
+          <UInput v-model="form.logoNote" class="w-full" size="xl" placeholder="Describe it, or skip for now" />
         </UFormField>
       </template>
 
       <template v-else>
         <UFormField label="Hero photo">
-          <UInput v-model="form.heroPhotoNote" placeholder="Describe the photo guests should see first" />
+          <UInput v-model="form.heroPhotoNote" class="w-full" size="xl" placeholder="Describe the photo guests should see first" />
         </UFormField>
         <UFormField label="Hero headline">
-          <UInput v-model="form.heroHeadline" placeholder="Leave blank to use your business name" />
+          <UInput v-model="form.heroHeadline" class="w-full" size="xl" placeholder="Leave blank to use your business name" />
         </UFormField>
       </template>
 
-      <div class="mt-4 grid gap-3 sm:flex sm:items-center sm:justify-between">
-        <p class="text-[11px] text-muted">{{ helperText }}</p>
+      <div class="grid gap-4">
+        <p class="text-[13px] leading-5 text-muted">{{ helperText }}</p>
         <UButton
           color="primary"
+          size="xl"
+          block
           class="justify-center"
           :loading="loading"
           :disabled="disabled"
@@ -86,3 +86,22 @@ const helperText = computed(() => props.section === 'brand'
   : 'You can replace this later from the dashboard.'
 )
 </script>
+
+<style scoped>
+.onboarding-intake-card {
+  border-radius: 22px;
+}
+
+.onboarding-intake-card :deep(.rounded-md),
+.onboarding-intake-card :deep(.rounded-lg) {
+  border-radius: 14px;
+}
+
+.onboarding-intake-card :deep(label) {
+  color: var(--ui-text-muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+</style>

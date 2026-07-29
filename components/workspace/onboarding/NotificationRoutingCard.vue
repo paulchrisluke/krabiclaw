@@ -1,30 +1,27 @@
 <template>
-  <UCard :ui="{ body: 'p-0 sm:p-0' }">
-    <template #header>
-      <div class="flex items-start gap-3 px-4 pt-4">
-        <div class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <UIcon name="i-lucide-bell" class="size-4" />
+  <UCard class="onboarding-intake-card" :ui="{ body: 'p-0 sm:p-0' }">
+    <div class="space-y-5 p-6 sm:p-7">
+      <div class="flex items-start gap-4">
+        <div class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <UIcon name="i-lucide-bell" class="size-5" />
         </div>
-        <div class="min-w-0">
-          <p class="text-[13px] font-semibold text-highlighted">{{ title }}</p>
-          <p class="mt-0.5 text-[12px] leading-relaxed text-muted">{{ description }}</p>
+        <div class="min-w-0 pt-0.5">
+          <p class="text-[17px] font-bold leading-6 text-highlighted">{{ title }}</p>
+          <p class="mt-1 text-[15px] leading-6 text-muted">{{ description }}</p>
         </div>
       </div>
-    </template>
 
-    <div class="px-4 pb-4 space-y-4">
-      <div>
-        <p class="text-[11px] font-bold uppercase tracking-wide text-dimmed mb-2">Your number (gets all notifications)</p>
+      <UFormField label="Your number (gets all notifications)">
         <UInput
           v-model="form.ownerPhone"
+          class="w-full"
           type="tel"
           placeholder="+447464115465"
-          size="sm"
+          size="xl"
         />
-      </div>
+      </UFormField>
 
-      <div>
-        <p class="text-[11px] font-bold uppercase tracking-wide text-dimmed mb-2">Channel</p>
+      <UFormField label="Channel">
         <div class="flex gap-2">
           <button
             v-for="ch in channelOptions"
@@ -39,10 +36,9 @@
             @click="toggleChannel(ch.value)"
           >{{ ch.label }}</button>
         </div>
-      </div>
+      </UFormField>
 
-      <div v-if="form.locations.length">
-        <p class="text-[11px] font-bold uppercase tracking-wide text-dimmed mb-2">Location notification numbers</p>
+      <UFormField v-if="form.locations.length" label="Location notification numbers">
         <div class="space-y-2">
           <div v-for="loc in form.locations" :key="loc.id" class="flex items-center gap-2">
             <span class="w-32 shrink-0 truncate text-[12px] text-muted">{{ loc.title }}</span>
@@ -50,20 +46,22 @@
               v-model="loc.notificationPhone"
               type="tel"
               :placeholder="loc.title"
-              size="sm"
+              size="lg"
               class="flex-1"
             />
           </div>
         </div>
-      </div>
+      </UFormField>
 
-      <div class="flex items-center justify-between gap-3">
-        <p class="text-[11px] text-muted">
+      <div class="grid gap-4">
+        <p class="text-[13px] leading-5 text-muted">
           Confirm the routing now, or change it later from Settings.
         </p>
         <UButton
-          size="sm"
+          size="xl"
           color="primary"
+          block
+          class="justify-center"
           :loading="loading"
           :disabled="disabled"
           @click="$emit('submit')"
@@ -109,3 +107,22 @@ function toggleChannel(value: string) {
   }
 }
 </script>
+
+<style scoped>
+.onboarding-intake-card {
+  border-radius: 22px;
+}
+
+.onboarding-intake-card :deep(.rounded-md),
+.onboarding-intake-card :deep(.rounded-lg) {
+  border-radius: 14px;
+}
+
+.onboarding-intake-card :deep(label) {
+  color: var(--ui-text-muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+</style>

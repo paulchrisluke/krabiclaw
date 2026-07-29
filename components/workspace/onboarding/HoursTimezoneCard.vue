@@ -1,21 +1,21 @@
 <template>
-  <UCard :ui="{ body: 'p-0 sm:p-0' }">
-    <template #header>
-      <div class="flex items-start gap-3 px-4 pt-4">
-        <div class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <UIcon name="i-lucide-clock-3" class="size-4" />
+  <UCard class="onboarding-intake-card" :ui="{ body: 'p-0 sm:p-0' }">
+    <div class="space-y-5 p-6 sm:p-7">
+      <div class="flex items-start gap-4">
+        <div class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <UIcon name="i-lucide-clock-3" class="size-5" />
         </div>
-        <div class="min-w-0">
-          <p class="text-[13px] font-semibold text-highlighted">{{ title }}</p>
-          <p class="mt-0.5 text-[12px] leading-relaxed text-muted">{{ description }}</p>
+        <div class="min-w-0 pt-0.5">
+          <p class="text-[17px] font-bold leading-6 text-highlighted">{{ title }}</p>
+          <p class="mt-1 text-[15px] leading-6 text-muted">{{ description }}</p>
         </div>
       </div>
-    </template>
 
-    <div class="space-y-4 px-4 pb-4">
       <UFormField label="Timezone" required>
         <USelectMenu
           v-model="form.timezone"
+          class="w-full"
+          size="xl"
           :items="timezoneOptions"
           searchable
           placeholder="Select timezone"
@@ -26,15 +26,17 @@
         <div
           v-for="(day, index) in form.hours"
           :key="day.day"
-          class="grid gap-2 rounded-lg border border-default bg-default p-3 @container"
+          class="@container grid gap-3 rounded-xl border border-default bg-elevated p-3"
         >
-          <div class="flex items-center justify-between gap-3">
-            <p class="text-[12px] font-semibold text-highlighted">{{ day.day }}</p>
-            <UCheckbox v-model="day.closed" label="Closed" />
+          <div class="flex min-h-9 items-center justify-between gap-3">
+            <p class="text-[13px] font-bold text-highlighted">{{ day.day }}</p>
+            <UCheckbox v-model="day.closed" label="Closed" class="shrink-0" />
           </div>
           <div class="grid gap-2 @sm:grid-cols-[1fr_1fr_auto]">
             <USelect
               v-model="day.open"
+              class="w-full"
+              size="lg"
               :items="timeOptions"
               value-attribute="value"
               label-attribute="label"
@@ -43,6 +45,8 @@
             />
             <USelect
               v-model="day.close"
+              class="w-full"
+              size="lg"
               :items="timeOptions"
               value-attribute="value"
               label-attribute="label"
@@ -62,10 +66,12 @@
         </div>
       </div>
 
-      <div class="mt-4 grid gap-3 sm:flex sm:items-center sm:justify-between">
-        <p class="text-[11px] text-muted">Used for booking availability and guest-facing hours.</p>
+      <div class="grid gap-4">
+        <p class="text-[13px] leading-5 text-muted">Used for booking availability and guest-facing hours.</p>
         <UButton
           color="primary"
+          size="xl"
+          block
           class="justify-center"
           :loading="loading"
           :disabled="disabled || !canSubmit"
@@ -133,3 +139,22 @@ function copyPrevious(index: number) {
   current.closed = previous.closed
 }
 </script>
+
+<style scoped>
+.onboarding-intake-card {
+  border-radius: 22px;
+}
+
+.onboarding-intake-card :deep(.rounded-md),
+.onboarding-intake-card :deep(.rounded-lg) {
+  border-radius: 14px;
+}
+
+.onboarding-intake-card :deep(label) {
+  color: var(--ui-text-muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+</style>
