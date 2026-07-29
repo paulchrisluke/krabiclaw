@@ -92,7 +92,9 @@ const previewDetails = ref<{
   openingHours: string
   brandColor: string
   logoNote: string
+  logoPreviewUrl: string
   heroPhotoNote: string
+  heroPreviewUrl: string
 }>({
   name: '',
   city: '',
@@ -103,7 +105,9 @@ const previewDetails = ref<{
   openingHours: '',
   brandColor: '',
   logoNote: '',
+  logoPreviewUrl: '',
   heroPhotoNote: '',
+  heroPreviewUrl: '',
 })
 const previewVertical = computed<SiteVertical>(() =>
   siteData.value
@@ -139,7 +143,6 @@ const siteId = computed<string | null>(() => siteData.value?.id ?? null)
 
 const sitePreviewBaseUrl = computed(() => {
   const platformBase = ((config.public.platformDomain || config.public.freeSiteDomain) as string).replace(/\/$/, '')
-  if (draftPreview.value?.draftId) return `${platformBase}/preview/draft/${draftPreview.value.draftId}`
   if (!siteData.value?.id) return ''
   return `${platformBase}/preview/site/${siteData.value.id}`
 })

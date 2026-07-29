@@ -79,35 +79,27 @@
 
     <div v-if="!iframeSrc && placeholderState === 'building'" class="relative min-h-0 flex-1 overflow-hidden bg-default">
       <img
-        :src="demoPreviewImage"
+        :src="previewHeroImage"
         alt=""
         class="h-full w-full object-cover"
       >
-      <div class="absolute inset-x-0 top-0 flex items-center justify-between gap-3 bg-gradient-to-b from-black/70 to-transparent p-5 text-white">
-        <div class="min-w-0">
-          <p class="truncate text-lg font-extrabold">{{ previewName }}</p>
-          <p class="mt-1 text-xs font-bold uppercase tracking-[0.18em] text-white/75">{{ demoEyebrow }}</p>
-        </div>
-        <div class="flex size-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white" :style="{ backgroundColor: previewBrandColor }">
+      <div class="absolute inset-x-0 top-0 flex items-center gap-3 bg-gradient-to-b from-black/70 to-transparent p-5 text-white">
+        <img
+          v-if="previewLogoUrl"
+          :src="previewLogoUrl"
+          alt=""
+          class="size-10 shrink-0 rounded-xl bg-white/90 object-contain p-1"
+        >
+        <div
+          v-else
+          class="flex size-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white"
+          :style="{ backgroundColor: previewBrandColor }"
+        >
           {{ previewInitials }}
         </div>
-      </div>
-      <div
-        v-if="previewHasDetails"
-        class="absolute inset-x-0 bottom-0 grid gap-2 bg-gradient-to-t from-black/75 to-transparent p-5 pt-16 text-sm text-white"
-      >
-        <p v-if="previewAddress" class="flex items-center gap-2">
-          <UIcon name="i-lucide-map-pin" class="size-4 text-primary" />
-          {{ previewAddress }}
-        </p>
-        <p v-if="previewDetails?.phone" class="flex items-center gap-2">
-          <UIcon name="i-lucide-phone" class="size-4 text-primary" />
-          {{ previewDetails.phone }}
-        </p>
-        <p v-if="previewHoursSummary" class="flex items-center gap-2">
-          <UIcon name="i-lucide-clock-3" class="size-4 text-primary" />
-          {{ previewHoursSummary }}
-        </p>
+        <div class="min-w-0 flex-1">
+          <p class="truncate text-lg font-extrabold">{{ previewName }}</p>
+        </div>
       </div>
     </div>
     <div v-else-if="!iframeSrc" class="flex flex-1 flex-col items-center justify-center gap-5 p-8 text-center text-muted">
@@ -124,14 +116,18 @@
       </div>
     </div>
 
-    <div v-else class="min-h-0 flex-1 overflow-auto p-5">
-      <SitePreviewFrame :iframe-src="iframeSrc" :display-url="displayUrl" :chrome="false" />
-    </div>
+    <iframe
+      v-else
+      id="site-preview-frame"
+      :src="iframeSrc"
+      title="Site preview"
+      class="min-h-0 w-full flex-1 border-0 bg-default"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { buildDisplayUrl, getEditablePages, resolvePreviewPath } from '~/config/content-registry'
+import { getEditablePages } from '~/config/content-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
@@ -155,7 +151,9 @@ const props = withDefaults(defineProps<{
     openingHours: string
     brandColor: string
     logoNote: string
+    logoPreviewUrl: string
     heroPhotoNote: string
+    heroPreviewUrl: string
   }
 }>(), {
   vertical: 'restaurant',
@@ -197,66 +195,24 @@ const demoContent = computed(() => {
     return {
       name: 'North Carolina Legal Services',
       image: '/templates/blawby-preview.jpg',
-      eyebrow: 'Professional services',
-      headline: 'Clear guidance when clients need it most',
-      description: 'A focused homepage for consultations, service areas, and client trust.',
-      action: 'Book a consultation',
-      sections: [
-        { title: 'Services', body: 'Family law, estate planning, and client support pathways.' },
-        { title: 'Consultation', body: 'Make the next step obvious and low-friction.' },
-        { title: 'Contact', body: 'Phone, office details, and intake routing stay visible.' },
-      ],
     }
   }
   if (props.vertical === 'experience') {
     return {
       name: 'Pottery House Krabi',
       image: '/templates/saya-preview.jpg',
-      eyebrow: 'Experience studio',
-      headline: 'Hands-on classes guests can book with confidence',
-      description: 'A warm homepage for workshops, location details, photos, and reviews.',
-      action: 'Book a class',
-      sections: [
-        { title: 'Experiences', body: 'Featured classes and sessions guests can reserve.' },
-        { title: 'Visit details', body: 'Address, hours, and what to expect before arriving.' },
-        { title: 'Reviews', body: 'Social proof from guests and students.' },
-      ],
     }
   }
   return {
     name: 'Demo Restaurant',
     image: '/templates/saya-preview.jpg',
-    eyebrow: 'Restaurant',
-    headline: 'A homepage that makes the first visit easy',
-    description: 'Menu highlights, reservations, hours, and contact details come together here.',
-    action: 'Reserve',
-    sections: [
-      { title: 'Menu', body: 'Featured dishes and house recommendations.' },
-      { title: 'Reservations', body: 'A clear path for guests to book a table.' },
-      { title: 'Contact', body: 'Address, phone, and opening hours in one place.' },
-    ],
   }
 })
 const previewName = computed(() => props.previewDetails?.name.trim() || demoContent.value.name)
 const previewBrandColor = computed(() => props.previewDetails?.brandColor || '#1F2547')
 const previewInitials = computed(() => previewName.value.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'KC')
-const demoPreviewImage = computed(() => demoContent.value.image)
-const demoEyebrow = computed(() => demoContent.value.eyebrow)
-const previewAddress = computed(() => [props.previewDetails?.address, props.previewDetails?.city].filter(Boolean).join(', '))
-const previewHoursSummary = computed(() => props.previewDetails?.openingHours.split('\n').find(Boolean) ?? '')
-const previewHasDetails = computed(() => Boolean(previewAddress.value || props.previewDetails?.phone || previewHoursSummary.value))
-
-const displayUrl = computed(() => {
-  const template = resolvePublicTemplate({ vertical: props.vertical })
-  if (props.vertical === 'professional_service' && props.selectedPage === secondaryTab.value?.id) {
-    return buildDisplayUrl(props.siteDomain ?? '', template.serviceRoutes.offeringsIndex ?? '/')
-  }
-  const page = getEditablePages(props.vertical, template.slug).find(p => p.id === props.selectedPage)
-  const path = page?.scope === 'location' && selectedLocation.value
-    ? resolvePreviewPath(props.selectedPage, { locationSlug: selectedLocation.value.slug })
-    : page?.path ?? '/'
-  return buildDisplayUrl(props.siteDomain ?? '', path)
-})
+const previewHeroImage = computed(() => props.previewDetails?.heroPreviewUrl || demoContent.value.image)
+const previewLogoUrl = computed(() => props.previewDetails?.logoPreviewUrl || '')
 
 const selectedLocation = computed(() =>
   props.siteLocations.find(l => l.id === props.selectedLocationId) ?? props.siteLocations[0] ?? null

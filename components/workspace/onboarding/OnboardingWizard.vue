@@ -195,7 +195,7 @@
             v-model:form="brandDraftForm"
             :title="messages[index]!.brandDraftCard!.title"
             :description="messages[index]!.brandDraftCard!.description"
-            :action-label="messages[index]!.brandDraftCard!.section === 'brand' ? 'Save & continue' : 'Upload hero photo'"
+            action-label="Continue"
             :section="messages[index]!.brandDraftCard!.section"
             :loading="importing"
             :disabled="importing"
@@ -434,7 +434,9 @@ const emit = defineEmits<{
     openingHours: string
     brandColor: string
     logoNote: string
+    logoPreviewUrl: string
     heroPhotoNote: string
+    heroPreviewUrl: string
   }]
 }>()
 
@@ -510,7 +512,9 @@ const hoursForm = reactive({
 const brandDraftForm = reactive({
   brandColor: '#3F3F46',
   logoNote: '',
+  logoPreviewUrl: '',
   heroPhotoNote: '',
+  heroPreviewUrl: '',
   heroHeadline: '',
 })
 const notificationForm = reactive({
@@ -584,7 +588,9 @@ watch(
     openingHours: serializeOpeningHours(),
     brandColor: brandDraftForm.brandColor,
     logoNote: brandDraftForm.logoNote,
+    logoPreviewUrl: brandDraftForm.logoPreviewUrl,
     heroPhotoNote: brandDraftForm.heroPhotoNote,
+    heroPreviewUrl: brandDraftForm.heroPreviewUrl,
   }),
   { deep: true, immediate: true },
 )

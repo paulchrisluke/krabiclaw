@@ -554,6 +554,13 @@
       "when": 1785316801713,
       "tag": "0085_bright_cobalt_man",
       "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "6",
+      "when": 1785359800000,
+      "tag": "0086_seed_public_theme_catalog",
+      "breakpoints": true
     }
   ]
 }

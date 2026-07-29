@@ -90,12 +90,14 @@
 </template>
 
 <script setup lang="ts">
-import { onUnmounted, ref } from 'vue'
+import { ref, watch } from 'vue'
 
 export type DraftBrandForm = {
   brandColor: string
   logoNote: string
+  logoPreviewUrl: string
   heroPhotoNote: string
+  heroPreviewUrl: string
   heroHeadline: string
 }
 
@@ -119,6 +121,14 @@ const heroInput = ref<HTMLInputElement | null>(null)
 const logoPreviewUrl = ref<string | null>(null)
 const heroPreviewUrl = ref<string | null>(null)
 
+watch(() => form.value.logoPreviewUrl, url => {
+  logoPreviewUrl.value = url || null
+}, { immediate: true })
+
+watch(() => form.value.heroPreviewUrl, url => {
+  heroPreviewUrl.value = url || null
+}, { immediate: true })
+
 function setPreview(target: typeof logoPreviewUrl | typeof heroPreviewUrl, file: File | undefined) {
   if (!file) return
   if (target.value?.startsWith('blob:')) URL.revokeObjectURL(target.value)
@@ -129,18 +139,15 @@ function onLogoSelected(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]
   setPreview(logoPreviewUrl, file)
   form.value.logoNote = file?.name ?? ''
+  form.value.logoPreviewUrl = logoPreviewUrl.value ?? ''
 }
 
 function onHeroSelected(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]
   setPreview(heroPreviewUrl, file)
   form.value.heroPhotoNote = file?.name ?? ''
+  form.value.heroPreviewUrl = heroPreviewUrl.value ?? ''
 }
-
-onUnmounted(() => {
-  if (logoPreviewUrl.value?.startsWith('blob:')) URL.revokeObjectURL(logoPreviewUrl.value)
-  if (heroPreviewUrl.value?.startsWith('blob:')) URL.revokeObjectURL(heroPreviewUrl.value)
-})
 </script>
 
 <style scoped>
