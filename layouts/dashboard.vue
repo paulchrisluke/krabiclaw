@@ -84,7 +84,6 @@
           :class="item.active ? 'bg-primary/10 text-primary' : 'text-dimmed'"
         />
         <UButton
-          ref="mobileMoreButtonRef"
           icon="i-lucide-ellipsis"
           color="neutral"
           variant="ghost"
@@ -93,7 +92,7 @@
           aria-label="More"
           title="More"
           :class="mobileMoreOpen ? 'bg-primary/10 text-primary' : 'text-dimmed'"
-          @click="mobileMoreOpen = !mobileMoreOpen"
+          @click="toggleMobileMore"
         />
         <UButton
           icon="i-lucide-bot"
@@ -204,7 +203,7 @@ const dashboard = useDashboardSite()
 const chowBot = useChowBot()
 const organizationsState = authClient.useListOrganizations()
 const mobileMoreOpen = ref(false)
-const mobileMoreButtonRef = ref<{ $el?: HTMLElement } | HTMLElement | null>(null)
+const mobileMoreButtonElement = ref<HTMLElement | null>(null)
 const mobileMoreSheetRef = ref<HTMLElement | null>(null)
 const mobileMoreFocusReturn = ref<HTMLElement | null>(null)
 
@@ -571,10 +570,15 @@ function firstLocationManagerItem(feature: ProductFeature) {
   if (scope.value === 'site' && !canManageSite.value) return null
   const location = dashboard.locations.value.find(item => item.is_primary) ?? dashboard.locations.value[0]
   if (!vertical.value || !templateSlug.value || !locationsBase.value || !location?.slug) return null
-  const locationCapabilities = resolveCmsCapabilities(vertical.value, templateSlug.value, {
-    site: parseCmsFeatureOverrideDelta(site.value?.feature_overrides),
-    location: parseCmsFeatureOverrideDelta(location.feature_overrides),
-  })
+  let locationCapabilities: ReturnType<typeof resolveCmsCapabilities>
+  try {
+    locationCapabilities = resolveCmsCapabilities(vertical.value, templateSlug.value, {
+      site: parseCmsFeatureOverrideDelta(site.value?.feature_overrides),
+      location: parseCmsFeatureOverrideDelta(location.feature_overrides),
+    })
+  } catch {
+    return null
+  }
   const manager = locationCapabilities.managers.find(item => item.id === feature && item.scope === 'location')
   if (!manager) return null
   const rel = manager.route.replace(/^:location\/?/, '')
@@ -684,7 +688,7 @@ watch(mobileMoreOpen, async (open) => {
   if (open) {
     mobileMoreFocusReturn.value = document.activeElement instanceof HTMLElement
       ? document.activeElement
-      : resolveMobileMoreButtonElement()
+      : mobileMoreButtonElement.value
     await nextTick()
     const first = mobileMoreFocusableItems()[0]
     if (first) first.focus()
@@ -702,10 +706,9 @@ function openChowBot() {
   chowBot.open()
 }
 
-function resolveMobileMoreButtonElement() {
-  const candidate = mobileMoreButtonRef.value
-  if (!candidate) return null
-  return candidate instanceof HTMLElement ? candidate : candidate.$el ?? null
+function toggleMobileMore(event: MouseEvent) {
+  mobileMoreButtonElement.value = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  mobileMoreOpen.value = !mobileMoreOpen.value
 }
 
 const mobileMoreFocusableSelector = [

@@ -2,6 +2,7 @@ import { cloudflareEnv } from '../../../utils/api-response'
 import { exchangeGoogleBusinessCode, storeGoogleBusinessConnection } from '../../../utils/google-business'
 import { verifyOAuthState } from '../../../utils/encryption'
 import { queryFirst } from '~/server/db'
+import { getDashboardSiteRouteContext } from '~/server/utils/dashboard-redirects'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
 import { assertLocationAccess } from '~/server/utils/member-access'
 
@@ -39,42 +40,29 @@ export default defineEventHandler(async (event) => {
     const db = env.DB
     if (!db) return `/dashboard?gb=${status}`
 
-    let organization: { slug: string } | null = null
     try {
-      organization = (await queryFirst<{ slug: string }>(db, `
-        SELECT slug FROM organization WHERE id = ? LIMIT 1
-      `, [organizationId])) ?? null
+      const context = await getDashboardSiteRouteContext(db, organizationId, siteId)
+      if (!context) return `/dashboard?gb=${status}`
+      const encodedOrgSlug = encodeURIComponent(context.organizationSlug)
+      const siteBase = `/dashboard/${encodedOrgSlug}/sites/${encodeURIComponent(context.siteSlug)}`
+      if (!locationId) return `${siteBase}?gb=${status}`
+
+      try {
+        const location = await queryFirst<{ slug: string }>(db, `
+          SELECT slug FROM business_locations
+          WHERE id = ? AND organization_id = ? AND site_id = ?
+          LIMIT 1
+        `, [locationId, organizationId, siteId])
+        return location?.slug
+          ? `${siteBase}/locations/${encodeURIComponent(location.slug)}/settings?gb=${status}`
+          : `${siteBase}?gb=${status}`
+      } catch (e) {
+        console.error('Google Business redirect location query failed:', e)
+        return `${siteBase}?gb=${status}`
+      }
     } catch (e) {
-      console.error('Google Business redirect organization query failed:', e)
+      console.error('Google Business redirect route context failed:', e)
       return `/dashboard?gb=${status}`
-    }
-
-    if (!organization) return `/dashboard?gb=${status}`
-    const encodedOrgSlug = encodeURIComponent(organization.slug)
-
-    let site: { subdomain: string | null } | null = null
-    try {
-      site = (await queryFirst<{ subdomain: string | null }>(db, `SELECT subdomain FROM sites WHERE id = ? LIMIT 1`, [siteId])) ?? null
-    } catch (e) {
-      console.error('Google Business redirect site query failed:', e)
-      return `/dashboard/${encodedOrgSlug}?gb=${status}`
-    }
-    if (!site?.subdomain) return `/dashboard/${encodedOrgSlug}?gb=${status}`
-    const siteBase = `/dashboard/${encodedOrgSlug}/sites/${encodeURIComponent(site.subdomain)}`
-    if (!locationId) return `${siteBase}?gb=${status}`
-
-    try {
-      const location = await queryFirst<{ slug: string }>(db, `
-        SELECT slug FROM business_locations
-        WHERE id = ? AND organization_id = ? AND site_id = ?
-        LIMIT 1
-      `, [locationId, organizationId, siteId])
-      return location?.slug
-        ? `${siteBase}/locations/${encodeURIComponent(location.slug)}/settings?gb=${status}`
-        : `${siteBase}?gb=${status}`
-    } catch (e) {
-      console.error('Google Business redirect location query failed:', e)
-      return `${siteBase}?gb=${status}`
     }
   }
 

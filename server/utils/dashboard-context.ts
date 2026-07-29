@@ -334,8 +334,8 @@ export interface DashboardSiteSummaryRow {
   brand_name: string | null
   subdomain: string | null
   vertical: string | null
-  status: string
-  onboarding_status: string
+  status: string | null
+  onboarding_status: string | null
   plan: string | null
 }
 

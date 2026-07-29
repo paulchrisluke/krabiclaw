@@ -30,8 +30,8 @@ interface DashboardSiteSummary {
   brand_name: string | null
   subdomain: string | null
   vertical: 'restaurant' | 'experience' | 'service' | 'professional_service' | null
-  status: string
-  onboarding_status: string
+  status: string | null
+  onboarding_status: string | null
   plan: string | null
 }
 
