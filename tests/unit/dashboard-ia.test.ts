@@ -133,6 +133,16 @@ test('dashboard layout derives capability-dependent navigation from managerNavIt
   assert.doesNotMatch(layout, /label:\s*['"](Menus|Orders|Reservations|Experiences|Professional services)['"]/)
 })
 
+test('responsive dashboard navigation keeps one canonical desktop sidebar with mobile parity affordances', () => {
+  const layout = source('layouts/dashboard.vue')
+  assert.equal((layout.match(/^\s*<UDashboardSidebar\b/gm) ?? []).length, 1)
+  assert.match(layout, /data-testid="dashboard-mobile-nav"/)
+  assert.match(layout, /mobileNavItems/)
+  assert.match(layout, /mobileMoreItems/)
+  assert.match(layout, /firstLocationManagerItem/)
+  assert.match(layout, /navigationItems\.value/)
+})
+
 test('every dashboard search route resolves to the canonical hierarchy', () => {
   const context = { orgSlug: 'org', siteSlug: 'site', locationSlug: 'location' }
   for (const entry of PLATFORM_DASHBOARD_ROUTE_ENTRIES) {

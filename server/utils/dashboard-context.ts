@@ -333,12 +333,13 @@ export interface DashboardSiteSummaryRow {
   id: string
   brand_name: string | null
   subdomain: string | null
+  vertical: string | null
   plan: string | null
 }
 
 export async function listOrganizationSites(db: DbClient, organizationId: string, principal?: { memberId: string; role: string }) {
   return await queryAll<DashboardSiteSummaryRow>(db, `
-    SELECT id, brand_name, subdomain, plan
+    SELECT id, brand_name, subdomain, vertical, plan
     FROM sites
     WHERE organization_id = ?
       ${principal && !isOrganizationWideRole(principal.role) ? 'AND EXISTS (SELECT 1 FROM member m JOIN teamMember tm ON tm.userId = m.userId AND tm.teamId = sites.team_id WHERE m.id = ? AND m.organizationId = sites.organization_id)' : ''}

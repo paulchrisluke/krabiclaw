@@ -29,6 +29,7 @@ interface DashboardSiteSummary {
   id: string
   brand_name: string | null
   subdomain: string | null
+  vertical: 'restaurant' | 'experience' | 'service' | 'professional_service' | null
   plan: string | null
 }
 

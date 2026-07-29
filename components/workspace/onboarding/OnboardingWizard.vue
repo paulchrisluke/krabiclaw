@@ -62,20 +62,54 @@
     </div>
 
     <!-- Chat transcript -->
-    <ChowBotConversation
-      v-else
-      v-model:input="textInput"
-      :messages="conversationMessages"
-      :placeholder="inputPlaceholder"
-      :disabled="!awaitingInput"
-      :loading="typing"
-      :messages-status="typing ? 'streaming' : undefined"
-      :show-empty-state="false"
-      :render-markdown="renderMarkdown"
-      :quick-replies="importError ? [] : replies"
-      @submit="handleTextSubmit"
-      @quick-reply="handleReply"
-    >
+    <div v-else class="flex min-h-0 flex-1 flex-col">
+      <div class="flex shrink-0 items-center gap-3 border-b border-default bg-default px-3 py-2">
+        <UButton
+          icon="i-lucide-chevron-left"
+          color="neutral"
+          variant="ghost"
+          size="sm"
+          square
+          :disabled="!canGoBack"
+          aria-label="Back"
+          @click="goBack"
+        />
+        <div class="min-w-0 flex-1">
+          <p class="truncate text-xs font-semibold text-highlighted">{{ progressLabel }}</p>
+          <div class="mt-1 flex gap-1">
+            <span
+              v-for="index in totalProgressSteps"
+              :key="index"
+              class="h-1.5 flex-1 rounded-full"
+              :class="index <= progressStep ? 'bg-primary' : 'bg-muted'"
+            />
+          </div>
+        </div>
+        <UButton
+          v-if="draftPreviewPayload"
+          icon="i-lucide-eye"
+          color="neutral"
+          variant="soft"
+          size="sm"
+          square
+          aria-label="Preview draft"
+          @click="$emit('draft-saved', draftPreviewPayload)"
+        />
+      </div>
+
+      <ChowBotConversation
+        v-model:input="textInput"
+        :messages="conversationMessages"
+        :placeholder="inputPlaceholder"
+        :disabled="!awaitingInput"
+        :loading="typing"
+        :messages-status="typing ? 'streaming' : undefined"
+        :show-empty-state="false"
+        :render-markdown="renderMarkdown"
+        :quick-replies="importError ? [] : replies"
+        @submit="handleTextSubmit"
+        @quick-reply="handleReply"
+      >
       <template #prompt-before>
         <!-- Error banner -->
         <div
@@ -94,12 +128,19 @@
           <!-- Place preview / confirm card -->
           <div
             v-if="messages[index].placePreview"
-            class="mt-2 flex items-start gap-3 rounded-xl border border-default bg-elevated px-4 py-3"
+            class="mt-2 overflow-hidden rounded-xl border border-default bg-elevated"
           >
-            <div class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <UIcon name="i-lucide-map-pin" class="size-4" />
+            <div class="flex h-24 items-center justify-center border-b border-default bg-muted text-muted">
+              <div class="flex items-center gap-2 text-xs font-medium">
+                <UIcon name="i-lucide-map" class="size-4" />
+                Map preview
+              </div>
             </div>
-            <div class="min-w-0 flex-1">
+            <div class="flex items-start gap-3 px-4 py-3">
+              <div class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <UIcon name="i-lucide-map-pin" class="size-4" />
+              </div>
+              <div class="min-w-0 flex-1">
               <p class="truncate text-[13px] font-semibold text-highlighted">{{ messages[index].placePreview.name }}</p>
               <p class="mt-0.5 text-[12px] leading-relaxed text-muted">{{ messages[index].placePreview.address }}</p>
               <p v-if="messages[index].placePreview.phone" class="mt-0.5 text-[12px] text-muted">{{ messages[index].placePreview.phone }}</p>
@@ -113,6 +154,7 @@
                 <UIcon name="i-lucide-external-link" class="size-3" />
                 View on Google Maps
               </a>
+              </div>
             </div>
           </div>
           <div
@@ -221,7 +263,8 @@
           </div>
         </template>
       </template>
-    </ChowBotConversation>
+      </ChowBotConversation>
+    </div>
   </div>
 </template>
 
@@ -384,6 +427,29 @@ const inputPlaceholder = computed(() => {
   if (step.value === 'awaiting_manual_name') return 'Your business name…'
   return 'Paste your Google Maps link…'
 })
+const totalProgressSteps = 9
+const progressStep = computed(() => {
+  if (step.value === 'vertical') return 1
+  if (step.value === 'source') return 2
+  if (step.value === 'awaiting_url' || step.value === 'awaiting_manual_name') return 3
+  if (step.value === 'confirm') return 4
+  if (step.value === 'details') return onboardingDraftId.value ? 7 : 5
+  if (step.value === 'importing') return onboardingDraftId.value ? 8 : 6
+  if (step.value === 'imported') return 9
+  return 1
+})
+const progressLabel = computed(() => {
+  if (step.value === 'vertical') return 'Choose business type'
+  if (step.value === 'source') return 'Choose source'
+  if (step.value === 'awaiting_url') return 'Add Maps link'
+  if (step.value === 'awaiting_manual_name') return 'Add business name'
+  if (step.value === 'confirm') return 'Confirm listing'
+  if (step.value === 'details') return onboardingDraftId.value ? 'Preview ready' : 'Business details'
+  if (step.value === 'importing') return 'Building'
+  if (step.value === 'imported') return 'Next steps'
+  return 'Onboarding'
+})
+const canGoBack = computed(() => !importing.value && !typing.value && !['welcome', 'importing', 'imported'].includes(step.value))
 const detailsActionLabel = computed(() => isAddingLocation.value ? 'Add location' : 'Create site')
 const detailsCardTitle = computed(() => isAddingLocation.value ? 'Location details' : 'Business details')
 const detailsCardDescription = computed(() => detailsSource.value === 'manual'
@@ -403,6 +469,7 @@ const importedLocationSlug = ref<string | null>(null)
 const checklistStarterPrompt = ref<string | null>(null)
 const preConfirmStep = ref<WizardStep>('awaiting_url')
 const onboardingDraftId = ref<string | null>(null)
+const draftPreviewPayload = ref<DraftSavedPayload | null>(null)
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -605,6 +672,35 @@ async function advance(target: WizardStep) {
           showPrimaryToggle: !!isAddingLocation.value,
         },
       })
+  }
+}
+
+async function goBack() {
+  if (!canGoBack.value) return
+  importError.value = null
+  replies.value = []
+  awaitingInput.value = false
+
+  if (step.value === 'source') {
+    messages.value = []
+    await advance(skipVertical.value ? 'welcome' : 'vertical')
+    return
+  }
+  if (step.value === 'awaiting_url' || step.value === 'awaiting_manual_name') {
+    await advance('source')
+    return
+  }
+  if (step.value === 'confirm') {
+    pendingPreview.value = null
+    await advance(preConfirmStep.value)
+    return
+  }
+  if (step.value === 'details') {
+    if (pendingPreview.value) {
+      showConfirm(pendingPreview.value, preConfirmStep.value)
+    } else {
+      await advance('awaiting_manual_name')
+    }
   }
 }
 
@@ -814,12 +910,13 @@ async function submitDetails() {
 
       tools[0]!.done = true
       onboardingDraftId.value = res.draftId
-      emit('draft-saved', {
+      draftPreviewPayload.value = {
         draftId: res.draftId,
         previewToken: res.previewToken,
         draftName: res.draftName,
         subdomainCandidate: res.subdomainCandidate,
-      })
+      }
+      emit('draft-saved', draftPreviewPayload.value)
 
       await pushBot(
         'Draft ready. The preview on the right now shows a private working copy, so you can review the site before reserving a live subdomain.'

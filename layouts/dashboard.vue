@@ -52,10 +52,88 @@
 
       <UDashboardSearch v-model:search-term="dashboardSearchTerm" :groups="dashboardSearchGroups" :loading="dashboardSearchLoading" :color-mode="false" />
 
-      <slot />
+      <div class="min-w-0 flex-1 pb-24 md:pb-0">
+        <slot />
+      </div>
 
       <ChowBot v-if="showChowBot" />
     </UDashboardGroup>
+
+    <div
+      v-if="mobileNavItems.length"
+      class="fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 md:hidden"
+      data-testid="dashboard-mobile-nav"
+    >
+      <nav class="flex h-[52px] w-full max-w-[420px] items-center justify-around rounded-full border border-default bg-elevated px-2 shadow-[0_10px_24px_rgba(20,23,46,0.2)]">
+        <UDashboardSearchButton
+          label="Search dashboard"
+          class="flex size-9 items-center justify-center rounded-full text-dimmed"
+          :ui="{ base: 'size-9 justify-center rounded-full px-0', label: 'sr-only' }"
+        />
+        <UButton
+          v-for="item in mobileNavItems"
+          :key="item.key"
+          :to="item.to"
+          :icon="item.icon"
+          color="neutral"
+          variant="ghost"
+          size="sm"
+          square
+          :aria-label="item.label"
+          :title="item.label"
+          :class="item.active ? 'bg-primary/10 text-primary' : 'text-dimmed'"
+        />
+        <UButton
+          icon="i-lucide-ellipsis"
+          color="neutral"
+          variant="ghost"
+          size="sm"
+          square
+          aria-label="More"
+          title="More"
+          :class="mobileMoreOpen ? 'bg-primary/10 text-primary' : 'text-dimmed'"
+          @click="mobileMoreOpen = !mobileMoreOpen"
+        />
+        <UButton
+          icon="i-lucide-bot"
+          color="neutral"
+          variant="ghost"
+          size="sm"
+          square
+          aria-label="ChowBot"
+          title="ChowBot"
+          class="text-dimmed"
+          @click="openChowBot"
+        />
+      </nav>
+    </div>
+
+    <button
+      v-if="mobileMoreOpen"
+      type="button"
+      class="fixed inset-0 z-30 bg-black/30 md:hidden"
+      aria-label="Close navigation menu"
+      @click="mobileMoreOpen = false"
+    />
+    <div
+      v-if="mobileMoreOpen"
+      class="fixed inset-x-3 bottom-20 z-40 rounded-xl border border-default bg-elevated p-2 shadow-xl md:hidden"
+      data-testid="dashboard-mobile-more"
+    >
+      <div class="max-h-[55vh] overflow-y-auto">
+        <NuxtLink
+          v-for="item in mobileMoreItems"
+          :key="item.to"
+          :to="item.to"
+          class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-highlighted hover:bg-muted"
+          @click="mobileMoreOpen = false"
+        >
+          <UIcon v-if="item.icon" :name="item.icon" class="size-4 text-muted" />
+          <span>{{ item.label }}</span>
+        </NuxtLink>
+      </div>
+    </div>
+
     <BillingCreditPurchaseModal />
     <BillingServiceUpsellModal />
     <BillingSiteSubscribeModal />
@@ -116,7 +194,9 @@ const toast = useToast()
 const stoppingImpersonation = ref(false)
 const { searchTerm: dashboardSearchTerm, loading: dashboardSearchLoading, groups: dashboardSearchGroups } = useDashboardSearch()
 const dashboard = useDashboardSite()
+const chowBot = useChowBot()
 const organizationsState = authClient.useListOrganizations()
+const mobileMoreOpen = ref(false)
 
 const dashboardContextError = ref<unknown>(null)
 
@@ -449,6 +529,141 @@ const navigationItems = computed(() => {
   if (settingsGroup.value.length) groups.push(settingsGroup.value)
   return groups
 })
+
+interface DashboardMobileNavItem {
+  key: string
+  label: string
+  icon: string
+  to: string
+  active?: boolean
+}
+
+function isActivePath(path: string) {
+  return route.path === path || route.path.startsWith(`${path}/`)
+}
+
+function firstManagerItem(feature: ProductFeature, managerScope = scope.value) {
+  const manager = capabilities.value?.managers.find(item => item.id === feature && item.scope === managerScope)
+  if (!manager) return null
+  const href = managerHref(manager)
+  return href ? { label: manager.label, to: href, icon: MANAGER_ICON[manager.id] ?? 'i-lucide-circle' } : null
+}
+
+function firstLocationManagerItem(feature: ProductFeature) {
+  const manager = capabilities.value?.managers.find(item => item.id === feature && item.scope === 'location')
+  const location = dashboard.locations.value.find(item => item.is_primary) ?? dashboard.locations.value[0]
+  if (!manager || !locationsBase.value || !location?.slug) return null
+  const rel = manager.route.replace(/^:location\/?/, '')
+  const base = `${locationsBase.value}/${location.slug}`
+  return {
+    label: manager.label,
+    to: rel ? `${base}/${rel}` : base,
+    icon: MANAGER_ICON[manager.id] ?? 'i-lucide-circle',
+  }
+}
+
+const mobileRevenueItem = computed<DashboardMobileNavItem | null>(() => {
+  if (scope.value === 'organization' && orgBase.value) {
+    return {
+      key: 'sites',
+      label: 'Sites',
+      icon: 'i-lucide-globe',
+      to: `${orgBase.value}/sites`,
+      active: isActivePath(`${orgBase.value}/sites`),
+    }
+  }
+
+  if (scope.value === 'location') {
+    const primary = firstManagerItem('menu', 'location')
+      ?? firstManagerItem('experiences', 'location')
+      ?? firstManagerItem('services', 'site')
+    if (!primary) return null
+    return {
+      key: 'primary',
+      label: primary.label,
+      icon: primary.icon,
+      to: primary.to,
+      active: isActivePath(primary.to),
+    }
+  }
+
+  if (scope.value !== 'site') return null
+  const revenue = firstManagerItem('ordering', 'site')
+    ?? firstManagerItem('services', 'site')
+    ?? firstLocationManagerItem('reservations')
+    ?? firstLocationManagerItem('experiences')
+  if (!revenue) return null
+  return {
+    key: 'revenue',
+    label: revenue.label === 'Reservation policies' ? 'Bookings' : revenue.label,
+    icon: revenue.icon,
+    to: revenue.to,
+    active: isActivePath(revenue.to),
+  }
+})
+
+const mobileHomeItem = computed<DashboardMobileNavItem | null>(() => {
+  const to = scope.value === 'location'
+    ? locationBase.value
+    : scope.value === 'site'
+      ? siteBase.value
+      : orgBase.value
+  if (!to) return null
+  return {
+    key: 'home',
+    label: 'Home',
+    icon: 'i-lucide-home',
+    to,
+    active: route.path === to,
+  }
+})
+
+const mobileInboxItem = computed<DashboardMobileNavItem | null>(() => {
+  const to = scope.value === 'location'
+    ? locationBase.value ? `${locationBase.value}/inbox` : null
+    : scope.value === 'site'
+      ? siteBase.value ? `${siteBase.value}/inbox` : null
+      : orgBase.value ? `${orgBase.value}/activity` : null
+  if (!to) return null
+  return {
+    key: 'inbox',
+    label: scope.value === 'organization' ? 'Activity' : 'Inbox',
+    icon: scope.value === 'organization' ? 'i-lucide-activity' : 'i-lucide-inbox',
+    to,
+    active: isActivePath(to),
+  }
+})
+
+const mobileNavItems = computed<DashboardMobileNavItem[]>(() => [
+  mobileHomeItem.value,
+  mobileInboxItem.value,
+  mobileRevenueItem.value,
+].filter((item): item is DashboardMobileNavItem => Boolean(item)))
+
+const mobileMoreItems = computed(() => {
+  const seen = new Set<string>()
+  const items: { label: string; icon?: string; to: string }[] = []
+  const primaryTargets = new Set(mobileNavItems.value.map(item => item.to))
+
+  for (const group of navigationItems.value) {
+    for (const item of group) {
+      if (('type' in item && item.type === 'label') || !item.to || primaryTargets.has(item.to) || seen.has(item.to)) continue
+      seen.add(item.to)
+      items.push({ label: item.label, icon: item.icon, to: item.to })
+    }
+  }
+
+  return items
+})
+
+watch(() => route.fullPath, () => {
+  mobileMoreOpen.value = false
+})
+
+function openChowBot() {
+  mobileMoreOpen.value = false
+  chowBot.open()
+}
 
 async function switchOrganization(organizationId: string) {
   const organizationApi = authClient.organization as unknown as {

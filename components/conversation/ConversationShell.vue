@@ -75,14 +75,19 @@
     <div v-if="showPrompt" class="shrink-0 border-t border-default bg-elevated p-3">
       <slot name="prompt-before" />
 
-      <div v-if="quickReplies.length" class="flex gap-2 overflow-x-auto pb-1">
+      <div
+        v-if="quickReplies.length"
+        class="flex gap-2 pb-1"
+        :class="quickReplyRows ? 'flex-col' : 'overflow-x-auto'"
+      >
         <button
           v-for="(reply, index) in quickReplies"
           :key="index"
           data-testid="chowbot-quick-reply"
           :data-reply-action="reply.action"
           :class="[
-            'inline-flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 py-2 text-[12.5px] font-semibold transition-colors',
+            'inline-flex shrink-0 cursor-pointer items-center gap-1.5 border px-3.5 py-2 text-[12.5px] font-semibold transition-colors',
+            quickReplyRows ? 'w-full whitespace-normal rounded-lg text-left' : 'whitespace-nowrap rounded-full',
             reply.primary
               ? 'border-primary bg-primary text-on-primary hover:bg-primary/90'
               : reply.ghost
@@ -155,7 +160,7 @@ export interface ConversationQuickReplyOption {
   action?: string
 }
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   messages: TMessage[]
   input: string
   placeholder: string
@@ -204,6 +209,8 @@ defineEmits<{
   starter: [prompt: string]
   'quick-reply': [reply: ConversationQuickReplyOption]
 }>()
+
+const quickReplyRows = computed(() => props.quickReplies.some(reply => Boolean(reply.sub)))
 
 function messageKey(message: TMessage, index: number) {
   if ('id' in message && typeof message.id === 'string' && message.id) return message.id
