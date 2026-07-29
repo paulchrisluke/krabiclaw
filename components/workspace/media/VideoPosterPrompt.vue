@@ -18,7 +18,7 @@
           <UButton icon="i-lucide-image" :loading="uploading" :disabled="uploading" @click="posterInput?.click()">
             Choose poster image
           </UButton>
-          <UButton color="neutral" variant="soft" :disabled="uploading" @click="emit('submit', null)">
+          <UButton v-if="allowSkip" color="neutral" variant="soft" :disabled="uploading" @click="emit('submit', null)">
             Skip
           </UButton>
         </div>
@@ -29,11 +29,14 @@
 </template>
 
 <script setup lang="ts">
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   open: boolean
   uploading?: boolean
   videoName?: string | null
-}>()
+  allowSkip?: boolean
+}>(), {
+  allowSkip: true,
+})
 
 const emit = defineEmits<{
   'update:open': [value: boolean]

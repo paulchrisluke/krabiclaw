@@ -106,6 +106,44 @@ export function buildFinalUnifiedMediaPreflightSql() {
   return `
 WITH checks(check_name, failures) AS (
   VALUES
+    ('legacy_experience_media_columns_present', (
+      SELECT COUNT(*)
+      FROM pragma_table_info('experiences')
+      WHERE name IN ('image_asset_id', 'video_asset_id', 'images')
+    )),
+    ('legacy_location_hero_columns_present', (
+      SELECT COUNT(*)
+      FROM pragma_table_info('business_locations')
+      WHERE name IN ('hero_image_asset_id', 'hero_video_asset_id')
+    )),
+    ('legacy_site_content_hero_columns_present', (
+      SELECT COUNT(*)
+      FROM pragma_table_info('site_content')
+      WHERE name IN ('hero_image_asset_id', 'hero_video_asset_id')
+    )),
+    ('legacy_media_assets_old_table_present', (
+      SELECT COUNT(*)
+      FROM sqlite_master
+      WHERE type = 'table' AND name = 'media_assets_old'
+    )),
+    ('legacy_media_assets_old_sync_triggers_present', (
+      SELECT COUNT(*)
+      FROM sqlite_master
+      WHERE type = 'trigger' AND name IN (
+        'sync_media_assets_old_delete',
+        'sync_media_assets_old_insert',
+        'sync_media_assets_old_update'
+      )
+    )),
+    ('legacy_media_assets_old_foreign_keys_present', (
+      SELECT
+        (SELECT COUNT(*) FROM pragma_foreign_key_list('business_locations') WHERE "table" = 'media_assets_old')
+        + (SELECT COUNT(*) FROM pragma_foreign_key_list('site_content') WHERE "table" = 'media_assets_old')
+        + (SELECT COUNT(*) FROM pragma_foreign_key_list('blog_posts') WHERE "table" = 'media_assets_old')
+        + (SELECT COUNT(*) FROM pragma_foreign_key_list('menu_items') WHERE "table" = 'media_assets_old')
+        + (SELECT COUNT(*) FROM pragma_foreign_key_list('platform_docs') WHERE "table" = 'media_assets_old')
+        + (SELECT COUNT(*) FROM pragma_foreign_key_list('posts') WHERE "table" = 'media_assets_old')
+    )),
     ('unsupported_video_mime_records', (
       SELECT COUNT(*)
       FROM media_assets
@@ -144,7 +182,45 @@ SELECT
     SELECT COUNT(*)
     FROM pragma_table_info('experiences')
     WHERE name IN ('image_asset_id', 'video_asset_id', 'images')
-  ) AS legacy_columns,
+  ) AS legacy_experience_columns,
+  (
+    SELECT COUNT(*)
+    FROM pragma_table_info('experiences')
+    WHERE name IN ('image_asset_id', 'video_asset_id', 'images')
+  )
+  + (
+    SELECT COUNT(*)
+    FROM pragma_table_info('business_locations')
+    WHERE name IN ('hero_image_asset_id', 'hero_video_asset_id')
+  )
+  + (
+    SELECT COUNT(*)
+    FROM pragma_table_info('site_content')
+    WHERE name IN ('hero_image_asset_id', 'hero_video_asset_id')
+  )
+  + (
+    SELECT COUNT(*)
+    FROM sqlite_master
+    WHERE type = 'table' AND name = 'media_assets_old'
+  )
+  + (
+    SELECT COUNT(*)
+    FROM sqlite_master
+    WHERE type = 'trigger' AND name IN (
+      'sync_media_assets_old_delete',
+      'sync_media_assets_old_insert',
+      'sync_media_assets_old_update'
+    )
+  )
+  + (
+    SELECT
+      (SELECT COUNT(*) FROM pragma_foreign_key_list('business_locations') WHERE "table" = 'media_assets_old')
+      + (SELECT COUNT(*) FROM pragma_foreign_key_list('site_content') WHERE "table" = 'media_assets_old')
+      + (SELECT COUNT(*) FROM pragma_foreign_key_list('blog_posts') WHERE "table" = 'media_assets_old')
+      + (SELECT COUNT(*) FROM pragma_foreign_key_list('menu_items') WHERE "table" = 'media_assets_old')
+      + (SELECT COUNT(*) FROM pragma_foreign_key_list('platform_docs') WHERE "table" = 'media_assets_old')
+      + (SELECT COUNT(*) FROM pragma_foreign_key_list('posts') WHERE "table" = 'media_assets_old')
+  ) AS legacy_objects,
   (
     SELECT COUNT(*)
     FROM sqlite_master
@@ -195,12 +271,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     '--command',
     buildLegacyColumnProbeSql(),
   ]))
-  const hasLegacyColumns = Number(probeRows[0]?.legacy_columns ?? 0) > 0
+  const hasLegacyExperienceColumns = Number(probeRows[0]?.legacy_experience_columns ?? 0) > 0
   const hasExperienceMedia = Number(probeRows[0]?.experience_media_tables ?? 0) > 0
   const rows = parseWranglerJson(runWrangler([
     ...baseCommand,
     '--command',
-    hasLegacyColumns && !hasExperienceMedia ? buildUnifiedMediaPreflightSql() : buildFinalUnifiedMediaPreflightSql(),
+    hasLegacyExperienceColumns && !hasExperienceMedia ? buildUnifiedMediaPreflightSql() : buildFinalUnifiedMediaPreflightSql(),
   ]))
   if (rows.length) {
     console.table(rows)

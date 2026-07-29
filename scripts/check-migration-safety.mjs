@@ -12,6 +12,7 @@ const PROTECTED_PARENT_TABLES = new Set([
   'site_content',
 ])
 const IMMUTABLE_ALLOWLIST = new Set(['0047_free_molecule_man.sql'])
+const RELATIONSHIP_PRESERVING_REBUILD_ALLOWLIST = new Set(['0074_unified_media_physical_cleanup.sql'])
 const FIRST_ENFORCED_MIGRATION = 72
 
 function migrationNumber(fileName) {
@@ -21,6 +22,11 @@ function migrationNumber(fileName) {
 
 export function findUnsafeMigrationStatements(fileName, sql) {
   if (IMMUTABLE_ALLOWLIST.has(fileName)) return []
+  if (RELATIONSHIP_PRESERVING_REBUILD_ALLOWLIST.has(fileName)) {
+    return sql.includes('__um_backup_business_locations') && sql.includes('__um_backup_experiences')
+      ? []
+      : [`${fileName} is allowlisted only when it preserves rebuilt parent relationships via explicit backups`]
+  }
   const number = migrationNumber(fileName)
   if (number !== null && number < FIRST_ENFORCED_MIGRATION) return []
 

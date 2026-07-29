@@ -137,8 +137,8 @@
                     <p class="font-medium text-highlighted">Cover video needs a poster image</p>
                     <p class="mt-1 text-muted">Upload or replace the video from the media library with a poster before saving it as the first gallery item.</p>
                   </div>
-                  <UButton size="xs" color="warning" variant="soft" icon="i-lucide-images" :to="mediaLibraryPath">
-                    Media
+                  <UButton size="xs" color="warning" variant="soft" icon="i-lucide-image-plus" :loading="posterUploading" @click="openCoverPosterPrompt">
+                    Add poster
                   </UButton>
                 </div>
               </div>
@@ -261,10 +261,19 @@
       <template #footer>
         <div class="flex justify-end gap-3 px-6 py-4">
           <UButton color="neutral" variant="ghost" @click="sliderOpen = false">Cancel</UButton>
-          <UButton :loading="saving" @click="save">{{ editing ? 'Save changes' : 'Create' }}</UButton>
+          <UButton :loading="saving" :disabled="posterlessCoverVideo" @click="save">{{ editing ? 'Save changes' : 'Create' }}</UButton>
         </div>
       </template>
     </USlideover>
+
+    <VideoPosterPrompt
+      :open="coverPosterPromptOpen"
+      :uploading="posterUploading"
+      :video-name="posterlessCoverVideoAsset?.asset_id ?? null"
+      :allow-skip="false"
+      @update:open="coverPosterPromptOpen = $event"
+      @submit="submitCoverPoster"
+    />
 
     <!-- Delete confirm -->
     <UModal v-model:open="deleteOpen" title="Delete experience">
@@ -347,6 +356,7 @@
 import type { Experience, SlotAvailability, SlotOverride, WeekdayName } from '~/server/utils/experiences'
 import type { BookingPolicyPatch, RenderedBookingPolicySummary } from '~/server/utils/booking-policies'
 import BookingPolicyForm from '~/components/dashboard/BookingPolicyForm.vue'
+import VideoPosterPrompt from '~/components/workspace/media/VideoPosterPrompt.vue'
 
 const weekdayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const satisfies WeekdayName[]
 
@@ -355,7 +365,6 @@ definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.experiences' }
 type ApiRecord = Experience
 
 const toast = useToast()
-const route = useRoute()
 const siteId = await useDashboardSiteId()
 const dashboardLocation = useDashboardLocation()
 
@@ -428,11 +437,8 @@ const intervalOptions = [
 ]
 const generating = ref(false)
 const draggingMediaIndex = ref<number | null>(null)
-const mediaLibraryPath = computed(() => {
-  const orgSlug = String(route.params.orgSlug ?? '')
-  const siteSlug = String(route.params.siteSlug ?? '')
-  return `/dashboard/${orgSlug}/sites/${siteSlug}/media`
-})
+const coverPosterPromptOpen = ref(false)
+const posterUploading = ref(false)
 
 async function runGenerator(target: 'flat' | 'recurring', day?: WeekdayName) {
   generating.value = true
@@ -506,6 +512,7 @@ const posterlessCoverVideo = computed(() => {
   const cover = form.media[0]
   return cover?.kind === 'video' && !cover.thumbnail_url
 })
+const posterlessCoverVideoAsset = computed(() => posterlessCoverVideo.value ? form.media[0] : null)
 
 watch(currentLocationId, () => {
   sliderOpen.value = false
@@ -555,6 +562,34 @@ function dropGalleryMedia(targetIndex: number) {
   if (sourceIndex < 0 || sourceIndex >= form.media.length || targetIndex < 0 || targetIndex >= form.media.length) return
   const [item] = form.media.splice(sourceIndex, 1)
   if (item) form.media.splice(targetIndex, 0, item)
+}
+
+function openCoverPosterPrompt() {
+  if (!posterlessCoverVideoAsset.value?.asset_id) return
+  coverPosterPromptOpen.value = true
+}
+
+async function submitCoverPoster(poster: File | null) {
+  if (!poster) return
+  const cover = posterlessCoverVideoAsset.value
+  if (!cover?.asset_id) return
+  posterUploading.value = true
+  try {
+    const body = new FormData()
+    body.append('poster', poster)
+    const response = await $fetch<{ thumbnailUrl: string }>(`/api/editor/sites/${siteId}/media/${cover.asset_id}/poster`, {
+      method: 'POST',
+      body,
+    })
+    cover.thumbnail_url = response.thumbnailUrl
+    cover.url = cover.url ?? response.thumbnailUrl
+    coverPosterPromptOpen.value = false
+    toast.add({ description: 'Poster image added.', color: 'success' })
+  } catch (error) {
+    toast.add({ description: getApiErrorMessage(error, 'Failed to add poster image.'), color: 'error' })
+  } finally {
+    posterUploading.value = false
+  }
 }
 
 function handleGalleryMediaChange(index: number, asset: { id: string; publicUrl: string; thumbnailUrl: string; kind?: string } | null) {
@@ -624,6 +659,10 @@ async function loadExperiencePolicy(experienceId: string, locationId: string | n
 }
 
 async function save() {
+  if (posterlessCoverVideo.value) {
+    toast.add({ description: 'Add a poster image before saving a video as the cover.', color: 'error' })
+    return
+  }
   if (!form.title.trim()) {
     toast.add({ description: 'Title is required.', color: 'error' })
     return
