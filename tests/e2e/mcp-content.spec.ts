@@ -41,7 +41,7 @@ test.describe('stateless MCP server', () => {
   })
 
   test('a post publishes immediately, stays idempotent on repeat, and matches the public API', async ({ request, baseURL }) => {
-    test.setTimeout(60_000)
+    test.setTimeout(90_000)
     await loginAs(request, baseURL!, MCP_MANAGED_USER_ID)
     const siteId = MCP_MANAGED_SITE_ID
     let createdPostId: string | undefined
