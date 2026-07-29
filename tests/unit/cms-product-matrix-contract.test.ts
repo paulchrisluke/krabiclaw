@@ -49,10 +49,12 @@ test('full product matrix resolves one coherent capability model', () => {
   assert.equal(sayaExperience.managers.find(manager => manager.key === 'location.reservations')?.label, 'Bookings')
 
   assert.equal(managerKeys(blawbyProfessional).has('site.services'), true)
+  assert.equal(blawbyProfessional.managers.find(manager => manager.key === 'site.services')?.label, 'Services')
   assert.equal(managerKeys(blawbyProfessional).has('location.menu'), false)
   assert.equal(managerKeys(blawbyProfessional).has('location.experiences'), false)
   assert.equal(blawbyProfessional.locationVocabulary, 'office/service area')
   assert.equal(pageIds(blawbyProfessional).has('services'), true)
+  assert.equal(pageIds(blawbyProfessional).has('schedule'), true)
   assert.equal(pageIds(blawbyProfessional).has('menu'), false)
 })
 

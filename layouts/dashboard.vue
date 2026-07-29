@@ -409,7 +409,14 @@ function managerAction(manager: CmsManagerCapability, href: string) {
     label: manager.label,
     to: href,
     icon: MANAGER_ICON[manager.id] ?? 'i-lucide-circle',
+    feature: manager.id,
   }
+}
+
+function revenueLabel(item: ReturnType<typeof managerAction>) {
+  if (item.feature === 'reservations') return 'Bookings'
+  if (item.feature === 'services') return 'Schedule'
+  return item.label
 }
 
 const overviewGroup = computed(() => {
@@ -600,6 +607,7 @@ const mobileRevenueItem = computed<DashboardMobileNavItem | null>(() => {
   if (scope.value === 'location') {
     const primary = firstManagerItem('menu', 'location')
       ?? firstManagerItem('experiences', 'location')
+      ?? firstManagerItem('services', 'site')
     if (!primary) return null
     return {
       key: 'primary',
@@ -618,7 +626,7 @@ const mobileRevenueItem = computed<DashboardMobileNavItem | null>(() => {
   if (!revenue) return null
   return {
     key: 'revenue',
-    label: revenue.label === 'Reservation policies' ? 'Bookings' : revenue.label,
+    label: revenueLabel(revenue),
     icon: revenue.icon,
     to: revenue.to,
     active: isActivePath(revenue.to),

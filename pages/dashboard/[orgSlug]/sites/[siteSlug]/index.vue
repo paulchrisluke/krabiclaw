@@ -160,7 +160,7 @@
             <p class="mt-1 text-xs text-muted">Manage Q&A and testimonials that apply to the whole site.</p>
           </div>
           <div class="flex flex-wrap gap-2">
-            <UButton v-if="hasSiteServicesManager" icon="i-lucide-building-2" color="neutral" variant="soft" :to="`${siteDashboardPath}/professional-services`">Professional services</UButton>
+            <UButton v-if="hasSiteServicesManager" icon="i-lucide-building-2" color="neutral" variant="soft" :to="`${siteDashboardPath}/professional-services`">Services</UButton>
             <UButton icon="i-lucide-circle-help" color="neutral" variant="soft" :to="`${siteDashboardPath}/qa`">Q&A</UButton>
             <UButton icon="i-lucide-star" color="neutral" variant="soft" :to="`${siteDashboardPath}/testimonials`">Testimonials</UButton>
           </div>
@@ -376,7 +376,7 @@ const revenueAction = computed(() => {
   if (ordering) return { label: ordering.label, icon: 'i-lucide-shopping-bag', to: `${siteDashboardPath.value}/${ordering.route}` }
 
   const services = managers.find(manager => manager.key === 'site.services')
-  if (services) return { label: services.label, icon: 'i-lucide-briefcase', to: `${siteDashboardPath.value}/${services.route}` }
+  if (services) return { label: 'Schedule', icon: 'i-lucide-calendar-days', to: `${siteDashboardPath.value}/${services.route}` }
 
   const location = primaryLocation.value
   const reservations = managers.find(manager => manager.key === 'location.reservations')
