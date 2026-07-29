@@ -97,9 +97,13 @@
             <p class="mt-1 text-xs leading-relaxed text-muted">{{ skeletonDescription }}</p>
           </div>
           <div class="grid gap-2">
-            <div class="h-11 animate-pulse rounded-xl bg-muted" />
-            <div class="h-11 animate-pulse rounded-xl bg-muted" />
-            <div class="h-24 animate-pulse rounded-xl bg-muted" />
+            <div
+              v-for="item in skeletonItems"
+              :key="item"
+              class="flex h-11 items-center rounded-xl bg-muted px-4 text-[12px] font-semibold text-muted"
+            >
+              {{ item }}
+            </div>
           </div>
         </div>
       </div>
@@ -119,7 +123,7 @@
     </div>
 
     <div v-else class="min-h-0 flex-1 overflow-auto p-5">
-      <SitePreviewFrame :iframe-src="iframeSrc" :display-url="displayUrl" />
+      <SitePreviewFrame :iframe-src="iframeSrc" :display-url="displayUrl" :chrome="false" />
     </div>
   </div>
 </template>
@@ -181,6 +185,11 @@ const verticalLabel = computed(() => {
 })
 const skeletonTitle = computed(() => `Sketching the ${verticalLabel.value} homepage`)
 const skeletonDescription = computed(() => 'I will fill this in with real business details as soon as the draft is ready.')
+const skeletonItems = computed(() => {
+  if (props.vertical === 'professional_service') return ['Services', 'Consultation', 'Contact']
+  if (props.vertical === 'experience') return ['Experiences', 'Schedule', 'Book']
+  return ['Menu', 'Reservations', 'Contact']
+})
 
 const displayUrl = computed(() => {
   const template = resolvePublicTemplate({ vertical: props.vertical })

@@ -79,7 +79,7 @@
   --kc-teal-100:    var(--color-teal-100);
 
   --kc-cream:       #F8F6F3;
-  --kc-cream-elev:  #FFFFFF;
+  --kc-cream-elev:  #FFF;
   --kc-sand:        #F0EBE3;
 
   --kc-border:      #E6E1D9;
@@ -104,23 +104,27 @@
 .platform-theme {
   --ui-primary:           var(--kc-coral);
 
-  --primary-foreground:   #FFFFFF;
+  --primary-foreground:   #FFF;
+
   --ui-secondary:         var(--kc-teal-600);
   --ui-success:           var(--kc-success);
   --ui-info:              #3B82F6;
   --ui-warning:           var(--kc-warning);
   --ui-error:             var(--kc-danger);
+
   --ui-bg:                var(--kc-cream);
   --ui-bg-elevated:       var(--kc-cream-elev);
   --ui-bg-muted:          #F2EFEA;
   --ui-bg-accented:       #F5F0EB;
   --ui-bg-inverted:       var(--kc-navy);
+
   --ui-text:              #454864;
   --ui-text-muted:        #5B5E73;
   --ui-text-dimmed:       #6E7189;
   --ui-text-toned:        #383B52;
   --ui-text-highlighted:  var(--kc-navy);
-  --ui-text-inverted:     #FFFFFF;
+  --ui-text-inverted:     #FFF;
+
   --ui-border:            var(--kc-border);
   --ui-border-muted:      var(--kc-border-muted);
   --ui-border-accented:   #D8D3CB;
@@ -151,22 +155,26 @@
   --ui-primary:           #FB7461;
 
   --primary-foreground:   #F5F4FB;
+
   --ui-secondary:         #5DCBCB;
   --ui-success:           #34D399;
   --ui-info:              #60A5FA;
   --ui-warning:           #FBBF24;
   --ui-error:             #F87171;
+
   --ui-bg:                #0F1225;
   --ui-bg-elevated:       #1F2547;
   --ui-bg-muted:          #141836;
   --ui-bg-accented:       #1A1E3A;
   --ui-bg-inverted:       var(--kc-cream-elev);
+
   --ui-text:              #C4C6DE;
   --ui-text-muted:        #A0A3C4;
   --ui-text-dimmed:       #9092B8;
   --ui-text-toned:        #DBDBEA;
   --ui-text-highlighted:  #F5F4FB;
-  --ui-text-inverted:     #F5F4FB;
+  --ui-text-inverted:     var(--kc-navy);
+
   --ui-border:            rgba(255,255,255,9%);
   --ui-border-muted:      rgba(255,255,255,5%);
   --ui-border-accented:   rgba(255,255,255,12%);
@@ -252,6 +260,7 @@
 .prose {
   max-width: 100%;
   overflow-wrap: anywhere;
+
   --tw-prose-body: var(--ui-text-highlighted);
   --tw-prose-headings: var(--ui-text-highlighted);
   --tw-prose-lead: var(--ui-text);

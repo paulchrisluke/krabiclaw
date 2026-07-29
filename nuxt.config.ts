@@ -79,9 +79,8 @@ const publicPerfTestPage = process.env.PERF_PUBLIC_TEST_PAGE !== 'false'
 const deploymentHost = new URL(
   process.env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'http://localhost',
 ).hostname
-const isNonProductionDeployment = deploymentHost === 'preview.krabiclaw.com'
-  || deploymentHost === 'staging.krabiclaw.com'
-  || deploymentHost.endsWith('.workers.dev')
+const productionHtmlCacheHosts = new Set(['krabiclaw.com', 'www.krabiclaw.com'])
+const isNonProductionDeployment = !productionHtmlCacheHosts.has(deploymentHost)
 const publicHtmlCacheHeaders = isNonProductionDeployment
   ? {
       'cache-control': 'private, no-store, max-age=0',

@@ -195,7 +195,7 @@
             v-model:form="brandDraftForm"
             :title="messages[index]!.brandDraftCard!.title"
             :description="messages[index]!.brandDraftCard!.description"
-            action-label="Continue"
+            :action-label="messages[index]!.brandDraftCard!.section === 'brand' ? 'Save & continue' : 'Upload hero photo'"
             :section="messages[index]!.brandDraftCard!.section"
             :loading="importing"
             :disabled="importing"
@@ -206,10 +206,12 @@
             v-model:form="notificationForm"
             title="Manager alerts"
             description="Choose where booking and message alerts should go."
-            action-label="Create site"
+            action-label="Save alerts"
+            show-skip
             :loading="importing"
             :disabled="importing"
-            @submit="submitDetails"
+            @submit="saveNotificationRouting"
+            @skip="skipNotificationRouting"
           />
           <div
             v-if="messages[index]?.handoff"
@@ -847,16 +849,14 @@ async function advance(target: WizardStep) {
     await pushBot('', {
       brandDraftCard: {
         title: 'Hero photo',
-        description: 'Describe the photo or headline direction for the top of your home page.',
+        description: 'Add the image guests should see first.',
         section: 'hero',
       },
     })
   }
 
   if (target === 'create') {
-    await pushBot('', {
-      notificationCard: true,
-    })
+    await submitDetails()
   }
 }
 
@@ -1120,7 +1120,7 @@ async function runLookup(mapsUrl: string) {
 }
 
 async function submitDetails() {
-  const requiredFields = [notificationForm.ownerPhone, hoursForm.timezone]
+  const requiredFields = [hoursForm.timezone]
   if (!requiredFields.every(value => value.trim().length > 0)) {
     importError.value = 'Add the required details before continuing.'
     return
@@ -1176,9 +1176,9 @@ async function submitDetails() {
       }
       emit('draft-saved', draftPreviewPayload.value)
 
-      await pushBot('Preview ready. Take a look on the right, then launch when it feels right.')
+      await pushBot('Preview ready. Take a look on the right, then create the site when it feels right.')
       replies.value = [
-        { label: 'Launch site', icon: 'i-lucide-badge-check', primary: true, action: 'commit_draft' },
+        { label: 'Create site', icon: 'i-lucide-badge-check', primary: true, action: 'commit_draft' },
         { label: 'Edit details', icon: 'i-lucide-square-pen', action: 'edit_draft' },
       ]
       step.value = 'location'
@@ -1220,7 +1220,7 @@ async function submitDetails() {
     await finishCreation(res.orgSlug, res.siteSlug ?? importedSiteSlug.value ?? props.existingSiteSlug ?? null, res.locationSlug)
   } catch (err) {
     importError.value = err instanceof Error ? err.message : 'Something went wrong. Please try again.'
-    step.value = 'create'
+    step.value = 'hero'
   } finally {
     importing.value = false
   }
@@ -1267,11 +1267,35 @@ async function commitDraft() {
     await finishCreation(res.orgSlug, res.siteSlug ?? importedSiteSlug.value ?? props.existingSiteSlug ?? null, res.locationSlug)
   } catch (error) {
     importError.value = error instanceof Error ? error.message : 'Something went wrong. Please try again.'
-    step.value = 'create'
+    step.value = 'location'
   } finally {
     importing.value = false
     committing = false
   }
+}
+
+async function saveNotificationRouting() {
+  if (!importedSiteId.value) return
+  importing.value = true
+  importError.value = null
+  try {
+    await $fetch(`/api/editor/sites/${importedSiteId.value}/notifications`, {
+      method: 'PATCH',
+      body: {
+        whatsapp_phone: notificationForm.ownerPhone.trim() || null,
+        channels: notificationForm.channels,
+      },
+    })
+    await pushBot('Manager alerts are saved.')
+  } catch (error) {
+    importError.value = error instanceof Error ? error.message : 'Could not save manager alerts. You can change them later from Settings.'
+  } finally {
+    importing.value = false
+  }
+}
+
+async function skipNotificationRouting() {
+  await pushBot('No problem. You can set manager alerts later from Settings.')
 }
 
 function serializeDetails() {
@@ -1381,6 +1405,9 @@ async function finishCreation(orgSlug: string | null | undefined, siteSlug: stri
       ? 'services'
       : 'menu'
   await pushBot(`Done. Your workspace is live at ${domain}.`)
+  if (!isAddingLocation.value && importedSiteId.value) {
+    await pushBot('', { notificationCard: true })
+  }
   if (!isAddingLocation.value && importedSiteId.value) {
     await pushBot(
       'Add a logo, brand color, and hero photo before you head into the dashboard.',

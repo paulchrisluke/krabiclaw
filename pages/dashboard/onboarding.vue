@@ -31,44 +31,31 @@
       />
     </div>
 
-    <div
-      v-if="mobilePreviewOpen"
-      class="fixed inset-0 z-50 bg-black/45 md:hidden"
-      role="presentation"
-      @click="mobilePreviewOpen = false"
-    />
-    <section
-      v-if="mobilePreviewOpen"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Site preview"
-      class="fixed inset-x-0 bottom-0 z-50 flex h-[82vh] flex-col overflow-hidden rounded-t-2xl border border-default bg-elevated shadow-xl md:hidden"
+    <USlideover
+      v-model:open="mobilePreviewOpen"
+      title="Site preview"
+      side="bottom"
+      class="md:hidden"
+      :close="false"
+      :ui="{ content: 'h-[82vh] overflow-hidden rounded-t-2xl', header: 'sr-only', body: 'flex min-h-0 p-0 sm:p-0' }"
     >
-      <UButton
-        icon="i-lucide-x"
-        color="neutral"
-        variant="soft"
-        size="sm"
-        square
-        aria-label="Close preview"
-        class="absolute right-3 top-3 z-10"
-        @click="mobilePreviewOpen = false"
-      />
-      <OnboardingPreviewPane
-        class="min-h-0 flex-1"
-        :iframe-src="iframeSrc"
-        :site-locations="previewLocations"
-        :selected-location-id="selectedLocationId"
-        :selected-page="selectedPreviewPage"
-        :site-status="computedSiteStatus"
-        :site-domain="siteDomain"
-        :vertical="previewVertical"
-        :placeholder-state="previewPlaceholderState"
-        home-only
-        @select-page="onSelectPage"
-        @select-location="onSelectLocation"
-      />
-    </section>
+      <template #body>
+        <OnboardingPreviewPane
+          class="min-h-0 flex-1"
+          :iframe-src="iframeSrc"
+          :site-locations="previewLocations"
+          :selected-location-id="selectedLocationId"
+          :selected-page="selectedPreviewPage"
+          :site-status="computedSiteStatus"
+          :site-domain="siteDomain"
+          :vertical="previewVertical"
+          :placeholder-state="previewPlaceholderState"
+          home-only
+          @select-page="onSelectPage"
+          @select-location="onSelectLocation"
+        />
+      </template>
+    </USlideover>
 
     <div v-if="!contextLoaded" class="flex min-h-0 flex-1 items-center justify-center">
       <div class="flex items-center gap-3 text-muted">

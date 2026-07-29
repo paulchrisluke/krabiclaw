@@ -68,6 +68,18 @@
         >
           {{ actionLabel }}
         </UButton>
+        <UButton
+          v-if="showSkip"
+          size="xl"
+          color="neutral"
+          variant="ghost"
+          block
+          class="justify-center"
+          :disabled="disabled"
+          @click="$emit('skip')"
+        >
+          Skip for now
+        </UButton>
       </div>
     </div>
   </UCard>
@@ -87,11 +99,12 @@ defineProps<{
   title: string
   description: string
   actionLabel: string
+  showSkip?: boolean
   loading?: boolean
   disabled?: boolean
 }>()
 
-defineEmits<{ submit: [] }>()
+defineEmits<{ submit: []; skip: [] }>()
 
 const channelOptions = [
   { label: 'WhatsApp', value: 'whatsapp' },

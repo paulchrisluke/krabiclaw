@@ -26,22 +26,42 @@
             />
           </div>
         </UFormField>
-        <UFormField label="Logo">
-          <UInput v-model="form.logoNote" class="w-full" size="xl" placeholder="Describe it, or skip for now" />
-        </UFormField>
+        <div class="flex items-center gap-3">
+          <button
+            type="button"
+            class="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-[14px] border border-default bg-default transition-colors hover:border-primary"
+            aria-label="Upload logo"
+            @click="logoInput?.click()"
+          >
+            <img v-if="logoPreviewUrl" :src="logoPreviewUrl" alt="" class="h-full w-full object-contain">
+            <UIcon v-else name="i-lucide-image" class="size-5 text-dimmed" />
+          </button>
+          <UButton
+            color="neutral"
+            variant="outline"
+            size="xl"
+            @click="logoInput?.click()"
+          >
+            {{ logoPreviewUrl ? 'Replace logo' : 'Upload logo' }}
+          </UButton>
+          <input ref="logoInput" type="file" accept="image/*" class="hidden" @change="onLogoSelected">
+        </div>
       </template>
 
       <template v-else>
-        <UFormField label="Hero photo">
-          <UInput v-model="form.heroPhotoNote" class="w-full" size="xl" placeholder="Describe the photo guests should see first" />
-        </UFormField>
-        <UFormField label="Hero headline">
-          <UInput v-model="form.heroHeadline" class="w-full" size="xl" placeholder="Leave blank to use your business name" />
-        </UFormField>
+        <button
+          type="button"
+          class="flex min-h-48 w-full items-center justify-center overflow-hidden rounded-[18px] border border-default bg-default transition-colors hover:border-primary"
+          aria-label="Upload hero photo"
+          @click="heroInput?.click()"
+        >
+          <img v-if="heroPreviewUrl" :src="heroPreviewUrl" alt="" class="h-full min-h-48 w-full object-cover">
+          <UIcon v-else name="i-lucide-image" class="size-9 text-highlighted" />
+        </button>
+        <input ref="heroInput" type="file" accept="image/*" class="hidden" @change="onHeroSelected">
       </template>
 
       <div class="grid gap-4">
-        <p class="text-[13px] leading-5 text-muted">{{ helperText }}</p>
         <UButton
           color="primary"
           size="xl"
@@ -53,12 +73,25 @@
         >
           {{ actionLabel }}
         </UButton>
+        <UButton
+          color="neutral"
+          variant="ghost"
+          size="xl"
+          block
+          class="justify-center"
+          :disabled="disabled"
+          @click="$emit('submit')"
+        >
+          Skip for now
+        </UButton>
       </div>
     </div>
   </UCard>
 </template>
 
 <script setup lang="ts">
+import { onUnmounted, ref } from 'vue'
+
 export type DraftBrandForm = {
   brandColor: string
   logoNote: string
@@ -79,12 +112,35 @@ const props = defineProps<{
 
 defineEmits<{ submit: [] }>()
 
-const colorPresets = ['#3F3F46', '#7C3AED', '#0EA5E9', '#16A34A', '#D97706', '#DC2626', '#DB2777', '#1F2547']
+const colorPresets = ['#3F3F46', '#7C3AED', '#0EA5E9', '#16A34A', '#D97706']
 const icon = computed(() => props.section === 'brand' ? 'i-lucide-paintbrush' : 'i-lucide-image')
-const helperText = computed(() => props.section === 'brand'
-  ? 'A quick direction is enough.'
-  : 'You can replace this later from the dashboard.'
-)
+const logoInput = ref<HTMLInputElement | null>(null)
+const heroInput = ref<HTMLInputElement | null>(null)
+const logoPreviewUrl = ref<string | null>(null)
+const heroPreviewUrl = ref<string | null>(null)
+
+function setPreview(target: typeof logoPreviewUrl | typeof heroPreviewUrl, file: File | undefined) {
+  if (!file) return
+  if (target.value?.startsWith('blob:')) URL.revokeObjectURL(target.value)
+  target.value = URL.createObjectURL(file)
+}
+
+function onLogoSelected(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  setPreview(logoPreviewUrl, file)
+  form.value.logoNote = file?.name ?? ''
+}
+
+function onHeroSelected(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  setPreview(heroPreviewUrl, file)
+  form.value.heroPhotoNote = file?.name ?? ''
+}
+
+onUnmounted(() => {
+  if (logoPreviewUrl.value?.startsWith('blob:')) URL.revokeObjectURL(logoPreviewUrl.value)
+  if (heroPreviewUrl.value?.startsWith('blob:')) URL.revokeObjectURL(heroPreviewUrl.value)
+})
 </script>
 
 <style scoped>

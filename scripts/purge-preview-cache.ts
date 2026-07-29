@@ -12,15 +12,27 @@ type CloudflareEnvelope<T> = {
   result?: T
 }
 
+const FETCH_TIMEOUT_MS = 15_000
+
 function errorMessage(envelope: CloudflareEnvelope<unknown>, fallback: string) {
   const messages = envelope.errors?.map(error => error.message).filter(Boolean)
   return messages?.length ? messages.join('; ') : fallback
 }
 
+async function fetchCloudflare(input: string, init: RequestInit = {}) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+  try {
+    return await fetch(input, { ...init, signal: controller.signal })
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 async function resolveZoneId() {
   if (process.env.CF_ZONE_ID) return process.env.CF_ZONE_ID
 
-  const response = await fetch(`https://api.cloudflare.com/client/v4/zones?name=${encodeURIComponent(zoneName)}`, {
+  const response = await fetchCloudflare(`https://api.cloudflare.com/client/v4/zones?name=${encodeURIComponent(zoneName)}`, {
     headers: { authorization: `Bearer ${token}` },
   })
   const envelope = await response.json() as CloudflareEnvelope<Array<{ id: string }>>
@@ -53,7 +65,7 @@ const files = [
 ]
 
 const zoneId = await resolveZoneId()
-const response = await fetch(`https://api.cloudflare.com/client/v4/zones/${zoneId}/purge_cache`, {
+const response = await fetchCloudflare(`https://api.cloudflare.com/client/v4/zones/${zoneId}/purge_cache`, {
   method: 'POST',
   headers: {
     authorization: `Bearer ${token}`,
