@@ -376,7 +376,7 @@ const revenueAction = computed(() => {
   if (ordering) return { label: ordering.label, icon: 'i-lucide-shopping-bag', to: `${siteDashboardPath.value}/${ordering.route}` }
 
   const services = managers.find(manager => manager.key === 'site.services')
-  if (services) return { label: 'Schedule', icon: 'i-lucide-calendar-check', to: `${siteDashboardPath.value}/professional-services` }
+  if (services) return { label: services.label, icon: 'i-lucide-briefcase', to: `${siteDashboardPath.value}/${services.route}` }
 
   const location = primaryLocation.value
   const reservations = managers.find(manager => manager.key === 'location.reservations')

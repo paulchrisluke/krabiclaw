@@ -166,7 +166,7 @@ const loadContext = async () => {
       locations?: Array<{ id: string; slug: string; title: string; is_primary: boolean }>
     }>('/api/dashboard/context')
 
-    if (response.organization) orgSlug.value = response.organization.slug ?? null
+    if (response.organization) orgSlug.value = response.organization.slug
     if (response.site) {
       siteData.value = response.site
       siteLocations.value = response.locations ?? []

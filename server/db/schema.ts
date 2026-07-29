@@ -1088,7 +1088,7 @@ export const oauthRefreshToken = sqliteTable("oauthRefreshToken", {
 export const organization = sqliteTable("organization", {
 	id: text().primaryKey(),
 	name: text().notNull(),
-	slug: text().unique(),
+	slug: text().notNull().unique(),
 	logo: text(),
 	metadata: text(),
 	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),

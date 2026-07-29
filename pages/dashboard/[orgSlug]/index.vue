@@ -23,7 +23,7 @@
               <p class="text-xs font-semibold uppercase tracking-wider text-primary">Today</p>
               <h2 class="mt-1 text-xl font-semibold text-highlighted">Your workspace at a glance</h2>
               <p class="mt-1 text-sm text-muted">
-                {{ sitesWithSubdomain.length }} {{ sitesWithSubdomain.length === 1 ? 'site' : 'sites' }} across {{ verticalCount }} {{ verticalCount === 1 ? 'vertical' : 'verticals' }}.
+                {{ liveSitesCount }} {{ liveSitesCount === 1 ? 'live site' : 'live sites' }} across {{ verticalCount }} {{ verticalCount === 1 ? 'vertical' : 'verticals' }}.
               </p>
             </div>
             <div class="grid grid-cols-2 gap-3 sm:min-w-72">
@@ -95,7 +95,7 @@ const sites = computed(() => dashboard.sites.value)
 const canManageOrganization = computed(() => ['owner', 'admin'].includes(dashboard.organization.value?.role ?? ''))
 const sitesWithSubdomain = computed(() => sites.value.filter((site): site is (typeof sites.value)[number] & { subdomain: string } => Boolean(site.subdomain)))
 const previewSites = computed(() => sitesWithSubdomain.value.slice(0, 3))
-const liveSitesCount = computed(() => sitesWithSubdomain.value.length)
+const liveSitesCount = computed(() => sites.value.filter(site => site.status === 'active' && site.onboarding_status === 'active').length)
 const verticalCount = computed(() => new Set(sitesWithSubdomain.value.map(site => site.vertical ?? 'unknown')).size)
 const planSummary = computed(() => {
   const plans = [...new Set(sitesWithSubdomain.value.map(site => site.plan ?? 'free'))]

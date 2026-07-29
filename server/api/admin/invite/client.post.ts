@@ -40,7 +40,7 @@ export default defineEventHandler(async (event) => {
   // Attach-to-existing-org path: org already provisioned (e.g. client:import --apply),
   // it just has no owner yet. Skip org creation entirely — only insert the invitation.
   if (existingOrgId || existingOrgSlug) {
-    const org = await queryFirst<{ id: string; name: string; slug: string | null }>(
+    const org = await queryFirst<{ id: string; name: string; slug: string }>(
       db,
       existingOrgId
         ? 'SELECT id, name, slug FROM organization WHERE id = ? LIMIT 1'

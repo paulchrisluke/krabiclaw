@@ -449,6 +449,13 @@
       "when": 1785134861181,
       "tag": "0070_early_hellion",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "6",
+      "when": 1785316801713,
+      "tag": "0071_bright_cobalt_man",
+      "breakpoints": true
     }
   ]
 }

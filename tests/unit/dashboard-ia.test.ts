@@ -143,6 +143,14 @@ test('responsive dashboard navigation keeps one canonical desktop sidebar with m
   assert.match(layout, /navigationItems\.value/)
 })
 
+test('organization switcher routes directly to canonical org slugs', () => {
+  const layout = source('layouts/dashboard.vue')
+  assert.match(layout, /`\/dashboard\/\$\{encodeURIComponent\(org\.slug\)\}`/)
+  assert.doesNotMatch(layout, /switchOrganization/)
+  assert.doesNotMatch(layout, /setActive\?\.\(\{ organizationId/)
+  assert.doesNotMatch(layout, /navigateTo\('\/dashboard'\)/)
+})
+
 test('every dashboard search route resolves to the canonical hierarchy', () => {
   const context = { orgSlug: 'org', siteSlug: 'site', locationSlug: 'location' }
   for (const entry of PLATFORM_DASHBOARD_ROUTE_ENTRIES) {

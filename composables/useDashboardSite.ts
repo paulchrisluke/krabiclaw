@@ -1,7 +1,7 @@
 interface DashboardOrganization {
   id: string
   name: string
-  slug: string | null
+  slug: string
   logo: string | null
   role: string
 }
@@ -30,6 +30,8 @@ interface DashboardSiteSummary {
   brand_name: string | null
   subdomain: string | null
   vertical: 'restaurant' | 'experience' | 'service' | 'professional_service' | null
+  status: string
+  onboarding_status: string
   plan: string | null
 }
 

@@ -39,9 +39,9 @@ export default defineEventHandler(async (event) => {
     const db = env.DB
     if (!db) return `/dashboard?gb=${status}`
 
-    let organization: { slug: string | null } | null = null
+    let organization: { slug: string } | null = null
     try {
-      organization = (await queryFirst<{ slug: string | null }>(db, `
+      organization = (await queryFirst<{ slug: string }>(db, `
         SELECT slug FROM organization WHERE id = ? LIMIT 1
       `, [organizationId])) ?? null
     } catch (e) {
@@ -49,7 +49,7 @@ export default defineEventHandler(async (event) => {
       return `/dashboard?gb=${status}`
     }
 
-    if (!organization?.slug) return `/dashboard?gb=${status}`
+    if (!organization) return `/dashboard?gb=${status}`
     const encodedOrgSlug = encodeURIComponent(organization.slug)
 
     let site: { subdomain: string | null } | null = null

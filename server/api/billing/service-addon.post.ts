@@ -5,7 +5,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getStripe, requireBillingAccess } from '~/server/utils/billing'
 import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
-import { execute, queryFirst, type DbClient } from '~/server/db'
+import { queryFirst } from '~/server/db'
 
 type AddonType = 'translation' | 'seasonal' | 'gbp_setup'
 
@@ -19,44 +19,6 @@ const ADDON_NAMES: Record<AddonType, string> = {
   translation: 'Additional Language Translation',
   seasonal: 'Seasonal Relaunch Package',
   gbp_setup: 'Google Business Optimization',
-}
-
-function slugifyOrgName(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48)
-}
-
-async function ensureOrganizationSlug(db: DbClient, orgId: string, existingSlug: string | null) {
-  if (existingSlug) return existingSlug
-
-  const organization = await queryFirst<{ name: string; slug: string | null }>(
-    db, `SELECT name, slug FROM organization WHERE id = ? LIMIT 1`, [orgId],
-  )
-
-  if (organization?.slug) return organization.slug
-
-  const fallbackBase = `org-${orgId.replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 8)}`
-  const baseSlug = slugifyOrgName(organization?.name ?? '') || fallbackBase
-
-  for (let index = 0; index < 12; index++) {
-    const candidate = index === 0 ? baseSlug : `${baseSlug}-${index}`
-    const conflict = await queryFirst(db, `SELECT id FROM organization WHERE slug = ? AND id != ? LIMIT 1`, [candidate, orgId])
-    if (conflict) continue
-
-    try {
-      await execute(db, `UPDATE organization SET slug = ? WHERE id = ? AND (slug IS NULL OR slug = '')`, [candidate, orgId])
-      return candidate
-    } catch {
-      // Slug was claimed between the check and update; try the next candidate.
-    }
-  }
-
-  const candidate = `${baseSlug}-${crypto.randomUUID().slice(0, 8)}`
-  try {
-    await execute(db, `UPDATE organization SET slug = ? WHERE id = ? AND (slug IS NULL OR slug = '')`, [candidate, orgId])
-    return candidate
-  } catch {
-    return null
-  }
 }
 
 export default defineEventHandler(async (event) => {
@@ -91,20 +53,7 @@ export default defineEventHandler(async (event) => {
   if (!organization) return jsonResponse({ error: 'No organization found' }, { status: 404 })
 
   const orgId = organization.id
-  let orgSlug: string | null = null
-  try {
-    orgSlug = await ensureOrganizationSlug(db, orgId, organization.slug)
-  } catch (error) {
-    console.error('Failed to ensure organization slug for service add-on checkout:', error)
-  }
-
-  if (!orgSlug) {
-    return jsonResponse({
-      error: 'Organization setup is incomplete',
-      message: 'Complete your restaurant workspace setup before purchasing managed services.',
-      settingsUrl: '/dashboard/account/profile',
-    }, { status: 400 })
-  }
+  const orgSlug = organization.slug
 
   await requireBillingAccess(env, db, orgId, session.user.id)
 

@@ -356,19 +356,15 @@ export default defineEventHandler(async (event) => {
     // If anything fails after this point, the draft is already committed - we don't reset it
     // since the site was successfully created. The user can continue from the dashboard.
 
-    let orgRow: { slug: string } | null = null
-    try {
-      orgRow = await queryFirst<{ slug: string }>(db, `
-        SELECT slug FROM organization WHERE id = ? LIMIT 1
-      `, [organizationId])
-    } catch (lookupError) {
-      console.warn('commit_post_org_lookup_failed', lookupError)
-    }
+    const orgRow = await queryFirst<{ slug: string }>(db, `
+      SELECT slug FROM organization WHERE id = ? LIMIT 1
+    `, [organizationId])
+    if (!orgRow) throw createError({ statusCode: 500, statusMessage: 'Committed organization not found' })
 
     return jsonResponse({
       success: true,
       siteId,
-      orgSlug: orgRow?.slug ?? null,
+      orgSlug: orgRow.slug,
       siteSlug: siteSlug ?? null,
       locationSlug: updatedSlug ?? locationRow.slug ?? null,
     })

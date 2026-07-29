@@ -84,6 +84,7 @@
           :class="item.active ? 'bg-primary/10 text-primary' : 'text-dimmed'"
         />
         <UButton
+          ref="mobileMoreButtonRef"
           icon="i-lucide-ellipsis"
           color="neutral"
           variant="ghost"
@@ -117,8 +118,14 @@
     />
     <div
       v-if="mobileMoreOpen"
+      ref="mobileMoreSheetRef"
       class="fixed inset-x-3 bottom-20 z-40 rounded-xl border border-default bg-elevated p-2 shadow-xl md:hidden"
       data-testid="dashboard-mobile-more"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Dashboard navigation"
+      tabindex="-1"
+      @keydown="onMobileMoreKeydown"
     >
       <div class="max-h-[55vh] overflow-y-auto">
         <NuxtLink
@@ -126,7 +133,7 @@
           :key="item.to"
           :to="item.to"
           class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-highlighted hover:bg-muted"
-          @click="mobileMoreOpen = false"
+          @click="closeMobileMore"
         >
           <UIcon v-if="item.icon" :name="item.icon" class="size-4 text-muted" />
           <span>{{ item.label }}</span>
@@ -182,7 +189,7 @@ import type { SiteVertical } from '~/utils/vertical-copy'
 interface AuthOrganization {
   id: string
   name: string
-  slug?: string | null
+  slug: string
   logo?: string | null
 }
 
@@ -197,6 +204,9 @@ const dashboard = useDashboardSite()
 const chowBot = useChowBot()
 const organizationsState = authClient.useListOrganizations()
 const mobileMoreOpen = ref(false)
+const mobileMoreButtonRef = ref<{ $el?: HTMLElement } | HTMLElement | null>(null)
+const mobileMoreSheetRef = ref<HTMLElement | null>(null)
+const mobileMoreFocusReturn = ref<HTMLElement | null>(null)
 
 const dashboardContextError = ref<unknown>(null)
 
@@ -307,7 +317,7 @@ const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
       avatar: org.logo ?? undefined,
       icon: org.logo ? undefined : 'i-lucide-building-2',
       active: org.id === organization.value?.id,
-      onSelect: () => switchOrganization(org.id)
+      to: `/dashboard/${encodeURIComponent(org.slug)}`
     })),
     createAction: { label: 'New Organization', to: '/dashboard/onboarding' }
   }
@@ -393,6 +403,14 @@ function managerNavItems(group: NavGroupId) {
     items.push({ label: manager.label, icon: MANAGER_ICON[manager.id], to: href })
   }
   return items
+}
+
+function managerAction(manager: CmsManagerCapability, href: string) {
+  return {
+    label: manager.label,
+    to: href,
+    icon: MANAGER_ICON[manager.id] ?? 'i-lucide-circle',
+  }
 }
 
 const overviewGroup = computed(() => {
@@ -546,20 +564,22 @@ function firstManagerItem(feature: ProductFeature, managerScope = scope.value) {
   const manager = capabilities.value?.managers.find(item => item.id === feature && item.scope === managerScope)
   if (!manager) return null
   const href = managerHref(manager)
-  return href ? { label: manager.label, to: href, icon: MANAGER_ICON[manager.id] ?? 'i-lucide-circle' } : null
+  return href ? managerAction(manager, href) : null
 }
 
 function firstLocationManagerItem(feature: ProductFeature) {
-  const manager = capabilities.value?.managers.find(item => item.id === feature && item.scope === 'location')
+  if (scope.value === 'site' && !canManageSite.value) return null
   const location = dashboard.locations.value.find(item => item.is_primary) ?? dashboard.locations.value[0]
-  if (!manager || !locationsBase.value || !location?.slug) return null
+  if (!vertical.value || !templateSlug.value || !locationsBase.value || !location?.slug) return null
+  const locationCapabilities = resolveCmsCapabilities(vertical.value, templateSlug.value, {
+    site: parseCmsFeatureOverrideDelta(site.value?.feature_overrides),
+    location: parseCmsFeatureOverrideDelta(location.feature_overrides),
+  })
+  const manager = locationCapabilities.managers.find(item => item.id === feature && item.scope === 'location')
+  if (!manager) return null
   const rel = manager.route.replace(/^:location\/?/, '')
   const base = `${locationsBase.value}/${location.slug}`
-  return {
-    label: manager.label,
-    to: rel ? `${base}/${rel}` : base,
-    icon: MANAGER_ICON[manager.id] ?? 'i-lucide-circle',
-  }
+  return managerAction(manager, rel ? `${base}/${rel}` : base)
 }
 
 const mobileRevenueItem = computed<DashboardMobileNavItem | null>(() => {
@@ -576,7 +596,6 @@ const mobileRevenueItem = computed<DashboardMobileNavItem | null>(() => {
   if (scope.value === 'location') {
     const primary = firstManagerItem('menu', 'location')
       ?? firstManagerItem('experiences', 'location')
-      ?? firstManagerItem('services', 'site')
     if (!primary) return null
     return {
       key: 'primary',
@@ -619,6 +638,7 @@ const mobileHomeItem = computed<DashboardMobileNavItem | null>(() => {
 })
 
 const mobileInboxItem = computed<DashboardMobileNavItem | null>(() => {
+  if (scope.value === 'organization' && !canManageOrganization.value) return null
   const to = scope.value === 'location'
     ? locationBase.value ? `${locationBase.value}/inbox` : null
     : scope.value === 'site'
@@ -660,18 +680,77 @@ watch(() => route.fullPath, () => {
   mobileMoreOpen.value = false
 })
 
+watch(mobileMoreOpen, async (open) => {
+  if (open) {
+    mobileMoreFocusReturn.value = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : resolveMobileMoreButtonElement()
+    await nextTick()
+    const first = mobileMoreFocusableItems()[0]
+    if (first) first.focus()
+    else mobileMoreSheetRef.value?.focus()
+    return
+  }
+
+  await nextTick()
+  mobileMoreFocusReturn.value?.focus()
+  mobileMoreFocusReturn.value = null
+})
+
 function openChowBot() {
   mobileMoreOpen.value = false
   chowBot.open()
 }
 
-async function switchOrganization(organizationId: string) {
-  const organizationApi = authClient.organization as unknown as {
-    setActive?: (_input: { organizationId: string }) => Promise<unknown>
+function resolveMobileMoreButtonElement() {
+  const candidate = mobileMoreButtonRef.value
+  if (!candidate) return null
+  return candidate instanceof HTMLElement ? candidate : candidate.$el ?? null
+}
+
+const mobileMoreFocusableSelector = [
+  'a[href]',
+  'button:not([disabled])',
+  'textarea:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',')
+
+function mobileMoreFocusableItems() {
+  if (!mobileMoreSheetRef.value) return []
+  return [...mobileMoreSheetRef.value.querySelectorAll<HTMLElement>(mobileMoreFocusableSelector)]
+    .filter(el => !el.hasAttribute('disabled') && el.getAttribute('aria-hidden') !== 'true')
+}
+
+function closeMobileMore() {
+  mobileMoreOpen.value = false
+}
+
+function onMobileMoreKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeMobileMore()
+    return
   }
-  await organizationApi.setActive?.({ organizationId })
-  await dashboard.refresh()
-  await navigateTo('/dashboard')
+
+  if (event.key !== 'Tab') return
+  const focusable = mobileMoreFocusableItems()
+  if (focusable.length === 0) {
+    event.preventDefault()
+    mobileMoreSheetRef.value?.focus()
+    return
+  }
+
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last?.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first?.focus()
+  }
 }
 
 // Load dashboard context during SSR so nav links render stable org-scoped routes.

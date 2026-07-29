@@ -681,6 +681,11 @@ async function goBack() {
   replies.value = []
   awaitingInput.value = false
 
+  if (step.value === 'vertical') {
+    messages.value = []
+    await advance('welcome')
+    return
+  }
   if (step.value === 'source') {
     messages.value = []
     await advance(skipVertical.value ? 'welcome' : 'vertical')
