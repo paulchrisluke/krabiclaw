@@ -78,32 +78,57 @@
     </div>
 
     <div v-if="!iframeSrc && placeholderState === 'building'" class="flex flex-1 items-center justify-center p-5">
-      <div class="w-full max-w-[420px] overflow-hidden rounded-2xl border border-default bg-default shadow-sm">
-        <div class="relative flex min-h-48 flex-col justify-end overflow-hidden bg-inverted p-5 text-inverted">
-          <div class="absolute inset-0 opacity-20">
-            <div class="absolute left-6 top-6 h-4 w-32 rounded-full bg-white/70" />
-            <div class="absolute left-6 top-14 h-3 w-48 rounded-full bg-white/35" />
-            <div class="absolute right-5 top-5 size-16 rounded-2xl bg-white/20" />
-          </div>
-          <div class="relative space-y-3">
-            <div class="h-3 w-24 animate-pulse rounded-full bg-white/35" />
-            <div class="h-7 w-4/5 animate-pulse rounded-full bg-white/75" />
-            <div class="h-7 w-2/3 animate-pulse rounded-full bg-white/55" />
+      <div class="w-full max-w-[430px] overflow-hidden rounded-2xl border border-default bg-default shadow-sm">
+        <div class="relative min-h-52 overflow-hidden" :style="{ backgroundColor: previewBrandColor }">
+          <img
+            :src="demoPreviewImage"
+            alt=""
+            class="absolute inset-0 h-full w-full object-cover opacity-35 mix-blend-luminosity"
+          >
+          <div class="absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-black/65" />
+          <div class="relative flex min-h-52 flex-col justify-between p-5 text-white">
+            <div class="flex items-center justify-between gap-3">
+              <div class="flex items-center gap-2">
+                <div class="flex size-9 items-center justify-center rounded-xl bg-white/15 text-sm font-bold backdrop-blur">
+                  {{ previewInitials }}
+                </div>
+                <p class="max-w-[14rem] truncate text-sm font-bold">{{ previewName }}</p>
+              </div>
+              <UButton color="neutral" variant="soft" size="xs">
+                {{ demoPrimaryAction }}
+              </UButton>
+            </div>
+            <div class="space-y-3">
+              <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-white/75">{{ demoEyebrow }}</p>
+              <h2 class="text-2xl font-extrabold leading-tight">{{ demoHeadline }}</h2>
+              <p class="max-w-[28ch] text-sm leading-relaxed text-white/85">{{ demoDescription }}</p>
+            </div>
           </div>
         </div>
         <div class="space-y-4 p-5">
-          <div>
-            <p class="text-sm font-semibold text-highlighted">{{ skeletonTitle }}</p>
-            <p class="mt-1 text-xs leading-relaxed text-muted">{{ skeletonDescription }}</p>
-          </div>
           <div class="grid gap-2">
             <div
-              v-for="item in skeletonItems"
-              :key="item"
-              class="flex h-11 items-center rounded-xl bg-muted px-4 text-[12px] font-semibold text-muted"
+              v-for="item in demoSections"
+              :key="item.title"
+              class="rounded-xl bg-muted px-4 py-3"
             >
-              {{ item }}
+              <p class="text-[12px] font-bold text-highlighted">{{ item.title }}</p>
+              <p class="mt-0.5 text-[11.5px] leading-5 text-muted">{{ item.body }}</p>
             </div>
+          </div>
+          <div class="grid gap-2 border-t border-default pt-4 text-[12px] text-muted">
+            <p v-if="previewDetails?.address || previewDetails?.city" class="flex items-center gap-2">
+              <UIcon name="i-lucide-map-pin" class="size-3.5 text-primary" />
+              {{ previewAddress }}
+            </p>
+            <p v-if="previewDetails?.phone" class="flex items-center gap-2">
+              <UIcon name="i-lucide-phone" class="size-3.5 text-primary" />
+              {{ previewDetails.phone }}
+            </p>
+            <p v-if="previewDetails?.openingHours" class="flex items-center gap-2">
+              <UIcon name="i-lucide-clock-3" class="size-3.5 text-primary" />
+              {{ previewHoursSummary }}
+            </p>
           </div>
         </div>
       </div>
@@ -143,6 +168,18 @@ const props = withDefaults(defineProps<{
   vertical?: SiteVertical
   homeOnly?: boolean
   placeholderState?: 'empty' | 'building'
+  previewDetails?: {
+    name: string
+    city: string
+    address: string
+    phone: string
+    currency: string
+    timezone: string
+    openingHours: string
+    brandColor: string
+    logoNote: string
+    heroPhotoNote: string
+  }
 }>(), {
   vertical: 'restaurant',
   homeOnly: false,
@@ -178,18 +215,76 @@ const tabs = computed(() => {
 })
 
 const currentTabIsLocationScoped = computed(() => tabs.value.find(tab => tab.id === props.selectedPage)?.locationScoped === true)
-const verticalLabel = computed(() => {
-  if (props.vertical === 'professional_service') return 'professional services'
-  if (props.vertical === 'experience') return 'experience'
-  return 'restaurant'
+const demoContent = computed(() => {
+  if (props.vertical === 'professional_service') {
+    return {
+      name: 'North Carolina Legal Services',
+      image: '/templates/blawby-preview.jpg',
+      eyebrow: 'Professional services',
+      headline: 'Clear guidance when clients need it most',
+      description: 'A focused homepage for consultations, service areas, and client trust.',
+      action: 'Book a consultation',
+      sections: [
+        { title: 'Services', body: 'Family law, estate planning, and client support pathways.' },
+        { title: 'Consultation', body: 'Make the next step obvious and low-friction.' },
+        { title: 'Contact', body: 'Phone, office details, and intake routing stay visible.' },
+      ],
+    }
+  }
+  if (props.vertical === 'experience') {
+    return {
+      name: 'Pottery House Krabi',
+      image: '/templates/saya-preview.jpg',
+      eyebrow: 'Experience studio',
+      headline: 'Hands-on classes guests can book with confidence',
+      description: 'A warm homepage for workshops, location details, photos, and reviews.',
+      action: 'Book a class',
+      sections: [
+        { title: 'Experiences', body: 'Featured classes and sessions guests can reserve.' },
+        { title: 'Visit details', body: 'Address, hours, and what to expect before arriving.' },
+        { title: 'Reviews', body: 'Social proof from guests and students.' },
+      ],
+    }
+  }
+  return {
+    name: 'Demo Restaurant',
+    image: '/templates/saya-preview.jpg',
+    eyebrow: 'Restaurant',
+    headline: 'A homepage that makes the first visit easy',
+    description: 'Menu highlights, reservations, hours, and contact details come together here.',
+    action: 'Reserve',
+    sections: [
+      { title: 'Menu', body: 'Featured dishes and house recommendations.' },
+      { title: 'Reservations', body: 'A clear path for guests to book a table.' },
+      { title: 'Contact', body: 'Address, phone, and opening hours in one place.' },
+    ],
+  }
 })
-const skeletonTitle = computed(() => `Sketching the ${verticalLabel.value} homepage`)
-const skeletonDescription = computed(() => 'I will fill this in with real business details as soon as the draft is ready.')
-const skeletonItems = computed(() => {
-  if (props.vertical === 'professional_service') return ['Services', 'Consultation', 'Contact']
-  if (props.vertical === 'experience') return ['Experiences', 'Schedule', 'Book']
-  return ['Menu', 'Reservations', 'Contact']
+const previewName = computed(() => props.previewDetails?.name.trim() || demoContent.value.name)
+const previewBrandColor = computed(() => props.previewDetails?.brandColor || '#1F2547')
+const previewInitials = computed(() => previewName.value.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'KC')
+const demoPreviewImage = computed(() => demoContent.value.image)
+const demoEyebrow = computed(() => demoContent.value.eyebrow)
+const demoHeadline = computed(() => props.previewDetails?.heroPhotoNote
+  ? `${previewName.value} is taking shape`
+  : demoContent.value.headline
+)
+const demoDescription = computed(() => {
+  const details = props.previewDetails
+  if (details?.city && details?.phone) return `${previewName.value} in ${details.city} now has the first guest-facing details in place.`
+  if (details?.city) return `${previewName.value} is ready to show guests where to find you in ${details.city}.`
+  return demoContent.value.description
 })
+const demoPrimaryAction = computed(() => demoContent.value.action)
+const demoSections = computed(() => {
+  const sections = [...demoContent.value.sections]
+  if (props.previewDetails?.currency) {
+    sections[0] = { ...sections[0]!, body: `${sections[0]!.body} Pricing will display in ${props.previewDetails.currency}.` }
+  }
+  return sections
+})
+const previewAddress = computed(() => [props.previewDetails?.address, props.previewDetails?.city].filter(Boolean).join(', '))
+const previewHoursSummary = computed(() => props.previewDetails?.openingHours.split('\n').find(Boolean) ?? '')
 
 const displayUrl = computed(() => {
   const template = resolvePublicTemplate({ vertical: props.vertical })

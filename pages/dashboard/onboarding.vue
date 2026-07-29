@@ -14,6 +14,7 @@
         @draft-saved="onDraftSaved"
         @preview-state="previewPlaceholderState = $event"
         @vertical-selected="selectedOnboardingVertical = $event"
+        @preview-details="previewDetails = $event"
       />
       <OnboardingPreviewPane
         class="hidden md:flex"
@@ -25,6 +26,7 @@
         :site-domain="siteDomain"
         :vertical="previewVertical"
         :placeholder-state="previewPlaceholderState"
+        :preview-details="previewDetails"
         home-only
         @select-page="onSelectPage"
         @select-location="onSelectLocation"
@@ -50,6 +52,7 @@
           :site-domain="siteDomain"
           :vertical="previewVertical"
           :placeholder-state="previewPlaceholderState"
+          :preview-details="previewDetails"
           home-only
           @select-page="onSelectPage"
           @select-location="onSelectLocation"
@@ -79,6 +82,29 @@ const toast = useToast()
 const siteData = ref<ApiRecord | null>(null)
 const selectedOnboardingVertical = ref<SiteVertical>('restaurant')
 const previewPlaceholderState = ref<'empty' | 'building'>('empty')
+const previewDetails = ref<{
+  name: string
+  city: string
+  address: string
+  phone: string
+  currency: string
+  timezone: string
+  openingHours: string
+  brandColor: string
+  logoNote: string
+  heroPhotoNote: string
+}>({
+  name: '',
+  city: '',
+  address: '',
+  phone: '',
+  currency: '',
+  timezone: '',
+  openingHours: '',
+  brandColor: '',
+  logoNote: '',
+  heroPhotoNote: '',
+})
 const previewVertical = computed<SiteVertical>(() =>
   siteData.value
     ? normalizeVertical(siteData.value.vertical as string | undefined) as SiteVertical

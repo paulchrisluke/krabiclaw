@@ -424,6 +424,18 @@ const emit = defineEmits<{
   'draft-saved': [draft: DraftSavedPayload]
   'preview-state': [state: 'empty' | 'building']
   'vertical-selected': [vertical: SiteVertical]
+  'preview-details': [details: {
+    name: string
+    city: string
+    address: string
+    phone: string
+    currency: string
+    timezone: string
+    openingHours: string
+    brandColor: string
+    logoNote: string
+    heroPhotoNote: string
+  }]
 }>()
 
 const router = useRouter()
@@ -560,6 +572,22 @@ const detailsRequireBasics = computed(() => detailsSource.value === 'manual')
 
 watch(previewState, state => emit('preview-state', state), { immediate: true })
 watch(selectedVertical, vertical => emit('vertical-selected', vertical), { immediate: true })
+watch(
+  [detailsForm, hoursForm, brandDraftForm],
+  () => emit('preview-details', {
+    name: detailsForm.name,
+    city: detailsForm.city,
+    address: detailsForm.address,
+    phone: detailsForm.phone,
+    currency: detailsForm.currency,
+    timezone: hoursForm.timezone,
+    openingHours: serializeOpeningHours(),
+    brandColor: brandDraftForm.brandColor,
+    logoNote: brandDraftForm.logoNote,
+    heroPhotoNote: brandDraftForm.heroPhotoNote,
+  }),
+  { deep: true, immediate: true },
+)
 
 const importedSiteId = ref<string | null>(props.siteId ?? null)
 const importedOrgSlug = ref<string | null>(null)
