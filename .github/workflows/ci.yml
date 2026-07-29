@@ -347,13 +347,15 @@ jobs:
           printf '%s' "$EMAIL_INBOUND_SECRET_PREVIEW" | npx wrangler secret put EMAIL_INBOUND_SECRET --env preview
       - run: npx playwright install --with-deps chromium
       - name: Warm up preview Worker
+        env:
+          PREVIEW_WORKER_URL: https://krabiclaw-preview.paulchrisluke.workers.dev
         run: |
-          curl -sf --connect-timeout 5 --max-time 15 "https://preview.krabiclaw.com/" || true
-          curl -sf --connect-timeout 5 --max-time 15 "https://preview.krabiclaw.com/blog" || true
-          curl -sf --connect-timeout 5 --max-time 15 -L -H "x-dev-route-secret: ${E2E_DEV_ROUTE_SECRET}" "https://preview.krabiclaw.com/api/dev/login" || true
+          curl -sf --connect-timeout 5 --max-time 15 "$PREVIEW_WORKER_URL/" || true
+          curl -sf --connect-timeout 5 --max-time 15 "$PREVIEW_WORKER_URL/blog" || true
+          curl -sf --connect-timeout 5 --max-time 15 -L -H "x-dev-route-secret: ${E2E_DEV_ROUTE_SECRET}" "$PREVIEW_WORKER_URL/api/dev/login" || true
       - name: Run smoke tests
         env:
-          PLAYWRIGHT_PREVIEW_URL: https://preview.krabiclaw.com
+          PLAYWRIGHT_PREVIEW_URL: https://krabiclaw-preview.paulchrisluke.workers.dev
           POTTERY_HOUSE_CHANGED: ${{ needs.changes.outputs.pottery_house }}
           BLAWBY_CHANGED: ${{ needs.changes.outputs.blawby }}
           MCP_CHANGED: ${{ needs.changes.outputs.mcp }}
