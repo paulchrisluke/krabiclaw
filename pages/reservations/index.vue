@@ -434,6 +434,12 @@ useBreadcrumbSchema([
 ])
 
 const brandName = computed(() => (site as ApiValue)?.brand_name || (site as ApiValue)?.title || 'Our Site')
+const primaryLocationSocialImage = computed(() => {
+  const primary = locations.value[0]
+  if (!primary) return null
+  if (getLocationMediaKind(primary) === 'video') return getLocationPoster(primary)
+  return getLocationMediaUrl(primary)
+})
 
 useTenantSocialMetadata(() => ({
   path: '/reservations',
@@ -445,7 +451,7 @@ useTenantSocialMetadata(() => ({
     faviconUrl: config.value?.favicon_url || null,
     primaryColor: config.value?.brand_color || null,
   },
-  heroImage: locations.value[0]?.public_url && locations.value[0]?.kind !== 'video' ? { url: String(locations.value[0].public_url) } : null,
+  heroImage: primaryLocationSocialImage.value ? { url: primaryLocationSocialImage.value } : null,
 }))
 
 useSchemaOrg([

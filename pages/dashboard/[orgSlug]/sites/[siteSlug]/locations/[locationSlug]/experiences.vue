@@ -608,7 +608,7 @@ function openEdit(exp: ApiRecord) {
     location_id: currentLocationId.value ?? exp.location_id ?? '',
     tagline: exp.tagline ?? '',
     body: exp.body ?? '',
-    media: exp.media.map(asset => ({
+    media: (Array.isArray(exp.media) ? exp.media : []).map(asset => ({
       _key: crypto.randomUUID(),
       asset_id: asset.id,
       url: asset.public_url ?? asset.thumbnail_url ?? null,

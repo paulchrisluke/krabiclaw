@@ -99,6 +99,15 @@ function assetPointerUrl(value: unknown) {
     : null
 }
 
+function assetPointerKind(value: unknown) {
+  const kind = value && typeof value === 'object' ? (value as ApiRecord).kind : null
+  return kind === 'video' ? 'video' : kind === 'image' ? 'image' : null
+}
+
+function mediaKindFromUrl(value: string | null) {
+  return value && /\.(mp4|webm|mov)$/i.test(value) ? 'video' : 'image'
+}
+
 function contactCardsToEditorValue(value: unknown) {
   return Array.isArray(value) ? value.map(String).filter(Boolean).join('\n\n') : ''
 }
@@ -107,19 +116,20 @@ function editorValueToContactCards(value: string) {
   return value.split(/\n\s*\n/).map(card => card.trim()).filter(Boolean)
 }
 
-async function resolveAssetPointer(db: DbClient, siteId: string, value: string) {
+async function resolveAssetPointer(db: DbClient, organizationId: string, siteId: string, value: string) {
   if (!value) return null
-  if (/^https?:\/\//i.test(value)) return { url: value }
-  const asset = await queryAll<{ id: string; public_url: string | null }>(db, `
-    SELECT id, public_url
+  if (/^https?:\/\//i.test(value)) return { url: value, kind: mediaKindFromUrl(value) }
+  const asset = await queryAll<{ id: string; public_url: string | null; kind: string | null }>(db, `
+    SELECT id, public_url, kind
       FROM media_assets
-     WHERE site_id = ? AND id = ? AND status = 'active'
+     WHERE organization_id = ? AND site_id = ? AND id = ? AND status = 'active'
      LIMIT 1
-  `, [siteId, value])
+  `, [organizationId, siteId, value])
   if (!asset[0]) return null
   return {
     asset_id: value,
     url: asset[0].public_url ?? null,
+    kind: asset[0].kind === 'video' ? 'video' : 'image',
   }
 }
 
@@ -133,6 +143,7 @@ function editorRow(input: {
   heroSubtitle?: string | null
   heroImageAssetId?: string | null
   heroPublicUrl?: string | null
+  heroKind?: string | null
 }): SiteContent {
   return {
     id: `professional-service::${input.row.id}::${input.field}`,
@@ -148,6 +159,7 @@ function editorRow(input: {
     hero_subtitle: input.heroSubtitle ?? undefined,
     hero_media_asset_id: input.heroImageAssetId ?? undefined,
     hero_public_url: input.heroPublicUrl ?? null,
+    hero_kind: input.heroKind ?? null,
     updated_at: input.row.updated_at,
   }
 }
@@ -188,6 +200,7 @@ export async function getProfessionalServiceEditorPageContent(
       heroSubtitle: optionalString(hero?.description) || row.summary || '',
       heroImageAssetId: page === 'home' ? assetPointerId(background) : null,
       heroPublicUrl: page === 'home' ? assetPointerUrl(background) : null,
+      heroKind: page === 'home' ? assetPointerKind(background) ?? mediaKindFromUrl(assetPointerUrl(background)) : null,
     }),
   ]
 
@@ -292,7 +305,7 @@ export async function updateProfessionalServiceEditorPageContent(
     }
     if (field === 'hero.media') {
       if (input.page !== 'home') validationError(`Field "${field}" is not editable on page "${input.page}".`)
-      hero.background = await resolveAssetPointer(db, input.siteId, value)
+      hero.background = await resolveAssetPointer(db, input.organizationId, input.siteId, value)
       continue
     }
     if (field === 'cta.title' || field === 'cta.description') {

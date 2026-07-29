@@ -1055,6 +1055,7 @@ UPDATE sites SET logo_asset_id = ${sqlValue(compiledPotteryHouseSeed.site.logoAs
 }
 
 export function renderCompiledPotteryHouseExperiencesBlock(): string {
+  const coverExperiences = compiledPotteryHouseSeed.experiences.filter(experience => experience.imageAssetId)
   const experienceRows = compiledPotteryHouseSeed.experiences
     .map((experience) => `  (${[
       sqlValue(experience.id),
@@ -1080,6 +1081,23 @@ export function renderCompiledPotteryHouseExperiencesBlock(): string {
       sqlValue(experience.seoDescription),
     ].join(', ')})`)
     .join(',\n')
+  const coverBlock = coverExperiences.length
+    ? `
+
+INSERT OR REPLACE INTO experience_media
+  (id, organization_id, site_id, experience_id, asset_id, sort_order)
+VALUES
+${coverExperiences
+  .map((experience) => `  (${[
+    sqlValue(`em-${experience.id}-cover`),
+    sqlValue(experience.organizationId),
+    sqlValue(experience.siteId),
+    sqlValue(experience.id),
+    sqlValue(experience.imageAssetId),
+    '0',
+  ].join(', ')})`)
+  .join(',\n')};`
+    : ''
 
   return `-- BEGIN GENERATED: pottery_experiences
 -- Experiences for Pottery House Krabi.
@@ -1091,21 +1109,7 @@ INSERT OR REPLACE INTO experiences
    status, sort_order, featured, featured_sort_order,
    seo_title, seo_description)
 VALUES
-${experienceRows};
-
-INSERT OR REPLACE INTO experience_media
-  (id, organization_id, site_id, experience_id, asset_id, sort_order)
-VALUES
-${compiledPotteryHouseSeed.experiences
-  .map((experience) => `  (${[
-    sqlValue(`em-${experience.id}-cover`),
-    sqlValue(experience.organizationId),
-    sqlValue(experience.siteId),
-    sqlValue(experience.id),
-    sqlValue(experience.imageAssetId),
-    '0',
-  ].join(', ')})`)
-  .join(',\n')};
+${experienceRows};${coverBlock}
 -- END GENERATED: pottery_experiences`
 }
 

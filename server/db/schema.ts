@@ -2371,6 +2371,7 @@ export const experience_media = sqliteTable("experience_media", {
 	unique("experience_media_experience_asset_unique").on(table.experience_id, table.asset_id),
 	unique("experience_media_experience_sort_unique").on(table.experience_id, table.sort_order),
 	index("experience_media_experience_order_idx").on(table.experience_id, table.sort_order),
+	index("experience_media_asset_scope_idx").on(table.organization_id, table.site_id, table.asset_id),
 	index("experience_media_site_experience_idx").on(table.site_id, table.experience_id),
 ]);
 

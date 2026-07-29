@@ -1716,6 +1716,7 @@ VALUES (${sqlValue(blockId)}, ${sqlValue(documentId)}, NULL, 'markdown', 0, NULL
 }
 
 export function renderCompiledDemoExperienceSeedBlock(): string {
+  const coverExperiences = compiledDemoSeed.experiences.filter(experience => experience.imageAssetId)
   const experienceRows = compiledDemoSeed.experiences
     .map((experience) => `  (${[
       sqlValue(experience.id),
@@ -1746,6 +1747,23 @@ export function renderCompiledDemoExperienceSeedBlock(): string {
       sqlValue(experience.seoDescription),
     ].join(', ')})`)
     .join(',\n')
+  const coverBlock = coverExperiences.length
+    ? `
+
+INSERT OR REPLACE INTO experience_media
+  (id, organization_id, site_id, experience_id, asset_id, sort_order)
+VALUES
+${coverExperiences
+  .map((experience) => `  (${[
+    sqlValue(`em-${experience.id}-cover`),
+    sqlValue(experience.organizationId),
+    sqlValue(experience.siteId),
+    sqlValue(experience.id),
+    sqlValue(experience.imageAssetId),
+    '0',
+  ].join(', ')})`)
+  .join(',\n')};`
+    : ''
 
   return `-- BEGIN GENERATED: demo_experiences
 -- Hybrid restaurant + experiences showcase for the platform demo.
@@ -1758,21 +1776,7 @@ INSERT OR REPLACE INTO experiences
    status, sort_order, featured, featured_sort_order,
    seo_title, seo_description)
 VALUES
-${experienceRows};
-
-INSERT OR REPLACE INTO experience_media
-  (id, organization_id, site_id, experience_id, asset_id, sort_order)
-VALUES
-${compiledDemoSeed.experiences
-  .map((experience) => `  (${[
-    sqlValue(`em-${experience.id}-cover`),
-    sqlValue(experience.organizationId),
-    sqlValue(experience.siteId),
-    sqlValue(experience.id),
-    sqlValue(experience.imageAssetId),
-    '0',
-  ].join(', ')})`)
-  .join(',\n')};
+${experienceRows};${coverBlock}
 -- END GENERATED: demo_experiences`
 }
 

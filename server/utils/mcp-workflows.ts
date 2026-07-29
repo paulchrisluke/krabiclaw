@@ -746,7 +746,11 @@ export async function getEditorContent(
       SELECT bl.hero_media_asset_id,
              media.public_url AS hero_public_url, media.kind AS hero_kind
       FROM business_locations bl
-      LEFT JOIN media_assets media ON bl.hero_media_asset_id = media.id AND media.status = 'active'
+      LEFT JOIN media_assets media
+        ON bl.hero_media_asset_id = media.id
+       AND media.organization_id = bl.organization_id
+       AND media.site_id = bl.site_id
+       AND media.status = 'active'
       WHERE bl.id = ? AND bl.site_id = ?
       LIMIT 1
     `, [locationId, siteId]);

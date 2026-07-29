@@ -19,8 +19,11 @@ gallery_items AS (
     json_extract(item.value, '$.url') AS url,
     COALESCE(json_extract(item.value, '$.kind'), 'image') AS kind,
     item.key AS position
-  FROM experience_gallery e, json_each(e.images) item
-  WHERE json_valid(e.images)
+  FROM (
+    SELECT *
+    FROM experience_gallery
+    WHERE images IS NOT NULL AND trim(images) != '' AND json_valid(images)
+  ) e, json_each(e.images) item
 ),
 url_matches AS (
   SELECT gi.experience_id, gi.position, gi.url, COUNT(ma.id) AS matches

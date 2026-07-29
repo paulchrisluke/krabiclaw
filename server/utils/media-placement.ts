@@ -203,8 +203,8 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
       const updateResult = await execute(db, `
         UPDATE blog_posts
            SET featured_image_asset_id = ?, updated_at = ?
-         WHERE site_id = ? AND id = ?
-      `, [assetId, now, input.siteId, input.target.post_id])
+         WHERE organization_id = ? AND site_id = ? AND id = ?
+      `, [assetId, now, input.organizationId, input.siteId, input.target.post_id])
       if (!updateResult?.success || Number(updateResult.meta?.changes ?? 0) === 0) {
         throw createError({ statusCode: 404, statusMessage: 'Blog post not found' })
       }
