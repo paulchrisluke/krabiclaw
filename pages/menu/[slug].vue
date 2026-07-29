@@ -41,7 +41,13 @@
         <section class="mt-8 lg:col-span-7 lg:col-start-1 lg:row-span-3 lg:row-start-1 lg:mt-0" aria-labelledby="item-images-heading">
           <h2 id="item-images-heading" class="sr-only">Dish images</h2>
           <div class="grid grid-cols-1 gap-4 lg:grid-cols-1 lg:gap-6">
-            <div class="overflow-hidden rounded-lg bg-default">
+            <button
+              v-if="mainMedia.url"
+              type="button"
+              class="group relative block w-full overflow-hidden rounded-lg bg-default text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
+              :aria-label="`Open ${item.name} media`"
+              @click="openLightbox"
+            >
               <video
                 v-if="mainMedia.isVideo"
                 :src="mainMedia.url ?? undefined"
@@ -49,15 +55,20 @@
                 muted
                 loop
                 playsinline
-                class="aspect-4/3 w-full object-cover"
+                class="aspect-4/3 w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
               />
               <img
-                v-else-if="mainMedia.url"
+                v-else
                 :src="mainMedia.url"
                 :alt="item.name"
-                class="aspect-4/3 w-full object-cover"
+                class="aspect-4/3 w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
               />
-              <div v-else class="flex aspect-4/3 w-full items-center justify-center px-6 text-center bg-muted">
+              <span class="pointer-events-none absolute inset-x-0 bottom-0 bg-linear-to-t from-black/70 to-transparent px-4 pb-4 pt-16 text-xs font-medium uppercase tracking-widest text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+                View media
+              </span>
+            </button>
+            <div v-else class="overflow-hidden rounded-lg bg-default">
+              <div class="flex aspect-4/3 w-full items-center justify-center px-6 text-center bg-muted">
                 <span class="text-sm text-dimmed">No image available yet</span>
               </div>
             </div>
@@ -267,6 +278,12 @@
           </NuxtLink>
         </div>
       </section>
+
+      <SayaLightbox v-model:open="lightboxOpen" :items="lightboxItems" :title="item.name">
+        <template v-if="item.description" #caption>
+          <p class="text-sm text-white/80">{{ item.description }}</p>
+        </template>
+      </SayaLightbox>
     </article>
 
     <!-- 404 State -->
@@ -378,6 +395,14 @@ type PropertyValue = {
   value: string
 }
 
+type LightboxMediaItem = {
+  url: string
+  kind: 'image' | 'video'
+  poster?: string | null
+  alt?: string
+  description?: string
+}
+
 // Item already ships in the layout's single bootstrap payload (page=menu, menu=1) —
 // look it up by slug instead of firing a second SSR round trip. useBootstrap() itself
 // is lazy/non-blocking (fine for the layout's header/footer), but a missing item here
@@ -441,6 +466,25 @@ const mainMedia = computed(() => resolveMedia({
   public_url: item.value?.public_url,
   kind: item.value?.kind
 }))
+
+const lightboxOpen = ref(false)
+const lightboxItems = computed<LightboxMediaItem[]>(() => {
+  if (!item.value || !mainMedia.value.url) return []
+  const kind = mainMedia.value.isVideo ? 'video' : 'image'
+  return [{
+    url: mainMedia.value.url,
+    kind,
+    poster: mainMedia.value.thumb,
+    alt: item.value.name,
+    description: item.value.description,
+  }]
+})
+
+function openLightbox() {
+  if (!lightboxItems.value.length) return
+  lightboxOpen.value = true
+}
+
 const visibleAllergens = computed(() =>
   item.value?.allergens?.filter(allergen => !allergen.includes('PLACEHOLDER')) ?? []
 )
