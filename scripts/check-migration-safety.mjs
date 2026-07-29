@@ -12,7 +12,6 @@ const PROTECTED_PARENT_TABLES = new Set([
   'site_content',
 ])
 const IMMUTABLE_ALLOWLIST = new Set(['0047_free_molecule_man.sql'])
-const RELATIONSHIP_PRESERVING_REBUILD_ALLOWLIST = new Set(['0074_unified_media_physical_cleanup.sql'])
 const FIRST_ENFORCED_MIGRATION = 72
 
 function migrationNumber(fileName) {
@@ -22,19 +21,34 @@ function migrationNumber(fileName) {
 
 export function findUnsafeMigrationStatements(fileName, sql) {
   if (IMMUTABLE_ALLOWLIST.has(fileName)) return []
-  if (RELATIONSHIP_PRESERVING_REBUILD_ALLOWLIST.has(fileName)) {
-    return sql.includes('__um_backup_business_locations') && sql.includes('__um_backup_experiences')
-      ? []
-      : [`${fileName} is allowlisted only when it preserves rebuilt parent relationships via explicit backups`]
-  }
   const number = migrationNumber(fileName)
   if (number !== null && number < FIRST_ENFORCED_MIGRATION) return []
 
   const findings = []
+  if (/\bINSERT\s+OR\s+IGNORE\b/i.test(sql)) {
+    findings.push('INSERT OR IGNORE can silently discard rows during a migration')
+  }
+
   const dropPattern = /\bDROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?[`"[]?([a-zA-Z0-9_]+)[`"\]]?/gi
   for (const match of sql.matchAll(dropPattern)) {
-    if (PROTECTED_PARENT_TABLES.has(match[1])) {
-      findings.push(`DROP TABLE ${match[1]} can clear or cascade-delete referencing production data`)
+    const table = match[1]
+    if (PROTECTED_PARENT_TABLES.has(table)) {
+      const backupName = `__um_backup_${table}`
+      const assertNameMatch = sql.match(/CREATE\s+TABLE\s+[`"]?(__um_assert_[0-9]+)[`"]?/i)
+      const assertName = assertNameMatch?.[1] ?? ''
+      const createsBackup = new RegExp(`CREATE\\s+TABLE\\s+\`?${backupName}\`?\\s+AS\\s+SELECT\\s+\\*\\s+FROM\\s+\`?${table}\`?`, 'i').test(sql)
+      const restoresBackup = new RegExp(`INSERT\\s+INTO\\s+\`?${table}\`?\\s+SELECT\\s+\\*\\s+FROM\\s+\`?${backupName}\`?`, 'i').test(sql)
+        || new RegExp(`INSERT\\s+INTO\\s+\`?__new_${table}\`?`, 'i').test(sql)
+      const countAssertion = sql.includes(`${table}_backup_count_mismatch`)
+        && new RegExp(`COUNT\\(\\*\\)\\s+FROM\\s+\`?${backupName}\`?`, 'i').test(sql)
+        && new RegExp(`COUNT\\(\\*\\)\\s+FROM\\s+\`?${table}\`?`, 'i').test(sql)
+      const fkAssertion = /pragma_foreign_key_check/i.test(sql)
+      const dropsAssert = Boolean(assertName) && new RegExp(`DROP\\s+TABLE\\s+\`?${assertName}\`?`, 'i').test(sql)
+      const dropsBackup = new RegExp(`DROP\\s+TABLE\\s+\`?${backupName}\`?`, 'i').test(sql)
+
+      if (!createsBackup || !restoresBackup || !countAssertion || !fkAssertion || !dropsAssert || !dropsBackup) {
+        findings.push(`DROP TABLE ${table} must be a bounded rebuild with backup, restore, count assertion, foreign_key_check, and post-assert backup cleanup`)
+      }
     }
   }
   return findings

@@ -475,7 +475,49 @@
       "idx": 74,
       "version": "6",
       "when": 1785314400000,
-      "tag": "0074_unified_media_physical_cleanup",
+      "tag": "0074_rebuild_blog_posts_media_fk",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "6",
+      "when": 1785314401000,
+      "tag": "0075_rebuild_menu_items_media_fk",
+      "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "6",
+      "when": 1785314402000,
+      "tag": "0076_rebuild_platform_docs_media_fk",
+      "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "6",
+      "when": 1785314403000,
+      "tag": "0077_rebuild_posts_media_fk",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "6",
+      "when": 1785314404000,
+      "tag": "0078_rebuild_location_experience_media_contract",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "6",
+      "when": 1785314405000,
+      "tag": "0079_assert_unified_media_physical_contract",
+      "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "6",
+      "when": 1785314406000,
+      "tag": "0080_drop_media_assets_old_legacy_sync",
       "breakpoints": true
     }
   ]

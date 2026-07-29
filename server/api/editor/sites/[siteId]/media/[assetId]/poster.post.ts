@@ -1,10 +1,10 @@
-import { execute, queryFirst } from '~/server/db'
+import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { uploadImageBuffer } from '~/server/utils/cloudflare-images'
 import { assertResourceAccess } from '~/server/utils/member-access'
 import { sniffMediaMimeType, POSTER_IMAGE_MIME_TYPES, MAX_POSTER_BYTES } from '~/server/utils/media-mime'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
+import { replaceVideoPoster } from '~/server/utils/media-asset-manager'
 
 interface MediaAssetSiteRow {
   id: string
@@ -85,14 +85,16 @@ export default defineEventHandler(async (event) => {
       return jsonResponse({ error: 'Poster file type mismatch' }, { status: 400 })
     }
 
-    const uploaded = await uploadImageBuffer(env, toArrayBuffer(posterPart.data), filename, detectedContentType)
-    await execute(
-      db,
-      `UPDATE media_assets SET thumbnail_url = ?, updated_at = ? WHERE id = ? AND site_id = ?`,
-      [uploaded.publicUrl, new Date().toISOString(), assetId, siteId],
-    )
+    const thumbnailUrl = await replaceVideoPoster(db, env, {
+      assetId,
+      siteId,
+      userId: session.user.id,
+      buffer: toArrayBuffer(posterPart.data),
+      filename,
+      contentType: detectedContentType,
+    })
 
-    return jsonResponse({ id: assetId, thumbnailUrl: uploaded.publicUrl })
+    return jsonResponse({ id: assetId, thumbnailUrl })
   } catch (error) {
     rethrowHttpError(error)
     const normalizedError = error instanceof Error ? error : new Error('Unknown poster upload error')

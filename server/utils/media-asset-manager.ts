@@ -1,5 +1,5 @@
 import { createError } from 'h3'
-import { deleteImage } from './cloudflare-images'
+import { deleteImage, uploadImageBuffer } from './cloudflare-images'
 import { deleteFromR2 } from './cloudflare-r2'
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { fireSiteEventSafe } from '~/server/utils/site-events'
@@ -334,6 +334,91 @@ export async function updateMediaAssetMetadata(
   params.push(id, siteId)
   const result = await execute(db, `UPDATE media_assets SET ${sets.join(', ')} WHERE id = ? AND site_id = ?`, params)
   return Number(result?.meta?.changes ?? 0) > 0
+}
+
+function cloudflareImageIdFromVariantUrl(env: MediaProviderEnv, url: string | null): string | null {
+  if (!url || !env.CLOUDFLARE_IMAGES_VARIANT_BASE) return null
+  const prefix = `${env.CLOUDFLARE_IMAGES_VARIANT_BASE.replace(/\/+$/, '')}/`
+  if (!url.startsWith(prefix)) return null
+  const imageId = url.slice(prefix.length).split('/')[0]?.trim()
+  return imageId || null
+}
+
+export async function replaceVideoPoster(
+  db: DbClient,
+  env: MediaProviderEnv,
+  input: {
+    assetId: string
+    siteId: string
+    userId: string | null
+    buffer: ArrayBuffer
+    filename: string
+    contentType: string
+  },
+): Promise<string> {
+  const asset = await queryFirst<Pick<MediaAsset, 'id' | 'organization_id' | 'site_id' | 'location_id' | 'kind' | 'thumbnail_url'>>(
+    db,
+    `SELECT id, organization_id, site_id, location_id, kind, thumbnail_url
+       FROM media_assets
+      WHERE id = ? AND site_id = ? AND status != 'deleted'
+      LIMIT 1`,
+    [input.assetId, input.siteId],
+  )
+  if (!asset) throw createError({ statusCode: 404, statusMessage: 'Asset not found' })
+  if (asset.kind !== 'video') throw createError({ statusCode: 400, statusMessage: 'Poster images can only be added to videos' })
+
+  const uploaded = await uploadImageBuffer(env, input.buffer, input.filename, input.contentType)
+  try {
+    const result = await execute(
+      db,
+      `UPDATE media_assets SET thumbnail_url = ?, updated_at = ? WHERE id = ? AND site_id = ? AND kind = 'video' AND status != 'deleted'`,
+      [uploaded.publicUrl, new Date().toISOString(), input.assetId, input.siteId],
+    )
+    if (Number(result?.meta?.changes ?? 0) !== 1) {
+      throw createError({ statusCode: 409, statusMessage: 'Poster update did not persist' })
+    }
+  } catch (error) {
+    try {
+      await deleteImage(env, uploaded.imageId)
+    } catch (cleanupError) {
+      console.error('media_poster_upload_cleanup_failed', {
+        assetId: input.assetId,
+        imageId: uploaded.imageId,
+        error: cleanupError,
+      })
+    }
+    throw error
+  }
+
+  const previousPosterImageId = cloudflareImageIdFromVariantUrl(env, asset.thumbnail_url)
+  if (previousPosterImageId && previousPosterImageId !== uploaded.imageId) {
+    try {
+      await deleteImage(env, previousPosterImageId)
+    } catch (cleanupError) {
+      console.error('media_poster_replace_cleanup_failed', {
+        assetId: input.assetId,
+        imageId: previousPosterImageId,
+        error: cleanupError,
+      })
+    }
+  }
+
+  await fireSiteEventSafe({
+    db,
+    organizationId: asset.organization_id,
+    siteId: input.siteId,
+    locationId: asset.location_id,
+    actorId: input.userId,
+    eventType: 'media.uploaded',
+    entityType: 'media_asset',
+    entityId: input.assetId,
+    metadata: {
+      provider: 'cloudflare_images',
+      action: 'poster_updated',
+    },
+  })
+
+  return uploaded.publicUrl
 }
 
 /**
