@@ -164,13 +164,12 @@ test.describe('dashboard functional smoke', () => {
     // toBeLessThan(400) alone would also pass on a 3xx redirect to some unrelated page (e.g. a
     // stale auth bounce to /login) — assert the exact success status AND that the final URL (after
     // following any redirect) is still the requested path, so a redirect can't silently satisfy this.
+    // This test intentionally asserts manager behavior rather than mutable client-authored records.
     const experiences = await page.goto(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi/experiences`, { waitUntil: 'load' })
     expect(experiences?.status(), 'location.experiences should resolve for an experience-vertical site').toBe(200)
     expect(new URL(page.url()).pathname).toBe('/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi/experiences')
     await expect(page.getByText('Experiences', { exact: true }).first()).toBeVisible()
     await expect(page.getByRole('button', { name: 'Add experience' }).first()).toBeVisible()
-    await expect(page.getByText('Cocktails & Clay')).toBeVisible()
-    await expect(page.getByText('Pottery Wheel Class')).toBeVisible()
 
     const services = await page.request.get(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/professional-services`)
     expect(services.status(), 'site.services has no catalog entry for saya and must 404, never redirect or render').toBe(404)
