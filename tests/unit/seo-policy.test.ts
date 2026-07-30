@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   isNonIndexableHost,
   isPrivateSeoPath,
+  isTechnicalAssetSeoPath,
   isTenantOnlySeoPath,
   PLATFORM_SITEMAP_ROUTES,
   PRIVATE_EXACT_ROUTES,
@@ -80,6 +81,29 @@ test('tenant-only routes cannot render as thin platform pages', () => {
   assert.equal(isTenantOnlySeoPath('/about'), false)
   assert.equal(isTenantOnlySeoPath('/blog'), false)
   assert.equal(isTenantOnlySeoPath('/docs'), false)
+})
+
+test('technical assets and legacy optimizer endpoints are non-indexable but not private', () => {
+  for (const route of [
+    '/_next',
+    '/_next/image',
+    '/_next/image?url=%2Flogo.png&w=384&q=75',
+    '/tenant-icon',
+    '/tenant-icon.svg',
+    '/tenant-icon-192.png',
+    '/tenant-icon-512.png',
+    '/tenant.webmanifest',
+    '/favicon.ico',
+    '/apple-touch-icon.png',
+    '/site.webmanifest',
+  ]) {
+    const pathname = route.split('?')[0]!
+    assert.equal(isTechnicalAssetSeoPath(pathname), true, route)
+    assert.equal(isPrivateSeoPath(pathname), false, route)
+  }
+
+  assert.equal(isTechnicalAssetSeoPath('/'), false)
+  assert.equal(isTechnicalAssetSeoPath('/blog'), false)
 })
 
 test('preview and deployment-provider hosts are globally non-indexable', () => {

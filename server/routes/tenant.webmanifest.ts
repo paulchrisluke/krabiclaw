@@ -12,6 +12,7 @@ export default defineEventHandler((event) => {
   const brandName = site?.brand_name?.trim() || 'KrabiClaw'
   const origin = requestUrl.origin
 
+  setHeader(event, 'x-robots-tag', 'noindex, nofollow, noarchive')
   setHeader(event, 'content-type', 'application/manifest+json')
   setHeader(event, 'cache-control', 'public, max-age=3600, stale-while-revalidate=86400')
 
