@@ -11,7 +11,6 @@ export interface DomainEnv {
   CF_CUSTOM_HOSTNAMES_API_TOKEN?: string
   CF_ZARAZ_API_TOKEN?: string
   CF_SAAS_CNAME_TARGET?: string
-  CF_DCV_DELEGATION_TARGET?: string
   CF_ACCOUNT_ID?: string
   CF_PAGES_PROJECT_NAME?: string
   NUXT_PUBLIC_FREE_SITE_DOMAIN?: string
@@ -41,6 +40,7 @@ export interface DomainRecord {
   ssl_validation_name_2?: string | null
   ssl_validation_type_2?: string | null
   ssl_validation_value_2?: string | null
+  validation_strategy?: 'http_auto' | 'txt_manual' | 'delegated_dcv'
   dcv_delegation_name?: string | null
   dcv_delegation_type?: string | null
   dcv_delegation_value?: string | null
@@ -52,6 +52,10 @@ export interface DomainRecord {
   next_check_at?: string | null
   retry_count?: number
   activated_at?: string | null
+  certificate_last_active_at?: string | null
+  renewal_issue_started_at?: string | null
+  renewal_notification_sent_at?: string | null
+  certificate_expires_at?: string | null
   error_message?: string | null
   metadata?: string | null
   created_at: string
@@ -89,6 +93,7 @@ interface CloudflareCustomHostname {
       cname?: string
       cname_target?: string
     }>
+    expires_on?: string
   }
   verification_errors?: string[]
   created_at?: string
@@ -315,9 +320,9 @@ async function cloudflareRequest<T>(
   return body.result as T
 }
 
-function cloudflareSslSettings() {
+export function cloudflareSslSettings(strategy: DomainRecord['validation_strategy'] = 'http_auto') {
   return {
-    method: 'txt',
+    method: strategy === 'txt_manual' || strategy === 'delegated_dcv' ? 'txt' : 'http',
     type: 'dv',
     bundle_method: 'ubiquitous'
   }
@@ -429,16 +434,6 @@ function normalizeDnsValue(value: string | null | undefined): string {
   return String(value || '').trim().toLowerCase().replace(/\.$/, '')
 }
 
-function delegatedDcvRecord(env: DomainEnv, domain: string): { name: string; type: string; value: string } | null {
-  const target = normalizeDnsValue(env.CF_DCV_DELEGATION_TARGET)
-  if (!target) return null
-  return {
-    name: `_acme-challenge.${rootDomainForPair(domain)}`,
-    type: 'CNAME',
-    value: target,
-  }
-}
-
 async function queryDnsJson(hostname: string, type: 'CNAME' | 'A' | 'AAAA', signal?: AbortSignal): Promise<string[]> {
   const url = new URL('https://cloudflare-dns.com/dns-query')
   url.searchParams.set('name', hostname)
@@ -522,7 +517,6 @@ async function persistCloudflareState(
 
   const sslValidation = firstSslValidation(hostname)
   const sslValidation2 = secondSslValidation(hostname)
-  const dcvDelegation = delegatedDcvRecord(env, before.domain)
   const dnsTarget = env.CF_SAAS_CNAME_TARGET || null
   const retryCount = options.incrementRetry ? Math.min(MAX_RETRY_COUNT, Number(before.retry_count || 0) + 1) : Number(before.retry_count || 0)
   const dnsStatus = options.dnsInspection?.points_to_saas
@@ -536,6 +530,14 @@ async function persistCloudflareState(
   const now = new Date().toISOString()
   const status = isPendingTooLong(before, mappedStatus, Date.parse(now)) ? 'stuck' : mappedStatus
   const activatedAt = status === 'active' ? (before.activated_at || now) : before.activated_at
+  const certificateLastActiveAt = hostname.ssl?.status === 'active'
+    ? now
+    : before.certificate_last_active_at ?? null
+  const renewalIssueStartedAt = before.status === 'active' && hostname.ssl?.status && hostname.ssl.status !== 'active'
+    ? before.renewal_issue_started_at ?? now
+    : hostname.ssl?.status === 'active'
+      ? null
+      : before.renewal_issue_started_at ?? null
   const errors = hostname.verification_errors?.join('; ') || null
 
   if (status === 'active' && before.role === 'canonical') {
@@ -567,6 +569,7 @@ async function persistCloudflareState(
         ssl_validation_name_2 = ?,
         ssl_validation_type_2 = ?,
         ssl_validation_value_2 = ?,
+        validation_strategy = ?,
         dcv_delegation_name = ?,
         dcv_delegation_type = ?,
         dcv_delegation_value = ?,
@@ -579,6 +582,9 @@ async function persistCloudflareState(
         next_check_at = ?,
         retry_count = ?,
         activated_at = ?,
+        certificate_last_active_at = ?,
+        renewal_issue_started_at = ?,
+        certificate_expires_at = ?,
         error_message = ?,
         metadata = ?,
         updated_at = ?
@@ -596,9 +602,10 @@ async function persistCloudflareState(
     sslValidation2?.txt_name ?? sslValidation2?.name ?? null,
     sslValidation2?.type ?? 'TXT',
     sslValidation2?.txt_value ?? sslValidation2?.value ?? null,
-    dcvDelegation?.name ?? before.dcv_delegation_name ?? null,
-    dcvDelegation?.type ?? before.dcv_delegation_type ?? null,
-    dcvDelegation?.value ?? before.dcv_delegation_value ?? null,
+    before.validation_strategy ?? 'http_auto',
+    before.validation_strategy === 'delegated_dcv' ? before.dcv_delegation_name ?? null : null,
+    before.validation_strategy === 'delegated_dcv' ? before.dcv_delegation_type ?? null : null,
+    before.validation_strategy === 'delegated_dcv' ? before.dcv_delegation_value ?? null : null,
     dnsTarget,
     dnsStatus,
     options.dnsInspection?.checked_at ?? before.dns_last_resolved_at ?? null,
@@ -610,6 +617,9 @@ async function persistCloudflareState(
       : nextCheckAt(retryCount, { recentDnsChange: options.triggeredRevalidation || dnsStatus === 'valid' }),
     retryCount,
     activatedAt,
+    certificateLastActiveAt,
+    renewalIssueStartedAt,
+    hostname.ssl?.expires_on ?? before.certificate_expires_at ?? null,
     errors,
     JSON.stringify({
       cloudflare_created_at: hostname.created_at ?? null,
@@ -703,8 +713,8 @@ export async function createCustomDomainPair(
     for (const entry of entries) {
       await execute(db, `
         INSERT INTO site_domains
-        (id, organization_id, site_id, domain, type, role, status, dns_target, dns_status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 'custom', ?, 'pending', ?, 'pending', ?, ?)
+        (id, organization_id, site_id, domain, type, role, status, validation_strategy, dns_target, dns_status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 'custom', ?, 'pending', 'http_auto', ?, 'pending', ?, ?)
       `, [entry.id, opts.organizationId, opts.siteId, entry.domain, entry.role, env.CF_SAAS_CNAME_TARGET, now, now])
       insertedDomainIds.push(entry.id)
 
