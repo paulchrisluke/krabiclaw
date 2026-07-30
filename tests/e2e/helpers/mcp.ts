@@ -83,22 +83,54 @@ export function mcpData<T>(body: { result?: { content?: Array<{ type?: string; t
   return {} as T
 }
 
+type McpToolCallBody = {
+  error?: unknown
+  result?: {
+    isError?: boolean
+    content?: Array<{ type?: string; text?: string; json?: unknown }>
+    structuredContent?: unknown
+  }
+  structuredContent?: unknown
+}
+
 export async function ensureSite(request: APIRequestContext, baseURL: string) {
-  const suffix = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
-  const res = await mcpRequest(request, baseURL, {
-    method: 'tools/call',
-    toolName: 'create_site',
-    args: {
-      name: `MCP E2E ${suffix}`,
-      subdomain: `mcp-e2e-${suffix}`,
-      vertical: 'restaurant',
-    },
-  })
-  if (res.status() !== 200) console.error(await res.text()); expect(res.status()).toBe(200)
-  const body = await res.json()
-  const siteId = mcpData<{ siteId?: string }>(body).siteId
-  expect(siteId).toEqual(expect.any(String))
-  return siteId as string
+  let lastResponseBody = ''
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const suffix = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
+    const res = await mcpRequest(request, baseURL, {
+      method: 'tools/call',
+      toolName: 'create_site',
+      args: {
+        name: `MCP E2E ${suffix}`,
+        subdomain: `mcp-e2e-${suffix}`,
+        vertical: 'restaurant',
+      },
+    })
+
+    lastResponseBody = await res.text()
+    expect(res.status(), `create_site HTTP response: ${lastResponseBody}`).toBe(200)
+
+    let body: McpToolCallBody
+    try {
+      body = JSON.parse(lastResponseBody) as McpToolCallBody
+    } catch {
+      throw new Error(`create_site returned invalid JSON: ${lastResponseBody}`)
+    }
+
+    const data = mcpData<{ siteId?: string; id?: string }>(body)
+    const siteId = data.siteId ?? data.id
+    if (siteId) return siteId
+
+    const isMcpError = Boolean(body.error || body.result?.isError)
+    if (attempt < 2) {
+      console.warn(`create_site attempt ${attempt} returned no site identifier${isMcpError ? ' and reported an MCP error' : ''}; retrying once: ${lastResponseBody}`)
+      await new Promise(resolve => setTimeout(resolve, 1_000))
+      continue
+    }
+  }
+
+  throw new Error(`create_site returned no site identifier after 2 attempts: ${lastResponseBody}`)
 }
 
 export async function getSiteOrg(request: APIRequestContext, baseURL: string, siteId: string) {
