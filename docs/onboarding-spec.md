@@ -31,7 +31,7 @@ Global first, local second, persistent after that.
 
 **Resolved** — kept as dated history, not current findings:
 
-- ~~The checklist's `hero_image` check can never pass because it queries the wrong column.~~ Fixed prior to #277 — `checklist.get.ts` now checks `site_config.hero_image_is_placeholder` and `business_locations.hero_image_asset_id` → `media_assets.source`, matching what both creation paths actually write.
+- ~~The checklist's `hero_image` check can never pass because it queries the wrong column.~~ Fixed prior to #277 — `checklist.get.ts` now checks `site_config.hero_image_is_placeholder` and `business_locations.hero_media_asset_id` → `media_assets.source`, matching what both creation paths actually write.
 - ~~No dedicated brand step exists anywhere in the wizard.~~ Fixed prior to #277 — `finishCreation()` in `OnboardingWizard.vue` shows a `brandCard` (`components/workspace/onboarding/BrandEssentialsCard.vue`) immediately after a new site is created, prompting for logo/hero photo/brand color before handoff.
 - ~~Restaurant-flavored placeholder copy bleeds into non-restaurant verticals.~~ Fixed by #276 — `onboarding-drafts.ts` and `site-template.ts` now have explicit `professional_service` copy (hero/CTA/about/Q&A/post), and neither seeds a menu for it.
 

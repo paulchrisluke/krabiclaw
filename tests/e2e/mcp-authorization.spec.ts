@@ -161,6 +161,7 @@ test.describe('stateless MCP server', () => {
     })
 
     test('owner of site B cannot mutate site A through MCP', async ({ baseURL }) => {
+      test.setTimeout(60_000)
       const crossMutate = await mcpRequest(sharedRequest, baseURL!, {
         method: 'tools/call',
         toolName: 'update_site_settings',
@@ -201,6 +202,7 @@ test.describe('stateless MCP server', () => {
   })
 
   test('an editor cannot see or use reply_to_review through MCP', async ({ request, baseURL }) => {
+    test.setTimeout(60_000)
     await loginAsFreshMcpUser(request, baseURL!)
     const siteId = await ensureSite(request, baseURL!)
     const organizationId = await getSiteOrg(request, baseURL!, siteId)

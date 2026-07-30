@@ -1,0 +1,7 @@
+-- Intentionally left as a no-op.
+--
+-- The generated version of this migration rebuilt parent tables to retarget
+-- legacy media foreign keys. On Cloudflare D1/SQLite, DROP TABLE performs
+-- implicit deletes that still fire ON DELETE CASCADE/SET NULL actions even
+-- when deferred foreign keys are enabled. Keeping this migration empty
+-- preserves the migration sequence without risking related production data.

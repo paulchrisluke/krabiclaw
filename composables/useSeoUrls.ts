@@ -48,9 +48,8 @@ export function useTenantOgImage(value?: MaybeRefOrGetter<string | null | undefi
   return useSeoUrl(() =>
     toValue(value) ||
     config.value?.og_image_url ||
-    locations.value[0]?.hero_image_public_url ||
+    (locations.value[0]?.kind !== 'video' ? locations.value[0]?.public_url : null) ||
     config.value?.logo_url ||
     SHARED_OG_IMAGE_PATH
   )
 }
-

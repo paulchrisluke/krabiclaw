@@ -311,7 +311,7 @@ async function transcodeDir() {
     console.log(`    ${r.assetId}-thumb  →  ${r.thumbPublicUrl}`)
   }
 
-  console.log('\n  Wire up hero_video_asset_id on site_content or business_locations as needed.')
+  console.log('\n  Wire up hero_media_asset_id on site_content or business_locations as needed.')
 }
 
 // ── Mode 2: re-transcode an existing R2 asset ─────────────────────────────────

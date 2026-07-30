@@ -164,7 +164,7 @@ export async function copyLocationBatch(
   }
 
   // Process entities in dependency order (media_assets before anything that
-  // references image_asset_id/hero_image_asset_id; menus before menu_items)
+  // references image_asset_id/hero_media_asset_id; menus before menu_items)
   // regardless of the order the caller listed them in.
   const entityOrder: CopyEntityType[] = ['media_assets', 'menus', 'menu_items', 'site_content', 'experiences', 'reviews', 'location_qa']
   const requestedConfigs = new Map(entities.map((config) => [config.type, config]))
@@ -370,9 +370,9 @@ async function copySiteContent(
   idMappings: Record<string, string>,
   includeTranslations = true,
 ) {
-  const content = await queryAll<{ id: string; page: string; field: string; hero_image_asset_id: string | null; hero_video_asset_id: string | null }>(
+  const content = await queryAll<{ id: string; page: string; field: string; hero_media_asset_id: string | null }>(
     db,
-    'SELECT id, page, field, hero_image_asset_id, hero_video_asset_id FROM site_content WHERE location_id = ? AND organization_id = ? AND site_id = ?',
+    'SELECT id, page, field, hero_media_asset_id FROM site_content WHERE location_id = ? AND organization_id = ? AND site_id = ?',
     [sourceLocationId, organizationId, siteId],
   )
 
@@ -381,16 +381,15 @@ async function copySiteContent(
     manifest.id_mappings[item.id] = newId
     manifest.entities.site_content.new_ids.push(newId)
 
-    const newHeroImageId = item.hero_image_asset_id ? (idMappings[item.hero_image_asset_id] ?? null) : null
-    const newHeroVideoId = item.hero_video_asset_id ? (idMappings[item.hero_video_asset_id] ?? null) : null
+    const newHeroMediaId = item.hero_media_asset_id ? (idMappings[item.hero_media_asset_id] ?? null) : null
 
     statements.push({
       query: `
-        INSERT INTO site_content (id, organization_id, site_id, location_id, page, field, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id, value, type, source, updated_at, updated_by, component)
-        SELECT ?, organization_id, site_id, ?, page, field, content, hero_title, hero_subtitle, ?, ?, value, type, source, ?, updated_by, component
+        INSERT INTO site_content (id, organization_id, site_id, location_id, page, field, content, hero_title, hero_subtitle, hero_media_asset_id, value, type, source, updated_at, updated_by, component)
+        SELECT ?, organization_id, site_id, ?, page, field, content, hero_title, hero_subtitle, ?, value, type, source, ?, updated_by, component
         FROM site_content WHERE id = ?
       `,
-      params: [newId, targetLocationId, newHeroImageId, newHeroVideoId, now, item.id],
+      params: [newId, targetLocationId, newHeroMediaId, now, item.id],
     })
 
     if (includeTranslations) {
@@ -534,9 +533,9 @@ async function copyExperiences(
   manifest: CopyManifest,
   idMappings: Record<string, string>,
 ) {
-  const experiences = await queryAll<{ id: string; slug: string; image_asset_id: string | null; video_asset_id: string | null }>(
+  const experiences = await queryAll<{ id: string; slug: string }>(
     db,
-    'SELECT id, slug, image_asset_id, video_asset_id FROM experiences WHERE location_id = ? AND organization_id = ? AND site_id = ?',
+    'SELECT id, slug FROM experiences WHERE location_id = ? AND organization_id = ? AND site_id = ?',
     [sourceLocationId, organizationId, siteId],
   )
 
@@ -545,19 +544,36 @@ async function copyExperiences(
     manifest.id_mappings[exp.id] = newId
     manifest.entities.experiences.new_ids.push(newId)
 
-    const newImageId = exp.image_asset_id ? (idMappings[exp.image_asset_id] ?? null) : null
-    const newVideoId = exp.video_asset_id ? (idMappings[exp.video_asset_id] ?? null) : null
     // experiences.slug is unique per site_id, so a same-site copy must not reuse the source slug.
     const newSlug = await uniqueSlug(db, siteId, exp.slug)
 
     statements.push({
       query: `
-        INSERT INTO experiences (id, organization_id, site_id, location_id, title, slug, tagline, body, image_asset_id, video_asset_id, images, price, price_amount, duration_minutes, max_capacity, time_slots, recurring_slots, available_note, status, sort_order, featured, featured_sort_order, seo_title, seo_description, created_at, updated_at, created_by, highlights, included_items, what_to_bring, meeting_point, source)
-        SELECT ?, organization_id, site_id, ?, title, ?, tagline, body, ?, ?, images, price, price_amount, duration_minutes, max_capacity, time_slots, recurring_slots, available_note, status, sort_order, featured, featured_sort_order, seo_title, seo_description, ?, updated_at, created_by, highlights, included_items, what_to_bring, meeting_point, source
+        INSERT INTO experiences (id, organization_id, site_id, location_id, title, slug, tagline, body, price, price_amount, compare_at_price_amount, sale_starts_at, sale_ends_at, duration_minutes, max_capacity, time_slots, recurring_slots, available_note, status, sort_order, featured, featured_sort_order, seo_title, seo_description, canonical_url, robots, og_image_asset_id, created_at, updated_at, created_by, highlights, included_items, what_to_bring, meeting_point, cancellation_policy, source)
+        SELECT ?, organization_id, site_id, ?, title, ?, tagline, body, price, price_amount, compare_at_price_amount, sale_starts_at, sale_ends_at, duration_minutes, max_capacity, time_slots, recurring_slots, available_note, status, sort_order, featured, featured_sort_order, seo_title, seo_description, canonical_url, robots, og_image_asset_id, ?, updated_at, created_by, highlights, included_items, what_to_bring, meeting_point, cancellation_policy, source
         FROM experiences WHERE id = ?
       `,
-      params: [newId, targetLocationId, newSlug, newImageId, newVideoId, now, exp.id],
+      params: [newId, targetLocationId, newSlug, now, exp.id],
     })
+
+    const experienceMedia = await queryAll<{ asset_id: string; sort_order: number }>(
+      db,
+      `SELECT asset_id, sort_order
+         FROM experience_media
+        WHERE organization_id = ? AND site_id = ? AND experience_id = ?
+        ORDER BY sort_order ASC`,
+      [organizationId, siteId, exp.id],
+    )
+    for (const item of experienceMedia) {
+      const newAssetId = idMappings[item.asset_id] ?? item.asset_id
+      statements.push({
+        query: `
+          INSERT INTO experience_media (id, organization_id, site_id, experience_id, asset_id, sort_order, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        params: [crypto.randomUUID(), organizationId, siteId, newId, newAssetId, item.sort_order, now, now],
+      })
+    }
 
     statements.push({
       query: `

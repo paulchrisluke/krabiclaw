@@ -19,12 +19,22 @@
       class="group block no-underline"
     >
       <div class="relative aspect-[4/3] overflow-hidden rounded-lg bg-muted">
-        <img
-          v-if="experience.image_url"
-          :src="experience.image_url"
-          :alt="experience.title"
-          class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-        >
+        <template v-if="coverImageUrl(experience)">
+          <img
+            :src="coverImageUrl(experience)!"
+            :alt="coverMedia(experience)!.alt_text || experience.title"
+            class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          >
+          <span
+            v-if="coverMedia(experience)!.kind === 'video'"
+            class="absolute inset-0 flex items-center justify-center bg-black/10"
+            aria-hidden="true"
+          >
+            <span class="flex size-12 items-center justify-center rounded-full bg-black/55 text-white">
+              <SayaIcon name="play" class="ml-0.5 size-5" />
+            </span>
+          </span>
+        </template>
         <div v-else class="flex h-full items-center justify-center">
           <SayaIcon name="sparkles" class="size-12 text-dimmed" />
         </div>
@@ -83,6 +93,18 @@ const props = defineProps<{
   durationHourLabel: string
   durationMinuteLabel: string
 }>()
+
+function coverMedia(experience: Experience) {
+  return experience.media?.[0] ?? null
+}
+
+function coverImageUrl(experience: Experience): string | null {
+  const cover = coverMedia(experience)
+  if (!cover) return null
+  return cover.kind === 'video'
+    ? cover.thumbnail_url || null
+    : cover.public_url || null
+}
 
 function unavailabilityBadge(experience: Experience): string | null {
   switch (experience.availability_state) {

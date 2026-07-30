@@ -24,8 +24,6 @@ interface ContentRow {
   hero_subtitle: string | null;
   hero_public_url: string | null;
   hero_kind: string | null;
-  hero_video_public_url: string | null;
-  hero_video_kind: string | null;
   thumbnail_url: string | null;
   component: string | null;
   [key: string]: unknown;
@@ -59,9 +57,18 @@ const emptyShell = (): SiteShellPayload => ({
 
 export const useSiteShell = () => {
   const { isPlatform, siteId, draftId } = useTenantSite();
+  const requestEvent = useRequestEvent();
   const requestFetch = useRequestFetch();
   const route = useRoute();
   const { locale } = useI18n();
+  const isSyntheticServerAssetFetch = import.meta.server
+    && !requestEvent?.context.cloudflare?.env
+    && (
+      requestEvent?.path?.startsWith('/_i18n/')
+      || requestEvent?.path?.startsWith('/_nuxt/')
+      || requestEvent?.path?.startsWith('/api/_nuxt_icon/')
+      || requestEvent?.path?.startsWith('/__nuxt_error')
+    );
 
   const entityId = computed(() => siteId || draftId || null);
 
@@ -83,7 +90,7 @@ export const useSiteShell = () => {
   const empty = emptyShell();
 
   const { data, error } =
-    isPlatform || (!siteId && !draftId)
+    isSyntheticServerAssetFetch || isPlatform || (!siteId && !draftId)
       ? { data: ref<SiteShellPayload>(empty), error: ref<Error | null>(null) }
       : useAsyncData<SiteShellPayload>(
           key,

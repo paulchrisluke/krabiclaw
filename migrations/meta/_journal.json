@@ -449,6 +449,104 @@
       "when": 1785134861181,
       "tag": "0070_early_hellion",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "6",
+      "when": 1785215472413,
+      "tag": "0071_bored_satana",
+      "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "6",
+      "when": 1785225253806,
+      "tag": "0072_whole_havok",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "6",
+      "when": 1785233888881,
+      "tag": "0073_jazzy_preak",
+      "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "6",
+      "when": 1785314400000,
+      "tag": "0074_rebuild_blog_posts_media_fk",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "6",
+      "when": 1785314401000,
+      "tag": "0075_rebuild_menu_items_media_fk",
+      "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "6",
+      "when": 1785314402000,
+      "tag": "0076_rebuild_platform_docs_media_fk",
+      "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "6",
+      "when": 1785314403000,
+      "tag": "0077_rebuild_posts_media_fk",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "6",
+      "when": 1785314404000,
+      "tag": "0078_prepare_location_experience_media_backups",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "6",
+      "when": 1785314405000,
+      "tag": "0079_rebuild_location_experience_media_contract",
+      "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "6",
+      "when": 1785314406000,
+      "tag": "0080_assert_location_experience_media_contract",
+      "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "6",
+      "when": 1785314407000,
+      "tag": "0081_cleanup_location_experience_media_backups",
+      "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "6",
+      "when": 1785314408000,
+      "tag": "0082_assert_unified_media_physical_contract",
+      "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "6",
+      "when": 1785314409000,
+      "tag": "0083_drop_media_assets_old_legacy_sync",
+      "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "6",
+      "when": 1785314410000,
+      "tag": "0084_tiny_lorna_dane",
+      "breakpoints": true
     }
   ]
 }

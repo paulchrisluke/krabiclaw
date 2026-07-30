@@ -177,8 +177,6 @@ jobs:
               - 'tests/e2e/helpers/mcp.ts'
               - 'tests/e2e/oauth-discovery.spec.ts'
               - 'types/nitro.d.ts'
-              - 'vite.config.widgets.ts'
-              - 'widgets/**'
               - 'wrangler.toml'
             seo:
               - 'app.vue'

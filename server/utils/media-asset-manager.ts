@@ -1,6 +1,7 @@
-import { deleteImage } from './cloudflare-images'
+import { createError } from 'h3'
+import { deleteImage, uploadImageBuffer } from './cloudflare-images'
 import { deleteFromR2 } from './cloudflare-r2'
-import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { fireSiteEventSafe } from '~/server/utils/site-events'
 
 type SqlBindValue = string | number | boolean | null
@@ -34,8 +35,184 @@ export interface MediaAsset {
   delete_pending_at: string | null
 }
 
+export interface ResolvedMediaAsset {
+  id: string
+  kind: 'image' | 'video'
+  public_url: string
+  thumbnail_url: string | null
+  mime_type: string | null
+  width: number | null
+  height: number | null
+  duration: number | null
+  alt_text: string | null
+  provider: string
+  status: 'active'
+}
+
+export interface MediaAssetRefInput {
+  asset_id: string
+}
+
 export type CreateInput = Pick<MediaAsset, 'id' | 'organization_id' | 'site_id' | 'kind' | 'provider' | 'source'> &
   Partial<Omit<MediaAsset, 'id' | 'organization_id' | 'site_id' | 'kind' | 'provider' | 'source' | 'created_at' | 'updated_at'>>
+
+export const MAX_ORDERED_MEDIA_ASSETS = 50
+
+function toResolvedMediaAsset(row: MediaAsset): ResolvedMediaAsset {
+  if (row.kind !== 'image' && row.kind !== 'video') {
+    throw createError({ statusCode: 400, statusMessage: `Media asset ${row.id} is not assignable image/video media` })
+  }
+  if (!row.public_url) {
+    throw createError({ statusCode: 400, statusMessage: `Media asset ${row.id} does not have a public URL` })
+  }
+  if (row.status !== 'active') {
+    throw createError({ statusCode: 400, statusMessage: `Media asset ${row.id} is not active` })
+  }
+
+  return {
+    id: row.id,
+    kind: row.kind,
+    public_url: row.public_url,
+    thumbnail_url: row.thumbnail_url,
+    mime_type: row.mime_type,
+    width: row.width,
+    height: row.height,
+    duration: row.duration,
+    alt_text: row.alt_text,
+    provider: row.provider,
+    status: 'active',
+  }
+}
+
+export async function hydrateMediaAssetRefs(
+  db: DbClient,
+  input: {
+    organizationId: string
+    siteId: string
+    refs: MediaAssetRefInput[]
+    allowedKinds?: Array<ResolvedMediaAsset['kind']>
+    requireCoverPoster?: boolean
+    fieldName?: string
+  },
+): Promise<ResolvedMediaAsset[]> {
+  const fieldName = input.fieldName ?? 'media'
+  const ids = input.refs.map(ref => ref.asset_id?.trim()).filter(Boolean)
+  if (input.refs.length > MAX_ORDERED_MEDIA_ASSETS) {
+    throw createError({ statusCode: 400, statusMessage: `${fieldName} accepts at most ${MAX_ORDERED_MEDIA_ASSETS} assets` })
+  }
+  if (ids.length !== input.refs.length) {
+    throw createError({ statusCode: 400, statusMessage: `${fieldName} items must contain asset_id` })
+  }
+  if (new Set(ids).size !== ids.length) {
+    throw createError({ statusCode: 400, statusMessage: `${fieldName} cannot contain duplicate asset IDs` })
+  }
+  if (ids.length === 0) return []
+
+  const rows = await queryAll<MediaAsset>(
+    db,
+    `SELECT * FROM media_assets
+      WHERE organization_id = ? AND site_id = ? AND status = 'active'
+        AND id IN (${ids.map(() => '?').join(',')})`,
+    [input.organizationId, input.siteId, ...ids],
+  )
+  const byId = new Map((rows ?? []).map(row => [row.id, row]))
+  const missing = ids.find(id => !byId.has(id))
+  if (missing) {
+    throw createError({ statusCode: 400, statusMessage: `${fieldName} references an inactive or out-of-scope media asset: ${missing}` })
+  }
+
+  const allowedKinds = input.allowedKinds ? new Set(input.allowedKinds) : null
+  const resolved = ids.map((id) => {
+    const row = byId.get(id)
+    if (!row) throw createError({ statusCode: 400, statusMessage: `${fieldName} references an inactive or out-of-scope media asset: ${id}` })
+    const asset = toResolvedMediaAsset(row)
+    if (allowedKinds && !allowedKinds.has(asset.kind)) {
+      throw createError({ statusCode: 400, statusMessage: `${fieldName} asset ${id} must be ${Array.from(allowedKinds).join(' or ')}` })
+    }
+    return asset
+  })
+
+  if (input.requireCoverPoster && resolved[0]?.kind === 'video' && !resolved[0].thumbnail_url) {
+    throw createError({ statusCode: 400, statusMessage: `${fieldName} cover video requires a poster thumbnail` })
+  }
+
+  return resolved
+}
+
+export async function hydrateMediaAssetsForExperiences(
+  db: DbClient,
+  siteId: string,
+  experienceIds: string[],
+): Promise<Map<string, ResolvedMediaAsset[]>> {
+  const uniqueExperienceIds = Array.from(new Set(experienceIds)).filter(Boolean)
+  const result = new Map<string, ResolvedMediaAsset[]>()
+  for (const id of uniqueExperienceIds) result.set(id, [])
+  if (uniqueExperienceIds.length === 0) return result
+
+  const rows = await queryAll<MediaAsset & { experience_id: string; sort_order: number }>(
+    db,
+    `SELECT ma.*, em.experience_id, em.sort_order
+       FROM experience_media em
+       JOIN media_assets ma ON ma.id = em.asset_id
+      WHERE em.site_id = ? AND em.experience_id IN (${uniqueExperienceIds.map(() => '?').join(',')})
+        AND ma.site_id = em.site_id AND ma.status = 'active'
+      ORDER BY em.experience_id ASC, em.sort_order ASC`,
+    [siteId, ...uniqueExperienceIds],
+  )
+  for (const row of rows ?? []) {
+    const list = result.get(row.experience_id)
+    if (list) list.push(toResolvedMediaAsset(row))
+  }
+  return result
+}
+
+export async function replaceExperienceMedia(
+  db: DbClient,
+  input: {
+    organizationId: string
+    siteId: string
+    experienceId: string
+    refs: MediaAssetRefInput[]
+  },
+): Promise<ResolvedMediaAsset[]> {
+  const media = await hydrateMediaAssetRefs(db, {
+    organizationId: input.organizationId,
+    siteId: input.siteId,
+    refs: input.refs,
+    allowedKinds: ['image', 'video'],
+    requireCoverPoster: true,
+    fieldName: 'media',
+  })
+  await executeBatch(db, buildReplaceExperienceMediaQueries({
+    organizationId: input.organizationId,
+    siteId: input.siteId,
+    experienceId: input.experienceId,
+    media,
+  }))
+  return media
+}
+
+export function buildReplaceExperienceMediaQueries(input: {
+  organizationId: string
+  siteId: string
+  experienceId: string
+  media: ResolvedMediaAsset[]
+  now?: string
+}): BatchQuery[] {
+  const now = input.now ?? new Date().toISOString()
+  return [
+    {
+      query: `DELETE FROM experience_media WHERE site_id = ? AND experience_id = ?`,
+      params: [input.siteId, input.experienceId],
+    },
+    ...input.media.map((asset, index) => ({
+      query: `INSERT INTO experience_media
+         (id, organization_id, site_id, experience_id, asset_id, sort_order, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      params: [crypto.randomUUID(), input.organizationId, input.siteId, input.experienceId, asset.id, index, now, now],
+    })),
+  ]
+}
 
 export async function createMediaAsset(db: DbClient, data: CreateInput): Promise<void> {
   const now = new Date().toISOString()
@@ -157,6 +334,91 @@ export async function updateMediaAssetMetadata(
   params.push(id, siteId)
   const result = await execute(db, `UPDATE media_assets SET ${sets.join(', ')} WHERE id = ? AND site_id = ?`, params)
   return Number(result?.meta?.changes ?? 0) > 0
+}
+
+function cloudflareImageIdFromVariantUrl(env: MediaProviderEnv, url: string | null): string | null {
+  if (!url || !env.CLOUDFLARE_IMAGES_VARIANT_BASE) return null
+  const prefix = `${env.CLOUDFLARE_IMAGES_VARIANT_BASE.replace(/\/+$/, '')}/`
+  if (!url.startsWith(prefix)) return null
+  const imageId = url.slice(prefix.length).split('/')[0]?.trim()
+  return imageId || null
+}
+
+export async function replaceVideoPoster(
+  db: DbClient,
+  env: MediaProviderEnv,
+  input: {
+    assetId: string
+    siteId: string
+    userId: string | null
+    buffer: ArrayBuffer
+    filename: string
+    contentType: string
+  },
+): Promise<string> {
+  const asset = await queryFirst<Pick<MediaAsset, 'id' | 'organization_id' | 'site_id' | 'location_id' | 'kind' | 'thumbnail_url'>>(
+    db,
+    `SELECT id, organization_id, site_id, location_id, kind, thumbnail_url
+       FROM media_assets
+      WHERE id = ? AND site_id = ? AND status != 'deleted'
+      LIMIT 1`,
+    [input.assetId, input.siteId],
+  )
+  if (!asset) throw createError({ statusCode: 404, statusMessage: 'Asset not found' })
+  if (asset.kind !== 'video') throw createError({ statusCode: 400, statusMessage: 'Poster images can only be added to videos' })
+
+  const uploaded = await uploadImageBuffer(env, input.buffer, input.filename, input.contentType)
+  try {
+    const result = await execute(
+      db,
+      `UPDATE media_assets SET thumbnail_url = ?, updated_at = ? WHERE id = ? AND site_id = ? AND kind = 'video' AND status != 'deleted'`,
+      [uploaded.publicUrl, new Date().toISOString(), input.assetId, input.siteId],
+    )
+    if (Number(result?.meta?.changes ?? 0) !== 1) {
+      throw createError({ statusCode: 409, statusMessage: 'Poster update did not persist' })
+    }
+  } catch (error) {
+    try {
+      await deleteImage(env, uploaded.imageId)
+    } catch (cleanupError) {
+      console.error('media_poster_upload_cleanup_failed', {
+        assetId: input.assetId,
+        imageId: uploaded.imageId,
+        error: cleanupError,
+      })
+    }
+    throw error
+  }
+
+  const previousPosterImageId = cloudflareImageIdFromVariantUrl(env, asset.thumbnail_url)
+  if (previousPosterImageId && previousPosterImageId !== uploaded.imageId) {
+    try {
+      await deleteImage(env, previousPosterImageId)
+    } catch (cleanupError) {
+      console.error('media_poster_replace_cleanup_failed', {
+        assetId: input.assetId,
+        imageId: previousPosterImageId,
+        error: cleanupError,
+      })
+    }
+  }
+
+  await fireSiteEventSafe({
+    db,
+    organizationId: asset.organization_id,
+    siteId: input.siteId,
+    locationId: asset.location_id,
+    actorId: input.userId,
+    eventType: 'media.uploaded',
+    entityType: 'media_asset',
+    entityId: input.assetId,
+    metadata: {
+      provider: 'cloudflare_images',
+      action: 'poster_updated',
+    },
+  })
+
+  return uploaded.publicUrl
 }
 
 /**

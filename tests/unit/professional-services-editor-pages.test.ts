@@ -24,8 +24,8 @@ async function queryAll<T>(_db: unknown, query: string, params: unknown[] = []):
   }
 
   if (query.includes('FROM media_assets')) {
-    const [siteId, assetId] = params
-    return store.media.filter(asset => asset.site_id === siteId && asset.id === assetId) as T[]
+    const [organizationId, siteId, assetId] = params
+    return store.media.filter(asset => asset.organization_id === organizationId && asset.site_id === siteId && asset.id === assetId) as T[]
   }
 
   if (query.includes('FROM offerings')) return [] as T[]
@@ -120,7 +120,7 @@ function resetStore() {
       updated_at: '2026-07-21T00:00:00.000Z',
     },
   ]
-  store.media = [{ id: 'asset-home-new', site_id: 'site-ncls-blawby', public_url: 'https://images.example/new-home.webp' }]
+  store.media = [{ id: 'asset-home-new', organization_id: 'org-ncls-blawby', site_id: 'site-ncls-blawby', public_url: 'https://images.example/new-home.webp', kind: 'image' }]
   store.batches = []
 }
 
@@ -136,8 +136,8 @@ test('professional_services page editor reads rendered Blawby tenant_page fields
   const hero = content.fields.find((field: { field: string }) => field.field === 'hero')
   assert.equal(hero?.hero_title, 'Legal help when it matters')
   assert.equal(hero?.hero_subtitle, 'Support for families across North Carolina.')
-  assert.equal(hero?.hero_image_asset_id, 'asset-home')
-  assert.deepEqual(content.schema.fields, ['hero.title', 'hero.subtitle', 'hero.image', 'cta.title', 'cta.description'])
+  assert.equal(hero?.hero_media_asset_id, 'asset-home')
+  assert.deepEqual(content.schema.fields, ['hero.title', 'hero.subtitle', 'hero.media', 'cta.title', 'cta.description'])
 })
 
 test('professional_services page editor updates tenant_page components without dropping existing blocks', async () => {
@@ -148,7 +148,7 @@ test('professional_services page editor updates tenant_page components without d
     page: 'home',
     changes: {
       'hero.title': 'Updated legal help',
-      'hero.image': 'asset-home-new',
+      'hero.media': 'asset-home-new',
       'cta.description': 'A new consultation note.',
     },
     updatedBy: 'user-ncls-blawby',
@@ -161,6 +161,7 @@ test('professional_services page editor updates tenant_page components without d
   assert.deepEqual(components.find(component => component.type === 'home_hero')?.background, {
     asset_id: 'asset-home-new',
     url: 'https://images.example/new-home.webp',
+    kind: 'image',
   })
   assert.equal(components.find(component => component.type === 'consultation_cta')?.description, 'A new consultation note.')
 })

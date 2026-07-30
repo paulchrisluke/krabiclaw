@@ -7,7 +7,7 @@ import { getFacebookPagesConnection, getLinkedInstagramAccount, publishToInstagr
 import { hasSiteEntitlement } from '~/server/utils/billing'
 import { isConversationalToolGroupEnabled } from '~/server/utils/conversational-tool-surface'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
-import { attachViewUrlToRecord, NOT_HANDLED, mutationContextPayload, normalizeChannelsInput, omit, optionalString, requireActiveImageAsset, requiredString } from './shared'
+import { attachViewUrlToRecord, NOT_HANDLED, mutationContextPayload, normalizeChannelsInput, omit, optionalString, requiredString } from './shared'
 
 async function asMcpValidationError<T>(work: () => Promise<T>): Promise<T> {
   try {
@@ -53,7 +53,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
           site.db,
           site.organizationId,
           site.siteId,
-          args as never,
+          omit(args, ["image_asset_id", "gallery_media", "og_image_asset_id"]) as never,
           site.userId,
           site.env,
         ));
@@ -82,7 +82,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
           site.organizationId,
           site.siteId,
           requiredString(args, "post_id"),
-          omit(args, ["post_id"]) as never,
+          omit(args, ["post_id", "image_asset_id", "gallery_media", "og_image_asset_id"]) as never,
           site.userId,
           site.env,
         ));
@@ -110,41 +110,6 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
           { post: hydratedPost },
         );
       }
-    case "set_post_image": {
-      const assetId = requiredString(args, "asset_id");
-      await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
-      const post = await asMcpValidationError(() => updatePost(
-          site.db,
-          site.organizationId,
-          site.siteId,
-          requiredString(args, "post_id"),
-          { image_asset_id: assetId },
-          site.userId,
-          site.env,
-        ));
-      if (!post) {
-        return renderStructuredResponse(
-          { ok: false, entity: "post", id: requiredString(args, "post_id") },
-          "No post found with that id — nothing was changed.",
-        );
-      }
-      const hydratedSetImagePost = attachViewUrlToRecord(post, site, {}, site.env);
-      const setImagePostContext = await mutationContextPayload(site, {
-        locationId: typeof post.location_id === "string" ? post.location_id : null,
-      });
-      return renderStructuredResponse(
-        {
-          ok: true,
-          entity: "post",
-          id: post.id,
-          slug: post.slug,
-          updated_at: post.updated_at,
-          context: setImagePostContext,
-        },
-        `Updated image for "${post.title ?? post.id}".`,
-        { post: hydratedSetImagePost },
-      );
-    }
     case "publish_post": {
       const channels = normalizeChannelsInput(args);
       const postId = requiredString(args, "post_id");

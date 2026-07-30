@@ -23,11 +23,10 @@ test.describe('pottery house public site', () => {
   for (const route of routes) {
     test(`${route.path} renders without runtime errors`, async ({ page }) => {
       const errors = collectPageErrors(page)
-      const response = await page.goto(`${potteryHouseBaseURL}${route.path}`, { waitUntil: 'load' })
+      const response = await page.goto(`${potteryHouseBaseURL}${route.path}`, { waitUntil: 'domcontentloaded' })
 
       expect(response?.status()).toBeLessThan(400)
       await page.waitForFunction(() => document.body && document.body.textContent !== null)
-      await page.waitForLoadState('load')
 
       await expect(page).toHaveTitle(route.title)
       await expect(page.locator('body')).toContainText(route.text)
@@ -41,11 +40,10 @@ test.describe('pottery house public site', () => {
     const errors = collectPageErrors(page)
     const response = await page.goto(
       `${potteryHouseBaseURL}/experiences/${wheelClass.slug}`,
-      { waitUntil: 'load' },
+      { waitUntil: 'domcontentloaded' },
     )
 
     expect(response?.status()).toBeLessThan(400)
-    await page.waitForLoadState('load')
 
     // Index title must not appear — proves detail route rendered
     await expect(page).not.toHaveTitle(/^Experiences \| Pottery House Krabi$/)
@@ -65,8 +63,7 @@ test.describe('pottery house public site', () => {
   // These strings come from the restaurant branch of getVerticalCopy().
   test('site does not render restaurant-vertical copy', async ({ page }) => {
     const errors = collectPageErrors(page)
-    await page.goto(`${potteryHouseBaseURL}/`, { waitUntil: 'load' })
-    await page.waitForLoadState('load')
+    await page.goto(`${potteryHouseBaseURL}/`, { waitUntil: 'domcontentloaded' })
 
     for (const forbidden of ['Come dine with us', 'Reserve a table', 'From the kitchen', 'Reserve a Table', 'Make a Reservation']) {
       await expect(page.locator('body')).not.toContainText(forbidden)
@@ -78,8 +75,7 @@ test.describe('pottery house public site', () => {
   // Regression: no Saya demo data or fallback copy must leak through.
   test('site does not leak Saya demo fallback copy', async ({ page }) => {
     const errors = collectPageErrors(page)
-    await page.goto(`${potteryHouseBaseURL}/`, { waitUntil: 'load' })
-    await page.waitForLoadState('load')
+    await page.goto(`${potteryHouseBaseURL}/`, { waitUntil: 'domcontentloaded' })
 
     await expect(page.locator('body')).not.toContainText('Also part of Saya')
     await expect(page.locator('body')).not.toContainText('Ember & Slice')

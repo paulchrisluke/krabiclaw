@@ -259,8 +259,8 @@ export function assignmentForGeneratedTarget(
   switch (target) {
     case "logo":
       return {
-        assignTool: "set_logo",
-        assignArgs: { site_id: siteId },
+        assignTool: "set_media",
+        assignArgs: { site_id: siteId, target: { type: "site_logo" }, asset_ids: [] },
         title: "Logo Concepts",
         subtitle: "Choose the mark that feels most like the brand.",
         useLabel: `Use as logo${forSite}`,
@@ -268,8 +268,8 @@ export function assignmentForGeneratedTarget(
       };
     case "home_hero":
       return {
-        assignTool: "set_home_hero_image",
-        assignArgs: { site_id: siteId },
+        assignTool: "set_media",
+        assignArgs: { site_id: siteId, target: { type: "home_hero" }, asset_ids: [] },
         title: "Homepage Hero Images",
         subtitle: "Choose the image that best sets the tone for the homepage.",
         useLabel: `Use as homepage hero${forSite}`,
@@ -277,8 +277,8 @@ export function assignmentForGeneratedTarget(
       };
     case "about_story_image":
       return {
-        assignTool: "set_about_story_image",
-        assignArgs: { site_id: siteId },
+        assignTool: "set_media",
+        assignArgs: { site_id: siteId, target: { type: "about_story_image" }, asset_ids: [] },
         title: "Story Images",
         subtitle: "Choose the image that best tells the brand story on the About page.",
         useLabel: `Use as About story image${forSite}`,
@@ -286,8 +286,8 @@ export function assignmentForGeneratedTarget(
       };
     case "home_story_image":
       return {
-        assignTool: "set_home_story_image",
-        assignArgs: { site_id: siteId },
+        assignTool: "set_media",
+        assignArgs: { site_id: siteId, target: { type: "home_story_image" }, asset_ids: [] },
         title: "Story Images",
         subtitle: "Choose the image that best tells the brand story on the homepage.",
         useLabel: `Use as homepage story image${forSite}`,
@@ -296,8 +296,8 @@ export function assignmentForGeneratedTarget(
     case "location_hero": {
       const locationId = requiredString(args, "location_id");
       return {
-        assignTool: "set_location_hero_image",
-        assignArgs: { site_id: siteId, location_id: locationId },
+        assignTool: "set_media",
+        assignArgs: { site_id: siteId, target: { type: "location_hero", location_id: locationId }, asset_ids: [] },
         title: "Location Hero Images",
         subtitle: "Choose the image that best represents this location.",
         useLabel: `Use as location hero${forSite}`,
@@ -307,8 +307,8 @@ export function assignmentForGeneratedTarget(
     case "post_image": {
       const postId = requiredString(args, "post_id");
       return {
-        assignTool: "set_post_image",
-        assignArgs: { site_id: siteId, post_id: postId },
+        assignTool: "set_media",
+        assignArgs: { site_id: siteId, target: { type: "post_image", post_id: postId }, asset_ids: [] },
         title: "Post Images",
         subtitle: "Choose the image that best fits this post.",
         useLabel: `Use for this post${forSite}`,
@@ -318,8 +318,8 @@ export function assignmentForGeneratedTarget(
     case "menu_item_image": {
       const menuItemId = requiredString(args, "menu_item_id");
       return {
-        assignTool: "set_menu_item_image",
-        assignArgs: { site_id: siteId, menu_item_id: menuItemId },
+        assignTool: "set_media",
+        assignArgs: { site_id: siteId, target: { type: "menu_item_image", menu_item_id: menuItemId }, asset_ids: [] },
         title: "Menu Item Images",
         subtitle: "Choose the image that best sells this item.",
         useLabel: `Use for this menu item${forSite}`,
@@ -329,12 +329,12 @@ export function assignmentForGeneratedTarget(
     case "experience_image": {
       const experienceId = requiredString(args, "experience_id");
       return {
-        assignTool: "set_experience_image",
-        assignArgs: { site_id: siteId, experience_id: experienceId },
-        title: "Experience Images",
-        subtitle: "Choose the image that best captures the experience.",
+        assignTool: "set_media",
+        assignArgs: { site_id: siteId, target: { type: "experience_media", experience_id: experienceId }, asset_ids: [] },
+        title: "Experience Media",
+        subtitle: "Choose the media that best captures the experience.",
         useLabel: `Use for this experience${forSite}`,
-        successMessage: `Experience image updated${forSite}.`,
+        successMessage: `Experience media updated${forSite}.`,
       };
     }
   }
@@ -408,6 +408,48 @@ export interface ToolFileReference {
   file_id: string;
   mime_type?: string;
   file_name?: string;
+}
+
+function filenameExtension(contentType: string, fallback = "bin"): string {
+  switch (contentType) {
+    case "image/jpeg":
+      return "jpg";
+    case "image/png":
+      return "png";
+    case "image/webp":
+      return "webp";
+    case "image/gif":
+      return "gif";
+    case "image/avif":
+      return "avif";
+    case "video/mp4":
+      return "mp4";
+    case "video/webm":
+      return "webm";
+    case "video/quicktime":
+      return "mov";
+    case "video/x-msvideo":
+      return "avi";
+    case "text/markdown":
+      return "md";
+    default:
+      return fallback;
+  }
+}
+
+function safeAttachmentFilename(file: Pick<ToolFileReference, "file_id" | "file_name">, contentType: string): string {
+  const fallbackBase = file.file_id
+    .trim()
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//i, "")
+    .replace(/^\/+/, "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 96) || "attachment";
+  const rawName = file.file_name?.trim() || "";
+  const candidate = rawName && !rawName.includes("/") && !rawName.includes("\\") && !rawName.includes("..")
+    ? rawName
+    : `${fallbackBase}.${filenameExtension(contentType)}`;
+  return candidate.replace(/[^a-zA-Z0-9._ -]+/g, "-").slice(0, 160);
 }
 
 export function toolFileReference(value: unknown, key: string): ToolFileReference {
@@ -513,7 +555,7 @@ export async function resolveUserUploadedImageFile(
     bytes,
     `file ${normalizedFileId}`,
   );
-  const filename = `${normalizedFileId}.${detectedContentType.split("/")[1] ?? "png"}`;
+  const filename = safeAttachmentFilename({ file_id: normalizedFileId }, detectedContentType);
   return { buffer, contentType: detectedContentType, filename };
 }
 
@@ -533,7 +575,7 @@ export async function resolveUserUploadedMediaFileById(
   if (markdownType) {
     assertMarkdownSize(bytes.byteLength);
     decodeMarkdownText(buffer);
-    return { buffer, contentType: markdownType, filename: `${normalizedFileId}.md`, kind: "file" };
+    return { buffer, contentType: markdownType, filename: safeAttachmentFilename({ file_id: normalizedFileId }, markdownType), kind: "file" };
   }
   if (bytes.byteLength < 64) {
     throw createError({
@@ -558,7 +600,7 @@ export async function resolveUserUploadedMediaFileById(
     });
   }
 
-  const filename = `${normalizedFileId}.${sniffedContentType.split("/")[1] ?? "bin"}`;
+  const filename = safeAttachmentFilename({ file_id: normalizedFileId }, sniffedContentType);
   return { buffer, contentType: sniffedContentType, filename, kind: isVideo ? "video" : "image" };
 }
 
@@ -593,9 +635,7 @@ export async function resolveGeneratedImageFile(
     bytes,
     `attachment ${file.file_id}`,
   );
-  const filename =
-    file.file_name ??
-    `${file.file_id}.${detectedContentType.split("/")[1] ?? "png"}`;
+  const filename = safeAttachmentFilename(file, detectedContentType);
   return { buffer, contentType: detectedContentType, filename };
 }
 
@@ -689,7 +729,7 @@ export async function resolveUserUploadedMediaFile(
     return {
       buffer,
       contentType: markdownType,
-      filename: file.file_name ?? `${file.file_id}.md`,
+      filename: safeAttachmentFilename(file, markdownType),
       kind: "file",
     };
   }
@@ -716,7 +756,7 @@ export async function resolveUserUploadedMediaFile(
     });
   }
 
-  const filename = file.file_name ?? `${file.file_id}.${sniffedContentType.split("/")[1] ?? "bin"}`;
+  const filename = safeAttachmentFilename(file, sniffedContentType);
   return { buffer, contentType: sniffedContentType, filename, kind: isVideo ? "video" : "image" };
 }
 
@@ -1092,8 +1132,7 @@ export async function getCurrentHomeHeroState(
   );
   const hero = content.find((entry) => entry.field === "hero");
   return {
-    hero_image_asset_id: hero?.hero_image_asset_id ?? null,
-    hero_video_asset_id: hero?.hero_video_asset_id ?? null,
+    hero_media_asset_id: hero?.hero_media_asset_id ?? null,
   };
 }
 

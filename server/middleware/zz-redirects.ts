@@ -16,10 +16,9 @@ const redirects: Record<string, string> = {
   // found" 404s from a live tenant domain. Nothing in this codebase emits
   // these URLs, so the most likely source is an LLM (e.g. ChatGPT, asked
   // "how do I connect KrabiClaw to ChatGPT") guessing a plausible-looking
-  // docs path and telling a real business owner to visit it — same class of
-  // hallucination as the open_media_upload MCP tool-name issue. Redirecting
-  // to the closest real doc turns a dead link real users are hitting into a
-  // working one, without us controlling what the LLM says elsewhere.
+  // docs path and telling a real business owner to visit it. Redirecting to
+  // the closest real doc turns a dead link real users are hitting into a
+  // working one.
   '/docs/getting-started/getting-started-with-krabiclaw-in-chatgpt': '/docs/getting-started/getting-started',
   '/docs/getting-started/getting-started-with-krabiclaw': '/docs/getting-started/getting-started',
   '/docs/getting-started/connect-krabiclaw-to-chatgpt': '/docs/integrations/mcp-setup',
@@ -109,12 +108,11 @@ export default defineEventHandler(async (event) => {
   // are scoped to blog_posts and must work on both Saya (/blog) and Blawby
   // (/article) route surfaces.
   if (getMethod(event) === 'GET') {
-    const env = cloudflareEnv(event)
-    const db = env.db
     const tenantMatch = normalizedPathname.match(/^\/(?:blog|article)\/([^/]+)$/)
-    if (db && tenantMatch && event.context.tenantType === TENANT_TYPES.TENANT && event.context.siteId) {
+    if (tenantMatch && event.context.tenantType === TENANT_TYPES.TENANT && event.context.siteId) {
+      const db = cloudflareEnv(event).db
       const oldSlug = safeDecodePathSegment(tenantMatch[1]!)
-      if (oldSlug !== null) {
+      if (db && oldSlug !== null) {
         try {
           const redirected = await queryFirst<{ slug: string } | null>(db, `
             SELECT p.slug FROM blog_post_redirects r JOIN blog_posts p ON p.id = r.post_id
@@ -127,9 +125,10 @@ export default defineEventHandler(async (event) => {
       }
     }
     const platformMatch = normalizedPathname.match(/^\/blog\/[^/]+\/([^/]+)$/)
-    if (db && platformMatch && event.context.tenantType === TENANT_TYPES.PLATFORM) {
+    if (platformMatch && event.context.tenantType === TENANT_TYPES.PLATFORM) {
+      const db = cloudflareEnv(event).db
       const oldSlug = safeDecodePathSegment(platformMatch[1]!)
-      if (oldSlug !== null) {
+      if (db && oldSlug !== null) {
         try {
           const redirected = await queryFirst<{ slug: string; category: string | null } | null>(db, `
             SELECT p.slug, p.category FROM blog_post_redirects r JOIN blog_posts p ON p.id = r.post_id

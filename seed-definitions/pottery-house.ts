@@ -1010,7 +1010,6 @@ export function renderCompiledPotteryHouseMediaBlock(): string {
       sqlValue(location.isPrimary),
       sqlValue(location.status),
       'NULL',
-      'NULL',
       sqlValue(location.notificationPhone ?? null),
       sqlValue('Asia/Bangkok'),
     ].join(', ')})`)
@@ -1018,7 +1017,7 @@ export function renderCompiledPotteryHouseMediaBlock(): string {
 
   const heroUpdates = compiledPotteryHouseSeed.locations
     .filter((l) => l.heroImageAssetId || l.heroVideoAssetId)
-    .map((l) => `UPDATE business_locations SET hero_image_asset_id = ${sqlValue(l.heroImageAssetId ?? null)}, hero_video_asset_id = ${sqlValue(l.heroVideoAssetId ?? null)} WHERE id = ${sqlValue(l.id)};`)
+    .map((l) => `UPDATE business_locations SET hero_media_asset_id = ${sqlValue(l.heroVideoAssetId ?? l.heroImageAssetId ?? null)} WHERE id = ${sqlValue(l.id)};`)
     .join('\n')
 
   return `-- BEGIN GENERATED: pottery_media
@@ -1034,7 +1033,7 @@ INSERT OR REPLACE INTO business_locations (
   price_level, categories,
   instagram_url, facebook_url,
   is_primary, status,
-  hero_image_asset_id, hero_video_asset_id,
+  hero_media_asset_id,
   notification_phone,
   timezone
 ) VALUES
@@ -1056,6 +1055,7 @@ UPDATE sites SET logo_asset_id = ${sqlValue(compiledPotteryHouseSeed.site.logoAs
 }
 
 export function renderCompiledPotteryHouseExperiencesBlock(): string {
+  const coverExperiences = compiledPotteryHouseSeed.experiences.filter(experience => experience.imageAssetId)
   const experienceRows = compiledPotteryHouseSeed.experiences
     .map((experience) => `  (${[
       sqlValue(experience.id),
@@ -1066,7 +1066,6 @@ export function renderCompiledPotteryHouseExperiencesBlock(): string {
       sqlValue(experience.slug),
       sqlValue(experience.tagline),
       sqlValue(experience.body),
-      sqlValue(experience.imageAssetId),
       sqlValue(experience.price),
       sqlValue(experience.priceAmount),
       sqlValue(experience.durationMinutes),
@@ -1082,18 +1081,35 @@ export function renderCompiledPotteryHouseExperiencesBlock(): string {
       sqlValue(experience.seoDescription),
     ].join(', ')})`)
     .join(',\n')
+  const coverBlock = coverExperiences.length
+    ? `
+
+INSERT OR REPLACE INTO experience_media
+  (id, organization_id, site_id, experience_id, asset_id, sort_order)
+VALUES
+${coverExperiences
+  .map((experience) => `  (${[
+    sqlValue(`em-${experience.id}-cover`),
+    sqlValue(experience.organizationId),
+    sqlValue(experience.siteId),
+    sqlValue(experience.id),
+    sqlValue(experience.imageAssetId),
+    '0',
+  ].join(', ')})`)
+  .join(',\n')};`
+    : ''
 
   return `-- BEGIN GENERATED: pottery_experiences
 -- Experiences for Pottery House Krabi.
 INSERT OR REPLACE INTO experiences
   (id, organization_id, site_id, location_id,
    title, slug, tagline, body,
-   image_asset_id, price, price_amount, duration_minutes, max_capacity,
+   price, price_amount, duration_minutes, max_capacity,
    time_slots, recurring_slots, available_note,
    status, sort_order, featured, featured_sort_order,
    seo_title, seo_description)
 VALUES
-${experienceRows};
+${experienceRows};${coverBlock}
 -- END GENERATED: pottery_experiences`
 }
 
@@ -1282,8 +1298,7 @@ export function renderCompiledPotteryHouseContentBlock(): string {
       sqlValue(entry.content),
       sqlValue(entry.heroTitle),
       sqlValue(entry.heroSubtitle),
-      sqlValue(entry.heroImageAssetId),
-      sqlValue(entry.heroVideoAssetId),
+      sqlValue(entry.heroVideoAssetId ?? entry.heroImageAssetId),
       sqlValue(entry.type),
       sqlValue(entry.source),
     ].join(', ')})`)
@@ -1293,7 +1308,7 @@ export function renderCompiledPotteryHouseContentBlock(): string {
 -- Site content for Pottery House Krabi.
 INSERT OR IGNORE INTO site_content
   (id, organization_id, site_id, location_id,
-   page, field, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id,
+   page, field, content, hero_title, hero_subtitle, hero_media_asset_id,
    type, source)
 VALUES
 ${contentRows};

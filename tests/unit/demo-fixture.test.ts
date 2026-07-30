@@ -114,7 +114,7 @@ test("demo media block includes all media assets and hero refs", () => {
   assert.match(sql, /media-demo-hero/);
   assert.match(sql, /'video'/);
   assert.match(sql, /INSERT OR REPLACE INTO business_locations/);
-  assert.match(sql, /hero_video_asset_id/);
+  assert.match(sql, /hero_media_asset_id/);
 });
 
 test("demo reviews block includes reviews for both locations", () => {
@@ -154,7 +154,7 @@ test("demo content block includes site content for all pages including home hero
   const sql = renderCompiledDemoContentBlock();
 
   assert.match(sql, /INSERT OR IGNORE INTO site_content/);
-  assert.match(sql, /hero_video_asset_id/);
+  assert.match(sql, /hero_media_asset_id/);
   assert.match(sql, /Wood fire\. Brooklyn nights\./);
   assert.match(sql, /story\.headline/);
   assert.match(sql, /hero\.kicker/);

@@ -4,7 +4,7 @@ import { globalTool, locationListItemObject, organizationListItemObject, siteLis
 export const CONTEXT_TOOLS: McpToolDefinition[] = [
   globalTool(withToolAnnotations({
       name: 'get_workspace_context',
-      description: 'Get the active MCP organization, site, and location context, plus the accessible sites and locations available for this user.',
+      description: 'Get the active MCP organization, site, and location context, plus the accessible sites and locations available for this user. Use context.site_id or one of the returned site.id values as site_id for site-scoped tools; do not pass public URLs, hostnames, custom domains, subdomains, slugs, or site names as site_id.',
       domain: 'context',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -22,7 +22,7 @@ export const CONTEXT_TOOLS: McpToolDefinition[] = [
     })),
   globalTool(withToolAnnotations({
       name: 'set_workspace_context',
-      description: 'Persist the active MCP site and optional location so later tool calls can omit raw IDs. Pass site_id to switch sites. Pass location_id to switch locations within the active or specified site.',
+      description: 'Persist the active MCP site and optional location so later tool calls can omit raw IDs. Pass an internal site_id from get_workspace_context, list_sites, or create_site to switch sites. Do not pass a public URL, hostname, custom domain, subdomain, slug, or site name as site_id. Pass location_id to switch locations within the active or specified site.',
       domain: 'context',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -30,7 +30,7 @@ export const CONTEXT_TOOLS: McpToolDefinition[] = [
         type: 'object',
         properties: {
           organization_id: { type: 'string' },
-          site_id: { type: 'string', description: 'Site id, subdomain, or custom domain.' },
+          site_id: { type: 'string', description: 'Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, custom domain, subdomain, slug, or site name here.' },
           location_id: { type: 'string', description: 'Location id or slug.' },
         },
         anyOf: [

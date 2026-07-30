@@ -35,8 +35,6 @@ export default defineEventHandler(async (event) => {
     address?: ApiValue
     city?: string
     phone?: string
-    hero_image_asset_id?: string
-    hero_video_asset_id?: string
     website_url?: string
     maps_url?: string
     description?: string
@@ -67,8 +65,6 @@ export default defineEventHandler(async (event) => {
       address: body?.address ? JSON.stringify(body.address) : null,
       city: body?.city ?? null,
       phone: body?.phone ?? null,
-      hero_image_asset_id: body?.hero_image_asset_id ?? null,
-      hero_video_asset_id: body?.hero_video_asset_id ?? null,
       website_url: body?.website_url ?? null,
       maps_url: body?.maps_url ?? null,
       description: body?.description ?? null,
