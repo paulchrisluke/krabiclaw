@@ -78,9 +78,9 @@
           <p class="truncate text-xs font-semibold text-highlighted">{{ progressLabel }}</p>
           <div class="mt-1 flex gap-1">
             <span
-              v-for="index in totalProgressSteps"
-              :key="index"
-              class="h-1.5 flex-1 rounded-full"
+            v-for="index in totalProgressSteps"
+            :key="index"
+              class="h-1.5 flex-1 rounded-full transition-colors duration-300 ease-out"
               :class="index <= progressStep ? 'bg-primary' : 'bg-muted'"
             />
           </div>
@@ -113,140 +113,163 @@
         @quick-reply="handleReply"
       >
       <template #message="{ index }">
-        <div v-if="isWidgetMessage(messages[index])" class="px-4 py-2">
+        <div
+          v-if="isWidgetMessage(messages[index])"
+          class="onboarding-transcript-item px-4 py-2"
+          :style="messageMotionStyle(index)"
+        >
           <div v-if="messages[index]?.text" class="mb-2 max-w-[30rem] rounded-xl bg-elevated px-4 py-3 text-[14px] leading-relaxed text-highlighted">
             <!-- eslint-disable-next-line vue/no-v-html -->
             <div class="prose prose-sm dark:prose-invert max-w-none" v-html="renderMarkdown(messages[index]!.text!)" />
           </div>
-          <button
-            v-if="isHistoricalMessage(index)"
-            type="button"
-            class="flex w-full items-center gap-3 rounded-lg border border-default bg-elevated px-3 py-3 text-left transition-colors hover:border-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-            @click="editHistoricalStep(messages[index]!)"
-          >
-            <span class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-default bg-default text-primary">
-              <UIcon :name="summaryIcon(messages[index]!)" class="size-4" />
-            </span>
-            <span class="min-w-0 flex-1">
-              <span class="block text-[12px] font-semibold uppercase leading-4 text-muted">{{ summaryLabel(messages[index]!) }}</span>
-              <span class="mt-0.5 block truncate text-[13px] font-semibold leading-5 text-highlighted">{{ summaryValue(messages[index]!) }}</span>
-            </span>
-            <span class="shrink-0 text-[12px] font-semibold text-primary">Edit</span>
-          </button>
-          <div
-            v-if="!isHistoricalMessage(index) && messages[index]?.placePreview"
-            class="overflow-hidden rounded-xl border border-default bg-elevated"
-          >
-            <div class="flex h-24 items-center justify-center border-b border-default bg-muted text-muted">
-              <div class="flex items-center gap-2 text-xs font-medium">
-                <UIcon name="i-lucide-map" class="size-4" />
-                Map preview
-              </div>
-            </div>
-            <div class="flex items-start gap-3 px-4 py-3">
-              <div class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <UIcon name="i-lucide-map-pin" class="size-4" />
-              </div>
-              <div class="min-w-0 flex-1">
-                <p class="truncate text-[13px] font-semibold text-highlighted">{{ messages[index]?.placePreview?.name }}</p>
-                <p class="mt-0.5 text-[12px] leading-relaxed text-muted">{{ messages[index]?.placePreview?.address }}</p>
-                <p v-if="messages[index]?.placePreview?.phone" class="mt-0.5 text-[12px] text-muted">{{ messages[index]?.placePreview?.phone }}</p>
-                <a
-                  v-if="messages[index]?.placePreview?.mapsUrl"
-                  :href="messages[index]?.placePreview?.mapsUrl ?? undefined"
-                  target="_blank"
-                  rel="noopener"
-                  class="mt-1 inline-flex items-center gap-1 text-[11.5px] text-primary hover:underline"
-                >
-                  <UIcon name="i-lucide-external-link" class="size-3" />
-                  View on Google Maps
-                </a>
-              </div>
-            </div>
-          </div>
-          <div v-if="!isHistoricalMessage(index) && messages[index]?.choiceCard" class="mt-2 grid gap-2">
+          <Transition name="onboarding-widget" mode="out-in">
             <button
-              v-for="choice in messages[index]?.choiceCard?.choices"
-              :key="choice.action"
+              v-if="isHistoricalMessage(index)"
+              :key="`summary-${messages[index]?.id}`"
               type="button"
-              class="flex w-full items-center gap-3 rounded-lg border border-default bg-elevated px-3 py-3 text-left transition-colors hover:border-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:pointer-events-none disabled:opacity-50"
-              :disabled="importing"
-              @click="handleReply(choice)"
+              class="flex w-full items-center gap-3 rounded-lg border border-default bg-elevated px-3 py-3 text-left transition-colors duration-150 ease-out hover:border-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              @click="editHistoricalStep(messages[index]!)"
             >
               <span class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-default bg-default text-primary">
-                <UIcon :name="choice.icon || 'i-lucide-circle'" class="size-4" />
+                <UIcon :name="summaryIcon(messages[index]!)" class="size-4" />
               </span>
               <span class="min-w-0 flex-1">
-                <span class="block text-[13px] font-semibold leading-5 text-highlighted">{{ choice.label }}</span>
-                <span v-if="choice.sub" class="mt-0.5 block text-[12px] leading-5 text-muted">{{ choice.sub }}</span>
+                <span class="block text-[12px] font-semibold uppercase leading-4 text-muted">{{ summaryLabel(messages[index]!) }}</span>
+                <span class="mt-0.5 block truncate text-[13px] font-semibold leading-5 text-highlighted">{{ summaryValue(messages[index]!) }}</span>
               </span>
-              <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0 text-dimmed" />
+              <span class="shrink-0 text-[12px] font-semibold text-primary">Edit</span>
             </button>
-          </div>
-          <div v-if="!isHistoricalMessage(index) && (messages[index]?.detailsCard || messages[index]?.hoursCard || messages[index]?.brandDraftCard)" class="onboarding-step-widget">
-            <IntakeDetailsCard
-              v-if="messages[index]?.detailsCard"
-              v-model:form="detailsForm"
-              :action-label="activeActionLabel(messages[index]!)"
-              :require-location-basics="messages[index]!.detailsCard!.requireLocationBasics"
-              :show-primary-toggle="messages[index]!.detailsCard!.showPrimaryToggle"
-              :section="messages[index]!.detailsCard!.section"
-              :loading="importing"
-              :disabled="importing"
-              @submit="submitDetailsCard(messages[index]!.detailsCard!.section)"
-            />
-            <HoursTimezoneCard
-              v-if="messages[index]?.hoursCard"
-              v-model:form="hoursForm"
-              :action-label="activeActionLabel(messages[index]!)"
-              :loading="importing"
-              :disabled="importing"
-              @submit="submitHoursCard"
-            />
-            <DraftBrandCard
-              v-if="messages[index]?.brandDraftCard"
-              v-model:form="brandDraftForm"
-              :action-label="activeActionLabel(messages[index]!)"
-              :section="messages[index]!.brandDraftCard!.section"
-              :draft-id="onboardingDraftId"
-              :loading="importing"
-              :disabled="importing"
-              @submit="submitBrandDraftCard"
-              @brand-color-change="queueBrandColorSave"
-            />
-          </div>
-          <button
-            v-if="!isHistoricalMessage(index) && messages[index]?.draftReadyCard"
-            type="button"
-            class="block w-full overflow-hidden rounded-xl border border-default bg-elevated text-left shadow-sm transition-colors hover:border-primary"
-            @click="openDraftPreview"
-          >
             <div
-              class="relative flex h-36 items-center justify-center overflow-hidden bg-muted text-muted"
-              :style="draftReadyThumbnailUrl ? undefined : { background: brandDraftForm.brandColor }"
+              v-else
+              :key="`active-${messages[index]?.id}`"
+              class="space-y-2"
             >
-              <UBadge class="absolute right-3 top-3" color="success" variant="soft" label="Ready" />
-              <img
-                v-if="draftReadyThumbnailUrl"
-                :src="draftReadyThumbnailUrl"
-                alt=""
-                class="h-full w-full object-cover"
+              <div
+                v-if="messages[index]?.placePreview"
+                class="overflow-hidden rounded-xl border border-default bg-elevated"
               >
-              <div v-else class="flex size-16 items-center justify-center rounded-2xl bg-default/85 text-xl font-extrabold text-highlighted shadow-sm">
-                {{ draftReadyInitials }}
+                <div class="flex h-24 items-center justify-center border-b border-default bg-muted text-muted">
+                  <div class="flex items-center gap-2 text-xs font-medium">
+                    <UIcon name="i-lucide-map" class="size-4" />
+                    Map preview
+                  </div>
+                </div>
+                <div class="flex items-start gap-3 px-4 py-3">
+                  <div class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <UIcon name="i-lucide-map-pin" class="size-4" />
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <p class="truncate text-[13px] font-semibold text-highlighted">{{ messages[index]?.placePreview?.name }}</p>
+                    <p class="mt-0.5 text-[12px] leading-relaxed text-muted">{{ messages[index]?.placePreview?.address }}</p>
+                    <p v-if="messages[index]?.placePreview?.phone" class="mt-0.5 text-[12px] text-muted">{{ messages[index]?.placePreview?.phone }}</p>
+                    <a
+                      v-if="messages[index]?.placePreview?.mapsUrl"
+                      :href="messages[index]?.placePreview?.mapsUrl ?? undefined"
+                      target="_blank"
+                      rel="noopener"
+                      class="mt-1 inline-flex items-center gap-1 text-[11.5px] text-primary hover:underline"
+                    >
+                      <UIcon name="i-lucide-external-link" class="size-3" />
+                      View on Google Maps
+                    </a>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div class="flex items-center gap-3 px-4 py-3">
-              <div class="min-w-0 flex-1">
-                <p class="truncate text-[14px] font-bold text-highlighted">{{ draftReadyDomain }}</p>
-                <p class="mt-0.5 text-[12px] text-muted">Tap to preview your site</p>
+              <div v-if="messages[index]?.choiceCard" class="grid gap-2">
+                <button
+                  v-for="choice in messages[index]?.choiceCard?.choices"
+                  :key="choice.action"
+                  type="button"
+                  :class="[
+                    'flex w-full items-center gap-3 rounded-lg border bg-elevated px-3 py-3 text-left transition-colors duration-150 ease-out hover:border-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:pointer-events-none disabled:opacity-50',
+                    selectedChoiceAction === choice.action ? 'border-primary bg-primary/10 text-highlighted shadow-sm' : 'border-default',
+                  ]"
+                  :disabled="importing || Boolean(selectedChoiceAction)"
+                  @click="selectChoice(choice)"
+                >
+                  <span
+                    :class="[
+                      'flex size-9 shrink-0 items-center justify-center rounded-lg border bg-default text-primary transition-colors duration-150',
+                      selectedChoiceAction === choice.action ? 'border-primary bg-primary/10' : 'border-default',
+                    ]"
+                  >
+                    <UIcon :name="choice.icon || 'i-lucide-circle'" class="size-4" />
+                  </span>
+                  <span class="min-w-0 flex-1">
+                    <span class="block text-[13px] font-semibold leading-5 text-highlighted">{{ choice.label }}</span>
+                    <span v-if="choice.sub" class="mt-0.5 block text-[12px] leading-5 text-muted">{{ choice.sub }}</span>
+                  </span>
+                  <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0 text-dimmed" />
+                </button>
               </div>
-              <UIcon name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
+              <div v-if="messages[index]?.detailsCard || messages[index]?.hoursCard || messages[index]?.brandDraftCard" class="onboarding-step-widget">
+                <IntakeDetailsCard
+                  v-if="messages[index]?.detailsCard"
+                  v-model:form="detailsForm"
+                  :action-label="activeActionLabel(messages[index]!)"
+                  :require-location-basics="messages[index]!.detailsCard!.requireLocationBasics"
+                  :show-primary-toggle="messages[index]!.detailsCard!.showPrimaryToggle"
+                  :section="messages[index]!.detailsCard!.section"
+                  :loading="importing"
+                  :disabled="importing"
+                  @submit="submitDetailsCard(messages[index]!.detailsCard!.section)"
+                />
+                <HoursTimezoneCard
+                  v-if="messages[index]?.hoursCard"
+                  v-model:form="hoursForm"
+                  :action-label="activeActionLabel(messages[index]!)"
+                  :loading="importing"
+                  :disabled="importing"
+                  @submit="submitHoursCard"
+                />
+                <DraftBrandCard
+                  v-if="messages[index]?.brandDraftCard"
+                  v-model:form="brandDraftForm"
+                  :action-label="activeActionLabel(messages[index]!)"
+                  :section="messages[index]!.brandDraftCard!.section"
+                  :draft-id="onboardingDraftId"
+                  :loading="importing"
+                  :disabled="importing"
+                  @submit="submitBrandDraftCard"
+                  @brand-color-change="queueBrandColorSave"
+                />
+              </div>
+              <button
+                v-if="messages[index]?.draftReadyCard"
+                type="button"
+                class="block w-full overflow-hidden rounded-xl border border-default bg-elevated text-left shadow-sm transition-colors duration-150 ease-out hover:border-primary"
+                @click="openDraftPreview"
+              >
+                <div
+                  class="relative flex h-36 items-center justify-center overflow-hidden bg-muted text-muted"
+                  :style="draftReadyThumbnailUrl ? undefined : { background: brandDraftForm.brandColor }"
+                >
+                  <UBadge class="absolute right-3 top-3" color="success" variant="soft" label="Ready" />
+                  <img
+                    v-if="draftReadyThumbnailUrl"
+                    :src="draftReadyThumbnailUrl"
+                    alt=""
+                    class="h-full w-full object-cover"
+                  >
+                  <div v-else class="flex size-16 items-center justify-center rounded-2xl bg-default/85 text-xl font-extrabold text-highlighted shadow-sm">
+                    {{ draftReadyInitials }}
+                  </div>
+                </div>
+                <div class="flex items-center gap-3 px-4 py-3">
+                  <div class="min-w-0 flex-1">
+                    <p class="truncate text-[14px] font-bold text-highlighted">{{ draftReadyDomain }}</p>
+                    <p class="mt-0.5 text-[12px] text-muted">Tap to preview your site</p>
+                  </div>
+                  <UIcon name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
+                </div>
+              </button>
             </div>
-          </button>
+          </Transition>
         </div>
         <UChatMessage
           v-else
+          class="onboarding-transcript-item"
+          :style="messageMotionStyle(index)"
           :id="String(index)"
           :role="messages[index]?.from === 'user' ? 'user' : 'assistant'"
           :parts="[{ type: 'text', text: messages[index]?.text ?? '' }]"
@@ -391,6 +414,7 @@ const WELCOME_POINTS: [string, string][] = isAddingLocation.value
 
 const step = ref<WizardStep>('welcome')
 const messages = ref<WizardMessage[]>([])
+const collapsedWidgetMessageIds = ref(new Set<string>())
 const conversationMessages = computed(() => messages.value.map(msg => ({
   role: msg.from === 'user' ? 'user' as const : 'assistant' as const,
   content: msg.text ?? '',
@@ -403,6 +427,7 @@ const typing = ref(false)
 const replies = ref<QuickReply[]>([])
 const awaitingInput = ref(false)
 const textInput = ref('')
+const selectedChoiceAction = ref<string | null>(null)
 const importError = ref<string | null>(null)
 const importing = ref(false)
 const pendingMapsUrl = ref('')
@@ -492,7 +517,14 @@ const progressLabel = computed(() => {
   return 'Onboarding'
 })
 const canGoBack = computed(() => !importing.value && !typing.value && !['welcome', 'importing', 'imported'].includes(step.value))
-const isHistoricalMessage = (index: number) => index < messages.value.length - 1
+const isHistoricalMessage = (index: number) => {
+  const message = messages.value[index]
+  if (!message) return false
+  return collapsedWidgetMessageIds.value.has(message.id) || index < messages.value.length - 1
+}
+const messageMotionStyle = (index: number) => ({
+  '--message-delay': `${Math.min(index, 6) * 26}ms`,
+})
 const detailsCardDescription = computed(() => detailsSource.value === 'manual'
   ? 'Add the details guests will see first.'
   : 'Check what Google found.'
@@ -663,6 +695,14 @@ function pushUser(text: string) {
   messages.value.push({ id: crypto.randomUUID(), from: 'user', text })
 }
 
+async function collapseActiveWidgetBeforeReply() {
+  const message = messages.value[messages.value.length - 1]
+  if (!message || !isWidgetMessage(message)) return
+  collapsedWidgetMessageIds.value = new Set([...collapsedWidgetMessageIds.value, message.id])
+  await nextTick()
+  await sleep(80)
+}
+
 async function pushBot(text: string, extra?: {
   step?: WizardStep
   tools?: { label: string; done: boolean }[]
@@ -808,11 +848,13 @@ async function goBack() {
 
   if (step.value === 'vertical') {
     messages.value = []
+    collapsedWidgetMessageIds.value = new Set()
     await advance('welcome')
     return
   }
   if (step.value === 'source') {
     messages.value = []
+    collapsedWidgetMessageIds.value = new Set()
     await advance(skipVertical.value ? 'welcome' : 'vertical')
     return
   }
@@ -939,6 +981,18 @@ async function handleReply(reply: QuickReply) {
     pushUser(reply.label)
     await commitDraft()
     return
+  }
+}
+
+async function selectChoice(choice: QuickReply) {
+  if (selectedChoiceAction.value || importing.value) return
+  selectedChoiceAction.value = choice.action ?? choice.label
+  await sleep(120)
+  try {
+    await collapseActiveWidgetBeforeReply()
+    await handleReply(choice)
+  } finally {
+    selectedChoiceAction.value = null
   }
 }
 
@@ -1401,10 +1455,54 @@ const onDrop = (e: DragEvent) => {
 .fade-enter-active, .fade-leave-active { transition: opacity 0.15s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
 
+.onboarding-transcript-item {
+  animation: onboarding-message-in 180ms ease both;
+  animation-delay: var(--message-delay, 0ms);
+}
+
+.onboarding-widget-enter-active,
+.onboarding-widget-leave-active {
+  transition: opacity 120ms ease;
+}
+
+.onboarding-widget-enter-from {
+  opacity: 0;
+}
+
+.onboarding-widget-enter-to,
+.onboarding-widget-leave-from {
+  opacity: 1;
+}
+
+.onboarding-widget-leave-to {
+  opacity: 0;
+}
+
 .onboarding-step-widget {
   border: 1px solid var(--ui-border);
   border-radius: 0.75rem;
   background: var(--ui-bg-elevated);
   padding: 0.875rem;
+}
+
+@keyframes onboarding-message-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-transcript-item {
+    animation: none;
+  }
+
+  .onboarding-widget-enter-active,
+  .onboarding-widget-leave-active {
+    transition: opacity 80ms linear;
+  }
+
 }
 </style>

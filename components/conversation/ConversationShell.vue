@@ -75,8 +75,10 @@
     <div v-if="showPrompt" class="shrink-0 border-t border-default bg-elevated p-3">
       <slot name="prompt-before" />
 
-      <div
+      <TransitionGroup
         v-if="quickReplies.length"
+        tag="div"
+        name="conversation-reply"
         class="flex gap-2 pb-1"
         :class="quickReplyRows ? 'flex-col' : 'overflow-x-auto'"
       >
@@ -86,7 +88,7 @@
           data-testid="chowbot-quick-reply"
           :data-reply-action="reply.action"
           :class="[
-            'inline-flex shrink-0 cursor-pointer items-center gap-1.5 border px-3.5 py-2 text-[12.5px] font-semibold transition-colors',
+            'inline-flex shrink-0 cursor-pointer items-center gap-1.5 border px-3.5 py-2 text-[12.5px] font-semibold transition-colors duration-150 ease-out',
             quickReplyRows ? 'w-full whitespace-normal rounded-lg text-left' : 'whitespace-nowrap rounded-full',
             reply.primary
               ? 'border-primary bg-primary text-on-primary hover:bg-primary/90'
@@ -102,7 +104,7 @@
             <span v-if="reply.sub" class="text-[10.5px] font-medium opacity-70">{{ reply.sub }}</span>
           </span>
         </button>
-      </div>
+      </TransitionGroup>
 
       <div v-else-if="$slots['prompt-submit']" class="flex items-start gap-2">
         <UChatPrompt
@@ -219,3 +221,23 @@ function messageKey(message: TMessage, index: number) {
   return `${message.role}-${index}`
 }
 </script>
+
+<style scoped>
+.conversation-reply-enter-active,
+.conversation-reply-leave-active {
+  transition: opacity 160ms ease;
+}
+
+.conversation-reply-enter-from,
+.conversation-reply-leave-to {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conversation-reply-enter-active,
+  .conversation-reply-leave-active {
+    transition: opacity 80ms linear;
+  }
+
+}
+</style>

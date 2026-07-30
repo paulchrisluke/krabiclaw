@@ -77,34 +77,37 @@
       </div>
     </div>
 
-    <iframe
-      v-if="iframeSrc"
-      id="site-preview-frame"
-      :src="iframeSrc"
-      title="Site preview"
-      class="size-full min-h-0 flex-1 border-0 bg-default"
-    />
-    <div v-else-if="emptyVisualUrl" class="relative min-h-0 flex-1 overflow-hidden bg-default">
-      <div class="flex h-full w-full items-center justify-center bg-muted p-4 sm:p-6 lg:p-8">
-        <div class="relative w-full max-w-4xl">
-          <div
-            class="absolute inset-0 rounded-3xl opacity-25 blur-2xl"
-            style="background: linear-gradient(135deg, var(--kc-coral-200), var(--kc-teal-100));"
-          />
-          <div
-            class="relative overflow-hidden rounded-3xl border border-default/60 p-3 shadow-2xl sm:p-5"
-            style="background: linear-gradient(145deg, var(--kc-coral-50) 0%, #fff8f6 100%);"
-          >
-            <img
-              :src="emptyVisualUrl"
-              :alt="emptyVisualAlt"
-              class="block max-h-[calc(100vh-8rem)] w-full rounded-[20px] object-contain shadow-lg"
+    <Transition name="onboarding-preview" mode="out-in">
+      <iframe
+        v-if="iframeSrc"
+        id="site-preview-frame"
+        key="iframe"
+        :src="iframeSrc"
+        title="Site preview"
+        class="size-full min-h-0 flex-1 border-0 bg-default"
+      />
+      <div v-else-if="emptyVisualUrl" :key="emptyVisualUrl" class="relative min-h-0 flex-1 overflow-hidden bg-default">
+        <div class="flex h-full w-full items-center justify-center bg-muted p-4 sm:p-6 lg:p-8">
+          <div class="relative w-full max-w-4xl">
+            <div
+              class="absolute inset-0 rounded-3xl opacity-25 blur-2xl"
+              style="background: linear-gradient(135deg, var(--kc-coral-200), var(--kc-teal-100));"
+            />
+            <div
+              class="relative overflow-hidden rounded-3xl border border-default/60 p-3 shadow-2xl sm:p-5"
+              style="background: linear-gradient(145deg, var(--kc-coral-50) 0%, #fff8f6 100%);"
             >
+              <img
+                :src="emptyVisualUrl"
+                :alt="emptyVisualAlt"
+                class="block max-h-[calc(100vh-8rem)] w-full rounded-[20px] object-contain shadow-lg"
+              >
+            </div>
           </div>
         </div>
       </div>
-    </div>
-    <div v-else class="min-h-0 flex-1 bg-default" />
+      <div v-else key="empty" class="min-h-0 flex-1 bg-default" />
+    </Transition>
   </div>
 </template>
 
@@ -173,3 +176,26 @@ const cycleLocation = () => {
   if (next) emit('select-location', next.id)
 }
 </script>
+
+<style scoped>
+.onboarding-preview-enter-active,
+.onboarding-preview-leave-active {
+  transition: opacity 180ms ease;
+}
+
+.onboarding-preview-enter-from {
+  opacity: 0;
+}
+
+.onboarding-preview-leave-to {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-preview-enter-active,
+  .onboarding-preview-leave-active {
+    transition: opacity 80ms linear;
+  }
+
+}
+</style>
