@@ -1,16 +1,5 @@
 <template>
-  <UCard class="onboarding-intake-card" :ui="{ body: 'p-0 sm:p-0' }">
-    <div class="space-y-5 p-6 sm:p-7">
-      <div class="flex items-start gap-4">
-        <div class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          <UIcon name="i-lucide-square-pen" class="size-5" />
-        </div>
-        <div class="min-w-0 pt-0.5">
-          <p class="text-[17px] font-bold leading-6 text-highlighted">{{ title }}</p>
-          <p class="mt-1 text-[15px] leading-6 text-muted">{{ description }}</p>
-        </div>
-      </div>
-
+  <div class="onboarding-intake-card">
       <div class="grid gap-4">
         <template v-if="section === 'location'">
           <UFormField label="Street address" :required="requireLocationBasics">
@@ -36,7 +25,12 @@
             </div>
           </div>
         </template>
-        <UFormField v-if="section === 'contact'" label="Phone" :required="requireLocationBasics">
+        <UFormField
+          v-if="section === 'contact'"
+          label="Phone"
+          :required="requireLocationBasics"
+          :error="phoneError"
+        >
           <UFieldGroup class="w-full gap-2">
             <USelectMenu
               v-model="countryCode"
@@ -59,8 +53,9 @@
               trailing-icon="i-lucide-chevrons-up-down"
               @update:open="onPhoneCountryOpen"
             >
-              <span class="flex size-5 items-center text-lg">
-                {{ country?.emoji || '🇺🇸' }}
+              <span class="flex min-w-0 items-center gap-2">
+                <span class="flex size-5 items-center text-lg">{{ country?.emoji || '🇺🇸' }}</span>
+                <span class="text-sm font-semibold text-highlighted">{{ countryCode }}</span>
               </span>
 
               <template #item-leading="{ item }">
@@ -87,6 +82,7 @@
                 leading: 'pointer-events-none text-base md:text-sm text-muted',
               }"
               @update:model-value="syncPhoneValue"
+              @blur="phoneTouched = true"
             >
               <template #leading>
                 {{ dialCode }}
@@ -103,6 +99,7 @@
             value-key="value"
             label-key="label"
             placeholder="Select currency"
+            @update:model-value="submitAfterSelection"
           />
         </UFormField>
         <div v-if="section === 'location' && showPrimaryToggle">
@@ -110,8 +107,7 @@
         </div>
       </div>
 
-      <div class="grid gap-4">
-        <p class="text-[13px] leading-5 text-muted">{{ helperText }}</p>
+      <div class="grid gap-3">
         <UButton
           color="primary"
           size="xl"
@@ -124,12 +120,12 @@
           {{ actionLabel }}
         </UButton>
       </div>
-    </div>
-  </UCard>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { vMaska } from 'maska/vue'
+import { parsePhone, type CountryCode } from '~/utils/phone'
 import { CURRENCY_OPTIONS, type CurrencyCode } from '~/shared/currencies'
 
 type PhoneCode = {
@@ -157,8 +153,6 @@ type IntakeForm = {
 const form = defineModel<IntakeForm>('form', { required: true })
 
 const props = defineProps<{
-  title: string
-  description: string
   actionLabel: string
   requireLocationBasics: boolean
   showPrimaryToggle: boolean
@@ -167,12 +161,13 @@ const props = defineProps<{
   disabled?: boolean
 }>()
 
-defineEmits<{ submit: [] }>()
+const emit = defineEmits<{ submit: [] }>()
 
-const helperText = computed(() => 'You can adjust these later.')
 const currencyOptions = CURRENCY_OPTIONS
 const phone = ref('')
+const phoneTouched = ref(false)
 const countryCode = ref('US')
+const hydratingStoredPhone = ref(false)
 
 const { data: phoneCodes, status, execute } = await useLazyFetch<PhoneCode[]>('/api/phone-codes.json', {
   key: 'api-phone-codes',
@@ -182,6 +177,9 @@ const { data: phoneCodes, status, execute } = await useLazyFetch<PhoneCode[]>('/
 const country = computed(() => phoneCodes.value?.find((c: PhoneCode) => c.code === countryCode.value))
 const dialCode = computed(() => country.value?.dialCode || '+1')
 const mask = computed(() => country.value?.mask || '(###) ###-####')
+const parsedPhone = computed(() =>
+  parsePhone(`${dialCode.value} ${phone.value}`, { defaultCountry: countryCode.value as CountryCode })
+)
 
 function onPhoneCountryOpen(open: boolean) {
   if (open && !phoneCodes.value?.length) {
@@ -190,23 +188,31 @@ function onPhoneCountryOpen(open: boolean) {
 }
 
 watch(countryCode, () => {
+  if (hydratingStoredPhone.value) return
   phone.value = ''
   form.value.phone = ''
 })
 
 function syncPhoneValue(value?: string | number) {
   if (value !== undefined) phone.value = String(value)
-  form.value.phone = phone.value.trim() ? `${dialCode.value} ${phone.value}` : ''
+  phoneTouched.value = true
+  form.value.phone = phone.value.trim() && parsedPhone.value.valid && parsedPhone.value.e164
+    ? parsedPhone.value.e164
+    : ''
 }
 
 watch(dialCode, syncPhoneValue)
 
 watch(() => form.value.phone, value => {
-  if (!value || value === `${dialCode.value} ${phone.value}`) return
-  const matchingCountry = phoneCodes.value?.find((code: PhoneCode) => value.startsWith(`${code.dialCode} `))
-  if (matchingCountry) {
-    countryCode.value = matchingCountry.code
-    phone.value = value.slice(matchingCountry.dialCode.length).trim()
+  if (!value || value === parsedPhone.value.e164) return
+  const parsed = parsePhone(value)
+  if (parsed.valid && parsed.country) {
+    hydratingStoredPhone.value = true
+    countryCode.value = parsed.country
+    phone.value = parsed.nationalFormat ?? value
+    nextTick(() => {
+      hydratingStoredPhone.value = false
+    })
     return
   }
   phone.value = value
@@ -218,13 +224,25 @@ const canSubmit = computed(() => {
   if (props.section === 'location') {
     return [form.value.streetAddress, form.value.city].every(value => value.trim().length > 0)
   }
-  return form.value.phone.trim().length > 0
+  return parsedPhone.value.valid
 })
+
+const phoneError = computed(() => {
+  if (props.section !== 'contact' || !phoneTouched.value) return undefined
+  if (!phone.value.trim()) return props.requireLocationBasics ? 'Enter a phone number.' : undefined
+  return parsedPhone.value.valid ? undefined : `Enter a valid ${country.value?.name ?? countryCode.value} phone number.`
+})
+
+function submitAfterSelection() {
+  if (props.section !== 'currency') return
+  nextTick(() => emit('submit'))
+}
 </script>
 
 <style scoped>
 .onboarding-intake-card {
-  border-radius: 22px;
+  display: grid;
+  gap: 1rem;
 }
 
 .onboarding-intake-card :deep(.rounded-md),

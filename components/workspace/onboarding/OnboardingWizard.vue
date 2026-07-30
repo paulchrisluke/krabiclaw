@@ -118,26 +118,23 @@
             <!-- eslint-disable-next-line vue/no-v-html -->
             <div class="prose prose-sm dark:prose-invert max-w-none" v-html="renderMarkdown(messages[index]!.text!)" />
           </div>
-          <div v-if="messages[index]?.choiceCard" class="grid gap-2">
-            <button
-              v-for="choice in messages[index]?.choiceCard?.choices"
-              :key="choice.action"
-              type="button"
-              class="flex w-full items-center gap-3 rounded-lg border border-default bg-elevated px-3 py-3 text-left transition-colors hover:border-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-              @click="handleReply(choice)"
-            >
-              <span class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-default bg-default text-primary">
-                <UIcon :name="choice.icon || 'i-lucide-circle'" class="size-4" />
-              </span>
-              <span class="min-w-0 flex-1">
-                <span class="block text-[13px] font-semibold leading-5 text-highlighted">{{ choice.label }}</span>
-                <span v-if="choice.sub" class="mt-0.5 block text-[12px] leading-5 text-muted">{{ choice.sub }}</span>
-              </span>
-              <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0 text-dimmed" />
-            </button>
-          </div>
+          <button
+            v-if="isHistoricalMessage(index)"
+            type="button"
+            class="flex w-full items-center gap-3 rounded-lg border border-default bg-elevated px-3 py-3 text-left transition-colors hover:border-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            @click="editHistoricalStep(messages[index]!)"
+          >
+            <span class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-default bg-default text-primary">
+              <UIcon :name="summaryIcon(messages[index]!)" class="size-4" />
+            </span>
+            <span class="min-w-0 flex-1">
+              <span class="block text-[12px] font-semibold uppercase leading-4 text-muted">{{ summaryLabel(messages[index]!) }}</span>
+              <span class="mt-0.5 block truncate text-[13px] font-semibold leading-5 text-highlighted">{{ summaryValue(messages[index]!) }}</span>
+            </span>
+            <span class="shrink-0 text-[12px] font-semibold text-primary">Edit</span>
+          </button>
           <div
-            v-if="messages[index]?.placePreview"
+            v-if="!isHistoricalMessage(index) && messages[index]?.placePreview"
             class="overflow-hidden rounded-xl border border-default bg-elevated"
           >
             <div class="flex h-24 items-center justify-center border-b border-default bg-muted text-muted">
@@ -167,135 +164,86 @@
               </div>
             </div>
           </div>
-          <IntakeDetailsCard
-            v-if="messages[index]?.detailsCard"
-            v-model:form="detailsForm"
-            :title="messages[index]!.detailsCard!.title"
-            :description="messages[index]!.detailsCard!.description"
-            :action-label="messages[index]!.detailsCard!.actionLabel"
-            :require-location-basics="messages[index]!.detailsCard!.requireLocationBasics"
-            :show-primary-toggle="messages[index]!.detailsCard!.showPrimaryToggle"
-            :section="messages[index]!.detailsCard!.section"
-            :loading="importing"
-            :disabled="importing"
-            @submit="submitDetailsCard(messages[index]!.detailsCard!.section)"
-          />
-          <HoursTimezoneCard
-            v-if="messages[index]?.hoursCard"
-            v-model:form="hoursForm"
-            :title="messages[index]!.hoursCard!.title"
-            :description="messages[index]!.hoursCard!.description"
-            action-label="Continue"
-            :loading="importing"
-            :disabled="importing"
-            @submit="submitHoursCard"
-          />
-          <DraftBrandCard
-            v-if="messages[index]?.brandDraftCard"
-            v-model:form="brandDraftForm"
-            :title="messages[index]!.brandDraftCard!.title"
-            :description="messages[index]!.brandDraftCard!.description"
-            action-label="Continue"
-            :section="messages[index]!.brandDraftCard!.section"
-            :loading="importing"
-            :disabled="importing"
-            @submit="submitBrandDraftCard(messages[index]!.brandDraftCard!.section)"
-          />
-          <NotificationRoutingCard
-            v-if="messages[index]?.notificationCard"
-            v-model:form="notificationForm"
-            title="Manager alerts"
-            description="Choose where booking and message alerts should go."
-            action-label="Save alerts"
-            show-skip
-            :loading="importing"
-            :disabled="importing"
-            @submit="saveNotificationRouting"
-            @skip="skipNotificationRouting"
-          />
-          <div
-            v-if="messages[index]?.handoff"
-            class="flex items-start gap-3 rounded-xl border border-default bg-elevated px-4 py-3"
-          >
-            <div class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <UIcon name="i-lucide-messages-square" class="size-4" />
-            </div>
-            <div>
-              <p class="text-[13px] font-semibold text-highlighted">Three ways to keep building</p>
-              <p class="mt-0.5 text-[12px] text-muted leading-relaxed">
-                Chat with ChowBot in your dashboard, use the structured editor for precise control, or pick it back up in ChatGPT — same site, same words.
-              </p>
-            </div>
+          <div v-if="!isHistoricalMessage(index) && messages[index]?.choiceCard" class="mt-2 grid gap-2">
+            <button
+              v-for="choice in messages[index]?.choiceCard?.choices"
+              :key="choice.action"
+              type="button"
+              class="flex w-full items-center gap-3 rounded-lg border border-default bg-elevated px-3 py-3 text-left transition-colors hover:border-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:pointer-events-none disabled:opacity-50"
+              :disabled="importing"
+              @click="handleReply(choice)"
+            >
+              <span class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-default bg-default text-primary">
+                <UIcon :name="choice.icon || 'i-lucide-circle'" class="size-4" />
+              </span>
+              <span class="min-w-0 flex-1">
+                <span class="block text-[13px] font-semibold leading-5 text-highlighted">{{ choice.label }}</span>
+                <span v-if="choice.sub" class="mt-0.5 block text-[12px] leading-5 text-muted">{{ choice.sub }}</span>
+              </span>
+              <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0 text-dimmed" />
+            </button>
           </div>
-          <UCard v-if="messages[index]?.socialCard" :ui="{ body: 'px-4 py-3 space-y-3' }">
-            <div class="flex items-center gap-2">
-              <UIcon name="i-simple-icons-facebook" class="size-4 text-[#1877F2] shrink-0" />
-              <span class="text-[13px] font-semibold text-highlighted">Facebook & Instagram</span>
-              <UBadge
-                :label="facebookConnected ? 'Connected' : hasFacebookAccess ? 'Ready to connect' : 'Upgrade required'"
-                :color="facebookConnected ? 'success' : hasFacebookAccess ? 'info' : 'warning'"
-                variant="soft"
-                size="xs"
-              />
+          <div v-if="!isHistoricalMessage(index) && (messages[index]?.detailsCard || messages[index]?.hoursCard || messages[index]?.brandDraftCard)" class="onboarding-step-widget">
+            <IntakeDetailsCard
+              v-if="messages[index]?.detailsCard"
+              v-model:form="detailsForm"
+              :action-label="activeActionLabel(messages[index]!)"
+              :require-location-basics="messages[index]!.detailsCard!.requireLocationBasics"
+              :show-primary-toggle="messages[index]!.detailsCard!.showPrimaryToggle"
+              :section="messages[index]!.detailsCard!.section"
+              :loading="importing"
+              :disabled="importing"
+              @submit="submitDetailsCard(messages[index]!.detailsCard!.section)"
+            />
+            <HoursTimezoneCard
+              v-if="messages[index]?.hoursCard"
+              v-model:form="hoursForm"
+              :action-label="activeActionLabel(messages[index]!)"
+              :loading="importing"
+              :disabled="importing"
+              @submit="submitHoursCard"
+            />
+            <DraftBrandCard
+              v-if="messages[index]?.brandDraftCard"
+              v-model:form="brandDraftForm"
+              :action-label="activeActionLabel(messages[index]!)"
+              :section="messages[index]!.brandDraftCard!.section"
+              :draft-id="onboardingDraftId"
+              :loading="importing"
+              :disabled="importing"
+              @submit="submitBrandDraftCard"
+              @brand-color-change="queueBrandColorSave"
+            />
+          </div>
+          <button
+            v-if="!isHistoricalMessage(index) && messages[index]?.draftReadyCard"
+            type="button"
+            class="block w-full overflow-hidden rounded-xl border border-default bg-elevated text-left shadow-sm transition-colors hover:border-primary"
+            @click="openDraftPreview"
+          >
+            <div
+              class="relative flex h-36 items-center justify-center overflow-hidden bg-muted text-muted"
+              :style="draftReadyThumbnailUrl ? undefined : { background: brandDraftForm.brandColor }"
+            >
+              <UBadge class="absolute right-3 top-3" color="success" variant="soft" label="Ready" />
+              <img
+                v-if="draftReadyThumbnailUrl"
+                :src="draftReadyThumbnailUrl"
+                alt=""
+                class="h-full w-full object-cover"
+              >
+              <div v-else class="flex size-16 items-center justify-center rounded-2xl bg-default/85 text-xl font-extrabold text-highlighted shadow-sm">
+                {{ draftReadyInitials }}
+              </div>
             </div>
-            <p class="text-[12px] text-muted leading-relaxed">
-              <template v-if="hasFacebookAccess">
-                Connect your Facebook Page and posts you publish there will automatically sync to your site. Instagram Business accounts linked to the Page sync too.
-              </template>
-              <template v-else>
-                Upgrade to Growth or above to connect your Facebook Page and automatically sync Facebook and linked Instagram Business posts to your site.
-              </template>
-            </p>
-            <div class="flex gap-2 pt-1">
-              <UButton
-                v-if="hasFacebookAccess && !facebookConnected"
-                size="sm"
-                color="primary"
-                icon="i-simple-icons-facebook"
-                :loading="connectingFacebook"
-                @click="startFacebookConnect"
-              >
-                Connect Facebook
-              </UButton>
-              <UButton
-                v-else-if="!hasFacebookAccess && importedOrgSlug"
-                size="sm"
-                color="primary"
-                variant="outline"
-                icon="i-lucide-circle-arrow-up"
-                :to="`/dashboard/${importedOrgSlug}/settings/billing`"
-              >
-                Upgrade to Growth
-              </UButton>
-              <UButton
-                v-else
-                size="sm"
-                color="neutral"
-                :variant="facebookConnected ? 'solid' : 'ghost'"
-                @click="workspaceEntryPath && router.push(workspaceEntryPath)"
-              >
-                {{ facebookConnected ? 'Open dashboard' : 'Set up later' }}
-              </UButton>
+            <div class="flex items-center gap-3 px-4 py-3">
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-[14px] font-bold text-highlighted">{{ draftReadyDomain }}</p>
+                <p class="mt-0.5 text-[12px] text-muted">Tap to preview your site</p>
+              </div>
+              <UIcon name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
             </div>
-          </UCard>
-          <BrandEssentialsCard v-if="messages[index]?.brandCard && importedSiteId" :site-id="importedSiteId" @done="handleBrandCardDone" />
-          <PolishSuggestionsCard
-            v-if="messages[index]?.polishCard"
-            :vertical="selectedVertical"
-            :primary-to="workspaceEntryPath"
-            primary-label="Open the dashboard"
-            :secondary-to="brandWorkspacePath"
-            secondary-label="Open brand pages"
-          />
-          <McpEditCard
-            v-if="messages[index]?.mcpCard"
-            :guide-to="chatgptGuidePath"
-            guide-label="ChatGPT setup guide"
-            :starter-prompt="chatgptStarterPrompt"
-            :examples="quickActionExamples"
-            :dashboard-to="workspaceEntryPath"
-            dashboard-label="Open the dashboard"
-          />
+          </button>
         </div>
         <UChatMessage
           v-else
@@ -352,39 +300,27 @@ import { getLocalTimezone } from '~/utils/timezone'
 import { marked } from 'marked'
 import { DEFAULT_CURRENCY } from '~/shared/currencies'
 import ChowBotConversation from '~/components/chowbot/ChowBotConversation.vue'
-import {
-  buildOnboardingStarterPrompt,
-  getQuickActionPrompts,
-  type OnboardingChecklistResponse,
-} from '~/composables/useOnboardingPrompts'
+import type { DraftBrandForm } from '~/components/workspace/onboarding/DraftBrandCard.vue'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
 interface WizardMessage {
   id: string
   from: 'bot' | 'user'
+  step?: WizardStep
   text?: string
   tools?: { label: string; done: boolean }[]
-  handoff?: boolean
-  socialCard?: boolean
-  polishCard?: boolean
-  mcpCard?: boolean
-  brandCard?: boolean
+  draftReadyCard?: boolean
   choiceCard?: { choices: QuickReply[] }
   placePreview?: { name: string; address: string; phone?: string | null; mapsUrl?: string | null }
   hoursCard?: {
-    title: string
-    description: string
+    actionLabel?: string
   }
   brandDraftCard?: {
-    title: string
-    description: string
+    actionLabel?: string
     section: 'brand' | 'hero'
   }
-  notificationCard?: boolean
   detailsCard?: {
-    title: string
-    description: string
-    actionLabel: string
+    actionLabel?: string
     requireLocationBasics: boolean
     showPrimaryToggle: boolean
     section: 'location' | 'contact' | 'currency'
@@ -407,8 +343,9 @@ interface DraftSavedPayload {
   subdomainCandidate: string
 }
 
-type WizardStep = 'welcome' | 'vertical' | 'source' | 'awaiting_url' | 'awaiting_manual_name' | 'confirm' | 'location' | 'contact' | 'currency' | 'hours' | 'brand' | 'hero' | 'create' | 'importing' | 'imported'
+type WizardStep = 'welcome' | 'vertical' | 'source' | 'awaiting_url' | 'awaiting_manual_name' | 'confirm' | 'location' | 'contact' | 'currency' | 'hours' | 'brand' | 'hero' | 'draft_ready' | 'create' | 'importing' | 'imported'
 type DetailsSource = 'imported' | 'manual'
+type DraftSourceType = 'manual' | 'google_places'
 
 type WizardMode = 'new-site' | 'add-location'
 
@@ -422,35 +359,14 @@ const props = defineProps<{
 const emit = defineEmits<{
   'site-created': [orgSlug: string | null, locationSlug?: string | null]
   'draft-saved': [draft: DraftSavedPayload]
-  'preview-state': [state: 'empty' | 'building']
   'vertical-selected': [vertical: SiteVertical]
-  'preview-details': [details: {
-    name: string
-    city: string
-    address: string
-    streetAddress: string
-    addressLine2: string
-    region: string
-    postalCode: string
-    country: string
-    phone: string
-    currency: string
-    timezone: string
-    openingHours: string
-    brandColor: string
-    logoNote: string
-    logoPreviewUrl: string
-    heroPhotoNote: string
-    heroPreviewUrl: string
-  }]
+  'step-changed': [step: WizardStep]
 }>()
 
 const router = useRouter()
+const config = useRuntimeConfig()
 const toast = useToast()
 const { trackSiteCreated, trackOnboardingCompleted } = useAnalytics()
-const connectingFacebook = ref(false)
-const facebookConnected = ref(false)
-const hasFacebookAccess = ref(false)
 
 const isAddingLocation = computed(() => props.mode === 'add-location')
 const skipVertical = computed(() => props.mode === 'add-location')
@@ -468,7 +384,7 @@ const WELCOME_POINTS: [string, string][] = isAddingLocation.value
   : [
       ['i-lucide-globe', 'Pulls your address, hours, photos & reviews from Google'],
       ['i-lucide-sparkles', 'Builds your homepage and story as you watch'],
-      ['i-lucide-rocket', 'Launches free on a krabiclaw.com address when you are ready'],
+      ['i-lucide-rocket', 'Launches on your included site address when you are ready'],
     ]
 
 // ─── State ───────────────────────────────────────────────────────────────────
@@ -523,14 +439,12 @@ const brandDraftForm = reactive({
   brandColor: '#3F3F46',
   logoNote: '',
   logoPreviewUrl: '',
+  logoImage: null as DraftBrandForm['logoImage'],
   heroPhotoNote: '',
   heroPreviewUrl: '',
+  heroImage: null as DraftBrandForm['heroImage'],
   heroHeadline: '',
-})
-const notificationForm = reactive({
-  ownerPhone: '',
-  channels: ['whatsapp'],
-  locations: [] as { id: string; title: string; notificationPhone: string }[],
+  heroDescription: '',
 })
 
 // Drag support
@@ -542,7 +456,7 @@ const inputPlaceholder = computed(() => {
   return 'Paste your Google Maps link…'
 })
 const showComposer = computed(() => Boolean(importError.value || awaitingInput.value || replies.value.length))
-const totalProgressSteps = 13
+const totalProgressSteps = 12
 const progressStep = computed(() => {
   if (step.value === 'vertical') return 1
   if (step.value === 'source') return 2
@@ -554,9 +468,9 @@ const progressStep = computed(() => {
   if (step.value === 'hours') return 8
   if (step.value === 'brand') return 9
   if (step.value === 'hero') return 10
-  if (step.value === 'create') return 11
-  if (step.value === 'importing') return onboardingDraftId.value ? 12 : 11
-  if (step.value === 'imported') return 13
+  if (step.value === 'draft_ready') return 11
+  if (step.value === 'create' || step.value === 'importing') return 12
+  if (step.value === 'imported') return 12
   return 1
 })
 const progressLabel = computed(() => {
@@ -569,52 +483,29 @@ const progressLabel = computed(() => {
   if (step.value === 'contact') return 'Contact'
   if (step.value === 'currency') return 'Currency'
   if (step.value === 'hours') return 'Hours'
-  if (step.value === 'brand') return 'Brand identity'
-  if (step.value === 'hero') return 'Hero photo'
+  if (step.value === 'brand') return 'Brand'
+  if (step.value === 'hero') return 'Homepage hero'
+  if (step.value === 'draft_ready') return 'Draft ready'
   if (step.value === 'create') return 'Create site'
-  if (step.value === 'importing') return 'Building'
+  if (step.value === 'importing') return 'Launching'
   if (step.value === 'imported') return 'Next steps'
   return 'Onboarding'
 })
 const canGoBack = computed(() => !importing.value && !typing.value && !['welcome', 'importing', 'imported'].includes(step.value))
-const previewState = computed<'empty' | 'building'>(() => ['welcome', 'vertical'].includes(step.value) ? 'empty' : 'building')
+const isHistoricalMessage = (index: number) => index < messages.value.length - 1
 const detailsCardDescription = computed(() => detailsSource.value === 'manual'
   ? 'Add the details guests will see first.'
   : 'Check what Google found.'
 )
 const detailsRequireBasics = computed(() => detailsSource.value === 'manual')
 
-watch(previewState, state => emit('preview-state', state), { immediate: true })
 watch(selectedVertical, vertical => emit('vertical-selected', vertical), { immediate: true })
-watch(
-  [detailsForm, hoursForm, brandDraftForm],
-  () => emit('preview-details', {
-    name: detailsForm.name,
-    city: detailsForm.city,
-    address: composeAddress(),
-    streetAddress: detailsForm.streetAddress,
-    addressLine2: detailsForm.addressLine2,
-    region: detailsForm.region,
-    postalCode: detailsForm.postalCode,
-    country: detailsForm.country,
-    phone: detailsForm.phone,
-    currency: detailsForm.currency,
-    timezone: hoursForm.timezone,
-    openingHours: serializeOpeningHours(),
-    brandColor: brandDraftForm.brandColor,
-    logoNote: brandDraftForm.logoNote,
-    logoPreviewUrl: brandDraftForm.logoPreviewUrl,
-    heroPhotoNote: brandDraftForm.heroPhotoNote,
-    heroPreviewUrl: brandDraftForm.heroPreviewUrl,
-  }),
-  { deep: true, immediate: true },
-)
+watch(step, value => emit('step-changed', value), { immediate: true })
 
 const importedSiteId = ref<string | null>(props.siteId ?? null)
 const importedOrgSlug = ref<string | null>(null)
 const importedSiteSlug = ref<string | null>(null)
 const importedLocationSlug = ref<string | null>(null)
-const checklistStarterPrompt = ref<string | null>(null)
 const preConfirmStep = ref<WizardStep>('awaiting_url')
 const onboardingDraftId = ref<string | null>(null)
 const draftPreviewPayload = ref<DraftSavedPayload | null>(null)
@@ -631,7 +522,6 @@ onMounted(async () => {
   }
   // If the user already has a site (returning to onboarding workspace), skip to imported state
   if (props.siteId && props.existingOrgSlug) {
-    await refreshSocialStatus(props.siteId)
     step.value = 'imported'
     messages.value.push({
       id: crypto.randomUUID(),
@@ -665,13 +555,75 @@ function isWidgetMessage(message: WizardMessage | undefined) {
     || message?.detailsCard
     || message?.hoursCard
     || message?.brandDraftCard
-    || message?.notificationCard
-    || message?.handoff
-    || message?.socialCard
-    || message?.brandCard
-    || message?.polishCard
-    || message?.mcpCard
+    || message?.draftReadyCard
   )
+}
+
+function activeActionLabel(message: WizardMessage) {
+  return message.detailsCard?.actionLabel
+    ?? message.hoursCard?.actionLabel
+    ?? message.brandDraftCard?.actionLabel
+    ?? 'Save'
+}
+
+function summaryLabel(message: WizardMessage) {
+  const messageStep = message.step
+  if (messageStep === 'vertical') return 'Business type'
+  if (messageStep === 'source') return 'Details source'
+  if (messageStep === 'confirm') return 'Google listing'
+  if (message.detailsCard?.section === 'location') return 'Location'
+  if (message.detailsCard?.section === 'contact') return 'Contact'
+  if (message.detailsCard?.section === 'currency') return 'Currency'
+  if (message.hoursCard) return 'Hours'
+  if (message.brandDraftCard?.section === 'brand') return 'Brand'
+  if (message.brandDraftCard?.section === 'hero') return 'Homepage hero'
+  if (message.draftReadyCard) return 'Draft'
+  return 'Answer'
+}
+
+function summaryIcon(message: WizardMessage) {
+  const messageStep = message.step
+  if (messageStep === 'vertical') return 'i-lucide-briefcase'
+  if (messageStep === 'source') return detailsSource.value === 'manual' ? 'i-lucide-pencil' : 'i-lucide-globe'
+  if (messageStep === 'confirm') return 'i-lucide-map-pin'
+  if (message.detailsCard?.section === 'location') return 'i-lucide-map-pin'
+  if (message.detailsCard?.section === 'contact') return 'i-lucide-phone'
+  if (message.detailsCard?.section === 'currency') return 'i-lucide-badge-dollar-sign'
+  if (message.hoursCard) return 'i-lucide-clock-3'
+  if (message.brandDraftCard?.section === 'brand') return 'i-lucide-paintbrush'
+  if (message.brandDraftCard?.section === 'hero') return 'i-lucide-image'
+  if (message.draftReadyCard) return 'i-lucide-eye'
+  return 'i-lucide-check'
+}
+
+function summaryValue(message: WizardMessage) {
+  const messageStep = message.step
+  if (messageStep === 'vertical') {
+    if (selectedVertical.value === 'professional_service') return 'Legal or professional services'
+    if (selectedVertical.value === 'experience') return 'Experience, class or activity'
+    return 'Restaurant, café or bar'
+  }
+  if (messageStep === 'source') return detailsSource.value === 'manual' ? 'Start manually' : 'Google Maps'
+  if (messageStep === 'confirm') return (pendingPreview.value?.name ?? detailsForm.name) || 'Confirmed'
+  if (message.detailsCard?.section === 'location') return [detailsForm.streetAddress, detailsForm.city].filter(Boolean).join(', ') || 'Location details'
+  if (message.detailsCard?.section === 'contact') return detailsForm.phone || 'Contact number'
+  if (message.detailsCard?.section === 'currency') return detailsForm.currency
+  if (message.hoursCard) return hoursForm.timezone || 'Hours & timezone'
+  if (message.brandDraftCard?.section === 'brand') return brandDraftForm.logoPreviewUrl ? 'Brand color and logo' : 'Brand color'
+  if (message.brandDraftCard?.section === 'hero') return brandDraftForm.heroHeadline || brandDraftForm.heroPhotoNote || 'Homepage hero'
+  if (message.draftReadyCard) return draftReadyDomain.value
+  return message.text ?? 'Answered'
+}
+
+async function editHistoricalStep(message: WizardMessage) {
+  if (!message.step || importing.value || typing.value) return
+  const index = messages.value.findIndex(item => item.id === message.id)
+  if (index >= 0) messages.value = messages.value.slice(0, index)
+  if (message.step === 'confirm') {
+    if (pendingPreview.value) showConfirm(pendingPreview.value, preConfirmStep.value)
+    return
+  }
+  await advance(message.step)
 }
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
@@ -683,116 +635,53 @@ const workspaceEntryPath = computed(() => {
   return siteSlug ? `/dashboard/${slug}/sites/${siteSlug}` : `/dashboard/${slug}`
 })
 
-const brandWorkspacePath = computed(() => {
-  const slug = importedOrgSlug.value ?? props.existingOrgSlug ?? null
-  const siteSlug = importedSiteSlug.value ?? props.existingSiteSlug ?? null
-  const locationSlug = importedLocationSlug.value
-  if (!slug || !siteSlug || !locationSlug) return workspaceEntryPath.value
-  return `/dashboard/${slug}/sites/${siteSlug}/content`
-})
-
-const chatgptGuidePath = computed(() => {
-  const slug = importedOrgSlug.value ?? props.existingOrgSlug ?? null
-  return slug ? `/dashboard/${slug}/settings/chatgpt` : '/docs/integrations/mcp-setup'
-})
-
-const chatgptStarterPrompt = computed(() => {
-  if (isAddingLocation.value) {
-    return 'Help me finish this new location. Ask me for location-specific hours, photos, FAQs, and what makes this branch different.'
-  }
-
-  if (checklistStarterPrompt.value) {
-    return checklistStarterPrompt.value
-  }
-
-  if (selectedVertical.value === 'experience') {
-    return 'Help me finish my experience site. First ask me for my hero headline, brand story, and signature experiences.'
-  }
-
-  if (selectedVertical.value === 'professional_service') {
-    return 'Help me finish my professional-service site. First ask me for my hero headline, brand story, and core services.'
-  }
-
-  return 'Help me finish my restaurant site. First ask me for my hero headline, brand story, and top menu sections.'
-})
-
-const quickActionExamples = computed(() => getQuickActionPrompts(selectedVertical.value))
-
-async function refreshChecklistStarterPrompt(siteId: string | null) {
-  if (!siteId || isAddingLocation.value) return
+const freeSiteHost = computed(() => {
+  const raw = String(config.public.freeSiteDomain || config.public.platformDomain || '').trim()
+  if (!raw) return ''
   try {
-    const checklist = await $fetch<OnboardingChecklistResponse>(`/api/dashboard/onboarding/checklist?siteId=${encodeURIComponent(siteId)}`)
-    checklistStarterPrompt.value = buildOnboardingStarterPrompt(checklist)
-  } catch (error) {
-    console.error('onboarding_checklist_prompt_failed', error)
-    checklistStarterPrompt.value = null
+    return new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`).host.replace(/\/$/, '')
+  } catch {
+    return raw.replace(/^https?:\/\//i, '').replace(/\/.*$/, '').replace(/\/$/, '')
   }
-}
+})
+const draftReadyDomain = computed(() => {
+  const candidate = draftPreviewPayload.value?.subdomainCandidate
+  return candidate && freeSiteHost.value ? `${candidate}.${freeSiteHost.value}` : 'your preview site'
+})
+const draftReadyThumbnailUrl = computed(() => brandDraftForm.heroPreviewUrl || brandDraftForm.logoPreviewUrl || '')
+const draftReadyInitials = computed(() => {
+  const source = detailsForm.name || draftPreviewPayload.value?.draftName || 'Site'
+  return source
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0]?.toUpperCase() ?? '')
+    .join('') || 'S'
+})
 
 function pushUser(text: string) {
   messages.value.push({ id: crypto.randomUUID(), from: 'user', text })
 }
 
 async function pushBot(text: string, extra?: {
+  step?: WizardStep
   tools?: { label: string; done: boolean }[]
-  handoff?: boolean
-  socialCard?: boolean
-  polishCard?: boolean
-  mcpCard?: boolean
-  brandCard?: boolean
+  draftReadyCard?: boolean
   choiceCard?: WizardMessage['choiceCard']
   placePreview?: WizardMessage['placePreview']
   hoursCard?: WizardMessage['hoursCard']
   brandDraftCard?: WizardMessage['brandDraftCard']
-  notificationCard?: boolean
   detailsCard?: WizardMessage['detailsCard']
 }) {
   typing.value = true
   await sleep(560)
   typing.value = false
-  messages.value.push({ id: crypto.randomUUID(), from: 'bot', text, ...extra })
+  messages.value.push({ id: crypto.randomUUID(), from: 'bot', text, step: extra?.step ?? step.value, ...extra })
   await sleep(80)
 }
 
-async function refreshSocialStatus(siteId: string | null) {
-  if (!siteId || isAddingLocation.value) return
-
-  try {
-    const [contextRes, facebookRes] = await Promise.all([
-      $fetch<{ context?: { site?: { entitlements?: Record<string, string | boolean> } } }>(`/api/editor/sites/${siteId}/context`),
-      $fetch<{ connected: boolean }>(`/api/integrations/facebook-pages/connection?siteId=${encodeURIComponent(siteId)}`),
-    ])
-
-    hasFacebookAccess.value = contextRes.context?.site?.entitlements?.managed_service === true
-    facebookConnected.value = facebookRes.connected === true
-  } catch (error) {
-    console.error('onboarding_social_status_failed', error)
-    hasFacebookAccess.value = false
-    facebookConnected.value = false
-  }
-}
-
-async function startFacebookConnect() {
-  const siteId = importedSiteId.value ?? props.siteId ?? null
-  if (!siteId) return
-
-  connectingFacebook.value = true
-  try {
-    const res = await $fetch<{ success: boolean; authUrl?: string; error?: string }>(
-      '/api/integrations/facebook-pages/auth',
-      { method: 'POST', body: { siteId } }
-    )
-    if (!res.authUrl) throw new Error(res.error || 'No authorization URL returned')
-    window.location.href = res.authUrl
-  } catch (error) {
-    console.error('facebook_connect_failed', error)
-    toast.add({
-      title: 'Failed to connect Facebook',
-      description: error instanceof Error ? error.message : 'Please try again',
-      color: 'error',
-    })
-    connectingFacebook.value = false
-  }
+function openDraftPreview() {
+  if (draftPreviewPayload.value) emit('draft-saved', draftPreviewPayload.value)
 }
 
 // ─── State machine ────────────────────────────────────────────────────────────
@@ -837,11 +726,9 @@ async function advance(target: WizardStep) {
   }
 
   if (target === 'location') {
-    await pushBot('', {
+    await pushBot(detailsSource.value === 'manual' ? 'Where should guests find you?' : detailsCardDescription.value, {
       detailsCard: {
-        title: 'Location',
-        description: detailsSource.value === 'manual' ? 'Where should guests find you?' : detailsCardDescription.value,
-        actionLabel: 'Continue',
+        actionLabel: 'Save location',
         requireLocationBasics: detailsRequireBasics.value,
         showPrimaryToggle: !!isAddingLocation.value,
         section: 'location',
@@ -850,11 +737,9 @@ async function advance(target: WizardStep) {
   }
 
   if (target === 'contact') {
-    await pushBot('', {
+    await pushBot('Add the number guests should use first.', {
       detailsCard: {
-        title: 'Contact',
-        description: 'Add the number guests should use first.',
-        actionLabel: 'Continue',
+        actionLabel: 'Save contact',
         requireLocationBasics: detailsRequireBasics.value,
         showPrimaryToggle: false,
         section: 'contact',
@@ -863,11 +748,9 @@ async function advance(target: WizardStep) {
   }
 
   if (target === 'currency') {
-    await pushBot('', {
+    await pushBot('Choose how guests will see prices.', {
       detailsCard: {
-        title: 'Currency',
-        description: 'Choose how guests will see prices.',
-        actionLabel: 'Continue',
+        actionLabel: 'Use this currency',
         requireLocationBasics: false,
         showPrimaryToggle: false,
         section: 'currency',
@@ -876,36 +759,44 @@ async function advance(target: WizardStep) {
   }
 
   if (target === 'hours') {
-    await pushBot('', {
+    await pushBot('Add your weekly hours so bookings and visit details line up.', {
       hoursCard: {
-        title: 'Hours & timezone',
-        description: 'Add your weekly hours so bookings and visit details line up.',
+        actionLabel: 'Save hours',
       },
     })
   }
 
   if (target === 'brand') {
-    await pushBot('', {
+    await pushBot('Choose the color and logo guests will recognize across your site.', {
       brandDraftCard: {
-        title: 'Brand identity',
-        description: 'Choose the first color direction and note anything important about your logo.',
+        actionLabel: 'Save brand',
         section: 'brand',
       },
     })
   }
 
   if (target === 'hero') {
-    await pushBot('', {
+    await pushBot('Add the photo and opening words guests see first on the homepage.', {
       brandDraftCard: {
-        title: 'Hero photo',
-        description: 'Add the image guests should see first.',
+        actionLabel: 'Save hero',
         section: 'hero',
       },
     })
   }
 
+  if (target === 'draft_ready') {
+    await pushBot("Draft ready. Tap the preview any time — it's a private working copy, so you can review before reserving a live subdomain.", {
+      draftReadyCard: true,
+    })
+    replies.value = [
+      { label: 'Create site', icon: 'i-lucide-rocket', primary: true, action: 'commit_draft' },
+      { label: 'Edit details', icon: 'i-lucide-pencil', action: 'edit_draft' },
+    ]
+  }
+
   if (target === 'create') {
-    await submitDetails()
+    if (isAddingLocation.value) await submitDetails()
+    else await commitDraft()
   }
 }
 
@@ -962,15 +853,12 @@ async function goBack() {
     await advance('brand')
     return
   }
-  if (step.value === 'create') {
+  if (step.value === 'draft_ready') {
     await advance('hero')
+    return
   }
-}
-
-function handleBrandCardDone() {
-  // Advance past the brand card step regardless of save or skip
-  if (workspaceEntryPath.value) {
-    router.push(workspaceEntryPath.value)
+  if (step.value === 'create') {
+    await advance('draft_ready')
   }
 }
 
@@ -1013,7 +901,7 @@ async function handleReply(reply: QuickReply) {
     if (pendingPreview.value) {
       detailsSource.value = 'imported'
       seedDetailsFromPreview(pendingPreview.value)
-      await advance('location')
+      if (await saveActiveDraft()) await advance('location')
     }
     return
   }
@@ -1066,11 +954,12 @@ async function handleTextSubmit() {
   } else if (step.value === 'awaiting_manual_name') {
     detailsSource.value = 'manual'
     seedDetailsFromManual(input)
-    await advance('location')
+    if (await saveActiveDraft()) await advance('location')
   }
 }
 
 async function submitDetailsCard(section: 'location' | 'contact' | 'currency') {
+  if (step.value !== section) return
   if (section === 'location') {
     await submitLocation()
     return
@@ -1079,7 +968,7 @@ async function submitDetailsCard(section: 'location' | 'contact' | 'currency') {
     await submitContact()
     return
   }
-  await advance('hours')
+  if (await saveActiveDraft()) await advance('hours')
 }
 
 async function submitLocation() {
@@ -1090,7 +979,7 @@ async function submitLocation() {
     importError.value = 'Add the required details before continuing.'
     return
   }
-  await advance('contact')
+  if (await saveActiveDraft()) await advance('contact')
 }
 
 async function submitContact() {
@@ -1098,10 +987,11 @@ async function submitContact() {
     importError.value = 'Add the required details before continuing.'
     return
   }
-  await advance('currency')
+  if (await saveActiveDraft()) await advance('currency')
 }
 
 async function submitHoursCard() {
+  if (step.value !== 'hours') return
   if (!hoursForm.timezone.trim()) {
     importError.value = 'Choose a timezone before continuing.'
     return
@@ -1110,11 +1000,16 @@ async function submitHoursCard() {
     importError.value = 'Add opening and closing times, or mark the day closed.'
     return
   }
-  await advance('brand')
+  if (await saveActiveDraft()) await advance('brand')
 }
 
-async function submitBrandDraftCard(section: 'brand' | 'hero') {
-  await advance(section === 'brand' ? 'hero' : 'create')
+async function submitBrandDraftCard() {
+  if (step.value !== 'brand' && step.value !== 'hero') return
+  if (step.value === 'brand') {
+    if (await saveActiveDraft()) await advance('hero')
+    return
+  }
+  if (await saveActiveDraft()) await advance(isAddingLocation.value ? 'create' : 'draft_ready')
 }
 
 // ─── Import flow ──────────────────────────────────────────────────────────────
@@ -1132,10 +1027,17 @@ function showConfirm(preview: NonNullable<typeof pendingPreview.value>, returnSt
   preConfirmStep.value = returnStep
   pendingPreview.value = preview
   step.value = 'confirm'
-  replies.value = [
-    { label: "Yes, that's my place", icon: 'i-lucide-check', primary: true, action: 'confirm_yes' },
-    { label: "That's not my place", icon: 'i-lucide-x', action: 'confirm_no' },
-  ]
+  const lastMessage = messages.value[messages.value.length - 1]
+  if (lastMessage?.placePreview) {
+    lastMessage.step = 'confirm'
+    lastMessage.choiceCard = {
+      choices: [
+        { label: "Yes, that's my place", icon: 'i-lucide-check', primary: true, action: 'confirm_yes' },
+        { label: "That's not my place", icon: 'i-lucide-x', action: 'confirm_no' },
+      ],
+    }
+  }
+  replies.value = []
 }
 
 async function runLookup(mapsUrl: string) {
@@ -1168,6 +1070,53 @@ async function runLookup(mapsUrl: string) {
   }
 }
 
+async function saveActiveDraft() {
+  if (isAddingLocation.value) return true
+
+  importing.value = true
+  importError.value = null
+  try {
+    const sourceType: DraftSourceType = pendingPreview.value ? 'google_places' : 'manual'
+    const res = await $fetch<{
+      success: boolean
+      draftId?: string
+      previewToken?: string
+      draftName?: string
+      subdomainCandidate?: string
+      error?: string
+    }>('/api/dashboard/onboarding/drafts/active', {
+      method: 'POST',
+      body: {
+        sourceType,
+        placeId: pendingPreview.value?.placeId,
+        name: detailsForm.name.trim(),
+        vertical: selectedVertical.value,
+        details: serializeDetails(),
+        brandDraft: serializeBrandDraft(),
+      },
+    })
+
+    if (!res.success || !res.draftId || !res.previewToken || !res.draftName || !res.subdomainCandidate) {
+      throw new Error(res.error ?? 'Failed to save your preview draft. Please try again.')
+    }
+
+    onboardingDraftId.value = res.draftId
+    draftPreviewPayload.value = {
+      draftId: res.draftId,
+      previewToken: res.previewToken,
+      draftName: res.draftName,
+      subdomainCandidate: res.subdomainCandidate,
+    }
+    emit('draft-saved', draftPreviewPayload.value)
+    return true
+  } catch (error) {
+    importError.value = error instanceof Error ? error.message : 'Failed to save your preview draft. Please try again.'
+    return false
+  } finally {
+    importing.value = false
+  }
+}
+
 async function submitDetails() {
   const requiredFields = [hoursForm.timezone]
   if (!requiredFields.every(value => value.trim().length > 0)) {
@@ -1178,62 +1127,9 @@ async function submitDetails() {
   step.value = 'importing'
   importing.value = true
   importError.value = null
-  const tools = await showLookupTools(
-    isAddingLocation.value
-      ? 'Adding your location…'
-      : 'Building your preview…'
-  )
+  const tools = await showLookupTools('Adding your location…')
 
   try {
-    if (!isAddingLocation.value) {
-      const endpoint = pendingPreview.value
-        ? '/api/dashboard/onboarding/drafts/from-place'
-        : '/api/dashboard/onboarding/drafts/manual'
-
-      const body = pendingPreview.value
-        ? {
-            placeId: pendingPreview.value.placeId,
-            vertical: selectedVertical.value,
-            details: serializeDetails(),
-          }
-        : {
-            name: detailsForm.name.trim(),
-            vertical: selectedVertical.value,
-            details: serializeDetails(),
-          }
-
-      const res = await $fetch<{
-        success: boolean
-        draftId?: string
-        previewToken?: string
-        draftName?: string
-        subdomainCandidate?: string
-        error?: string
-      }>(endpoint, { method: 'POST', body })
-
-      if (!res.success || !res.draftId || !res.previewToken || !res.draftName || !res.subdomainCandidate) {
-        throw new Error(res.error ?? 'Failed to save your preview draft. Please try again.')
-      }
-
-      tools[0]!.done = true
-      onboardingDraftId.value = res.draftId
-      draftPreviewPayload.value = {
-        draftId: res.draftId,
-        previewToken: res.previewToken,
-        draftName: res.draftName,
-        subdomainCandidate: res.subdomainCandidate,
-      }
-      emit('draft-saved', draftPreviewPayload.value)
-
-      await pushBot('Preview ready. Take a look on the right, then create the site when it feels right.')
-      replies.value = [
-        { label: 'Create site', icon: 'i-lucide-badge-check', primary: true, action: 'commit_draft' },
-        { label: 'Edit details', icon: 'i-lucide-square-pen', action: 'edit_draft' },
-      ]
-      step.value = 'location'
-      return
-    }
-
     const endpoint = addLocationEndpoint
 
     const body = pendingPreview.value
@@ -1265,17 +1161,28 @@ async function submitDetails() {
     importedSiteId.value = res.siteId ?? props.siteId ?? null
     importedOrgSlug.value = res.orgSlug ?? null
     importedSiteSlug.value = res.siteSlug ?? props.existingSiteSlug ?? null
-    await refreshChecklistStarterPrompt(importedSiteId.value)
     await finishCreation(res.orgSlug, res.siteSlug ?? importedSiteSlug.value ?? props.existingSiteSlug ?? null, res.locationSlug)
   } catch (err) {
     importError.value = err instanceof Error ? err.message : 'Something went wrong. Please try again.'
-    step.value = 'hero'
+    step.value = 'draft_ready'
   } finally {
     importing.value = false
   }
 }
 
 let committing = false
+let brandColorSaveTimer: ReturnType<typeof setTimeout> | null = null
+
+function queueBrandColorSave() {
+  if (isAddingLocation.value || step.value !== 'brand' || !onboardingDraftId.value) return
+  if (brandColorSaveTimer) clearTimeout(brandColorSaveTimer)
+  brandColorSaveTimer = setTimeout(() => {
+    brandColorSaveTimer = null
+    saveActiveDraft().catch((error) => {
+      importError.value = error instanceof Error ? error.message : 'Failed to save brand color.'
+    })
+  }, 250)
+}
 
 async function commitDraft() {
   if (committing) return
@@ -1312,7 +1219,6 @@ async function commitDraft() {
     importedSiteId.value = res.siteId ?? props.siteId ?? null
     importedOrgSlug.value = res.orgSlug ?? null
     importedSiteSlug.value = res.siteSlug ?? props.existingSiteSlug ?? null
-    await refreshChecklistStarterPrompt(importedSiteId.value)
     await finishCreation(res.orgSlug, res.siteSlug ?? importedSiteSlug.value ?? props.existingSiteSlug ?? null, res.locationSlug)
   } catch (error) {
     importError.value = error instanceof Error ? error.message : 'Something went wrong. Please try again.'
@@ -1323,30 +1229,6 @@ async function commitDraft() {
   }
 }
 
-async function saveNotificationRouting() {
-  if (!importedSiteId.value) return
-  importing.value = true
-  importError.value = null
-  try {
-    await $fetch(`/api/editor/sites/${importedSiteId.value}/notifications`, {
-      method: 'PATCH',
-      body: {
-        whatsapp_phone: notificationForm.ownerPhone.trim() || null,
-        channels: notificationForm.channels,
-      },
-    })
-    await pushBot('Manager alerts are saved.')
-  } catch (error) {
-    importError.value = error instanceof Error ? error.message : 'Could not save manager alerts. You can change them later from Settings.'
-  } finally {
-    importing.value = false
-  }
-}
-
-async function skipNotificationRouting() {
-  await pushBot('No problem. You can set manager alerts later from Settings.')
-}
-
 function serializeDetails() {
   return {
     name: detailsForm.name.trim(),
@@ -1354,10 +1236,24 @@ function serializeDetails() {
     address: composeAddress() || null,
     phone: detailsForm.phone.trim() || null,
     openingHours: serializeOpeningHours(),
-    notificationPhone: notificationForm.ownerPhone.trim() || null,
+    notificationPhone: detailsForm.phone.trim() || null,
     timezone: hoursForm.timezone.trim() || null,
     currency: detailsForm.currency,
     isPrimary: isAddingLocation.value ? detailsForm.isPrimary : true,
+  }
+}
+
+function serializeBrandDraft() {
+  return {
+    brandColor: brandDraftForm.brandColor.trim() || null,
+    logoNote: brandDraftForm.logoNote.trim() || null,
+    logoPreviewUrl: brandDraftForm.logoPreviewUrl.trim() || null,
+    heroPhotoNote: brandDraftForm.heroPhotoNote.trim() || null,
+    heroPreviewUrl: brandDraftForm.heroPreviewUrl.trim() || null,
+    logoImage: brandDraftForm.logoImage,
+    heroImage: brandDraftForm.heroImage,
+    heroHeadline: brandDraftForm.heroHeadline.trim() || null,
+    heroDescription: brandDraftForm.heroDescription.trim() || null,
   }
 }
 
@@ -1406,7 +1302,6 @@ function seedDetailsFromPreview(preview: NonNullable<typeof pendingPreview.value
   detailsForm.phone = preview.phone ?? ''
   detailsForm.currency = DEFAULT_CURRENCY
   seedHoursFromPreview(preview.openingHours)
-  notificationForm.ownerPhone = preview.phone ?? ''
   detailsForm.isPrimary = !isAddingLocation.value
 }
 
@@ -1422,7 +1317,6 @@ function seedDetailsFromManual(name: string) {
   detailsForm.phone = ''
   detailsForm.currency = DEFAULT_CURRENCY
   seedHoursFromPreview(null)
-  notificationForm.ownerPhone = ''
   detailsForm.isPrimary = !isAddingLocation.value
 }
 
@@ -1466,33 +1360,16 @@ async function finishCreation(orgSlug: string | null | undefined, siteSlug: stri
     trackSiteCreated(importedSiteId.value)
   }
 
-  await refreshSocialStatus(importedSiteId.value)
   await sleep(300)
   const domainSlug = siteSlug ?? orgSlug
-  const domain = domainSlug ? `**${domainSlug}.krabiclaw.com**` : 'your new workspace'
-  const offerLabel = selectedVertical.value === 'experience'
-    ? 'experiences'
-    : selectedVertical.value === 'professional_service'
-      ? 'services'
-      : 'menu'
+  const domain = domainSlug && freeSiteHost.value ? `**${domainSlug}.${freeSiteHost.value}**` : 'your new workspace'
   await pushBot(`Done. Your workspace is live at ${domain}.`)
-  if (!isAddingLocation.value && importedSiteId.value) {
-    await pushBot('', { notificationCard: true })
-  }
-  if (!isAddingLocation.value && importedSiteId.value) {
-    await pushBot(
-      'Add a logo, brand color, and hero photo before you head into the dashboard.',
-      { brandCard: true },
-    )
-  }
   await pushBot(
-    `From here, head to your dashboard to keep building — add your ${offerLabel} and story — or connect ChatGPT to manage it from there.`,
-    { handoff: true, socialCard: !isAddingLocation.value, polishCard: true, mcpCard: true },
+    "From here, head to your dashboard to keep building — chat with ChowBot, use the structured editor, or pick it back up in ChatGPT. Connect Facebook whenever you're ready and posts you publish there will sync to your site too.",
   )
   step.value = 'imported'
   replies.value = [
     { label: 'Open my dashboard', icon: 'i-lucide-arrow-right', primary: true, action: 'dashboard' },
-    { label: 'Add another location', icon: 'i-lucide-map-pin', action: 'add_location' },
   ]
 }
 
@@ -1516,11 +1393,18 @@ const onDrop = (e: DragEvent) => {
   dragCounter.value = 0
   const file = e.dataTransfer?.files[0]
   if (!file) return
-  toast.add({ description: 'File uploads are available after your site is created.', color: 'neutral' })
+  toast.add({ description: 'Use the Brand and Homepage hero steps to add your logo and hero photo.', color: 'neutral' })
 }
 </script>
 
 <style scoped>
 .fade-enter-active, .fade-leave-active { transition: opacity 0.15s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+
+.onboarding-step-widget {
+  border: 1px solid var(--ui-border);
+  border-radius: 0.75rem;
+  background: var(--ui-bg-elevated);
+  padding: 0.875rem;
+}
 </style>

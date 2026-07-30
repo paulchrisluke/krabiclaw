@@ -29,7 +29,20 @@ interface ContentRow {
   [key: string]: unknown;
 }
 
+interface ShellSiteInfo {
+  brand_name?: string | null;
+  brand_description?: string | null;
+  logo_url?: string | null;
+  logo_mime_type?: string | null;
+  favicon_url?: string | null;
+  vertical?: string | null;
+  config?: {
+    phone?: string | null;
+  } | null;
+}
+
 interface SiteShellPayload {
+  site?: ShellSiteInfo | null;
   locations: ApiRecord[];
   config: Record<string, string>;
   googleBusiness: ApiRecord;
@@ -45,6 +58,7 @@ interface SiteShellPayload {
 }
 
 const emptyShell = (): SiteShellPayload => ({
+  site: null,
   locations: [],
   config: {},
   googleBusiness: { business: null, reviews: [], media: [], posts: [], syncedAt: null },
@@ -116,6 +130,7 @@ export const useSiteShell = () => {
 
   const locations = computed(() => (data.value?.locations ?? []) as ApiRecord[]);
   const config = computed(() => (data.value?.config ?? {}) as Record<string, string>);
+  const shellSite = computed(() => data.value?.site ?? null);
   const googleBusiness = computed(() => data.value?.googleBusiness ?? empty.googleBusiness);
   const locales = computed(() => data.value?.locales ?? []);
   const hasExperiences = computed(() => data.value?.hasExperiences ?? false);
@@ -136,6 +151,7 @@ export const useSiteShell = () => {
   return {
     locations,
     config,
+    site: shellSite,
     googleBusiness,
     menu: menuData,
     menuItemsBySection,

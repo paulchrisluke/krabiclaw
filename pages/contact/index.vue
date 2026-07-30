@@ -244,9 +244,9 @@ import { setContactConfirmation } from '~/composables/useContactHandoff'
 
 definePageMeta({ layout: false })
 
-const { isPlatform, siteId, site } = useTenantSite()
+const { isPlatform, siteId, draftId, site } = useTenantSite()
 const { isBlawby } = usePublicTemplate()
-if (isPlatform) throw createError({ statusCode: 404 })
+if (isPlatform || (!siteId && !draftId)) throw createError({ statusCode: 404 })
 
 const { locale } = useI18n()
 const vertCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))

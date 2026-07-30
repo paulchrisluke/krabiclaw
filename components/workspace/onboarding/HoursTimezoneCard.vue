@@ -1,16 +1,5 @@
 <template>
-  <UCard class="onboarding-intake-card" :ui="{ body: 'p-0 sm:p-0' }">
-    <div class="space-y-5 p-6 sm:p-7">
-      <div class="flex items-start gap-4">
-        <div class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          <UIcon name="i-lucide-clock-3" class="size-5" />
-        </div>
-        <div class="min-w-0 pt-0.5">
-          <p class="text-[17px] font-bold leading-6 text-highlighted">{{ title }}</p>
-          <p class="mt-1 text-[15px] leading-6 text-muted">{{ description }}</p>
-        </div>
-      </div>
-
+  <div class="onboarding-intake-card">
       <UFormField label="Timezone" required>
         <USelectMenu
           v-model="form.timezone"
@@ -66,8 +55,7 @@
         </div>
       </div>
 
-      <div class="grid gap-4">
-        <p class="text-[13px] leading-5 text-muted">Used for booking availability and guest-facing hours.</p>
+      <div class="grid gap-3">
         <UButton
           color="primary"
           size="xl"
@@ -80,8 +68,7 @@
           {{ actionLabel }}
         </UButton>
       </div>
-    </div>
-  </UCard>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -102,8 +89,6 @@ export type HoursTimezoneForm = {
 const form = defineModel<HoursTimezoneForm>('form', { required: true })
 
 defineProps<{
-  title: string
-  description: string
   actionLabel: string
   loading?: boolean
   disabled?: boolean
@@ -142,7 +127,8 @@ function copyPrevious(index: number) {
 
 <style scoped>
 .onboarding-intake-card {
-  border-radius: 22px;
+  display: grid;
+  gap: 1rem;
 }
 
 .onboarding-intake-card :deep(.rounded-md),

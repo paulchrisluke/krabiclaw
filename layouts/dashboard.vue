@@ -21,6 +21,7 @@
         v-model:collapsed="sidebarCollapsed"
         resizable
         collapsible
+        class="hidden md:flex"
         :menu="{ close: false }"
         :ui="{ root: 'bg-elevated', header: 'h-auto min-h-(--ui-header-height) items-start py-2.5', body: 'px-3 py-1', content: 'bg-elevated' }"
       >
@@ -127,6 +128,10 @@
       @keydown="onMobileMoreKeydown"
     >
       <div class="max-h-[55vh] overflow-y-auto">
+        <div class="border-b border-default px-3 py-3">
+          <p class="truncate text-sm font-semibold text-highlighted">{{ sessionData?.user?.name || 'User' }}</p>
+          <p class="mt-0.5 truncate text-xs text-muted">{{ sessionData?.user?.email }}</p>
+        </div>
         <NuxtLink
           v-for="item in mobileMoreItems"
           :key="item.to"
@@ -137,6 +142,27 @@
           <UIcon v-if="item.icon" :name="item.icon" class="size-4 text-muted" />
           <span>{{ item.label }}</span>
         </NuxtLink>
+        <div class="mt-2 border-t border-default pt-2">
+          <NuxtLink
+            v-for="item in mobileAccountItems"
+            :key="item.to"
+            :to="item.to"
+            class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-highlighted hover:bg-muted"
+            :target="item.target"
+            @click="closeMobileMore"
+          >
+            <UIcon :name="item.icon" class="size-4 text-muted" />
+            <span>{{ item.label }}</span>
+          </NuxtLink>
+          <button
+            type="button"
+            class="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-error hover:bg-error/10"
+            @click="handleMobileSignOut"
+          >
+            <UIcon name="i-lucide-log-out" class="size-4" />
+            <span>Log Out</span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -193,8 +219,9 @@ interface AuthOrganization {
 }
 
 const route = useRoute()
+const config = useRuntimeConfig()
 const sidebarCollapsed = useState<boolean>('dashboard-sidebar-collapsed', () => false)
-const { data: sessionData, refreshSession } = useAuth()
+const { data: sessionData, refreshSession, signOut } = useAuth()
 const { trackDashboardVisited } = useAnalytics()
 const toast = useToast()
 const stoppingImpersonation = ref(false)
@@ -688,6 +715,13 @@ const mobileMoreItems = computed(() => {
   return items
 })
 
+const mobileAccountItems = computed(() => [
+  { label: 'Account settings', icon: 'i-lucide-settings', to: '/dashboard/account/profile' },
+  { label: 'Authentication', icon: 'i-lucide-shield', to: '/dashboard/account/authentication' },
+  { label: 'Help', icon: 'i-lucide-circle-help', to: config.public.helpUrl as string, target: '_blank' },
+  { label: 'Docs', icon: 'i-lucide-book-open', to: '/docs' },
+])
+
 watch(() => route.fullPath, () => {
   mobileMoreOpen.value = false
 })
@@ -736,6 +770,13 @@ function mobileMoreFocusableItems() {
 
 function closeMobileMore() {
   mobileMoreOpen.value = false
+}
+
+async function handleMobileSignOut() {
+  const redirect = route.fullPath
+  closeMobileMore()
+  await signOut()
+  await navigateTo({ path: '/login', query: { redirect } })
 }
 
 function onMobileMoreKeydown(event: KeyboardEvent) {

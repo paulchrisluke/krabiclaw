@@ -14,6 +14,7 @@ import {
 } from "../utils/tenant-hosts";
 import { verifyScopedPreviewToken } from "../utils/preview-token";
 import { isPlatformPath } from "~/utils/platform-routes";
+import { parseOnboardingDraftPayload } from "~/server/utils/onboarding-drafts";
 
 interface TenantResolutionEnv {
   NUXT_PUBLIC_FREE_SITE_DOMAIN?: string;
@@ -219,12 +220,14 @@ export default defineEventHandler(async (event) => {
           previewToken,
         );
         if (isAuthorized) {
+          const payload = parseOnboardingDraftPayload(previewDraft.payload_json);
           event.context.draftId = previewDraft.id;
           setTenantType(event, TENANT_TYPES.TENANT);
           event.context.themeId = "saya-theme-v1";
+          event.context.onboardingStatus = "active";
           event.context.site = {
             brand_name: previewDraft.name || null,
-            logo_url: null,
+            logo_url: payload.preview.config.logo_url || null,
             favicon_url: null,
             vertical: previewDraft.vertical || "restaurant",
           };

@@ -35,7 +35,7 @@ export default defineEventHandler(async (event) => {
     siteId = site.id
     brandName = site.brand_name
   } else {
-    const dashboard = await getDashboardContext(event, { requireSite: false })
+    const dashboard = await getDashboardContext(event, { requireSite: false, requireOrganization: false })
     if (!dashboard?.site) return jsonResponse(EMPTY_CHECKLIST)
     siteId = dashboard.site.id
     brandName = dashboard.site.brand_name
@@ -61,7 +61,7 @@ export default defineEventHandler(async (event) => {
       )
     `, [siteId])
 
-    // Hero is "done" once it's no longer the generic stock fallback. Two paths write
+    // Hero is "done" once it has real owner/imported media. Two paths write
     // hero state today: the draft/commit flow (site_config flag) and direct site
     // creation via seedNewSite (business_locations -> media_assets.source).
     const heroConfig = await queryFirst<{ value: string }>(db, `

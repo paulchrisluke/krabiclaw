@@ -142,8 +142,8 @@ import { formatMoneyAmount, isSaleActive } from '~/shared/money'
 
 definePageMeta({ layout: 'saya' })
 
-const { siteId, site } = useTenantSite()
-if (!siteId) throw createError({ statusCode: 404 })
+const { siteId, draftId, site } = useTenantSite()
+if (!siteId && !draftId) throw createError({ statusCode: 404 })
 
 const restaurantName = computed(() => (site as ApiValue)?.brand_name || (site as ApiValue)?.title || 'Menu')
 

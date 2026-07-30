@@ -1,5 +1,7 @@
 -- Rebuild the parent location/content/experience tables and restore dependent rows from 0078 backups.
 
+PRAGMA defer_foreign_keys = true;--> statement-breakpoint
+
 CREATE TABLE `__new_business_locations` (
 	`id` text PRIMARY KEY NOT NULL,
 	`organization_id` text NOT NULL,
@@ -216,6 +218,7 @@ WHERE id NOT IN (SELECT id FROM `menu_item_translations`)
 INSERT INTO `reservation_slot_overrides` SELECT * FROM `__um_backup_reservation_slot_overrides` WHERE id NOT IN (SELECT id FROM `reservation_slot_overrides`);--> statement-breakpoint
 INSERT INTO `reservation_submissions` SELECT * FROM `__um_backup_reservation_submissions` WHERE id NOT IN (SELECT id FROM `reservation_submissions`);--> statement-breakpoint
 INSERT INTO `reviews` SELECT * FROM `__um_backup_reviews` WHERE id NOT IN (SELECT id FROM `reviews`);--> statement-breakpoint
+INSERT INTO `review_media` SELECT * FROM `__um_backup_review_media` WHERE id NOT IN (SELECT id FROM `review_media`);--> statement-breakpoint
 UPDATE `site_content_translations`
 SET
 	`organization_id` = (SELECT `organization_id` FROM `__um_backup_site_content_translations` WHERE `__um_backup_site_content_translations`.`id` = `site_content_translations`.`id`),

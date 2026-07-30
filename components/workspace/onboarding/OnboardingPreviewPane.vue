@@ -54,13 +54,13 @@
         </UBadge>
         <UBadge
           v-else-if="iframeSrc"
-          color="warning"
+          color="primary"
           variant="soft"
           size="sm"
           class="gap-1.5"
         >
           <span class="size-1.5 rounded-full bg-current" />
-          Building
+          Draft
         </UBadge>
 
         <UButton
@@ -77,27 +77,34 @@
       </div>
     </div>
 
-    <div v-if="!iframeSrc" class="flex flex-1 flex-col items-center justify-center gap-5 p-8 text-center text-muted">
-      <img
-        src="/krabiclaw-login-mascot.png"
-        alt=""
-        class="size-32 rounded-[28px] object-contain"
-      >
-      <div>
-        <p class="text-[15px] font-semibold text-highlighted">Let's give your business a proper home.</p>
-        <p class="mt-2 max-w-[30ch] text-[12.5px] leading-relaxed">
-          Pick the kind of site you need and the homepage will start taking shape here.
-        </p>
-      </div>
-    </div>
-
     <iframe
-      v-else
+      v-if="iframeSrc"
       id="site-preview-frame"
       :src="iframeSrc"
       title="Site preview"
       class="size-full min-h-0 flex-1 border-0 bg-default"
     />
+    <div v-else-if="emptyVisualUrl" class="relative min-h-0 flex-1 overflow-hidden bg-default">
+      <div class="flex h-full w-full items-center justify-center bg-muted p-4 sm:p-6 lg:p-8">
+        <div class="relative w-full max-w-4xl">
+          <div
+            class="absolute inset-0 rounded-3xl opacity-25 blur-2xl"
+            style="background: linear-gradient(135deg, var(--kc-coral-200), var(--kc-teal-100));"
+          />
+          <div
+            class="relative overflow-hidden rounded-3xl border border-default/60 p-3 shadow-2xl sm:p-5"
+            style="background: linear-gradient(145deg, var(--kc-coral-50) 0%, #fff8f6 100%);"
+          >
+            <img
+              :src="emptyVisualUrl"
+              :alt="emptyVisualAlt"
+              class="block max-h-[calc(100vh-8rem)] w-full rounded-[20px] object-contain shadow-lg"
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+    <div v-else class="min-h-0 flex-1 bg-default" />
   </div>
 </template>
 
@@ -115,11 +122,13 @@ const props = withDefaults(defineProps<{
   siteDomain?: string
   vertical?: SiteVertical
   homeOnly?: boolean
-  placeholderState?: 'empty' | 'building'
+  emptyVisualUrl?: string
+  emptyVisualAlt?: string
 }>(), {
   vertical: 'restaurant',
   homeOnly: false,
-  placeholderState: 'empty',
+  emptyVisualUrl: '',
+  emptyVisualAlt: '',
 })
 
 const emit = defineEmits<{

@@ -12,8 +12,8 @@
         :existing-site-slug="siteData?.subdomain ?? null"
         @site-created="onSiteCreated"
         @draft-saved="onDraftSaved"
-        @preview-state="previewPlaceholderState = $event"
         @vertical-selected="selectedOnboardingVertical = $event"
+        @step-changed="activeOnboardingStep = $event"
       />
       <OnboardingPreviewPane
         class="hidden md:flex"
@@ -24,7 +24,8 @@
         :site-status="computedSiteStatus"
         :site-domain="siteDomain"
         :vertical="previewVertical"
-        :placeholder-state="previewPlaceholderState"
+        :empty-visual-url="preDraftVisual.url"
+        :empty-visual-alt="preDraftVisual.alt"
         home-only
         @select-page="onSelectPage"
         @select-location="onSelectLocation"
@@ -49,7 +50,8 @@
           :site-status="computedSiteStatus"
           :site-domain="siteDomain"
           :vertical="previewVertical"
-          :placeholder-state="previewPlaceholderState"
+          :empty-visual-url="preDraftVisual.url"
+          :empty-visual-alt="preDraftVisual.alt"
           home-only
           @select-page="onSelectPage"
           @select-location="onSelectLocation"
@@ -78,7 +80,7 @@ const toast = useToast()
 // ─── State ────────────────────────────────────────────────────────────────────
 const siteData = ref<ApiRecord | null>(null)
 const selectedOnboardingVertical = ref<SiteVertical>('restaurant')
-const previewPlaceholderState = ref<'empty' | 'building'>('empty')
+const activeOnboardingStep = ref('welcome')
 const previewVertical = computed<SiteVertical>(() =>
   siteData.value
     ? normalizeVertical(siteData.value.vertical as string | undefined) as SiteVertical
@@ -113,9 +115,13 @@ const previewReloadToken = ref(0)
 const siteId = computed<string | null>(() => siteData.value?.id ?? null)
 
 const sitePreviewBaseUrl = computed(() => {
-  const platformBase = ((config.public.platformDomain || config.public.freeSiteDomain) as string).replace(/\/$/, '')
   if (!siteData.value?.id) return ''
-  return `${platformBase}/preview/site/${siteData.value.id}`
+  return `/preview/site/${siteData.value.id}`
+})
+
+const draftPreviewBaseUrl = computed(() => {
+  if (!draftPreview.value?.draftId) return ''
+  return `/preview/draft/${draftPreview.value.draftId}`
 })
 
 const previewLocations = computed(() => {
@@ -160,10 +166,11 @@ const previewPagePath = computed(() => {
 })
 
 const iframeSrc = computed(() => {
-  if (!sitePreviewBaseUrl.value) return ''
+  const baseUrl = draftPreview.value ? draftPreviewBaseUrl.value : sitePreviewBaseUrl.value
+  if (!baseUrl) return ''
   if (currentPageIsLocationScoped.value && !selectedLocation.value && !draftPreview.value) return ''
   const subPath = previewPagePath.value === '/' ? '' : previewPagePath.value
-  const url = new URL(sitePreviewBaseUrl.value + subPath)
+  const url = new URL(baseUrl + subPath, window.location.origin)
   url.searchParams.set('preview', 'true')
   const token = draftPreview.value?.previewToken ?? previewToken.value
   if (token) url.searchParams.set('token', token)
@@ -172,6 +179,37 @@ const iframeSrc = computed(() => {
   }
   if (previewReloadToken.value) url.searchParams.set('t', String(previewReloadToken.value))
   return url.toString()
+})
+const PRE_DRAFT_VISUALS = {
+  welcome: {
+    url: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/b9f925eb-0b91-4b62-d0e6-8db5df900700/w=800',
+    alt: 'Start building your KrabiClaw site',
+  },
+  vertical: {
+    url: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/9c594a4f-41c8-4c81-3545-fe08d9a70c00/w=800',
+    alt: 'Choose your business type',
+  },
+  source: {
+    url: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/3c0e50cb-6390-46e9-4143-e8e68fa89900/w=800',
+    alt: 'Choose how to add business details',
+  },
+  businessName: {
+    url: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/8be9a754-ef8f-4452-3fc0-90bfa24f2600/w=800',
+    alt: 'Add your business name',
+  },
+  google: {
+    url: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/1952e5fa-e460-46f0-e50a-057dce7e8a00/w=800',
+    alt: 'Add business details from Google Maps',
+  },
+} as const
+const preDraftVisual = computed(() => {
+  if (iframeSrc.value) return { url: '', alt: '' }
+  if (activeOnboardingStep.value === 'awaiting_manual_name') return PRE_DRAFT_VISUALS.businessName
+  if (activeOnboardingStep.value === 'awaiting_url') return PRE_DRAFT_VISUALS.google
+  if (activeOnboardingStep.value === 'source') return PRE_DRAFT_VISUALS.source
+  if (activeOnboardingStep.value === 'vertical') return PRE_DRAFT_VISUALS.vertical
+  if (activeOnboardingStep.value === 'welcome') return PRE_DRAFT_VISUALS.welcome
+  return { url: '', alt: '' }
 })
 
 const computedSiteStatus = computed((): 'setup' | 'progress' | 'ready' | 'live' => {

@@ -6,6 +6,7 @@ import { parseOnboardingDraftPayload } from '~/server/utils/onboarding-drafts'
 import { runSiteCreation } from '~/server/utils/site-creation'
 import { setConfig } from '~/server/utils/site-config'
 import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
+import { createMediaAsset } from '~/server/utils/media-asset-manager'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
 type SiteEnv = Parameters<typeof runSiteCreation>[0]
@@ -108,6 +109,53 @@ export default defineEventHandler(async (event) => {
       throw new Error('No active location found for this site. Site creation may have failed.')
     }
 
+    const logoDraftImage = payload.preview.draftMedia?.logo ?? null
+    const heroDraftImage = payload.preview.draftMedia?.hero ?? null
+    const logoAssetId = logoDraftImage?.draftAssetId ?? null
+    const heroAssetId = heroDraftImage?.draftAssetId ?? null
+
+    if (logoDraftImage) {
+      await createMediaAsset(db, {
+        id: logoDraftImage.draftAssetId,
+        organization_id: organizationId,
+        site_id: siteId,
+        location_id: null,
+        kind: 'image',
+        provider: 'cloudflare_images',
+        source: 'uploaded',
+        cloudflare_image_id: logoDraftImage.cloudflareImageId,
+        public_url: logoDraftImage.publicUrl,
+        thumbnail_url: logoDraftImage.thumbnailUrl,
+        mime_type: logoDraftImage.mimeType,
+        file_name: logoDraftImage.fileName,
+        file_size: logoDraftImage.fileSize,
+        category: 'logo',
+        status: 'active',
+        created_by_user_id: session.user.id,
+      })
+    }
+
+    if (heroDraftImage) {
+      await createMediaAsset(db, {
+        id: heroDraftImage.draftAssetId,
+        organization_id: organizationId,
+        site_id: siteId,
+        location_id: locationRow.id,
+        kind: 'image',
+        provider: 'cloudflare_images',
+        source: 'uploaded',
+        cloudflare_image_id: heroDraftImage.cloudflareImageId,
+        public_url: heroDraftImage.publicUrl,
+        thumbnail_url: heroDraftImage.thumbnailUrl,
+        mime_type: heroDraftImage.mimeType,
+        file_name: heroDraftImage.fileName,
+        file_size: heroDraftImage.fileSize,
+        category: 'other',
+        status: 'active',
+        created_by_user_id: session.user.id,
+      })
+    }
+
     const primaryLocation = payload.preview.locations[0]
     let updatedSlug: string | null = locationRow.slug ?? null
     if (primaryLocation) {
@@ -125,6 +173,7 @@ export default defineEventHandler(async (event) => {
         review_count: primaryLocation.review_count ?? undefined,
         notification_phone: payload.source.details.notificationPhone ?? undefined,
         timezone: payload.source.details.timezone ?? undefined,
+        hero_media_asset_id: heroAssetId ?? undefined,
         is_primary: true,
         status: 'active',
         maps_url: payload.source.place?.mapsUrl ?? undefined,
@@ -144,8 +193,8 @@ export default defineEventHandler(async (event) => {
     const locationHeroImageUrl = payload.preview.config.location_hero_image_url
     if (heroImageUrl) await setConfig(db, organizationId, siteId, 'hero_image_url', heroImageUrl)
     if (locationHeroImageUrl) await setConfig(db, organizationId, siteId, 'location_hero_image_url', locationHeroImageUrl)
-    // No real Maps photo was available, so the hero is still the generic stock fallback —
-    // record this so the onboarding checklist can tell a placeholder hero from a real one.
+    // No real Maps photo was available, so the hero remains the non-photo Saya treatment.
+    // Record this so the onboarding checklist can distinguish it from owner-provided media.
     const heroIsPlaceholder = !payload.source.place?.photos?.[0]?.photoUri
     await setConfig(db, organizationId, siteId, 'hero_image_is_placeholder', heroIsPlaceholder ? 'true' : 'false')
 
@@ -156,17 +205,31 @@ export default defineEventHandler(async (event) => {
     const now = new Date().toISOString()
     const batchQueries: BatchQuery[] = []
 
+    if (logoAssetId) {
+      batchQueries.push({
+        query: `UPDATE sites SET logo_asset_id = ?, updated_at = ? WHERE id = ? AND organization_id = ?`,
+        params: [logoAssetId, now, siteId, organizationId],
+      })
+    }
+
     batchQueries.push({ query: `DELETE FROM site_content WHERE organization_id = ? AND site_id = ?`, params: [organizationId, siteId] })
     for (const row of payload.preview.content) {
-      // These rows are auto-generated draft copy the owner has not individually edited yet
-      // (the wizard only supports re-running the whole details form, not per-field edits) —
-      // mark them 'template' so the checklist and dashboard hints can prompt for real content.
+      const isHomeHero = row.page === 'home' && row.field === 'hero'
+      const heroSource = isHomeHero && (
+        heroAssetId
+        || payload.preview.config.draft_hero_headline
+        || payload.preview.config.draft_hero_description
+      )
+        ? 'owner'
+        : 'template'
+      // Most draft content is template copy. The home hero can be owner-authored
+      // through Make it yours before commit, so preserve that source separately.
       batchQueries.push({
         query: `
           INSERT INTO site_content
             (id, organization_id, site_id, location_id, page, field, content,
-             hero_title, hero_subtitle, value, type, source, updated_at, updated_by, component)
-          VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 'template', ?, ?, ?)
+             hero_title, hero_subtitle, hero_media_asset_id, value, type, source, updated_at, updated_by, component)
+          VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT (organization_id, site_id, page, field) WHERE location_id IS NULL DO NOTHING
         `,
         params: [
@@ -178,8 +241,10 @@ export default defineEventHandler(async (event) => {
           row.content,
           row.hero_title,
           row.hero_subtitle,
+          isHomeHero ? heroAssetId : null,
           row.value,
           row.type,
+          heroSource,
           row.updated_at || now,
           session.user.id,
           row.component,

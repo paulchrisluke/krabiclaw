@@ -28,6 +28,7 @@ DROP TABLE `__um_backup_posts`;--> statement-breakpoint
 DROP TABLE `__um_backup_reservation_slot_overrides`;--> statement-breakpoint
 DROP TABLE `__um_backup_reservation_submissions`;--> statement-breakpoint
 DROP TABLE `__um_backup_review_requests`;--> statement-breakpoint
+DROP TABLE `__um_backup_review_media`;--> statement-breakpoint
 DROP TABLE `__um_backup_reviews`;--> statement-breakpoint
 DROP TABLE `__um_backup_site_content`;--> statement-breakpoint
 DROP TABLE `__um_backup_site_content_translations`;--> statement-breakpoint

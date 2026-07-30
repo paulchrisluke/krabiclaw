@@ -37,8 +37,8 @@ interface TenantBlogPost {
   featured_image?: { public_url: string | null; kind: string | null } | null
 }
 
-const { siteId, site } = useTenantSite()
-if (!siteId) throw createError({ statusCode: 404 })
+const { siteId, draftId, site } = useTenantSite()
+if (!siteId && !draftId) throw createError({ statusCode: 404 })
 
 const siteName = computed(() => site?.brand_name || 'Our Site')
 

@@ -21,18 +21,18 @@ Global first, local second, persistent after that.
 
 **Current** — the flow is draft-first, and this is the one and only new-site creation path:
 
-`OnboardingWizard.vue`: `welcome → vertical → source → url/manual name → confirm → details → importing → imported`, then optional post-creation handoff cards (brand essentials, social/polish/MCP — all skippable via "Set up later"). Brand essentials is required before leaving onboarding but optional/skippable via "Set up later".
+`OnboardingWizard.vue`: `welcome → vertical → source → url/manual name → confirm → location → contact → currency → hours → brand → hero → create → imported`, then optional post-creation handoff cards (manager alerts, brand essentials, social/polish/MCP — all skippable where the cards allow).
 
-- `submitDetails()` posts to `/api/dashboard/onboarding/drafts/from-place` or `/manual`, which calls `buildOnboardingDraftPayload()` in `server/utils/onboarding-drafts.ts` and returns a `previewToken` for a private preview *before* the site is committed.
+- The first real business identity creates an active draft through `POST /api/dashboard/onboarding/drafts/active`: manual name entry creates a manual draft, and confirming a Google listing creates a Google Places draft. Completed onboarding sections patch that same active draft, and the preview renders from `/preview/draft/:draftId` until commit.
 - `commitDraft()` turns that draft into a real site via `POST /api/dashboard/onboarding/drafts/[draftId]/commit`, which calls the same `runSiteCreation()` used everywhere else a site gets created (`POST /api/sites`, the MCP `create_site` tool).
-- There is no other new-site creation path. `server/api/dashboard/onboarding/setup.post.ts` and `setup-manual.post.ts` used to also contain full site-creation implementations, but the wizard never reached them (new-site creation always went through the draft endpoints above) — #277 removed both files. The still-needed Google Maps preview-only lookup for the wizard's confirm card now lives at its own single-purpose endpoint, `POST /api/dashboard/onboarding/places-preview`.
+- There is no other new-site creation path. `server/api/dashboard/onboarding/setup.post.ts` and `setup-manual.post.ts` used to also contain full site-creation implementations, but the wizard never reached them; #277 removed both files, and new-site onboarding now goes through the active draft endpoint above. The still-needed Google Maps preview-only lookup for the wizard's confirm card now lives at its own single-purpose endpoint, `POST /api/dashboard/onboarding/places-preview`.
 - Adding a location to an *existing* site is a separate mode of the same `OnboardingWizard.vue` component (`mode="add-location"`), and creates exclusively through `POST /api/dashboard/locations/add` — that endpoint owns both the Places-preview lookup and the mutation for add-location, since (unlike new-site creation) there's no draft/commit split for adding to an already-live site.
 - `OnboardingChecklist.vue` tracks 5 items (`business_info`, `hero_image`, `core_offering`, `story`, `post`; `core_offering` was renamed from `menu_or_experiences` in #277 — see completion logic in `server/api/dashboard/onboarding/checklist.get.ts`), rendered on `pages/dashboard/[orgSlug]/sites/[siteSlug]/index.vue`.
 
 **Resolved** — kept as dated history, not current findings:
 
 - ~~The checklist's `hero_image` check can never pass because it queries the wrong column.~~ Fixed prior to #277 — `checklist.get.ts` now checks `site_config.hero_image_is_placeholder` and `business_locations.hero_media_asset_id` → `media_assets.source`, matching what both creation paths actually write.
-- ~~No dedicated brand step exists anywhere in the wizard.~~ Fixed prior to #277 — `finishCreation()` in `OnboardingWizard.vue` shows a `brandCard` (`components/workspace/onboarding/BrandEssentialsCard.vue`) immediately after a new site is created, prompting for logo/hero photo/brand color before handoff.
+- ~~No dedicated brand step exists anywhere in the wizard.~~ Fixed prior to #277 and revised in #459 — `OnboardingWizard.vue` now prompts before commit with separate skippable `Brand` and `Homepage hero` draft steps, instead of combining brand color, logo, hero photo, and homepage copy in one dense card.
 - ~~Restaurant-flavored placeholder copy bleeds into non-restaurant verticals.~~ Fixed by #276 — `onboarding-drafts.ts` and `site-template.ts` now have explicit `professional_service` copy (hero/CTA/about/Q&A/post), and neither seeds a menu for it.
 
 **Deferred** — real, tracked gaps, not silently left as current-behavior claims:
@@ -42,12 +42,12 @@ Global first, local second, persistent after that.
 
 ---
 
-## Why the preview used to read as "blank" (historical — resolved by #276's brand step + explicit vertical copy)
+## Why the preview used to read as "blank" (historical — resolved by active draft preview)
 
-Hero image was never literally empty in either creation path — both `seedNewSite()` and `buildOnboardingDraftPayload()` fall back to a stock photo when no Maps photo is available. The "blank" perception had three real causes, tracked and addressed as follows:
+The onboarding preview now renders the active draft through the same Saya bootstrap path as tenant pages. When owner or Google media is missing, the source of truth stays media-free and the Saya section renders its non-photo treatment; it does not invent a stock/photo placeholder. The old "blank" perception had three real causes, tracked and addressed as follows:
 
-1. **No logo / no brand color.** Resolved — the post-creation `brandCard` step (see above) now collects both immediately after site creation.
-2. **Stock hero photo for manual-entry onboarding.** Still current behavior for sites with no Google Maps match — this is an accepted tradeoff (no fabricated photo), not a bug.
+1. **No logo / no brand color.** Resolved — the pre-commit `Brand` step (see above) now collects both on the active draft.
+2. **No real hero photo for manual-entry onboarding.** Current behavior: no photo is shown until the owner provides one or a Google/imported media source supplies it.
 3. **Restaurant-flavored placeholder copy leaking into other verticals.** Resolved by #276 (see above).
 
 ---
@@ -74,13 +74,14 @@ Recommended mechanism (still just a proposal, not implemented): add a single nul
 |---|---|---|---|
 | 1 | Business basics (Maps import or manual: name, vertical, address, contact) | Required | Wizard |
 | 2 | Draft preview (private, current architecture) | Proposed (not currently step 2) | Wizard → `/preview/draft/...` |
-| 3 | Brand essentials — logo, hero photo (upload or keep template), brand color | Optional (skippable) | Wizard, post-creation `brandCard` step |
-| 4 | Operations — timezone, currency, notification phone | Required | Wizard |
-| 5 | Core offering — menu (restaurant), experiences (experience vertical); no equivalent yet for professional_service (#284) | Required, most prominent step | Wizard, deep-linkable to dashboard CMS later |
-| 6 | Story — about, founder story, FAQ seeds | Optional but prompted | Wizard or checklist |
-| 7 | Channels — Facebook/Instagram, ChatGPT app install, ChowBot intro | Optional | Wizard handoff cards |
-| 8 | Team — invite admins/editors | Optional, explicitly skippable | Wizard or checklist |
-| 9 | Launch readiness — domain, final review, publish | Required to go live, not required to keep working in draft | Checklist + `/dashboard/[orgSlug]/sites/[siteSlug]/domains` |
+| 3 | Brand — brand color and logo | Optional (skippable) | Wizard active draft |
+| 4 | Homepage hero — hero photo, headline, and description | Optional (skippable) | Wizard active draft |
+| 5 | Operations — timezone, currency, notification phone | Required | Wizard |
+| 6 | Core offering — menu (restaurant), experiences (experience vertical); no equivalent yet for professional_service (#284) | Required, most prominent step | Wizard, deep-linkable to dashboard CMS later |
+| 7 | Story — about, founder story, FAQ seeds | Optional but prompted | Wizard or checklist |
+| 8 | Channels — Facebook/Instagram, ChatGPT app install, ChowBot intro | Optional | Wizard handoff cards |
+| 9 | Team — invite admins/editors | Optional, explicitly skippable | Wizard or checklist |
+| 10 | Launch readiness — domain, final review, publish | Required to go live, not required to keep working in draft | Checklist + `/dashboard/[orgSlug]/sites/[siteSlug]/domains` |
 
 ### Location-level (once per location, including the first)
 

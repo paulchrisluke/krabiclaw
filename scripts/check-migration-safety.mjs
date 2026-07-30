@@ -19,7 +19,7 @@ function migrationNumber(fileName) {
   return match ? Number(match[1]) : null
 }
 
-export function findUnsafeMigrationStatements(fileName, sql) {
+export function findUnsafeMigrationStatements(fileName, sql, migrationContext = sql) {
   if (IMMUTABLE_ALLOWLIST.has(fileName)) return []
   const number = migrationNumber(fileName)
   if (number !== null && number < FIRST_ENFORCED_MIGRATION) return []
@@ -35,21 +35,21 @@ export function findUnsafeMigrationStatements(fileName, sql) {
     if (PROTECTED_PARENT_TABLES.has(table)) {
       const backupName = `__um_backup_${table}`
       const newTableName = `__new_${table}`
-      const assertNameMatch = sql.match(/CREATE\s+TABLE\s+[`"]?(__um_assert_[0-9]+)[`"]?/i)
+      const assertNameMatch = migrationContext.match(/CREATE\s+TABLE\s+[`"]?(__um_assert_[0-9]+)[`"]?/i)
       const assertName = assertNameMatch?.[1] ?? ''
-      const createsBackup = new RegExp(`CREATE\\s+TABLE\\s+\`?${backupName}\`?\\s+AS\\s+SELECT\\s+\\*\\s+FROM\\s+\`?${table}\`?`, 'i').test(sql)
+      const createsBackup = new RegExp(`CREATE\\s+TABLE\\s+\`?${backupName}\`?\\s+AS\\s+SELECT\\s+\\*\\s+FROM\\s+\`?${table}\`?`, 'i').test(migrationContext)
       const createsNewTable = new RegExp(`CREATE\\s+TABLE\\s+\`?${newTableName}\`?`, 'i').test(sql)
       const restoresBackup = new RegExp(`INSERT\\s+INTO\\s+\`?${table}\`?\\s+SELECT\\s+\\*\\s+FROM\\s+\`?${backupName}\`?`, 'i').test(sql)
         || new RegExp(`INSERT\\s+INTO\\s+\`?${newTableName}\`?`, 'i').test(sql)
-      const countAssertion = sql.includes(`${table}_backup_count_mismatch`)
-        && new RegExp(`COUNT\\(\\*\\)\\s+FROM\\s+\`?${backupName}\`?`, 'i').test(sql)
-        && new RegExp(`COUNT\\(\\*\\)\\s+FROM\\s+\`?${table}\`?`, 'i').test(sql)
-      const fkAssertion = /pragma_foreign_key_check/i.test(sql)
-      const dropsAssert = Boolean(assertName) && new RegExp(`DROP\\s+TABLE\\s+\`?${assertName}\`?`, 'i').test(sql)
-      const dropsBackup = new RegExp(`DROP\\s+TABLE\\s+\`?${backupName}\`?`, 'i').test(sql)
+      const countAssertion = migrationContext.includes(`${table}_backup_count_mismatch`)
+        && new RegExp(`COUNT\\(\\*\\)\\s+FROM\\s+\`?${backupName}\`?`, 'i').test(migrationContext)
+        && new RegExp(`COUNT\\(\\*\\)\\s+FROM\\s+\`?${table}\`?`, 'i').test(migrationContext)
+      const fkAssertion = /pragma_foreign_key_check/i.test(migrationContext)
+      const dropsAssert = Boolean(assertName) && new RegExp(`DROP\\s+TABLE\\s+\`?${assertName}\`?`, 'i').test(migrationContext)
+      const dropsBackup = new RegExp(`DROP\\s+TABLE\\s+\`?${backupName}\`?`, 'i').test(migrationContext)
       const hasRelationshipPreservation = createsBackup
         ? restoresBackup && countAssertion && dropsBackup
-        : createsNewTable && restoresBackup && countAssertion
+        : createsNewTable && restoresBackup && countAssertion && dropsBackup
 
       if (!hasRelationshipPreservation || !fkAssertion || !dropsAssert) {
         findings.push(`DROP TABLE ${table} must be a bounded rebuild with backup, restore, count assertion, foreign_key_check, and post-assert backup cleanup`)
@@ -62,9 +62,12 @@ export function findUnsafeMigrationStatements(fileName, sql) {
 export async function checkMigrationDirectory(migrationsDir) {
   const files = (await readdir(migrationsDir)).filter(file => /^\d{4}_.+\.sql$/.test(file)).sort()
   const violations = []
+  const migrationSql = new Map()
+  for (const file of files) migrationSql.set(file, await readFile(path.join(migrationsDir, file), 'utf8'))
+  const migrationContext = Array.from(migrationSql.values()).join('\n')
   for (const file of files) {
-    const sql = await readFile(path.join(migrationsDir, file), 'utf8')
-    for (const reason of findUnsafeMigrationStatements(file, sql)) violations.push(`${file}: ${reason}`)
+    const sql = migrationSql.get(file) ?? ''
+    for (const reason of findUnsafeMigrationStatements(file, sql, migrationContext)) violations.push(`${file}: ${reason}`)
   }
   return violations
 }
