@@ -68,6 +68,7 @@
                 v-else-if="mediaItems.length === 1"
                 type="button"
                 class="relative block aspect-4/3 w-full overflow-hidden border-0 bg-transparent p-0 text-left lg:h-[520px]"
+                :aria-label="mediaItems[0]?.kind === 'video' ? `Play video, ${experience.title}` : undefined"
                 @click="openLightbox(0)"
               >
                 <video
@@ -109,6 +110,7 @@
                     type="button"
                     class="relative h-full w-full overflow-hidden border-0 bg-transparent p-0 text-left"
                     :class="mediaItems.length >= 3 ? 'row-span-2' : ''"
+                    :aria-label="mediaItems[0]?.kind === 'video' ? `Play video, ${experience.title}` : undefined"
                     @click="openLightbox(0)"
                   >
                     <video
@@ -145,6 +147,7 @@
                     :key="item.url"
                     type="button"
                     class="relative h-full w-full overflow-hidden border-0 bg-transparent p-0 text-left"
+                    :aria-label="item.kind === 'video' ? `Play video, ${experience.title}` : undefined"
                     @click="openLightbox(i + 1)"
                   >
                     <video
@@ -618,6 +621,7 @@ const lightboxIdx = ref(0)
 const galleryVideoRefs = ref<Record<number, HTMLVideoElement>>({})
 const galleryVideoVisibility = ref<Record<number, number>>({})
 let galleryVideoObserver: IntersectionObserver | null = null
+let galleryVideoSyncToken = 0
 
 function pauseGalleryVideo(video: HTMLVideoElement) {
   video.pause()
@@ -643,6 +647,7 @@ function mostVisibleGalleryVideoIndex() {
 }
 
 async function syncGalleryVideoPreviews() {
+  const syncToken = ++galleryVideoSyncToken
   if (!import.meta.client) return
   if (lightboxOpen.value || document.visibilityState !== 'visible') {
     pauseGalleryVideos()
@@ -652,6 +657,8 @@ async function syncGalleryVideoPreviews() {
   const selectedIndex = mostVisibleGalleryVideoIndex()
 
   for (const [key, video] of Object.entries(galleryVideoRefs.value)) {
+    if (syncToken !== galleryVideoSyncToken) return
+
     const index = Number(key)
     if (index !== selectedIndex) {
       pauseGalleryVideo(video)
@@ -660,6 +667,10 @@ async function syncGalleryVideoPreviews() {
 
     try {
       await video.play()
+      if (syncToken !== galleryVideoSyncToken) {
+        pauseGalleryVideo(video)
+        return
+      }
     } catch {
       // Muted preview autoplay can still be blocked by browser policy.
     }
@@ -668,6 +679,7 @@ async function syncGalleryVideoPreviews() {
 
 function setGalleryVideoRef(el: Element | ComponentPublicInstance | null, index: number) {
   if (!import.meta.client || !(el instanceof HTMLVideoElement)) return
+  createGalleryVideoObserver()
   galleryVideoRefs.value[index] = el
   galleryVideoObserver?.observe(el)
   void syncGalleryVideoPreviews()
@@ -681,6 +693,7 @@ function disconnectGalleryVideoObserver() {
 }
 
 function createGalleryVideoObserver() {
+  if (galleryVideoObserver) return
   if (!import.meta.client || !('IntersectionObserver' in window)) return
 
   galleryVideoObserver = new IntersectionObserver((entries) => {
