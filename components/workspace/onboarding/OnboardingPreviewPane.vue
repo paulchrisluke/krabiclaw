@@ -1,8 +1,9 @@
 <template>
-  <div class="flex min-h-0 flex-col bg-elevated">
-    <!-- Preview toolbar -->
-    <div class="flex shrink-0 items-center gap-2.5 border-b border-default bg-default px-[18px] py-3">
-      <!-- Page tabs -->
+  <div class="flex size-full min-h-0 flex-col bg-elevated">
+    <div
+      v-if="!homeOnly"
+      class="flex shrink-0 items-center gap-2.5 border-b border-default bg-default px-[18px] py-3"
+    >
       <div class="flex gap-0.5 rounded-[11px] border border-default bg-muted p-1">
         <button
           v-for="tab in tabs"
@@ -21,7 +22,6 @@
         </button>
       </div>
 
-      <!-- Location switcher (only for location-scoped pages) -->
       <button
         v-if="currentTabIsLocationScoped && siteLocations.length > 0"
         class="inline-flex items-center gap-1.5 rounded-[10px] border border-default bg-default px-3 py-2 text-[12.5px] font-semibold text-highlighted shadow-sm transition-colors hover:border-default/80"
@@ -31,7 +31,6 @@
         {{ selectedLocationLabel }}
       </button>
 
-      <!-- Status badge (pushed right) -->
       <div class="ml-auto flex items-center gap-2">
         <UBadge
           v-if="siteStatus === 'live'"
@@ -55,16 +54,15 @@
         </UBadge>
         <UBadge
           v-else-if="iframeSrc"
-          color="warning"
+          color="primary"
           variant="soft"
           size="sm"
           class="gap-1.5"
         >
           <span class="size-1.5 rounded-full bg-current" />
-          Building
+          Draft
         </UBadge>
 
-        <!-- Open in new tab -->
         <UButton
           v-if="iframeSrc"
           :href="iframeSrc"
@@ -79,26 +77,43 @@
       </div>
     </div>
 
-    <!-- Empty state (no site yet) -->
-    <div v-if="!iframeSrc" class="flex flex-1 flex-col items-center justify-center gap-4 p-10 text-center text-muted">
-      <div class="flex size-[60px] items-center justify-center rounded-2xl border border-default bg-default text-dimmed">
-        <UIcon name="i-lucide-globe" class="size-7" />
+    <Transition name="onboarding-preview" mode="out-in">
+      <iframe
+        v-if="iframeSrc"
+        :data-preview-frame-id="previewFrameId"
+        key="iframe"
+        :src="iframeSrc"
+        title="Site preview"
+        sandbox="allow-same-origin allow-scripts allow-forms"
+        class="size-full min-h-0 flex-1 border-0 bg-default"
+      />
+      <div v-else-if="emptyVisualUrl" :key="emptyVisualUrl" class="relative min-h-0 flex-1 overflow-hidden bg-default">
+        <div class="flex h-full w-full items-center justify-center bg-muted p-4 sm:p-6 lg:p-8">
+          <div class="relative w-full max-w-4xl">
+            <div
+              class="absolute inset-0 rounded-3xl opacity-25 blur-2xl"
+              style="background: linear-gradient(135deg, var(--kc-coral-200), var(--kc-teal-100));"
+            />
+            <div
+              class="relative overflow-hidden rounded-3xl border border-default/60 p-3 shadow-2xl sm:p-5"
+              style="background: linear-gradient(145deg, var(--kc-coral-50) 0%, #fff8f6 100%);"
+            >
+              <img
+                :src="emptyVisualUrl"
+                :alt="emptyVisualAlt"
+                class="block max-h-[calc(100vh-8rem)] w-full rounded-[20px] object-contain shadow-lg"
+              >
+            </div>
+          </div>
+        </div>
       </div>
-      <p class="text-[15px] font-semibold text-highlighted">Your site shows up here.</p>
-      <p class="max-w-[30ch] text-[12.5px] leading-relaxed">
-        Tell me where to start and I'll build your homepage live as we chat.
-      </p>
-    </div>
-
-    <!-- Preview scroll area -->
-    <div v-else class="min-h-0 flex-1 overflow-auto p-5">
-      <SitePreviewFrame :iframe-src="iframeSrc" :display-url="displayUrl" />
-    </div>
+      <div v-else key="empty" class="min-h-0 flex-1 bg-default" />
+    </Transition>
   </div>
 </template>
 
 <script setup lang="ts">
-import { buildDisplayUrl, getEditablePages, resolvePreviewPath } from '~/config/content-registry'
+import { getEditablePages } from '~/config/content-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
@@ -110,21 +125,22 @@ const props = withDefaults(defineProps<{
   siteStatus: 'setup' | 'progress' | 'ready' | 'live'
   siteDomain?: string
   vertical?: SiteVertical
+  homeOnly?: boolean
+  emptyVisualUrl?: string
+  emptyVisualAlt?: string
 }>(), {
   vertical: 'restaurant',
+  homeOnly: false,
+  emptyVisualUrl: '',
+  emptyVisualAlt: '',
 })
 
 const emit = defineEmits<{
   'select-page': [page: string]
   'select-location': [id: string]
 }>()
+const previewFrameId = useId()
 
-// Derives the "core offering" tab (Menu / Experiences / Services) from the
-// same page registry the main CMS editor uses, instead of a hardcoded
-// Saya-shaped "Menu" tab. professional_service has no menu/experiences
-// registry entry (see #276/#277), so it falls through to the resolved
-// public template's offerings route (/services for Blawby) — site-level,
-// not location-scoped, per #285.
 const secondaryTab = computed(() => {
   if (props.vertical === 'professional_service') {
     const offeringsPath = resolvePublicTemplate({ vertical: props.vertical }).serviceRoutes.offeringsIndex
@@ -135,15 +151,13 @@ const secondaryTab = computed(() => {
   const match = getEditablePages(props.vertical, template.slug).find(page => page.id === 'menu' || page.id === 'experiences')
   if (!match) return null
   const locationScoped = match.scope === 'location'
-  // A location-scoped tab has no page to preview until a location exists —
-  // resolvePreviewPath has no path to substitute the location slug into
-  // otherwise, so disable rather than show a broken :location placeholder URL.
   const enabled = !!props.iframeSrc && (!locationScoped || props.siteLocations.length > 0)
   return { id: match.id, label: match.label, enabled, locationScoped }
 })
 
 const tabs = computed(() => {
   const list = [{ id: 'home', label: 'Home', enabled: !!props.iframeSrc, locationScoped: false }]
+  if (props.homeOnly) return list
   if (secondaryTab.value) list.push(secondaryTab.value)
   list.push({ id: 'about', label: 'About', enabled: !!props.iframeSrc, locationScoped: false })
   list.push({ id: 'contact', label: 'Contact', enabled: !!props.iframeSrc, locationScoped: false })
@@ -151,23 +165,6 @@ const tabs = computed(() => {
 })
 
 const currentTabIsLocationScoped = computed(() => tabs.value.find(tab => tab.id === props.selectedPage)?.locationScoped === true)
-
-// The URL a real visitor would see — distinct from iframeSrc, which points at
-// the internal /preview/site/:id route that actually serves draft content.
-const displayUrl = computed(() => {
-  const template = resolvePublicTemplate({ vertical: props.vertical })
-  // professional_service's "Services" tab id is the offerings route itself
-  // (see secondaryTab above), not a content-registry page id — resolve it
-  // the same way before falling back to the registry lookup for other pages.
-  if (props.vertical === 'professional_service' && props.selectedPage === secondaryTab.value?.id) {
-    return buildDisplayUrl(props.siteDomain ?? '', template.serviceRoutes.offeringsIndex ?? '/')
-  }
-  const page = getEditablePages(props.vertical, template.slug).find(p => p.id === props.selectedPage)
-  const path = page?.scope === 'location' && selectedLocation.value
-    ? resolvePreviewPath(props.selectedPage, { locationSlug: selectedLocation.value.slug })
-    : page?.path ?? '/'
-  return buildDisplayUrl(props.siteDomain ?? '', path)
-})
 
 const selectedLocation = computed(() =>
   props.siteLocations.find(l => l.id === props.selectedLocationId) ?? props.siteLocations[0] ?? null
@@ -181,3 +178,26 @@ const cycleLocation = () => {
   if (next) emit('select-location', next.id)
 }
 </script>
+
+<style scoped>
+.onboarding-preview-enter-active,
+.onboarding-preview-leave-active {
+  transition: opacity 180ms ease;
+}
+
+.onboarding-preview-enter-from {
+  opacity: 0;
+}
+
+.onboarding-preview-leave-to {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-preview-enter-active,
+  .onboarding-preview-leave-active {
+    transition: opacity 80ms linear;
+  }
+
+}
+</style>

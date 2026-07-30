@@ -76,6 +76,21 @@ const skipClientScripts = process.env.PERF_NO_SCRIPTS === 'true'
 const skipDompurifyHooks = process.env.PERF_NO_DOMPURIFY_HOOKS === 'true'
 const publicPerfTestPage = process.env.PERF_PUBLIC_TEST_PAGE !== 'false'
 
+const deploymentHost = new URL(
+  process.env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'http://localhost',
+).hostname
+const productionHtmlCacheHosts = new Set(['krabiclaw.com', 'www.krabiclaw.com'])
+const isNonProductionDeployment = !productionHtmlCacheHosts.has(deploymentHost)
+const publicHtmlCacheHeaders = isNonProductionDeployment
+  ? {
+      'cache-control': 'private, no-store, max-age=0',
+      pragma: 'no-cache',
+      expires: '0',
+    }
+  : {
+      'cache-control': 'public, s-maxage=60, stale-while-revalidate=300, max-age=0',
+    }
+
 // Tried (2026-07-02): a `PERF_CSS_EXCLUDE_DASHBOARD` flag appending
 // `@source not "<glob>";` to main.css for dashboard/admin/editor/billing/
 // onboarding/media paths, to measure how much of entry.css a public/tenant
@@ -434,10 +449,10 @@ export default defineNuxtConfig({
     '/login':        { headers: { 'cache-control': 'no-store', 'x-frame-options': 'DENY', 'content-security-policy': "frame-ancestors 'none'" } },
     '/links':        { headers: { 'cache-control': 'private, no-store' } },
 
-    // Public pages — detectBrowserLanguage is disabled so / is safe to cache.
+    // Public pages — detectBrowserLanguage is disabled so / is safe to cache in production.
     // Explicit '/' rule overrides any cache-control the i18n module injects internally.
-    '/':   { headers: { 'cache-control': 'public, s-maxage=60, stale-while-revalidate=300, max-age=0' } },
-    '/**': { headers: { 'cache-control': 'public, s-maxage=60, stale-while-revalidate=300, max-age=0' } },
+    '/':   { headers: publicHtmlCacheHeaders },
+    '/**': { headers: publicHtmlCacheHeaders },
   },
 
   // Font configuration — @nuxt/fonts downloads, subsets, and self-hosts these.

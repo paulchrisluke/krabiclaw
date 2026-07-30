@@ -1,0 +1,44 @@
+[
+  {
+    "name": "United States",
+    "code": "US",
+    "emoji": "🇺🇸",
+    "dialCode": "+1",
+    "mask": "(###) ###-####"
+  },
+  {
+    "name": "United Kingdom",
+    "code": "GB",
+    "emoji": "🇬🇧",
+    "dialCode": "+44",
+    "mask": "#### ######"
+  },
+  {
+    "name": "Thailand",
+    "code": "TH",
+    "emoji": "🇹🇭",
+    "dialCode": "+66",
+    "mask": "## ### ####"
+  },
+  {
+    "name": "Australia",
+    "code": "AU",
+    "emoji": "🇦🇺",
+    "dialCode": "+61",
+    "mask": "# #### ####"
+  },
+  {
+    "name": "Canada",
+    "code": "CA",
+    "emoji": "🇨🇦",
+    "dialCode": "+1",
+    "mask": "(###) ###-####"
+  },
+  {
+    "name": "Singapore",
+    "code": "SG",
+    "emoji": "🇸🇬",
+    "dialCode": "+65",
+    "mask": "#### ####"
+  }
+]

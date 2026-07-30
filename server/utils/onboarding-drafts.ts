@@ -1,8 +1,32 @@
 import type { SiteVertical } from '~/utils/vertical-copy'
 import { execute, queryFirst } from '~/server/db'
 import type { PlaceDetails } from '~/server/utils/google-places'
+import type { CurrencyCode } from '~/shared/currencies'
 
 type DraftSourceType = 'google_places' | 'manual'
+
+export interface DraftBrandInput {
+  brandColor: string | null
+  logoNote: string | null
+  logoPreviewUrl: string | null
+  heroPhotoNote: string | null
+  heroPreviewUrl: string | null
+  heroHeadline: string | null
+  heroDescription: string | null
+  logoImage: DraftUploadedImage | null
+  heroImage: DraftUploadedImage | null
+}
+
+export interface DraftUploadedImage {
+  draftAssetId: string
+  cloudflareImageId: string
+  publicUrl: string
+  thumbnailUrl: string | null
+  mimeType: string | null
+  fileName: string | null
+  fileSize: number | null
+  category: 'logo' | 'other'
+}
 
 export interface DraftLocationRecord {
   id: string
@@ -97,6 +121,10 @@ export interface OnboardingDraftPayload {
     vertical: SiteVertical
     subdomainCandidate: string
     config: Record<string, string | null>
+    draftMedia: {
+      logo: DraftUploadedImage | null
+      hero: DraftUploadedImage | null
+    }
     locations: DraftLocationRecord[]
     menu: DraftMenuRecord | null
     reviews: DraftReviewRecord[]
@@ -123,6 +151,7 @@ export interface DraftDetailsInput {
   openingHours: string | null
   notificationPhone: string | null
   timezone: string | null
+  currency: CurrencyCode
   isPrimary: boolean
 }
 
@@ -192,11 +221,29 @@ function draftUid(prefix: string) {
 }
 
 function isUniqueConstraintError(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error || '')
-  return /UNIQUE constraint failed/i.test(message)
+  const messages: string[] = []
+  let current: unknown = error
+  while (current) {
+    if (current instanceof Error) {
+      messages.push(current.message)
+      current = current.cause
+      continue
+    }
+    if (typeof current === 'object' && current && 'cause' in current) {
+      const record = current as { message?: unknown; cause?: unknown }
+      if (typeof record.message === 'string') messages.push(record.message)
+      current = record.cause
+      continue
+    }
+    messages.push(String(current))
+    break
+  }
+  return messages.some(message => /UNIQUE constraint failed/i.test(message))
 }
 
-function asPlaceSnapshot(place: PlaceDetails): PlaceDetailsSnapshot {
+type DraftPlaceSource = PlaceDetails | PlaceDetailsSnapshot
+
+function asPlaceSnapshot(place: DraftPlaceSource): PlaceDetailsSnapshot {
   return {
     placeId: place.placeId,
     name: place.name,
@@ -253,7 +300,14 @@ const DRAFT_CONTENT_COPY: Record<SiteVertical, {
   },
 }
 
-function buildDraftContent(brandName: string, vertical: SiteVertical, heroImageUrl: string | null, heroThumbnailUrl: string | null): DraftContentRecord[] {
+function buildDraftContent(
+  brandName: string,
+  vertical: SiteVertical,
+  heroImageUrl: string | null,
+  heroThumbnailUrl: string | null,
+  heroHeadline: string | null,
+  heroDescription: string | null,
+): DraftContentRecord[] {
   const updatedAt = nowIso()
   const copy = DRAFT_CONTENT_COPY[vertical] ?? DRAFT_CONTENT_COPY.restaurant
   const baseHeroSubtitle = copy.heroSubtitle(brandName)
@@ -269,8 +323,8 @@ function buildDraftContent(brandName: string, vertical: SiteVertical, heroImageU
       content: null,
       value: null,
       type: 'text',
-      hero_title: brandName,
-      hero_subtitle: baseHeroSubtitle,
+      hero_title: heroHeadline || brandName,
+      hero_subtitle: heroDescription || baseHeroSubtitle,
       hero_public_url: heroImageUrl,
       hero_kind: heroImageUrl ? 'image' : null,
       thumbnail_url: heroThumbnailUrl,
@@ -398,16 +452,19 @@ export function buildOnboardingDraftPayload(input: {
   name: string
   vertical: SiteVertical
   details: DraftDetailsInput
-  place: PlaceDetails | null
+  place: DraftPlaceSource | null
+  brandDraft?: DraftBrandInput | null
 }): OnboardingDraftPayload {
   const brandName = input.details.name || input.name
   const subdomainCandidate = slugify(brandName).slice(0, 40)
   const placeSnapshot = input.place ? asPlaceSnapshot(input.place) : null
   // No stock photo fallback here: a generic stock image isn't actually theirs, and the
   // Saya hero renders a brand-color + icon treatment when no real photo is available yet.
-  const heroImageUrl = placeSnapshot?.photos[0]?.photoUri ?? null
-  const locationHeroImageUrl = placeSnapshot?.photos[1]?.photoUri ?? heroImageUrl
-  const heroThumbnailUrl = heroImageUrl
+  const uploadedHero = input.brandDraft?.heroImage ?? null
+  const uploadedLogo = input.brandDraft?.logoImage ?? null
+  const heroImageUrl = uploadedHero?.publicUrl ?? placeSnapshot?.photos[0]?.photoUri ?? null
+  const locationHeroImageUrl = uploadedHero?.publicUrl ?? placeSnapshot?.photos[1]?.photoUri ?? heroImageUrl
+  const heroThumbnailUrl = uploadedHero?.thumbnailUrl ?? heroImageUrl
   const locationSlug = slugify(brandName) || 'main'
   const locationId = 'draft-location-main'
 
@@ -474,7 +531,10 @@ export function buildOnboardingDraftPayload(input: {
     published_at: nowIso(),
   }]
 
-  const content = buildDraftContent(brandName, input.vertical, heroImageUrl, heroThumbnailUrl)
+  const brandColor = input.brandDraft?.brandColor?.trim() || null
+  const heroHeadline = input.brandDraft?.heroHeadline?.trim() || null
+  const heroDescription = input.brandDraft?.heroDescription?.trim() || null
+  const content = buildDraftContent(brandName, input.vertical, heroImageUrl, heroThumbnailUrl, heroHeadline, heroDescription)
 
   return {
     version: 1,
@@ -491,6 +551,18 @@ export function buildOnboardingDraftPayload(input: {
         source_locale: 'en',
         hero_image_url: heroImageUrl,
         location_hero_image_url: locationHeroImageUrl,
+        logo_url: uploadedLogo?.publicUrl ?? null,
+        brand_color: brandColor,
+        draft_logo_note: input.brandDraft?.logoNote?.trim() || null,
+        draft_hero_photo_note: input.brandDraft?.heroPhotoNote?.trim() || null,
+        draft_hero_headline: heroHeadline,
+        draft_hero_description: heroDescription,
+        draft_logo_asset_id: uploadedLogo?.draftAssetId ?? null,
+        draft_hero_asset_id: uploadedHero?.draftAssetId ?? null,
+      },
+      draftMedia: {
+        logo: uploadedLogo,
+        hero: uploadedHero,
       },
       locations: [{
         id: locationId,
@@ -525,6 +597,7 @@ export function parseOnboardingDraftPayload(raw: string): OnboardingDraftPayload
   if (!parsed || parsed.version !== 1) {
     throw new Error('Unsupported onboarding draft payload')
   }
+  parsed.preview.draftMedia ??= { logo: null, hero: null }
   return parsed
 }
 

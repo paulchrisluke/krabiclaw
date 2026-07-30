@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process'
+import { pathToFileURL } from 'node:url'
 
 export function buildUnifiedMediaPreflightSql() {
   return `
@@ -256,7 +257,7 @@ function runWrangler(command) {
   return result.stdout
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const args = process.argv.slice(2)
   const remote = args.includes('--remote')
   const envIndex = args.indexOf('--env')

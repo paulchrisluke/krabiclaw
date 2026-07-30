@@ -32,6 +32,7 @@ export interface McpUserContext {
 export interface McpSiteContext extends McpUserContext {
   siteId: string
   organizationId: string
+  memberId: string
   organizationSlug?: string
   subdomain?: string | null
   customDomain?: string | null
@@ -401,6 +402,7 @@ export async function requireMcpSite(
     ...user,
     siteId: site.id,
     organizationId: site.organization_id,
+    memberId: site.member_id,
     organizationSlug: site.organization_slug || undefined,
     subdomain: site.subdomain ?? null,
     customDomain: site.custom_domain ?? null,

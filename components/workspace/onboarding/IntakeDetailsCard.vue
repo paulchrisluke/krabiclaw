@@ -1,73 +1,118 @@
 <template>
-  <UCard :ui="{ body: 'p-0 sm:p-0' }">
-    <template #header>
-      <div class="flex items-start gap-3 px-4 pt-4">
-        <div class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <UIcon name="i-lucide-square-pen" class="size-4" />
-        </div>
-        <div class="min-w-0">
-          <p class="text-[13px] font-semibold text-highlighted">{{ title }}</p>
-          <p class="mt-0.5 text-[12px] leading-relaxed text-muted">{{ description }}</p>
-        </div>
-      </div>
-    </template>
+  <div class="onboarding-intake-card">
+      <div class="grid gap-4">
+        <template v-if="section === 'location'">
+          <UFormField label="Street address" :required="requireLocationBasics">
+            <UInput v-model="form.streetAddress" class="w-full" size="xl" placeholder="123 Beach Road" />
+          </UFormField>
+          <UFormField label="Unit, floor, or neighborhood">
+            <UInput v-model="form.addressLine2" class="w-full" size="xl" placeholder="Suite, village, landmark" />
+          </UFormField>
+          <div class="@container">
+            <div class="grid gap-4 @sm:grid-cols-2">
+              <UFormField label="City or town" :required="requireLocationBasics">
+                <UInput v-model="form.city" class="w-full" size="xl" placeholder="Ao Nang" />
+              </UFormField>
+              <UFormField label="Province or region">
+                <UInput v-model="form.region" class="w-full" size="xl" placeholder="Krabi" />
+              </UFormField>
+              <UFormField label="Postal code">
+                <UInput v-model="form.postalCode" class="w-full" size="xl" inputmode="numeric" placeholder="81000" />
+              </UFormField>
+              <UFormField label="Country">
+                <UInput v-model="form.country" class="w-full" size="xl" placeholder="Thailand" />
+              </UFormField>
+            </div>
+          </div>
+        </template>
+        <UFormField
+          v-if="section === 'contact'"
+          label="Phone"
+          :required="requireLocationBasics"
+          :error="phoneError"
+        >
+          <UFieldGroup class="w-full gap-2">
+            <USelectMenu
+              v-model="countryCode"
+              :items="phoneCodes"
+              value-key="code"
+              :search-input="{
+                placeholder: 'Search country...',
+                icon: 'i-lucide-search',
+                loading: status === 'pending',
+              }"
+              :filter-fields="['name', 'code', 'dialCode']"
+              :content="{ align: 'start' }"
+              class="shrink-0"
+              :ui="{
+                base: 'w-[6.5rem] justify-between pe-8',
+                content: 'w-48',
+                placeholder: 'hidden',
+                trailingIcon: 'size-4',
+              }"
+              trailing-icon="i-lucide-chevrons-up-down"
+              @update:open="onPhoneCountryOpen"
+            >
+              <span class="flex min-w-0 items-center gap-2">
+                <span class="flex size-5 items-center text-lg">{{ country?.emoji || '🇺🇸' }}</span>
+                <span class="text-sm font-semibold text-highlighted">{{ countryCode }}</span>
+              </span>
 
-    <div class="px-4 pb-4">
-      <div class="grid gap-4 sm:grid-cols-2">
-        <UFormField label="Name">
-          <UInput v-model="form.name" />
+              <template #item-leading="{ item }">
+                <span class="flex size-5 items-center text-lg">
+                  {{ item.emoji }}
+                </span>
+              </template>
+
+              <template #item-label="{ item }">
+                {{ item.name }} ({{ item.dialCode }})
+              </template>
+            </USelectMenu>
+
+            <UInput
+              v-model="phone"
+              v-maska="mask"
+              class="min-w-0 flex-1"
+              size="xl"
+              type="tel"
+              :placeholder="mask.replaceAll('#', '_')"
+              :style="{ '--dial-code-length': `${dialCode.length + 1.5}ch` }"
+              :ui="{
+                base: 'ps-(--dial-code-length)',
+                leading: 'pointer-events-none text-base md:text-sm text-muted',
+              }"
+              @update:model-value="syncPhoneValue"
+              @blur="phoneTouched = true"
+            >
+              <template #leading>
+                {{ dialCode }}
+              </template>
+            </UInput>
+          </UFieldGroup>
         </UFormField>
-        <UFormField label="City" :required="requireLocationBasics">
-          <UInput v-model="form.city" placeholder="Ao Nang" />
-        </UFormField>
-        <UFormField label="Address" class="sm:col-span-2" :required="requireLocationBasics">
-          <UTextarea v-model="form.address" :rows="2" placeholder="Street, ward, district" />
-        </UFormField>
-        <UFormField label="Phone" :required="requireLocationBasics">
-          <UInput v-model="form.phone" type="tel" placeholder="+66..." />
-        </UFormField>
-        <UFormField label="Website URL">
-          <UInput v-model="form.websiteUrl" type="url" placeholder="https://..." />
-        </UFormField>
-        <UFormField label="Hours" class="sm:col-span-2" :required="requireLocationBasics">
-          <UTextarea
-            v-model="form.openingHours"
-            :rows="4"
-            placeholder="Monday: 9:00 AM - 6:00 PM&#10;Tuesday: 9:00 AM - 6:00 PM"
-          />
-        </UFormField>
-        <UFormField label="Manager alert number" required help="Bookings get sent here by WhatsApp. Without it, alerts fall back to email only — easy to miss.">
-          <UInput v-model="form.notificationPhone" type="tel" placeholder="+66..." />
-        </UFormField>
-        <UFormField label="Timezone" required help="Used to validate booking dates against your local time.">
+        <UFormField v-if="section === 'currency'" label="Currency" required>
           <USelectMenu
-            v-model="form.timezone"
-            :items="timezoneOptions"
-            searchable
-            placeholder="Select timezone"
-          />
-        </UFormField>
-        <UFormField v-if="!showPrimaryToggle" label="Currency" required help="Affects how menu and experience prices are displayed site-wide.">
-          <USelect
             v-model="form.currency"
+            class="w-full"
+            size="xl"
             :items="currencyOptions"
-            value-attribute="value"
-            label-attribute="label"
+            value-key="value"
+            label-key="label"
+            placeholder="Select currency"
+            @update:model-value="submitAfterSelection"
           />
         </UFormField>
-        <div v-if="showPrimaryToggle" class="sm:col-span-2">
+        <div v-if="section === 'location' && showPrimaryToggle">
           <UCheckbox v-model="form.isPrimary" label="Make this the primary location" />
         </div>
       </div>
 
-      <div class="mt-4 flex items-center justify-between gap-3">
-        <p class="text-[11px] text-muted">
-          {{ requireLocationBasics
-            ? 'I need the basics before I can create this draft.'
-            : 'You can leave anything blank and edit it later in the dashboard.' }}
-        </p>
+      <div class="grid gap-3">
         <UButton
           color="primary"
+          size="xl"
+          block
+          class="justify-center"
           :loading="loading"
           :disabled="disabled || !canSubmit"
           @click="$emit('submit')"
@@ -75,23 +120,31 @@
           {{ actionLabel }}
         </UButton>
       </div>
-    </div>
-  </UCard>
+  </div>
 </template>
 
 <script setup lang="ts">
+import { vMaska } from 'maska/vue'
+import { parsePhone, type CountryCode } from '~/utils/phone'
 import { CURRENCY_OPTIONS, type CurrencyCode } from '~/shared/currencies'
-import { TIMEZONE_OPTIONS } from '~/utils/timezone'
+
+type PhoneCode = {
+  name: string
+  code: string
+  emoji: string
+  dialCode: string
+  mask: string
+}
 
 type IntakeForm = {
   name: string
   city: string
-  address: string
+  streetAddress: string
+  addressLine2: string
+  region: string
+  postalCode: string
+  country: string
   phone: string
-  websiteUrl: string
-  openingHours: string
-  notificationPhone: string
-  timezone: string
   currency: CurrencyCode
   isPrimary: boolean
 }
@@ -99,37 +152,108 @@ type IntakeForm = {
 const form = defineModel<IntakeForm>('form', { required: true })
 
 const props = defineProps<{
-  title: string
-  description: string
   actionLabel: string
   requireLocationBasics: boolean
   showPrimaryToggle: boolean
+  section: 'location' | 'contact' | 'currency'
   loading?: boolean
   disabled?: boolean
 }>()
 
-defineEmits<{ submit: [] }>()
+const emit = defineEmits<{ submit: [] }>()
 
-const timezoneOptions = TIMEZONE_OPTIONS
 const currencyOptions = CURRENCY_OPTIONS
+const phone = ref('')
+const phoneTouched = ref(false)
+const countryCode = ref('US')
+const hydratingStoredPhone = ref(false)
+
+const { data: phoneCodes, status, execute } = useLazyFetch<PhoneCode[]>('/api/phone-codes.json', {
+  key: 'api-phone-codes',
+  immediate: false,
+})
+
+const country = computed(() => phoneCodes.value?.find((c: PhoneCode) => c.code === countryCode.value))
+const dialCode = computed(() => country.value?.dialCode || '+1')
+const mask = computed(() => country.value?.mask || '(###) ###-####')
+const parsedPhone = computed(() =>
+  parsePhone(`${dialCode.value} ${phone.value}`, { defaultCountry: countryCode.value as CountryCode })
+)
+
+function onPhoneCountryOpen(open: boolean) {
+  if (open && !phoneCodes.value?.length) {
+    execute()
+  }
+}
+
+watch(countryCode, () => {
+  if (hydratingStoredPhone.value) return
+  phone.value = ''
+  form.value.phone = ''
+})
+
+function syncPhoneValue(value?: string | number) {
+  if (value !== undefined) phone.value = String(value)
+  phoneTouched.value = true
+  form.value.phone = phone.value.trim() && parsedPhone.value.valid && parsedPhone.value.e164
+    ? parsedPhone.value.e164
+    : ''
+}
+
+watch(dialCode, syncPhoneValue)
+
+watch(() => form.value.phone, value => {
+  if (!value || value === parsedPhone.value.e164) return
+  const parsed = parsePhone(value)
+  if (parsed.valid && parsed.country) {
+    hydratingStoredPhone.value = true
+    countryCode.value = parsed.country
+    phone.value = parsed.nationalFormat ?? value
+    nextTick(() => {
+      hydratingStoredPhone.value = false
+    })
+    return
+  }
+  phone.value = value
+}, { immediate: true })
 
 const canSubmit = computed(() => {
-  // notificationPhone + timezone are never supplied by Google Maps import, and
-  // a missing notification phone silently degrades booking alerts to email-only
-  // with no error surfaced anywhere — so these are required on every path, not
-  // just the manual-entry one. Currency is site-level (not asked again when
-  // adding a location, see showPrimaryToggle) but still required up front —
-  // it silently defaults to THB otherwise, wrong for any non-Thai client.
-  const hasNotificationBasics = form.value.notificationPhone.trim().length > 0
-    && form.value.timezone.trim().length > 0
-  const hasCurrency = props.showPrimaryToggle || form.value.currency.trim().length > 0
-  if (!props.requireLocationBasics) return !!form.value.name.trim() && hasNotificationBasics && hasCurrency
-  return [
-    form.value.name,
-    form.value.city,
-    form.value.address,
-    form.value.phone,
-    form.value.openingHours,
-  ].every(value => value.trim().length > 0) && hasNotificationBasics && hasCurrency
+  if (props.section === 'currency') return !!form.value.currency
+  if (!props.requireLocationBasics) return true
+  if (props.section === 'location') {
+    return [form.value.streetAddress, form.value.city].every(value => value.trim().length > 0)
+  }
+  return parsedPhone.value.valid
 })
+
+const phoneError = computed(() => {
+  if (props.section !== 'contact' || !phoneTouched.value) return undefined
+  if (!phone.value.trim()) return props.requireLocationBasics ? 'Enter a phone number.' : undefined
+  return parsedPhone.value.valid ? undefined : `Enter a valid ${country.value?.name ?? countryCode.value} phone number.`
+})
+
+function submitAfterSelection() {
+  if (props.section !== 'currency') return
+  nextTick(() => emit('submit'))
+}
 </script>
+
+<style scoped>
+.onboarding-intake-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.onboarding-intake-card :deep(.rounded-md),
+.onboarding-intake-card :deep(.rounded-lg) {
+  border-radius: 14px;
+}
+
+.onboarding-intake-card :deep(label) {
+  color: var(--ui-text-muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+</style>

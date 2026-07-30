@@ -34,6 +34,7 @@ DROP TABLE IF EXISTS `__um_backup_posts`;--> statement-breakpoint
 DROP TABLE IF EXISTS `__um_backup_reservation_slot_overrides`;--> statement-breakpoint
 DROP TABLE IF EXISTS `__um_backup_reservation_submissions`;--> statement-breakpoint
 DROP TABLE IF EXISTS `__um_backup_review_requests`;--> statement-breakpoint
+DROP TABLE IF EXISTS `__um_backup_review_media`;--> statement-breakpoint
 DROP TABLE IF EXISTS `__um_backup_reviews`;--> statement-breakpoint
 DROP TABLE IF EXISTS `__um_backup_site_content`;--> statement-breakpoint
 DROP TABLE IF EXISTS `__um_backup_site_content_translations`;--> statement-breakpoint
@@ -55,6 +56,7 @@ CREATE TABLE `__um_backup_menus` AS SELECT * FROM `menus`;--> statement-breakpoi
 CREATE TABLE `__um_backup_reservation_slot_overrides` AS SELECT * FROM `reservation_slot_overrides`;--> statement-breakpoint
 CREATE TABLE `__um_backup_reservation_submissions` AS SELECT * FROM `reservation_submissions`;--> statement-breakpoint
 CREATE TABLE `__um_backup_reviews` AS SELECT * FROM `reviews`;--> statement-breakpoint
+CREATE TABLE `__um_backup_review_media` AS SELECT * FROM `review_media`;--> statement-breakpoint
 CREATE TABLE `__um_backup_site_content` AS SELECT * FROM `site_content`;--> statement-breakpoint
 CREATE TABLE `__um_backup_site_content_translations` AS SELECT * FROM `site_content_translations`;--> statement-breakpoint
 
@@ -93,6 +95,7 @@ CREATE INDEX `__um_backup_menus_id_idx` ON `__um_backup_menus` (`id`);--> statem
 CREATE INDEX `__um_backup_reservation_slot_overrides_id_idx` ON `__um_backup_reservation_slot_overrides` (`id`);--> statement-breakpoint
 CREATE INDEX `__um_backup_reservation_submissions_id_idx` ON `__um_backup_reservation_submissions` (`id`);--> statement-breakpoint
 CREATE INDEX `__um_backup_reviews_id_idx` ON `__um_backup_reviews` (`id`);--> statement-breakpoint
+CREATE INDEX `__um_backup_review_media_id_idx` ON `__um_backup_review_media` (`id`);--> statement-breakpoint
 CREATE INDEX `__um_backup_site_content_translations_id_idx` ON `__um_backup_site_content_translations` (`id`);--> statement-breakpoint
 CREATE INDEX `__um_backup_site_content_translations_natural_idx` ON `__um_backup_site_content_translations` (`organization_id`, `site_id`, `locale`, `page`, `field`, `location_id`);--> statement-breakpoint
 CREATE INDEX `__um_backup_chowbot_conversations_id_idx` ON `__um_backup_chowbot_conversations` (`id`);--> statement-breakpoint

@@ -61,7 +61,7 @@ export default defineEventHandler(async (event) => {
   try {
     await requireBillingAccess(env, db, orgId, session.user.id)
 
-    const organization = await queryFirst<{ name: string; slug: string | null; stripe_customer_id: string | null }>(db, `
+    const organization = await queryFirst<{ name: string; slug: string; stripe_customer_id: string | null }>(db, `
       SELECT o.name, o.slug, ob.stripe_customer_id
       FROM organization o
       LEFT JOIN organization_billing ob ON o.id = ob.organization_id
@@ -112,7 +112,7 @@ export default defineEventHandler(async (event) => {
       `, [`billing-${orgId}`, orgId, customerId, new Date().toISOString()])
     }
 
-    const targetSlug = organization.slug ? encodeURIComponent(organization.slug) : encodeURIComponent(orgId)
+    const targetSlug = encodeURIComponent(organization.slug)
     const checkoutSession = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',

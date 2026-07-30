@@ -54,13 +54,14 @@ async function telemetry(toolName, since) {
 
 async function pollTelemetry(toolName, since, expected = {}, timeoutMs = 180_000) {
   const deadline = Date.now() + timeoutMs
+  const valueAtPath = (value, path) => path.split('.').reduce((current, key) => current?.[key], value)
   while (Date.now() < deadline) {
     const events = await telemetry(toolName, since)
     const event = events.find((candidate) => {
       if (candidate.tool_name !== toolName) return false
       if (expected.siteId && candidate.site_id !== expected.siteId) return false
       const args = parseSummary(candidate.arguments_summary_json)
-      if (expected.arguments && !Object.entries(expected.arguments).every(([key, value]) => JSON.stringify(args[key]) === JSON.stringify(value))) return false
+      if (expected.arguments && !Object.entries(expected.arguments).every(([key, value]) => JSON.stringify(valueAtPath(args, key)) === JSON.stringify(value))) return false
       return true
     })
     if (event) {
@@ -187,7 +188,7 @@ async function main() {
     if (!videoAssetId || uploadedVideo.status !== 'active') throw new Error('Attachment upload did not return an active video asset.')
     if (!publicUrl || !(await fetch(publicUrl)).ok) throw new Error('Attachment video public URL did not return 200.')
 
-    await runPrompt(rl, 'Assign uploaded video', `I explicitly confirm this change. Assign KrabiClaw video asset_id ${videoAssetId} as the homepage hero video for site_id ${siteId} now.`, 'set_media', { siteId, arguments: { site_id: siteId, target: { type: 'home_hero' }, asset_ids: [videoAssetId] } })
+    await runPrompt(rl, 'Assign uploaded video', `I explicitly confirm this change. Assign KrabiClaw video asset_id ${videoAssetId} as the homepage hero video for site_id ${siteId} now.`, 'set_media', { siteId, arguments: { site_id: siteId, 'target.type': 'home_hero', asset_ids: [videoAssetId] } })
 
     console.log(`# Actual ChatGPT connector behavior passed. Cleaning up created content...`)
   } catch (error) {

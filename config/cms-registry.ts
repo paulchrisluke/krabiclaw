@@ -142,7 +142,7 @@ const blawbyTemplateCatalog: CmsTemplateCatalog = {
     { key: 'site.media', id: 'media', label: 'Media library', section: 'media', route: 'media', scope: 'site' },
     { key: 'site.links', id: 'links', label: 'Links page', section: 'collections', route: 'links', scope: 'site' },
     { key: 'site.locations', id: 'locations', label: 'Offices / service areas', section: 'locations', route: '', scope: 'site' },
-    { key: 'site.services', id: 'services', label: 'Professional services', section: 'collections', route: 'professional-services', scope: 'site' },
+    { key: 'site.services', id: 'services', label: 'Services', section: 'collections', route: 'professional-services', scope: 'site' },
     { key: 'location.qa', id: 'qa', label: 'Q&A', section: 'collections', route: ':location/qa', scope: 'location' },
     { key: 'location.posts', id: 'posts', label: 'Posts', section: 'collections', route: ':location/posts', scope: 'location' },
     { key: 'location.photos', id: 'photos', label: 'Photos', section: 'media', route: ':location/photos', scope: 'location' },

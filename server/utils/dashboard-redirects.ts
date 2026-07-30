@@ -10,7 +10,7 @@ export async function getDashboardSiteRouteContext(
   organizationId: string,
   siteId: string,
 ): Promise<DashboardSiteRouteContext | null> {
-  const context = await queryFirst<{ organization_slug: string | null; site_slug: string | null }>(db, `
+  const context = await queryFirst<{ organization_slug: string; site_slug: string | null }>(db, `
     SELECT o.slug AS organization_slug, s.subdomain AS site_slug
     FROM organization o
     JOIN sites s ON s.organization_id = o.id
@@ -18,7 +18,7 @@ export async function getDashboardSiteRouteContext(
     LIMIT 1
   `, [organizationId, siteId])
 
-  if (!context?.organization_slug || !context.site_slug) return null
+  if (!context?.site_slug) return null
   return {
     organizationSlug: context.organization_slug,
     siteSlug: context.site_slug,
