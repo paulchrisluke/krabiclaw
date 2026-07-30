@@ -5,7 +5,14 @@ if (!rawBaseUrl) {
   process.exit(0)
 }
 
-const baseUrl = new URL(rawBaseUrl)
+let baseUrl
+try {
+  baseUrl = new URL(rawBaseUrl)
+} catch {
+  console.error(`PLAYWRIGHT_PREVIEW_URL is not a valid URL: ${rawBaseUrl}`)
+  process.exit(1)
+}
+
 const localHosts = new Set(['localhost', '127.0.0.1', '::1'])
 
 if (localHosts.has(baseUrl.hostname)) {
