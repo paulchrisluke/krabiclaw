@@ -64,18 +64,22 @@
               </div>
 
               <!-- Single image / video -->
-              <div
+              <button
                 v-else-if="mediaItems.length === 1"
-                class="relative aspect-4/3 lg:h-[520px] overflow-hidden"
-                :class="mediaItems[0] ? 'cursor-zoom-in' : ''"
+                type="button"
+                class="relative block aspect-4/3 w-full overflow-hidden border-0 bg-transparent p-0 text-left lg:h-[520px]"
+                :aria-label="mediaItems[0]?.kind === 'video' ? `Play video, ${experience.title}` : undefined"
                 @click="openLightbox(0)"
               >
                 <video
                   v-if="mediaItems[0]?.kind === 'video' && mediaItems[0]?.url"
+                  :ref="el => setGalleryVideoRef(el, 0)"
                   :src="mediaItems[0].url"
                   :poster="mediaItems[0].poster || undefined"
                   preload="none"
-                  muted loop playsinline controls
+                  muted
+                  loop
+                  playsinline
                   class="h-full w-full object-cover"
                 />
                 <img
@@ -84,7 +88,16 @@
                   :alt="experience.title"
                   class="h-full w-full object-cover"
                 />
-              </div>
+                <span
+                  v-if="mediaItems[0]?.kind === 'video'"
+                  class="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/10 text-white"
+                  aria-hidden="true"
+                >
+                  <span class="flex size-14 items-center justify-center rounded-full bg-black/45 backdrop-blur-sm">
+                    <SayaIcon name="play" class="ml-0.5 size-6" />
+                  </span>
+                </span>
+              </button>
 
               <!-- 2+ items — grid on all screen sizes -->
               <div v-else>
@@ -93,20 +106,22 @@
                   :class="mediaItems.length === 2 ? 'grid-cols-2' : 'grid-cols-2 grid-rows-2'"
                 >
                   <!-- Hero — spans 2 rows when 3+ items -->
-                  <div
-                    class="relative overflow-hidden"
-                    :class="[
-                      mediaItems.length >= 3 ? 'row-span-2' : '',
-                      mediaItems[0] ? 'cursor-zoom-in' : ''
-                    ]"
+                  <button
+                    type="button"
+                    class="relative h-full w-full overflow-hidden border-0 bg-transparent p-0 text-left"
+                    :class="mediaItems.length >= 3 ? 'row-span-2' : ''"
+                    :aria-label="mediaItems[0]?.kind === 'video' ? `Play video, ${experience.title}` : undefined"
                     @click="openLightbox(0)"
                   >
                     <video
                       v-if="mediaItems[0]?.kind === 'video' && mediaItems[0]?.url"
+                      :ref="el => setGalleryVideoRef(el, 0)"
                       :src="mediaItems[0].url"
                       :poster="mediaItems[0].poster || undefined"
                       preload="none"
-                      muted loop playsinline
+                      muted
+                      loop
+                      playsinline
                       class="h-full w-full object-cover"
                     />
                     <img
@@ -115,22 +130,35 @@
                       :alt="experience.title"
                       class="h-full w-full object-cover transition-transform duration-300 hover:scale-[1.02]"
                     />
-                  </div>
+                    <span
+                      v-if="mediaItems[0]?.kind === 'video'"
+                      class="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/10 text-white"
+                      aria-hidden="true"
+                    >
+                      <span class="flex size-12 items-center justify-center rounded-full bg-black/45 backdrop-blur-sm">
+                        <SayaIcon name="play" class="ml-0.5 size-5" />
+                      </span>
+                    </span>
+                  </button>
 
                   <!-- Thumbnails 2–4 -->
-                  <div
+                  <button
                     v-for="(item, i) in mediaItems.slice(1, 4)"
                     :key="item.url"
-                    class="relative overflow-hidden"
-                    :class="item.url ? 'cursor-zoom-in' : ''"
+                    type="button"
+                    class="relative h-full w-full overflow-hidden border-0 bg-transparent p-0 text-left"
+                    :aria-label="item.kind === 'video' ? `Play video, ${experience.title}` : undefined"
                     @click="openLightbox(i + 1)"
                   >
                     <video
                       v-if="item.kind === 'video'"
+                      :ref="el => setGalleryVideoRef(el, i + 1)"
                       :src="item.url"
                       :poster="item.poster || undefined"
                       preload="none"
-                      muted loop playsinline
+                      muted
+                      loop
+                      playsinline
                       class="h-full w-full object-cover"
                     />
                     <img
@@ -139,17 +167,24 @@
                       :alt="experience.title"
                       class="h-full w-full object-cover transition-transform duration-300 hover:scale-[1.02]"
                     />
+                    <span
+                      v-if="item.kind === 'video'"
+                      class="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/10 text-white"
+                      aria-hidden="true"
+                    >
+                      <span class="flex size-12 items-center justify-center rounded-full bg-black/45 backdrop-blur-sm">
+                        <SayaIcon name="play" class="ml-0.5 size-5" />
+                      </span>
+                    </span>
                     <!-- "Show all" overlay only on last thumbnail when extras exist -->
-                    <button
+                    <span
                       v-if="i === 2 && mediaItems.length > 4"
-                      type="button"
                       class="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/50 text-white text-sm font-semibold backdrop-blur-[2px] hover:bg-black/60 transition-colors"
-                      @click.stop="openLightbox(0)"
                     >
                       <SayaIcon name="squares-2x2" class="size-5" />
                       Show all {{ mediaItems.length }} media
-                    </button>
-                  </div>
+                    </span>
+                  </button>
                 </div>
               </div>
 
@@ -583,13 +618,132 @@ function handleContactSubmit(contactData: ContactFormState) {
 
 const lightboxOpen = ref(false)
 const lightboxIdx = ref(0)
+const galleryVideoRefs = ref<Record<number, HTMLVideoElement>>({})
+const galleryVideoVisibility = ref<Record<number, number>>({})
+let galleryVideoObserver: IntersectionObserver | null = null
+let galleryVideoSyncToken = 0
+
+function pauseGalleryVideo(video: HTMLVideoElement) {
+  video.pause()
+}
+
+function pauseGalleryVideos() {
+  Object.values(galleryVideoRefs.value).forEach(pauseGalleryVideo)
+}
+
+function mostVisibleGalleryVideoIndex() {
+  let selectedIndex: number | null = null
+  let selectedRatio = 0
+
+  for (const [key, ratio] of Object.entries(galleryVideoVisibility.value)) {
+    const index = Number(key)
+    if (ratio > selectedRatio && galleryVideoRefs.value[index]) {
+      selectedIndex = index
+      selectedRatio = ratio
+    }
+  }
+
+  return selectedRatio > 0 ? selectedIndex : null
+}
+
+async function syncGalleryVideoPreviews() {
+  const syncToken = ++galleryVideoSyncToken
+  if (!import.meta.client) return
+  if (lightboxOpen.value || document.visibilityState !== 'visible') {
+    pauseGalleryVideos()
+    return
+  }
+
+  const selectedIndex = mostVisibleGalleryVideoIndex()
+
+  for (const [key, video] of Object.entries(galleryVideoRefs.value)) {
+    if (syncToken !== galleryVideoSyncToken) return
+
+    const index = Number(key)
+    if (index !== selectedIndex) {
+      pauseGalleryVideo(video)
+      continue
+    }
+
+    try {
+      await video.play()
+      if (syncToken !== galleryVideoSyncToken) {
+        pauseGalleryVideo(video)
+        return
+      }
+    } catch {
+      // Muted preview autoplay can still be blocked by browser policy.
+    }
+  }
+}
+
+function setGalleryVideoRef(el: Element | ComponentPublicInstance | null, index: number) {
+  if (!import.meta.client || !(el instanceof HTMLVideoElement)) return
+  createGalleryVideoObserver()
+  galleryVideoRefs.value[index] = el
+  galleryVideoObserver?.observe(el)
+  void syncGalleryVideoPreviews()
+}
+
+function disconnectGalleryVideoObserver() {
+  galleryVideoObserver?.disconnect()
+  galleryVideoObserver = null
+  galleryVideoRefs.value = {}
+  galleryVideoVisibility.value = {}
+}
+
+function createGalleryVideoObserver() {
+  if (galleryVideoObserver) return
+  if (!import.meta.client || !('IntersectionObserver' in window)) return
+
+  galleryVideoObserver = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      const index = Object.entries(galleryVideoRefs.value)
+        .find(([, video]) => video === entry.target)?.[0]
+      if (index === undefined) continue
+      galleryVideoVisibility.value[Number(index)] = entry.isIntersecting ? entry.intersectionRatio : 0
+    }
+
+    void syncGalleryVideoPreviews()
+  }, {
+    threshold: [0, 0.25, 0.5, 0.75, 1],
+  })
+}
+
+function onVisibilityChange() {
+  void syncGalleryVideoPreviews()
+}
 
 function openLightbox(mediaIdx: number) {
   const item = mediaItems.value[mediaIdx]
   if (!item) return
+  pauseGalleryVideos()
   lightboxIdx.value = mediaIdx
   lightboxOpen.value = true
 }
+
+watch(lightboxOpen, () => {
+  void syncGalleryVideoPreviews()
+})
+
+watch(mediaItems, async () => {
+  disconnectGalleryVideoObserver()
+  createGalleryVideoObserver()
+  await nextTick()
+  void syncGalleryVideoPreviews()
+})
+
+onMounted(() => {
+  createGalleryVideoObserver()
+  document.addEventListener('visibilitychange', onVisibilityChange)
+  void syncGalleryVideoPreviews()
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+  pauseGalleryVideos()
+  disconnectGalleryVideoObserver()
+})
 
 // ── Booking form ──────────────────────────────────────────────────────────────
 
