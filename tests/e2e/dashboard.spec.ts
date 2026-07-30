@@ -169,7 +169,7 @@ test.describe('dashboard functional smoke', () => {
     expect(new URL(page.url()).pathname).toBe('/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi/experiences')
     await expect(page.getByText('Experiences', { exact: true }).first()).toBeVisible()
     await expect(page.getByRole('button', { name: 'Add experience' }).first()).toBeVisible()
-    await expect(page.getByText('Handbuilding Class')).toBeVisible()
+    await expect(page.getByText('Cocktails & Clay')).toBeVisible()
     await expect(page.getByText('Pottery Wheel Class')).toBeVisible()
 
     const services = await page.request.get(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/professional-services`)
