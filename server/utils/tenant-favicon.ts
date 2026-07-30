@@ -114,6 +114,7 @@ export function handleFaviconRequest(event: H3Event, options: FaviconOptions) {
   const faviconUrl = sanitizeUrl(site?.favicon_url)
   const logoUrl = sanitizeUrl(site?.logo_url)
 
+  setHeader(event, 'x-robots-tag', 'noindex, nofollow, noarchive')
   setHeader(event, 'cache-control', 'public, max-age=3600, stale-while-revalidate=86400')
 
   // Always return real SVG for SVG format requests
