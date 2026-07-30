@@ -1,5 +1,5 @@
 <template>
-  <div class="flex min-h-0 flex-col bg-elevated">
+  <div class="flex size-full min-h-0 flex-col bg-elevated">
     <div
       v-if="!homeOnly"
       class="flex shrink-0 items-center gap-2.5 border-b border-default bg-default px-[18px] py-3"
@@ -77,32 +77,7 @@
       </div>
     </div>
 
-    <div v-if="!iframeSrc && placeholderState === 'building'" class="relative min-h-0 flex-1 overflow-hidden bg-default">
-      <img
-        :src="previewHeroImage"
-        alt=""
-        class="h-full w-full object-cover"
-      >
-      <div class="absolute inset-x-0 top-0 flex items-center gap-3 bg-gradient-to-b from-black/70 to-transparent p-5 text-white">
-        <img
-          v-if="previewLogoUrl"
-          :src="previewLogoUrl"
-          alt=""
-          class="size-10 shrink-0 rounded-xl bg-white/90 object-contain p-1"
-        >
-        <div
-          v-else
-          class="flex size-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold text-white"
-          :style="{ backgroundColor: previewBrandColor }"
-        >
-          {{ previewInitials }}
-        </div>
-        <div class="min-w-0 flex-1">
-          <p class="truncate text-lg font-extrabold">{{ previewName }}</p>
-        </div>
-      </div>
-    </div>
-    <div v-else-if="!iframeSrc" class="flex flex-1 flex-col items-center justify-center gap-5 p-8 text-center text-muted">
+    <div v-if="!iframeSrc" class="flex flex-1 flex-col items-center justify-center gap-5 p-8 text-center text-muted">
       <img
         src="/krabiclaw-login-mascot.png"
         alt=""
@@ -121,7 +96,7 @@
       id="site-preview-frame"
       :src="iframeSrc"
       title="Site preview"
-      class="min-h-0 w-full flex-1 border-0 bg-default"
+      class="size-full min-h-0 flex-1 border-0 bg-default"
     />
   </div>
 </template>
@@ -141,20 +116,6 @@ const props = withDefaults(defineProps<{
   vertical?: SiteVertical
   homeOnly?: boolean
   placeholderState?: 'empty' | 'building'
-  previewDetails?: {
-    name: string
-    city: string
-    address: string
-    phone: string
-    currency: string
-    timezone: string
-    openingHours: string
-    brandColor: string
-    logoNote: string
-    logoPreviewUrl: string
-    heroPhotoNote: string
-    heroPreviewUrl: string
-  }
 }>(), {
   vertical: 'restaurant',
   homeOnly: false,
@@ -190,29 +151,6 @@ const tabs = computed(() => {
 })
 
 const currentTabIsLocationScoped = computed(() => tabs.value.find(tab => tab.id === props.selectedPage)?.locationScoped === true)
-const demoContent = computed(() => {
-  if (props.vertical === 'professional_service') {
-    return {
-      name: 'North Carolina Legal Services',
-      image: '/templates/blawby-preview.jpg',
-    }
-  }
-  if (props.vertical === 'experience') {
-    return {
-      name: 'Pottery House Krabi',
-      image: '/templates/saya-preview.jpg',
-    }
-  }
-  return {
-    name: 'Demo Restaurant',
-    image: '/templates/saya-preview.jpg',
-  }
-})
-const previewName = computed(() => props.previewDetails?.name.trim() || demoContent.value.name)
-const previewBrandColor = computed(() => props.previewDetails?.brandColor || '#1F2547')
-const previewInitials = computed(() => previewName.value.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'KC')
-const previewHeroImage = computed(() => props.previewDetails?.heroPreviewUrl || demoContent.value.image)
-const previewLogoUrl = computed(() => props.previewDetails?.logoPreviewUrl || '')
 
 const selectedLocation = computed(() =>
   props.siteLocations.find(l => l.id === props.selectedLocationId) ?? props.siteLocations[0] ?? null

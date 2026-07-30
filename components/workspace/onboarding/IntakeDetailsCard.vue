@@ -12,14 +12,87 @@
       </div>
 
       <div class="grid gap-4">
-        <UFormField v-if="section === 'location'" label="City" :required="requireLocationBasics">
-          <UInput v-model="form.city" class="w-full" size="xl" placeholder="Ao Nang" />
-        </UFormField>
-        <UFormField v-if="section === 'location'" label="Address" :required="requireLocationBasics">
-          <UTextarea v-model="form.address" class="w-full" size="xl" :rows="2" placeholder="Street, ward, district" />
-        </UFormField>
+        <template v-if="section === 'location'">
+          <UFormField label="Street address" :required="requireLocationBasics">
+            <UInput v-model="form.streetAddress" class="w-full" size="xl" placeholder="123 Beach Road" />
+          </UFormField>
+          <UFormField label="Unit, floor, or neighborhood">
+            <UInput v-model="form.addressLine2" class="w-full" size="xl" placeholder="Suite, village, landmark" />
+          </UFormField>
+          <div class="@container">
+            <div class="grid gap-4 @sm:grid-cols-2">
+              <UFormField label="City or town" :required="requireLocationBasics">
+                <UInput v-model="form.city" class="w-full" size="xl" placeholder="Ao Nang" />
+              </UFormField>
+              <UFormField label="Province or region">
+                <UInput v-model="form.region" class="w-full" size="xl" placeholder="Krabi" />
+              </UFormField>
+              <UFormField label="Postal code">
+                <UInput v-model="form.postalCode" class="w-full" size="xl" inputmode="numeric" placeholder="81000" />
+              </UFormField>
+              <UFormField label="Country">
+                <UInput v-model="form.country" class="w-full" size="xl" placeholder="Thailand" />
+              </UFormField>
+            </div>
+          </div>
+        </template>
         <UFormField v-if="section === 'contact'" label="Phone" :required="requireLocationBasics">
-          <UInput v-model="form.phone" class="w-full" size="xl" type="tel" placeholder="+66..." />
+          <UFieldGroup class="w-full gap-2">
+            <USelectMenu
+              v-model="countryCode"
+              :items="phoneCodes"
+              value-key="code"
+              :search-input="{
+                placeholder: 'Search country...',
+                icon: 'i-lucide-search',
+                loading: status === 'pending',
+              }"
+              :filter-fields="['name', 'code', 'dialCode']"
+              :content="{ align: 'start' }"
+              class="shrink-0"
+              :ui="{
+                base: 'w-[6.5rem] justify-between pe-8',
+                content: 'w-48',
+                placeholder: 'hidden',
+                trailingIcon: 'size-4',
+              }"
+              trailing-icon="i-lucide-chevrons-up-down"
+              @update:open="onPhoneCountryOpen"
+            >
+              <span class="flex size-5 items-center text-lg">
+                {{ country?.emoji || '🇺🇸' }}
+              </span>
+
+              <template #item-leading="{ item }">
+                <span class="flex size-5 items-center text-lg">
+                  {{ item.emoji }}
+                </span>
+              </template>
+
+              <template #item-label="{ item }">
+                {{ item.name }} ({{ item.dialCode }})
+              </template>
+            </USelectMenu>
+
+            <UInput
+              v-model="phone"
+              v-maska="mask"
+              class="min-w-0 flex-1"
+              size="xl"
+              type="tel"
+              :placeholder="mask.replaceAll('#', '_')"
+              :style="{ '--dial-code-length': `${dialCode.length + 1.5}ch` }"
+              :ui="{
+                base: 'ps-(--dial-code-length)',
+                leading: 'pointer-events-none text-base md:text-sm text-muted',
+              }"
+              @update:model-value="syncPhoneValue"
+            >
+              <template #leading>
+                {{ dialCode }}
+              </template>
+            </UInput>
+          </UFieldGroup>
         </UFormField>
         <UFormField v-if="section === 'currency'" label="Currency" required>
           <USelectMenu
@@ -56,12 +129,26 @@
 </template>
 
 <script setup lang="ts">
+import { vMaska } from 'maska/vue'
 import { CURRENCY_OPTIONS, type CurrencyCode } from '~/shared/currencies'
+
+type PhoneCode = {
+  name: string
+  code: string
+  emoji: string
+  dialCode: string
+  mask: string
+}
 
 type IntakeForm = {
   name: string
   city: string
   address: string
+  streetAddress: string
+  addressLine2: string
+  region: string
+  postalCode: string
+  country: string
   phone: string
   currency: CurrencyCode
   isPrimary: boolean
@@ -84,12 +171,52 @@ defineEmits<{ submit: [] }>()
 
 const helperText = computed(() => 'You can adjust these later.')
 const currencyOptions = CURRENCY_OPTIONS
+const phone = ref('')
+const countryCode = ref('US')
+
+const { data: phoneCodes, status, execute } = await useLazyFetch<PhoneCode[]>('/api/phone-codes.json', {
+  key: 'api-phone-codes',
+  immediate: false,
+})
+
+const country = computed(() => phoneCodes.value?.find((c: PhoneCode) => c.code === countryCode.value))
+const dialCode = computed(() => country.value?.dialCode || '+1')
+const mask = computed(() => country.value?.mask || '(###) ###-####')
+
+function onPhoneCountryOpen(open: boolean) {
+  if (open && !phoneCodes.value?.length) {
+    execute()
+  }
+}
+
+watch(countryCode, () => {
+  phone.value = ''
+  form.value.phone = ''
+})
+
+function syncPhoneValue(value?: string | number) {
+  if (value !== undefined) phone.value = String(value)
+  form.value.phone = phone.value.trim() ? `${dialCode.value} ${phone.value}` : ''
+}
+
+watch(dialCode, syncPhoneValue)
+
+watch(() => form.value.phone, value => {
+  if (!value || value === `${dialCode.value} ${phone.value}`) return
+  const matchingCountry = phoneCodes.value?.find((code: PhoneCode) => value.startsWith(`${code.dialCode} `))
+  if (matchingCountry) {
+    countryCode.value = matchingCountry.code
+    phone.value = value.slice(matchingCountry.dialCode.length).trim()
+    return
+  }
+  phone.value = value
+}, { immediate: true })
 
 const canSubmit = computed(() => {
   if (props.section === 'currency') return !!form.value.currency
   if (!props.requireLocationBasics) return true
   if (props.section === 'location') {
-    return [form.value.city, form.value.address].every(value => value.trim().length > 0)
+    return [form.value.streetAddress, form.value.city].every(value => value.trim().length > 0)
   }
   return form.value.phone.trim().length > 0
 })

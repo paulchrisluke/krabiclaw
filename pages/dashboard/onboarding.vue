@@ -14,7 +14,6 @@
         @draft-saved="onDraftSaved"
         @preview-state="previewPlaceholderState = $event"
         @vertical-selected="selectedOnboardingVertical = $event"
-        @preview-details="previewDetails = $event"
       />
       <OnboardingPreviewPane
         class="hidden md:flex"
@@ -26,7 +25,6 @@
         :site-domain="siteDomain"
         :vertical="previewVertical"
         :placeholder-state="previewPlaceholderState"
-        :preview-details="previewDetails"
         home-only
         @select-page="onSelectPage"
         @select-location="onSelectLocation"
@@ -34,10 +32,10 @@
     </div>
 
     <USlideover
-      v-model:open="mobilePreviewOpen"
+      v-if="isMobilePreviewViewport"
+      v-model:open="mobilePreviewOpenForViewport"
       title="Site preview"
       side="bottom"
-      class="md:hidden"
       :close="false"
       :ui="{ content: 'h-[82vh] overflow-hidden rounded-t-2xl', header: 'sr-only', body: 'flex min-h-0 p-0 sm:p-0' }"
     >
@@ -52,7 +50,6 @@
           :site-domain="siteDomain"
           :vertical="previewVertical"
           :placeholder-state="previewPlaceholderState"
-          :preview-details="previewDetails"
           home-only
           @select-page="onSelectPage"
           @select-location="onSelectLocation"
@@ -82,33 +79,6 @@ const toast = useToast()
 const siteData = ref<ApiRecord | null>(null)
 const selectedOnboardingVertical = ref<SiteVertical>('restaurant')
 const previewPlaceholderState = ref<'empty' | 'building'>('empty')
-const previewDetails = ref<{
-  name: string
-  city: string
-  address: string
-  phone: string
-  currency: string
-  timezone: string
-  openingHours: string
-  brandColor: string
-  logoNote: string
-  logoPreviewUrl: string
-  heroPhotoNote: string
-  heroPreviewUrl: string
-}>({
-  name: '',
-  city: '',
-  address: '',
-  phone: '',
-  currency: '',
-  timezone: '',
-  openingHours: '',
-  brandColor: '',
-  logoNote: '',
-  logoPreviewUrl: '',
-  heroPhotoNote: '',
-  heroPreviewUrl: '',
-})
 const previewVertical = computed<SiteVertical>(() =>
   siteData.value
     ? normalizeVertical(siteData.value.vertical as string | undefined) as SiteVertical
@@ -124,6 +94,7 @@ const draftPreview = ref<{
   subdomainCandidate: string
 } | null>(null)
 const mobilePreviewOpen = ref(false)
+const isMobilePreviewViewport = ref(false)
 const contextLoaded = ref(false)
 type ReadinessState = 'complete' | 'attention' | 'missing'
 
@@ -211,6 +182,15 @@ const computedSiteStatus = computed((): 'setup' | 'progress' | 'ready' | 'live' 
   if (readinessScore.value > 0) return 'progress'
   return 'setup'
 })
+
+const mobilePreviewOpenForViewport = computed({
+  get: () => isMobilePreviewViewport.value && mobilePreviewOpen.value,
+  set: value => {
+    mobilePreviewOpen.value = value
+  },
+})
+
+let stopMobilePreviewViewportListener: (() => void) | null = null
 
 const readinessScore = computed(() => {
   const weights: Record<ReadinessState, number> = { complete: 100 / 6, attention: 50 / 6, missing: 0 }
@@ -309,11 +289,20 @@ const onDraftSaved = (draft: {
   draftPreview.value = draft
   selectedLocationId.value = draft.draftId
   previewReloadToken.value = Date.now()
-  mobilePreviewOpen.value = true
+  mobilePreviewOpen.value = isMobilePreviewViewport.value
 }
 
 // ─── Toast from query params ──────────────────────────────────────────────────
 onMounted(async () => {
+  const mobilePreviewQuery = window.matchMedia('(max-width: 767.98px)')
+  const updateMobilePreviewViewport = () => {
+    isMobilePreviewViewport.value = mobilePreviewQuery.matches
+    if (!mobilePreviewQuery.matches) mobilePreviewOpen.value = false
+  }
+  updateMobilePreviewViewport()
+  mobilePreviewQuery.addEventListener('change', updateMobilePreviewViewport)
+  stopMobilePreviewViewportListener = () => mobilePreviewQuery.removeEventListener('change', updateMobilePreviewViewport)
+
   await loadContext()
   await loadReadiness()
 
@@ -323,5 +312,10 @@ onMounted(async () => {
   if (route.query.new === 'true') {
     toast.add({ title: 'Welcome', description: 'Your site has been created.', color: 'success' })
   }
+})
+
+onUnmounted(() => {
+  stopMobilePreviewViewportListener?.()
+  stopMobilePreviewViewportListener = null
 })
 </script>

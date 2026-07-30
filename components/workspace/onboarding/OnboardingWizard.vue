@@ -428,6 +428,11 @@ const emit = defineEmits<{
     name: string
     city: string
     address: string
+    streetAddress: string
+    addressLine2: string
+    region: string
+    postalCode: string
+    country: string
     phone: string
     currency: string
     timezone: string
@@ -500,6 +505,11 @@ const detailsForm = reactive({
   name: '',
   city: '',
   address: '',
+  streetAddress: '',
+  addressLine2: '',
+  region: '',
+  postalCode: '',
+  country: '',
   phone: '',
   currency: DEFAULT_CURRENCY,
   isPrimary: true,
@@ -581,7 +591,12 @@ watch(
   () => emit('preview-details', {
     name: detailsForm.name,
     city: detailsForm.city,
-    address: detailsForm.address,
+    address: composeAddress(),
+    streetAddress: detailsForm.streetAddress,
+    addressLine2: detailsForm.addressLine2,
+    region: detailsForm.region,
+    postalCode: detailsForm.postalCode,
+    country: detailsForm.country,
     phone: detailsForm.phone,
     currency: detailsForm.currency,
     timezone: hoursForm.timezone,
@@ -1069,7 +1084,7 @@ async function submitDetailsCard(section: 'location' | 'contact' | 'currency') {
 
 async function submitLocation() {
   const requiredFields = detailsRequireBasics.value
-    ? [detailsForm.city, detailsForm.address]
+    ? [detailsForm.streetAddress, detailsForm.city]
     : []
   if (!requiredFields.every(value => value.trim().length > 0)) {
     importError.value = 'Add the required details before continuing.'
@@ -1336,7 +1351,7 @@ function serializeDetails() {
   return {
     name: detailsForm.name.trim(),
     city: detailsForm.city.trim() || null,
-    address: detailsForm.address.trim() || null,
+    address: composeAddress() || null,
     phone: detailsForm.phone.trim() || null,
     openingHours: serializeOpeningHours(),
     notificationPhone: notificationForm.ownerPhone.trim() || null,
@@ -1344,6 +1359,18 @@ function serializeDetails() {
     currency: detailsForm.currency,
     isPrimary: isAddingLocation.value ? detailsForm.isPrimary : true,
   }
+}
+
+function composeAddress() {
+  return [
+    detailsForm.streetAddress,
+    detailsForm.addressLine2,
+    [detailsForm.city, detailsForm.region, detailsForm.postalCode].filter(Boolean).join(', '),
+    detailsForm.country,
+  ]
+    .map(part => part.trim())
+    .filter(Boolean)
+    .join('\n')
 }
 
 function serializeOpeningHours() {
@@ -1371,6 +1398,11 @@ function seedDetailsFromPreview(preview: NonNullable<typeof pendingPreview.value
   detailsForm.name = preview.name ?? ''
   detailsForm.city = preview.city ?? ''
   detailsForm.address = preview.address ?? ''
+  detailsForm.streetAddress = preview.address ?? ''
+  detailsForm.addressLine2 = ''
+  detailsForm.region = ''
+  detailsForm.postalCode = ''
+  detailsForm.country = ''
   detailsForm.phone = preview.phone ?? ''
   detailsForm.currency = DEFAULT_CURRENCY
   seedHoursFromPreview(preview.openingHours)
@@ -1382,6 +1414,11 @@ function seedDetailsFromManual(name: string) {
   detailsForm.name = name
   detailsForm.city = ''
   detailsForm.address = ''
+  detailsForm.streetAddress = ''
+  detailsForm.addressLine2 = ''
+  detailsForm.region = ''
+  detailsForm.postalCode = ''
+  detailsForm.country = ''
   detailsForm.phone = ''
   detailsForm.currency = DEFAULT_CURRENCY
   seedHoursFromPreview(null)
