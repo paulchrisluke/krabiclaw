@@ -23,7 +23,7 @@
     @starter="$emit('starter', $event)"
     @quick-reply="$emit('quick-reply', $event)"
   >
-    <template #message="slotProps">
+    <template v-if="$slots.message" #message="slotProps">
       <slot name="message" v-bind="slotProps" />
     </template>
     <template #assistant-after="slotProps">

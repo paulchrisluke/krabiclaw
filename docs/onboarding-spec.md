@@ -21,7 +21,7 @@ Global first, local second, persistent after that.
 
 **Current** — the flow is draft-first, and this is the one and only new-site creation path:
 
-`OnboardingWizard.vue`: `welcome → vertical → source → url/manual name → confirm → location → contact → currency → hours → brand → hero → create → imported`, then optional post-creation handoff cards (manager alerts, brand essentials, social/polish/MCP — all skippable where the cards allow).
+`OnboardingWizard.vue`: `welcome → vertical → source → url/manual name → confirm → location → contact → currency → hours → brand → hero → draft_ready → create → imported`, then optional post-creation handoff cards (manager alerts, brand essentials, social/polish/MCP — all skippable where the cards allow).
 
 - The first real business identity creates an active draft through `POST /api/dashboard/onboarding/drafts/active`: manual name entry creates a manual draft, and confirming a Google listing creates a Google Places draft. Completed onboarding sections patch that same active draft, and the preview renders from `/preview/draft/:draftId` until commit.
 - `commitDraft()` turns that draft into a real site via `POST /api/dashboard/onboarding/drafts/[draftId]/commit`, which calls the same `runSiteCreation()` used everywhere else a site gets created (`POST /api/sites`, the MCP `create_site` tool).

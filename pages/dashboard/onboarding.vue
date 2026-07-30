@@ -12,10 +12,12 @@
         :existing-site-slug="siteData?.subdomain ?? null"
         @site-created="onSiteCreated"
         @draft-saved="onDraftSaved"
+        @draft-cleared="onDraftCleared"
         @vertical-selected="selectedOnboardingVertical = $event"
         @step-changed="activeOnboardingStep = $event"
       />
       <OnboardingPreviewPane
+        v-if="!isMobilePreviewViewport"
         class="hidden md:flex"
         :iframe-src="iframeSrc"
         :site-locations="previewLocations"
@@ -328,6 +330,12 @@ const onDraftSaved = (draft: {
   selectedLocationId.value = draft.draftId
   previewReloadToken.value = Date.now()
   mobilePreviewOpen.value = isMobilePreviewViewport.value
+}
+
+const onDraftCleared = () => {
+  draftPreview.value = null
+  selectedLocationId.value = null
+  previewReloadToken.value = Date.now()
 }
 
 // ─── Toast from query params ──────────────────────────────────────────────────

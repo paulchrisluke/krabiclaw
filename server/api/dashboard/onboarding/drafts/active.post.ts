@@ -134,19 +134,25 @@ export default defineEventHandler(async (event) => {
   const vertical = rawVertical as SiteVertical
 
   let place: Awaited<ReturnType<typeof getPlaceDetails>> | PlaceDetailsSnapshot | null = null
+  let fetchedPlaceDetails = false
   const placeId = typeof body?.placeId === 'string' ? body.placeId.trim() : ''
   if (sourceType === 'google_places') {
     const existingPlace = existingPayload?.source.place ?? null
     if (placeId) {
-      const apiKey = env.GOOGLE_PLACES_API_KEY as string | undefined
-      if (!apiKey) return jsonResponse({ error: 'Google Places API key not configured' }, { status: 503 })
-      try {
-        place = await getPlaceDetails(apiKey, placeId)
-      } catch (error) {
-        const status = error instanceof PlaceDetailsError ? error.statusCode : 502
-        return jsonResponse({
-          error: error instanceof Error ? error.message : 'Could not fetch place details. Try again.',
-        }, { status })
+      if (existingPlace?.placeId === placeId) {
+        place = existingPlace
+      } else {
+        const apiKey = env.GOOGLE_PLACES_API_KEY as string | undefined
+        if (!apiKey) return jsonResponse({ error: 'Google Places API key not configured' }, { status: 503 })
+        try {
+          place = await getPlaceDetails(apiKey, placeId)
+          fetchedPlaceDetails = true
+        } catch (error) {
+          const status = error instanceof PlaceDetailsError ? error.statusCode : 502
+          return jsonResponse({
+            error: error instanceof Error ? error.message : 'Could not fetch place details. Try again.',
+          }, { status })
+        }
       }
     } else if (existingPlace) {
       place = existingPlace
@@ -161,7 +167,7 @@ export default defineEventHandler(async (event) => {
   } catch {
     dashboard = null
   }
-  if (sourceType === 'google_places' && placeId && dashboard?.organization?.id) {
+  if (sourceType === 'google_places' && fetchedPlaceDetails && dashboard?.organization?.id) {
     await chargeFlatCredits(db, dashboard.organization.id, { action: 'google_places_details' }).catch(() => {})
   }
 

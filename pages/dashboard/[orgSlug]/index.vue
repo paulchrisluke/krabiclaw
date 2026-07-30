@@ -83,6 +83,8 @@
 </template>
 
 <script setup lang="ts">
+import { getVerticalLabel } from '~/utils/vertical-copy'
+
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Dashboard | KrabiClaw', robots: 'noindex, nofollow' })
 
@@ -95,7 +97,7 @@ const sites = computed(() => dashboard.sites.value)
 const canManageOrganization = computed(() => ['owner', 'admin'].includes(dashboard.organization.value?.role ?? ''))
 const sitesWithSubdomain = computed(() => sites.value.filter((site): site is (typeof sites.value)[number] & { subdomain: string } => Boolean(site.subdomain)))
 const previewSites = computed(() => sitesWithSubdomain.value.slice(0, 3))
-const liveSitesCount = computed(() => sites.value.filter(site => site.status === 'active' && site.onboarding_status === 'active').length)
+const liveSitesCount = computed(() => sitesWithSubdomain.value.filter(site => site.status === 'active' && site.onboarding_status === 'active').length)
 const verticalCount = computed(() => new Set(sitesWithSubdomain.value.map(site => site.vertical ?? 'unknown')).size)
 const planSummary = computed(() => {
   const plans = [...new Set(sitesWithSubdomain.value.map(site => site.plan ?? 'free'))]
@@ -105,10 +107,7 @@ const planSummary = computed(() => {
 })
 
 function verticalLabel(vertical: string | null) {
-  if (vertical === 'professional_service' || vertical === 'service') return 'Professional services'
-  if (vertical === 'experience') return 'Experience'
-  if (vertical === 'restaurant') return 'Restaurant'
-  return 'Business'
+  return getVerticalLabel(vertical)
 }
 
 onMounted(async () => {

@@ -78,7 +78,8 @@ test.describe('stateless MCP server', () => {
       if (placement.status() !== 200) console.error(await placement.text())
       expect(placement.status()).toBe(200)
       const placementBody = await placement.json()
-      expect(placementBody.result?.isError ?? false).toBe(false)
+      expect(placementBody.result).toBeTruthy()
+      expect(placementBody.result.isError).toBe(false)
 
       const read = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'get_post', args: { site_id: siteId, post_id: created.id },

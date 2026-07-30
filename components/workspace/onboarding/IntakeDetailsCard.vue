@@ -139,7 +139,6 @@ type PhoneCode = {
 type IntakeForm = {
   name: string
   city: string
-  address: string
   streetAddress: string
   addressLine2: string
   region: string
@@ -169,7 +168,7 @@ const phoneTouched = ref(false)
 const countryCode = ref('US')
 const hydratingStoredPhone = ref(false)
 
-const { data: phoneCodes, status, execute } = await useLazyFetch<PhoneCode[]>('/api/phone-codes.json', {
+const { data: phoneCodes, status, execute } = useLazyFetch<PhoneCode[]>('/api/phone-codes.json', {
   key: 'api-phone-codes',
   immediate: false,
 })

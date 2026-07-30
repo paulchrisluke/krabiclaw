@@ -6,7 +6,6 @@
           class="w-full"
           size="xl"
           :items="timezoneOptions"
-          searchable
           placeholder="Select timezone"
         />
       </UFormField>
@@ -27,8 +26,8 @@
               class="w-full"
               size="lg"
               :items="timeOptions"
-              value-attribute="value"
-              label-attribute="label"
+              value-key="value"
+              label-key="label"
               :disabled="day.closed"
               aria-label="Open time"
             />
@@ -37,8 +36,8 @@
               class="w-full"
               size="lg"
               :items="timeOptions"
-              value-attribute="value"
-              label-attribute="label"
+              value-key="value"
+              label-key="label"
               :disabled="day.closed"
               aria-label="Close time"
             />

@@ -41,8 +41,8 @@ export default defineEventHandler(async (event) => {
       return jsonResponse({ error: 'Cloudflare Images not configured' }, { status: 503 })
     }
 
-    const draft = await queryFirst<{ id: string; user_id: string; status: string; payload_json: string }>(db, `
-      SELECT id, user_id, status, payload_json
+    const draft = await queryFirst<{ id: string; user_id: string; status: string; payload_json: string; updated_at: string }>(db, `
+      SELECT id, user_id, status, payload_json, updated_at
       FROM onboarding_drafts
       WHERE id = ?
       LIMIT 1
@@ -93,42 +93,58 @@ export default defineEventHandler(async (event) => {
       category: target === 'logo' ? 'logo' : 'other',
     }
 
-    const payload = parseOnboardingDraftPayload(draft.payload_json)
-    payload.preview.draftMedia ??= { logo: null, hero: null }
-    if (target === 'logo') {
-      payload.preview.draftMedia.logo = image
-      payload.preview.config.logo_url = image.publicUrl
-      payload.preview.config.draft_logo_asset_id = image.draftAssetId
-      payload.preview.config.draft_logo_note = filename
-    } else {
-      payload.preview.draftMedia.hero = image
-      payload.preview.config.hero_image_url = image.publicUrl
-      payload.preview.config.location_hero_image_url = image.publicUrl
-      payload.preview.config.draft_hero_asset_id = image.draftAssetId
-      payload.preview.config.draft_hero_photo_note = filename
-      for (const row of payload.preview.content) {
-        if (row.page === 'home' && row.field === 'hero') {
-          row.hero_public_url = image.publicUrl
-          row.hero_kind = 'image'
-          row.thumbnail_url = image.thumbnailUrl
+    let currentUpdatedAt = draft.updated_at
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const currentDraft = attempt === 0
+        ? draft
+        : await queryFirst<{ id: string; user_id: string; status: string; payload_json: string; updated_at: string }>(db, `
+            SELECT id, user_id, status, payload_json, updated_at
+            FROM onboarding_drafts
+            WHERE id = ? AND user_id = ? AND status = 'active'
+            LIMIT 1
+          `, [draftId, session.user.id])
+      if (!currentDraft) return jsonResponse({ error: 'Draft not found' }, { status: 404 })
+      currentUpdatedAt = currentDraft.updated_at
+      const payload = parseOnboardingDraftPayload(currentDraft.payload_json)
+      payload.preview.draftMedia ??= { logo: null, hero: null }
+      if (target === 'logo') {
+        payload.preview.draftMedia.logo = image
+        payload.preview.config.logo_url = image.publicUrl
+        payload.preview.config.draft_logo_asset_id = image.draftAssetId
+        payload.preview.config.draft_logo_note = filename
+      } else {
+        payload.preview.draftMedia.hero = image
+        payload.preview.config.hero_image_url = image.publicUrl
+        payload.preview.config.location_hero_image_url = image.publicUrl
+        payload.preview.config.draft_hero_asset_id = image.draftAssetId
+        payload.preview.config.draft_hero_photo_note = filename
+        for (const row of payload.preview.content) {
+          if (row.page === 'home' && row.field === 'hero') {
+            row.hero_public_url = image.publicUrl
+            row.hero_kind = 'image'
+            row.thumbnail_url = image.thumbnailUrl
+          }
+        }
+        for (const location of payload.preview.locations) {
+          location.hero_url = image.publicUrl
+          location.thumbnail_url = image.thumbnailUrl ?? image.publicUrl
         }
       }
-      for (const location of payload.preview.locations) {
-        location.hero_url = image.publicUrl
-        location.thumbnail_url = image.thumbnailUrl ?? image.publicUrl
+
+      const updatedAt = new Date().toISOString()
+      const result = await execute(db, `
+        UPDATE onboarding_drafts
+        SET payload_json = ?, updated_at = ?
+        WHERE id = ? AND user_id = ? AND status = 'active' AND updated_at = ?
+      `, [JSON.stringify(payload), updatedAt, draftId, session.user.id, currentUpdatedAt])
+      if ((result.meta?.changes ?? 0) > 0) {
+        return jsonResponse({
+          success: true,
+          image,
+        })
       }
     }
-
-    await execute(db, `
-      UPDATE onboarding_drafts
-      SET payload_json = ?, updated_at = ?
-      WHERE id = ? AND user_id = ? AND status = 'active'
-    `, [JSON.stringify(payload), new Date().toISOString(), draftId, session.user.id])
-
-    return jsonResponse({
-      success: true,
-      image,
-    })
+    return jsonResponse({ error: 'Failed to upload draft media' }, { status: 409 })
   } catch (error) {
     rethrowHttpError(error)
     const normalized = error instanceof Error ? error : new Error('Unknown draft media upload error')
@@ -136,6 +152,6 @@ export default defineEventHandler(async (event) => {
       error: normalized.message,
       stack: normalized.stack,
     })
-    return jsonResponse({ error: 'Failed to upload draft media', message: normalized.message }, { status: 500 })
+    return jsonResponse({ error: 'Failed to upload draft media' }, { status: 503 })
   }
 })

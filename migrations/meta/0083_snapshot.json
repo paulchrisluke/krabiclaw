@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "0085_bright_cobalt_man",
-  "prevId": "0084_tiny_lorna_dane",
+  "id": "0083_drop_media_assets_old_legacy_sync",
+  "prevId": "0082_assert_unified_media_physical_contract",
   "tables": {
     "account": {
       "name": "account",

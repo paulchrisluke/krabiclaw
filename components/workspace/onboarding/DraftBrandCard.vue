@@ -6,15 +6,19 @@
             v-for="swatch in colorPresets"
             :key="swatch"
             type="button"
-            class="size-7 rounded-full border-2 transition"
+            class="size-7 rounded-full border-2 transition disabled:pointer-events-none disabled:opacity-50"
             :class="form.brandColor === swatch ? 'scale-110 border-highlighted' : 'border-transparent'"
             :style="{ background: swatch }"
             :aria-label="`Use ${swatch} as brand color`"
+            :disabled="disabled"
             @click="setBrandColor(swatch)"
           />
           <label
             class="relative flex size-7 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 transition"
-            :class="customColorSelected ? 'scale-110 border-highlighted' : 'border-default bg-default text-muted hover:border-primary'"
+            :class="[
+              customColorSelected ? 'scale-110 border-highlighted' : 'border-default bg-default text-muted hover:border-primary',
+              disabled ? 'pointer-events-none opacity-50' : '',
+            ]"
             :style="customColorSelected ? { background: form.brandColor } : undefined"
             aria-label="Choose custom brand color"
           >
@@ -24,6 +28,7 @@
               type="color"
               class="absolute inset-0 cursor-pointer opacity-0"
               aria-label="Choose custom brand color"
+              :disabled="disabled"
               @input="setCustomBrandColor"
             >
           </label>
@@ -171,6 +176,7 @@ const activeUploadInProgress = computed(() => section.value === 'brand' ? logoUp
 const customColorSelected = computed(() => !colorPresets.includes(form.value.brandColor))
 
 function setBrandColor(color: string) {
+  if (props.disabled) return
   form.value.brandColor = color
   emit('brand-color-change')
 }
@@ -184,7 +190,7 @@ async function uploadDraftImage(event: Event, target: 'logo' | 'hero') {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = ''
-  if (!file || !props.draftId) return
+  if (!file || !props.draftId || props.disabled) return
 
   uploadError.value = null
   if (target === 'logo') logoUploading.value = true

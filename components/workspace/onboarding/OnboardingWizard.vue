@@ -122,28 +122,7 @@
             <!-- eslint-disable-next-line vue/no-v-html -->
             <div class="prose prose-sm dark:prose-invert max-w-none" v-html="renderMarkdown(messages[index]!.text!)" />
           </div>
-          <Transition name="onboarding-widget" mode="out-in">
-            <button
-              v-if="isHistoricalMessage(index)"
-              :key="`summary-${messages[index]?.id}`"
-              type="button"
-              class="flex w-full items-center gap-3 rounded-lg border border-default bg-elevated px-3 py-3 text-left transition-colors duration-150 ease-out hover:border-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-              @click="editHistoricalStep(messages[index]!)"
-            >
-              <span class="flex size-9 shrink-0 items-center justify-center rounded-lg border border-default bg-default text-primary">
-                <UIcon :name="summaryIcon(messages[index]!)" class="size-4" />
-              </span>
-              <span class="min-w-0 flex-1">
-                <span class="block text-[12px] font-semibold uppercase leading-4 text-muted">{{ summaryLabel(messages[index]!) }}</span>
-                <span class="mt-0.5 block truncate text-[13px] font-semibold leading-5 text-highlighted">{{ summaryValue(messages[index]!) }}</span>
-              </span>
-              <span class="shrink-0 text-[12px] font-semibold text-primary">Edit</span>
-            </button>
-            <div
-              v-else
-              :key="`active-${messages[index]?.id}`"
-              class="space-y-2"
-            >
+          <div class="space-y-2">
               <div
                 v-if="messages[index]?.placePreview"
                 class="overflow-hidden rounded-xl border border-default bg-elevated"
@@ -181,16 +160,16 @@
                   :key="choice.action"
                   type="button"
                   :class="[
-                    'flex w-full items-center gap-3 rounded-lg border bg-elevated px-3 py-3 text-left transition-colors duration-150 ease-out hover:border-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:pointer-events-none disabled:opacity-50',
-                    selectedChoiceAction === choice.action ? 'border-primary bg-primary/10 text-highlighted shadow-sm' : 'border-default',
+                    'flex w-full items-center gap-3 rounded-lg border bg-elevated px-3 py-3 text-left transition-colors duration-150 ease-out hover:border-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:pointer-events-none',
+                    selectedChoiceAction === choice.action || (isPastMessage(index) && isSelectedChoice(messages[index]!, choice)) ? 'border-primary bg-primary/10 text-highlighted shadow-sm' : 'border-default',
                   ]"
                   :disabled="importing || Boolean(selectedChoiceAction)"
-                  @click="selectChoice(choice)"
+                  @click="selectChoice(choice, index)"
                 >
                   <span
                     :class="[
                       'flex size-9 shrink-0 items-center justify-center rounded-lg border bg-default text-primary transition-colors duration-150',
-                      selectedChoiceAction === choice.action ? 'border-primary bg-primary/10' : 'border-default',
+                      selectedChoiceAction === choice.action || (isPastMessage(index) && isSelectedChoice(messages[index]!, choice)) ? 'border-primary bg-primary/10' : 'border-default',
                     ]"
                   >
                     <UIcon :name="choice.icon || 'i-lucide-circle'" class="size-4" />
@@ -211,7 +190,7 @@
                   :show-primary-toggle="messages[index]!.detailsCard!.showPrimaryToggle"
                   :section="messages[index]!.detailsCard!.section"
                   :loading="importing"
-                  :disabled="importing"
+                  :disabled="!isActiveStepMessage(messages[index]!)"
                   @submit="submitDetailsCard(messages[index]!.detailsCard!.section)"
                 />
                 <HoursTimezoneCard
@@ -219,7 +198,7 @@
                   v-model:form="hoursForm"
                   :action-label="activeActionLabel(messages[index]!)"
                   :loading="importing"
-                  :disabled="importing"
+                  :disabled="!isActiveStepMessage(messages[index]!)"
                   @submit="submitHoursCard"
                 />
                 <DraftBrandCard
@@ -229,7 +208,7 @@
                   :section="messages[index]!.brandDraftCard!.section"
                   :draft-id="onboardingDraftId"
                   :loading="importing"
-                  :disabled="importing"
+                  :disabled="!isActiveStepMessage(messages[index]!)"
                   @submit="submitBrandDraftCard"
                   @brand-color-change="queueBrandColorSave"
                 />
@@ -263,8 +242,7 @@
                   <UIcon name="i-lucide-chevron-right" class="size-5 shrink-0 text-muted" />
                 </div>
               </button>
-            </div>
-          </Transition>
+          </div>
         </div>
         <UChatMessage
           v-else
@@ -382,6 +360,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'site-created': [orgSlug: string | null, locationSlug?: string | null]
   'draft-saved': [draft: DraftSavedPayload]
+  'draft-cleared': []
   'vertical-selected': [vertical: SiteVertical]
   'step-changed': [step: WizardStep]
 }>()
@@ -414,7 +393,6 @@ const WELCOME_POINTS: [string, string][] = isAddingLocation.value
 
 const step = ref<WizardStep>('welcome')
 const messages = ref<WizardMessage[]>([])
-const collapsedWidgetMessageIds = ref(new Set<string>())
 const conversationMessages = computed(() => messages.value.map(msg => ({
   role: msg.from === 'user' ? 'user' as const : 'assistant' as const,
   content: msg.text ?? '',
@@ -445,7 +423,6 @@ const selectedVertical = ref<SiteVertical>('restaurant')
 const detailsForm = reactive({
   name: '',
   city: '',
-  address: '',
   streetAddress: '',
   addressLine2: '',
   region: '',
@@ -517,11 +494,8 @@ const progressLabel = computed(() => {
   return 'Onboarding'
 })
 const canGoBack = computed(() => !importing.value && !typing.value && !['welcome', 'importing', 'imported'].includes(step.value))
-const isHistoricalMessage = (index: number) => {
-  const message = messages.value[index]
-  if (!message) return false
-  return collapsedWidgetMessageIds.value.has(message.id) || index < messages.value.length - 1
-}
+const isPastMessage = (index: number) => index < messages.value.length - 1
+const isActiveStepMessage = (message: WizardMessage) => message.step === step.value && !importing.value
 const messageMotionStyle = (index: number) => ({
   '--message-delay': `${Math.min(index, 6) * 26}ms`,
 })
@@ -598,64 +572,35 @@ function activeActionLabel(message: WizardMessage) {
     ?? 'Save'
 }
 
-function summaryLabel(message: WizardMessage) {
-  const messageStep = message.step
-  if (messageStep === 'vertical') return 'Business type'
-  if (messageStep === 'source') return 'Details source'
-  if (messageStep === 'confirm') return 'Google listing'
-  if (message.detailsCard?.section === 'location') return 'Location'
-  if (message.detailsCard?.section === 'contact') return 'Contact'
-  if (message.detailsCard?.section === 'currency') return 'Currency'
-  if (message.hoursCard) return 'Hours'
-  if (message.brandDraftCard?.section === 'brand') return 'Brand'
-  if (message.brandDraftCard?.section === 'hero') return 'Homepage hero'
-  if (message.draftReadyCard) return 'Draft'
-  return 'Answer'
-}
-
-function summaryIcon(message: WizardMessage) {
-  const messageStep = message.step
-  if (messageStep === 'vertical') return 'i-lucide-briefcase'
-  if (messageStep === 'source') return detailsSource.value === 'manual' ? 'i-lucide-pencil' : 'i-lucide-globe'
-  if (messageStep === 'confirm') return 'i-lucide-map-pin'
-  if (message.detailsCard?.section === 'location') return 'i-lucide-map-pin'
-  if (message.detailsCard?.section === 'contact') return 'i-lucide-phone'
-  if (message.detailsCard?.section === 'currency') return 'i-lucide-badge-dollar-sign'
-  if (message.hoursCard) return 'i-lucide-clock-3'
-  if (message.brandDraftCard?.section === 'brand') return 'i-lucide-paintbrush'
-  if (message.brandDraftCard?.section === 'hero') return 'i-lucide-image'
-  if (message.draftReadyCard) return 'i-lucide-eye'
-  return 'i-lucide-check'
-}
-
-function summaryValue(message: WizardMessage) {
+function isSelectedChoice(message: WizardMessage, choice: QuickReply) {
   const messageStep = message.step
   if (messageStep === 'vertical') {
-    if (selectedVertical.value === 'professional_service') return 'Legal or professional services'
-    if (selectedVertical.value === 'experience') return 'Experience, class or activity'
-    return 'Restaurant, café or bar'
+    return choice.action === `set_vertical_${selectedVertical.value}`
   }
-  if (messageStep === 'source') return detailsSource.value === 'manual' ? 'Start manually' : 'Google Maps'
-  if (messageStep === 'confirm') return (pendingPreview.value?.name ?? detailsForm.name) || 'Confirmed'
-  if (message.detailsCard?.section === 'location') return [detailsForm.streetAddress, detailsForm.city].filter(Boolean).join(', ') || 'Location details'
-  if (message.detailsCard?.section === 'contact') return detailsForm.phone || 'Contact number'
-  if (message.detailsCard?.section === 'currency') return detailsForm.currency
-  if (message.hoursCard) return hoursForm.timezone || 'Hours & timezone'
-  if (message.brandDraftCard?.section === 'brand') return brandDraftForm.logoPreviewUrl ? 'Brand color and logo' : 'Brand color'
-  if (message.brandDraftCard?.section === 'hero') return brandDraftForm.heroHeadline || brandDraftForm.heroPhotoNote || 'Homepage hero'
-  if (message.draftReadyCard) return draftReadyDomain.value
-  return message.text ?? 'Answered'
+  if (messageStep === 'source') {
+    return detailsSource.value === 'manual' ? choice.action === 'ask_manual' : choice.action === 'ask_url'
+  }
+  if (messageStep === 'confirm') return choice.action === 'confirm_yes' && detailsSource.value === 'imported'
+  return false
 }
 
-async function editHistoricalStep(message: WizardMessage) {
-  if (!message.step || importing.value || typing.value) return
-  const index = messages.value.findIndex(item => item.id === message.id)
-  if (index >= 0) messages.value = messages.value.slice(0, index)
-  if (message.step === 'confirm') {
-    if (pendingPreview.value) showConfirm(pendingPreview.value, preConfirmStep.value)
-    return
+function clearDraftPreview() {
+  onboardingDraftId.value = null
+  draftPreviewPayload.value = null
+  emit('draft-cleared')
+}
+
+function rewindToChoiceMessage(index: number) {
+  const message = messages.value[index]
+  if (!message?.choiceCard || !isPastMessage(index)) return
+  messages.value = messages.value.slice(0, index + 1)
+  replies.value = []
+  awaitingInput.value = false
+  typing.value = false
+  importError.value = null
+  if (message.step === 'vertical' || message.step === 'source' || message.step === 'confirm') {
+    clearDraftPreview()
   }
-  await advance(message.step)
 }
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
@@ -693,14 +638,6 @@ const draftReadyInitials = computed(() => {
 
 function pushUser(text: string) {
   messages.value.push({ id: crypto.randomUUID(), from: 'user', text })
-}
-
-async function collapseActiveWidgetBeforeReply() {
-  const message = messages.value[messages.value.length - 1]
-  if (!message || !isWidgetMessage(message)) return
-  collapsedWidgetMessageIds.value = new Set([...collapsedWidgetMessageIds.value, message.id])
-  await nextTick()
-  await sleep(80)
 }
 
 async function pushBot(text: string, extra?: {
@@ -848,13 +785,11 @@ async function goBack() {
 
   if (step.value === 'vertical') {
     messages.value = []
-    collapsedWidgetMessageIds.value = new Set()
     await advance('welcome')
     return
   }
   if (step.value === 'source') {
     messages.value = []
-    collapsedWidgetMessageIds.value = new Set()
     await advance(skipVertical.value ? 'welcome' : 'vertical')
     return
   }
@@ -927,12 +862,14 @@ async function handleReply(reply: QuickReply) {
   }
 
   if (reply.action === 'ask_url') {
+    detailsSource.value = 'imported'
     pushUser(reply.label)
     await advance('awaiting_url')
     return
   }
 
   if (reply.action === 'ask_manual') {
+    detailsSource.value = 'manual'
     pushUser(reply.label)
     await advance('awaiting_manual_name')
     return
@@ -984,12 +921,12 @@ async function handleReply(reply: QuickReply) {
   }
 }
 
-async function selectChoice(choice: QuickReply) {
+async function selectChoice(choice: QuickReply, messageIndex?: number) {
   if (selectedChoiceAction.value || importing.value) return
+  if (typeof messageIndex === 'number') rewindToChoiceMessage(messageIndex)
   selectedChoiceAction.value = choice.action ?? choice.label
   await sleep(120)
   try {
-    await collapseActiveWidgetBeforeReply()
     await handleReply(choice)
   } finally {
     selectedChoiceAction.value = null
@@ -1124,10 +1061,10 @@ async function runLookup(mapsUrl: string) {
   }
 }
 
-async function saveActiveDraft() {
+async function saveActiveDraft(options: { silent?: boolean } = {}) {
   if (isAddingLocation.value) return true
 
-  importing.value = true
+  if (!options.silent) importing.value = true
   importError.value = null
   try {
     const sourceType: DraftSourceType = pendingPreview.value ? 'google_places' : 'manual'
@@ -1167,7 +1104,7 @@ async function saveActiveDraft() {
     importError.value = error instanceof Error ? error.message : 'Failed to save your preview draft. Please try again.'
     return false
   } finally {
-    importing.value = false
+    if (!options.silent) importing.value = false
   }
 }
 
@@ -1232,9 +1169,7 @@ function queueBrandColorSave() {
   if (brandColorSaveTimer) clearTimeout(brandColorSaveTimer)
   brandColorSaveTimer = setTimeout(() => {
     brandColorSaveTimer = null
-    saveActiveDraft().catch((error) => {
-      importError.value = error instanceof Error ? error.message : 'Failed to save brand color.'
-    })
+    void saveActiveDraft({ silent: true })
   }, 250)
 }
 
@@ -1347,7 +1282,6 @@ function guessLocalTimezone(): string {
 function seedDetailsFromPreview(preview: NonNullable<typeof pendingPreview.value>) {
   detailsForm.name = preview.name ?? ''
   detailsForm.city = preview.city ?? ''
-  detailsForm.address = preview.address ?? ''
   detailsForm.streetAddress = preview.address ?? ''
   detailsForm.addressLine2 = ''
   detailsForm.region = ''
@@ -1362,7 +1296,6 @@ function seedDetailsFromPreview(preview: NonNullable<typeof pendingPreview.value
 function seedDetailsFromManual(name: string) {
   detailsForm.name = name
   detailsForm.city = ''
-  detailsForm.address = ''
   detailsForm.streetAddress = ''
   detailsForm.addressLine2 = ''
   detailsForm.region = ''
@@ -1377,7 +1310,9 @@ function seedDetailsFromManual(name: string) {
 function seedHoursFromPreview(openingHours: string[] | null | undefined) {
   hoursForm.timezone = guessLocalTimezone()
   const byDay = new Map((openingHours ?? []).map((line) => {
-    const [day, hours] = line.split(/:\s*/, 2)
+    const separatorIndex = line.indexOf(':')
+    const day = separatorIndex >= 0 ? line.slice(0, separatorIndex).trim() : line.trim()
+    const hours = separatorIndex >= 0 ? line.slice(separatorIndex + 1).trim() : ''
     return [day, hours]
   }))
   for (const row of hoursForm.hours) {
@@ -1460,24 +1395,6 @@ const onDrop = (e: DragEvent) => {
   animation-delay: var(--message-delay, 0ms);
 }
 
-.onboarding-widget-enter-active,
-.onboarding-widget-leave-active {
-  transition: opacity 120ms ease;
-}
-
-.onboarding-widget-enter-from {
-  opacity: 0;
-}
-
-.onboarding-widget-enter-to,
-.onboarding-widget-leave-from {
-  opacity: 1;
-}
-
-.onboarding-widget-leave-to {
-  opacity: 0;
-}
-
 .onboarding-step-widget {
   border: 1px solid var(--ui-border);
   border-radius: 0.75rem;
@@ -1497,11 +1414,6 @@ const onDrop = (e: DragEvent) => {
 @media (prefers-reduced-motion: reduce) {
   .onboarding-transcript-item {
     animation: none;
-  }
-
-  .onboarding-widget-enter-active,
-  .onboarding-widget-leave-active {
-    transition: opacity 80ms linear;
   }
 
 }

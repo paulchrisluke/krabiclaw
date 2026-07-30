@@ -634,7 +634,6 @@ const mobileRevenueItem = computed<DashboardMobileNavItem | null>(() => {
   if (scope.value === 'location') {
     const primary = firstManagerItem('menu', 'location')
       ?? firstManagerItem('experiences', 'location')
-      ?? firstManagerItem('services', 'site')
     if (!primary) return null
     return {
       key: 'primary',
@@ -718,7 +717,7 @@ const mobileMoreItems = computed(() => {
 const mobileAccountItems = computed(() => [
   { label: 'Account settings', icon: 'i-lucide-settings', to: '/dashboard/account/profile' },
   { label: 'Authentication', icon: 'i-lucide-shield', to: '/dashboard/account/authentication' },
-  { label: 'Help', icon: 'i-lucide-circle-help', to: config.public.helpUrl as string, target: '_blank' },
+  ...(config.public.helpUrl ? [{ label: 'Help', icon: 'i-lucide-circle-help', to: config.public.helpUrl as string, target: '_blank' }] : []),
   { label: 'Docs', icon: 'i-lucide-book-open', to: '/docs' },
 ])
 

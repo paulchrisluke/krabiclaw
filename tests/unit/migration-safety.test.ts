@@ -67,8 +67,10 @@ describe('migration safety', () => {
       DROP TABLE business_locations;
       ALTER TABLE __new_business_locations RENAME TO business_locations;
     `
-    const siblingMarkers = `
+    const prepareMarkers = `
       CREATE TABLE __um_backup_business_locations AS SELECT * FROM business_locations;
+    `
+    const assertionMarkers = `
       CREATE TABLE __um_assert_0080 (violation text not null check (violation = ''));
       INSERT INTO __um_assert_0080 (violation)
       SELECT 'business_locations_backup_count_mismatch'
@@ -79,7 +81,7 @@ describe('migration safety', () => {
       DROP TABLE __um_assert_0080;
       DROP TABLE __um_backup_business_locations;
     `
-    assert.deepEqual(findUnsafeMigrationStatements('0079_split.sql', rebuildSql, `${siblingMarkers}\n${rebuildSql}`), [])
+    assert.deepEqual(findUnsafeMigrationStatements('0079_split.sql', rebuildSql, `${prepareMarkers}\n${rebuildSql}\n${assertionMarkers}`), [])
   })
 
   it('blocks split rebuild migrations without a sibling count assertion', () => {

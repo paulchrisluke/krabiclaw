@@ -174,10 +174,10 @@ const hasReviews = computed(() => featureSet.value.has('reviews'))
 const hasReservations = computed(() => featureSet.value.has('reservations'))
 const hasExperiences = computed(() => featureSet.value.has('experiences'))
 const needsGoogleConnection = computed(() => !googleConnection.value || !location.value?.google_place_id)
-const primaryManageItem = computed(() => workspaceLinks.value.find(item => ['Menu', 'Experiences', 'Services'].includes(item.label)) ?? workspaceLinks.value[0] ?? null)
+const primaryManageItem = computed(() => workspaceLinks.value.find(item => ['menu', 'experiences', 'services'].includes(item.feature)) ?? workspaceLinks.value[0] ?? null)
 const primaryManageLabel = computed(() => primaryManageItem.value?.label ?? 'Manage')
 const primaryManageValue = computed(() => {
-  if (primaryManageItem.value?.label === 'Menu') return `${menus.value.length} ${menus.value.length === 1 ? 'menu' : 'menus'}`
+  if (primaryManageItem.value?.feature === 'menu') return `${menus.value.length} ${menus.value.length === 1 ? 'menu' : 'menus'}`
   return primaryManageItem.value ? 'Ready' : 'Not set'
 })
 const currentOpeningState = computed(() => {
@@ -193,15 +193,15 @@ const currentOpeningState = computed(() => {
   return getTodayGoogleHours(hours, today) || 'Hours synced'
 })
 const workspaceLinks = computed(() => [
-  { label: 'Content', icon: 'i-lucide-file-text', to: `${locationBase.value}/content`, visible: true },
-  { label: 'Inbox', icon: 'i-lucide-inbox', to: `${locationBase.value}/inbox`, visible: true },
-  { label: 'Menu', icon: 'i-lucide-utensils', to: `${locationBase.value}/menu`, visible: hasMenu.value },
-  { label: 'Services', icon: 'i-lucide-briefcase', to: `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/professional-services`, visible: featureSet.value.has('services') },
-  { label: 'Reservations', icon: 'i-lucide-calendar-check', to: `${locationBase.value}/reservations`, visible: hasReservations.value },
-  { label: 'Experiences', icon: 'i-lucide-ticket', to: `${locationBase.value}/experiences`, visible: hasExperiences.value },
-  { label: 'Photos', icon: 'i-lucide-image', to: `${locationBase.value}/photos`, visible: featureSet.value.has('photos') },
-  { label: 'Q&A', icon: 'i-lucide-message-circle-question', to: `${locationBase.value}/qa`, visible: featureSet.value.has('qa') },
-  { label: 'Settings', icon: 'i-lucide-settings', to: `${locationBase.value}/settings`, visible: true },
+  { feature: 'content', label: 'Content', icon: 'i-lucide-file-text', to: `${locationBase.value}/content`, visible: true },
+  { feature: 'inbox', label: 'Inbox', icon: 'i-lucide-inbox', to: `${locationBase.value}/inbox`, visible: true },
+  { feature: 'menu', label: 'Menu', icon: 'i-lucide-utensils', to: `${locationBase.value}/menu`, visible: hasMenu.value },
+  { feature: 'services', label: 'Services', icon: 'i-lucide-briefcase', to: `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/professional-services`, visible: featureSet.value.has('services') },
+  { feature: 'reservations', label: 'Reservations', icon: 'i-lucide-calendar-check', to: `${locationBase.value}/reservations`, visible: hasReservations.value },
+  { feature: 'experiences', label: 'Experiences', icon: 'i-lucide-ticket', to: `${locationBase.value}/experiences`, visible: hasExperiences.value },
+  { feature: 'photos', label: 'Photos', icon: 'i-lucide-image', to: `${locationBase.value}/photos`, visible: featureSet.value.has('photos') },
+  { feature: 'qa', label: 'Q&A', icon: 'i-lucide-message-circle-question', to: `${locationBase.value}/qa`, visible: featureSet.value.has('qa') },
+  { feature: 'settings', label: 'Settings', icon: 'i-lucide-settings', to: `${locationBase.value}/settings`, visible: true },
 ].filter(item => item.visible))
 
 async function load() {

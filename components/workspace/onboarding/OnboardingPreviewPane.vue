@@ -80,10 +80,11 @@
     <Transition name="onboarding-preview" mode="out-in">
       <iframe
         v-if="iframeSrc"
-        id="site-preview-frame"
+        :data-preview-frame-id="previewFrameId"
         key="iframe"
         :src="iframeSrc"
         title="Site preview"
+        sandbox="allow-same-origin allow-scripts allow-forms"
         class="size-full min-h-0 flex-1 border-0 bg-default"
       />
       <div v-else-if="emptyVisualUrl" :key="emptyVisualUrl" class="relative min-h-0 flex-1 overflow-hidden bg-default">
@@ -138,6 +139,7 @@ const emit = defineEmits<{
   'select-page': [page: string]
   'select-location': [id: string]
 }>()
+const previewFrameId = useId()
 
 const secondaryTab = computed(() => {
   if (props.vertical === 'professional_service') {

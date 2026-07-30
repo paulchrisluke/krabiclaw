@@ -1,6 +1,6 @@
 <template>
   <div class="flex min-h-0 flex-1 flex-col">
-    <div class="min-h-0 flex-1 overflow-y-auto">
+    <div ref="scrollContainer" class="min-h-0 flex-1 overflow-y-auto">
       <UChatMessages :status="messagesStatus" should-auto-scroll class="py-4">
         <div
           v-if="showEmptyState && messages.length === 0"
@@ -215,6 +215,29 @@ defineEmits<{
 }>()
 
 const quickReplyRows = computed(() => props.quickReplies.some(reply => Boolean(reply.sub)))
+const scrollContainer = ref<HTMLElement | null>(null)
+
+function scrollToLatestMessage() {
+  if (!import.meta.client) return
+  window.requestAnimationFrame(() => {
+    const container = scrollContainer.value
+    if (!container) return
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: reducedMotion ? 'auto' : 'smooth',
+    })
+  })
+}
+
+watch(
+  () => [props.messages.length, props.messagesStatus] as const,
+  async () => {
+    await nextTick()
+    scrollToLatestMessage()
+  },
+  { flush: 'post' },
+)
 
 function messageKey(message: TMessage, index: number) {
   if ('id' in message && typeof message.id === 'string' && message.id) return message.id

@@ -19,11 +19,13 @@ function errorMessage(envelope: CloudflareEnvelope<unknown>, fallback: string) {
   return messages?.length ? messages.join('; ') : fallback
 }
 
-async function fetchCloudflare(input: string, init: RequestInit = {}) {
+async function fetchCloudflare<T>(input: string, init: RequestInit = {}) {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
   try {
-    return await fetch(input, { ...init, signal: controller.signal })
+    const response = await fetch(input, { ...init, signal: controller.signal })
+    const envelope = await response.json() as CloudflareEnvelope<T>
+    return { response, envelope }
   } finally {
     clearTimeout(timeout)
   }
@@ -32,10 +34,9 @@ async function fetchCloudflare(input: string, init: RequestInit = {}) {
 async function resolveZoneId() {
   if (process.env.CF_ZONE_ID) return process.env.CF_ZONE_ID
 
-  const response = await fetchCloudflare(`https://api.cloudflare.com/client/v4/zones?name=${encodeURIComponent(zoneName)}`, {
+  const { response, envelope } = await fetchCloudflare<Array<{ id: string }>>(`https://api.cloudflare.com/client/v4/zones?name=${encodeURIComponent(zoneName)}`, {
     headers: { authorization: `Bearer ${token}` },
   })
-  const envelope = await response.json() as CloudflareEnvelope<Array<{ id: string }>>
   if (!response.ok || !envelope.success) {
     throw new Error(errorMessage(envelope, `Cloudflare zone lookup failed (${response.status})`))
   }
@@ -65,7 +66,7 @@ const files = [
 ]
 
 const zoneId = await resolveZoneId()
-const response = await fetchCloudflare(`https://api.cloudflare.com/client/v4/zones/${zoneId}/purge_cache`, {
+const { response, envelope } = await fetchCloudflare<{ id: string }>(`https://api.cloudflare.com/client/v4/zones/${zoneId}/purge_cache`, {
   method: 'POST',
   headers: {
     authorization: `Bearer ${token}`,
@@ -73,7 +74,6 @@ const response = await fetchCloudflare(`https://api.cloudflare.com/client/v4/zon
   },
   body: JSON.stringify({ files }),
 })
-const envelope = await response.json() as CloudflareEnvelope<{ id: string }>
 
 if (!response.ok || !envelope.success) {
   throw new Error(errorMessage(envelope, `Cloudflare cache purge failed (${response.status})`))

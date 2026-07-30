@@ -115,7 +115,7 @@ export default defineEventHandler(async (event) => {
         `SELECT o.name, o.slug, b.stripe_customer_id FROM organization o LEFT JOIN organization_billing b ON o.id = b.organization_id WHERE o.id = ? LIMIT 1`,
         [toOrgId],
       )
-      if (!orgRow) throw new Error('Organization not found')
+      if (!orgRow) throw createError({ statusCode: 404, statusMessage: 'Organization not found' })
 
       let customerId = orgRow.stripe_customer_id
       if (customerId) {

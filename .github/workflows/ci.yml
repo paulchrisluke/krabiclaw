@@ -312,6 +312,7 @@ jobs:
       - name: Purge preview HTML cache
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          PREVIEW_CACHE_ORIGIN: https://preview.krabiclaw.com
         run: node --experimental-strip-types scripts/purge-preview-cache.ts
       - name: Sync preview secrets
         env:
@@ -348,14 +349,14 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Warm up preview Worker
         env:
-          PREVIEW_WORKER_URL: https://krabiclaw-preview.paulchrisluke.workers.dev
+          PREVIEW_WORKER_URL: https://preview.krabiclaw.com
         run: |
           curl -sf --connect-timeout 5 --max-time 15 "$PREVIEW_WORKER_URL/" || true
           curl -sf --connect-timeout 5 --max-time 15 "$PREVIEW_WORKER_URL/blog" || true
           curl -sf --connect-timeout 5 --max-time 15 -L -H "x-dev-route-secret: ${E2E_DEV_ROUTE_SECRET}" "$PREVIEW_WORKER_URL/api/dev/login" || true
       - name: Run smoke tests
         env:
-          PLAYWRIGHT_PREVIEW_URL: https://krabiclaw-preview.paulchrisluke.workers.dev
+          PLAYWRIGHT_PREVIEW_URL: https://preview.krabiclaw.com
           POTTERY_HOUSE_CHANGED: ${{ needs.changes.outputs.pottery_house }}
           BLAWBY_CHANGED: ${{ needs.changes.outputs.blawby }}
           MCP_CHANGED: ${{ needs.changes.outputs.mcp }}

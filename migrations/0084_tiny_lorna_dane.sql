@@ -30,6 +30,28 @@ BEGIN
         OR `site_id` != NEW.`site_id`
       )
   );
+
+  SELECT RAISE(ABORT, 'media_assets organization_id/site_id update would break scoped experience media references')
+  WHERE EXISTS (
+    SELECT 1
+    FROM `experience_media`
+    WHERE `asset_id` = OLD.`id`
+      AND (
+        `organization_id` != NEW.`organization_id`
+        OR `site_id` != NEW.`site_id`
+      )
+  );
+
+  SELECT RAISE(ABORT, 'media_assets organization_id/site_id update would break scoped experiences media references')
+  WHERE EXISTS (
+    SELECT 1
+    FROM `experiences`
+    WHERE `og_image_asset_id` = OLD.`id`
+      AND (
+      `organization_id` != NEW.`organization_id`
+      OR `site_id` != NEW.`site_id`
+    )
+  );
 END;--> statement-breakpoint
 
 CREATE TRIGGER `business_locations_hero_media_scope_insert`

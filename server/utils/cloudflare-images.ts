@@ -56,6 +56,7 @@ export async function uploadImageBuffer(
 ): Promise<{ imageId: string; publicUrl: string; thumbnailUrl: string }> {
   const form = new FormData()
   form.append('file', new Blob([buffer], { type: contentType }), filename)
+  const signal = AbortSignal.timeout(30_000)
 
   let res: Response
   try {
@@ -63,6 +64,7 @@ export async function uploadImageBuffer(
       method: 'POST',
       headers: authHeader(env),
       body: form,
+      signal,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'
