@@ -59,7 +59,7 @@ export function domainInstructions(domain: DomainRecord) {
         purpose: 'ownership' as const,
       }
     : null
-  const dcvDelegation = domain.dcv_delegation_name && domain.dcv_delegation_value
+  const dcvDelegation = domain.validation_strategy === 'delegated_dcv' && domain.dcv_delegation_name && domain.dcv_delegation_value
     ? {
         type: domain.dcv_delegation_type || 'CNAME',
         name: domain.dcv_delegation_name,
@@ -84,7 +84,7 @@ export function domainInstructions(domain: DomainRecord) {
       purpose: 'ssl',
     })
   }
-  const records = [ownership, dcvDelegation, dns, ...(!dcvDelegation ? sslRecords : [])]
+  const records = [ownership, dcvDelegation, dns, ...sslRecords]
     .filter((record): record is DomainDnsRecord => Boolean(record))
 
   return {
@@ -157,7 +157,7 @@ export function groupCustomDomains(domains: DomainRecord[]): DomainGroup[] {
       baseInstructions?.ownership ?? null,
       baseInstructions?.dcv_delegation ?? null,
       trafficRecord,
-      ...(!baseInstructions?.dcv_delegation ? baseInstructions?.ssl_records ?? [] : []),
+      ...(baseInstructions?.ssl_records ?? []),
     ].filter((record): record is DomainDnsRecord => Boolean(record))
     const status = groupedStatus(records)
     return {

@@ -561,6 +561,13 @@
       "when": 1785359800000,
       "tag": "0086_seed_public_theme_catalog",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "6",
+      "when": 1785395598728,
+      "tag": "0087_fuzzy_warbird",
+      "breakpoints": true
     }
   ]
 }
