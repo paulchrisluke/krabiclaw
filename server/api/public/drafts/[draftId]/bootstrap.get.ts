@@ -59,9 +59,22 @@ export default defineEventHandler(async (event) => {
       }
     : null
 
+  const config = {
+    ...payload.preview.config,
+    brand_name: payload.preview.brandName,
+    logo_url: payload.preview.config.logo_url || payload.preview.draftMedia.logo?.publicUrl || null,
+    og_image_url: payload.preview.config.hero_image_url || payload.preview.draftMedia.hero?.publicUrl || null,
+  }
+
   return jsonResponse({
+    site: {
+      brand_name: payload.preview.brandName,
+      logo_url: config.logo_url,
+      favicon_url: null,
+      vertical: payload.preview.vertical,
+    },
     locations: payload.preview.locations,
-    config: payload.preview.config,
+    config,
     googleBusiness: {
       business: null,
       reviews: [],

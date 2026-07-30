@@ -134,12 +134,14 @@ function syncVideos() {
   for (const [key, video] of Object.entries(videoRefs.value)) {
     const i = Number(key)
 
-    if (i === currentIndex.value) {
-      video.pause()
-    } else {
+    if (i !== currentIndex.value) {
       video.pause()
     }
   }
+}
+
+function pauseAllVideos() {
+  Object.values(videoRefs.value).forEach(video => video.pause())
 }
 
 function backgroundUrl(item: LightboxItem): string | null {
@@ -155,6 +157,7 @@ function getPageHeight() {
 }
 
 watch(indexModel, async () => {
+  pauseAllVideos()
   await nextTick()
   syncVideos()
 })
@@ -167,7 +170,7 @@ watch(() => props.open, async (open) => {
     closeButton.value?.focus()
   } else {
     releaseScrollLock()
-    Object.values(videoRefs.value).forEach(video => video.pause())
+    pauseAllVideos()
     return
   }
 
@@ -253,5 +256,6 @@ onMounted(() => window.addEventListener('keydown', onKeydown))
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown)
   releaseScrollLock()
+  pauseAllVideos()
 })
 </script>

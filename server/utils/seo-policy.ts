@@ -68,6 +68,22 @@ export const TENANT_ONLY_ROUTE_PREFIXES = [
   '/reviews/',
 ] as const
 
+export const TECHNICAL_ASSET_EXACT_ROUTES = new Set([
+  '/apple-touch-icon.png',
+  '/favicon.ico',
+  '/site.webmanifest',
+  '/tenant-icon',
+  '/tenant-icon.png',
+  '/tenant-icon.svg',
+  '/tenant-icon-192.png',
+  '/tenant-icon-512.png',
+  '/tenant.webmanifest',
+])
+
+export const TECHNICAL_ASSET_ROUTE_PREFIXES = [
+  '/_next',
+] as const
+
 export interface RuntimeSeoSiteConfig {
   url: string
   indexable: boolean
@@ -82,6 +98,11 @@ export function isPrivateSeoPath(pathname: string): boolean {
 export function isTenantOnlySeoPath(pathname: string): boolean {
   return TENANT_ONLY_EXACT_ROUTES.has(pathname)
     || TENANT_ONLY_ROUTE_PREFIXES.some(prefix => pathname.startsWith(prefix))
+}
+
+export function isTechnicalAssetSeoPath(pathname: string): boolean {
+  return TECHNICAL_ASSET_EXACT_ROUTES.has(pathname)
+    || TECHNICAL_ASSET_ROUTE_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`))
 }
 
 export function isNonIndexableHost(hostname: string): boolean {

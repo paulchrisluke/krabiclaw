@@ -1,5 +1,59 @@
 CREATE INDEX IF NOT EXISTS `experience_media_asset_scope_idx` ON `experience_media` (`organization_id`,`site_id`,`asset_id`);--> statement-breakpoint
 
+CREATE TRIGGER `media_assets_scope_update`
+BEFORE UPDATE OF `organization_id`, `site_id` ON `media_assets`
+FOR EACH ROW
+WHEN NEW.`organization_id` IS NOT OLD.`organization_id`
+  OR NEW.`site_id` IS NOT OLD.`site_id`
+BEGIN
+  SELECT RAISE(ABORT, 'media_assets organization_id/site_id update would break scoped business location media references')
+  WHERE EXISTS (
+    SELECT 1
+    FROM `business_locations`
+    WHERE (
+      `hero_media_asset_id` = OLD.`id`
+      OR `og_image_asset_id` = OLD.`id`
+    )
+    AND (
+      `organization_id` != NEW.`organization_id`
+      OR `site_id` != NEW.`site_id`
+    )
+  );
+
+  SELECT RAISE(ABORT, 'media_assets organization_id/site_id update would break scoped site content media references')
+  WHERE EXISTS (
+    SELECT 1
+    FROM `site_content`
+    WHERE `hero_media_asset_id` = OLD.`id`
+      AND (
+        `organization_id` != NEW.`organization_id`
+        OR `site_id` != NEW.`site_id`
+      )
+  );
+
+  SELECT RAISE(ABORT, 'media_assets organization_id/site_id update would break scoped experience media references')
+  WHERE EXISTS (
+    SELECT 1
+    FROM `experience_media`
+    WHERE `asset_id` = OLD.`id`
+      AND (
+        `organization_id` != NEW.`organization_id`
+        OR `site_id` != NEW.`site_id`
+      )
+  );
+
+  SELECT RAISE(ABORT, 'media_assets organization_id/site_id update would break scoped experiences media references')
+  WHERE EXISTS (
+    SELECT 1
+    FROM `experiences`
+    WHERE `og_image_asset_id` = OLD.`id`
+      AND (
+      `organization_id` != NEW.`organization_id`
+      OR `site_id` != NEW.`site_id`
+    )
+  );
+END;--> statement-breakpoint
+
 CREATE TRIGGER `business_locations_hero_media_scope_insert`
 BEFORE INSERT ON `business_locations`
 FOR EACH ROW

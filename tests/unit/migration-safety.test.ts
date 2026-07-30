@@ -60,6 +60,51 @@ describe('migration safety', () => {
     ])
   })
 
+  it('allows split rebuild migrations only when sibling assertions and cleanup exist', () => {
+    const rebuildSql = `
+      CREATE TABLE __new_business_locations (id text primary key);
+      INSERT INTO __new_business_locations SELECT * FROM __um_backup_business_locations;
+      DROP TABLE business_locations;
+      ALTER TABLE __new_business_locations RENAME TO business_locations;
+    `
+    const prepareMarkers = `
+      CREATE TABLE __um_backup_business_locations AS SELECT * FROM business_locations;
+    `
+    const assertionMarkers = `
+      CREATE TABLE __um_assert_0080 (violation text not null check (violation = ''));
+      INSERT INTO __um_assert_0080 (violation)
+      SELECT 'business_locations_backup_count_mismatch'
+      WHERE (SELECT COUNT(*) FROM __um_backup_business_locations) != (SELECT COUNT(*) FROM business_locations);
+      INSERT INTO __um_assert_0080 (violation)
+      SELECT 'fk failed'
+      WHERE EXISTS (SELECT 1 FROM pragma_foreign_key_check);
+      DROP TABLE __um_assert_0080;
+      DROP TABLE __um_backup_business_locations;
+    `
+    assert.deepEqual(findUnsafeMigrationStatements('0079_split.sql', rebuildSql, `${prepareMarkers}\n${rebuildSql}\n${assertionMarkers}`), [])
+  })
+
+  it('blocks split rebuild migrations without a sibling count assertion', () => {
+    const rebuildSql = `
+      CREATE TABLE __new_business_locations (id text primary key);
+      INSERT INTO __new_business_locations SELECT * FROM __um_backup_business_locations;
+      DROP TABLE business_locations;
+      ALTER TABLE __new_business_locations RENAME TO business_locations;
+    `
+    const siblingMarkers = `
+      CREATE TABLE __um_backup_business_locations AS SELECT * FROM business_locations;
+      CREATE TABLE __um_assert_0080 (violation text not null check (violation = ''));
+      INSERT INTO __um_assert_0080 (violation)
+      SELECT 'fk failed'
+      WHERE EXISTS (SELECT 1 FROM pragma_foreign_key_check);
+      DROP TABLE __um_assert_0080;
+      DROP TABLE __um_backup_business_locations;
+    `
+    assert.deepEqual(findUnsafeMigrationStatements('0079_split.sql', rebuildSql, `${siblingMarkers}\n${rebuildSql}`), [
+      'DROP TABLE business_locations must be a bounded rebuild with backup, restore, count assertion, foreign_key_check, and post-assert backup cleanup',
+    ])
+  })
+
   it('allows non-destructive trigger migrations', () => {
     assert.deepEqual(findUnsafeMigrationStatements('0072_safe.sql', 'CREATE TRIGGER media_guard BEFORE INSERT ON media_assets BEGIN SELECT 1; END;'), [])
   })

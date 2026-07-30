@@ -21,6 +21,7 @@
         v-model:collapsed="sidebarCollapsed"
         resizable
         collapsible
+        class="hidden md:flex"
         :menu="{ close: false }"
         :ui="{ root: 'bg-elevated', header: 'h-auto min-h-(--ui-header-height) items-start py-2.5', body: 'px-3 py-1', content: 'bg-elevated' }"
       >
@@ -52,10 +53,119 @@
 
       <UDashboardSearch v-model:search-term="dashboardSearchTerm" :groups="dashboardSearchGroups" :loading="dashboardSearchLoading" :color-mode="false" />
 
-      <slot />
+      <div class="min-w-0 flex-1 pb-24 md:pb-0">
+        <slot />
+      </div>
 
       <ChowBot v-if="showChowBot" />
     </UDashboardGroup>
+
+    <div
+      v-if="mobileNavItems.length"
+      class="fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 md:hidden"
+      data-testid="dashboard-mobile-nav"
+    >
+      <nav class="flex h-[52px] w-full max-w-[420px] items-center justify-around rounded-full border border-default bg-elevated px-2 shadow-[0_10px_24px_rgba(20,23,46,0.2)]">
+        <UDashboardSearchButton
+          label="Search dashboard"
+          class="flex size-9 items-center justify-center rounded-full text-dimmed"
+          :ui="{ base: 'size-9 justify-center rounded-full px-0', label: 'sr-only' }"
+        />
+        <UButton
+          v-for="item in mobileNavItems"
+          :key="item.key"
+          :to="item.to"
+          :icon="item.icon"
+          color="neutral"
+          variant="ghost"
+          size="sm"
+          square
+          :aria-label="item.label"
+          :title="item.label"
+          :class="item.active ? 'bg-primary/10 text-primary' : 'text-dimmed'"
+        />
+        <UButton
+          icon="i-lucide-ellipsis"
+          color="neutral"
+          variant="ghost"
+          size="sm"
+          square
+          aria-label="More"
+          title="More"
+          :class="mobileMoreOpen ? 'bg-primary/10 text-primary' : 'text-dimmed'"
+          @click="toggleMobileMore"
+        />
+        <UButton
+          icon="i-lucide-bot"
+          color="neutral"
+          variant="ghost"
+          size="sm"
+          square
+          aria-label="ChowBot"
+          title="ChowBot"
+          class="text-dimmed"
+          @click="openChowBot"
+        />
+      </nav>
+    </div>
+
+    <button
+      v-if="mobileMoreOpen"
+      type="button"
+      class="fixed inset-0 z-30 bg-black/30 md:hidden"
+      aria-label="Close navigation menu"
+      @click="mobileMoreOpen = false"
+    />
+    <div
+      v-if="mobileMoreOpen"
+      ref="mobileMoreSheetRef"
+      class="fixed inset-x-3 bottom-20 z-40 rounded-xl border border-default bg-elevated p-2 shadow-xl md:hidden"
+      data-testid="dashboard-mobile-more"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Dashboard navigation"
+      tabindex="-1"
+      @keydown="onMobileMoreKeydown"
+    >
+      <div class="max-h-[55vh] overflow-y-auto">
+        <div class="border-b border-default px-3 py-3">
+          <p class="truncate text-sm font-semibold text-highlighted">{{ sessionData?.user?.name || 'User' }}</p>
+          <p class="mt-0.5 truncate text-xs text-muted">{{ sessionData?.user?.email }}</p>
+        </div>
+        <NuxtLink
+          v-for="item in mobileMoreItems"
+          :key="item.to"
+          :to="item.to"
+          class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-highlighted hover:bg-muted"
+          @click="closeMobileMore"
+        >
+          <UIcon v-if="item.icon" :name="item.icon" class="size-4 text-muted" />
+          <span>{{ item.label }}</span>
+        </NuxtLink>
+        <div class="mt-2 border-t border-default pt-2">
+          <NuxtLink
+            v-for="item in mobileAccountItems"
+            :key="item.to"
+            :to="item.to"
+            class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-highlighted hover:bg-muted"
+            :target="item.target"
+            @click="closeMobileMore"
+          >
+            <UIcon :name="item.icon" class="size-4 text-muted" />
+            <span>{{ item.label }}</span>
+          </NuxtLink>
+          <button
+            type="button"
+            class="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-error hover:bg-error/10"
+            @click="handleMobileSignOut"
+          >
+            <UIcon name="i-lucide-log-out" class="size-4" />
+            <span>Log Out</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <BillingCreditPurchaseModal />
     <BillingServiceUpsellModal />
     <BillingSiteSubscribeModal />
@@ -104,19 +214,25 @@ import type { SiteVertical } from '~/utils/vertical-copy'
 interface AuthOrganization {
   id: string
   name: string
-  slug?: string | null
+  slug: string
   logo?: string | null
 }
 
 const route = useRoute()
+const config = useRuntimeConfig()
 const sidebarCollapsed = useState<boolean>('dashboard-sidebar-collapsed', () => false)
-const { data: sessionData, refreshSession } = useAuth()
+const { data: sessionData, refreshSession, signOut } = useAuth()
 const { trackDashboardVisited } = useAnalytics()
 const toast = useToast()
 const stoppingImpersonation = ref(false)
 const { searchTerm: dashboardSearchTerm, loading: dashboardSearchLoading, groups: dashboardSearchGroups } = useDashboardSearch()
 const dashboard = useDashboardSite()
+const chowBot = useChowBot()
 const organizationsState = authClient.useListOrganizations()
+const mobileMoreOpen = ref(false)
+const mobileMoreButtonElement = ref<HTMLElement | null>(null)
+const mobileMoreSheetRef = ref<HTMLElement | null>(null)
+const mobileMoreFocusReturn = ref<HTMLElement | null>(null)
 
 const dashboardContextError = ref<unknown>(null)
 
@@ -227,7 +343,7 @@ const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
       avatar: org.logo ?? undefined,
       icon: org.logo ? undefined : 'i-lucide-building-2',
       active: org.id === organization.value?.id,
-      onSelect: () => switchOrganization(org.id)
+      to: `/dashboard/${encodeURIComponent(org.slug)}`
     })),
     createAction: { label: 'New Organization', to: '/dashboard/onboarding' }
   }
@@ -313,6 +429,21 @@ function managerNavItems(group: NavGroupId) {
     items.push({ label: manager.label, icon: MANAGER_ICON[manager.id], to: href })
   }
   return items
+}
+
+function managerAction(manager: CmsManagerCapability, href: string) {
+  return {
+    label: manager.label,
+    to: href,
+    icon: MANAGER_ICON[manager.id] ?? 'i-lucide-circle',
+    feature: manager.id,
+  }
+}
+
+function revenueLabel(item: ReturnType<typeof managerAction>) {
+  if (item.feature === 'reservations') return 'Bookings'
+  if (item.feature === 'services') return 'Schedule'
+  return item.label
 }
 
 const overviewGroup = computed(() => {
@@ -450,13 +581,227 @@ const navigationItems = computed(() => {
   return groups
 })
 
-async function switchOrganization(organizationId: string) {
-  const organizationApi = authClient.organization as unknown as {
-    setActive?: (_input: { organizationId: string }) => Promise<unknown>
+interface DashboardMobileNavItem {
+  key: string
+  label: string
+  icon: string
+  to: string
+  active?: boolean
+}
+
+function isActivePath(path: string) {
+  return route.path === path || route.path.startsWith(`${path}/`)
+}
+
+function firstManagerItem(feature: ProductFeature, managerScope = scope.value) {
+  const manager = capabilities.value?.managers.find(item => item.id === feature && item.scope === managerScope)
+  if (!manager) return null
+  const href = managerHref(manager)
+  return href ? managerAction(manager, href) : null
+}
+
+function firstLocationManagerItem(feature: ProductFeature) {
+  if (scope.value === 'site' && !canManageSite.value) return null
+  const location = dashboard.locations.value.find(item => item.is_primary) ?? dashboard.locations.value[0]
+  if (!vertical.value || !templateSlug.value || !locationsBase.value || !location?.slug) return null
+  let locationCapabilities: ReturnType<typeof resolveCmsCapabilities>
+  try {
+    locationCapabilities = resolveCmsCapabilities(vertical.value, templateSlug.value, {
+      site: parseCmsFeatureOverrideDelta(site.value?.feature_overrides),
+      location: parseCmsFeatureOverrideDelta(location.feature_overrides),
+    })
+  } catch {
+    return null
   }
-  await organizationApi.setActive?.({ organizationId })
-  await dashboard.refresh()
-  await navigateTo('/dashboard')
+  const manager = locationCapabilities.managers.find(item => item.id === feature && item.scope === 'location')
+  if (!manager) return null
+  const rel = manager.route.replace(/^:location\/?/, '')
+  const base = `${locationsBase.value}/${location.slug}`
+  return managerAction(manager, rel ? `${base}/${rel}` : base)
+}
+
+const mobileRevenueItem = computed<DashboardMobileNavItem | null>(() => {
+  if (scope.value === 'organization' && orgBase.value) {
+    return {
+      key: 'sites',
+      label: 'Sites',
+      icon: 'i-lucide-globe',
+      to: `${orgBase.value}/sites`,
+      active: isActivePath(`${orgBase.value}/sites`),
+    }
+  }
+
+  if (scope.value === 'location') {
+    const primary = firstManagerItem('menu', 'location')
+      ?? firstManagerItem('experiences', 'location')
+    if (!primary) return null
+    return {
+      key: 'primary',
+      label: primary.label,
+      icon: primary.icon,
+      to: primary.to,
+      active: isActivePath(primary.to),
+    }
+  }
+
+  if (scope.value !== 'site') return null
+  const revenue = firstManagerItem('ordering', 'site')
+    ?? firstManagerItem('services', 'site')
+    ?? firstLocationManagerItem('reservations')
+    ?? firstLocationManagerItem('experiences')
+  if (!revenue) return null
+  return {
+    key: 'revenue',
+    label: revenueLabel(revenue),
+    icon: revenue.icon,
+    to: revenue.to,
+    active: isActivePath(revenue.to),
+  }
+})
+
+const mobileHomeItem = computed<DashboardMobileNavItem | null>(() => {
+  const to = scope.value === 'location'
+    ? locationBase.value
+    : scope.value === 'site'
+      ? siteBase.value
+      : orgBase.value
+  if (!to) return null
+  return {
+    key: 'home',
+    label: 'Home',
+    icon: 'i-lucide-home',
+    to,
+    active: route.path === to,
+  }
+})
+
+const mobileInboxItem = computed<DashboardMobileNavItem | null>(() => {
+  if (scope.value === 'organization' && !canManageOrganization.value) return null
+  const to = scope.value === 'location'
+    ? locationBase.value ? `${locationBase.value}/inbox` : null
+    : scope.value === 'site'
+      ? siteBase.value ? `${siteBase.value}/inbox` : null
+      : orgBase.value ? `${orgBase.value}/activity` : null
+  if (!to) return null
+  return {
+    key: 'inbox',
+    label: scope.value === 'organization' ? 'Activity' : 'Inbox',
+    icon: scope.value === 'organization' ? 'i-lucide-activity' : 'i-lucide-inbox',
+    to,
+    active: isActivePath(to),
+  }
+})
+
+const mobileNavItems = computed<DashboardMobileNavItem[]>(() => [
+  mobileHomeItem.value,
+  mobileInboxItem.value,
+  mobileRevenueItem.value,
+].filter((item): item is DashboardMobileNavItem => Boolean(item)))
+
+const mobileMoreItems = computed(() => {
+  const seen = new Set<string>()
+  const items: { label: string; icon?: string; to: string }[] = []
+  const primaryTargets = new Set(mobileNavItems.value.map(item => item.to))
+
+  for (const group of navigationItems.value) {
+    for (const item of group) {
+      if (('type' in item && item.type === 'label') || !item.to || primaryTargets.has(item.to) || seen.has(item.to)) continue
+      seen.add(item.to)
+      items.push({ label: item.label, icon: item.icon, to: item.to })
+    }
+  }
+
+  return items
+})
+
+const mobileAccountItems = computed(() => [
+  { label: 'Account settings', icon: 'i-lucide-settings', to: '/dashboard/account/profile' },
+  { label: 'Authentication', icon: 'i-lucide-shield', to: '/dashboard/account/authentication' },
+  ...(config.public.helpUrl ? [{ label: 'Help', icon: 'i-lucide-circle-help', to: config.public.helpUrl as string, target: '_blank' }] : []),
+  { label: 'Docs', icon: 'i-lucide-book-open', to: '/docs' },
+])
+
+watch(() => route.fullPath, () => {
+  mobileMoreOpen.value = false
+})
+
+watch(mobileMoreOpen, async (open) => {
+  if (open) {
+    mobileMoreFocusReturn.value = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : mobileMoreButtonElement.value
+    await nextTick()
+    const first = mobileMoreFocusableItems()[0]
+    if (first) first.focus()
+    else mobileMoreSheetRef.value?.focus()
+    return
+  }
+
+  await nextTick()
+  mobileMoreFocusReturn.value?.focus()
+  mobileMoreFocusReturn.value = null
+})
+
+function openChowBot() {
+  mobileMoreOpen.value = false
+  chowBot.open()
+}
+
+function toggleMobileMore(event: MouseEvent) {
+  mobileMoreButtonElement.value = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  mobileMoreOpen.value = !mobileMoreOpen.value
+}
+
+const mobileMoreFocusableSelector = [
+  'a[href]',
+  'button:not([disabled])',
+  'textarea:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',')
+
+function mobileMoreFocusableItems() {
+  if (!mobileMoreSheetRef.value) return []
+  return [...mobileMoreSheetRef.value.querySelectorAll<HTMLElement>(mobileMoreFocusableSelector)]
+    .filter(el => !el.hasAttribute('disabled') && el.getAttribute('aria-hidden') !== 'true')
+}
+
+function closeMobileMore() {
+  mobileMoreOpen.value = false
+}
+
+async function handleMobileSignOut() {
+  const redirect = route.fullPath
+  closeMobileMore()
+  await signOut()
+  await navigateTo({ path: '/login', query: { redirect } })
+}
+
+function onMobileMoreKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeMobileMore()
+    return
+  }
+
+  if (event.key !== 'Tab') return
+  const focusable = mobileMoreFocusableItems()
+  if (focusable.length === 0) {
+    event.preventDefault()
+    mobileMoreSheetRef.value?.focus()
+    return
+  }
+
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last?.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first?.focus()
+  }
 }
 
 // Load dashboard context during SSR so nav links render stable org-scoped routes.

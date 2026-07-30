@@ -8,7 +8,7 @@ import { getDashboardContext } from '~/server/utils/dashboard-context'
 export interface SiteAccessRow {
   id: string
   organization_id: string
-  organization_slug: string | null
+  organization_slug: string
   brand_name: string | null
   subdomain: string | null
   status: string

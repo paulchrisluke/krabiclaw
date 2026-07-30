@@ -1,5 +1,6 @@
 import { createError } from 'h3'
 import { execute, executeBatch, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
+import { assertResourceAccess, type MemberAccessPrincipal } from '~/server/utils/member-access'
 import {
   buildReplaceExperienceMediaQueries,
   hydrateMediaAssetRefs,
@@ -23,6 +24,8 @@ export type MediaPlacementTarget =
 export interface SetMediaPlacementInput {
   organizationId: string
   siteId: string
+  memberId?: string
+  role?: MemberAccessPrincipal['role']
   userId: string
   env?: unknown
   target: MediaPlacementTarget
@@ -96,6 +99,16 @@ export async function validateAndHydrateMediaPlacement(
 }
 
 export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementInput): Promise<SetMediaPlacementResult> {
+  const targetLocationId = await resolvePlacementLocationId(db, input)
+  if (input.memberId && input.role) {
+    await assertResourceAccess(db, {
+      memberId: input.memberId,
+      role: input.role,
+      organizationId: input.organizationId,
+      siteId: input.siteId,
+      resourceLocationId: targetLocationId,
+    })
+  }
   const media = await validateAndHydrateMediaPlacement(db, {
     organizationId: input.organizationId,
     siteId: input.siteId,
@@ -128,7 +141,7 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
           },
         },
       })
-      return placementResult(input.target, media, 'page_content', 'home', now, input.target.location_id ?? null)
+      return placementResult(input.target, media, 'page_content', 'home', now, targetLocationId)
     }
     case 'home_story_image':
     case 'about_story_image': {
@@ -157,7 +170,7 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
       if (!result?.success || Number(result.meta?.changes ?? 0) === 0) {
         throw createError({ statusCode: 404, statusMessage: 'Location not found' })
       }
-      return placementResult(input.target, media, 'location', input.target.location_id, now, input.target.location_id)
+      return placementResult(input.target, media, 'location', input.target.location_id, now, targetLocationId)
     }
     case 'menu_item_image': {
       const updateResult = await execute(db, `
@@ -180,7 +193,7 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
         WHERE m.organization_id = ? AND m.site_id = ? AND mi.id = ?
         LIMIT 1
       `, [input.organizationId, input.siteId, input.target.menu_item_id])
-      return placementResult(input.target, media, 'menu_item', input.target.menu_item_id, menu?.updated_at ?? now, menu?.location_id ?? null)
+      return placementResult(input.target, media, 'menu_item', input.target.menu_item_id, menu?.updated_at ?? now, targetLocationId)
     }
     case 'post_image': {
       const updateResult = await execute(db, `
@@ -197,7 +210,7 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
          WHERE organization_id = ? AND site_id = ? AND id = ?
          LIMIT 1
       `, [input.organizationId, input.siteId, input.target.post_id])
-      return placementResult(input.target, media, 'post', input.target.post_id, post?.updated_at ?? now, post?.location_id ?? null)
+      return placementResult(input.target, media, 'post', input.target.post_id, post?.updated_at ?? now, targetLocationId)
     }
     case 'blog_post_image': {
       const updateResult = await execute(db, `
@@ -234,7 +247,57 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
       if (!updateResult?.success || Number(updateResult.meta?.changes ?? 0) === 0) {
         throw createError({ statusCode: 404, statusMessage: 'Experience not found' })
       }
-      return placementResult(input.target, media, 'experience', experience.id, now, experience.location_id)
+      return placementResult(input.target, media, 'experience', experience.id, now, targetLocationId)
+    }
+  }
+}
+
+async function resolvePlacementLocationId(db: DbClient, input: SetMediaPlacementInput): Promise<string | null> {
+  switch (input.target.type) {
+    case 'site_logo':
+    case 'home_story_image':
+    case 'about_story_image':
+    case 'blog_post_image':
+      return null
+    case 'home_hero':
+      return input.target.location_id ?? null
+    case 'location_hero': {
+      const location = await queryFirst<{ id: string }>(db, `
+        SELECT id FROM business_locations
+        WHERE organization_id = ? AND site_id = ? AND id = ?
+        LIMIT 1
+      `, [input.organizationId, input.siteId, input.target.location_id])
+      if (!location) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
+      return location.id
+    }
+    case 'menu_item_image': {
+      const menu = await queryFirst<{ location_id: string | null }>(db, `
+        SELECT m.location_id
+        FROM menu_items mi
+        JOIN menus m ON m.id = mi.menu_id
+        WHERE m.organization_id = ? AND m.site_id = ? AND mi.id = ?
+        LIMIT 1
+      `, [input.organizationId, input.siteId, input.target.menu_item_id])
+      if (!menu) throw createError({ statusCode: 404, statusMessage: 'Menu item not found' })
+      return menu.location_id ?? null
+    }
+    case 'post_image': {
+      const post = await queryFirst<{ location_id: string | null }>(db, `
+        SELECT location_id FROM posts
+        WHERE organization_id = ? AND site_id = ? AND id = ?
+        LIMIT 1
+      `, [input.organizationId, input.siteId, input.target.post_id])
+      if (!post) throw createError({ statusCode: 404, statusMessage: 'Post not found' })
+      return post.location_id ?? null
+    }
+    case 'experience_media': {
+      const experience = await queryFirst<{ location_id: string | null }>(db, `
+        SELECT location_id FROM experiences
+        WHERE organization_id = ? AND site_id = ? AND (id = ? OR slug = ?)
+        LIMIT 1
+      `, [input.organizationId, input.siteId, input.target.experience_id, input.target.experience_id])
+      if (!experience) throw createError({ statusCode: 404, statusMessage: 'Experience not found' })
+      return experience.location_id ?? null
     }
   }
 }

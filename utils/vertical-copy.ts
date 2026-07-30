@@ -722,6 +722,14 @@ export function normalizeVertical(vertical: string | null | undefined): string {
   return v === "service" ? "professional_service" : v
 }
 
+export function getVerticalLabel(vertical: string | null | undefined): string {
+  const v = normalizeVertical(vertical)
+  if (v === "professional_service") return "Professional services"
+  if (v === "experience") return "Experience"
+  if (v === "restaurant") return "Restaurant"
+  return "Business"
+}
+
 export function getVerticalCopy(vertical: string | null | undefined, locale: string | null | undefined = "en"): VerticalCopy {
   const v = normalizeVertical(vertical)
   const l = String(locale ?? "en") as LocaleCode

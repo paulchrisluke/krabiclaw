@@ -410,7 +410,7 @@ import { resolveSiteExperienceHref } from '~/utils/experience-navigation'
 
 definePageMeta({ layout: false })
 
-const { isPlatform, siteId, site } = useTenantSite()
+const { isPlatform, siteId, draftId, site } = useTenantSite()
 const { isBlawby } = usePublicTemplate()
 const { locale } = useI18n()
 const isBlawbyPage = computed(() => isBlawby.value)
@@ -441,7 +441,7 @@ const features = [
   { icon: 'bar-chart', title: 'Real-time insights', body: 'See visits, top pages, and busy hours — ask ChatGPT or check the analytics tab.' },
 ]
 // Validate tenant context ONLY for tenant sites
-if (!isPlatform && !siteId) {
+if (!isPlatform && !siteId && !draftId) {
   throw createError({
     statusCode: 404,
     statusMessage: 'Site not found'

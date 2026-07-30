@@ -105,7 +105,8 @@ function assetPointerKind(value: unknown) {
 }
 
 function mediaKindFromUrl(value: string | null) {
-  return value && /\.(mp4|webm|mov)$/i.test(value) ? 'video' : 'image'
+  if (!value) return null
+  return /\.(mp4|webm|mov)(?:[?#]|$)/i.test(value) ? 'video' : 'image'
 }
 
 function contactCardsToEditorValue(value: unknown) {

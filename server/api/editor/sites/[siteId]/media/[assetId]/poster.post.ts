@@ -48,11 +48,10 @@ export default defineEventHandler(async (event) => {
   try {
     const asset = await queryFirst<MediaAssetSiteRow>(
       db,
-      `SELECT id, site_id, organization_id, location_id, kind FROM media_assets WHERE id = ? LIMIT 1`,
-      [assetId],
+      `SELECT id, site_id, organization_id, location_id, kind FROM media_assets WHERE id = ? AND site_id = ? LIMIT 1`,
+      [assetId, siteId],
     )
     if (!asset) return jsonResponse({ error: 'Asset not found' }, { status: 404 })
-    if (asset.site_id !== siteId) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
     if (asset.kind !== 'video') return jsonResponse({ error: 'Poster images can only be added to videos' }, { status: 400 })
 
     await assertResourceAccess(db, {

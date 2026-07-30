@@ -3,15 +3,15 @@
 // wizard's "confirm this is your business" card. Read-only: it never creates a
 // site, org, or location, and it never charges ai_credits — the Places details
 // charge for a new-site import happens once, at draft creation time
-// (server/utils/onboarding-drafts.ts's from-place.post.ts caller), not here.
+// (POST /api/dashboard/onboarding/drafts/active), not here.
 //
 // This replaces the previewOnly branch that used to live inline in the now-removed
 // server/api/dashboard/onboarding/setup.post.ts. That file also contained a
 // direct site-creation branch, but the new-site UI (OnboardingWizard.vue) never
-// reached it — new-site creation has always gone through
-// drafts/from-place|manual -> drafts/[draftId]/commit. Splitting the still-live
-// preview behavior into its own endpoint means there is no more direct-creation
-// branch to accidentally reach or keep in sync with the draft flow.
+// reached it — new-site creation now goes through the active draft endpoint and
+// then drafts/[draftId]/commit. Splitting the still-live preview behavior into
+// its own endpoint means there is no more direct-creation branch to accidentally
+// reach or keep in sync with the draft flow.
 //
 // The add-location flow does NOT use this endpoint — it has its own
 // previewOnly branch in POST /api/dashboard/locations/add, since that endpoint

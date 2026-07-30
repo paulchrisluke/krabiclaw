@@ -56,12 +56,20 @@ export async function uploadImageBuffer(
 ): Promise<{ imageId: string; publicUrl: string; thumbnailUrl: string }> {
   const form = new FormData()
   form.append('file', new Blob([buffer], { type: contentType }), filename)
+  const signal = AbortSignal.timeout(30_000)
 
-  const res = await fetch(`${apiBase(env)}/v1`, {
-    method: 'POST',
-    headers: authHeader(env),
-    body: form,
-  })
+  let res: Response
+  try {
+    res = await fetch(`${apiBase(env)}/v1`, {
+      method: 'POST',
+      headers: authHeader(env),
+      body: form,
+      signal,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    throw new Error(`CF Images upload request failed for account ${accountId(env) || 'missing'}: ${message}`)
+  }
   if (!res.ok) {
     const body = await res.text()
     console.error(`[CF Images] upload error ${res.status}: ${body}`)

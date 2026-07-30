@@ -1,11 +1,9 @@
 <template>
   <div class="flex h-screen flex-col overflow-hidden bg-muted text-highlighted">
 
-    <!-- ─── Body ─────────────────────────────────────────────────────────── -->
     <div
       v-if="contextLoaded"
-      class="grid min-h-0 flex-1 overflow-hidden"
-      style="grid-template-columns: minmax(24rem, 45%) 1fr; grid-template-rows: minmax(0, 1fr)"
+      class="grid min-h-0 flex-1 overflow-hidden md:grid-cols-[minmax(24rem,45%)_1fr]"
     >
       <OnboardingWizard
         mode="new-site"
@@ -14,8 +12,13 @@
         :existing-site-slug="siteData?.subdomain ?? null"
         @site-created="onSiteCreated"
         @draft-saved="onDraftSaved"
+        @draft-cleared="onDraftCleared"
+        @vertical-selected="selectedOnboardingVertical = $event"
+        @step-changed="activeOnboardingStep = $event"
       />
       <OnboardingPreviewPane
+        v-if="!isMobilePreviewViewport"
+        class="hidden md:flex"
         :iframe-src="iframeSrc"
         :site-locations="previewLocations"
         :selected-location-id="selectedLocationId"
@@ -23,13 +26,42 @@
         :site-status="computedSiteStatus"
         :site-domain="siteDomain"
         :vertical="previewVertical"
+        :empty-visual-url="preDraftVisual.url"
+        :empty-visual-alt="preDraftVisual.alt"
+        home-only
         @select-page="onSelectPage"
         @select-location="onSelectLocation"
       />
     </div>
 
-    <!-- Loading state -->
-    <div v-else class="flex min-h-0 flex-1 items-center justify-center">
+    <USlideover
+      v-if="isMobilePreviewViewport"
+      v-model:open="mobilePreviewOpenForViewport"
+      title="Site preview"
+      side="bottom"
+      :close="false"
+      :ui="{ content: 'h-[82vh] overflow-hidden rounded-t-2xl', header: 'sr-only', body: 'flex min-h-0 p-0 sm:p-0' }"
+    >
+      <template #body>
+        <OnboardingPreviewPane
+          class="min-h-0 flex-1"
+          :iframe-src="iframeSrc"
+          :site-locations="previewLocations"
+          :selected-location-id="selectedLocationId"
+          :selected-page="selectedPreviewPage"
+          :site-status="computedSiteStatus"
+          :site-domain="siteDomain"
+          :vertical="previewVertical"
+          :empty-visual-url="preDraftVisual.url"
+          :empty-visual-alt="preDraftVisual.alt"
+          home-only
+          @select-page="onSelectPage"
+          @select-location="onSelectLocation"
+        />
+      </template>
+    </USlideover>
+
+    <div v-if="!contextLoaded" class="flex min-h-0 flex-1 items-center justify-center">
       <div class="flex items-center gap-3 text-muted">
         <UIcon name="i-lucide-refresh-cw" class="size-5 animate-spin" />
         <span class="text-sm">Loading workspace…</span>
@@ -49,7 +81,13 @@ const toast = useToast()
 
 // ─── State ────────────────────────────────────────────────────────────────────
 const siteData = ref<ApiRecord | null>(null)
-const previewVertical = computed<SiteVertical>(() => normalizeVertical(siteData.value?.vertical as string | undefined) as SiteVertical)
+const selectedOnboardingVertical = ref<SiteVertical>('restaurant')
+const activeOnboardingStep = ref('welcome')
+const previewVertical = computed<SiteVertical>(() =>
+  siteData.value
+    ? normalizeVertical(siteData.value.vertical as string | undefined) as SiteVertical
+    : selectedOnboardingVertical.value
+)
 const siteLocations = ref<Array<{ id: string; slug: string; title: string; is_primary: boolean }>>([])
 const orgSlug = ref<string | null>(null)
 const previewToken = ref('')
@@ -59,6 +97,8 @@ const draftPreview = ref<{
   draftName: string
   subdomainCandidate: string
 } | null>(null)
+const mobilePreviewOpen = ref(false)
+const isMobilePreviewViewport = ref(false)
 const contextLoaded = ref(false)
 type ReadinessState = 'complete' | 'attention' | 'missing'
 
@@ -77,10 +117,13 @@ const previewReloadToken = ref(0)
 const siteId = computed<string | null>(() => siteData.value?.id ?? null)
 
 const sitePreviewBaseUrl = computed(() => {
-  const platformBase = ((config.public.platformDomain || config.public.freeSiteDomain) as string).replace(/\/$/, '')
-  if (draftPreview.value?.draftId) return `${platformBase}/preview/draft/${draftPreview.value.draftId}`
   if (!siteData.value?.id) return ''
-  return `${platformBase}/preview/site/${siteData.value.id}`
+  return `/preview/site/${siteData.value.id}`
+})
+
+const draftPreviewBaseUrl = computed(() => {
+  if (!draftPreview.value?.draftId) return ''
+  return `/preview/draft/${draftPreview.value.draftId}`
 })
 
 const previewLocations = computed(() => {
@@ -114,7 +157,6 @@ const currentPageIsLocationScoped = computed(() => locationScopedPages.has(selec
 
 const previewPagePath = computed(() => {
   if (draftPreview.value) {
-    // Draft previews don't support location-scoped routes
     if (selectedPreviewPage.value === 'location') return '/'
     if (selectedPreviewPage.value === 'menu') return '/menu'
     return selectedPreviewPage.value === 'home' ? '/' : `/${selectedPreviewPage.value}`
@@ -126,10 +168,11 @@ const previewPagePath = computed(() => {
 })
 
 const iframeSrc = computed(() => {
-  if (!sitePreviewBaseUrl.value) return ''
+  const baseUrl = draftPreview.value ? draftPreviewBaseUrl.value : sitePreviewBaseUrl.value
+  if (!baseUrl) return ''
   if (currentPageIsLocationScoped.value && !selectedLocation.value && !draftPreview.value) return ''
   const subPath = previewPagePath.value === '/' ? '' : previewPagePath.value
-  const url = new URL(sitePreviewBaseUrl.value + subPath)
+  const url = new URL(baseUrl + subPath, window.location.origin)
   url.searchParams.set('preview', 'true')
   const token = draftPreview.value?.previewToken ?? previewToken.value
   if (token) url.searchParams.set('token', token)
@@ -138,6 +181,37 @@ const iframeSrc = computed(() => {
   }
   if (previewReloadToken.value) url.searchParams.set('t', String(previewReloadToken.value))
   return url.toString()
+})
+const PRE_DRAFT_VISUALS = {
+  welcome: {
+    url: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/b9f925eb-0b91-4b62-d0e6-8db5df900700/w=800',
+    alt: 'Start building your KrabiClaw site',
+  },
+  vertical: {
+    url: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/9c594a4f-41c8-4c81-3545-fe08d9a70c00/w=800',
+    alt: 'Choose your business type',
+  },
+  source: {
+    url: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/3c0e50cb-6390-46e9-4143-e8e68fa89900/w=800',
+    alt: 'Choose how to add business details',
+  },
+  businessName: {
+    url: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/8be9a754-ef8f-4452-3fc0-90bfa24f2600/w=800',
+    alt: 'Add your business name',
+  },
+  google: {
+    url: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/1952e5fa-e460-46f0-e50a-057dce7e8a00/w=800',
+    alt: 'Add business details from Google Maps',
+  },
+} as const
+const preDraftVisual = computed(() => {
+  if (iframeSrc.value) return { url: '', alt: '' }
+  if (activeOnboardingStep.value === 'awaiting_manual_name') return PRE_DRAFT_VISUALS.businessName
+  if (activeOnboardingStep.value === 'awaiting_url') return PRE_DRAFT_VISUALS.google
+  if (activeOnboardingStep.value === 'source') return PRE_DRAFT_VISUALS.source
+  if (activeOnboardingStep.value === 'vertical') return PRE_DRAFT_VISUALS.vertical
+  if (activeOnboardingStep.value === 'welcome') return PRE_DRAFT_VISUALS.welcome
+  return { url: '', alt: '' }
 })
 
 const computedSiteStatus = computed((): 'setup' | 'progress' | 'ready' | 'live' => {
@@ -148,6 +222,15 @@ const computedSiteStatus = computed((): 'setup' | 'progress' | 'ready' | 'live' 
   if (readinessScore.value > 0) return 'progress'
   return 'setup'
 })
+
+const mobilePreviewOpenForViewport = computed({
+  get: () => isMobilePreviewViewport.value && mobilePreviewOpen.value,
+  set: value => {
+    mobilePreviewOpen.value = value
+  },
+})
+
+let stopMobilePreviewViewportListener: (() => void) | null = null
 
 const readinessScore = computed(() => {
   const weights: Record<ReadinessState, number> = { complete: 100 / 6, attention: 50 / 6, missing: 0 }
@@ -166,7 +249,7 @@ const loadContext = async () => {
       locations?: Array<{ id: string; slug: string; title: string; is_primary: boolean }>
     }>('/api/dashboard/context')
 
-    if (response.organization) orgSlug.value = response.organization.slug ?? null
+    if (response.organization) orgSlug.value = response.organization.slug
     if (response.site) {
       siteData.value = response.site
       siteLocations.value = response.locations ?? []
@@ -230,7 +313,6 @@ const onSelectLocation = (id: string) => {
   selectedLocationId.value = id
 }
 
-// Called by OnboardingWizard after the site is created — reload context + preview token, populate preview pane
 const onSiteCreated = async (_orgSlug: string | null) => {
   draftPreview.value = null
   await loadContext()        // sets siteData + calls loadPreviewToken()
@@ -247,10 +329,26 @@ const onDraftSaved = (draft: {
   draftPreview.value = draft
   selectedLocationId.value = draft.draftId
   previewReloadToken.value = Date.now()
+  mobilePreviewOpen.value = isMobilePreviewViewport.value
+}
+
+const onDraftCleared = () => {
+  draftPreview.value = null
+  selectedLocationId.value = null
+  previewReloadToken.value = Date.now()
 }
 
 // ─── Toast from query params ──────────────────────────────────────────────────
 onMounted(async () => {
+  const mobilePreviewQuery = window.matchMedia('(max-width: 767.98px)')
+  const updateMobilePreviewViewport = () => {
+    isMobilePreviewViewport.value = mobilePreviewQuery.matches
+    if (!mobilePreviewQuery.matches) mobilePreviewOpen.value = false
+  }
+  updateMobilePreviewViewport()
+  mobilePreviewQuery.addEventListener('change', updateMobilePreviewViewport)
+  stopMobilePreviewViewportListener = () => mobilePreviewQuery.removeEventListener('change', updateMobilePreviewViewport)
+
   await loadContext()
   await loadReadiness()
 
@@ -260,5 +358,10 @@ onMounted(async () => {
   if (route.query.new === 'true') {
     toast.add({ title: 'Welcome', description: 'Your site has been created.', color: 'success' })
   }
+})
+
+onUnmounted(() => {
+  stopMobilePreviewViewportListener?.()
+  stopMobilePreviewViewportListener = null
 })
 </script>

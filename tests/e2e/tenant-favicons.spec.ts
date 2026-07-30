@@ -7,9 +7,9 @@ test.describe('Tenant Favicon Endpoints & Host Isolation E2E Tests', () => {
     const textManifest = await resManifest.text()
     expect(textManifest).toContain('KrabiClaw')
 
-    const resFavicon = await request.get('/favicon.ico', { maxRedirects: 5 })
-    expect(resFavicon.status()).toBe(200)
-    expect(resFavicon.headers()['x-robots-tag']).toBeUndefined()
+    const resFavicon = await request.get('/favicon.ico', { maxRedirects: 0 })
+    expect([200, 302]).toContain(resFavicon.status())
+    expect(resFavicon.headers()['x-robots-tag']).toContain('noindex')
   })
 
   test('Pottery House tenant host endpoints return tenant-specific assets without platform fallbacks', async ({ request }) => {
@@ -19,16 +19,16 @@ test.describe('Tenant Favicon Endpoints & Host Isolation E2E Tests', () => {
     const resSvg = await request.get('/tenant-icon.svg', { headers })
     expect(resSvg.status()).toBe(200)
     expect(resSvg.headers()['content-type']).toContain('image/svg+xml')
-    expect(resSvg.headers()['x-robots-tag']).toBeUndefined()
+    expect(resSvg.headers()['x-robots-tag']).toContain('noindex')
 
     // Test /tenant-icon-192.png, /tenant-icon-512.png, /favicon.ico, /apple-touch-icon.png
     const endpoints = ['/tenant-icon-192.png', '/tenant-icon-512.png', '/apple-touch-icon.png', '/favicon.ico']
     for (const ep of endpoints) {
-      const res = await request.get(ep, { headers, maxRedirects: 5 })
-      expect(res.status()).toBe(200)
-      expect(res.headers()['x-robots-tag']).toBeUndefined()
+      const res = await request.get(ep, { headers, maxRedirects: 0 })
+      expect([200, 302]).toContain(res.status())
+      expect(res.headers()['x-robots-tag']).toContain('noindex')
       // Ensure it does not return the platform file
-      const url = res.url()
+      const url = res.headers().location || res.url()
       expect(url).not.toContain('/platform/')
     }
 

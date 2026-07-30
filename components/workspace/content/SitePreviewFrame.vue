@@ -1,7 +1,7 @@
 <template>
   <UCard class="rounded-2xl shadow-lg" :ui="{ root: 'overflow-hidden', body: 'p-0 sm:p-0' }">
     <!-- Chrome bar -->
-    <div class="flex items-center gap-2 border-b border-default bg-elevated px-3 py-2">
+    <div v-if="chrome" class="flex items-center gap-2 border-b border-default bg-elevated px-3 py-2">
       <div class="flex gap-[5px]">
         <i class="block size-[9px] rounded-full bg-default-300" />
         <i class="block size-[9px] rounded-full bg-default-300" />
@@ -69,7 +69,10 @@ const props = defineProps<{
    *  subdomain + page path) — distinct from iframeSrc, which points at the
    *  internal /preview/site/:id route that actually serves draft content. */
   displayUrl: string
+  chrome?: boolean
 }>()
+
+const chrome = computed(() => props.chrome !== false)
 
 const previewFrame = ref<HTMLIFrameElement>()
 // Starts true (not reset via the immediate watcher below) because iframeSrc

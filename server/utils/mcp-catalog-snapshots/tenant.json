@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:9ea8ed7a1c506ef79ab4bb3329f0e84e7f99d1129d5c3c661a6c79a9cb74a9ec",
+  "fingerprint": "sha256:f6abb3ba9f6ccc53d9d3fe592c3b4a0bc6a3bf8699669027613f242fbf9c1846",
   "tools": [
     {
       "name": "add_menu_items_batch",
@@ -10624,13 +10624,37 @@
       "name": "set_media",
       "inputSchema": {
         "additionalProperties": true,
+        "allOf": [
+          {
+            "else": {
+              "properties": {
+                "asset_ids": {
+                  "maxItems": 1
+                }
+              }
+            },
+            "if": {
+              "properties": {
+                "target": {
+                  "properties": {
+                    "type": {
+                      "const": "experience_media"
+                    }
+                  }
+                }
+              }
+            },
+            "then": {}
+          }
+        ],
         "properties": {
           "asset_ids": {
             "description": "Complete desired asset-id state for the target. Empty clears. Duplicates are rejected.",
             "items": {
               "type": "string"
             },
-            "type": "array"
+            "type": "array",
+            "uniqueItems": true
           },
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
