@@ -1039,11 +1039,11 @@ async function runLookup(mapsUrl: string) {
   const tools = await showLookupTools('Looking up your Google Maps listing…')
 
   try {
-    const res = await $fetch<{
+    const res = await $fetch(lookupEndpoint.value, { method: 'POST', body: { mapsUrl, previewOnly: true } }) as {
       success: boolean
       preview?: { placeId: string; name: string; address: string; city?: string | null; phone?: string | null; mapsUrl?: string | null; openingHours?: string[] | null }
       error?: string
-    }>(lookupEndpoint.value, { method: 'POST', body: { mapsUrl, previewOnly: true } })
+    }
 
     if (!res.success || !res.preview) {
       throw new Error(res.error ?? 'Could not find your business. Please check the Google Maps URL and try again.')
@@ -1068,14 +1068,7 @@ async function saveActiveDraft(options: { silent?: boolean } = {}) {
   importError.value = null
   try {
     const sourceType: DraftSourceType = pendingPreview.value ? 'google_places' : 'manual'
-    const res = await $fetch<{
-      success: boolean
-      draftId?: string
-      previewToken?: string
-      draftName?: string
-      subdomainCandidate?: string
-      error?: string
-    }>('/api/dashboard/onboarding/drafts/active', {
+    const res = await $fetch('/api/dashboard/onboarding/drafts/active', {
       method: 'POST',
       body: {
         sourceType,
@@ -1085,7 +1078,14 @@ async function saveActiveDraft(options: { silent?: boolean } = {}) {
         details: serializeDetails(),
         brandDraft: serializeBrandDraft(),
       },
-    })
+    }) as {
+      success: boolean
+      draftId?: string
+      previewToken?: string
+      draftName?: string
+      subdomainCandidate?: string
+      error?: string
+    }
 
     if (!res.success || !res.draftId || !res.previewToken || !res.draftName || !res.subdomainCandidate) {
       throw new Error(res.error ?? 'Failed to save your preview draft. Please try again.')
@@ -1135,14 +1135,14 @@ async function submitDetails() {
           details: serializeDetails(),
         }
 
-    const res = await $fetch<{
+    const res = await $fetch(endpoint, { method: 'POST', body }) as {
       success: boolean
       siteId?: string | null
       orgSlug?: string | null
       siteSlug?: string | null
       locationSlug?: string | null
       error?: string
-    }>(endpoint, { method: 'POST', body })
+    }
 
     if (!res.success) {
       throw new Error(res.error ?? 'Failed to create your workspace. Please try again.')
@@ -1189,16 +1189,16 @@ async function commitDraft() {
   const tools = await showLookupTools('Creating your site from the approved draft…')
 
   try {
-    const res = await $fetch<{
+    const res = await $fetch(`/api/dashboard/onboarding/drafts/${onboardingDraftId.value}/commit`, {
+      method: 'POST',
+    }) as {
       success: boolean
       siteId?: string | null
       orgSlug?: string | null
       siteSlug?: string | null
       locationSlug?: string | null
       error?: string
-    }>(`/api/dashboard/onboarding/drafts/${onboardingDraftId.value}/commit`, {
-      method: 'POST',
-    })
+    }
 
     if (!res.success) {
       throw new Error(res.error ?? 'Failed to create your workspace. Please try again.')

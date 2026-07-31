@@ -56,58 +56,27 @@
   <!-- Modal -->
   <UModal
     v-model:open="isOpen"
-    :title="panel === 'generate' ? 'Generate image' : title"
+    :title="title"
     :ui="{ content: 'max-w-2xl' }"
   >
     <template #body>
       <MediaLibraryGrid
-        v-if="panel === 'library'"
         :site-id="siteId"
         :selected-id="pendingAsset?.id ?? modelValue"
         :accept="accept"
         :location-id="locationId"
         @select="onSelect"
-        @generate="panel = 'generate'"
         @uploaded="onUploaded"
-      />
-
-      <MediaGeneratePanel
-        v-else
-        ref="generatePanel"
-        :site-id="siteId"
-        :location-id="locationId"
-        :initial-prompt="initialPrompt"
-        :context="context"
-        @keep="onGenerated"
-        @back="panel = 'library'"
       />
     </template>
 
     <template #footer>
       <div class="flex w-full items-center justify-between gap-2">
-        <UButton
-          v-if="panel === 'generate'"
-          icon="i-lucide-arrow-left"
-          color="neutral"
-          variant="ghost"
-          size="sm"
-          @click="panel = 'library'"
-        >
-          Back
-        </UButton>
-        <div v-else />
+        <div />
 
         <div class="flex gap-2">
           <UButton color="neutral" variant="ghost" @click="isOpen = false">Cancel</UButton>
           <UButton
-            v-if="panel === 'generate'"
-            :disabled="!generatePanel?.canKeep"
-            @click="generatePanel?.keep()"
-          >
-            Keep
-          </UButton>
-          <UButton
-            v-else
             :disabled="!pendingAsset"
             @click="confirm"
           >
@@ -137,8 +106,6 @@ const emit = defineEmits<{
 
 const { trackImageUploaded, trackVideoUploaded, trackMediaLibraryViewed } = useAnalytics()
 
-type Panel = 'library' | 'generate'
-
 interface PickerMediaAsset {
   id: string
   kind?: string | null
@@ -151,9 +118,7 @@ interface PickerMediaAsset {
 }
 
 const isOpen = ref(false)
-const panel = ref<Panel>('library')
 const pendingAsset = ref<{ id: string; publicUrl: string; thumbnailUrl: string; kind?: string } | null>(null)
-const generatePanel = ref<ApiRecord | null>(null)
 
 const selectedUrl = ref<string | null>(null)
 const selectedKind = ref<string | null>(null)
@@ -178,10 +143,10 @@ watch(() => props.modelValue, async (id) => {
   modelLoadController.value = controller
 
   try {
-    const res = await $fetch<{ media: PickerMediaAsset[] }>(
+    const res = await $fetch(
       `/api/editor/sites/${props.siteId}/media?id=${encodeURIComponent(id)}&limit=1`,
       { signal: controller.signal }
-    )
+    ) as { media: PickerMediaAsset[] }
 
     if (controller.signal.aborted) return
 
@@ -213,7 +178,6 @@ onUnmounted(() => {
 
 function open() {
   pendingAsset.value = null
-  panel.value = 'library'
   isOpen.value = true
   trackMediaLibraryViewed(props.siteId)
 }
@@ -242,16 +206,6 @@ function onUploaded(asset: PickerMediaAsset) {
   } else {
     trackVideoUploaded(props.siteId, size, 'cloudflare_r2')
   }
-}
-
-function onGenerated(asset: { id: string; publicUrl: string; thumbnailUrl: string; kind?: string }) {
-  pendingAsset.value = asset
-  selectedUrl.value = asset.thumbnailUrl || asset.publicUrl
-  selectedKind.value = asset.kind || 'image'
-  emit('update:modelValue', asset.id)
-  emit('change', asset)
-  isOpen.value = false
-  panel.value = 'library'
 }
 
 function confirm() {

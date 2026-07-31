@@ -16,10 +16,10 @@ const BUNDLE_PRICES = Object.fromEntries(CREDIT_BUNDLES.map(b => [b.credits, b.p
 const _successHandlers = new Map<string, (_balance: number) => void>()
 
 async function _redirectToCheckout(bundle: CreditBundle) {
-  const res = await $fetch<{ checkoutUrl?: string }>('/api/billing/credits/add', {
+  const res = await $fetch('/api/billing/credits/add', {
     method: 'POST',
     body: { bundle },
-  })
+  }) as { checkoutUrl?: string }
   if (!res.checkoutUrl) {
     throw new Error('Missing checkout URL from billing API')
   }
@@ -45,7 +45,7 @@ export const useCreditPurchase = () => {
 
   async function purchase(bundle: CreditBundle, onSuccess?: (_balance: number) => void) {
     try {
-      const res = await $fetch<{ card: SavedCard | null }>('/api/billing/payment-method')
+      const res = await $fetch('/api/billing/payment-method') as { card: SavedCard | null }
       if (res.card) {
         const txId = crypto.randomUUID()
         savedCard.value = res.card
@@ -71,10 +71,10 @@ export const useCreditPurchase = () => {
     const bundle = pendingBundle.value
     const txId = pendingTxId.value
     try {
-      const res = await $fetch<{ balance: number; requiresCheckout?: boolean }>(
+      const res = await $fetch(
         '/api/billing/credits/charge',
         { method: 'POST', body: { bundle, txId, enableAutoTopup: wantsAutoTopup.value, autoTopupBundle: bundle } }
-      )
+      ) as { balance: number; requiresCheckout?: boolean }
       const balance = res.balance
       isOpen.value = false
       pendingBundle.value = null

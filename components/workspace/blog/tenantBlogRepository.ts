@@ -13,24 +13,24 @@ export function tenantBlogRepository({ siteId, orgSlug, siteSlug }: TenantBlogRe
     editUrl: postId => `${dashboardBaseUrl}/${postId}`,
 
     async get(postId: string): Promise<BlogPost> {
-      const res = await $fetch<{ post: BlogPost }>(`${baseUrl}/${postId}`)
+      const res = await $fetch(`${baseUrl}/${postId}`) as { post: BlogPost }
       if (!res.post) throw new Error('Post not found')
       return res.post
     },
 
     async create(input: PlatformBlogCreateInput): Promise<BlogPost & { id: string }> {
-      const res = await $fetch<{ id: string; post: BlogPost }>(`${baseUrl}/posts`, {
+      const res = await $fetch(`${baseUrl}/posts`, {
         method: 'POST',
         body: input,
-      })
+      }) as { id: string; post: BlogPost }
       return { ...res.post, id: res.id } as BlogPost & { id: string }
     },
 
     async update(postId: string, input: PlatformBlogUpdateInput): Promise<BlogPost> {
-      const res = await $fetch<{ post: BlogPost }>(`${baseUrl}/${postId}`, {
+      const res = await $fetch(`${baseUrl}/${postId}`, {
         method: 'PATCH',
         body: input,
-      })
+      }) as { post: BlogPost }
       if (!res.post) throw new Error('Post not found after update')
       return res.post
     },

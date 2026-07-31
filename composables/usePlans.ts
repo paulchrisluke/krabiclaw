@@ -12,7 +12,7 @@ export const usePlans = () => {
     // self-fetch if the prefetch didn't run (e.g. non-platform-homepage caller).
     const prefetched = useRequestEvent()?.context.platformPlans as Plan[] | undefined
     if (prefetched) return Promise.resolve(prefetched)
-    return $fetch<Plan[]>('/api/billing/plans')
+    return $fetch('/api/billing/plans') as Promise<Plan[]>
   }, {
     server: true,
     getCachedData(key) {

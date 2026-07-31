@@ -59,7 +59,7 @@ export function useDashboardSearch() {
     const requestId = ++requestSequence
     loading.value = true
     try {
-      const response = await $fetch<SearchResponse>('/api/public/search', {
+      const response = await $fetch('/api/public/search', {
         query: {
           q: normalized,
           surface: 'dashboard',
@@ -67,7 +67,7 @@ export function useDashboardSearch() {
           siteSlug: typeof route.params.siteSlug === 'string' ? route.params.siteSlug : '',
           locationSlug: typeof route.params.locationSlug === 'string' ? route.params.locationSlug : '',
         },
-      })
+      }) as SearchResponse
       if (requestId !== requestSequence) return
       groups.value = groupResults(response.results ?? [])
     } catch (error) {

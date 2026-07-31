@@ -438,7 +438,7 @@ function skipTeam() {
 
 async function checkFacebookConnection() {
   try {
-    const res = await $fetch<{ connected: boolean }>(`/api/editor/sites/${props.siteId}/integrations/facebook-pages/status`)
+    const res = await $fetch(`/api/editor/sites/${props.siteId}/integrations/facebook-pages/status`) as { connected: boolean }
     facebookConnected.value = res.connected ?? false
   } catch (e) {
     console.error('check_facebook_connection_failed', e)
@@ -449,10 +449,10 @@ async function checkFacebookConnection() {
 async function startFacebookConnect() {
   connectingFacebook.value = true
   try {
-    const res = await $fetch<{ success: boolean; authUrl?: string; error?: string }>(
+    const res = await $fetch(
       '/api/integrations/facebook-pages/auth',
       { method: 'POST', body: { siteId: props.siteId } }
-    )
+    ) as { success: boolean; authUrl?: string; error?: string }
     if (!res.authUrl) throw new Error(res.error || 'No authorization URL returned')
     window.location.href = res.authUrl
   } catch (e) {

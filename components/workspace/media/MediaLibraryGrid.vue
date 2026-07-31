@@ -13,9 +13,6 @@
       <UIcon name="i-lucide-upload" class="size-6 text-muted" />
       <div class="flex items-center gap-2">
         <UButton size="sm" color="neutral" variant="outline" @click.stop="fileInput?.click()">+ Add files</UButton>
-        <UButton size="sm" color="neutral" variant="ghost" icon="i-lucide-sparkles" @click.stop="emit('generate')">
-          Generate image
-        </UButton>
       </div>
       <p class="text-xs text-muted">Drag and drop images or videos</p>
       <input
@@ -67,7 +64,7 @@
 
     <div v-else-if="filteredAssets.length === 0" class="py-10 text-center">
       <UIcon name="i-lucide-image" class="mx-auto size-8 text-muted" />
-      <p class="mt-3 text-sm text-muted">No media yet. Upload or generate your first image.</p>
+      <p class="mt-3 text-sm text-muted">No media yet. Upload your first image or video.</p>
     </div>
 
     <div v-else class="grid grid-cols-4 gap-2 sm:grid-cols-5 lg:grid-cols-6 overflow-y-auto max-h-80">
@@ -151,7 +148,6 @@ interface MediaAsset {
 
 const emit = defineEmits<{
   select: [asset: MediaAsset]
-  generate: []
   uploaded: [asset: MediaAsset]
 }>()
 
@@ -222,9 +218,9 @@ async function loadAssets() {
     const params = new URLSearchParams()
     if (kindFilter.value && kindFilter.value !== ALL_MEDIA_KIND) params.set('kind', kindFilter.value)
     if (props.locationId) params.set('locationId', props.locationId)
-    const res = await $fetch<{ media: MediaAsset[] }>(`/api/editor/sites/${props.siteId}/media?${params}`, {
+    const res = await $fetch(`/api/editor/sites/${props.siteId}/media?${params}`, {
       signal: controller.signal,
-    })
+    }) as { media: MediaAsset[] }
 
     if (controller.signal.aborted || requestId !== loadRequestId.value) return
 
@@ -291,10 +287,10 @@ async function uploadImage(file: File) {
   uploading.value = true
   uploadProgress.value = 0
   try {
-    const { assetId, uploadUrl } = await $fetch<{ assetId: string; uploadUrl: string; imageId: string }>(
+    const { assetId, uploadUrl } = await $fetch(
       `/api/editor/sites/${props.siteId}/media/request-upload`,
       { method: 'POST', body: { filename: file.name, locationId: props.locationId } }
-    )
+    ) as { assetId: string; uploadUrl: string; imageId: string }
 
     uploadProgress.value = 30
 
@@ -330,7 +326,7 @@ async function uploadImage(file: File) {
     let lastError: unknown = null
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        asset = await $fetch<MediaAsset>(confirmEndpoint, { method: 'POST' })
+        asset = await $fetch(confirmEndpoint, { method: 'POST' }) as MediaAsset
         break
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err))

@@ -214,13 +214,13 @@ async function save() {
     }
     
     // Run mutations sequentially to handle partial failures
-    await $fetch<unknown>(`${siteApiBase.value}/settings`, {
+    await $fetch(`${siteApiBase.value}/settings`, {
       method: 'PATCH',
       body: { brand_color: brandColor.value, logo_asset_id: logoAssetId.value },
     })
     
     if (heroAssetId.value) {
-      await $fetch<unknown>(`${siteApiBase.value}/content/save`, {
+      await $fetch(`${siteApiBase.value}/content/save`, {
         method: 'POST',
         body: { page: 'home', changes: { 'hero.media': heroAssetId.value } },
       })

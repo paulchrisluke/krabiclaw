@@ -27,9 +27,9 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
       if (effectiveLocationId.value !== undefined && effectiveLocationId.value !== null && effectiveLocationId.value !== '') {
         params.set('locationId', effectiveLocationId.value)
       }
-      const response = await $fetch<{ success: boolean; menus: Menu[] }>(
+      const response = await $fetch(
         `/api/editor/sites/${siteId}/menus${params.toString() ? `?${params.toString()}` : ''}`
-      )
+      ) as { success: boolean; menus: Menu[] }
 
       if (requestId !== loadMenusRequestId) return
 
@@ -53,9 +53,9 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     loading.value = true
     error.value = null
     try {
-      const response = await $fetch<{ success: boolean; menu: MenuWithItems }>(
+      const response = await $fetch(
         `/api/editor/sites/${siteId}/menus/${menuId}`
-      )
+      ) as { success: boolean; menu: MenuWithItems }
       if (response.success) {
         currentMenu.value = response.menu
       } else {
@@ -72,10 +72,10 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     saving.value = true
     error.value = null
     try {
-      const response = await $fetch<{ success: boolean; menu: Menu }>(
+      const response = await $fetch(
         `/api/editor/sites/${siteId}/menus`,
         { method: 'POST', body: { ...menuData, locationId: effectiveLocationId.value } }
-      )
+      ) as { success: boolean; menu: Menu }
       if (response.success) {
         await loadMenu(response.menu.id)
         return response.menu
@@ -93,10 +93,10 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     saving.value = true
     error.value = null
     try {
-      const response = await $fetch<{ success: boolean; menu: Menu }>(
+      const response = await $fetch(
         `/api/editor/sites/${siteId}/menus/${menuId}`,
         { method: 'PATCH', body: updates }
-      )
+      ) as { success: boolean; menu: Menu }
       if (response.success) {
         if (currentMenu.value?.id === menuId) {
           currentMenu.value = { ...response.menu, items: currentMenu.value.items }
@@ -131,10 +131,10 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     saving.value = true
     error.value = null
     try {
-      const response = await $fetch<{ success: boolean; menuItem: MenuItem }>(
+      const response = await $fetch(
         `/api/editor/sites/${siteId}/menus/${currentMenu.value.id}/items`,
         { method: 'POST', body: itemData }
-      )
+      ) as { success: boolean; menuItem: MenuItem }
       if (response.success) {
         currentMenu.value.items.push(response.menuItem)
         return response.menuItem
@@ -153,10 +153,10 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     saving.value = true
     error.value = null
     try {
-      const response = await $fetch<{ success: boolean; menuItem: MenuItem }>(
+      const response = await $fetch(
         `/api/editor/sites/${siteId}/menus/${currentMenu.value.id}/items/${itemId}`,
         { method: 'PATCH', body: updates }
-      )
+      ) as { success: boolean; menuItem: MenuItem }
       if (response.success) {
         const index = currentMenu.value.items.findIndex(item => item.id === itemId)
         if (index !== -1) currentMenu.value.items[index] = response.menuItem
@@ -191,10 +191,10 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     saving.value = true
     error.value = null
     try {
-      const response = await $fetch<{ success: boolean; old_section: string; new_section: string; updated: number }>(
+      const response = await $fetch(
         `/api/editor/sites/${siteId}/menus/${currentMenu.value.id}/sections`,
         { method: 'PATCH', body: { old_section: oldSection, new_section: newSection } }
-      )
+      ) as { success: boolean; old_section: string; new_section: string; updated: number }
       if (response.success) {
         currentMenu.value.items = currentMenu.value.items.map(item =>
           item.section === oldSection ? { ...item, section: response.new_section } : item
@@ -219,10 +219,10 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     error.value = null
     try {
       const encodedSection = encodeURIComponent(section)
-      const response = await $fetch<{ success: boolean; section: string; deleted: number }>(
+      const response = await $fetch(
         `/api/editor/sites/${siteId}/menus/${currentMenu.value.id}/sections?section=${encodedSection}`,
         { method: 'DELETE' }
-      )
+      ) as { success: boolean; section: string; deleted: number }
       if (response.success) {
         currentMenu.value.items = currentMenu.value.items.filter(item => item.section !== response.section)
         currentMenu.value.section_order = (currentMenu.value.section_order ?? []).filter(section => section !== response.section)

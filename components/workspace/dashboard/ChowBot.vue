@@ -618,7 +618,6 @@ const toolLabel = (name: string): string => {
     reply_to_review: 'Saving reply…',
     get_location_media: 'Fetching media…',
     delete_media_asset: 'Deleting media…',
-    generate_image: 'Generating image with AI…',
     get_location_qa: 'Fetching Q&A…',
     add_qa: 'Adding Q&A…',
     delete_qa: 'Deleting Q&A…',

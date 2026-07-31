@@ -39,7 +39,7 @@ export const AGENT_SKILL_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'get_image_generation_guidance',
-    description: 'Resolve persisted scoped Agent Skill guidance for tenant image generation. Use before preparing an AI-generated image brief. Returns each active source document separately; MCP cannot create, edit, activate, or archive skills.',
+    description: 'Resolve persisted scoped Agent Skill guidance for a tenant image brief. Use before preparing a brief for ChatGPT-native image generation. Returns each active source document separately; MCP cannot create, edit, activate, or archive skills.',
     domain: 'agent_skills',
     minimumRole: 'editor',
     confirmRequired: false,
@@ -50,7 +50,7 @@ export const AGENT_SKILL_TOOLS: McpToolDefinition[] = [
   }),
   siteTool({
     name: 'review_image_generation_brief',
-    description: 'Persist a server-side advisory review run for an exact tenant image-generation brief against resolved Agent Skill guidance. The returned guidance_run_id must be bound to later generated media persistence.',
+    description: 'Persist a server-side advisory review run for an exact tenant image brief against resolved Agent Skill guidance. This does not generate an image; the returned guidance_run_id must be bound to later generated media persistence.',
     domain: 'agent_skills',
     minimumRole: 'editor',
     confirmRequired: false,

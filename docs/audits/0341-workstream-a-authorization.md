@@ -134,7 +134,7 @@ owner/admin callers and keep their existing organization-level checks.
 
 | `editor/sites/[siteId]/contact-submissions/[submissionId].patch.ts` | | ✓ | | | | inline SQL + `assertSiteWideAccess` (no `location_id` column; explicitly forbidden cross-location inbox) |
 | `ai/[siteId]/enhance-prompt.post.ts`, `ai/[siteId]/posts/generate.post.ts` | | ✓ | | | | inline SQL + `assertSiteWideAccess` (no location param accepted; save-time endpoints already enforce the real target location) |
-| `ai/[siteId]/generate-image.post.ts` | | | | ✓ (`body.locationId`) | | inline SQL + `assertResourceAccess` |
+| `ai/[siteId]/generate-image.post.ts` | | | | | ✓ | Removed; KrabiClaw no longer generates images through dashboard/ChowBot AI Gateway routes. |
 | `ai/[siteId]/menu/extract.post.ts` | | | | ✓ (existing menu's own `location_id`, or site-wide when creating a new menu) | | inline SQL + `assertResourceAccess`/`assertSiteWideAccess` |
 
 **contact-submissions/AI routes family: complete.** Typecheck + lint clean.

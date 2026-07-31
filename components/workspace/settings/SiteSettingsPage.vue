@@ -273,10 +273,10 @@ async function load() {
     const siteId = dashboard.siteId.value
     if (!siteId) throw new Error('Site not found')
     const [settings, notifications, facebook] = await Promise.all([
-      $fetch<{ success: boolean; settings: SiteSettingsResponse }>('/api/dashboard/settings'),
-      $fetch<{ success: boolean; notifications: { whatsapp_phone: string | null; channels: string[] } }>(`/api/editor/sites/${siteId}/notifications`),
+      $fetch('/api/dashboard/settings') as Promise<{ success: boolean; settings: SiteSettingsResponse }>,
+      $fetch(`/api/editor/sites/${siteId}/notifications`) as Promise<{ success: boolean; notifications: { whatsapp_phone: string | null; channels: string[] } }>,
       hasFacebookAccess.value
-        ? $fetch<FacebookConnectionStatus>('/api/integrations/facebook-pages/connection', { query: { siteId } })
+        ? $fetch('/api/integrations/facebook-pages/connection', { query: { siteId } }) as Promise<FacebookConnectionStatus>
         : Promise.resolve<FacebookConnectionStatus>({ connected: false }),
     ])
     if (token !== loadToken) return
@@ -296,10 +296,10 @@ async function saveSiteSettings() {
   const requestedSiteSlug = route.params.siteSlug
   saving.value = true
   try {
-    const response = await $fetch<{ success: boolean; settings: SiteSettingsResponse }>('/api/dashboard/settings', {
+    const response = await $fetch('/api/dashboard/settings', {
       method: 'PATCH',
       body: { ...form },
-    })
+    }) as { success: boolean; settings: SiteSettingsResponse }
     if (route.params.siteSlug !== requestedSiteSlug) return
     fillForm(response.settings)
     toast.add({ description: 'Site settings saved', color: 'success' })
@@ -323,10 +323,10 @@ async function saveFeatures() {
     const enabled = toggleableFeatures.value.filter(feature => enabledFeatureSet[feature] && !defaultSet.has(feature))
     const disabled = defaultFeatures.value.filter(feature => !enabledFeatureSet[feature])
     const featureOverrides = enabled.length === 0 && disabled.length === 0 ? null : { enabled, disabled }
-    const response = await $fetch<{ success: boolean; settings: SiteSettingsResponse }>('/api/dashboard/settings', {
+    const response = await $fetch('/api/dashboard/settings', {
       method: 'PATCH',
       body: { feature_overrides: featureOverrides },
-    })
+    }) as { success: boolean; settings: SiteSettingsResponse }
     if (route.params.siteSlug !== requestedSiteSlug) return
     fillForm(response.settings)
     toast.add({ description: 'Business modules saved', color: 'success' })
@@ -348,10 +348,10 @@ async function saveNotifications() {
   try {
     const siteId = dashboard.siteId.value
     if (!siteId) throw new Error('Site not found')
-    const response = await $fetch<{ notifications: { whatsapp_phone: string | null; channels: string[] } }>(`/api/editor/sites/${siteId}/notifications`, {
+    const response = await $fetch(`/api/editor/sites/${siteId}/notifications`, {
       method: 'PATCH',
       body: { whatsapp_phone: whatsappPhone.value.trim() || null, channels: notificationChannels.value },
-    })
+    }) as { notifications: { whatsapp_phone: string | null; channels: string[] } }
     if (route.params.siteSlug !== requestedSiteSlug) return
     whatsappPhone.value = response.notifications.whatsapp_phone ?? ''
     notificationChannels.value = response.notifications.channels
@@ -367,7 +367,7 @@ async function startFacebookConnect() {
   const requestedSiteSlug = route.params.siteSlug
   connectingFacebook.value = true
   try {
-    const response = await $fetch<{ authUrl?: string; error?: string }>('/api/integrations/facebook-pages/auth', { method: 'POST' })
+    const response = await $fetch('/api/integrations/facebook-pages/auth', { method: 'POST' }) as { authUrl?: string; error?: string }
     if (!response.authUrl) throw new Error(response.error || 'No authorization URL returned')
     if (route.params.siteSlug !== requestedSiteSlug) {
       connectingFacebook.value = false

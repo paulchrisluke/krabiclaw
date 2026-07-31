@@ -6,24 +6,24 @@ export function platformBlogRepository(): BlogPostRepository {
     editUrl: postId => `/admin/blog/${postId}`,
 
     async get(postId: string): Promise<BlogPost> {
-      const res = await $fetch<{ post: BlogPost }>(`/api/admin/blog/posts/${postId}`)
+      const res = await $fetch(`/api/admin/blog/posts/${postId}`) as { post: BlogPost }
       if (!res.post) throw new Error('Post not found')
       return res.post
     },
 
     async create(input: PlatformBlogCreateInput): Promise<BlogPost & { id: string }> {
-      const res = await $fetch<{ id: string; post: BlogPost }>('/api/admin/blog/posts', {
+      const res = await $fetch('/api/admin/blog/posts', {
         method: 'POST',
         body: input,
-      })
+      }) as { id: string; post: BlogPost }
       return { ...res.post, id: res.id } as BlogPost & { id: string }
     },
 
     async update(postId: string, input: PlatformBlogUpdateInput): Promise<BlogPost> {
-      const res = await $fetch<{ post: BlogPost }>(`/api/admin/blog/posts/${postId}`, {
+      const res = await $fetch(`/api/admin/blog/posts/${postId}`, {
         method: 'PATCH',
         body: input,
-      })
+      }) as { post: BlogPost }
       if (!res.post) throw new Error('Post not found after update')
       return res.post
     },

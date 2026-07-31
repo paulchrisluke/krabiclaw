@@ -21,11 +21,11 @@ export const usePublicMenu = (siteId: string, locationId?: string | null) => {
         queryParams.set('locale', locale.value)
       }
 
-      const response = await $fetch<{
+      const response = await $fetch(`/api/public/sites/${siteId}/menus?${queryParams.toString()}`) as {
         success: boolean
         menu: MenuWithItems | null
         message?: string
-      }>(`/api/public/sites/${siteId}/menus?${queryParams.toString()}`)
+      }
 
       if (response.success) {
         menu.value = response.menu

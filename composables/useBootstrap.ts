@@ -94,7 +94,7 @@ export const useBootstrap = async (options: { enabled?: boolean | Ref<boolean> }
       : await useAsyncData<BootstrapPayload>(
           key,
           async () => {
-            if (!import.meta.server) return $fetch<BootstrapPayload>(url.value);
+            if (!import.meta.server) return await $fetch(url.value) as BootstrapPayload;
             // Nested SSR self-fetch (useRequestFetch) has been the source of a real bug
             // class elsewhere (pages/blog/[category]/[slug].vue, pages/docs/[...segments].vue):
             // Nitro's internal dispatch for those routes sometimes returned a wrong 404 that
@@ -104,7 +104,7 @@ export const useBootstrap = async (options: { enabled?: boolean | Ref<boolean> }
             // self-fetch in the app (every tenant page goes through it) — log on failure so
             // a future occurrence leaves evidence instead of a silent wrong render.
             try {
-              return await requestFetch<BootstrapPayload>(url.value);
+              return await requestFetch(url.value) as BootstrapPayload;
             } catch (err) {
               // url/key can carry a signed preview token on /preview/* routes — strip it
               // before logging so it doesn't end up in server logs. Key fields are

@@ -4,7 +4,7 @@
 // value. Callers own the fallback decision for their own current state.
 export async function fetchMenuCurrency(): Promise<string | null> {
   try {
-    const response = await $fetch<{ success: boolean; settings: { default_currency?: string } }>(`/api/dashboard/settings`)
+    const response = await $fetch('/api/dashboard/settings') as { success: boolean; settings: { default_currency?: string } }
     return response.success ? response.settings?.default_currency ?? null : null
   } catch {
     return null

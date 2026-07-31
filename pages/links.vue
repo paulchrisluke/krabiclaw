@@ -79,7 +79,7 @@ const { data, error } = await useAsyncData<PublicSiteLinksPayload | null>(
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
       return await getPublicLinksPage(db, siteId)
     }
-    const response = await $fetch<{ success: boolean } & PublicSiteLinksPayload>(`/api/public/sites/${siteId}/links-page`)
+    const response = await $fetch(`/api/public/sites/${siteId}/links-page`) as { success: boolean } & PublicSiteLinksPayload
     return response
   },
   { server: true, lazy: false },

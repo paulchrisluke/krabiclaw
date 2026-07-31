@@ -111,7 +111,7 @@ async function refreshNotifications() {
   if (loading.value) return
   loading.value = true
   try {
-    const response = await $fetch<NotificationResponse>('/api/dashboard/notifications', { query: { limit: 20 } })
+    const response = await $fetch('/api/dashboard/notifications', { query: { limit: 20 } }) as NotificationResponse
     notifications.value = response.notifications
     unreadCount.value = response.unread_count
   } catch (error) {

@@ -4,7 +4,7 @@ import { chowbotToolFromMcp } from './from-mcp'
 
 // upload_user_media is ChatGPT-attachment-specific (chatgptFileInput),
 // so it is not applicable to ChowBot,
-// which has its own generate_image/WhatsApp-pending-media upload paths.
+// which has its own WhatsApp-pending-media upload paths.
 const MEDIA_DOMAIN_TOOL_NAMES = new Set([
   'set_media',
   'get_site_media_assets',
@@ -55,28 +55,6 @@ export const MEDIA_CHOWBOT_TOOLS: AiTool[] = [
           action: { type: "string", enum: ["save_media", "cancel"] },
         },
         required: ["action"],
-      },
-    },
-  // ── Image generation (ChowBot's own AI gateway, no MCP equivalent) ────────
-    {
-      name: "generate_image",
-      description:
-        "Generate an AI image from a text prompt using the configured OpenAI image model. The image is automatically saved to the media library. Use for menu item photos, hero images, or social posts.",
-      input_schema: {
-        type: "object",
-        properties: {
-          prompt: {
-            type: "string",
-            description:
-              "Describe the image. Include food type, style, plating, lighting. Be specific.",
-          },
-          location_id: {
-            type: "string",
-            description:
-              "Optional: attach the generated image to a specific location.",
-          },
-        },
-        required: ["prompt"],
       },
     },
 ]

@@ -45,7 +45,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
       allowed = result.status === 'ok' && result.allowed
     }
   } else {
-    const access = await $fetch<{ allowed?: boolean }>('/api/account/access').catch((err) => {
+    const access = await ($fetch('/api/account/access') as Promise<{ allowed?: boolean }>).catch((err) => {
       // Only treat known unauthenticated/forbidden responses as "not allowed"
       // Let network errors, 5xx, and other unexpected failures surface
       if (err?.statusCode === 401 || err?.statusCode === 403) return null
@@ -101,9 +101,9 @@ export default defineNuxtRouteMiddleware(async (to) => {
         }
       }
     } else {
-      const result = await $fetch<{ allowed?: boolean }>('/api/dashboard/route-capability', {
+      const result = await ($fetch('/api/dashboard/route-capability', {
         query: { orgSlug: organizationSlug, siteSlug, locationSlug: locationSlug ?? undefined, key: capabilityKey },
-      }).catch(() => null)
+      }) as Promise<{ allowed?: boolean }>).catch(() => null)
       capabilityAllowed = Boolean(result?.allowed)
     }
 

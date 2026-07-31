@@ -346,7 +346,7 @@ const sitePreviewBaseUrl = computed(() => {
 // Load editor context
 const loadEditorContext = async () => {
   try {
-    const response = await $fetch<{ context: ApiRecord }>(`/api/editor/sites/${props.siteId}/context`)
+    const response = await $fetch(`/api/editor/sites/${props.siteId}/context`) as { context: ApiRecord }
     siteData.value = response.context.site
     siteLocations.value = response.context.locations || []
     siteEntitlements.value = response.context.site.entitlements || {}
@@ -619,9 +619,9 @@ const loadPageContent = async () => {
   if (requiresLocationSelection.value) return
   contentLoading.value = true
   try {
-    const res = await $fetch<{ fields: ApiRecord[] }>(
+    const res = await $fetch(
       endpointWithContentScope(`/api/editor/sites/${props.siteId}/content/${selectedPageId.value}`)
-    )
+    ) as { fields: ApiRecord[] }
     if (version !== loadVersion.value) return
     const map: Record<string, string> = {}
     for (const row of res.fields) {

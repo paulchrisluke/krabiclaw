@@ -149,10 +149,10 @@ watch(() => props.modelValue, async (id) => {
   modelLoadController.value = controller
 
   try {
-    const res = await $fetch<{ media: PlatformMediaAsset[] }>(
+    const res = await $fetch(
       `/api/admin/platform/media?id=${encodeURIComponent(id)}&limit=1`,
       { signal: controller.signal }
-    )
+    ) as { media: PlatformMediaAsset[] }
 
     if (controller.signal.aborted) return
 
@@ -188,9 +188,9 @@ async function loadImages() {
   loading.value = true
   error.value = null
   try {
-    const res = await $fetch<{ media: PlatformMediaAsset[] }>('/api/admin/platform/media?limit=50', {
+    const res = await $fetch('/api/admin/platform/media?limit=50', {
       signal: controller.signal
-    })
+    }) as { media: PlatformMediaAsset[] }
     if (controller.signal.aborted) return
     images.value = res.media ?? []
   } catch (err) {

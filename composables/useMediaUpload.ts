@@ -121,7 +121,7 @@ export function useMediaUpload(siteApiBase: string) {
       }
 
       if (isImage) {
-        const { assetId, uploadUrl } = await $fetch<{ assetId: string, uploadUrl: string }>(
+        const { assetId, uploadUrl } = await $fetch(
           `${siteApiBase}/media/request-upload`,
           {
             method: 'POST',
@@ -131,7 +131,7 @@ export function useMediaUpload(siteApiBase: string) {
               category: options.category,
             }
           }
-        )
+        ) as { assetId: string, uploadUrl: string }
 
         const form = new FormData()
         form.append('file', file)
@@ -164,16 +164,16 @@ export function useMediaUpload(siteApiBase: string) {
       if (options.category) form.append('category', options.category)
       if (options.poster) form.append('poster', options.poster)
 
-      const response = await $fetch<{
+      const response = await $fetch(`${siteApiBase}/media/upload`, {
+        method: 'POST',
+        body: form
+      }) as {
         id: string
         kind: 'video' | 'file'
         publicUrl: string | null
         thumbnailUrl: string | null
         posterWarning?: string | null
-      }>(`${siteApiBase}/media/upload`, {
-        method: 'POST',
-        body: form
-      })
+      }
 
       return {
         id: response.id,

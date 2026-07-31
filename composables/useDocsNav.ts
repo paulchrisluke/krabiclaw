@@ -1,3 +1,4 @@
+import type { Ref } from 'vue'
 import { CATEGORY_SLUGS, categoryToSlug } from '~/utils/docs-categories'
 import { docNavSectionFor, groupDocItemsByNavSectionAndGroup } from '~/utils/platform-content-nav'
 
@@ -31,9 +32,9 @@ interface DocsNavCategory {
 // (max 3 levels) — docs support an optional nav_group subgroup within their
 // nav_section; blog posts never get this (see useBlogNav, which stays flat).
 export function useDocsNav() {
-  const { data } = useFetch<{ docs: PublicDoc[] }>('/api/public/docs', {
+  const { data } = useFetch('/api/public/docs', {
     default: () => ({ docs: [] }),
-  })
+  }) as { data: Ref<{ docs: PublicDoc[] } | null> }
 
   const docs = computed(() => data.value?.docs || [])
 

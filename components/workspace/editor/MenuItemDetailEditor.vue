@@ -254,9 +254,9 @@ const loadMenu = async () => {
   error.value = null
 
   try {
-    const response = await $fetch<{ success: boolean; menu: MenuWithItems }>(
+    const response = await $fetch(
       `/api/editor/sites/${props.siteId}/menus/${props.menuId}`
-    )
+    ) as { success: boolean; menu: MenuWithItems }
 
     if (!response.success) throw new Error('Failed to load menu')
 
@@ -323,10 +323,10 @@ const handleSave = async () => {
       })
       toast.add({ description: 'Item saved', color: 'success' })
     } else {
-      const res = await $fetch<{ menuItem: MenuItem }>(`/api/editor/sites/${props.siteId}/menus/${props.menuId}/items`, {
+      const res = await $fetch(`/api/editor/sites/${props.siteId}/menus/${props.menuId}/items`, {
         method: 'POST',
         body: payload.value
-      })
+      }) as { menuItem: MenuItem }
       if (res?.menuItem?.id) {
         trackMenuItemCreated(String(res.menuItem.id), props.siteId)
         toast.add({ description: 'Item created', color: 'success' })

@@ -216,8 +216,8 @@ async function loadStatus() {
   error.value = ''
   try {
     const [localesResponse, jobsResponse] = await Promise.all([
-      $fetch<{ success: boolean; source_locale: string; locales: SiteLocaleRow[] }>(`/api/editor/sites/${props.siteId}/locales`),
-      $fetch<{ success: boolean; jobs: TranslationJobRow[] }>(`/api/editor/sites/${props.siteId}/translations/jobs`),
+      $fetch(`/api/editor/sites/${props.siteId}/locales`) as Promise<{ success: boolean; source_locale: string; locales: SiteLocaleRow[] }>,
+      $fetch(`/api/editor/sites/${props.siteId}/translations/jobs`) as Promise<{ success: boolean; jobs: TranslationJobRow[] }>,
     ])
     sourceLocale.value = localesResponse.source_locale || 'en'
     locales.value = localesResponse.locales || []
@@ -243,7 +243,7 @@ async function estimateTranslation() {
   estimateLoading.value = true
   error.value = ''
   try {
-    const response = await $fetch<{ success: boolean; estimate: TranslationEstimate }>(
+    const response = await $fetch(
       `/api/editor/sites/${props.siteId}/translations/inventory`,
       {
         query: {
@@ -252,7 +252,7 @@ async function estimateTranslation() {
           includePublished: false,
         }
       }
-    )
+    ) as { success: boolean; estimate: TranslationEstimate }
     estimate.value = response.estimate
   } catch (err) {
     estimate.value = null

@@ -245,7 +245,7 @@ Start every conversation by calling get_workspace_context. If no active site is 
 - If they have 0 sites, start the Onboarding Flow:
   1. Ask for their Google Maps URL (or shortlink) to import their business details.
   2. Call import_from_maps.
-  3. After import, ask for Required missing context: "What should the main button say (e.g., Book Now)?" and ask if they want to upload a Hero Image or have AI generate one. Follow the Image work rules above.
+  3. After import, ask for Required missing context: "What should the main button say (e.g., Book Now)?" and ask if they want to attach or upload a Hero Image. Follow the Image work rules above.
   4. Ask for Optional context: "What's the short story behind your business?" and "Do you have a logo to upload?" (let them skip these).
   5. DO NOT ask for menus, detailed services, or social links yet (defer until the site is live).
   6. Call create_site and create_location, then show_site_preview.
@@ -270,7 +270,7 @@ A site is confirmed when:
 
 Tool categories:
 - **Read-only** (list_*, get_*, show_*) — safe to call once list_sites returns
-- **Preview/generate** (generate_*, show_generated_images) — require a confirmed site
+- **Preview/save generated media** (show_generated_images, save_generated_image_file, save_generated_image) — require a confirmed site
 - **Mutating** (set_*, update_*, create_*, delete_*, publish_*) — require a confirmed site
 
 If the user asks you to mutate content before a site is confirmed, call list_sites first, confirm the active site, then proceed.
@@ -284,7 +284,7 @@ When a public-facing tool result includes \`view_url\` or \`public_url\`, includ
 
 All other tools require a site_id obtained from get_workspace_context, list_sites, or create_site. Never guess, invent, derive, or pass through site IDs from URLs/domains. Use get_current_user when the user asks which account is connected.
 
-Common workflows: update menus and items, create and publish site posts, triage contact and reservation submissions, update page content directly, upload media, reply to reviews, manage experiences and bookings, and generate or replace images for any content section. Translations, social publishing, domains, and managed-service requests are available only when explicitly enabled for this connector; otherwise direct the user to the dashboard.`,
+Common workflows: update menus and items, create and publish site posts, triage contact and reservation submissions, update page content directly, upload or save ChatGPT-native generated media, reply to reviews, and manage experiences and bookings. Translations, social publishing, domains, and managed-service requests are available only when explicitly enabled for this connector; otherwise direct the user to the dashboard.`,
       });
     }
 

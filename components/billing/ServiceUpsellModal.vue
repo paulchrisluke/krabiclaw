@@ -206,10 +206,10 @@ async function handleCta() {
     if (RECURRING_TYPES.includes(type.value)) {
       const siteId = dashboard.siteId.value
       if (!siteId) throw new Error('Choose a site before starting checkout')
-      const res = await $fetch<{ checkoutUrl: string }>('/api/billing/checkout', {
+      const res = await $fetch('/api/billing/checkout', {
         method: 'POST',
         body: { siteId, plan: type.value, interval: 'month' },
-      })
+      }) as { checkoutUrl: string }
       if (res.checkoutUrl) {
         close()
         await navigateTo(res.checkoutUrl, { external: true })
@@ -217,10 +217,10 @@ async function handleCta() {
         throw new Error('Missing checkoutUrl')
       }
     } else {
-      const res = await $fetch<{ checkoutUrl: string }>('/api/billing/service-addon', {
+      const res = await $fetch('/api/billing/service-addon', {
         method: 'POST',
         body: { addonType: type.value },
-      })
+      }) as { checkoutUrl: string }
       if (res.checkoutUrl) {
         close()
         await navigateTo(res.checkoutUrl, { external: true })

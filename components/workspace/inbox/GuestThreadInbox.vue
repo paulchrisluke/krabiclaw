@@ -341,14 +341,14 @@ async function loadThreads() {
   const requestToken = ++threadsRequestToken
   loadingThreads.value = true
   try {
-    const res = await $fetch<{ threads: ThreadListItem[] }>(`/api/dashboard/sites/${siteId}/guest-threads`, {
+    const res = await $fetch(`/api/dashboard/sites/${siteId}/guest-threads`, {
       headers: dashboardRequestHeaders.value,
       query: {
         location_id: isLocationScope.value ? selectedLocationId.value : undefined,
         search: search.value || undefined,
         type: props.submissionTypeFilter,
       },
-    })
+    }) as { threads: ThreadListItem[] }
     if (requestToken !== threadsRequestToken) return
     threads.value = res.threads ?? []
   } catch (error) {
@@ -364,9 +364,9 @@ async function loadThreadDetail(threadId: string) {
   loadingDetail.value = true
   selectedDetail.value = null
   try {
-    const res = await $fetch<{ thread: ThreadDetail }>(`/api/dashboard/sites/${siteId}/guest-threads/${threadId}`, {
+    const res = await $fetch(`/api/dashboard/sites/${siteId}/guest-threads/${threadId}`, {
       headers: dashboardRequestHeaders.value,
-    })
+    }) as { thread: ThreadDetail }
     if (requestToken !== detailRequestToken) return
     selectedDetail.value = res.thread
     replyDraft.value = ''

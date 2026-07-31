@@ -145,7 +145,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
         description: `Onboard a new site from ${mapsUrl}`,
         text: [
           `Call import_from_maps with maps_url "${mapsUrl}" to pull in the business details.`,
-          "Ask for the required missing context: what the main CTA button should say (e.g. \"Book Now\"), and whether they want to upload a hero image or have AI generate one — follow the existing image-work rules for whichever they choose.",
+          "Ask for the required missing context: what the main CTA button should say (e.g. \"Book Now\"), and whether they want to attach or upload a hero image — follow the existing image-work rules.",
           "Ask the optional questions too (short business story, logo upload), but let the user skip either.",
           "Do not ask about menus, detailed services, or social links yet — those come later, after the site is live.",
           "Once the required context is in hand, call create_site, then create_location, then show_site_preview, then call set_workspace_context so the new site becomes the active context for the rest of the conversation.",

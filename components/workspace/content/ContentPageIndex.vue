@@ -66,7 +66,7 @@ const pages = computed(() => getScopedEditablePages(
 
 onMounted(async () => {
   try {
-    const response = await $fetch<{ context: ApiRecord }>(`/api/editor/sites/${props.siteId}/context`)
+    const response = await $fetch(`/api/editor/sites/${props.siteId}/context`) as { context: ApiRecord }
     siteData.value = response.context.site
     siteLocations.value = response.context.locations || []
   } catch (error) {

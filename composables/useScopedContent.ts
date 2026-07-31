@@ -44,13 +44,13 @@ export const useScopedContent = (siteId: string, page: string, locationId?: stri
         queryParams.set('locationId', effectiveLocationId.value)
       }
 
-      const response = await $fetch<{
+      const response = await $fetch(`/api/editor/sites/${siteId}/content/${page}?${queryParams.toString()}`) as {
         success: boolean
         content: SiteContent[]
         siteId: string
         locationId: string | null
         page: string
-      }>(`/api/editor/sites/${siteId}/content/${page}?${queryParams.toString()}`)
+      }
 
       if (response.success) {
         content.value = response.content

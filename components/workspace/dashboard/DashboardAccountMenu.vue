@@ -93,7 +93,7 @@ const platformStatus = ref<'normal' | 'loading' | 'error'>('loading')
 
 async function checkPlatformStatus() {
   try {
-    const res = await $fetch<{ status: string }>('/api/health')
+    const res = await $fetch('/api/health') as { status: string }
     platformStatus.value = res.status === 'ok' ? 'normal' : 'error'
   } catch (err) {
     console.error('Failed to fetch platform status:', err)
