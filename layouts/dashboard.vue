@@ -180,7 +180,7 @@ import { useAuth } from '~/composables/useAuth'
 import { useAnalytics } from '~/composables/useAnalytics'
 import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities, type CmsManagerCapability, type ProductFeature } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
-import type { SiteVertical } from '~/utils/vertical-copy'
+import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 
 // ─────────────────────────────────────────────────────────────────────────
 // Dashboard shell architecture (issue #316 + its "Authoritative clarification:
@@ -274,7 +274,10 @@ const isConversationsRoute = computed(() => routeName.value.includes('conversati
 const showChowBot = computed(() => !isConversationsRoute.value
   && (dashboard.siteAccess.value !== 'location' || scope.value === 'location'))
 
-const vertical = computed(() => (site.value?.vertical ?? null) as SiteVertical | null)
+const vertical = computed(() => {
+  const normalized = normalizeVertical(site.value?.vertical)
+  return normalized ? normalized as SiteVertical : null
+})
 const templateSlug = computed(() => vertical.value ? resolvePublicTemplate({ vertical: vertical.value }).slug : null)
 const currentLocationRow = computed(() => dashboard.locations.value.find(l => l.slug === currentLocationSlug.value) ?? null)
 // The resolved definition always reflects BOTH the site's own override and, once drilled into a
