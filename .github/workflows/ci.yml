@@ -310,17 +310,6 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: node scripts/generate-ncls-blawby-seed.mjs --preview
-      - name: Deploy preview Worker
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          WRANGLER_LOG: debug
-        run: yarn deploy:preview:worker
-      - name: Purge preview HTML cache
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          PREVIEW_CACHE_ORIGIN: https://preview.krabiclaw.com
-        run: node --experimental-strip-types scripts/purge-preview-cache.ts
       - name: Sync preview secrets
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -353,6 +342,19 @@ jobs:
         run: |
           printf '%s' "$EMAIL_REPLY_SECRET_PREVIEW" | npx wrangler secret put EMAIL_REPLY_SECRET --env preview
           printf '%s' "$EMAIL_INBOUND_SECRET_PREVIEW" | npx wrangler secret put EMAIL_INBOUND_SECRET --env preview
+      - name: Deploy preview Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_LOG: debug
+        # Secret updates publish Worker versions. Deploy last so HTML and the
+        # immutable Nuxt assets always propagate as one final version.
+        run: yarn deploy:preview:worker
+      - name: Purge preview HTML cache
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          PREVIEW_CACHE_ORIGIN: https://preview.krabiclaw.com
+        run: node --experimental-strip-types scripts/purge-preview-cache.ts
       - run: npx playwright install --with-deps chromium
       - name: Warm up preview Worker
         env:
@@ -428,12 +430,6 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: node scripts/generate-ncls-blawby-seed.mjs --staging
-      - name: Deploy staging Worker
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          WRANGLER_LOG: debug
-        run: yarn deploy:staging:worker
       - name: Sync staging Stripe secrets
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -474,6 +470,14 @@ jobs:
         # the E2E_DEV_ROUTE_SECRET env var above.
         run: |
           printf '%s' "$E2E_DEV_ROUTE_SECRET_STAGING" | npx wrangler secret put E2E_DEV_ROUTE_SECRET --env staging
+      - name: Deploy staging Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_LOG: debug
+        # Secret updates publish Worker versions. Deploy last so HTML and the
+        # immutable Nuxt assets always propagate as one final version.
+        run: yarn deploy:staging:worker
       - run: npx playwright install --with-deps chromium
       - name: Warm up staging Worker
         run: |
