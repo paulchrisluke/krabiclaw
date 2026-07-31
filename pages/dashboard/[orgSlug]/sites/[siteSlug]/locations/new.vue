@@ -140,7 +140,7 @@ const computedSiteStatus = computed((): 'setup' | 'progress' | 'ready' | 'live' 
 const loadContext = async () => {
   contextError.value = null
   try {
-    const response = await $fetch<{
+    const response = await dashboardFetch<{
       success: boolean
       site?: ApiRecord | null
       locations?: Array<{ id: string; slug: string; title: string; is_primary: boolean }>

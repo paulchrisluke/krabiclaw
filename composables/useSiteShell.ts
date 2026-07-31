@@ -15,7 +15,6 @@
 // Suspense blocks the route swap until the new page's real content is in
 // hand. See useBootstrap.ts.
 import { useBootstrapKey, useBootstrapUrl, type BootstrapParams } from "~/composables/useBootstrapParams";
-import type { Experience } from "~/server/utils/experiences";
 
 interface ContentRow {
   field: string;
@@ -46,10 +45,8 @@ interface SiteShellPayload {
   locations: ApiRecord[];
   config: Record<string, string>;
   googleBusiness: ApiRecord;
-  menu: ApiRecord | null;
   locales: { code: string; label: string; is_source: boolean }[];
   hasExperiences: boolean;
-  experiencesList: Experience[];
   // Bootstrap always returns `content`; the shell fetch keeps it around only
   // because SayaHeader/SayaFooter read a couple of site-wide fields (e.g.
   // footer legal copy) out of it — everything page-specific still comes from
@@ -62,14 +59,12 @@ const emptyShell = (): SiteShellPayload => ({
   locations: [],
   config: {},
   googleBusiness: { business: null, reviews: [], media: [], posts: [], syncedAt: null },
-  menu: null,
   locales: [],
   hasExperiences: false,
-  experiencesList: [],
   content: [],
 });
 
-export const useSiteShell = () => {
+export const useSiteShellState = () => {
   const { isPlatform, siteId, draftId } = useTenantSite();
   const requestEvent = useRequestEvent();
   const requestFetch = useRequestFetch();
@@ -91,7 +86,7 @@ export const useSiteShell = () => {
     page: null,
     location: null,
     experience: null,
-    menu: true,
+    menu: false,
     data: null,
     blogSlug: null,
     locale: locale.value,
@@ -103,30 +98,46 @@ export const useSiteShell = () => {
 
   const empty = emptyShell();
 
-  const { data, error } =
-    isSyntheticServerAssetFetch || isPlatform || (!siteId && !draftId)
-      ? { data: ref<SiteShellPayload>(empty), error: ref<Error | null>(null) }
-      : useAsyncData<SiteShellPayload>(
+  let data: Ref<SiteShellPayload | null>
+  let error: Ref<Error | null>
+  let ready: Promise<unknown>
+  if (isSyntheticServerAssetFetch || isPlatform || (!siteId && !draftId)) {
+    data = ref<SiteShellPayload>(empty)
+    error = ref<Error | null>(null)
+    ready = Promise.resolve()
+  } else {
+    const asyncData = useAsyncData<SiteShellPayload>(
           key,
           async () => {
-            if (!import.meta.server) return $fetch<SiteShellPayload>(url.value);
-            try {
-              return await requestFetch<SiteShellPayload>(url.value);
-            } catch (err) {
-              const redactedUrl = url.value.replace(/([?&]token=)[^&]*/, "$1[redacted]");
-              const redactedKey = params.value.token
-                ? key.value.split("~").slice(0, -1).concat("[redacted]").join("~")
-                : key.value;
-              const errorSummary = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-              console.error(
-                `[useSiteShell] SSR self-fetch failed for siteId=${siteId ?? "none"} draftId=${draftId ?? "none"} ` +
-                  `url=${redactedUrl} key=${redactedKey} error=${errorSummary}`,
+            if (import.meta.server) {
+              if (draftId) return await requestFetch<SiteShellPayload>(url.value);
+              if (!requestEvent || !siteId) {
+                throw createError({ statusCode: 500, statusMessage: "Public shell server context unavailable" });
+              }
+              const { handlePublicBootstrap } = await import(
+                "~/server/utils/public-bootstrap"
               );
-              throw err;
+              const response = await handlePublicBootstrap(requestEvent, siteId, {
+                locale: params.value.locale ?? undefined,
+                token: params.value.token ?? undefined,
+              });
+              if (!response.ok) {
+                throw createError({ statusCode: response.status, statusMessage: "Public shell failed" });
+              }
+              return await response.json() as SiteShellPayload;
             }
+            return await publicApiRequest<SiteShellPayload>(url.value, {
+              coalesceKey: key.value,
+              validate: (value): value is SiteShellPayload =>
+                isRecord(value) && Array.isArray(value.locations) && Array.isArray(value.locales),
+            });
           },
-          { default: emptyShell, server: true, lazy: true },
+          { default: emptyShell, server: true },
         );
+    data = asyncData.data
+    error = asyncData.error as Ref<Error | null>
+    ready = asyncData
+  }
 
   const locations = computed(() => (data.value?.locations ?? []) as ApiRecord[]);
   const config = computed(() => (data.value?.config ?? {}) as Record<string, string>);
@@ -134,30 +145,14 @@ export const useSiteShell = () => {
   const googleBusiness = computed(() => data.value?.googleBusiness ?? empty.googleBusiness);
   const locales = computed(() => data.value?.locales ?? []);
   const hasExperiences = computed(() => data.value?.hasExperiences ?? false);
-  const experiencesList = computed(() => (data.value?.experiencesList ?? []) as Experience[]);
-
-  const menuData = computed(() => data.value?.menu ?? null);
-  const menuItemsBySection = computed(() => {
-    const m = menuData.value as { items?: ApiRecord[] } | null;
-    if (!m?.items) return {} as Record<string, ApiRecord[]>;
-    return m.items.reduce<Record<string, ApiRecord[]>>((acc, item) => {
-      const section = (item.section as string) || "Uncategorized";
-      if (!acc[section]) acc[section] = [];
-      acc[section].push(item);
-      return acc;
-    }, {});
-  });
-
   return {
     locations,
     config,
     site: shellSite,
     googleBusiness,
-    menu: menuData,
-    menuItemsBySection,
     locales,
     hasExperiences,
-    experiencesList,
     error,
+    ready,
   };
 };

@@ -19,10 +19,10 @@ if (tenantType === TENANT_TYPES.TENANT_404) {
 }
 
 // app.vue is the root component and never remounts across client-side
-// navigation, so it uses useSiteShell() (stable siteId+locale key, never
+// navigation, so it reads the stable site-shell state (siteId+locale key, never
 // stale) rather than useBootstrap() (route-keyed, must be `await`-ed inside
 // a per-page <script setup> for Suspense to block on it — see useBootstrap.ts).
-const { config } = useSiteShell()
+const { config } = useSiteShellState()
 const route = useRoute()
 const defaultOgImage = useSharedOgImage()
 const defaultPageUrl = useSeoUrl(() => route.path)

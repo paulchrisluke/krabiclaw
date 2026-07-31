@@ -8,6 +8,19 @@ avoid piling on caches/custom behavior, and isolate one cost at a time.
 Start with the dev-only test page and prove the cost there before moving to real
 tenant or platform pages.
 
+## 2026-07-31 data-loading recovery
+
+The public shell/page contracts are separate, availability and policy reads are
+bulk indexed, public SSR uses the canonical server service, and dashboard
+traffic uses explicit route scope. Budgets are documented in
+`docs/performance/performance-recovery-2026-07.md`.
+
+Compare Lobby and Saya only with the same seeded site, route, cache state,
+browser build, viewport, and network profile. After backend parity, attribute
+remaining differences to measured payload bytes, JavaScript, long tasks, or
+rendering work. Build/deploy isolation remains the item 7 decision and must not
+absorb shared data-loading regressions.
+
 Use:
 
 - Raw Nitro baseline: `/__dev-perf/plain-text`

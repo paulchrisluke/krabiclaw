@@ -59,7 +59,7 @@ export function useDashboardSearch() {
     const requestId = ++requestSequence
     loading.value = true
     try {
-      const response = await $fetch<SearchResponse>('/api/public/search', {
+      const response = await dashboardFetch<SearchResponse>('/api/public/search', {
         query: {
           q: normalized,
           surface: 'dashboard',

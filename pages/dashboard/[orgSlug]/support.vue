@@ -238,7 +238,7 @@ async function submitRequest() {
   submitError.value = ''
   submitSuccess.value = false
   try {
-    await $fetch('/api/dashboard/work-requests', {
+    await dashboardFetch('/api/dashboard/work-requests', {
       method: 'POST',
       headers: requestHeaders,
       body: { type: form.type, title: form.title.trim(), description: form.description.trim() || undefined, priority: form.priority },

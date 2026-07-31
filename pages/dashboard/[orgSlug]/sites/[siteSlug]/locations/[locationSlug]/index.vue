@@ -209,12 +209,12 @@ async function load() {
   error.value = null
   try {
     const [locationResponse, menuResponse, connectionResponse, threadsResponse] = await Promise.all([
-      $fetch<{ success: boolean; location: LocationOverview }>(`/api/dashboard/locations/${locationId.value}`),
+      dashboardFetch<{ success: boolean; location: LocationOverview }>(`/api/dashboard/locations/${locationId.value}`),
       hasMenu.value
-        ? $fetch<{ success: boolean; menus: ApiRecord[] }>(`/api/editor/sites/${siteId}/menus?locationId=${locationId.value}`)
+        ? dashboardFetch<{ success: boolean; menus: ApiRecord[] }>(`/api/editor/sites/${siteId}/menus?locationId=${locationId.value}`)
         : Promise.resolve({ success: true, menus: [] }),
-      $fetch<{ connection: GoogleConnection | null }>(`/api/sites/${siteId}/locations/${locationId.value}/integrations/google-business`),
-      $fetch<{ summary: InboxSummary }>(`/api/dashboard/sites/${siteId}/guest-threads`, {
+      dashboardFetch<{ connection: GoogleConnection | null }>(`/api/sites/${siteId}/locations/${locationId.value}/integrations/google-business`),
+      dashboardFetch<{ summary: InboxSummary }>(`/api/dashboard/sites/${siteId}/guest-threads`, {
         query: { location_id: locationId.value },
       }),
     ])

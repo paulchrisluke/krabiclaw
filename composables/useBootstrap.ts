@@ -1,7 +1,7 @@
 // Per-page content fetch (photos/qa/reviews/blog/menu/experience datasets,
 // CMS content fields, booking policies). Site-wide chrome data that doesn't
 // vary by route (locations, config, menu, experiencesList) lives in
-// useSiteShell() instead — see that file for why the split exists.
+// the site-shell loader instead — see that file for why the split exists.
 //
 // This is `await`-ed by every caller. That's load-bearing, not stylistic:
 // the key is derived from the current route, so on client-side navigation
@@ -23,7 +23,7 @@ import {
   useBootstrapKey,
   useBootstrapUrl,
 } from "~/composables/useBootstrapParams";
-import { useSiteShell } from "~/composables/useSiteShell";
+import { useSiteShellState } from "~/composables/useSiteShell";
 import type { RenderedBookingPolicySummary } from "~/server/utils/booking-policies";
 import type { Experience } from "~/server/utils/experiences";
 
@@ -54,6 +54,8 @@ interface BootstrapPayload {
   experiencePolicySiteDefault: RenderedBookingPolicySummary | null;
   experiencePolicyById: Record<string, RenderedBookingPolicySummary>;
   experienceDetail: Experience | null;
+  experiencesList: Experience[];
+  menu: ApiRecord | null;
 }
 
 const emptyBootstrap = (): BootstrapPayload => ({
@@ -71,11 +73,14 @@ const emptyBootstrap = (): BootstrapPayload => ({
   experiencePolicySiteDefault: null,
   experiencePolicyById: {},
   experienceDetail: null,
+  experiencesList: [],
+  menu: null,
 });
 
 export const useBootstrap = async (options: { enabled?: boolean | Ref<boolean> } = {}) => {
   const { isPlatform, siteId, draftId } = useTenantSite();
   const route = useRoute();
+  const requestEvent = useRequestEvent();
   const requestFetch = useRequestFetch();
   const params = useBootstrapParams();
   const entityId = computed(() => siteId || draftId || null);
@@ -86,7 +91,7 @@ export const useBootstrap = async (options: { enabled?: boolean | Ref<boolean> }
 
   const empty = emptyBootstrap();
 
-  const shell = useSiteShell();
+  const shell = useSiteShellState();
 
   const { data, error, pending } =
     isPlatform || !enabled.value || (!siteId && !draftId)
@@ -94,32 +99,34 @@ export const useBootstrap = async (options: { enabled?: boolean | Ref<boolean> }
       : await useAsyncData<BootstrapPayload>(
           key,
           async () => {
-            if (!import.meta.server) return $fetch<BootstrapPayload>(url.value);
-            // Nested SSR self-fetch (useRequestFetch) has been the source of a real bug
-            // class elsewhere (pages/blog/[category]/[slug].vue, pages/docs/[...segments].vue):
-            // Nitro's internal dispatch for those routes sometimes returned a wrong 404 that
-            // an identical external request to the same URL didn't. This route's shape is
-            // different (one path segment + query string, not multiple path segments) and
-            // hasn't been reproduced failing the same way, but it's the highest-traffic
-            // self-fetch in the app (every tenant page goes through it) — log on failure so
-            // a future occurrence leaves evidence instead of a silent wrong render.
-            try {
-              return await requestFetch<BootstrapPayload>(url.value);
-            } catch (err) {
-              // url/key can carry a signed preview token on /preview/* routes — strip it
-              // before logging so it doesn't end up in server logs. Key fields are
-              // "~"-joined with the token last (see useBootstrapKey).
-              const redactedUrl = url.value.replace(/([?&]token=)[^&]*/, "$1[redacted]");
-              const redactedKey = params.value.token
-                ? key.value.split("~").slice(0, -1).concat("[redacted]").join("~")
-                : key.value;
-              const errorSummary = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-              console.error(
-                `[useBootstrap] SSR self-fetch failed for siteId=${siteId ?? "none"} draftId=${draftId ?? "none"} ` +
-                  `route=${route.path} url=${redactedUrl} key=${redactedKey} error=${errorSummary}`,
+            if (import.meta.server) {
+              if (draftId) return await requestFetch<BootstrapPayload>(url.value);
+              if (!requestEvent || !siteId) {
+                throw createError({ statusCode: 500, statusMessage: "Public bootstrap server context unavailable" });
+              }
+              const { handlePublicBootstrap } = await import(
+                "~/server/utils/public-bootstrap"
               );
-              throw err;
+              const response = await handlePublicBootstrap(requestEvent, siteId, {
+                page: params.value.page ?? undefined,
+                location: params.value.location ?? undefined,
+                experience: params.value.experience ?? undefined,
+                menu: params.value.menu ? "1" : undefined,
+                data: params.value.data ?? undefined,
+                blogSlug: params.value.blogSlug ?? undefined,
+                locale: params.value.locale ?? undefined,
+                token: params.value.token ?? undefined,
+              });
+              if (!response.ok) {
+                throw createError({ statusCode: response.status, statusMessage: "Public bootstrap failed" });
+              }
+              return await response.json() as BootstrapPayload;
             }
+            return await publicApiRequest<BootstrapPayload>(url.value, {
+              coalesceKey: key.value,
+              validate: (value): value is BootstrapPayload =>
+                isRecord(value) && Array.isArray(value.content),
+            });
           },
           {
             default: emptyBootstrap,
@@ -127,11 +134,22 @@ export const useBootstrap = async (options: { enabled?: boolean | Ref<boolean> }
             watch: [url],
           },
         );
+  await shell.ready;
 
   // ── Locations / config / menu / experiences list ─────────────
-  // Site-wide, page-independent — sourced from useSiteShell(), which never
+  // Site-wide, page-independent — sourced from the site-shell state, which never
   // goes stale across navigation because its key never changes.
-  const { locations, config, googleBusiness, locales, hasExperiences, experiencesList, menu: menuData, menuItemsBySection } = shell;
+  const { locations, config, googleBusiness, locales, hasExperiences } = shell;
+  const experiencesList = computed(() => data.value?.experiencesList ?? []);
+  const menuData = computed(() => data.value?.menu ?? null);
+  const menuItemsBySection = computed(() => {
+    const menu = menuData.value as { items?: ApiRecord[] } | null;
+    return (menu?.items ?? []).reduce<Record<string, ApiRecord[]>>((groups, item) => {
+      const section = typeof item.section === "string" ? item.section : "Uncategorized";
+      (groups[section] ??= []).push(item);
+      return groups;
+    }, {});
+  });
 
   // ── Single location (for /locations/[slug]/* pages) ───────
   const location = computed(() => {

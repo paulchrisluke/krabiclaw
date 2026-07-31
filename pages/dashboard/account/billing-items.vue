@@ -124,7 +124,7 @@ const { data: billingItems, status, error, refresh } = await useAsyncData(
       if (!session?.user?.id) return []
       return await getUserBillingItems(env, db.$client, session.user.id)
     }
-    const response = await $fetch<{ items: BillingItem[] }>('/api/user/billing-items')
+    const response = await dashboardFetch<{ items: BillingItem[] }>('/api/user/billing-items')
     return response.items
   }
 )

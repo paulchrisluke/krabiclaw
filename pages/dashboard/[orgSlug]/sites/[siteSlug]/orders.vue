@@ -129,7 +129,7 @@ function previewLinks(location: { form: OrderForm }) {
 async function loadOrder() {
   loading.value = true
   try {
-    const locationsRes = await $fetch<{ locations: LocationRow[] }>(`/api/dashboard/locations`)
+    const locationsRes = await dashboardFetch<{ locations: LocationRow[] }>(`/api/dashboard/locations`)
     locations.value = (locationsRes.locations ?? []).map(location => ({
       ...location,
       addressText: addressText(location.address),
@@ -150,7 +150,7 @@ async function saveLocation(location: LocationRow & { form: OrderForm }) {
   if (!canSaveLocation(location)) return
   savingId.value = location.id
   try {
-    await $fetch(`/api/dashboard/locations/${location.id}`, {
+    await dashboardFetch(`/api/dashboard/locations/${location.id}`, {
       method: 'PATCH',
       body: {
         grab_url: normalizedUrl(location.form.grab_url),

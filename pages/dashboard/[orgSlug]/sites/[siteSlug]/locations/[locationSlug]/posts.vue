@@ -201,7 +201,7 @@ const loadPosts = async () => {
     const query: Record<string, string> = {}
     if (activeTab.value !== 'all') query.status = activeTab.value
     query.location_id = requestedLocationId
-    const res = await $fetch<{ posts: ApiRecord[] }>(`/api/editor/sites/${siteId}/posts`, { query })
+    const res = await dashboardFetch<{ posts: ApiRecord[] }>(`/api/editor/sites/${siteId}/posts`, { query })
     if (generation !== postsLoadGeneration || currentLocationId.value !== requestedLocationId) return
     posts.value = res.posts ?? []
   } catch {
@@ -216,7 +216,7 @@ async function loadFacebookConnection() {
   facebookConnected.value = false
   if (!requestedLocationId) return
   try {
-    const res = await $fetch<{ connected: boolean }>('/api/integrations/facebook-pages/connection', {
+    const res = await dashboardFetch<{ connected: boolean }>('/api/integrations/facebook-pages/connection', {
       query: { locationId: requestedLocationId },
     })
     if (currentLocationId.value === requestedLocationId) facebookConnected.value = res.connected
@@ -362,13 +362,13 @@ const handleSave = async () => {
   saving.value = true
   try {
     if (selectedPost.value) {
-      const res = await $fetch<ApiRecord>(`/api/editor/sites/${siteId}/posts/${selectedPost.value.id}`, {
+      const res = await dashboardFetch<ApiRecord>(`/api/editor/sites/${siteId}/posts/${selectedPost.value.id}`, {
         method: 'PATCH', body: buildPostPayload(locationId, String(selectedPost.value.id)),
       })
       if (currentLocationId.value !== locationId) return
       selectedPost.value = res.post
     } else {
-      const res = await $fetch<ApiRecord>(`/api/editor/sites/${siteId}/posts`, {
+      const res = await dashboardFetch<ApiRecord>(`/api/editor/sites/${siteId}/posts`, {
         method: 'POST', body: buildPostPayload(locationId),
       })
       if (currentLocationId.value !== locationId) return
@@ -409,12 +409,12 @@ const handlePublish = async () => {
     if (!postId || hasUnsavedEdits()) {
       const method = postId ? 'PATCH' : 'POST'
       const url = postId ? `/api/editor/sites/${siteId}/posts/${postId}` : `/api/editor/sites/${siteId}/posts`
-      const res = await $fetch<ApiRecord>(url, { method, body: buildPostPayload(locationId, postId ? String(postId) : undefined) })
+      const res = await dashboardFetch<ApiRecord>(url, { method, body: buildPostPayload(locationId, postId ? String(postId) : undefined) })
       if (currentLocationId.value !== locationId) return
       postId = res.post.id
       selectedPost.value = res.post
     }
-    const res = await $fetch<ApiRecord>(`/api/editor/sites/${siteId}/posts/${postId}/publish`, {
+    const res = await dashboardFetch<ApiRecord>(`/api/editor/sites/${siteId}/posts/${postId}/publish`, {
       method: 'POST', body: { channels: selectedChannels.value },
     })
     if (currentLocationId.value !== locationId) return
@@ -436,7 +436,7 @@ const handlePublish = async () => {
 const handleDelete = async () => {
   if (!selectedPost.value) return
   try {
-    await $fetch(`/api/editor/sites/${siteId}/posts/${selectedPost.value.id}`, { method: 'DELETE' })
+    await dashboardFetch(`/api/editor/sites/${siteId}/posts/${selectedPost.value.id}`, { method: 'DELETE' })
     selectedPost.value = null
     toast.add({ description: 'Post deleted', color: 'neutral' })
     await loadPosts()
@@ -510,7 +510,7 @@ const generatePost = async () => {
       image_base64 = dataUrl.slice(commaIndex + 1)
     }
 
-    const res = await $fetch<ApiRecord>(`/api/ai/${siteId}/posts/generate`, {
+    const res = await dashboardFetch<ApiRecord>(`/api/ai/${siteId}/posts/generate`, {
       method: 'POST',
       body: { prompt: aiPrompt.value.trim(), image_base64, image_mime },
     })

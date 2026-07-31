@@ -63,7 +63,7 @@ export const useEditMode = (siteId?: string, locationId?: string | null) => {
         queryParams.set('locationId', effectiveLocationId.value)
       }
 
-      await $fetch(`/api/editor/sites/${resolvedSiteId}/content/save?${queryParams.toString()}`, {
+      await dashboardFetch(`/api/editor/sites/${resolvedSiteId}/content/save?${queryParams.toString()}`, {
         method: 'POST',
         body: { 
           page: currentPage.value,

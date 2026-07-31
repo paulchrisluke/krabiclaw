@@ -8,6 +8,22 @@ rediscover them.
 For the compact reconnect triage flow, start with
 [docs/mcp-auth-debugging.md](./mcp-auth-debugging.md).
 
+## Data-loading diagnostics
+
+Every application API error should include the `x-request-id` response header
+and the same ID in its structured error body. Browser clients retain that ID in
+`ApiClientError`; use it to correlate the browser failure with Worker logs.
+
+For public bootstrap investigations, record `Server-Timing`,
+`x-bootstrap-cache`, payload bytes, and request count together. D1 query-count
+instrumentation should be grouped by the logical shell/page key. Two concurrent
+browser requests with the same key indicate a coalescing regression; a second
+request after a timeout or 5xx indicates an automatic-retry regression.
+
+Dashboard requests must carry explicit organization and, for site routes, site
+scope through the canonical client. Missing or conflicting scope is terminal
+and must not be repaired from active-organization or first-site state.
+
 ## Credentials
 
 `CLOUDFLARE_API_TOKEN` is in `.env` (not `CLOUDFLARE_ACCOUNT_ID` — that var is

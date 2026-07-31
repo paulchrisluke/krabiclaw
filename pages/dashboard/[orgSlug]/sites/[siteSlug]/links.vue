@@ -184,7 +184,7 @@ const items = ref<LinkItem[]>([])
 
 const { data, pending, refresh } = await useAsyncData(
   `links-page-editor-${siteId}`,
-  () => $fetch<{ page: ApiLinksPage; items: ApiLinkItem[] }>(`/api/editor/sites/${siteId}/links-page`, { headers }),
+  () => dashboardFetch<{ page: ApiLinksPage; items: ApiLinkItem[] }>(`/api/editor/sites/${siteId}/links-page`, { headers }),
   { server: false },
 )
 
@@ -284,7 +284,7 @@ async function save() {
         status: item.status,
       })),
     }
-    const response = await $fetch<{ page: ApiLinksPage; items: ApiLinkItem[] }>(`/api/editor/sites/${siteId}/links-page`, {
+    const response = await dashboardFetch<{ page: ApiLinksPage; items: ApiLinkItem[] }>(`/api/editor/sites/${siteId}/links-page`, {
       method: 'PATCH',
       headers,
       body: payload,

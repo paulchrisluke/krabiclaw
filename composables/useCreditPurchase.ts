@@ -16,7 +16,7 @@ const BUNDLE_PRICES = Object.fromEntries(CREDIT_BUNDLES.map(b => [b.credits, b.p
 const _successHandlers = new Map<string, (_balance: number) => void>()
 
 async function _redirectToCheckout(bundle: CreditBundle) {
-  const res = await $fetch<{ checkoutUrl?: string }>('/api/billing/credits/add', {
+  const res = await dashboardFetch<{ checkoutUrl?: string }>('/api/billing/credits/add', {
     method: 'POST',
     body: { bundle },
   })
@@ -45,7 +45,7 @@ export const useCreditPurchase = () => {
 
   async function purchase(bundle: CreditBundle, onSuccess?: (_balance: number) => void) {
     try {
-      const res = await $fetch<{ card: SavedCard | null }>('/api/billing/payment-method')
+      const res = await dashboardFetch<{ card: SavedCard | null }>('/api/billing/payment-method')
       if (res.card) {
         const txId = crypto.randomUUID()
         savedCard.value = res.card
@@ -71,7 +71,7 @@ export const useCreditPurchase = () => {
     const bundle = pendingBundle.value
     const txId = pendingTxId.value
     try {
-      const res = await $fetch<{ balance: number; requiresCheckout?: boolean }>(
+      const res = await dashboardFetch<{ balance: number; requiresCheckout?: boolean }>(
         '/api/billing/credits/charge',
         { method: 'POST', body: { bundle, txId, enableAutoTopup: wantsAutoTopup.value, autoTopupBundle: bundle } }
       )

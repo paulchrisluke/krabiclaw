@@ -164,7 +164,7 @@ async function loadConnection() {
   }
   loading.value = true
   try {
-    const res = await $fetch<{
+    const res = await dashboardFetch<{
       success: boolean
       connection: ConnectionInfo | null
       ga4Properties: Ga4Property[]
@@ -196,7 +196,7 @@ async function connectGoogle() {
   if (!requestedSiteId) return
   connecting.value = true
   try {
-    const res = await $fetch<{ success: boolean; authUrl: string }>(
+    const res = await dashboardFetch<{ success: boolean; authUrl: string }>(
       `/api/sites/${requestedSiteId}/integrations/google-analytics/auth`,
       { method: 'POST' }
     )
@@ -224,7 +224,7 @@ async function disconnectGoogle() {
   if (!requestedSiteId || connectionSiteId.value !== requestedSiteId) return
   disconnecting.value = true
   try {
-    await $fetch(`/api/sites/${requestedSiteId}/integrations/google-analytics/disconnect`, { method: 'POST' })
+    await dashboardFetch(`/api/sites/${requestedSiteId}/integrations/google-analytics/disconnect`, { method: 'POST' })
     if (siteId.value !== requestedSiteId) return
     connection.value = null
     ga4Properties.value = []
@@ -245,7 +245,7 @@ async function saveSelection() {
   saving.value = true
   try {
     const property = ga4Properties.value.find((p) => p.propertyId === selectedGa4Property.value)
-    await $fetch(`/api/sites/${requestedSiteId}/integrations/google-analytics/select`, {
+    await dashboardFetch(`/api/sites/${requestedSiteId}/integrations/google-analytics/select`, {
       method: 'POST',
       body: {
         ga4_property_id: selectedGa4Property.value,

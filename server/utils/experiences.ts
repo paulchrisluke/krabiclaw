@@ -1189,6 +1189,73 @@ export interface AvailabilitySummary {
   next_available_time: string | null
 }
 
+interface AvailabilityBookingRow {
+  experience_id: string
+  booking_date: string
+  time_slot: string
+  booked: number
+}
+
+interface AvailabilityOverrideRow {
+  experience_id: string
+  override_date: string
+  time_slot: string
+  status: 'closed' | 'open'
+  capacity_override: number | null
+}
+
+function calculateAvailabilitySummary(
+  experience: Experience,
+  timezone: string,
+  bookingRows: AvailabilityBookingRow[],
+  overrideRows: AvailabilityOverrideRow[],
+  opts: { locationClosed?: boolean } = {},
+): AvailabilitySummary {
+  const none = { next_available_date: null, next_available_time: null }
+  if (experience.status === 'inactive') return { availability_state: 'inactive', ...none }
+  if (experience.status === 'sold_out') return { availability_state: 'sold_out', ...none }
+  if (opts.locationClosed) return { availability_state: 'temporarily_unavailable', ...none }
+
+  const hasSchedule = Boolean(experience.recurring_slots) || Boolean(experience.time_slots?.length)
+  const hasPrice = Boolean(experience.price) || experience.price_amount != null
+  if (!hasSchedule || !hasPrice) return { availability_state: 'inquiry_only', ...none }
+
+  const bookedMap = new Map<string, number>()
+  for (const row of bookingRows) bookedMap.set(`${row.booking_date}|${row.time_slot}`, row.booked)
+  const overrideMap = new Map<string, AvailabilityOverrideRow>()
+  for (const row of overrideRows) overrideMap.set(`${row.override_date}|${row.time_slot}`, row)
+
+  let anySlotsInWindow = false
+  const cursor = new Date()
+  for (let i = 0; i < AVAILABILITY_SUMMARY_WINDOW_DAYS; i++) {
+    const dateStr = cursor.toISOString().slice(0, 10)
+    const scheduled = resolveEffectiveTimeSlots(experience, dateStr).filter(slot => !isTimeSlotInPast(dateStr, slot, timezone))
+    const oneOffOpen = overrideRows
+      .filter(row => row.override_date === dateStr && row.status === 'open' && !scheduled.includes(row.time_slot) && !isTimeSlotInPast(dateStr, row.time_slot, timezone))
+      .map(row => row.time_slot)
+    const daySlots = [...scheduled, ...oneOffOpen].sort()
+    if (daySlots.length > 0) {
+      anySlotsInWindow = true
+      for (const slot of daySlots) {
+        const override = overrideMap.get(`${dateStr}|${slot}`)
+        if (override?.status === 'closed') continue
+        const capacity = override?.capacity_override ?? experience.max_capacity ?? null
+        const booked = bookedMap.get(`${dateStr}|${slot}`) ?? 0
+        const remaining = capacity == null ? null : capacity - booked
+        if (remaining === null || remaining > 0) {
+          return {
+            availability_state: remaining !== null && remaining <= LIMITED_REMAINING_THRESHOLD ? 'limited' : 'available',
+            next_available_date: dateStr,
+            next_available_time: slot,
+          }
+        }
+      }
+    }
+    cursor.setUTCDate(cursor.getUTCDate() + 1)
+  }
+  return { availability_state: anySlotsInWindow ? 'full' : 'no_slots', ...none }
+}
+
 /**
  * Derives a single availability_state for an experience card/detail view by
  * looking at real slots/bookings/overrides over the next AVAILABILITY_SUMMARY_WINDOW_DAYS,
@@ -1235,44 +1302,19 @@ export async function computeExperienceAvailabilitySummary(
       [siteId, experience.id, fromDate, toDate],
     ),
   ])
-  const bookedMap = new Map<string, number>()
-  for (const r of bookingRows ?? []) bookedMap.set(`${r.booking_date}|${r.time_slot}`, r.booked)
-  const overrideMap = new Map<string, { status: 'closed' | 'open'; capacity_override: number | null }>()
-  for (const r of overrideRows ?? []) overrideMap.set(`${r.override_date}|${r.time_slot}`, { status: r.status, capacity_override: r.capacity_override })
-
-  let anySlotsInWindow = false
-  const cursor = new Date(today)
-  for (let i = 0; i < AVAILABILITY_SUMMARY_WINDOW_DAYS; i++) {
-    const dateStr = cursor.toISOString().slice(0, 10)
-    const scheduled = resolveEffectiveTimeSlots(experience, dateStr).filter((slot) => !isTimeSlotInPast(dateStr, slot, timezone))
-    const oneOffOpen = (overrideRows ?? [])
-      .filter((r) => r.override_date === dateStr && r.status === 'open' && !scheduled.includes(r.time_slot) && !isTimeSlotInPast(dateStr, r.time_slot, timezone))
-      .map((r) => r.time_slot)
-    const daySlots = [...scheduled, ...oneOffOpen].sort()
-
-    if (daySlots.length > 0) {
-      anySlotsInWindow = true
-      for (const slot of daySlots) {
-        const override = overrideMap.get(`${dateStr}|${slot}`)
-        if (override?.status === 'closed') continue
-        const capacity = override?.capacity_override ?? experience.max_capacity ?? null
-        const booked = bookedMap.get(`${dateStr}|${slot}`) ?? 0
-        const remaining = capacity == null ? null : capacity - booked
-        if (remaining === null || remaining > 0) {
-          const state: AvailabilityState = remaining !== null && remaining <= LIMITED_REMAINING_THRESHOLD ? 'limited' : 'available'
-          return { availability_state: state, next_available_date: dateStr, next_available_time: slot }
-        }
-      }
-    }
-    cursor.setUTCDate(cursor.getUTCDate() + 1)
-  }
-  return { availability_state: anySlotsInWindow ? 'full' : 'no_slots', ...none }
+  return calculateAvailabilitySummary(
+    experience,
+    timezone,
+    (bookingRows ?? []).map(row => ({ ...row, experience_id: experience.id })),
+    (overrideRows ?? []).map(row => ({ ...row, experience_id: experience.id })),
+    opts,
+  )
 }
 
 /**
  * Batch version of computeExperienceAvailabilitySummary for a public list/detail
- * response — fetches each referenced location's closure state once (not once per
- * experience) before computing each experience's summary.
+ * response. Location/config, booking, and override reads have constant query
+ * count; inheritance and slot calculations are pure in-memory work.
  */
 export async function attachAvailabilitySummaries<T extends Experience>(
   db: DbClient,
@@ -1281,26 +1323,68 @@ export async function attachAvailabilitySummaries<T extends Experience>(
   list: T[],
 ): Promise<Array<T & AvailabilitySummary>> {
   const locationIds = [...new Set(list.map((e) => e.location_id).filter((id): id is string => Boolean(id)))]
-  const closedLocationIds = new Set<string>()
-  if (locationIds.length) {
-    const placeholders = locationIds.map(() => '?').join(',')
-    const rows = await queryAll<{ id: string; special_hours: string | null; timezone: string | null }>(
+  if (list.length === 0) return []
+  const experienceIds = list.map(experience => experience.id)
+  const fromDate = new Date().toISOString().slice(0, 10)
+  const toCursor = new Date()
+  toCursor.setUTCDate(toCursor.getUTCDate() + AVAILABILITY_SUMMARY_WINDOW_DAYS - 1)
+  const toDate = toCursor.toISOString().slice(0, 10)
+  const locationPlaceholders = locationIds.map(() => '?').join(',')
+  const experiencePlaceholders = experienceIds.map(() => '?').join(',')
+  const [locationRows, configRows, bookingRows, overrideRows] = await Promise.all([
+    locationIds.length
+      ? queryAll<{ id: string; special_hours: string | null; timezone: string | null }>(
       db,
-      `SELECT id, special_hours, timezone FROM business_locations WHERE site_id = ? AND id IN (${placeholders})`,
+      `SELECT id, special_hours, timezone FROM business_locations WHERE site_id = ? AND id IN (${locationPlaceholders})`,
       [siteId, ...locationIds],
-    )
-    for (const row of rows ?? []) {
-      if (getActiveSpecialClosure(row.special_hours, row.timezone)) closedLocationIds.add(row.id)
-    }
+    ) : Promise.resolve([]),
+    queryAll<{ key: string; value: string }>(
+      db,
+      `SELECT key, value FROM site_config WHERE organization_id = ? AND site_id = ? AND key = 'default_timezone'`,
+      [organizationId, siteId],
+    ),
+    queryAll<AvailabilityBookingRow>(
+      db,
+      `SELECT experience_id, booking_date, time_slot, SUM(party_size) AS booked
+       FROM experience_bookings
+       WHERE site_id = ? AND experience_id IN (${experiencePlaceholders})
+         AND booking_date BETWEEN ? AND ? AND status IN ('pending', 'confirmed')
+       GROUP BY experience_id, booking_date, time_slot`,
+      [siteId, ...experienceIds, fromDate, toDate],
+    ),
+    queryAll<AvailabilityOverrideRow>(
+      db,
+      `SELECT experience_id, override_date, time_slot, status, capacity_override
+       FROM experience_slot_overrides
+       WHERE site_id = ? AND experience_id IN (${experiencePlaceholders})
+         AND override_date BETWEEN ? AND ?`,
+      [siteId, ...experienceIds, fromDate, toDate],
+    ),
+  ])
+  const defaultTimezone = configRows[0]?.value || 'UTC'
+  const locations = new Map(locationRows.map(row => [row.id, row]))
+  const bookingsByExperience = new Map<string, AvailabilityBookingRow[]>()
+  for (const row of bookingRows) {
+    const rows = bookingsByExperience.get(row.experience_id) ?? []
+    rows.push(row)
+    bookingsByExperience.set(row.experience_id, rows)
+  }
+  const overridesByExperience = new Map<string, AvailabilityOverrideRow[]>()
+  for (const row of overrideRows) {
+    const rows = overridesByExperience.get(row.experience_id) ?? []
+    rows.push(row)
+    overridesByExperience.set(row.experience_id, rows)
   }
 
-  const results: Array<T & AvailabilitySummary> = []
-  for (const experience of list) {
-    const timezone = await resolveExperienceTimezone(db, organizationId, siteId, experience)
-    const summary = await computeExperienceAvailabilitySummary(db, siteId, experience, timezone, {
-      locationClosed: experience.location_id ? closedLocationIds.has(experience.location_id) : false,
-    })
-    results.push({ ...experience, ...summary })
-  }
-  return results
+  return list.map(experience => {
+    const location = locations.get(experience.location_id)
+    const summary = calculateAvailabilitySummary(
+      experience,
+      location?.timezone || defaultTimezone,
+      bookingsByExperience.get(experience.id) ?? [],
+      overridesByExperience.get(experience.id) ?? [],
+      { locationClosed: Boolean(location && getActiveSpecialClosure(location.special_hours, location.timezone)) },
+    )
+    return { ...experience, ...summary }
+  })
 }

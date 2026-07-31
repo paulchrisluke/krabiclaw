@@ -66,7 +66,7 @@ async function submit() {
   creating.value = true
   error.value = null
   try {
-    const res = await $fetch<{
+    const res = await dashboardFetch<{
       siteId: string
       subdomain: string
       offerSubscribePlan: string | null

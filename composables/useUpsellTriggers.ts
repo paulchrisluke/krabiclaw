@@ -15,7 +15,7 @@ export const useUpsellTriggers = () => {
 
   async function loadPlanIds(): Promise<Set<string>> {
     try {
-      const plans = await $fetch<Plan[]>('/api/billing/plans')
+      const plans = await dashboardFetch<Plan[]>('/api/billing/plans')
       return new Set(plans.map(plan => plan.id))
     } catch {
       return new Set()

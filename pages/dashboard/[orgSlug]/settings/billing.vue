@@ -333,7 +333,7 @@ const selectedSite = computed(() => sites.value.find(s => s.siteId === selectedS
 
 async function loadSites() {
   try {
-    const res = await $fetch<{ sites: SiteBillingSummary[] }>('/api/billing/sites')
+    const res = await dashboardFetch<{ sites: SiteBillingSummary[] }>('/api/billing/sites')
     sites.value = res.sites ?? []
     if (!selectedSiteId.value && sites.value.length === 1) {
       selectedSiteId.value = sites.value[0]!.siteId
@@ -369,7 +369,7 @@ function onAutoTopupSaved(settings: { enabled: boolean; bundle: CreditBundleSize
 
 async function loadPaymentMethod() {
   try {
-    const res = await $fetch<{ card: SavedCard | null }>('/api/billing/payment-method')
+    const res = await dashboardFetch<{ card: SavedCard | null }>('/api/billing/payment-method')
     savedCard.value = res.card
   } catch { savedCard.value = null }
 }
@@ -380,7 +380,7 @@ async function purchaseCredits(bundle: 500 | 2500 | 5000) {
   if (process.env.NODE_ENV === 'development') {
     buyingCredits.value = bundle
     try {
-      const res = await $fetch<{ balance?: number; error?: string }>('/api/billing/credits/add', {
+      const res = await dashboardFetch<{ balance?: number; error?: string }>('/api/billing/credits/add', {
         method: 'POST', body: { bundle }
       })
       if (res.balance !== undefined) {
@@ -412,7 +412,7 @@ const { open: openServiceUpsell } = useServiceUpsell()
 const loadCredits = async () => {
   creditsLoading.value = true
   try {
-    credits.value = await $fetch<ApiRecord>('/api/billing/credits')
+    credits.value = await dashboardFetch<ApiRecord>('/api/billing/credits')
   } catch {
     // non-critical
     credits.value = null
@@ -426,7 +426,7 @@ const { formatRelativeTime, formatExactDateTime: formatDate } = useHumanTime()
 const loadBillingData = async () => {
   loading.value = true
   try {
-    const response = await $fetch<ApiRecord>('/api/billing/status')
+    const response = await dashboardFetch<ApiRecord>('/api/billing/status')
     billing.value = response.billing
     autoTopupEnabled.value = Boolean(response.billing?.autoTopupEnabled)
     const bundleVal = Number(response.billing?.autoTopupBundle)
@@ -450,7 +450,7 @@ const upgradeToPlan = async (plan: string) => {
   trackPlanViewed(plan)
   trackCheckoutStarted(plan)
   try {
-    const response = await $fetch<{ checkoutUrl: string }>('/api/billing/checkout', {
+    const response = await dashboardFetch<{ checkoutUrl: string }>('/api/billing/checkout', {
       method: 'POST',
       body: { plan, interval: annual.value ? 'year' : 'month', siteId: selectedSiteId.value, gaClientId: getGaClientId() }
     })
@@ -475,7 +475,7 @@ const openBillingPortal = async () => {
       errorMessage.value = 'Organization ID not found'
       return
     }
-    const response = await $fetch<{ portalUrl: string }>('/api/billing/portal', {
+    const response = await dashboardFetch<{ portalUrl: string }>('/api/billing/portal', {
       method: 'POST',
       body: { organizationId: orgId }
     })

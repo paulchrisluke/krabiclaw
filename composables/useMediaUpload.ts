@@ -66,7 +66,7 @@ export function useMediaUpload(siteApiBase: string) {
   const pendingRetryFile = ref<PendingMediaUpload | null>(null)
 
   async function cleanupPendingUpload(assetId: string) {
-    await $fetch(`${siteApiBase}/media/${assetId}`, { method: 'DELETE' })
+    await dashboardFetch(`${siteApiBase}/media/${assetId}`, { method: 'DELETE' })
   }
 
   async function confirmPendingUpload(assetId: string) {
@@ -74,7 +74,7 @@ export function useMediaUpload(siteApiBase: string) {
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
-        await $fetch(`${siteApiBase}/media/${assetId}/confirm`, { method: 'POST' })
+        await dashboardFetch(`${siteApiBase}/media/${assetId}/confirm`, { method: 'POST' })
         return
       } catch (uploadError) {
         lastError = uploadError
@@ -121,7 +121,7 @@ export function useMediaUpload(siteApiBase: string) {
       }
 
       if (isImage) {
-        const { assetId, uploadUrl } = await $fetch<{ assetId: string, uploadUrl: string }>(
+        const { assetId, uploadUrl } = await dashboardFetch<{ assetId: string, uploadUrl: string }>(
           `${siteApiBase}/media/request-upload`,
           {
             method: 'POST',
@@ -164,7 +164,7 @@ export function useMediaUpload(siteApiBase: string) {
       if (options.category) form.append('category', options.category)
       if (options.poster) form.append('poster', options.poster)
 
-      const response = await $fetch<{
+      const response = await dashboardFetch<{
         id: string
         kind: 'video' | 'file'
         publicUrl: string | null

@@ -88,7 +88,7 @@ const dashboard = useDashboardSite()
 if (!dashboard.state.value) await dashboard.refresh()
 const toast = useToast()
 
-// Bare $fetch (globalThis override in dashboard-site-header.client.ts) does not
+// Bare dashboardFetch (globalThis override in dashboard-site-header.client.ts) does not
 // run during SSR — must attach dashboard headers explicitly, same as useDashboardSite.ts.
 const requestHeaders = buildDashboardRequestHeaders()
 
@@ -132,7 +132,7 @@ watch(() => filters.siteId, async (siteId) => {
   const site = dashboard.sites.value.find(s => s.id === siteId)
   if (!site?.subdomain) return
   try {
-    const res = await $fetch<{ locations: Location[] }>('/api/dashboard/locations', {
+    const res = await dashboardFetch<{ locations: Location[] }>('/api/dashboard/locations', {
       headers: buildDashboardRequestHeaders({ 'x-dashboard-site-slug': site.subdomain }),
     })
     locationsForSite.value = res.locations
@@ -159,7 +159,7 @@ async function fetchEvents(before?: string) {
   if (filters.actorId) query.actorId = filters.actorId
   if (before) query.before = before
 
-  return $fetch<{ events: SiteEvent[]; nextCursor: string | null }>('/api/dashboard/events', { query, headers: requestHeaders })
+  return dashboardFetch<{ events: SiteEvent[]; nextCursor: string | null }>('/api/dashboard/events', { query, headers: requestHeaders })
 }
 
 async function reload() {

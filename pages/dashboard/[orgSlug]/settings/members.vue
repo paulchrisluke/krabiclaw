@@ -375,7 +375,7 @@ const { data, pending, refresh } = await useAsyncData(
       if (!org) throw createError({ statusCode: 404, statusMessage: 'Organization not found' })
       return await getOrganizationMembersData(db, org.id)
     }
-    return await $fetch<{ members: MemberRow[]; invitations: InvitationRow[] }>('/api/dashboard/members')
+    return await dashboardFetch<{ members: MemberRow[]; invitations: InvitationRow[] }>('/api/dashboard/members')
   },
 )
 
@@ -425,7 +425,7 @@ async function loadOrgSites() {
   const requestId = ++sitesRequestId
   sitesPending.value = true
   try {
-    const response = await $fetch<{ sites: OrgSiteSummary[] }>('/api/dashboard/context')
+    const response = await dashboardFetch<{ sites: OrgSiteSummary[] }>('/api/dashboard/context')
     if (requestId !== sitesRequestId) return
     orgSites.value = response.sites ?? []
   } catch (err) {
@@ -451,7 +451,7 @@ watch(() => inviteForm.siteId, async (siteId) => {
   }
   locationsPending.value = true
   try {
-    const response = await $fetch<{ success: boolean; locations: OrgLocationSummary[] }>(`/api/sites/${siteId}/locations`)
+    const response = await dashboardFetch<{ success: boolean; locations: OrgLocationSummary[] }>(`/api/sites/${siteId}/locations`)
     if (!isCurrentLocationsRequest(requestId, siteId)) return
     orgLocations.value = response.locations ?? []
   } catch (err) {
@@ -512,7 +512,7 @@ async function retryInvitation(invitationId: string) {
   invitationActionError.value = null
   invitationActionErrorId.value = null
   try {
-    await $fetch(`/api/dashboard/invitations/${invitationId}/retry`, { method: 'POST' })
+    await dashboardFetch(`/api/dashboard/invitations/${invitationId}/retry`, { method: 'POST' })
     await refresh()
   } catch (err: unknown) {
     const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
@@ -531,7 +531,7 @@ async function replaceInvitation(invitationId: string) {
   invitationActionError.value = null
   invitationActionErrorId.value = null
   try {
-    await $fetch(`/api/dashboard/invitations/${invitationId}/replace`, {
+    await dashboardFetch(`/api/dashboard/invitations/${invitationId}/replace`, {
       method: 'POST',
       body: { phone: replacePhone.value.trim() },
     })
@@ -554,7 +554,7 @@ async function clearInvitation(invitationId: string) {
   invitationActionError.value = null
   invitationActionErrorId.value = null
   try {
-    await $fetch(`/api/dashboard/invitations/${invitationId}/clear`, { method: 'POST' })
+    await dashboardFetch(`/api/dashboard/invitations/${invitationId}/clear`, { method: 'POST' })
     await refresh()
   } catch (err: unknown) {
     const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
@@ -576,7 +576,7 @@ async function sendInvite() {
   inviteSuccess.value = false
 
   try {
-    await $fetch('/api/dashboard/invitations', {
+    await dashboardFetch('/api/dashboard/invitations', {
       method: 'POST',
       body: {
         email: inviteForm.email,
@@ -635,7 +635,7 @@ async function submitRemoveMember(memberId: string, options?: { confirmed?: bool
   memberError.value = null
 
   try {
-    await $fetch(`/api/dashboard/organizations/members/${memberId}/remove`, {
+    await dashboardFetch(`/api/dashboard/organizations/members/${memberId}/remove`, {
       method: 'POST',
       body: options?.confirmed ? { action: 'clear', confirmed: true } : {},
     })

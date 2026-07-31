@@ -1,0 +1,115 @@
+export const PUBLIC_READ_TIMEOUT_MS = 6_000
+export const DASHBOARD_READ_TIMEOUT_MS = 8_000
+export const MUTATION_TIMEOUT_MS = 15_000
+
+export class ApiClientError extends Error {
+  readonly statusCode: number
+  readonly code: string
+  readonly requestId: string | null
+  override readonly cause?: unknown
+
+  constructor(
+    message: string,
+    statusCode: number,
+    code: string,
+    requestId: string | null,
+    cause?: unknown,
+  ) {
+    super(message)
+    this.name = 'ApiClientError'
+    this.statusCode = statusCode
+    this.code = code
+    this.requestId = requestId
+    this.cause = cause
+  }
+}
+
+type Validator<T> = (value: unknown) => value is T
+type ApiMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+
+const inFlightReads = new Map<string, Promise<unknown>>()
+
+function normalizeApiError(error: unknown): ApiClientError {
+  if (error instanceof ApiClientError) return error
+  const candidate = error as {
+    statusCode?: number
+    status?: number
+    message?: string
+    data?: { error?: { code?: string; message?: string; requestId?: string } }
+    response?: { status?: number; headers?: Headers }
+  }
+  const statusCode = candidate.statusCode ?? candidate.status ?? candidate.response?.status ?? 500
+  return new ApiClientError(
+    candidate.data?.error?.message ?? candidate.message ?? 'API request failed',
+    statusCode,
+    candidate.data?.error?.code ?? 'API_REQUEST_FAILED',
+    candidate.data?.error?.requestId ?? candidate.response?.headers?.get('x-request-id') ?? null,
+    error,
+  )
+}
+
+async function request<T>(
+  url: string,
+  options: {
+    method?: ApiMethod
+    headers?: HeadersInit
+    body?: unknown
+    query?: Record<string, unknown>
+    signal?: AbortSignal
+    timeout: number
+    validate: Validator<T>
+    coalesceKey?: string
+  },
+): Promise<T> {
+  const method = options.method ?? 'GET'
+  const run = async () => {
+    try {
+      const value = await $fetch<unknown>(url, {
+        method,
+        headers: options.headers,
+        body: options.body as Record<string, unknown> | BodyInit | null | undefined,
+        query: options.query,
+        signal: options.signal,
+        retry: 0,
+        timeout: options.timeout,
+      })
+      if (!options.validate(value)) {
+        throw new ApiClientError('API response did not match its contract', 502, 'INVALID_API_RESPONSE', null)
+      }
+      return value
+    } catch (error) {
+      throw normalizeApiError(error)
+    }
+  }
+
+  if (method !== 'GET' || !options.coalesceKey) return await run()
+  const existing = inFlightReads.get(options.coalesceKey) as Promise<T> | undefined
+  if (existing) return await existing
+  const pending = run().finally(() => {
+    if (inFlightReads.get(options.coalesceKey!) === pending) {
+      inFlightReads.delete(options.coalesceKey!)
+    }
+  })
+  inFlightReads.set(options.coalesceKey, pending)
+  return await pending
+}
+
+export function publicApiRequest<T>(
+  url: string,
+  options: {
+    validate: Validator<T>
+    signal?: AbortSignal
+    coalesceKey?: string
+    query?: Record<string, unknown>
+  },
+) {
+  return request(url, { ...options, timeout: PUBLIC_READ_TIMEOUT_MS })
+}
+
+export const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+
+export const hasRecordConfig = (
+  value: unknown,
+): value is { config: Record<string, unknown> } =>
+  isRecord(value) && isRecord(value.config)

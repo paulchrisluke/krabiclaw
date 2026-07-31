@@ -17,7 +17,7 @@
       :site="resolvedSite"
       :locations="locations"
       :menu="menu"
-      :has-experiences="hasExperiences"
+      :has-experiences="showExperiences"
       :experience-cta-path="locationExperienceCtaPath"
     />
     <main class="grow">
@@ -31,57 +31,72 @@
       :error="bootstrapError"
       :config="config"
       :menu="menu"
-      :has-experiences="hasExperiences"
+      :has-experiences="showExperiences"
     />
     <ConsentBanner v-if="!isDemoHost" />
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import ConsentBanner from '~/components/ConsentBanner.vue'
 import { resolveLocationExperienceHref } from '~/utils/experience-navigation'
+import { isRecord, publicApiRequest } from '~/utils/api-clients'
+
+type BrandConfigResponse = { config: Record<string, unknown> }
+
+const hasRecordConfig = (value: unknown): value is BrandConfigResponse =>
+  isRecord(value) && isRecord(value.config)
 
 if (import.meta.dev) useDebugLCP()
 
-// Single owner of the shared site-shell fetch for this tree — header/footer
-// receive the fields they need as props instead of each independently
-// calling useSiteShell()/useTenantSite(). This layout persists across
-// client-side navigation (it isn't remounted per route), so it uses
-// useSiteShell() rather than useBootstrap(): useBootstrap()'s key changes
-// per route and must be `await`-ed so Suspense can block the page swap on
-// it, but a persistent layout component never remounts, so there's no
-// Suspense boundary here for an await to plug into. useSiteShell()'s key is
-// siteId+locale only — it never changes across navigation, so it doesn't
-// need blocking and can't go stale (see useSiteShell.ts).
-const { config, locations, menu, hasExperiences, experiencesList, locales, error: bootstrapError, site: shellSite } = useSiteShell()
-const { siteId, draftId, isTenant, isPlatform, site } = useTenantSite()
+// Persistent chrome uses the minimal shell contract. Route-specific menu and
+// experience data comes from the keyed page loader and changes independently.
+const { config, locations, hasExperiences, locales, error: bootstrapError, site: shellSite } = useSiteShellState()
+const { menu, experiencesList } = await useBootstrap()
+const showExperiences = computed(() => hasExperiences.value || experiencesList.value.length > 0)
+const { siteId, draftId, isTenant, isPlatform, site, organizationId } = useTenantSite()
 const resolvedSite = computed(() => shellSite.value || site)
 const route = useRoute()
 // Called for its side effect: keeps the consent ref in sync and lets the
 // head markup emit the default signal ahead of any analytics config.
 useCookieConsent()
 
-// The site-shell fetch above is intentionally `lazy: true` (see
-// useSiteShell.ts) so SSR doesn't block the whole page on it. But that means
-// brand_color isn't known yet on first paint, and the CTA button's Tailwind
-// class falls back to Nuxt UI's default color, then snaps to the real brand
-// color once bootstrap resolves client-side — a visible flash of the wrong
-// color. This tiny, non-lazy fetch blocks SSR just long enough to know the
-// real brand_color before anything paints, so no fallback color is ever shown.
+// Brand config is kept as a dedicated, narrowly scoped query so theme tokens
+// are known before first paint without coupling them to route-specific data.
 const draftPreviewToken = typeof route.query.token === 'string' ? route.query.token : ''
 const brandConfigUrl = draftId && draftPreviewToken
   ? `/api/public/drafts/${draftId}/bootstrap?preview=true&token=${encodeURIComponent(draftPreviewToken)}&menu=1`
   : siteId
     ? `/api/public/sites/${siteId}/config`
     : ''
+const requestEvent = useRequestEvent()
+const requestFetch = useRequestFetch()
 const { data: brandConfigData } = isTenant && brandConfigUrl
-  ? await useFetch(brandConfigUrl, {
-      key: draftId ? `draft-brand-config-${draftId}-${draftPreviewToken}` : `site-brand-config-${siteId}`,
-    })
+  ? await useAsyncData(
+      draftId ? `draft-brand-config-${draftId}-${draftPreviewToken}` : `site-brand-config-${siteId}`,
+      async () => {
+        if (import.meta.server && siteId && organizationId && requestEvent) {
+          const [{ cloudflareEnv }, { getConfig }] = await Promise.all([
+            import('~/server/utils/api-response'),
+            import('~/server/utils/site-config'),
+          ])
+          const env = cloudflareEnv(requestEvent)
+          if (!env.DB) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+          return { config: await getConfig(env.DB, organizationId, siteId) }
+        }
+        if (import.meta.server) return await requestFetch(brandConfigUrl)
+        return await publicApiRequest<BrandConfigResponse>(brandConfigUrl, {
+          coalesceKey: `brand-config:${siteId || draftId}`,
+          validate: hasRecordConfig,
+        })
+      },
+      { server: true },
+    )
   : { data: ref(null) }
 
+const brandConfig = computed(() => hasRecordConfig(brandConfigData.value) ? brandConfigData.value.config : {})
 const brandColor = computed(
-  () => brandConfigData.value?.config?.brand_color || config.value?.brand_color || null
+  () => typeof brandConfig.value.brand_color === 'string' ? brandConfig.value.brand_color : config.value?.brand_color || null
 )
 const brandTextColor = computed(() => getContrastColor(brandColor.value))
 

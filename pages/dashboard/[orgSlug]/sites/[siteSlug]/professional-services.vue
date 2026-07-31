@@ -268,7 +268,7 @@ const { data, pending, refresh } = await useAsyncData(
       })
       return { success: true, ...(await getProfessionalServiceContent(db, siteId)) } as unknown as ProfessionalServiceEditorResponse
     }
-    return await $fetch<ProfessionalServiceEditorResponse>(`/api/editor/sites/${siteId}/professional-services`, { headers })
+    return await dashboardFetch<ProfessionalServiceEditorResponse>(`/api/editor/sites/${siteId}/professional-services`, { headers })
   },
 )
 
@@ -396,7 +396,7 @@ watch(() => data.value, () => {
 })
 
 async function patchProfessionalServiceContent(body: ApiRecord, successMessage: string) {
-  await $fetch(`/api/editor/sites/${siteId}/professional-services`, {
+  await dashboardFetch(`/api/editor/sites/${siteId}/professional-services`, {
     method: 'PATCH',
     headers,
     body,

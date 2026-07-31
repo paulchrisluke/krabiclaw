@@ -27,7 +27,7 @@ export async function assertDashboardContentPageAvailable(
   scope: 'site' | 'location',
   locationSlug?: string | null,
 ) {
-  const response = await $fetch<EditorContextResponse>(`/api/editor/sites/${siteId}/context`)
+  const response = await dashboardFetch<EditorContextResponse>(`/api/editor/sites/${siteId}/context`)
   const location = scope === 'location'
     ? response.context.locations?.find(item => item.slug === locationSlug)
     : null

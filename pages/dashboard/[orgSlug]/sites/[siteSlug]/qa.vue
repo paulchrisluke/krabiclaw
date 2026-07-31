@@ -85,12 +85,12 @@ const STANDARD_ROUTES = ['/', '/about', '/services', '/pricing', '/contact', '/s
 
 const { data: tenantPages } = await useAsyncData(
   () => `dashboard-tenant-pages-${siteId}`,
-  () => $fetch<Array<{ path: string; title: string }>>(`/api/editor/sites/${siteId}/tenant-pages`, { headers }),
+  () => dashboardFetch<Array<{ path: string; title: string }>>(`/api/editor/sites/${siteId}/tenant-pages`, { headers }),
 )
 
 const { data: existingQaScopes } = await useAsyncData(
   () => `dashboard-qa-scopes-${siteId}`,
-  () => $fetch<Array<{ page_path: string | null }>>(`/api/editor/sites/${siteId}/qa/scopes`, { headers }),
+  () => dashboardFetch<Array<{ page_path: string | null }>>(`/api/editor/sites/${siteId}/qa/scopes`, { headers }),
 )
 
 const pageScopes = computed(() => {
@@ -125,7 +125,7 @@ watch(selectedPagePath, () => {
 })
 const { data, pending, refresh } = await useAsyncData(
   () => `dashboard-site-qa-${siteId}-${selectedPagePath.value}`,
-  () => $fetch<{ qa: QaRow[] }>(`/api/editor/sites/${siteId}/qa`, { headers, query: pagePath.value ? { page_path: pagePath.value } : undefined }),
+  () => dashboardFetch<{ qa: QaRow[] }>(`/api/editor/sites/${siteId}/qa`, { headers, query: pagePath.value ? { page_path: pagePath.value } : undefined }),
   { watch: [selectedPagePath] },
 )
 const qaRows = computed(() => data.value?.qa ?? [])
@@ -149,9 +149,9 @@ async function save() {
   try {
     const body: Record<string, unknown> = { page_path: pagePath.value, question: form.question, answer: form.answer || null, status: form.published ? 'published' : 'hidden' }
     if (editingId.value) {
-      await $fetch(`/api/editor/sites/${siteId}/qa/${editingId.value}`, { method: 'PATCH', body })
+      await dashboardFetch(`/api/editor/sites/${siteId}/qa/${editingId.value}`, { method: 'PATCH', body })
     } else {
-      await $fetch(`/api/editor/sites/${siteId}/qa`, { method: 'POST', body })
+      await dashboardFetch(`/api/editor/sites/${siteId}/qa`, { method: 'POST', body })
     }
     reset()
     await refresh()
@@ -167,7 +167,7 @@ async function move(item: QaRow, direction: -1 | 1) {
   const index = qaRows.value.findIndex(row => row.id === item.id)
   const target = qaRows.value[index + direction]
   if (!target) return
-  await $fetch(`/api/editor/sites/${siteId}/qa/reorder`, {
+  await dashboardFetch(`/api/editor/sites/${siteId}/qa/reorder`, {
     method: 'POST',
     body: { page_path: pagePath.value, updates: [{ id: item.id, sort_order: target.sort_order }, { id: target.id, sort_order: item.sort_order }] },
   })
@@ -176,7 +176,7 @@ async function move(item: QaRow, direction: -1 | 1) {
 
 async function remove(item: QaRow) {
   if (!confirm(`Delete this question?\n\n${item.question}`)) return
-  await $fetch(`/api/editor/sites/${siteId}/qa/${item.id}`, { method: 'DELETE', query: pagePath.value ? { page_path: pagePath.value } : undefined })
+  await dashboardFetch(`/api/editor/sites/${siteId}/qa/${item.id}`, { method: 'DELETE', query: pagePath.value ? { page_path: pagePath.value } : undefined })
   if (editingId.value === item.id) reset()
   await refresh()
 }

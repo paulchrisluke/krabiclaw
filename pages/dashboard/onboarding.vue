@@ -242,7 +242,7 @@ const readinessScore = computed(() => {
 // Step 1 — fast org/site resolution (works even when site doesn't exist yet)
 const loadContext = async () => {
   try {
-    const response = await $fetch<{
+    const response = await dashboardFetch<{
       success: boolean
       organization?: { id: string; slug: string; name: string } | null
       site?: ApiRecord | null
@@ -269,7 +269,7 @@ const loadContext = async () => {
 const loadPreviewToken = async () => {
   try {
     if (!siteId.value) return
-    const res = await $fetch<{ context: { previewToken: string } }>(`/api/editor/sites/${siteId.value}/context`)
+    const res = await dashboardFetch<{ context: { previewToken: string } }>(`/api/editor/sites/${siteId.value}/context`)
     if (res.context?.previewToken) previewToken.value = res.context.previewToken
   } catch {
     // Non-fatal — preview still works if onboarding_status is 'active' (it will be after setup)
@@ -280,7 +280,7 @@ const loadReadiness = async () => {
   if (!siteId.value) return
 
   try {
-    const data = await $fetch<{
+    const data = await dashboardFetch<{
       items: { business_info: boolean; hero_image: boolean; core_offering: boolean; story: boolean; post: boolean }
     }>(`/api/dashboard/onboarding/checklist?siteId=${siteId.value}`)
 

@@ -2,6 +2,13 @@
 
 When an internal API returns errors, nulls, or malformed data, fix the API contract/source of truth first. Do not add frontend fallbacks, guards, or workaround logic unless the API behavior is intentionally nullable and documented.
 
+Application-owned fetch clients use `retry: 0` and centralized explicit
+timeouts. One logical resource load has one network attempt. SSR calls canonical
+server services directly rather than self-fetching. Errors remain errors and
+must not become empty success states. Delete disabled fallback and compatibility
+branches instead of retaining them for safety. A violation discovered in an
+affected path is not excused as pre-existing, out of scope, or high risk.
+
 ---
 
 ## "Pre-existing" is not a stopping point

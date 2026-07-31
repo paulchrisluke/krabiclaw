@@ -398,7 +398,7 @@ async function confirmDeleteAccount() {
   deleteError.value = ''
 
   try {
-    const res = await $fetch<{ success?: boolean }>('/api/user/delete-account', { method: 'POST' })
+    const res = await dashboardFetch<{ success?: boolean }>('/api/user/delete-account', { method: 'POST' })
     if (res?.success) {
       try { await authClient.signOut() } catch (_err) { /* ignore */ }
       try {

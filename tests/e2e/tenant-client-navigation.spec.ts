@@ -14,6 +14,11 @@ import { tenantBaseURL, tenantExtraHeaders, setupTenantHeaders } from './helpers
 const BOOTSTRAP_DELAY_MS = 1000
 
 async function setupSlowBootstrap(page: Page) {
+  // This suite validates live loader transitions. Persistent Miniflare HTML
+  // cache can otherwise replay an SSR document from an earlier test run and
+  // prevent the browser from exercising the current loader implementation.
+  await page.setExtraHTTPHeaders({ 'cache-control': 'no-cache' })
+
   // Defeat NuxtLink's viewport-based prefetch so the bootstrap fetch only
   // happens on the actual click, not ahead of time.
   await page.addInitScript(() => {

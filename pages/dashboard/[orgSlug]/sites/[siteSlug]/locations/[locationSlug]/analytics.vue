@@ -262,7 +262,7 @@ function markCustomAndLoad() {
 async function loadAnalytics() {
   loading.value = true
   try {
-    analytics.value = await $fetch<AnalyticsResponse>(`/api/sites/${siteId}/analytics`, {
+    analytics.value = await dashboardFetch<AnalyticsResponse>(`/api/sites/${siteId}/analytics`, {
       query: { startDate: range.startDate, endDate: range.endDate }
     })
   } catch (error) {

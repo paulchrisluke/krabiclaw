@@ -242,7 +242,7 @@ async function loadDomains({ background = false }: { background?: boolean } = {}
   try {
     const response = import.meta.server
       ? await loadDomainsForServer(siteId.value)
-      : await $fetch<DomainsResponse>(`/api/sites/${siteId.value}/domains`)
+      : await dashboardFetch<DomainsResponse>(`/api/sites/${siteId.value}/domains`)
     domainGroups.value = response.domain_groups ?? []
   } catch {
     if (!background) toast.add({ description: 'Failed to load domains', color: 'error' })
@@ -284,7 +284,7 @@ async function addDomain() {
   adding.value = true
   addError.value = ''
   try {
-    const response = await $fetch<AddDomainResponse>(`/api/sites/${siteId.value}/domains`, {
+    const response = await dashboardFetch<AddDomainResponse>(`/api/sites/${siteId.value}/domains`, {
       method: 'POST',
       body: {
         domain: addForm.domain.trim(),
@@ -383,7 +383,7 @@ async function syncGroup(group: DomainGroup) {
   if (!siteId.value || !group.primary_domain_id) return
   syncingGroupId.value = group.id
   try {
-    await $fetch(`/api/sites/${siteId.value}/domains/${group.primary_domain_id}/sync`, { method: 'POST' })
+    await dashboardFetch(`/api/sites/${siteId.value}/domains/${group.primary_domain_id}/sync`, { method: 'POST' })
     await loadDomains({ background: true })
     toast.add({ description: 'Domain checked', color: 'success' })
   } catch {
@@ -397,7 +397,7 @@ async function makePrimary(group: DomainGroup) {
   if (!siteId.value || !group.primary_domain_id) return
   promotingGroupId.value = group.id
   try {
-    await $fetch(`/api/sites/${siteId.value}/domains/${group.primary_domain_id}`, {
+    await dashboardFetch(`/api/sites/${siteId.value}/domains/${group.primary_domain_id}`, {
       method: 'PATCH',
       body: { role: 'canonical' },
     })
@@ -416,7 +416,7 @@ async function deleteGroup(group: DomainGroup) {
   deletingGroupId.value = group.id
   try {
     for (const domain of group.domains.filter((domain) => domain.type === 'custom')) {
-      await $fetch(`/api/sites/${siteId.value}/domains/${domain.id}`, { method: 'DELETE' })
+      await dashboardFetch(`/api/sites/${siteId.value}/domains/${domain.id}`, { method: 'DELETE' })
     }
     domainGroups.value = domainGroups.value.filter((candidate) => candidate.id !== group.id)
     toast.add({ description: 'Domain removed', color: 'success' })
