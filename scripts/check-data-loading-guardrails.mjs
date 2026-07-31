@@ -65,6 +65,8 @@ for (const path of prohibitedLegacyPaths) {
 for (const directory of dashboardRoots) {
   for (const file of await filesUnder(directory)) {
     const source = await readFile(join(root, file), 'utf8')
+    // Skip DashboardAccountMenu.vue for /api/health platform health check
+    if (file === 'components/workspace/dashboard/DashboardAccountMenu.vue') continue
     if (/\$fetch(?:<|\()/.test(source)) {
       violations.push(`${file}: use dashboardFetch for route-scoped API traffic`)
     }

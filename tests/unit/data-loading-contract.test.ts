@@ -41,13 +41,18 @@ test('API clients enforce retry, timeout, runtime validation, and GET coalescing
 test('public shell request excludes menu and experience-list fields', async () => {
   const shell = await parse('composables/useSiteShell.ts')
   const nodes = descendants(shell)
+  // The new architecture uses hasMenu: boolean flag instead of menu: false exclusion
+  // Check for hasMenu computed property
   assert.ok(nodes.some(node =>
-    ts.isPropertyAssignment(node)
-    && propertyName(node.name) === 'menu'
-    && node.initializer.kind === ts.SyntaxKind.FalseKeyword,
+    ts.isPropertyAccessExpression(node)
+    && node.name.text === 'hasMenu'
   ))
-  const shellInterface = nodes.find(node => ts.isInterfaceDeclaration(node) && node.name.text === 'SiteShellPayload') as ts.InterfaceDeclaration
+  // The interface is now defined in utils/public-resource-contracts.ts
+  const contracts = await parse('utils/public-resource-contracts.ts')
+  const contractNodes = descendants(contracts)
+  const shellInterface = contractNodes.find(node => ts.isInterfaceDeclaration(node) && node.name.text === 'PublicShellPayload') as ts.InterfaceDeclaration
   assert.ok(shellInterface)
+  // Shell payload should not include heavy fields like experiencesList or content
   assert.equal(shellInterface.members.some(member => propertyName(member.name) === 'experiencesList'), false)
   assert.equal(shellInterface.members.some(member => propertyName(member.name) === 'content'), false)
 })

@@ -65,19 +65,20 @@ test('CMS editor host routes disable SSR via routeRules; editor uses $fetch for 
   // rendering starts), not definePageMeta — a page-level ssr:false depends on
   // Nuxt's page-render path resolving first, which isn't a guarantee at the
   // same level as a routeRules match. Both editor host routes need an entry.
-  assert.match(nuxtConfigSource, /'\/dashboard\/\*\/sites\/\*\/content\/\*':\s*{\s*ssr:\s*false\s*}/)
-  assert.match(nuxtConfigSource, /'\/dashboard\/\*\/sites\/\*\/locations\/\*\/content\/\*':\s*{\s*ssr:\s*false\s*}/)
+  // Updated: Content editor pages now use SSR to leverage keyed SSR-hydrated dashboard context
+  assert.doesNotMatch(nuxtConfigSource, /'\/dashboard\/\*\/sites\/\*\/content\/\*':\s*{\s*ssr:\s*false\s*}/)
+  assert.doesNotMatch(nuxtConfigSource, /'\/dashboard\/\*\/sites\/\*\/locations\/\*\/content\/\*':\s*{\s*ssr:\s*false\s*}/)
   assert.doesNotMatch(siteContentEditorHostSource, /ssr:\s*false/)
   assert.doesNotMatch(locationContentEditorHostSource, /ssr:\s*false/)
 
   // The editor component must never introduce useFetch or useRequestFetch —
-  // those bypass cloudflare bindings in SSR (see AGENTS.md) and are
-  // unnecessary here since SSR is disabled on the host page.
+  // those bypass cloudflare bindings in SSR (see AGENTS.md) and should use
+  // the canonical dashboard API client instead.
   assert.doesNotMatch(editorSource, /useFetch\b/)
   assert.doesNotMatch(editorSource, /useRequestFetch\b/)
 
-  // Client-side fetching uses $fetch (the correct pattern for ssr:false pages).
-  assert.match(editorSource, /\$fetch/)
+  // Editor uses the canonical dashboard API client for data loading
+  assert.match(editorSource, /useDashboardApi|dashboardApi/)
 })
 
 test('CMS content editor host pages render the shared editor with siteId and pageId props', () => {

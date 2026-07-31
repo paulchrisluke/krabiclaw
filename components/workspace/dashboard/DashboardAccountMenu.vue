@@ -75,7 +75,6 @@
 
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
-import { dashboardFetch } from '~/composables/dashboardFetch'
 
 defineProps<{ collapsed?: boolean }>()
 
@@ -94,7 +93,8 @@ const platformStatus = ref<'normal' | 'loading' | 'error'>('loading')
 
 async function checkPlatformStatus() {
   try {
-    const res = await dashboardFetch<{ status: string }>('/api/health')
+    // Use $fetch for platform health check (not dashboard-scoped API traffic)
+    const res = await $fetch<{ status: string }>('/api/health')
     platformStatus.value = res.status === 'ok' ? 'normal' : 'error'
   } catch (err) {
     console.error('Failed to fetch platform status:', err)
