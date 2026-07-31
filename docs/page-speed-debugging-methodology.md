@@ -8,6 +8,19 @@ avoid piling on caches/custom behavior, and isolate one cost at a time.
 Start with the dev-only test page and prove the cost there before moving to real
 tenant or platform pages.
 
+## 2026-07-31 data-loading recovery
+
+The public shell/page contracts are separate, availability and policy reads are
+bulk indexed, public SSR uses the canonical server service, and dashboard
+traffic uses explicit route scope. Budgets are documented in
+`docs/performance/performance-recovery-2026-07.md`.
+
+Compare Lobby and Saya only with the same seeded site, route, cache state,
+browser build, viewport, and network profile. After backend parity, attribute
+remaining differences to measured payload bytes, JavaScript, long tasks, or
+rendering work. Build/deploy isolation remains the item 7 decision and must not
+absorb shared data-loading regressions.
+
 Use:
 
 - Raw Nitro baseline: `/__dev-perf/plain-text`
@@ -318,12 +331,10 @@ Investigate these in order after the Saya shell isolation:
    actually served from Cloudflare edge cache by `host + path + locale`. Bypass
    `/dashboard`, `/admin`, `/api`, auth, preview, draft, and edit-mode routes.
    Route headers alone are not proof if the Worker still runs on every request.
-2. **Tenant SSR self-fetch in `useBootstrap`.** Verify whether tenant SSR still
-   calls `/api/public/sites/:siteId/bootstrap` through `useRequestFetch`. If yes,
-   move the bootstrap query/build logic from
-   `server/api/public/sites/[siteId]/bootstrap.get.ts` into a shared server
-   function and call it directly from SSR and the API route.
-3. **Bootstrap cache TTL and invalidation.** If bootstrap data is public and
+2. **Tenant SSR public-resource loading.** Verify that tenant SSR calls the
+   canonical shell and page services directly rather than self-fetching their
+   own-origin JSON routes.
+3. **Public-resource cache TTL and invalidation.** If public resource data is
    content-like, test a 300-900s TTL with explicit purge on site/content/menu
    media updates.
 4. **Duplicate Cloudflare Image variants.** The HAR showed the same image loaded

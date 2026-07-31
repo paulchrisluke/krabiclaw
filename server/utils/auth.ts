@@ -6,7 +6,7 @@ import { oauthProvider } from '@better-auth/oauth-provider'
 import type { SchemaClient, Scope } from '@better-auth/oauth-provider'
 import { cimd } from '@better-auth/cimd'
 import type { GenericEndpointContext } from '@better-auth/core'
-import { getHeaders } from 'h3'
+import { toWebRequest } from 'h3'
 import type { H3Event } from 'h3'
 import { createDb, execute, schema } from '~/server/db'
 import { linkAnonymousCustomerToUser } from '~/server/utils/customers'
@@ -480,6 +480,6 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
 
 export async function getAuthSession(event: H3Event, env: CloudflareEnv): Promise<Awaited<ReturnType<ReturnType<typeof createAuth>['api']['getSession']>>> {
   return createAuth(env).api.getSession({
-    headers: getHeaders(event) as HeadersInit
+    headers: toWebRequest(event).headers,
   })
 }

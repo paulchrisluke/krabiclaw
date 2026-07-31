@@ -98,6 +98,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Analytics | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
@@ -118,6 +119,32 @@ interface SearchConsoleSite {
   siteUrl: string
   permissionLevel: string
 }
+
+const isAnalyticsPropertiesResponse = (value: unknown): value is {
+  success: boolean
+  connection: ConnectionInfo | null
+  ga4Properties: Ga4Property[]
+  searchConsoleSites: SearchConsoleSite[]
+  ga4Error: string | null
+  searchConsoleError: string | null
+} =>
+  isRecord(value)
+  && typeof value.success === 'boolean'
+  && (value.connection === null || isRecord(value.connection))
+  && Array.isArray(value.ga4Properties)
+  && value.ga4Properties.every(property =>
+    isRecord(property)
+    && typeof property.propertyId === 'string'
+    && typeof property.propertyName === 'string',
+  )
+  && Array.isArray(value.searchConsoleSites)
+  && value.searchConsoleSites.every(site => isRecord(site) && typeof site.siteUrl === 'string')
+  && (value.ga4Error === null || typeof value.ga4Error === 'string')
+  && (value.searchConsoleError === null || typeof value.searchConsoleError === 'string')
+const isAuthUrlResponse = (value: unknown): value is { success: boolean; authUrl: string } =>
+  isRecord(value) && typeof value.success === 'boolean' && typeof value.authUrl === 'string'
+const isSuccessResponse = (value: unknown): value is { success: true } =>
+  isRecord(value) && value.success === true
 
 const toast = useToast()
 const { dashboard, siteOptions, selectedSiteSlug, selectedSiteId: siteId } = useOrganizationSettingsSite()
@@ -164,14 +191,16 @@ async function loadConnection() {
   }
   loading.value = true
   try {
-    const res = await $fetch<{
+    const res = await dashboardApi<{
       success: boolean
       connection: ConnectionInfo | null
       ga4Properties: Ga4Property[]
       searchConsoleSites: SearchConsoleSite[]
       ga4Error: string | null
       searchConsoleError: string | null
-    }>(`/api/sites/${requestedSiteId}/integrations/google-analytics/properties`)
+    }>(`/api/sites/${requestedSiteId}/integrations/google-analytics/properties`, {
+      validate: isAnalyticsPropertiesResponse,
+    })
 
     if (generation !== connectionLoadGeneration || siteId.value !== requestedSiteId) return
     connection.value = res.connection
@@ -196,9 +225,9 @@ async function connectGoogle() {
   if (!requestedSiteId) return
   connecting.value = true
   try {
-    const res = await $fetch<{ success: boolean; authUrl: string }>(
+    const res = await dashboardApi<{ success: boolean; authUrl: string }>(
       `/api/sites/${requestedSiteId}/integrations/google-analytics/auth`,
-      { method: 'POST' }
+      { method: 'POST', validate: isAuthUrlResponse }
     )
     if (siteId.value !== requestedSiteId) {
       connecting.value = false
@@ -224,7 +253,10 @@ async function disconnectGoogle() {
   if (!requestedSiteId || connectionSiteId.value !== requestedSiteId) return
   disconnecting.value = true
   try {
-    await $fetch(`/api/sites/${requestedSiteId}/integrations/google-analytics/disconnect`, { method: 'POST' })
+    await dashboardApi(`/api/sites/${requestedSiteId}/integrations/google-analytics/disconnect`, {
+      method: 'POST',
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+    })
     if (siteId.value !== requestedSiteId) return
     connection.value = null
     ga4Properties.value = []
@@ -245,13 +277,14 @@ async function saveSelection() {
   saving.value = true
   try {
     const property = ga4Properties.value.find((p) => p.propertyId === selectedGa4Property.value)
-    await $fetch(`/api/sites/${requestedSiteId}/integrations/google-analytics/select`, {
+    await dashboardApi(`/api/sites/${requestedSiteId}/integrations/google-analytics/select`, {
       method: 'POST',
       body: {
         ga4_property_id: selectedGa4Property.value,
         ga4_property_name: property?.propertyName ?? null,
         search_console_site_url: selectedSearchConsoleSite.value
-      }
+      },
+      validate: isSuccessResponse,
     })
     if (siteId.value !== requestedSiteId) return
     toast.add({ description: 'Saved', color: 'success' })
@@ -263,9 +296,7 @@ async function saveSelection() {
   }
 }
 
-onMounted(async () => {
-  if (!dashboard.state.value) await dashboard.refresh()
-
+onMounted(() => {
   const status = route.query.ga
   if (status === 'connected') {
     toast.add({ description: 'Google account connected', color: 'success' })

@@ -141,6 +141,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.services' })
 useSeoMeta({ title: 'Professional services | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
@@ -216,8 +217,18 @@ type ProfessionalServiceEditorResponse = {
   consultation: ConsultationRecord | null
 }
 
+const isProfessionalServiceEditorResponse = (
+  value: unknown,
+): value is ProfessionalServiceEditorResponse =>
+  isRecord(value)
+  && Array.isArray(value.offerings)
+  && value.offerings.every(isRecord)
+  && Array.isArray(value.tenantPages)
+  && value.tenantPages.every(isRecord)
+  && (value.compliance === null || isRecord(value.compliance))
+  && (value.consultation === null || isRecord(value.consultation))
+
 const siteId = await useDashboardSiteId()
-const headers = buildDashboardRequestHeaders()
 const requestEvent = useRequestEvent()
 const toast = useToast()
 const savingOfferings = ref(false)
@@ -268,7 +279,10 @@ const { data, pending, refresh } = await useAsyncData(
       })
       return { success: true, ...(await getProfessionalServiceContent(db, siteId)) } as unknown as ProfessionalServiceEditorResponse
     }
-    return await $fetch<ProfessionalServiceEditorResponse>(`/api/editor/sites/${siteId}/professional-services`, { headers })
+    return await dashboardApi<ProfessionalServiceEditorResponse>(
+      `/api/editor/sites/${siteId}/professional-services`,
+      { validate: isProfessionalServiceEditorResponse },
+    )
   },
 )
 
@@ -396,10 +410,11 @@ watch(() => data.value, () => {
 })
 
 async function patchProfessionalServiceContent(body: ApiRecord, successMessage: string) {
-  await $fetch(`/api/editor/sites/${siteId}/professional-services`, {
+  await dashboardApi(`/api/editor/sites/${siteId}/professional-services`, {
     method: 'PATCH',
-    headers,
     body,
+    validate: (value): value is { success: true; written: number } =>
+      isRecord(value) && value.success === true && typeof value.written === 'number',
   })
   toast.add({ description: successMessage, color: 'success' })
 }

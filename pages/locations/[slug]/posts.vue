@@ -51,7 +51,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
 
-const { location, postsList, config: bootstrapConfig } = await useBootstrap()
+const { location, postsList, config: pageConfig } = await usePublicPageData()
 const posts = postsList
 
 const runtimeConfig = useRuntimeConfig()
@@ -64,9 +64,9 @@ useTenantSocialMetadata(() => ({
   location: location.value?.title || null,
   brand: {
     siteName: siteName.value,
-    logoUrl: bootstrapConfig.value?.logo_url || null,
-    faviconUrl: bootstrapConfig.value?.favicon_url || null,
-    primaryColor: bootstrapConfig.value?.brand_color || null,
+    logoUrl: pageConfig.value?.logo_url || null,
+    faviconUrl: pageConfig.value?.favicon_url || null,
+    primaryColor: pageConfig.value?.brand_color || null,
   },
 }))
 

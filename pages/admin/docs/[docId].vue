@@ -287,6 +287,13 @@ interface DocResponse {
   doc?: Doc
 }
 
+const isDocResponse = (value: unknown): value is DocResponse =>
+  isRecord(value)
+  && isRecord(value.doc)
+  && typeof value.doc.id === 'string'
+  && typeof value.doc.title === 'string'
+  && typeof value.doc.body === 'string'
+
 definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
@@ -397,7 +404,9 @@ async function loadDoc() {
   loadPending.value = true
   loadError.value = ''
   try {
-    const res = await $fetch<DocResponse>(`/api/admin/docs/${docId}`)
+    const res = await applicationFetch<DocResponse>(`/api/admin/docs/${docId}`, {
+      validate: isDocResponse,
+    })
     if (!res.doc) throw new Error('Doc not found')
     doc.value = res.doc
     form.title = res.doc.title
@@ -433,9 +442,10 @@ async function update(publish = false) {
   errorMessage.value = ''
   successMessage.value = ''
   try {
-    const updated = await $fetch<DocResponse>(`/api/admin/docs/${docId}`, {
+    const updated = await applicationFetch<DocResponse>(`/api/admin/docs/${docId}`, {
       method: 'PATCH',
       body: { ...buildPayload(), ...(publish ? { publish: true } : {}) },
+      validate: isDocResponse,
     })
     if (!updated.doc) throw new Error('Doc not found after save')
     doc.value = updated.doc
@@ -453,9 +463,10 @@ async function unpublish() {
   errorMessage.value = ''
   successMessage.value = ''
   try {
-    const updated = await $fetch<DocResponse>(`/api/admin/docs/${docId}`, {
+    const updated = await applicationFetch<DocResponse>(`/api/admin/docs/${docId}`, {
       method: 'PATCH',
       body: { ...buildPayload(), unpublish: true },
+      validate: isDocResponse,
     })
     if (!updated.doc) throw new Error('Doc not found after unpublish')
     doc.value = updated.doc
@@ -473,7 +484,10 @@ async function remove() {
   saving.value = true
   errorMessage.value = ''
   try {
-    await $fetch(`/api/admin/docs/${docId}`, { method: 'DELETE' })
+    await applicationFetch(`/api/admin/docs/${docId}`, {
+      method: 'DELETE',
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+    })
     await navigateTo('/admin/docs')
   } catch (err) {
     errorMessage.value = getErrorMessage(err, 'Failed to delete.')

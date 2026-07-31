@@ -81,13 +81,38 @@ export interface DashboardLocationRow {
   feature_overrides: string | null
 }
 
-export type DashboardLocationContextRow = Record<string, unknown> & {
+export interface DashboardLocationContextRow {
   id: string
   organization_id: string
   site_id: string
+  slug: string
+  google_location_id: string | null
+  title: string
+  address: string | null
+  city: string | null
+  neighborhood: string | null
+  phone: string | null
+  email: string | null
+  website_url: string | null
+  maps_url: string | null
+  opening_hours: string | null
+  rating: number | null
+  review_count: number | null
+  is_primary: number | boolean
+  status: string
+  last_synced_at: string | null
+  description: string | null
+  short_description: string | null
+  price_level: string | null
+  google_place_id: string | null
+  google_review_url: string | null
+  hero_media_asset_id: string | null
+  notification_phone: string | null
+  timezone: string | null
+  feature_overrides: string | null
 }
 
-interface DashboardContextOptions {
+export interface DashboardContextOptions {
   requireSite?: boolean
   // Opt-in only — see resolveRecentlyTransferredSite. Defaults to off so generic
   // multi-site callers (e.g. the org-root single-site auto-redirect) keep returning
@@ -99,9 +124,21 @@ interface DashboardContextOptions {
   // the onboarding discovery endpoint (/api/dashboard/context) opts out of the
   // throw to represent that state instead of erroring.
   requireOrganization?: boolean
+  organizationSlug?: string | null
+  siteSlug?: string | null
+  // The scoped-role path allowlist (SCOPED_ROLE_DASHBOARD_ROUTES) only lists
+  // /api/dashboard/* patterns. event.path is correct when a real API route
+  // handler calls this directly, but SSR callers that bypass the self-fetch
+  // (see AGENTS.md) invoke this with the *page's* own event to preserve
+  // Cloudflare bindings — event.path there is a /dashboard/... page path,
+  // which never matches the allowlist and would 403 every scoped-role page
+  // load regardless of whether that page is actually restricted. Those
+  // callers must pass the /api/dashboard/* path they're logically emulating.
+  pathname?: string
 }
 
 export interface ResolveOrganizationOptions {
+  organizationSlug?: string | null
   // From an explicit caller-supplied param (e.g. billing's body/query organizationId).
   // Still membership-checked — never trusted outright.
   explicitOrganizationId?: string | null
@@ -126,7 +163,7 @@ export async function resolveRequestedOrganization(
   userId: string,
   options: ResolveOrganizationOptions = {}
 ): Promise<DashboardOrganizationRow | null> {
-  const organizationSlug = getHeader(event, 'x-dashboard-org-slug')
+  const organizationSlug = options.organizationSlug ?? getHeader(event, 'x-dashboard-org-slug')
   const explicitOrganizationId = options.explicitOrganizationId ?? null
 
   const headerOrg = organizationSlug
@@ -241,7 +278,10 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
     ? sessionRecord.activeOrganizationId
     : null
 
-  const organization = await resolveRequestedOrganization(event, db, session.user.id, { activeOrganizationId })
+  const organization = await resolveRequestedOrganization(event, db, session.user.id, {
+    activeOrganizationId,
+    organizationSlug: options.organizationSlug,
+  })
 
   if (!organization) {
     if (options.requireOrganization === false) {
@@ -254,7 +294,7 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
         site: null,
       }
     }
-    const hasHeader = Boolean(getHeader(event, 'x-dashboard-org-slug'))
+    const hasHeader = Boolean(options.organizationSlug ?? getHeader(event, 'x-dashboard-org-slug'))
     throw createError({
       statusCode: hasHeader ? 404 : 400,
       message: hasHeader
@@ -262,7 +302,7 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
         : 'Organization context is required. Use /dashboard/{orgSlug} routes.',
     })
   }
-  assertDashboardPathPermission(organization.role, event.path)
+  assertDashboardPathPermission(organization.role, options.pathname ?? event.path)
 
   // The organization and active site are resolved explicitly from the route segments,
   // sent on every /api/dashboard/* request via dashboard headers (see
@@ -273,7 +313,7 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
   // before a site is known/selected, so a missing header there means "no site
   // selected yet" rather than a client error — only callers that need a site
   // get the hard 400.
-  const siteSlug = getHeader(event, 'x-dashboard-site-slug')
+  const siteSlug = options.siteSlug ?? getHeader(event, 'x-dashboard-site-slug')
 
   if (!siteSlug && options.requireSite !== false) {
     throw createError({ statusCode: 400, message: 'Site slug is required. Use /dashboard/{orgSlug}/sites/{siteSlug} routes.' })

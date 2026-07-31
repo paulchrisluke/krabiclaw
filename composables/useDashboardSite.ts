@@ -57,22 +57,74 @@ interface DashboardContextResponse {
   siteAccess: 'organization' | 'site' | 'location' | null
 }
 
-// dashboard-site-header.client.ts attaches x-dashboard-org-slug/site-slug on every
-// dashboard-scoped /api/* call, but only client-side. On SSR (a direct full-page
-// load of a nested /dashboard/{orgSlug}/sites/{siteSlug}/... route) that plugin
-// never runs, so any page/composable doing its own SSR fetch to a dashboard/billing/
-// integration endpoint must build these headers itself — this is the one correct
-// implementation; nothing else should hand-roll a cookie-only header set.
+const isDashboardOrganization = (value: unknown): value is DashboardOrganization =>
+  isRecord(value)
+  && typeof value.id === 'string'
+  && typeof value.name === 'string'
+  && typeof value.slug === 'string'
+  && (value.logo === null || typeof value.logo === 'string')
+  && typeof value.role === 'string'
+
+const isDashboardSite = (value: unknown): value is DashboardSite =>
+  isRecord(value)
+  && typeof value.id === 'string'
+  && typeof value.organization_id === 'string'
+  && (value.brand_name === null || typeof value.brand_name === 'string')
+  && (value.subdomain === null || typeof value.subdomain === 'string')
+  && (value.public_url === null || typeof value.public_url === 'string')
+  && typeof value.status === 'string'
+  && typeof value.onboarding_status === 'string'
+
+const isDashboardLocation = (value: unknown): value is DashboardLocation =>
+  isRecord(value)
+  && typeof value.id === 'string'
+  && typeof value.slug === 'string'
+  && typeof value.title === 'string'
+  && typeof value.is_primary === 'boolean'
+  && typeof value.status === 'string'
+
+const isDashboardContextResponse = (value: unknown): value is DashboardContextResponse =>
+  isRecord(value)
+  && value.success === true
+  && (value.organization === null || isDashboardOrganization(value.organization))
+  && (value.site === null || isDashboardSite(value.site))
+  && Array.isArray(value.sites)
+  && value.sites.every(site =>
+    isRecord(site)
+    && typeof site.id === 'string'
+    && (site.brand_name === null || typeof site.brand_name === 'string')
+    && (site.subdomain === null || typeof site.subdomain === 'string'))
+  && Array.isArray(value.locations)
+  && value.locations.every(isDashboardLocation)
+  && typeof value.managedServiceEnabled === 'boolean'
+  && (
+    value.siteAccess === null
+    || value.siteAccess === 'organization'
+    || value.siteAccess === 'site'
+    || value.siteAccess === 'location'
+  )
+
+let clientDashboardContextReads: Map<string, Promise<DashboardContextResponse>> | undefined
+
+function getClientDashboardContextReads() {
+  if (!import.meta.client) return undefined
+  clientDashboardContextReads ??= new Map()
+  return clientDashboardContextReads
+}
+
+// Central legacy dashboard scope adapter. Better Auth migration issue #386 owns
+// removing these route headers; callers must go through dashboardFetch rather
+// than spreading this debt into individual pages or composables.
 // `overrides` lets a caller (e.g. a per-request site-slug filter) set additional
 // headers without losing the org/site ones already on the returned Headers instance
 // (spreading a Headers object with `{ ...headers }` silently drops its entries).
-export function buildDashboardRequestHeaders(overrides?: Record<string, string>): Headers {
-  const route = useRoute()
-  const orgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
-  const siteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : null
+export function buildDashboardRequestHeaders(
+  scope: DashboardRequestScope,
+  overrides?: Record<string, string>,
+): Headers {
   const headers = new Headers(import.meta.server ? useRequestHeaders(['cookie']) : undefined)
-  if (orgSlug) headers.set('x-dashboard-org-slug', orgSlug)
-  if (siteSlug) headers.set('x-dashboard-site-slug', siteSlug)
+  headers.set('x-dashboard-org-slug', scope.orgSlug)
+  if (scope.siteSlug) headers.set('x-dashboard-site-slug', scope.siteSlug)
   if (overrides) {
     for (const [key, value] of Object.entries(overrides)) headers.set(key, value)
   }
@@ -80,23 +132,63 @@ export function buildDashboardRequestHeaders(overrides?: Record<string, string>)
 }
 
 export function useDashboardSite() {
-  // Only initialize state on client to avoid hydration mismatches
-  const state = useState<DashboardContextResponse | null>('dashboard:site-context', () => null)
-  const pending = useState<boolean>('dashboard:site-context:pending', () => false)
-  const refreshGeneration = useState<number>('dashboard:site-context:generation', () => 0)
+  const scope = useDashboardRouteScope()
+  const contextByScope = useState<Record<string, DashboardContextResponse | null>>('dashboard:contexts', () => ({}))
+  const pendingByScope = useState<Record<string, boolean>>('dashboard:context-pending', () => ({}))
+  const contextKey = computed(() => {
+    const current = scope.value
+    return current ? `${current.orgSlug}:${current.siteSlug ?? ''}` : ''
+  })
+  const state = computed<DashboardContextResponse | null>({
+    get: () => contextKey.value ? contextByScope.value[contextKey.value] ?? null : null,
+    set: (value) => {
+      if (!contextKey.value) return
+      contextByScope.value = { ...contextByScope.value, [contextKey.value]: value }
+    },
+  })
+  const pending = computed(() => contextKey.value ? pendingByScope.value[contextKey.value] ?? false : false)
 
-  async function refresh() {
-    const headers = buildDashboardRequestHeaders()
-    const generation = ++refreshGeneration.value
-
-    pending.value = true
-    try {
-      const response = await $fetch<DashboardContextResponse>('/api/dashboard/context', { headers })
-      if (generation === refreshGeneration.value) state.value = response
-      return response
-    } finally {
-      if (generation === refreshGeneration.value) pending.value = false
+  async function refresh(signal?: AbortSignal) {
+    const requestScope = scope.value
+    const requestKey = contextKey.value
+    if (!requestScope || !requestKey) {
+      state.value = null
+      return null
     }
+    const sharedReads = !signal ? getClientDashboardContextReads() : undefined
+    const existing = sharedReads?.get(requestKey)
+    if (existing) return await existing
+    pendingByScope.value = { ...pendingByScope.value, [requestKey]: true }
+    const pendingRead = (import.meta.server
+      ? (async () => {
+          const event = useRequestEvent()
+          if (!event) throw createError({ statusCode: 500, statusMessage: 'Dashboard request context unavailable' })
+          const [{ loadDashboardContext }, { finalizeRequestMetrics }] = await Promise.all([
+            import('~/server/utils/dashboard-context-service'),
+            import('~/server/utils/request-metrics'),
+          ])
+          const response = await loadDashboardContext(event, requestScope) as DashboardContextResponse
+          return finalizeRequestMetrics(event, 'dashboard-context-ssr', response) as DashboardContextResponse
+        })()
+      : dashboardFetch<DashboardContextResponse>('/api/dashboard/context', requestScope, {
+          signal,
+          validate: isDashboardContextResponse,
+        }))
+      .then((response) => {
+        if (!isDashboardContextResponse(response)) {
+          throw new ApiClientError('Dashboard context response did not match its contract', 502, 'INVALID_API_RESPONSE', null)
+        }
+        contextByScope.value = { ...contextByScope.value, [requestKey]: response }
+        return response
+      })
+      .finally(() => {
+        pendingByScope.value = { ...pendingByScope.value, [requestKey]: false }
+        if (sharedReads?.get(requestKey) === pendingRead) {
+          sharedReads.delete(requestKey)
+        }
+      })
+    sharedReads?.set(requestKey, pendingRead)
+    return await pendingRead
   }
 
   const organization = computed(() => state.value?.organization ?? null)
@@ -109,6 +201,8 @@ export function useDashboardSite() {
 
   return {
     state,
+    scope,
+    contextKey,
     pending,
     organization,
     site,
@@ -123,11 +217,7 @@ export function useDashboardSite() {
 
 export async function useDashboardSiteId() {
   const dashboard = useDashboardSite()
-  const route = useRoute()
-  const routeSiteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : null
-  if (!dashboard.state.value || (routeSiteSlug && dashboard.site.value?.subdomain !== routeSiteSlug)) {
-    await dashboard.refresh()
-  }
+  if (!dashboard.state.value) throw createError({ statusCode: 503, message: 'Dashboard context not loaded' })
   const siteId = dashboard.siteId.value
   if (!siteId) {
     throw createError({ statusCode: 404, message: 'Site not found' })

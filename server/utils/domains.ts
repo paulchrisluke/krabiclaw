@@ -2,7 +2,7 @@
 
 import { execute, queryAll, queryFirst } from '~/server/db'
 import { hasSiteEntitlement } from '~/server/utils/billing'
-import { canonicalDomainForPair, domainPair, normalizeDomain, rootDomainForPair } from '~/server/utils/domain-shared'
+import { canonicalDomainForPair, domainPair, normalizeDomain } from '~/server/utils/domain-shared'
 import { fireSiteEventSafe } from '~/server/utils/site-events'
 
 export interface DomainEnv {

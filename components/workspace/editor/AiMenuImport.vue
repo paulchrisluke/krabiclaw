@@ -210,6 +210,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 
 const props = defineProps<{
   siteId: string
@@ -311,14 +312,33 @@ async function runExtraction() {
   abortController.value = controller
 
   try {
-    const res = await $fetch<{
+    const res = await dashboardApi<{
       success: boolean
       menuId: string
       menuItems: Array<Record<string, unknown>>
       warning?: string | null
       credits: { charged: number; remaining: number }
       error?: string
-    }>(`/api/ai/${props.siteId}/menu/extract`, { method: 'POST', body: fd, signal: controller.signal })
+    }>(`/api/ai/${props.siteId}/menu/extract`, {
+      method: 'POST',
+      body: fd,
+      signal: controller.signal,
+      validate: (value): value is {
+        success: boolean
+        menuId: string
+        menuItems: Array<Record<string, unknown>>
+        warning?: string | null
+        credits: { charged: number; remaining: number }
+        error?: string
+      } => isRecord(value)
+        && typeof value.success === 'boolean'
+        && typeof value.menuId === 'string'
+        && Array.isArray(value.menuItems)
+        && value.menuItems.every(isRecord)
+        && isRecord(value.credits)
+        && typeof value.credits.charged === 'number'
+        && typeof value.credits.remaining === 'number',
+    })
 
     resultMenuId.value = res.menuId
     creditsCharged.value = res.credits?.charged ?? null
@@ -355,30 +375,24 @@ async function saveItems() {
     const remainingIds = new Set(editedItems.value.map(i => i.id))
     const deletedIds = originalItemIds.value.filter(id => !remainingIds.has(id))
 
-    // Delete removed items with per-item error tracking
-    const deleteResults = await Promise.allSettled(
+    await Promise.all(
       deletedIds.map(id =>
-        $fetch(`/api/editor/sites/${props.siteId}/menus/${resultMenuId.value}/items/${id}`, { method: 'DELETE' })
-      )
-    )
-    const deleteFailures = deleteResults.filter(r => r.status === 'rejected').length
-
-    // Update items with per-item error tracking
-    const updateResults = await Promise.allSettled(
-      editedItems.value.map(item =>
-        $fetch(`/api/editor/sites/${props.siteId}/menus/${resultMenuId.value}/items/${item.id}`, {
-          method: 'PATCH',
-          body: { name: item.name, description: item.description, section: item.section, price_amount: item.price_amount },
+        dashboardApi(`/api/editor/sites/${props.siteId}/menus/${resultMenuId.value}/items/${id}`, {
+          method: 'DELETE',
+          validate: (value): value is { success: true } => isRecord(value) && value.success === true,
         })
       )
     )
-    const updateFailures = updateResults.filter(r => r.status === 'rejected').length
 
-    const totalFailures = deleteFailures + updateFailures
-    if (totalFailures > 0) {
-      toast.add({ description: `Failed to save ${totalFailures} item${totalFailures === 1 ? '' : 's'}. Please try again.`, color: 'error' })
-      return
-    }
+    await Promise.all(
+      editedItems.value.map(item =>
+        dashboardApi(`/api/editor/sites/${props.siteId}/menus/${resultMenuId.value}/items/${item.id}`, {
+          method: 'PATCH',
+          body: { name: item.name, description: item.description, section: item.section, price_amount: item.price_amount },
+          validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+        })
+      )
+    )
 
     savedCount.value = editedItems.value.length
     step.value = 'done'

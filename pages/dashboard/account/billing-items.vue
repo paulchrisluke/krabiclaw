@@ -107,6 +107,18 @@ interface BillingItem {
   }
 }
 
+const isBillingItemsResponse = (value: unknown): value is { items: BillingItem[] } =>
+  isRecord(value)
+  && Array.isArray(value.items)
+  && value.items.every(item =>
+    isRecord(item)
+    && isRecord(item.organization)
+    && typeof item.organization.id === 'string'
+    && typeof item.organization.name === 'string'
+    && isRecord(item.billing)
+    && typeof item.billing.plan === 'string',
+  )
+
 const { data: billingItems, status, error, refresh } = await useAsyncData(
   'user-billing-items',
   async () => {
@@ -124,7 +136,10 @@ const { data: billingItems, status, error, refresh } = await useAsyncData(
       if (!session?.user?.id) return []
       return await getUserBillingItems(env, db.$client, session.user.id)
     }
-    const response = await $fetch<{ items: BillingItem[] }>('/api/user/billing-items')
+    const response = await applicationFetch<{ items: BillingItem[] }>(
+      '/api/user/billing-items',
+      { validate: isBillingItemsResponse },
+    )
     return response.items
   }
 )

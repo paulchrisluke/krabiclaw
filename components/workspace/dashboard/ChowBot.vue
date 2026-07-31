@@ -179,6 +179,7 @@ import { getQuickActionPrompts } from '~/composables/useOnboardingPrompts'
 import { sanitizeHtmlForSsr } from '~/utils/markdown'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
+const dashboardApi = useDashboardApi()
 const props = defineProps<{ embedded?: boolean; setupMode?: boolean }>()
 const setupMode = computed(() => Boolean(props.setupMode))
 
@@ -416,9 +417,13 @@ async function handleSetupMessage(text: string) {
   creatingRestaurant.value = true
 
   try {
-    const validation = await $fetch<{ available: boolean; message?: string }>('/api/sites/validate-subdomain', {
+    const validation = await dashboardApi<{ available: boolean; message?: string }>('/api/sites/validate-subdomain', {
       method: 'POST',
-      body: { subdomain: requestedSubdomain }
+      body: { subdomain: requestedSubdomain },
+      validate: (value): value is { available: boolean; message?: string } =>
+        isRecord(value)
+        && typeof value.available === 'boolean'
+        && (value.message === undefined || typeof value.message === 'string'),
     })
 
     if (!validation.available) {
@@ -427,13 +432,17 @@ async function handleSetupMessage(text: string) {
       return
     }
 
-    await $fetch('/api/sites', {
+    await dashboardApi('/api/sites', {
       method: 'POST',
       body: {
         name: setupRestaurantName.value,
         subdomain: requestedSubdomain,
         vertical: setupVertical.value ?? 'restaurant',
-      }
+      },
+      validate: (value): value is { site: { id: string } } =>
+        isRecord(value)
+        && isRecord(value.site)
+        && typeof value.site.id === 'string',
     })
 
     await dashboard.refresh()
@@ -545,27 +554,26 @@ const processFile = async (file: File, caption = '') => {
     formData.append('file', file)
     if (caption) formData.append('menuName', caption)
 
-    let json: ApiValue = null
-    let httpOk = false
-    let httpStatus = 0
-    try {
-      const raw = await fetch(`/api/ai/${siteId.value}/menu/extract`, { method: 'POST', body: formData })
-      httpOk = raw.ok
-      httpStatus = raw.status
-      json = await raw.json().catch(() => null)
-    } catch (networkErr) {
-      // Connection dropped (e.g. server crash) — make the error visible
-      console.error('[ChowBot] menu extract network error:', networkErr)
-      throw new Error('Connection lost during upload. Please try again.')
-    }
-
-    if (!httpOk) {
-      const tip = json?.error ?? `Upload failed (${httpStatus}). Please try again.`
-      console.error('[ChowBot] menu extract server error:', httpStatus, json)
-      throw new Error(tip)
-    }
-
-    const res: { success: boolean; menuId: string; menuItems: Array<Record<string, unknown>>; warning: string | null } = json
+    const res = await dashboardApi<{
+      success: boolean
+      menuId: string
+      menuItems: Array<Record<string, unknown>>
+      warning: string | null
+    }>(`/api/ai/${siteId.value}/menu/extract`, {
+      method: 'POST',
+      body: formData,
+      validate: (value): value is {
+        success: boolean
+        menuId: string
+        menuItems: Array<Record<string, unknown>>
+        warning: string | null
+      } => isRecord(value)
+        && typeof value.success === 'boolean'
+        && typeof value.menuId === 'string'
+        && Array.isArray(value.menuItems)
+        && value.menuItems.every(isRecord)
+        && (value.warning === null || typeof value.warning === 'string'),
+    })
 
     const count = res.menuItems?.length ?? 0
     const msg = count > 0

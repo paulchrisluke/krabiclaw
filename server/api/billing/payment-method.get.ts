@@ -18,11 +18,7 @@ export default defineEventHandler(async (event) => {
   const organization = await resolveRequestedOrganization(event, db, session.user.id)
   if (!organization) return jsonResponse({ error: 'No Organization found' }, { status: 404 })
 
-  try {
-    await requireBillingAccess(env, db, organization.id, session.user.id)
-  } catch {
-    return jsonResponse({ card: null })
-  }
+  await requireBillingAccess(env, db, organization.id, session.user.id)
 
   const billing = await queryFirst<{ stripe_customer_id: string | null }>(
     db, 'SELECT stripe_customer_id FROM organization_billing WHERE organization_id = ? LIMIT 1', [organization.id],
@@ -49,7 +45,11 @@ export default defineEventHandler(async (event) => {
         exp_year: pm.card.exp_year,
       }
     })
-  } catch {
-    return jsonResponse({ card: null })
+  } catch (error) {
+    console.error('Failed to retrieve billing payment method', {
+      organizationId: organization.id,
+      error,
+    })
+    throw createError({ statusCode: 502, statusMessage: 'Failed to retrieve payment method' })
   }
 })

@@ -1,14 +1,13 @@
-// GET /api/public/sites/[siteId]/bootstrap
-// Single SSR call per page type. Optional query params:
+// Canonical route-capability-driven public page service.
 //   ?page=home|about|contact|location|reviews|photos|qa|...
 //   ?location=slug          scope content to a location
-//   ?menu=1                 include active menu items
-//   ?data=reviews|photos|qa include full page-specific dataset (type A/E/F)
+//   ?datasets=content,menu   include only the named route capabilities
 // All inline D1 queries run in a single executeBatch() call.
 import { executeBatch, queryFirst, type BatchQuery } from "~/server/db";
-import { cloudflareEnv, jsonResponse } from "~/server/utils/api-response";
+import { getHeader, setHeader, type H3Event } from "h3";
+import { cloudflareEnv } from "~/server/utils/api-response";
 import { calculateMapEmbedUrl } from "~/server/utils/google-business";
-import { type SiteContent } from "~/server/utils/content-management";
+import type { SiteContent } from "~/server/utils/content-management";
 import {
   mapMenu,
   mapMenuItem,
@@ -24,27 +23,30 @@ import {
   type MediaAsset,
   type ResolvedMediaAsset,
 } from "~/server/utils/media-asset-manager";
-import { type MenuWithItems } from "~/server/types/menu";
+import type { MenuWithItems } from "~/server/types/menu";
 import {
   attachFeaturedImageFromBareJoin,
   listContentComponents,
   resolveContentComponentsMedia,
 } from "~/server/utils/platform-content";
 import {
-  buildBootstrapCacheKey,
-  getBootstrapCache,
-  putBootstrapCache,
-} from "~/server/utils/bootstrap-cache";
+  buildPublicResourceCacheKey,
+  getPublicResourceCache,
+  putPublicResourceCache,
+} from "~/server/utils/public-resource-cache";
+import { recordRequestPhase } from "~/server/utils/request-metrics";
 import {
   renderBookingPolicySummary,
-  resolveBookingPolicy,
+  resolveBookingPolicyIndex,
 } from "~/server/utils/booking-policies";
 import { getCloudflareWaitUntil } from "~/server/utils/mcp-route-helpers";
 import { isPreviewContext } from "~/server/utils/tenant-hosts";
 import { getPublishedPosts } from "~/server/utils/post-management";
+import { loadPublicBase } from "~/server/utils/public-base";
+import { isPublicPagePayload } from '~/utils/public-resource-contracts'
 
 function groupContentBlocks(rows: SiteContent[]): Array<SiteContent & { _section: string }> {
-  const groups: Record<string, SiteContent & { _section: string }> = {}
+  const groups = Object.create(null) as Record<string, SiteContent & { _section: string }>
   for (const row of rows) {
     const section = row.field?.split('.')[0] || 'unknown'
     if (!groups[section]) {
@@ -120,6 +122,13 @@ interface MenuItemTranslationRow {
 }
 
 type MenuItemMediaRow = MediaAsset & { menu_item_id: string; sort_order: number };
+
+const publicPageReadsByRequest = new WeakMap<H3Event, Map<string, Promise<unknown>>>()
+
+interface PublicPageLoadOptions {
+  mutateResponseHeaders?: boolean
+  signal?: AbortSignal
+}
 
 const parseJson = (raw: string | null) => {
   if (!raw) return null;
@@ -203,45 +212,56 @@ function parseExperienceRow(row: Record<string, unknown>): Experience {
   } as Experience;
 }
 
-export default defineEventHandler(async (event) => {
-  const siteId = getRouterParam(event, "siteId");
-  if (!siteId)
-    return jsonResponse({ error: "siteId required" }, { status: 400 });
-
+async function loadPublicPageSource(
+  event: H3Event,
+  siteId: string,
+  query: Record<string, string | undefined>,
+  options: PublicPageLoadOptions = {},
+) {
+  options.signal?.throwIfAborted();
+  const mutateResponseHeaders = options.mutateResponseHeaders ?? true;
   const env = cloudflareEnv(event);
   const db = env.DB;
-  if (!db)
-    return jsonResponse({ error: "Database unavailable" }, { status: 503 });
-
-  const query = getQuery(event);
+  if (!db) throw createError({ statusCode: 503, statusMessage: "Database unavailable" });
 
   const rawToken = typeof query.token === "string" ? query.token : null;
   let isPreviewAuthorized = false;
   if (rawToken && env.PREVIEW_SECRET) {
     isPreviewAuthorized = await verifyPreviewToken(String(env.PREVIEW_SECRET), siteId, rawToken);
   }
+  options.signal?.throwIfAborted();
 
-  setHeader(
-    event,
-    "cache-control",
-    isPreviewAuthorized
-      ? "private, no-store"
-      : "public, max-age=60, stale-while-revalidate=300",
-  );
+  if (mutateResponseHeaders) {
+    setHeader(
+      event,
+      "cache-control",
+      isPreviewAuthorized
+        ? "private, no-store"
+        : "public, max-age=60, stale-while-revalidate=300",
+    );
+  }
   const page = typeof query.page === "string" ? query.page : null;
   const locationSlug =
     typeof query.location === "string" ? query.location : null;
   const experienceSlug =
     typeof query.experience === "string" ? query.experience : null;
-  const includeMenu = query.menu === "1" || query.menu === "true";
-  const dataType = typeof query.data === "string" ? query.data : null; // 'reviews' | 'photos' | 'qa' | 'blog' | 'blogPost'
+  const requestedDatasets = new Set(
+    typeof query.datasets === "string" && query.datasets
+      ? query.datasets.split(",")
+      : [],
+  );
+  const includeMenu = requestedDatasets.has("menu");
   const blogSlug = typeof query.blogSlug === "string" ? query.blogSlug : null;
   const locale = typeof query.locale === "string" ? query.locale : undefined;
 
   // Validate query inputs before using KV cache — only allow known-safe values
   // to prevent unbounded cache entries from arbitrary variants.
-  const VALID_DATA_TYPES = new Set(['reviews', 'photos', 'qa', 'blog', 'blogPost', 'posts']);
-  // Mirrors composables/useBootstrapParams.ts's getBootstrapParams() — the only
+  const VALID_DATASETS = new Set([
+    'content', 'location', 'menu', 'reviews', 'photos', 'qa', 'posts',
+    'blog', 'blogPost', 'experiences', 'experienceDetail',
+    'reservationPolicies', 'experiencePolicies',
+  ]);
+  // Mirrors composables/usePublicPageRequest.ts's getPublicPageRequest() — the only
   // page values the frontend ever requests. A regex alone (e.g. /^[a-z0-9_-]+$/)
   // would still let an attacker mint unlimited distinct cache keys by varying
   // the page value; allowlisting against the real route set bounds that space.
@@ -249,7 +269,7 @@ export default defineEventHandler(async (event) => {
     'home', 'locations', 'location', 'about', 'contact', 'reservations',
     'order', 'qa', 'reviews', 'posts', 'experiences', 'photos', 'menu', 'blog',
   ]);
-  const isValidDataType = dataType === null || VALID_DATA_TYPES.has(dataType);
+  const areDatasetsValid = [...requestedDatasets].every(dataset => VALID_DATASETS.has(dataset));
   const isValidLocale = locale === undefined || /^[a-z]{2}(-[A-Z]{2})?$/.test(locale);
   const isValidPage = page === null || VALID_PAGES.has(page);
   // locationSlug/experienceSlug/blogSlug can't be allowlisted up front — they're
@@ -261,8 +281,11 @@ export default defineEventHandler(async (event) => {
   const isValidExperience = experienceSlug === null || /^[a-z0-9_-]+$/.test(experienceSlug);
   const isValidBlogSlug = blogSlug === null || /^[a-z0-9_-]+$/.test(blogSlug);
 
-  const allInputsValid = isValidDataType && isValidLocale && isValidPage &&
+  const allInputsValid = areDatasetsValid && isValidLocale && isValidPage &&
     isValidLocation && isValidExperience && isValidBlogSlug;
+  if (!allInputsValid) {
+    throw createError({ statusCode: 400, statusMessage: "Invalid public page query" });
+  }
 
   // Read-through KV cache for the D1 batch below. Skipped for preview-authorized
   // requests (isPreviewAuthorized gates the whole read/write, not just the key —
@@ -272,68 +295,56 @@ export default defineEventHandler(async (event) => {
   // a 60s-old cached response could serve pre-reseed content into a fresh E2E run.
   // Also skipped if any query input is invalid to prevent unbounded cache entries.
   const host = getHeader(event, "host") ?? "";
-  const useBootstrapCache = !isPreviewAuthorized && !isPreviewContext(host) && allInputsValid;
-  const cacheKey = buildBootstrapCacheKey(siteId, {
+  const usePageCache = !isPreviewAuthorized && !isPreviewContext(host) && allInputsValid;
+  const cacheKey = buildPublicResourceCacheKey(siteId, {
+    contract: 'page',
     page,
     location: locationSlug,
     experience: experienceSlug,
-    menu: includeMenu,
-    data: dataType,
+    datasets: [...requestedDatasets],
     blogSlug,
     locale,
   });
-  if (useBootstrapCache) {
+  if (usePageCache) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const kv = (env as any).SITE_CACHE as KVNamespace | undefined;
     if (kv) {
-      const cached = await getBootstrapCache(kv, cacheKey);
+      const cacheStartedAt = performance.now();
+      const cached = await getPublicResourceCache(kv, cacheKey);
+      recordRequestPhase(event, "cache", cacheStartedAt);
+      options.signal?.throwIfAborted();
       if (cached) {
         try {
-          setHeader(event, "x-bootstrap-cache", "HIT");
-          return jsonResponse(JSON.parse(cached));
-        } catch {
-          // Invalid cached JSON — treat as a miss and regenerate
+          const parsed = JSON.parse(cached) as unknown;
+          if (!isPublicPagePayload(parsed, page ?? 'home')) {
+            throw new Error("Page cache contract mismatch");
+          }
+          if (mutateResponseHeaders) setHeader(event, "x-bootstrap-cache", "HIT");
+          return parsed;
+        } catch (error) {
+          console.warn("[public-resource-cache] corrupt page entry", {
+            siteId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          const deletion = kv.delete(cacheKey).catch((deleteError: unknown) => {
+            console.warn("[public-resource-cache] corrupt page deletion failed", {
+              siteId,
+              error: String(deleteError),
+            });
+          });
+          getCloudflareWaitUntil(event)?.(deletion);
         }
       }
-      setHeader(event, "x-bootstrap-cache", "MISS");
+      if (mutateResponseHeaders) setHeader(event, "x-bootstrap-cache", "MISS");
     } else {
-      setHeader(event, "x-bootstrap-cache", "NO-KV");
+      if (mutateResponseHeaders) setHeader(event, "x-bootstrap-cache", "NO-KV");
     }
   } else {
-    setHeader(event, "x-bootstrap-cache", "SKIP");
+    if (mutateResponseHeaders) setHeader(event, "x-bootstrap-cache", "SKIP");
   }
 
-  // Parallelize site auth + location slug resolution — both only need siteId
-  const [site, locationRow] = await Promise.all([
-    queryFirst<{
-      id: string;
-      organization_id: string;
-      default_currency: string | null;
-      contact_email: string | null;
-      contact_phone: string | null;
-      brand_name: string | null;
-      brand_description: string | null;
-      logo_url: string | null;
-      favicon_url: string | null;
-      og_image_url: string | null;
-      seo_title: string | null;
-      seo_description: string | null;
-      canonical_url: string | null;
-      robots: string | null;
-    }>(
-      db,
-      `SELECT s.id, s.organization_id, s.default_currency, s.contact_email, s.contact_phone, s.brand_name,
-              s.brand_description, COALESCE(ma_logo.public_url, s.logo_url) AS logo_url,
-              json_extract(s.settings, '$.favicon_url') AS favicon_url,
-              ma_og.public_url AS og_image_url,
-              s.seo_title, s.seo_description, s.canonical_url, s.robots
-         FROM sites s
-         LEFT JOIN media_assets ma_logo ON s.logo_asset_id = ma_logo.id AND ma_logo.status = 'active'
-         LEFT JOIN media_assets ma_og ON s.og_image_asset_id = ma_og.id AND ma_og.status = 'active'
-        WHERE s.id = ? AND s.status = 'active'${isPreviewAuthorized ? "" : " AND s.onboarding_status = 'active'"}
-        LIMIT 1`,
-      [siteId],
-    ),
+  const [{ site }, locationRow] = await Promise.all([
+    loadPublicBase(event, siteId, { previewAuthorized: isPreviewAuthorized }),
     locationSlug
       ? queryFirst<{ id: string }>(
           db,
@@ -342,31 +353,28 @@ export default defineEventHandler(async (event) => {
         )
       : Promise.resolve(null),
   ]);
+  options.signal?.throwIfAborted();
 
-  if (!site) return jsonResponse({ error: "Site not found" }, { status: 404 });
   const orgId = site.organization_id;
   const locationId = locationRow?.id;
 
   // Pages that render the sitewide reviews list
   const needsGlobalReviews =
-    page === "home" || (page === "reviews" && !locationSlug);
+    requestedDatasets.has("reviews") && !locationSlug;
   // Pages that render the posts feed
-  const needsGlobalPosts = page === "home" || page === "posts";
+  const needsGlobalPosts = requestedDatasets.has("posts") && !locationSlug;
   // Pages that display location hero images (cards or detail header)
-  const needsLocationHeroMedia =
-    !page ||
-    page === "home" ||
-    page === "reservations" ||
-    page === "locations" ||
-    page === "photos" ||
-    !!locationSlug;
+  const needsLocationHeroMedia = requestedDatasets.has("location");
+  const needsLocations =
+    needsLocationHeroMedia ||
+    requestedDatasets.has("menu") ||
+    requestedDatasets.has("experiences") ||
+    requestedDatasets.has("reservationPolicies") ||
+    requestedDatasets.has("experiencePolicies");
 
   // Build batch — one subrequest to D1 for all inline queries
   const batchStmts: BatchQuery[] = [];
-  let idxLoc = -1,
-    idxConfig = -1,
-    idxLocale = -1,
-    idxExpCount = -1;
+  let idxLoc = -1;
   let idxReviews = -1,
     idxLocReviews = -1;
   let idxFullReviews = -1,
@@ -390,8 +398,7 @@ export default defineEventHandler(async (event) => {
     return i;
   };
 
-  // Always — locations with or without hero media JOINs
-  idxLoc = push(
+  if (needsLocations) idxLoc = push(
     needsLocationHeroMedia
       ? `SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.email, bl.website_url, bl.maps_url,
                  bl.latitude, bl.longitude, bl.opening_hours, bl.special_hours, bl.timezone, bl.rating, bl.review_count,
@@ -425,27 +432,8 @@ export default defineEventHandler(async (event) => {
     [orgId, siteId],
   );
 
-  idxConfig = push(
-    `SELECT key, value FROM site_config WHERE organization_id = ? AND site_id = ?`,
-    [orgId, siteId],
-  );
-
-  idxLocale = push(
-    `SELECT locale, label, is_source, status
-     FROM site_locales
-     WHERE organization_id = ? AND site_id = ?
-       AND (is_source = 1 OR status = 'published')
-     ORDER BY is_source DESC, locale ASC`,
-    [orgId, siteId],
-  );
-
-  idxExpCount = push(
-    `SELECT COUNT(*) AS cnt FROM experiences WHERE site_id = ? AND status != 'inactive'`,
-    [siteId],
-  );
-
   // Content for the requested page (source + translations)
-  if (page) {
+  if (page && requestedDatasets.has("content")) {
     const contentParams: unknown[] = [orgId, siteId, page];
     if (locationId) contentParams.push(locationId);
 
@@ -555,16 +543,10 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // Experiences list + detail (mutually exclusive with the query conditions above)
-  // `page === null` covers the site-shell request (useSiteShell.ts) — it
-  // deliberately omits `page` to keep its cache key stable across
-  // navigation, but still needs the real experiences list for header/subnav
-  // CTAs, so it must qualify here the same as home/location/experiences do.
+  // Experiences are page data. The persistent shell receives only the
+  // hasExperiences capability and never pays for list availability/policies.
   const needsExperiencesList =
-    (page === "experiences" && !experienceSlug) ||
-    page === "home" ||
-    page === "location" ||
-    page === null;
+    requestedDatasets.has("experiences") && !experienceSlug;
 
   if (needsExperiencesList) {
     const expParams: unknown[] = [orgId, siteId];
@@ -587,7 +569,7 @@ export default defineEventHandler(async (event) => {
     idxExperiencesList = push(expSql, expParams);
   }
 
-  if (page === "experiences" && experienceSlug) {
+  if (requestedDatasets.has("experienceDetail") && experienceSlug) {
     idxExperienceDetail = push(
       `SELECT e.id, e.organization_id, e.site_id, e.location_id,
               e.title, e.slug, e.tagline, e.body,
@@ -621,7 +603,7 @@ export default defineEventHandler(async (event) => {
   // formatted PublishedPostSummary shape (slug, canonical_url, gallery media) that this raw
   // row shape doesn't have — no point running an equivalent query here just to discard it.
 
-  if (locationId)
+  if (locationId && requestedDatasets.has("reviews"))
     idxLocReviews = push(
       `SELECT id, author_name, rating, content, created_at
        FROM reviews WHERE location_id = ? AND site_id = ? AND status = 'approved'
@@ -629,7 +611,7 @@ export default defineEventHandler(async (event) => {
       [locationId, siteId],
     );
 
-  if (locationId && dataType === "reviews")
+  if (locationId && requestedDatasets.has("reviews"))
     idxFullReviews = push(
       `SELECT id, author_name, reviewer_photo_url, rating, title, content,
               owner_reply, owner_reply_at, photo_urls, source, created_at
@@ -638,7 +620,7 @@ export default defineEventHandler(async (event) => {
       [locationId, siteId],
     );
 
-  if (dataType === "photos")
+  if (requestedDatasets.has("photos"))
     idxPhotos = push(
       locationId
         ? `SELECT id, public_url, thumbnail_url, alt_text, category, created_at, location_id
@@ -652,7 +634,7 @@ export default defineEventHandler(async (event) => {
       locationId ? [siteId, locationId] : [siteId],
     );
 
-  if (dataType === "blog" || page === "home")
+  if (requestedDatasets.has("blog"))
     idxBlogList = push(
       // read_time_minutes approximates words as body length / 5 chars at 200wpm —
       // avoids shipping the full post body to list views just to estimate read time.
@@ -669,7 +651,7 @@ export default defineEventHandler(async (event) => {
       [siteId, page === "home" ? 3 : 50],
     );
 
-  if (dataType === "blogPost" && blogSlug)
+  if (requestedDatasets.has("blogPost") && blogSlug)
     idxBlogPost = push(
       `SELECT p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.seo_description, p.seo_keywords,
               p.canonical_url, p.robots, p.published_at, p.created_at, p.updated_at,
@@ -684,7 +666,7 @@ export default defineEventHandler(async (event) => {
       [blogSlug, siteId],
     );
 
-  if (dataType === "qa")
+  if (requestedDatasets.has("qa"))
     idxQa = push(
       locationId
         ? `SELECT id, question, question_author, question_date,
@@ -701,13 +683,16 @@ export default defineEventHandler(async (event) => {
     );
 
   // Single D1 round trip
-  const batchResults = await executeBatch(db, batchStmts);
+  options.signal?.throwIfAborted();
+  const batchResults = batchStmts.length > 0
+    ? await executeBatch(db, batchStmts)
+    : [];
+  options.signal?.throwIfAborted();
 
   // Extract batch results by tracked index
-  const locRows = batchResults[idxLoc] as { results: Record<string, unknown>[] };
-  const configRows = batchResults[idxConfig] as {
-    results: { key: string; value: string }[];
-  };
+  const locRows = idxLoc >= 0
+    ? batchResults[idxLoc] as { results: Record<string, unknown>[] }
+    : { results: [] as Record<string, unknown>[] };
   const reviewRows =
     idxReviews >= 0
       ? (batchResults[idxReviews] as { results: Record<string, unknown>[] })
@@ -728,22 +713,7 @@ export default defineEventHandler(async (event) => {
     idxQa >= 0
       ? (batchResults[idxQa] as { results: Record<string, unknown>[] })
       : { results: [] as Record<string, unknown>[] };
-  const localeRows = batchResults[idxLocale] as {
-    results: {
-      locale: string;
-      label: string | null;
-      is_source: number;
-      status: string;
-    }[];
-  };
-  const experienceCountVal =
-    (
-      batchResults[idxExpCount]?.results?.[0] as
-        | { cnt: number }
-        | undefined
-    )?.cnt ?? 0;
-
-  const sourceLocale = (localeRows.results ?? []).find((l) => l.is_source)?.locale;
+  const sourceLocale = site.source_locale;
 
   // Build content rows
   const buildContentRows = (
@@ -917,6 +887,7 @@ export default defineEventHandler(async (event) => {
           (batchResults[idxExperiencesList] as { results: Record<string, unknown>[] })?.results ?? []
         ).map(parseExperienceRow)
       : [];
+  options.signal?.throwIfAborted();
   const mediaByExperience = await hydrateMediaAssetsForExperiences(
     db,
     siteId,
@@ -932,12 +903,19 @@ export default defineEventHandler(async (event) => {
     ...experience,
     media: mediaByExperience.get(experience.id) ?? [],
   });
-  const experiencesList = await attachAvailabilitySummaries(
-    db,
-    orgId,
-    siteId,
-    experiencesListRaw.map(attachExperienceMedia),
-  );
+  const experiencesWithMedia = experiencesListRaw.map(attachExperienceMedia);
+  options.signal?.throwIfAborted();
+  const availabilityContext = {
+    locations: (locRows.results ?? []).map(location => ({
+      id: String(location.id),
+      special_hours: typeof location.special_hours === "string" ? location.special_hours : null,
+      timezone: typeof location.timezone === "string" ? location.timezone : null,
+    })),
+    defaultTimezone: site.default_timezone ?? "UTC",
+  };
+  const experiencesList = requestedDatasets.has("experiences")
+    ? await attachAvailabilitySummaries(db, orgId, siteId, experiencesWithMedia, availabilityContext)
+    : experiencesWithMedia;
 
   const experienceDetailRaw: Experience | null =
     idxExperienceDetail >= 0
@@ -951,14 +929,24 @@ export default defineEventHandler(async (event) => {
       : null;
   // inactive experiences are never public, at any route — sold_out stays visible
   // with its own messaging (see server/utils/experiences.ts listExperiences).
+  options.signal?.throwIfAborted();
   const experienceDetail =
     experienceDetailRaw && experienceDetailRaw.status !== "inactive"
-      ? (await attachAvailabilitySummaries(db, orgId, siteId, [attachExperienceMedia(experienceDetailRaw)]))[0]
+      ? (await attachAvailabilitySummaries(
+          db,
+          orgId,
+          siteId,
+          [attachExperienceMedia(experienceDetailRaw)],
+          availabilityContext,
+        ))[0]
       : null;
 
+  options.signal?.throwIfAborted();
   const [globalPublishedPosts, locationPublishedPosts] = await Promise.all([
     needsGlobalPosts ? getPublishedPosts(db, siteId, env, page === "posts" ? 50 : 6) : Promise.resolve([]),
-    locationId && dataType === "posts" ? getPublishedPosts(db, siteId, env, 50, locationId) : Promise.resolve([]),
+    locationId && requestedDatasets.has("posts")
+      ? getPublishedPosts(db, siteId, env, 50, locationId)
+      : Promise.resolve([]),
   ]);
 
   // Shape locations
@@ -1013,108 +1001,6 @@ export default defineEventHandler(async (event) => {
     };
   });
 
-  const config = Object.fromEntries(
-    (configRows.results ?? []).map(({ key, value }) => [key, value]),
-  );
-  config.default_currency = site.default_currency || "THB";
-  if (site.contact_email) config.contact_email = site.contact_email;
-  if (site.contact_phone) config.contact_phone = site.contact_phone;
-  if (site.brand_name) config.brand_name = site.brand_name;
-  if (site.brand_description) config.brand_description = site.brand_description;
-  if (site.logo_url) config.logo_url = site.logo_url;
-  if (site.favicon_url) config.favicon_url = site.favicon_url;
-  if (site.og_image_url) config.og_image_url = site.og_image_url;
-  if (site.seo_title) config.seo_title = site.seo_title;
-  if (site.seo_description) config.seo_description = site.seo_description;
-  if (site.canonical_url) config.canonical_url = site.canonical_url;
-  if (site.robots) config.robots = site.robots;
-
-  const primary =
-    (locRows.results ?? []).find((l) => l.is_primary) ??
-    locRows.results?.[0] ??
-    null;
-
-  // Site-wide review summary: a review-count-weighted average across every verified
-  // location, not just the primary one — a site with several separately-synced
-  // locations should show a rating that represents the whole business, not one address.
-  const verifiedLocations = (locRows.results ?? []).filter(
-    (l) => l.last_synced_at && l.rating != null && l.review_count != null,
-  );
-  const siteReviewCount = verifiedLocations.reduce(
-    (sum, l) => sum + Number(l.review_count),
-    0,
-  );
-  const siteReviewSummary =
-    siteReviewCount > 0
-      ? {
-          averageRating:
-            Math.round(
-              (verifiedLocations.reduce(
-                (sum, l) => sum + Number(l.rating) * Number(l.review_count),
-                0,
-              ) /
-                siteReviewCount) *
-                10,
-            ) / 10,
-          totalReviewCount: siteReviewCount,
-        }
-      : null;
-
-  const googleBusiness = {
-    business: primary
-      ? {
-          title: primary.title,
-          city: primary.city,
-          storefrontAddress: parseJson(primary.address as string | null),
-          phoneNumbers: primary.phone ? [{ phoneNumber: primary.phone }] : [],
-          websiteUri: primary.website_url,
-          mapsUri: primary.maps_url,
-          latlng:
-            primary.latitude && primary.longitude
-              ? { latitude: primary.latitude, longitude: primary.longitude }
-              : null,
-          profile: { description: primary.description },
-          reviewSummary: siteReviewSummary,
-        }
-      : null,
-    reviews: reviewRows.results ?? [],
-    media: [],
-    posts: globalPublishedPosts,
-    syncedAt: primary?.last_synced_at ?? null,
-  };
-
-  const reservationPolicySiteDefault = renderBookingPolicySummary(
-    await resolveBookingPolicy(db, {
-      siteId,
-      policyType: "reservation",
-    }),
-    locale ?? "en",
-  );
-
-  const reservationPolicyByLocation = Object.fromEntries(
-    await Promise.all(
-      locations.map(async (location) => [
-        String(location.id),
-        renderBookingPolicySummary(
-          await resolveBookingPolicy(db, {
-            siteId,
-            policyType: "reservation",
-            locationId: String(location.id),
-          }),
-          locale ?? "en",
-        ),
-      ]),
-    ),
-  );
-
-  const experiencePolicySiteDefault = renderBookingPolicySummary(
-    await resolveBookingPolicy(db, {
-      siteId,
-      policyType: "experience",
-    }),
-    locale ?? "en",
-  );
-
   const experiencePolicyTargets = new Map<string, { locationId: string | null }>();
   for (const experience of experiencesList) {
     experiencePolicyTargets.set(experience.id, {
@@ -1127,21 +1013,47 @@ export default defineEventHandler(async (event) => {
     });
   }
 
+  const needsReservationPolicies = requestedDatasets.has('reservationPolicies');
+  const needsExperiencePolicies = requestedDatasets.has('experiencePolicies');
+  if ((needsReservationPolicies || needsExperiencePolicies) && !locale && !sourceLocale) {
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'Site source locale is not configured',
+    });
+  }
+  options.signal?.throwIfAborted();
+  const [reservationPolicies, experiencePolicies] = await Promise.all([
+    needsReservationPolicies ? resolveBookingPolicyIndex(db, {
+      siteId,
+      policyType: "reservation",
+      locations: locations.map(location => String(location.id)),
+    }) : Promise.resolve(null),
+    needsExperiencePolicies ? resolveBookingPolicyIndex(db, {
+      siteId,
+      policyType: "experience",
+      locations: locations.map(location => String(location.id)),
+      experiences: experiencePolicyTargets,
+    }) : Promise.resolve(null),
+  ]);
+  options.signal?.throwIfAborted();
+  const policyLocale = locale ?? sourceLocale!;
+  const reservationPolicySiteDefault = reservationPolicies
+    ? renderBookingPolicySummary(reservationPolicies.site, policyLocale)
+    : null;
+  const reservationPolicyByLocation = Object.fromEntries(
+    Array.from(reservationPolicies?.byLocation ?? [], ([locationId, policy]) => [
+      locationId,
+      renderBookingPolicySummary(policy, policyLocale),
+    ]),
+  );
+  const experiencePolicySiteDefault = experiencePolicies
+    ? renderBookingPolicySummary(experiencePolicies.site, policyLocale)
+    : null;
   const experiencePolicyById = Object.fromEntries(
-    await Promise.all(
-      Array.from(experiencePolicyTargets.entries()).map(async ([experienceId, target]) => [
-        experienceId,
-        renderBookingPolicySummary(
-          await resolveBookingPolicy(db, {
-            siteId,
-            policyType: "experience",
-            locationId: target.locationId,
-            experienceId,
-          }),
-          locale ?? "en",
-        ),
-      ]),
-    ),
+    Array.from(experiencePolicies?.byExperience ?? [], ([experienceId, policy]) => [
+      experienceId,
+      renderBookingPolicySummary(policy, policyLocale),
+    ]),
   );
 
   // Shape full reviews (type A)
@@ -1193,6 +1105,7 @@ export default defineEventHandler(async (event) => {
     const postRow = (batchResults[idxBlogPost] as { results: ApiRecord[] })
       ?.results?.[0];
     if (postRow) {
+      options.signal?.throwIfAborted();
       const components = await resolveContentComponentsMedia(
         db,
         await listContentComponents(db, "blog_post", String(postRow.id), {
@@ -1203,60 +1116,39 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const payload = {
+  const pagePayload = {
+    kind: page ?? 'home',
     success: true,
-    locations,
-    config,
-    googleBusiness,
     content: contentRows,
     content_blocks: groupContentBlocks(contentRows),
     menu: menuData,
     locationReviews: locationReviewRows?.results ?? [],
-    count: locations.length,
-    // Type A — full reviews for /locations/[slug]/reviews
-    ...(dataType === "reviews"
+    globalReviews: needsGlobalReviews ? reviewRows.results ?? [] : [],
+    reviewsAggregate: requestedDatasets.has("reviews")
+      && locationForAggregate?.last_synced_at
+      && locationForAggregate.rating != null
+      && locationForAggregate.review_count != null
       ? {
-          reviewsAggregate:
-            locationForAggregate?.last_synced_at &&
-            locationForAggregate.rating != null &&
-            locationForAggregate.review_count != null
-              ? {
-                  rating: locationForAggregate.rating,
-                  review_count: locationForAggregate.review_count,
-                  distribution: reviewsDist,
-                }
-              : null,
-          reviewsList: fullReviews,
+          rating: locationForAggregate.rating,
+          review_count: locationForAggregate.review_count,
+          distribution: reviewsDist,
         }
-      : {}),
-    // Type E — photos for /locations/[slug]/photos
-    ...(dataType === "photos" ? { photosList: photos } : {}),
-    // Type F — Q&A for /locations/[slug]/qa
-    ...(dataType === "qa" ? { qaList: qaRows?.results ?? [] } : {}),
-    // Blog list for /blog and homepage highlights
-    ...((dataType === "blog" || page === "home") ? { blogList } : {}),
-    // Blog post detail for /blog/[slug]
-    ...(dataType === "blogPost" ? { blogPost } : {}),
-    // Type G — posts for /locations/[slug]/posts
-    ...(dataType === "posts"
-      ? {
-          postsList: locationPublishedPosts,
-        }
-      : {}),
-    // Site locales + experiences — always included for header/nav
-    locales: (localeRows?.results ?? []).map((l) => ({
-      code: l.locale,
-      label: l.label ?? l.locale,
-      is_source: Boolean(l.is_source),
-    })),
+      : null,
+    reviewsList: requestedDatasets.has("reviews") ? fullReviews : [],
+    photosList: requestedDatasets.has("photos") ? photos : [],
+    qaList: requestedDatasets.has("qa") ? qaRows?.results ?? [] : [],
+    blogList: requestedDatasets.has("blog") ? blogList : [],
+    blogPost: requestedDatasets.has("blogPost") ? blogPost : null,
+    postsList: requestedDatasets.has("posts") ? locationPublishedPosts : [],
+    globalPosts: needsGlobalPosts ? globalPublishedPosts : [],
     reservationPolicySiteDefault,
     reservationPolicyByLocation,
     experiencePolicySiteDefault,
     experiencePolicyById,
-    hasExperiences: experienceCountVal > 0,
     experiencesList,
     experienceDetail,
   };
+  const payload = pagePayload;
 
   // Slug-shaped inputs are only worth caching once they've resolved to a real
   // row — otherwise a stream of made-up slugs (still regex-valid) would each
@@ -1267,13 +1159,13 @@ export default defineEventHandler(async (event) => {
     (!experienceSlug || !!experienceDetail) &&
     (!blogSlug || !!blogPost);
 
-  if (useBootstrapCache && resolvedSlugsValid) {
+  if (usePageCache && resolvedSlugsValid) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const kv = (env as any).SITE_CACHE as KVNamespace | undefined;
     if (kv) {
-      const putAsync = putBootstrapCache(kv, cacheKey, JSON.stringify(payload)).catch(
+      const putAsync = putPublicResourceCache(kv, cacheKey, JSON.stringify(payload)).catch(
         (err: unknown) => {
-          console.warn("[bootstrap-cache] put failed:", String(err));
+          console.warn("[public-resource-cache] page put failed:", String(err));
         },
       );
       const waitUntil = getCloudflareWaitUntil(event);
@@ -1281,5 +1173,42 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  return jsonResponse(payload);
-});
+  return payload;
+}
+
+export const loadPublicPage = (
+  event: H3Event,
+  siteId: string,
+  query: Record<string, string | undefined>,
+  options?: PublicPageLoadOptions,
+) => {
+  if (options?.signal) {
+    const startedAt = performance.now();
+    return loadPublicPageSource(event, siteId, query, options)
+      .finally(() => recordRequestPhase(event, "page", startedAt));
+  }
+  let requestReads = publicPageReadsByRequest.get(event);
+  if (!requestReads) {
+    requestReads = new Map();
+    publicPageReadsByRequest.set(event, requestReads);
+  }
+  const queryKey = JSON.stringify(
+    Object.entries(query)
+      .filter(([, value]) => value !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right)),
+  );
+  const key = `${siteId}:${queryKey}`;
+  const existing = requestReads.get(key);
+  if (existing) return existing;
+
+  const startedAt = performance.now();
+  const operation = loadPublicPageSource(event, siteId, query, options);
+  const pending = operation
+    .finally(() => recordRequestPhase(event, "page", startedAt))
+    .catch((error) => {
+      if (requestReads.get(key) === pending) requestReads.delete(key);
+      throw error;
+    });
+  requestReads.set(key, pending);
+  return pending;
+};

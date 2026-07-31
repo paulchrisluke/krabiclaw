@@ -200,9 +200,21 @@ async function uploadDraftImage(event: Event, target: 'logo' | 'hero') {
     const body = new FormData()
     body.set('target', target)
     body.set('file', file)
-    const res = await $fetch<{ success: boolean; image?: DraftUploadedImage; error?: string; message?: string }>(
+    const res = await applicationFetch<{ success: boolean; image?: DraftUploadedImage; error?: string; message?: string }>(
       `/api/dashboard/onboarding/drafts/${props.draftId}/media/upload`,
-      { method: 'POST', body },
+      {
+        method: 'POST',
+        body,
+        validate: (value): value is { success: boolean; image?: DraftUploadedImage; error?: string; message?: string } =>
+          isRecord(value)
+          && typeof value.success === 'boolean'
+          && (value.image === undefined || (
+            isRecord(value.image)
+            && typeof value.image.draftAssetId === 'string'
+            && typeof value.image.cloudflareImageId === 'string'
+            && typeof value.image.publicUrl === 'string'
+          )),
+      },
     )
     if (!res.success || !res.image) throw new Error(res.error || res.message || 'Upload failed.')
 

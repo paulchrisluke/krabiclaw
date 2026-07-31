@@ -1039,11 +1039,26 @@ async function runLookup(mapsUrl: string) {
   const tools = await showLookupTools('Looking up your Google Maps listing…')
 
   try {
-    const res = await $fetch<{
+    const res = await applicationFetch<{
       success: boolean
       preview?: { placeId: string; name: string; address: string; city?: string | null; phone?: string | null; mapsUrl?: string | null; openingHours?: string[] | null }
       error?: string
-    }>(lookupEndpoint.value, { method: 'POST', body: { mapsUrl, previewOnly: true } })
+    }>(lookupEndpoint.value, {
+      method: 'POST',
+      body: { mapsUrl, previewOnly: true },
+      validate: (value): value is {
+        success: boolean
+        preview?: { placeId: string; name: string; address: string; city?: string | null; phone?: string | null; mapsUrl?: string | null; openingHours?: string[] | null }
+        error?: string
+      } => isRecord(value)
+        && typeof value.success === 'boolean'
+        && (value.preview === undefined || (
+          isRecord(value.preview)
+          && typeof value.preview.placeId === 'string'
+          && typeof value.preview.name === 'string'
+          && typeof value.preview.address === 'string'
+        )),
+    })
 
     if (!res.success || !res.preview) {
       throw new Error(res.error ?? 'Could not find your business. Please check the Google Maps URL and try again.')
@@ -1068,7 +1083,7 @@ async function saveActiveDraft(options: { silent?: boolean } = {}) {
   importError.value = null
   try {
     const sourceType: DraftSourceType = pendingPreview.value ? 'google_places' : 'manual'
-    const res = await $fetch<{
+    const res = await applicationFetch<{
       success: boolean
       draftId?: string
       previewToken?: string
@@ -1085,6 +1100,19 @@ async function saveActiveDraft(options: { silent?: boolean } = {}) {
         details: serializeDetails(),
         brandDraft: serializeBrandDraft(),
       },
+      validate: (value): value is {
+        success: boolean
+        draftId?: string
+        previewToken?: string
+        draftName?: string
+        subdomainCandidate?: string
+        error?: string
+      } => isRecord(value)
+        && typeof value.success === 'boolean'
+        && (value.draftId === undefined || typeof value.draftId === 'string')
+        && (value.previewToken === undefined || typeof value.previewToken === 'string')
+        && (value.draftName === undefined || typeof value.draftName === 'string')
+        && (value.subdomainCandidate === undefined || typeof value.subdomainCandidate === 'string'),
     })
 
     if (!res.success || !res.draftId || !res.previewToken || !res.draftName || !res.subdomainCandidate) {
@@ -1135,14 +1163,30 @@ async function submitDetails() {
           details: serializeDetails(),
         }
 
-    const res = await $fetch<{
+    const res = await applicationFetch<{
       success: boolean
       siteId?: string | null
       orgSlug?: string | null
       siteSlug?: string | null
       locationSlug?: string | null
       error?: string
-    }>(endpoint, { method: 'POST', body })
+    }>(endpoint, {
+      method: 'POST',
+      body,
+      validate: (value): value is {
+        success: boolean
+        siteId?: string | null
+        orgSlug?: string | null
+        siteSlug?: string | null
+        locationSlug?: string | null
+        error?: string
+      } => isRecord(value)
+        && typeof value.success === 'boolean'
+        && (value.siteId === undefined || value.siteId === null || typeof value.siteId === 'string')
+        && (value.orgSlug === undefined || value.orgSlug === null || typeof value.orgSlug === 'string')
+        && (value.siteSlug === undefined || value.siteSlug === null || typeof value.siteSlug === 'string')
+        && (value.locationSlug === undefined || value.locationSlug === null || typeof value.locationSlug === 'string'),
+    })
 
     if (!res.success) {
       throw new Error(res.error ?? 'Failed to create your workspace. Please try again.')
@@ -1189,7 +1233,7 @@ async function commitDraft() {
   const tools = await showLookupTools('Creating your site from the approved draft…')
 
   try {
-    const res = await $fetch<{
+    const res = await applicationFetch<{
       success: boolean
       siteId?: string | null
       orgSlug?: string | null
@@ -1198,6 +1242,19 @@ async function commitDraft() {
       error?: string
     }>(`/api/dashboard/onboarding/drafts/${onboardingDraftId.value}/commit`, {
       method: 'POST',
+      validate: (value): value is {
+        success: boolean
+        siteId?: string | null
+        orgSlug?: string | null
+        siteSlug?: string | null
+        locationSlug?: string | null
+        error?: string
+      } => isRecord(value)
+        && typeof value.success === 'boolean'
+        && (value.siteId === undefined || value.siteId === null || typeof value.siteId === 'string')
+        && (value.orgSlug === undefined || value.orgSlug === null || typeof value.orgSlug === 'string')
+        && (value.siteSlug === undefined || value.siteSlug === null || typeof value.siteSlug === 'string')
+        && (value.locationSlug === undefined || value.locationSlug === null || typeof value.locationSlug === 'string'),
     })
 
     if (!res.success) {
@@ -1370,7 +1427,10 @@ function retryImport() {
 }
 
 async function markOnboardingComplete() {
-  await $fetch('/api/dashboard/onboarding/complete', { method: 'POST' }).catch(() => {})
+  await applicationFetch<{ success: true }>('/api/dashboard/onboarding/complete', {
+    method: 'POST',
+    validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+  })
   if (importedSiteId.value) {
     trackOnboardingCompleted(importedSiteId.value)
   }

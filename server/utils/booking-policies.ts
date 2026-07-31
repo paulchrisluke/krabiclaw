@@ -1,5 +1,5 @@
 import { createError } from 'h3'
-import { execute, queryFirst, type DbClient } from '../db/index.ts'
+import { execute, queryAll, queryFirst, type DbClient } from '../db/index.ts'
 import { sanitizeUrl } from '~/utils/sanitize'
 export { formatBookingPolicySummary as renderBookingPolicySummary } from './booking-policy-summary.ts'
 export type {
@@ -535,6 +535,74 @@ export async function resolveBookingPolicy(
   }
 
   return resolved
+}
+
+export interface BookingPolicyTarget {
+  locationId?: string | null
+  experienceId?: string | null
+}
+
+export interface BookingPolicyIndex {
+  site: ResolvedBookingPolicy
+  byLocation: Map<string, ResolvedBookingPolicy>
+  byExperience: Map<string, ResolvedBookingPolicy>
+}
+
+/**
+ * Loads every policy needed by a public page in one statement and resolves
+ * inheritance in memory. Query count is constant regardless of target count.
+ */
+export async function resolveBookingPolicyIndex(
+  db: DbClient,
+  input: {
+    siteId: string
+    policyType: BookingPolicyType
+    locations?: string[]
+    experiences?: Map<string, BookingPolicyTarget>
+  },
+): Promise<BookingPolicyIndex> {
+  const rows = await queryAll<BookingPolicyRow>(
+    db,
+    `${BOOKING_POLICY_SELECT}
+     WHERE site_id = ? AND policy_type = ?`,
+    [input.siteId, input.policyType],
+  )
+  const policies = (rows ?? []).map(rowToPolicy)
+  const sitePolicy = policies.find(policy => policy.scope_type === 'site') ?? null
+  const locationPolicies = new Map(
+    policies
+      .filter(policy => policy.scope_type === 'location' && policy.location_id)
+      .map(policy => [policy.location_id!, policy]),
+  )
+  const experiencePolicies = new Map(
+    policies
+      .filter(policy => policy.scope_type === 'experience' && policy.experience_id)
+      .map(policy => [policy.experience_id!, policy]),
+  )
+
+  let site = baseDefaults(input.siteId, input.policyType)
+  if (sitePolicy) site = applyPolicy(site, sitePolicy)
+
+  const byLocation = new Map<string, ResolvedBookingPolicy>()
+  for (const locationId of new Set(input.locations ?? [])) {
+    const direct = locationPolicies.get(locationId)
+    byLocation.set(locationId, direct ? applyPolicy(site, direct) : site)
+  }
+
+  const byExperience = new Map<string, ResolvedBookingPolicy>()
+  for (const [experienceId, target] of input.experiences ?? []) {
+    let resolved = target.locationId
+      ? (byLocation.get(target.locationId)
+        ?? (locationPolicies.get(target.locationId)
+          ? applyPolicy(site, locationPolicies.get(target.locationId)!)
+          : site))
+      : site
+    const direct = experiencePolicies.get(experienceId)
+    if (direct) resolved = applyPolicy(resolved, direct)
+    byExperience.set(experienceId, resolved)
+  }
+
+  return { site, byLocation, byExperience }
 }
 
 export function applyBookingPolicyPatch(

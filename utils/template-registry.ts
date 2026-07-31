@@ -70,7 +70,15 @@ export function resolvePublicTemplate(input: {
     definition.verticals.includes(vertical),
   )
 
-  return match ?? publicTemplateRegistry.saya
+  if (!match) {
+    // Only two templates exist and their `verticals` lists cover every value
+    // ALL_VERTICALS enumerates, so a real site should always match one. Landing
+    // here means the theme/themeId/vertical inputs didn't match anything —
+    // a real data gap, not a state to paper over by silently rendering the
+    // wrong template.
+    throw new Error(`resolvePublicTemplate() found no match for theme="${theme}" themeId="${themeId}" vertical="${vertical}".`)
+  }
+  return match
 }
 
 export function isBlawbyTemplate(input: {

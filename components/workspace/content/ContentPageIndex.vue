@@ -3,7 +3,7 @@
     <UAlert color="error" variant="soft" title="Content unavailable" :description="loadError" />
   </div>
 
-  <div v-else-if="!siteData" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+  <div v-else-if="pending" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
     <USkeleton v-for="i in 3" :key="i" class="h-32 rounded-xl" />
   </div>
 
@@ -19,11 +19,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 
 import { getScopedEditablePages } from '~/config/content-registry'
 import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities } from '~/config/cms-registry'
-import type { PublicTemplateSlug } from '~/utils/template-registry'
+import { resolvePublicTemplate } from '~/utils/template-registry'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
 const props = defineProps<{
@@ -36,9 +36,24 @@ const props = defineProps<{
 const { paths } = useDashboardSiteLinks(props.siteId)
 const basePath = computed(() => props.scope === 'location' ? `${paths.value.project}/content` : paths.value.content)
 
-const siteData = ref<ApiRecord | null>(null)
-const siteLocations = ref<Array<{ id: string; slug: string; title: string; is_primary: boolean; feature_overrides?: string | null }>>([])
+const dashboard = useDashboardSite()
+const siteData = computed(() => dashboard.site.value as ApiRecord | null)
+const siteLocations = computed(() => dashboard.locations.value)
+const pending = computed(() => dashboard.pending.value)
+// dashboard.refresh() reuses the same shared in-flight/completed request other
+// callers (e.g. layouts/dashboard.vue) already triggered — this doesn't fire a
+// duplicate fetch. Capturing its rejection here is what lets this component
+// distinguish "still loading" (pending) from "actually failed" (loadError)
+// instead of inferring failure from state being merely absent, which was
+// indistinguishable from normal loading.
 const loadError = ref<string | null>(null)
+if (!dashboard.state.value) {
+  try {
+    await dashboard.refresh()
+  } catch (err) {
+    loadError.value = err instanceof Error ? err.message : 'Dashboard context unavailable'
+  }
+}
 
 // Only meaningful when scope === 'location' (this component is only ever rendered inside a
 // locations/[locationSlug]/... route in that case) — route-derived, same pattern as
@@ -50,7 +65,9 @@ const activeLocation = computed(() =>
 
 const cmsCapabilities = computed(() => {
   if (!siteData.value) return null
-  return resolveCmsCapabilities(siteData.value.vertical as SiteVertical, siteData.value.template as PublicTemplateSlug, {
+  const vertical = siteData.value.vertical as SiteVertical
+  const template = resolvePublicTemplate({ vertical }).slug
+  return resolveCmsCapabilities(vertical, template, {
     site: parseCmsFeatureOverrideDelta(siteData.value.feature_overrides as string | null | undefined),
     // Without this, a module the active location has explicitly disabled would still list as
     // editable here even though its dashboard route already 404s.
@@ -64,13 +81,4 @@ const pages = computed(() => getScopedEditablePages(
   props.scope,
 ))
 
-onMounted(async () => {
-  try {
-    const response = await $fetch<{ context: ApiRecord }>(`/api/editor/sites/${props.siteId}/context`)
-    siteData.value = response.context.site
-    siteLocations.value = response.context.locations || []
-  } catch (error) {
-    loadError.value = error instanceof Error ? error.message : 'Failed to load content pages'
-  }
-})
 </script>

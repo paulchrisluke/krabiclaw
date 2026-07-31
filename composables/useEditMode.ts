@@ -63,12 +63,13 @@ export const useEditMode = (siteId?: string, locationId?: string | null) => {
         queryParams.set('locationId', effectiveLocationId.value)
       }
 
-      await $fetch(`/api/editor/sites/${resolvedSiteId}/content/save?${queryParams.toString()}`, {
+      await applicationFetch(`/api/editor/sites/${resolvedSiteId}/content/save?${queryParams.toString()}`, {
         method: 'POST',
         body: { 
           page: currentPage.value,
           changes: pendingChanges.value
-        }
+        },
+        validate: (value): value is { success: true } => isRecord(value) && value.success === true,
       })
       // Clear local pending state; direct writes are live immediately.
       pendingChanges.value = {}

@@ -116,6 +116,7 @@
                   <p class="text-[12px] text-muted leading-relaxed">
                     Connect your Facebook Page and posts you publish there will automatically sync to your site. Instagram Business accounts linked to the Page sync too.
                   </p>
+                  <UAlert v-if="socialError" color="error" variant="soft" :description="socialError" />
                   <div class="flex gap-2 pt-1">
                     <UButton
                       v-if="!facebookConnected"
@@ -196,6 +197,7 @@ import { authClient } from '~/lib/auth-client'
 import ChowBotConversation from '~/components/chowbot/ChowBotConversation.vue'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
+const dashboardApi = useDashboardApi()
 interface Location {
   id: string
   title: string
@@ -274,6 +276,7 @@ const domainsPath = computed(() => `/dashboard/${props.orgSlug}/sites/${domainsS
 
 const connectingFacebook = ref(false)
 const facebookConnected = ref(false)
+const socialError = ref<string | null>(null)
 
 const { data: session } = await authClient.useSession(useFetch)
 const activeOrgId = computed(() => session.value?.session?.activeOrganizationId ?? null)
@@ -366,38 +369,22 @@ async function saveNotifications() {
   savingNotifs.value = true
   notificationError.value = null
   try {
-    const siteResult = await $fetch(`/api/editor/sites/${props.siteId}/notifications`, {
+    await dashboardApi(`/api/editor/sites/${props.siteId}/notifications`, {
       method: 'PATCH',
       body: { whatsapp_phone: notifForm.ownerPhone, channels: notifForm.channels },
-    }).catch(e => ({ error: e }))
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+    })
     
-    const locationResults = await Promise.allSettled(
+    await Promise.all(
       notifForm.locations.map(loc =>
-        $fetch(`/api/dashboard/locations/${loc.id}`, {
+        dashboardApi(`/api/dashboard/locations/${loc.id}`, {
           method: 'PATCH',
           body: { notification_phone: loc.notificationPhone || null },
+          validate: (value): value is { success: true } => isRecord(value) && value.success === true,
         })
       )
     )
-
-    const errors: string[] = []
-    if ('error' in siteResult) {
-      errors.push(`Site notifications: ${getErrorMessage(siteResult.error, 'failed to save')}`)
-    }
-    
-    locationResults.forEach((result, idx) => {
-      if (result.status === 'rejected') {
-        const locName = notifForm.locations[idx]?.title || `Location ${idx + 1}`
-        errors.push(`${locName}: ${getErrorMessage(result.reason, 'failed to save')}`)
-      }
-    })
-
-    if (errors.length > 0) {
-      notificationError.value = errors.join('\n')
-      toast.add({ title: 'Failed to save notification settings', description: notificationError.value, color: 'error' })
-    } else {
-      advance('team')
-    }
+    advance('team')
   } catch (e) {
     console.error('save_notifications_failed', e)
     notificationError.value = notificationSaveErrorMessage(e)
@@ -437,21 +424,36 @@ function skipTeam() {
 }
 
 async function checkFacebookConnection() {
+  socialError.value = null
   try {
-    const res = await $fetch<{ connected: boolean }>(`/api/editor/sites/${props.siteId}/integrations/facebook-pages/status`)
-    facebookConnected.value = res.connected ?? false
+    const res = await dashboardApi<{ connected: boolean }>(
+      `/api/editor/sites/${props.siteId}/integrations/facebook-pages/status`,
+      {
+        validate: (value): value is { connected: boolean } =>
+          isRecord(value) && typeof value.connected === 'boolean',
+      },
+    )
+    facebookConnected.value = res.connected
   } catch (e) {
     console.error('check_facebook_connection_failed', e)
-    facebookConnected.value = false
+    socialError.value = getErrorMessage(e, 'Failed to check Facebook connection')
   }
 }
 
 async function startFacebookConnect() {
   connectingFacebook.value = true
   try {
-    const res = await $fetch<{ success: boolean; authUrl?: string; error?: string }>(
+    const res = await dashboardApi<{ success: boolean; authUrl?: string; error?: string }>(
       '/api/integrations/facebook-pages/auth',
-      { method: 'POST', body: { siteId: props.siteId } }
+      {
+        method: 'POST',
+        body: { siteId: props.siteId },
+        validate: (value): value is { success: boolean; authUrl?: string; error?: string } =>
+          isRecord(value)
+          && typeof value.success === 'boolean'
+          && (value.authUrl === undefined || typeof value.authUrl === 'string')
+          && (value.error === undefined || typeof value.error === 'string'),
+      },
     )
     if (!res.authUrl) throw new Error(res.error || 'No authorization URL returned')
     window.location.href = res.authUrl

@@ -2,6 +2,21 @@ import { ref, computed, watch } from 'vue'
 import { useEditorContext } from './useEditorContext'
 import type { Menu, MenuItem, MenuWithItems, CreateMenuRequest, UpdateMenuRequest, CreateMenuItemRequest, UpdateMenuItemRequest } from '~/server/types/menu'
 
+const isMenu = (value: unknown): value is Menu =>
+  isRecord(value) && typeof value.id === 'string' && typeof value.site_id === 'string'
+const isMenuItem = (value: unknown): value is MenuItem =>
+  isRecord(value) && typeof value.id === 'string' && typeof value.menu_id === 'string'
+const isMenuWithItems = (value: unknown): value is MenuWithItems =>
+  isRecord(value) && isMenu(value) && Array.isArray(value.items) && value.items.every(isMenuItem)
+const isMenusWithDetailResponse = (value: unknown): value is { success: boolean; menus: Menu[]; menu: MenuWithItems | null } =>
+  isRecord(value)
+  && value.success === true
+  && Array.isArray(value.menus)
+  && value.menus.every(isMenu)
+  && (value.menu === null || isMenuWithItems(value.menu))
+const isSuccess = (value: unknown): value is { success: true } =>
+  isRecord(value) && value.success === true
+
 export const useMenuEditor = (siteId: string, locationId?: string | null) => {
   const { currentLocationId, isBrandScope } = useEditorContext(siteId)
 
@@ -14,47 +29,79 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
   const effectiveLocationId = computed(() => locationId !== undefined ? locationId : currentLocationId.value)
   const isEditingBrandMenu = computed(() => locationId !== undefined ? (locationId === null || locationId === '') : isBrandScope.value)
 
-  // Race-condition guard: ignore responses from superseded requests
-  let loadMenusRequestId = 0
+  // Reload on location change (immediate) or ChowBot menu changes
+  const menuRefreshSignal = useState<number>('menu:refresh', () => 0)
+  const requestEvent = useRequestEvent()
+
+  // Location-scoped menus (the only mode this editor is actually used in —
+  // see pages/dashboard/.../locations/[locationSlug]/menu/index.vue) load via
+  // the direct SSR server service during SSR, matching every other converted
+  // dashboard editor resource; brand-wide scope (locationId undefined, no
+  // known consumer today) keeps the original client-only two-step fetch.
+  const {
+    data: menusResource,
+    pending: menusPending,
+    error: menusResourceError,
+    refresh: refreshMenusResource,
+  } = useAsyncData(
+    computed(() => `dashboard-menus:${siteId}:${effectiveLocationId.value ?? 'brand'}`),
+    async () => {
+      const currentEffectiveLocationId = effectiveLocationId.value
+      if (currentEffectiveLocationId && import.meta.server) {
+        if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+        const { loadDashboardLocationMenus } = await import('~/server/utils/dashboard-editor-resources')
+        return await loadDashboardLocationMenus(requestEvent, siteId, currentEffectiveLocationId)
+      }
+      const params = new URLSearchParams()
+      if (currentEffectiveLocationId !== undefined && currentEffectiveLocationId !== null && currentEffectiveLocationId !== '') {
+        params.set('locationId', currentEffectiveLocationId)
+      }
+      const listResponse = await applicationFetch<{ success: boolean; menus: Menu[] }>(
+        `/api/editor/sites/${siteId}/menus${params.toString() ? `?${params.toString()}` : ''}`,
+        {
+          validate: (value): value is { success: boolean; menus: Menu[] } =>
+            isRecord(value) && value.success === true && Array.isArray(value.menus) && value.menus.every(isMenu),
+        },
+      )
+      if (listResponse.menus.length === 0) return { success: true as const, menus: [], menu: null }
+      const detailResponse = await applicationFetch<{ success: boolean; menu: MenuWithItems }>(
+        `/api/editor/sites/${siteId}/menus/${listResponse.menus[0]!.id}`,
+        {
+          validate: (value): value is { success: boolean; menu: MenuWithItems } =>
+            isRecord(value) && value.success === true && isMenuWithItems(value.menu),
+        },
+      )
+      return { success: true as const, menus: listResponse.menus, menu: detailResponse.menu }
+    },
+    { lazy: import.meta.client, watch: [menuRefreshSignal] },
+  )
+
+  watch([menusResource, menusPending, menusResourceError], ([resource, pending, err]) => {
+    loading.value = pending
+    if (err) {
+      error.value = err instanceof Error ? err.message : 'Unknown error'
+      return
+    }
+    if (resource && isMenusWithDetailResponse(resource)) {
+      currentMenu.value = resource.menu
+      error.value = null
+    }
+  }, { immediate: true })
 
   const loadMenus = async () => {
-    const requestId = ++loadMenusRequestId
-    loading.value = true
-    error.value = null
-
-    try {
-      const params = new URLSearchParams()
-      if (effectiveLocationId.value !== undefined && effectiveLocationId.value !== null && effectiveLocationId.value !== '') {
-        params.set('locationId', effectiveLocationId.value)
-      }
-      const response = await $fetch<{ success: boolean; menus: Menu[] }>(
-        `/api/editor/sites/${siteId}/menus${params.toString() ? `?${params.toString()}` : ''}`
-      )
-
-      if (requestId !== loadMenusRequestId) return
-
-      if (response.success) {
-        currentMenu.value = null
-        if (response.menus.length > 0) {
-          await loadMenu(response.menus[0]!.id)
-        }
-      } else {
-        error.value = 'Failed to load menu'
-      }
-    } catch (err) {
-      if (requestId !== loadMenusRequestId) return
-      error.value = err instanceof Error ? err.message : 'Unknown error'
-    } finally {
-      if (requestId === loadMenusRequestId) loading.value = false
-    }
+    await refreshMenusResource()
   }
 
   const loadMenu = async (menuId: string) => {
     loading.value = true
     error.value = null
     try {
-      const response = await $fetch<{ success: boolean; menu: MenuWithItems }>(
-        `/api/editor/sites/${siteId}/menus/${menuId}`
+      const response = await applicationFetch<{ success: boolean; menu: MenuWithItems }>(
+        `/api/editor/sites/${siteId}/menus/${menuId}`,
+        {
+          validate: (value): value is { success: boolean; menu: MenuWithItems } =>
+            isRecord(value) && value.success === true && isMenuWithItems(value.menu),
+        },
       )
       if (response.success) {
         currentMenu.value = response.menu
@@ -72,9 +119,14 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     saving.value = true
     error.value = null
     try {
-      const response = await $fetch<{ success: boolean; menu: Menu }>(
+      const response = await applicationFetch<{ success: boolean; menu: Menu }>(
         `/api/editor/sites/${siteId}/menus`,
-        { method: 'POST', body: { ...menuData, locationId: effectiveLocationId.value } }
+        {
+          method: 'POST',
+          body: { ...menuData, locationId: effectiveLocationId.value },
+          validate: (value): value is { success: boolean; menu: Menu } =>
+            isRecord(value) && value.success === true && isMenu(value.menu),
+        },
       )
       if (response.success) {
         await loadMenu(response.menu.id)
@@ -93,9 +145,14 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     saving.value = true
     error.value = null
     try {
-      const response = await $fetch<{ success: boolean; menu: Menu }>(
+      const response = await applicationFetch<{ success: boolean; menu: Menu }>(
         `/api/editor/sites/${siteId}/menus/${menuId}`,
-        { method: 'PATCH', body: updates }
+        {
+          method: 'PATCH',
+          body: updates,
+          validate: (value): value is { success: boolean; menu: Menu } =>
+            isRecord(value) && value.success === true && isMenu(value.menu),
+        },
       )
       if (response.success) {
         if (currentMenu.value?.id === menuId) {
@@ -116,7 +173,10 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     saving.value = true
     error.value = null
     try {
-      await $fetch(`/api/editor/sites/${siteId}/menus/${menuId}`, { method: 'DELETE' })
+      await applicationFetch(`/api/editor/sites/${siteId}/menus/${menuId}`, {
+        method: 'DELETE',
+        validate: isSuccess,
+      })
       currentMenu.value = null
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error'
@@ -131,9 +191,14 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     saving.value = true
     error.value = null
     try {
-      const response = await $fetch<{ success: boolean; menuItem: MenuItem }>(
+      const response = await applicationFetch<{ success: boolean; menuItem: MenuItem }>(
         `/api/editor/sites/${siteId}/menus/${currentMenu.value.id}/items`,
-        { method: 'POST', body: itemData }
+        {
+          method: 'POST',
+          body: itemData,
+          validate: (value): value is { success: boolean; menuItem: MenuItem } =>
+            isRecord(value) && value.success === true && isMenuItem(value.menuItem),
+        },
       )
       if (response.success) {
         currentMenu.value.items.push(response.menuItem)
@@ -153,9 +218,14 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     saving.value = true
     error.value = null
     try {
-      const response = await $fetch<{ success: boolean; menuItem: MenuItem }>(
+      const response = await applicationFetch<{ success: boolean; menuItem: MenuItem }>(
         `/api/editor/sites/${siteId}/menus/${currentMenu.value.id}/items/${itemId}`,
-        { method: 'PATCH', body: updates }
+        {
+          method: 'PATCH',
+          body: updates,
+          validate: (value): value is { success: boolean; menuItem: MenuItem } =>
+            isRecord(value) && value.success === true && isMenuItem(value.menuItem),
+        },
       )
       if (response.success) {
         const index = currentMenu.value.items.findIndex(item => item.id === itemId)
@@ -176,7 +246,10 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     saving.value = true
     error.value = null
     try {
-      await $fetch(`/api/editor/sites/${siteId}/menus/${currentMenu.value.id}/items/${itemId}`, { method: 'DELETE' })
+      await applicationFetch(`/api/editor/sites/${siteId}/menus/${currentMenu.value.id}/items/${itemId}`, {
+        method: 'DELETE',
+        validate: isSuccess,
+      })
       currentMenu.value.items = currentMenu.value.items.filter(item => item.id !== itemId)
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error'
@@ -191,9 +264,18 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     saving.value = true
     error.value = null
     try {
-      const response = await $fetch<{ success: boolean; old_section: string; new_section: string; updated: number }>(
+      const response = await applicationFetch<{ success: boolean; old_section: string; new_section: string; updated: number }>(
         `/api/editor/sites/${siteId}/menus/${currentMenu.value.id}/sections`,
-        { method: 'PATCH', body: { old_section: oldSection, new_section: newSection } }
+        {
+          method: 'PATCH',
+          body: { old_section: oldSection, new_section: newSection },
+          validate: (value): value is { success: boolean; old_section: string; new_section: string; updated: number } =>
+            isRecord(value)
+            && value.success === true
+            && typeof value.old_section === 'string'
+            && typeof value.new_section === 'string'
+            && typeof value.updated === 'number',
+        },
       )
       if (response.success) {
         currentMenu.value.items = currentMenu.value.items.map(item =>
@@ -219,9 +301,16 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     error.value = null
     try {
       const encodedSection = encodeURIComponent(section)
-      const response = await $fetch<{ success: boolean; section: string; deleted: number }>(
+      const response = await applicationFetch<{ success: boolean; section: string; deleted: number }>(
         `/api/editor/sites/${siteId}/menus/${currentMenu.value.id}/sections?section=${encodedSection}`,
-        { method: 'DELETE' }
+        {
+          method: 'DELETE',
+          validate: (value): value is { success: boolean; section: string; deleted: number } =>
+            isRecord(value)
+            && value.success === true
+            && typeof value.section === 'string'
+            && typeof value.deleted === 'number',
+        },
       )
       if (response.success) {
         currentMenu.value.items = currentMenu.value.items.filter(item => item.section !== response.section)
@@ -242,9 +331,10 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     saving.value = true
     error.value = null
     try {
-      await $fetch(`/api/editor/sites/${siteId}/menus/${currentMenu.value.id}/reorder`, {
+      await applicationFetch(`/api/editor/sites/${siteId}/menus/${currentMenu.value.id}/reorder`, {
         method: 'POST',
-        body: { items }
+        body: { items },
+        validate: isSuccess,
       })
       items.forEach(({ id, sort_order }) => {
         const item = currentMenu.value?.items.find(i => i.id === id)
@@ -274,10 +364,6 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     }
     return grouped
   })
-
-  // Reload on location change (immediate) or ChowBot menu changes
-  const menuRefreshSignal = useState<number>('menu:refresh', () => 0)
-  watch([effectiveLocationId, menuRefreshSignal], () => loadMenus(), { immediate: true })
 
   return {
     currentMenu,

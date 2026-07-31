@@ -1,6 +1,4 @@
-// Computes bootstrap params from the current route.
-// Used by pages, SayaHeader, and SayaFooter so they all register the same
-// useFetch key — Nuxt deduplicates to a single SSR request.
+// Maps each public route to the exact page datasets it may request.
 //
 // Page type → SSR call mapping:
 //   /locations/[slug]/reviews  → type A  (reviews data included)
@@ -10,13 +8,27 @@
 //   /locations/[slug]/photos   → type E  (photos data included)
 //   /locations/[slug]/qa       → type F  (qa data included)
 //   /locations/[slug]/posts    → type G  (posts data included)
-export interface BootstrapParams {
+export type PublicPageDataset =
+  | 'content'
+  | 'location'
+  | 'menu'
+  | 'reviews'
+  | 'photos'
+  | 'qa'
+  | 'posts'
+  | 'blog'
+  | 'blogPost'
+  | 'experiences'
+  | 'experienceDetail'
+  | 'reservationPolicies'
+  | 'experiencePolicies'
+
+export interface PublicPageRequest {
   page: string | null;
   location: string | null;
   experience: string | null;
-  menu: boolean;
-  data: string | null; // 'reviews' | 'photos' | 'qa' | 'posts' | 'blog' | 'blogPost' — triggers full dataset in bootstrap
-  blogSlug: string | null; // set when data === 'blogPost'
+  datasets: readonly PublicPageDataset[];
+  blogSlug: string | null; // set when the blogPost dataset is requested
   locale: string | null;
   token: string | null; // signed preview token — non-null only on /preview/site/... routes
 }
@@ -29,7 +41,7 @@ function getPreviewSubpath(path: string): string | null {
   return match[1] || '/'
 }
 
-export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale" | "token"> {
+export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "locale" | "token"> {
 
   // Location sub-pages: /locations/[slug]/*
   const locationMatch = path.match(/^\/locations\/([^/]+)/);
@@ -39,17 +51,23 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
     const sub = segments.length > 3 ? segments[3] : undefined;
     const page = sub || "location";
     const fullData =
-      page === "location"
-        ? "posts"
-        : page === "reviews" || page === "photos" || page === "qa" || page === "posts"
-          ? page
-          : null;
+      page === "reviews" || page === "photos" || page === "qa" || page === "posts"
+        ? page
+        : null;
     return {
       page,
       location: slug ?? null,
       experience: null,
-      menu: true,
-      data: fullData,
+      datasets: [
+        'content',
+        'location',
+        ...(page === "location" || page === "menu" ? ['menu'] as const : []),
+        ...(page === "location" || page === "menu" || page === "experiences"
+          ? ['experiences', 'experiencePolicies'] as const
+          : []),
+        ...(page === "location" ? ['reviews', 'posts'] as const : []),
+        ...(fullData ? [fullData] as PublicPageDataset[] : []),
+      ],
       blogSlug: null,
     };
   }
@@ -61,8 +79,7 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       page: "experiences",
       location: null,
       experience: experienceMatch[1] ?? null,
-      menu: true,
-      data: null,
+      datasets: ['content', 'experiences', 'experienceDetail', 'experiencePolicies'],
       blogSlug: null,
     };
   }
@@ -76,8 +93,7 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       page: "blog",
       location: null,
       experience: null,
-      menu: false,
-      data: "blogPost",
+      datasets: ['blogPost'],
       blogSlug: blogMatch[1] ?? null,
     };
   }
@@ -88,8 +104,7 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       page: "blog",
       location: null,
       experience: null,
-      menu: false,
-      data: "blogPost",
+      datasets: ['blogPost'],
       blogSlug: articleMatch[1] ?? null,
     };
   }
@@ -100,8 +115,10 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       page: "home",
       location: null,
       experience: null,
-      menu: true,
-      data: null,
+      datasets: [
+        'content', 'location', 'menu', 'reviews', 'posts', 'blog',
+        'experiences', 'experiencePolicies',
+      ],
       blogSlug: null,
     };
   if (path.startsWith("/locations"))
@@ -109,8 +126,7 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       page: "locations",
       location: null,
       experience: null,
-      menu: true,
-      data: null,
+      datasets: ['content', 'location'],
       blogSlug: null,
     };
   if (path.startsWith("/about"))
@@ -118,8 +134,7 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       page: "about",
       location: null,
       experience: null,
-      menu: true,
-      data: null,
+      datasets: ['content'],
       blogSlug: null,
     };
   if (path.startsWith("/contact"))
@@ -127,8 +142,7 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       page: "contact",
       location: null,
       experience: null,
-      menu: true,
-      data: null,
+      datasets: ['content'],
       blogSlug: null,
     };
   if (path.startsWith("/reservations"))
@@ -136,8 +150,7 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       page: "reservations",
       location: null,
       experience: null,
-      menu: true,
-      data: null,
+      datasets: ['content', 'reservationPolicies'],
       blogSlug: null,
     };
   if (path.startsWith("/order"))
@@ -145,8 +158,7 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       page: "order",
       location: null,
       experience: null,
-      menu: true,
-      data: null,
+      datasets: ['content'],
       blogSlug: null,
     };
   if (path.startsWith("/qa"))
@@ -154,8 +166,7 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       page: "qa",
       location: null,
       experience: null,
-      menu: true,
-      data: "qa",
+      datasets: ['content', 'qa'],
       blogSlug: null,
     };
   if (path.startsWith("/reviews"))
@@ -163,8 +174,7 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       page: "reviews",
       location: null,
       experience: null,
-      menu: true,
-      data: null,
+      datasets: ['content', 'reviews'],
       blogSlug: null,
     };
   if (path.startsWith("/posts"))
@@ -172,8 +182,7 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       page: "posts",
       location: null,
       experience: null,
-      menu: true,
-      data: null,
+      datasets: ['content', 'posts'],
       blogSlug: null,
     };
   if (path.startsWith("/experiences"))
@@ -181,8 +190,7 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       page: "experiences",
       location: null,
       experience: null,
-      menu: true,
-      data: null,
+      datasets: ['content', 'experiences', 'experiencePolicies'],
       blogSlug: null,
     };
   if (path.startsWith("/photos"))
@@ -190,8 +198,7 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       page: "photos",
       location: null,
       experience: null,
-      menu: true,
-      data: "photos",
+      datasets: ['content', 'photos'],
       blogSlug: null,
     };
   if (path === "/menu" || path.startsWith("/menu/"))
@@ -199,8 +206,7 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       page: "menu",
       location: null,
       experience: null,
-      menu: true,
-      data: null,
+      datasets: ['content', 'menu'],
       blogSlug: null,
     };
   if (path === "/blog" || path === "/blog/")
@@ -208,8 +214,7 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       page: "blog",
       location: null,
       experience: null,
-      menu: false,
-      data: "blog",
+      datasets: ['blog'],
       blogSlug: null,
     };
 
@@ -217,24 +222,23 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       page: null,
       location: null,
       experience: null,
-      menu: false,
-      data: null,
+      datasets: [],
       blogSlug: null,
     };
 }
 
-export const useBootstrapParams = () => {
+export const usePublicPageRequest = () => {
   const route = useRoute();
   const { locale } = useI18n();
 
-  return computed<BootstrapParams>(() => {
+  return computed<PublicPageRequest>(() => {
     const previewSubpath = getPreviewSubpath(route.path)
     const effectivePath = previewSubpath ?? route.path
     const token = previewSubpath !== null && typeof route.query.token === 'string'
       ? route.query.token
       : null
     return {
-      ...getBootstrapParams(effectivePath),
+      ...getPublicPageRequest(effectivePath),
       locale: locale.value,
       token,
     }
@@ -249,34 +253,39 @@ export const useBootstrapParams = () => {
 const encodeKeyField = (value: string | null | undefined): string =>
   encodeURIComponent(value ?? "").replace(/~/g, '%7E');
 
-export const useBootstrapKey = (
+export const usePublicResourceKey = (
+  resourceKind: 'shell' | 'page',
   siteId: string | null | undefined,
-  params: BootstrapParams,
+  params: PublicPageRequest,
 ) =>
   [
-    "bs",
+    resourceKind,
     encodeKeyField(siteId ?? "none"),
     encodeKeyField(params.page),
     encodeKeyField(params.location),
     encodeKeyField(params.experience),
-    params.menu ? "m" : "",
-    encodeKeyField(params.data),
+    encodeKeyField([...params.datasets].sort().join(',')),
     encodeKeyField(params.blogSlug),
     encodeKeyField(params.locale),
     encodeKeyField(params.token),
   ].join("~");
 
-export const useBootstrapUrl = (
+export const usePublicPageKey = (
   siteId: string | null | undefined,
-  params: BootstrapParams,
+  params: PublicPageRequest,
+) => usePublicResourceKey('page', siteId, params)
+
+export const usePublicPageUrl = (
+  siteId: string | null | undefined,
+  params: PublicPageRequest,
+  resourceKind: 'shell' | 'page' = 'page',
 ) => {
   const route = useRoute()
   const qs = new URLSearchParams();
   if (params.page) qs.set("page", params.page);
   if (params.location) qs.set("location", params.location);
   if (params.experience) qs.set("experience", params.experience);
-  if (params.menu) qs.set("menu", "1");
-  if (params.data) qs.set("data", params.data);
+  if (params.datasets.length) qs.set("datasets", [...params.datasets].sort().join(','));
   if (params.blogSlug) qs.set("blogSlug", params.blogSlug);
   if (params.locale) qs.set("locale", params.locale);
   if (params.token) {
@@ -287,6 +296,9 @@ export const useBootstrapUrl = (
   const draftId = typeof route.params.draftId === 'string' && route.path.startsWith('/preview/draft/')
     ? route.params.draftId
     : null
-  if (draftId) return `/api/public/drafts/${draftId}/bootstrap${q ? `?${q}` : ""}`;
-  return `/api/public/sites/${siteId}/bootstrap${q ? `?${q}` : ""}`;
+  if (draftId) {
+    const draftQuery = qs.toString()
+    return `/api/public/drafts/${draftId}/${resourceKind}${draftQuery ? `?${draftQuery}` : ""}`
+  }
+  return `/api/public/sites/${siteId}/${resourceKind}${q ? `?${q}` : ""}`;
 };

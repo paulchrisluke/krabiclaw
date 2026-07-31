@@ -9,6 +9,11 @@
 definePageMeta({ layout: 'editor' })
 
 const route = useRoute()
+// This route uses layout: 'editor', not layout: 'dashboard' — the latter is
+// what normally loads dashboard context (see layouts/dashboard.vue). Since
+// this page never renders through that layout, nothing else populates it.
+const dashboard = useDashboardSite()
+if (!dashboard.state.value) await dashboard.refresh()
 const siteId = await useDashboardSiteId()
 const pageId = computed(() => String(route.params.pageId ?? ''))
 

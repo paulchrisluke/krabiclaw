@@ -72,6 +72,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 import { getErrorMessage } from '~/utils/errors'
 
 interface BlogPost {
@@ -94,22 +95,42 @@ const posts = ref<BlogPost[]>([])
 const loadPending = ref(true)
 const loadError = ref('')
 
-async function loadPosts() {
-  loadPending.value = true
-  loadError.value = ''
-  try {
-    const res = await $fetch<{ posts: BlogPost[] }>(`/api/editor/sites/${siteId}/blog/posts`)
-    posts.value = res.posts || []
-  } catch (err) {
-    loadError.value = getErrorMessage(err, 'Failed to load posts.')
-  } finally {
-    loadPending.value = false
-  }
-}
+const isPostsResponse = (value: unknown): value is { posts: BlogPost[] } =>
+  isRecord(value)
+  && Array.isArray(value.posts)
+  && value.posts.every(post =>
+    isRecord(post)
+    && typeof post.id === 'string'
+    && typeof post.title === 'string',
+  )
 
-onMounted(() => {
-  loadPosts()
-})
+const requestEvent = useRequestEvent()
+const { data: postsResource, pending: postsPending, error: postsError } = await useAsyncData(
+  `dashboard-blog-posts:${siteId}`,
+  async () => {
+    if (import.meta.server) {
+      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+      const { loadDashboardBlogPosts } = await import('~/server/utils/dashboard-editor-resources')
+      return await loadDashboardBlogPosts(requestEvent, siteId)
+    }
+    return await dashboardApi<{ posts: BlogPost[] }>(`/api/editor/sites/${siteId}/blog/posts`, {
+      validate: isPostsResponse,
+    })
+  },
+  { lazy: import.meta.client },
+)
+
+watch([postsResource, postsPending, postsError], ([resource, pending, error]) => {
+  loadPending.value = pending
+  if (error) {
+    loadError.value = getErrorMessage(error, 'Failed to load posts.')
+    return
+  }
+  if (resource) {
+    posts.value = resource.posts
+    loadError.value = ''
+  }
+}, { immediate: true })
 
 useSeoMeta({ title: 'Blog Posts | Dashboard' })
 </script>

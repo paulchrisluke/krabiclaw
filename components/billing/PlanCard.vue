@@ -13,7 +13,7 @@
 
     <!-- Plan image -->
     <div v-if="plan.image" class="mb-5 rounded-2xl overflow-hidden w-20 h-20 border border-default/50 bg-elevated/50 shadow-sm">
-      <img :src="plan.image" :alt="plan.name" class="w-full h-full object-cover" />
+      <img :src="plan.image" :alt="plan.name" loading="lazy" decoding="async" class="w-full h-full object-cover" />
     </div>
 
     <!-- Header -->

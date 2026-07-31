@@ -301,6 +301,7 @@ import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities } from '~/config/c
 import type { PublicTemplateSlug } from '~/utils/template-registry'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
+const dashboardApi = useDashboardApi()
 const props = defineProps<{
   siteId: string
   /** Which half of a template's page inventory to expose here — the host page
@@ -343,22 +344,11 @@ const sitePreviewBaseUrl = computed(() => {
   return `${platformBase}/preview/site/${siteData.value.id}`
 })
 
-// Load editor context
-const loadEditorContext = async () => {
-  try {
-    const response = await $fetch<{ context: ApiRecord }>(`/api/editor/sites/${props.siteId}/context`)
-    siteData.value = response.context.site
-    siteLocations.value = response.context.locations || []
-    siteEntitlements.value = response.context.site.entitlements || {}
-    previewToken.value = response.context.previewToken
-  } catch (error) {
-    console.error('Failed to load editor context:', error)
-    cmsLoadError.value = getErrorMessage(error, 'Failed to load editor context')
-    toast.add({ description: cmsLoadError.value, color: 'error' })
-    return
-  }
-  // Outside the try/catch: a bad pageId should surface as a real 404 (thrown
-  // via createError), not get caught here and rewritten into a generic toast.
+const applyEditorContext = (context: ApiRecord) => {
+  siteData.value = context.site as ApiRecord
+  siteLocations.value = context.locations as typeof siteLocations.value
+  siteEntitlements.value = (context.site as ApiRecord).entitlements as ApiRecord || {}
+  previewToken.value = String(context.previewToken)
   applyRouteContentScope()
 }
 
@@ -619,21 +609,17 @@ const loadPageContent = async () => {
   if (requiresLocationSelection.value) return
   contentLoading.value = true
   try {
-    const res = await $fetch<{ fields: ApiRecord[] }>(
-      endpointWithContentScope(`/api/editor/sites/${props.siteId}/content/${selectedPageId.value}`)
+    const res = await dashboardApi<{ fields: ApiRecord[] }>(
+      endpointWithContentScope(`/api/editor/sites/${props.siteId}/content/${selectedPageId.value}`),
+      {
+        validate: (value): value is { fields: ApiRecord[] } =>
+          isRecord(value)
+          && Array.isArray(value.fields)
+          && value.fields.every(field => isRecord(field) && typeof field.field === 'string'),
+      },
     )
     if (version !== loadVersion.value) return
-    const map: Record<string, string> = {}
-    for (const row of res.fields) {
-      if (row.field === 'hero') {
-        if (row.hero_title) map['hero.title'] = row.hero_title
-        if (row.hero_subtitle) map['hero.subtitle'] = row.hero_subtitle
-        if (row.hero_media_asset_id) map['hero.media'] = row.hero_media_asset_id
-      } else {
-        map[row.field] = row.content || ''
-      }
-    }
-    currentValues.value = map
+    applyContentFields(res.fields)
   } catch (error) {
     if (version !== loadVersion.value) return
     console.error('Failed to load page content:', error)
@@ -644,19 +630,78 @@ const loadPageContent = async () => {
   }
 }
 
-// Load on mount
-onMounted(async () => {
-  await loadEditorContext()
-  if (cmsLoadError.value) return
-  // loadPageContent() rethrows after its own toast — uncaught here, the
-  // initial mount would sit in a broken/unresponsive state (no content, no
-  // blocked message) instead of showing the same "Content unavailable" alert
-  // a failed loadEditorContext() already gets.
-  try {
-    await loadPageContent()
-  } catch (error) {
-    cmsLoadError.value = getErrorMessage(error, 'Failed to load page content')
+const applyContentFields = (fields: ApiRecord[]) => {
+  const map: Record<string, string> = {}
+  for (const row of fields) {
+    if (row.field === 'hero') {
+      if (row.hero_title) map['hero.title'] = String(row.hero_title)
+      if (row.hero_subtitle) map['hero.subtitle'] = String(row.hero_subtitle)
+      if (row.hero_media_asset_id) map['hero.media'] = String(row.hero_media_asset_id)
+    } else {
+      map[String(row.field)] = typeof row.content === 'string' ? row.content : ''
+    }
   }
+  currentValues.value = map
+}
+
+interface ContentEditorResource {
+  context: ApiRecord
+  fields: ApiRecord[]
+}
+
+const isContentEditorResource = (value: unknown): value is ContentEditorResource =>
+  isRecord(value)
+  && isRecord(value.context)
+  && isRecord(value.context.site)
+  && typeof value.context.site.id === 'string'
+  && Array.isArray(value.context.locations)
+  && value.context.locations.every(location =>
+    isRecord(location)
+    && typeof location.id === 'string'
+    && typeof location.slug === 'string'
+    && typeof location.title === 'string'
+    && typeof location.is_primary === 'boolean',
+  )
+  && typeof value.context.previewToken === 'string'
+  && Array.isArray(value.fields)
+  && value.fields.every(field => isRecord(field) && typeof field.field === 'string')
+
+const requestEvent = useRequestEvent()
+const contentEditorKey = computed(() =>
+  `dashboard-content-editor:${props.siteId}:${props.pageId}:${selectedLocationId.value ?? 'site'}`,
+)
+const {
+  data: contentEditorResource,
+  error: contentEditorError,
+  pending: contentEditorPending,
+} = await useAsyncData<ContentEditorResource>(contentEditorKey, async () => {
+  const locationId = contentRegistry[props.pageId]?.scope === 'location'
+    ? selectedLocationId.value ?? undefined
+    : undefined
+  if (import.meta.server) {
+    if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+    const { loadDashboardContentEditor } = await import('~/server/utils/dashboard-editor-resources')
+    return await loadDashboardContentEditor(requestEvent, props.siteId, props.pageId, locationId)
+  }
+  return await dashboardApi<ContentEditorResource>(`/api/editor/sites/${props.siteId}/content-editor`, {
+    query: { page: props.pageId, ...(locationId ? { locationId } : {}) },
+    validate: isContentEditorResource,
+  })
+}, {
+  lazy: import.meta.client,
+})
+
+watchEffect(() => {
+  contentLoading.value = contentEditorPending.value
+  if (contentEditorError.value) {
+    cmsLoadError.value = getErrorMessage(contentEditorError.value, 'Failed to load editor content')
+    return
+  }
+  const resource = contentEditorResource.value
+  if (!resource) return
+  applyEditorContext(resource.context)
+  applyContentFields(resource.fields)
+  cmsLoadError.value = null
 })
 
 // onBeforeRouteLeave only guards in-app Vue Router navigation — it does
@@ -686,11 +731,12 @@ const handleSaveContent = async () => {
   }
   saving.value = true
   try {
-    await $fetch(`/api/editor/sites/${props.siteId}/content/save`, {
+    await dashboardApi(`/api/editor/sites/${props.siteId}/content/save`, {
       method: 'POST',
       body: { page: selectedPageId.value, changes: currentValues.value },
       query: effectiveLocationId.value ? { locationId: effectiveLocationId.value } : {},
-      credentials: 'include'
+      credentials: 'include',
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
     })
     localHasChanges.value = false
     previewReloadToken.value = Date.now()

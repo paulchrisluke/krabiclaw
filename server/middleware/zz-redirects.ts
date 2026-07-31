@@ -146,13 +146,14 @@ export default defineEventHandler(async (event) => {
   // Server-side redirect for single-location sites
   // Only run if tenant data is available (set by tenant-resolution middleware)
   // Use 302 (temporary) since the single-location condition can change over time
-  const isBlawbyTenant = isBlawbyTemplate({
+  const isTenantRequest = normalizedPathname === '/' && event.context.tenantType === TENANT_TYPES.TENANT && event.context.siteId
+  const isBlawbyTenant = isTenantRequest && isBlawbyTemplate({
     theme: event.context.site?.theme,
     themeId: event.context.themeId,
     vertical: event.context.site?.vertical,
   })
 
-  if (normalizedPathname === '/' && event.context.tenantType === TENANT_TYPES.TENANT && event.context.siteId && !isBlawbyTenant) {
+  if (isTenantRequest && !isBlawbyTenant) {
     const env = cloudflareEnv(event)
     const db = env.db
     if (db) {

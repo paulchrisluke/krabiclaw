@@ -92,6 +92,16 @@ interface Purchase {
   created_at: string
 }
 
+const isPurchasesResponse = (value: unknown): value is { purchases: Purchase[] } =>
+  isRecord(value)
+  && Array.isArray(value.purchases)
+  && value.purchases.every(purchase =>
+    isRecord(purchase)
+    && typeof purchase.id === 'string'
+    && typeof purchase.organization_id === 'string'
+    && typeof purchase.addon_type === 'string',
+  )
+
 const purchases = ref<Purchase[]>([])
 const queueLoading = ref(false)
 const fulfillingId = ref<string | null>(null)
@@ -120,7 +130,10 @@ function addonColor(type: string) { return ADDON_COLORS[type] ?? 'bg-muted text-
 async function loadQueue() {
   queueLoading.value = true
   try {
-    const res = await $fetch<{ purchases: Purchase[] }>(`/api/admin/fulfillment?all=${showAllPurchases.value ? '1' : '0'}`)
+    const res = await applicationFetch<{ purchases: Purchase[] }>(
+      `/api/admin/fulfillment?all=${showAllPurchases.value ? '1' : '0'}`,
+      { validate: isPurchasesResponse },
+    )
     purchases.value = res.purchases
   } catch {
     toast.add({ title: 'Failed to load queue', color: 'error' })
@@ -132,7 +145,10 @@ async function loadQueue() {
 async function markDone(id: string) {
   fulfillingId.value = id
   try {
-    await $fetch(`/api/admin/fulfillment/${id}/done`, { method: 'POST' })
+    await applicationFetch(`/api/admin/fulfillment/${id}/done`, {
+      method: 'POST',
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+    })
     toast.add({ title: 'Marked as fulfilled', color: 'success' })
     await loadQueue()
   } catch {
