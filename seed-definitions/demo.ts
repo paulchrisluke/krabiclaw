@@ -1560,6 +1560,25 @@ export function renderCompiledDemoMenuBlock(): string {
       sqlValue(item.sortOrder),
     ].join(', ')})`)
     .join(',\n')
+  const menuItemMediaRows = allItems
+    .filter((item) => item.imageAssetId)
+    .map((item) => `  (${[
+      sqlValue(`${item.id}-cover-media`),
+      sqlValue(item.organizationId),
+      sqlValue(item.siteId),
+      sqlValue(item.id),
+      sqlValue(item.imageAssetId),
+      0,
+    ].join(', ')})`)
+    .join(',\n')
+  const menuItemMediaSql = menuItemMediaRows
+    ? `
+
+INSERT OR REPLACE INTO menu_item_media
+  (id, organization_id, site_id, menu_item_id, asset_id, sort_order)
+VALUES
+${menuItemMediaRows};`
+    : ''
 
   return `-- BEGIN GENERATED: demo_menu
 -- Menus and menu items for the demo tenant.
@@ -1571,7 +1590,7 @@ INSERT OR IGNORE INTO menu_items
   (id, menu_id, section, name, slug, description, price_amount,
    image_asset_id, allergens, dietary_notes, available, sort_order)
 VALUES
-${menuItemRows};
+${menuItemRows};${menuItemMediaSql}
 -- END GENERATED: demo_menu`
 }
 

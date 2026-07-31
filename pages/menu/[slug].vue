@@ -275,7 +275,6 @@ import {
   useBootstrapUrl,
 } from '~/composables/useBootstrapParams'
 
-const { resolveMedia } = useMedia()
 const route = useRoute()
 const { site, siteId, draftId } = useTenantSite()
 const siteName = computed(() => site?.brand_name || 'KrabiClaw')
@@ -318,6 +317,13 @@ interface MenuItemType {
   canonical_url?: string | null
   robots?: string | null
   og_image_public_url?: string | null
+  media?: Array<{
+    id: string
+    kind: 'image' | 'video'
+    public_url: string
+    thumbnail_url: string | null
+    alt_text: string | null
+  }>
 }
 
 interface ReviewsResponse {
@@ -428,22 +434,18 @@ const isRobatayaki = computed(() =>
   category.value?.name?.toLowerCase().includes('robatayaki') ?? false
 )
 
-const mainMedia = computed(() => resolveMedia({
-  public_url: item.value?.public_url,
-  thumbnail_url: item.value?.thumbnail_url,
-  kind: item.value?.kind
-}))
-
 const lightboxItems = computed<LightboxMediaItem[]>(() => {
-  if (!item.value || !mainMedia.value.url) return []
-  const kind = mainMedia.value.isVideo ? 'video' : 'image'
-  return [{
-    url: mainMedia.value.url,
-    kind,
-    poster: mainMedia.value.thumb || undefined,
-    alt: item.value.name,
-    description: item.value.description,
-  }]
+  const currentItem = item.value
+  if (!currentItem) return []
+  return (currentItem.media ?? [])
+    .map(media => ({
+      url: media.public_url,
+      kind: media.kind,
+      poster: media.kind === 'video' ? media.thumbnail_url || undefined : undefined,
+      alt: media.alt_text || currentItem.name,
+      description: currentItem.description,
+    }))
+    .filter(media => media.url)
 })
 
 const visibleAllergens = computed(() =>
@@ -501,7 +503,7 @@ const reviewSummary = computed(() => {
 const reviewDateTime = (review: Review) => review.datetime ?? review.createdAt ?? ''
 
 const schemaImage = computed(() =>
-  mainMedia.value.url ?? undefined
+  lightboxItems.value[0]?.url
 )
 const loadReviews = async () => {
   if (!item.value?.slug) return
@@ -576,7 +578,8 @@ const seoTitle = () => item.value?.seo_title || (item.value ? `${item.value.name
 const seoDescription = () => truncateForSeo(item.value?.seo_description || (item.value ? item.value.description : 'The menu item you\'re looking for doesn\'t exist.'), 160)
 
 useTenantSocialMetadata(() => {
-  const heroImageUrl = item.value?.og_image_public_url || mainMedia.value.thumb || null
+  const firstMedia = lightboxItems.value[0]
+  const heroImageUrl = item.value?.og_image_public_url || firstMedia?.poster || firstMedia?.url || null
   return {
     path: item.value?.canonical_url || (item.value ? `/menu/${item.value.slug}` : '/menu'),
     title: seoTitle(),

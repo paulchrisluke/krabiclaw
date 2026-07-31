@@ -28,7 +28,21 @@ export interface MenuItem {
   sale_ends_at: string | null
   image_asset_id: string | null
   public_url?: string | null  // from media_assets join
+  thumbnail_url?: string | null
   kind?: string | null
+  media?: Array<{
+    id: string
+    kind: 'image' | 'video'
+    public_url: string
+    thumbnail_url: string | null
+    mime_type: string | null
+    width: number | null
+    height: number | null
+    duration: number | null
+    alt_text: string | null
+    provider: string
+    status: 'active'
+  }>
   available: boolean
   featured: boolean
   featured_sort_order: number
@@ -75,7 +89,7 @@ export interface CreateMenuItemRequest {
   compare_at_price_amount?: string | number | null
   sale_starts_at?: string | null
   sale_ends_at?: string | null
-  image_asset_id?: string | null
+  media?: Array<{ asset_id: string }> | null
   available?: boolean
   featured?: boolean
   featured_sort_order?: number
@@ -101,7 +115,7 @@ export interface UpdateMenuItemRequest {
   compare_at_price_amount?: string | number | null
   sale_starts_at?: string | null
   sale_ends_at?: string | null
-  image_asset_id?: string | null
+  media?: Array<{ asset_id: string }> | null
   available?: boolean
   featured?: boolean
   featured_sort_order?: number

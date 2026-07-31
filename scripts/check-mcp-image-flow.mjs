@@ -301,11 +301,11 @@ async function main() {
 
   await assertImageAssignmentTool(headers, 'set_media', {
     site_id: siteId,
-    target: { type: 'menu_item_image', menu_item_id: itemId },
+    target: { type: 'menu_item_media', menu_item_id: itemId },
     asset_ids: [assetId],
   }, (payload) => {
-    expectValue('set_media menu_item_image returns item id', payload?.id === itemId, payload)
-    expectValue('set_media menu_item_image returns site context', payload?.context?.site_id === siteId, payload)
+    expectValue('set_media menu_item_media returns item id', payload?.id === itemId, payload)
+    expectValue('set_media menu_item_media returns site context', payload?.context?.site_id === siteId, payload)
   })
 
   await assertImageAssignmentTool(headers, 'set_media', {
@@ -340,7 +340,7 @@ async function main() {
   const menuReadPayload = data(menuRead.body)?.menu
   const menuItem = menuReadPayload?.items?.find((item) => item.id === itemId)
   expectStatus('get_menu for image verification succeeds', menuRead)
-  expectValue('set_media updates menu item image', menuItem?.image_asset_id === assetId, menuItem)
+  expectValue('set_media updates menu item media', menuItem?.media?.[0]?.id === assetId, menuItem)
 
   const postRead = await mcp(headers, 'get_post', {
     site_id: siteId,

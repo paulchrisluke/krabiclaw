@@ -10661,7 +10661,7 @@
             "type": "string"
           },
           "target": {
-            "description": "Discriminated media placement target. Supported types: site_logo, home_hero, home_story_image, about_story_image, location_hero, menu_item_image, post_image, blog_post_image, experience_media.",
+            "description": "Discriminated media placement target. Supported types: site_logo, home_hero, home_story_image, about_story_image, location_hero, menu_item_media, post_image, blog_post_image, experience_media.",
             "oneOf": [
               {
                 "properties": {
@@ -10729,7 +10729,7 @@
                     "type": "string"
                   },
                   "type": {
-                    "const": "menu_item_image"
+                    "const": "menu_item_media"
                   }
                 },
                 "required": [
@@ -11212,7 +11212,7 @@
               "home_story_image",
               "location_hero",
               "post_image",
-              "menu_item_image",
+              "menu_item_media",
               "experience_image"
             ],
             "type": "string"

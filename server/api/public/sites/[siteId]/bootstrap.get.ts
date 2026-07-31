@@ -18,7 +18,12 @@ import {
 } from "~/server/utils/menu-management";
 import { verifyPreviewToken } from "~/server/utils/preview-token";
 import { attachAvailabilitySummaries, type Experience } from "~/server/utils/experiences";
-import { hydrateMediaAssetsForExperiences } from "~/server/utils/media-asset-manager";
+import {
+  hydrateMediaAssetsForExperiences,
+  toResolvedMediaAsset,
+  type MediaAsset,
+  type ResolvedMediaAsset,
+} from "~/server/utils/media-asset-manager";
 import { type MenuWithItems } from "~/server/types/menu";
 import {
   attachFeaturedImageFromBareJoin,
@@ -113,6 +118,8 @@ interface MenuItemTranslationRow {
   preparation: string | null;
   serving_note: string | null;
 }
+
+type MenuItemMediaRow = MediaAsset & { menu_item_id: string; sort_order: number };
 
 const parseJson = (raw: string | null) => {
   if (!raw) return null;
@@ -369,6 +376,7 @@ export default defineEventHandler(async (event) => {
     idxContentTranslations = -1;
   let idxMenus = -1,
     idxMenuItems = -1,
+    idxMenuItemMedia = -1,
     idxMenuTranslations = -1,
     idxMenuItemTranslations = -1;
   let idxExperiencesList = -1,
@@ -498,18 +506,31 @@ export default defineEventHandler(async (event) => {
     idxMenuItems = push(
       `SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
               mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
-              mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured,
+              NULL AS image_asset_id, NULL AS public_url, NULL AS thumbnail_url, NULL AS kind, mi.available, mi.featured,
               mi.featured_sort_order, mi.sort_order, mi.allergens, mi.ingredients, mi.dietary_notes,
               mi.preparation, mi.serving_note,
               mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots, ma_og.public_url AS og_image_public_url,
               mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
        FROM menu_items mi
        JOIN menus m ON m.id = mi.menu_id
-       LEFT JOIN media_assets ma ON mi.image_asset_id = ma.id AND ma.status = 'active'
        LEFT JOIN media_assets ma_og ON mi.og_image_asset_id = ma_og.id AND ma_og.status = 'active'
          AND ma_og.organization_id = m.organization_id AND ma_og.site_id = m.site_id
        WHERE m.organization_id = ? AND m.site_id = ? AND m.status = 'published'
        ORDER BY mi.sort_order, mi.name`,
+      [orgId, siteId],
+    );
+
+    idxMenuItemMedia = push(
+      `SELECT ma.*, mim.menu_item_id, mim.sort_order
+       FROM menu_item_media mim
+       JOIN menu_items mi ON mi.id = mim.menu_item_id
+       JOIN menus m ON m.id = mi.menu_id
+       JOIN media_assets ma ON ma.id = mim.asset_id
+         AND ma.organization_id = mim.organization_id
+         AND ma.site_id = mim.site_id
+         AND ma.status = 'active'
+       WHERE m.organization_id = ? AND m.site_id = ? AND m.status = 'published'
+       ORDER BY mim.menu_item_id ASC, mim.sort_order ASC`,
       [orgId, siteId],
     );
 
@@ -791,6 +812,8 @@ export default defineEventHandler(async (event) => {
       (batchResults[idxMenus] as { results: Record<string, unknown>[] })?.results ?? [];
     const menuItemRows =
       (batchResults[idxMenuItems] as { results: Record<string, unknown>[] })?.results ?? [];
+    const menuItemMediaRows =
+      (batchResults[idxMenuItemMedia] as { results: MenuItemMediaRow[] })?.results ?? [];
     const menuTranslations =
       (batchResults[idxMenuTranslations] as { results: MenuTranslationRow[] })?.results ?? [];
     const menuItemTranslations =
@@ -830,11 +853,26 @@ export default defineEventHandler(async (event) => {
         menuItemTranslations.map((t) => [t.menu_item_id, t]),
       );
 
+      const mediaByMenuItem = new Map<string, ResolvedMediaAsset[]>();
+      for (const row of menuItemMediaRows) {
+        const list = mediaByMenuItem.get(row.menu_item_id) ?? [];
+        list.push(toResolvedMediaAsset(row));
+        mediaByMenuItem.set(row.menu_item_id, list);
+      }
       const items = sortMenuItems(
         menuItemRows
           .filter((raw) => raw.menu_id === menuId)
           .map((raw) => {
-            const item = mapMenuItem(raw);
+            const mapped = mapMenuItem(raw);
+            const media = mediaByMenuItem.get(mapped.id) ?? [];
+            const item = {
+              ...mapped,
+              media,
+              image_asset_id: media[0]?.id ?? null,
+              public_url: media[0]?.public_url ?? null,
+              thumbnail_url: media[0]?.thumbnail_url ?? null,
+              kind: media[0]?.kind ?? null,
+            };
             const t = itemTranslationsById.get(item.id);
             if (!t) return item;
 

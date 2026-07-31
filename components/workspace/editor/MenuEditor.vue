@@ -229,12 +229,12 @@
             class="grid gap-3 border-b border-default px-4 py-3 last:border-0 hover:bg-elevated sm:grid-cols-[auto_minmax(0,1fr)_auto_auto_auto_auto] sm:items-center"
           >
             <MediaPicker
-              :model-value="item.image_asset_id"
+              :model-value="item.media?.[0]?.id ?? null"
               :site-id="props.siteId"
               :location-id="props.locationId"
               accept="any"
               title="Item image or video"
-              @update:model-value="handleQuickUpdateItem(item, { image_asset_id: $event })"
+              @update:model-value="handleQuickUpdateItem(item, { media: $event ? [{ asset_id: $event }] : [] })"
             >
               <div class="group relative size-14 overflow-hidden rounded-md border border-default bg-muted">
                 <img

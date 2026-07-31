@@ -50,7 +50,7 @@
               <p class="text-sm font-medium text-highlighted">Image</p>
             </template>
             <MediaPicker
-              v-model="form.image_asset_id"
+              v-model="coverAssetId"
               :site-id="siteId"
               :location-id="locationId"
               :initial-prompt="suggestedPrompt"
@@ -186,7 +186,7 @@ const form = reactive({
   sale_ends_at: '',
   available: true,
   featured: false,
-  image_asset_id: null as string | null,
+  media: [] as Array<{ asset_id: string }>,
   allergens: '',
   ingredients: '',
   dietary_notes: '',
@@ -199,6 +199,13 @@ watch(() => form.name, (name) => emit('update:item-name', name))
 const siteId = computed(() => props.siteId)
 const itemId = computed(() => props.itemId || null)
 const locationId = computed(() => props.locationId || null)
+const coverAssetId = computed({
+  get: () => form.media[0]?.asset_id ?? null,
+  set: (assetId: string | null) => {
+    const next = assetId?.trim()
+    form.media = next ? [{ asset_id: next }] : []
+  },
+})
 
 const { menuPath } = useDashboardSiteLinks(props.siteId)
 const backPath = computed(() => menuPath(props.locationId))
@@ -275,7 +282,7 @@ const loadMenu = async () => {
       form.sale_ends_at = item.sale_ends_at ? item.sale_ends_at.slice(0, 10) : ''
       form.available = item.available
       form.featured = item.featured
-      form.image_asset_id = item.image_asset_id || null
+      form.media = (item.media ?? []).map(asset => ({ asset_id: asset.id }))
       form.allergens = (item.allergens || []).join(', ')
       form.ingredients = (item.ingredients || []).join(', ')
       form.dietary_notes = (item.dietary_notes || []).join(', ')
@@ -302,7 +309,7 @@ const payload = computed<CreateMenuItemRequest & UpdateMenuItemRequest>(() => ({
   sale_ends_at: form.sale_ends_at.trim() || null,
   available: form.available,
   featured: form.featured,
-  image_asset_id: form.image_asset_id,
+  media: form.media,
   allergens: splitList(form.allergens),
   ingredients: splitList(form.ingredients),
   dietary_notes: splitList(form.dietary_notes),
