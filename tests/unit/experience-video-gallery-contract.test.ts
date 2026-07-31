@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 const experiencePage = readFileSync('pages/experiences/[slug].vue', 'utf8')
+const mediaGallery = readFileSync('components/saya/SayaMediaGallery.vue', 'utf8')
 const lightbox = readFileSync('components/saya/SayaLightbox.vue', 'utf8')
 
 test('experience detail maps mixed media to one ordered lightbox list', () => {
@@ -15,39 +16,36 @@ test('experience detail maps mixed media to one ordered lightbox list', () => {
 })
 
 test('experience gallery videos are real previews without native controls', () => {
-  const gallerySection = experiencePage.slice(
-    experiencePage.indexOf('<!-- Single image / video -->'),
-    experiencePage.indexOf('<!-- Lightbox -->'),
-  )
-
-  assert.match(gallerySection, /<video[\s\S]*:ref="el => setGalleryVideoRef\(el, 0\)"/)
-  assert.match(gallerySection, /<video[\s\S]*muted[\s\S]*loop[\s\S]*playsinline/)
-  assert.match(gallerySection, /<SayaIcon name="play"/)
-  assert.match(gallerySection, /:aria-label="mediaItems\[0\]\?\.kind === 'video' \? `Play video, \$\{experience\.title\}` : undefined"/)
-  assert.match(gallerySection, /:aria-label="item\.kind === 'video' \? `Play video, \$\{experience\.title\}` : undefined"/)
-  assert.doesNotMatch(gallerySection, /\bcontrols\b/)
+  assert.match(experiencePage, /<SayaMediaGallery :items="mediaItems" :title="experience\.title"/)
+  assert.match(mediaGallery, /<video[\s\S]*:ref="el => setVideoRef\(el, 0\)"/)
+  assert.match(mediaGallery, /<video[\s\S]*muted[\s\S]*loop[\s\S]*playsinline/)
+  assert.match(mediaGallery, /<SayaIcon name="play"/)
+  assert.match(mediaGallery, /:aria-label="items\[0\]\?\.kind === 'video' \? `Play video, \$\{title\}` : `Open media, \$\{title\}`"/)
+  assert.match(mediaGallery, /:aria-label="item\.kind === 'video' \? `Play video, \$\{title\}` : `Open media, \$\{title\}`"/)
+  assert.doesNotMatch(mediaGallery, /\bcontrols\b/)
 })
 
 test('experience gallery opens the unfiltered media index and pauses previews', () => {
-  assert.match(experiencePage, /<SayaLightbox v-model:open="lightboxOpen" v-model:index="lightboxIdx" :items="mediaItems"/)
-  assert.match(experiencePage, /@click="openLightbox\(i \+ 1\)"/)
-  assert.match(experiencePage, /function openLightbox\(mediaIdx: number\) \{[\s\S]*pauseGalleryVideos\(\)[\s\S]*lightboxIdx\.value = mediaIdx[\s\S]*lightboxOpen\.value = true/)
+  assert.match(mediaGallery, /<SayaLightbox v-model:open="lightboxOpen" v-model:index="lightboxIndex" :items="items"/)
+  assert.match(mediaGallery, /@click="openLightbox\(index\)"/)
+  assert.match(mediaGallery, /function openLightbox\(index: number\) \{[\s\S]*pauseVideos\(\)[\s\S]*lightboxIndex\.value = index[\s\S]*lightboxOpen\.value = true/)
 })
 
 test('experience gallery coordinates one visible preview video at a time', () => {
-  assert.match(experiencePage, /let galleryVideoObserver: IntersectionObserver \| null = null/)
-  assert.match(experiencePage, /let galleryVideoSyncToken = 0/)
-  assert.match(experiencePage, /function mostVisibleGalleryVideoIndex\(\)/)
-  assert.match(experiencePage, /const syncToken = \+\+galleryVideoSyncToken/)
-  assert.match(experiencePage, /if \(syncToken !== galleryVideoSyncToken\) return/)
-  assert.match(experiencePage, /await video\.play\(\)/)
-  assert.match(experiencePage, /if \(syncToken !== galleryVideoSyncToken\) \{[\s\S]*pauseGalleryVideo\(video\)[\s\S]*return[\s\S]*\}/)
-  assert.match(experiencePage, /catch \{[\s\S]*Muted preview autoplay can still be blocked/)
-  assert.match(experiencePage, /document\.visibilityState !== 'visible'[\s\S]*pauseGalleryVideos\(\)/)
-  assert.match(experiencePage, /document\.addEventListener\('visibilitychange', onVisibilityChange\)/)
-  assert.match(experiencePage, /galleryVideoObserver\?\.disconnect\(\)/)
-  assert.match(experiencePage, /function setGalleryVideoRef\(el: Element \| ComponentPublicInstance \| null, index: number\) \{[\s\S]*createGalleryVideoObserver\(\)[\s\S]*galleryVideoObserver\?\.observe\(el\)/)
-  assert.match(experiencePage, /function createGalleryVideoObserver\(\) \{[\s\S]*if \(galleryVideoObserver\) return[\s\S]*if \(!import\.meta\.client \|\| !\('IntersectionObserver' in window\)\) return/)
+  assert.match(mediaGallery, /let videoObserver: IntersectionObserver \| null = null/)
+  assert.match(mediaGallery, /let syncToken = 0/)
+  assert.match(mediaGallery, /function mostVisibleVideoIndex\(\)/)
+  assert.match(mediaGallery, /const currentToken = \+\+syncToken/)
+  assert.match(mediaGallery, /if \(currentToken !== syncToken\) return/)
+  assert.match(mediaGallery, /await video\.play\(\)/)
+  assert.match(mediaGallery, /if \(currentToken !== syncToken\) \{[\s\S]*return[\s\S]*\}/)
+  assert.doesNotMatch(mediaGallery, /if \(currentToken !== syncToken\) \{[\s\S]*pauseVideo\(video\)[\s\S]*return[\s\S]*\}/)
+  assert.match(mediaGallery, /catch \{[\s\S]*videoPlaying\.value\[index\] = false/)
+  assert.match(mediaGallery, /document\.visibilityState !== 'visible'[\s\S]*pauseVideos\(\)/)
+  assert.match(mediaGallery, /document\.addEventListener\('visibilitychange', onVisibilityChange\)/)
+  assert.match(mediaGallery, /videoObserver\?\.disconnect\(\)/)
+  assert.match(mediaGallery, /function setVideoRef\(el: Element \| ComponentPublicInstance \| null, index: number\) \{[\s\S]*createVideoObserver\(\)[\s\S]*videoObserver\?\.observe\(el\)/)
+  assert.match(mediaGallery, /function createVideoObserver\(\) \{[\s\S]*if \(videoObserver\) return[\s\S]*if \(!import\.meta\.client \|\| !\('IntersectionObserver' in window\)\) return/)
 })
 
 test('lightbox pauses inactive and closed videos without pausing the active branch', () => {

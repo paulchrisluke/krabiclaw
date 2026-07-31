@@ -40,6 +40,15 @@ mock.module('../../server/utils/media-asset-manager.ts', {
       if (!asset || asset.site_id !== siteId) return null
       return asset
     },
+    async hydrateMediaAssetRefs() {
+      return []
+    },
+    async hydrateMediaAssetsForMenuItems() {
+      return new Map()
+    },
+    buildReplaceMenuItemMediaQueries() {
+      return []
+    },
   },
 })
 
