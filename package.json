@@ -25,7 +25,6 @@
     "lint:data-loading": "node scripts/check-data-loading-guardrails.mjs",
     "test": "yarn test:unit && yarn test:e2e",
     "test:unit": "node --experimental-strip-types --experimental-test-module-mocks --import ./tests/unit/support/register-aliases.mjs --test tests/unit/**/*.test.ts",
-    "test:unit:budgets": "node --experimental-strip-types --experimental-test-module-mocks --import ./tests/unit/support/register-aliases.mjs --test tests/unit/deterministic-budgets.test.ts",
     "test:unit:file": "node --experimental-strip-types --experimental-test-module-mocks --import ./tests/unit/support/register-aliases.mjs --test",
     "test:e2e": "playwright test",
     "test:browser": "playwright test --project=chromium --workers=1",

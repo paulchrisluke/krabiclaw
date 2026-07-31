@@ -36,7 +36,6 @@ jobs:
       - run: yarn lint:better-auth-boundaries
       - run: yarn typecheck
       - run: yarn test:unit
-      - run: yarn test:unit:budgets
       - run: yarn mcp:compat
 
   changes:
