@@ -77,8 +77,8 @@ test('CMS editor host routes disable SSR via routeRules; editor uses $fetch for 
   assert.doesNotMatch(editorSource, /useFetch\b/)
   assert.doesNotMatch(editorSource, /useRequestFetch\b/)
 
-  // Editor uses the canonical dashboard API client for data loading
-  assert.match(editorSource, /useDashboardApi|dashboardApi/)
+  // Editor layout loads dashboard context during SSR via useDashboardSite
+  assert.match(editorSource, /useDashboardSite/)
 })
 
 test('CMS content editor host pages render the shared editor with siteId and pageId props', () => {
