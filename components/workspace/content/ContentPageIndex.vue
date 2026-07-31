@@ -19,7 +19,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed } from 'vue'
 
 import { getScopedEditablePages } from '~/config/content-registry'
 import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities } from '~/config/cms-registry'
@@ -36,9 +36,12 @@ const props = defineProps<{
 const { paths } = useDashboardSiteLinks(props.siteId)
 const basePath = computed(() => props.scope === 'location' ? `${paths.value.project}/content` : paths.value.content)
 
-const siteData = ref<ApiRecord | null>(null)
-const siteLocations = ref<Array<{ id: string; slug: string; title: string; is_primary: boolean; feature_overrides?: string | null }>>([])
-const loadError = ref<string | null>(null)
+const dashboard = useDashboardSite()
+const siteData = computed(() => dashboard.site.value as ApiRecord | null)
+const siteLocations = computed(() => dashboard.locations.value)
+const loadError = computed(() =>
+  dashboard.state.value ? null : 'Dashboard context unavailable',
+)
 
 // Only meaningful when scope === 'location' (this component is only ever rendered inside a
 // locations/[locationSlug]/... route in that case) — route-derived, same pattern as
@@ -64,13 +67,4 @@ const pages = computed(() => getScopedEditablePages(
   props.scope,
 ))
 
-onMounted(async () => {
-  try {
-    const response = await $fetch<{ context: ApiRecord }>(`/api/editor/sites/${props.siteId}/context`)
-    siteData.value = response.context.site
-    siteLocations.value = response.context.locations || []
-  } catch (error) {
-    loadError.value = error instanceof Error ? error.message : 'Failed to load content pages'
-  }
-})
 </script>

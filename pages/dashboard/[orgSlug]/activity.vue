@@ -86,7 +86,6 @@ useSeoMeta({ title: 'Activity | KrabiClaw Dashboard', robots: 'noindex, nofollow
 const { eventLabel } = useSiteEventLabels()
 const { formatRelativeTime: timeAgo } = useHumanTime()
 const dashboard = useDashboardSite()
-if (!dashboard.state.value) await dashboard.refresh()
 const toast = useToast()
 
 type SiteEvent = import('~/server/utils/dashboard-events').DashboardEvent
@@ -125,7 +124,16 @@ const { data: membersData } = await useAsyncData<{ members: Member[] }>(membersK
     const result = await getOrganizationMembersData(db, dashboard.organization.value.id)
     return { members: result.members }
   }
-  return await dashboardApi<{ members: Member[] }>('/api/dashboard/members')
+  return await dashboardApi<{ members: Member[] }>('/api/dashboard/members', {
+    validate: (value): value is { members: Member[] } =>
+      isRecord(value)
+      && Array.isArray(value.members)
+      && value.members.every(member =>
+        isRecord(member)
+        && typeof member.userId === 'string'
+        && typeof member.name === 'string',
+      ),
+  })
 })
 const actorOptions = computed(() => [
   { label: 'Everyone', value: '' },
@@ -145,6 +153,14 @@ watch(() => filters.siteId, async (siteId) => {
     // the organization scope resolved from this dashboard route.
     const res = await dashboardApi<{ locations: Location[] }>('/api/dashboard/locations', {
       headers: { 'x-dashboard-site-slug': site.subdomain },
+      validate: (value): value is { locations: Location[] } =>
+        isRecord(value)
+        && Array.isArray(value.locations)
+        && value.locations.every(location =>
+          isRecord(location)
+          && typeof location.id === 'string'
+          && typeof location.title === 'string',
+        ),
     })
     locationsForSite.value = res.locations
   } catch (err) {

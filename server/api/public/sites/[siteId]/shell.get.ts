@@ -1,5 +1,5 @@
 import { jsonResponse } from '~/server/utils/api-response'
-import { loadPublicShell } from '~/server/utils/public-bootstrap'
+import { loadPublicShell } from '~/server/utils/public-shell'
 import { finalizeRequestMetrics } from '~/server/utils/request-metrics'
 
 export default defineEventHandler(async (event) => {

@@ -63,8 +63,25 @@
               </div>
             </div>
 
+            <UAlert
+              v-if="postsLoadError"
+              color="error"
+              variant="soft"
+              title="Posts could not be loaded"
+              :description="postsLoadError"
+              class="m-4"
+            />
+            <UAlert
+              v-if="facebookLoadError"
+              color="warning"
+              variant="soft"
+              title="Publishing connection could not be loaded"
+              :description="facebookLoadError"
+              class="m-4"
+            />
+
             <!-- Empty state -->
-            <div v-if="!loading && posts.length === 0" class="px-4 py-10 text-center">
+            <div v-if="!loading && !postsLoadError && posts.length === 0" class="px-4 py-10 text-center">
               <UIcon name="i-lucide-newspaper" class="mx-auto size-8 text-muted" />
               <p class="mt-3 text-sm text-muted">No posts yet. Use the AI composer or write one manually.</p>
               <UButton size="sm" color="neutral" variant="soft" icon="i-lucide-pencil" class="mt-3" @click="openCompose">
@@ -185,9 +202,22 @@ const dashboardLocation = useDashboardLocation()
 // Posts list
 const posts = ref<ApiRecord[]>([])
 const loading = ref(false)
+const postsLoadError = ref<string | null>(null)
+const facebookLoadError = ref<string | null>(null)
+const facebookConnected = ref(false)
 const activeTab = ref('all')
 const currentLocationId = computed(() => dashboardLocation.currentLocationId.value)
 let postsLoadGeneration = 0
+const isPostsResponse = (value: unknown): value is { posts: ApiRecord[] } =>
+  isRecord(value)
+  && Array.isArray(value.posts)
+  && value.posts.every(post =>
+    isRecord(post)
+    && typeof post.id === 'string'
+    && typeof post.status === 'string',
+  )
+const isFacebookResponse = (value: unknown): value is { connected: boolean } =>
+  isRecord(value) && typeof value.connected === 'boolean'
 
 const loadPosts = async () => {
   const requestedLocationId = currentLocationId.value
@@ -198,15 +228,22 @@ const loadPosts = async () => {
     return
   }
   loading.value = true
+  postsLoadError.value = null
   try {
     const query: Record<string, string> = {}
     if (activeTab.value !== 'all') query.status = activeTab.value
     query.location_id = requestedLocationId
-    const res = await dashboardApi<{ posts: ApiRecord[] }>(`/api/editor/sites/${siteId}/posts`, { query })
+    const res = await dashboardApi<{ posts: ApiRecord[] }>(`/api/editor/sites/${siteId}/posts`, {
+      query,
+      validate: isPostsResponse,
+    })
     if (generation !== postsLoadGeneration || currentLocationId.value !== requestedLocationId) return
     posts.value = res.posts ?? []
-  } catch {
-    if (generation === postsLoadGeneration) toast.add({ description: 'Failed to load posts', color: 'error' })
+  } catch (error) {
+    if (generation === postsLoadGeneration) {
+      postsLoadError.value = error instanceof Error ? error.message : 'Failed to load posts'
+      toast.add({ description: postsLoadError.value, color: 'error' })
+    }
   } finally {
     if (generation === postsLoadGeneration) loading.value = false
   }
@@ -214,24 +251,64 @@ const loadPosts = async () => {
 
 async function loadFacebookConnection() {
   const requestedLocationId = currentLocationId.value
-  facebookConnected.value = false
+  facebookLoadError.value = null
   if (!requestedLocationId) return
   try {
     const res = await dashboardApi<{ connected: boolean }>('/api/integrations/facebook-pages/connection', {
       query: { locationId: requestedLocationId },
+      validate: isFacebookResponse,
     })
     if (currentLocationId.value === requestedLocationId) facebookConnected.value = res.connected
-  } catch {
+  } catch (error) {
     if (currentLocationId.value === requestedLocationId) {
-      facebookConnected.value = false
+      facebookLoadError.value = error instanceof Error ? error.message : 'Failed to load Facebook connection status'
       toast.add({ description: 'Failed to load Facebook connection status', color: 'error' })
     }
   }
 }
 
-onMounted(async () => {
-  await Promise.all([loadPosts(), loadFacebookConnection()])
-})
+const requestEvent = useRequestEvent()
+const postsKey = computed(() =>
+  `dashboard-location-posts:${siteId}:${currentLocationId.value ?? 'missing'}`,
+)
+const { data: postsResource, pending: postsPending, error: postsResourceError } = await useAsyncData(
+  postsKey,
+  async () => {
+    if (!currentLocationId.value) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
+    if (import.meta.server) {
+      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+      const { loadDashboardLocationPosts } = await import('~/server/utils/dashboard-editor-resources')
+      return await loadDashboardLocationPosts(requestEvent, siteId, currentLocationId.value)
+    }
+    const [postsResponse, facebookResponse] = await Promise.all([
+      dashboardApi<{ posts: ApiRecord[] }>(`/api/editor/sites/${siteId}/posts`, {
+        query: { location_id: currentLocationId.value },
+        validate: isPostsResponse,
+      }),
+      dashboardApi<{ connected: boolean }>('/api/integrations/facebook-pages/connection', {
+        query: { locationId: currentLocationId.value },
+        validate: isFacebookResponse,
+      }),
+    ])
+    return { posts: postsResponse, facebook: facebookResponse }
+  },
+  { lazy: import.meta.client },
+)
+
+watch([postsResource, postsPending, postsResourceError], ([resource, pending, error]) => {
+  loading.value = pending
+  if (error) {
+    const message = error instanceof Error ? error.message : 'Failed to load posts'
+    postsLoadError.value = message
+    facebookLoadError.value = message
+    return
+  }
+  if (!resource) return
+  posts.value = resource.posts.posts as ApiRecord[]
+  facebookConnected.value = resource.facebook.connected
+  postsLoadError.value = null
+  facebookLoadError.value = null
+}, { immediate: true })
 
 // Selection / compose
 const selectedPost = ref<ApiRecord | null>(null)
@@ -258,8 +335,6 @@ const editForm = reactive({
   gallery_media: [] as GalleryFormItem[],
 })
 const selectedChannels = ref<string[]>(['site'])
-
-const facebookConnected = ref(false)
 
 const channelOptions = computed(() => [
   { value: 'site', label: 'This website', disabled: false },
@@ -540,6 +615,5 @@ watch(currentLocationId, () => {
   composing.value = false
   resetEditForm()
   selectedChannels.value = []
-  void Promise.all([loadPosts(), loadFacebookConnection()])
 })
 </script>

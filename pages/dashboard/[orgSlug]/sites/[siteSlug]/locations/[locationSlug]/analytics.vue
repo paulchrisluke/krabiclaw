@@ -201,7 +201,6 @@ interface AnalyticsResponse {
 
 const toast = useToast()
 const dashboard = useDashboardSite()
-if (!dashboard.state.value) await dashboard.refresh()
 const siteId = await useDashboardSiteId()
 
 const presets: Array<{ key: PresetKey; label: string }> = [

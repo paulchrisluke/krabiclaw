@@ -1,6 +1,7 @@
-interface PublicBootstrapLoadOptions<T> {
+interface PublicResourceLoadOptions<T> {
   draftId: string | null
   siteId: string | null
+  resourceKind: 'shell' | 'page'
   url: string
   key: string
   query: Record<string, string | undefined>
@@ -9,24 +10,25 @@ interface PublicBootstrapLoadOptions<T> {
   signal?: AbortSignal
 }
 
-export async function loadPublicBootstrapPayload<T>(
-  options: PublicBootstrapLoadOptions<T>,
+export async function loadPublicResourcePayload<T>(
+  options: PublicResourceLoadOptions<T>,
 ): Promise<T> {
   const providerOptions = {
     draftId: options.draftId,
     siteId: options.siteId,
+    resourceKind: options.resourceKind,
     url: options.url,
     query: options.query,
     signal: options.signal,
   }
   const value = import.meta.server
-    ? await (useRequestEvent()?.context.publicBootstrapProvider as
-        | import('~/utils/public-bootstrap-provider').PublicBootstrapProvider
+    ? await (useRequestEvent()?.context.publicResourceProvider as
+        | import('~/utils/public-resource-provider').PublicResourceProvider
         | undefined)?.(providerOptions)
-    : await publicApiRequest<unknown>(options.url, {
+    : await publicApiRequest<T>(options.url, {
         coalesceKey: options.key,
         signal: options.signal,
-        validate: (_value): _value is unknown => true,
+        validate: options.validate,
       })
   if (value === undefined) {
     throw createError({ statusCode: 500, statusMessage: `${options.failureMessage} provider unavailable` })

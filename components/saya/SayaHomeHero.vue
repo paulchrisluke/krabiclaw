@@ -118,7 +118,7 @@ interface HeroData {
 interface Props {
   data?: {
     hero?: HeroData
-    // Pre-resolved via useBootstrap().getField('hero.eyebrow', ...) by the
+    // Pre-resolved via usePublicPageData().getField('hero.eyebrow', ...) by the
     // caller — not part of getHero()'s return shape, so it can't be read off
     // `hero` the way title/subtitle/image/video can.
     eyebrow?: string | null

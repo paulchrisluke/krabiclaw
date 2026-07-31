@@ -4,8 +4,7 @@ import { extname, join } from 'node:path'
 const root = new URL('..', import.meta.url).pathname
 const dashboardRoots = [
   'pages/dashboard',
-  'components/dashboard',
-  'components/cms',
+  'components/workspace',
 ]
 const adminRoots = ['pages/admin', 'components/admin']
 const applicationRoots = [
@@ -18,6 +17,14 @@ const applicationRoots = [
   'components',
 ]
 const violations = []
+const prohibitedLegacyPaths = [
+  'composables/useBootstrap.ts',
+  'composables/useBootstrapParams.ts',
+  'composables/loadPublicBootstrapPayload.ts',
+  'server/utils/public-bootstrap.ts',
+  'server/api/public/sites/[siteId]/bootstrap.get.ts',
+  'server/api/public/drafts/[draftId]/bootstrap.get.ts',
+]
 
 async function filesUnder(directory) {
   const entries = await readdir(join(root, directory), { withFileTypes: true }).catch((error) => {
@@ -47,10 +54,21 @@ for (const directory of applicationRoots) {
   }
 }
 
+for (const path of prohibitedLegacyPaths) {
+  const source = await readFile(join(root, path), 'utf8').catch(error => {
+    if (error?.code === 'ENOENT') return null
+    throw error
+  })
+  if (source !== null) violations.push(`${path}: legacy data-loading path must remain deleted`)
+}
+
 for (const directory of dashboardRoots) {
   for (const file of await filesUnder(directory)) {
     const source = await readFile(join(root, file), 'utf8')
     if (/\$fetch(?:<|\()/.test(source)) {
+      violations.push(`${file}: use dashboardFetch for route-scoped API traffic`)
+    }
+    if (/\bfetch\s*\(\s*['"`]\/api\//.test(source)) {
       violations.push(`${file}: use dashboardFetch for route-scoped API traffic`)
     }
   }

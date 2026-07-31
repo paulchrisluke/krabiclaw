@@ -75,11 +75,11 @@ const expCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, loc
 const {
   location,
   experiencesList,
-  pending: bootstrapPending,
+  pending: pagePending,
   config,
-} = await useBootstrap()
+} = await usePublicPageData()
 
-const pending = computed(() => bootstrapPending.value)
+const pending = computed(() => pagePending.value)
 const experiences = computed<Experience[]>(() => experiencesList.value)
 const heroSubtitle = computed(() =>
   location.value

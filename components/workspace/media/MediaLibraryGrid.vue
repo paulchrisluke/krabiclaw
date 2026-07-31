@@ -38,6 +38,7 @@
 
     <!-- Error -->
     <UAlert v-if="uploadError" color="error" variant="soft" :description="uploadError" icon="i-lucide-triangle-alert" />
+    <UAlert v-if="loadError" color="error" variant="soft" :description="loadError" icon="i-lucide-triangle-alert" />
 
     <!-- Search + filters -->
     <div class="flex items-center gap-2">
@@ -56,7 +57,6 @@
         label-key="label"
         size="sm"
         class="w-28"
-        @update:model-value="loadAssets"
       />
     </div>
 
@@ -65,7 +65,7 @@
       <div v-for="i in 12" :key="i" class="aspect-square rounded-lg bg-elevated animate-pulse" />
     </div>
 
-    <div v-else-if="filteredAssets.length === 0" class="py-10 text-center">
+    <div v-else-if="!loadError && filteredAssets.length === 0" class="py-10 text-center">
       <UIcon name="i-lucide-image" class="mx-auto size-8 text-muted" />
       <p class="mt-3 text-sm text-muted">No media yet. Upload or generate your first image.</p>
     </div>
@@ -131,6 +131,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 const props = defineProps<{
   siteId: string
   selectedId?: string | null
@@ -149,6 +150,18 @@ interface MediaAsset {
   description?: string
 }
 
+const isMediaAsset = (value: unknown): value is MediaAsset =>
+  isRecord(value)
+  && typeof value.id === 'string'
+  && (value.kind === undefined || typeof value.kind === 'string')
+  && (value.public_url === undefined || typeof value.public_url === 'string')
+  && (value.thumbnail_url === undefined || typeof value.thumbnail_url === 'string')
+
+const isMediaResponse = (value: unknown): value is { media: MediaAsset[] } =>
+  isRecord(value)
+  && Array.isArray(value.media)
+  && value.media.every(isMediaAsset)
+
 const emit = defineEmits<{
   select: [asset: MediaAsset]
   generate: []
@@ -160,6 +173,7 @@ const ALL_MEDIA_KIND = 'all'
 
 const assets = ref<MediaAsset[]>([])
 const loading = ref(false)
+const loadError = ref<string | null>(null)
 const uploading = ref(false)
 const uploadProgress = ref(0)
 const uploadError = ref<string | null>(null)
@@ -169,7 +183,6 @@ const search = ref('')
 const kindFilter = ref(props.accept === 'video' ? 'video' : 'image')
 const loadAbortController = ref<AbortController | null>(null)
 const loadRequestId = ref(0)
-const pendingConfirmIds = ref<string[]>([])
 
 const computedAccept = computed(() => {
   if (props.accept === 'video') return 'video/mp4,video/webm'
@@ -217,32 +230,30 @@ async function loadAssets() {
   const controller = new AbortController()
   loadAbortController.value = controller
   loading.value = true
+  loadError.value = null
 
   try {
     const params = new URLSearchParams()
     if (kindFilter.value && kindFilter.value !== ALL_MEDIA_KIND) params.set('kind', kindFilter.value)
     if (props.locationId) params.set('locationId', props.locationId)
-    const res = await $fetch<{ media: MediaAsset[] }>(`/api/editor/sites/${props.siteId}/media?${params}`, {
+    const res = await dashboardApi<{ media: MediaAsset[] }>(`/api/editor/sites/${props.siteId}/media?${params}`, {
       signal: controller.signal,
+      validate: isMediaResponse,
     })
 
     if (controller.signal.aborted || requestId !== loadRequestId.value) return
 
-    assets.value = res.media ?? []
+    assets.value = res.media
   } catch (err) {
     if (controller.signal.aborted || isAbortError(err instanceof Error ? err : new Error(String(err)))) return
     if (requestId === loadRequestId.value) {
-      assets.value = []
+      loadError.value = getErrorMessage(err, 'Failed to load media')
     }
   } finally {
     if (requestId === loadRequestId.value) {
       loading.value = false
     }
   }
-}
-
-function sleep(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms))
 }
 
 function onDrop(e: DragEvent) {
@@ -291,9 +302,17 @@ async function uploadImage(file: File) {
   uploading.value = true
   uploadProgress.value = 0
   try {
-    const { assetId, uploadUrl } = await $fetch<{ assetId: string; uploadUrl: string; imageId: string }>(
+    const { assetId, uploadUrl } = await dashboardApi<{ assetId: string; uploadUrl: string; imageId: string }>(
       `/api/editor/sites/${props.siteId}/media/request-upload`,
-      { method: 'POST', body: { filename: file.name, locationId: props.locationId } }
+      {
+        method: 'POST',
+        body: { filename: file.name, locationId: props.locationId },
+        validate: (value): value is { assetId: string; uploadUrl: string; imageId: string } =>
+          isRecord(value)
+          && typeof value.assetId === 'string'
+          && typeof value.uploadUrl === 'string'
+          && typeof value.imageId === 'string',
+      }
     )
 
     uploadProgress.value = 30
@@ -326,27 +345,10 @@ async function uploadImage(file: File) {
     uploadProgress.value = 80
 
     const confirmEndpoint = `/api/editor/sites/${props.siteId}/media/${assetId}/confirm`
-    let asset: MediaAsset | null = null
-    let lastError: unknown = null
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        asset = await $fetch<MediaAsset>(confirmEndpoint, { method: 'POST' })
-        break
-      } catch (err) {
-        lastError = err instanceof Error ? err : new Error(String(err))
-        if (attempt < 3) await sleep(250 * attempt)
-      }
-    }
-
-    if (!asset) {
-      if (!pendingConfirmIds.value.includes(assetId)) pendingConfirmIds.value.push(assetId)
-      console.error('Media confirm failed after retries', {
-        assetId,
-        confirmEndpoint,
-        error: getErrorMessage(lastError, 'Unknown error'),
-      })
-      throw new Error(`Confirmation failed for asset ${assetId}`)
-    }
+    const asset = await dashboardApi<MediaAsset>(confirmEndpoint, {
+      method: 'POST',
+      validate: isMediaAsset,
+    })
 
     uploadProgress.value = 100
     toast.add({ title: 'File uploaded', color: 'success' })
@@ -410,7 +412,47 @@ async function uploadVideo(file: File) {
   }
 }
 
-onMounted(loadAssets)
+const requestEvent = useRequestEvent()
+const initialMediaKey = computed(() =>
+  `dashboard-media-library:${props.siteId}:${props.locationId ?? 'site'}:${kindFilter.value}`,
+)
+const {
+  data: initialMedia,
+  pending: initialMediaPending,
+  error: initialMediaError,
+} = await useAsyncData(initialMediaKey, async () => {
+  const kind = kindFilter.value && kindFilter.value !== ALL_MEDIA_KIND
+    ? kindFilter.value
+    : undefined
+  if (import.meta.server) {
+    if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+    const { loadDashboardMedia } = await import('~/server/utils/dashboard-editor-resources')
+    return await loadDashboardMedia(requestEvent, props.siteId, {
+      kind,
+      locationId: props.locationId,
+      limit: 100,
+    })
+  }
+  const params = new URLSearchParams({ limit: '100' })
+  if (kind) params.set('kind', kind)
+  if (props.locationId) params.set('locationId', props.locationId)
+  return await dashboardApi<{ media: MediaAsset[] }>(
+    `/api/editor/sites/${props.siteId}/media?${params}`,
+    { validate: isMediaResponse },
+  )
+}, { lazy: import.meta.client })
+
+watch([initialMedia, initialMediaPending, initialMediaError], ([data, pending, error]) => {
+  loading.value = pending
+  if (error) {
+    loadError.value = getErrorMessage(error, 'Failed to load media')
+    return
+  }
+  if (data) {
+    assets.value = data.media as MediaAsset[]
+    loadError.value = null
+  }
+}, { immediate: true })
 
 onUnmounted(() => {
   loadAbortController.value?.abort()

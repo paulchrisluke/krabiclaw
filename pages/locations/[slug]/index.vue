@@ -327,17 +327,17 @@ const {
   locations,
   getField: getContentField,
   getHero: getContentHero,
-  menu: bootstrapMenu,
+  menu: pageMenu,
   locationReviews,
   pending,
-  config: bootstrapConfig,
+  config: pageConfig,
   experiencesList,
   contentBlocks,
   postsList,
-} = await useBootstrap()
+} = await usePublicPageData()
 
 const hasMenu = computed(() => {
-  const m = bootstrapMenu.value as { items?: unknown[] } | null
+  const m = pageMenu.value as { items?: unknown[] } | null
   return !!(m && m.items && m.items.length > 0)
 })
 
@@ -392,7 +392,7 @@ const otherLocations = computed(() => locations.value.filter((l: ApiRecord) => l
 const reviewsPreview = computed(() => locationReviews.value.slice(0, 3))
 
 // Neutral default until the owner picks a brand color in onboarding.
-const locationHeroBrandColor = computed(() => bootstrapConfig.value?.brand_color || '#3F3F46')
+const locationHeroBrandColor = computed(() => pageConfig.value?.brand_color || '#3F3F46')
 const locationHeroIcon = computed(() => (site as ApiValue)?.vertical === 'experience' ? 'sparkles' : 'map-pin')
 
 // Sanitize hero background URL to prevent CSS injection
@@ -422,11 +422,11 @@ const heroBackgroundStyle = computed(() => {
 
 // Featured items from bootstrap menu or experiences (if no menu)
 const featuredItems = computed(() => {
-  const defaultCurrency = bootstrapConfig.value?.default_currency || 'THB'
+  const defaultCurrency = pageConfig.value?.default_currency || 'THB'
   
   if (hasMenu.value) {
     // Use featured menu items
-    const items = (bootstrapMenu.value as { items?: ApiRecord[] } | null)?.items ?? []
+    const items = (pageMenu.value as { items?: ApiRecord[] } | null)?.items ?? []
     return items.filter((i: ApiRecord) => i.featured || i.available !== false).slice(0, 4).map((item: ApiRecord) => ({
       name: item.name,
       price: formatMoneyAmount(item.price_amount, defaultCurrency, ''),
@@ -534,9 +534,9 @@ useTenantSocialMetadata(() => ({
   robots: location.value?.robots || null,
   brand: {
     siteName: siteName.value,
-    logoUrl: bootstrapConfig.value?.logo_url || null,
-    faviconUrl: bootstrapConfig.value?.favicon_url || null,
-    primaryColor: bootstrapConfig.value?.brand_color || null,
+    logoUrl: pageConfig.value?.logo_url || null,
+    faviconUrl: pageConfig.value?.favicon_url || null,
+    primaryColor: pageConfig.value?.brand_color || null,
   },
   heroImage: location.value?.og_image_public_url || heroMedia.value.thumb
     ? { url: location.value?.og_image_public_url || heroMedia.value.thumb }

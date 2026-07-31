@@ -40,9 +40,24 @@
       >
         <h1 class="saya-display-md text-default">{{ $t('error.page_not_loaded') }}</h1>
         <p class="mt-4 text-sm text-muted">{{ $t('error.generic_message') }}</p>
-        <button type="button" class="mt-8 border border-default px-5 py-3 text-sm" @click="retryPublicData">
-          {{ $t('action.try_again') }}
-        </button>
+        <div class="mt-8 flex justify-center gap-3">
+          <button
+            v-if="shell.error.value"
+            type="button"
+            class="border border-default px-5 py-3 text-sm"
+            @click="retryShell"
+          >
+            {{ $t('action.try_again') }}
+          </button>
+          <button
+            v-if="routeLoadState.error && routeLoadState.key"
+            type="button"
+            class="border border-default px-5 py-3 text-sm"
+            @click="retryPage"
+          >
+            {{ $t('action.try_again') }}
+          </button>
+        </div>
       </div>
       <slot v-else />
     </main>
@@ -74,14 +89,9 @@ const { config, locations, hasExperiences, locales, error: bootstrapError, site:
 const routeLoadState = usePublicRouteLoadState()
 const publicPending = computed(() => shell.pending.value || routeLoadState.value.pending)
 const publicError = computed(() => shell.error.value || routeLoadState.value.error)
-const retryPublicData = async () => {
-  if (shell.error.value) {
-    await shell.refresh()
-    return
-  }
-  if (routeLoadState.value.error && routeLoadState.value.key) {
-    await refreshNuxtData(routeLoadState.value.key)
-  }
+const retryShell = async () => await shell.refresh()
+const retryPage = async () => {
+  if (routeLoadState.value.key) await refreshNuxtData(routeLoadState.value.key)
 }
 const activePageKey = computed(() => routeLoadState.value.key)
 const nuxtApp = useNuxtApp()

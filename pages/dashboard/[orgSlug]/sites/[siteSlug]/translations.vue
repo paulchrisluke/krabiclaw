@@ -78,7 +78,15 @@
                 </div>
               </div>
 
-              <div v-if="activeLocales.length" class="mt-5 space-y-2">
+              <UAlert
+                v-if="localesError"
+                class="mt-5"
+                color="error"
+                variant="soft"
+                title="Languages unavailable"
+                :description="localesError.message"
+              />
+              <div v-else-if="activeLocales.length" class="mt-5 space-y-2">
                 <p class="text-xs font-semibold uppercase tracking-wide text-muted">Active language</p>
                 <div
                   v-for="locale in activeLocales"
@@ -189,7 +197,6 @@ definePageMeta({ layout: 'dashboard' })
 
 const config = useRuntimeConfig()
 const dashboard = useDashboardSite()
-if (!dashboard.state.value) await dashboard.refresh()
 
 const siteId = computed(() => dashboard.siteId.value ?? '')
 const plan = computed(() => dashboard.site.value?.plan ?? 'free')
@@ -241,19 +248,30 @@ interface SiteLocaleRow {
   status: 'draft' | 'published' | 'disabled'
 }
 
-const activeLocales = ref<SiteLocaleRow[]>([])
-
-onMounted(async () => {
-  if (!siteId.value) return
-  try {
-    const response = await dashboardApi<{ success: boolean; source_locale: string; locales: SiteLocaleRow[] }>(
-      `/api/editor/sites/${siteId.value}/locales`
+const requestEvent = useRequestEvent()
+const { data: localesResource, error: localesError } = await useAsyncData(
+  computed(() => `dashboard-site-locales-${siteId.value}`),
+  async () => {
+    if (!siteId.value) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
+    if (import.meta.server) {
+      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+      const { loadDashboardSiteLocales } = await import('~/server/utils/dashboard-editor-resources')
+      return await loadDashboardSiteLocales(requestEvent, siteId.value)
+    }
+    return await dashboardApi<{ success: true; source_locale: string; locales: SiteLocaleRow[] }>(
+      `/api/editor/sites/${siteId.value}/locales`,
+      {
+        validate: (value): value is { success: true; source_locale: string; locales: SiteLocaleRow[] } =>
+          isRecord(value)
+          && value.success === true
+          && typeof value.source_locale === 'string'
+          && Array.isArray(value.locales),
+      },
     )
-    activeLocales.value = (response.locales ?? []).filter(l => !l.is_source && l.status !== 'disabled')
-  } catch {
-    // silently ignore — locales section just won't show
-  }
-})
+  },
+)
+const activeLocales = computed(() => (localesResource.value?.locales ?? [])
+  .filter(locale => !locale.is_source && locale.status !== 'disabled'))
 
 useSeoMeta({ title: 'Translations | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>

@@ -3,6 +3,7 @@ interface PublicRouteLoadState {
   key: string
   pending: boolean
   error: PublicRouteLoadError | null
+  hasData: boolean
 }
 
 interface PublicRouteLoadError {
@@ -18,6 +19,7 @@ const createPublicRouteLoadState = (): PublicRouteLoadState => ({
   key: '',
   pending: false,
   error: null,
+  hasData: false,
 })
 
 const clientPublicRouteLoadState = shallowRef<PublicRouteLoadState>(createPublicRouteLoadState())

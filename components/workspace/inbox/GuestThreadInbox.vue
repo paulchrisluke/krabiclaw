@@ -421,6 +421,15 @@ function isThreadDetailResponse(value: unknown): value is { thread: ThreadDetail
     && Array.isArray(value.thread.availableActions)
 }
 
+function isThreadOperationResponse(value: unknown): value is {
+  thread: ThreadDetail
+  availableActions: string[]
+} {
+  return isThreadDetailResponse(value)
+    && Array.isArray(value.availableActions)
+    && value.availableActions.every(action => typeof action === 'string')
+}
+
 function actionMeta(action: string) {
   return ACTION_META[action] ?? { label: action.charAt(0).toUpperCase() + action.slice(1), icon: 'i-lucide-circle', color: 'neutral' as UiColor, variant: 'outline' as const }
 }
@@ -506,10 +515,14 @@ async function sendReply() {
   const idempotencyKey = activeReplyAttemptKey()
   replySaving.value = true
   try {
-    await dashboardApi(`/api/dashboard/sites/${siteId}/guest-threads/${props.threadId}/operations/reply`, {
+    await dashboardApi<{ thread: ThreadDetail; availableActions: string[] }>(
+      `/api/dashboard/sites/${siteId}/guest-threads/${props.threadId}/operations/reply`,
+      {
       method: 'POST',
       body: { body: replyDraft.value, idempotencyKey },
-    })
+      validate: isThreadOperationResponse,
+      },
+    )
     replyAttemptKey.value = null
     replyAttemptDraft.value = null
     toast.add({ description: 'Reply sent', color: 'success' })
@@ -533,10 +546,14 @@ async function runOperationalAction(action: string) {
   const idempotencyKey = activeAttemptMapKey(operationAttemptKeys, attemptName)
   operationActionPending.value = action
   try {
-    await dashboardApi(`/api/dashboard/sites/${siteId}/guest-threads/${threadId}/operations/${action}`, {
+    await dashboardApi<{ thread: ThreadDetail; availableActions: string[] }>(
+      `/api/dashboard/sites/${siteId}/guest-threads/${threadId}/operations/${action}`,
+      {
       method: 'POST',
       body: { idempotencyKey },
-    })
+      validate: isThreadOperationResponse,
+      },
+    )
     clearAttemptMapKey(operationAttemptKeys, attemptName)
     toast.add({ description: `${meta.label} applied`, color: 'success' })
     await refreshThread(threadId)
@@ -558,10 +575,14 @@ async function retryDelivery(deliveryId: string) {
   const idempotencyKey = activeAttemptMapKey(retryAttemptKeys, attemptName)
   retryingDeliveryId.value = deliveryId
   try {
-    await dashboardApi(`/api/dashboard/sites/${siteId}/guest-threads/${threadId}/operations/retry_delivery`, {
+    await dashboardApi<{ thread: ThreadDetail; availableActions: string[] }>(
+      `/api/dashboard/sites/${siteId}/guest-threads/${threadId}/operations/retry_delivery`,
+      {
       method: 'POST',
       body: { deliveryId, idempotencyKey },
-    })
+      validate: isThreadOperationResponse,
+      },
+    )
     clearAttemptMapKey(retryAttemptKeys, attemptName)
     await refreshThread(threadId)
   } catch (error) {

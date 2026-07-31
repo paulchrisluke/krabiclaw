@@ -143,13 +143,13 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
 
-const { location, menu: bootstrapMenu, menuItemsBySection, pending: menuLoading, config: bootstrapConfig, experiencesList } = await useBootstrap()
+const { location, menu: pageMenu, menuItemsBySection, pending: menuLoading, config: pageConfig, experiencesList } = await usePublicPageData()
 const { formatDate } = useLocaleDate()
-const hasMenu = computed(() => ((bootstrapMenu.value as { items?: unknown[] } | null)?.items?.length ?? 0) > 0)
+const hasMenu = computed(() => ((pageMenu.value as { items?: unknown[] } | null)?.items?.length ?? 0) > 0)
 const locationExperienceHref = computed(() => resolveLocationExperienceHref(slug.value, experiencesList.value))
 
 const menuUpdated = computed(() => {
-  const d = bootstrapMenu.value?.updated_at
+  const d = pageMenu.value?.updated_at
   if (!d) return 'recently'
   return formatDate(d)
 })
@@ -219,16 +219,16 @@ useTenantSocialMetadata(() => ({
   location: location.value?.title || null,
   brand: {
     siteName: siteName.value,
-    logoUrl: bootstrapConfig.value?.logo_url || null,
-    faviconUrl: bootstrapConfig.value?.favicon_url || null,
-    primaryColor: bootstrapConfig.value?.brand_color || null,
+    logoUrl: pageConfig.value?.logo_url || null,
+    faviconUrl: pageConfig.value?.favicon_url || null,
+    primaryColor: pageConfig.value?.brand_color || null,
   },
 }))
 
 const locationCurrency = computed(() => {
   const loc = location.value as ApiValue
   if (loc?.currency && typeof loc.currency === 'string') return loc.currency
-  const currency = (bootstrapConfig.value as Record<string, string> | undefined)?.default_currency
+  const currency = (pageConfig.value as Record<string, string> | undefined)?.default_currency
   if (currency) return currency
   return 'THB'
 })

@@ -4,10 +4,10 @@ import { queryFirst } from '~/server/db'
 import { parseOnboardingDraftPayload } from '~/server/utils/onboarding-drafts'
 import { verifyScopedPreviewToken } from '~/server/utils/preview-token'
 
-export async function loadPublicDraftBootstrap(
+async function loadDraftPreviewSource(
   event: H3Event,
   draftIdInput: string,
-  query: Record<string, string | undefined>,
+  token: string | undefined,
   options: { signal?: AbortSignal } = {},
 ) {
   options.signal?.throwIfAborted()
@@ -18,7 +18,7 @@ export async function loadPublicDraftBootstrap(
   const db = env.DB
   if (!db) throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
 
-  const rawToken = typeof query.token === 'string' ? query.token : null
+  const rawToken = typeof token === 'string' ? token : null
   if (!rawToken || !env.PREVIEW_SECRET) {
     throw createError({ statusCode: 401, statusMessage: 'Preview token required' })
   }
@@ -26,33 +26,6 @@ export async function loadPublicDraftBootstrap(
   const isPreviewAuthorized = await verifyScopedPreviewToken(String(env.PREVIEW_SECRET), 'draft', draftId, rawToken)
   options.signal?.throwIfAborted()
   if (!isPreviewAuthorized) throw createError({ statusCode: 403, statusMessage: 'Preview token invalid' })
-
-  const page = typeof query.page === 'string' ? query.page : 'home'
-  const supportedPages = new Set([
-    'home', 'locations', 'location', 'about', 'contact', 'reservations',
-    'order', 'qa', 'reviews', 'posts', 'experiences', 'photos', 'menu', 'blog',
-  ])
-  if (!supportedPages.has(page)) {
-    throw createError({ statusCode: 400, statusMessage: 'Unsupported draft preview page' })
-  }
-  const locationSlug = typeof query.location === 'string' ? query.location : null
-  const experienceSlug = typeof query.experience === 'string' ? query.experience : null
-  const includeMenu = page === 'menu' || query.menu === '1' || query.menu === 'true'
-  const contract = query.contract === 'shell' ? 'shell' : 'page'
-  const routeDataType = page === 'reviews' || page === 'posts' || page === 'photos' || page === 'qa'
-    ? page
-    : null
-  const dataType = typeof query.data === 'string' ? query.data : routeDataType
-  const supportedDataTypes = new Set(['reviews', 'photos', 'qa', 'posts', 'blog', 'blogPost'])
-  if (dataType && !supportedDataTypes.has(dataType)) {
-    throw createError({ statusCode: 400, statusMessage: 'Unsupported draft preview dataset' })
-  }
-  if (contract === 'page' && (page === 'experiences' || experienceSlug)) {
-    throw createError({ statusCode: 422, statusMessage: 'Draft preview does not contain experience records' })
-  }
-  if (contract === 'page' && (page === 'blog' || dataType === 'blog' || dataType === 'blogPost')) {
-    throw createError({ statusCode: 422, statusMessage: 'Draft preview does not contain blog records' })
-  }
 
   const row = await queryFirst<{ payload_json: string }>(db, `
     SELECT payload_json
@@ -63,8 +36,48 @@ export async function loadPublicDraftBootstrap(
   options.signal?.throwIfAborted()
 
   if (!row) throw createError({ statusCode: 404, statusMessage: 'Draft not found' })
+  return parseOnboardingDraftPayload(row.payload_json)
+}
 
-  const payload = parseOnboardingDraftPayload(row.payload_json)
+export async function loadPublicDraftPage(
+  event: H3Event,
+  draftId: string,
+  query: Record<string, string | undefined>,
+  options: { signal?: AbortSignal } = {},
+) {
+  const payload = await loadDraftPreviewSource(event, draftId, query.token, options)
+  options.signal?.throwIfAborted()
+  const page = typeof query.page === 'string' ? query.page : 'home'
+  const supportedPages = new Set([
+    'home', 'locations', 'location', 'about', 'contact', 'reservations',
+    'order', 'qa', 'reviews', 'posts', 'experiences', 'photos', 'menu', 'blog',
+  ])
+  if (!supportedPages.has(page)) {
+    throw createError({ statusCode: 400, statusMessage: 'Unsupported draft preview page' })
+  }
+  const locationSlug = typeof query.location === 'string' ? query.location : null
+  const experienceSlug = typeof query.experience === 'string' ? query.experience : null
+  const requestedDatasets = new Set(
+    typeof query.datasets === 'string' && query.datasets
+      ? query.datasets.split(',')
+      : [],
+  )
+  const includeMenu = requestedDatasets.has('menu')
+  const supportedDatasets = new Set([
+    'content', 'location', 'menu', 'reviews', 'photos', 'qa', 'posts',
+    'blog', 'blogPost', 'experiences', 'experienceDetail',
+    'reservationPolicies', 'experiencePolicies',
+  ])
+  if ([...requestedDatasets].some(dataset => !supportedDatasets.has(dataset))) {
+    throw createError({ statusCode: 400, statusMessage: 'Unsupported draft preview dataset' })
+  }
+  if (page === 'experiences' || experienceSlug) {
+    throw createError({ statusCode: 422, statusMessage: 'Draft preview does not contain experience records' })
+  }
+  if (page === 'blog' || requestedDatasets.has('blog') || requestedDatasets.has('blogPost')) {
+    throw createError({ statusCode: 422, statusMessage: 'Draft preview does not contain blog records' })
+  }
+
   const primaryLocation = payload.preview.locations[0] ?? null
   const resolvedLocation = locationSlug
     ? payload.preview.locations.find(location => location.slug === locationSlug) ?? null
@@ -74,15 +87,15 @@ export async function loadPublicDraftBootstrap(
   }
 
   const content = payload.preview.content.filter((item) => item.page === page)
-  const reviewsList = dataType === 'reviews' ? payload.preview.reviews : []
-  const photosList = dataType === 'photos'
+  const reviewsList = requestedDatasets.has('reviews') ? payload.preview.reviews : []
+  const photosList = requestedDatasets.has('photos')
     ? payload.preview.locations
         .flatMap(location => [location.hero_url, location.thumbnail_url])
         .filter((url): url is string => Boolean(url))
         .map((url, index) => ({ id: `draft-photo-${index + 1}`, url, category: 'OTHER' }))
     : []
-  const qaList = dataType === 'qa' ? payload.preview.qa : []
-  const postsList = dataType === 'posts' ? payload.preview.posts : []
+  const qaList = requestedDatasets.has('qa') ? payload.preview.qa : []
+  const postsList = requestedDatasets.has('posts') ? payload.preview.posts : []
 
   const ratings = payload.preview.reviews.map(review => review.rating).filter((value) => Number.isFinite(value))
   const reviewsAggregate = ratings.length
@@ -98,38 +111,6 @@ export async function loadPublicDraftBootstrap(
     logo_url: payload.preview.config.logo_url || payload.preview.draftMedia.logo?.publicUrl || null,
     og_image_url: payload.preview.config.hero_image_url || payload.preview.draftMedia.hero?.publicUrl || null,
   }
-  const draftPhone = typeof payload.preview.config.phone === 'string'
-    ? payload.preview.config.phone
-    : null
-
-  if (contract === 'shell') {
-    return {
-      site: {
-        brand_name: payload.preview.brandName,
-        brand_description: null,
-        logo_url: config.logo_url,
-        logo_mime_type: null,
-        favicon_url: null,
-        vertical: payload.preview.vertical,
-        config: {
-          phone: draftPhone,
-        },
-      },
-      locations: payload.preview.locations,
-      config,
-      googleBusiness: {
-        business: null,
-        reviews: [],
-        media: [],
-        posts: [],
-        syncedAt: null,
-      },
-      locales: payload.preview.locales,
-      hasExperiences: payload.preview.hasExperiences,
-      hasMenu: Boolean(payload.preview.menu?.items.length),
-    }
-  }
-
   return {
     kind: page,
     site: {
@@ -158,5 +139,46 @@ export async function loadPublicDraftBootstrap(
     experiencesList: [],
     experienceDetail: null,
     location: resolvedLocation,
+  }
+}
+
+export async function loadPublicDraftShell(
+  event: H3Event,
+  draftId: string,
+  query: Pick<Record<string, string | undefined>, 'token'>,
+  options: { signal?: AbortSignal } = {},
+) {
+  const payload = await loadDraftPreviewSource(event, draftId, query.token, options)
+  const config = {
+    ...payload.preview.config,
+    brand_name: payload.preview.brandName,
+    logo_url: payload.preview.config.logo_url || payload.preview.draftMedia.logo?.publicUrl || null,
+    og_image_url: payload.preview.config.hero_image_url || payload.preview.draftMedia.hero?.publicUrl || null,
+  }
+  const draftPhone = typeof payload.preview.config.phone === 'string'
+    ? payload.preview.config.phone
+    : null
+  return {
+    site: {
+      brand_name: payload.preview.brandName,
+      brand_description: null,
+      logo_url: config.logo_url,
+      logo_mime_type: null,
+      favicon_url: null,
+      vertical: payload.preview.vertical,
+      config: { phone: draftPhone },
+    },
+    locations: payload.preview.locations,
+    config,
+    googleBusiness: {
+      business: null,
+      reviews: [],
+      media: [],
+      posts: [],
+      syncedAt: null,
+    },
+    locales: payload.preview.locales,
+    hasExperiences: payload.preview.hasExperiences,
+    hasMenu: Boolean(payload.preview.menu?.items.length),
   }
 }

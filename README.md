@@ -108,6 +108,20 @@ yarn test:mcp:local
 The full env contract, tunnel setup, write-smoke mode, and ChatGPT handoff are
 documented in [docs/local-mcp-harness.md](docs/local-mcp-harness.md).
 
+### Data-loading benchmarks
+
+Run the shell/page endpoint benchmark or the 30-sample public/dashboard browser
+journeys against a deployed-style local Worker:
+
+```bash
+yarn benchmark:data-loading
+yarn benchmark:performance-recovery --base-url http://localhost:3000 --samples 30
+```
+
+The contracts, budgets, and measurement format are documented in
+[docs/performance/data-loading-architecture.md](docs/performance/data-loading-architecture.md)
+and [docs/performance/performance-recovery-2026-07.md](docs/performance/performance-recovery-2026-07.md).
+
 ### macOS file limit fix
 
 ```bash

@@ -57,7 +57,7 @@
 const dashboardApi = useDashboardApi()
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 
-definePageMeta({ layout: 'editor', ssr: false })
+definePageMeta({ layout: 'editor' })
 
 const route = useRoute()
 const router = useRouter()
@@ -135,8 +135,15 @@ async function loadTransferContext() {
   selectedLocationId.value = null
   selectedPage.value = 'home'
   try {
-    const ctx = await dashboardApi<{
-      success: boolean
+    const ctx = import.meta.server
+      ? await (async () => {
+          const event = useRequestEvent()
+          if (!event) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+          const { loadTransferOnboardingContext } = await import('~/server/utils/transfer-onboarding-context')
+          return await loadTransferOnboardingContext(event)
+        })()
+      : await dashboardApi<{
+      success: true
       organization?: { id: string; slug: string } | null
       // vertical is the raw sites.vertical storage value (may be 'service',
       // the DB alias for professional_service — see
@@ -145,7 +152,21 @@ async function loadTransferContext() {
       // every transferred professional_service/service site to silently
       // display as 'restaurant'.
       site?: { id: string; brand_name: string; vertical?: string | null; subdomain: string; plan: string } | null
-    }>('/api/dashboard/context?afterTransfer=true')
+      locations: LocationRow[]
+      notifications: { whatsapp_phone: string | null; channels: string[] }
+    }>('/api/dashboard/transfer-onboarding-context', {
+      validate: (value): value is {
+        success: true
+        organization?: { id: string; slug: string } | null
+        site?: { id: string; brand_name: string; vertical?: string | null; subdomain: string; plan: string } | null
+        locations: LocationRow[]
+        notifications: { whatsapp_phone: string | null; channels: string[] }
+      } => isRecord(value)
+        && value.success === true
+        && isRecord(value.site)
+        && Array.isArray(value.locations)
+        && isRecord(value.notifications),
+    })
 
     if (ctx.site) {
       siteId.value = ctx.site.id
@@ -166,19 +187,12 @@ async function loadTransferContext() {
     // membership — unlike /api/dashboard/locations, it needs no site-slug
     // header, so it works for a transferred site with no subdomain yet
     // (custom-domain-only) instead of silently losing that site's locations.
-    const [locsRes, notifRes] = await Promise.all([
-      dashboardApi<{ success: boolean; locations: LocationRow[] }>(`/api/sites/${siteId.value}/locations`),
-      dashboardApi<{ success: boolean; notifications: { whatsapp_phone: string | null; channels: string[] } }>(
-        `/api/editor/sites/${siteId.value}/notifications`
-      ),
-    ])
-
-    locations.value = locsRes?.locations ?? []
+    locations.value = ctx.locations
     const primary = locations.value.find(l => l.is_primary) ?? locations.value[0]
     if (primary) selectedLocationId.value = primary.id
 
-    if (notifRes?.notifications?.whatsapp_phone) {
-      ownerPhone.value = notifRes.notifications.whatsapp_phone
+    if (ctx.notifications.whatsapp_phone) {
+      ownerPhone.value = ctx.notifications.whatsapp_phone
     }
   } catch (e) {
     console.error('transfer_onboarding_load_failed', e)
@@ -188,7 +202,7 @@ async function loadTransferContext() {
   }
 }
 
-onMounted(loadTransferContext)
+await loadTransferContext()
 
 function finish() {
   router.push(subdomain.value

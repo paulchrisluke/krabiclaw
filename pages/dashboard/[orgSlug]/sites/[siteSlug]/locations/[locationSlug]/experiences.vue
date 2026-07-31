@@ -369,20 +369,54 @@ const toast = useToast()
 const siteId = await useDashboardSiteId()
 const dashboardLocation = useDashboardLocation()
 
-const sitePublicUrl = ref<string | null>(null)
-const defaultCurrency = ref('THB')
+const dashboard = useDashboardSite()
+const defaultCurrency = computed(() => dashboard.site.value?.default_currency || 'THB')
 
 // ── List ──────────────────────────────────────────────────
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const experiences = ref<ApiRecord[]>([])
 const currentLocationId = computed(() => dashboardLocation.currentLocationId.value)
-let experiencesLoadGeneration = 0
+const requestEvent = useRequestEvent()
+const {
+  data: experiencesResource,
+  error: experiencesResourceError,
+  pending: experiencesPending,
+  refresh: refreshExperiences,
+} = await useAsyncData(
+  computed(() => `dashboard-location-experiences-${siteId}-${currentLocationId.value ?? 'missing'}`),
+  async () => {
+    const locationId = currentLocationId.value
+    if (!locationId) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
+    if (import.meta.server) {
+      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+      const { loadDashboardLocationExperiences } = await import('~/server/utils/dashboard-editor-resources')
+      return await loadDashboardLocationExperiences(requestEvent, siteId, locationId)
+    }
+    return await dashboardApi<{ experiences: ApiRecord[] }>(
+      `/api/editor/sites/${siteId}/experiences`,
+      {
+        query: { location_id: locationId },
+        validate: (value): value is { experiences: ApiRecord[] } =>
+          isRecord(value)
+          && Array.isArray(value.experiences)
+          && value.experiences.every(experience =>
+            isRecord(experience) && typeof experience.id === 'string',
+          ),
+      },
+    )
+  },
+)
+watch(experiencesResource, value => {
+  if (value) experiences.value = value.experiences
+}, { immediate: true })
+watch([experiencesPending, experiencesResourceError], () => {
+  loading.value = experiencesPending.value
+  loadError.value = experiencesResourceError.value?.message ?? null
+}, { immediate: true })
 
 async function loadExperiences() {
-  const locationId = currentLocationId.value
-  const generation = ++experiencesLoadGeneration
-  if (!locationId) {
+  if (!currentLocationId.value) {
     experiences.value = []
     loadError.value = null
     loading.value = false
@@ -391,34 +425,16 @@ async function loadExperiences() {
   loading.value = true
   loadError.value = null
   try {
-    const res = await dashboardApi<{ experiences: ApiRecord[] }>(`/api/editor/sites/${siteId}/experiences`, {
-      query: { location_id: locationId },
-    })
-    if (generation !== experiencesLoadGeneration || currentLocationId.value !== locationId) return
-    experiences.value = res.experiences
+    await refreshExperiences()
+    if (experiencesResourceError.value) throw experiencesResourceError.value
+    if (!experiencesResource.value) throw new Error('Experiences response unavailable')
+    experiences.value = experiencesResource.value.experiences
   } catch (error) {
-    if (generation !== experiencesLoadGeneration || currentLocationId.value !== locationId) return
     loadError.value = error instanceof Error && error.message ? error.message : 'The server did not return the experiences list.'
   } finally {
-    if (generation === experiencesLoadGeneration && currentLocationId.value === locationId) {
-      loading.value = false
-    }
+    loading.value = false
   }
 }
-
-async function loadSitePublicUrl() {
-  try {
-      const response = await dashboardApi<{ success: boolean; settings: { public_url?: string | null; default_currency?: string } }>(`/api/dashboard/settings`)
-    sitePublicUrl.value = response.settings?.public_url || null
-    defaultCurrency.value = response.settings?.default_currency || 'THB'
-  } catch {
-    sitePublicUrl.value = null
-  }
-}
-
-onMounted(() => {
-  Promise.all([loadExperiences(), loadSitePublicUrl()])
-})
 
 // ── Form ──────────────────────────────────────────────────
 const sliderOpen = ref(false)
@@ -518,7 +534,6 @@ const posterlessCoverVideoAsset = computed(() => posterlessCoverVideo.value ? fo
 watch(currentLocationId, () => {
   sliderOpen.value = false
   editing.value = null
-  void loadExperiences()
 })
 
 function openCreate() {

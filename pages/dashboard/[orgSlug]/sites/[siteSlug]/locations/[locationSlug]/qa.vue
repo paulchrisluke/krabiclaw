@@ -18,6 +18,11 @@
             <USkeleton v-for="i in 4" :key="i" class="h-28 rounded-lg" />
           </div>
 
+          <div v-else-if="loadError" class="space-y-3">
+            <UAlert color="error" variant="soft" title="Q&A unavailable" :description="loadError" />
+            <UButton color="neutral" variant="soft" @click="loadQa">Try again</UButton>
+          </div>
+
           <div v-else-if="qaRows.length === 0" class="rounded-lg border border-dashed border-default px-6 py-12 text-center">
             <UIcon name="i-lucide-circle-help" class="mx-auto size-9 text-muted" />
             <p class="mt-3 text-sm font-medium text-highlighted">No Q&A yet</p>
@@ -98,10 +103,44 @@ const toast = useToast()
 const locationId = computed(() => dashboardLocation.currentLocationId.value)
 const qaRows = ref<QaRow[]>([])
 const loading = ref(true)
+const loadError = ref<string | null>(null)
 const saving = ref(false)
 const deletingId = ref<string | null>(null)
 const editingId = ref<string | null>(null)
 const form = reactive({ question: '', answer: '' })
+const requestEvent = useRequestEvent()
+const {
+  data: qaResource,
+  error: qaResourceError,
+  pending: qaPending,
+  refresh: refreshQa,
+} = await useAsyncData(
+  computed(() => `dashboard-location-qa-${siteId}-${locationId.value ?? 'missing'}`),
+  async () => {
+    if (!locationId.value) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
+    if (import.meta.server) {
+      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+      const { loadDashboardLocationQa } = await import('~/server/utils/dashboard-editor-resources')
+      return await loadDashboardLocationQa(requestEvent, siteId, locationId.value)
+    }
+    return await dashboardApi<{ qa: QaRow[] }>(
+      `/api/editor/sites/${siteId}/locations/${locationId.value}/qa`,
+      {
+        validate: (value): value is { qa: QaRow[] } =>
+          isRecord(value)
+          && Array.isArray(value.qa)
+          && value.qa.every(row => isRecord(row) && typeof row.id === 'string'),
+      },
+    )
+  },
+)
+watch(qaResource, value => {
+  if (value) qaRows.value = value.qa
+}, { immediate: true })
+watch([qaPending, qaResourceError], () => {
+  loading.value = qaPending.value
+  loadError.value = qaResourceError.value?.message ?? null
+}, { immediate: true })
 
 async function loadQa() {
   if (!locationId.value) {
@@ -110,11 +149,14 @@ async function loadQa() {
     return
   }
   loading.value = true
+  loadError.value = null
   try {
-    const res = await dashboardApi<{ qa: QaRow[] }>(`/api/editor/sites/${siteId}/locations/${locationId.value}/qa`)
-    qaRows.value = res.qa ?? []
+    await refreshQa()
+    if (qaResourceError.value) throw qaResourceError.value
+    if (!qaResource.value) throw new Error('Q&A response unavailable')
+    qaRows.value = qaResource.value.qa
   } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to load Q&A', color: 'error' })
+    loadError.value = error instanceof Error ? error.message : 'Failed to load Q&A'
   } finally {
     loading.value = false
   }
@@ -139,13 +181,20 @@ async function saveQa() {
     if (editingId.value) {
       await dashboardApi(`/api/editor/sites/${siteId}/locations/${locationId.value}/qa/${editingId.value}`, {
         method: 'PATCH',
-        body: { question: form.question, answer: form.answer || null, is_owner_answer: 1 }
+        body: { question: form.question, answer: form.answer || null, is_owner_answer: 1 },
+        validate: (value): value is { updated: true; qa_id: string } =>
+          isRecord(value) && value.updated === true && typeof value.qa_id === 'string',
       })
       toast.add({ description: 'Q&A updated', color: 'success' })
     } else {
       await dashboardApi(`/api/editor/sites/${siteId}/locations/${locationId.value}/qa`, {
         method: 'POST',
-        body: { question: form.question, answer: form.answer || null, is_owner_answer: 1 }
+        body: { question: form.question, answer: form.answer || null, is_owner_answer: 1 },
+        validate: (value): value is QaRow =>
+          isRecord(value)
+          && typeof value.id === 'string'
+          && typeof value.question === 'string'
+          && typeof value.sort_order === 'number',
       })
       toast.add({ description: 'Q&A added', color: 'success' })
     }
@@ -163,7 +212,9 @@ async function updateQa(item: QaRow, body: ApiRecord, successMessage: string) {
   try {
     await dashboardApi(`/api/editor/sites/${siteId}/locations/${locationId.value}/qa/${item.id}`, {
       method: 'PATCH',
-      body
+      body,
+      validate: (value): value is { updated: true; qa_id: string } =>
+        isRecord(value) && value.updated === true && typeof value.qa_id === 'string',
     })
     toast.add({ description: successMessage, color: 'success' })
     await loadQa()
@@ -192,7 +243,9 @@ async function moveQa(item: QaRow, direction: -1 | 1) {
           { id: item.id, sort_order: target.sort_order },
           { id: target.id, sort_order: item.sort_order }
         ]
-      }
+      },
+      validate: (value): value is { updated: number } =>
+        isRecord(value) && typeof value.updated === 'number',
     })
     toast.add({ description: 'Q&A reordered', color: 'success' })
     await loadQa()
@@ -206,7 +259,11 @@ async function deleteQa(item: QaRow) {
   if (!confirm(`Delete this question?\n\n${item.question}`)) return
   deletingId.value = item.id
   try {
-  await dashboardApi(`/api/editor/sites/${siteId}/locations/${locationId.value}/qa/${item.id}`, { method: 'DELETE' })
+    await dashboardApi(`/api/editor/sites/${siteId}/locations/${locationId.value}/qa/${item.id}`, {
+      method: 'DELETE',
+      validate: (value): value is { qa_id: string; deleted: true } =>
+        isRecord(value) && typeof value.qa_id === 'string' && value.deleted === true,
+    })
     qaRows.value = qaRows.value.filter(row => row.id !== item.id)
     toast.add({ description: 'Q&A deleted', color: 'neutral' })
   } catch (error) {
@@ -216,20 +273,10 @@ async function deleteQa(item: QaRow) {
   }
 }
 
-onMounted(async () => {
-  try {
-    await loadQa()
-  } catch (error) {
-    loading.value = false
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to load Q&A page', color: 'error' })
-  }
-})
-
 watch(locationId, () => {
   editingId.value = null
   form.question = ''
   form.answer = ''
-  void loadQa()
 })
 
 useSeoMeta({ title: 'Q&A | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

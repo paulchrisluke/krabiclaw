@@ -330,8 +330,6 @@ const retryContext = async () => {
   contextRetrying.value = true
   try {
     await loadContext()
-  } catch (error) {
-    contextError.value ??= normalizeApiError(error, 'Workspace context failed')
   } finally {
     contextRetrying.value = false
   }

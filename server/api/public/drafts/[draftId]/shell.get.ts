@@ -1,5 +1,6 @@
 import { jsonResponse } from '~/server/utils/api-response'
-import { loadPublicDraftBootstrap } from '~/server/utils/public-draft-bootstrap'
+import { loadPublicDraftShell } from '~/server/utils/public-draft-bootstrap'
+import { finalizeRequestMetrics } from '~/server/utils/request-metrics'
 
 export default defineEventHandler(async (event) => {
   const draftId = String(getRouterParam(event, 'draftId') || '').trim()
@@ -7,5 +8,6 @@ export default defineEventHandler(async (event) => {
   const query = Object.fromEntries(
     Object.entries(rawQuery).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
   )
-  return jsonResponse(await loadPublicDraftBootstrap(event, draftId, query))
+  const payload = await loadPublicDraftShell(event, draftId, query)
+  return jsonResponse(finalizeRequestMetrics(event, 'public-draft-shell', payload))
 })

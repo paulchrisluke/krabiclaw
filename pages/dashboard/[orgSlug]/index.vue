@@ -110,7 +110,5 @@ function verticalLabel(vertical: string | null) {
   return getVerticalLabel(vertical)
 }
 
-onMounted(() => {
-  pending.value = false
-})
+pending.value = false
 </script>

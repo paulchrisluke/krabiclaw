@@ -57,7 +57,5 @@ const sites = computed(() => dashboard.sites.value)
 const canManageOrganization = computed(() => ['owner', 'admin'].includes(dashboard.organization.value?.role ?? ''))
 const sitesWithSubdomain = computed(() => sites.value.filter((site): site is (typeof sites.value)[number] & { subdomain: string } => Boolean(site.subdomain)))
 
-onMounted(() => {
-  pending.value = false
-})
+pending.value = false
 </script>

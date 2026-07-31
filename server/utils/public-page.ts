@@ -1,9 +1,7 @@
-// Canonical public shell/page bootstrap service.
-// Single SSR call per page type. Optional query params:
+// Canonical route-capability-driven public page service.
 //   ?page=home|about|contact|location|reviews|photos|qa|...
 //   ?location=slug          scope content to a location
-//   ?menu=1                 include active menu items
-//   ?data=reviews|photos|qa include full page-specific dataset (type A/E/F)
+//   ?datasets=content,menu   include only the named route capabilities
 // All inline D1 queries run in a single executeBatch() call.
 import { executeBatch, queryFirst, type BatchQuery } from "~/server/db";
 import { getHeader, setHeader, type H3Event } from "h3";
@@ -32,10 +30,10 @@ import {
   resolveContentComponentsMedia,
 } from "~/server/utils/platform-content";
 import {
-  buildBootstrapCacheKey,
-  getBootstrapCache,
-  putBootstrapCache,
-} from "~/server/utils/bootstrap-cache";
+  buildPublicResourceCacheKey,
+  getPublicResourceCache,
+  putPublicResourceCache,
+} from "~/server/utils/public-resource-cache";
 import { recordRequestPhase } from "~/server/utils/request-metrics";
 import {
   renderBookingPolicySummary,
@@ -44,6 +42,8 @@ import {
 import { getCloudflareWaitUntil } from "~/server/utils/mcp-route-helpers";
 import { isPreviewContext } from "~/server/utils/tenant-hosts";
 import { getPublishedPosts } from "~/server/utils/post-management";
+import { loadPublicBase } from "~/server/utils/public-base";
+import { isPublicPagePayload } from '~/utils/public-resource-contracts'
 
 function groupContentBlocks(rows: SiteContent[]): Array<SiteContent & { _section: string }> {
   const groups = Object.create(null) as Record<string, SiteContent & { _section: string }>
@@ -123,94 +123,11 @@ interface MenuItemTranslationRow {
 
 type MenuItemMediaRow = MediaAsset & { menu_item_id: string; sort_order: number };
 
-interface PublicBase {
-  site: {
-    id: string;
-    organization_id: string;
-    default_currency: string | null;
-    contact_email: string | null;
-    contact_phone: string | null;
-    brand_name: string | null;
-    brand_description: string | null;
-    vertical: string | null;
-    logo_url: string | null;
-    favicon_url: string | null;
-    og_image_url: string | null;
-    seo_title: string | null;
-    seo_description: string | null;
-    canonical_url: string | null;
-    robots: string | null;
-    source_locale: string | null;
-    default_timezone: string | null;
-  };
-}
-
-const publicBaseByRequest = new WeakMap<H3Event, Map<string, Promise<PublicBase>>>();
-const publicShellReadsByRequest = new WeakMap<H3Event, Map<string, Promise<unknown>>>()
 const publicPageReadsByRequest = new WeakMap<H3Event, Map<string, Promise<unknown>>>()
 
-interface PublicBootstrapLoadOptions {
+interface PublicPageLoadOptions {
   mutateResponseHeaders?: boolean
   signal?: AbortSignal
-}
-
-/**
- * Request-scoped site identity. Shell and page SSR providers share this
- * promise, so one render cannot resolve the same tenant twice.
- */
-export function loadPublicBase(
-  event: H3Event,
-  siteId: string,
-  options: { previewAuthorized?: boolean } = {},
-): Promise<PublicBase> {
-  let requestReads = publicBaseByRequest.get(event);
-  if (!requestReads) {
-    requestReads = new Map();
-    publicBaseByRequest.set(event, requestReads);
-  }
-  const key = `${siteId}:${options.previewAuthorized ? "preview" : "public"}`;
-  const existing = requestReads.get(key);
-  if (existing) return existing;
-
-  const pending = (async () => {
-    const startedAt = performance.now();
-    const db = cloudflareEnv(event).DB;
-    if (!db) throw createError({ statusCode: 503, statusMessage: "Database unavailable" });
-    try {
-      const site = await queryFirst<PublicBase["site"]>(
-        db,
-        `SELECT s.id, s.organization_id, s.default_currency, s.contact_email, s.contact_phone, s.brand_name, s.vertical,
-              s.brand_description, COALESCE(ma_logo.public_url, s.logo_url) AS logo_url,
-              json_extract(s.settings, '$.favicon_url') AS favicon_url,
-              ma_og.public_url AS og_image_url,
-              s.seo_title, s.seo_description, s.canonical_url, s.robots,
-              (SELECT sl.locale
-                 FROM site_locales sl
-                WHERE sl.organization_id = s.organization_id
-                  AND sl.site_id = s.id
-                  AND sl.is_source = 1
-                LIMIT 1) AS source_locale,
-              (SELECT sc.value
-                 FROM site_config sc
-                WHERE sc.organization_id = s.organization_id
-                  AND sc.site_id = s.id
-                  AND sc.key = 'default_timezone'
-                LIMIT 1) AS default_timezone
-         FROM sites s
-         LEFT JOIN media_assets ma_logo ON s.logo_asset_id = ma_logo.id AND ma_logo.status = 'active'
-         LEFT JOIN media_assets ma_og ON s.og_image_asset_id = ma_og.id AND ma_og.status = 'active'
-        WHERE s.id = ? AND s.status = 'active'${options.previewAuthorized ? "" : " AND s.onboarding_status = 'active'"}
-        LIMIT 1`,
-        [siteId],
-      );
-      if (!site) throw createError({ statusCode: 404, statusMessage: "Site not found" });
-      return { site };
-    } finally {
-      recordRequestPhase(event, "base", startedAt);
-    }
-  })();
-  requestReads.set(key, pending);
-  return pending;
 }
 
 const parseJson = (raw: string | null) => {
@@ -295,14 +212,11 @@ function parseExperienceRow(row: Record<string, unknown>): Experience {
   } as Experience;
 }
 
-type PublicResourceKind = 'shell' | 'page'
-
-async function loadPublicResource(
+async function loadPublicPageSource(
   event: H3Event,
   siteId: string,
-  resourceKind: PublicResourceKind,
   query: Record<string, string | undefined>,
-  options: PublicBootstrapLoadOptions = {},
+  options: PublicPageLoadOptions = {},
 ) {
   options.signal?.throwIfAborted();
   const mutateResponseHeaders = options.mutateResponseHeaders ?? true;
@@ -331,15 +245,23 @@ async function loadPublicResource(
     typeof query.location === "string" ? query.location : null;
   const experienceSlug =
     typeof query.experience === "string" ? query.experience : null;
-  const includeMenu = query.menu === "1" || query.menu === "true";
-  const dataType = typeof query.data === "string" ? query.data : null; // 'reviews' | 'photos' | 'qa' | 'blog' | 'blogPost'
+  const requestedDatasets = new Set(
+    typeof query.datasets === "string" && query.datasets
+      ? query.datasets.split(",")
+      : [],
+  );
+  const includeMenu = requestedDatasets.has("menu");
   const blogSlug = typeof query.blogSlug === "string" ? query.blogSlug : null;
   const locale = typeof query.locale === "string" ? query.locale : undefined;
 
   // Validate query inputs before using KV cache — only allow known-safe values
   // to prevent unbounded cache entries from arbitrary variants.
-  const VALID_DATA_TYPES = new Set(['reviews', 'photos', 'qa', 'blog', 'blogPost', 'posts']);
-  // Mirrors composables/useBootstrapParams.ts's getBootstrapParams() — the only
+  const VALID_DATASETS = new Set([
+    'content', 'location', 'menu', 'reviews', 'photos', 'qa', 'posts',
+    'blog', 'blogPost', 'experiences', 'experienceDetail',
+    'reservationPolicies', 'experiencePolicies',
+  ]);
+  // Mirrors composables/usePublicPageRequest.ts's getPublicPageRequest() — the only
   // page values the frontend ever requests. A regex alone (e.g. /^[a-z0-9_-]+$/)
   // would still let an attacker mint unlimited distinct cache keys by varying
   // the page value; allowlisting against the real route set bounds that space.
@@ -347,7 +269,7 @@ async function loadPublicResource(
     'home', 'locations', 'location', 'about', 'contact', 'reservations',
     'order', 'qa', 'reviews', 'posts', 'experiences', 'photos', 'menu', 'blog',
   ]);
-  const isValidDataType = dataType === null || VALID_DATA_TYPES.has(dataType);
+  const areDatasetsValid = [...requestedDatasets].every(dataset => VALID_DATASETS.has(dataset));
   const isValidLocale = locale === undefined || /^[a-z]{2}(-[A-Z]{2})?$/.test(locale);
   const isValidPage = page === null || VALID_PAGES.has(page);
   // locationSlug/experienceSlug/blogSlug can't be allowlisted up front — they're
@@ -359,10 +281,10 @@ async function loadPublicResource(
   const isValidExperience = experienceSlug === null || /^[a-z0-9_-]+$/.test(experienceSlug);
   const isValidBlogSlug = blogSlug === null || /^[a-z0-9_-]+$/.test(blogSlug);
 
-  const allInputsValid = isValidDataType && isValidLocale && isValidPage &&
+  const allInputsValid = areDatasetsValid && isValidLocale && isValidPage &&
     isValidLocation && isValidExperience && isValidBlogSlug;
   if (!allInputsValid) {
-    throw createError({ statusCode: 400, statusMessage: "Invalid public bootstrap query" });
+    throw createError({ statusCode: 400, statusMessage: "Invalid public page query" });
   }
 
   // Read-through KV cache for the D1 batch below. Skipped for preview-authorized
@@ -373,29 +295,44 @@ async function loadPublicResource(
   // a 60s-old cached response could serve pre-reseed content into a fresh E2E run.
   // Also skipped if any query input is invalid to prevent unbounded cache entries.
   const host = getHeader(event, "host") ?? "";
-  const useBootstrapCache = !isPreviewAuthorized && !isPreviewContext(host) && allInputsValid;
-  const cacheKey = buildBootstrapCacheKey(siteId, {
-    contract: resourceKind,
+  const usePageCache = !isPreviewAuthorized && !isPreviewContext(host) && allInputsValid;
+  const cacheKey = buildPublicResourceCacheKey(siteId, {
+    contract: 'page',
     page,
     location: locationSlug,
     experience: experienceSlug,
-    menu: includeMenu,
-    data: dataType,
+    datasets: [...requestedDatasets],
     blogSlug,
     locale,
   });
-  if (useBootstrapCache) {
+  if (usePageCache) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const kv = (env as any).SITE_CACHE as KVNamespace | undefined;
     if (kv) {
-      const cached = await getBootstrapCache(kv, cacheKey);
+      const cacheStartedAt = performance.now();
+      const cached = await getPublicResourceCache(kv, cacheKey);
+      recordRequestPhase(event, "cache", cacheStartedAt);
       options.signal?.throwIfAborted();
       if (cached) {
         try {
+          const parsed = JSON.parse(cached) as unknown;
+          if (!isPublicPagePayload(parsed, page ?? 'home')) {
+            throw new Error("Page cache contract mismatch");
+          }
           if (mutateResponseHeaders) setHeader(event, "x-bootstrap-cache", "HIT");
-          return JSON.parse(cached) as ApiRecord;
-        } catch {
-          // Invalid cached JSON — treat as a miss and regenerate
+          return parsed;
+        } catch (error) {
+          console.warn("[public-resource-cache] corrupt page entry", {
+            siteId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          const deletion = kv.delete(cacheKey).catch((deleteError: unknown) => {
+            console.warn("[public-resource-cache] corrupt page deletion failed", {
+              siteId,
+              error: String(deleteError),
+            });
+          });
+          getCloudflareWaitUntil(event)?.(deletion);
         }
       }
       if (mutateResponseHeaders) setHeader(event, "x-bootstrap-cache", "MISS");
@@ -423,28 +360,21 @@ async function loadPublicResource(
 
   // Pages that render the sitewide reviews list
   const needsGlobalReviews =
-    page === "home" || (page === "reviews" && !locationSlug);
+    requestedDatasets.has("reviews") && !locationSlug;
   // Pages that render the posts feed
-  const needsGlobalPosts = page === "home" || page === "posts";
+  const needsGlobalPosts = requestedDatasets.has("posts") && !locationSlug;
   // Pages that display location hero images (cards or detail header)
-  const needsLocationHeroMedia =
-    !page ||
-    page === "home" ||
-    page === "reservations" ||
-    page === "locations" ||
-    page === "photos" ||
-    !!locationSlug;
+  const needsLocationHeroMedia = requestedDatasets.has("location");
   const needsLocations =
-    resourceKind === "shell" ||
     needsLocationHeroMedia ||
-    page === "menu" ||
-    page === "experiences";
+    requestedDatasets.has("menu") ||
+    requestedDatasets.has("experiences") ||
+    requestedDatasets.has("reservationPolicies") ||
+    requestedDatasets.has("experiencePolicies");
 
   // Build batch — one subrequest to D1 for all inline queries
   const batchStmts: BatchQuery[] = [];
-  let idxLoc = -1,
-    idxConfig = -1,
-    idxLocale = -1;
+  let idxLoc = -1;
   let idxReviews = -1,
     idxLocReviews = -1;
   let idxFullReviews = -1,
@@ -502,33 +432,8 @@ async function loadPublicResource(
     [orgId, siteId],
   );
 
-  if (resourceKind === 'shell') idxConfig = push(
-    `SELECT key, value
-       FROM site_config
-      WHERE organization_id = ? AND site_id = ?
-     UNION ALL
-     SELECT '__experience_count',
-            CAST((SELECT COUNT(*) FROM experiences WHERE site_id = ? AND status != 'inactive') AS TEXT)
-     UNION ALL
-     SELECT '__has_menu',
-            CAST(EXISTS(
-              SELECT 1 FROM menus
-              WHERE organization_id = ? AND site_id = ? AND status = 'published'
-            ) AS TEXT)`,
-    [orgId, siteId, siteId, orgId, siteId],
-  );
-
-  if (resourceKind === 'shell') idxLocale = push(
-    `SELECT locale, label, is_source, status
-     FROM site_locales
-     WHERE organization_id = ? AND site_id = ?
-       AND (is_source = 1 OR status = 'published')
-     ORDER BY is_source DESC, locale ASC`,
-    [orgId, siteId],
-  );
-
   // Content for the requested page (source + translations)
-  if (page) {
+  if (page && requestedDatasets.has("content")) {
     const contentParams: unknown[] = [orgId, siteId, page];
     if (locationId) contentParams.push(locationId);
 
@@ -641,9 +546,7 @@ async function loadPublicResource(
   // Experiences are page data. The persistent shell receives only the
   // hasExperiences capability and never pays for list availability/policies.
   const needsExperiencesList =
-    (page === "experiences" && !experienceSlug) ||
-    page === "home" ||
-    page === "location";
+    requestedDatasets.has("experiences") && !experienceSlug;
 
   if (needsExperiencesList) {
     const expParams: unknown[] = [orgId, siteId];
@@ -666,7 +569,7 @@ async function loadPublicResource(
     idxExperiencesList = push(expSql, expParams);
   }
 
-  if (page === "experiences" && experienceSlug) {
+  if (requestedDatasets.has("experienceDetail") && experienceSlug) {
     idxExperienceDetail = push(
       `SELECT e.id, e.organization_id, e.site_id, e.location_id,
               e.title, e.slug, e.tagline, e.body,
@@ -700,7 +603,7 @@ async function loadPublicResource(
   // formatted PublishedPostSummary shape (slug, canonical_url, gallery media) that this raw
   // row shape doesn't have — no point running an equivalent query here just to discard it.
 
-  if (locationId)
+  if (locationId && requestedDatasets.has("reviews"))
     idxLocReviews = push(
       `SELECT id, author_name, rating, content, created_at
        FROM reviews WHERE location_id = ? AND site_id = ? AND status = 'approved'
@@ -708,7 +611,7 @@ async function loadPublicResource(
       [locationId, siteId],
     );
 
-  if (locationId && dataType === "reviews")
+  if (locationId && requestedDatasets.has("reviews"))
     idxFullReviews = push(
       `SELECT id, author_name, reviewer_photo_url, rating, title, content,
               owner_reply, owner_reply_at, photo_urls, source, created_at
@@ -717,7 +620,7 @@ async function loadPublicResource(
       [locationId, siteId],
     );
 
-  if (dataType === "photos")
+  if (requestedDatasets.has("photos"))
     idxPhotos = push(
       locationId
         ? `SELECT id, public_url, thumbnail_url, alt_text, category, created_at, location_id
@@ -731,7 +634,7 @@ async function loadPublicResource(
       locationId ? [siteId, locationId] : [siteId],
     );
 
-  if (dataType === "blog" || page === "home")
+  if (requestedDatasets.has("blog"))
     idxBlogList = push(
       // read_time_minutes approximates words as body length / 5 chars at 200wpm —
       // avoids shipping the full post body to list views just to estimate read time.
@@ -748,7 +651,7 @@ async function loadPublicResource(
       [siteId, page === "home" ? 3 : 50],
     );
 
-  if (dataType === "blogPost" && blogSlug)
+  if (requestedDatasets.has("blogPost") && blogSlug)
     idxBlogPost = push(
       `SELECT p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.seo_description, p.seo_keywords,
               p.canonical_url, p.robots, p.published_at, p.created_at, p.updated_at,
@@ -763,7 +666,7 @@ async function loadPublicResource(
       [blogSlug, siteId],
     );
 
-  if (dataType === "qa")
+  if (requestedDatasets.has("qa"))
     idxQa = push(
       locationId
         ? `SELECT id, question, question_author, question_date,
@@ -788,9 +691,6 @@ async function loadPublicResource(
   const locRows = idxLoc >= 0
     ? batchResults[idxLoc] as { results: Record<string, unknown>[] }
     : { results: [] as Record<string, unknown>[] };
-  const configRows = idxConfig >= 0
-    ? batchResults[idxConfig] as { results: { key: string; value: string }[] }
-    : { results: [] as { key: string; value: string }[] };
   const reviewRows =
     idxReviews >= 0
       ? (batchResults[idxReviews] as { results: Record<string, unknown>[] })
@@ -811,25 +711,7 @@ async function loadPublicResource(
     idxQa >= 0
       ? (batchResults[idxQa] as { results: Record<string, unknown>[] })
       : { results: [] as Record<string, unknown>[] };
-  const localeRows = idxLocale >= 0
-    ? batchResults[idxLocale] as {
-        results: {
-          locale: string
-          label: string | null
-          is_source: number
-          status: string
-        }[]
-      }
-    : { results: [] };
-  const experienceCountVal = Number(
-    configRows.results.find(({ key }) => key === "__experience_count")?.value ?? 0,
-  );
-  const hasMenu =
-    configRows.results.find(({ key }) => key === "__has_menu")?.value === "1";
-
-  const sourceLocale =
-    site.source_locale
-    ?? (localeRows.results ?? []).find((l) => l.is_source)?.locale;
+  const sourceLocale = site.source_locale;
 
   // Build content rows
   const buildContentRows = (
@@ -1029,7 +911,7 @@ async function loadPublicResource(
     })),
     defaultTimezone: site.default_timezone ?? "UTC",
   };
-  const experiencesList = page === "experiences"
+  const experiencesList = requestedDatasets.has("experiences")
     ? await attachAvailabilitySummaries(db, orgId, siteId, experiencesWithMedia, availabilityContext)
     : experiencesWithMedia;
 
@@ -1060,7 +942,9 @@ async function loadPublicResource(
   options.signal?.throwIfAborted();
   const [globalPublishedPosts, locationPublishedPosts] = await Promise.all([
     needsGlobalPosts ? getPublishedPosts(db, siteId, env, page === "posts" ? 50 : 6) : Promise.resolve([]),
-    locationId && dataType === "posts" ? getPublishedPosts(db, siteId, env, 50, locationId) : Promise.resolve([]),
+    locationId && requestedDatasets.has("posts")
+      ? getPublishedPosts(db, siteId, env, 50, locationId)
+      : Promise.resolve([]),
   ]);
 
   // Shape locations
@@ -1115,78 +999,6 @@ async function loadPublicResource(
     };
   });
 
-  const config = Object.fromEntries(
-    (configRows.results ?? [])
-      .filter(({ key }) => !key.startsWith("__"))
-      .map(({ key, value }) => [key, value]),
-  );
-  config.default_currency = site.default_currency || "THB";
-  if (site.contact_email) config.contact_email = site.contact_email;
-  if (site.contact_phone) config.contact_phone = site.contact_phone;
-  if (site.brand_name) config.brand_name = site.brand_name;
-  if (site.brand_description) config.brand_description = site.brand_description;
-  if (site.logo_url) config.logo_url = site.logo_url;
-  if (site.favicon_url) config.favicon_url = site.favicon_url;
-  if (site.og_image_url) config.og_image_url = site.og_image_url;
-  if (site.seo_title) config.seo_title = site.seo_title;
-  if (site.seo_description) config.seo_description = site.seo_description;
-  if (site.canonical_url) config.canonical_url = site.canonical_url;
-  if (site.robots) config.robots = site.robots;
-
-  const primary =
-    (locRows.results ?? []).find((l) => l.is_primary) ??
-    locRows.results?.[0] ??
-    null;
-
-  // Site-wide review summary: a review-count-weighted average across every verified
-  // location, not just the primary one — a site with several separately-synced
-  // locations should show a rating that represents the whole business, not one address.
-  const verifiedLocations = (locRows.results ?? []).filter(
-    (l) => l.last_synced_at && l.rating != null && l.review_count != null,
-  );
-  const siteReviewCount = verifiedLocations.reduce(
-    (sum, l) => sum + Number(l.review_count),
-    0,
-  );
-  const siteReviewSummary =
-    siteReviewCount > 0
-      ? {
-          averageRating:
-            Math.round(
-              (verifiedLocations.reduce(
-                (sum, l) => sum + Number(l.rating) * Number(l.review_count),
-                0,
-              ) /
-                siteReviewCount) *
-                10,
-            ) / 10,
-          totalReviewCount: siteReviewCount,
-        }
-      : null;
-
-  const googleBusiness = {
-    business: primary
-      ? {
-          title: primary.title,
-          city: primary.city,
-          storefrontAddress: parseJson(primary.address as string | null),
-          phoneNumbers: primary.phone ? [{ phoneNumber: primary.phone }] : [],
-          websiteUri: primary.website_url,
-          mapsUri: primary.maps_url,
-          latlng:
-            primary.latitude && primary.longitude
-              ? { latitude: primary.latitude, longitude: primary.longitude }
-              : null,
-          profile: { description: primary.description },
-          reviewSummary: siteReviewSummary,
-        }
-      : null,
-    reviews: reviewRows.results ?? [],
-    media: [],
-    posts: globalPublishedPosts,
-    syncedAt: primary?.last_synced_at ?? null,
-  };
-
   const experiencePolicyTargets = new Map<string, { locationId: string | null }>();
   for (const experience of experiencesList) {
     experiencePolicyTargets.set(experience.id, {
@@ -1199,10 +1011,14 @@ async function loadPublicResource(
     });
   }
 
-  const needsReservationPolicies = resourceKind === 'page' && page === 'reservations';
-  const needsExperiencePolicies = resourceKind === 'page' && (
-    page === 'experiences' || page === 'location' || page === 'menu'
-  );
+  const needsReservationPolicies = requestedDatasets.has('reservationPolicies');
+  const needsExperiencePolicies = requestedDatasets.has('experiencePolicies');
+  if ((needsReservationPolicies || needsExperiencePolicies) && !locale && !sourceLocale) {
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'Site source locale is not configured',
+    });
+  }
   options.signal?.throwIfAborted();
   const [reservationPolicies, experiencePolicies] = await Promise.all([
     needsReservationPolicies ? resolveBookingPolicyIndex(db, {
@@ -1218,7 +1034,7 @@ async function loadPublicResource(
     }) : Promise.resolve(null),
   ]);
   options.signal?.throwIfAborted();
-  const policyLocale = locale ?? sourceLocale;
+  const policyLocale = locale ?? sourceLocale!;
   const reservationPolicySiteDefault = reservationPolicies
     ? renderBookingPolicySummary(reservationPolicies.site, policyLocale)
     : null;
@@ -1298,31 +1114,6 @@ async function loadPublicResource(
     }
   }
 
-  const shellPayload = {
-    success: true,
-    locations,
-    config,
-    googleBusiness,
-    count: locations.length,
-    locales: (localeRows?.results ?? []).map((l) => ({
-      code: l.locale,
-      label: l.label ?? l.locale,
-      is_source: Boolean(l.is_source),
-    })),
-    hasExperiences: experienceCountVal > 0,
-    hasMenu,
-    site: {
-      brand_name: site.brand_name,
-      brand_description: site.brand_description,
-      vertical: site.vertical,
-      logo_url: site.logo_url,
-      logo_mime_type: null,
-      favicon_url: site.favicon_url,
-      config: {
-        phone: site.contact_phone,
-      },
-    },
-  };
   const pagePayload = {
     kind: page ?? 'home',
     success: true,
@@ -1331,7 +1122,7 @@ async function loadPublicResource(
     menu: menuData,
     locationReviews: locationReviewRows?.results ?? [],
     globalReviews: needsGlobalReviews ? reviewRows.results ?? [] : [],
-    reviewsAggregate: dataType === "reviews"
+    reviewsAggregate: requestedDatasets.has("reviews")
       && locationForAggregate?.last_synced_at
       && locationForAggregate.rating != null
       && locationForAggregate.review_count != null
@@ -1341,12 +1132,12 @@ async function loadPublicResource(
           distribution: reviewsDist,
         }
       : null,
-    reviewsList: dataType === "reviews" ? fullReviews : [],
-    photosList: dataType === "photos" ? photos : [],
-    qaList: dataType === "qa" ? qaRows?.results ?? [] : [],
-    blogList: dataType === "blog" || page === "home" ? blogList : [],
-    blogPost: dataType === "blogPost" ? blogPost : null,
-    postsList: dataType === "posts" ? locationPublishedPosts : [],
+    reviewsList: requestedDatasets.has("reviews") ? fullReviews : [],
+    photosList: requestedDatasets.has("photos") ? photos : [],
+    qaList: requestedDatasets.has("qa") ? qaRows?.results ?? [] : [],
+    blogList: requestedDatasets.has("blog") ? blogList : [],
+    blogPost: requestedDatasets.has("blogPost") ? blogPost : null,
+    postsList: requestedDatasets.has("posts") ? locationPublishedPosts : [],
     globalPosts: needsGlobalPosts ? globalPublishedPosts : [],
     reservationPolicySiteDefault,
     reservationPolicyByLocation,
@@ -1355,7 +1146,7 @@ async function loadPublicResource(
     experiencesList,
     experienceDetail,
   };
-  const payload = resourceKind === 'shell' ? shellPayload : pagePayload;
+  const payload = pagePayload;
 
   // Slug-shaped inputs are only worth caching once they've resolved to a real
   // row — otherwise a stream of made-up slugs (still regex-valid) would each
@@ -1366,13 +1157,13 @@ async function loadPublicResource(
     (!experienceSlug || !!experienceDetail) &&
     (!blogSlug || !!blogPost);
 
-  if (useBootstrapCache && resolvedSlugsValid) {
+  if (usePageCache && resolvedSlugsValid) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const kv = (env as any).SITE_CACHE as KVNamespace | undefined;
     if (kv) {
-      const putAsync = putBootstrapCache(kv, cacheKey, JSON.stringify(payload)).catch(
+      const putAsync = putPublicResourceCache(kv, cacheKey, JSON.stringify(payload)).catch(
         (err: unknown) => {
-          console.warn("[bootstrap-cache] put failed:", String(err));
+          console.warn("[public-resource-cache] page put failed:", String(err));
         },
       );
       const waitUntil = getCloudflareWaitUntil(event);
@@ -1383,38 +1174,17 @@ async function loadPublicResource(
   return payload;
 }
 
-export const loadPublicShell = (
-  event: H3Event,
-  siteId: string,
-  query: Pick<Record<string, string | undefined>, 'locale' | 'token'>,
-  options?: PublicBootstrapLoadOptions,
-) => {
-  let requestReads = publicShellReadsByRequest.get(event);
-  if (!requestReads) {
-    requestReads = new Map();
-    publicShellReadsByRequest.set(event, requestReads);
-  }
-  const key = `${siteId}:${query.locale ?? ''}:${query.token ?? ''}`;
-  const existing = requestReads.get(key);
-  if (existing) return existing;
-  const startedAt = performance.now();
-  const operation = loadPublicResource(event, siteId, 'shell', query, options);
-  const pending = operation
-    .finally(() => recordRequestPhase(event, "shell", startedAt))
-    .catch((error) => {
-      if (requestReads.get(key) === pending) requestReads.delete(key);
-      throw error;
-    });
-  requestReads.set(key, pending);
-  return pending;
-};
-
 export const loadPublicPage = (
   event: H3Event,
   siteId: string,
   query: Record<string, string | undefined>,
-  options?: PublicBootstrapLoadOptions,
+  options?: PublicPageLoadOptions,
 ) => {
+  if (options?.signal) {
+    const startedAt = performance.now();
+    return loadPublicPageSource(event, siteId, query, options)
+      .finally(() => recordRequestPhase(event, "page", startedAt));
+  }
   let requestReads = publicPageReadsByRequest.get(event);
   if (!requestReads) {
     requestReads = new Map();
@@ -1430,7 +1200,7 @@ export const loadPublicPage = (
   if (existing) return existing;
 
   const startedAt = performance.now();
-  const operation = loadPublicResource(event, siteId, 'page', query, options);
+  const operation = loadPublicPageSource(event, siteId, query, options);
   const pending = operation
     .finally(() => recordRequestPhase(event, "page", startedAt))
     .catch((error) => {

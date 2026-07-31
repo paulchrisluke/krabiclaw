@@ -10,8 +10,8 @@ chrome data: site identity, locations, configuration, locales, Google Business
 summary, and the `hasExperiences` capability. Full menus, experiences,
 availability, and booking policies belong to the route-keyed page payload.
 
-During SSR, `useSiteShell` and `useBootstrap` call the request-scoped public
-bootstrap provider, which invokes `loadPublicShell` and `loadPublicPage` with
+During SSR, `useSiteShell` and `usePublicPageData` call the request-scoped public
+resource provider, which invokes `loadPublicShell` and `loadPublicPage` with
 the original request event and Cloudflare bindings. The public API routes are
 browser transport wrappers over those same loaders. Browser reads use
 `publicApiRequest`, which applies a six-second

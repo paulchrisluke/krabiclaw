@@ -23,7 +23,7 @@ import { MCP_PROMPTS, renderMcpPrompt } from "~/server/utils/mcp-prompts";
 import { cloudflareEnv } from "~/server/utils/api-response";
 import { queryAll } from "~/server/db";
 import { purgeSiteKvCache } from "~/server/utils/edge-cache";
-import { purgeBootstrapCache } from "~/server/utils/bootstrap-cache";
+import { purgePublicResourceCache } from "~/server/utils/public-resource-cache";
 import { schedulePlatformKnowledgeIndexRebuild } from "~/server/utils/platform-search-rebuild";
 import {
   assertConversationalToolEnabled,
@@ -524,16 +524,16 @@ Common workflows: update menus and items, create and publish site posts, triage 
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const db = (env as any).DB as D1Database | undefined;
           if (kv) {
-            // Bootstrap cache is keyed by siteId directly (not hostname), so no
+            // Public resource cache is keyed by siteId directly (not hostname), so no
             // domain lookup is needed here — unlike the HTML purge below.
             // Awaited inline (not waitUntil) so the MCP response never returns
-            // before the stale bootstrap entry is cleared — otherwise a client
-            // that reads bootstrap immediately after this mutation could still
+            // before the stale public resource entry is cleared — otherwise a client
+            // that reads public resources immediately after this mutation could still
             // see stale data.
             try {
-              await purgeBootstrapCache(kv, siteId)
+              await purgePublicResourceCache(kv, siteId)
             } catch (err: unknown) {
-              console.warn("[mcp-cache-purge] bootstrap purge failed:", String(err))
+              console.warn("[mcp-cache-purge] public resource purge failed:", String(err))
             }
           }
           if (kv && db) {

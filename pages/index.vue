@@ -161,7 +161,7 @@
         :data="{
           hero: hero,
           eyebrow: getField('hero.eyebrow', businessCity),
-          locations: bootstrapLocations,
+          locations: pageLocations,
           businessTitle: businessTitle,
           businessSubtitle: businessSubtitle,
           businessCity: businessCity,
@@ -172,7 +172,7 @@
           orderNowCta: homeCopy.orderNowCta,
           viewMenuCta: homeCopy.viewMenuCta,
           viewMenuRoute: homeCopy.viewMenuRoute,
-          brandColor: bootstrapConfig.value?.brand_color,
+          brandColor: pageConfig.value?.brand_color,
           vertical: site?.vertical
         }"
       />
@@ -414,7 +414,7 @@ const { isPlatform, siteId, draftId, site } = useTenantSite()
 const { isBlawby } = usePublicTemplate()
 const { locale } = useI18n()
 const isBlawbyPage = computed(() => isBlawby.value)
-const shouldUseSayaBootstrap = computed(() => !isBlawbyPage.value)
+const shouldLoadSayaPage = computed(() => !isBlawbyPage.value)
 
 const platformPlans = isPlatform ? usePlans().plans : ref(null)
 const plans = computed(() => isPlatform ? platformPlans.value : null)
@@ -452,18 +452,18 @@ if (!isPlatform && !siteId && !draftId) {
 // Replaces: /locations + /google-business + /config + /content/home + /menus
 // SayaHeader + SayaFooter share the same bootstrap key — zero duplicate calls.
 const {
-  locations: bootstrapLocations,
-  googleBusiness: bootstrapGB,
+  locations: pageLocations,
+  googleBusiness: pageGoogleBusiness,
   getField,
   getHero,
-  config: bootstrapConfig,
+  config: pageConfig,
   menuItemsBySection,
   experiencesList,
   contentBlocks,
   blogList,
-} = await useBootstrap({ enabled: shouldUseSayaBootstrap })
+} = await usePublicPageData({ enabled: shouldLoadSayaPage })
 
-const locations = computed(() => bootstrapLocations.value)
+const locations = computed(() => pageLocations.value)
 const hasOrderLinks = computed(() =>
   locations.value.some(loc => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
 )
@@ -484,7 +484,7 @@ const hasMenu = computed(() => {
 })
 
 const googleBusiness = computed(() => {
-  const gb = bootstrapGB.value
+  const gb = pageGoogleBusiness.value
   if (!gb) return null
   return {
     ...gb,
@@ -546,7 +546,7 @@ if (isPlatform) {
 // SEO for tenant sites: set ogUrl to the actual request URL so custom domains share correctly.
 if (!isPlatform && siteId && !isBlawbyPage.value) {
   const seoTitle = computed(() => {
-    if (bootstrapConfig.value?.seo_title) return bootstrapConfig.value.seo_title
+    if (pageConfig.value?.seo_title) return pageConfig.value.seo_title
     const primary = (restaurantName.value || '').trim()
     const secondary = (businessTitle.value || 'Business').trim() || 'Business'
     if (!primary || primary.toLowerCase() === secondary.toLowerCase()) {
@@ -559,22 +559,22 @@ if (!isPlatform && siteId && !isBlawbyPage.value) {
   // shared #259 composer) does its own platform-appropriate truncation, so
   // this page shouldn't pre-truncate and risk drifting from that length.
   const seoDescription = computed(() =>
-    bootstrapConfig.value?.seo_description || businessSubtitle.value || 'Professional business website with photos, updates and reviews.'
+    pageConfig.value?.seo_description || businessSubtitle.value || 'Professional business website with photos, updates and reviews.'
   )
 
   useTenantSocialMetadata(() => ({
-    path: bootstrapConfig.value?.canonical_url || '/',
+    path: pageConfig.value?.canonical_url || '/',
     title: seoTitle.value,
     description: seoDescription.value,
     brand: {
       siteName: site?.brand_name || restaurantName.value,
-      logoUrl: bootstrapConfig.value?.logo_url || null,
-      faviconUrl: bootstrapConfig.value?.favicon_url || null,
-      primaryColor: bootstrapConfig.value?.brand_color || null,
+      logoUrl: pageConfig.value?.logo_url || null,
+      faviconUrl: pageConfig.value?.favicon_url || null,
+      primaryColor: pageConfig.value?.brand_color || null,
     },
     heroImage: hero.value.image ? { url: hero.value.image } : null,
-    ogImageOverride: bootstrapConfig.value?.og_image_url ? { url: bootstrapConfig.value.og_image_url } : null,
-    robots: bootstrapConfig.value?.robots || null,
+    ogImageOverride: pageConfig.value?.og_image_url ? { url: pageConfig.value.og_image_url } : null,
+    robots: pageConfig.value?.robots || null,
   }))
 }
 
@@ -609,7 +609,7 @@ const featuredExperiences = computed(() => {
     })
   return (featured.length > 0 ? featured : allExperiences.filter(exp => exp.status === 'active')).slice(0, 6)
 })
-const defaultCurrency = computed(() => bootstrapConfig.value.default_currency || 'THB')
+const defaultCurrency = computed(() => pageConfig.value.default_currency || 'THB')
 const isExperienceTenant = computed(() => site?.vertical === 'experience')
 const homeExperienceHref = computed(() => resolveSiteExperienceHref(experiencesList.value))
 const homePrimaryCtaRoute = computed(() => {

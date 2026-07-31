@@ -264,9 +264,7 @@ async function saveSelection() {
   }
 }
 
-onMounted(async () => {
-  if (!dashboard.state.value) await dashboard.refresh()
-
+onMounted(() => {
   const status = route.query.ga
   if (status === 'connected') {
     toast.add({ description: 'Google account connected', color: 'success' })

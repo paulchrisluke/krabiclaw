@@ -317,7 +317,7 @@ if (bootstrapData) {
 
   // Location email is legitimately nullable: Google Places doesn't expose a
   // per-location email, and this client has no site-level contact_email
-  // configured. bootstrap.get.ts used to backfill it with the org owner's
+  // configured. The legacy combined public loader used to backfill it with the org owner's
   // private account email, which leaked personal contact info onto a public
   // page (fixed in 4d08888a) — so "no email at all" is the correct state
   // here, not a regression.

@@ -7,7 +7,7 @@ import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { getPlaceDetailsByUrl, getPlaceDetails, searchPlaces } from '~/server/utils/google-places'
 import { chargeFlatCredits } from '~/server/utils/ai-credits'
 import { createLocation, syncLocationWhatsAppAccess } from '~/server/utils/location-management'
-import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
+import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
 import { execute, queryFirst, type DbClient } from '~/server/db'
 import { parsePhone } from '~/utils/phone'
 import { assertSiteWideAccess } from '~/server/utils/member-access'
@@ -150,7 +150,7 @@ export default defineEventHandler(async (event) => {
         inviterUserId: session.user.id,
       })
     }
-    await purgeBootstrapCacheSafe(env, siteId)
+    await purgePublicResourceCacheSafe(env, siteId)
 
     const orgRow = await queryFirst<{ slug: string }>(db, 'SELECT slug FROM organization WHERE id = ? LIMIT 1', [organizationId])
 
@@ -295,7 +295,7 @@ export default defineEventHandler(async (event) => {
       } catch { /* non-fatal */ }
     }
   }
-  await purgeBootstrapCacheSafe(env, siteId)
+  await purgePublicResourceCacheSafe(env, siteId)
 
   // Get org slug for navigation
   const orgRow = await queryFirst<{ slug: string }>(db, 'SELECT slug FROM organization WHERE id = ? LIMIT 1', [organizationId])

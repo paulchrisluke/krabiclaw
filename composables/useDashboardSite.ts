@@ -57,6 +57,53 @@ interface DashboardContextResponse {
   siteAccess: 'organization' | 'site' | 'location' | null
 }
 
+const isDashboardOrganization = (value: unknown): value is DashboardOrganization =>
+  isRecord(value)
+  && typeof value.id === 'string'
+  && typeof value.name === 'string'
+  && typeof value.slug === 'string'
+  && (value.logo === null || typeof value.logo === 'string')
+  && typeof value.role === 'string'
+
+const isDashboardSite = (value: unknown): value is DashboardSite =>
+  isRecord(value)
+  && typeof value.id === 'string'
+  && typeof value.organization_id === 'string'
+  && (value.brand_name === null || typeof value.brand_name === 'string')
+  && (value.subdomain === null || typeof value.subdomain === 'string')
+  && (value.public_url === null || typeof value.public_url === 'string')
+  && typeof value.status === 'string'
+  && typeof value.onboarding_status === 'string'
+
+const isDashboardLocation = (value: unknown): value is DashboardLocation =>
+  isRecord(value)
+  && typeof value.id === 'string'
+  && typeof value.slug === 'string'
+  && typeof value.title === 'string'
+  && typeof value.is_primary === 'boolean'
+  && typeof value.status === 'string'
+
+const isDashboardContextResponse = (value: unknown): value is DashboardContextResponse =>
+  isRecord(value)
+  && value.success === true
+  && (value.organization === null || isDashboardOrganization(value.organization))
+  && (value.site === null || isDashboardSite(value.site))
+  && Array.isArray(value.sites)
+  && value.sites.every(site =>
+    isRecord(site)
+    && typeof site.id === 'string'
+    && (site.brand_name === null || typeof site.brand_name === 'string')
+    && (site.subdomain === null || typeof site.subdomain === 'string'))
+  && Array.isArray(value.locations)
+  && value.locations.every(isDashboardLocation)
+  && typeof value.managedServiceEnabled === 'boolean'
+  && (
+    value.siteAccess === null
+    || value.siteAccess === 'organization'
+    || value.siteAccess === 'site'
+    || value.siteAccess === 'location'
+  )
+
 let clientDashboardContextReads: Map<string, Promise<DashboardContextResponse>> | undefined
 
 function getClientDashboardContextReads() {
@@ -125,23 +172,10 @@ export function useDashboardSite() {
         })()
       : dashboardFetch<DashboardContextResponse>('/api/dashboard/context', requestScope, {
           signal,
-          validate: (value): value is DashboardContextResponse =>
-            isRecord(value)
-            && value.success === true
-            && (value.organization === null || isRecord(value.organization))
-            && (value.site === null || isRecord(value.site))
-            && Array.isArray(value.sites)
-            && Array.isArray(value.locations)
-            && typeof value.managedServiceEnabled === 'boolean'
-            && (
-              value.siteAccess === null
-              || value.siteAccess === 'organization'
-              || value.siteAccess === 'site'
-              || value.siteAccess === 'location'
-            ),
+          validate: isDashboardContextResponse,
         }))
       .then((response) => {
-        if (!response?.success || !Array.isArray(response.sites) || !Array.isArray(response.locations)) {
+        if (!isDashboardContextResponse(response)) {
           throw new ApiClientError('Dashboard context response did not match its contract', 502, 'INVALID_API_RESPONSE', null)
         }
         contextByScope.value = { ...contextByScope.value, [requestKey]: response }

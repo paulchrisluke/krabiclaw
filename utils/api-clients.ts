@@ -141,6 +141,20 @@ export function publicApiRequest<T>(
   return request(url, { ...options, timeout: PUBLIC_READ_TIMEOUT_MS })
 }
 
+export function publicApiMutation<T>(
+  url: string,
+  options: {
+    method: Exclude<ApiMethod, 'GET'>
+    body?: unknown
+    query?: Record<string, unknown>
+    headers?: HeadersInit
+    signal?: AbortSignal
+    validate: Validator<T>
+  },
+) {
+  return request(url, { ...options, timeout: MUTATION_TIMEOUT_MS })
+}
+
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 

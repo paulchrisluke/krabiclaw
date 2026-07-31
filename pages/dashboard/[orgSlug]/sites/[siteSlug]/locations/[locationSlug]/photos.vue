@@ -27,6 +27,14 @@
         <USkeleton v-for="i in 14" :key="i" class="aspect-square rounded-lg" />
       </div>
 
+      <UAlert
+        v-else-if="loadError"
+        color="error"
+        variant="soft"
+        title="Photos could not be loaded"
+        :description="loadError"
+      />
+
       <div v-else-if="filteredAssets.length === 0" class="rounded-lg border border-dashed border-default px-6 py-12 text-center">
         <UIcon name="i-lucide-image" class="mx-auto size-9 text-muted" />
         <p class="mt-3 text-sm font-medium text-highlighted">No location media yet</p>
@@ -127,7 +135,6 @@ interface MediaAsset {
   category: string | null
 }
 
-const _siteId = await useDashboardSiteId()
 const dashboardLocation = useDashboardLocation()
 const toast = useToast()
 const siteId = await useDashboardSiteId()
@@ -136,6 +143,7 @@ const locationId = computed(() => dashboardLocation.currentLocationId.value)
 const assets = ref<MediaAsset[]>([])
 const attachableAssets = ref<MediaAsset[]>([])
 const loading = ref(true)
+const loadError = ref<string | null>(null)
 const attachOpen = ref(false)
 const attachLoading = ref(false)
 const categoryFilter = ref('all')
@@ -143,6 +151,14 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const posterPromptOpen = ref(false)
 const pendingVideoFile = ref<File | null>(null)
 const { uploading, error: uploadError, pendingRetryFile, upload } = useMediaUpload(siteApiBase)
+const isMediaResponse = (value: unknown): value is { media: MediaAsset[] } =>
+  isRecord(value)
+  && Array.isArray(value.media)
+  && value.media.every(asset =>
+    isRecord(asset)
+    && typeof asset.id === 'string'
+    && typeof asset.kind === 'string',
+  )
 
 const categoryItems = [
   { id: 'all', label: 'All categories' },
@@ -170,11 +186,15 @@ async function loadPhotos() {
     return
   }
   loading.value = true
+  loadError.value = null
   try {
     const params = new URLSearchParams({ locationId: locationId.value, limit: '100' })
-    const res = await dashboardApi<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`)
-    assets.value = res.media ?? []
+    const res = await dashboardApi<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`, {
+      validate: isMediaResponse,
+    })
+    assets.value = res.media
   } catch (error) {
+    loadError.value = error instanceof Error ? error.message : 'Failed to load photos'
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load photos', color: 'error' })
   } finally {
     loading.value = false
@@ -255,8 +275,10 @@ async function loadAttachableMedia() {
   try {
     const params = new URLSearchParams({ limit: '100' })
     if (locationId.value) params.set('locationId', locationId.value)
-    const res = await dashboardApi<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`)
-    attachableAssets.value = (res.media ?? []).filter(asset => asset.location_id !== locationId.value)
+    const res = await dashboardApi<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`, {
+      validate: isMediaResponse,
+    })
+    attachableAssets.value = res.media.filter(asset => asset.location_id !== locationId.value)
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load media library', color: 'error' })
   } finally {
@@ -271,7 +293,12 @@ async function openAttachModal() {
 
 async function patchAsset(asset: MediaAsset, body: ApiRecord, successMessage: string) {
   try {
-    await dashboardApi(`${siteApiBase}/media/${asset.id}`, { method: 'PATCH', body })
+    await dashboardApi(`${siteApiBase}/media/${asset.id}`, {
+      method: 'PATCH',
+      body,
+      validate: (value): value is { updated: true } =>
+        isRecord(value) && value.updated === true,
+    })
     toast.add({ description: successMessage, color: 'success' })
     await loadPhotos()
     return true
@@ -303,18 +330,39 @@ function categoryMenu(asset: MediaAsset) {
   }))]
 }
 
-onMounted(async () => {
-  try {
-    await loadPhotos()
-  } catch (error) {
-    loading.value = false
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to load photos page', color: 'error' })
-  }
-})
+const requestEvent = useRequestEvent()
+const photosKey = computed(() => `dashboard-location-photos:${siteId}:${locationId.value ?? 'missing'}`)
+const { data: photosResource, pending: photosPending, error: photosError } = await useAsyncData(
+  photosKey,
+  async () => {
+    if (!locationId.value) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
+    if (import.meta.server) {
+      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+      const { loadDashboardMedia } = await import('~/server/utils/dashboard-editor-resources')
+      return await loadDashboardMedia(requestEvent, siteId, {
+        locationId: locationId.value,
+        limit: 100,
+      })
+    }
+    const params = new URLSearchParams({ locationId: locationId.value, limit: '100' })
+    return await dashboardApi<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`, {
+      validate: isMediaResponse,
+    })
+  },
+  { lazy: import.meta.client },
+)
 
-watch(locationId, () => {
-  void loadPhotos()
-})
+watch([photosResource, photosPending, photosError], ([resource, pending, error]) => {
+  loading.value = pending
+  if (error) {
+    loadError.value = error instanceof Error ? error.message : 'Failed to load photos'
+    return
+  }
+  if (resource) {
+    assets.value = resource.media as MediaAsset[]
+    loadError.value = null
+  }
+}, { immediate: true })
 
 useSeoMeta({ title: 'Photos | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>

@@ -348,8 +348,9 @@ const showChowBot = computed(() => !isConversationsRoute.value
   && (dashboard.siteAccess.value !== 'location' || scope.value === 'location'))
 
 const vertical = computed(() => {
-  const normalized = normalizeVertical(site.value?.vertical)
-  return normalized ? normalized as SiteVertical : null
+  const raw = site.value?.vertical
+  if (!raw) return null
+  return normalizeVertical(raw) as SiteVertical
 })
 const templateSlug = computed(() => vertical.value ? resolvePublicTemplate({ vertical: vertical.value }).slug : null)
 const currentLocationRow = computed(() => dashboard.locations.value.find(l => l.slug === currentLocationSlug.value) ?? null)

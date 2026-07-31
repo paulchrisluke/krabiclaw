@@ -17,8 +17,15 @@
 
       <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
         <section class="space-y-3">
+          <UAlert
+            v-if="qaError"
+            color="error"
+            variant="soft"
+            title="Q&A could not be loaded"
+            :description="getErrorMessage(qaError, 'Q&A request failed')"
+          />
           <USkeleton v-if="pending" class="h-32" />
-          <div v-else-if="qaRows.length === 0" class="border border-dashed border-default px-6 py-12 text-center">
+          <div v-else-if="!qaError && qaRows.length === 0" class="border border-dashed border-default px-6 py-12 text-center">
             <UIcon name="i-lucide-circle-help" class="mx-auto size-9 text-muted" />
             <p class="mt-3 text-sm font-medium text-highlighted">No site Q&A yet</p>
           </div>
@@ -169,7 +176,7 @@ watch(selectedPagePath, () => {
   form.answer = ''
   form.published = true
 })
-const { data, pending, refresh } = await useAsyncData(
+const { data, pending, refresh, error: qaError } = await useAsyncData(
   () => `dashboard-site-qa-${siteId}-${selectedPagePath.value}`,
   async () => {
     if (import.meta.server) {
@@ -225,9 +232,22 @@ async function save() {
   try {
     const body: Record<string, unknown> = { page_path: pagePath.value, question: form.question, answer: form.answer || null, status: form.published ? 'published' : 'hidden' }
     if (editingId.value) {
-      await dashboardApi(`/api/editor/sites/${siteId}/qa/${editingId.value}`, { method: 'PATCH', body })
+      await dashboardApi(`/api/editor/sites/${siteId}/qa/${editingId.value}`, {
+        method: 'PATCH',
+        body,
+        validate: (value): value is { updated: true; qa_id: string } =>
+          isRecord(value) && value.updated === true && typeof value.qa_id === 'string',
+      })
     } else {
-      await dashboardApi(`/api/editor/sites/${siteId}/qa`, { method: 'POST', body })
+      await dashboardApi(`/api/editor/sites/${siteId}/qa`, {
+        method: 'POST',
+        body,
+        validate: (value): value is QaRow =>
+          isRecord(value)
+          && typeof value.id === 'string'
+          && typeof value.question === 'string'
+          && typeof value.sort_order === 'number',
+      })
     }
     reset()
     await refresh()
@@ -246,13 +266,20 @@ async function move(item: QaRow, direction: -1 | 1) {
   await dashboardApi(`/api/editor/sites/${siteId}/qa/reorder`, {
     method: 'POST',
     body: { page_path: pagePath.value, updates: [{ id: item.id, sort_order: target.sort_order }, { id: target.id, sort_order: item.sort_order }] },
+    validate: (value): value is { updated: number } =>
+      isRecord(value) && typeof value.updated === 'number',
   })
   await refresh()
 }
 
 async function remove(item: QaRow) {
   if (!confirm(`Delete this question?\n\n${item.question}`)) return
-  await dashboardApi(`/api/editor/sites/${siteId}/qa/${item.id}`, { method: 'DELETE', query: pagePath.value ? { page_path: pagePath.value } : undefined })
+  await dashboardApi(`/api/editor/sites/${siteId}/qa/${item.id}`, {
+    method: 'DELETE',
+    query: pagePath.value ? { page_path: pagePath.value } : undefined,
+    validate: (value): value is { qa_id: string; deleted: true } =>
+      isRecord(value) && typeof value.qa_id === 'string' && value.deleted === true,
+  })
   if (editingId.value === item.id) reset()
   await refresh()
 }

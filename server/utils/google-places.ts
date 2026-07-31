@@ -222,10 +222,22 @@ export async function fetchPlacePhotoUrls(
     }
   }
 
-  const settled = await Promise.allSettled(rawPhotos.slice(0, limit).map(fetch1Photo))
-  return settled
+  const attempted = rawPhotos.slice(0, limit)
+  const settled = await Promise.allSettled(attempted.map(fetch1Photo))
+  const photos = settled
     .filter((r): r is PromiseFulfilledResult<PlacePhoto> => r.status === 'fulfilled' && r.value !== null)
     .map(r => r.value)
+
+  // Google told us this place has photos (rawPhotos came from its own response),
+  // so every one of them failing is a systemic problem — a bad/rate-limited API
+  // key, or the photo-media endpoint being down — not "this business has no
+  // photos" (that case never reaches here: rawPhotos would already be empty).
+  // Surfacing this loudly is what lets a real integration failure get fixed
+  // instead of silently masquerading as an empty photo gallery.
+  if (attempted.length > 0 && photos.length === 0) {
+    throw new Error(`fetchPlacePhotoUrls() failed to resolve all ${attempted.length} photo(s) Google reported for this place.`)
+  }
+  return photos
 }
 
 export async function syncPlaceToLocation(

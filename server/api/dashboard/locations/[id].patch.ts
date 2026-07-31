@@ -3,8 +3,8 @@ import { getHeaders } from 'h3'
 import { jsonResponse } from '~/server/utils/api-response'
 import { getDashboardLocationContext } from '~/server/utils/dashboard-context'
 import { resolveLocationCapabilitySummary, syncLocationWhatsAppAccess, updateLocation, type UpdateLocationInput } from '~/server/utils/location-management'
-import { parseLocationPayload } from './location-helpers'
-import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
+import { parseLocationPayload } from '~/server/utils/location-payload'
+import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
 import { queryFirst } from '~/server/db'
 import { assertMemberScope } from '~/server/utils/member-access'
 import { parsePhone } from '~/utils/phone'
@@ -167,7 +167,7 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  await purgeBootstrapCacheSafe(env, siteId)
+  await purgePublicResourceCacheSafe(env, siteId)
 
   const location = (result.data as { location?: { feature_overrides?: string | null } }).location
   const capabilitySummary = location ? await resolveLocationCapabilitySummary(db, organizationId, siteId, location.feature_overrides ?? null) : null

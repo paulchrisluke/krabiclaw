@@ -101,6 +101,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 type TranslationScope = 'site' | 'content' | 'menus' | 'locations' | 'posts'
 
 interface SiteLocaleRow {
@@ -125,6 +126,20 @@ interface TranslationJobRow {
   target_locale: string
   status: 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled'
 }
+
+const isLocaleRow = (value: unknown): value is SiteLocaleRow =>
+  isRecord(value)
+  && typeof value.locale === 'string'
+  && (value.label === null || typeof value.label === 'string')
+  && typeof value.is_source === 'boolean'
+  && ['draft', 'published', 'disabled'].includes(String(value.status))
+  && typeof value.fallback_enabled === 'boolean'
+
+const isJobRow = (value: unknown): value is TranslationJobRow =>
+  isRecord(value)
+  && typeof value.id === 'string'
+  && typeof value.target_locale === 'string'
+  && ['queued', 'running', 'succeeded', 'failed', 'canceled'].includes(String(value.status))
 
 const props = defineProps<{
   siteId: string
@@ -216,8 +231,27 @@ async function loadStatus() {
   error.value = ''
   try {
     const [localesResponse, jobsResponse] = await Promise.all([
-      $fetch<{ success: boolean; source_locale: string; locales: SiteLocaleRow[] }>(`/api/editor/sites/${props.siteId}/locales`),
-      $fetch<{ success: boolean; jobs: TranslationJobRow[] }>(`/api/editor/sites/${props.siteId}/translations/jobs`),
+      dashboardApi<{ success: boolean; source_locale: string; locales: SiteLocaleRow[] }>(
+        `/api/editor/sites/${props.siteId}/locales`,
+        {
+          validate: (value): value is { success: boolean; source_locale: string; locales: SiteLocaleRow[] } =>
+            isRecord(value)
+            && typeof value.success === 'boolean'
+            && typeof value.source_locale === 'string'
+            && Array.isArray(value.locales)
+            && value.locales.every(isLocaleRow),
+        },
+      ),
+      dashboardApi<{ success: boolean; jobs: TranslationJobRow[] }>(
+        `/api/editor/sites/${props.siteId}/translations/jobs`,
+        {
+          validate: (value): value is { success: boolean; jobs: TranslationJobRow[] } =>
+            isRecord(value)
+            && typeof value.success === 'boolean'
+            && Array.isArray(value.jobs)
+            && value.jobs.every(isJobRow),
+        },
+      ),
     ])
     sourceLocale.value = localesResponse.source_locale || 'en'
     locales.value = localesResponse.locales || []
@@ -243,14 +277,23 @@ async function estimateTranslation() {
   estimateLoading.value = true
   error.value = ''
   try {
-    const response = await $fetch<{ success: boolean; estimate: TranslationEstimate }>(
+    const response = await dashboardApi<{ success: boolean; estimate: TranslationEstimate }>(
       `/api/editor/sites/${props.siteId}/translations/inventory`,
       {
         query: {
           locale: form.locale,
           scope: form.scope,
           includePublished: false,
-        }
+        },
+        validate: (value): value is { success: boolean; estimate: TranslationEstimate } =>
+          isRecord(value)
+          && typeof value.success === 'boolean'
+          && isRecord(value.estimate)
+          && typeof value.estimate.source_locale === 'string'
+          && typeof value.estimate.target_locale === 'string'
+          && typeof value.estimate.total_items === 'number'
+          && typeof value.estimate.total_chars === 'number'
+          && typeof value.estimate.estimated_credits === 'number',
       }
     )
     estimate.value = response.estimate
@@ -266,7 +309,7 @@ async function ensureLocale() {
   const existing = locales.value.find(locale => locale.locale === form.locale)
   if (existing) return
 
-  await $fetch(`/api/editor/sites/${props.siteId}/locales`, {
+  await dashboardApi(`/api/editor/sites/${props.siteId}/locales`, {
     method: 'POST',
     body: {
       locale: form.locale,
@@ -274,7 +317,8 @@ async function ensureLocale() {
       status: 'draft',
       is_source: false,
       fallback_enabled: true,
-    }
+    },
+    validate: (value): value is { success: true } => isRecord(value) && value.success === true,
   })
 }
 
@@ -284,13 +328,14 @@ async function startTranslation() {
   error.value = ''
   try {
     await ensureLocale()
-    await $fetch(`/api/editor/sites/${props.siteId}/translations/jobs`, {
+    await dashboardApi(`/api/editor/sites/${props.siteId}/translations/jobs`, {
       method: 'POST',
       body: {
         locale: form.locale,
         scope: form.scope,
         includePublished: false,
-      }
+      },
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
     })
     dismissed.value = true
     isOpen.value = false

@@ -301,6 +301,7 @@ import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities } from '~/config/c
 import type { PublicTemplateSlug } from '~/utils/template-registry'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
+const dashboardApi = useDashboardApi()
 const props = defineProps<{
   siteId: string
   /** Which half of a template's page inventory to expose here — the host page
@@ -346,7 +347,15 @@ const sitePreviewBaseUrl = computed(() => {
 // Load editor context
 const loadEditorContext = async () => {
   try {
-    const response = await $fetch<{ context: ApiRecord }>(`/api/editor/sites/${props.siteId}/context`)
+    const response = await dashboardApi<{ context: ApiRecord }>(`/api/editor/sites/${props.siteId}/context`, {
+      validate: (value): value is { context: ApiRecord } =>
+        isRecord(value)
+        && isRecord(value.context)
+        && isRecord(value.context.site)
+        && typeof value.context.site.id === 'string'
+        && Array.isArray(value.context.locations)
+        && typeof value.context.previewToken === 'string',
+    })
     siteData.value = response.context.site
     siteLocations.value = response.context.locations || []
     siteEntitlements.value = response.context.site.entitlements || {}
@@ -619,8 +628,14 @@ const loadPageContent = async () => {
   if (requiresLocationSelection.value) return
   contentLoading.value = true
   try {
-    const res = await $fetch<{ fields: ApiRecord[] }>(
-      endpointWithContentScope(`/api/editor/sites/${props.siteId}/content/${selectedPageId.value}`)
+    const res = await dashboardApi<{ fields: ApiRecord[] }>(
+      endpointWithContentScope(`/api/editor/sites/${props.siteId}/content/${selectedPageId.value}`),
+      {
+        validate: (value): value is { fields: ApiRecord[] } =>
+          isRecord(value)
+          && Array.isArray(value.fields)
+          && value.fields.every(field => isRecord(field) && typeof field.field === 'string'),
+      },
     )
     if (version !== loadVersion.value) return
     const map: Record<string, string> = {}
@@ -686,11 +701,12 @@ const handleSaveContent = async () => {
   }
   saving.value = true
   try {
-    await $fetch(`/api/editor/sites/${props.siteId}/content/save`, {
+    await dashboardApi(`/api/editor/sites/${props.siteId}/content/save`, {
       method: 'POST',
       body: { page: selectedPageId.value, changes: currentValues.value },
       query: effectiveLocationId.value ? { locationId: effectiveLocationId.value } : {},
-      credentials: 'include'
+      credentials: 'include',
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
     })
     localHasChanges.value = false
     previewReloadToken.value = Date.now()

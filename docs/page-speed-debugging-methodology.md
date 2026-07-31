@@ -331,12 +331,10 @@ Investigate these in order after the Saya shell isolation:
    actually served from Cloudflare edge cache by `host + path + locale`. Bypass
    `/dashboard`, `/admin`, `/api`, auth, preview, draft, and edit-mode routes.
    Route headers alone are not proof if the Worker still runs on every request.
-2. **Tenant SSR self-fetch in `useBootstrap`.** Verify whether tenant SSR still
-   calls `/api/public/sites/:siteId/bootstrap` through `useRequestFetch`. If yes,
-   move the bootstrap query/build logic from
-   `server/api/public/sites/[siteId]/bootstrap.get.ts` into a shared server
-   function and call it directly from SSR and the API route.
-3. **Bootstrap cache TTL and invalidation.** If bootstrap data is public and
+2. **Tenant SSR public-resource loading.** Verify that tenant SSR calls the
+   canonical shell and page services directly rather than self-fetching their
+   own-origin JSON routes.
+3. **Public-resource cache TTL and invalidation.** If public resource data is
    content-like, test a 300-900s TTL with explicit purge on site/content/menu
    media updates.
 4. **Duplicate Cloudflare Image variants.** The HAR showed the same image loaded

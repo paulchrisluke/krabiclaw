@@ -1,23 +1,26 @@
 // Per-page content fetch (photos/qa/reviews/blog/menu/experience datasets,
 // CMS content fields, booking policies). Site-wide chrome data that doesn't
-// vary by route (locations, config, menu, experiencesList) lives in
-// the site-shell loader instead — see that file for why the split exists.
+// vary by route (brand, location summaries, config, locales, navigation
+// capabilities) lives in the site-shell loader instead.
 //
 // SSR waits for route data so rendered HTML is complete. Client navigation
 // starts the keyed request lazily and returns immediately; the Saya layout
 // replaces the old route with a destination-local loading or error state.
 //
 // Usage (in a page):
-//   const { getField, getHero, photosList, qaList, ... } = await useBootstrap()
+//   const { getField, getHero, photosList, qaList, ... } = await usePublicPageData()
 import { onMounted, onBeforeUnmount } from "vue";
 import {
-  useBootstrapParams,
-  useBootstrapKey,
-  useBootstrapUrl,
-} from "~/composables/useBootstrapParams";
+  usePublicPageRequest,
+  usePublicPageKey,
+  usePublicPageUrl,
+} from "~/composables/usePublicPageRequest";
 import { useSiteShellState } from "~/composables/useSiteShell";
-import type { RenderedBookingPolicySummary } from "~/server/utils/booking-policies";
 import type { Experience } from "~/server/utils/experiences";
+import {
+  isPublicPagePayload,
+  type PublicPagePayload,
+} from '~/utils/public-resource-contracts'
 
 interface ContentRow {
   field: string;
@@ -31,92 +34,45 @@ interface ContentRow {
   [key: string]: unknown;
 }
 
-interface BootstrapPayload {
-  kind: string;
-  content: ContentRow[];
-  locationReviews: ApiRecord[];
-  globalReviews: ApiRecord[];
-  reviewsAggregate: ApiRecord | null;
-  reviewsList: ApiRecord[];
-  photosList: ApiRecord[];
-  qaList: ApiRecord[];
-  postsList: ApiRecord[];
-  globalPosts: ApiRecord[];
-  blogList: ApiRecord[];
-  blogPost: ApiRecord | null;
-  reservationPolicySiteDefault: RenderedBookingPolicySummary | null;
-  reservationPolicyByLocation: Record<string, RenderedBookingPolicySummary>;
-  experiencePolicySiteDefault: RenderedBookingPolicySummary | null;
-  experiencePolicyById: Record<string, RenderedBookingPolicySummary>;
-  experienceDetail: Experience | null;
-  experiencesList: Experience[];
-  menu: ApiRecord | null;
-}
-
-const isBootstrapPayload = (value: unknown, expectedKind: string): value is BootstrapPayload =>
-  isRecord(value)
-  && value.kind === expectedKind
-  && Array.isArray(value.content)
-  && value.content.every(item => isRecord(item) && typeof item.field === 'string')
-  && Array.isArray(value.locationReviews)
-  && Array.isArray(value.globalReviews)
-  && value.globalReviews.every(item => isRecord(item) && typeof item.rating === 'number')
-  && (value.reviewsAggregate === null || isRecord(value.reviewsAggregate))
-  && Array.isArray(value.reviewsList)
-  && Array.isArray(value.photosList)
-  && Array.isArray(value.qaList)
-  && Array.isArray(value.postsList)
-  && Array.isArray(value.globalPosts)
-  && value.globalPosts.every(item => isRecord(item) && typeof item.id === 'string')
-  && Array.isArray(value.blogList)
-  && (value.blogPost === null || isRecord(value.blogPost))
-  && (value.reservationPolicySiteDefault === null || isRecord(value.reservationPolicySiteDefault))
-  && isRecord(value.reservationPolicyByLocation)
-  && (value.experiencePolicySiteDefault === null || isRecord(value.experiencePolicySiteDefault))
-  && isRecord(value.experiencePolicyById)
-  && (value.experienceDetail === null || isRecord(value.experienceDetail))
-  && Array.isArray(value.experiencesList)
-  && (value.menu === null || isRecord(value.menu))
-
-export const useBootstrap = async (options: { enabled?: boolean } = {}) => {
+export const usePublicPageData = async (options: { enabled?: boolean } = {}) => {
   const { isPlatform, siteId, draftId } = useTenantSite();
   const route = useRoute();
-  const params = useBootstrapParams();
+  const params = usePublicPageRequest();
   const routeLoadState = usePublicRouteLoadState();
   const routeLoadOwner = claimPublicRouteLoadOwner();
   onScopeDispose(routeLoadOwner.release)
   const ownedPath = route.path;
   const entityId = computed(() => siteId || draftId || null);
-  const key = computed(() => useBootstrapKey(entityId.value, params.value));
+  const key = computed(() => usePublicPageKey(entityId.value, params.value));
   const enabled = computed(() => options.enabled !== false);
 
-  const url = computed(() => useBootstrapUrl(siteId, params.value));
+  const url = computed(() => usePublicPageUrl(siteId, params.value));
 
   const shell = useSiteShellState();
 
   const asyncData =
     isPlatform || !enabled.value || (!siteId && !draftId)
-      ? { data: ref<BootstrapPayload>(), error: ref<Error | null>(null), pending: ref(false), refresh: async () => {} }
-      : useAsyncData<BootstrapPayload>(
+      ? { data: ref<PublicPagePayload>(), error: ref<Error | null>(null), pending: ref(false), refresh: async () => {} }
+      : useAsyncData<PublicPagePayload>(
           key,
-          (_nuxtApp, { signal }) => loadPublicBootstrapPayload<BootstrapPayload>({
+          (_nuxtApp, { signal }) => loadPublicResourcePayload<PublicPagePayload>({
               draftId,
               siteId,
+              resourceKind: 'page',
               url: url.value,
               key: key.value,
               query: {
                 page: params.value.page ?? undefined,
                 location: params.value.location ?? undefined,
                 experience: params.value.experience ?? undefined,
-                menu: params.value.menu ? "1" : undefined,
-                data: params.value.data ?? undefined,
+                datasets: [...params.value.datasets].sort().join(',') || undefined,
                 blogSlug: params.value.blogSlug ?? undefined,
                 locale: params.value.locale ?? undefined,
                 token: params.value.token ?? undefined,
               },
-              validate: (value): value is BootstrapPayload =>
-                isBootstrapPayload(value, params.value.page ?? 'home'),
-              failureMessage: 'Public bootstrap failed',
+              validate: (value): value is PublicPagePayload =>
+                isPublicPagePayload(value, params.value.page ?? 'home'),
+              failureMessage: 'Public page failed',
               signal,
             }),
           {
@@ -138,6 +94,7 @@ export const useBootstrap = async (options: { enabled?: boolean } = {}) => {
       key: key.value,
       pending: pending.value,
       error: normalizePublicRouteLoadError(error.value),
+      hasData: data.value !== undefined,
     }
   })
 

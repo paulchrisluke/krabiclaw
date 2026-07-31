@@ -2,7 +2,7 @@ import { jsonResponse } from '../../../utils/api-response'
 import { syncPlaceToLocation } from '../../../utils/google-places'
 import { hasSiteEntitlement } from '~/server/utils/billing'
 import { chargeFlatCredits } from '~/server/utils/ai-credits'
-import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
+import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
 import { queryFirst } from '~/server/db'
 import { requireRequestedLocationAccess } from '~/server/utils/location-access'
 
@@ -41,7 +41,7 @@ export default defineEventHandler(async (event) => {
       location.google_place_id
     )
     await chargeFlatCredits(db, site.organization_id, { siteId: site.id, action: 'google_places_details' }).catch(() => {})
-    await purgeBootstrapCacheSafe(env, site.id)
+    await purgePublicResourceCacheSafe(env, site.id)
 
     return jsonResponse({
       success: true,

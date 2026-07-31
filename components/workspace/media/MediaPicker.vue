@@ -52,6 +52,13 @@
       </div>
     </slot>
   </div>
+  <UAlert
+    v-if="modelLoadError"
+    color="error"
+    variant="soft"
+    :description="modelLoadError"
+    class="mt-2"
+  />
 
   <!-- Modal -->
   <UModal
@@ -120,6 +127,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 const props = defineProps<{
   siteId: string
   modelValue?: string | null
@@ -150,6 +158,17 @@ interface PickerMediaAsset {
   size?: number | null
 }
 
+const isPickerMediaResponse = (value: unknown): value is { media: PickerMediaAsset[] } =>
+  isRecord(value)
+  && Array.isArray(value.media)
+  && value.media.every(asset =>
+    isRecord(asset)
+    && typeof asset.id === 'string'
+    && (asset.kind === undefined || asset.kind === null || typeof asset.kind === 'string')
+    && (asset.public_url === undefined || asset.public_url === null || typeof asset.public_url === 'string')
+    && (asset.thumbnail_url === undefined || asset.thumbnail_url === null || typeof asset.thumbnail_url === 'string'),
+  )
+
 const isOpen = ref(false)
 const panel = ref<Panel>('library')
 const pendingAsset = ref<{ id: string; publicUrl: string; thumbnailUrl: string; kind?: string } | null>(null)
@@ -159,6 +178,7 @@ const selectedUrl = ref<string | null>(null)
 const selectedKind = ref<string | null>(null)
 const selectedAlt = ref<string>('')
 const modelLoadController = ref<AbortController | null>(null)
+const modelLoadError = ref<string | null>(null)
 
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError'
@@ -176,11 +196,12 @@ watch(() => props.modelValue, async (id) => {
 
   const controller = new AbortController()
   modelLoadController.value = controller
+  modelLoadError.value = null
 
   try {
-    const res = await $fetch<{ media: PickerMediaAsset[] }>(
+    const res = await dashboardApi<{ media: PickerMediaAsset[] }>(
       `/api/editor/sites/${props.siteId}/media?id=${encodeURIComponent(id)}&limit=1`,
-      { signal: controller.signal }
+      { signal: controller.signal, validate: isPickerMediaResponse },
     )
 
     if (controller.signal.aborted) return
@@ -197,9 +218,7 @@ watch(() => props.modelValue, async (id) => {
     }
   } catch (err) {
     if (controller.signal.aborted || isAbortError(err)) return
-    selectedUrl.value = null
-    selectedKind.value = null
-    selectedAlt.value = ''
+    modelLoadError.value = getErrorMessage(err, 'Failed to load the selected media')
   } finally {
     if (modelLoadController.value === controller) {
       modelLoadController.value = null

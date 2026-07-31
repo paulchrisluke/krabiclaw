@@ -139,8 +139,14 @@ function applyMetricHeaders(
   const totalDuration = performance.now() - metrics.startedAt
   setHeader(event, 'x-request-id', metrics.requestId)
   setHeader(event, 'x-data-cache', cacheStatus)
+  setHeader(event, 'x-attempt-count', '1')
   setHeader(event, 'x-d1-query-count', String(metrics.statementCount))
+  setHeader(event, 'x-d1-batch-count', String(metrics.batchRoundTrips))
+  setHeader(event, 'x-d1-rows-read', String(metrics.rowsRead))
+  setHeader(event, 'x-d1-rows-written', String(metrics.rowsWritten))
+  setHeader(event, 'x-d1-duration-ms', metrics.d1DurationMs.toFixed(2))
   setHeader(event, 'x-response-bytes', String(responseBytes))
+  setHeader(event, 'x-total-duration-ms', totalDuration.toFixed(2))
   const phaseTimings = Object.entries(metrics.phases).map(
     ([name, duration]) => `${name};dur=${duration.toFixed(2)}`,
   )
@@ -171,6 +177,12 @@ export function flushRequestMetrics(event: H3Event, responseBody?: unknown) {
   const metrics = metricsByEvent.get(event)
   if (!metrics || metrics.finalized) return
   metrics.finalized = true
+  if (metrics.resources.size === 0 && responseBody !== undefined) {
+    const serialized = typeof responseBody === 'string'
+      ? responseBody
+      : JSON.stringify(responseBody)
+    metrics.resources.set(event.path, new TextEncoder().encode(serialized).byteLength)
+  }
   const cacheStatus = String(getResponseHeader(event, 'x-bootstrap-cache') ?? 'BYPASS')
   applyMetricHeaders(event, metrics, cacheStatus)
   const responseBytes = [...metrics.resources.values()].reduce((total, bytes) => total + bytes, 0)

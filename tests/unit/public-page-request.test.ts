@@ -1,31 +1,29 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { getBootstrapParams } from '../../composables/useBootstrapParams.ts'
+import { getPublicPageRequest } from '../../composables/usePublicPageRequest.ts'
 
 test('location experiences route requests an experiences page scoped to the location slug', () => {
-  assert.deepEqual(getBootstrapParams('/locations/beachfront-pottery/experiences'), {
+  assert.deepEqual(getPublicPageRequest('/locations/beachfront-pottery/experiences'), {
     page: 'experiences',
     location: 'beachfront-pottery',
     experience: null,
-    menu: false,
-    data: null,
+    datasets: ['content', 'location', 'experiences', 'experiencePolicies'],
     blogSlug: null,
   })
 })
 
 test('global experiences route keeps the site-wide collection unscoped', () => {
-  assert.deepEqual(getBootstrapParams('/experiences'), {
+  assert.deepEqual(getPublicPageRequest('/experiences'), {
     page: 'experiences',
     location: null,
     experience: null,
-    menu: false,
-    data: null,
+    datasets: ['content', 'experiences', 'experiencePolicies'],
     blogSlug: null,
   })
 })
 
 test('global reviews and posts routes request their route datasets', () => {
-  assert.equal(getBootstrapParams('/reviews').data, 'reviews')
-  assert.equal(getBootstrapParams('/posts').data, 'posts')
+  assert.deepEqual(getPublicPageRequest('/reviews').datasets, ['content', 'reviews'])
+  assert.deepEqual(getPublicPageRequest('/posts').datasets, ['content', 'posts'])
 })

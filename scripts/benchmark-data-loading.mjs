@@ -137,36 +137,36 @@ function buildDefaultCases(params) {
   const apiCases = siteId
     ? [
         {
-          name: "api-bootstrap-home",
-          relativePath: `/api/public/sites/${siteId}/page?page=home&menu=1`,
+          name: "api-page-home",
+          relativePath: `/api/public/sites/${siteId}/page?page=home&datasets=content%2Clocation%2Cmenu%2Creviews%2Cposts%2Cblog%2Cexperiences%2CexperiencePolicies`,
         },
         {
-          name: "api-bootstrap-locations",
-          relativePath: `/api/public/sites/${siteId}/page?page=locations&menu=1`,
+          name: "api-page-locations",
+          relativePath: `/api/public/sites/${siteId}/page?page=locations&datasets=content%2Clocation`,
         },
         {
-          name: "api-bootstrap-location-reviews",
-          relativePath: `/api/public/sites/${siteId}/page?page=reviews&location=${locationSlug}&data=reviews`,
+          name: "api-page-location-reviews",
+          relativePath: `/api/public/sites/${siteId}/page?page=reviews&location=${locationSlug}&datasets=content%2Clocation%2Creviews`,
         },
         {
-          name: "api-bootstrap-location-photos",
-          relativePath: `/api/public/sites/${siteId}/page?page=photos&location=${locationSlug}&data=photos`,
+          name: "api-page-location-photos",
+          relativePath: `/api/public/sites/${siteId}/page?page=photos&location=${locationSlug}&datasets=content%2Clocation%2Cphotos`,
         },
         {
-          name: "api-bootstrap-location-qa",
-          relativePath: `/api/public/sites/${siteId}/page?page=qa&location=${locationSlug}&data=qa`,
+          name: "api-page-location-qa",
+          relativePath: `/api/public/sites/${siteId}/page?page=qa&location=${locationSlug}&datasets=content%2Clocation%2Cqa`,
         },
         {
-          name: "api-bootstrap-posts",
-          relativePath: `/api/public/sites/${siteId}/page?page=posts`,
+          name: "api-page-posts",
+          relativePath: `/api/public/sites/${siteId}/page?page=posts&datasets=content%2Cposts`,
         },
         {
-          name: "api-bootstrap-experiences-list",
-          relativePath: `/api/public/sites/${siteId}/page?page=experiences`,
+          name: "api-page-experiences-list",
+          relativePath: `/api/public/sites/${siteId}/page?page=experiences&datasets=content%2Cexperiences%2CexperiencePolicies`,
         },
         {
-          name: "api-bootstrap-experiences-detail",
-          relativePath: `/api/public/sites/${siteId}/page?page=experiences&experience=${experienceSlug}`,
+          name: "api-page-experiences-detail",
+          relativePath: `/api/public/sites/${siteId}/page?page=experiences&experience=${experienceSlug}&datasets=content%2Cexperiences%2CexperienceDetail%2CexperiencePolicies`,
         },
       ]
     : [];
@@ -187,7 +187,7 @@ async function main() {
 
   if (args.help === "true" || args.h === "true") {
     console.log(
-      `Usage: yarn benchmark [options]\n\nDefaults to https://demo.krabiclaw.com. Override for other tenants:\n  yarn benchmark --base-url https://pottery-house.krabiclaw.com --site-id site-pottery-house --location-slug ao-nang\n\nOptions:\n  --base-url            Target URL (default: https://demo.krabiclaw.com)\n  --site-id             Site ID for api-bootstrap-* cases (default: site-demo)\n  --location-slug       Location slug (default: brooklyn)\n  --experience-slug     Experience slug (default: wheel-throwing-workshop)\n  --runs                Number of autocannon runs per case (default: 5)\n  --warmup-runs         Warmup runs per case, excluded from metrics (default: 1)\n  --connections         Concurrent connections for autocannon (default: 10)\n  --duration            Duration in seconds per run (default: 10)\n  --amount              Fixed number of requests per run (optional; overrides duration when set)\n  --timeout             Request timeout in seconds (default: 15)\n  --output-dir          Output directory (default: test-results/bootstrap-benchmarks)\n  --api-only            Skip page routes; benchmark only api-bootstrap-* endpoints (uses --site-id, default: site-demo)\n`,
+      `Usage: yarn benchmark [options]\n\nDefaults to https://demo.krabiclaw.com. Override for other tenants:\n  yarn benchmark --base-url https://pottery-house.krabiclaw.com --site-id site-pottery-house --location-slug ao-nang\n\nOptions:\n  --base-url            Target URL (default: https://demo.krabiclaw.com)\n  --site-id             Site ID for API page cases (default: site-demo)\n  --location-slug       Location slug (default: brooklyn)\n  --experience-slug     Experience slug (default: wheel-throwing-workshop)\n  --runs                Number of autocannon runs per case (default: 5)\n  --warmup-runs         Warmup runs per case, excluded from metrics (default: 1)\n  --connections         Concurrent connections for autocannon (default: 10)\n  --duration            Duration in seconds per run (default: 10)\n  --amount              Fixed number of requests per run (optional; overrides duration when set)\n  --timeout             Request timeout in seconds (default: 15)\n  --output-dir          Output directory (default: test-results/data-loading-benchmarks)\n  --api-only            Skip page routes; benchmark only API page endpoints (uses --site-id, default: site-demo)\n`,
     );
     return;
   }
@@ -203,7 +203,7 @@ async function main() {
     durationSeconds: Math.max(1, toNumber(args.duration, 10)),
     amount: args.amount ? Math.max(1, toNumber(args.amount, 0)) : undefined,
     timeoutSeconds: Math.max(1, toNumber(args.timeout, 15)),
-    outputDir: args["output-dir"] || "test-results/bootstrap-benchmarks",
+    outputDir: args["output-dir"] || "test-results/data-loading-benchmarks",
     apiOnly: args["api-only"] === "true",
   };
 
@@ -354,10 +354,10 @@ async function main() {
   const outputDirAbsolute = path.resolve(process.cwd(), config.outputDir);
   await mkdir(outputDirAbsolute, { recursive: true });
 
-  const jsonPath = path.join(outputDirAbsolute, `benchmark-${timestamp}.json`);
+  const jsonPath = path.join(outputDirAbsolute, `data-loading-${timestamp}.json`);
   const markdownPath = path.join(
     outputDirAbsolute,
-    `benchmark-${timestamp}.md`,
+    `data-loading-${timestamp}.md`,
   );
 
   await writeFile(jsonPath, `${JSON.stringify(summary, null, 2)}\n`, "utf8");
@@ -369,7 +369,7 @@ async function main() {
     )
     .join("\n");
 
-  const markdown = `# Bootstrap Benchmark\n\n- Started: ${summary.startedAt}\n- Completed: ${summary.completedAt}\n- Base URL: ${config.baseUrl}\n- Runs per case: ${config.runs}\n- Warmup runs: ${config.warmupRuns}\n- Connections: ${config.connections}\n- Duration (seconds): ${config.durationSeconds}\n\n## Aggregate\n\n- Median p95: ${formatMs(summary.aggregate.medianP95Ms)}\n- Median response bytes: ${summary.aggregate.medianResponseBytes.toFixed(0)}\n- Max p95: ${formatMs(summary.aggregate.maxP95Ms)}\n- Total errors/timeouts: ${summary.aggregate.totalErrors}\n\n## Per Route\n\n| Route | Status | Response Bytes | p50 | p95 | p99 | Req/s | Bytes/s | Error Rate |\n|---|---:|---:|---:|---:|---:|---:|---:|---:|\n${rows}\n\n`;
+  const markdown = `# Data-loading benchmark\n\n- Started: ${summary.startedAt}\n- Completed: ${summary.completedAt}\n- Base URL: ${config.baseUrl}\n- Runs per case: ${config.runs}\n- Warmup runs: ${config.warmupRuns}\n- Connections: ${config.connections}\n- Duration (seconds): ${config.durationSeconds}\n\n## Aggregate\n\n- Median p95: ${formatMs(summary.aggregate.medianP95Ms)}\n- Median response bytes: ${summary.aggregate.medianResponseBytes.toFixed(0)}\n- Max p95: ${formatMs(summary.aggregate.maxP95Ms)}\n- Total errors/timeouts: ${summary.aggregate.totalErrors}\n\n## Per Route\n\n| Route | Status | Response Bytes | p50 | p95 | p99 | Req/s | Bytes/s | Error Rate |\n|---|---:|---:|---:|---:|---:|---:|---:|---:|\n${rows}\n\n`;
 
   await writeFile(markdownPath, markdown, "utf8");
 

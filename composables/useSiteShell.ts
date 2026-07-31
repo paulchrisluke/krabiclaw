@@ -11,76 +11,14 @@
 // can't, because there's no "another page's data" — the response never
 // depended on the page in the first place.
 //
-// Page-specific content and collections live in useBootstrap(). Client
+// Page-specific content and collections live in usePublicPageData(). Client
 // navigation renders a destination-local loading state while that keyed page
 // request is in flight.
-import { useBootstrapKey, useBootstrapUrl, type BootstrapParams } from "~/composables/useBootstrapParams";
-
-interface ShellSiteInfo {
-  brand_name: string | null;
-  brand_description: string | null;
-  logo_url: string | null;
-  logo_mime_type: string | null;
-  favicon_url: string | null;
-  vertical: string | null;
-  config: {
-    phone: string | null;
-  } | null;
-}
-
-interface SiteShellPayload {
-  site: ShellSiteInfo;
-  locations: ApiRecord[];
-  config: Record<string, string>;
-  googleBusiness: ApiRecord;
-  locales: { code: string; label: string; is_source: boolean }[];
-  hasExperiences: boolean;
-  hasMenu: boolean;
-}
-
-const isSiteShellPayload = (value: unknown): value is SiteShellPayload => {
-  if (!isRecord(value)) return false
-  if (!isRecord(value.site)) return false
-  // Enforce exact contract: site fields must match declared types precisely
-  if (typeof value.site.brand_name !== 'string' && value.site.brand_name !== null) return false
-  if (typeof value.site.brand_description !== 'string' && value.site.brand_description !== null) return false
-  if (typeof value.site.logo_url !== 'string' && value.site.logo_url !== null) return false
-  if (typeof value.site.logo_mime_type !== 'string' && value.site.logo_mime_type !== null) return false
-  if (typeof value.site.favicon_url !== 'string' && value.site.favicon_url !== null) return false
-  if (typeof value.site.vertical !== 'string' && value.site.vertical !== null) return false
-  if (value.site.config !== null && !isRecord(value.site.config)) return false
-  if (isRecord(value.site.config)
-    && typeof value.site.config.phone !== 'string'
-    && value.site.config.phone !== null) return false
-
-  if (!Array.isArray(value.locations)) return false
-  if (!value.locations.every(location =>
-    isRecord(location)
-    && typeof location.id === 'string'
-    && typeof location.slug === 'string'
-    && typeof location.title === 'string',
-  )) return false
-
-  if (!isRecord(value.config)) return false
-  if (!isRecord(value.googleBusiness)) return false
-  if (value.googleBusiness.business !== null && !isRecord(value.googleBusiness.business)) return false
-  if (!Array.isArray(value.googleBusiness.reviews)) return false
-  if (!Array.isArray(value.googleBusiness.media)) return false
-  if (!Array.isArray(value.googleBusiness.posts)) return false
-
-  if (!Array.isArray(value.locales)) return false
-  if (!value.locales.every(locale =>
-    isRecord(locale)
-    && typeof locale.code === 'string'
-    && typeof locale.label === 'string'
-    && typeof locale.is_source === 'boolean',
-  )) return false
-
-  if (typeof value.hasExperiences !== 'boolean') return false
-  if (typeof value.hasMenu !== 'boolean') return false
-
-  return true
-}
+import { usePublicResourceKey, usePublicPageUrl, type PublicPageRequest } from "~/composables/usePublicPageRequest";
+import {
+  isPublicShellPayload,
+  type PublicShellPayload as SiteShellPayload,
+} from '~/utils/public-resource-contracts'
 
 export const useSiteShellState = () => {
   const { isPlatform, siteId, draftId } = useTenantSite();
@@ -99,19 +37,18 @@ export const useSiteShellState = () => {
   const entityId = computed(() => siteId || draftId || null);
 
   // Fixed, page-independent params — this is what makes the key stable.
-  const params = computed<BootstrapParams>(() => ({
+  const params = computed<PublicPageRequest>(() => ({
     page: null,
     location: null,
     experience: null,
-    menu: false,
-    data: null,
+    datasets: [],
     blogSlug: null,
     locale: locale.value,
     token: typeof route.query.token === "string" && route.path.startsWith("/preview/") ? route.query.token : null,
   }));
 
-  const key = computed(() => `shell~${useBootstrapKey(entityId.value, params.value)}`);
-  const url = computed(() => useBootstrapUrl(siteId, params.value, 'shell'));
+  const key = computed(() => usePublicResourceKey('shell', entityId.value, params.value));
+  const url = computed(() => usePublicPageUrl(siteId, params.value, 'shell'));
 
   let data: Ref<SiteShellPayload | undefined>
   let error: Ref<Error | null>
@@ -127,17 +64,17 @@ export const useSiteShellState = () => {
   } else {
     const asyncData = useAsyncData<SiteShellPayload>(
           key,
-          (_nuxtApp, { signal }) => loadPublicBootstrapPayload<SiteShellPayload>({
+          (_nuxtApp, { signal }) => loadPublicResourcePayload<SiteShellPayload>({
               draftId,
               siteId,
+              resourceKind: 'shell',
               url: url.value,
               key: key.value,
               query: {
-                contract: 'shell',
                 locale: params.value.locale ?? undefined,
                 token: params.value.token ?? undefined,
               },
-              validate: isSiteShellPayload,
+              validate: isPublicShellPayload,
               failureMessage: 'Public shell failed',
               signal,
             }),

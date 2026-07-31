@@ -239,7 +239,7 @@
   </NuxtLayout>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { setContactConfirmation } from '~/composables/useContactHandoff'
 
 definePageMeta({ layout: false })
@@ -263,7 +263,7 @@ const businessName = computed(() => site?.brand_name || 'Our Business')
 const isDraftPreview = computed(() => Boolean(draftId && !siteId))
 
 // ── Bootstrap: locations + config in one call ─────────────
-const { locations, config: siteConfig } = await useBootstrap()
+const { locations, config: siteConfig } = await usePublicPageData()
 
 function formatLocAddress(loc) {
   if (!loc.address) return loc.city || ''
@@ -337,9 +337,10 @@ const handleTenantContact = async () => {
 
   tenantSubmitting.value = true
   try {
-    await $fetch(`/api/public/sites/${siteId}/contact`, {
+    await publicApiMutation<{ success: true }>(`/api/public/sites/${siteId}/contact`, {
       method: 'POST',
-      body: { ...tenantForm.value, experienceId: inquiryExperienceId }
+      body: { ...tenantForm.value, experienceId: inquiryExperienceId },
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
     })
   } catch {
     tenantSubmitError.value = t('saya.contact_page.message_failed')

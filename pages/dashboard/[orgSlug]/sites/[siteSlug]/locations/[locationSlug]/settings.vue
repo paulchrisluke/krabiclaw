@@ -375,7 +375,6 @@ const router = useRouter()
 const toast = useToast()
 const dashboard = useDashboardSite()
 const dashboardLocation = useDashboardLocation()
-if (!dashboard.state.value) await dashboard.refresh()
 const siteId = await useDashboardSiteId()
 const locationId = computed(() => dashboardLocation.currentLocationId.value ?? '')
 

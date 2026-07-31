@@ -1,9 +1,9 @@
 // Regression coverage for krabiclaw #436/#437: client-side navigation on a
 // tenant Saya site must never render another page's (or an empty-state)
-// content while its own bootstrap fetch is still in flight. See
-// composables/useBootstrap.ts and composables/useSiteShell.ts for the fix.
+// content while its own page fetch is still in flight. See
+// composables/usePublicPageData.ts and composables/useSiteShell.ts for the fix.
 //
-// The bootstrap XHR is deliberately delayed via route interception so the
+// The page XHR is deliberately delayed via route interception so the
 // race window is wide enough to observe deterministically — on unthrottled
 // local/CI networks the fetch can resolve fast enough that a regression
 // wouldn't reliably show up otherwise.
@@ -17,7 +17,7 @@ async function setupNavigationTest(page: Page) {
   // prevent the browser from exercising the current loader implementation.
   await page.setExtraHTTPHeaders({ 'cache-control': 'no-cache' })
 
-  // Defeat NuxtLink's viewport-based prefetch so the bootstrap fetch only
+  // Defeat NuxtLink's viewport-based prefetch so the page fetch only
   // happens on the actual click, not ahead of time.
   await page.addInitScript(() => {
     class NoopObserver {

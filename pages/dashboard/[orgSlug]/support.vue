@@ -241,9 +241,9 @@ const { data, refresh, error: requestsError } = await useAsyncData<{ requests: W
   () => `dashboard-work-requests-${dashboardScope.value?.orgSlug ?? 'unknown'}`,
   async () => {
     const scope = dashboardScope.value
-    if (!scope) return null
+    if (!scope) throw createError({ statusCode: 400, statusMessage: 'Dashboard organization scope is required' })
     if (import.meta.server) {
-      if (!requestEvent) return null
+      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
       const [{ cloudflareEnv }, { loadDashboardContext }, { listWorkRequests }] = await Promise.all([
         import('~/server/utils/api-response'),
         import('~/server/utils/dashboard-context-service'),
@@ -283,6 +283,8 @@ async function submitRequest() {
     await dashboardApi('/api/dashboard/work-requests', {
       method: 'POST',
       body: { type: form.type, title: form.title.trim(), description: form.description.trim() || undefined, priority: form.priority },
+      validate: (value): value is { success: true; id: string } =>
+        isRecord(value) && value.success === true && typeof value.id === 'string',
     })
     form.title = ''
     form.description = ''

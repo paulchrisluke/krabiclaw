@@ -103,8 +103,8 @@ import type { BlogPostRepository, BlogPost, BlogEditorBlock, PlatformBlogUpdateI
 import { generatedExcerpt, initialBlogEditorBlocks, normalizeBlogSlug, resolveBlogPublicPath, resolveBlogSeo, SerializedSnapshotQueue } from '~/utils/blog-editor'
 import { getErrorMessage } from '~/utils/errors'
 
-const props = withDefaults(defineProps<{ repository: BlogPostRepository; postId?: string; siteId?: string; isEdit?: boolean; backUrl?: string; mediaPickerComponent?: Component; freeTextCategory?: boolean }>(), {
-  postId: undefined, siteId: '', isEdit: false, backUrl: '/admin', mediaPickerComponent: undefined, freeTextCategory: false,
+const props = withDefaults(defineProps<{ repository: BlogPostRepository; initialPost?: BlogPost | null; deferLoad?: boolean; postId?: string; siteId?: string; isEdit?: boolean; backUrl?: string; mediaPickerComponent?: Component; freeTextCategory?: boolean }>(), {
+  initialPost: null, deferLoad: false, postId: undefined, siteId: '', isEdit: false, backUrl: '/admin', mediaPickerComponent: undefined, freeTextCategory: false,
 })
 const route = useRoute()
 const postId = computed(() => props.postId || String(route.params.postId || ''))
@@ -214,24 +214,42 @@ const saveQueue = new SerializedSnapshotQueue<SaveSnapshot, BlogPost>(
 )
 
 watch([() => ({ ...form }), blocks, tagsText, publishTiming, slugResetRequested], () => { if (!applyingServerSnapshot) queueSave() }, { deep: true, flush: 'sync' })
-onMounted(async () => { window.addEventListener('beforeunload', beforeUnload); window.addEventListener('popstate', onPopState); await load() })
+onMounted(async () => {
+  window.addEventListener('beforeunload', beforeUnload)
+  window.addEventListener('popstate', onPopState)
+  if (!props.initialPost && !props.deferLoad) await load()
+})
 onBeforeUnmount(() => { if (saveTimer) clearTimeout(saveTimer); if (import.meta.client) { window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener('popstate', onPopState) } })
 
 async function load() {
   if (!postId.value || !props.isEdit) { loadPending.value = false; return }
   try {
     const loaded = await props.repository.get(postId.value)
-    syncServerVersions(loaded)
-    post.value = loaded
-    Object.assign(form, { title: loaded.title, category: loaded.category || '', excerpt: loaded.excerpt || '', seo_title: loaded.seo_title || '', seo_description: loaded.seo_description || '', social_image_asset_id: loaded.social_image_asset_id || '', slug: loaded.slug || '', canonical_url: loaded.canonical_url || '', robots: loaded.robots || '', visibility: loaded.visibility || 'public', scheduled_for: toLocalDatetime(loaded.scheduled_for), redirect_old_slug: true })
-    slugResetRequested.value = false
-    tagsText.value = loaded.tags?.join(', ') || ''
-    publishTiming.value = loaded.scheduled_for ? 'Scheduled' : 'Now'
-    if (!loaded.content_document) throw new Error('Blog content document is missing')
-    blocks.value = structuredClone(loaded.content_document.blocks || [])
-    ensureTrailingTextBlock()
+    applyLoadedPost(loaded)
   } catch (error) { loadError.value = getErrorMessage(error, 'Failed to load post.') } finally { loadPending.value = false }
 }
+function applyLoadedPost(loaded: BlogPost) {
+  syncServerVersions(loaded)
+  post.value = loaded
+  Object.assign(form, { title: loaded.title, category: loaded.category || '', excerpt: loaded.excerpt || '', seo_title: loaded.seo_title || '', seo_description: loaded.seo_description || '', social_image_asset_id: loaded.social_image_asset_id || '', slug: loaded.slug || '', canonical_url: loaded.canonical_url || '', robots: loaded.robots || '', visibility: loaded.visibility || 'public', scheduled_for: toLocalDatetime(loaded.scheduled_for), redirect_old_slug: true })
+  slugResetRequested.value = false
+  tagsText.value = loaded.tags?.join(', ') || ''
+  publishTiming.value = loaded.scheduled_for ? 'Scheduled' : 'Now'
+  if (!loaded.content_document) throw new Error('Blog content document is missing')
+  blocks.value = structuredClone(loaded.content_document.blocks || [])
+  ensureTrailingTextBlock()
+}
+watch(() => props.initialPost, (loaded) => {
+  if (!loaded) return
+  try {
+    applyLoadedPost(loaded)
+    loadError.value = ''
+  } catch (error) {
+    loadError.value = getErrorMessage(error, 'Failed to load post.')
+  } finally {
+    loadPending.value = false
+  }
+}, { immediate: true })
 function queueSave() {
   if (loadPending.value || saveState.value === 'conflict') return
   dirty = true
