@@ -18,6 +18,7 @@ import {
 } from "~/server/utils/menu-management";
 import { verifyPreviewToken } from "~/server/utils/preview-token";
 import { attachAvailabilitySummaries, type Experience } from "~/server/utils/experiences";
+import { hydrateMediaAssetsForExperiences } from "~/server/utils/media-asset-manager";
 import { type MenuWithItems } from "~/server/types/menu";
 import {
   attachFeaturedImageFromBareJoin,
@@ -878,7 +879,27 @@ export default defineEventHandler(async (event) => {
           (batchResults[idxExperiencesList] as { results: Record<string, unknown>[] })?.results ?? []
         ).map(parseExperienceRow)
       : [];
-  const experiencesList = await attachAvailabilitySummaries(db, orgId, siteId, experiencesListRaw);
+  const mediaByExperience = await hydrateMediaAssetsForExperiences(
+    db,
+    siteId,
+    [
+      ...experiencesListRaw.map(experience => experience.id),
+      ...(idxExperienceDetail >= 0
+        ? ((batchResults[idxExperienceDetail] as { results: Record<string, unknown>[] })?.results ?? [])
+            .map(row => String(row.id ?? ""))
+        : []),
+    ],
+  );
+  const attachExperienceMedia = <T extends Experience>(experience: T): T => ({
+    ...experience,
+    media: mediaByExperience.get(experience.id) ?? [],
+  });
+  const experiencesList = await attachAvailabilitySummaries(
+    db,
+    orgId,
+    siteId,
+    experiencesListRaw.map(attachExperienceMedia),
+  );
 
   const experienceDetailRaw: Experience | null =
     idxExperienceDetail >= 0
@@ -894,7 +915,7 @@ export default defineEventHandler(async (event) => {
   // with its own messaging (see server/utils/experiences.ts listExperiences).
   const experienceDetail =
     experienceDetailRaw && experienceDetailRaw.status !== "inactive"
-      ? (await attachAvailabilitySummaries(db, orgId, siteId, [experienceDetailRaw]))[0]
+      ? (await attachAvailabilitySummaries(db, orgId, siteId, [attachExperienceMedia(experienceDetailRaw)]))[0]
       : null;
 
   const [globalPublishedPosts, locationPublishedPosts] = await Promise.all([
