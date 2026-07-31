@@ -23,7 +23,7 @@ import { computed } from 'vue'
 
 import { getScopedEditablePages } from '~/config/content-registry'
 import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities } from '~/config/cms-registry'
-import type { PublicTemplateSlug } from '~/utils/template-registry'
+import { resolvePublicTemplate } from '~/utils/template-registry'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
 const props = defineProps<{
@@ -53,7 +53,9 @@ const activeLocation = computed(() =>
 
 const cmsCapabilities = computed(() => {
   if (!siteData.value) return null
-  return resolveCmsCapabilities(siteData.value.vertical as SiteVertical, siteData.value.template as PublicTemplateSlug, {
+  const vertical = siteData.value.vertical as SiteVertical
+  const template = resolvePublicTemplate({ vertical }).slug
+  return resolveCmsCapabilities(vertical, template, {
     site: parseCmsFeatureOverrideDelta(siteData.value.feature_overrides as string | null | undefined),
     // Without this, a module the active location has explicitly disabled would still list as
     // editable here even though its dashboard route already 404s.

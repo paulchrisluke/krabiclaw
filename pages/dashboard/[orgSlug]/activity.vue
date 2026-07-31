@@ -21,7 +21,7 @@
               <USelect v-model="filters.siteId" :items="siteOptions" class="w-full" />
             </UFormField>
             <UFormField label="Location">
-              <USelect v-model="filters.locationId" :items="locationOptions" :disabled="!filters.siteId" class="w-full" />
+              <USelect v-model="filters.locationId" :items="locationOptions" :disabled="filters.siteId === FILTER_ALL" class="w-full" />
             </UFormField>
             <UFormField label="Type">
               <USelect v-model="filters.eventType" :items="eventTypeOptions" class="w-full" />
@@ -90,20 +90,25 @@ const toast = useToast()
 
 type SiteEvent = import('~/server/utils/dashboard-events').DashboardEvent
 
+// Nuxt UI's SelectItem throws if given an empty-string value (it's reserved
+// internally for clearing the selection) — use a distinct sentinel for the
+// "no filter" option instead of ''.
+const FILTER_ALL = '__all__'
+
 const filters = reactive({
-  siteId: '',
-  locationId: '',
-  eventType: '',
-  actorId: '',
+  siteId: FILTER_ALL,
+  locationId: FILTER_ALL,
+  eventType: FILTER_ALL,
+  actorId: FILTER_ALL,
 })
 
 const siteOptions = computed(() => [
-  { label: 'All sites', value: '' },
+  { label: 'All sites', value: FILTER_ALL },
   ...dashboard.sites.value.map(s => ({ label: s.brand_name ?? s.subdomain ?? s.id, value: s.id })),
 ])
 
 const eventTypeOptions = computed(() => [
-  { label: 'All types', value: '' },
+  { label: 'All types', value: FILTER_ALL },
   ...SITE_EVENT_TYPES.map(type => ({ label: eventLabel(type), value: type })),
 ])
 
@@ -136,16 +141,16 @@ const { data: membersData } = await useAsyncData<{ members: Member[] }>(membersK
   })
 })
 const actorOptions = computed(() => [
-  { label: 'Everyone', value: '' },
+  { label: 'Everyone', value: FILTER_ALL },
   ...(membersData.value?.members ?? []).map(m => ({ label: m.name, value: m.userId })),
 ])
 
 interface Location { id: string; title: string }
 const locationsForSite = ref<Location[]>([])
 watch(() => filters.siteId, async (siteId) => {
-  filters.locationId = ''
+  filters.locationId = FILTER_ALL
   locationsForSite.value = []
-  if (!siteId) return
+  if (siteId === FILTER_ALL) return
   const site = dashboard.sites.value.find(s => s.id === siteId)
   if (!site?.subdomain) return
   try {
@@ -168,16 +173,16 @@ watch(() => filters.siteId, async (siteId) => {
   }
 })
 const locationOptions = computed(() => [
-  { label: 'All locations', value: '' },
+  { label: 'All locations', value: FILTER_ALL },
   ...locationsForSite.value.map(l => ({ label: l.title, value: l.id })),
 ])
 
 const eventQuery = computed(() => ({
   limit: 20,
-  siteId: filters.siteId || undefined,
-  locationId: filters.locationId || undefined,
-  eventType: filters.eventType || undefined,
-  actorId: filters.actorId || undefined,
+  siteId: filters.siteId !== FILTER_ALL ? filters.siteId : undefined,
+  locationId: filters.locationId !== FILTER_ALL ? filters.locationId : undefined,
+  eventType: filters.eventType !== FILTER_ALL ? filters.eventType : undefined,
+  actorId: filters.actorId !== FILTER_ALL ? filters.actorId : undefined,
 }))
 const eventsKey = computed(() =>
   `dashboard-events-${String(route.params.orgSlug ?? '')}-${JSON.stringify(eventQuery.value)}`,
