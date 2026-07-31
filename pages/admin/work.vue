@@ -137,7 +137,7 @@ async function loadWorkRequests() {
   const showDone = workShowDone.value
   workLoading.value = true
   try {
-    const res = await $fetch<{ requests: WorkRequest[] }>(`/api/admin/work-requests?done=${showDone ? '1' : '0'}`)
+    const res = await applicationFetch<{ requests: WorkRequest[] }>(`/api/admin/work-requests?done=${showDone ? '1' : '0'}`)
     if (requestToken !== workRequestToken || showDone !== workShowDone.value) return
     workRequests.value = res.requests
   } catch {
@@ -150,7 +150,7 @@ async function loadWorkRequests() {
 
 async function updateWorkRequest(id: string, patch: { status?: string; notes?: string }) {
   try {
-    await $fetch(`/api/admin/work-requests/${id}`, { method: 'PATCH', body: patch })
+    await applicationFetch(`/api/admin/work-requests/${id}`, { method: 'PATCH', body: patch })
     await loadWorkRequests()
   } catch {
     toast.add({ title: 'Failed to update request', color: 'error' })

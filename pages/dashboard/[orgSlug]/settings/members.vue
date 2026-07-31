@@ -515,8 +515,9 @@ async function retryInvitation(invitationId: string) {
     await dashboardFetch(`/api/dashboard/invitations/${invitationId}/retry`, { method: 'POST' })
     await refresh()
   } catch (err: unknown) {
-    const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
-    invitationActionError.value = errorData?.error ?? 'Failed to resend the invitation.'
+    invitationActionError.value = err instanceof ApiClientError && typeof err.data.error === 'string'
+      ? err.data.error
+      : err instanceof Error ? err.message : 'Failed to resend the invitation.'
     invitationActionErrorId.value = invitationId
   } finally {
     invitationActionId.value = null
@@ -539,8 +540,9 @@ async function replaceInvitation(invitationId: string) {
     replacePhone.value = ''
     await refresh()
   } catch (err: unknown) {
-    const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
-    invitationActionError.value = errorData?.error ?? 'Failed to replace the phone number.'
+    invitationActionError.value = err instanceof ApiClientError && typeof err.data.error === 'string'
+      ? err.data.error
+      : err instanceof Error ? err.message : 'Failed to replace the phone number.'
     invitationActionErrorId.value = invitationId
   } finally {
     invitationActionId.value = null
@@ -557,8 +559,9 @@ async function clearInvitation(invitationId: string) {
     await dashboardFetch(`/api/dashboard/invitations/${invitationId}/clear`, { method: 'POST' })
     await refresh()
   } catch (err: unknown) {
-    const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
-    invitationActionError.value = errorData?.error ?? 'Failed to clear this invitation.'
+    invitationActionError.value = err instanceof ApiClientError && typeof err.data.error === 'string'
+      ? err.data.error
+      : err instanceof Error ? err.message : 'Failed to clear this invitation.'
     invitationActionErrorId.value = invitationId
   } finally {
     invitationActionId.value = null
@@ -597,8 +600,7 @@ async function sendInvite() {
     inviteSuccessTimeout.value = setTimeout(() => { inviteSuccess.value = false }, 4000)
     await refresh()
   } catch (err) {
-    const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
-    inviteError.value = errorData?.error ?? (err instanceof Error ? err.message : 'Failed to send invite.')
+    inviteError.value = err instanceof Error ? err.message : 'Failed to send invite.'
   } finally {
     inviting.value = false
   }
@@ -642,14 +644,15 @@ async function submitRemoveMember(memberId: string, options?: { confirmed?: bool
     pendingRemoval.value = null
     await refresh()
   } catch (err: unknown) {
-    const errorData = err && typeof err === 'object' && 'data' in err
-      ? (err as Record<string, { error?: string; requiresConfirmation?: boolean; assignments?: PhoneAssignment[] }>).data
-      : null
-    if (errorData?.requiresConfirmation && errorData.assignments) {
-      pendingRemoval.value = { memberId, assignments: errorData.assignments }
+    const errorData = err instanceof ApiClientError ? err.data : {}
+    const assignments = Array.isArray(errorData.assignments) ? errorData.assignments as PhoneAssignment[] : null
+    if (errorData.requiresConfirmation === true && assignments) {
+      pendingRemoval.value = { memberId, assignments }
     } else {
       pendingRemoval.value = null
-      memberError.value = errorData?.error ?? 'Failed to remove member.'
+      memberError.value = typeof errorData.error === 'string'
+        ? errorData.error
+        : err instanceof Error ? err.message : 'Failed to remove member.'
     }
   } finally {
     removingMemberId.value = null

@@ -44,7 +44,7 @@ export const useScopedContent = (siteId: string, page: string, locationId?: stri
         queryParams.set('locationId', effectiveLocationId.value)
       }
 
-      const response = await dashboardFetch<{
+      const response = await applicationFetch<{
         success: boolean
         content: SiteContent[]
         siteId: string

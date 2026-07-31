@@ -2,8 +2,21 @@ import { readdir, readFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 
 const root = new URL('..', import.meta.url).pathname
-const dashboardRoots = ['pages/dashboard', 'components/dashboard', 'components/cms']
-const applicationRoots = ['composables', 'layouts', 'pages/dashboard', 'components/dashboard', 'components/cms']
+const dashboardRoots = [
+  'pages/dashboard',
+  'components/dashboard',
+  'components/cms',
+]
+const adminRoots = ['pages/admin', 'components/admin']
+const applicationRoots = [
+  'composables',
+  'layouts',
+  'middleware',
+  'plugins',
+  'utils',
+  'pages',
+  'components',
+]
 const violations = []
 
 async function filesUnder(directory) {
@@ -15,7 +28,7 @@ async function filesUnder(directory) {
   for (const entry of entries) {
     const path = join(directory, entry.name)
     if (entry.isDirectory()) files.push(...await filesUnder(path))
-    else if (['.ts', '.vue'].includes(extname(entry.name))) files.push(path)
+    else if (['.ts', '.tsx', '.vue'].includes(extname(entry.name))) files.push(path)
   }
   return files
 }
@@ -39,6 +52,15 @@ for (const directory of dashboardRoots) {
     const source = await readFile(join(root, file), 'utf8')
     if (/\$fetch(?:<|\()/.test(source)) {
       violations.push(`${file}: use dashboardFetch for route-scoped API traffic`)
+    }
+  }
+}
+
+for (const directory of adminRoots) {
+  for (const file of await filesUnder(directory)) {
+    const source = await readFile(join(root, file), 'utf8')
+    if (/\$fetch(?:<|\()/.test(source) || /\bdashboardFetch(?:<|\()/.test(source)) {
+      violations.push(`${file}: use applicationFetch for unscoped admin API traffic`)
     }
   }
 }

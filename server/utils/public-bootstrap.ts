@@ -45,7 +45,7 @@ import { isPreviewContext } from "~/server/utils/tenant-hosts";
 import { getPublishedPosts } from "~/server/utils/post-management";
 
 function groupContentBlocks(rows: SiteContent[]): Array<SiteContent & { _section: string }> {
-  const groups: Record<string, SiteContent & { _section: string }> = {}
+  const groups = Object.create(null) as Record<string, SiteContent & { _section: string }>
   for (const row of rows) {
     const section = row.field?.split('.')[0] || 'unknown'
     if (!groups[section]) {
@@ -208,7 +208,9 @@ export async function handlePublicBootstrap(
   event: H3Event,
   siteId: string,
   query: Record<string, string | undefined>,
+  options: { mutateResponseHeaders?: boolean } = {},
 ) {
+  const mutateResponseHeaders = options.mutateResponseHeaders ?? true;
   const env = cloudflareEnv(event);
   const db = env.DB;
   if (!db)
@@ -220,13 +222,15 @@ export async function handlePublicBootstrap(
     isPreviewAuthorized = await verifyPreviewToken(String(env.PREVIEW_SECRET), siteId, rawToken);
   }
 
-  setHeader(
-    event,
-    "cache-control",
-    isPreviewAuthorized
-      ? "private, no-store"
-      : "public, max-age=60, stale-while-revalidate=300",
-  );
+  if (mutateResponseHeaders) {
+    setHeader(
+      event,
+      "cache-control",
+      isPreviewAuthorized
+        ? "private, no-store"
+        : "public, max-age=60, stale-while-revalidate=300",
+    );
+  }
   const page = typeof query.page === "string" ? query.page : null;
   const locationSlug =
     typeof query.location === "string" ? query.location : null;
@@ -288,18 +292,18 @@ export async function handlePublicBootstrap(
       const cached = await getBootstrapCache(kv, cacheKey);
       if (cached) {
         try {
-          setHeader(event, "x-bootstrap-cache", "HIT");
+          if (mutateResponseHeaders) setHeader(event, "x-bootstrap-cache", "HIT");
           return jsonResponse(JSON.parse(cached));
         } catch {
           // Invalid cached JSON — treat as a miss and regenerate
         }
       }
-      setHeader(event, "x-bootstrap-cache", "MISS");
+      if (mutateResponseHeaders) setHeader(event, "x-bootstrap-cache", "MISS");
     } else {
-      setHeader(event, "x-bootstrap-cache", "NO-KV");
+      if (mutateResponseHeaders) setHeader(event, "x-bootstrap-cache", "NO-KV");
     }
   } else {
-    setHeader(event, "x-bootstrap-cache", "SKIP");
+    if (mutateResponseHeaders) setHeader(event, "x-bootstrap-cache", "SKIP");
   }
 
   // Parallelize site auth + location slug resolution — both only need siteId

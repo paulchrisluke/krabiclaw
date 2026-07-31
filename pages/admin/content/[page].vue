@@ -78,7 +78,7 @@ onMounted(async () => {
       loading.value = false
       return
     }
-    const response = await $fetch<{ content?: string }>(`/api/admin/content/${page}`)
+    const response = await applicationFetch<{ content?: string }>(`/api/admin/content/${page}`)
     content.value = response.content ?? ''
   } catch (err) {
     console.error('Failed to load content:', err)
@@ -95,7 +95,7 @@ async function saveContent() {
   }
   saving.value = true
   try {
-    await $fetch(`/api/admin/content/${page}`, {
+    await applicationFetch(`/api/admin/content/${page}`, {
       method: 'POST',
       body: { content: content.value },
     })
@@ -115,7 +115,7 @@ async function confirmDelete() {
   }
   deleting.value = true
   try {
-    await $fetch(`/api/admin/content/${page}`, { method: 'DELETE' })
+    await applicationFetch(`/api/admin/content/${page}`, { method: 'DELETE' })
     content.value = ''
     deleteConfirmOpen.value = false
     toast.add({ title: 'Content deleted', color: 'success' })

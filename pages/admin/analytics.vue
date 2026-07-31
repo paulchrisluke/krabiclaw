@@ -68,7 +68,7 @@ const analyticsStats = computed(() => [
 async function loadAnalytics() {
   analyticsLoading.value = true
   try {
-    analytics.value = await $fetch<Analytics>('/api/admin/analytics')
+    analytics.value = await applicationFetch<Analytics>('/api/admin/analytics')
   } catch {
     toast.add({ title: 'Failed to load analytics', color: 'error' })
   } finally {

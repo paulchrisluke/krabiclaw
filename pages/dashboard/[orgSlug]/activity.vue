@@ -88,8 +88,8 @@ const dashboard = useDashboardSite()
 if (!dashboard.state.value) await dashboard.refresh()
 const toast = useToast()
 
-// Bare dashboardFetch (globalThis override in dashboard-site-header.client.ts) does not
-// run during SSR — must attach dashboard headers explicitly, same as useDashboardSite.ts.
+// Reused for requests that deliberately override the active site while retaining
+// the organization scope resolved from this dashboard route.
 const requestHeaders = buildDashboardRequestHeaders()
 
 interface SiteEvent {
@@ -117,7 +117,23 @@ const eventTypeOptions = computed(() => [
 ])
 
 interface Member { userId: string; name: string }
-const { data: membersData } = await useFetch<{ members: Member[] }>('/api/dashboard/members', { headers: requestHeaders })
+const requestEvent = useRequestEvent()
+const { data: membersData } = await useAsyncData<{ members: Member[] }>('dashboard-activity-members', async () => {
+  if (import.meta.server) {
+    if (!requestEvent || !dashboard.organization.value?.id) {
+      throw createError({ statusCode: 500, statusMessage: 'Dashboard member context unavailable' })
+    }
+    const [{ cloudflareEnv }, { getOrganizationMembersData }] = await Promise.all([
+      import('~/server/utils/api-response'),
+      import('~/server/utils/dashboard-members'),
+    ])
+    const db = cloudflareEnv(requestEvent).db
+    if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+    const result = await getOrganizationMembersData(db, dashboard.organization.value.id)
+    return { members: result.members }
+  }
+  return await dashboardFetch<{ members: Member[] }>('/api/dashboard/members')
+})
 const actorOptions = computed(() => [
   { label: 'Everyone', value: '' },
   ...(membersData.value?.members ?? []).map(m => ({ label: m.name, value: m.userId })),

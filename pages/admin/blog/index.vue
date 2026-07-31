@@ -61,7 +61,7 @@ const deletingPostId = ref<string | null>(null)
 
 async function loadBlogPosts() {
   try {
-    const res = await $fetch<{ posts: BlogPost[] }>('/api/admin/blog/posts')
+    const res = await applicationFetch<{ posts: BlogPost[] }>('/api/admin/blog/posts')
     blogPosts.value = res.posts ?? []
     blogError.value = ''
   } catch {
@@ -79,7 +79,7 @@ async function confirmDeletePost() {
   if (!pendingDeletePostId.value) return
   deletingPostId.value = pendingDeletePostId.value
   try {
-    await $fetch(`/api/admin/blog/posts/${pendingDeletePostId.value}`, { method: 'DELETE' })
+    await applicationFetch(`/api/admin/blog/posts/${pendingDeletePostId.value}`, { method: 'DELETE' })
     toast.add({ title: 'Post deleted', color: 'success' })
     await loadBlogPosts()
   } catch {

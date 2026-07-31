@@ -67,7 +67,7 @@ async function loadUsers() {
   usersLoading.value = true
   try {
     const q = userSearch.value.trim() ? `?q=${encodeURIComponent(userSearch.value.trim())}` : ''
-    const res = await $fetch<{ users: AdminUser[] }>(`/api/admin/users${q}`)
+    const res = await applicationFetch<{ users: AdminUser[] }>(`/api/admin/users${q}`)
     users.value = res.users
   } catch {
     toast.add({ title: 'Failed to load users', color: 'error' })

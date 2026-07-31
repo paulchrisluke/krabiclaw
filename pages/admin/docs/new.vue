@@ -315,7 +315,7 @@ async function save(publish: boolean) {
   errorMessage.value = ''
   successMessage.value = ''
   try {
-    const res = await $fetch<CreateDocResponse>('/api/admin/docs', {
+    const res = await applicationFetch<CreateDocResponse>('/api/admin/docs', {
       method: 'POST',
       body: { ...buildPayload(), publish },
     })

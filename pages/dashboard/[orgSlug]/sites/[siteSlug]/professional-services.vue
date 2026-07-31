@@ -217,7 +217,6 @@ type ProfessionalServiceEditorResponse = {
 }
 
 const siteId = await useDashboardSiteId()
-const headers = buildDashboardRequestHeaders()
 const requestEvent = useRequestEvent()
 const toast = useToast()
 const savingOfferings = ref(false)
@@ -268,7 +267,7 @@ const { data, pending, refresh } = await useAsyncData(
       })
       return { success: true, ...(await getProfessionalServiceContent(db, siteId)) } as unknown as ProfessionalServiceEditorResponse
     }
-    return await dashboardFetch<ProfessionalServiceEditorResponse>(`/api/editor/sites/${siteId}/professional-services`, { headers })
+    return await dashboardFetch<ProfessionalServiceEditorResponse>(`/api/editor/sites/${siteId}/professional-services`)
   },
 )
 
@@ -398,7 +397,6 @@ watch(() => data.value, () => {
 async function patchProfessionalServiceContent(body: ApiRecord, successMessage: string) {
   await dashboardFetch(`/api/editor/sites/${siteId}/professional-services`, {
     method: 'PATCH',
-    headers,
     body,
   })
   toast.add({ description: successMessage, color: 'success' })

@@ -1,12 +1,67 @@
 import type { FetchOptions } from 'ofetch'
 
+type DashboardFetchOptions<T> = FetchOptions & {
+  validate?: Validator<T>
+  coalesceKey?: string
+}
+
+const dashboardInFlightReads = new Map<string, Promise<unknown>>()
+
+const stableValue = (value: unknown): string => {
+  if (value === undefined) return ''
+  if (value === null || typeof value !== 'object') return JSON.stringify(value)
+  if (Array.isArray(value)) return `[${value.map(stableValue).join(',')}]`
+  return `{${Object.entries(value as Record<string, unknown>)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, item]) => `${JSON.stringify(key)}:${stableValue(item)}`)
+    .join(',')}}`
+}
+
+async function executeApiFetch<T>(
+  request: string,
+  options: DashboardFetchOptions<T>,
+  headers: Headers,
+): Promise<T> {
+  const method = String(options.method ?? 'GET').toUpperCase()
+  const { validate, coalesceKey, ...fetchOptions } = options
+  const run = async () => {
+    try {
+      const value = await $fetch<unknown>(request as never, {
+        ...fetchOptions,
+        headers,
+        retry: 0,
+        timeout: method === 'GET' ? DASHBOARD_READ_TIMEOUT_MS : MUTATION_TIMEOUT_MS,
+      } as never)
+      const responseIsValid = validate
+        ? validate(value)
+        : isRecord(value) || Array.isArray(value)
+      if (!responseIsValid) {
+        throw new ApiClientError('API response did not match its contract', 502, 'INVALID_API_RESPONSE', null)
+      }
+      return value as T
+    } catch (error) {
+      throw normalizeApiError(error, 'Dashboard API request failed')
+    }
+  }
+
+  if (method !== 'GET' || (fetchOptions.signal && !coalesceKey)) return await run()
+  const key = coalesceKey ?? `${request}:${stableValue(fetchOptions.query)}:${stableValue([...headers])}`
+  const existing = dashboardInFlightReads.get(key) as Promise<T> | undefined
+  if (existing) return await existing
+  const pending = run().finally(() => {
+    if (dashboardInFlightReads.get(key) === pending) dashboardInFlightReads.delete(key)
+  })
+  dashboardInFlightReads.set(key, pending)
+  return await pending
+}
+
 /**
  * The only browser transport for route-scoped dashboard data. Scope is read
  * from the route at the call site and is always sent explicitly to the API.
  */
 export async function dashboardFetch<T>(
   request: string,
-  options: FetchOptions = {},
+  options: DashboardFetchOptions<T> = {},
 ): Promise<T> {
   const route = useRoute()
   const orgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
@@ -16,29 +71,18 @@ export async function dashboardFetch<T>(
   const headers = buildDashboardRequestHeaders(
     Object.fromEntries(new Headers(options.headers as HeadersInit).entries()),
   )
-  const method = String(options.method ?? 'GET').toUpperCase()
+  return await executeApiFetch(request, options, headers)
+}
 
-  try {
-    return await $fetch<T>(request as never, {
-      ...options,
-      headers,
-      retry: 0,
-      timeout: method === 'GET' ? DASHBOARD_READ_TIMEOUT_MS : MUTATION_TIMEOUT_MS,
-    } as never) as T
-  } catch (error) {
-    const candidate = error as {
-      statusCode?: number
-      status?: number
-      message?: string
-      data?: { error?: { code?: string; message?: string; requestId?: string } }
-      response?: { status?: number; headers?: Headers }
+export async function applicationFetch<T>(
+  request: string,
+  options: DashboardFetchOptions<T> = {},
+): Promise<T> {
+  const headers = new Headers(options.headers as HeadersInit)
+  if (import.meta.server) {
+    for (const [key, value] of Object.entries(useRequestHeaders(['cookie']))) {
+      if (value) headers.set(key, value)
     }
-    throw new ApiClientError(
-      candidate.data?.error?.message ?? candidate.message ?? 'Dashboard API request failed',
-      candidate.statusCode ?? candidate.status ?? candidate.response?.status ?? 500,
-      candidate.data?.error?.code ?? 'DASHBOARD_API_REQUEST_FAILED',
-      candidate.data?.error?.requestId ?? candidate.response?.headers?.get('x-request-id') ?? null,
-      error,
-    )
   }
+  return await executeApiFetch(request, options, headers)
 }

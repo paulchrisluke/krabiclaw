@@ -120,7 +120,7 @@ function addonColor(type: string) { return ADDON_COLORS[type] ?? 'bg-muted text-
 async function loadQueue() {
   queueLoading.value = true
   try {
-    const res = await $fetch<{ purchases: Purchase[] }>(`/api/admin/fulfillment?all=${showAllPurchases.value ? '1' : '0'}`)
+    const res = await applicationFetch<{ purchases: Purchase[] }>(`/api/admin/fulfillment?all=${showAllPurchases.value ? '1' : '0'}`)
     purchases.value = res.purchases
   } catch {
     toast.add({ title: 'Failed to load queue', color: 'error' })
@@ -132,7 +132,7 @@ async function loadQueue() {
 async function markDone(id: string) {
   fulfillingId.value = id
   try {
-    await $fetch(`/api/admin/fulfillment/${id}/done`, { method: 'POST' })
+    await applicationFetch(`/api/admin/fulfillment/${id}/done`, { method: 'POST' })
     toast.add({ title: 'Marked as fulfilled', color: 'success' })
     await loadQueue()
   } catch {

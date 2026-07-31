@@ -6,6 +6,7 @@ export class ApiClientError extends Error {
   readonly statusCode: number
   readonly code: string
   readonly requestId: string | null
+  readonly data: Record<string, unknown>
   override readonly cause?: unknown
 
   constructor(
@@ -13,6 +14,7 @@ export class ApiClientError extends Error {
     statusCode: number,
     code: string,
     requestId: string | null,
+    data: Record<string, unknown> = {},
     cause?: unknown,
   ) {
     super(message)
@@ -20,30 +22,60 @@ export class ApiClientError extends Error {
     this.statusCode = statusCode
     this.code = code
     this.requestId = requestId
+    this.data = data
     this.cause = cause
   }
 }
 
-type Validator<T> = (value: unknown) => value is T
+export type Validator<T> = (value: unknown) => value is T
 type ApiMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
 const inFlightReads = new Map<string, Promise<unknown>>()
 
-function normalizeApiError(error: unknown): ApiClientError {
+function sanitizeApiData(value: unknown): Record<string, unknown> {
+  if (!isRecord(value)) return {}
+  const sanitized: Record<string, unknown> = {}
+  for (const [key, item] of Object.entries(value)) {
+    if (
+      item === null
+      || typeof item === 'string'
+      || typeof item === 'number'
+      || typeof item === 'boolean'
+      || (Array.isArray(item) && item.every(entry =>
+        entry === null || ['string', 'number', 'boolean'].includes(typeof entry) || isRecord(entry),
+      ))
+      || isRecord(item)
+    ) {
+      sanitized[key] = item
+    }
+  }
+  return sanitized
+}
+
+export function normalizeApiError(error: unknown, fallbackMessage = 'API request failed'): ApiClientError {
   if (error instanceof ApiClientError) return error
   const candidate = error as {
     statusCode?: number
     status?: number
     message?: string
-    data?: { error?: { code?: string; message?: string; requestId?: string } }
+    data?: unknown
     response?: { status?: number; headers?: Headers }
   }
+  const data = sanitizeApiData(candidate.data)
+  const structuredError = isRecord(data.error) ? data.error : null
+  const topLevelError = typeof data.error === 'string' ? data.error : null
   const statusCode = candidate.statusCode ?? candidate.status ?? candidate.response?.status ?? 500
   return new ApiClientError(
-    candidate.data?.error?.message ?? candidate.message ?? 'API request failed',
+    (typeof structuredError?.message === 'string' ? structuredError.message : null)
+      ?? topLevelError
+      ?? candidate.message
+      ?? fallbackMessage,
     statusCode,
-    candidate.data?.error?.code ?? 'API_REQUEST_FAILED',
-    candidate.data?.error?.requestId ?? candidate.response?.headers?.get('x-request-id') ?? null,
+    (typeof structuredError?.code === 'string' ? structuredError.code : null) ?? 'API_REQUEST_FAILED',
+    (typeof structuredError?.requestId === 'string' ? structuredError.requestId : null)
+      ?? candidate.response?.headers?.get('x-request-id')
+      ?? null,
+    data,
     error,
   )
 }

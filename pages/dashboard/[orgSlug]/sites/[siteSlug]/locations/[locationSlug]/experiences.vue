@@ -754,17 +754,8 @@ async function save() {
 }
 
 function getApiErrorMessage(error: unknown, fallback: string): string {
-  if (error && typeof error === 'object') {
-    const data = (error as Record<string, unknown>).data
-    if (data && typeof data === 'object') {
-      const dataError = (data as Record<string, unknown>).error
-      if (typeof dataError === 'string' && dataError.trim()) return dataError
-      const statusMessage = (data as Record<string, unknown>).statusMessage
-      if (typeof statusMessage === 'string' && statusMessage.trim()) return statusMessage
-    }
-    const message = (error as Record<string, unknown>).message
-    if (typeof message === 'string' && message.trim()) return message
-  }
+  if (error instanceof ApiClientError) return error.message
+  if (error instanceof Error && error.message.trim()) return error.message
   return fallback
 }
 

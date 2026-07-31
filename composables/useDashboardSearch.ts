@@ -47,7 +47,11 @@ export function useDashboardSearch() {
     return [...byLabel.entries()].map(([label, items]) => ({ id: label, label, items, ignoreFilter: true }))
   }
 
+  let activeController: AbortController | null = null
+
   async function runSearch() {
+    activeController?.abort()
+    activeController = null
     const normalized = searchTerm.value.trim()
     if (!normalized) {
       requestSequence += 1
@@ -57,9 +61,12 @@ export function useDashboardSearch() {
     }
 
     const requestId = ++requestSequence
+    const controller = new AbortController()
+    activeController = controller
     loading.value = true
     try {
       const response = await dashboardFetch<SearchResponse>('/api/public/search', {
+        signal: controller.signal,
         query: {
           q: normalized,
           surface: 'dashboard',
@@ -75,12 +82,14 @@ export function useDashboardSearch() {
       console.error('Dashboard search failed:', error)
       groups.value = []
     } finally {
+      if (activeController === controller) activeController = null
       if (requestId === requestSequence) loading.value = false
     }
   }
 
   watch(searchTerm, () => {
     if (debounceHandle) clearTimeout(debounceHandle)
+    activeController?.abort()
     debounceHandle = setTimeout(() => { void runSearch() }, 120)
   })
 

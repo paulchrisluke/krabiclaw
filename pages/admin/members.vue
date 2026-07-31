@@ -220,7 +220,7 @@ let orgSearchDebounce: ReturnType<typeof setTimeout> | undefined
 async function runOrgSearch(term: string) {
   orgSearchLoading.value = true
   try {
-    const res = await $fetch<{ organizations: OrgSearchResult[] }>('/api/admin/organizations', {
+    const res = await applicationFetch<{ organizations: OrgSearchResult[] }>('/api/admin/organizations', {
       query: { q: term },
     })
     if (term !== orgSearchTerm.value) return
@@ -249,7 +249,7 @@ function setInviteMode(mode: 'new' | 'existing') {
 async function loadMembers() {
   membersLoading.value = true
   try {
-    const res = await $fetch<{ team: TeamMember[]; pendingInvitations: PendingInvitation[] }>('/api/admin/members')
+    const res = await applicationFetch<{ team: TeamMember[]; pendingInvitations: PendingInvitation[] }>('/api/admin/members')
     team.value = res.team
     pendingInvitations.value = res.pendingInvitations
   } catch {
@@ -265,7 +265,7 @@ async function inviteTeamMember() {
   invitingTeam.value = true
   teamInviteResult.value = null
   try {
-    const res = await $fetch<{ action: string; email: string }>('/api/admin/invite/team', {
+    const res = await applicationFetch<{ action: string; email: string }>('/api/admin/invite/team', {
       method: 'POST',
       body: { email, name: teamInviteName.value.trim() || undefined },
     })
@@ -289,7 +289,7 @@ async function inviteClient() {
     invitingClient.value = true
     clientInviteResult.value = null
     try {
-      const res = await $fetch<{ inviteUrl: string; restaurantName: string }>('/api/admin/invite/client', {
+      const res = await applicationFetch<{ inviteUrl: string; restaurantName: string }>('/api/admin/invite/client', {
         method: 'POST',
         body: { email, orgId: selectedOrg.value.id },
       })
@@ -312,7 +312,7 @@ async function inviteClient() {
   invitingClient.value = true
   clientInviteResult.value = null
   try {
-    const res = await $fetch<{ inviteUrl: string; restaurantName: string }>('/api/admin/invite/client', {
+    const res = await applicationFetch<{ inviteUrl: string; restaurantName: string }>('/api/admin/invite/client', {
       method: 'POST',
       body: { email, restaurantName: name },
     })

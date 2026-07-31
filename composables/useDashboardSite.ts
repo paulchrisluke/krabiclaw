@@ -57,6 +57,8 @@ interface DashboardContextResponse {
   siteAccess: 'organization' | 'site' | 'location' | null
 }
 
+const dashboardContextReads = new Map<string, Promise<DashboardContextResponse>>()
+
 // Central legacy dashboard scope adapter. Better Auth migration issue #386 owns
 // removing these route headers; callers must go through dashboardFetch rather
 // than spreading this debt into individual pages or composables.
@@ -83,12 +85,11 @@ export function useDashboardSite() {
   const contextKey = `dashboard:site-context:${orgSlug}:${siteSlug}`
   const state = useState<DashboardContextResponse | null>(contextKey, () => null)
   const pending = useState<boolean>(`${contextKey}:pending`, () => false)
-  let inFlight: Promise<DashboardContextResponse> | null = null
-
   async function refresh() {
-    if (inFlight) return await inFlight
+    const existing = dashboardContextReads.get(contextKey)
+    if (existing) return await existing
     pending.value = true
-    inFlight = dashboardFetch<DashboardContextResponse>('/api/dashboard/context')
+    const pendingRead = dashboardFetch<DashboardContextResponse>('/api/dashboard/context')
       .then((response) => {
         if (!response?.success || !Array.isArray(response.sites) || !Array.isArray(response.locations)) {
           throw new ApiClientError('Dashboard context response did not match its contract', 502, 'INVALID_API_RESPONSE', null)
@@ -98,9 +99,12 @@ export function useDashboardSite() {
       })
       .finally(() => {
         pending.value = false
-        inFlight = null
+        if (dashboardContextReads.get(contextKey) === pendingRead) {
+          dashboardContextReads.delete(contextKey)
+        }
       })
-    return await inFlight
+    dashboardContextReads.set(contextKey, pendingRead)
+    return await pendingRead
   }
 
   const organization = computed(() => state.value?.organization ?? null)

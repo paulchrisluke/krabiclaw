@@ -16,9 +16,10 @@ and the same ID in its structured error body. Browser clients retain that ID in
 
 For public bootstrap investigations, record `Server-Timing`,
 `x-bootstrap-cache`, payload bytes, and request count together. D1 query-count
-instrumentation should be grouped by the logical shell/page key. Two concurrent
-browser requests with the same key indicate a coalescing regression; a second
-request after a timeout or 5xx indicates an automatic-retry regression.
+instrumentation should be grouped by the logical shell/page key and request
+context. Record a retry regression only when a follow-up request has the same
+key and context and occurs without navigation, user action, another tab, or
+another caller.
 
 Dashboard requests must carry explicit organization and, for site routes, site
 scope through the canonical client. Missing or conflicting scope is terminal

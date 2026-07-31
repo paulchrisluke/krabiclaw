@@ -4,6 +4,7 @@ export const useAiCredits = (siteId: Ref<string | null> | ComputedRef<string | n
     return {
       balance: ref(null),
       total: ref(null),
+      error: ref(null),
       isLow: computed(() => false),
       isDepleted: computed(() => false),
       fetch: async () => {},
@@ -13,25 +14,31 @@ export const useAiCredits = (siteId: Ref<string | null> | ComputedRef<string | n
 
   const balance = ref<number | null>(null)
   const total = ref<number | null>(null)
+  const error = ref<unknown>(null)
 
   watch(siteId, () => {
     balance.value = null
     total.value = null
+    error.value = null
   })
 
   const fetch = async () => {
     if (!siteId.value) {
       balance.value = null
       total.value = null
+      error.value = null
       return
     }
     try {
+      error.value = null
       const res = await dashboardFetch<{ balance: number; total: number }>(`/api/ai/${siteId.value}/credits`)
       balance.value = res.balance
       total.value = res.total
-    } catch {
+    } catch (fetchError) {
       balance.value = null
       total.value = null
+      error.value = fetchError
+      throw fetchError
     }
   }
 
@@ -46,5 +53,5 @@ export const useAiCredits = (siteId: Ref<string | null> | ComputedRef<string | n
   const isLow = computed(() => balance.value !== null && balance.value < 50)
   const isDepleted = computed(() => balance.value !== null && balance.value <= 0)
 
-  return { balance, total, isLow, isDepleted, fetch, update }
+  return { balance, total, error, isLow, isDepleted, fetch, update }
 }

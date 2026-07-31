@@ -74,6 +74,7 @@ export const useChowBotHistory = () => {
         ...conversationsBySite.value,
         [siteId]: previousConversations,
       }
+      throw error
     }
   }
 

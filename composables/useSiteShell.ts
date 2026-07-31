@@ -16,18 +16,6 @@
 // hand. See useBootstrap.ts.
 import { useBootstrapKey, useBootstrapUrl, type BootstrapParams } from "~/composables/useBootstrapParams";
 
-interface ContentRow {
-  field: string;
-  content: string | null;
-  hero_title: string | null;
-  hero_subtitle: string | null;
-  hero_public_url: string | null;
-  hero_kind: string | null;
-  thumbnail_url: string | null;
-  component: string | null;
-  [key: string]: unknown;
-}
-
 interface ShellSiteInfo {
   brand_name?: string | null;
   brand_description?: string | null;
@@ -47,11 +35,6 @@ interface SiteShellPayload {
   googleBusiness: ApiRecord;
   locales: { code: string; label: string; is_source: boolean }[];
   hasExperiences: boolean;
-  // Bootstrap always returns `content`; the shell fetch keeps it around only
-  // because SayaHeader/SayaFooter read a couple of site-wide fields (e.g.
-  // footer legal copy) out of it — everything page-specific still comes from
-  // useBootstrap()'s own `content`.
-  content: ContentRow[];
 }
 
 const emptyShell = (): SiteShellPayload => ({
@@ -61,7 +44,6 @@ const emptyShell = (): SiteShellPayload => ({
   googleBusiness: { business: null, reviews: [], media: [], posts: [], syncedAt: null },
   locales: [],
   hasExperiences: false,
-  content: [],
 });
 
 export const useSiteShellState = () => {
@@ -108,30 +90,21 @@ export const useSiteShellState = () => {
   } else {
     const asyncData = useAsyncData<SiteShellPayload>(
           key,
-          async () => {
-            if (import.meta.server) {
-              if (draftId) return await requestFetch<SiteShellPayload>(url.value);
-              if (!requestEvent || !siteId) {
-                throw createError({ statusCode: 500, statusMessage: "Public shell server context unavailable" });
-              }
-              const { handlePublicBootstrap } = await import(
-                "~/server/utils/public-bootstrap"
-              );
-              const response = await handlePublicBootstrap(requestEvent, siteId, {
+          () => loadPublicBootstrapPayload<SiteShellPayload>({
+              draftId,
+              siteId,
+              requestEvent,
+              requestFetch,
+              url: url.value,
+              key: key.value,
+              query: {
                 locale: params.value.locale ?? undefined,
                 token: params.value.token ?? undefined,
-              });
-              if (!response.ok) {
-                throw createError({ statusCode: response.status, statusMessage: "Public shell failed" });
-              }
-              return await response.json() as SiteShellPayload;
-            }
-            return await publicApiRequest<SiteShellPayload>(url.value, {
-              coalesceKey: key.value,
+              },
               validate: (value): value is SiteShellPayload =>
                 isRecord(value) && Array.isArray(value.locations) && Array.isArray(value.locales),
-            });
-          },
+              failureMessage: 'Public shell failed',
+            }),
           { default: emptyShell, server: true },
         );
     data = asyncData.data

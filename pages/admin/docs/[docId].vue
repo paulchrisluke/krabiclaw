@@ -397,7 +397,7 @@ async function loadDoc() {
   loadPending.value = true
   loadError.value = ''
   try {
-    const res = await $fetch<DocResponse>(`/api/admin/docs/${docId}`)
+    const res = await applicationFetch<DocResponse>(`/api/admin/docs/${docId}`)
     if (!res.doc) throw new Error('Doc not found')
     doc.value = res.doc
     form.title = res.doc.title
@@ -433,7 +433,7 @@ async function update(publish = false) {
   errorMessage.value = ''
   successMessage.value = ''
   try {
-    const updated = await $fetch<DocResponse>(`/api/admin/docs/${docId}`, {
+    const updated = await applicationFetch<DocResponse>(`/api/admin/docs/${docId}`, {
       method: 'PATCH',
       body: { ...buildPayload(), ...(publish ? { publish: true } : {}) },
     })
@@ -453,7 +453,7 @@ async function unpublish() {
   errorMessage.value = ''
   successMessage.value = ''
   try {
-    const updated = await $fetch<DocResponse>(`/api/admin/docs/${docId}`, {
+    const updated = await applicationFetch<DocResponse>(`/api/admin/docs/${docId}`, {
       method: 'PATCH',
       body: { ...buildPayload(), unpublish: true },
     })
@@ -473,7 +473,7 @@ async function remove() {
   saving.value = true
   errorMessage.value = ''
   try {
-    await $fetch(`/api/admin/docs/${docId}`, { method: 'DELETE' })
+    await applicationFetch(`/api/admin/docs/${docId}`, { method: 'DELETE' })
     await navigateTo('/admin/docs')
   } catch (err) {
     errorMessage.value = getErrorMessage(err, 'Failed to delete.')

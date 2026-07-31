@@ -27,7 +27,7 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
       if (effectiveLocationId.value !== undefined && effectiveLocationId.value !== null && effectiveLocationId.value !== '') {
         params.set('locationId', effectiveLocationId.value)
       }
-      const response = await dashboardFetch<{ success: boolean; menus: Menu[] }>(
+      const response = await applicationFetch<{ success: boolean; menus: Menu[] }>(
         `/api/editor/sites/${siteId}/menus${params.toString() ? `?${params.toString()}` : ''}`
       )
 
@@ -53,7 +53,7 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     loading.value = true
     error.value = null
     try {
-      const response = await dashboardFetch<{ success: boolean; menu: MenuWithItems }>(
+      const response = await applicationFetch<{ success: boolean; menu: MenuWithItems }>(
         `/api/editor/sites/${siteId}/menus/${menuId}`
       )
       if (response.success) {
@@ -72,7 +72,7 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     saving.value = true
     error.value = null
     try {
-      const response = await dashboardFetch<{ success: boolean; menu: Menu }>(
+      const response = await applicationFetch<{ success: boolean; menu: Menu }>(
         `/api/editor/sites/${siteId}/menus`,
         { method: 'POST', body: { ...menuData, locationId: effectiveLocationId.value } }
       )
@@ -93,7 +93,7 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     saving.value = true
     error.value = null
     try {
-      const response = await dashboardFetch<{ success: boolean; menu: Menu }>(
+      const response = await applicationFetch<{ success: boolean; menu: Menu }>(
         `/api/editor/sites/${siteId}/menus/${menuId}`,
         { method: 'PATCH', body: updates }
       )
@@ -116,7 +116,7 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     saving.value = true
     error.value = null
     try {
-      await dashboardFetch(`/api/editor/sites/${siteId}/menus/${menuId}`, { method: 'DELETE' })
+      await applicationFetch(`/api/editor/sites/${siteId}/menus/${menuId}`, { method: 'DELETE' })
       currentMenu.value = null
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error'
@@ -131,7 +131,7 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     saving.value = true
     error.value = null
     try {
-      const response = await dashboardFetch<{ success: boolean; menuItem: MenuItem }>(
+      const response = await applicationFetch<{ success: boolean; menuItem: MenuItem }>(
         `/api/editor/sites/${siteId}/menus/${currentMenu.value.id}/items`,
         { method: 'POST', body: itemData }
       )
@@ -153,7 +153,7 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     saving.value = true
     error.value = null
     try {
-      const response = await dashboardFetch<{ success: boolean; menuItem: MenuItem }>(
+      const response = await applicationFetch<{ success: boolean; menuItem: MenuItem }>(
         `/api/editor/sites/${siteId}/menus/${currentMenu.value.id}/items/${itemId}`,
         { method: 'PATCH', body: updates }
       )
@@ -176,7 +176,7 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     saving.value = true
     error.value = null
     try {
-      await dashboardFetch(`/api/editor/sites/${siteId}/menus/${currentMenu.value.id}/items/${itemId}`, { method: 'DELETE' })
+      await applicationFetch(`/api/editor/sites/${siteId}/menus/${currentMenu.value.id}/items/${itemId}`, { method: 'DELETE' })
       currentMenu.value.items = currentMenu.value.items.filter(item => item.id !== itemId)
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error'
@@ -191,7 +191,7 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     saving.value = true
     error.value = null
     try {
-      const response = await dashboardFetch<{ success: boolean; old_section: string; new_section: string; updated: number }>(
+      const response = await applicationFetch<{ success: boolean; old_section: string; new_section: string; updated: number }>(
         `/api/editor/sites/${siteId}/menus/${currentMenu.value.id}/sections`,
         { method: 'PATCH', body: { old_section: oldSection, new_section: newSection } }
       )
@@ -219,7 +219,7 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     error.value = null
     try {
       const encodedSection = encodeURIComponent(section)
-      const response = await dashboardFetch<{ success: boolean; section: string; deleted: number }>(
+      const response = await applicationFetch<{ success: boolean; section: string; deleted: number }>(
         `/api/editor/sites/${siteId}/menus/${currentMenu.value.id}/sections?section=${encodedSection}`,
         { method: 'DELETE' }
       )
@@ -242,7 +242,7 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     saving.value = true
     error.value = null
     try {
-      await dashboardFetch(`/api/editor/sites/${siteId}/menus/${currentMenu.value.id}/reorder`, {
+      await applicationFetch(`/api/editor/sites/${siteId}/menus/${currentMenu.value.id}/reorder`, {
         method: 'POST',
         body: { items }
       })

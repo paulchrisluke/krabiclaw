@@ -98,16 +98,14 @@ export const useBootstrap = async (options: { enabled?: boolean | Ref<boolean> }
       ? { data: ref<BootstrapPayload>(empty), error: ref<Error | null>(null), pending: ref(false) }
       : await useAsyncData<BootstrapPayload>(
           key,
-          async () => {
-            if (import.meta.server) {
-              if (draftId) return await requestFetch<BootstrapPayload>(url.value);
-              if (!requestEvent || !siteId) {
-                throw createError({ statusCode: 500, statusMessage: "Public bootstrap server context unavailable" });
-              }
-              const { handlePublicBootstrap } = await import(
-                "~/server/utils/public-bootstrap"
-              );
-              const response = await handlePublicBootstrap(requestEvent, siteId, {
+          () => loadPublicBootstrapPayload<BootstrapPayload>({
+              draftId,
+              siteId,
+              requestEvent,
+              requestFetch,
+              url: url.value,
+              key: key.value,
+              query: {
                 page: params.value.page ?? undefined,
                 location: params.value.location ?? undefined,
                 experience: params.value.experience ?? undefined,
@@ -116,18 +114,11 @@ export const useBootstrap = async (options: { enabled?: boolean | Ref<boolean> }
                 blogSlug: params.value.blogSlug ?? undefined,
                 locale: params.value.locale ?? undefined,
                 token: params.value.token ?? undefined,
-              });
-              if (!response.ok) {
-                throw createError({ statusCode: response.status, statusMessage: "Public bootstrap failed" });
-              }
-              return await response.json() as BootstrapPayload;
-            }
-            return await publicApiRequest<BootstrapPayload>(url.value, {
-              coalesceKey: key.value,
+              },
               validate: (value): value is BootstrapPayload =>
                 isRecord(value) && Array.isArray(value.content),
-            });
-          },
+              failureMessage: 'Public bootstrap failed',
+            }),
           {
             default: emptyBootstrap,
             server: true,

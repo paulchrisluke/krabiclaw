@@ -56,7 +56,7 @@ export const useEditorContext = (siteId?: string) => {
     error.value = null
 
     try {
-      const response = await dashboardFetch<{
+      const response = await applicationFetch<{
         success: boolean
         context: EditorContext
       }>(`/api/editor/sites/${effectiveSiteId.value}/context`)

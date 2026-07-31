@@ -1330,8 +1330,11 @@ export async function attachAvailabilitySummaries<T extends Experience>(
   toCursor.setUTCDate(toCursor.getUTCDate() + AVAILABILITY_SUMMARY_WINDOW_DAYS - 1)
   const toDate = toCursor.toISOString().slice(0, 10)
   const locationPlaceholders = locationIds.map(() => '?').join(',')
-  const experiencePlaceholders = experienceIds.map(() => '?').join(',')
-  const [locationRows, configRows, bookingRows, overrideRows] = await Promise.all([
+  const chunks: string[][] = []
+  for (let index = 0; index < experienceIds.length; index += 97) {
+    chunks.push(experienceIds.slice(index, index + 97))
+  }
+  const [locationRows, configRows, chunkRows] = await Promise.all([
     locationIds.length
       ? queryAll<{ id: string; special_hours: string | null; timezone: string | null }>(
       db,
@@ -1343,24 +1346,32 @@ export async function attachAvailabilitySummaries<T extends Experience>(
       `SELECT key, value FROM site_config WHERE organization_id = ? AND site_id = ? AND key = 'default_timezone'`,
       [organizationId, siteId],
     ),
-    queryAll<AvailabilityBookingRow>(
-      db,
-      `SELECT experience_id, booking_date, time_slot, SUM(party_size) AS booked
-       FROM experience_bookings
-       WHERE site_id = ? AND experience_id IN (${experiencePlaceholders})
-         AND booking_date BETWEEN ? AND ? AND status IN ('pending', 'confirmed')
-       GROUP BY experience_id, booking_date, time_slot`,
-      [siteId, ...experienceIds, fromDate, toDate],
-    ),
-    queryAll<AvailabilityOverrideRow>(
-      db,
-      `SELECT experience_id, override_date, time_slot, status, capacity_override
-       FROM experience_slot_overrides
-       WHERE site_id = ? AND experience_id IN (${experiencePlaceholders})
-         AND override_date BETWEEN ? AND ?`,
-      [siteId, ...experienceIds, fromDate, toDate],
-    ),
+    Promise.all(chunks.map(async (chunk) => {
+      const placeholders = chunk.map(() => '?').join(',')
+      const [bookings, overrides] = await Promise.all([
+        queryAll<AvailabilityBookingRow>(
+          db,
+          `SELECT experience_id, booking_date, time_slot, SUM(party_size) AS booked
+           FROM experience_bookings
+           WHERE site_id = ? AND experience_id IN (${placeholders})
+             AND booking_date BETWEEN ? AND ? AND status IN ('pending', 'confirmed')
+           GROUP BY experience_id, booking_date, time_slot`,
+          [siteId, ...chunk, fromDate, toDate],
+        ),
+        queryAll<AvailabilityOverrideRow>(
+          db,
+          `SELECT experience_id, override_date, time_slot, status, capacity_override
+           FROM experience_slot_overrides
+           WHERE site_id = ? AND experience_id IN (${placeholders})
+             AND override_date BETWEEN ? AND ?`,
+          [siteId, ...chunk, fromDate, toDate],
+        ),
+      ])
+      return { bookings, overrides }
+    })),
   ])
+  const bookingRows = chunkRows.flatMap(chunk => chunk.bookings)
+  const overrideRows = chunkRows.flatMap(chunk => chunk.overrides)
   const defaultTimezone = configRows[0]?.value || 'UTC'
   const locations = new Map(locationRows.map(row => [row.id, row]))
   const bookingsByExperience = new Map<string, AvailabilityBookingRow[]>()

@@ -417,7 +417,7 @@ function planColor(plan: string) { return PLAN_COLORS[plan] ?? 'neutral' }
 async function loadClients() {
   clientsLoading.value = true
   try {
-    const res = await $fetch<{ clients: Client[] }>('/api/admin/clients')
+    const res = await applicationFetch<{ clients: Client[] }>('/api/admin/clients')
     clients.value = res.clients
   } catch {
     toast.add({ title: 'Failed to load clients', color: 'error' })
@@ -499,7 +499,7 @@ async function openBilling(client: Client) {
   billingOpen.value = true
   billingLoading.value = true
   try {
-    billingStatus.value = await $fetch<BillingStatus>(`/api/admin/organizations/${client.org_id}/billing`)
+    billingStatus.value = await applicationFetch<BillingStatus>(`/api/admin/organizations/${client.org_id}/billing`)
   } catch (err: unknown) {
     billingError.value = getErrorMessage(err, 'Failed to load billing info')
   } finally {
@@ -517,7 +517,7 @@ async function recordCashPayment() {
   cashResult.value = null
   cashError.value = ''
   try {
-    const res = await $fetch<{ success: boolean; plan: string; interval: string; amount_paid: number }>(
+    const res = await applicationFetch<{ success: boolean; plan: string; interval: string; amount_paid: number }>(
       `/api/admin/organizations/${billingClient.value.org_id}/billing/cash-payment`,
       {
         method: 'POST',
@@ -532,7 +532,7 @@ async function recordCashPayment() {
     )
     cashResult.value = res
     await loadClients()
-    billingStatus.value = await $fetch<BillingStatus>(`/api/admin/organizations/${billingClient.value.org_id}/billing`)
+    billingStatus.value = await applicationFetch<BillingStatus>(`/api/admin/organizations/${billingClient.value.org_id}/billing`)
   } catch (err: unknown) {
     cashError.value = getErrorMessage(err, 'Failed to record payment')
   } finally {
@@ -547,14 +547,14 @@ async function markMonthPaid() {
   markPaidResult.value = null
   markPaidError.value = ''
   try {
-    const res = await $fetch<{ success: boolean; new_period_end: string | null }>(
+    const res = await applicationFetch<{ success: boolean; new_period_end: string | null }>(
       `/api/admin/sites/${siteId}/billing/mark-paid`,
       { method: 'POST' },
     )
     markPaidResult.value = res
     await loadClients()
     if (billingClient.value) {
-      billingStatus.value = await $fetch<BillingStatus>(`/api/admin/organizations/${billingClient.value.org_id}/billing`)
+      billingStatus.value = await applicationFetch<BillingStatus>(`/api/admin/organizations/${billingClient.value.org_id}/billing`)
     }
   } catch (err: unknown) {
     markPaidError.value = getErrorMessage(err, 'Failed to mark payment')
@@ -569,13 +569,13 @@ async function forceAcceptTransfer() {
   forceAcceptResult.value = null
   forceAcceptError.value = ''
   try {
-    const res = await $fetch<{ success: boolean; to_email: string }>(
+    const res = await applicationFetch<{ success: boolean; to_email: string }>(
       `/api/admin/sites/${billingStatus.value.pending_transfer.site_id}/transfer/force-accept`,
       { method: 'POST' },
     )
     forceAcceptResult.value = res
     await loadClients()
-    billingStatus.value = await $fetch<BillingStatus>(`/api/admin/organizations/${billingClient.value!.org_id}/billing`)
+    billingStatus.value = await applicationFetch<BillingStatus>(`/api/admin/organizations/${billingClient.value!.org_id}/billing`)
   } catch (err: unknown) {
     forceAcceptError.value = getErrorMessage(err, 'Failed to transfer site')
   } finally {
@@ -633,7 +633,7 @@ async function sendHandoff() {
   handoffError.value = ''
   handoffResult.value = null
   try {
-    const res = await $fetch<HandoffResult>(`/api/admin/sites/${handoffClient.value.site_id}/transfer`, {
+    const res = await applicationFetch<HandoffResult>(`/api/admin/sites/${handoffClient.value.site_id}/transfer`, {
       method: 'POST',
       body: {
         email: handoffEmail.value.trim(),

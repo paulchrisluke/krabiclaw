@@ -299,13 +299,15 @@ async function addDomain() {
     toast.add({ description: 'Domain added', color: 'success' })
     closeAddModal()
   } catch (error) {
-    const data = (error as { data?: { error?: string; live_cutover_warning?: LiveCutoverWarning } })?.data
-    if (data?.live_cutover_warning) {
-      liveCutoverWarning.value = data.live_cutover_warning
+    const data = error instanceof ApiClientError ? error.data : {}
+    if (data.live_cutover_warning && typeof data.live_cutover_warning === 'object') {
+      liveCutoverWarning.value = data.live_cutover_warning as LiveCutoverWarning
       addError.value = ''
     } else {
       liveCutoverWarning.value = null
-      addError.value = data?.error ?? 'Failed to add domain'
+      addError.value = typeof data.error === 'string'
+        ? data.error
+        : error instanceof Error ? error.message : 'Failed to add domain'
     }
   } finally {
     adding.value = false

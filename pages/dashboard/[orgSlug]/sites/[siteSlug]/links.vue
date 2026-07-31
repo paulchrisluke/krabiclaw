@@ -294,8 +294,9 @@ async function save() {
     savedSnapshot.value = serializeState()
     toast.add({ description: 'Links page saved', color: 'success' })
   } catch (error) {
-    const data = error && typeof error === 'object' ? (error as { data?: { error?: string } }).data : null
-    errorMessage.value = data?.error || (error instanceof Error ? error.message : 'Unable to save links page')
+    errorMessage.value = error instanceof ApiClientError
+      ? error.message
+      : error instanceof Error ? error.message : 'Unable to save links page'
     toast.add({ description: errorMessage.value, color: 'error' })
   } finally {
     saving.value = false

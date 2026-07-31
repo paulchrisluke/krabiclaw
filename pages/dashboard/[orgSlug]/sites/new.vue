@@ -81,8 +81,7 @@ async function submit() {
       await offerSubscribe(res.siteId, res.offerSubscribePlan)
     }
   } catch (err) {
-    const data = (err as { data?: { error?: string } })?.data
-    error.value = data?.error ?? 'Could not create site. Please try again.'
+    error.value = err instanceof Error ? err.message : 'Could not create site. Please try again.'
   } finally {
     creating.value = false
   }

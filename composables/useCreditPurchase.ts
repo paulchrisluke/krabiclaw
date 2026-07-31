@@ -55,13 +55,9 @@ export const useCreditPurchase = () => {
         if (onSuccess) _successHandlers.set(txId, onSuccess)
         return
       }
-    } catch {
-      // No saved card — fall through to Checkout
-    }
-    try {
       await _redirectToCheckout(bundle)
-    } catch {
-      toast.add({ title: 'Unable to start checkout — please try again', color: 'error' })
+    } catch (error) {
+      toast.add({ title: error instanceof Error ? error.message : 'Unable to start checkout — please try again', color: 'error' })
     }
   }
 
@@ -86,13 +82,13 @@ export const useCreditPurchase = () => {
         _successHandlers.delete(txId)
       }
     } catch (err) {
-      const data = (err as { data?: { requiresCheckout?: boolean } }).data
+      const data = err instanceof ApiClientError ? err.data : {}
       isOpen.value = false
       pendingBundle.value = null
       pendingTxId.value = null
       wantsAutoTopup.value = false
       if (txId) _successHandlers.delete(txId)
-      if (data?.requiresCheckout) {
+      if (data.requiresCheckout === true) {
         try {
           await _redirectToCheckout(bundle)
         } catch {

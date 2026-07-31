@@ -1,8 +1,6 @@
 export const IMAGE_MAX_SIZE_BYTES = 10 * 1024 * 1024
 export const VIDEO_MAX_SIZE_BYTES = 50 * 1024 * 1024
 
-const CONFIRM_RETRY_DELAYS_MS = [250, 500]
-
 export interface MediaUploadOptions {
   locationId?: string | null
   category?: string | null
@@ -56,10 +54,6 @@ function getErrorStatus(error: unknown): number {
   return 0
 }
 
-function sleep(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms))
-}
-
 export function useMediaUpload(siteApiBase: string) {
   const uploading = ref(false)
   const error = ref<string | null>(null)
@@ -70,28 +64,12 @@ export function useMediaUpload(siteApiBase: string) {
   }
 
   async function confirmPendingUpload(assetId: string) {
-    let lastError: unknown = null
-
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      try {
-        await dashboardFetch(`${siteApiBase}/media/${assetId}/confirm`, { method: 'POST' })
-        return
-      } catch (uploadError) {
-        lastError = uploadError
-        const status = getErrorStatus(uploadError)
-        if (status === 409) return
-
-        const retryDelay = CONFIRM_RETRY_DELAYS_MS[attempt]
-        if (retryDelay !== undefined && (!status || status >= 500 || status === 408 || status === 429)) {
-          await sleep(retryDelay)
-          continue
-        }
-
-        break
-      }
+    try {
+      await dashboardFetch(`${siteApiBase}/media/${assetId}/confirm`, { method: 'POST' })
+    } catch (uploadError) {
+      if (getErrorStatus(uploadError) === 409) return
+      throw uploadError
     }
-
-    throw lastError ?? new Error('Failed to confirm uploaded file.')
   }
 
   async function upload(file: File, options: MediaUploadOptions = {}): Promise<MediaUploadResult | null> {
