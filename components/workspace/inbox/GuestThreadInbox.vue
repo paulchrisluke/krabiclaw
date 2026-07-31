@@ -292,7 +292,11 @@ const capabilities = computed(() => {
 })
 
 const dashboardScope = useDashboardRouteScope()
-const dashboardRequestHeaders = computed(() => buildDashboardRequestHeaders(dashboardScope.value!))
+const dashboardRequestHeaders = computed(() => {
+  const scope = dashboardScope.value
+  if (!scope) throw new Error('Dashboard organization scope is required')
+  return buildDashboardRequestHeaders(scope)
+})
 const effectiveFeatureSet = computed(() => new Set<ProductFeature>([
   ...(capabilities.value?.pages.map(page => page.feature) ?? []),
   ...(capabilities.value?.managers.map(manager => manager.id) ?? []),
@@ -339,6 +343,7 @@ async function goBackToList() {
 
 async function loadThreads() {
   if (isLocationScope.value && !selectedLocationId.value) return
+  if (!dashboardScope.value) return
   const requestToken = ++threadsRequestToken
   loadingThreads.value = true
   try {

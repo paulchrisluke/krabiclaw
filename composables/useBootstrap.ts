@@ -9,8 +9,7 @@
 //
 // Usage (in a page):
 //   const { getField, getHero, photosList, qaList, ... } = await useBootstrap()
-import { onMounted, onBeforeUnmount, unref } from "vue";
-import type { Ref } from "vue";
+import { onMounted, onBeforeUnmount } from "vue";
 import {
   useBootstrapParams,
   useBootstrapKey,
@@ -79,14 +78,14 @@ const isBootstrapPayload = (value: unknown, expectedKind: string): value is Boot
   && Array.isArray(value.experiencesList)
   && (value.menu === null || isRecord(value.menu))
 
-export const useBootstrap = async (options: { enabled?: boolean | Ref<boolean> } = {}) => {
+export const useBootstrap = async (options: { enabled?: boolean } = {}) => {
   const { isPlatform, siteId, draftId } = useTenantSite();
   const route = useRoute();
   const params = useBootstrapParams();
   const routeLoadState = usePublicRouteLoadState();
   const entityId = computed(() => siteId || draftId || null);
   const key = computed(() => useBootstrapKey(entityId.value, params.value));
-  const enabled = computed(() => options.enabled === undefined ? true : Boolean(unref(options.enabled)));
+  const enabled = computed(() => options.enabled !== false);
 
   const url = computed(() => useBootstrapUrl(siteId, params.value));
 

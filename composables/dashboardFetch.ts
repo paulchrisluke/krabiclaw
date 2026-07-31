@@ -39,7 +39,9 @@ async function executeApiFetch<T>(
       } as never)
       const responseIsValid = validate
         ? validate(value)
-        : isRecord(value) || Array.isArray(value)
+        : method === 'GET'
+          ? isRecord(value) || Array.isArray(value)
+          : value === null || value === '' || isRecord(value) || Array.isArray(value)
       if (!responseIsValid) {
         throw new ApiClientError('API response did not match its contract', 502, 'INVALID_API_RESPONSE', null)
       }
@@ -50,6 +52,9 @@ async function executeApiFetch<T>(
   }
 
   if (method !== 'GET' || fetchOptions.signal) return await run()
+  // Coalescing is browser-only to prevent SSR cross-request data leakage.
+  // In server context, every request must stand alone without shared state.
+  if (import.meta.server) return await run()
   const key = coalesceKey ?? `${request}:${stableValue(fetchOptions.query)}:${stableValue([...headers])}`
   const existing = dashboardInFlightReads.get(key) as Promise<T> | undefined
   if (existing) return await existing

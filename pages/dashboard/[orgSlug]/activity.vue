@@ -126,7 +126,7 @@ const { data: membersData } = await useAsyncData<{ members: Member[] }>(membersK
       import('~/server/utils/api-response'),
       import('~/server/utils/dashboard-members'),
     ])
-    const db = cloudflareEnv(requestEvent).db
+    const db = cloudflareEnv(requestEvent).DB
     if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
     const result = await getOrganizationMembersData(db, dashboard.organization.value.id)
     return { members: result.members }

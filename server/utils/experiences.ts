@@ -1329,18 +1329,30 @@ export async function attachAvailabilitySummaries<T extends Experience>(
   const toCursor = new Date()
   toCursor.setUTCDate(toCursor.getUTCDate() + AVAILABILITY_SUMMARY_WINDOW_DAYS - 1)
   const toDate = toCursor.toISOString().slice(0, 10)
-  const locationPlaceholders = locationIds.map(() => '?').join(',')
+
+  // Chunk locationIds to stay within D1's parameter limit (circa 100 params per statement).
+  // locationIds query includes site_id + each location id, so max ~97 locations per chunk.
+  const locationChunks: string[][] = []
+  for (let index = 0; index < locationIds.length; index += 97) {
+    locationChunks.push(locationIds.slice(index, index + 97))
+  }
+
   const chunks: string[][] = []
   for (let index = 0; index < experienceIds.length; index += 97) {
     chunks.push(experienceIds.slice(index, index + 97))
   }
+
   const [locationRows, configRows, chunkRows] = await Promise.all([
     locationIds.length
-      ? queryAll<{ id: string; special_hours: string | null; timezone: string | null }>(
-      db,
-      `SELECT id, special_hours, timezone FROM business_locations WHERE site_id = ? AND id IN (${locationPlaceholders})`,
-      [siteId, ...locationIds],
-    ) : Promise.resolve([]),
+      ? Promise.all(locationChunks.map(async (chunk) => {
+        const placeholders = chunk.map(() => '?').join(',')
+        return queryAll<{ id: string; special_hours: string | null; timezone: string | null }>(
+          db,
+          `SELECT id, special_hours, timezone FROM business_locations WHERE site_id = ? AND id IN (${placeholders})`,
+          [siteId, ...chunk],
+        )
+      })).then((results) => results.flatMap(r => r ?? []))
+      : Promise.resolve([]),
     queryAll<{ key: string; value: string }>(
       db,
       `SELECT key, value FROM site_config WHERE organization_id = ? AND site_id = ? AND key = 'default_timezone'`,
@@ -1389,12 +1401,14 @@ export async function attachAvailabilitySummaries<T extends Experience>(
 
   return list.map(experience => {
     const location = locations.get(experience.location_id)
+    const experienceTimezone = location?.timezone || defaultTimezone
+    const closureTimezone = location?.timezone || defaultTimezone
     const summary = calculateAvailabilitySummary(
       experience,
-      location?.timezone || defaultTimezone,
+      experienceTimezone,
       bookingsByExperience.get(experience.id) ?? [],
       overridesByExperience.get(experience.id) ?? [],
-      { locationClosed: Boolean(location && getActiveSpecialClosure(location.special_hours, location.timezone)) },
+      { locationClosed: Boolean(location && getActiveSpecialClosure(location.special_hours, closureTimezone)) },
     )
     return { ...experience, ...summary }
   })

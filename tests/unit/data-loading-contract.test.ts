@@ -57,16 +57,25 @@ test('availability and policy loaders use bounded bulk-query call sites', async 
   const policies = await parse('server/utils/booking-policies.ts')
   const experienceNodes = descendants(experiences)
   const policyNodes = descendants(policies)
+  // Check for experienceIds chunking at 97
   assert.ok(experienceNodes.some(node =>
     ts.isBinaryExpression(node)
     && node.operatorToken.kind === ts.SyntaxKind.LessThanToken
     && node.right.getText() === 'experienceIds.length',
   ))
+  // Check for locationIds chunking at 97
   assert.ok(experienceNodes.some(node =>
+    ts.isBinaryExpression(node)
+    && node.operatorToken.kind === ts.SyntaxKind.LessThanToken
+    && node.right.getText() === 'locationIds.length',
+  ))
+  // Verify 97-item chunk size is used
+  const chunkSizeNodes = experienceNodes.filter(node =>
     ts.isBinaryExpression(node)
     && node.operatorToken.kind === ts.SyntaxKind.PlusEqualsToken
     && node.right.getText() === '97',
-  ))
+  )
+  assert.ok(chunkSizeNodes.length >= 2, 'Should have at least 2 chunk size assignments (for both experiences and locations)')
   assert.ok(experienceNodes.filter(node =>
     ts.isCallExpression(node) && node.expression.getText() === 'queryAll',
   ).length >= 4)
@@ -84,4 +93,32 @@ test('dashboard transport never mutates global fetch', async () => {
       && node.name.text === '$fetch',
     ), false)
   }
+})
+
+test('dashboard fetch applies configured timeout per method', async () => {
+  const dashboard = await parse('composables/dashboardFetch.ts')
+  const apiClients = await parse('utils/api-clients.ts')
+  const nodes = descendants(dashboard)
+  const apiNodes = descendants(apiClients)
+
+  // Check that timeout is conditionally applied based on method
+  assert.ok(nodes.some(node =>
+    ts.isConditionalExpression(node)
+    && node.condition.getText().includes('GET'),
+  ), 'dashboardFetch should conditionally apply timeout based on method')
+
+  // Check that timeout constants are exported
+  assert.ok(apiNodes.some(node =>
+    ts.isVariableStatement(node)
+    && node.declarationList.declarations.some(d =>
+      ts.isIdentifier(d.name) && d.name.text === 'DASHBOARD_READ_TIMEOUT_MS',
+    ),
+  ), 'DASHBOARD_READ_TIMEOUT_MS must be exported from api-clients.ts')
+
+  assert.ok(apiNodes.some(node =>
+    ts.isVariableStatement(node)
+    && node.declarationList.declarations.some(d =>
+      ts.isIdentifier(d.name) && d.name.text === 'MUTATION_TIMEOUT_MS',
+    ),
+  ), 'MUTATION_TIMEOUT_MS must be exported from api-clients.ts')
 })

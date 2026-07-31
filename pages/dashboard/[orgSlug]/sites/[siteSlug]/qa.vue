@@ -83,14 +83,39 @@ const selectedPagePath = ref('general')
 
 const STANDARD_ROUTES = ['/', '/about', '/services', '/pricing', '/contact', '/schedule', '/blog', '/donate'] as const
 
+const requestEvent = useRequestEvent()
 const { data: tenantPages } = await useAsyncData(
   () => `dashboard-tenant-pages-${siteId}`,
-  () => dashboardApi<Array<{ path: string; title: string }>>(`/api/editor/sites/${siteId}/tenant-pages`),
+  async () => {
+    if (import.meta.server) {
+      if (!requestEvent) return null
+      const [{ cloudflareEnv }, { getTenantPages }] = await Promise.all([
+        import('~/server/utils/api-response'),
+        import('~/server/utils/qa-dashboard'),
+      ])
+      const db = cloudflareEnv(requestEvent).db
+      if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+      return await getTenantPages(db, siteId)
+    }
+    return null
+  },
 )
 
 const { data: existingQaScopes } = await useAsyncData(
   () => `dashboard-qa-scopes-${siteId}`,
-  () => dashboardApi<Array<{ page_path: string | null }>>(`/api/editor/sites/${siteId}/qa/scopes`),
+  async () => {
+    if (import.meta.server) {
+      if (!requestEvent) return null
+      const [{ cloudflareEnv }, { getQaScopes }] = await Promise.all([
+        import('~/server/utils/api-response'),
+        import('~/server/utils/qa-dashboard'),
+      ])
+      const db = cloudflareEnv(requestEvent).db
+      if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+      return await getQaScopes(db, siteId)
+    }
+    return null
+  },
 )
 
 const pageScopes = computed(() => {
@@ -125,7 +150,20 @@ watch(selectedPagePath, () => {
 })
 const { data, pending, refresh } = await useAsyncData(
   () => `dashboard-site-qa-${siteId}-${selectedPagePath.value}`,
-  () => dashboardApi<{ qa: QaRow[] }>(`/api/editor/sites/${siteId}/qa`, { query: pagePath.value ? { page_path: pagePath.value } : undefined }),
+  async () => {
+    if (import.meta.server) {
+      if (!requestEvent) return null
+      const [{ cloudflareEnv }, { getSiteQa }] = await Promise.all([
+        import('~/server/utils/api-response'),
+        import('~/server/utils/qa-dashboard'),
+      ])
+      const db = cloudflareEnv(requestEvent).db
+      if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+      const qa = await getSiteQa(db, siteId, pagePath.value)
+      return { qa }
+    }
+    return null
+  },
   { watch: [selectedPagePath] },
 )
 const qaRows = computed(() => data.value?.qa ?? [])

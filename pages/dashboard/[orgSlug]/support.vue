@@ -159,6 +159,8 @@
 </template>
 
 <script setup lang="ts">
+import { getDashboardContext } from '~/server/utils/dashboard-context'
+
 const dashboardApi = useDashboardApi()
 const dashboardScope = useDashboardRouteScope()
 definePageMeta({ layout: 'dashboard' })
@@ -230,8 +232,28 @@ interface WorkRequest {
   notes: string | null; created_at: string
 }
 
-const requestHeaders = computed(() => buildDashboardRequestHeaders(dashboardScope.value!))
-const { data, refresh } = await useFetch<{ requests: WorkRequest[] }>('/api/dashboard/work-requests', { headers: requestHeaders.value })
+const requestEvent = useRequestEvent()
+const { data, refresh } = await useAsyncData<{ requests: WorkRequest[] } | null>(
+  () => `dashboard-work-requests-${dashboardScope.value?.orgSlug ?? 'unknown'}`,
+  async () => {
+    const scope = dashboardScope.value
+    if (!scope) return null
+    if (import.meta.server) {
+      if (!requestEvent) return null
+      const [{ cloudflareEnv }, { listWorkRequests }] = await Promise.all([
+        import('~/server/utils/api-response'),
+        import('~/server/utils/work-requests-dashboard'),
+      ])
+      const db = cloudflareEnv(requestEvent).DB
+      if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+      const { organization } = await getDashboardContext(requestEvent, { requireOrganization: false, organizationSlug: scope.orgSlug })
+      if (!organization) return { requests: [] }
+      const requests = await listWorkRequests(db, organization.id)
+      return { requests }
+    }
+    return null
+  },
+)
 const requests = computed(() => data.value?.requests)
 
 async function submitRequest() {
@@ -242,7 +264,6 @@ async function submitRequest() {
   try {
     await dashboardApi('/api/dashboard/work-requests', {
       method: 'POST',
-      headers: requestHeaders.value,
       body: { type: form.type, title: form.title.trim(), description: form.description.trim() || undefined, priority: form.priority },
     })
     form.title = ''

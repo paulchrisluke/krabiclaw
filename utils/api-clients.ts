@@ -54,13 +54,13 @@ function sanitizeApiData(value: unknown): Record<string, unknown> {
 
 export function normalizeApiError(error: unknown, fallbackMessage = 'API request failed'): ApiClientError {
   if (error instanceof ApiClientError) return error
-  const candidate = error as {
+  const candidate = isRecord(error) || (error && typeof error === 'object') ? (error as {
     statusCode?: number
     status?: number
     message?: string
     data?: unknown
     response?: { status?: number; headers?: Headers }
-  }
+  }) : {}
   const data = sanitizeApiData(candidate.data)
   const structuredError = isRecord(data.error) ? data.error : null
   const topLevelError = typeof data.error === 'string' ? data.error : null
@@ -115,8 +115,9 @@ async function request<T>(
   }
 
   // A request with a caller-owned signal cannot safely share cancellation
-  // ownership with another consumer.
-  if (method !== 'GET' || !options.coalesceKey || options.signal) return await run()
+  // ownership with another consumer. Coalescing is client-only to prevent
+  // SSR cross-request data leakage.
+  if (method !== 'GET' || !options.coalesceKey || options.signal || import.meta.server) return await run()
   const existing = inFlightReads.get(options.coalesceKey) as Promise<T> | undefined
   if (existing) return await existing
   const pending = run().finally(() => {

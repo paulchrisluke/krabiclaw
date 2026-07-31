@@ -38,33 +38,47 @@ interface SiteShellPayload {
   hasMenu: boolean;
 }
 
-const isSiteShellPayload = (value: unknown): value is SiteShellPayload =>
-  isRecord(value)
-  && isRecord(value.site)
-  && (typeof value.site.brand_name === 'string' || value.site.brand_name === null)
-  && (typeof value.site.vertical === 'string' || value.site.vertical === null)
-  && Array.isArray(value.locations)
-  && value.locations.every(location =>
+const isSiteShellPayload = (value: unknown): value is SiteShellPayload => {
+  if (!isRecord(value)) return false
+  if (!isRecord(value.site)) return false
+  // Enforce exact contract: site fields must match declared types precisely
+  if (typeof value.site.brand_name !== 'string' && value.site.brand_name !== null) return false
+  if (typeof value.site.brand_description !== 'string' && value.site.brand_description !== null) return false
+  if (typeof value.site.logo_url !== 'string' && value.site.logo_url !== null) return false
+  if (typeof value.site.logo_mime_type !== 'string' && value.site.logo_mime_type !== null) return false
+  if (typeof value.site.favicon_url !== 'string' && value.site.favicon_url !== null) return false
+  if (typeof value.site.vertical !== 'string' && value.site.vertical !== null) return false
+  if (value.site.config !== null && !isRecord(value.site.config)) return false
+  if (value.site.config !== null && value.site.config.phone !== null && typeof value.site.config.phone !== 'string') return false
+
+  if (!Array.isArray(value.locations)) return false
+  if (!value.locations.every(location =>
     isRecord(location)
     && typeof location.id === 'string'
     && typeof location.slug === 'string'
     && typeof location.title === 'string',
-  )
-  && isRecord(value.config)
-  && isRecord(value.googleBusiness)
-  && (value.googleBusiness.business === null || isRecord(value.googleBusiness.business))
-  && Array.isArray(value.googleBusiness.reviews)
-  && Array.isArray(value.googleBusiness.media)
-  && Array.isArray(value.googleBusiness.posts)
-  && Array.isArray(value.locales)
-  && value.locales.every(locale =>
+  )) return false
+
+  if (!isRecord(value.config)) return false
+  if (!isRecord(value.googleBusiness)) return false
+  if (value.googleBusiness.business !== null && !isRecord(value.googleBusiness.business)) return false
+  if (!Array.isArray(value.googleBusiness.reviews)) return false
+  if (!Array.isArray(value.googleBusiness.media)) return false
+  if (!Array.isArray(value.googleBusiness.posts)) return false
+
+  if (!Array.isArray(value.locales)) return false
+  if (!value.locales.every(locale =>
     isRecord(locale)
     && typeof locale.code === 'string'
     && typeof locale.label === 'string'
     && typeof locale.is_source === 'boolean',
-  )
-  && typeof value.hasExperiences === 'boolean'
-  && typeof value.hasMenu === 'boolean'
+  )) return false
+
+  if (typeof value.hasExperiences !== 'boolean') return false
+  if (typeof value.hasMenu !== 'boolean') return false
+
+  return true
+}
 
 export const useSiteShellState = () => {
   const { isPlatform, siteId, draftId } = useTenantSite();

@@ -15,13 +15,18 @@ export async function loadDashboardContext(
   const managedServiceEnabled = isManagedServiceEnabled(cloudflareEnv(event))
   const { db, organization, site } = await getDashboardContext(event, {
     requireSite: false,
-    requireOrganization: false,
+    requireOrganization: scope?.orgSlug ? true : false,
     allowTransferFallback: scope?.afterTransfer,
     organizationSlug: scope?.orgSlug,
     siteSlug: scope?.siteSlug,
   })
 
   if (!organization) {
+    // If an organization slug was explicitly requested but not found,
+    // that's an error, not a fallback to null.
+    if (scope?.orgSlug) {
+      throw createError({ statusCode: 404, statusMessage: `Organization not found: ${scope.orgSlug}` })
+    }
     return {
       success: true as const,
       organization: null,

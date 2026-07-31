@@ -38,10 +38,10 @@
         class="mx-auto max-w-xl px-4 py-24 text-center sm:px-6"
         data-testid="public-route-error"
       >
-        <h1 class="saya-display-md text-default">This page could not be loaded.</h1>
-        <p class="mt-4 text-sm text-muted">{{ publicError.message }}</p>
+        <h1 class="saya-display-md text-default">{{ $t('error.page_not_loaded') }}</h1>
+        <p class="mt-4 text-sm text-muted">{{ $t('error.generic_message') }}</p>
         <button type="button" class="mt-8 border border-default px-5 py-3 text-sm" @click="retryPublicData">
-          Try again
+          {{ $t('action.try_again') }}
         </button>
       </div>
       <slot v-else />
@@ -77,7 +77,6 @@ const publicError = computed(() => shell.error.value || routeLoadState.value.err
 const retryPublicData = async () => {
   if (shell.error.value) {
     await shell.refresh()
-    return
   }
   if (routeLoadState.value.error && routeLoadState.value.key) {
     await refreshNuxtData(routeLoadState.value.key)

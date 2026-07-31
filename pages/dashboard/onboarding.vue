@@ -310,7 +310,6 @@ const loadContext = async () => {
     }
   } catch (error) {
     contextError.value = normalizeApiError(error, 'Workspace context failed')
-    throw contextError.value
   } finally {
     contextLoaded.value = true
   }
