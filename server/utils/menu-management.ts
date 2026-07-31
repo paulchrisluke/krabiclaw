@@ -12,6 +12,13 @@ import { normalizePriceAmount, assertValidSaleWindow } from "~/shared/money";
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from "~/server/db";
 import { fireSiteEventSafe } from "~/server/utils/site-events";
 import { validateMediaAsset } from "~/server/utils/location-management";
+import {
+  buildReplaceMenuItemMediaQueries,
+  hydrateMediaAssetsForMenuItems,
+  hydrateMediaAssetRefs,
+  type MediaAssetRefInput,
+  type ResolvedMediaAsset,
+} from "~/server/utils/media-asset-manager";
 
 const MAX_SUFFIX_ATTEMPTS = 50;
 
@@ -170,6 +177,82 @@ export function mapMenuItem(row: Record<string, unknown>): MenuItem {
     ingredients: parseStringArray(row.ingredients),
     dietary_notes: parseStringArray(row.dietary_notes),
   };
+}
+
+async function attachMenuItemMedia<T extends MenuItem>(
+  db: DbClient,
+  siteId: string,
+  items: T[],
+): Promise<T[]> {
+  const mediaByItem = await hydrateMediaAssetsForMenuItems(db, siteId, items.map((item) => item.id));
+  return items.map((item) => {
+    const media = mediaByItem.get(item.id) ?? [];
+    return {
+      ...item,
+      media,
+      image_asset_id: media[0]?.id ?? null,
+      public_url: media[0]?.public_url ?? null,
+      thumbnail_url: media[0]?.thumbnail_url ?? null,
+      kind: media[0]?.kind ?? null,
+    };
+  });
+}
+
+async function validateMenuItemMediaRefs(
+  db: DbClient,
+  input: {
+    organizationId: string
+    siteId: string
+    refs: MediaAssetRefInput[]
+  },
+) {
+  return await hydrateMediaAssetRefs(db, {
+    organizationId: input.organizationId,
+    siteId: input.siteId,
+    refs: input.refs,
+    allowedKinds: ['image', 'video'],
+    requireCoverPoster: true,
+    fieldName: 'media',
+  });
+}
+
+async function replaceMenuItemMedia(
+  db: DbClient,
+  input: {
+    organizationId: string
+    siteId: string
+    menuItemId: string
+    media: ResolvedMediaAsset[]
+    now?: string
+  },
+) {
+  await executeBatch(db, buildReplaceMenuItemMediaQueries({
+    organizationId: input.organizationId,
+    siteId: input.siteId,
+    menuItemId: input.menuItemId,
+    media: input.media,
+    now: input.now,
+  }));
+}
+
+async function replaceMenuItemMediaFromRefs(
+  db: DbClient,
+  input: {
+    organizationId: string
+    siteId: string
+    menuItemId: string
+    refs: MediaAssetRefInput[]
+    now?: string
+  },
+) {
+  const media = await validateMenuItemMediaRefs(db, input);
+  await replaceMenuItemMedia(db, { ...input, media });
+  return media;
+}
+
+function menuItemMediaRefsFromInput(input: { media?: MediaAssetRefInput[] | null }) {
+  if (input.media !== undefined) return input.media ?? [];
+  return null;
 }
 
 export function sortMenuItems(items: MenuItem[], sectionOrder: string[]): MenuItem[] {
@@ -449,22 +532,27 @@ export async function getMenuWithItems(
     `
     SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
            mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
-           mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
+           NULL AS image_asset_id, NULL AS public_url, NULL AS thumbnail_url, NULL AS kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
            mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots, mi.og_image_asset_id,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
     FROM menu_items mi
-    LEFT JOIN media_assets ma ON mi.image_asset_id = ma.id AND ma.status = 'active'
     WHERE mi.menu_id = ?
     ORDER BY mi.sort_order, mi.name
   `,
     [menuId],
   );
 
+  const mappedItems = await attachMenuItemMedia(
+    db,
+    siteId,
+    (items || []).map(mapMenuItem),
+  );
+
   return {
     ...mappedMenu,
     items: sortMenuItems(
-      (items || []).map(mapMenuItem),
+      mappedItems,
       mappedMenu.section_order ?? [],
     ),
   };
@@ -483,22 +571,27 @@ async function loadPublishedMenuById(
     `
     SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
            mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
-           mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
+           NULL AS image_asset_id, NULL AS public_url, NULL AS thumbnail_url, NULL AS kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
            mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots, mi.og_image_asset_id,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
     FROM menu_items mi
-    LEFT JOIN media_assets ma ON mi.image_asset_id = ma.id AND ma.status = 'active'
     WHERE mi.menu_id = ?
     ORDER BY mi.sort_order, mi.name
   `,
     [menuRow.id],
   );
 
+  const mappedItems = await attachMenuItemMedia(
+    db,
+    siteId,
+    (items || []).map(mapMenuItem),
+  );
+
   const menuWithItems = {
     ...mappedMenu,
     items: sortMenuItems(
-      (items || []).map(mapMenuItem),
+      mappedItems,
       mappedMenu.section_order ?? [],
     ),
   };
@@ -587,20 +680,21 @@ export async function getPublicMenuItem(
     `
     SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
            mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
-           mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
+           NULL AS image_asset_id, NULL AS public_url, NULL AS thumbnail_url, NULL AS kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
            mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots, mi.og_image_asset_id,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
     FROM menu_items mi
     JOIN menus m ON m.id = mi.menu_id
-    LEFT JOIN media_assets ma ON mi.image_asset_id = ma.id AND ma.status = 'active'
     WHERE m.site_id = ? AND mi.slug = ? AND m.status = 'published'
     LIMIT 1
   `,
     [siteId, slug],
   );
 
-  return item ? mapMenuItem(item) : null;
+  if (!item) return null;
+  const [mappedItem] = await attachMenuItemMedia(db, siteId, [mapMenuItem(item)]);
+  return mappedItem ?? null;
 }
 
 // Create menu
@@ -781,6 +875,14 @@ export async function createMenuItem(
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   const slug = await uniqueSlug(db, menuId, item.name);
+  const mediaRefs = menuItemMediaRefsFromInput(item);
+  const media = mediaRefs
+    ? await validateMenuItemMediaRefs(db, {
+        organizationId,
+        siteId,
+        refs: mediaRefs,
+      })
+    : null;
 
   const result = await execute(
     db,
@@ -800,7 +902,7 @@ export async function createMenuItem(
       normalizePriceAmount(item.compare_at_price_amount),
       item.sale_starts_at || null,
       item.sale_ends_at || null,
-      item.image_asset_id || null,
+      null,
       item.available !== undefined ? item.available : true,
       item.featured !== undefined ? item.featured : false,
       item.featured_sort_order || 0,
@@ -828,17 +930,26 @@ export async function createMenuItem(
     throw new Error("Failed to create menu item");
   }
 
+  if (media) {
+    await replaceMenuItemMedia(db, {
+      organizationId,
+      siteId,
+      menuItemId: id,
+      media,
+      now,
+    });
+  }
+
   const createdItem = await queryFirst<Record<string, unknown>>(
     db,
     `
     SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
            mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
-           mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
+           NULL AS image_asset_id, NULL AS public_url, NULL AS thumbnail_url, NULL AS kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
            mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots, mi.og_image_asset_id,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
     FROM menu_items mi
-    LEFT JOIN media_assets ma ON mi.image_asset_id = ma.id AND ma.status = 'active'
     WHERE mi.id = ?
     LIMIT 1
   `,
@@ -848,6 +959,7 @@ export async function createMenuItem(
   if (!createdItem) {
     throw new Error("Menu item not found after creation");
   }
+  const [createdItemWithMedia] = await attachMenuItemMedia(db, siteId, [mapMenuItem(createdItem)]);
 
   await ensureMenuSectionInOrder(db, menuId, item.section, createdBy);
 
@@ -866,7 +978,10 @@ export async function createMenuItem(
     },
   })
 
-  return mapMenuItem(createdItem);
+  if (!createdItemWithMedia) {
+    throw new Error("Menu item media hydration failed after creation");
+  }
+  return createdItemWithMedia;
 }
 
 // Update menu item
@@ -900,6 +1015,7 @@ export async function updateMenuItem(
   if (updates.og_image_asset_id !== undefined) {
     await validateMediaAsset(db, organizationId, siteId, updates.og_image_asset_id, "image", "og_image_asset_id");
   }
+  const mediaRefs = menuItemMediaRefsFromInput(updates);
 
   // Build dynamic update query
   const setParts: string[] = [];
@@ -940,10 +1056,6 @@ export async function updateMenuItem(
   if (updates.sale_ends_at !== undefined) {
     setParts.push("sale_ends_at = ?");
     params.push(updates.sale_ends_at || null);
-  }
-  if (updates.image_asset_id !== undefined) {
-    setParts.push("image_asset_id = ?");
-    params.push(updates.image_asset_id);
   }
   if (updates.available !== undefined) {
     setParts.push("available = ?");
@@ -1013,7 +1125,7 @@ export async function updateMenuItem(
   // Only change source to manual when actual content is edited, not for metadata-only changes
   const hasContentChange = updates.name !== undefined || updates.description !== undefined || updates.section !== undefined ||
     updates.price_amount !== undefined || updates.compare_at_price_amount !== undefined || updates.sale_starts_at !== undefined ||
-    updates.sale_ends_at !== undefined || updates.image_asset_id !== undefined || updates.allergens !== undefined ||
+    updates.sale_ends_at !== undefined || updates.media !== undefined || updates.allergens !== undefined ||
     updates.ingredients !== undefined || updates.dietary_notes !== undefined || updates.preparation !== undefined ||
     updates.serving_note !== undefined
   if (hasContentChange) {
@@ -1040,17 +1152,26 @@ export async function updateMenuItem(
     throw new Error("Failed to update menu item");
   }
 
+  if (mediaRefs) {
+    await replaceMenuItemMediaFromRefs(db, {
+      organizationId,
+      siteId,
+      menuItemId,
+      refs: mediaRefs,
+      now,
+    });
+  }
+
   const updatedItem = await queryFirst<Record<string, unknown>>(
     db,
     `
     SELECT mi.id, mi.menu_id, mi.section, mi.name, mi.slug, mi.description, mi.price_amount,
            mi.compare_at_price_amount, mi.sale_starts_at, mi.sale_ends_at,
-           mi.image_asset_id, ma.public_url, ma.thumbnail_url, ma.kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
+           NULL AS image_asset_id, NULL AS public_url, NULL AS thumbnail_url, NULL AS kind, mi.available, mi.featured, mi.featured_sort_order, mi.sort_order,
            mi.allergens, mi.ingredients, mi.dietary_notes, mi.preparation, mi.serving_note,
            mi.seo_title, mi.seo_description, mi.canonical_url, mi.robots, mi.og_image_asset_id,
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
     FROM menu_items mi
-    LEFT JOIN media_assets ma ON mi.image_asset_id = ma.id AND ma.status = 'active'
     WHERE mi.id = ?
     LIMIT 1
   `,
@@ -1060,6 +1181,7 @@ export async function updateMenuItem(
   if (!updatedItem) {
     throw new Error("Menu item not found after update");
   }
+  const [updatedItemWithMedia] = await attachMenuItemMedia(db, siteId, [mapMenuItem(updatedItem)]);
 
   if (updates.section !== undefined) {
     const menuId =
@@ -1101,7 +1223,10 @@ export async function updateMenuItem(
     },
   })
 
-  return mapMenuItem(updatedItem);
+  if (!updatedItemWithMedia) {
+    throw new Error("Menu item media hydration failed after update");
+  }
+  return updatedItemWithMedia;
 }
 
 // Delete menu item

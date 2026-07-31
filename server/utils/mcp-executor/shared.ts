@@ -227,7 +227,7 @@ export type GeneratedImageTarget =
   | "home_story_image"
   | "location_hero"
   | "post_image"
-  | "menu_item_image"
+  | "menu_item_media"
   | "experience_image";
 
 export interface GeneratedImagePickerConfig {
@@ -315,15 +315,15 @@ export function assignmentForGeneratedTarget(
         successMessage: `Post image updated${forSite}.`,
       };
     }
-    case "menu_item_image": {
+    case "menu_item_media": {
       const menuItemId = requiredString(args, "menu_item_id");
       return {
         assignTool: "set_media",
-        assignArgs: { site_id: siteId, target: { type: "menu_item_image", menu_item_id: menuItemId }, asset_ids: [] },
-        title: "Menu Item Images",
-        subtitle: "Choose the image that best sells this item.",
+        assignArgs: { site_id: siteId, target: { type: "menu_item_media", menu_item_id: menuItemId }, asset_ids: [] },
+        title: "Menu Item Media",
+        subtitle: "Choose the media that best sells this item.",
         useLabel: `Use for this menu item${forSite}`,
-        successMessage: `Menu item image updated${forSite}.`,
+        successMessage: `Menu item media updated${forSite}.`,
       };
     }
     case "experience_image": {
@@ -351,7 +351,7 @@ export function pickerConfigFromShowGeneratedImages(
   const successMessage = optionalString(rawArguments, "success_message");
   const VALID_TARGETS = new Set<string>([
     "logo", "home_hero", "about_story_image", "home_story_image", "location_hero",
-    "post_image", "menu_item_image", "experience_image",
+    "post_image", "menu_item_media", "experience_image",
   ]);
   const rawTargetStr = optionalString(rawArguments, "target");
   if (rawTargetStr !== null && !VALID_TARGETS.has(rawTargetStr)) {

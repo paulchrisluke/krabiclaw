@@ -164,7 +164,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
             ? `If none exists, call create_menu with name "${menuName}".`
             : "If none exists, call create_menu with a sensible name based on the business.",
           `Parse the following into individual menu items (name, section, price, and description where given), then call add_menu_items_batch with all of them in one call rather than creating items one at a time: ${itemsDescription}`,
-          "If the user has photos for any dish, offer to attach them after the items are created, then place them with set_media using target type menu_item_image — do not block creating the menu on having images.",
+          "If the user has photos or videos for any dish, offer to attach them after the items are created, then place them with set_media using target type menu_item_media — do not block creating the menu on having media.",
           "Report back the menu name and the items that were added.",
         ].join(" "),
       };

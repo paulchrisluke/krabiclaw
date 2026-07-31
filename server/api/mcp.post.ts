@@ -208,7 +208,7 @@ Whenever an image is needed (hero, logo, post thumbnail, menu photo, experience 
 3. Call image_generation natively with model gpt-image-1 or gpt-image-2 and the reviewed prompt tailored to the business.
 4. Immediately call save_generated_image_file({ site_id, attachment_id: <file reference from image_generation_call>, prompt }). Pass the file reference — never extract or forward the base64 from image_generation_call.result, that will be blocked by safety checks.
 5. Call show_generated_images with the assetId and publicUrl returned by save_generated_image_file.
-6. After the user approves, assign with set_media using the appropriate target (for example site_logo, home_hero, home_story_image, about_story_image, location_hero, menu_item_image, post_image, blog_post_image, or experience_media).
+6. After the user approves, assign with set_media using the appropriate target (for example site_logo, home_hero, home_story_image, about_story_image, location_hero, menu_item_media, post_image, blog_post_image, or experience_media).
 7. If the user wants changes, revise the brief and repeat from step 2 so review_agent_guidance_candidate approves every changed image brief before image_generation or saving.
 
 This entire flow runs within the current conversation — do not tell the user to leave the app or use a different context.

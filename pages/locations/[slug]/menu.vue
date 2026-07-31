@@ -67,29 +67,19 @@
               :key="item.id"
               class="flex items-start gap-5"
             >
-              <!-- Thumbnail left (images only) -->
+              <!-- Thumbnail left -->
               <NuxtLink
-                v-if="item.public_url && item.kind === 'image' && item.available"
+                v-if="item.public_url && item.available"
                 :to="`/menu/${itemSlug(item)}`"
-                :class="['shrink-0', !item.available && 'opacity-50 grayscale']"
+                class="shrink-0"
               >
-                <img
-                  :src="item.public_url"
-                  :alt="item.name"
-                  class="size-24 rounded-xl object-cover bg-muted"
-                  loading="lazy"
-                />
+                <SayaMenuItemPreview :item="item" />
               </NuxtLink>
               <div
-                v-else-if="item.public_url && item.kind === 'image'"
-                class="shrink-0 opacity-50 grayscale"
+                v-else-if="item.public_url"
+                class="shrink-0"
               >
-                <img
-                  :src="item.public_url"
-                  :alt="item.name"
-                  class="size-24 rounded-xl object-cover bg-muted"
-                  loading="lazy"
-                />
+                <SayaMenuItemPreview :item="item" disabled />
               </div>
 
               <!-- Text -->

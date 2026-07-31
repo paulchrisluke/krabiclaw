@@ -1,7 +1,7 @@
 import type { H3Event } from 'h3'
-import { queryFirst } from '~/server/db'
+import { queryAll, queryFirst } from '~/server/db'
 import { getMcpTool } from '~/server/utils/mcp-tools'
-import { requireMcpUser } from '~/server/utils/mcp-auth'
+import { requireMcpSite, requireMcpUser } from '~/server/utils/mcp-auth'
 import { resolveMcpWorkspace } from '~/server/utils/mcp-context'
 import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
@@ -493,25 +493,45 @@ export async function executeMcpToolCall(
     }));
 
     let activeSiteName: string | null = null;
+    let activeSiteContext: Awaited<ReturnType<typeof requireMcpSite>> | null = null;
     const rawSiteId = optionalString(normalizedArguments, "site_id");
     const rawTargetForName = optionalString(normalizedArguments, "target");
     if (rawTargetForName && rawSiteId) {
-      const authorizedSite = await requireMcpSite(event, rawSiteId, "editor");
+      activeSiteContext = await requireMcpSite(event, rawSiteId, "editor");
       const siteRow = await queryFirst<{ brand_name: string | null; subdomain: string | null }>(
-        authorizedSite.db,
+        activeSiteContext.db,
         `
           SELECT brand_name, subdomain
           FROM sites
           WHERE id = ? AND organization_id = ?
           LIMIT 1
         `,
-        [authorizedSite.siteId, authorizedSite.organizationId],
+        [activeSiteContext.siteId, activeSiteContext.organizationId],
       );
       const nameVal = siteRow?.brand_name?.trim();
       activeSiteName = (nameVal ? nameVal : siteRow?.subdomain) ?? null;
     }
 
     const picker = pickerConfigFromShowGeneratedImages(normalizedArguments, activeSiteName);
+    if (picker.assignTool === "set_media" && picker.assignArgs?.target && typeof picker.assignArgs.target === "object") {
+      const target = picker.assignArgs.target as { type?: unknown; menu_item_id?: unknown };
+      if (target.type === "menu_item_media" && typeof target.menu_item_id === "string" && activeSiteContext) {
+        const rows = await queryAll<{ asset_id: string }>(
+          activeSiteContext.db,
+          `
+            SELECT mim.asset_id
+            FROM menu_item_media mim
+            JOIN menu_items mi ON mi.id = mim.menu_item_id
+            JOIN menus m ON m.id = mi.menu_id
+            WHERE mim.site_id = ? AND mim.menu_item_id = ?
+              AND m.organization_id = ? AND m.site_id = ?
+            ORDER BY mim.sort_order ASC
+          `,
+          [activeSiteContext.siteId, target.menu_item_id, activeSiteContext.organizationId, activeSiteContext.siteId],
+        );
+        picker.assignArgs.asset_ids = rows.map((row) => row.asset_id);
+      }
+    }
     const isDebug = normalizedArguments.debug === true;
     return renderStructuredResponse(
       {

@@ -58,7 +58,7 @@ export type CreateInput = Pick<MediaAsset, 'id' | 'organization_id' | 'site_id' 
 
 export const MAX_ORDERED_MEDIA_ASSETS = 50
 
-function toResolvedMediaAsset(row: MediaAsset): ResolvedMediaAsset {
+export function toResolvedMediaAsset(row: MediaAsset): ResolvedMediaAsset {
   if (row.kind !== 'image' && row.kind !== 'video') {
     throw createError({ statusCode: 400, statusMessage: `Media asset ${row.id} is not assignable image/video media` })
   }
@@ -171,6 +171,34 @@ export async function hydrateMediaAssetsForExperiences(
   return result
 }
 
+export async function hydrateMediaAssetsForMenuItems(
+  db: DbClient,
+  siteId: string,
+  menuItemIds: string[],
+): Promise<Map<string, ResolvedMediaAsset[]>> {
+  const uniqueMenuItemIds = Array.from(new Set(menuItemIds)).filter(Boolean)
+  const result = new Map<string, ResolvedMediaAsset[]>()
+  for (const id of uniqueMenuItemIds) result.set(id, [])
+  if (uniqueMenuItemIds.length === 0) return result
+
+  const rows = await queryAll<MediaAsset & { menu_item_id: string; sort_order: number }>(
+    db,
+    `SELECT ma.*, mim.menu_item_id, mim.sort_order
+       FROM menu_item_media mim
+       JOIN media_assets ma ON ma.id = mim.asset_id
+      WHERE mim.site_id = ? AND mim.menu_item_id IN (${uniqueMenuItemIds.map(() => '?').join(',')})
+        AND ma.site_id = mim.site_id AND ma.status = 'active'
+      ORDER BY mim.menu_item_id ASC, mim.sort_order ASC`,
+    [siteId, ...uniqueMenuItemIds],
+  )
+  for (const row of rows ?? []) {
+    const list = result.get(row.menu_item_id)
+    if (!list) continue
+    list.push(toResolvedMediaAsset(row))
+  }
+  return result
+}
+
 export async function replaceExperienceMedia(
   db: DbClient,
   input: {
@@ -216,6 +244,32 @@ export function buildReplaceExperienceMediaQueries(input: {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       params: [crypto.randomUUID(), input.organizationId, input.siteId, input.experienceId, asset.id, index, now, now],
     })),
+  ]
+}
+
+export function buildReplaceMenuItemMediaQueries(input: {
+  organizationId: string
+  siteId: string
+  menuItemId: string
+  media: ResolvedMediaAsset[]
+  now?: string
+}): BatchQuery[] {
+  const now = input.now ?? new Date().toISOString()
+  return [
+    {
+      query: `DELETE FROM menu_item_media WHERE site_id = ? AND menu_item_id = ?`,
+      params: [input.siteId, input.menuItemId],
+    },
+    ...input.media.map((asset, index) => ({
+      query: `INSERT INTO menu_item_media
+         (id, organization_id, site_id, menu_item_id, asset_id, sort_order, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      params: [crypto.randomUUID(), input.organizationId, input.siteId, input.menuItemId, asset.id, index, now, now],
+    })),
+    {
+      query: `UPDATE menu_items SET updated_at = ? WHERE id = ?`,
+      params: [now, input.menuItemId],
+    },
   ]
 }
 

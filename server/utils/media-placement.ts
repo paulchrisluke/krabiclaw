@@ -3,6 +3,7 @@ import { execute, executeBatch, queryFirst, type BatchQuery, type DbClient } fro
 import { assertResourceAccess, type MemberAccessPrincipal } from '~/server/utils/member-access'
 import {
   buildReplaceExperienceMediaQueries,
+  buildReplaceMenuItemMediaQueries,
   hydrateMediaAssetRefs,
   MAX_ORDERED_MEDIA_ASSETS,
   type MediaAssetRefInput,
@@ -16,7 +17,7 @@ export type MediaPlacementTarget =
   | { type: 'home_story_image' }
   | { type: 'about_story_image' }
   | { type: 'location_hero'; location_id: string }
-  | { type: 'menu_item_image'; menu_item_id: string }
+  | { type: 'menu_item_media'; menu_item_id: string }
   | { type: 'post_image'; post_id: string }
   | { type: 'blog_post_image'; post_id: string }
   | { type: 'experience_media'; experience_id: string }
@@ -55,10 +56,11 @@ export function mediaPlacementDefinition(target: MediaPlacementTarget): Placemen
     case 'site_logo':
     case 'home_story_image':
     case 'about_story_image':
-    case 'menu_item_image':
     case 'post_image':
     case 'blog_post_image':
       return { entity: target.type, cardinality: 'single', allowedKinds: ['image'], requireCoverPoster: true }
+    case 'menu_item_media':
+      return { entity: 'menu_item', cardinality: 'ordered', allowedKinds: ['image', 'video'], requireCoverPoster: true }
     case 'home_hero':
     case 'location_hero':
       return { entity: target.type, cardinality: 'single', allowedKinds: ['image', 'video'], requireCoverPoster: true }
@@ -172,17 +174,29 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
       }
       return placementResult(input.target, media, 'location', input.target.location_id, now, targetLocationId)
     }
-    case 'menu_item_image': {
-      const updateResult = await execute(db, `
-        UPDATE menu_items
-           SET image_asset_id = ?, updated_at = ?
-         WHERE id = ?
-           AND menu_id IN (
-             SELECT id
-               FROM menus
-              WHERE organization_id = ? AND site_id = ?
-           )
-      `, [assetId, now, input.target.menu_item_id, input.organizationId, input.siteId])
+    case 'menu_item_media': {
+      const [updateResult] = await executeBatch(db, [
+        {
+          query: `
+            UPDATE menu_items
+               SET updated_at = ?
+             WHERE id = ?
+               AND menu_id IN (
+                 SELECT id
+                   FROM menus
+                  WHERE organization_id = ? AND site_id = ?
+               )
+          `,
+          params: [now, input.target.menu_item_id, input.organizationId, input.siteId],
+        },
+        ...buildReplaceMenuItemMediaQueries({
+          organizationId: input.organizationId,
+          siteId: input.siteId,
+          menuItemId: input.target.menu_item_id,
+          media,
+          now,
+        }),
+      ])
       if (!updateResult?.success || Number(updateResult.meta?.changes ?? 0) === 0) {
         throw createError({ statusCode: 404, statusMessage: 'Menu item not found' })
       }
@@ -270,7 +284,7 @@ async function resolvePlacementLocationId(db: DbClient, input: SetMediaPlacement
       if (!location) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
       return location.id
     }
-    case 'menu_item_image': {
+    case 'menu_item_media': {
       const menu = await queryFirst<{ location_id: string | null }>(db, `
         SELECT m.location_id
         FROM menu_items mi

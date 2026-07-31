@@ -817,6 +817,25 @@ export function renderKikuzukiMenuBlock(): string {
       sqlValue(item.sortOrder),
     ].join(', ')})`)
     .join(',\n')
+  const menuItemMediaRows = allItems
+    .filter((item) => item.imageAssetId)
+    .map((item) => `  (${[
+      sqlValue(`${item.id}-cover-media`),
+      sqlValue(item.organizationId),
+      sqlValue(item.siteId),
+      sqlValue(item.id),
+      sqlValue(item.imageAssetId),
+      0,
+    ].join(', ')})`)
+    .join(',\n')
+  const menuItemMediaSql = menuItemMediaRows
+    ? `
+
+INSERT OR REPLACE INTO menu_item_media
+  (id, organization_id, site_id, menu_item_id, asset_id, sort_order)
+VALUES
+${menuItemMediaRows};`
+    : ''
 
   return `-- BEGIN GENERATED: kikuzuki_menu
 INSERT OR REPLACE INTO menus (id, organization_id, site_id, location_id, name, description, status, section_order)
@@ -828,7 +847,7 @@ INSERT OR IGNORE INTO menu_items
    price_amount, image_asset_id, available,
    allergens, dietary_notes, sort_order)
 VALUES
-${itemRows};
+${itemRows};${menuItemMediaSql}
 -- END GENERATED: kikuzuki_menu`
 }
 

@@ -60,7 +60,7 @@ test('media placement contract does not reintroduce entity-specific assignment t
     'set_home_hero_video',
     'set_location_hero_image',
     'set_location_hero_video',
-    'set_menu_item_image',
+    'set_menu_item_media',
     'set_post_image',
     'set_blog_post_image',
     'set_logo',
