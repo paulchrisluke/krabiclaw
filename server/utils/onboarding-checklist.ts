@@ -7,7 +7,7 @@ import { normalizeVertical } from '~/utils/vertical-copy'
 
 export interface OnboardingChecklist {
   success: true
-  vertical: string
+  vertical: string | null
   brandName: string | null
   city: string | null
   items: {
@@ -19,19 +19,19 @@ export interface OnboardingChecklist {
   }
 }
 
-export const EMPTY_ONBOARDING_CHECKLIST: OnboardingChecklist = {
-  success: true,
-  vertical: 'restaurant',
+export const EMPTY_ONBOARDING_CHECKLIST: OnboardingChecklist = Object.freeze({
+  success: true as const,
+  vertical: null,
   brandName: null,
   city: null,
-  items: {
+  items: Object.freeze({
     business_info: false,
     hero_image: false,
     core_offering: false,
     story: false,
     post: false,
-  },
-}
+  }),
+})
 
 interface ChecklistRow {
   vertical: string
@@ -101,11 +101,11 @@ export async function loadOnboardingChecklist(
       (
         SELECT COUNT(*) FROM site_content
         WHERE site_id = s.id AND page = 'about' AND field LIKE 'story%'
-          AND content IS NOT NULL AND length(content) > 20 AND source != 'template'
+          AND content IS NOT NULL AND length(content) > 20 AND (source IS NULL OR source != 'template')
       ) AS story,
       (
         SELECT COUNT(*) FROM posts
-        WHERE site_id = s.id AND status = 'published' AND source != 'template'
+        WHERE site_id = s.id AND status = 'published' AND (source IS NULL OR source != 'template')
       ) AS post
     FROM sites s
     WHERE s.id = ?

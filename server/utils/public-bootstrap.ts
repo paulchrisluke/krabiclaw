@@ -1287,7 +1287,11 @@ export async function loadPublicBootstrap(
       brand_description: site.brand_description,
       vertical: site.vertical,
       logo_url: site.logo_url,
+      logo_mime_type: null,
       favicon_url: site.favicon_url,
+      config: {
+        phone: site.contact_phone,
+      },
     },
   };
   const pagePayload = {

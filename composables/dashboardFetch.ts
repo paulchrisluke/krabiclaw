@@ -3,6 +3,7 @@ import type { FetchOptions } from 'ofetch'
 type DashboardFetchOptions<T> = FetchOptions & {
   validate?: Validator<T>
   coalesceKey?: string
+  expectEmptyResponse?: boolean
 }
 
 export interface DashboardRequestScope {
@@ -28,7 +29,7 @@ async function executeApiFetch<T>(
   headers: Headers,
 ): Promise<T> {
   const method = String(options.method ?? 'GET').toUpperCase()
-  const { validate, coalesceKey, ...fetchOptions } = options
+  const { validate, coalesceKey, expectEmptyResponse = false, ...fetchOptions } = options
   const run = async () => {
     try {
       const value = await $fetch<unknown>(request as never, {
@@ -39,9 +40,9 @@ async function executeApiFetch<T>(
       } as never)
       const responseIsValid = validate
         ? validate(value)
-        : method === 'GET'
-          ? isRecord(value) || Array.isArray(value)
-          : value === null || value === '' || isRecord(value) || Array.isArray(value)
+        : value === null || value === ''
+          ? method !== 'GET' && expectEmptyResponse
+          : isRecord(value) || Array.isArray(value)
       if (!responseIsValid) {
         throw new ApiClientError('API response did not match its contract', 502, 'INVALID_API_RESPONSE', null)
       }

@@ -800,22 +800,20 @@ watch(() => route.fullPath, () => {
 })
 
 watch(
-  () => dashboard.scope.value
-    ? `${dashboard.scope.value.orgSlug}:${dashboard.scope.value.siteSlug ?? ''}`
-    : '',
-  async (nextScope, previousScope) => {
+  () => dashboard.contextKey.value,
+  async (nextContextKey, previousContextKey) => {
     dashboardContextController?.abort()
     dashboardContextController = null
-    if (!nextScope) return
-    clearDashboardContextError(nextScope)
-    if (nextScope === previousScope || dashboard.state.value) return
+    if (!nextContextKey) return
+    clearDashboardContextError(nextContextKey)
+    if (nextContextKey === previousContextKey || dashboard.state.value) return
     const controller = new AbortController()
     dashboardContextController = controller
     try {
       await dashboard.refresh(controller.signal)
     } catch (error) {
-      if (!controller.signal.aborted && dashboard.contextKey.value === nextScope) {
-        setDashboardContextError(nextScope, error)
+      if (!controller.signal.aborted && dashboard.contextKey.value === nextContextKey) {
+        setDashboardContextError(nextContextKey, error)
       }
     } finally {
       if (dashboardContextController === controller) dashboardContextController = null
@@ -916,7 +914,18 @@ if ((routeName.value.startsWith('dashboard') || isAdminRoute.value) && !dashboar
 
 onMounted(async () => {
   if ((routeName.value.startsWith('dashboard') || isAdminRoute.value) && !dashboard.state.value && !dashboardContextError.value) {
-    await dashboard.refresh()
+    dashboardContextController?.abort()
+    const controller = new AbortController()
+    dashboardContextController = controller
+    try {
+      await dashboard.refresh(controller.signal)
+    } catch (error) {
+      if (!controller.signal.aborted && dashboard.contextKey.value) {
+        setDashboardContextError(dashboard.contextKey.value, error)
+      }
+    } finally {
+      if (dashboardContextController === controller) dashboardContextController = null
+    }
   }
 
   // Track dashboard visit

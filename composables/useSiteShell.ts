@@ -17,14 +17,14 @@
 import { useBootstrapKey, useBootstrapUrl, type BootstrapParams } from "~/composables/useBootstrapParams";
 
 interface ShellSiteInfo {
-  brand_name?: string | null;
-  brand_description?: string | null;
-  logo_url?: string | null;
-  logo_mime_type?: string | null;
-  favicon_url?: string | null;
-  vertical?: string | null;
-  config?: {
-    phone?: string | null;
+  brand_name: string | null;
+  brand_description: string | null;
+  logo_url: string | null;
+  logo_mime_type: string | null;
+  favicon_url: string | null;
+  vertical: string | null;
+  config: {
+    phone: string | null;
   } | null;
 }
 
@@ -49,7 +49,9 @@ const isSiteShellPayload = (value: unknown): value is SiteShellPayload => {
   if (typeof value.site.favicon_url !== 'string' && value.site.favicon_url !== null) return false
   if (typeof value.site.vertical !== 'string' && value.site.vertical !== null) return false
   if (value.site.config !== null && !isRecord(value.site.config)) return false
-  if (value.site.config !== null && value.site.config.phone !== null && typeof value.site.config.phone !== 'string') return false
+  if (isRecord(value.site.config)
+    && typeof value.site.config.phone !== 'string'
+    && value.site.config.phone !== null) return false
 
   if (!Array.isArray(value.locations)) return false
   if (!value.locations.every(location =>

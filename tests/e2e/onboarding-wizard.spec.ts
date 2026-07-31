@@ -246,7 +246,7 @@ test.describe('onboarding wizard UI', () => {
     await expect.poll(() => onboardingContextRequests).toBe(1)
     expect(legacyContextRequests).toBe(0)
     await completeManualWizard(page, `Onboard Test Cafe ${suffix}`)
-    expect(onboardingContextRequests).toBe(2)
+    await expect.poll(() => onboardingContextRequests).toBe(2)
     expect(legacyContextRequests).toBe(0)
     await expect(page.getByText('From here, head to your dashboard to keep building')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Add another location' })).toHaveCount(0)

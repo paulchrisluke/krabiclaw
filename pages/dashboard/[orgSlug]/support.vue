@@ -131,6 +131,13 @@
           </UCard>
 
           <!-- Request history -->
+          <UAlert
+            v-if="requestsError"
+            color="error"
+            variant="soft"
+            title="Requests could not be loaded"
+            :description="getErrorMessage(requestsError, 'Support requests failed')"
+          />
           <UCard v-if="requests && requests.length > 0">
             <template #header>
               <h2 class="font-semibold text-highlighted">Your requests</h2>
@@ -231,26 +238,39 @@ interface WorkRequest {
 }
 
 const requestEvent = useRequestEvent()
-const { data, refresh } = await useAsyncData<{ requests: WorkRequest[] } | null>(
+const { data, refresh, error: requestsError } = await useAsyncData<{ requests: WorkRequest[] } | null>(
   () => `dashboard-work-requests-${dashboardScope.value?.orgSlug ?? 'unknown'}`,
   async () => {
     const scope = dashboardScope.value
     if (!scope) return null
     if (import.meta.server) {
       if (!requestEvent) return null
-      const [{ cloudflareEnv }, { getDashboardContext }, { listWorkRequests }] = await Promise.all([
+      const [{ cloudflareEnv }, { loadDashboardContext }, { listWorkRequests }] = await Promise.all([
         import('~/server/utils/api-response'),
-        import('~/server/utils/dashboard-context'),
+        import('~/server/utils/dashboard-context-service'),
         import('~/server/utils/work-requests-dashboard'),
       ])
       const db = cloudflareEnv(requestEvent).DB
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-      const { organization } = await getDashboardContext(requestEvent, { requireOrganization: false, organizationSlug: scope.orgSlug })
-      if (!organization) return { requests: [] }
+      const { organization } = await loadDashboardContext(requestEvent, { orgSlug: scope.orgSlug })
+      if (!organization) throw createError({ statusCode: 404, statusMessage: 'Organization not found' })
       const requests = await listWorkRequests(db, organization.id)
       return { requests }
     }
-    return await dashboardApi<{ requests: WorkRequest[] }>('/api/dashboard/work-requests')
+    return await dashboardApi<{ requests: WorkRequest[] }>('/api/dashboard/work-requests', {
+      validate: (value): value is { requests: WorkRequest[] } =>
+        isRecord(value)
+        && Array.isArray(value.requests)
+        && value.requests.every(request =>
+          isRecord(request)
+          && typeof request.id === 'string'
+          && typeof request.type === 'string'
+          && typeof request.title === 'string'
+          && typeof request.status === 'string'
+          && (request.notes === null || typeof request.notes === 'string')
+          && typeof request.created_at === 'string',
+        ),
+    })
   },
 )
 const requests = computed(() => data.value?.requests)

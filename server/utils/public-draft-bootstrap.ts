@@ -37,7 +37,7 @@ export async function loadPublicDraftBootstrap(
   }
   const locationSlug = typeof query.location === 'string' ? query.location : null
   const experienceSlug = typeof query.experience === 'string' ? query.experience : null
-  const includeMenu = query.menu === '1' || query.menu === 'true'
+  const includeMenu = page === 'menu' || query.menu === '1' || query.menu === 'true'
   const contract = query.contract === 'shell' ? 'shell' : 'page'
   const routeDataType = page === 'reviews' || page === 'posts' || page === 'photos' || page === 'qa'
     ? page
@@ -98,14 +98,22 @@ export async function loadPublicDraftBootstrap(
     logo_url: payload.preview.config.logo_url || payload.preview.draftMedia.logo?.publicUrl || null,
     og_image_url: payload.preview.config.hero_image_url || payload.preview.draftMedia.hero?.publicUrl || null,
   }
+  const draftPhone = typeof payload.preview.config.phone === 'string'
+    ? payload.preview.config.phone
+    : null
 
   if (contract === 'shell') {
     return {
       site: {
         brand_name: payload.preview.brandName,
+        brand_description: null,
         logo_url: config.logo_url,
+        logo_mime_type: null,
         favicon_url: null,
         vertical: payload.preview.vertical,
+        config: {
+          phone: draftPhone,
+        },
       },
       locations: payload.preview.locations,
       config,

@@ -99,6 +99,15 @@ const { data: tenantPages } = await useAsyncData(
     }
     return await dashboardApi<Array<{ path: string; title: string }>>(
       `/api/editor/sites/${siteId}/tenant-pages`,
+      {
+        validate: (value): value is Array<{ path: string; title: string }> =>
+          Array.isArray(value)
+          && value.every(page =>
+            isRecord(page)
+            && typeof page.path === 'string'
+            && typeof page.title === 'string',
+          ),
+      },
     )
   },
 )
@@ -118,6 +127,14 @@ const { data: existingQaScopes } = await useAsyncData(
     }
     return await dashboardApi<Array<{ page_path: string | null }>>(
       `/api/editor/sites/${siteId}/qa/scopes`,
+      {
+        validate: (value): value is Array<{ page_path: string | null }> =>
+          Array.isArray(value)
+          && value.every(scope =>
+            isRecord(scope)
+            && (scope.page_path === null || typeof scope.page_path === 'string'),
+          ),
+      },
     )
   },
 )
@@ -168,7 +185,21 @@ const { data, pending, refresh } = await useAsyncData(
     }
     return await dashboardApi<{ qa: QaRow[] }>(
       `/api/editor/sites/${siteId}/qa`,
-      { query: pagePath.value ? { page_path: pagePath.value } : undefined },
+      {
+        query: pagePath.value ? { page_path: pagePath.value } : undefined,
+        validate: (value): value is { qa: QaRow[] } =>
+          isRecord(value)
+          && Array.isArray(value.qa)
+          && value.qa.every(item =>
+            isRecord(item)
+            && typeof item.id === 'string'
+            && typeof item.question === 'string'
+            && (item.answer === null || typeof item.answer === 'string')
+            && (item.status === 'published' || item.status === 'hidden')
+            && typeof item.sort_order === 'number'
+            && (item.page_path === null || typeof item.page_path === 'string'),
+          ),
+      },
     )
   },
   { watch: [selectedPagePath] },
