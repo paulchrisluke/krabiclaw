@@ -42,10 +42,48 @@ function parseNumericHeader(response, name) {
   return Number.isFinite(value) ? value : null
 }
 
+function isLocalHost(hostname) {
+  return ['localhost', '127.0.0.1', '[::1]'].includes(hostname)
+}
+
+function isPreviewContext(hostname) {
+  return hostname === 'workers.dev'
+    || hostname.endsWith('.workers.dev')
+    || /^(?:staging|preview)\.[^.]+\.[^.]+$/.test(hostname)
+}
+
+function tenantTarget(baseUrl, slug) {
+  const url = new URL(baseUrl)
+  if (isLocalHost(url.hostname)) {
+    url.hostname = `${slug}.localhost`
+    return { baseUrl: url, headers: {} }
+  }
+  if (isPreviewContext(url.hostname)) {
+    return {
+      baseUrl: url,
+      headers: { 'x-preview-tenant': slug, 'cache-control': 'no-store' },
+    }
+  }
+  url.hostname = url.hostname.startsWith(`${slug}.`) ? url.hostname : `${slug}.${url.hostname}`
+  return { baseUrl: url, headers: {} }
+}
+
 async function measureScenario(context, scenario, sampleCount) {
   const samples = []
   for (let index = 0; index < sampleCount; index += 1) {
     const page = await context.newPage()
+    if (Object.keys(scenario.headers).length > 0) {
+      const scenarioOrigin = new URL(scenario.url).origin
+      await page.route('**/*', async (route) => {
+        if (new URL(route.request().url()).origin !== scenarioOrigin) {
+          await route.continue()
+          return
+        }
+        await route.continue({
+          headers: { ...route.request().headers(), ...scenario.headers },
+        })
+      })
+    }
     const dataRequests = []
     const failedRequests = []
     page.on('request', request => {
@@ -111,10 +149,8 @@ const baseUrl = args['base-url'] ?? 'http://localhost:3000'
 const samples = Math.max(30, Number(args.samples) || 30)
 const outputDir = path.resolve(args['output-dir'] ?? 'test-results/performance-recovery')
 const platformUrl = new URL(baseUrl)
-const sayaUrl = new URL(baseUrl)
-sayaUrl.hostname = 'demo.localhost'
-const blawbyUrl = new URL(baseUrl)
-blawbyUrl.hostname = 'ncls.localhost'
+const sayaTarget = tenantTarget(baseUrl, 'demo')
+const blawbyTarget = tenantTarget(baseUrl, 'ncls')
 
 const browser = await chromium.launch()
 try {
@@ -142,12 +178,14 @@ try {
     {
       name: 'saya-about',
       template: 'saya',
-      url: new URL('/about', sayaUrl).toString(),
+      url: new URL('/about', sayaTarget.baseUrl).toString(),
+      headers: sayaTarget.headers,
     },
     {
       name: 'blawby-about',
       template: 'blawby',
-      url: new URL('/about', blawbyUrl).toString(),
+      url: new URL('/about', blawbyTarget.baseUrl).toString(),
+      headers: blawbyTarget.headers,
     },
     {
       name: 'dashboard-site-overview',
@@ -156,6 +194,7 @@ try {
         '/dashboard/pottery-house-krabi/sites/pottery-house',
         platformUrl,
       ).toString(),
+      headers: {},
     },
   ]
 
@@ -174,8 +213,12 @@ try {
     browser: 'Playwright Chromium',
     sampleCount: samples,
     fixtures: {
-      saya: 'site-demo / demo.localhost',
-      blawby: 'NCLS seed / ncls.localhost',
+      saya: isPreviewContext(platformUrl.hostname)
+        ? 'site-demo / x-preview-tenant: demo'
+        : `site-demo / ${sayaTarget.baseUrl.hostname}`,
+      blawby: isPreviewContext(platformUrl.hostname)
+        ? 'NCLS seed / x-preview-tenant: ncls'
+        : `NCLS seed / ${blawbyTarget.baseUrl.hostname}`,
       dashboard: 'user-pottery-house / pottery-house seed',
     },
     note:

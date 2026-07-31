@@ -110,12 +110,13 @@ documented in [docs/local-mcp-harness.md](docs/local-mcp-harness.md).
 
 ### Data-loading benchmarks
 
-Run the shell/page endpoint benchmark or the 30-sample public/dashboard browser
-journeys against a deployed-style local Worker:
+Run the fast shell/page endpoint benchmark during development. The 30-sample
+Saya, Blawby, and dashboard browser benchmark is deliberate staging/release
+evidence and is not part of routine PR smoke:
 
 ```bash
 yarn benchmark:data-loading
-yarn benchmark:performance-recovery --base-url http://localhost:3000 --samples 30
+yarn benchmark:performance-recovery --base-url https://staging.krabiclaw.com --samples 30
 ```
 
 The contracts, budgets, and measurement format are documented in

@@ -20,6 +20,22 @@ Use this workflow when running Codex or Claude agents in parallel worktrees.
 - Treat CodeRabbit rate limiting as a blocked/pending review state, never as success. A status like "review rate limited" means the review did not happen yet, usually because too many PRs or commits are competing for CodeRabbit at once.
 - When CodeRabbit is rate limited, do not push empty commits or ask for manual re-reviews. Reduce the active review queue where possible, wait for the cooldown window, then check once after about 20 minutes.
 
+### CI scope
+
+- PR preview smoke is intentionally small: deploy the real preview Worker, then
+  exercise the platform page, representative tenant SSR/hydration, one public
+  write, data-loading budgets, and dashboard context.
+- Do not append full MCP, client-fixture, billing, SEO, notification, or
+  dashboard workflow suites to every PR push. Run the focused suite locally
+  when changing that workflow; exhaustive browser coverage remains available
+  through the scheduled/manual full-regression workflow.
+- Staging runs the core smoke plus the focused dashboard or billing smoke when
+  those paths changed. It does not fan out into every subsystem suite.
+- Thirty-sample Saya/Blawby/dashboard benchmarks and Lighthouse are deliberate
+  staging/release checks, not routine per-commit PR jobs.
+- Keep deterministic retry, request-count, query-count, payload, SSR self-fetch,
+  and response-contract checks fast enough to remain mandatory.
+
 ## Local Dependencies
 
 Fresh worktrees usually do not have `node_modules`.

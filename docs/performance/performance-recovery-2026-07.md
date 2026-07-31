@@ -2,12 +2,13 @@
 
 ## Scope and method
 
-The deterministic data budgets are exercised by
-`tests/e2e/smoke.spec.ts` against the deployed-style public shell and page
-routes. The browser benchmark is executable with:
+The deterministic data budgets are exercised by the focused
+`tests/e2e/smoke.spec.ts` suite against the deployed-style public shell and page
+routes. The browser benchmark is a manual staging/release check, not a
+per-commit PR job:
 
 ```bash
-yarn benchmark:performance-recovery --base-url http://localhost:3000 --samples 30
+yarn benchmark:performance-recovery --base-url https://staging.krabiclaw.com --samples 30
 ```
 
 The 30-sample evidence below used Playwright Chromium, the curated demo,
@@ -17,9 +18,8 @@ plus the working-tree changes in this performance batch. All 90 document
 requests returned HTTP 200 with no document or application-data request
 failures.
 
-The current public template registry contains `saya` and `blawby`. It contains
-no Lobby template or Lobby fixture, so this report uses both shipped templates
-and does not label another implementation as Lobby.
+The two shipped public templates are Saya and Blawby. Earlier issue text used
+“Lobby” by mistake; Blawby is the intended comparison.
 
 ## Deterministic data budgets
 

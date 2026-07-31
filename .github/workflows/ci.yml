@@ -69,6 +69,11 @@ jobs:
               - '!scripts/adapters/ncls-blawby.mjs'
               - 'components/saya/**'
               - 'pages/**'
+              - '!pages/admin/**'
+              - '!pages/dashboard/**'
+              - '!pages/account/**'
+              - '!pages/auth/**'
+              - '!pages/oauth/**'
               - 'utils/vertical-copy.ts'
             blawby:
               - 'client-imports/north-carolina-legal-services/**'
@@ -119,7 +124,11 @@ jobs:
               - 'tests/unit/ncls-seo-migration.test.ts'
               - 'tests/unit/site-content-scopes.test.ts'
             seed_relevant:
-              - 'scripts/**'
+              - 'scripts/generate-demo-bundle.ts'
+              - 'scripts/generate-demo-seed.ts'
+              - 'scripts/generate-pottery-house-seed.ts'
+              - 'scripts/generate-kikuzuki-seed.ts'
+              - 'scripts/utils/d1-seed-file.mjs'
               - 'seed-definitions/**'
               - 'server/db/schema.ts'
               - 'migrations/**'
@@ -150,14 +159,12 @@ jobs:
               - 'server/api/**/reservations/**'
               - 'tests/e2e/notifications.spec.ts'
             mcp:
-              - '.github/workflows/ci.yml'
               - 'build/cloudflare-dev-module.ts'
               - 'build/runtime/cloudflare-bindings-dev.ts'
               - 'docs/local-mcp-harness.md'
               - 'docs/media-workflow-contract.md'
               - 'migrations/**'
               - 'nuxt.config.ts'
-              - 'package.json'
               - 'pages/oauth/login.vue'
               - 'playwright.config.ts'
               - 'scripts/check-*mcp*.mjs'
@@ -357,18 +364,7 @@ jobs:
       - name: Run smoke tests
         env:
           PLAYWRIGHT_PREVIEW_URL: https://krabiclaw-preview.paulchrisluke.workers.dev
-          POTTERY_HOUSE_CHANGED: ${{ needs.changes.outputs.pottery_house }}
-          BLAWBY_CHANGED: ${{ needs.changes.outputs.blawby }}
-          MCP_CHANGED: ${{ needs.changes.outputs.mcp }}
-        run: |
-          yarn test:e2e:smoke
-          [ "$MCP_CHANGED" != "true" ] || PLAYWRIGHT_WORKERS=1 yarn test:e2e:mcp
-          if [ "$POTTERY_HOUSE_CHANGED" = "true" ]; then
-            yarn test:e2e:pottery-house
-          fi
-          if [ "$BLAWBY_CHANGED" = "true" ]; then
-            yarn test:e2e:blawby
-          fi
+        run: yarn test:e2e:smoke
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -485,26 +481,14 @@ jobs:
           curl -sf --connect-timeout 5 --max-time 15 "https://staging.krabiclaw.com/blog" || true
           curl -sf --connect-timeout 5 --max-time 15 "https://staging.krabiclaw.com/api/billing/plans" || true
           curl -sf --connect-timeout 5 --max-time 15 -L -H "x-dev-route-secret: ${E2E_DEV_ROUTE_SECRET}" "https://staging.krabiclaw.com/api/dev/login" || true
-      - name: Run required smoke and changed subsystem suites
+      - name: Run focused smoke tests
         env:
-          AUTH_CHANGED: ${{ needs.changes.outputs.auth }}
           DASHBOARD_CHANGED: ${{ needs.changes.outputs.dashboard }}
           BILLING_CHANGED: ${{ needs.changes.outputs.billing }}
-          NOTIFICATIONS_CHANGED: ${{ needs.changes.outputs.notifications }}
-          MCP_CHANGED: ${{ needs.changes.outputs.mcp }}
-          SEO_CHANGED: ${{ needs.changes.outputs.seo }}
-          POTTERY_HOUSE_CHANGED: ${{ needs.changes.outputs.pottery_house }}
-          BLAWBY_CHANGED: ${{ needs.changes.outputs.blawby }}
         run: |
           yarn test:e2e:smoke
-          [ "$AUTH_CHANGED" != "true" ] || yarn test:e2e:auth
-          [ "$DASHBOARD_CHANGED" != "true" ] || yarn test:e2e:dashboard
-          [ "$BILLING_CHANGED" != "true" ] || yarn test:e2e:billing
-          [ "$NOTIFICATIONS_CHANGED" != "true" ] || PLAYWRIGHT_WORKERS=1 yarn test:e2e:notifications
-          [ "$MCP_CHANGED" != "true" ] || PLAYWRIGHT_WORKERS=1 yarn test:e2e:mcp
-          [ "$SEO_CHANGED" != "true" ] || yarn test:e2e:seo
-          [ "$POTTERY_HOUSE_CHANGED" != "true" ] || PLAYWRIGHT_WORKERS=1 yarn test:e2e:pottery-house
-          [ "$BLAWBY_CHANGED" != "true" ] || yarn test:e2e:blawby
+          [ "$DASHBOARD_CHANGED" != "true" ] || yarn test:e2e:dashboard:smoke
+          [ "$BILLING_CHANGED" != "true" ] || yarn test:e2e:smoke:billing
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
