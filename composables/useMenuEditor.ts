@@ -8,6 +8,12 @@ const isMenuItem = (value: unknown): value is MenuItem =>
   isRecord(value) && typeof value.id === 'string' && typeof value.menu_id === 'string'
 const isMenuWithItems = (value: unknown): value is MenuWithItems =>
   isRecord(value) && isMenu(value) && Array.isArray(value.items) && value.items.every(isMenuItem)
+const isMenusWithDetailResponse = (value: unknown): value is { success: boolean; menus: Menu[]; menu: MenuWithItems | null } =>
+  isRecord(value)
+  && value.success === true
+  && Array.isArray(value.menus)
+  && value.menus.every(isMenu)
+  && (value.menu === null || isMenuWithItems(value.menu))
 const isSuccess = (value: unknown): value is { success: true } =>
   isRecord(value) && value.success === true
 
@@ -23,43 +29,67 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
   const effectiveLocationId = computed(() => locationId !== undefined ? locationId : currentLocationId.value)
   const isEditingBrandMenu = computed(() => locationId !== undefined ? (locationId === null || locationId === '') : isBrandScope.value)
 
-  // Race-condition guard: ignore responses from superseded requests
-  let loadMenusRequestId = 0
+  // Reload on location change (immediate) or ChowBot menu changes
+  const menuRefreshSignal = useState<number>('menu:refresh', () => 0)
+  const requestEvent = useRequestEvent()
 
-  const loadMenus = async () => {
-    const requestId = ++loadMenusRequestId
-    loading.value = true
-    error.value = null
-
-    try {
-      const params = new URLSearchParams()
-      if (effectiveLocationId.value !== undefined && effectiveLocationId.value !== null && effectiveLocationId.value !== '') {
-        params.set('locationId', effectiveLocationId.value)
+  // Location-scoped menus (the only mode this editor is actually used in —
+  // see pages/dashboard/.../locations/[locationSlug]/menu/index.vue) load via
+  // the direct SSR server service during SSR, matching every other converted
+  // dashboard editor resource; brand-wide scope (locationId undefined, no
+  // known consumer today) keeps the original client-only two-step fetch.
+  const {
+    data: menusResource,
+    pending: menusPending,
+    error: menusResourceError,
+    refresh: refreshMenusResource,
+  } = useAsyncData(
+    computed(() => `dashboard-menus:${siteId}:${effectiveLocationId.value ?? 'brand'}`),
+    async () => {
+      const currentEffectiveLocationId = effectiveLocationId.value
+      if (currentEffectiveLocationId && import.meta.server) {
+        if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+        const { loadDashboardLocationMenus } = await import('~/server/utils/dashboard-editor-resources')
+        return await loadDashboardLocationMenus(requestEvent, siteId, currentEffectiveLocationId)
       }
-      const response = await applicationFetch<{ success: boolean; menus: Menu[] }>(
+      const params = new URLSearchParams()
+      if (currentEffectiveLocationId !== undefined && currentEffectiveLocationId !== null && currentEffectiveLocationId !== '') {
+        params.set('locationId', currentEffectiveLocationId)
+      }
+      const listResponse = await applicationFetch<{ success: boolean; menus: Menu[] }>(
         `/api/editor/sites/${siteId}/menus${params.toString() ? `?${params.toString()}` : ''}`,
         {
           validate: (value): value is { success: boolean; menus: Menu[] } =>
             isRecord(value) && value.success === true && Array.isArray(value.menus) && value.menus.every(isMenu),
         },
       )
+      if (listResponse.menus.length === 0) return { success: true as const, menus: [], menu: null }
+      const detailResponse = await applicationFetch<{ success: boolean; menu: MenuWithItems }>(
+        `/api/editor/sites/${siteId}/menus/${listResponse.menus[0]!.id}`,
+        {
+          validate: (value): value is { success: boolean; menu: MenuWithItems } =>
+            isRecord(value) && value.success === true && isMenuWithItems(value.menu),
+        },
+      )
+      return { success: true as const, menus: listResponse.menus, menu: detailResponse.menu }
+    },
+    { lazy: import.meta.client, watch: [menuRefreshSignal] },
+  )
 
-      if (requestId !== loadMenusRequestId) return
-
-      if (response.success) {
-        currentMenu.value = null
-        if (response.menus.length > 0) {
-          await loadMenu(response.menus[0]!.id)
-        }
-      } else {
-        error.value = 'Failed to load menu'
-      }
-    } catch (err) {
-      if (requestId !== loadMenusRequestId) return
+  watch([menusResource, menusPending, menusResourceError], ([resource, pending, err]) => {
+    loading.value = pending
+    if (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error'
-    } finally {
-      if (requestId === loadMenusRequestId) loading.value = false
+      return
     }
+    if (resource && isMenusWithDetailResponse(resource)) {
+      currentMenu.value = resource.menu
+      error.value = null
+    }
+  }, { immediate: true })
+
+  const loadMenus = async () => {
+    await refreshMenusResource()
   }
 
   const loadMenu = async (menuId: string) => {
@@ -334,10 +364,6 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     }
     return grouped
   })
-
-  // Reload on location change (immediate) or ChowBot menu changes
-  const menuRefreshSignal = useState<number>('menu:refresh', () => 0)
-  watch([effectiveLocationId, menuRefreshSignal], () => loadMenus(), { immediate: true })
 
   return {
     currentMenu,

@@ -317,23 +317,27 @@ test.describe('dashboard functional smoke', () => {
     await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
     await page.goto(devLoginUrl(baseURL!, 'user-kikuzuki'), { waitUntil: 'load' })
 
-    // Unlike media/blog/experiences, the menu editor's read (useMenuEditor's
-    // loadMenus/loadMenu) is not SSR-hydrated — it fetches client-side only,
-    // regardless of navigation type — so a plain page.goto after registering
-    // the mock is sufficient here; no SPA-transition click is required.
-    const menuUrl = `${baseURL}/dashboard/kikuzuki-krabi-thailand/sites/kikuzuki-krabi-thailand/locations/kikuzuki-japanese-robatayaki-izakaya/menu`
+    // Same SSR-direct-service constraint as experiences/media/blog above —
+    // useMenuEditor now loads via loadDashboardLocationMenus during SSR, so
+    // the mock must be hit through an in-app SPA transition, not a URL nav.
+    const overviewUrl = `${baseURL}/dashboard/kikuzuki-krabi-thailand/sites/kikuzuki-krabi-thailand/locations/kikuzuki-japanese-robatayaki-izakaya`
+    const menuLink = page.locator('[id^="dashboard-sidebar"]').getByRole('link', { name: 'Menus' })
 
     await page.route('**/api/editor/sites/site-kikuzuki/menus?**', async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, menus: [] }) })
     })
-    await page.goto(menuUrl, { waitUntil: 'load' })
+    await page.goto(overviewUrl, { waitUntil: 'networkidle' })
+    await menuLink.click()
+    await expect(page).toHaveURL(/\/menu$/)
     await expect(page.getByText('No menus yet')).toBeVisible()
     await page.unroute('**/api/editor/sites/site-kikuzuki/menus?**')
 
     await page.route('**/api/editor/sites/site-kikuzuki/menus?**', async (route) => {
       await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Test failure' }) })
     })
-    await page.goto(menuUrl, { waitUntil: 'load' })
+    await page.goto(overviewUrl, { waitUntil: 'networkidle' })
+    await menuLink.click()
+    await expect(page).toHaveURL(/\/menu$/)
     await expect(page.getByText('No menus yet')).toBeHidden()
     await expect(page.getByText('Test failure')).toBeVisible()
   })

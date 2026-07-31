@@ -431,6 +431,22 @@ export async function loadDashboardMenu(
   return { success: true as const, menu }
 }
 
+// Mirrors GET /api/editor/sites/[siteId]/menus?locationId=... (menus.get.ts) —
+// list menus for a location, plus the first menu's own items so the editor's
+// initial SSR render has real menu data instead of a client-only fetch.
+export async function loadDashboardLocationMenus(
+  event: H3Event,
+  siteId: string,
+  locationId: string,
+) {
+  const { db, site } = await requireLocationAccess(event, siteId, locationId)
+  const menus = await getMenus(db, site.organization_id, siteId, locationId)
+  const menu = menus.length > 0
+    ? await getMenuWithItems(db, site.organization_id, siteId, menus[0]!.id)
+    : null
+  return { success: true as const, menus, menu }
+}
+
 export async function loadDashboardLocationPosts(
   event: H3Event,
   siteId: string,
