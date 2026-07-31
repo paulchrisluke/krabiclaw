@@ -7,7 +7,7 @@ const isMenu = (value: unknown): value is Menu =>
 const isMenuItem = (value: unknown): value is MenuItem =>
   isRecord(value) && typeof value.id === 'string' && typeof value.menu_id === 'string'
 const isMenuWithItems = (value: unknown): value is MenuWithItems =>
-  isMenu(value) && Array.isArray(value.items) && value.items.every(isMenuItem)
+  isRecord(value) && isMenu(value) && Array.isArray(value.items) && value.items.every(isMenuItem)
 const isSuccess = (value: unknown): value is { success: true } =>
   isRecord(value) && value.success === true
 

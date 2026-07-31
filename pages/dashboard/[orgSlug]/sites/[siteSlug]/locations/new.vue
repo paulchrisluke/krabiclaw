@@ -85,10 +85,8 @@ const dashboard = useDashboardSite()
 const siteData = computed(() => dashboard.site.value as ApiRecord | null)
 const previewVertical = computed<SiteVertical>(() => normalizeVertical(siteData.value?.vertical as string | undefined) as SiteVertical)
 const siteLocations = computed(() => dashboard.locations.value)
-const contextLoaded = computed(() => !dashboard.pending.value)
-const contextError = computed(() =>
-  dashboard.state.value ? null : 'Workspace data could not be loaded.',
-)
+const contextLoaded = ref(false)
+const contextError = ref<string | null>(null)
 const selectedLocationId = ref<string | null>(null)
 const selectedPreviewPage = ref('home')
 const previewReloadToken = ref(0)
@@ -151,13 +149,34 @@ const onSelectLocation = (id: string) => {
   selectedLocationId.value = id
 }
 
+const loadContext = async () => {
+  contextLoaded.value = false
+  contextError.value = null
+  try {
+    const context = await dashboard.refresh()
+    if (!context) throw new Error('Workspace data could not be loaded.')
+  } catch (error) {
+    contextError.value = getErrorMessage(error, 'Workspace data could not be loaded.')
+  } finally {
+    contextLoaded.value = true
+  }
+}
+
 // Called by OnboardingWizard after the location is created — reload locations and preview the new one
 const onLocationCreated = async (_orgSlug: string | null, locationSlug: string | null | undefined) => {
-  await dashboard.refresh()
+  contextError.value = null
+  try {
+    await dashboard.refresh()
+  } catch (error) {
+    contextError.value = getErrorMessage(error, 'Workspace data could not be loaded.')
+    return
+  }
   previewReloadToken.value = Date.now()
 
   const created = locationSlug ? siteLocations.value.find(l => l.slug === locationSlug) : null
   if (created) selectedLocationId.value = created.id
 }
+
+onMounted(loadContext)
 
 </script>

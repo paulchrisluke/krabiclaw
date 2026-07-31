@@ -81,10 +81,35 @@ export interface DashboardLocationRow {
   feature_overrides: string | null
 }
 
-export type DashboardLocationContextRow = Record<string, unknown> & {
+export interface DashboardLocationContextRow {
   id: string
   organization_id: string
   site_id: string
+  slug: string
+  google_location_id: string | null
+  title: string
+  address: string | null
+  city: string | null
+  neighborhood: string | null
+  phone: string | null
+  email: string | null
+  website_url: string | null
+  maps_url: string | null
+  opening_hours: string | null
+  rating: number | null
+  review_count: number | null
+  is_primary: number | boolean
+  status: string
+  last_synced_at: string | null
+  description: string | null
+  short_description: string | null
+  price_level: string | null
+  google_place_id: string | null
+  google_review_url: string | null
+  hero_media_asset_id: string | null
+  notification_phone: string | null
+  timezone: string | null
+  feature_overrides: string | null
 }
 
 export interface DashboardContextOptions {

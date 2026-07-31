@@ -183,9 +183,9 @@ interface SiteSettingsResponse {
   robots?: string | null
   google_analytics_measurement_id?: string | null
   google_site_verification?: string | null
-  toggleable_features?: ProductFeature[]
-  effective_features?: ProductFeature[]
-  default_features?: ProductFeature[]
+  toggleable_features?: readonly ProductFeature[]
+  effective_features?: readonly ProductFeature[]
+  default_features?: readonly ProductFeature[]
 }
 
 interface FacebookConnectionStatus {
@@ -288,8 +288,8 @@ function fillForm(settings: SiteSettingsResponse) {
   form.robots = settings.robots ?? ''
   form.google_analytics_measurement_id = settings.google_analytics_measurement_id ?? ''
   form.google_site_verification = settings.google_site_verification ?? ''
-  toggleableFeatures.value = settings.toggleable_features ?? []
-  defaultFeatures.value = settings.default_features ?? []
+  toggleableFeatures.value = [...(settings.toggleable_features ?? [])]
+  defaultFeatures.value = [...(settings.default_features ?? [])]
   const effective = new Set(settings.effective_features ?? [])
   // Only ever read through toggleableFeatures (see the template's v-for and saveFeatures'
   // filter), so a stale key from a previous load is harmless — no need to clear the object first.

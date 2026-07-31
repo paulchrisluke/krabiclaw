@@ -404,7 +404,11 @@ async function confirmDeleteAccount() {
   deleteError.value = ''
 
   try {
-    const res = await applicationFetch<{ success?: boolean }>('/api/user/delete-account', { method: 'POST' })
+    const res = await applicationFetch<{ success?: boolean }>('/api/user/delete-account', {
+      method: 'POST',
+      validate: (value): value is { success?: boolean } =>
+        isRecord(value) && (value.success === undefined || typeof value.success === 'boolean'),
+    })
     if (res?.success) {
       try { await authClient.signOut() } catch (_err) { /* ignore */ }
       try {

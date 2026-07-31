@@ -75,6 +75,17 @@ async function submit() {
     }>('/api/sites', {
       method: 'POST',
       body: { name: name.value.trim(), subdomain: subdomain.value.trim(), vertical: vertical.value },
+      validate: (value): value is {
+        siteId: string
+        subdomain: string
+        offerSubscribePlan: string | null
+        error?: string
+      } =>
+        isRecord(value)
+        && typeof value.siteId === 'string'
+        && typeof value.subdomain === 'string'
+        && (value.offerSubscribePlan === null || typeof value.offerSubscribePlan === 'string')
+        && (value.error === undefined || typeof value.error === 'string'),
     })
 
     await router.push(`/dashboard/${orgSlug}/sites/${res.subdomain}`)

@@ -145,7 +145,7 @@ export async function loadPublicDraftPage(
 export async function loadPublicDraftShell(
   event: H3Event,
   draftId: string,
-  query: Pick<Record<string, string | undefined>, 'token'>,
+  query: { token?: string },
   options: { signal?: AbortSignal } = {},
 ) {
   const payload = await loadDraftPreviewSource(event, draftId, query.token, options)

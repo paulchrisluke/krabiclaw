@@ -9,7 +9,7 @@
 //
 // Usage (in a page):
 //   const { getField, getHero, photosList, qaList, ... } = await usePublicPageData()
-import { onMounted, onBeforeUnmount } from "vue";
+import { onMounted, onBeforeUnmount, toValue, type MaybeRefOrGetter } from "vue";
 import {
   usePublicPageRequest,
   usePublicPageKey,
@@ -34,7 +34,7 @@ interface ContentRow {
   [key: string]: unknown;
 }
 
-export const usePublicPageData = async (options: { enabled?: boolean } = {}) => {
+export const usePublicPageData = async (options: { enabled?: MaybeRefOrGetter<boolean> } = {}) => {
   const { isPlatform, siteId, draftId } = useTenantSite();
   const route = useRoute();
   const params = usePublicPageRequest();
@@ -44,7 +44,13 @@ export const usePublicPageData = async (options: { enabled?: boolean } = {}) => 
   const ownedPath = route.path;
   const entityId = computed(() => siteId || draftId || null);
   const key = computed(() => usePublicPageKey(entityId.value, params.value));
-  const enabled = computed(() => options.enabled !== false);
+  // options.enabled may be a plain boolean, a Ref/ComputedRef, or a getter —
+  // toValue() unwraps all three. Comparing a Ref object directly to `false`
+  // (the previous `options.enabled !== false`) is always true regardless of
+  // the ref's actual value, since an object is never === the primitive false —
+  // that silently made every `enabled: someComputedRef` caller behave as
+  // always-enabled.
+  const enabled = computed(() => toValue(options.enabled) !== false);
 
   const url = computed(() => usePublicPageUrl(siteId, params.value));
 

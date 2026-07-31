@@ -684,7 +684,9 @@ async function loadPublicPageSource(
 
   // Single D1 round trip
   options.signal?.throwIfAborted();
-  const batchResults = await executeBatch(db, batchStmts);
+  const batchResults = batchStmts.length > 0
+    ? await executeBatch(db, batchStmts)
+    : [];
   options.signal?.throwIfAborted();
 
   // Extract batch results by tracked index

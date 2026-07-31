@@ -325,7 +325,7 @@ export async function loadDashboardLocationOverview(
   return {
     location: {
       success: true as const,
-      location: parseLocationPayload(location),
+      location: parseLocationPayload(location)!,
       ...capabilities,
     },
     menus: { success: true as const, menus },
@@ -374,7 +374,7 @@ export async function loadDashboardLocationSettings(
   return {
     location: {
       success: true as const,
-      location: parseLocationPayload(location),
+      location: parseLocationPayload(location)!,
       ...capabilities,
     },
     connection: {

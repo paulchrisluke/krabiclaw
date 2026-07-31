@@ -1447,14 +1447,13 @@ export async function attachAvailabilitySummaries<T extends Experience>(
 
   return list.map(experience => {
     const location = locations.get(experience.location_id)
-    const experienceTimezone = location?.timezone || defaultTimezone
-    const closureTimezone = location?.timezone || defaultTimezone
+    const resolvedTimezone = location?.timezone || defaultTimezone
     const summary = calculateAvailabilitySummary(
       experience,
-      experienceTimezone,
+      resolvedTimezone,
       bookingsByExperience.get(experience.id) ?? [],
       overridesByExperience.get(experience.id) ?? [],
-      { locationClosed: Boolean(location && getActiveSpecialClosure(location.special_hours, closureTimezone)) },
+      { locationClosed: Boolean(location && getActiveSpecialClosure(location.special_hours, resolvedTimezone)) },
     )
     return { ...experience, ...summary }
   })

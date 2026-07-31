@@ -347,6 +347,15 @@ interface PhoneAssignment {
   locationName: string | null
 }
 
+const isMembersResponse = (
+  value: unknown,
+): value is { members: MemberRow[]; invitations: InvitationRow[] } =>
+  isRecord(value)
+  && Array.isArray(value.members)
+  && value.members.every(member => isRecord(member) && typeof member.id === 'string')
+  && Array.isArray(value.invitations)
+  && value.invitations.every(invitation => isRecord(invitation) && typeof invitation.id === 'string')
+
 const route = useRoute()
 const membersKey = computed(() => `dashboard-org-members-${String(route.params.orgSlug ?? '')}`)
 
@@ -377,7 +386,10 @@ const { data, pending, refresh } = await useAsyncData(
       if (!org) throw createError({ statusCode: 404, statusMessage: 'Organization not found' })
       return await getOrganizationMembersData(db, org.id)
     }
-    return await dashboardApi<{ members: MemberRow[]; invitations: InvitationRow[] }>('/api/dashboard/members')
+    return await dashboardApi<{ members: MemberRow[]; invitations: InvitationRow[] }>(
+      '/api/dashboard/members',
+      { validate: isMembersResponse },
+    )
   },
 )
 
@@ -427,7 +439,12 @@ async function loadOrgSites() {
   const requestId = ++sitesRequestId
   sitesPending.value = true
   try {
-    const response = await dashboardApi<{ sites: OrgSiteSummary[] }>('/api/dashboard/context')
+    const response = await dashboardApi<{ sites: OrgSiteSummary[] }>('/api/dashboard/context', {
+      validate: (value): value is { sites: OrgSiteSummary[] } =>
+        isRecord(value)
+        && Array.isArray(value.sites)
+        && value.sites.every(site => isRecord(site) && typeof site.id === 'string'),
+    })
     if (requestId !== sitesRequestId) return
     orgSites.value = response.sites ?? []
   } catch (err) {
@@ -453,7 +470,20 @@ watch(() => inviteForm.siteId, async (siteId) => {
   }
   locationsPending.value = true
   try {
-    const response = await dashboardApi<{ success: boolean; locations: OrgLocationSummary[] }>(`/api/sites/${siteId}/locations`)
+    const response = await dashboardApi<{ success: boolean; locations: OrgLocationSummary[] }>(
+      `/api/sites/${siteId}/locations`,
+      {
+        validate: (value): value is { success: boolean; locations: OrgLocationSummary[] } =>
+          isRecord(value)
+          && typeof value.success === 'boolean'
+          && Array.isArray(value.locations)
+          && value.locations.every(location =>
+            isRecord(location)
+            && typeof location.id === 'string'
+            && typeof location.title === 'string',
+          ),
+      },
+    )
     if (!isCurrentLocationsRequest(requestId, siteId)) return
     orgLocations.value = response.locations ?? []
   } catch (err) {

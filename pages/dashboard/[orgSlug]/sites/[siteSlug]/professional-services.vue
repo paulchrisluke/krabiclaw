@@ -217,6 +217,17 @@ type ProfessionalServiceEditorResponse = {
   consultation: ConsultationRecord | null
 }
 
+const isProfessionalServiceEditorResponse = (
+  value: unknown,
+): value is ProfessionalServiceEditorResponse =>
+  isRecord(value)
+  && Array.isArray(value.offerings)
+  && value.offerings.every(isRecord)
+  && Array.isArray(value.tenantPages)
+  && value.tenantPages.every(isRecord)
+  && (value.compliance === null || isRecord(value.compliance))
+  && (value.consultation === null || isRecord(value.consultation))
+
 const siteId = await useDashboardSiteId()
 const requestEvent = useRequestEvent()
 const toast = useToast()
@@ -268,7 +279,10 @@ const { data, pending, refresh } = await useAsyncData(
       })
       return { success: true, ...(await getProfessionalServiceContent(db, siteId)) } as unknown as ProfessionalServiceEditorResponse
     }
-    return await dashboardApi<ProfessionalServiceEditorResponse>(`/api/editor/sites/${siteId}/professional-services`)
+    return await dashboardApi<ProfessionalServiceEditorResponse>(
+      `/api/editor/sites/${siteId}/professional-services`,
+      { validate: isProfessionalServiceEditorResponse },
+    )
   },
 )
 

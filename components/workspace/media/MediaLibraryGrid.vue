@@ -143,7 +143,7 @@ interface MediaAsset {
   id: string
   kind?: string
   file_name?: string
-  thumbnail_url?: string
+  thumbnail_url?: string | null
   public_url?: string
   alt_text?: string
   title?: string
@@ -155,7 +155,7 @@ const isMediaAsset = (value: unknown): value is MediaAsset =>
   && typeof value.id === 'string'
   && (value.kind === undefined || typeof value.kind === 'string')
   && (value.public_url === undefined || typeof value.public_url === 'string')
-  && (value.thumbnail_url === undefined || typeof value.thumbnail_url === 'string')
+  && (value.thumbnail_url === undefined || value.thumbnail_url === null || typeof value.thumbnail_url === 'string')
 
 const isMediaResponse = (value: unknown): value is { media: MediaAsset[] } =>
   isRecord(value)
@@ -429,7 +429,7 @@ const {
     const { loadDashboardMedia } = await import('~/server/utils/dashboard-editor-resources')
     return await loadDashboardMedia(requestEvent, props.siteId, {
       kind,
-      locationId: props.locationId,
+      locationId: props.locationId ?? undefined,
       limit: 100,
     })
   }

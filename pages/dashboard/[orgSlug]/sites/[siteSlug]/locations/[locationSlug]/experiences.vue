@@ -365,6 +365,44 @@ definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.experiences' }
 
 type ApiRecord = Experience
 
+const isSlotsResponse = (value: unknown): value is { slots: string[] } =>
+  isRecord(value)
+  && Array.isArray(value.slots)
+  && value.slots.every(slot => typeof slot === 'string')
+const isPosterResponse = (value: unknown): value is { thumbnailUrl: string } =>
+  isRecord(value) && typeof value.thumbnailUrl === 'string'
+const isExperienceResponse = (value: unknown): value is { experience: ApiRecord } =>
+  isRecord(value)
+  && isRecord(value.experience)
+  && typeof value.experience.id === 'string'
+  && typeof value.experience.title === 'string'
+const isPolicyResponse = (
+  value: unknown,
+): value is { policy: BookingPolicyPatch | null; summary: RenderedBookingPolicySummary | null } =>
+  isRecord(value)
+  && (value.policy === null || isRecord(value.policy))
+  && (value.summary === null || isRecord(value.summary))
+const isPolicySummaryResponse = (
+  value: unknown,
+): value is { summary: RenderedBookingPolicySummary | null } =>
+  isRecord(value) && (value.summary === null || isRecord(value.summary))
+const isAvailabilityResponse = (
+  value: unknown,
+): value is { timezone: string; dates: Array<{ date: string; slots: SlotAvailability[] }> } =>
+  isRecord(value)
+  && typeof value.timezone === 'string'
+  && Array.isArray(value.dates)
+  && value.dates.every(day =>
+    isRecord(day)
+    && typeof day.date === 'string'
+    && Array.isArray(day.slots)
+    && day.slots.every(isRecord),
+  )
+const isOverridesResponse = (value: unknown): value is { overrides: SlotOverride[] } =>
+  isRecord(value)
+  && Array.isArray(value.overrides)
+  && value.overrides.every(override => isRecord(override) && typeof override.id === 'string')
+
 const toast = useToast()
 const siteId = await useDashboardSiteId()
 const dashboardLocation = useDashboardLocation()
@@ -462,6 +500,7 @@ async function runGenerator(target: 'flat' | 'recurring', day?: WeekdayName) {
   try {
     const res = await dashboardApi<{ slots: string[] }>(`/api/utils/generate-slots`, {
       query: { start: generator.start, end: generator.end, interval_minutes: generator.interval },
+      validate: isSlotsResponse,
     })
     if (target === 'flat') {
       timeSlotsInput.value = res.slots.join(', ')
@@ -596,6 +635,7 @@ async function submitCoverPoster(poster: File | null) {
     const response = await dashboardApi<{ thumbnailUrl: string }>(`/api/editor/sites/${siteId}/media/${cover.asset_id}/poster`, {
       method: 'POST',
       body,
+      validate: isPosterResponse,
     })
     cover.thumbnail_url = response.thumbnailUrl
     cover.url = cover.url ?? response.thumbnailUrl
@@ -663,6 +703,7 @@ async function loadExperiencePolicy(experienceId: string, locationId: string | n
         experience_id: experienceId,
         location_id: locationId ?? undefined,
       },
+      validate: isPolicyResponse,
     })
     if (currentLocationId.value !== locationId || editing.value?.id !== experienceId) return
     bookingPolicyDraft.value = res.policy ?? {}
@@ -726,12 +767,18 @@ async function save() {
     }
     let experienceResult: ApiRecord | null = null
     if (editing.value) {
-      const response = await dashboardApi<{ experience: ApiRecord }>(`/api/editor/sites/${siteId}/experiences/${editing.value.id}`, { method: 'PATCH', body: payload })
+      const response = await dashboardApi<{ experience: ApiRecord }>(
+        `/api/editor/sites/${siteId}/experiences/${editing.value.id}`,
+        { method: 'PATCH', body: payload, validate: isExperienceResponse },
+      )
       if (currentLocationId.value !== locationId) return
       experienceResult = response.experience ?? null
       toast.add({ description: 'Experience updated.', color: 'success' })
     } else {
-      const response = await dashboardApi<{ experience: ApiRecord }>(`/api/editor/sites/${siteId}/experiences`, { method: 'POST', body: payload })
+      const response = await dashboardApi<{ experience: ApiRecord }>(
+        `/api/editor/sites/${siteId}/experiences`,
+        { method: 'POST', body: payload, validate: isExperienceResponse },
+      )
       if (currentLocationId.value !== locationId) return
       experienceResult = response.experience ?? null
       toast.add({ description: 'Experience created.', color: 'success' })
@@ -750,6 +797,7 @@ async function save() {
             experience_id: experienceResult.id,
             location_id: locationId,
           },
+          validate: isPolicySummaryResponse,
         })
         if (currentLocationId.value !== locationId) return
         bookingPolicySummary.value = policyResponse.summary ?? null
@@ -831,10 +879,11 @@ async function loadAvailability() {
     const [avail, overrides] = await Promise.all([
       dashboardApi<{ timezone: string; dates: Array<{ date: string; slots: SlotAvailability[] }> }>(
         `/api/editor/sites/${siteId}/experiences/${availabilityExp.value.id}/availability`,
-        { query: { date: availabilityDate.value } },
+        { query: { date: availabilityDate.value }, validate: isAvailabilityResponse },
       ),
       dashboardApi<{ overrides: SlotOverride[] }>(
         `/api/editor/sites/${siteId}/experiences/${availabilityExp.value.id}/slot-overrides`,
+        { validate: isOverridesResponse },
       ),
     ])
     availabilityTimezone.value = avail.timezone

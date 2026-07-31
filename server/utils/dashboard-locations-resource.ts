@@ -7,6 +7,7 @@ export interface DashboardLocationResource {
   id: string
   slug: string
   title: string
+  city: string | null
   is_primary: boolean
   status: string
   address: string | null | Record<string, unknown>
@@ -23,7 +24,7 @@ export async function listDashboardLocationsResource(event: H3Event) {
   if (!site) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
   const scoped = !isOrganizationWideRole(organization.role)
   const locations = await queryAll<DashboardLocationResource>(db, `
-    SELECT id, slug, title, is_primary, status, address, phone, email,
+    SELECT id, slug, title, city, is_primary, status, address, phone, email,
            notification_phone, grab_url, uber_eats_url, foodpanda_url
       FROM business_locations
      WHERE organization_id = ? AND site_id = ?

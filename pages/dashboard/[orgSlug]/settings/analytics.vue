@@ -120,6 +120,32 @@ interface SearchConsoleSite {
   permissionLevel: string
 }
 
+const isAnalyticsPropertiesResponse = (value: unknown): value is {
+  success: boolean
+  connection: ConnectionInfo | null
+  ga4Properties: Ga4Property[]
+  searchConsoleSites: SearchConsoleSite[]
+  ga4Error: string | null
+  searchConsoleError: string | null
+} =>
+  isRecord(value)
+  && typeof value.success === 'boolean'
+  && (value.connection === null || isRecord(value.connection))
+  && Array.isArray(value.ga4Properties)
+  && value.ga4Properties.every(property =>
+    isRecord(property)
+    && typeof property.propertyId === 'string'
+    && typeof property.propertyName === 'string',
+  )
+  && Array.isArray(value.searchConsoleSites)
+  && value.searchConsoleSites.every(site => isRecord(site) && typeof site.siteUrl === 'string')
+  && (value.ga4Error === null || typeof value.ga4Error === 'string')
+  && (value.searchConsoleError === null || typeof value.searchConsoleError === 'string')
+const isAuthUrlResponse = (value: unknown): value is { success: boolean; authUrl: string } =>
+  isRecord(value) && typeof value.success === 'boolean' && typeof value.authUrl === 'string'
+const isSuccessResponse = (value: unknown): value is { success: true } =>
+  isRecord(value) && value.success === true
+
 const toast = useToast()
 const { dashboard, siteOptions, selectedSiteSlug, selectedSiteId: siteId } = useOrganizationSettingsSite()
 const route = useRoute()
@@ -172,7 +198,9 @@ async function loadConnection() {
       searchConsoleSites: SearchConsoleSite[]
       ga4Error: string | null
       searchConsoleError: string | null
-    }>(`/api/sites/${requestedSiteId}/integrations/google-analytics/properties`)
+    }>(`/api/sites/${requestedSiteId}/integrations/google-analytics/properties`, {
+      validate: isAnalyticsPropertiesResponse,
+    })
 
     if (generation !== connectionLoadGeneration || siteId.value !== requestedSiteId) return
     connection.value = res.connection
@@ -199,7 +227,7 @@ async function connectGoogle() {
   try {
     const res = await dashboardApi<{ success: boolean; authUrl: string }>(
       `/api/sites/${requestedSiteId}/integrations/google-analytics/auth`,
-      { method: 'POST' }
+      { method: 'POST', validate: isAuthUrlResponse }
     )
     if (siteId.value !== requestedSiteId) {
       connecting.value = false
@@ -255,7 +283,8 @@ async function saveSelection() {
         ga4_property_id: selectedGa4Property.value,
         ga4_property_name: property?.propertyName ?? null,
         search_console_site_url: selectedSearchConsoleSite.value
-      }
+      },
+      validate: isSuccessResponse,
     })
     if (siteId.value !== requestedSiteId) return
     toast.add({ description: 'Saved', color: 'success' })

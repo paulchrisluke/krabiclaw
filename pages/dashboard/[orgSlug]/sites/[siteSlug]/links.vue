@@ -150,6 +150,23 @@ interface ApiLinksPage extends Omit<LinksPage, 'seo_title' | 'seo_description'> 
 
 type ApiLinkItem = LinkItem
 
+const isLinksResponse = (
+  value: unknown,
+): value is { page: ApiLinksPage; items: ApiLinkItem[] } =>
+  isRecord(value)
+  && isRecord(value.page)
+  && typeof value.page.title === 'string'
+  && typeof value.page.status === 'string'
+  && Array.isArray(value.items)
+  && value.items.every(item =>
+    isRecord(item)
+    && typeof item.id === 'string'
+    && typeof item.label === 'string'
+    && typeof item.destination === 'string'
+    && typeof item.sort_order === 'number'
+    && typeof item.status === 'string',
+  )
+
 const siteId = await useDashboardSiteId()
 const dashboard = useDashboardSite()
 const toast = useToast()
@@ -184,7 +201,10 @@ const items = ref<LinkItem[]>([])
 
 const { data, pending, refresh } = await useAsyncData(
   `links-page-editor-${siteId}`,
-  () => dashboardApi<{ page: ApiLinksPage; items: ApiLinkItem[] }>(`/api/editor/sites/${siteId}/links-page`),
+  () => dashboardApi<{ page: ApiLinksPage; items: ApiLinkItem[] }>(
+    `/api/editor/sites/${siteId}/links-page`,
+    { validate: isLinksResponse },
+  ),
   { server: false },
 )
 
@@ -287,6 +307,7 @@ async function save() {
     const response = await dashboardApi<{ page: ApiLinksPage; items: ApiLinkItem[] }>(`/api/editor/sites/${siteId}/links-page`, {
       method: 'PATCH',
       body: payload,
+      validate: isLinksResponse,
     })
     data.value = response
     await refresh()

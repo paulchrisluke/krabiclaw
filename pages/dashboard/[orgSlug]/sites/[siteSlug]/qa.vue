@@ -91,7 +91,11 @@ const selectedPagePath = ref('general')
 const STANDARD_ROUTES = ['/', '/about', '/services', '/pricing', '/contact', '/schedule', '/blog', '/donate'] as const
 
 const requestEvent = useRequestEvent()
-const { data: tenantPages } = await useAsyncData(
+// tenantPages, existingQaScopes, and the main qa query below are independent of
+// each other (none reads another's result) — issue them together instead of
+// sequentially awaiting each one, which otherwise turns three independent
+// requests into a waterfall during SSR.
+const tenantPagesAsyncData = useAsyncData(
   () => `dashboard-tenant-pages-${siteId}`,
   async () => {
     if (import.meta.server) {
@@ -119,7 +123,7 @@ const { data: tenantPages } = await useAsyncData(
   },
 )
 
-const { data: existingQaScopes } = await useAsyncData(
+const existingQaScopesAsyncData = useAsyncData(
   () => `dashboard-qa-scopes-${siteId}`,
   async () => {
     if (import.meta.server) {
@@ -146,28 +150,6 @@ const { data: existingQaScopes } = await useAsyncData(
   },
 )
 
-const pageScopes = computed(() => {
-  const scopes = new Map<string, string>()
-  scopes.set('general', 'General fallback')
-  
-  for (const path of STANDARD_ROUTES) {
-    scopes.set(path, path === '/' ? 'Home' : path)
-  }
-  
-  for (const page of tenantPages.value ?? []) {
-    if (page.path && !scopes.has(page.path)) {
-      scopes.set(page.path, page.title || page.path)
-    }
-  }
-  
-  for (const scope of existingQaScopes.value ?? []) {
-    if (scope.page_path && !scopes.has(scope.page_path)) {
-      scopes.set(scope.page_path, scope.page_path)
-    }
-  }
-  
-  return Array.from(scopes.entries()).map(([value, label]) => ({ label, value }))
-})
 const pagePath = computed(() => selectedPagePath.value === 'general' ? null : selectedPagePath.value)
 const form = reactive({ question: '', answer: '', published: true })
 watch(selectedPagePath, () => {
@@ -176,7 +158,7 @@ watch(selectedPagePath, () => {
   form.answer = ''
   form.published = true
 })
-const { data, pending, refresh, error: qaError } = await useAsyncData(
+const qaAsyncData = useAsyncData(
   () => `dashboard-site-qa-${siteId}-${selectedPagePath.value}`,
   async () => {
     if (import.meta.server) {
@@ -211,6 +193,35 @@ const { data, pending, refresh, error: qaError } = await useAsyncData(
   },
   { watch: [selectedPagePath] },
 )
+
+const [
+  { data: tenantPages },
+  { data: existingQaScopes },
+  { data, pending, refresh, error: qaError },
+] = await Promise.all([tenantPagesAsyncData, existingQaScopesAsyncData, qaAsyncData])
+
+const pageScopes = computed(() => {
+  const scopes = new Map<string, string>()
+  scopes.set('general', 'General fallback')
+
+  for (const path of STANDARD_ROUTES) {
+    scopes.set(path, path === '/' ? 'Home' : path)
+  }
+
+  for (const page of tenantPages.value ?? []) {
+    if (page.path && !scopes.has(page.path)) {
+      scopes.set(page.path, page.title || page.path)
+    }
+  }
+
+  for (const scope of existingQaScopes.value ?? []) {
+    if (scope.page_path && !scopes.has(scope.page_path)) {
+      scopes.set(scope.page_path, scope.page_path)
+    }
+  }
+
+  return Array.from(scopes.entries()).map(([value, label]) => ({ label, value }))
+})
 const qaRows = computed(() => data.value?.qa ?? [])
 
 function reset() {

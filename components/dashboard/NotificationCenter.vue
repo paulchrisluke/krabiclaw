@@ -83,6 +83,16 @@ interface NotificationResponse {
   unread_count: number
 }
 
+const isNotificationResponse = (value: unknown): value is NotificationResponse =>
+  isRecord(value)
+  && Array.isArray(value.notifications)
+  && value.notifications.every(notification =>
+    isRecord(notification)
+    && typeof notification.id === 'string'
+    && typeof notification.severity === 'string',
+  )
+  && typeof value.unread_count === 'number'
+
 const notifications = ref<DashboardNotification[]>([])
 const unreadCount = ref(0)
 const loading = ref(false)
@@ -112,7 +122,10 @@ async function refreshNotifications() {
   if (loading.value) return
   loading.value = true
   try {
-    const response = await dashboardApi<NotificationResponse>('/api/dashboard/notifications', { query: { limit: 20 } })
+    const response = await dashboardApi<NotificationResponse>('/api/dashboard/notifications', {
+      query: { limit: 20 },
+      validate: isNotificationResponse,
+    })
     notifications.value = response.notifications
     unreadCount.value = response.unread_count
   } catch (error) {

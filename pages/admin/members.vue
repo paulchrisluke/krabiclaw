@@ -210,6 +210,37 @@ const clientInviteResult = ref<{ inviteUrl?: string; restaurantName?: string; er
 // ── Invite Client: new-org vs existing-org mode ──────────────────────────────
 interface OrgSearchResult { id: string; name: string; slug: string | null; hasOwner: boolean; hasPendingInvitation: boolean }
 
+const isOrgSearchResponse = (value: unknown): value is { organizations: OrgSearchResult[] } =>
+  isRecord(value)
+  && Array.isArray(value.organizations)
+  && value.organizations.every(organization =>
+    isRecord(organization)
+    && typeof organization.id === 'string'
+    && typeof organization.name === 'string'
+    && typeof organization.hasOwner === 'boolean'
+    && typeof organization.hasPendingInvitation === 'boolean',
+  )
+const isMembersResponse = (
+  value: unknown,
+): value is { team: TeamMember[]; pendingInvitations: PendingInvitation[] } =>
+  isRecord(value)
+  && Array.isArray(value.team)
+  && value.team.every(member =>
+    isRecord(member) && typeof member.id === 'string' && typeof member.email === 'string',
+  )
+  && Array.isArray(value.pendingInvitations)
+  && value.pendingInvitations.every(invitation =>
+    isRecord(invitation) && typeof invitation.id === 'string' && typeof invitation.email === 'string',
+  )
+const isTeamInviteResponse = (value: unknown): value is { action: string; email: string } =>
+  isRecord(value) && typeof value.action === 'string' && typeof value.email === 'string'
+const isClientInviteResponse = (
+  value: unknown,
+): value is { inviteUrl: string; restaurantName: string } =>
+  isRecord(value)
+  && typeof value.inviteUrl === 'string'
+  && typeof value.restaurantName === 'string'
+
 const inviteMode = ref<'new' | 'existing'>('new')
 const orgSearchTerm = ref('')
 const orgSearchResults = ref<OrgSearchResult[]>([])
@@ -222,6 +253,7 @@ async function runOrgSearch(term: string) {
   try {
     const res = await applicationFetch<{ organizations: OrgSearchResult[] }>('/api/admin/organizations', {
       query: { q: term },
+      validate: isOrgSearchResponse,
     })
     if (term !== orgSearchTerm.value) return
     orgSearchResults.value = res.organizations
@@ -249,7 +281,10 @@ function setInviteMode(mode: 'new' | 'existing') {
 async function loadMembers() {
   membersLoading.value = true
   try {
-    const res = await applicationFetch<{ team: TeamMember[]; pendingInvitations: PendingInvitation[] }>('/api/admin/members')
+    const res = await applicationFetch<{ team: TeamMember[]; pendingInvitations: PendingInvitation[] }>(
+      '/api/admin/members',
+      { validate: isMembersResponse },
+    )
     team.value = res.team
     pendingInvitations.value = res.pendingInvitations
   } catch {
@@ -268,6 +303,7 @@ async function inviteTeamMember() {
     const res = await applicationFetch<{ action: string; email: string }>('/api/admin/invite/team', {
       method: 'POST',
       body: { email, name: teamInviteName.value.trim() || undefined },
+      validate: isTeamInviteResponse,
     })
     const verb = res.action === 'promoted' ? 'promoted to admin' : 'created as admin'
     teamInviteResult.value = { message: `${res.email} ${verb}` }
@@ -292,6 +328,7 @@ async function inviteClient() {
       const res = await applicationFetch<{ inviteUrl: string; restaurantName: string }>('/api/admin/invite/client', {
         method: 'POST',
         body: { email, orgId: selectedOrg.value.id },
+        validate: isClientInviteResponse,
       })
       clientInviteResult.value = res
       clientEmail.value = ''
@@ -315,6 +352,7 @@ async function inviteClient() {
     const res = await applicationFetch<{ inviteUrl: string; restaurantName: string }>('/api/admin/invite/client', {
       method: 'POST',
       body: { email, restaurantName: name },
+      validate: isClientInviteResponse,
     })
     clientInviteResult.value = res
     clientEmail.value = ''

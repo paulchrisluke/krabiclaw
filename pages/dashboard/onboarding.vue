@@ -178,12 +178,18 @@ const previewPagePath = computed(() => {
   return selectedPreviewPage.value === 'home' ? '/' : `/${selectedPreviewPage.value}`
 })
 
+// SSR-safe origin — derived from the incoming request on the server and from
+// window.location on the client. This page now renders server-side (SSR is
+// no longer disabled here), so a bare window.location.origin read inside a
+// computed the template evaluates would throw during SSR.
+const requestURL = useRequestURL()
+
 const iframeSrc = computed(() => {
   const baseUrl = draftPreview.value ? draftPreviewBaseUrl.value : sitePreviewBaseUrl.value
   if (!baseUrl) return ''
   if (currentPageIsLocationScoped.value && !selectedLocation.value && !draftPreview.value) return ''
   const subPath = previewPagePath.value === '/' ? '' : previewPagePath.value
-  const url = new URL(baseUrl + subPath, window.location.origin)
+  const url = new URL(baseUrl + subPath, requestURL.origin)
   url.searchParams.set('preview', 'true')
   const token = draftPreview.value?.previewToken ?? previewToken.value
   if (token) url.searchParams.set('token', token)

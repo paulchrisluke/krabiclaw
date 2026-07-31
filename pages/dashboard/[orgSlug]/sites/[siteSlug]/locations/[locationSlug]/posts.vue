@@ -218,6 +218,18 @@ const isPostsResponse = (value: unknown): value is { posts: ApiRecord[] } =>
   )
 const isFacebookResponse = (value: unknown): value is { connected: boolean } =>
   isRecord(value) && typeof value.connected === 'boolean'
+const isPostResponse = (value: unknown): value is ApiRecord =>
+  isRecord(value)
+  && isRecord(value.post)
+  && typeof value.post.id === 'string'
+  && (value.socialErrors === undefined || isRecord(value.socialErrors))
+const isGeneratedPostResponse = (value: unknown): value is ApiRecord =>
+  isRecord(value)
+  && isRecord(value.generated)
+  && typeof value.generated.title === 'string'
+  && typeof value.generated.body === 'string'
+  && isRecord(value.credits)
+  && typeof value.credits.remaining === 'number'
 
 const loadPosts = async () => {
   const requestedLocationId = currentLocationId.value
@@ -440,12 +452,14 @@ const handleSave = async () => {
     if (selectedPost.value) {
       const res = await dashboardApi<ApiRecord>(`/api/editor/sites/${siteId}/posts/${selectedPost.value.id}`, {
         method: 'PATCH', body: buildPostPayload(locationId, String(selectedPost.value.id)),
+        validate: isPostResponse,
       })
       if (currentLocationId.value !== locationId) return
       selectedPost.value = res.post
     } else {
       const res = await dashboardApi<ApiRecord>(`/api/editor/sites/${siteId}/posts`, {
         method: 'POST', body: buildPostPayload(locationId),
+        validate: isPostResponse,
       })
       if (currentLocationId.value !== locationId) return
       selectedPost.value = res.post
@@ -485,13 +499,18 @@ const handlePublish = async () => {
     if (!postId || hasUnsavedEdits()) {
       const method = postId ? 'PATCH' : 'POST'
       const url = postId ? `/api/editor/sites/${siteId}/posts/${postId}` : `/api/editor/sites/${siteId}/posts`
-      const res = await dashboardApi<ApiRecord>(url, { method, body: buildPostPayload(locationId, postId ? String(postId) : undefined) })
+      const res = await dashboardApi<ApiRecord>(url, {
+        method,
+        body: buildPostPayload(locationId, postId ? String(postId) : undefined),
+        validate: isPostResponse,
+      })
       if (currentLocationId.value !== locationId) return
       postId = res.post.id
       selectedPost.value = res.post
     }
     const res = await dashboardApi<ApiRecord>(`/api/editor/sites/${siteId}/posts/${postId}/publish`, {
       method: 'POST', body: { channels: selectedChannels.value },
+      validate: isPostResponse,
     })
     if (currentLocationId.value !== locationId) return
     selectedPost.value = res.post
@@ -592,6 +611,7 @@ const generatePost = async () => {
     const res = await dashboardApi<ApiRecord>(`/api/ai/${siteId}/posts/generate`, {
       method: 'POST',
       body: { prompt: aiPrompt.value.trim(), image_base64, image_mime },
+      validate: isGeneratedPostResponse,
     })
 
     credits.value = res.credits?.remaining ?? null

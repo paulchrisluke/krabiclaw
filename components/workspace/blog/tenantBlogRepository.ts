@@ -16,7 +16,7 @@ export function tenantBlogRepository({ siteId, orgSlug, siteSlug }: TenantBlogRe
   const isPostResponse = (value: unknown): value is { post: BlogPost } =>
     isRecord(value) && isBlogPost(value.post)
   const isCreatedPostResponse = (value: unknown): value is { id: string; post: BlogPost } =>
-    isPostResponse(value) && typeof value.id === 'string'
+    isRecord(value) && typeof value.id === 'string' && isBlogPost(value.post)
   const isSuccess = (value: unknown): value is { success: true } =>
     isRecord(value) && value.success === true
 

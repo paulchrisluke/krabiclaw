@@ -3,7 +3,7 @@
     <UAlert color="error" variant="soft" title="Content unavailable" :description="loadError" />
   </div>
 
-  <div v-else-if="!siteData" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+  <div v-else-if="pending" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
     <USkeleton v-for="i in 3" :key="i" class="h-32 rounded-xl" />
   </div>
 
@@ -19,7 +19,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 import { getScopedEditablePages } from '~/config/content-registry'
 import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities } from '~/config/cms-registry'
@@ -39,9 +39,21 @@ const basePath = computed(() => props.scope === 'location' ? `${paths.value.proj
 const dashboard = useDashboardSite()
 const siteData = computed(() => dashboard.site.value as ApiRecord | null)
 const siteLocations = computed(() => dashboard.locations.value)
-const loadError = computed(() =>
-  dashboard.state.value ? null : 'Dashboard context unavailable',
-)
+const pending = computed(() => dashboard.pending.value)
+// dashboard.refresh() reuses the same shared in-flight/completed request other
+// callers (e.g. layouts/dashboard.vue) already triggered — this doesn't fire a
+// duplicate fetch. Capturing its rejection here is what lets this component
+// distinguish "still loading" (pending) from "actually failed" (loadError)
+// instead of inferring failure from state being merely absent, which was
+// indistinguishable from normal loading.
+const loadError = ref<string | null>(null)
+if (!dashboard.state.value) {
+  try {
+    await dashboard.refresh()
+  } catch (err) {
+    loadError.value = err instanceof Error ? err.message : 'Dashboard context unavailable'
+  }
+}
 
 // Only meaningful when scope === 'location' (this component is only ever rendered inside a
 // locations/[locationSlug]/... route in that case) — route-derived, same pattern as

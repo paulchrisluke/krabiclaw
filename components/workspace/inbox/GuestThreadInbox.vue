@@ -421,14 +421,7 @@ function isThreadDetailResponse(value: unknown): value is { thread: ThreadDetail
     && Array.isArray(value.thread.availableActions)
 }
 
-function isThreadOperationResponse(value: unknown): value is {
-  thread: ThreadDetail
-  availableActions: string[]
-} {
-  return isThreadDetailResponse(value)
-    && Array.isArray(value.availableActions)
-    && value.availableActions.every(action => typeof action === 'string')
-}
+const isThreadOperationResponse = isThreadDetailResponse
 
 function actionMeta(action: string) {
   return ACTION_META[action] ?? { label: action.charAt(0).toUpperCase() + action.slice(1), icon: 'i-lucide-circle', color: 'neutral' as UiColor, variant: 'outline' as const }
@@ -515,7 +508,7 @@ async function sendReply() {
   const idempotencyKey = activeReplyAttemptKey()
   replySaving.value = true
   try {
-    await dashboardApi<{ thread: ThreadDetail; availableActions: string[] }>(
+    await dashboardApi<{ thread: ThreadDetail }>(
       `/api/dashboard/sites/${siteId}/guest-threads/${props.threadId}/operations/reply`,
       {
       method: 'POST',
@@ -546,7 +539,7 @@ async function runOperationalAction(action: string) {
   const idempotencyKey = activeAttemptMapKey(operationAttemptKeys, attemptName)
   operationActionPending.value = action
   try {
-    await dashboardApi<{ thread: ThreadDetail; availableActions: string[] }>(
+    await dashboardApi<{ thread: ThreadDetail }>(
       `/api/dashboard/sites/${siteId}/guest-threads/${threadId}/operations/${action}`,
       {
       method: 'POST',
@@ -575,7 +568,7 @@ async function retryDelivery(deliveryId: string) {
   const idempotencyKey = activeAttemptMapKey(retryAttemptKeys, attemptName)
   retryingDeliveryId.value = deliveryId
   try {
-    await dashboardApi<{ thread: ThreadDetail; availableActions: string[] }>(
+    await dashboardApi<{ thread: ThreadDetail }>(
       `/api/dashboard/sites/${siteId}/guest-threads/${threadId}/operations/retry_delivery`,
       {
       method: 'POST',

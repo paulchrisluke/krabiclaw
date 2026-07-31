@@ -59,6 +59,13 @@ interface Domain {
 }
 interface DomainEvent { id: string; domain: string | null; event_type: string; message: string; created_at: string }
 
+const isDomainsResponse = (value: unknown): value is { domains: Domain[]; events: DomainEvent[] } =>
+  isRecord(value)
+  && Array.isArray(value.domains)
+  && value.domains.every(domain => isRecord(domain) && typeof domain.id === 'string' && typeof domain.domain === 'string')
+  && Array.isArray(value.events)
+  && value.events.every(event => isRecord(event) && typeof event.id === 'string' && typeof event.event_type === 'string')
+
 const domains = ref<Domain[]>([])
 const domainEvents = ref<DomainEvent[]>([])
 const domainSearch = ref('')
@@ -69,7 +76,10 @@ async function loadDomains() {
   domainsLoading.value = true
   try {
     const q = domainSearch.value.trim() ? `?q=${encodeURIComponent(domainSearch.value.trim())}` : ''
-    const res = await applicationFetch<{ domains: Domain[]; events: DomainEvent[] }>(`/api/admin/domains${q}`)
+    const res = await applicationFetch<{ domains: Domain[]; events: DomainEvent[] }>(
+      `/api/admin/domains${q}`,
+      { validate: isDomainsResponse },
+    )
     domains.value = res.domains ?? []
     domainEvents.value = res.events ?? []
   } catch {

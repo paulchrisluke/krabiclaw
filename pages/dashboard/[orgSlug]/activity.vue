@@ -237,10 +237,19 @@ async function fetchEvents(before?: string) {
 }
 
 async function loadMore() {
+  if (loadingMore.value) return
   if (!nextCursor.value) return
+  // Capture the key/cursor before awaiting — if a filter changes while this
+  // request is in flight, eventsKey changes and the main useAsyncData watch
+  // resets events/nextCursor to the new filter's first page. Applying this
+  // request's (now-stale) result afterward would append old-filter events
+  // onto the new list and clobber the new cursor.
+  const requestedKey = eventsKey.value
+  const cursor = nextCursor.value
   loadingMore.value = true
   try {
-    const res = await fetchEvents(nextCursor.value)
+    const res = await fetchEvents(cursor)
+    if (requestedKey !== eventsKey.value) return
     events.value = [...events.value, ...res.events]
     nextCursor.value = res.nextCursor
   } catch (err) {
@@ -250,16 +259,28 @@ async function loadMore() {
   }
 }
 
+// Fixed, explicit zone/locale rather than the host's — Date.toDateString(),
+// getFullYear(), and Intl.DateTimeFormat(undefined, ...) all read the running
+// process's local time zone, which differs between the SSR server and the
+// client's browser and produces mismatched "Today"/"Yesterday" grouping (and
+// a hydration mismatch) for the same event.
+const ACTIVITY_TIME_ZONE = 'UTC'
+const dateKeyFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: ACTIVITY_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' })
+const dateKey = (date: Date) => dateKeyFormatter.format(date)
+
 function groupLabel(dateStr: string) {
   const date = new Date(dateStr)
   const now = new Date()
-  const isSameDay = date.toDateString() === now.toDateString()
-  const yesterday = new Date(now)
-  yesterday.setDate(now.getDate() - 1)
-  if (isSameDay) return 'Today'
-  if (date.toDateString() === yesterday.toDateString()) return 'Yesterday'
-  const sameYear = date.getFullYear() === now.getFullYear()
-  return new Intl.DateTimeFormat(undefined, sameYear ? { month: 'long', day: 'numeric' } : { month: 'long', year: 'numeric' }).format(date)
+  const todayKey = dateKey(now)
+  const key = dateKey(date)
+  if (key === todayKey) return 'Today'
+  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+  if (key === dateKey(yesterday)) return 'Yesterday'
+  const sameYear = key.slice(0, 4) === todayKey.slice(0, 4)
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: ACTIVITY_TIME_ZONE,
+    ...(sameYear ? { month: 'long', day: 'numeric' } : { month: 'long', year: 'numeric' }),
+  }).format(date)
 }
 
 const groups = computed(() => {

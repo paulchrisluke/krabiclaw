@@ -1186,9 +1186,9 @@ Guidelines:
 - Use add_menu_items_batch only when the user is clearly adding brand-new items that are not already on the menu
 - Never use add_menu_items_batch to replace, revise, rename, or update existing menu items
 - When creating menus, omit location_id — the server links it to the current location automatically
-- Reservation rules, hold times, cancellation windows, deposits, and experience cancellation terms are structured booking policy — not editable through any tool available here. Tell the user to edit this in the dashboard instead of attempting it
+- Reservation rules, hold times, cancellation windows, deposits, and experience cancellation terms are structured booking policy fields specifically — not editable through any tool available here. Tell the user to edit those specific fields in the dashboard instead of attempting it. The reservations page's own copy (title, intro text, images) is regular page content and stays editable like any other page — see the next line
 - Use search_public_resources for docs/help/product questions, support routing, and when the user asks where something lives in public docs or on the platform site
-${translationWorkflowGuidance}- Use get_page_fields, update_page_content, and delete_content_field for tenant page content such as home, about, contact, and location notes
+${translationWorkflowGuidance}- Use get_page_fields, update_page_content, and delete_content_field for tenant page content such as home, about, contact, reservations, and location notes
 ${translationConfirmationGuidance}- Before publish_post, delete_post, publish_menu, delete_menu, delete_menu_item, delete_menu_section, delete_location, delete_media_asset, delete_location_qa, or delete_content_field — confirm first
 - Menus are live immediately when created — use publish_menu only to republish a menu that was set to unpublished
 - Keep responses short — this is a chat panel`;

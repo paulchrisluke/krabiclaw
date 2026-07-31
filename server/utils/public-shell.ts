@@ -81,7 +81,7 @@ export async function loadPublicShellSource(
           siteId,
           error: error instanceof Error ? error.message : String(error),
         })
-        const deletion = cache.delete(cacheKey).catch(deleteError => {
+        const deletion = cache.delete(cacheKey).catch((deleteError: unknown) => {
           console.warn('[public-resource-cache] corrupt shell deletion failed', {
             siteId,
             error: String(deleteError),

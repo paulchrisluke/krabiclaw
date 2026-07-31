@@ -90,6 +90,22 @@ interface SiteTestimonial {
   status: 'pending' | 'approved' | 'rejected'
 }
 
+const isSiteTestimonial = (value: unknown): value is SiteTestimonial =>
+  isRecord(value)
+  && typeof value.id === 'string'
+  && typeof value.author_name === 'string'
+  && typeof value.rating === 'number'
+  && typeof value.content === 'string'
+  && typeof value.status === 'string'
+const isTestimonialsResponse = (value: unknown): value is { reviews: SiteTestimonial[] } =>
+  isRecord(value) && Array.isArray(value.reviews) && value.reviews.every(isSiteTestimonial)
+const isReviewCreatedResponse = (value: unknown): value is { id: string; created: true } =>
+  isRecord(value) && typeof value.id === 'string' && value.created === true
+const isReviewUpdatedResponse = (value: unknown): value is { updated: true } =>
+  isRecord(value) && value.updated === true
+const isReviewDeletedResponse = (value: unknown): value is { review_id: string; deleted: true } =>
+  isRecord(value) && typeof value.review_id === 'string' && value.deleted === true
+
 const siteId = await useDashboardSiteId()
 const route = useRoute()
 const toast = useToast()
@@ -124,7 +140,10 @@ const { data, pending, refresh } = await useAsyncData(
       if (context.site?.id !== siteId) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
       return { reviews: await listSiteReviews(db, siteId) as unknown as SiteTestimonial[] }
     }
-    return await dashboardApi<{ reviews: SiteTestimonial[] }>(`/api/editor/sites/${siteId}/reviews`)
+    return await dashboardApi<{ reviews: SiteTestimonial[] }>(
+      `/api/editor/sites/${siteId}/reviews`,
+      { validate: isTestimonialsResponse },
+    )
   },
 )
 const testimonials = computed(() => data.value?.reviews ?? [])
@@ -152,8 +171,19 @@ async function save() {
   saving.value = true
   try {
     const body = { ...form, title: form.title || null, original_review_date: form.original_review_date || null, original_reference: form.original_reference || null }
-    if (editingId.value) await dashboardApi(`/api/editor/sites/${siteId}/reviews/${editingId.value}`, { method: 'PATCH', body })
-    else await dashboardApi(`/api/editor/sites/${siteId}/reviews`, { method: 'POST', body })
+    if (editingId.value) {
+      await dashboardApi(`/api/editor/sites/${siteId}/reviews/${editingId.value}`, {
+        method: 'PATCH',
+        body,
+        validate: isReviewUpdatedResponse,
+      })
+    } else {
+      await dashboardApi(`/api/editor/sites/${siteId}/reviews`, {
+        method: 'POST',
+        body,
+        validate: isReviewCreatedResponse,
+      })
+    }
     reset()
     await refresh()
     toast.add({ description: 'Testimonial saved', color: 'success' })
@@ -166,7 +196,10 @@ async function save() {
 
 async function remove(testimonial: SiteTestimonial) {
   if (!confirm(`Delete the testimonial from ${testimonial.author_name}?`)) return
-  await dashboardApi(`/api/editor/sites/${siteId}/reviews/${testimonial.id}`, { method: 'DELETE' })
+  await dashboardApi(`/api/editor/sites/${siteId}/reviews/${testimonial.id}`, {
+    method: 'DELETE',
+    validate: isReviewDeletedResponse,
+  })
   if (editingId.value === testimonial.id) reset()
   await refresh()
 }

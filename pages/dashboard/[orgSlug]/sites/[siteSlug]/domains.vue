@@ -331,10 +331,12 @@ async function addDomain() {
         include_www: true,
         acknowledge_live_cutover: addForm.acknowledge_live_cutover,
       },
-      validate: (value): value is AddDomainResponse =>
-        isDomainsResponse(value)
-        && Array.isArray(value.requested_hostnames)
-        && value.requested_hostnames.every(hostname => typeof hostname === 'string'),
+      validate: (value): value is AddDomainResponse => {
+        const requestedHostnames = isRecord(value) ? value.requested_hostnames : null
+        return isDomainsResponse(value)
+          && Array.isArray(requestedHostnames)
+          && requestedHostnames.every(hostname => typeof hostname === 'string')
+      },
     })
     domainGroups.value = mergeGroups(domainGroups.value, response.domain_groups ?? [])
     const newGroup = response.domain_groups?.[0]
