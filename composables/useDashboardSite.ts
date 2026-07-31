@@ -95,14 +95,14 @@ export function useDashboardSite() {
   })
   const pending = computed(() => contextKey.value ? pendingByScope.value[contextKey.value] ?? false : false)
 
-  async function refresh() {
+  async function refresh(signal?: AbortSignal) {
     const requestScope = scope.value
     const requestKey = contextKey.value
     if (!requestScope || !requestKey) {
       state.value = null
       return null
     }
-    const existing = import.meta.client ? dashboardContextReads.get(requestKey) : undefined
+    const existing = import.meta.client && !signal ? dashboardContextReads.get(requestKey) : undefined
     if (existing) return await existing
     pendingByScope.value = { ...pendingByScope.value, [requestKey]: true }
     const pendingRead = (import.meta.server
@@ -112,7 +112,23 @@ export function useDashboardSite() {
           const { loadDashboardContext } = await import('~/server/utils/dashboard-context-service')
           return await loadDashboardContext(event, requestScope) as DashboardContextResponse
         })()
-      : dashboardFetch<DashboardContextResponse>('/api/dashboard/context', requestScope))
+      : dashboardFetch<DashboardContextResponse>('/api/dashboard/context', requestScope, {
+          signal,
+          validate: (value): value is DashboardContextResponse =>
+            isRecord(value)
+            && value.success === true
+            && (value.organization === null || isRecord(value.organization))
+            && (value.site === null || isRecord(value.site))
+            && Array.isArray(value.sites)
+            && Array.isArray(value.locations)
+            && typeof value.managedServiceEnabled === 'boolean'
+            && (
+              value.siteAccess === null
+              || value.siteAccess === 'organization'
+              || value.siteAccess === 'site'
+              || value.siteAccess === 'location'
+            ),
+        }))
       .then((response) => {
         if (!response?.success || !Array.isArray(response.sites) || !Array.isArray(response.locations)) {
           throw new ApiClientError('Dashboard context response did not match its contract', 502, 'INVALID_API_RESPONSE', null)
@@ -122,11 +138,11 @@ export function useDashboardSite() {
       })
       .finally(() => {
         pendingByScope.value = { ...pendingByScope.value, [requestKey]: false }
-        if (import.meta.client && dashboardContextReads.get(requestKey) === pendingRead) {
+        if (import.meta.client && !signal && dashboardContextReads.get(requestKey) === pendingRead) {
           dashboardContextReads.delete(requestKey)
         }
       })
-    if (import.meta.client) dashboardContextReads.set(requestKey, pendingRead)
+    if (import.meta.client && !signal) dashboardContextReads.set(requestKey, pendingRead)
     return await pendingRead
   }
 
@@ -141,6 +157,7 @@ export function useDashboardSite() {
   return {
     state,
     scope,
+    contextKey,
     pending,
     organization,
     site,

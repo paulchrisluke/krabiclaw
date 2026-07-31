@@ -250,23 +250,63 @@ const readinessScore = computed(() => {
 
 // ─── Load context ─────────────────────────────────────────────────────────────
 
-// Step 1 — fast org/site resolution (works even when site doesn't exist yet)
 const loadContext = async () => {
   contextError.value = null
   try {
     const response = await applicationFetch<{
       success: boolean
-      organization?: { id: string; slug: string; name: string } | null
-      site?: ApiRecord | null
-      locations?: Array<{ id: string; slug: string; title: string; is_primary: boolean }>
-    }>('/api/dashboard/context')
+      context: {
+        organization?: { id: string; slug: string; name: string } | null
+        site?: ApiRecord | null
+        locations?: Array<{ id: string; slug: string; title: string; is_primary: boolean }>
+      }
+      previewToken: string | null
+      checklist: {
+        items: { business_info: boolean; hero_image: boolean; core_offering: boolean; story: boolean; post: boolean }
+      }
+    }>('/api/dashboard/onboarding-context', {
+      validate: (value): value is {
+        success: boolean
+        context: {
+          organization?: { id: string; slug: string; name: string } | null
+          site?: ApiRecord | null
+          locations?: Array<{ id: string; slug: string; title: string; is_primary: boolean }>
+        }
+        previewToken: string | null
+        checklist: {
+          items: { business_info: boolean; hero_image: boolean; core_offering: boolean; story: boolean; post: boolean }
+        }
+      } => {
+        if (!isRecord(value)
+          || value.success !== true
+          || !isRecord(value.context)
+          || (value.previewToken !== null && typeof value.previewToken !== 'string')
+          || !isRecord(value.checklist)
+          || !isRecord(value.checklist.items)) {
+          return false
+        }
+        const items = value.checklist.items
+        return ['business_info', 'hero_image', 'core_offering', 'story', 'post']
+          .every(key => typeof items[key] === 'boolean')
+      },
+    })
 
-    if (response.organization) orgSlug.value = response.organization.slug
-    if (response.site) {
-      siteData.value = response.site
-      siteLocations.value = response.locations ?? []
+    if (response.context.organization) orgSlug.value = response.context.organization.slug
+    if (response.context.site) {
+      siteData.value = response.context.site
+      siteLocations.value = response.context.locations ?? []
       const primary = siteLocations.value.find(l => l.is_primary) ?? siteLocations.value[0]
       if (primary) selectedLocationId.value = primary.id
+    }
+    previewToken.value = response.previewToken ?? ''
+    const items = response.checklist.items
+    readiness.value = {
+      details: items.business_info ? 'complete' : 'missing',
+      hero: items.hero_image ? 'complete' : 'missing',
+      offer: items.core_offering ? 'complete' : 'missing',
+      brand: items.story ? 'complete' : items.business_info ? 'attention' : 'missing',
+      trust: items.post ? 'complete' : items.business_info ? 'attention' : 'missing',
+      launch: (items.business_info && items.hero_image && items.core_offering) ? 'attention' : 'missing',
     }
   } catch (error) {
     contextError.value = normalizeApiError(error, 'Workspace context failed')
@@ -276,38 +316,12 @@ const loadContext = async () => {
   }
 }
 
-// Step 2 — editor context includes the signed preview token needed to render draft sites
-const loadPreviewToken = async () => {
-  if (!siteId.value) return
-  const res = await applicationFetch<{ context: { previewToken: string } }>(`/api/editor/sites/${siteId.value}/context`)
-  if (res.context?.previewToken) previewToken.value = res.context.previewToken
-}
-
-const loadReadiness = async () => {
-  if (!siteId.value) return
-
-  const data = await applicationFetch<{
-    items: { business_info: boolean; hero_image: boolean; core_offering: boolean; story: boolean; post: boolean }
-  }>(`/api/dashboard/onboarding/checklist?siteId=${siteId.value}`)
-
-  readiness.value = {
-    details: data.items.business_info ? 'complete' : 'missing',
-    hero: data.items.hero_image ? 'complete' : 'missing',
-    offer: data.items.core_offering ? 'complete' : 'missing',
-    brand: data.items.story ? 'complete' : data.items.business_info ? 'attention' : 'missing',
-    trust: data.items.post ? 'complete' : data.items.business_info ? 'attention' : 'missing',
-    launch: (data.items.business_info && data.items.hero_image && data.items.core_offering) ? 'attention' : 'missing',
-  }
-}
-
 const retryContext = async () => {
   contextRetrying.value = true
   try {
     await loadContext()
-    await Promise.all([loadPreviewToken(), loadReadiness()])
   } catch (error) {
-    contextError.value ??= normalizeApiError(error, 'Workspace readiness failed')
-    throw contextError.value
+    contextError.value ??= normalizeApiError(error, 'Workspace context failed')
   } finally {
     contextRetrying.value = false
   }
@@ -332,8 +346,7 @@ const onSelectLocation = (id: string) => {
 const onSiteCreated = async (_orgSlug: string | null) => {
   draftPreview.value = null
   await retryContext()
-    .then(() => { previewReloadToken.value = Date.now() })
-    .catch(() => {})
+  if (!contextError.value) previewReloadToken.value = Date.now()
 }
 
 const onDraftSaved = (draft: {
@@ -365,7 +378,7 @@ onMounted(async () => {
   mobilePreviewQuery.addEventListener('change', updateMobilePreviewViewport)
   stopMobilePreviewViewportListener = () => mobilePreviewQuery.removeEventListener('change', updateMobilePreviewViewport)
 
-  await retryContext().catch(() => {})
+  await retryContext()
 
   if (route.query.payment === 'cancelled') {
     toast.add({ title: 'Payment cancelled', description: 'Your subscription was not completed.', color: 'warning' })

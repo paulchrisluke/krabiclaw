@@ -1,4 +1,5 @@
-// Site-wide chrome data (locations, config, menu, experiences list) for
+// Site-wide chrome data (brand, navigation flags, location summaries, locales,
+// and persistent business metadata) for
 // components that persist across client-side navigation — SayaHeader,
 // SayaFooter, app.vue, and anything else that lives outside <NuxtPage> or
 // otherwise doesn't remount per route.
@@ -10,10 +11,9 @@
 // can't, because there's no "another page's data" — the response never
 // depended on the page in the first place.
 //
-// Page-specific content (photosList, qaList, blogPost, reviewsList, etc.)
-// lives in useBootstrap(), which every page/child-component `await`s so
-// Suspense blocks the route swap until the new page's real content is in
-// hand. See useBootstrap.ts.
+// Page-specific content and collections live in useBootstrap(). Client
+// navigation renders a destination-local loading state while that keyed page
+// request is in flight.
 import { useBootstrapKey, useBootstrapUrl, type BootstrapParams } from "~/composables/useBootstrapParams";
 
 interface ShellSiteInfo {
@@ -29,7 +29,7 @@ interface ShellSiteInfo {
 }
 
 interface SiteShellPayload {
-  site: ShellSiteInfo | null;
+  site: ShellSiteInfo;
   locations: ApiRecord[];
   config: Record<string, string>;
   googleBusiness: ApiRecord;
@@ -40,18 +40,29 @@ interface SiteShellPayload {
 
 const isSiteShellPayload = (value: unknown): value is SiteShellPayload =>
   isRecord(value)
-  && (
-    value.site === null
-    || (
-      isRecord(value.site)
-      && (typeof value.site.brand_name === 'string' || value.site.brand_name === null)
-      && (typeof value.site.vertical === 'string' || value.site.vertical === null)
-    )
-  )
+  && isRecord(value.site)
+  && (typeof value.site.brand_name === 'string' || value.site.brand_name === null)
+  && (typeof value.site.vertical === 'string' || value.site.vertical === null)
   && Array.isArray(value.locations)
+  && value.locations.every(location =>
+    isRecord(location)
+    && typeof location.id === 'string'
+    && typeof location.slug === 'string'
+    && typeof location.title === 'string',
+  )
   && isRecord(value.config)
   && isRecord(value.googleBusiness)
+  && (value.googleBusiness.business === null || isRecord(value.googleBusiness.business))
+  && Array.isArray(value.googleBusiness.reviews)
+  && Array.isArray(value.googleBusiness.media)
+  && Array.isArray(value.googleBusiness.posts)
   && Array.isArray(value.locales)
+  && value.locales.every(locale =>
+    isRecord(locale)
+    && typeof locale.code === 'string'
+    && typeof locale.label === 'string'
+    && typeof locale.is_source === 'boolean',
+  )
   && typeof value.hasExperiences === 'boolean'
   && typeof value.hasMenu === 'boolean'
 

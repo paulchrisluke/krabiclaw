@@ -78,7 +78,10 @@ onMounted(async () => {
       loading.value = false
       return
     }
-    const response = await applicationFetch<{ content?: string }>(`/api/admin/content/${page}`)
+    const response = await applicationFetch<{ content?: string }>(`/api/admin/content/${page}`, {
+      validate: (value): value is { content?: string } =>
+        isRecord(value) && (value.content === undefined || typeof value.content === 'string'),
+    })
     content.value = response.content ?? ''
   } catch (err) {
     console.error('Failed to load content:', err)

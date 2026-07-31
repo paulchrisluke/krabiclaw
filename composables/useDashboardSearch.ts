@@ -68,6 +68,7 @@ export function useDashboardSearch() {
     try {
       const response = await dashboardApi<SearchResponse>('/api/public/search', {
         signal: controller.signal,
+        validate: validateApiShape({ results: 'array' }),
         query: {
           q: normalized,
           surface: 'dashboard',

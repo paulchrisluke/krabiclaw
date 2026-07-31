@@ -21,7 +21,21 @@ export const usePlans = () => {
       ])
       return await getCachedPlans(cloudflareEnv(requestEvent))
     }
-    return await applicationFetch<Plan[]>('/api/billing/plans')
+    return await applicationFetch<Plan[]>('/api/billing/plans', {
+      validate: validateApiArrayItems<Plan>({
+        id: 'string',
+        name: 'string',
+        tagline: 'string',
+        highlighted: 'boolean',
+        prices: 'array',
+        features: 'array',
+        limits: 'object',
+        cta: {
+          label: 'string',
+          href: 'string',
+        },
+      }),
+    })
   }, {
     server: true,
     getCachedData(key) {

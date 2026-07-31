@@ -61,7 +61,9 @@ const deletingPostId = ref<string | null>(null)
 
 async function loadBlogPosts() {
   try {
-    const res = await applicationFetch<{ posts: BlogPost[] }>('/api/admin/blog/posts')
+    const res = await applicationFetch<{ posts: BlogPost[] }>('/api/admin/blog/posts', {
+      validate: validateApiShape({ posts: 'array' }),
+    })
     blogPosts.value = res.posts ?? []
     blogError.value = ''
   } catch {

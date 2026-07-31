@@ -164,7 +164,7 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       location: null,
       experience: null,
       menu: false,
-      data: null,
+      data: "reviews",
       blogSlug: null,
     };
   if (path.startsWith("/posts"))
@@ -173,7 +173,7 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       location: null,
       experience: null,
       menu: false,
-      data: null,
+      data: "posts",
       blogSlug: null,
     };
   if (path.startsWith("/experiences"))

@@ -24,3 +24,8 @@ test('global experiences route keeps the site-wide collection unscoped', () => {
     blogSlug: null,
   })
 })
+
+test('global reviews and posts routes request their route datasets', () => {
+  assert.equal(getBootstrapParams('/reviews').data, 'reviews')
+  assert.equal(getBootstrapParams('/posts').data, 'posts')
+})

@@ -259,7 +259,27 @@ const mobileMoreButtonElement = ref<HTMLElement | null>(null)
 const mobileMoreSheetRef = ref<HTMLElement | null>(null)
 const mobileMoreFocusReturn = ref<HTMLElement | null>(null)
 
-const dashboardContextError = ref<unknown>(null)
+const dashboardContextErrors = shallowRef<Record<string, unknown>>({})
+const dashboardContextError = computed(() =>
+  dashboard.contextKey.value
+    ? dashboardContextErrors.value[dashboard.contextKey.value] ?? null
+    : null,
+)
+let dashboardContextController: AbortController | null = null
+
+function setDashboardContextError(scopeKey: string, error: unknown) {
+  if (!scopeKey) return
+  dashboardContextErrors.value = { ...dashboardContextErrors.value, [scopeKey]: error }
+}
+
+function clearDashboardContextError(scopeKey: string) {
+  if (!scopeKey || !(scopeKey in dashboardContextErrors.value)) return
+  dashboardContextErrors.value = Object.fromEntries(
+    Object.entries(dashboardContextErrors.value)
+      .filter(([key]) => key !== scopeKey),
+  )
+}
+
 const dashboardContextErrorMessage = computed(() =>
   getErrorMessage(dashboardContextError.value, 'Dashboard context request failed'),
 )
@@ -270,11 +290,20 @@ const dashboardContextRequestId = computed(() =>
 )
 
 async function retryDashboardContext() {
-  dashboardContextError.value = null
+  const requestedScope = dashboard.contextKey.value
+  if (!requestedScope) return
+  clearDashboardContextError(requestedScope)
+  dashboardContextController?.abort()
+  const controller = new AbortController()
+  dashboardContextController = controller
   try {
-    await dashboard.refresh()
+    await dashboard.refresh(controller.signal)
   } catch (error) {
-    dashboardContextError.value = error
+    if (!controller.signal.aborted && dashboard.contextKey.value === requestedScope) {
+      setDashboardContextError(requestedScope, error)
+    }
+  } finally {
+    if (dashboardContextController === controller) dashboardContextController = null
   }
 }
 
@@ -775,12 +804,21 @@ watch(
     ? `${dashboard.scope.value.orgSlug}:${dashboard.scope.value.siteSlug ?? ''}`
     : '',
   async (nextScope, previousScope) => {
-    if (!nextScope || nextScope === previousScope || dashboard.state.value) return
-    dashboardContextError.value = null
+    dashboardContextController?.abort()
+    dashboardContextController = null
+    if (!nextScope) return
+    clearDashboardContextError(nextScope)
+    if (nextScope === previousScope || dashboard.state.value) return
+    const controller = new AbortController()
+    dashboardContextController = controller
     try {
-      await dashboard.refresh()
+      await dashboard.refresh(controller.signal)
     } catch (error) {
-      dashboardContextError.value = error
+      if (!controller.signal.aborted && dashboard.contextKey.value === nextScope) {
+        setDashboardContextError(nextScope, error)
+      }
+    } finally {
+      if (dashboardContextController === controller) dashboardContextController = null
     }
   },
 )
@@ -866,10 +904,13 @@ function onMobileMoreKeydown(event: KeyboardEvent) {
 
 // Load dashboard context during SSR so nav links render stable org-scoped routes.
 if ((routeName.value.startsWith('dashboard') || isAdminRoute.value) && !dashboard.state.value) {
+  const requestedScope = dashboard.contextKey.value
   try {
     await dashboard.refresh()
   } catch (error) {
-    dashboardContextError.value = error
+    if (requestedScope && dashboard.contextKey.value === requestedScope) {
+      setDashboardContextError(requestedScope, error)
+    }
   }
 }
 
@@ -882,6 +923,11 @@ onMounted(async () => {
   if (activeSiteId.value) {
     trackDashboardVisited(scope.value, activeSiteId.value)
   }
+})
+
+onBeforeUnmount(() => {
+  dashboardContextController?.abort()
+  dashboardContextController = null
 })
 
 async function stopImpersonating() {

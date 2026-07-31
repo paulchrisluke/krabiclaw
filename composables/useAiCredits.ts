@@ -32,7 +32,9 @@ export const useAiCredits = (siteId: Ref<string | null> | ComputedRef<string | n
     }
     try {
       error.value = null
-      const res = await dashboardApi<{ balance: number; total: number }>(`/api/ai/${siteId.value}/credits`)
+      const res = await dashboardApi<{ balance: number; total: number }>(`/api/ai/${siteId.value}/credits`, {
+        validate: validateApiShape({ balance: 'number', total: 'number' }),
+      })
       balance.value = res.balance
       total.value = res.total
     } catch (fetchError) {

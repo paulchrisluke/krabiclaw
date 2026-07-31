@@ -139,34 +139,18 @@ interface PublicBase {
     seo_description: string | null;
     canonical_url: string | null;
     robots: string | null;
+    source_locale: string | null;
   };
 }
 
 const publicBaseByRequest = new WeakMap<H3Event, Map<string, Promise<PublicBase>>>();
-
-interface PublicCommonData {
-  locRows: { results: Record<string, unknown>[] }
-  configRows: { results: { key: string; value: string }[] }
-  localeRows: {
-    results: {
-      locale: string
-      label: string | null
-      is_source: number
-      status: string
-    }[]
-  }
-  experienceCountVal: number
-  hasMenu: boolean
-}
-
-const publicCommonByRequest = new WeakMap<H3Event, Map<string, PublicCommonData>>()
 const publicShellReadsByRequest = new WeakMap<H3Event, Map<string, Promise<unknown>>>()
+const publicPageReadsByRequest = new WeakMap<H3Event, Map<string, Promise<unknown>>>()
 
-const publicCommonKey = (
-  siteId: string,
-  locale: string | undefined,
-  previewAuthorized: boolean,
-) => `${siteId}:${locale ?? ''}:${previewAuthorized ? 'preview' : 'public'}`
+interface PublicBootstrapLoadOptions {
+  mutateResponseHeaders?: boolean
+  signal?: AbortSignal
+}
 
 /**
  * Request-scoped site identity. Shell and page SSR providers share this
@@ -195,7 +179,13 @@ export function loadPublicBase(
               s.brand_description, COALESCE(ma_logo.public_url, s.logo_url) AS logo_url,
               json_extract(s.settings, '$.favicon_url') AS favicon_url,
               ma_og.public_url AS og_image_url,
-              s.seo_title, s.seo_description, s.canonical_url, s.robots
+              s.seo_title, s.seo_description, s.canonical_url, s.robots,
+              (SELECT sl.locale
+                 FROM site_locales sl
+                WHERE sl.organization_id = s.organization_id
+                  AND sl.site_id = s.id
+                  AND sl.is_source = 1
+                LIMIT 1) AS source_locale
          FROM sites s
          LEFT JOIN media_assets ma_logo ON s.logo_asset_id = ma_logo.id AND ma_logo.status = 'active'
          LEFT JOIN media_assets ma_og ON s.og_image_asset_id = ma_og.id AND ma_og.status = 'active'
@@ -296,8 +286,9 @@ export async function loadPublicBootstrap(
   event: H3Event,
   siteId: string,
   query: Record<string, string | undefined>,
-  options: { mutateResponseHeaders?: boolean } = {},
+  options: PublicBootstrapLoadOptions = {},
 ) {
+  options.signal?.throwIfAborted();
   const mutateResponseHeaders = options.mutateResponseHeaders ?? true;
   const env = cloudflareEnv(event);
   const db = env.DB;
@@ -308,6 +299,7 @@ export async function loadPublicBootstrap(
   if (rawToken && env.PREVIEW_SECRET) {
     isPreviewAuthorized = await verifyPreviewToken(String(env.PREVIEW_SECRET), siteId, rawToken);
   }
+  options.signal?.throwIfAborted();
 
   if (mutateResponseHeaders) {
     setHeader(
@@ -382,6 +374,7 @@ export async function loadPublicBootstrap(
     const kv = (env as any).SITE_CACHE as KVNamespace | undefined;
     if (kv) {
       const cached = await getBootstrapCache(kv, cacheKey);
+      options.signal?.throwIfAborted();
       if (cached) {
         try {
           if (mutateResponseHeaders) setHeader(event, "x-bootstrap-cache", "HIT");
@@ -408,13 +401,10 @@ export async function loadPublicBootstrap(
         )
       : Promise.resolve(null),
   ]);
+  options.signal?.throwIfAborted();
 
   const orgId = site.organization_id;
   const locationId = locationRow?.id;
-  const commonKey = publicCommonKey(siteId, locale, isPreviewAuthorized);
-  const sharedCommon = contract === 'page'
-    ? publicCommonByRequest.get(event)?.get(commonKey)
-    : undefined;
 
   // Pages that render the sitewide reviews list
   const needsGlobalReviews =
@@ -460,10 +450,7 @@ export async function loadPublicBootstrap(
     return i;
   };
 
-  // Shell owns common location/config/locale/capability reads. During SSR the
-  // page service reuses the shell's request-scoped result instead of repeating
-  // those statements.
-  if (!sharedCommon) idxLoc = push(
+  idxLoc = push(
     needsLocationHeroMedia
       ? `SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.email, bl.website_url, bl.maps_url,
                  bl.latitude, bl.longitude, bl.opening_hours, bl.special_hours, bl.timezone, bl.rating, bl.review_count,
@@ -497,12 +484,12 @@ export async function loadPublicBootstrap(
     [orgId, siteId],
   );
 
-  if (!sharedCommon) idxConfig = push(
+  if (contract === 'shell') idxConfig = push(
     `SELECT key, value FROM site_config WHERE organization_id = ? AND site_id = ?`,
     [orgId, siteId],
   );
 
-  if (!sharedCommon) idxLocale = push(
+  if (contract === 'shell') idxLocale = push(
     `SELECT locale, label, is_source, status
      FROM site_locales
      WHERE organization_id = ? AND site_id = ?
@@ -511,11 +498,11 @@ export async function loadPublicBootstrap(
     [orgId, siteId],
   );
 
-  if (!sharedCommon) idxExpCount = push(
+  if (contract === 'shell') idxExpCount = push(
     `SELECT COUNT(*) AS cnt FROM experiences WHERE site_id = ? AND status != 'inactive'`,
     [siteId],
   );
-  if (!sharedCommon && contract === 'shell') {
+  if (contract === 'shell') {
     idxHasMenu = push(
       `SELECT 1 AS present
        FROM menus
@@ -778,13 +765,15 @@ export async function loadPublicBootstrap(
     );
 
   // Single D1 round trip
+  options.signal?.throwIfAborted();
   const batchResults = await executeBatch(db, batchStmts);
+  options.signal?.throwIfAborted();
 
   // Extract batch results by tracked index
-  const locRows = sharedCommon?.locRows
-    ?? batchResults[idxLoc] as { results: Record<string, unknown>[] };
-  const configRows = sharedCommon?.configRows
-    ?? batchResults[idxConfig] as { results: { key: string; value: string }[] };
+  const locRows = batchResults[idxLoc] as { results: Record<string, unknown>[] };
+  const configRows = idxConfig >= 0
+    ? batchResults[idxConfig] as { results: { key: string; value: string }[] }
+    : { results: [] as { key: string; value: string }[] };
   const reviewRows =
     idxReviews >= 0
       ? (batchResults[idxReviews] as { results: Record<string, unknown>[] })
@@ -805,33 +794,29 @@ export async function loadPublicBootstrap(
     idxQa >= 0
       ? (batchResults[idxQa] as { results: Record<string, unknown>[] })
       : { results: [] as Record<string, unknown>[] };
-  const localeRows = sharedCommon?.localeRows
-    ?? batchResults[idxLocale] as PublicCommonData['localeRows'];
-  const experienceCountVal = sharedCommon?.experienceCountVal
-    ?? (
+  const localeRows = idxLocale >= 0
+    ? batchResults[idxLocale] as {
+        results: {
+          locale: string
+          label: string | null
+          is_source: number
+          status: string
+        }[]
+      }
+    : { results: [] };
+  const experienceCountVal =
+    (
       batchResults[idxExpCount]?.results?.[0] as
         | { cnt: number }
         | undefined
     )?.cnt
     ?? 0;
-  const hasMenu = sharedCommon?.hasMenu
-    ?? (idxHasMenu >= 0 && Boolean(batchResults[idxHasMenu]?.results?.length));
-  if (contract === 'shell') {
-    let requestCommon = publicCommonByRequest.get(event);
-    if (!requestCommon) {
-      requestCommon = new Map();
-      publicCommonByRequest.set(event, requestCommon);
-    }
-    requestCommon.set(commonKey, {
-      locRows,
-      configRows,
-      localeRows,
-      experienceCountVal,
-      hasMenu,
-    });
-  }
+  const hasMenu =
+    idxHasMenu >= 0 && Boolean(batchResults[idxHasMenu]?.results?.length);
 
-  const sourceLocale = (localeRows.results ?? []).find((l) => l.is_source)?.locale;
+  const sourceLocale =
+    site.source_locale
+    ?? (localeRows.results ?? []).find((l) => l.is_source)?.locale;
 
   // Build content rows
   const buildContentRows = (
@@ -1005,6 +990,7 @@ export async function loadPublicBootstrap(
           (batchResults[idxExperiencesList] as { results: Record<string, unknown>[] })?.results ?? []
         ).map(parseExperienceRow)
       : [];
+  options.signal?.throwIfAborted();
   const mediaByExperience = await hydrateMediaAssetsForExperiences(
     db,
     siteId,
@@ -1021,6 +1007,7 @@ export async function loadPublicBootstrap(
     media: mediaByExperience.get(experience.id) ?? [],
   });
   const experiencesWithMedia = experiencesListRaw.map(attachExperienceMedia);
+  options.signal?.throwIfAborted();
   const experiencesList = page === "experiences"
     ? await attachAvailabilitySummaries(db, orgId, siteId, experiencesWithMedia)
     : experiencesWithMedia;
@@ -1037,11 +1024,13 @@ export async function loadPublicBootstrap(
       : null;
   // inactive experiences are never public, at any route — sold_out stays visible
   // with its own messaging (see server/utils/experiences.ts listExperiences).
+  options.signal?.throwIfAborted();
   const experienceDetail =
     experienceDetailRaw && experienceDetailRaw.status !== "inactive"
       ? (await attachAvailabilitySummaries(db, orgId, siteId, [attachExperienceMedia(experienceDetailRaw)]))[0]
       : null;
 
+  options.signal?.throwIfAborted();
   const [globalPublishedPosts, locationPublishedPosts] = await Promise.all([
     needsGlobalPosts ? getPublishedPosts(db, siteId, env, page === "posts" ? 50 : 6) : Promise.resolve([]),
     locationId && dataType === "posts" ? getPublishedPosts(db, siteId, env, 50, locationId) : Promise.resolve([]),
@@ -1185,6 +1174,7 @@ export async function loadPublicBootstrap(
   const needsExperiencePolicies = contract === 'page' && (
     page === 'experiences' || page === 'location' || page === 'menu'
   );
+  options.signal?.throwIfAborted();
   const [reservationPolicies, experiencePolicies] = await Promise.all([
     needsReservationPolicies ? resolveBookingPolicyIndex(db, {
       siteId,
@@ -1198,7 +1188,8 @@ export async function loadPublicBootstrap(
       experiences: experiencePolicyTargets,
     }) : Promise.resolve(null),
   ]);
-  const policyLocale = locale ?? "en";
+  options.signal?.throwIfAborted();
+  const policyLocale = locale ?? sourceLocale;
   const reservationPolicySiteDefault = reservationPolicies
     ? renderBookingPolicySummary(reservationPolicies.site, policyLocale)
     : null;
@@ -1267,6 +1258,7 @@ export async function loadPublicBootstrap(
     const postRow = (batchResults[idxBlogPost] as { results: ApiRecord[] })
       ?.results?.[0];
     if (postRow) {
+      options.signal?.throwIfAborted();
       const components = await resolveContentComponentsMedia(
         db,
         await listContentComponents(db, "blog_post", String(postRow.id), {
@@ -1299,11 +1291,13 @@ export async function loadPublicBootstrap(
     },
   };
   const pagePayload = {
+    kind: page ?? 'home',
     success: true,
     content: contentRows,
     content_blocks: groupContentBlocks(contentRows),
     menu: menuData,
     locationReviews: locationReviewRows?.results ?? [],
+    globalReviews: needsGlobalReviews ? reviewRows.results ?? [] : [],
     reviewsAggregate: dataType === "reviews"
       && locationForAggregate?.last_synced_at
       && locationForAggregate.rating != null
@@ -1320,6 +1314,7 @@ export async function loadPublicBootstrap(
     blogList: dataType === "blog" || page === "home" ? blogList : [],
     blogPost: dataType === "blogPost" ? blogPost : null,
     postsList: dataType === "posts" ? locationPublishedPosts : [],
+    globalPosts: needsGlobalPosts ? globalPublishedPosts : [],
     reservationPolicySiteDefault,
     reservationPolicyByLocation,
     experiencePolicySiteDefault,
@@ -1359,7 +1354,7 @@ export const loadPublicShell = (
   event: H3Event,
   siteId: string,
   query: Pick<Record<string, string | undefined>, 'locale' | 'token'>,
-  options?: { mutateResponseHeaders?: boolean },
+  options?: PublicBootstrapLoadOptions,
 ) => {
   let requestReads = publicShellReadsByRequest.get(event);
   if (!requestReads) {
@@ -1378,11 +1373,27 @@ export const loadPublicPage = (
   event: H3Event,
   siteId: string,
   query: Record<string, string | undefined>,
-  options?: { mutateResponseHeaders?: boolean },
+  options?: PublicBootstrapLoadOptions,
 ) => {
-  const key = `${siteId}:${query.locale ?? ''}:${query.token ?? ''}`;
-  const shellRead = publicShellReadsByRequest.get(event)?.get(key);
-  return shellRead
-    ? shellRead.then(() => loadPublicBootstrap(event, siteId, { ...query, contract: 'page' }, options))
-    : loadPublicBootstrap(event, siteId, { ...query, contract: 'page' }, options);
+  let requestReads = publicPageReadsByRequest.get(event);
+  if (!requestReads) {
+    requestReads = new Map();
+    publicPageReadsByRequest.set(event, requestReads);
+  }
+  const queryKey = JSON.stringify(
+    Object.entries(query)
+      .filter(([, value]) => value !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right)),
+  );
+  const key = `${siteId}:${queryKey}`;
+  const existing = requestReads.get(key);
+  if (existing) return existing;
+
+  const operation = loadPublicBootstrap(event, siteId, { ...query, contract: 'page' }, options);
+  const pending = operation.catch((error) => {
+    if (requestReads.get(key) === pending) requestReads.delete(key);
+    throw error;
+  });
+  requestReads.set(key, pending);
+  return pending;
 };

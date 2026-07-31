@@ -68,7 +68,19 @@ const analyticsStats = computed(() => [
 async function loadAnalytics() {
   analyticsLoading.value = true
   try {
-    analytics.value = await applicationFetch<Analytics>('/api/admin/analytics')
+    analytics.value = await applicationFetch<Analytics>('/api/admin/analytics', {
+      validate: validateApiShape({
+        metrics: {
+          users: 'number',
+          organizations: 'number',
+          sites: 'number',
+          posts: 'number',
+          menus: 'number',
+          locations: 'number',
+        },
+        recentSites: 'array',
+      }),
+    })
   } catch {
     toast.add({ title: 'Failed to load analytics', color: 'error' })
   } finally {

@@ -213,6 +213,7 @@ const SCOPED_ROLE_DASHBOARD_ROUTES = [
   /^\/api\/dashboard\/settings$/,
   /^\/api\/dashboard\/locations(?:\/add|\/[^/]+)?$/,
   /^\/api\/dashboard\/sites\/[^/]+\/guest-threads(?:\/[^/]+(?:\/reply)?)?$/,
+  /^\/api\/dashboard\/onboarding-context$/,
   /^\/api\/dashboard\/onboarding\/checklist$/,
   /^\/api\/dashboard\/notifications(?:\/unread-count|\/read-all|\/[^/]+\/read)?$/,
 ]

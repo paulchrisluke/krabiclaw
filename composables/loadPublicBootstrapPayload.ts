@@ -24,6 +24,7 @@ export async function loadPublicBootstrapPayload<T>(
         | import('~/utils/public-bootstrap-provider').PublicBootstrapProvider
         | undefined)?.(providerOptions)
     : await publicApiRequest<unknown>(options.url, {
+        coalesceKey: options.key,
         signal: options.signal,
         validate: (_value): _value is unknown => true,
       })

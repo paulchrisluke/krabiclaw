@@ -104,6 +104,7 @@ export function useMediaUpload(siteApiBase: string) {
           `${siteApiBase}/media/request-upload`,
           {
             method: 'POST',
+            validate: validateApiShape({ assetId: 'string', uploadUrl: 'string' }),
             body: {
               filename: file.name,
               locationId: options.locationId,
@@ -151,7 +152,19 @@ export function useMediaUpload(siteApiBase: string) {
         posterWarning?: string | null
       }>(`${siteApiBase}/media/upload`, {
         method: 'POST',
-        body: form
+        body: form,
+        validate: (value): value is {
+          id: string
+          kind: 'video' | 'file'
+          publicUrl: string | null
+          thumbnailUrl: string | null
+          posterWarning?: string | null
+        } => isRecord(value)
+          && typeof value.id === 'string'
+          && (value.kind === 'video' || value.kind === 'file')
+          && (value.publicUrl === null || typeof value.publicUrl === 'string')
+          && (value.thumbnailUrl === null || typeof value.thumbnailUrl === 'string')
+          && (value.posterWarning === undefined || value.posterWarning === null || typeof value.posterWarning === 'string'),
       })
 
       return {

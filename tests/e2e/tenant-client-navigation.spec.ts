@@ -67,8 +67,14 @@ async function navigateAndAssertNonBlocking(page: Page, opts: {
 
   await page.goto(`${tenantBaseURL}${opts.fromPath}`, { waitUntil: 'load' })
   await expect(page.locator('body')).toContainText(opts.beforeText)
-
   const link = page.locator(`a[href="${opts.linkHref}"]`).first()
+  await page.waitForFunction(
+    href => Boolean(
+      (document.querySelector(`a[href="${href}"]`) as Element & { __vueParentComponent?: unknown } | null)
+        ?.__vueParentComponent,
+    ),
+    opts.linkHref,
+  )
   // Dispatch the click without Playwright waiting for navigation completion;
   // the behavior under test is specifically the state before data completes.
   await link.evaluate((element: HTMLAnchorElement) => element.click())

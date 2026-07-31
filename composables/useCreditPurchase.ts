@@ -22,6 +22,8 @@ async function _redirectToCheckout(
   const res = await dashboardApi<{ checkoutUrl?: string }>('/api/billing/credits/add', {
     method: 'POST',
     body: { bundle },
+    validate: (value): value is { checkoutUrl?: string } =>
+      isRecord(value) && (value.checkoutUrl === undefined || typeof value.checkoutUrl === 'string'),
   })
   if (!res.checkoutUrl) {
     throw new Error('Missing checkout URL from billing API')
@@ -49,7 +51,9 @@ export const useCreditPurchase = () => {
 
   async function purchase(bundle: CreditBundle, onSuccess?: (_balance: number) => void) {
     try {
-      const res = await dashboardApi<{ card: SavedCard | null }>('/api/billing/payment-method')
+      const res = await dashboardApi<{ card: SavedCard | null }>('/api/billing/payment-method', {
+        validate: validateApiShape({ card: 'nullable-object' }),
+      })
       if (res.card) {
         const txId = crypto.randomUUID()
         savedCard.value = res.card
@@ -73,7 +77,11 @@ export const useCreditPurchase = () => {
     try {
       const res = await dashboardApi<{ balance: number; requiresCheckout?: boolean }>(
         '/api/billing/credits/charge',
-        { method: 'POST', body: { bundle, txId, enableAutoTopup: wantsAutoTopup.value, autoTopupBundle: bundle } }
+        {
+          method: 'POST',
+          body: { bundle, txId, enableAutoTopup: wantsAutoTopup.value, autoTopupBundle: bundle },
+          validate: validateApiShape({ balance: 'number' }),
+        },
       )
       const balance = res.balance
       isOpen.value = false

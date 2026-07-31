@@ -228,8 +228,26 @@ test.describe('onboarding wizard UI', () => {
     const userId = `e2e-onboard-${suffix}`
     await loginFreshUser(page, baseURL!, userId)
 
+    let onboardingContextRequests = 0
+    let legacyContextRequests = 0
+    page.on('request', (request) => {
+      const pathname = new URL(request.url()).pathname
+      if (pathname === '/api/dashboard/onboarding-context') onboardingContextRequests += 1
+      if (
+        pathname === '/api/dashboard/context'
+        || pathname === '/api/dashboard/onboarding/checklist'
+        || /^\/api\/editor\/sites\/[^/]+\/context$/.test(pathname)
+      ) {
+        legacyContextRequests += 1
+      }
+    })
+
     await page.goto(`${baseURL}/dashboard/onboarding`, { waitUntil: 'load' })
+    await expect.poll(() => onboardingContextRequests).toBe(1)
+    expect(legacyContextRequests).toBe(0)
     await completeManualWizard(page, `Onboard Test Cafe ${suffix}`)
+    expect(onboardingContextRequests).toBe(2)
+    expect(legacyContextRequests).toBe(0)
     await expect(page.getByText('From here, head to your dashboard to keep building')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Add another location' })).toHaveCount(0)
     await page.getByRole('button', { name: 'Open my dashboard' }).click()

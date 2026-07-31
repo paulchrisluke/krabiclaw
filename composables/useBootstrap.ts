@@ -33,13 +33,16 @@ interface ContentRow {
 }
 
 interface BootstrapPayload {
+  kind: string;
   content: ContentRow[];
   locationReviews: ApiRecord[];
+  globalReviews: ApiRecord[];
   reviewsAggregate: ApiRecord | null;
   reviewsList: ApiRecord[];
   photosList: ApiRecord[];
   qaList: ApiRecord[];
   postsList: ApiRecord[];
+  globalPosts: ApiRecord[];
   blogList: ApiRecord[];
   blogPost: ApiRecord | null;
   reservationPolicySiteDefault: RenderedBookingPolicySummary | null;
@@ -51,15 +54,21 @@ interface BootstrapPayload {
   menu: ApiRecord | null;
 }
 
-const isBootstrapPayload = (value: unknown): value is BootstrapPayload =>
+const isBootstrapPayload = (value: unknown, expectedKind: string): value is BootstrapPayload =>
   isRecord(value)
+  && value.kind === expectedKind
   && Array.isArray(value.content)
+  && value.content.every(item => isRecord(item) && typeof item.field === 'string')
   && Array.isArray(value.locationReviews)
+  && Array.isArray(value.globalReviews)
+  && value.globalReviews.every(item => isRecord(item) && typeof item.rating === 'number')
   && (value.reviewsAggregate === null || isRecord(value.reviewsAggregate))
   && Array.isArray(value.reviewsList)
   && Array.isArray(value.photosList)
   && Array.isArray(value.qaList)
   && Array.isArray(value.postsList)
+  && Array.isArray(value.globalPosts)
+  && value.globalPosts.every(item => isRecord(item) && typeof item.id === 'string')
   && Array.isArray(value.blogList)
   && (value.blogPost === null || isRecord(value.blogPost))
   && (value.reservationPolicySiteDefault === null || isRecord(value.reservationPolicySiteDefault))
@@ -103,7 +112,8 @@ export const useBootstrap = async (options: { enabled?: boolean | Ref<boolean> }
                 locale: params.value.locale ?? undefined,
                 token: params.value.token ?? undefined,
               },
-              validate: isBootstrapPayload,
+              validate: (value): value is BootstrapPayload =>
+                isBootstrapPayload(value, params.value.page ?? 'home'),
               failureMessage: 'Public bootstrap failed',
               signal,
             }),
@@ -124,15 +134,19 @@ export const useBootstrap = async (options: { enabled?: boolean | Ref<boolean> }
       path: route.path,
       key: key.value,
       pending: pending.value,
-      error: error.value ?? null,
+      error: normalizePublicRouteLoadError(error.value),
       data: (data.value as ApiRecord | undefined) ?? null,
     }
   })
 
-  // ── Locations / config / menu / experiences list ─────────────
-  // Site-wide, page-independent — sourced from the site-shell state, which never
-  // goes stale across navigation because its key never changes.
-  const { locations, config, googleBusiness, locales, hasExperiences } = shell;
+  // Persistent chrome data comes from the stable shell. Route-owned collections
+  // come from the keyed page response and change with navigation.
+  const { locations, config, locales, hasExperiences } = shell;
+  const googleBusiness = computed(() => ({
+    ...(shell.googleBusiness.value ?? {}),
+    reviews: data.value?.globalReviews ?? [],
+    posts: data.value?.globalPosts ?? [],
+  }))
   const experiencesList = computed(() => data.value?.experiencesList ?? []);
   const menuData = computed(() => data.value?.menu ?? null);
   const menuItemsBySection = computed(() => {
