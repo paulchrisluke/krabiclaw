@@ -280,6 +280,14 @@ function clearDashboardContextError(scopeKey: string) {
   )
 }
 
+// Matches the H3Error createError({ statusCode: 403 }) thrown by
+// assertDashboardPathPermission (server/utils/member-access.ts) when a
+// scoped role (editor/member) hits an organization-wide dashboard path.
+function isDashboardPermissionError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'statusCode' in error
+    && (error as { statusCode?: unknown }).statusCode === 403
+}
+
 const dashboardContextErrorMessage = computed(() =>
   getErrorMessage(dashboardContextError.value, 'Dashboard context request failed'),
 )
@@ -907,6 +915,13 @@ if ((routeName.value.startsWith('dashboard') || isAdminRoute.value) && !dashboar
   try {
     await dashboard.refresh()
   } catch (error) {
+    // A role-permission denial (assertDashboardPathPermission) isn't a transient
+    // failure a retry banner can recover from — it must surface as a real HTTP
+    // error on the initial SSR response, not a soft 200 with a "try again" state.
+    // Only during SSR: once the page has already rendered (onMounted/watch
+    // below), the same denial is shown as an inline banner instead, since a full
+    // error page would be worse UX for an in-app navigation the user just made.
+    if (import.meta.server && isDashboardPermissionError(error)) throw error
     if (requestedScope && dashboard.contextKey.value === requestedScope) {
       setDashboardContextError(requestedScope, error)
     }

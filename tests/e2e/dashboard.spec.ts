@@ -90,7 +90,11 @@ test.describe('dashboard functional smoke', () => {
       ['/dashboard/pottery-house-krabi/sites/pottery-house', 'Pottery House Krabi'],
       ['/dashboard/pottery-house-krabi/sites/pottery-house/locations', 'Locations'],
       ['/dashboard/pottery-house-krabi/sites/pottery-house/settings', 'Site Settings'],
-      ['/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi', 'Location Overview'],
+      // The navbar falls back to the literal 'Location Overview' only when the
+      // location hasn't loaded yet (see locations/[locationSlug]/index.vue) —
+      // the Krabi fixture location always has a real title, so it renders
+      // that instead; asserting the fallback string here never matched.
+      ['/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi', 'Pottery House Krabi'],
       ['/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi/settings', 'Location Settings'],
     ] as const
 
@@ -198,6 +202,26 @@ test.describe('dashboard functional smoke', () => {
     await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
     await page.goto(devLoginUrl(baseURL!, 'user-pottery-house'), { waitUntil: 'load' })
 
+    // The experiences page fetches its list via a direct server-side call during
+    // SSR (see loadDashboardLocationExperiences in dashboard-editor-resources.ts),
+    // which never goes through the browser's network stack — page.route() cannot
+    // intercept it on a page.goto/page.reload (hard) navigation. It only fetches
+    // client-side (interceptable) when the component mounts via an in-app SPA
+    // transition, so every mocked visit below arrives via a NuxtLink click from
+    // the location overview page rather than a URL navigation. That click must
+    // land after hydration completes — waitUntil: 'load' resolves as soon as the
+    // document and its resources finish loading, which can race ahead of Vue
+    // attaching NuxtLink's client-side router interception; a click before that
+    // point falls through to the anchor's plain href and forces a hard reload
+    // (bypassing the mock again). 'networkidle' waits out that gap reliably.
+    const overviewUrl = `${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi`
+    const experiencesLink = page.locator('[id^="dashboard-sidebar"]').getByRole('link', { name: 'Experiences' })
+
+    // The route mock must be registered before the overview page loads, not
+    // after — NuxtLink eagerly prefetches its target route's data as soon as
+    // the link scrolls into view, so registering the mock after page.goto
+    // would let that prefetch slip through with real data, which the later
+    // click would then reuse from cache instead of hitting our mock.
     await page.route('**/api/editor/sites/site-pottery-house/experiences?**', async (route) => {
       await route.fulfill({
         status: 200,
@@ -205,13 +229,17 @@ test.describe('dashboard functional smoke', () => {
         body: JSON.stringify({ experiences: [] }),
       })
     })
-    const empty = await page.goto(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi/experiences`, { waitUntil: 'load' })
-    expect(empty?.status()).toBe(200)
+    await page.goto(overviewUrl, { waitUntil: 'networkidle' })
+    await experiencesLink.click()
+    await expect(page).toHaveURL(/\/experiences$/)
     await expect(page.getByText('Experiences', { exact: true }).first()).toBeVisible()
     await expect(page.getByRole('button', { name: 'Add experience' }).first()).toBeVisible()
     await expect(page.getByText('No experiences yet')).toBeVisible()
-
     await page.unroute('**/api/editor/sites/site-pottery-house/experiences?**')
+
+    // A fresh hard navigation back to the overview page discards the client-side
+    // Nuxt payload cache, so the next click below performs a genuine new fetch
+    // under the 500 mock rather than reusing the cached empty result above.
     await page.route('**/api/editor/sites/site-pottery-house/experiences?**', async (route) => {
       await route.fulfill({
         status: 500,
@@ -219,7 +247,9 @@ test.describe('dashboard functional smoke', () => {
         body: JSON.stringify({ error: 'Test failure' }),
       })
     })
-    await page.reload({ waitUntil: 'load' })
+    await page.goto(overviewUrl, { waitUntil: 'networkidle' })
+    await experiencesLink.click()
+    await expect(page).toHaveURL(/\/experiences$/)
     await expect(page.getByText('Experiences', { exact: true }).first()).toBeVisible()
     await expect(page.getByText('Could not load experiences')).toBeVisible()
     await expect(page.getByText('No experiences yet')).toBeHidden()

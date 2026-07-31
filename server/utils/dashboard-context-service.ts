@@ -21,6 +21,13 @@ export async function loadDashboardContext(
     allowTransferFallback: scope?.afterTransfer,
     organizationSlug: scope?.orgSlug,
     siteSlug: scope?.siteSlug,
+    // This function is the canonical /api/dashboard/context payload loader —
+    // called directly by that route's own handler (where event.path already
+    // matches) and, for SSR, by useDashboardSite's refresh() using the page's
+    // own event (see the pathname doc on DashboardContextOptions). Pinning
+    // the logical path here keeps the scoped-role allowlist check correct
+    // for both callers instead of only the former.
+    pathname: '/api/dashboard/context',
   })
   recordRequestPhase(event, 'context', contextStartedAt)
 
