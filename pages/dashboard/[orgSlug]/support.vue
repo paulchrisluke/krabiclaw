@@ -159,8 +159,6 @@
 </template>
 
 <script setup lang="ts">
-import { getDashboardContext } from '~/server/utils/dashboard-context'
-
 const dashboardApi = useDashboardApi()
 const dashboardScope = useDashboardRouteScope()
 definePageMeta({ layout: 'dashboard' })
@@ -240,8 +238,9 @@ const { data, refresh } = await useAsyncData<{ requests: WorkRequest[] } | null>
     if (!scope) return null
     if (import.meta.server) {
       if (!requestEvent) return null
-      const [{ cloudflareEnv }, { listWorkRequests }] = await Promise.all([
+      const [{ cloudflareEnv }, { getDashboardContext }, { listWorkRequests }] = await Promise.all([
         import('~/server/utils/api-response'),
+        import('~/server/utils/dashboard-context'),
         import('~/server/utils/work-requests-dashboard'),
       ])
       const db = cloudflareEnv(requestEvent).DB
@@ -251,7 +250,7 @@ const { data, refresh } = await useAsyncData<{ requests: WorkRequest[] } | null>
       const requests = await listWorkRequests(db, organization.id)
       return { requests }
     }
-    return null
+    return await dashboardApi<{ requests: WorkRequest[] }>('/api/dashboard/work-requests')
   },
 )
 const requests = computed(() => data.value?.requests)

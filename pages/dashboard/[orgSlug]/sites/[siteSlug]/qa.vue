@@ -97,7 +97,9 @@ const { data: tenantPages } = await useAsyncData(
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
       return await getTenantPages(db, siteId)
     }
-    return null
+    return await dashboardApi<Array<{ path: string; title: string }>>(
+      `/api/editor/sites/${siteId}/tenant-pages`,
+    )
   },
 )
 
@@ -114,7 +116,9 @@ const { data: existingQaScopes } = await useAsyncData(
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
       return await getQaScopes(db, siteId)
     }
-    return null
+    return await dashboardApi<Array<{ page_path: string | null }>>(
+      `/api/editor/sites/${siteId}/qa/scopes`,
+    )
   },
 )
 
@@ -162,7 +166,10 @@ const { data, pending, refresh } = await useAsyncData(
       const qa = await getSiteQa(db, siteId, pagePath.value)
       return { qa }
     }
-    return null
+    return await dashboardApi<{ qa: QaRow[] }>(
+      `/api/editor/sites/${siteId}/qa`,
+      { query: pagePath.value ? { page_path: pagePath.value } : undefined },
+    )
   },
   { watch: [selectedPagePath] },
 )
