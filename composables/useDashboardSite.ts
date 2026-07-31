@@ -57,7 +57,13 @@ interface DashboardContextResponse {
   siteAccess: 'organization' | 'site' | 'location' | null
 }
 
-const dashboardContextReads = new Map<string, Promise<DashboardContextResponse>>()
+let clientDashboardContextReads: Map<string, Promise<DashboardContextResponse>> | undefined
+
+function getClientDashboardContextReads() {
+  if (!import.meta.client) return undefined
+  clientDashboardContextReads ??= new Map()
+  return clientDashboardContextReads
+}
 
 // Central legacy dashboard scope adapter. Better Auth migration issue #386 owns
 // removing these route headers; callers must go through dashboardFetch rather
@@ -102,15 +108,20 @@ export function useDashboardSite() {
       state.value = null
       return null
     }
-    const existing = import.meta.client && !signal ? dashboardContextReads.get(requestKey) : undefined
+    const sharedReads = !signal ? getClientDashboardContextReads() : undefined
+    const existing = sharedReads?.get(requestKey)
     if (existing) return await existing
     pendingByScope.value = { ...pendingByScope.value, [requestKey]: true }
     const pendingRead = (import.meta.server
       ? (async () => {
           const event = useRequestEvent()
           if (!event) throw createError({ statusCode: 500, statusMessage: 'Dashboard request context unavailable' })
-          const { loadDashboardContext } = await import('~/server/utils/dashboard-context-service')
-          return await loadDashboardContext(event, requestScope) as DashboardContextResponse
+          const [{ loadDashboardContext }, { finalizeRequestMetrics }] = await Promise.all([
+            import('~/server/utils/dashboard-context-service'),
+            import('~/server/utils/request-metrics'),
+          ])
+          const response = await loadDashboardContext(event, requestScope) as DashboardContextResponse
+          return finalizeRequestMetrics(event, 'dashboard-context-ssr', response) as DashboardContextResponse
         })()
       : dashboardFetch<DashboardContextResponse>('/api/dashboard/context', requestScope, {
           signal,
@@ -138,11 +149,11 @@ export function useDashboardSite() {
       })
       .finally(() => {
         pendingByScope.value = { ...pendingByScope.value, [requestKey]: false }
-        if (import.meta.client && !signal && dashboardContextReads.get(requestKey) === pendingRead) {
-          dashboardContextReads.delete(requestKey)
+        if (sharedReads?.get(requestKey) === pendingRead) {
+          sharedReads.delete(requestKey)
         }
       })
-    if (import.meta.client && !signal) dashboardContextReads.set(requestKey, pendingRead)
+    sharedReads?.set(requestKey, pendingRead)
     return await pendingRead
   }
 

@@ -396,7 +396,20 @@ interface BillingStatus {
 
 const validateBillingStatus = validateApiShape<BillingStatus>({
   org_name: 'string',
-  sites_billing: 'array',
+  sites_billing: {
+    arrayOf: {
+      site_id: 'string',
+      brand_name: 'nullable-string',
+      stripe_subscription_id: 'nullable-string',
+      plan: 'nullable-string',
+      status: 'nullable-string',
+      current_period_end: 'nullable-string',
+      cancel_at_period_end: 'boolean',
+      payment_method: 'string',
+      local_rate: 'nullable-number',
+      local_currency: 'nullable-string',
+    },
+  },
   cancel_at_period_end: 'boolean',
   pending_transfer: 'nullable-object',
 })

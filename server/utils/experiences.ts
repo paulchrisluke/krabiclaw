@@ -1204,6 +1204,16 @@ interface AvailabilityOverrideRow {
   capacity_override: number | null
 }
 
+interface AvailabilityDataRow {
+  row_kind: 'booking' | 'override'
+  experience_id: string
+  event_date: string
+  time_slot: string
+  booked: number | null
+  status: 'closed' | 'open' | null
+  capacity_override: number | null
+}
+
 function calculateAvailabilitySummary(
   experience: Experience,
   timezone: string,
@@ -1321,6 +1331,10 @@ export async function attachAvailabilitySummaries<T extends Experience>(
   organizationId: string,
   siteId: string,
   list: T[],
+  context?: {
+    locations: Array<{ id: string; special_hours: string | null; timezone: string | null }>
+    defaultTimezone: string
+  },
 ): Promise<Array<T & AvailabilitySummary>> {
   const locationIds = [...new Set(list.map((e) => e.location_id).filter((id): id is string => Boolean(id)))]
   if (list.length === 0) return []
@@ -1343,7 +1357,9 @@ export async function attachAvailabilitySummaries<T extends Experience>(
   }
 
   const [locationRows, configRows, chunkRows] = await Promise.all([
-    locationIds.length
+    context
+      ? Promise.resolve(context.locations)
+      : locationIds.length
       ? Promise.all(locationChunks.map(async (chunk) => {
         const placeholders = chunk.map(() => '?').join(',')
         return queryAll<{ id: string; special_hours: string | null; timezone: string | null }>(
@@ -1353,32 +1369,62 @@ export async function attachAvailabilitySummaries<T extends Experience>(
         )
       })).then((results) => results.flatMap(r => r ?? []))
       : Promise.resolve([]),
-    queryAll<{ key: string; value: string }>(
-      db,
-      `SELECT key, value FROM site_config WHERE organization_id = ? AND site_id = ? AND key = 'default_timezone'`,
-      [organizationId, siteId],
-    ),
+    context
+      ? Promise.resolve([{ key: "default_timezone", value: context.defaultTimezone }])
+      : queryAll<{ key: string; value: string }>(
+          db,
+          `SELECT key, value FROM site_config WHERE organization_id = ? AND site_id = ? AND key = 'default_timezone'`,
+          [organizationId, siteId],
+        ),
     Promise.all(chunks.map(async (chunk) => {
       const placeholders = chunk.map(() => '?').join(',')
-      const [bookings, overrides] = await Promise.all([
-        queryAll<AvailabilityBookingRow>(
-          db,
-          `SELECT experience_id, booking_date, time_slot, SUM(party_size) AS booked
+      const rows = await queryAll<AvailabilityDataRow>(
+        db,
+        `SELECT 'booking' AS row_kind, experience_id, booking_date AS event_date,
+                time_slot, SUM(party_size) AS booked, NULL AS status,
+                NULL AS capacity_override
            FROM experience_bookings
-           WHERE site_id = ? AND experience_id IN (${placeholders})
-             AND booking_date BETWEEN ? AND ? AND status IN ('pending', 'confirmed')
-           GROUP BY experience_id, booking_date, time_slot`,
-          [siteId, ...chunk, fromDate, toDate],
-        ),
-        queryAll<AvailabilityOverrideRow>(
-          db,
-          `SELECT experience_id, override_date, time_slot, status, capacity_override
+          WHERE site_id = ? AND experience_id IN (${placeholders})
+            AND booking_date BETWEEN ? AND ? AND status IN ('pending', 'confirmed')
+          GROUP BY experience_id, booking_date, time_slot
+         UNION ALL
+         SELECT 'override' AS row_kind, experience_id, override_date AS event_date,
+                time_slot, NULL AS booked, status, capacity_override
            FROM experience_slot_overrides
-           WHERE site_id = ? AND experience_id IN (${placeholders})
-             AND override_date BETWEEN ? AND ?`,
-          [siteId, ...chunk, fromDate, toDate],
-        ),
-      ])
+          WHERE site_id = ? AND experience_id IN (${placeholders})
+            AND override_date BETWEEN ? AND ?`,
+        [
+          siteId,
+          ...chunk,
+          fromDate,
+          toDate,
+          siteId,
+          ...chunk,
+          fromDate,
+          toDate,
+        ],
+      )
+      const bookings = rows
+        .filter((row): row is AvailabilityDataRow & { row_kind: 'booking'; booked: number } =>
+          row.row_kind === 'booking' && row.booked !== null,
+        )
+        .map(row => ({
+          experience_id: row.experience_id,
+          booking_date: row.event_date,
+          time_slot: row.time_slot,
+          booked: row.booked,
+        }))
+      const overrides = rows
+        .filter((row): row is AvailabilityDataRow & { row_kind: 'override'; status: 'closed' | 'open' } =>
+          row.row_kind === 'override' && row.status !== null,
+        )
+        .map(row => ({
+          experience_id: row.experience_id,
+          override_date: row.event_date,
+          time_slot: row.time_slot,
+          status: row.status,
+          capacity_override: row.capacity_override,
+        }))
       return { bookings, overrides }
     })),
   ])

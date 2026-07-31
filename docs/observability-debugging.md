@@ -14,12 +14,23 @@ Every application API error should include the `x-request-id` response header
 and the same ID in its structured error body. Browser clients retain that ID in
 `ApiClientError`; use it to correlate the browser failure with Worker logs.
 
-For public bootstrap investigations, record `Server-Timing`,
-`x-bootstrap-cache`, payload bytes, and request count together. D1 query-count
-instrumentation should be grouped by the logical shell/page key and request
-context. Record a retry regression only when a follow-up request has the same
-key and context and occurs without navigation, user action, another tab, or
-another caller.
+Instrumented public shell/page and representative dashboard responses expose:
+
+- `x-request-id`
+- `x-data-cache`
+- `x-d1-query-count`
+- `x-response-bytes`
+- `Server-Timing` phases such as `base`, `shell`, `page`, `context`,
+  `resources`, `d1`, `serialize`, and `total`
+
+Exactly one matching `[data-request]` structured Worker log is emitted at the
+response boundary. It aggregates every instrumented loader used by that HTTP
+request and includes resource names, attempt count, statement count, D1 batch
+round trips, rows read/written, accumulated D1 time, JSON bytes, total duration,
+HTTP status, and error code. Batch operations count every contained statement,
+not only the network round trip. Record a retry regression only when a follow-up
+request has the same logical key and context and occurs without navigation,
+user action, another tab, or another caller.
 
 Dashboard requests must carry explicit organization and, for site routes, site
 scope through the canonical client. Missing or conflicting scope is terminal

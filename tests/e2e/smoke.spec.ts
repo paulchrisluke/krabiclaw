@@ -47,6 +47,35 @@ test.describe('representative tenant routes', () => {
     })
     expect(response.status()).toBe(201)
   })
+
+  test('public shell and page enforce data-loading budgets', async ({ request }) => {
+    const readMetrics = async (path: string) => {
+      const response = await request.get(`${tenantBaseURL}${path}`, {
+        headers: tenantExtraHeaders,
+      })
+      expect(response.status()).toBe(200)
+      expect(response.headers()['x-request-id']).toBeTruthy()
+      expect(response.headers()['x-data-cache']).toBeTruthy()
+      expect(response.headers()['server-timing']).toContain('d1;dur=')
+      expect(response.headers()['server-timing']).toContain('total;dur=')
+      const queryCount = Number(response.headers()['x-d1-query-count'])
+      const responseBytes = Number(response.headers()['x-response-bytes'])
+      expect(Number.isInteger(queryCount)).toBe(true)
+      expect(Number.isInteger(responseBytes)).toBe(true)
+      return { queryCount, responseBytes }
+    }
+
+    const shell = await readMetrics('/api/public/sites/site-demo/shell?locale=th')
+    const simplePage = await readMetrics('/api/public/sites/site-demo/page?page=about&locale=th')
+    expect(shell.queryCount + simplePage.queryCount).toBeLessThanOrEqual(8)
+    expect(shell.responseBytes).toBeLessThanOrEqual(30 * 1024)
+    expect(simplePage.responseBytes).toBeLessThanOrEqual(25 * 1024)
+
+    const experiencePage = await readMetrics(
+      '/api/public/sites/site-demo/page?page=experiences&experience=pizza-making-class',
+    )
+    expect(shell.queryCount + experiencePage.queryCount).toBeLessThanOrEqual(12)
+  })
 })
 
 test('development login reaches dashboard context', async ({ request, baseURL }) => {

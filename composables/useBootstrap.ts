@@ -83,6 +83,9 @@ export const useBootstrap = async (options: { enabled?: boolean } = {}) => {
   const route = useRoute();
   const params = useBootstrapParams();
   const routeLoadState = usePublicRouteLoadState();
+  const routeLoadOwner = claimPublicRouteLoadOwner();
+  onScopeDispose(routeLoadOwner.release)
+  const ownedPath = route.path;
   const entityId = computed(() => siteId || draftId || null);
   const key = computed(() => useBootstrapKey(entityId.value, params.value));
   const enabled = computed(() => options.enabled !== false);
@@ -129,12 +132,12 @@ export const useBootstrap = async (options: { enabled?: boolean } = {}) => {
   }
   const { data, error, pending, refresh } = asyncData
   watchEffect(() => {
+    if (!routeLoadOwner.ownsState()) return
     routeLoadState.value = {
-      path: route.path,
+      path: ownedPath,
       key: key.value,
       pending: pending.value,
       error: normalizePublicRouteLoadError(error.value),
-      data: (data.value as ApiRecord | undefined) ?? null,
     }
   })
 

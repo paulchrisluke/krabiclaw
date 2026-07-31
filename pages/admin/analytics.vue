@@ -78,7 +78,14 @@ async function loadAnalytics() {
           menus: 'number',
           locations: 'number',
         },
-        recentSites: 'array',
+        recentSites: {
+          arrayOf: {
+            id: 'string',
+            brand_name: 'nullable-string',
+            subdomain: 'nullable-string',
+            created_at: 'string',
+          },
+        },
       }),
     })
   } catch {

@@ -10,6 +10,7 @@ export type ApiShape =
   | 'nullable-number'
   | 'nullable-object'
   | 'nullable-string'
+  | { readonly arrayOf: ApiShape }
   | { readonly [key: string]: ApiShape }
 
 const isApiRecord = (value: unknown): value is Record<string, unknown> =>
@@ -17,6 +18,10 @@ const isApiRecord = (value: unknown): value is Record<string, unknown> =>
 
 const matchesApiShape = (value: unknown, shape: ApiShape): boolean => {
   if (typeof shape === 'object') {
+    if (Object.keys(shape).length === 1 && Object.hasOwn(shape, 'arrayOf')) {
+      return Array.isArray(value)
+        && value.every(item => matchesApiShape(item, shape.arrayOf))
+    }
     return isApiRecord(value)
       && Object.entries(shape).every(([key, childShape]) =>
         Object.hasOwn(value, key) && matchesApiShape(value[key], childShape),

@@ -7,11 +7,13 @@ import {
 } from '~/server/utils/dashboard-context'
 import { isManagedServiceEnabled } from '~/server/utils/feature-flags'
 import { resolveDashboardSiteAccess } from '~/server/utils/member-access'
+import { recordRequestPhase } from '~/server/utils/request-metrics'
 
 export async function loadDashboardContext(
   event: H3Event,
   scope?: { orgSlug?: string | null; siteSlug?: string | null; afterTransfer?: boolean },
 ) {
+  const contextStartedAt = performance.now()
   const managedServiceEnabled = isManagedServiceEnabled(cloudflareEnv(event))
   const { db, organization, site } = await getDashboardContext(event, {
     requireSite: false,
@@ -20,6 +22,7 @@ export async function loadDashboardContext(
     organizationSlug: scope?.orgSlug,
     siteSlug: scope?.siteSlug,
   })
+  recordRequestPhase(event, 'context', contextStartedAt)
 
   if (!organization) {
     // If an organization slug was explicitly requested but not found,
@@ -52,6 +55,7 @@ export async function loadDashboardContext(
     }
   }
 
+  const resourcesStartedAt = performance.now()
   const [locations, siteAccess] = await Promise.all([
     listDashboardLocations(db, organization.id, site.id, principal),
     resolveDashboardSiteAccess(db, {
@@ -60,6 +64,7 @@ export async function loadDashboardContext(
       siteId: site.id,
     }),
   ])
+  recordRequestPhase(event, 'resources', resourcesStartedAt)
   return {
     success: true as const,
     organization,

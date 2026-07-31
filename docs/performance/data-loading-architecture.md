@@ -10,10 +10,11 @@ chrome data: site identity, locations, configuration, locales, Google Business
 summary, and the `hasExperiences` capability. Full menus, experiences,
 availability, and booking policies belong to the route-keyed page payload.
 
-During SSR, `useSiteShell` and `useBootstrap` call
-`handlePublicBootstrap` directly with the current request event and Cloudflare
-bindings. The public API route is the browser transport wrapper for that same
-service. Browser reads use `publicApiRequest`, which applies a six-second
+During SSR, `useSiteShell` and `useBootstrap` call the request-scoped public
+bootstrap provider, which invokes `loadPublicShell` and `loadPublicPage` with
+the original request event and Cloudflare bindings. The public API routes are
+browser transport wrappers over those same loaders. Browser reads use
+`publicApiRequest`, which applies a six-second
 timeout, `retry: 0`, contract validation, exact-key in-flight coalescing, and
 normalized errors.
 
@@ -33,8 +34,9 @@ scope is a terminal error. The only context exception is the explicit
 
 ## Database work
 
-Availability loads locations/config, bookings, and overrides in a constant four
-queries, then indexes rows by experience and calculates slots in memory.
+Availability reuses locations and the default timezone already loaded for the
+public request, reads bookings and overrides with one unioned statement, then
+indexes rows by experience and calculates slots in memory.
 Booking policies load the complete site/type hierarchy in one query and resolve
 site → location → experience precedence in memory.
 
@@ -45,4 +47,3 @@ cause exactly one canonical source load. A cache-write failure after a
 successful source load is logged and does not replace the successful result.
 Transport, timeout, authorization, database, and contract errors remain errors;
 they never become empty collections or inferred tenant context.
-

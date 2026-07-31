@@ -26,6 +26,21 @@ test('validateApiShape supports nullable contract fields', () => {
   assert.equal(validate({ card: [], renewal: null }), false)
 })
 
+test('validateApiShape validates every nested array item', () => {
+  const validate = validateApiShape({
+    rows: {
+      arrayOf: {
+        id: 'string',
+        label: 'nullable-string',
+      },
+    },
+  })
+
+  assert.equal(validate({ rows: [{ id: 'one', label: null }] }), true)
+  assert.equal(validate({ rows: [{ id: 'one', label: 3 }] }), false)
+  assert.equal(validate({ rows: [{ label: null }] }), false)
+})
+
 test('validateApiArray rejects non-array responses', () => {
   const validate = validateApiArray<unknown>()
   assert.equal(validate([]), true)

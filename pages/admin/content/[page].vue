@@ -85,8 +85,8 @@ onMounted(async () => {
     content.value = response.content ?? ''
   } catch (err) {
     console.error('Failed to load content:', err)
-    const requestId = err instanceof ApiClientError ? err.data?.requestId : undefined
-    error.value = requestId ? `Failed to load content (${requestId})` : 'Failed to load content'
+    const requestId = err instanceof ApiClientError ? err.requestId : null
+    error.value = requestId ? `Failed to load content (request ${requestId})` : 'Failed to load content'
   } finally {
     loading.value = false
   }

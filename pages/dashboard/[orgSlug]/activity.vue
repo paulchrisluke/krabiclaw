@@ -31,18 +31,18 @@
             </UFormField>
           </div>
 
-          <ClientOnly>
-            <template #fallback>
-              <div v-if="pending" class="space-y-3">
-                <USkeleton v-for="i in 5" :key="i" class="h-12 w-full" />
-              </div>
-            </template>
-
+            <UAlert
+              v-if="eventsError"
+              color="error"
+              variant="soft"
+              title="Activity could not be loaded"
+              :description="getErrorMessage(eventsError, 'Activity request failed')"
+            />
             <div v-if="pending && groups.length === 0" class="space-y-3">
               <USkeleton v-for="i in 5" :key="i" class="h-12 w-full" />
             </div>
 
-            <div v-else-if="groups.length === 0" class="py-16 text-center">
+            <div v-else-if="!eventsError && groups.length === 0" class="py-16 text-center">
               <UIcon name="i-lucide-activity" class="size-8 text-muted mx-auto mb-3" />
               <p class="text-sm font-medium text-highlighted">No activity yet</p>
               <p class="mt-1 text-xs text-muted">Actions across your sites will show up here.</p>
@@ -70,7 +70,6 @@
                 <UButton label="Load more" color="neutral" variant="soft" :loading="loadingMore" @click="loadMore" />
               </div>
             </div>
-          </ClientOnly>
         </UCard>
 
       </div>
@@ -90,12 +89,7 @@ const dashboard = useDashboardSite()
 if (!dashboard.state.value) await dashboard.refresh()
 const toast = useToast()
 
-interface SiteEvent {
-  id: string; event_type: string; site_id: string; location_id: string | null
-  metadata: Record<string, unknown> | null; created_at: string
-  actor_id: string | null; actor_name: string | null; actor_image: string | null
-  location_title: string | null
-}
+type SiteEvent = import('~/server/utils/dashboard-events').DashboardEvent
 
 const filters = reactive({
   siteId: '',
@@ -162,58 +156,78 @@ const locationOptions = computed(() => [
   ...locationsForSite.value.map(l => ({ label: l.title, value: l.id })),
 ])
 
+const eventQuery = computed(() => ({
+  limit: 20,
+  siteId: filters.siteId || undefined,
+  locationId: filters.locationId || undefined,
+  eventType: filters.eventType || undefined,
+  actorId: filters.actorId || undefined,
+}))
+const eventsKey = computed(() =>
+  `dashboard-events-${String(route.params.orgSlug ?? '')}-${JSON.stringify(eventQuery.value)}`,
+)
+const isEventsResponse = (value: unknown): value is { events: SiteEvent[]; nextCursor: string | null } =>
+  isRecord(value)
+  && Array.isArray(value.events)
+  && value.events.every(event =>
+    isRecord(event)
+    && typeof event.id === 'string'
+    && typeof event.event_type === 'string'
+    && typeof event.site_id === 'string'
+    && typeof event.created_at === 'string',
+  )
+  && (value.nextCursor === null || typeof value.nextCursor === 'string')
+
+const { data: eventsData, pending, error: eventsError } = await useAsyncData(
+  eventsKey,
+  async () => {
+    if (import.meta.server) {
+      if (!requestEvent || !dashboard.organization.value?.id) {
+        throw createError({ statusCode: 500, statusMessage: 'Dashboard event context unavailable' })
+      }
+      const [{ cloudflareEnv }, { listDashboardEvents }] = await Promise.all([
+        import('~/server/utils/api-response'),
+        import('~/server/utils/dashboard-events'),
+      ])
+      const db = cloudflareEnv(requestEvent).DB
+      if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+      return await listDashboardEvents(db, dashboard.organization.value.id, eventQuery.value)
+    }
+    return await dashboardApi<{ events: SiteEvent[]; nextCursor: string | null }>(
+      '/api/dashboard/events',
+      { query: eventQuery.value, validate: isEventsResponse },
+    )
+  },
+  { watch: [eventQuery] },
+)
 const events = ref<SiteEvent[]>([])
 const nextCursor = ref<string | null>(null)
-const pending = ref(false)
+watch(eventsData, (value) => {
+  events.value = value?.events ?? []
+  nextCursor.value = value?.nextCursor ?? null
+}, { immediate: true })
 const loadingMore = ref(false)
-const requestToken = ref(0)
 
 async function fetchEvents(before?: string) {
-  const query: Record<string, string> = { limit: '20' }
-  if (filters.siteId) query.siteId = filters.siteId
-  if (filters.locationId) query.locationId = filters.locationId
-  if (filters.eventType) query.eventType = filters.eventType
-  if (filters.actorId) query.actorId = filters.actorId
-  if (before) query.before = before
-
-  return dashboardApi<{ events: SiteEvent[]; nextCursor: string | null }>('/api/dashboard/events', { query })
-}
-
-async function reload() {
-  const currentToken = ++requestToken.value
-  pending.value = true
-  try {
-    const res = await fetchEvents()
-    if (currentToken !== requestToken.value) return
-    events.value = res.events
-    nextCursor.value = res.nextCursor
-  } catch (err) {
-    if (currentToken !== requestToken.value) return
-    toast.add({ title: 'Failed to load activity', description: err instanceof Error ? err.message : 'Please try again.', color: 'error' })
-  } finally {
-    if (currentToken === requestToken.value) pending.value = false
-  }
+  return await dashboardApi<{ events: SiteEvent[]; nextCursor: string | null }>(
+    '/api/dashboard/events',
+    { query: { ...eventQuery.value, before }, validate: isEventsResponse },
+  )
 }
 
 async function loadMore() {
   if (!nextCursor.value) return
-  const currentToken = ++requestToken.value
   loadingMore.value = true
   try {
     const res = await fetchEvents(nextCursor.value)
-    if (currentToken !== requestToken.value) return
     events.value = [...events.value, ...res.events]
     nextCursor.value = res.nextCursor
   } catch (err) {
-    if (currentToken !== requestToken.value) return
     toast.add({ title: 'Failed to load more activity', description: err instanceof Error ? err.message : 'Please try again.', color: 'error' })
   } finally {
-    if (currentToken === requestToken.value) loadingMore.value = false
+    loadingMore.value = false
   }
 }
-
-watch([() => filters.siteId, () => filters.locationId, () => filters.eventType, () => filters.actorId], reload)
-await reload()
 
 function groupLabel(dateStr: string) {
   const date = new Date(dateStr)

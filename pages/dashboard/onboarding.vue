@@ -82,7 +82,7 @@
 <script setup lang="ts">
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 
-definePageMeta({ layout: 'editor', ssr: false })
+definePageMeta({ layout: 'editor' })
 
 const route = useRoute()
 const config = useRuntimeConfig()
@@ -250,64 +250,75 @@ const readinessScore = computed(() => {
 
 // ─── Load context ─────────────────────────────────────────────────────────────
 
+interface OnboardingContextResponse {
+  success: true
+  context: {
+    organization?: { id: string; slug: string; name: string } | null
+    site?: ApiRecord | null
+    locations?: Array<{ id: string; slug: string; title: string; is_primary: boolean }>
+  }
+  previewToken: string | null
+  checklist: {
+    items: { business_info: boolean; hero_image: boolean; core_offering: boolean; story: boolean; post: boolean }
+  }
+}
+
+const isOnboardingContextResponse = (value: unknown): value is OnboardingContextResponse => {
+  if (!isRecord(value)
+    || value.success !== true
+    || !isRecord(value.context)
+    || (value.previewToken !== null && typeof value.previewToken !== 'string')
+    || !isRecord(value.checklist)
+    || !isRecord(value.checklist.items)) return false
+  const items = value.checklist.items
+  return ['business_info', 'hero_image', 'core_offering', 'story', 'post']
+    .every(key => typeof items[key] === 'boolean')
+}
+
+const requestEvent = useRequestEvent()
+const loadContextResource = async (): Promise<OnboardingContextResponse> => {
+  if (import.meta.server) {
+    if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+    const { loadDashboardOnboardingContext } = await import('~/server/utils/onboarding-context')
+    return await loadDashboardOnboardingContext(requestEvent)
+  }
+  return await applicationFetch<OnboardingContextResponse>('/api/dashboard/onboarding-context', {
+    validate: isOnboardingContextResponse,
+  })
+}
+
+const applyContext = (response: OnboardingContextResponse) => {
+  if (response.context.organization) orgSlug.value = response.context.organization.slug
+  if (response.context.site) {
+    siteData.value = response.context.site
+    siteLocations.value = response.context.locations ?? []
+    const primary = siteLocations.value.find(l => l.is_primary) ?? siteLocations.value[0]
+    if (primary) selectedLocationId.value = primary.id
+  }
+  previewToken.value = response.previewToken ?? ''
+  const items = response.checklist.items
+  readiness.value = {
+    details: items.business_info ? 'complete' : 'missing',
+    hero: items.hero_image ? 'complete' : 'missing',
+    offer: items.core_offering ? 'complete' : 'missing',
+    brand: items.story ? 'complete' : items.business_info ? 'attention' : 'missing',
+    trust: items.post ? 'complete' : items.business_info ? 'attention' : 'missing',
+    launch: (items.business_info && items.hero_image && items.core_offering) ? 'attention' : 'missing',
+  }
+}
+
+const { data: contextResource, error: initialContextError, refresh: refreshContext } =
+  await useAsyncData('dashboard-onboarding-context', loadContextResource)
+if (contextResource.value) applyContext(contextResource.value)
+if (initialContextError.value) contextError.value = normalizeApiError(initialContextError.value, 'Workspace context failed')
+contextLoaded.value = true
+
 const loadContext = async () => {
   contextError.value = null
   try {
-    const response = await applicationFetch<{
-      success: boolean
-      context: {
-        organization?: { id: string; slug: string; name: string } | null
-        site?: ApiRecord | null
-        locations?: Array<{ id: string; slug: string; title: string; is_primary: boolean }>
-      }
-      previewToken: string | null
-      checklist: {
-        items: { business_info: boolean; hero_image: boolean; core_offering: boolean; story: boolean; post: boolean }
-      }
-    }>('/api/dashboard/onboarding-context', {
-      validate: (value): value is {
-        success: boolean
-        context: {
-          organization?: { id: string; slug: string; name: string } | null
-          site?: ApiRecord | null
-          locations?: Array<{ id: string; slug: string; title: string; is_primary: boolean }>
-        }
-        previewToken: string | null
-        checklist: {
-          items: { business_info: boolean; hero_image: boolean; core_offering: boolean; story: boolean; post: boolean }
-        }
-      } => {
-        if (!isRecord(value)
-          || value.success !== true
-          || !isRecord(value.context)
-          || (value.previewToken !== null && typeof value.previewToken !== 'string')
-          || !isRecord(value.checklist)
-          || !isRecord(value.checklist.items)) {
-          return false
-        }
-        const items = value.checklist.items
-        return ['business_info', 'hero_image', 'core_offering', 'story', 'post']
-          .every(key => typeof items[key] === 'boolean')
-      },
-    })
-
-    if (response.context.organization) orgSlug.value = response.context.organization.slug
-    if (response.context.site) {
-      siteData.value = response.context.site
-      siteLocations.value = response.context.locations ?? []
-      const primary = siteLocations.value.find(l => l.is_primary) ?? siteLocations.value[0]
-      if (primary) selectedLocationId.value = primary.id
-    }
-    previewToken.value = response.previewToken ?? ''
-    const items = response.checklist.items
-    readiness.value = {
-      details: items.business_info ? 'complete' : 'missing',
-      hero: items.hero_image ? 'complete' : 'missing',
-      offer: items.core_offering ? 'complete' : 'missing',
-      brand: items.story ? 'complete' : items.business_info ? 'attention' : 'missing',
-      trust: items.post ? 'complete' : items.business_info ? 'attention' : 'missing',
-      launch: (items.business_info && items.hero_image && items.core_offering) ? 'attention' : 'missing',
-    }
+    await refreshContext()
+    if (!contextResource.value) throw initialContextError.value ?? new Error('Workspace context failed')
+    applyContext(contextResource.value)
   } catch (error) {
     contextError.value = normalizeApiError(error, 'Workspace context failed')
   } finally {
@@ -376,8 +387,6 @@ onMounted(async () => {
   updateMobilePreviewViewport()
   mobilePreviewQuery.addEventListener('change', updateMobilePreviewViewport)
   stopMobilePreviewViewportListener = () => mobilePreviewQuery.removeEventListener('change', updateMobilePreviewViewport)
-
-  await retryContext()
 
   if (route.query.payment === 'cancelled') {
     toast.add({ title: 'Payment cancelled', description: 'Your subscription was not completed.', color: 'warning' })

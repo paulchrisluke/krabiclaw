@@ -77,12 +77,19 @@ const publicError = computed(() => shell.error.value || routeLoadState.value.err
 const retryPublicData = async () => {
   if (shell.error.value) {
     await shell.refresh()
+    return
   }
   if (routeLoadState.value.error && routeLoadState.value.key) {
     await refreshNuxtData(routeLoadState.value.key)
   }
 }
-const pagePayload = computed(() => routeLoadState.value.data)
+const activePageKey = computed(() => routeLoadState.value.key)
+const nuxtApp = useNuxtApp()
+const pagePayload = computed(() =>
+  (nuxtApp.payload.data[activePageKey.value] as ApiRecord | undefined)
+  ?? (nuxtApp.static.data[activePageKey.value] as ApiRecord | undefined)
+  ?? null,
+)
 const menu = computed(() => (pagePayload.value?.menu as ApiRecord | null | undefined) ?? null)
 const experiencesList = computed(() =>
   Array.isArray(pagePayload.value?.experiencesList)

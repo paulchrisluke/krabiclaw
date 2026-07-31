@@ -689,8 +689,9 @@ deploy, measure via PSI, re-enable, repeat — don't guess):
 **`server/middleware/`** (runs on every request in listed order):
 - `00.edge-cache.ts` — HTML KV cache read (short-circuits SSR on hit, keep)
 - `00.r2-media.ts` — R2 media proxy (only fires for `media.krabiclaw.com` host)
-- `db-foreign-keys.ts` — `PRAGMA foreign_keys = ON` per request (now guarded
-  against self-fetches, still runs on every real request)
+- D1 foreign keys are enforced by the platform. The former
+  `db-foreign-keys.ts` per-request pragma middleware was removed on 2026-07-31
+  because it added a redundant statement to every request.
 - `tenant-resolution.ts` — tenant/host resolution + D1 lookup, ~12.6KB file,
   the single largest/most complex middleware, runs on every request
 - `tenant-routing.ts` — redirect/404 logic for tenant routing

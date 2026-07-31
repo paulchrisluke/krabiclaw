@@ -36,6 +36,7 @@ import {
   getBootstrapCache,
   putBootstrapCache,
 } from "~/server/utils/bootstrap-cache";
+import { recordRequestPhase } from "~/server/utils/request-metrics";
 import {
   renderBookingPolicySummary,
   resolveBookingPolicyIndex,
@@ -140,6 +141,7 @@ interface PublicBase {
     canonical_url: string | null;
     robots: string | null;
     source_locale: string | null;
+    default_timezone: string | null;
   };
 }
 
@@ -171,11 +173,13 @@ export function loadPublicBase(
   if (existing) return existing;
 
   const pending = (async () => {
+    const startedAt = performance.now();
     const db = cloudflareEnv(event).DB;
     if (!db) throw createError({ statusCode: 503, statusMessage: "Database unavailable" });
-    const site = await queryFirst<PublicBase["site"]>(
-      db,
-      `SELECT s.id, s.organization_id, s.default_currency, s.contact_email, s.contact_phone, s.brand_name, s.vertical,
+    try {
+      const site = await queryFirst<PublicBase["site"]>(
+        db,
+        `SELECT s.id, s.organization_id, s.default_currency, s.contact_email, s.contact_phone, s.brand_name, s.vertical,
               s.brand_description, COALESCE(ma_logo.public_url, s.logo_url) AS logo_url,
               json_extract(s.settings, '$.favicon_url') AS favicon_url,
               ma_og.public_url AS og_image_url,
@@ -185,16 +189,25 @@ export function loadPublicBase(
                 WHERE sl.organization_id = s.organization_id
                   AND sl.site_id = s.id
                   AND sl.is_source = 1
-                LIMIT 1) AS source_locale
+                LIMIT 1) AS source_locale,
+              (SELECT sc.value
+                 FROM site_config sc
+                WHERE sc.organization_id = s.organization_id
+                  AND sc.site_id = s.id
+                  AND sc.key = 'default_timezone'
+                LIMIT 1) AS default_timezone
          FROM sites s
          LEFT JOIN media_assets ma_logo ON s.logo_asset_id = ma_logo.id AND ma_logo.status = 'active'
          LEFT JOIN media_assets ma_og ON s.og_image_asset_id = ma_og.id AND ma_og.status = 'active'
         WHERE s.id = ? AND s.status = 'active'${options.previewAuthorized ? "" : " AND s.onboarding_status = 'active'"}
         LIMIT 1`,
-      [siteId],
-    );
-    if (!site) throw createError({ statusCode: 404, statusMessage: "Site not found" });
-    return { site };
+        [siteId],
+      );
+      if (!site) throw createError({ statusCode: 404, statusMessage: "Site not found" });
+      return { site };
+    } finally {
+      recordRequestPhase(event, "base", startedAt);
+    }
   })();
   requestReads.set(key, pending);
   return pending;
@@ -282,9 +295,12 @@ function parseExperienceRow(row: Record<string, unknown>): Experience {
   } as Experience;
 }
 
-export async function loadPublicBootstrap(
+type PublicResourceKind = 'shell' | 'page'
+
+async function loadPublicResource(
   event: H3Event,
   siteId: string,
+  resourceKind: PublicResourceKind,
   query: Record<string, string | undefined>,
   options: PublicBootstrapLoadOptions = {},
 ) {
@@ -319,7 +335,6 @@ export async function loadPublicBootstrap(
   const dataType = typeof query.data === "string" ? query.data : null; // 'reviews' | 'photos' | 'qa' | 'blog' | 'blogPost'
   const blogSlug = typeof query.blogSlug === "string" ? query.blogSlug : null;
   const locale = typeof query.locale === "string" ? query.locale : undefined;
-  const contract = query.contract === 'shell' ? 'shell' : 'page';
 
   // Validate query inputs before using KV cache — only allow known-safe values
   // to prevent unbounded cache entries from arbitrary variants.
@@ -360,7 +375,7 @@ export async function loadPublicBootstrap(
   const host = getHeader(event, "host") ?? "";
   const useBootstrapCache = !isPreviewAuthorized && !isPreviewContext(host) && allInputsValid;
   const cacheKey = buildBootstrapCacheKey(siteId, {
-    contract,
+    contract: resourceKind,
     page,
     location: locationSlug,
     experience: experienceSlug,
@@ -419,14 +434,17 @@ export async function loadPublicBootstrap(
     page === "locations" ||
     page === "photos" ||
     !!locationSlug;
+  const needsLocations =
+    resourceKind === "shell" ||
+    needsLocationHeroMedia ||
+    page === "menu" ||
+    page === "experiences";
 
   // Build batch — one subrequest to D1 for all inline queries
   const batchStmts: BatchQuery[] = [];
   let idxLoc = -1,
     idxConfig = -1,
-    idxLocale = -1,
-    idxExpCount = -1,
-    idxHasMenu = -1;
+    idxLocale = -1;
   let idxReviews = -1,
     idxLocReviews = -1;
   let idxFullReviews = -1,
@@ -450,7 +468,7 @@ export async function loadPublicBootstrap(
     return i;
   };
 
-  idxLoc = push(
+  if (needsLocations) idxLoc = push(
     needsLocationHeroMedia
       ? `SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.email, bl.website_url, bl.maps_url,
                  bl.latitude, bl.longitude, bl.opening_hours, bl.special_hours, bl.timezone, bl.rating, bl.review_count,
@@ -484,12 +502,23 @@ export async function loadPublicBootstrap(
     [orgId, siteId],
   );
 
-  if (contract === 'shell') idxConfig = push(
-    `SELECT key, value FROM site_config WHERE organization_id = ? AND site_id = ?`,
-    [orgId, siteId],
+  if (resourceKind === 'shell') idxConfig = push(
+    `SELECT key, value
+       FROM site_config
+      WHERE organization_id = ? AND site_id = ?
+     UNION ALL
+     SELECT '__experience_count',
+            CAST((SELECT COUNT(*) FROM experiences WHERE site_id = ? AND status != 'inactive') AS TEXT)
+     UNION ALL
+     SELECT '__has_menu',
+            CAST(EXISTS(
+              SELECT 1 FROM menus
+              WHERE organization_id = ? AND site_id = ? AND status = 'published'
+            ) AS TEXT)`,
+    [orgId, siteId, siteId, orgId, siteId],
   );
 
-  if (contract === 'shell') idxLocale = push(
+  if (resourceKind === 'shell') idxLocale = push(
     `SELECT locale, label, is_source, status
      FROM site_locales
      WHERE organization_id = ? AND site_id = ?
@@ -497,20 +526,6 @@ export async function loadPublicBootstrap(
      ORDER BY is_source DESC, locale ASC`,
     [orgId, siteId],
   );
-
-  if (contract === 'shell') idxExpCount = push(
-    `SELECT COUNT(*) AS cnt FROM experiences WHERE site_id = ? AND status != 'inactive'`,
-    [siteId],
-  );
-  if (contract === 'shell') {
-    idxHasMenu = push(
-      `SELECT 1 AS present
-       FROM menus
-       WHERE organization_id = ? AND site_id = ? AND status = 'published'
-       LIMIT 1`,
-      [orgId, siteId],
-    );
-  }
 
   // Content for the requested page (source + translations)
   if (page) {
@@ -770,7 +785,9 @@ export async function loadPublicBootstrap(
   options.signal?.throwIfAborted();
 
   // Extract batch results by tracked index
-  const locRows = batchResults[idxLoc] as { results: Record<string, unknown>[] };
+  const locRows = idxLoc >= 0
+    ? batchResults[idxLoc] as { results: Record<string, unknown>[] }
+    : { results: [] as Record<string, unknown>[] };
   const configRows = idxConfig >= 0
     ? batchResults[idxConfig] as { results: { key: string; value: string }[] }
     : { results: [] as { key: string; value: string }[] };
@@ -804,15 +821,11 @@ export async function loadPublicBootstrap(
         }[]
       }
     : { results: [] };
-  const experienceCountVal =
-    (
-      batchResults[idxExpCount]?.results?.[0] as
-        | { cnt: number }
-        | undefined
-    )?.cnt
-    ?? 0;
+  const experienceCountVal = Number(
+    configRows.results.find(({ key }) => key === "__experience_count")?.value ?? 0,
+  );
   const hasMenu =
-    idxHasMenu >= 0 && Boolean(batchResults[idxHasMenu]?.results?.length);
+    configRows.results.find(({ key }) => key === "__has_menu")?.value === "1";
 
   const sourceLocale =
     site.source_locale
@@ -1008,8 +1021,16 @@ export async function loadPublicBootstrap(
   });
   const experiencesWithMedia = experiencesListRaw.map(attachExperienceMedia);
   options.signal?.throwIfAborted();
+  const availabilityContext = {
+    locations: (locRows.results ?? []).map(location => ({
+      id: String(location.id),
+      special_hours: typeof location.special_hours === "string" ? location.special_hours : null,
+      timezone: typeof location.timezone === "string" ? location.timezone : null,
+    })),
+    defaultTimezone: site.default_timezone ?? "UTC",
+  };
   const experiencesList = page === "experiences"
-    ? await attachAvailabilitySummaries(db, orgId, siteId, experiencesWithMedia)
+    ? await attachAvailabilitySummaries(db, orgId, siteId, experiencesWithMedia, availabilityContext)
     : experiencesWithMedia;
 
   const experienceDetailRaw: Experience | null =
@@ -1027,7 +1048,13 @@ export async function loadPublicBootstrap(
   options.signal?.throwIfAborted();
   const experienceDetail =
     experienceDetailRaw && experienceDetailRaw.status !== "inactive"
-      ? (await attachAvailabilitySummaries(db, orgId, siteId, [attachExperienceMedia(experienceDetailRaw)]))[0]
+      ? (await attachAvailabilitySummaries(
+          db,
+          orgId,
+          siteId,
+          [attachExperienceMedia(experienceDetailRaw)],
+          availabilityContext,
+        ))[0]
       : null;
 
   options.signal?.throwIfAborted();
@@ -1089,7 +1116,9 @@ export async function loadPublicBootstrap(
   });
 
   const config = Object.fromEntries(
-    (configRows.results ?? []).map(({ key, value }) => [key, value]),
+    (configRows.results ?? [])
+      .filter(({ key }) => !key.startsWith("__"))
+      .map(({ key, value }) => [key, value]),
   );
   config.default_currency = site.default_currency || "THB";
   if (site.contact_email) config.contact_email = site.contact_email;
@@ -1170,8 +1199,8 @@ export async function loadPublicBootstrap(
     });
   }
 
-  const needsReservationPolicies = contract === 'page' && page === 'reservations';
-  const needsExperiencePolicies = contract === 'page' && (
+  const needsReservationPolicies = resourceKind === 'page' && page === 'reservations';
+  const needsExperiencePolicies = resourceKind === 'page' && (
     page === 'experiences' || page === 'location' || page === 'menu'
   );
   options.signal?.throwIfAborted();
@@ -1326,7 +1355,7 @@ export async function loadPublicBootstrap(
     experiencesList,
     experienceDetail,
   };
-  const payload = contract === 'shell' ? shellPayload : pagePayload;
+  const payload = resourceKind === 'shell' ? shellPayload : pagePayload;
 
   // Slug-shaped inputs are only worth caching once they've resolved to a real
   // row — otherwise a stream of made-up slugs (still regex-valid) would each
@@ -1368,7 +1397,14 @@ export const loadPublicShell = (
   const key = `${siteId}:${query.locale ?? ''}:${query.token ?? ''}`;
   const existing = requestReads.get(key);
   if (existing) return existing;
-  const pending = loadPublicBootstrap(event, siteId, { ...query, contract: 'shell' }, options);
+  const startedAt = performance.now();
+  const operation = loadPublicResource(event, siteId, 'shell', query, options);
+  const pending = operation
+    .finally(() => recordRequestPhase(event, "shell", startedAt))
+    .catch((error) => {
+      if (requestReads.get(key) === pending) requestReads.delete(key);
+      throw error;
+    });
   requestReads.set(key, pending);
   return pending;
 };
@@ -1393,11 +1429,14 @@ export const loadPublicPage = (
   const existing = requestReads.get(key);
   if (existing) return existing;
 
-  const operation = loadPublicBootstrap(event, siteId, { ...query, contract: 'page' }, options);
-  const pending = operation.catch((error) => {
-    if (requestReads.get(key) === pending) requestReads.delete(key);
-    throw error;
-  });
+  const startedAt = performance.now();
+  const operation = loadPublicResource(event, siteId, 'page', query, options);
+  const pending = operation
+    .finally(() => recordRequestPhase(event, "page", startedAt))
+    .catch((error) => {
+      if (requestReads.get(key) === pending) requestReads.delete(key);
+      throw error;
+    });
   requestReads.set(key, pending);
   return pending;
 };

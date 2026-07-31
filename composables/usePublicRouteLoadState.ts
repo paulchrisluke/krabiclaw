@@ -3,7 +3,6 @@ interface PublicRouteLoadState {
   key: string
   pending: boolean
   error: PublicRouteLoadError | null
-  data: ApiRecord | null
 }
 
 interface PublicRouteLoadError {
@@ -19,10 +18,21 @@ const createPublicRouteLoadState = (): PublicRouteLoadState => ({
   key: '',
   pending: false,
   error: null,
-  data: null,
 })
 
 const clientPublicRouteLoadState = shallowRef<PublicRouteLoadState>(createPublicRouteLoadState())
+let activePublicRouteOwner: symbol | null = null
+
+export function claimPublicRouteLoadOwner() {
+  const owner = Symbol('public-route-load-owner')
+  if (import.meta.client) activePublicRouteOwner = owner
+  return {
+    ownsState: () => import.meta.server || activePublicRouteOwner === owner,
+    release: () => {
+      if (activePublicRouteOwner === owner) activePublicRouteOwner = null
+    },
+  }
+}
 
 export const normalizePublicRouteLoadError = (error: unknown): PublicRouteLoadError | null => {
   if (!error) return null

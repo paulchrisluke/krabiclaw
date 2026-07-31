@@ -65,6 +65,10 @@ export default defineEventHandler(async (event) => {
 
   const url = getRequestURL(event);
   const tenantPath = normalizedPath(url.pathname);
+  // Public site APIs carry an explicit site ID and resolve that site through
+  // their canonical service. Host-based tenant resolution would duplicate the
+  // same database lookup without adding an authorization boundary.
+  if (tenantPath.startsWith("/api/public/sites/")) return;
   const host = getHeader(event, "host") || "";
   const env = cloudflareEnv(event);
 

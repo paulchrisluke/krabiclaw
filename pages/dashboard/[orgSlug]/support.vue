@@ -172,7 +172,6 @@ definePageMeta({ layout: 'dashboard' })
 
 const config = useRuntimeConfig()
 const dashboard = useDashboardSite()
-if (!dashboard.state.value) await dashboard.refresh()
 const plan = computed(() => dashboard.site.value?.plan ?? 'free')
 const isFree = computed(() => !plan.value || plan.value === 'free')
 const managedServiceEnabled = dashboard.managedServiceEnabled
