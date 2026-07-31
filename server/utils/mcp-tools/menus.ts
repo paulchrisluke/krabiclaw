@@ -108,6 +108,17 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
         dietary_notes: { type: 'array', items: { type: 'string' } },
         preparation: { type: ['string', 'null'] },
         serving_note: { type: ['string', 'null'] },
+        media: {
+          type: 'array',
+          description: 'Ordered image/video media asset references. Position 0 is the cover everywhere. Videos in cover position must already have thumbnail_url/poster metadata.',
+          items: {
+            type: 'object',
+            properties: {
+              asset_id: { type: 'string', description: 'Active image or video asset id from get_site_media_assets.' },
+            },
+            required: ['asset_id'],
+          },
+        },
         ...seoOverrideFieldsSchema('Falls back to the site-level og image if unset.'),
       },
       required: ['menu_id', 'section', 'name'],
@@ -144,6 +155,17 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
               dietary_notes: { type: 'array', items: { type: 'string' } },
               preparation: { type: ['string', 'null'] },
               serving_note: { type: ['string', 'null'] },
+              media: {
+                type: 'array',
+                description: 'Ordered image/video media asset references. Position 0 is the cover everywhere. Videos in cover position must already have thumbnail_url/poster metadata.',
+                items: {
+                  type: 'object',
+                  properties: {
+                    asset_id: { type: 'string', description: 'Active image or video asset id from get_site_media_assets.' },
+                  },
+                  required: ['asset_id'],
+                },
+              },
             },
             required: ['section', 'name'],
             additionalProperties: true,
@@ -213,6 +235,17 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
               dietary_notes: { type: 'array', items: { type: 'string' } },
               preparation: { type: ['string', 'null'] },
               serving_note: { type: ['string', 'null'] },
+              media: {
+                type: 'array',
+                description: 'Ordered image/video media asset references. Position 0 is the cover everywhere. Videos in cover position must already have thumbnail_url/poster metadata.',
+                items: {
+                  type: 'object',
+                  properties: {
+                    asset_id: { type: 'string', description: 'Active image or video asset id from get_site_media_assets.' },
+                  },
+                  required: ['asset_id'],
+                },
+              },
             },
             additionalProperties: true,
           },
@@ -328,6 +361,17 @@ export const MENUS_TOOLS: McpToolDefinition[] = [
         dietary_notes: { type: 'array', items: { type: 'string' } },
         preparation: { type: ['string', 'null'] },
         serving_note: { type: ['string', 'null'] },
+        media: {
+          type: 'array',
+          description: 'Ordered image/video media asset references. Position 0 is the cover everywhere. Videos in cover position must already have thumbnail_url/poster metadata.',
+          items: {
+            type: 'object',
+            properties: {
+              asset_id: { type: 'string', description: 'Active image or video asset id from get_site_media_assets.' },
+            },
+            required: ['asset_id'],
+          },
+        },
         ...seoOverrideFieldsSchema('Falls back to the site-level og image if unset.'),
       },
       required: ['menu_item_id'],

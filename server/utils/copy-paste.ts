@@ -280,10 +280,10 @@ async function copyMenuItems(
   idMappings: Record<string, string>,
   includeTranslations = true,
 ) {
-  const menuItems = await queryAll<{ id: string; menu_id: string; image_asset_id: string | null }>(
+  const menuItems = await queryAll<{ id: string; menu_id: string }>(
     db,
     `
-    SELECT id, menu_id, image_asset_id 
+    SELECT id, menu_id
     FROM menu_items 
     WHERE menu_id IN (SELECT id FROM menus WHERE location_id = ? AND organization_id = ? AND site_id = ?)
     `,
@@ -296,7 +296,6 @@ async function copyMenuItems(
     manifest.entities.menu_items.new_ids.push(newId)
 
     const newMenuId = idMappings[item.menu_id]
-    const newImageAssetId = item.image_asset_id ? (idMappings[item.image_asset_id] ?? null) : null
 
     statements.push({
       query: `
@@ -304,8 +303,25 @@ async function copyMenuItems(
         SELECT ?, ?, section, name, slug, description, price_amount, ?, available, featured, featured_sort_order, sort_order, allergens, ingredients, dietary_notes, preparation, serving_note, ?, updated_at, created_by, updated_by
         FROM menu_items WHERE id = ?
       `,
-      params: [newId, newMenuId, newImageAssetId, now, item.id],
+      params: [newId, newMenuId, null, now, item.id],
     })
+
+    const mediaRows = await queryAll<{ asset_id: string; sort_order: number }>(
+      db,
+      `SELECT asset_id, sort_order FROM menu_item_media WHERE site_id = ? AND menu_item_id = ? ORDER BY sort_order`,
+      [siteId, item.id],
+    )
+    for (const media of mediaRows) {
+      const newAssetId = idMappings[media.asset_id]
+      if (!newAssetId) continue
+      statements.push({
+        query: `
+          INSERT INTO menu_item_media (id, organization_id, site_id, menu_item_id, asset_id, sort_order, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        params: [crypto.randomUUID(), organizationId, siteId, newId, newAssetId, media.sort_order, now, now],
+      })
+    }
 
     if (includeTranslations) {
       // SELECT can return multiple rows (one per locale) — generate a fresh id per row

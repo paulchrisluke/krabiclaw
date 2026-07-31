@@ -240,7 +240,9 @@ async function main() {
   const rawBase64Image = await assertSavedImage(headers, siteId, fixture.rawBase64, 'raw-base64')
   const dataUrlImage = await assertSavedImage(headers, siteId, fixture.dataUrl, 'data-url')
   const assetId = rawBase64Image?.assetId
+  const secondAssetId = dataUrlImage?.assetId
   expectValue('saved image fixture returns reusable assetId', Boolean(assetId), rawBase64Image)
+  expectValue('saved image fixture returns second reusable assetId', Boolean(secondAssetId), dataUrlImage)
 
   const locationId = await createLocation(headers, siteId)
   const workspaceSet = await mcp(headers, 'set_workspace_context', {
@@ -301,11 +303,11 @@ async function main() {
 
   await assertImageAssignmentTool(headers, 'set_media', {
     site_id: siteId,
-    target: { type: 'menu_item_image', menu_item_id: itemId },
-    asset_ids: [assetId],
+    target: { type: 'menu_item_media', menu_item_id: itemId },
+    asset_ids: [assetId, secondAssetId],
   }, (payload) => {
-    expectValue('set_media menu_item_image returns item id', payload?.id === itemId, payload)
-    expectValue('set_media menu_item_image returns site context', payload?.context?.site_id === siteId, payload)
+    expectValue('set_media menu_item_media returns item id', payload?.id === itemId, payload)
+    expectValue('set_media menu_item_media returns site context', payload?.context?.site_id === siteId, payload)
   })
 
   await assertImageAssignmentTool(headers, 'set_media', {
@@ -340,7 +342,11 @@ async function main() {
   const menuReadPayload = data(menuRead.body)?.menu
   const menuItem = menuReadPayload?.items?.find((item) => item.id === itemId)
   expectStatus('get_menu for image verification succeeds', menuRead)
-  expectValue('set_media updates menu item image', menuItem?.image_asset_id === assetId, menuItem)
+  expectValue(
+    'set_media updates ordered menu item media',
+    JSON.stringify(menuItem?.media?.map((media) => media.id)) === JSON.stringify([assetId, secondAssetId]),
+    menuItem,
+  )
 
   const postRead = await mcp(headers, 'get_post', {
     site_id: siteId,

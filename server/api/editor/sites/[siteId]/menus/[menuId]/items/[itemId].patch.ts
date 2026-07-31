@@ -90,19 +90,6 @@ export default defineEventHandler(async (event) => {
       resourceLocationId: existingMenu.location_id,
     })
 
-    if (body.image_asset_id !== undefined && body.image_asset_id !== null && body.image_asset_id !== '') {
-      const asset = await queryFirst(db, `
-        SELECT id
-        FROM media_assets
-        WHERE id = ? AND organization_id = ? AND site_id = ?
-        LIMIT 1
-      `, [body.image_asset_id, site.organization_id, siteId])
-
-      if (!asset) {
-        return jsonResponse({ error: 'Invalid image_asset_id' }, { status: 400 })
-      }
-    }
-
     if (body.price_amount !== undefined && body.price_amount !== null && String(body.price_amount).trim() !== '' && !normalizePriceAmount(body.price_amount)) {
       return jsonResponse({ error: 'Invalid price amount' }, { status: 400 })
     }

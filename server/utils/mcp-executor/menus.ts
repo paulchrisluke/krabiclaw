@@ -59,6 +59,7 @@ function buildMenuItemUpdates(itemRecord: Record<string, unknown>, match?: MenuI
   if (dietaryNotes !== undefined && !stringArraysEqual(dietaryNotes, match?.dietary_notes)) updates.dietary_notes = dietaryNotes
   if (preparation !== undefined && preparation !== match?.preparation) updates.preparation = preparation
   if (servingNote !== undefined && servingNote !== match?.serving_note) updates.serving_note = servingNote
+  if (itemRecord.media !== undefined) updates.media = itemRecord.media as UpdateMenuItemRequest['media']
 
   return updates
 }
@@ -354,21 +355,15 @@ export async function handleMenusTools(ctx: McpExecutorContext): Promise<unknown
         }
 
         try {
+          const createMenuItemArgs = normalizeMenuItemArgs(itemRecord, {
+            requireSection: true,
+          });
           const createdItem = await createMenuItem(
             site.db,
             site.organizationId,
             site.siteId,
             menuId,
-            {
-              section,
-              name,
-              description: toolString(itemRecord, "description", 500),
-              price_amount: toolString(itemRecord, "price_amount", 50),
-              compare_at_price_amount: toolString(itemRecord, "compare_at_price_amount", 50),
-              sale_starts_at: toolString(itemRecord, "sale_starts_at", 50),
-              sale_ends_at: toolString(itemRecord, "sale_ends_at", 50),
-              available: toolBoolean(itemRecord, "available"),
-            } as never,
+            omit(createMenuItemArgs, ["price"]) as never,
             site.userId,
           );
           workingItems.push(createdItem);

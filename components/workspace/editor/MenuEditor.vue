@@ -229,12 +229,12 @@
             class="grid gap-3 border-b border-default px-4 py-3 last:border-0 hover:bg-elevated sm:grid-cols-[auto_minmax(0,1fr)_auto_auto_auto_auto] sm:items-center"
           >
             <MediaPicker
-              :model-value="item.image_asset_id"
+              :model-value="item.media?.[0]?.id ?? null"
               :site-id="props.siteId"
               :location-id="props.locationId"
               accept="any"
               title="Item image or video"
-              @update:model-value="handleQuickUpdateItem(item, { image_asset_id: $event })"
+              @update:model-value="handleQuickUpdateItem(item, coverMediaUpdate(item, $event))"
             >
               <div class="group relative size-14 overflow-hidden rounded-md border border-default bg-muted">
                 <img
@@ -430,6 +430,12 @@ const itemEditPath = (item: MenuItem) => ({
   path: `${paths.value.menu}/items/${item.id}`,
   query: menuRouteQuery.value
 })
+
+const coverMediaUpdate = (item: MenuItem, assetId: string | null): UpdateMenuItemRequest => {
+  const rest = (item.media ?? []).slice(1).map((media) => ({ asset_id: media.id }))
+  const next = assetId?.trim()
+  return { media: next ? [{ asset_id: next }, ...rest] : rest }
+}
 
 const handleQuickUpdateItem = async (item: MenuItem, updates: UpdateMenuItemRequest) => {
   try {

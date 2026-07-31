@@ -183,7 +183,7 @@ function mediaPlacementTarget(raw: Record<string, unknown>): MediaPlacementTarge
   if (type === "site_logo" || type === "home_story_image" || type === "about_story_image") return { type };
   if (type === "home_hero") return { type, location_id: optionalString(raw, "location_id") ?? null };
   if (type === "location_hero") return { type, location_id: requiredString(raw, "location_id") };
-  if (type === "menu_item_image") return { type, menu_item_id: requiredString(raw, "menu_item_id") };
+  if (type === "menu_item_media") return { type, menu_item_id: requiredString(raw, "menu_item_id") };
   if (type === "post_image") return { type, post_id: requiredString(raw, "post_id") };
   if (type === "blog_post_image") return { type, post_id: requiredString(raw, "post_id") };
   if (type === "experience_media") return { type, experience_id: requiredString(raw, "experience_id") };

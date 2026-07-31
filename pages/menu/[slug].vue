@@ -41,37 +41,7 @@
         <section class="mt-8 lg:col-span-7 lg:col-start-1 lg:row-span-3 lg:row-start-1 lg:mt-0" aria-labelledby="item-images-heading">
           <h2 id="item-images-heading" class="sr-only">Dish images</h2>
           <div class="grid grid-cols-1 gap-4 lg:grid-cols-1 lg:gap-6">
-            <button
-              v-if="mainMedia.url"
-              type="button"
-              class="group relative block w-full overflow-hidden rounded-lg bg-default text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
-              :aria-label="`Open ${item.name} media`"
-              @click="openLightbox"
-            >
-              <video
-                v-if="mainMedia.isVideo"
-                :src="mainMedia.url ?? undefined"
-                autoplay
-                muted
-                loop
-                playsinline
-                class="aspect-4/3 w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-              />
-              <img
-                v-else
-                :src="mainMedia.url"
-                :alt="item.name"
-                class="aspect-4/3 w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-              />
-              <span class="pointer-events-none absolute inset-x-0 bottom-0 bg-linear-to-t from-black/70 to-transparent px-4 pb-4 pt-16 text-xs font-medium uppercase tracking-widest text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-                View media
-              </span>
-            </button>
-            <div v-else class="overflow-hidden rounded-lg bg-default">
-              <div class="flex aspect-4/3 w-full items-center justify-center px-6 text-center bg-muted">
-                <span class="text-sm text-dimmed">No image available yet</span>
-              </div>
-            </div>
+            <SayaMediaGallery :items="mediaItems" :title="item.name" empty-icon="sparkles" />
           </div>
         </section>
 
@@ -279,11 +249,6 @@
         </div>
       </section>
 
-      <SayaLightbox v-model:open="lightboxOpen" :items="lightboxItems" :title="item.name">
-        <template v-if="item.description" #caption>
-          <p class="text-sm text-white/80">{{ item.description }}</p>
-        </template>
-      </SayaLightbox>
     </article>
 
     <!-- 404 State -->
@@ -304,13 +269,13 @@
 definePageMeta({ layout: 'saya' })
 import AppBreadcrumb from '~/components/ui/AppBreadcrumb.vue'
 import { formatMoneyAmount, isSaleActive } from '~/shared/money'
+import type { MenuItem } from '~/server/types/menu'
 import {
   useBootstrapParams,
   useBootstrapKey,
   useBootstrapUrl,
 } from '~/composables/useBootstrapParams'
 
-const { resolveMedia } = useMedia()
 const route = useRoute()
 const { site, siteId, draftId } = useTenantSite()
 const siteName = computed(() => site?.brand_name || 'KrabiClaw')
@@ -339,6 +304,7 @@ interface MenuItemType {
   sale_ends_at?: string | null
   available: boolean
   public_url?: string
+  thumbnail_url?: string | null
   kind?: string
   description?: string
   preparation?: string
@@ -352,6 +318,7 @@ interface MenuItemType {
   canonical_url?: string | null
   robots?: string | null
   og_image_public_url?: string | null
+  media?: MenuItem['media']
 }
 
 interface ReviewsResponse {
@@ -398,7 +365,7 @@ type PropertyValue = {
 type LightboxMediaItem = {
   url: string
   kind: 'image' | 'video'
-  poster?: string | null
+  poster?: string
   alt?: string
   description?: string
 }
@@ -462,28 +429,19 @@ const isRobatayaki = computed(() =>
   category.value?.name?.toLowerCase().includes('robatayaki') ?? false
 )
 
-const mainMedia = computed(() => resolveMedia({
-  public_url: item.value?.public_url,
-  kind: item.value?.kind
-}))
-
-const lightboxOpen = ref(false)
-const lightboxItems = computed<LightboxMediaItem[]>(() => {
-  if (!item.value || !mainMedia.value.url) return []
-  const kind = mainMedia.value.isVideo ? 'video' : 'image'
-  return [{
-    url: mainMedia.value.url,
-    kind,
-    poster: mainMedia.value.thumb,
-    alt: item.value.name,
-    description: item.value.description,
-  }]
+const mediaItems = computed<LightboxMediaItem[]>(() => {
+  const currentItem = item.value
+  if (!currentItem) return []
+  return (currentItem.media ?? [])
+    .map(media => ({
+      url: media.public_url,
+      kind: media.kind,
+      poster: media.kind === 'video' ? media.thumbnail_url || undefined : undefined,
+      alt: media.alt_text || currentItem.name,
+      description: currentItem.description,
+    }))
+    .filter(media => media.url)
 })
-
-function openLightbox() {
-  if (!lightboxItems.value.length) return
-  lightboxOpen.value = true
-}
 
 const visibleAllergens = computed(() =>
   item.value?.allergens?.filter(allergen => !allergen.includes('PLACEHOLDER')) ?? []
@@ -540,7 +498,7 @@ const reviewSummary = computed(() => {
 const reviewDateTime = (review: Review) => review.datetime ?? review.createdAt ?? ''
 
 const schemaImage = computed(() =>
-  mainMedia.value.url ?? undefined
+  mediaItems.value[0]?.poster || mediaItems.value[0]?.url
 )
 const loadReviews = async () => {
   if (!item.value?.slug) return
@@ -615,7 +573,8 @@ const seoTitle = () => item.value?.seo_title || (item.value ? `${item.value.name
 const seoDescription = () => truncateForSeo(item.value?.seo_description || (item.value ? item.value.description : 'The menu item you\'re looking for doesn\'t exist.'), 160)
 
 useTenantSocialMetadata(() => {
-  const heroImageUrl = item.value?.og_image_public_url || mainMedia.value.thumb || null
+  const firstMedia = mediaItems.value[0]
+  const heroImageUrl = item.value?.og_image_public_url || firstMedia?.poster || firstMedia?.url || null
   return {
     path: item.value?.canonical_url || (item.value ? `/menu/${item.value.slug}` : '/menu'),
     title: seoTitle(),

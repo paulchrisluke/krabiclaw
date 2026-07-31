@@ -92,7 +92,7 @@ export const ONBOARDING_TOOLS: McpToolDefinition[] = [
           },
           target: {
             type: 'string',
-            enum: ['logo', 'home_hero', 'about_story_image', 'home_story_image', 'location_hero', 'post_image', 'menu_item_image', 'experience_image'],
+            enum: ['logo', 'home_hero', 'about_story_image', 'home_story_image', 'location_hero', 'post_image', 'menu_item_media', 'experience_image'],
             description: 'Optional target that should be updated directly after the user selects an image.',
           },
           site_id: { type: 'string', description: 'Required with target. Site ID that owns the target content.' },
