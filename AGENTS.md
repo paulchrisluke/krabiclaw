@@ -220,33 +220,263 @@ The bodies in `server/utils/whatsapp.ts`'s `TEMPLATES` map must match approved t
 
 ## CI / E2E Architecture
 
-Three tiers exist:
+### Validation policy
 
-### e2e-smoke
+Do not add one test per review comment. Map each defect to the lowest-level
+shared invariant that would have prevented it, and add or update one owning
+test there. Add an E2E test only when the behavior crosses routing, SSR,
+hydration, browser cancellation, or multiple independent resources.
 
-Runs on every PR.
+During implementation:
+- Run focused tests for changed modules.
+- Do not rerun the full suite after each individual fix.
+- Do not run multi-sample benchmarks during the editing loop.
 
-1. Build
-2. `yarn migrate:preview`, then seed `krabiclaw-db-preview`
-3. `yarn deploy:preview:worker`
-4. Run E2E against `preview.krabiclaw.com`
+Required on each relevant PR push:
+- Typecheck and lint.
+- Impacted unit/integration tests.
+- Representative E2E tests only.
+- Deterministic request, query, payload, retry, and SSR-call budgets.
+- One production build in parallel.
+- Target required CI wall-clock duration: 10 minutes or less.
 
-### e2e-staging
+Run the exhaustive suite only nightly, manually, or when the PR is marked
+merge-ready:
+- Full browser and route matrix.
+- Full E2E suite.
+- Long-running database integration coverage.
+- Comparative performance benchmarks.
 
-Runs on push to `staging`.
+Performance policy:
+- PR smoke benchmark: 3-5 samples for affected representative journeys.
+- Final merge-ready comparison: 20-30 samples, run once against base and head
+  under the same fixture, cache state, environment, and runner.
+- Do not report p99 from 30 samples.
+- Use production telemetry or at least 100 samples for meaningful tail
+  percentiles.
+- Deterministic request/query/payload budgets remain blocking on every
+  performance-sensitive PR.
 
-1. Build
-2. `yarn migrate:staging`, then seed `krabiclaw-db-staging`
-3. `yarn deploy:staging:worker`
-4. Run E2E against `staging.krabiclaw.com`
+The final report must identify:
+- Tests added.
+- Existing tests reused.
+- Redundant tests removed or consolidated.
+- Focused validation results.
+- Full validation results, only when the full lane was run.
+- Benchmark results, only when the benchmark lane was run.
 
-### prod-deploy
+Do not claim that a benchmark was executed when only a source-code contract
+test or static assertion was run.
 
-Runs on push to `main`.
+### Three CI lanes
 
-1. `yarn migrate:prod`, then `yarn deploy:prod:worker`
-2. `prod-smoke` job runs afterward (needs: prod-deploy)
-3. Production canaries run separately — gated behind `vars.ENABLE_REAL_SEND_TESTS` (real-send canaries) or the daily schedule (status-only canary)
+#### 1. Focused development lane: target under 2 minutes
+
+Run after each implementation batch:
+
+- Tests directly covering changed modules.
+- Typecheck for affected workspace/package where supported.
+- Focused lint.
+- No full browser matrix.
+- No repeated performance sampling.
+- No production build after every individual review item.
+
+The LLM should run this lane repeatedly while working.
+
+Workflow: `.github/workflows/ci-dev.yml`
+
+#### 2. Required PR lane: target under 8–10 minutes wall-clock
+
+Run jobs in parallel:
+
+- Full typecheck and lint.
+- Impacted unit and integration tests.
+- A small set of representative E2E tests.
+- Deterministic request, query, and payload budgets.
+- One production build, in its own parallel job.
+
+Do not run every template, every dashboard page, every browser, and every benchmark sample on every push.
+
+Workflow: `.github/workflows/ci.yml`
+
+#### 3. Full validation lane: merge-ready, manual, or nightly
+
+Run only when the PR is marked ready, given a performance label, or on schedule:
+
+- Full E2E suite.
+- All supported browser/template combinations.
+- Complete production build variants.
+- Long-running D1 integration tests.
+- Comparative performance benchmark.
+- Flake and retry analysis.
+
+This lane can take 20–30 minutes without blocking every development iteration.
+
+Workflow: `.github/workflows/ci-full.yml`
+
+### Replace repeated tests with invariant-owned tests
+
+Each invariant should have one primary test at the lowest useful layer.
+
+#### 1. API attempt semantics
+
+One `api-clients` suite should verify:
+
+- `retry: 0`.
+- Central timeout.
+- Runtime response validation.
+- Caller cancellation.
+- Browser-only coalescing.
+- Null and primitive error normalization.
+- Explicit empty-mutation response support.
+
+Individual pages do not each need another test proving `retry: 0`.
+
+#### 2. Explicit dashboard scope
+
+One server-level authorization suite should verify:
+
+- Requested organization A never resolves to active organization B.
+- Missing or inaccessible explicit scope fails.
+- Unscoped discovery can still use the intended unscoped behavior.
+
+Support, Q&A, activity, and other pages do not each need duplicate authorization matrices unless they contain separate authorization logic.
+
+#### 3. No own-origin SSR requests
+
+Instrument the internal request boundary once. Render one representative dashboard route and one public route. Assert zero app-owned HTTP calls during SSR.
+
+A single instrumentation test is stronger and cheaper than separate source-text tests for activity, support, Q&A, onboarding, and every future page.
+
+#### 4. Public route ownership
+
+One focused A → B → C E2E test should cover:
+
+- A resolves after B mounts.
+- A rejects after B mounts.
+- B resolves after C mounts.
+- Only C can update loading and error state.
+
+This does not need to be repeated for every public page.
+
+#### 5. Public data query budgets
+
+Keep two integration fixtures:
+
+- A simple localized public page.
+- An experience route with multiple experiences and locations.
+
+Assert deterministic statement counts and constant query growth. Do not run dozens of wall-clock samples to verify query-count behavior.
+
+#### 6. DTO validation
+
+Pass actual published and draft service results through the shared runtime schemas. Avoid separate shallow validator tests in each consuming composable.
+
+### Tests that should not be added
+
+Do not add dedicated tests solely for:
+
+- Removing a non-null assertion.
+- Correcting comments or documentation.
+- Replacing one import with the canonical service.
+- A simple null guard already covered by a shared transport test.
+- Type-only corrections enforced by TypeScript.
+- Every page that adopts the same shared API client.
+- Source-code syntax already enforced by lint or architecture guards.
+
+A regression test is appropriate when the defect changes observable behavior, authorization, request count, state ownership, SSR behavior, or data integrity.
+
+### Replace AST contract tests with cheaper enforcement
+
+Current source-parsing tests are weak because they verify syntax rather than behavior.
+
+Use a single fast lint or repository guard for static prohibitions such as:
+
+- Raw `$fetch` inside scoped dashboard components.
+- `retry` values other than zero in canonical clients.
+- Universal imports from `server/**`.
+- Known own-origin SSR request patterns.
+- `.catch(() => {})` in designated data-loading paths.
+- Module-global SSR in-flight maps.
+
+Use behavioral tests for:
+
+- Actual number of requests.
+- Actual response validation.
+- Actual cancellation.
+- Actual D1 statements.
+- Actual hydration duplication.
+
+Do not test the same requirement statically and behaviorally unless the static guard prevents a broad architectural regression at negligible cost.
+
+### Revised benchmark expectations
+
+Thirty samples should not run on every push.
+
+Use three levels:
+
+#### PR smoke benchmark
+
+Run only when performance-sensitive paths change:
+
+- 3–5 samples.
+- One simple public route.
+- One heavy public route.
+- One representative dashboard journey.
+- Fixed fixture, cache state, runner, and environment.
+- Compare base and head on the same worker.
+
+This detects catastrophic regressions. It is not intended to produce stable tail percentiles.
+
+#### Final comparative benchmark
+
+Run once when the PR is merge-ready:
+
+- 20–30 samples per selected journey.
+- Base and head interleaved or run under equivalent conditions.
+- Report median, a reasonable upper percentile, errors, request count, query count, payload bytes, and cache state.
+- Store the report as a CI artifact rather than committing a new report after every revision.
+
+#### Production or scheduled telemetry
+
+Use this for meaningful p95 and p99 measurements.
+
+A 30-sample benchmark contains only `30 × 0.01 = 0.3` expected observations in the worst one percent. A reported p99 from 30 samples is effectively an unstable maximum, not a reliable percentile. Remove p99 from the 30-sample PR requirement. Use production telemetry or at least roughly 100 observations for tail-percentile reporting.
+
+### Deterministic metrics should remain merge-blocking
+
+These are cheap and stable enough to run on each relevant PR:
+
+- Automatic attempts per logical request.
+- Requests per navigation.
+- Own-origin SSR request count.
+- Hydration duplicate request count.
+- D1 statement count.
+- Rows read.
+- Response bytes.
+- Shell and page payload size.
+- Query-count growth as fixture size increases.
+- Cache hit/miss behavior.
+- Malformed-response handling.
+
+Wall-clock metrics such as TTFB, LCP, and INP should use comparative thresholds because CI timing is noisy. A practical gate should require both a relative and absolute regression, for example greater than 15% and greater than 50 ms, rather than failing on a small percentage change in a very fast operation.
+
+### Minimal merge-blocking suite for this PR
+
+The required behavioral coverage can be reduced to:
+
+1. API client invariant suite.
+2. Dashboard explicit-scope authorization suite.
+3. Published and draft public DTO contract suite.
+4. Public A → B → C ownership/cancellation E2E.
+5. One dashboard SSR/hydration request-count integration test.
+6. One public SSR/navigation request-count integration test.
+7. Simple-page D1 budget test.
+8. Experience-route constant-query-growth test.
+9. One final production build.
+10. One final comparative benchmark job.
+
+Activity, Q&A, support, guest inbox, onboarding, Lobby, and Saya still need functional coverage where their behavior is unique, but they should not each duplicate the shared transport, timeout, retry, schema, and SSR-boundary tests.
 
 ### CI Environment Rules
 

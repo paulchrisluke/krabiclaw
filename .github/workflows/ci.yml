@@ -1,4 +1,4 @@
-name: CI
+name: CI (Required PR Lane)
 
 on:
   pull_request:
@@ -36,6 +36,7 @@ jobs:
       - run: yarn lint:better-auth-boundaries
       - run: yarn typecheck
       - run: yarn test:unit
+      - run: yarn test:unit:budgets
       - run: yarn mcp:compat
 
   changes:
@@ -236,11 +237,12 @@ jobs:
             node --check "$f" && echo "✓ $f" || exit 1
           done
 
-  e2e-smoke:
-    name: E2E smoke
+  e2e-representative:
+    name: E2E representative tests
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.draft == false
     needs: [changes]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     concurrency:
       group: shared-preview-deployment
       cancel-in-progress: false
@@ -363,10 +365,11 @@ jobs:
           curl -sf --connect-timeout 5 --max-time 15 "$PREVIEW_WORKER_URL/" || true
           curl -sf --connect-timeout 5 --max-time 15 "$PREVIEW_WORKER_URL/blog" || true
           curl -sf --connect-timeout 5 --max-time 15 -L -H "x-dev-route-secret: ${E2E_DEV_ROUTE_SECRET}" "$PREVIEW_WORKER_URL/api/dev/login" || true
-      - name: Run smoke tests
+      - name: Run representative tests
         env:
           PLAYWRIGHT_PREVIEW_URL: https://krabiclaw-preview.paulchrisluke.workers.dev
-        run: yarn test:e2e:smoke
+        # Focused representative subset, not full matrix
+        run: yarn test:e2e:representative
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
