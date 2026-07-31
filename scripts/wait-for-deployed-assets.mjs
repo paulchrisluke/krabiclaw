@@ -1,3 +1,5 @@
+import { readdirSync } from 'node:fs'
+
 const rawBaseUrl = process.env.PLAYWRIGHT_PREVIEW_URL
 
 if (!rawBaseUrl) {
@@ -24,6 +26,14 @@ const REQUEST_TIMEOUT_MS = 15_000
 const RETRY_DELAY_MS = 2_000
 const MAX_ATTEMPTS = 20
 const ENTRY_CSS_PATTERN = /\/_nuxt\/entry\.[A-Za-z0-9_-]+\.css/
+const expectedEntryCss = readdirSync('.output/public/_nuxt')
+  .find(filename => /^entry\.[A-Za-z0-9_-]+\.css$/.test(filename))
+
+if (!expectedEntryCss) {
+  throw new Error('The local production build does not contain an entry CSS asset.')
+}
+
+const expectedAssetPath = `/_nuxt/${expectedEntryCss}`
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
@@ -61,6 +71,9 @@ for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     const assetPath = html.match(ENTRY_CSS_PATTERN)?.[0]
     if (!assetPath) {
       throw new Error('homepage did not reference an entry CSS asset')
+    }
+    if (assetPath !== expectedAssetPath) {
+      throw new Error(`homepage references ${assetPath}; waiting for ${expectedAssetPath}`)
     }
 
     const assetUrl = new URL(assetPath, baseUrl)
