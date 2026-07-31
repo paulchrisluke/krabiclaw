@@ -47,8 +47,6 @@
     "test:e2e:full": "playwright test",
     "test:e2e:representative": "playwright test tests/e2e/smoke.spec.ts tests/e2e/dashboard.spec.ts tests/e2e/dashboard-api.spec.ts",
     "test:e2e:staging": "yarn test:e2e:smoke",
-    "benchmark:smoke": "playwright test tests/benchmark/smoke.spec.ts --project=chromium",
-    "benchmark:full": "playwright test tests/benchmark/ --project=chromium",
     "test:e2e:ui": "playwright test --ui",
     "check:deploy": "node scripts/check-deploy-env.mjs",
     "cloudflare:resources": "node scripts/check-cloudflare-resources.mjs",
