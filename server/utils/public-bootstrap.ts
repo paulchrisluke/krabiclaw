@@ -7,7 +7,7 @@
 // All inline D1 queries run in a single executeBatch() call.
 import { executeBatch, queryFirst, type BatchQuery } from "~/server/db";
 import { getHeader, setHeader, type H3Event } from "h3";
-import { cloudflareEnv, jsonResponse } from "~/server/utils/api-response";
+import { cloudflareEnv } from "~/server/utils/api-response";
 import { calculateMapEmbedUrl } from "~/server/utils/google-business";
 import type { SiteContent } from "~/server/utils/content-management";
 import {
@@ -122,6 +122,69 @@ interface MenuItemTranslationRow {
 
 type MenuItemMediaRow = MediaAsset & { menu_item_id: string; sort_order: number };
 
+interface PublicBase {
+  site: {
+    id: string;
+    organization_id: string;
+    default_currency: string | null;
+    contact_email: string | null;
+    contact_phone: string | null;
+    brand_name: string | null;
+    brand_description: string | null;
+    logo_url: string | null;
+    favicon_url: string | null;
+    og_image_url: string | null;
+    seo_title: string | null;
+    seo_description: string | null;
+    canonical_url: string | null;
+    robots: string | null;
+  };
+}
+
+const publicBaseByRequest = new WeakMap<H3Event, Map<string, Promise<PublicBase>>>();
+
+/**
+ * Request-scoped site identity. Shell and page SSR providers share this
+ * promise, so one render cannot resolve the same tenant twice.
+ */
+export function loadPublicBase(
+  event: H3Event,
+  siteId: string,
+  options: { previewAuthorized?: boolean } = {},
+): Promise<PublicBase> {
+  let requestReads = publicBaseByRequest.get(event);
+  if (!requestReads) {
+    requestReads = new Map();
+    publicBaseByRequest.set(event, requestReads);
+  }
+  const key = `${siteId}:${options.previewAuthorized ? "preview" : "public"}`;
+  const existing = requestReads.get(key);
+  if (existing) return existing;
+
+  const pending = (async () => {
+    const db = cloudflareEnv(event).DB;
+    if (!db) throw createError({ statusCode: 503, statusMessage: "Database unavailable" });
+    const site = await queryFirst<PublicBase["site"]>(
+      db,
+      `SELECT s.id, s.organization_id, s.default_currency, s.contact_email, s.contact_phone, s.brand_name,
+              s.brand_description, COALESCE(ma_logo.public_url, s.logo_url) AS logo_url,
+              json_extract(s.settings, '$.favicon_url') AS favicon_url,
+              ma_og.public_url AS og_image_url,
+              s.seo_title, s.seo_description, s.canonical_url, s.robots
+         FROM sites s
+         LEFT JOIN media_assets ma_logo ON s.logo_asset_id = ma_logo.id AND ma_logo.status = 'active'
+         LEFT JOIN media_assets ma_og ON s.og_image_asset_id = ma_og.id AND ma_og.status = 'active'
+        WHERE s.id = ? AND s.status = 'active'${options.previewAuthorized ? "" : " AND s.onboarding_status = 'active'"}
+        LIMIT 1`,
+      [siteId],
+    );
+    if (!site) throw createError({ statusCode: 404, statusMessage: "Site not found" });
+    return { site };
+  })();
+  requestReads.set(key, pending);
+  return pending;
+}
+
 const parseJson = (raw: string | null) => {
   if (!raw) return null;
   try {
@@ -204,7 +267,7 @@ function parseExperienceRow(row: Record<string, unknown>): Experience {
   } as Experience;
 }
 
-export async function handlePublicBootstrap(
+export async function loadPublicBootstrap(
   event: H3Event,
   siteId: string,
   query: Record<string, string | undefined>,
@@ -213,8 +276,7 @@ export async function handlePublicBootstrap(
   const mutateResponseHeaders = options.mutateResponseHeaders ?? true;
   const env = cloudflareEnv(event);
   const db = env.DB;
-  if (!db)
-    return jsonResponse({ error: "Database unavailable" }, { status: 503 });
+  if (!db) throw createError({ statusCode: 503, statusMessage: "Database unavailable" });
 
   const rawToken = typeof query.token === "string" ? query.token : null;
   let isPreviewAuthorized = false;
@@ -240,6 +302,7 @@ export async function handlePublicBootstrap(
   const dataType = typeof query.data === "string" ? query.data : null; // 'reviews' | 'photos' | 'qa' | 'blog' | 'blogPost'
   const blogSlug = typeof query.blogSlug === "string" ? query.blogSlug : null;
   const locale = typeof query.locale === "string" ? query.locale : undefined;
+  const contract = query.contract === 'shell' ? 'shell' : 'page';
 
   // Validate query inputs before using KV cache — only allow known-safe values
   // to prevent unbounded cache entries from arbitrary variants.
@@ -277,6 +340,7 @@ export async function handlePublicBootstrap(
   const host = getHeader(event, "host") ?? "";
   const useBootstrapCache = !isPreviewAuthorized && !isPreviewContext(host) && allInputsValid;
   const cacheKey = buildBootstrapCacheKey(siteId, {
+    contract,
     page,
     location: locationSlug,
     experience: experienceSlug,
@@ -293,7 +357,7 @@ export async function handlePublicBootstrap(
       if (cached) {
         try {
           if (mutateResponseHeaders) setHeader(event, "x-bootstrap-cache", "HIT");
-          return jsonResponse(JSON.parse(cached));
+          return JSON.parse(cached) as ApiRecord;
         } catch {
           // Invalid cached JSON — treat as a miss and regenerate
         }
@@ -306,37 +370,8 @@ export async function handlePublicBootstrap(
     if (mutateResponseHeaders) setHeader(event, "x-bootstrap-cache", "SKIP");
   }
 
-  // Parallelize site auth + location slug resolution — both only need siteId
-  const [site, locationRow] = await Promise.all([
-    queryFirst<{
-      id: string;
-      organization_id: string;
-      default_currency: string | null;
-      contact_email: string | null;
-      contact_phone: string | null;
-      brand_name: string | null;
-      brand_description: string | null;
-      logo_url: string | null;
-      favicon_url: string | null;
-      og_image_url: string | null;
-      seo_title: string | null;
-      seo_description: string | null;
-      canonical_url: string | null;
-      robots: string | null;
-    }>(
-      db,
-      `SELECT s.id, s.organization_id, s.default_currency, s.contact_email, s.contact_phone, s.brand_name,
-              s.brand_description, COALESCE(ma_logo.public_url, s.logo_url) AS logo_url,
-              json_extract(s.settings, '$.favicon_url') AS favicon_url,
-              ma_og.public_url AS og_image_url,
-              s.seo_title, s.seo_description, s.canonical_url, s.robots
-         FROM sites s
-         LEFT JOIN media_assets ma_logo ON s.logo_asset_id = ma_logo.id AND ma_logo.status = 'active'
-         LEFT JOIN media_assets ma_og ON s.og_image_asset_id = ma_og.id AND ma_og.status = 'active'
-        WHERE s.id = ? AND s.status = 'active'${isPreviewAuthorized ? "" : " AND s.onboarding_status = 'active'"}
-        LIMIT 1`,
-      [siteId],
-    ),
+  const [{ site }, locationRow] = await Promise.all([
+    loadPublicBase(event, siteId, { previewAuthorized: isPreviewAuthorized }),
     locationSlug
       ? queryFirst<{ id: string }>(
           db,
@@ -346,7 +381,6 @@ export async function handlePublicBootstrap(
       : Promise.resolve(null),
   ]);
 
-  if (!site) return jsonResponse({ error: "Site not found" }, { status: 404 });
   const orgId = site.organization_id;
   const locationId = locationRow?.id;
 
@@ -1094,36 +1128,38 @@ export async function handlePublicBootstrap(
     });
   }
 
+  const needsReservationPolicies = contract === 'page' && page === 'reservations';
+  const needsExperiencePolicies = contract === 'page' && (
+    page === 'experiences' || page === 'location' || page === 'menu'
+  );
   const [reservationPolicies, experiencePolicies] = await Promise.all([
-    resolveBookingPolicyIndex(db, {
+    needsReservationPolicies ? resolveBookingPolicyIndex(db, {
       siteId,
       policyType: "reservation",
       locations: locations.map(location => String(location.id)),
-    }),
-    resolveBookingPolicyIndex(db, {
+    }) : Promise.resolve(null),
+    needsExperiencePolicies ? resolveBookingPolicyIndex(db, {
       siteId,
       policyType: "experience",
       locations: locations.map(location => String(location.id)),
       experiences: experiencePolicyTargets,
-    }),
+    }) : Promise.resolve(null),
   ]);
   const policyLocale = locale ?? "en";
-  const reservationPolicySiteDefault = renderBookingPolicySummary(
-    reservationPolicies.site,
-    policyLocale,
-  );
+  const reservationPolicySiteDefault = reservationPolicies
+    ? renderBookingPolicySummary(reservationPolicies.site, policyLocale)
+    : null;
   const reservationPolicyByLocation = Object.fromEntries(
-    Array.from(reservationPolicies.byLocation, ([locationId, policy]) => [
+    Array.from(reservationPolicies?.byLocation ?? [], ([locationId, policy]) => [
       locationId,
       renderBookingPolicySummary(policy, policyLocale),
     ]),
   );
-  const experiencePolicySiteDefault = renderBookingPolicySummary(
-    experiencePolicies.site,
-    policyLocale,
-  );
+  const experiencePolicySiteDefault = experiencePolicies
+    ? renderBookingPolicySummary(experiencePolicies.site, policyLocale)
+    : null;
   const experiencePolicyById = Object.fromEntries(
-    Array.from(experiencePolicies.byExperience, ([experienceId, policy]) => [
+    Array.from(experiencePolicies?.byExperience ?? [], ([experienceId, policy]) => [
       experienceId,
       renderBookingPolicySummary(policy, policyLocale),
     ]),
@@ -1188,16 +1224,31 @@ export async function handlePublicBootstrap(
     }
   }
 
-  const payload = {
+  const shellPayload = {
     success: true,
     locations,
     config,
     googleBusiness,
+    count: locations.length,
+    locales: (localeRows?.results ?? []).map((l) => ({
+      code: l.locale,
+      label: l.label ?? l.locale,
+      is_source: Boolean(l.is_source),
+    })),
+    hasExperiences: experienceCountVal > 0,
+    site: {
+      brand_name: site.brand_name,
+      brand_description: site.brand_description,
+      logo_url: site.logo_url,
+      favicon_url: site.favicon_url,
+    },
+  };
+  const pagePayload = {
+    success: true,
     content: contentRows,
     content_blocks: groupContentBlocks(contentRows),
     menu: menuData,
     locationReviews: locationReviewRows?.results ?? [],
-    count: locations.length,
     // Type A — full reviews for /locations/[slug]/reviews
     ...(dataType === "reviews"
       ? {
@@ -1228,20 +1279,14 @@ export async function handlePublicBootstrap(
           postsList: locationPublishedPosts,
         }
       : {}),
-    // Site locales + experiences — always included for header/nav
-    locales: (localeRows?.results ?? []).map((l) => ({
-      code: l.locale,
-      label: l.label ?? l.locale,
-      is_source: Boolean(l.is_source),
-    })),
     reservationPolicySiteDefault,
     reservationPolicyByLocation,
     experiencePolicySiteDefault,
     experiencePolicyById,
-    hasExperiences: experienceCountVal > 0,
     experiencesList,
     experienceDetail,
   };
+  const payload = contract === 'shell' ? shellPayload : pagePayload;
 
   // Slug-shaped inputs are only worth caching once they've resolved to a real
   // row — otherwise a stream of made-up slugs (still regex-valid) would each
@@ -1266,5 +1311,17 @@ export async function handlePublicBootstrap(
     }
   }
 
-  return jsonResponse(payload);
+  return payload;
 }
+
+export const loadPublicShell = (
+  event: H3Event,
+  siteId: string,
+  query: Pick<Record<string, string | undefined>, 'locale' | 'token'>,
+) => loadPublicBootstrap(event, siteId, { ...query, contract: 'shell' }, { mutateResponseHeaders: false });
+
+export const loadPublicPage = (
+  event: H3Event,
+  siteId: string,
+  query: Record<string, string | undefined>,
+) => loadPublicBootstrap(event, siteId, { ...query, contract: 'page' }, { mutateResponseHeaders: false });

@@ -79,6 +79,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Activity | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
@@ -90,7 +91,6 @@ const toast = useToast()
 
 // Reused for requests that deliberately override the active site while retaining
 // the organization scope resolved from this dashboard route.
-const requestHeaders = buildDashboardRequestHeaders()
 
 interface SiteEvent {
   id: string; event_type: string; site_id: string; location_id: string | null
@@ -132,7 +132,7 @@ const { data: membersData } = await useAsyncData<{ members: Member[] }>('dashboa
     const result = await getOrganizationMembersData(db, dashboard.organization.value.id)
     return { members: result.members }
   }
-  return await dashboardFetch<{ members: Member[] }>('/api/dashboard/members')
+  return await dashboardApi<{ members: Member[] }>('/api/dashboard/members')
 })
 const actorOptions = computed(() => [
   { label: 'Everyone', value: '' },
@@ -148,8 +148,8 @@ watch(() => filters.siteId, async (siteId) => {
   const site = dashboard.sites.value.find(s => s.id === siteId)
   if (!site?.subdomain) return
   try {
-    const res = await dashboardFetch<{ locations: Location[] }>('/api/dashboard/locations', {
-      headers: buildDashboardRequestHeaders({ 'x-dashboard-site-slug': site.subdomain }),
+    const res = await dashboardApi<{ locations: Location[] }>('/api/dashboard/locations', {
+      headers: { 'x-dashboard-site-slug': site.subdomain },
     })
     locationsForSite.value = res.locations
   } catch (err) {
@@ -175,7 +175,7 @@ async function fetchEvents(before?: string) {
   if (filters.actorId) query.actorId = filters.actorId
   if (before) query.before = before
 
-  return dashboardFetch<{ events: SiteEvent[]; nextCursor: string | null }>('/api/dashboard/events', { query, headers: requestHeaders })
+  return dashboardApi<{ events: SiteEvent[]; nextCursor: string | null }>('/api/dashboard/events', { query })
 }
 
 async function reload() {

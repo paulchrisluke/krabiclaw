@@ -10,6 +10,7 @@ interface PublicBootstrapLoadOptions<T> {
   query: Record<string, string | undefined>
   validate: Validator<T>
   failureMessage: string
+  signal?: AbortSignal
 }
 
 export async function loadPublicBootstrapPayload<T>(
@@ -20,21 +21,18 @@ export async function loadPublicBootstrapPayload<T>(
     if (!options.requestEvent || !options.siteId) {
       throw createError({ statusCode: 500, statusMessage: `${options.failureMessage} context unavailable` })
     }
-    const { handlePublicBootstrap } = await import('~/server/utils/public-bootstrap')
-    const response = await handlePublicBootstrap(
-      options.requestEvent,
-      options.siteId,
-      options.query,
-      { mutateResponseHeaders: false },
-    )
-    if (!response.ok) {
-      throw createError({ statusCode: response.status, statusMessage: options.failureMessage })
+    const { loadPublicPage, loadPublicShell } = await import('~/server/utils/public-bootstrap')
+    if (options.query.contract === 'shell') {
+      return await loadPublicShell(options.requestEvent, options.siteId, {
+        locale: options.query.locale,
+        token: options.query.token,
+      }) as T
     }
-    return await response.json() as T
+    return await loadPublicPage(options.requestEvent, options.siteId, options.query) as T
   }
 
   return await publicApiRequest<T>(options.url, {
-    coalesceKey: options.key,
+    signal: options.signal,
     validate: options.validate,
   })
 }

@@ -138,35 +138,35 @@ function buildDefaultCases(params) {
     ? [
         {
           name: "api-bootstrap-home",
-          relativePath: `/api/public/sites/${siteId}/bootstrap?page=home&menu=1`,
+          relativePath: `/api/public/sites/${siteId}/page?page=home&menu=1`,
         },
         {
           name: "api-bootstrap-locations",
-          relativePath: `/api/public/sites/${siteId}/bootstrap?page=locations&menu=1`,
+          relativePath: `/api/public/sites/${siteId}/page?page=locations&menu=1`,
         },
         {
           name: "api-bootstrap-location-reviews",
-          relativePath: `/api/public/sites/${siteId}/bootstrap?page=reviews&location=${locationSlug}&data=reviews`,
+          relativePath: `/api/public/sites/${siteId}/page?page=reviews&location=${locationSlug}&data=reviews`,
         },
         {
           name: "api-bootstrap-location-photos",
-          relativePath: `/api/public/sites/${siteId}/bootstrap?page=photos&location=${locationSlug}&data=photos`,
+          relativePath: `/api/public/sites/${siteId}/page?page=photos&location=${locationSlug}&data=photos`,
         },
         {
           name: "api-bootstrap-location-qa",
-          relativePath: `/api/public/sites/${siteId}/bootstrap?page=qa&location=${locationSlug}&data=qa`,
+          relativePath: `/api/public/sites/${siteId}/page?page=qa&location=${locationSlug}&data=qa`,
         },
         {
           name: "api-bootstrap-posts",
-          relativePath: `/api/public/sites/${siteId}/bootstrap?page=posts`,
+          relativePath: `/api/public/sites/${siteId}/page?page=posts`,
         },
         {
           name: "api-bootstrap-experiences-list",
-          relativePath: `/api/public/sites/${siteId}/bootstrap?page=experiences`,
+          relativePath: `/api/public/sites/${siteId}/page?page=experiences`,
         },
         {
           name: "api-bootstrap-experiences-detail",
-          relativePath: `/api/public/sites/${siteId}/bootstrap?page=experiences&experience=${experienceSlug}`,
+          relativePath: `/api/public/sites/${siteId}/page?page=experiences&experience=${experienceSlug}`,
         },
       ]
     : [];

@@ -79,6 +79,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.qa' })
 
 interface QaRow {
@@ -110,7 +111,7 @@ async function loadQa() {
   }
   loading.value = true
   try {
-    const res = await dashboardFetch<{ qa: QaRow[] }>(`/api/editor/sites/${siteId}/locations/${locationId.value}/qa`)
+    const res = await dashboardApi<{ qa: QaRow[] }>(`/api/editor/sites/${siteId}/locations/${locationId.value}/qa`)
     qaRows.value = res.qa ?? []
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load Q&A', color: 'error' })
@@ -136,13 +137,13 @@ async function saveQa() {
   saving.value = true
   try {
     if (editingId.value) {
-      await dashboardFetch(`/api/editor/sites/${siteId}/locations/${locationId.value}/qa/${editingId.value}`, {
+      await dashboardApi(`/api/editor/sites/${siteId}/locations/${locationId.value}/qa/${editingId.value}`, {
         method: 'PATCH',
         body: { question: form.question, answer: form.answer || null, is_owner_answer: 1 }
       })
       toast.add({ description: 'Q&A updated', color: 'success' })
     } else {
-      await dashboardFetch(`/api/editor/sites/${siteId}/locations/${locationId.value}/qa`, {
+      await dashboardApi(`/api/editor/sites/${siteId}/locations/${locationId.value}/qa`, {
         method: 'POST',
         body: { question: form.question, answer: form.answer || null, is_owner_answer: 1 }
       })
@@ -160,7 +161,7 @@ async function saveQa() {
 async function updateQa(item: QaRow, body: ApiRecord, successMessage: string) {
   if (!locationId.value) return
   try {
-    await dashboardFetch(`/api/editor/sites/${siteId}/locations/${locationId.value}/qa/${item.id}`, {
+    await dashboardApi(`/api/editor/sites/${siteId}/locations/${locationId.value}/qa/${item.id}`, {
       method: 'PATCH',
       body
     })
@@ -184,7 +185,7 @@ async function moveQa(item: QaRow, direction: -1 | 1) {
   const target = qaRows.value[targetIndex]
   if (!target) return
   try {
-    await dashboardFetch(`/api/editor/sites/${siteId}/locations/${locationId.value}/qa/reorder`, {
+    await dashboardApi(`/api/editor/sites/${siteId}/locations/${locationId.value}/qa/reorder`, {
       method: 'POST',
       body: {
         updates: [
@@ -205,7 +206,7 @@ async function deleteQa(item: QaRow) {
   if (!confirm(`Delete this question?\n\n${item.question}`)) return
   deletingId.value = item.id
   try {
-  await dashboardFetch(`/api/editor/sites/${siteId}/locations/${locationId.value}/qa/${item.id}`, { method: 'DELETE' })
+  await dashboardApi(`/api/editor/sites/${siteId}/locations/${locationId.value}/qa/${item.id}`, { method: 'DELETE' })
     qaRows.value = qaRows.value.filter(row => row.id !== item.id)
     toast.add({ description: 'Q&A deleted', color: 'neutral' })
   } catch (error) {

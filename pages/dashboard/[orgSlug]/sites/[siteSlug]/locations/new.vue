@@ -70,6 +70,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 
 definePageMeta({ layout: 'editor', ssr: false })
@@ -140,7 +141,7 @@ const computedSiteStatus = computed((): 'setup' | 'progress' | 'ready' | 'live' 
 const loadContext = async () => {
   contextError.value = null
   try {
-    const response = await dashboardFetch<{
+    const response = await dashboardApi<{
       success: boolean
       site?: ApiRecord | null
       locations?: Array<{ id: string; slug: string; title: string; is_primary: boolean }>

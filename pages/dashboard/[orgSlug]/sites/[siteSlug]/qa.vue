@@ -62,6 +62,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.qa' })
 useSeoMeta({ title: 'Site Q&A | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
@@ -75,7 +76,6 @@ interface QaRow {
 }
 
 const siteId = await useDashboardSiteId()
-const headers = buildDashboardRequestHeaders()
 const toast = useToast()
 const saving = ref(false)
 const editingId = ref<string | null>(null)
@@ -85,12 +85,12 @@ const STANDARD_ROUTES = ['/', '/about', '/services', '/pricing', '/contact', '/s
 
 const { data: tenantPages } = await useAsyncData(
   () => `dashboard-tenant-pages-${siteId}`,
-  () => dashboardFetch<Array<{ path: string; title: string }>>(`/api/editor/sites/${siteId}/tenant-pages`, { headers }),
+  () => dashboardApi<Array<{ path: string; title: string }>>(`/api/editor/sites/${siteId}/tenant-pages`),
 )
 
 const { data: existingQaScopes } = await useAsyncData(
   () => `dashboard-qa-scopes-${siteId}`,
-  () => dashboardFetch<Array<{ page_path: string | null }>>(`/api/editor/sites/${siteId}/qa/scopes`, { headers }),
+  () => dashboardApi<Array<{ page_path: string | null }>>(`/api/editor/sites/${siteId}/qa/scopes`),
 )
 
 const pageScopes = computed(() => {
@@ -125,7 +125,7 @@ watch(selectedPagePath, () => {
 })
 const { data, pending, refresh } = await useAsyncData(
   () => `dashboard-site-qa-${siteId}-${selectedPagePath.value}`,
-  () => dashboardFetch<{ qa: QaRow[] }>(`/api/editor/sites/${siteId}/qa`, { headers, query: pagePath.value ? { page_path: pagePath.value } : undefined }),
+  () => dashboardApi<{ qa: QaRow[] }>(`/api/editor/sites/${siteId}/qa`, { query: pagePath.value ? { page_path: pagePath.value } : undefined }),
   { watch: [selectedPagePath] },
 )
 const qaRows = computed(() => data.value?.qa ?? [])
@@ -149,9 +149,9 @@ async function save() {
   try {
     const body: Record<string, unknown> = { page_path: pagePath.value, question: form.question, answer: form.answer || null, status: form.published ? 'published' : 'hidden' }
     if (editingId.value) {
-      await dashboardFetch(`/api/editor/sites/${siteId}/qa/${editingId.value}`, { method: 'PATCH', body })
+      await dashboardApi(`/api/editor/sites/${siteId}/qa/${editingId.value}`, { method: 'PATCH', body })
     } else {
-      await dashboardFetch(`/api/editor/sites/${siteId}/qa`, { method: 'POST', body })
+      await dashboardApi(`/api/editor/sites/${siteId}/qa`, { method: 'POST', body })
     }
     reset()
     await refresh()
@@ -167,7 +167,7 @@ async function move(item: QaRow, direction: -1 | 1) {
   const index = qaRows.value.findIndex(row => row.id === item.id)
   const target = qaRows.value[index + direction]
   if (!target) return
-  await dashboardFetch(`/api/editor/sites/${siteId}/qa/reorder`, {
+  await dashboardApi(`/api/editor/sites/${siteId}/qa/reorder`, {
     method: 'POST',
     body: { page_path: pagePath.value, updates: [{ id: item.id, sort_order: target.sort_order }, { id: target.id, sort_order: item.sort_order }] },
   })
@@ -176,7 +176,7 @@ async function move(item: QaRow, direction: -1 | 1) {
 
 async function remove(item: QaRow) {
   if (!confirm(`Delete this question?\n\n${item.question}`)) return
-  await dashboardFetch(`/api/editor/sites/${siteId}/qa/${item.id}`, { method: 'DELETE', query: pagePath.value ? { page_path: pagePath.value } : undefined })
+  await dashboardApi(`/api/editor/sites/${siteId}/qa/${item.id}`, { method: 'DELETE', query: pagePath.value ? { page_path: pagePath.value } : undefined })
   if (editingId.value === item.id) reset()
   await refresh()
 }

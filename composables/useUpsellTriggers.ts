@@ -4,6 +4,7 @@ import type { Plan } from '~/server/api/billing/plans.get'
 const SESSION_KEY = 'kc-upsell-shown'
 
 export const useUpsellTriggers = () => {
+  const dashboardApi = useDashboardApi()
   const { site } = useDashboardSite()
   const { open } = useServiceUpsell()
 
@@ -15,7 +16,7 @@ export const useUpsellTriggers = () => {
 
   async function loadPlanIds(): Promise<Set<string>> {
     try {
-      const plans = await dashboardFetch<Plan[]>('/api/billing/plans')
+      const plans = await dashboardApi<Plan[]>('/api/billing/plans')
       return new Set(plans.map(plan => plan.id))
     } catch {
       return new Set()

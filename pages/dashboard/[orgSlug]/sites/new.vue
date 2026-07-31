@@ -32,6 +32,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 import type { SiteVertical } from '~/utils/vertical-copy'
 
 definePageMeta({ layout: 'dashboard' })
@@ -66,7 +67,7 @@ async function submit() {
   creating.value = true
   error.value = null
   try {
-    const res = await dashboardFetch<{
+    const res = await dashboardApi<{
       siteId: string
       subdomain: string
       offerSubscribePlan: string | null

@@ -269,6 +269,7 @@ export const useBootstrapKey = (
 export const useBootstrapUrl = (
   siteId: string | null | undefined,
   params: BootstrapParams,
+  contract: 'shell' | 'page' = 'page',
 ) => {
   const route = useRoute()
   const qs = new URLSearchParams();
@@ -288,5 +289,5 @@ export const useBootstrapUrl = (
     ? route.params.draftId
     : null
   if (draftId) return `/api/public/drafts/${draftId}/bootstrap${q ? `?${q}` : ""}`;
-  return `/api/public/sites/${siteId}/bootstrap${q ? `?${q}` : ""}`;
+  return `/api/public/sites/${siteId}/${contract}${q ? `?${q}` : ""}`;
 };

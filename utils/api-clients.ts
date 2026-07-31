@@ -114,7 +114,9 @@ async function request<T>(
     }
   }
 
-  if (method !== 'GET' || !options.coalesceKey) return await run()
+  // A request with a caller-owned signal cannot safely share cancellation
+  // ownership with another consumer.
+  if (method !== 'GET' || !options.coalesceKey || options.signal) return await run()
   const existing = inFlightReads.get(options.coalesceKey) as Promise<T> | undefined
   if (existing) return await existing
   const pending = run().finally(() => {

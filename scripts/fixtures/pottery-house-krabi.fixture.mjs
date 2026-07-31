@@ -168,7 +168,7 @@ for (const route of REQUIRED_ROUTES) {
 
 section('Bootstrap: two locations (primary + beachfront)')
 
-const bootstrapRes = await get(`/api/public/sites/${SITE_ID}/bootstrap`)
+const bootstrapRes = await get(`/api/public/sites/${SITE_ID}/shell`)
 let bootstrapData = null
 
 if (bootstrapRes.ok) {
@@ -193,7 +193,7 @@ if (bootstrapRes.ok) {
 
 section('Experience slugs route correctly')
 
-const expRes = await get(`/api/public/sites/${SITE_ID}/bootstrap?page=experiences`)
+const expRes = await get(`/api/public/sites/${SITE_ID}/page?page=experiences`)
 if (expRes.ok) {
   const expData = await expRes.json()
   const experiences = expData.experiencesList ?? []

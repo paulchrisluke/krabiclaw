@@ -111,6 +111,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.photos' })
 
 import VideoPosterPrompt from '~/components/workspace/media/VideoPosterPrompt.vue'
@@ -171,7 +172,7 @@ async function loadPhotos() {
   loading.value = true
   try {
     const params = new URLSearchParams({ locationId: locationId.value, limit: '100' })
-    const res = await dashboardFetch<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`)
+    const res = await dashboardApi<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`)
     assets.value = res.media ?? []
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load photos', color: 'error' })
@@ -254,7 +255,7 @@ async function loadAttachableMedia() {
   try {
     const params = new URLSearchParams({ limit: '100' })
     if (locationId.value) params.set('locationId', locationId.value)
-    const res = await dashboardFetch<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`)
+    const res = await dashboardApi<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`)
     attachableAssets.value = (res.media ?? []).filter(asset => asset.location_id !== locationId.value)
   } catch (error) {
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load media library', color: 'error' })
@@ -270,7 +271,7 @@ async function openAttachModal() {
 
 async function patchAsset(asset: MediaAsset, body: ApiRecord, successMessage: string) {
   try {
-    await dashboardFetch(`${siteApiBase}/media/${asset.id}`, { method: 'PATCH', body })
+    await dashboardApi(`${siteApiBase}/media/${asset.id}`, { method: 'PATCH', body })
     toast.add({ description: successMessage, color: 'success' })
     await loadPhotos()
     return true

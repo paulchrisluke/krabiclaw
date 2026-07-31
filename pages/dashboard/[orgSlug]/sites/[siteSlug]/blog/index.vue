@@ -72,6 +72,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 import { getErrorMessage } from '~/utils/errors'
 
 interface BlogPost {
@@ -98,7 +99,7 @@ async function loadPosts() {
   loadPending.value = true
   loadError.value = ''
   try {
-    const res = await dashboardFetch<{ posts: BlogPost[] }>(`/api/editor/sites/${siteId}/blog/posts`)
+    const res = await dashboardApi<{ posts: BlogPost[] }>(`/api/editor/sites/${siteId}/blog/posts`)
     posts.value = res.posts || []
   } catch (err) {
     loadError.value = getErrorMessage(err, 'Failed to load posts.')

@@ -173,6 +173,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard' })
 
 import DashboardAnalyticsRow from '~/components/workspace/dashboard/AnalyticsRow.vue'
@@ -262,7 +263,7 @@ function markCustomAndLoad() {
 async function loadAnalytics() {
   loading.value = true
   try {
-    analytics.value = await dashboardFetch<AnalyticsResponse>(`/api/sites/${siteId}/analytics`, {
+    analytics.value = await dashboardApi<AnalyticsResponse>(`/api/sites/${siteId}/analytics`, {
       query: { startDate: range.startDate, endDate: range.endDate }
     })
   } catch (error) {

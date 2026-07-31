@@ -2,7 +2,7 @@
   <div class="flex h-screen flex-col overflow-hidden bg-muted text-highlighted">
 
     <div
-      v-if="contextLoaded"
+      v-if="contextLoaded && !contextError"
       class="grid min-h-0 flex-1 overflow-hidden md:grid-cols-[minmax(24rem,45%)_1fr]"
     >
       <OnboardingWizard
@@ -67,6 +67,15 @@
         <span class="text-sm">Loading workspace…</span>
       </div>
     </div>
+    <div v-else-if="contextError" class="flex min-h-0 flex-1 items-center justify-center p-6">
+      <UCard class="w-full max-w-md text-center">
+        <h1 class="text-lg font-semibold text-highlighted">Workspace could not be loaded</h1>
+        <p class="mt-2 text-sm text-muted">{{ contextError.message }}</p>
+        <UButton class="mt-6" :loading="contextRetrying" @click="retryContext">
+          Try again
+        </UButton>
+      </UCard>
+    </div>
   </div>
 </template>
 
@@ -100,6 +109,8 @@ const draftPreview = ref<{
 const mobilePreviewOpen = ref(false)
 const isMobilePreviewViewport = ref(false)
 const contextLoaded = ref(false)
+const contextError = ref<Error | null>(null)
+const contextRetrying = ref(false)
 type ReadinessState = 'complete' | 'attention' | 'missing'
 
 const readiness = ref<Record<'brand' | 'hero' | 'details' | 'offer' | 'trust' | 'launch', ReadinessState>>({
@@ -241,6 +252,7 @@ const readinessScore = computed(() => {
 
 // Step 1 — fast org/site resolution (works even when site doesn't exist yet)
 const loadContext = async () => {
+  contextError.value = null
   try {
     const response = await applicationFetch<{
       success: boolean
@@ -258,8 +270,9 @@ const loadContext = async () => {
       // Step 2 — get preview token now that we have a site
       await loadPreviewToken()
     }
-  } catch {
-    // No org/site yet — expected for new users
+  } catch (error) {
+    contextError.value = normalizeApiError(error, 'Workspace context failed')
+    throw contextError.value
   } finally {
     contextLoaded.value = true
   }
@@ -267,33 +280,35 @@ const loadContext = async () => {
 
 // Step 2 — editor context includes the signed preview token needed to render draft sites
 const loadPreviewToken = async () => {
-  try {
-    if (!siteId.value) return
-    const res = await applicationFetch<{ context: { previewToken: string } }>(`/api/editor/sites/${siteId.value}/context`)
-    if (res.context?.previewToken) previewToken.value = res.context.previewToken
-  } catch {
-    // Non-fatal — preview still works if onboarding_status is 'active' (it will be after setup)
-  }
+  if (!siteId.value) return
+  const res = await applicationFetch<{ context: { previewToken: string } }>(`/api/editor/sites/${siteId.value}/context`)
+  if (res.context?.previewToken) previewToken.value = res.context.previewToken
 }
 
 const loadReadiness = async () => {
   if (!siteId.value) return
 
-  try {
-    const data = await applicationFetch<{
-      items: { business_info: boolean; hero_image: boolean; core_offering: boolean; story: boolean; post: boolean }
-    }>(`/api/dashboard/onboarding/checklist?siteId=${siteId.value}`)
+  const data = await applicationFetch<{
+    items: { business_info: boolean; hero_image: boolean; core_offering: boolean; story: boolean; post: boolean }
+  }>(`/api/dashboard/onboarding/checklist?siteId=${siteId.value}`)
 
-    readiness.value = {
-      details: data.items.business_info ? 'complete' : 'missing',
-      hero: data.items.hero_image ? 'complete' : 'missing',
-      offer: data.items.core_offering ? 'complete' : 'missing',
-      brand: data.items.story ? 'complete' : data.items.business_info ? 'attention' : 'missing',
-      trust: data.items.post ? 'complete' : data.items.business_info ? 'attention' : 'missing',
-      launch: (data.items.business_info && data.items.hero_image && data.items.core_offering) ? 'attention' : 'missing',
-    }
-  } catch {
-    // Not critical, readiness stays at default
+  readiness.value = {
+    details: data.items.business_info ? 'complete' : 'missing',
+    hero: data.items.hero_image ? 'complete' : 'missing',
+    offer: data.items.core_offering ? 'complete' : 'missing',
+    brand: data.items.story ? 'complete' : data.items.business_info ? 'attention' : 'missing',
+    trust: data.items.post ? 'complete' : data.items.business_info ? 'attention' : 'missing',
+    launch: (data.items.business_info && data.items.hero_image && data.items.core_offering) ? 'attention' : 'missing',
+  }
+}
+
+const retryContext = async () => {
+  contextRetrying.value = true
+  try {
+    await loadContext()
+    await loadReadiness()
+  } finally {
+    contextRetrying.value = false
   }
 }
 
@@ -349,8 +364,7 @@ onMounted(async () => {
   mobilePreviewQuery.addEventListener('change', updateMobilePreviewViewport)
   stopMobilePreviewViewportListener = () => mobilePreviewQuery.removeEventListener('change', updateMobilePreviewViewport)
 
-  await loadContext()
-  await loadReadiness()
+  await retryContext().catch(() => {})
 
   if (route.query.payment === 'cancelled') {
     toast.add({ title: 'Payment cancelled', description: 'Your subscription was not completed.', color: 'warning' })

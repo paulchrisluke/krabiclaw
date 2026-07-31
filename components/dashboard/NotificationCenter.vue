@@ -65,6 +65,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 interface DashboardNotification {
   id: string
   scope: 'platform' | 'organization' | 'site'
@@ -111,7 +112,7 @@ async function refreshNotifications() {
   if (loading.value) return
   loading.value = true
   try {
-    const response = await dashboardFetch<NotificationResponse>('/api/dashboard/notifications', { query: { limit: 20 } })
+    const response = await dashboardApi<NotificationResponse>('/api/dashboard/notifications', { query: { limit: 20 } })
     notifications.value = response.notifications
     unreadCount.value = response.unread_count
   } catch (error) {
@@ -123,7 +124,7 @@ async function refreshNotifications() {
 
 async function markRead(notification: DashboardNotification) {
   if (notification.read_at) return
-  await dashboardFetch(`/api/dashboard/notifications/${notification.id}/read`, { method: 'PATCH' })
+  await dashboardApi(`/api/dashboard/notifications/${notification.id}/read`, { method: 'PATCH' })
   notification.read_at = new Date().toISOString()
   unreadCount.value = Math.max(0, unreadCount.value - 1)
 }
@@ -131,7 +132,7 @@ async function markRead(notification: DashboardNotification) {
 async function markAllRead() {
   markingAll.value = true
   try {
-    await dashboardFetch('/api/dashboard/notifications/read-all', { method: 'PATCH' })
+    await dashboardApi('/api/dashboard/notifications/read-all', { method: 'PATCH' })
     const now = new Date().toISOString()
     notifications.value = notifications.value.map(notification => ({ ...notification, read_at: notification.read_at ?? now }))
     unreadCount.value = 0

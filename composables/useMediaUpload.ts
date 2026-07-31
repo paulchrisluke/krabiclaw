@@ -55,17 +55,18 @@ function getErrorStatus(error: unknown): number {
 }
 
 export function useMediaUpload(siteApiBase: string) {
+  const dashboardApi = useDashboardApi()
   const uploading = ref(false)
   const error = ref<string | null>(null)
   const pendingRetryFile = ref<PendingMediaUpload | null>(null)
 
   async function cleanupPendingUpload(assetId: string) {
-    await dashboardFetch(`${siteApiBase}/media/${assetId}`, { method: 'DELETE' })
+    await dashboardApi(`${siteApiBase}/media/${assetId}`, { method: 'DELETE' })
   }
 
   async function confirmPendingUpload(assetId: string) {
     try {
-      await dashboardFetch(`${siteApiBase}/media/${assetId}/confirm`, { method: 'POST' })
+      await dashboardApi(`${siteApiBase}/media/${assetId}/confirm`, { method: 'POST' })
     } catch (uploadError) {
       if (getErrorStatus(uploadError) === 409) return
       throw uploadError
@@ -99,7 +100,7 @@ export function useMediaUpload(siteApiBase: string) {
       }
 
       if (isImage) {
-        const { assetId, uploadUrl } = await dashboardFetch<{ assetId: string, uploadUrl: string }>(
+        const { assetId, uploadUrl } = await dashboardApi<{ assetId: string, uploadUrl: string }>(
           `${siteApiBase}/media/request-upload`,
           {
             method: 'POST',
@@ -142,7 +143,7 @@ export function useMediaUpload(siteApiBase: string) {
       if (options.category) form.append('category', options.category)
       if (options.poster) form.append('poster', options.poster)
 
-      const response = await dashboardFetch<{
+      const response = await dashboardApi<{
         id: string
         kind: 'video' | 'file'
         publicUrl: string | null

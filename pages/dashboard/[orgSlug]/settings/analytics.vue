@@ -98,6 +98,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Analytics | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
@@ -164,7 +165,7 @@ async function loadConnection() {
   }
   loading.value = true
   try {
-    const res = await dashboardFetch<{
+    const res = await dashboardApi<{
       success: boolean
       connection: ConnectionInfo | null
       ga4Properties: Ga4Property[]
@@ -196,7 +197,7 @@ async function connectGoogle() {
   if (!requestedSiteId) return
   connecting.value = true
   try {
-    const res = await dashboardFetch<{ success: boolean; authUrl: string }>(
+    const res = await dashboardApi<{ success: boolean; authUrl: string }>(
       `/api/sites/${requestedSiteId}/integrations/google-analytics/auth`,
       { method: 'POST' }
     )
@@ -224,7 +225,7 @@ async function disconnectGoogle() {
   if (!requestedSiteId || connectionSiteId.value !== requestedSiteId) return
   disconnecting.value = true
   try {
-    await dashboardFetch(`/api/sites/${requestedSiteId}/integrations/google-analytics/disconnect`, { method: 'POST' })
+    await dashboardApi(`/api/sites/${requestedSiteId}/integrations/google-analytics/disconnect`, { method: 'POST' })
     if (siteId.value !== requestedSiteId) return
     connection.value = null
     ga4Properties.value = []
@@ -245,7 +246,7 @@ async function saveSelection() {
   saving.value = true
   try {
     const property = ga4Properties.value.find((p) => p.propertyId === selectedGa4Property.value)
-    await dashboardFetch(`/api/sites/${requestedSiteId}/integrations/google-analytics/select`, {
+    await dashboardApi(`/api/sites/${requestedSiteId}/integrations/google-analytics/select`, {
       method: 'POST',
       body: {
         ga4_property_id: selectedGa4Property.value,

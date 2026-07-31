@@ -184,6 +184,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard' })
 
 const config = useRuntimeConfig()
@@ -245,7 +246,7 @@ const activeLocales = ref<SiteLocaleRow[]>([])
 onMounted(async () => {
   if (!siteId.value) return
   try {
-    const response = await dashboardFetch<{ success: boolean; source_locale: string; locales: SiteLocaleRow[] }>(
+    const response = await dashboardApi<{ success: boolean; source_locale: string; locales: SiteLocaleRow[] }>(
       `/api/editor/sites/${siteId.value}/locales`
     )
     activeLocales.value = (response.locales ?? []).filter(l => !l.is_source && l.status !== 'disabled')

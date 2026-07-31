@@ -72,6 +72,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.testimonials' })
 useSeoMeta({ title: 'Testimonials | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
@@ -90,7 +91,6 @@ interface SiteTestimonial {
 }
 
 const siteId = await useDashboardSiteId()
-const headers = buildDashboardRequestHeaders()
 const toast = useToast()
 const saving = ref(false)
 const editingId = ref<string | null>(null)
@@ -105,7 +105,7 @@ const form = reactive({
 })
 const { data, pending, refresh } = await useAsyncData(
   `dashboard-site-testimonials-${siteId}`,
-  () => dashboardFetch<{ reviews: SiteTestimonial[] }>(`/api/editor/sites/${siteId}/reviews`, { headers }),
+  () => dashboardApi<{ reviews: SiteTestimonial[] }>(`/api/editor/sites/${siteId}/reviews`),
 )
 const testimonials = computed(() => data.value?.reviews ?? [])
 const canSave = computed(() => Boolean(form.author_name.trim() && form.content.trim() && Number.isInteger(form.rating) && form.rating >= 1 && form.rating <= 5 && form.publication_authorized))
@@ -132,8 +132,8 @@ async function save() {
   saving.value = true
   try {
     const body = { ...form, title: form.title || null, original_review_date: form.original_review_date || null, original_reference: form.original_reference || null }
-    if (editingId.value) await dashboardFetch(`/api/editor/sites/${siteId}/reviews/${editingId.value}`, { method: 'PATCH', body })
-    else await dashboardFetch(`/api/editor/sites/${siteId}/reviews`, { method: 'POST', body })
+    if (editingId.value) await dashboardApi(`/api/editor/sites/${siteId}/reviews/${editingId.value}`, { method: 'PATCH', body })
+    else await dashboardApi(`/api/editor/sites/${siteId}/reviews`, { method: 'POST', body })
     reset()
     await refresh()
     toast.add({ description: 'Testimonial saved', color: 'success' })
@@ -146,7 +146,7 @@ async function save() {
 
 async function remove(testimonial: SiteTestimonial) {
   if (!confirm(`Delete the testimonial from ${testimonial.author_name}?`)) return
-  await dashboardFetch(`/api/editor/sites/${siteId}/reviews/${testimonial.id}`, { method: 'DELETE' })
+  await dashboardApi(`/api/editor/sites/${siteId}/reviews/${testimonial.id}`, { method: 'DELETE' })
   if (editingId.value === testimonial.id) reset()
   await refresh()
 }

@@ -20,8 +20,30 @@
       :has-experiences="showExperiences"
       :experience-cta-path="locationExperienceCtaPath"
     />
-    <main class="grow">
-      <slot />
+    <main class="grow" :data-route-shell="route.path">
+      <div
+        v-if="publicPending"
+        class="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8"
+        data-testid="public-route-loading"
+      >
+        <div class="h-7 w-44 animate-pulse rounded bg-elevated" />
+        <div class="mt-5 h-12 max-w-2xl animate-pulse rounded bg-elevated" />
+        <div class="mt-10 grid gap-6 md:grid-cols-2">
+          <div v-for="index in 2" :key="index" class="h-56 animate-pulse rounded bg-elevated" />
+        </div>
+      </div>
+      <div
+        v-else-if="publicError"
+        class="mx-auto max-w-xl px-4 py-24 text-center sm:px-6"
+        data-testid="public-route-error"
+      >
+        <h1 class="saya-display-md text-default">This page could not be loaded.</h1>
+        <p class="mt-4 text-sm text-muted">{{ publicError.message }}</p>
+        <button type="button" class="mt-8 border border-default px-5 py-3 text-sm" @click="retryPublicData">
+          Try again
+        </button>
+      </div>
+      <slot v-else />
     </main>
     <LazySayaFooter
       :site="resolvedSite"
@@ -51,8 +73,15 @@ if (import.meta.dev) useDebugLCP()
 
 // Persistent chrome uses the minimal shell contract. Route-specific menu and
 // experience data comes from the keyed page loader and changes independently.
-const { config, locations, hasExperiences, locales, error: bootstrapError, site: shellSite } = useSiteShellState()
-const { menu, experiencesList } = await useBootstrap()
+const shell = useSiteShellState()
+const { config, locations, hasExperiences, locales, error: bootstrapError, site: shellSite } = shell
+const pageData = await useBootstrap()
+const { menu, experiencesList } = pageData
+const publicPending = computed(() => shell.pending.value || pageData.pending.value)
+const publicError = computed(() => shell.error.value || pageData.error.value)
+const retryPublicData = async () => {
+  await Promise.all([shell.refresh(), pageData.refresh()])
+}
 const showExperiences = computed(() => hasExperiences.value || experiencesList.value.length > 0)
 const { siteId, draftId, isTenant, isPlatform, site, organizationId } = useTenantSite()
 const resolvedSite = computed(() => shellSite.value || site)

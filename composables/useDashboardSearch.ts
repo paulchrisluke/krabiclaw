@@ -18,6 +18,7 @@ const RESULT_GROUP_LABEL: Record<PublicSearchResult['type'], string> = {
  *  against /api/public/search (the same endpoint and result grouping the Saya/Blawby
  *  tenant search modal uses), scoped to the current org/site/location route context. */
 export function useDashboardSearch() {
+  const dashboardApi = useDashboardApi()
   const route = useRoute()
   const router = useRouter()
   const searchTerm = ref('')
@@ -65,7 +66,7 @@ export function useDashboardSearch() {
     activeController = controller
     loading.value = true
     try {
-      const response = await dashboardFetch<SearchResponse>('/api/public/search', {
+      const response = await dashboardApi<SearchResponse>('/api/public/search', {
         signal: controller.signal,
         query: {
           q: normalized,

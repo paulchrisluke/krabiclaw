@@ -204,7 +204,7 @@ let _bootstrapData = null;
 async function getBootstrap() {
   if (_bootstrapData !== null) return _bootstrapData;
   if (!SITE_ID) return null;
-  const res = await get(`/api/public/sites/${SITE_ID}/bootstrap`);
+  const res = await get(`/api/public/sites/${SITE_ID}/shell`);
   if (!res.ok) return null;
   _bootstrapData = await res.json();
   return _bootstrapData;
@@ -268,7 +268,7 @@ if (SITE_ID && (VERTICAL === "experience" || VERTICAL === "restaurant")) {
   info("── Slug route checks");
 
   const contentType = VERTICAL === "experience" ? "experiences" : "menu";
-  const apiPath = `/api/public/sites/${SITE_ID}/bootstrap?page=${contentType}`;
+  const apiPath = `/api/public/sites/${SITE_ID}/page?page=${contentType}`;
   const res = await get(apiPath);
 
   if (res.ok) {

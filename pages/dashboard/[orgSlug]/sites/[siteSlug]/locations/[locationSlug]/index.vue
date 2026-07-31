@@ -110,6 +110,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities, type ProductFeature } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { getTodayGoogleHours } from '~/utils/formatters'
@@ -209,12 +210,12 @@ async function load() {
   error.value = null
   try {
     const [locationResponse, menuResponse, connectionResponse, threadsResponse] = await Promise.all([
-      dashboardFetch<{ success: boolean; location: LocationOverview }>(`/api/dashboard/locations/${locationId.value}`),
+      dashboardApi<{ success: boolean; location: LocationOverview }>(`/api/dashboard/locations/${locationId.value}`),
       hasMenu.value
-        ? dashboardFetch<{ success: boolean; menus: ApiRecord[] }>(`/api/editor/sites/${siteId}/menus?locationId=${locationId.value}`)
+        ? dashboardApi<{ success: boolean; menus: ApiRecord[] }>(`/api/editor/sites/${siteId}/menus?locationId=${locationId.value}`)
         : Promise.resolve({ success: true, menus: [] }),
-      dashboardFetch<{ connection: GoogleConnection | null }>(`/api/sites/${siteId}/locations/${locationId.value}/integrations/google-business`),
-      dashboardFetch<{ summary: InboxSummary }>(`/api/dashboard/sites/${siteId}/guest-threads`, {
+      dashboardApi<{ connection: GoogleConnection | null }>(`/api/sites/${siteId}/locations/${locationId.value}/integrations/google-business`),
+      dashboardApi<{ summary: InboxSummary }>(`/api/dashboard/sites/${siteId}/guest-threads`, {
         query: { location_id: locationId.value },
       }),
     ])

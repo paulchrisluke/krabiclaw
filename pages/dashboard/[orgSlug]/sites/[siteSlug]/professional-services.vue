@@ -141,6 +141,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.services' })
 useSeoMeta({ title: 'Professional services | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
@@ -267,7 +268,7 @@ const { data, pending, refresh } = await useAsyncData(
       })
       return { success: true, ...(await getProfessionalServiceContent(db, siteId)) } as unknown as ProfessionalServiceEditorResponse
     }
-    return await dashboardFetch<ProfessionalServiceEditorResponse>(`/api/editor/sites/${siteId}/professional-services`)
+    return await dashboardApi<ProfessionalServiceEditorResponse>(`/api/editor/sites/${siteId}/professional-services`)
   },
 )
 
@@ -395,7 +396,7 @@ watch(() => data.value, () => {
 })
 
 async function patchProfessionalServiceContent(body: ApiRecord, successMessage: string) {
-  await dashboardFetch(`/api/editor/sites/${siteId}/professional-services`, {
+  await dashboardApi(`/api/editor/sites/${siteId}/professional-services`, {
     method: 'PATCH',
     body,
   })

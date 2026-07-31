@@ -37,15 +37,6 @@ interface SiteShellPayload {
   hasExperiences: boolean;
 }
 
-const emptyShell = (): SiteShellPayload => ({
-  site: null,
-  locations: [],
-  config: {},
-  googleBusiness: { business: null, reviews: [], media: [], posts: [], syncedAt: null },
-  locales: [],
-  hasExperiences: false,
-});
-
 export const useSiteShellState = () => {
   const { isPlatform, siteId, draftId } = useTenantSite();
   const requestEvent = useRequestEvent();
@@ -76,21 +67,23 @@ export const useSiteShellState = () => {
   }));
 
   const key = computed(() => `shell~${useBootstrapKey(entityId.value, params.value)}`);
-  const url = computed(() => useBootstrapUrl(siteId, params.value));
+  const url = computed(() => useBootstrapUrl(siteId, params.value, 'shell'));
 
-  const empty = emptyShell();
-
-  let data: Ref<SiteShellPayload | null>
+  let data: Ref<SiteShellPayload | undefined>
   let error: Ref<Error | null>
+  let pending: Ref<boolean>
+  let refresh: () => Promise<unknown>
   let ready: Promise<unknown>
   if (isSyntheticServerAssetFetch || isPlatform || (!siteId && !draftId)) {
-    data = ref<SiteShellPayload>(empty)
+    data = ref<SiteShellPayload>()
     error = ref<Error | null>(null)
+    pending = ref(false)
+    refresh = async () => {}
     ready = Promise.resolve()
   } else {
     const asyncData = useAsyncData<SiteShellPayload>(
           key,
-          () => loadPublicBootstrapPayload<SiteShellPayload>({
+          (_nuxtApp, { signal }) => loadPublicBootstrapPayload<SiteShellPayload>({
               draftId,
               siteId,
               requestEvent,
@@ -98,24 +91,28 @@ export const useSiteShellState = () => {
               url: url.value,
               key: key.value,
               query: {
+                contract: 'shell',
                 locale: params.value.locale ?? undefined,
                 token: params.value.token ?? undefined,
               },
               validate: (value): value is SiteShellPayload =>
                 isRecord(value) && Array.isArray(value.locations) && Array.isArray(value.locales),
               failureMessage: 'Public shell failed',
+              signal,
             }),
-          { default: emptyShell, server: true },
+          { server: true, dedupe: 'cancel' },
         );
     data = asyncData.data
     error = asyncData.error as Ref<Error | null>
-    ready = asyncData
+    pending = asyncData.pending
+    refresh = asyncData.refresh
+    ready = import.meta.server ? asyncData : Promise.resolve()
   }
 
   const locations = computed(() => (data.value?.locations ?? []) as ApiRecord[]);
   const config = computed(() => (data.value?.config ?? {}) as Record<string, string>);
   const shellSite = computed(() => data.value?.site ?? null);
-  const googleBusiness = computed(() => data.value?.googleBusiness ?? empty.googleBusiness);
+  const googleBusiness = computed(() => data.value?.googleBusiness ?? null);
   const locales = computed(() => data.value?.locales ?? []);
   const hasExperiences = computed(() => data.value?.hasExperiences ?? false);
   return {
@@ -125,7 +122,10 @@ export const useSiteShellState = () => {
     googleBusiness,
     locales,
     hasExperiences,
+    data,
+    pending,
     error,
+    refresh,
     ready,
   };
 };

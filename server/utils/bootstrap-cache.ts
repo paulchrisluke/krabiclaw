@@ -14,6 +14,7 @@
 export const BOOTSTRAP_CACHE_TTL_SECONDS = 300
 
 export interface BootstrapCacheParams {
+  contract: 'shell' | 'page'
   page: string | null
   location: string | null
   experience: string | null
@@ -32,6 +33,7 @@ export function buildBootstrapCacheKey(siteId: string, params: BootstrapCachePar
   return [
     'bs',
     encodeKeyField(siteId),
+    params.contract,
     encodeKeyField(params.page),
     encodeKeyField(params.location),
     encodeKeyField(params.experience),

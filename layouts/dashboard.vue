@@ -726,6 +726,21 @@ watch(() => route.fullPath, () => {
   mobileMoreOpen.value = false
 })
 
+watch(
+  () => dashboard.scope.value
+    ? `${dashboard.scope.value.orgSlug}:${dashboard.scope.value.siteSlug ?? ''}`
+    : '',
+  async (nextScope, previousScope) => {
+    if (!nextScope || nextScope === previousScope || dashboard.state.value) return
+    dashboardContextError.value = null
+    try {
+      await dashboard.refresh()
+    } catch (error) {
+      dashboardContextError.value = error
+    }
+  },
+)
+
 watch(mobileMoreOpen, async (open) => {
   if (open) {
     mobileMoreFocusReturn.value = document.activeElement instanceof HTMLElement

@@ -305,6 +305,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 import { TIMEZONE_OPTIONS } from '~/utils/timezone'
 import { toggleableModulesForScope, type ProductFeature } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
@@ -432,7 +433,7 @@ async function saveLocationFeatures() {
     const enabled = locationToggleableFeatures.value.filter(feature => locationEnabledFeatureSet[feature] && !siteSet.has(feature))
     const disabled = locationToggleableFeatures.value.filter(feature => siteSet.has(feature) && !locationEnabledFeatureSet[feature])
     const featureOverrides = enabled.length === 0 && disabled.length === 0 ? null : { enabled, disabled }
-    const response = await dashboardFetch<{ success: boolean; location: BusinessLocation } & LocationCapabilitySummary>(`/api/dashboard/locations/${requestedLocationId}`, {
+    const response = await dashboardApi<{ success: boolean; location: BusinessLocation } & LocationCapabilitySummary>(`/api/dashboard/locations/${requestedLocationId}`, {
       method: 'PATCH',
       body: { feature_overrides: featureOverrides },
     })
@@ -646,7 +647,7 @@ async function saveLocationDetails() {
   const requestedLocationId = locationId.value
   detailsSaving.value = true
   try {
-    const response = await dashboardFetch<{ success: boolean; location: BusinessLocation }>(`/api/dashboard/locations/${requestedLocationId}`, {
+    const response = await dashboardApi<{ success: boolean; location: BusinessLocation }>(`/api/dashboard/locations/${requestedLocationId}`, {
       method: 'PATCH',
       body: {
         title: detailsForm.title,
@@ -697,7 +698,7 @@ const connectGoogleBusiness = async () => {
   const requestedLocationId = locationId.value
   connectingGoogle.value = true
   try {
-    const res = await dashboardFetch<{ success: boolean; authUrl: string }>(
+    const res = await dashboardApi<{ success: boolean; authUrl: string }>(
       `/api/sites/${siteId}/locations/${requestedLocationId}/integrations/google-business/auth`,
       { method: 'POST' }
     )
@@ -731,7 +732,7 @@ async function syncGooglePlace() {
   const requestedLocationId = locationId.value
   syncingPlace.value = true
   try {
-    const res = await dashboardFetch<{ success: boolean; reviewsUpserted: number; place: { rating: number | null; ratingCount: number | null } }>(
+    const res = await dashboardApi<{ success: boolean; reviewsUpserted: number; place: { rating: number | null; ratingCount: number | null } }>(
       '/api/integrations/google-places/sync',
       { method: 'POST', body: { locationId: requestedLocationId } }
     )
@@ -762,8 +763,8 @@ const loadLocationWorkspace = async () => {
   error.value = null
   try {
     const [locationResponse, connectionResponse] = await Promise.all([
-      dashboardFetch<{ success: boolean; location: BusinessLocation } & LocationCapabilitySummary>(`/api/dashboard/locations/${requestedLocationId}`),
-      dashboardFetch<{ success: boolean; connection: GbConnection | null }>(`/api/sites/${siteId}/locations/${requestedLocationId}/integrations/google-business`),
+      dashboardApi<{ success: boolean; location: BusinessLocation } & LocationCapabilitySummary>(`/api/dashboard/locations/${requestedLocationId}`),
+      dashboardApi<{ success: boolean; connection: GbConnection | null }>(`/api/sites/${siteId}/locations/${requestedLocationId}/integrations/google-business`),
     ])
     if (currentToken !== locationLoadToken || locationId.value !== requestedLocationId) return false
     if (!locationResponse.success) throw new Error('Failed to load location')

@@ -291,7 +291,8 @@ const capabilities = computed(() => {
   }
 })
 
-const dashboardRequestHeaders = computed(() => buildDashboardRequestHeaders())
+const dashboardScope = useDashboardRouteScope()
+const dashboardRequestHeaders = computed(() => buildDashboardRequestHeaders(dashboardScope.value!))
 const effectiveFeatureSet = computed(() => new Set<ProductFeature>([
   ...(capabilities.value?.pages.map(page => page.feature) ?? []),
   ...(capabilities.value?.managers.map(manager => manager.id) ?? []),

@@ -65,13 +65,13 @@ const dashboardContextReads = new Map<string, Promise<DashboardContextResponse>>
 // `overrides` lets a caller (e.g. a per-request site-slug filter) set additional
 // headers without losing the org/site ones already on the returned Headers instance
 // (spreading a Headers object with `{ ...headers }` silently drops its entries).
-export function buildDashboardRequestHeaders(overrides?: Record<string, string>): Headers {
-  const route = useRoute()
-  const orgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
-  const siteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : null
+export function buildDashboardRequestHeaders(
+  scope: DashboardRequestScope,
+  overrides?: Record<string, string>,
+): Headers {
   const headers = new Headers(import.meta.server ? useRequestHeaders(['cookie']) : undefined)
-  if (orgSlug) headers.set('x-dashboard-org-slug', orgSlug)
-  if (siteSlug) headers.set('x-dashboard-site-slug', siteSlug)
+  headers.set('x-dashboard-org-slug', scope.orgSlug)
+  if (scope.siteSlug) headers.set('x-dashboard-site-slug', scope.siteSlug)
   if (overrides) {
     for (const [key, value] of Object.entries(overrides)) headers.set(key, value)
   }
@@ -79,31 +79,54 @@ export function buildDashboardRequestHeaders(overrides?: Record<string, string>)
 }
 
 export function useDashboardSite() {
-  const route = useRoute()
-  const orgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : 'none'
-  const siteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : 'none'
-  const contextKey = `dashboard:site-context:${orgSlug}:${siteSlug}`
-  const state = useState<DashboardContextResponse | null>(contextKey, () => null)
-  const pending = useState<boolean>(`${contextKey}:pending`, () => false)
+  const scope = useDashboardRouteScope()
+  const contextByScope = useState<Record<string, DashboardContextResponse | null>>('dashboard:contexts', () => ({}))
+  const pendingByScope = useState<Record<string, boolean>>('dashboard:context-pending', () => ({}))
+  const contextKey = computed(() => {
+    const current = scope.value
+    return current ? `${current.orgSlug}:${current.siteSlug ?? ''}` : ''
+  })
+  const state = computed<DashboardContextResponse | null>({
+    get: () => contextKey.value ? contextByScope.value[contextKey.value] ?? null : null,
+    set: (value) => {
+      if (!contextKey.value) return
+      contextByScope.value = { ...contextByScope.value, [contextKey.value]: value }
+    },
+  })
+  const pending = computed(() => contextKey.value ? pendingByScope.value[contextKey.value] ?? false : false)
+
   async function refresh() {
-    const existing = dashboardContextReads.get(contextKey)
+    const requestScope = scope.value
+    const requestKey = contextKey.value
+    if (!requestScope || !requestKey) {
+      state.value = null
+      return null
+    }
+    const existing = dashboardContextReads.get(requestKey)
     if (existing) return await existing
-    pending.value = true
-    const pendingRead = dashboardFetch<DashboardContextResponse>('/api/dashboard/context')
+    pendingByScope.value = { ...pendingByScope.value, [requestKey]: true }
+    const pendingRead = (import.meta.server
+      ? (async () => {
+          const event = useRequestEvent()
+          if (!event) throw createError({ statusCode: 500, statusMessage: 'Dashboard request context unavailable' })
+          const { loadDashboardContext } = await import('~/server/utils/dashboard-context-service')
+          return await loadDashboardContext(event, requestScope) as DashboardContextResponse
+        })()
+      : dashboardFetch<DashboardContextResponse>('/api/dashboard/context', requestScope))
       .then((response) => {
         if (!response?.success || !Array.isArray(response.sites) || !Array.isArray(response.locations)) {
           throw new ApiClientError('Dashboard context response did not match its contract', 502, 'INVALID_API_RESPONSE', null)
         }
-        state.value = response
+        contextByScope.value = { ...contextByScope.value, [requestKey]: response }
         return response
       })
       .finally(() => {
-        pending.value = false
-        if (dashboardContextReads.get(contextKey) === pendingRead) {
-          dashboardContextReads.delete(contextKey)
+        pendingByScope.value = { ...pendingByScope.value, [requestKey]: false }
+        if (dashboardContextReads.get(requestKey) === pendingRead) {
+          dashboardContextReads.delete(requestKey)
         }
       })
-    dashboardContextReads.set(contextKey, pendingRead)
+    dashboardContextReads.set(requestKey, pendingRead)
     return await pendingRead
   }
 
@@ -117,6 +140,7 @@ export function useDashboardSite() {
 
   return {
     state,
+    scope,
     pending,
     organization,
     site,

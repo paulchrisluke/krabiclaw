@@ -5,6 +5,11 @@ type DashboardFetchOptions<T> = FetchOptions & {
   coalesceKey?: string
 }
 
+export interface DashboardRequestScope {
+  orgSlug: string
+  siteSlug?: string | null
+}
+
 const dashboardInFlightReads = new Map<string, Promise<unknown>>()
 
 const stableValue = (value: unknown): string => {
@@ -61,17 +66,38 @@ async function executeApiFetch<T>(
  */
 export async function dashboardFetch<T>(
   request: string,
+  scope: DashboardRequestScope,
   options: DashboardFetchOptions<T> = {},
 ): Promise<T> {
-  const route = useRoute()
-  const orgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
-  if (!orgSlug) {
+  if (!scope.orgSlug) {
     throw createError({ statusCode: 400, statusMessage: 'Dashboard organization scope is required' })
   }
-  const headers = buildDashboardRequestHeaders(
+  const headers = buildDashboardRequestHeaders(scope,
     Object.fromEntries(new Headers(options.headers as HeadersInit).entries()),
   )
   return await executeApiFetch(request, options, headers)
+}
+
+export function useDashboardRouteScope() {
+  const route = useRoute()
+  return computed<DashboardRequestScope | null>(() => {
+    const orgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
+    if (!orgSlug) return null
+    return {
+      orgSlug,
+      siteSlug: typeof route.params.siteSlug === 'string' ? route.params.siteSlug : null,
+    }
+  })
+}
+
+export function useDashboardApi(scope = useDashboardRouteScope()) {
+  return async <T>(request: string, options: DashboardFetchOptions<T> = {}) => {
+    const resolved = unref(scope)
+    if (!resolved) {
+      throw createError({ statusCode: 400, statusMessage: 'Dashboard organization scope is required' })
+    }
+    return await dashboardFetch<T>(request, resolved, options)
+  }
 }
 
 export async function applicationFetch<T>(

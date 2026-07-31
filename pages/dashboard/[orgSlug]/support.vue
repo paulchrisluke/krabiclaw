@@ -159,6 +159,8 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
+const dashboardScope = useDashboardRouteScope()
 definePageMeta({ layout: 'dashboard' })
 
 const config = useRuntimeConfig()
@@ -228,8 +230,8 @@ interface WorkRequest {
   notes: string | null; created_at: string
 }
 
-const requestHeaders = buildDashboardRequestHeaders()
-const { data, refresh } = await useFetch<{ requests: WorkRequest[] }>('/api/dashboard/work-requests', { headers: requestHeaders })
+const requestHeaders = computed(() => buildDashboardRequestHeaders(dashboardScope.value!))
+const { data, refresh } = await useFetch<{ requests: WorkRequest[] }>('/api/dashboard/work-requests', { headers: requestHeaders.value })
 const requests = computed(() => data.value?.requests)
 
 async function submitRequest() {
@@ -238,9 +240,9 @@ async function submitRequest() {
   submitError.value = ''
   submitSuccess.value = false
   try {
-    await dashboardFetch('/api/dashboard/work-requests', {
+    await dashboardApi('/api/dashboard/work-requests', {
       method: 'POST',
-      headers: requestHeaders,
+      headers: requestHeaders.value,
       body: { type: form.type, title: form.title.trim(), description: form.description.trim() || undefined, priority: form.priority },
     })
     form.title = ''

@@ -20,6 +20,7 @@ interface StoredMessage {
 const conversationsState = () => useState<Record<string, ChowBotConv[]>>('chowbot:server-conversations', () => ({}))
 
 export const useChowBotHistory = () => {
+  const dashboardApi = useDashboardApi()
   // Skip on server to avoid hydration issues
   if (import.meta.server) {
     return {
@@ -33,7 +34,7 @@ export const useChowBotHistory = () => {
   const conversationsBySite = conversationsState()
 
   const load = async (siteId: string) => {
-    const res = await dashboardFetch<{ conversations: ChowBotConv[] }>(`/api/ai/${siteId}/conversations`)
+    const res = await dashboardApi<{ conversations: ChowBotConv[] }>(`/api/ai/${siteId}/conversations`)
     conversationsBySite.value = {
       ...conversationsBySite.value,
       [siteId]: res.conversations ?? [],
@@ -43,7 +44,7 @@ export const useChowBotHistory = () => {
   const forSite = (siteId: string): ChowBotConv[] => conversationsBySite.value[siteId] ?? []
 
   const get = async (siteId: string, conversationId: string): Promise<{ conversation: ChowBotConv; messages: ChowbotMessage[] }> => {
-    const res = await dashboardFetch<{ conversation: ChowBotConv; messages: StoredMessage[] }>(`/api/ai/${siteId}/conversations/${conversationId}`)
+    const res = await dashboardApi<{ conversation: ChowBotConv; messages: StoredMessage[] }>(`/api/ai/${siteId}/conversations/${conversationId}`)
     return {
       conversation: res.conversation,
       messages: (res.messages ?? [])
@@ -66,7 +67,7 @@ export const useChowBotHistory = () => {
     }
 
     try {
-      await dashboardFetch(`/api/ai/${siteId}/conversations/${conversationId}`, { method: 'DELETE' })
+      await dashboardApi(`/api/ai/${siteId}/conversations/${conversationId}`, { method: 'DELETE' })
       await load(siteId)
     } catch (error) {
       console.error('Failed to remove conversation:', error)

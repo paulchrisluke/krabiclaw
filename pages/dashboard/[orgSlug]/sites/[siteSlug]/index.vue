@@ -242,6 +242,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 import { buildOnboardingChecklistItems, buildOnboardingStarterPrompt, type OnboardingChecklistResponse } from '~/composables/useOnboardingPrompts'
 import ChowBotPromptTrigger from '~/components/chowbot/ChowBotPromptTrigger.vue'
 import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities } from '~/config/cms-registry'
@@ -280,7 +281,7 @@ const { data, pending } = await useAsyncData(
   async () => {
     // Bypass the self-fetch entirely on the server — see "Nested SSR self-fetch
     // loses Cloudflare bindings" in CLAUDE.md. dashboardState.refresh() does its
-    // own dashboardFetch to /api/dashboard/context, which has the exact same nested-fetch
+    // own dashboardApi to /api/dashboard/context, which has the exact same nested-fetch
     // problem during SSR — call getDashboardContext directly against the real
     // request event instead, and only use dashboardState.refresh() client-side.
     if (import.meta.server) {
@@ -327,7 +328,7 @@ const { data, pending } = await useAsyncData(
     }
 
     await dashboardState.refresh()
-    return dashboardFetch<{ locations: Location[]; credits: Credits | null; events: SiteEvent[]; operations: OperationsSummary }>('/api/dashboard/home')
+    return dashboardApi<{ locations: Location[]; credits: Credits | null; events: SiteEvent[]; operations: OperationsSummary }>('/api/dashboard/home')
   },
   // Reuse the SSR payload on first hydration (avoids a redundant duplicate fetch
   // on initial load), but force a fresh fetch on every subsequent client-side

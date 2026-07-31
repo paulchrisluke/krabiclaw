@@ -87,7 +87,7 @@ export type DashboardLocationContextRow = Record<string, unknown> & {
   site_id: string
 }
 
-interface DashboardContextOptions {
+export interface DashboardContextOptions {
   requireSite?: boolean
   // Opt-in only — see resolveRecentlyTransferredSite. Defaults to off so generic
   // multi-site callers (e.g. the org-root single-site auto-redirect) keep returning
@@ -99,9 +99,12 @@ interface DashboardContextOptions {
   // the onboarding discovery endpoint (/api/dashboard/context) opts out of the
   // throw to represent that state instead of erroring.
   requireOrganization?: boolean
+  organizationSlug?: string | null
+  siteSlug?: string | null
 }
 
 export interface ResolveOrganizationOptions {
+  organizationSlug?: string | null
   // From an explicit caller-supplied param (e.g. billing's body/query organizationId).
   // Still membership-checked — never trusted outright.
   explicitOrganizationId?: string | null
@@ -126,7 +129,7 @@ export async function resolveRequestedOrganization(
   userId: string,
   options: ResolveOrganizationOptions = {}
 ): Promise<DashboardOrganizationRow | null> {
-  const organizationSlug = getHeader(event, 'x-dashboard-org-slug')
+  const organizationSlug = options.organizationSlug ?? getHeader(event, 'x-dashboard-org-slug')
   const explicitOrganizationId = options.explicitOrganizationId ?? null
 
   const headerOrg = organizationSlug
@@ -241,7 +244,10 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
     ? sessionRecord.activeOrganizationId
     : null
 
-  const organization = await resolveRequestedOrganization(event, db, session.user.id, { activeOrganizationId })
+  const organization = await resolveRequestedOrganization(event, db, session.user.id, {
+    activeOrganizationId,
+    organizationSlug: options.organizationSlug,
+  })
 
   if (!organization) {
     if (options.requireOrganization === false) {
@@ -254,7 +260,7 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
         site: null,
       }
     }
-    const hasHeader = Boolean(getHeader(event, 'x-dashboard-org-slug'))
+    const hasHeader = Boolean(options.organizationSlug ?? getHeader(event, 'x-dashboard-org-slug'))
     throw createError({
       statusCode: hasHeader ? 404 : 400,
       message: hasHeader
@@ -273,7 +279,7 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
   // before a site is known/selected, so a missing header there means "no site
   // selected yet" rather than a client error — only callers that need a site
   // get the hard 400.
-  const siteSlug = getHeader(event, 'x-dashboard-site-slug')
+  const siteSlug = options.siteSlug ?? getHeader(event, 'x-dashboard-site-slug')
 
   if (!siteSlug && options.requireSite !== false) {
     throw createError({ statusCode: 400, message: 'Site slug is required. Use /dashboard/{orgSlug}/sites/{siteSlug} routes.' })

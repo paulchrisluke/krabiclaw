@@ -120,6 +120,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.links' })
 useSeoMeta({ title: 'Links page | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
@@ -150,7 +151,6 @@ interface ApiLinksPage extends Omit<LinksPage, 'seo_title' | 'seo_description'> 
 type ApiLinkItem = LinkItem
 
 const siteId = await useDashboardSiteId()
-const headers = buildDashboardRequestHeaders()
 const dashboard = useDashboardSite()
 const toast = useToast()
 const saving = ref(false)
@@ -184,7 +184,7 @@ const items = ref<LinkItem[]>([])
 
 const { data, pending, refresh } = await useAsyncData(
   `links-page-editor-${siteId}`,
-  () => dashboardFetch<{ page: ApiLinksPage; items: ApiLinkItem[] }>(`/api/editor/sites/${siteId}/links-page`, { headers }),
+  () => dashboardApi<{ page: ApiLinksPage; items: ApiLinkItem[] }>(`/api/editor/sites/${siteId}/links-page`),
   { server: false },
 )
 
@@ -284,9 +284,8 @@ async function save() {
         status: item.status,
       })),
     }
-    const response = await dashboardFetch<{ page: ApiLinksPage; items: ApiLinkItem[] }>(`/api/editor/sites/${siteId}/links-page`, {
+    const response = await dashboardApi<{ page: ApiLinksPage; items: ApiLinkItem[] }>(`/api/editor/sites/${siteId}/links-page`, {
       method: 'PATCH',
-      headers,
       body: payload,
     })
     data.value = response

@@ -54,6 +54,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 
 definePageMeta({ layout: 'editor', ssr: false })
@@ -134,7 +135,7 @@ async function loadTransferContext() {
   selectedLocationId.value = null
   selectedPage.value = 'home'
   try {
-    const ctx = await dashboardFetch<{
+    const ctx = await dashboardApi<{
       success: boolean
       organization?: { id: string; slug: string } | null
       // vertical is the raw sites.vertical storage value (may be 'service',
@@ -166,8 +167,8 @@ async function loadTransferContext() {
     // header, so it works for a transferred site with no subdomain yet
     // (custom-domain-only) instead of silently losing that site's locations.
     const [locsRes, notifRes] = await Promise.all([
-      dashboardFetch<{ success: boolean; locations: LocationRow[] }>(`/api/sites/${siteId.value}/locations`),
-      dashboardFetch<{ success: boolean; notifications: { whatsapp_phone: string | null; channels: string[] } }>(
+      dashboardApi<{ success: boolean; locations: LocationRow[] }>(`/api/sites/${siteId.value}/locations`),
+      dashboardApi<{ success: boolean; notifications: { whatsapp_phone: string | null; channels: string[] } }>(
         `/api/editor/sites/${siteId.value}/notifications`
       ),
     ])

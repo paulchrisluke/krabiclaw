@@ -3,16 +3,9 @@
 // vary by route (locations, config, menu, experiencesList) lives in
 // the site-shell loader instead — see that file for why the split exists.
 //
-// This is `await`-ed by every caller. That's load-bearing, not stylistic:
-// the key is derived from the current route, so on client-side navigation
-// the key changes on every page. A non-awaited useAsyncData here would let
-// Vue render the new page with the OLD key's leftover data for a beat (or,
-// if a component further down the tree never re-renders it, indefinitely)
-// before the new fetch resolves — see krabiclaw issue #436/#437. Awaiting it
-// at the top of each page's <script setup> makes Vue Router's Suspense
-// boundary hold the previous page on screen until the new page's real data
-// is in hand, exactly like pages/blog/[slug].vue's own post fetch already
-// does correctly.
+// SSR waits for route data so rendered HTML is complete. Client navigation
+// starts the keyed request lazily and returns immediately; the Saya layout
+// replaces the old route with a destination-local loading or error state.
 //
 // Usage (in a page):
 //   const { getField, getHero, photosList, qaList, ... } = await useBootstrap()
@@ -58,25 +51,6 @@ interface BootstrapPayload {
   menu: ApiRecord | null;
 }
 
-const emptyBootstrap = (): BootstrapPayload => ({
-  content: [],
-  locationReviews: [],
-  reviewsAggregate: null,
-  reviewsList: [],
-  photosList: [],
-  qaList: [],
-  postsList: [],
-  blogList: [],
-  blogPost: null,
-  reservationPolicySiteDefault: null,
-  reservationPolicyByLocation: {},
-  experiencePolicySiteDefault: null,
-  experiencePolicyById: {},
-  experienceDetail: null,
-  experiencesList: [],
-  menu: null,
-});
-
 export const useBootstrap = async (options: { enabled?: boolean | Ref<boolean> } = {}) => {
   const { isPlatform, siteId, draftId } = useTenantSite();
   const route = useRoute();
@@ -89,16 +63,14 @@ export const useBootstrap = async (options: { enabled?: boolean | Ref<boolean> }
 
   const url = computed(() => useBootstrapUrl(siteId, params.value));
 
-  const empty = emptyBootstrap();
-
   const shell = useSiteShellState();
 
-  const { data, error, pending } =
+  const asyncData =
     isPlatform || !enabled.value || (!siteId && !draftId)
-      ? { data: ref<BootstrapPayload>(empty), error: ref<Error | null>(null), pending: ref(false) }
-      : await useAsyncData<BootstrapPayload>(
+      ? { data: ref<BootstrapPayload>(), error: ref<Error | null>(null), pending: ref(false), refresh: async () => {} }
+      : useAsyncData<BootstrapPayload>(
           key,
-          () => loadPublicBootstrapPayload<BootstrapPayload>({
+          (_nuxtApp, { signal }) => loadPublicBootstrapPayload<BootstrapPayload>({
               draftId,
               siteId,
               requestEvent,
@@ -118,14 +90,21 @@ export const useBootstrap = async (options: { enabled?: boolean | Ref<boolean> }
               validate: (value): value is BootstrapPayload =>
                 isRecord(value) && Array.isArray(value.content),
               failureMessage: 'Public bootstrap failed',
+              signal,
             }),
           {
-            default: emptyBootstrap,
             server: true,
+            lazy: import.meta.client,
             watch: [url],
+            dedupe: 'cancel',
           },
         );
-  await shell.ready;
+  if (import.meta.server) {
+    await Promise.all([asyncData, shell.ready])
+    if (asyncData.error.value) throw asyncData.error.value
+    if (shell.error.value) throw shell.error.value
+  }
+  const { data, error, pending, refresh } = asyncData
 
   // ── Locations / config / menu / experiences list ─────────────
   // Site-wide, page-independent — sourced from the site-shell state, which never
@@ -278,6 +257,7 @@ export const useBootstrap = async (options: { enabled?: boolean | Ref<boolean> }
   return {
     data,
     pending,
+    refresh,
     locations,
     location,
     config,

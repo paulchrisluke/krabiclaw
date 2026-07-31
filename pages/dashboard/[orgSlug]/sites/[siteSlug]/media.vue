@@ -153,6 +153,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.media' })
 
 import VideoPosterPrompt from '~/components/workspace/media/VideoPosterPrompt.vue'
@@ -244,7 +245,7 @@ async function load() {
     const params = new URLSearchParams({ limit: String(LIMIT), offset: '0' })
     if (kindFilter.value) params.set('kind', kindFilter.value)
     if (search.value) params.set('search', search.value)
-    const res = await dashboardFetch<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`)
+    const res = await dashboardApi<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`)
     if (requestToken !== mediaRequestToken) return
     assets.value = res.media ?? []
     hasMore.value = assets.value.length === LIMIT
@@ -268,7 +269,7 @@ async function loadMore() {
     const params = new URLSearchParams({ limit: String(LIMIT), offset: String(requestOffset) })
     if (kindFilter.value) params.set('kind', kindFilter.value)
     if (search.value) params.set('search', search.value)
-    const res = await dashboardFetch<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`)
+    const res = await dashboardApi<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`)
     if (requestToken !== mediaRequestToken) return
     const more = res.media ?? []
     assets.value.push(...more)
@@ -297,7 +298,7 @@ async function deleteSelected() {
   const selectedIds = [...selected.value]
   try {
     const results = await Promise.allSettled(selectedIds.map(id =>
-      dashboardFetch(`${siteApiBase}/media/${id}`, { method: 'DELETE' })
+      dashboardApi(`${siteApiBase}/media/${id}`, { method: 'DELETE' })
     ))
 
     const successfullyDeleted = new Set<string>()

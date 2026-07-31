@@ -11,9 +11,7 @@ import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import { tenantBaseURL, tenantExtraHeaders, setupTenantHeaders } from './helpers'
 
-const BOOTSTRAP_DELAY_MS = 1000
-
-async function setupSlowBootstrap(page: Page) {
+async function setupNavigationTest(page: Page) {
   // This suite validates live loader transitions. Persistent Miniflare HTML
   // cache can otherwise replay an SSR document from an earlier test run and
   // prevent the browser from exercising the current loader implementation.
@@ -31,13 +29,9 @@ async function setupSlowBootstrap(page: Page) {
     // @ts-expect-error test-only stub
     window.IntersectionObserver = NoopObserver
   })
-  await page.route('**/api/public/sites/*/bootstrap*', async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, BOOTSTRAP_DELAY_MS))
-    await route.continue()
-  })
 }
 
-async function navigateAndAssertNoStaleFlash(page: Page, opts: {
+async function navigateAndAssertNonBlocking(page: Page, opts: {
   fromPath: string
   linkHref: string
   beforeText: string
@@ -47,35 +41,47 @@ async function navigateAndAssertNoStaleFlash(page: Page, opts: {
   await page.goto(`${tenantBaseURL}${opts.fromPath}`, { waitUntil: 'load' })
   await expect(page.locator('body')).toContainText(opts.beforeText)
 
+  let releasePageRequest!: () => void
+  const pageRequestPaused = new Promise<void>((resolve) => {
+    releasePageRequest = resolve
+  })
+  let markPageRequestPaused!: () => void
+  const sawPausedPageRequest = new Promise<void>((resolve) => {
+    markPageRequestPaused = resolve
+  })
+  await page.route('**/api/public/sites/*/page*', async (route) => {
+    markPageRequestPaused()
+    await pageRequestPaused
+    await route.continue()
+  })
+
   const link = page.locator(`a[href="${opts.linkHref}"]`).first()
   await link.click()
+  await sawPausedPageRequest
 
-  // Poll frequently across the whole delay window — any appearance of a
-  // forbidden marker (wrong page's content, or a premature empty state)
-  // at any point during the transition is the bug.
-  const deadline = Date.now() + BOOTSTRAP_DELAY_MS + 3000
-  let sawForbidden: string | null = null
-  while (Date.now() < deadline) {
-    const bodyText = await page.locator('body').innerText().catch(() => '')
-    for (const forbidden of opts.forbiddenTexts) {
-      if (bodyText.includes(forbidden)) sawForbidden = forbidden
-    }
-    if (bodyText.includes(opts.afterText)) break
-    await page.waitForTimeout(100)
+  // These assertions execute while the destination API request is still
+  // paused. They distinguish an immediate route transition from Suspense
+  // retaining the previous page until data arrives.
+  await expect(page).toHaveURL(new RegExp(`${opts.linkHref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/?$`))
+  await expect(page.locator(`[data-route-shell="${opts.linkHref}"]`)).toBeVisible()
+  await expect(page.getByTestId('public-route-loading')).toBeVisible()
+  await expect(page.locator('main')).not.toContainText(opts.beforeText)
+  for (const forbidden of opts.forbiddenTexts) {
+    await expect(page.locator('main')).not.toContainText(forbidden)
   }
 
-  expect(sawForbidden, `saw forbidden marker "${sawForbidden}" during ${opts.fromPath} -> ${opts.linkHref} navigation`).toBeNull()
+  releasePageRequest()
   await expect(page.locator('body')).toContainText(opts.afterText)
 }
 
 test.describe('tenant client-side navigation does not show stale/fallback content', () => {
   test.beforeEach(async ({ page }) => {
     await setupTenantHeaders(page, tenantBaseURL, tenantExtraHeaders)
-    await setupSlowBootstrap(page)
+    await setupNavigationTest(page)
   })
 
   test('Home -> About', async ({ page }) => {
-    await navigateAndAssertNoStaleFlash(page, {
+    await navigateAndAssertNonBlocking(page, {
       fromPath: '/',
       linkHref: '/about',
       beforeText: 'Ember & Slice',
@@ -85,7 +91,7 @@ test.describe('tenant client-side navigation does not show stale/fallback conten
   })
 
   test('Home -> Experiences', async ({ page }) => {
-    await navigateAndAssertNoStaleFlash(page, {
+    await navigateAndAssertNonBlocking(page, {
       fromPath: '/',
       linkHref: '/experiences',
       beforeText: 'Ember & Slice',
@@ -95,7 +101,7 @@ test.describe('tenant client-side navigation does not show stale/fallback conten
   })
 
   test('Experiences -> Experience detail', async ({ page }) => {
-    await navigateAndAssertNoStaleFlash(page, {
+    await navigateAndAssertNonBlocking(page, {
       fromPath: '/experiences',
       linkHref: '/experiences/pizza-making-class',
       beforeText: 'Pizza Making Class',
@@ -105,7 +111,7 @@ test.describe('tenant client-side navigation does not show stale/fallback conten
   })
 
   test('Home -> Menu', async ({ page }) => {
-    await navigateAndAssertNoStaleFlash(page, {
+    await navigateAndAssertNonBlocking(page, {
       fromPath: '/',
       linkHref: '/menu',
       beforeText: 'Ember & Slice',
@@ -115,7 +121,7 @@ test.describe('tenant client-side navigation does not show stale/fallback conten
   })
 
   test('Home -> Locations', async ({ page }) => {
-    await navigateAndAssertNoStaleFlash(page, {
+    await navigateAndAssertNonBlocking(page, {
       fromPath: '/',
       linkHref: '/locations',
       beforeText: 'Ember & Slice',
@@ -125,7 +131,7 @@ test.describe('tenant client-side navigation does not show stale/fallback conten
   })
 
   test('Locations -> Location detail', async ({ page }) => {
-    await navigateAndAssertNoStaleFlash(page, {
+    await navigateAndAssertNonBlocking(page, {
       fromPath: '/locations',
       linkHref: '/locations/brooklyn',
       beforeText: 'Locations',
@@ -139,7 +145,7 @@ test.describe('tenant client-side navigation does not show stale/fallback conten
     // payload has an empty photosList (only populated when the /photos page
     // requests it), so a broken pending signal would render the Saya
     // "No photos yet." empty state using home's leftover data.
-    await navigateAndAssertNoStaleFlash(page, {
+    await navigateAndAssertNonBlocking(page, {
       fromPath: '/',
       linkHref: '/photos',
       beforeText: 'Ember & Slice',
