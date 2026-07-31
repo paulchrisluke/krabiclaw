@@ -60,7 +60,7 @@ test('CMS status never fabricates a Live state from local dirty state', () => {
   assert.match(editorSource, /siteStatusLabel/)
 })
 
-test('CMS editor host routes disable SSR via routeRules; editor uses $fetch for client-side fetching and avoids useFetch/useRequestFetch', () => {
+test('CMS editor host routes disable SSR via routeRules; editor uses the canonical dashboard API client for client-side fetching and avoids useFetch/useRequestFetch', () => {
   // ssr:false must come from routeRules (read by Nitro before any Vue
   // rendering starts), not definePageMeta — a page-level ssr:false depends on
   // Nuxt's page-render path resolving first, which isn't a guarantee at the
@@ -76,8 +76,11 @@ test('CMS editor host routes disable SSR via routeRules; editor uses $fetch for 
   assert.doesNotMatch(editorSource, /useFetch\b/)
   assert.doesNotMatch(editorSource, /useRequestFetch\b/)
 
-  // Editor uses $fetch for client-side data loading (SSR disabled for editor routes)
-  assert.match(editorSource, /\$fetch/)
+  // Editor uses the canonical dashboard API client (dashboardApi/useDashboardApi,
+  // itself backed by $fetch — see composables/dashboardFetch.ts) for client-side
+  // data loading, rather than calling $fetch directly or reintroducing an
+  // SSR-unsafe primitive. SSR is disabled for editor routes, so this is safe.
+  assert.match(editorSource, /\bdashboardApi\(/)
 })
 
 test('CMS content editor host pages render the shared editor with siteId and pageId props', () => {
