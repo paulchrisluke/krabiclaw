@@ -448,9 +448,9 @@ if (!isPlatform && !siteId && !draftId) {
   })
 }
 
-// ── Single SSR call ───────────────────────────────────────────────────────
-// Replaces: /locations + /google-business + /config + /content/home + /menus
-// SayaHeader + SayaFooter share the same bootstrap key — zero duplicate calls.
+// Route-owned page data (home content, menu, experiences). Persistent chrome
+// (SayaHeader/SayaFooter) reads from the separate, site-wide shell composable
+// (useSiteShellState, see layouts/saya.vue) instead — the two never overlap.
 const {
   locations: pageLocations,
   googleBusiness: pageGoogleBusiness,

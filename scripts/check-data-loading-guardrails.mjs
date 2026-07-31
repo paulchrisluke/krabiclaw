@@ -1,5 +1,15 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
+import {
+  PROHIBITED_LEGACY_PATHS,
+  CANONICAL_LOADER_PATHS,
+  checkGlobalFetchAndRetry,
+  checkBannedSilentEmptySuccessNames,
+  checkSilentEmptyCatch,
+  checkLegacyFallbackFlag,
+  checkDashboardFetchUsage,
+  checkAdminFetchUsage,
+} from './lib/data-loading-guardrails.mjs'
 
 const root = new URL('..', import.meta.url).pathname
 const dashboardRoots = [
@@ -17,14 +27,6 @@ const applicationRoots = [
   'components',
 ]
 const violations = []
-const prohibitedLegacyPaths = [
-  'composables/useBootstrap.ts',
-  'composables/useBootstrapParams.ts',
-  'composables/loadPublicBootstrapPayload.ts',
-  'server/utils/public-bootstrap.ts',
-  'server/api/public/sites/[siteId]/bootstrap.get.ts',
-  'server/api/public/drafts/[draftId]/bootstrap.get.ts',
-]
 
 async function filesUnder(directory) {
   const entries = await readdir(join(root, directory), { withFileTypes: true }).catch((error) => {
@@ -43,18 +45,26 @@ async function filesUnder(directory) {
 for (const directory of applicationRoots) {
   for (const file of await filesUnder(directory)) {
     const source = await readFile(join(root, file), 'utf8')
-    if (source.includes('globalThis.$fetch')) {
-      violations.push(`${file}: mutates or references globalThis.$fetch`)
-    }
-    for (const match of source.matchAll(/\bretry\s*:\s*([^,\n}]+)/g)) {
-      if (match[1].trim() !== '0') {
-        violations.push(`${file}: app-owned fetch retry must be 0 (found ${match[1].trim()})`)
-      }
-    }
+    violations.push(...checkGlobalFetchAndRetry(file, source))
+    violations.push(...checkBannedSilentEmptySuccessNames(file, source))
+    violations.push(...checkLegacyFallbackFlag(file, source))
   }
 }
 
-for (const path of prohibitedLegacyPaths) {
+// server/ isn't part of applicationRoots (that list is Nuxt app-side code), but
+// the canonical SSR loaders below live under server/utils — check them for the
+// same legacy-fallback-flag pattern.
+for (const path of CANONICAL_LOADER_PATHS) {
+  if (!path.startsWith('server/')) continue
+  const source = await readFile(join(root, path), 'utf8').catch(error => {
+    if (error?.code === 'ENOENT') return null
+    throw error
+  })
+  if (source === null) continue
+  violations.push(...checkLegacyFallbackFlag(path, source))
+}
+
+for (const path of PROHIBITED_LEGACY_PATHS) {
   const source = await readFile(join(root, path), 'utf8').catch(error => {
     if (error?.code === 'ENOENT') return null
     throw error
@@ -62,26 +72,28 @@ for (const path of prohibitedLegacyPaths) {
   if (source !== null) violations.push(`${path}: legacy data-loading path must remain deleted`)
 }
 
+for (const path of CANONICAL_LOADER_PATHS) {
+  const source = await readFile(join(root, path), 'utf8').catch(error => {
+    if (error?.code === 'ENOENT') return null
+    throw error
+  })
+  if (source === null) continue
+  violations.push(...checkSilentEmptyCatch(path, source))
+}
+
 for (const directory of dashboardRoots) {
   for (const file of await filesUnder(directory)) {
     const source = await readFile(join(root, file), 'utf8')
     // Skip DashboardAccountMenu.vue for /api/health platform health check
     if (file === 'components/workspace/dashboard/DashboardAccountMenu.vue') continue
-    if (/\$fetch(?:<|\()/.test(source)) {
-      violations.push(`${file}: use dashboardFetch for route-scoped API traffic`)
-    }
-    if (/\bfetch\s*\(\s*['"`]\/api\//.test(source)) {
-      violations.push(`${file}: use dashboardFetch for route-scoped API traffic`)
-    }
+    violations.push(...checkDashboardFetchUsage(file, source))
   }
 }
 
 for (const directory of adminRoots) {
   for (const file of await filesUnder(directory)) {
     const source = await readFile(join(root, file), 'utf8')
-    if (/\$fetch(?:<|\()/.test(source) || /\bdashboardFetch(?:<|\()/.test(source)) {
-      violations.push(`${file}: use applicationFetch for unscoped admin API traffic`)
-    }
+    violations.push(...checkAdminFetchUsage(file, source))
   }
 }
 

@@ -254,4 +254,87 @@ test.describe('dashboard functional smoke', () => {
     await expect(page.getByText('Could not load experiences')).toBeVisible()
     await expect(page.getByText('No experiences yet')).toBeHidden()
   })
+
+  test('site media library distinguishes empty and failed list states', async ({ page, baseURL }) => {
+    test.setTimeout(60_000)
+    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
+    await page.goto(devLoginUrl(baseURL!, 'user-kikuzuki'), { waitUntil: 'load' })
+
+    // Same SSR-direct-service constraint as the experiences page above (see the
+    // comment there) — media.vue fetches via loadDashboardMedia during SSR, so
+    // the mock must be hit through an in-app SPA transition, not a URL nav.
+    const settingsUrl = `${baseURL}/dashboard/kikuzuki-krabi-thailand/sites/kikuzuki-krabi-thailand/settings`
+    const mediaLink = page.locator('[id^="dashboard-sidebar"]').getByRole('link', { name: 'Media library' })
+
+    await page.route('**/api/editor/sites/site-kikuzuki/media?**', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ media: [] }) })
+    })
+    await page.goto(settingsUrl, { waitUntil: 'networkidle' })
+    await mediaLink.click()
+    await expect(page).toHaveURL(/\/media$/)
+    await expect(page.getByText('No media yet')).toBeVisible()
+    await page.unroute('**/api/editor/sites/site-kikuzuki/media?**')
+
+    await page.route('**/api/editor/sites/site-kikuzuki/media?**', async (route) => {
+      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Test failure' }) })
+    })
+    await page.goto(settingsUrl, { waitUntil: 'networkidle' })
+    await mediaLink.click()
+    await expect(page).toHaveURL(/\/media$/)
+    await expect(page.getByText('No media yet')).toBeHidden()
+    await expect(page.getByText('Test failure')).toBeVisible()
+  })
+
+  test('blog posts list distinguishes empty and failed list states', async ({ page, baseURL }) => {
+    test.setTimeout(60_000)
+    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
+    await page.goto(devLoginUrl(baseURL!, 'user-kikuzuki'), { waitUntil: 'load' })
+
+    const settingsUrl = `${baseURL}/dashboard/kikuzuki-krabi-thailand/sites/kikuzuki-krabi-thailand/settings`
+    const blogLink = page.locator('[id^="dashboard-sidebar"]').getByRole('link', { name: 'Blog posts' })
+
+    await page.route('**/api/editor/sites/site-kikuzuki/blog/posts', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ posts: [] }) })
+    })
+    await page.goto(settingsUrl, { waitUntil: 'networkidle' })
+    await blogLink.click()
+    await expect(page).toHaveURL(/\/blog$/)
+    await expect(page.getByText('No blog posts yet. Create your first post to get started.')).toBeVisible()
+    await page.unroute('**/api/editor/sites/site-kikuzuki/blog/posts')
+
+    await page.route('**/api/editor/sites/site-kikuzuki/blog/posts', async (route) => {
+      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Test failure' }) })
+    })
+    await page.goto(settingsUrl, { waitUntil: 'networkidle' })
+    await blogLink.click()
+    await expect(page).toHaveURL(/\/blog$/)
+    await expect(page.getByText('No blog posts yet. Create your first post to get started.')).toBeHidden()
+    await expect(page.getByText('Test failure')).toBeVisible()
+  })
+
+  test('location menu distinguishes empty and failed list states', async ({ page, baseURL }) => {
+    test.setTimeout(60_000)
+    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
+    await page.goto(devLoginUrl(baseURL!, 'user-kikuzuki'), { waitUntil: 'load' })
+
+    // Unlike media/blog/experiences, the menu editor's read (useMenuEditor's
+    // loadMenus/loadMenu) is not SSR-hydrated — it fetches client-side only,
+    // regardless of navigation type — so a plain page.goto after registering
+    // the mock is sufficient here; no SPA-transition click is required.
+    const menuUrl = `${baseURL}/dashboard/kikuzuki-krabi-thailand/sites/kikuzuki-krabi-thailand/locations/kikuzuki-japanese-robatayaki-izakaya/menu`
+
+    await page.route('**/api/editor/sites/site-kikuzuki/menus?**', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, menus: [] }) })
+    })
+    await page.goto(menuUrl, { waitUntil: 'load' })
+    await expect(page.getByText('No menus yet')).toBeVisible()
+    await page.unroute('**/api/editor/sites/site-kikuzuki/menus?**')
+
+    await page.route('**/api/editor/sites/site-kikuzuki/menus?**', async (route) => {
+      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Test failure' }) })
+    })
+    await page.goto(menuUrl, { waitUntil: 'load' })
+    await expect(page.getByText('No menus yet')).toBeHidden()
+    await expect(page.getByText('Test failure')).toBeVisible()
+  })
 })
