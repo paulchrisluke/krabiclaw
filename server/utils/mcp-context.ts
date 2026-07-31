@@ -77,19 +77,7 @@ export async function getMcpWorkspacePreference(
 export async function listAccessibleSitesForMcp(
   db: D1Database,
   userId: string,
-  isPlatformAdmin: boolean,
 ) {
-  if (isPlatformAdmin) {
-    return await queryAll<McpSiteSummary>(db, `
-      SELECT s.id, s.organization_id, o.name AS organization_name, o.slug AS organization_slug,
-             s.brand_name, s.subdomain, s.custom_domain, s.public_url, s.status, s.onboarding_status,
-             s.primary_location_id, 'owner' AS role
-      FROM sites s
-      LEFT JOIN organization o ON o.id = s.organization_id
-      ORDER BY s.updated_at DESC, s.created_at DESC
-    `)
-  }
-
   return await queryAll<McpSiteSummary>(db, `
     SELECT s.id, s.organization_id, o.name AS organization_name, o.slug AS organization_slug,
            s.brand_name, s.subdomain, s.custom_domain, s.public_url, s.status, s.onboarding_status,
@@ -130,11 +118,10 @@ export async function listLocationsForMcp(
 export async function resolveMcpWorkspace(
   db: D1Database,
   userId: string,
-  isPlatformAdmin: boolean,
   options: ResolveWorkspaceOptions = {},
 ): Promise<ResolvedMcpWorkspace> {
   const preference = await getMcpWorkspacePreference(db, userId)
-  const sites = await listAccessibleSitesForMcp(db, userId, isPlatformAdmin)
+  const sites = await listAccessibleSitesForMcp(db, userId)
   const organizations = Array.from(
     new Map(
       sites.map((site) => [

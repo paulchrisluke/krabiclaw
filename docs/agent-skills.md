@@ -47,7 +47,7 @@ This is review evidence, not a semantic publication blocker. Persisted blog revi
 
 ## Security Boundary
 
-Skills must not contain or enforce:
+Skills must not be the authoritative enforcement point for:
 
 - authorization or tenant membership rules
 - tool input/output schemas

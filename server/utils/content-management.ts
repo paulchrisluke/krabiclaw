@@ -13,14 +13,10 @@ export interface SiteContent {
   content?: string
   hero_title?: string | null
   hero_subtitle?: string | null
-  hero_image_asset_id?: string | null
-  hero_video_asset_id?: string | null
-  /** Resolved public URL of hero_image_asset_id — injected by getPageContent JOINs */
+  hero_media_asset_id?: string | null
+  /** Resolved public URL of hero_media_asset_id — injected by getPageContent JOINs */
   hero_public_url?: string | null
   hero_kind?: string | null
-  /** Resolved public URL of hero_video_asset_id — injected by getPageContent JOINs */
-  hero_video_public_url?: string | null
-  hero_video_kind?: string | null
   thumbnail_url?: string | null
   /** Component identifier for dynamic rendering */
   component?: string | null
@@ -41,7 +37,7 @@ interface SiteContentTranslationRow {
 // Site Content
 export const getSiteContent = async (db: DbClient, organizationId: string, siteId: string, locationId?: string): Promise<SiteContent[]> => {
   let query = `
-    SELECT id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id, component, updated_at
+    SELECT id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_media_asset_id, component, updated_at
      FROM site_content
      WHERE organization_id = ? AND site_id = ?
   `
@@ -64,13 +60,11 @@ export const getPageContent = async (db: DbClient, organizationId: string, siteI
   let query = `
     SELECT sc.id, sc.organization_id, sc.site_id, sc.location_id, sc.page, sc.field,
            sc.value, sc.type, sc.source, sc.content, sc.hero_title, sc.hero_subtitle,
-           sc.hero_image_asset_id, sc.hero_video_asset_id, sc.component, sc.updated_at,
-           img.public_url AS hero_public_url, img.kind AS hero_kind,
-           vid.public_url AS hero_video_public_url, vid.kind AS hero_video_kind,
-           vid.thumbnail_url
+           sc.hero_media_asset_id, sc.component, sc.updated_at,
+           media.public_url AS hero_public_url, media.kind AS hero_kind,
+           media.thumbnail_url
     FROM site_content sc
-    LEFT JOIN media_assets img ON sc.hero_image_asset_id = img.id AND img.status = 'active'
-    LEFT JOIN media_assets vid ON sc.hero_video_asset_id = vid.id AND vid.status = 'active'
+    LEFT JOIN media_assets media ON sc.hero_media_asset_id = media.id AND media.status = 'active'
     WHERE sc.organization_id = ? AND sc.site_id = ? AND sc.page = ?
   `
   const params = [organizationId, siteId, page]
@@ -191,8 +185,7 @@ export const getPublishedPageContentForLocale = async (
         page,
         field: translation.field,
         source: 'manual',
-        hero_image_asset_id: undefined,
-        hero_video_asset_id: undefined,
+        hero_media_asset_id: undefined,
       }),
       field: translation.field,
       value: translation.value ?? translation.content ?? base?.value,
@@ -226,7 +219,7 @@ export const getPublishedPageContentForLocale = async (
 
 export const getSiteContentField = async (db: DbClient, organizationId: string, siteId: string, locationId: string | null, page: string, field: string): Promise<SiteContent | null> => {
   let query = `
-    SELECT id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id, component, updated_at
+    SELECT id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_media_asset_id, component, updated_at
      FROM site_content
      WHERE organization_id = ? AND site_id = ? AND page = ? AND field = ?
   `
@@ -267,8 +260,7 @@ export const deleteSiteContentField = async (
 const HERO_SUBFIELD_COLUMNS = {
   'hero.title': 'hero_title',
   'hero.subtitle': 'hero_subtitle',
-  'hero.image': 'hero_image_asset_id',
-  'hero.video': 'hero_video_asset_id',
+  'hero.media': 'hero_media_asset_id',
 } as const
 
 /**
@@ -301,8 +293,7 @@ export const clearSiteHeroField = async (
 export const upsertSiteContent = async (db: DbClient, content: Omit<SiteContent, 'updated_at'>) => {
   const hasHeroTitle = content.hero_title !== undefined
   const hasHeroSubtitle = content.hero_subtitle !== undefined
-  const hasHeroImageAssetId = content.hero_image_asset_id !== undefined
-  const hasHeroVideoAssetId = content.hero_video_asset_id !== undefined
+  const hasHeroMediaAssetId = content.hero_media_asset_id !== undefined
   const values = [
     content.id || crypto.randomUUID(),
     content.organization_id,
@@ -316,24 +307,22 @@ export const upsertSiteContent = async (db: DbClient, content: Omit<SiteContent,
     content.content || null,
     content.hero_title ?? null,
     content.hero_subtitle ?? null,
-    content.hero_image_asset_id ?? null,
-    content.hero_video_asset_id ?? null,
+    content.hero_media_asset_id ?? null,
     content.component || null,
   ]
-  const flags = [hasHeroTitle ? 1 : 0, hasHeroSubtitle ? 1 : 0, hasHeroImageAssetId ? 1 : 0, hasHeroVideoAssetId ? 1 : 0]
+  const flags = [hasHeroTitle ? 1 : 0, hasHeroSubtitle ? 1 : 0, hasHeroMediaAssetId ? 1 : 0]
 
   if (!content.location_id) {
     await execute(
       db,
       `
-      INSERT INTO site_content (id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id, component)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO site_content (id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_media_asset_id, component)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(organization_id, site_id, page, field) WHERE location_id IS NULL DO UPDATE SET
         content = excluded.content,
         hero_title = CASE WHEN ? THEN excluded.hero_title ELSE site_content.hero_title END,
         hero_subtitle = CASE WHEN ? THEN excluded.hero_subtitle ELSE site_content.hero_subtitle END,
-        hero_image_asset_id = CASE WHEN ? THEN excluded.hero_image_asset_id ELSE site_content.hero_image_asset_id END,
-        hero_video_asset_id = CASE WHEN ? THEN excluded.hero_video_asset_id ELSE site_content.hero_video_asset_id END,
+        hero_media_asset_id = CASE WHEN ? THEN excluded.hero_media_asset_id ELSE site_content.hero_media_asset_id END,
         value = excluded.value,
         type = excluded.type,
         source = excluded.source,
@@ -348,14 +337,13 @@ export const upsertSiteContent = async (db: DbClient, content: Omit<SiteContent,
   await execute(
     db,
     `
-    INSERT INTO site_content (id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_image_asset_id, hero_video_asset_id, component)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO site_content (id, organization_id, site_id, location_id, page, field, value, type, source, content, hero_title, hero_subtitle, hero_media_asset_id, component)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(organization_id, site_id, location_id, page, field) DO UPDATE SET
       content = excluded.content,
       hero_title = CASE WHEN ? THEN excluded.hero_title ELSE site_content.hero_title END,
       hero_subtitle = CASE WHEN ? THEN excluded.hero_subtitle ELSE site_content.hero_subtitle END,
-      hero_image_asset_id = CASE WHEN ? THEN excluded.hero_image_asset_id ELSE site_content.hero_image_asset_id END,
-      hero_video_asset_id = CASE WHEN ? THEN excluded.hero_video_asset_id ELSE site_content.hero_video_asset_id END,
+      hero_media_asset_id = CASE WHEN ? THEN excluded.hero_media_asset_id ELSE site_content.hero_media_asset_id END,
       value = excluded.value,
       type = excluded.type,
       source = excluded.source,

@@ -1,6 +1,5 @@
-import { execute, executeBatch, queryFirst, type DbClient } from '~/server/db'
+import { queryFirst, type DbClient } from '~/server/db'
 import { logOnlyEmailProviderId, shouldSendRealEmail } from '~/server/utils/email-delivery'
-import { attachThreadToSubmissionMessages, ensureGuestThread, syncGuestThreadAfterMessage } from '~/server/utils/guest-threads'
 import {
   buildReplyLocalPart,
   buildReplyToken,
@@ -9,8 +8,6 @@ import {
   type ReplySubmissionType,
 } from '~/server/utils/reply-address'
 import { getReplyDomain } from '~/server/utils/reply-domain'
-import { buildCanonicalNotificationInsert, NOTIFICATION_EVENT_TYPES } from '~/server/utils/notification-center'
-import { buildOwnerThreadInboxUrl, type DashboardNotificationLinkEnv } from '~/server/utils/dashboard-notification-links'
 
 export type SubmissionType = ReplySubmissionType
 
@@ -173,6 +170,7 @@ export async function sendReplyEmail(env: ReplyEmailEnv, opts: {
   body: string
   submissionType: SubmissionType
   submissionId: string
+  idempotencyKey?: string
 }): Promise<SendReplyEmailResult> {
   const replyTo = await buildReplyToAddress(env, opts.submissionType, opts.submissionId)
 
@@ -200,6 +198,7 @@ export async function sendReplyEmail(env: ReplyEmailEnv, opts: {
       headers: {
         Authorization: `Bearer ${env.RESEND_API_KEY}`,
         'Content-Type': 'application/json',
+        ...(opts.idempotencyKey ? { 'Idempotency-Key': opts.idempotencyKey } : {}),
       },
       body: JSON.stringify({
         from: fromValue,
@@ -222,128 +221,4 @@ export async function sendReplyEmail(env: ReplyEmailEnv, opts: {
 
   const data = await response.json().catch(() => ({})) as { id?: string }
   return { success: true, messageId: data.id }
-}
-
-export async function insertSubmissionMessage(db: DbClient, opts: {
-  submissionType: SubmissionType
-  submissionId: string
-  organizationId: string
-  siteId: string
-  direction: 'in' | 'out'
-  channel: 'email' | 'whatsapp'
-  body: string
-  senderUserId?: string | null
-  metaMessageId?: string | null
-  status?: string
-  error?: string | null
-}): Promise<string> {
-  const id = crypto.randomUUID()
-  const thread = await ensureGuestThread(db, opts.submissionType, opts.submissionId)
-  const createdAt = new Date().toISOString()
-  await execute(db, `
-    INSERT INTO submission_messages
-    (id, thread_id, submission_type, submission_id, organization_id, site_id, direction, channel, body, sender_user_id, meta_message_id, status, error, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `, [
-    id,
-    thread.id,
-    opts.submissionType,
-    opts.submissionId,
-    opts.organizationId,
-    opts.siteId,
-    opts.direction,
-    opts.channel,
-    opts.body,
-    opts.senderUserId ?? null,
-    opts.metaMessageId ?? null,
-    opts.status ?? 'sent',
-    opts.error ?? null,
-    createdAt,
-  ])
-  await syncGuestThreadAfterMessage(db, {
-    threadId: thread.id,
-    direction: opts.direction,
-    body: opts.body,
-    createdAt,
-  })
-  return id
-}
-
-export async function insertInboundSubmissionReply(env: DashboardNotificationLinkEnv, db: DbClient, opts: {
-  submissionType: SubmissionType
-  submissionId: string
-  organizationId: string
-  siteId: string
-  channel: 'email' | 'whatsapp'
-  body: string
-  metaMessageId?: string | null
-  from?: string | null
-}): Promise<string> {
-  const thread = await ensureGuestThread(db, opts.submissionType, opts.submissionId)
-  const messageId = crypto.randomUUID()
-  const now = new Date().toISOString()
-  const template = opts.channel === 'email' ? 'submission_reply_email' : 'submission_reply_whatsapp'
-  const title = `New ${opts.channel === 'email' ? 'email' : 'WhatsApp'} reply from ${thread.guest_name}`
-  const replyUrl = await buildOwnerThreadInboxUrl(env, db, {
-    organizationId: opts.organizationId,
-    siteId: opts.siteId,
-    locationId: thread.location_id,
-    threadId: thread.id,
-  })
-  const notification = buildCanonicalNotificationInsert({
-    scope: 'site',
-    eventType: NOTIFICATION_EVENT_TYPES.GUEST_REPLY_CREATED,
-    organizationId: opts.organizationId,
-    siteId: opts.siteId,
-    locationId: thread.location_id,
-    title,
-    message: `${thread.guest_name} replied by ${opts.channel}.`,
-    deepLink: replyUrl,
-    payload: {
-      thread_id: thread.id,
-      submission_type: opts.submissionType,
-      submission_id: opts.submissionId,
-      from: opts.from ?? null,
-      message: opts.body,
-      deep_link: replyUrl ?? '',
-    },
-    template,
-  }, undefined, now)
-
-  await executeBatch(db, [
-    {
-      query: `
-        INSERT INTO submission_messages
-        (id, thread_id, submission_type, submission_id, organization_id, site_id, direction, channel, body, sender_user_id, meta_message_id, status, error, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      params: [
-        messageId,
-        thread.id,
-        opts.submissionType,
-        opts.submissionId,
-        opts.organizationId,
-        opts.siteId,
-        'in',
-        opts.channel,
-        opts.body,
-        null,
-        opts.metaMessageId ?? null,
-        'sent',
-        null,
-        now,
-      ],
-    },
-    notification,
-  ])
-
-  await attachThreadToSubmissionMessages(db, thread.id, opts.submissionType, opts.submissionId)
-  await syncGuestThreadAfterMessage(db, {
-    threadId: thread.id,
-    direction: 'in',
-    body: opts.body,
-    createdAt: now,
-  })
-
-  return messageId
 }

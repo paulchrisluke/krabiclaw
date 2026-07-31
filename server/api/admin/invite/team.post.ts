@@ -1,6 +1,6 @@
 // POST /api/admin/invite/team - promote existing user to admin, or create new admin account
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { addPlatformAdminUser, adminHeadersForEvent, authAdminApi } from '~/server/utils/platform-admin-users'
+import { addPlatformAdminUser, adminHeadersForEvent, authAdminApi, platformPermissionError, requirePlatformEventPermission } from '~/server/utils/platform-admin-users'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -18,11 +18,11 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
+    await requirePlatformEventPermission(event, env, { user: ['create', 'set-role'] })
     const result = await addPlatformAdminUser(authAdminApi(env), adminHeadersForEvent(event), { email, name })
     return jsonResponse({ success: true, ...result })
   } catch (error) {
-    const statusCode = typeof (error as { statusCode?: unknown })?.statusCode === 'number' ? (error as { statusCode: number }).statusCode : 500
-    const message = typeof (error as { statusMessage?: unknown })?.statusMessage === 'string' ? (error as { statusMessage: string }).statusMessage : 'Failed to add team member'
+    const { statusCode, message } = platformPermissionError(error, 'Failed to add team member')
     return jsonResponse({ error: message }, { status: statusCode })
   }
 })

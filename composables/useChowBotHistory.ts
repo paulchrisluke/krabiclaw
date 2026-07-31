@@ -33,7 +33,7 @@ export const useChowBotHistory = () => {
   const conversationsBySite = conversationsState()
 
   const load = async (siteId: string) => {
-    const res = await $fetch<{ conversations: ChowBotConv[] }>(`/api/ai/${siteId}/conversations`)
+    const res = await $fetch(`/api/ai/${siteId}/conversations`) as { conversations: ChowBotConv[] }
     conversationsBySite.value = {
       ...conversationsBySite.value,
       [siteId]: res.conversations ?? [],
@@ -43,7 +43,7 @@ export const useChowBotHistory = () => {
   const forSite = (siteId: string): ChowBotConv[] => conversationsBySite.value[siteId] ?? []
 
   const get = async (siteId: string, conversationId: string): Promise<{ conversation: ChowBotConv; messages: ChowbotMessage[] }> => {
-    const res = await $fetch<{ conversation: ChowBotConv; messages: StoredMessage[] }>(`/api/ai/${siteId}/conversations/${conversationId}`)
+    const res = await $fetch(`/api/ai/${siteId}/conversations/${conversationId}`) as { conversation: ChowBotConv; messages: StoredMessage[] }
     return {
       conversation: res.conversation,
       messages: (res.messages ?? [])

@@ -81,7 +81,7 @@ if (isPlatform) throw createError({ statusCode: 404, statusMessage: 'Page not fo
 
 const { locale } = useI18n()
 const orderCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
-const { getField, locations, config } = useBootstrap()
+const { getField, locations, config } = await useBootstrap()
 
 const allLocations = computed(() => locations.value)
 

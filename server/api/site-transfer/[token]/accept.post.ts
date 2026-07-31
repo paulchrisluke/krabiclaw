@@ -2,7 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { execute, queryFirst } from '~/server/db'
-import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 import { executeSiteTransfer } from '~/server/utils/site-transfer'
 import { createOrganizationForSite } from '~/server/utils/site-creation'
 import { getStripe, getPriceIdForPlan } from '~/server/utils/billing'
@@ -31,7 +31,7 @@ export default defineEventHandler(async (event) => {
 
   const userId = session.user.id
   const userEmail = session.user.email?.toLowerCase() ?? ''
-  const isPlatAdmin = isPlatformAdmin(session.user, env)
+  const isPlatAdmin = await hasPlatformEventPermission(event, env, { platform: ['organizations'] })
 
   let acceptBody: { interval?: string } = {}
   try {
@@ -110,13 +110,14 @@ export default defineEventHandler(async (event) => {
       const stripe = getStripe(env)
 
       // Get or create Stripe customer for the new org
-      const orgRow = await queryFirst<{ name: string; slug: string | null; stripe_customer_id: string | null }>(
+      const orgRow = await queryFirst<{ name: string; slug: string; stripe_customer_id: string | null }>(
         db,
         `SELECT o.name, o.slug, b.stripe_customer_id FROM organization o LEFT JOIN organization_billing b ON o.id = b.organization_id WHERE o.id = ? LIMIT 1`,
         [toOrgId],
       )
+      if (!orgRow) throw createError({ statusCode: 404, statusMessage: 'Organization not found' })
 
-      let customerId = orgRow?.stripe_customer_id ?? null
+      let customerId = orgRow.stripe_customer_id
       if (customerId) {
         try {
           const existingCustomer = await stripe.customers.retrieve(customerId)
@@ -137,7 +138,7 @@ export default defineEventHandler(async (event) => {
         if (!userEmail) throw new Error('User email required to create Stripe customer')
         const customer = await stripe.customers.create({
           email: userEmail,
-          name: orgRow?.name ?? userEmail,
+          name: orgRow.name,
           metadata: { organization_id: toOrgId },
         })
         customerId = customer.id
@@ -152,7 +153,7 @@ export default defineEventHandler(async (event) => {
       }
 
       const origin = getRequestURL(event).origin
-      const slug = orgRow?.slug ? encodeURIComponent(orgRow.slug) : encodeURIComponent(toOrgId)
+      const slug = encodeURIComponent(orgRow.slug)
 
       if (transfer.stripe_checkout_session_id) {
         try {

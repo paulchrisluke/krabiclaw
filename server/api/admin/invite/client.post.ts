@@ -4,7 +4,7 @@
 // site_domains but never an owner user/member/invitation.
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { platformPermissionJsonResponse } from '~/server/utils/platform-admin-users'
 import { execute, executeBatch, queryFirst } from '~/server/db'
 
 function slugify(str: string) {
@@ -18,7 +18,8 @@ export default defineEventHandler(async (event) => {
 
   const session = await getAuthSession(event, env)
   if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-  if (!isPlatformAdmin(session.user, env)) return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
+  const permissionDenied = await platformPermissionJsonResponse(event, env, { platform: ['organizations'] })
+  if (permissionDenied) return permissionDenied
 
   const body = await readBody(event).catch(() => ({})) as {
     email?: string
@@ -39,7 +40,7 @@ export default defineEventHandler(async (event) => {
   // Attach-to-existing-org path: org already provisioned (e.g. client:import --apply),
   // it just has no owner yet. Skip org creation entirely — only insert the invitation.
   if (existingOrgId || existingOrgSlug) {
-    const org = await queryFirst<{ id: string; name: string; slug: string | null }>(
+    const org = await queryFirst<{ id: string; name: string; slug: string }>(
       db,
       existingOrgId
         ? 'SELECT id, name, slug FROM organization WHERE id = ? LIMIT 1'

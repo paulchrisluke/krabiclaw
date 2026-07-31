@@ -65,6 +65,7 @@ export interface RunChowBotOptions {
   orgId: string;
   siteId: string;
   userId: string;
+  memberId: string;
   userRole?: string;
   siteName: string;
   defaultCurrency: string;
@@ -155,6 +156,7 @@ async function executeTool(
     orgId: string;
     siteId: string;
     userId: string;
+    memberId: string;
     userRole?: string;
     agentMessages?: AiMessage[];
     locationId?: string | null;
@@ -180,6 +182,7 @@ async function executeTool(
     db,
     env: env as CloudflareEnv,
     userId,
+    memberId: ctx.memberId,
     organizationId: orgId,
     siteId,
     role: normalizedRole,
@@ -245,8 +248,7 @@ async function executeTool(
     case "sync_menu_items":
     case "create_menu_item":
     case "update_menu_item":
-    case "reorder_menu_items":
-    case "set_menu_item_image": {
+    case "reorder_menu_items": {
       return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
@@ -554,8 +556,8 @@ async function executeTool(
     // (readHeroContentState/heroColumnForField/isEmptyHeroState), duplicating
     // what mcp-workflows.ts's updatePageContent/deleteContentField already
     // do correctly via a CASE-based partial upsert — that shared function
-    // accepts the exact same "hero.title"/"hero.subtitle"/"hero.image"/
-    // "hero.video" field keys via HERO_FIELD_ALIASES. deleteContentField's
+    // accepts the exact same "hero.title"/"hero.subtitle"/"hero.media"
+    // field keys via HERO_FIELD_ALIASES. deleteContentField's
     // hero handling didn't exist at all before this branch (see the fix in
     // mcp-workflows.ts) — MCP's delete_content_field silently deleted
     // nothing for hero sub-fields, since they live as columns on a single
@@ -984,8 +986,7 @@ async function executeTool(
       return { results };
     }
 
-    case "get_post":
-    case "set_post_image": {
+    case "get_post": {
       return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
@@ -997,7 +998,6 @@ async function executeTool(
     case "get_blog_post":
     case "create_blog_post":
     case "update_blog_post":
-    case "set_blog_post_image":
     case "delete_blog_post": {
       return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
@@ -1006,14 +1006,11 @@ async function executeTool(
       return runMcpExecutorToolForChowbot(executorSite, "list_menus", input);
     }
 
-    case "get_location":
-    case "set_location_hero_image":
-    case "set_location_hero_video": {
+    case "get_location": {
       return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
-    case "get_site_settings":
-    case "set_logo": {
+    case "get_site_settings": {
       return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
@@ -1025,20 +1022,8 @@ async function executeTool(
       return runMcpExecutorToolForChowbot(executorSite, "update_media_asset", input);
     }
 
-    // Regression fix: set_about_story_image/set_home_story_image stored a
-    // pre-resolved CDN public_url string directly in site_content.value.
-    // Every other media-typed content field (content-registry's
-    // 'story.image' is type: 'media') stores the raw asset_id and lets
-    // resolveMediaFieldUrls resolve it to a URL at read time — storing a
-    // frozen URL instead loses the asset_id linkage (can't tell which
-    // media_asset this came from) and won't reflect a future CDN URL
-    // rotation for that asset. MCP's set_about_story_image/
-    // set_home_story_image already used the correct asset_id-storing path.
-    case "set_home_hero_image":
-    case "set_home_hero_video":
     case "update_home_hero":
-    case "set_about_story_image":
-    case "set_home_story_image": {
+    case "set_media": {
       return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
@@ -1057,9 +1042,7 @@ async function executeTool(
       return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
-    case "get_experience":
-    case "set_experience_image":
-    case "set_experience_video": {
+    case "get_experience": {
       return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
@@ -1090,6 +1073,7 @@ export async function executeChowBotToolForTest(
     orgId: string;
     siteId: string;
     userId: string;
+    memberId: string;
     userRole?: string;
     agentMessages?: AiMessage[];
     locationId?: string | null;
@@ -1176,7 +1160,7 @@ ${SETUP_PREAMBLE}
 Site: ${siteName}
 Default menu currency: ${opts.defaultCurrency}
 Current page: ${currentPage}${locationId ? `\nCurrent location: ${locationName ?? locationId} (id: ${locationId})` : ""}
-${opts.pendingMedia ? `Pending WhatsApp media: asset_id ${opts.pendingMedia.assetId}. Use this asset_id directly in any tool that accepts image/media — update_menu_item (image_asset_id), create_menu_item (image_asset_id), add_menu_items_batch (image_asset_id), update_location or create_location (hero_image_asset_id / hero_video_asset_id), create_post (image_asset_id for the cover, or gallery_media for additional public post media). If the user wants to import/extract menu items from it, call import_menu_from_media. If it is a Markdown document (.md/.markdown) and the user wants a summary, wants to ask a question about it, or wants information extracted from it, call analyze_document (pass their question, or omit it for a summary) — you can call this multiple times to answer follow-up questions about the same document. If the user wants to just save it to the library without assigning it, call resolve_pending_media with action=save_media. To discard, call resolve_pending_media with action=cancel. After using it in a tool call that assigns or imports it, also call resolve_pending_media with action=save_media to clear the pending state — do not clear it after analyze_document unless the user is done with the file. If the user's intent is unclear, ask one short clarifying question.` : ""}
+${opts.pendingMedia ? `Pending WhatsApp media: asset_id ${opts.pendingMedia.assetId}. To place it on an existing site surface, call set_media with the appropriate explicit target and complete asset_ids state for ordered targets. If the user wants to import/extract menu items from it, call import_menu_from_media. If it is a Markdown document (.md/.markdown) and the user wants a summary, wants to ask a question about it, or wants information extracted from it, call analyze_document (pass their question, or omit it for a summary) — you can call this multiple times to answer follow-up questions about the same document. If the user wants to just save it to the library without assigning it, call resolve_pending_media with action=save_media. To discard, call resolve_pending_media with action=cancel. After using it in a tool call that assigns or imports it, also call resolve_pending_media with action=save_media to clear the pending state — do not clear it after analyze_document unless the user is done with the file. If the user's intent is unclear, ask one short clarifying question.` : ""}
 
 Capabilities (always use tools — never say you can't do something the tools support):
 - Posts: list, create, update, delete, publish (standard/offer/event/update with CTA) — optionally location-scoped
@@ -1239,6 +1223,7 @@ ${translationConfirmationGuidance}- Before publish_post, delete_post, publish_me
     orgId,
     siteId,
     userId,
+    memberId: opts.memberId,
     userRole: opts.userRole,
     agentMessages,
     locationId,

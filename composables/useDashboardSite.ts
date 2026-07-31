@@ -1,7 +1,7 @@
 interface DashboardOrganization {
   id: string
   name: string
-  slug: string | null
+  slug: string
   logo: string | null
   role: string
 }
@@ -29,6 +29,9 @@ interface DashboardSiteSummary {
   id: string
   brand_name: string | null
   subdomain: string | null
+  vertical: 'restaurant' | 'experience' | 'service' | 'professional_service' | null
+  status: string | null
+  onboarding_status: string | null
   plan: string | null
 }
 
@@ -88,7 +91,7 @@ export function useDashboardSite() {
 
     pending.value = true
     try {
-      const response = await $fetch<DashboardContextResponse>('/api/dashboard/context', { headers })
+      const response = await $fetch('/api/dashboard/context', { headers }) as DashboardContextResponse
       if (generation === refreshGeneration.value) state.value = response
       return response
     } finally {
@@ -120,7 +123,11 @@ export function useDashboardSite() {
 
 export async function useDashboardSiteId() {
   const dashboard = useDashboardSite()
-  if (!dashboard.state.value) await dashboard.refresh()
+  const route = useRoute()
+  const routeSiteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : null
+  if (!dashboard.state.value || (routeSiteSlug && dashboard.site.value?.subdomain !== routeSiteSlug)) {
+    await dashboard.refresh()
+  }
   const siteId = dashboard.siteId.value
   if (!siteId) {
     throw createError({ statusCode: 404, message: 'Site not found' })

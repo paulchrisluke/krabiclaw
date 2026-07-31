@@ -30,7 +30,7 @@ function parseLocationAddress(value: string | null): { addressLines: string[] } 
 export interface DashboardOrganizationRow {
   id: string
   name: string
-  slug: string | null
+  slug: string
   logo: string | null
   role: string
   memberId: string
@@ -79,6 +79,12 @@ export interface DashboardLocationRow {
   // Same contract as DashboardSiteRow.feature_overrides, one scope down — the delta is applied
   // on top of the parent site's effective feature set (never the vertical defaults directly).
   feature_overrides: string | null
+}
+
+export type DashboardLocationContextRow = Record<string, unknown> & {
+  id: string
+  organization_id: string
+  site_id: string
 }
 
 interface DashboardContextOptions {
@@ -327,15 +333,18 @@ export interface DashboardSiteSummaryRow {
   id: string
   brand_name: string | null
   subdomain: string | null
+  vertical: string | null
+  status: string | null
+  onboarding_status: string | null
   plan: string | null
 }
 
 export async function listOrganizationSites(db: DbClient, organizationId: string, principal?: { memberId: string; role: string }) {
   return await queryAll<DashboardSiteSummaryRow>(db, `
-    SELECT id, brand_name, subdomain, plan
+    SELECT id, brand_name, subdomain, vertical, status, onboarding_status, plan
     FROM sites
     WHERE organization_id = ?
-      ${principal && !isOrganizationWideRole(principal.role) ? 'AND EXISTS (SELECT 1 FROM member_access_scope mas WHERE mas.member_id = ? AND mas.organization_id = sites.organization_id AND mas.site_id = sites.id)' : ''}
+      ${principal && !isOrganizationWideRole(principal.role) ? 'AND EXISTS (SELECT 1 FROM member m JOIN teamMember tm ON tm.userId = m.userId AND tm.teamId = sites.team_id WHERE m.id = ? AND m.organizationId = sites.organization_id)' : ''}
     ORDER BY created_at ASC, id ASC
   `, principal && !isOrganizationWideRole(principal.role) ? [organizationId, principal.memberId] : [organizationId])
 }
@@ -351,6 +360,68 @@ export async function getDashboardSite(event: H3Event) {
   }
 }
 
+export async function getDashboardLocationContext(event: H3Event, locationId: string): Promise<{
+  env: ReturnType<typeof cloudflareEnv>
+  db: D1Database
+  session: NonNullable<Awaited<ReturnType<typeof getAuthSession>>>
+  userId: string
+  organization: DashboardOrganizationRow
+  location: DashboardLocationContextRow
+}> {
+  const env = cloudflareEnv(event)
+  const db = env.DB
+
+  if (!db) {
+    throw createError({ statusCode: 503, message: 'Database not available' })
+  }
+
+  const session = await getAuthSession(event, env)
+  if (!session?.user?.id) {
+    throw createError({ statusCode: 401, message: 'Authentication required' })
+  }
+
+  const row = await queryFirst<DashboardLocationContextRow & {
+    organization_name: string
+    organization_slug: string
+    organization_logo: string | null
+    member_role: string
+    member_id: string
+  }>(db, `
+    SELECT bl.*,
+           o.name AS organization_name, o.slug AS organization_slug, o.logo AS organization_logo,
+           m.role AS member_role, m.id AS member_id
+    FROM business_locations bl
+    JOIN organization o ON o.id = bl.organization_id
+    JOIN member m ON m.organizationId = bl.organization_id
+    WHERE bl.id = ? AND m.userId = ?
+    LIMIT 1
+  `, [locationId, session.user.id])
+
+  if (!row) {
+    throw createError({ statusCode: 404, message: 'Location not found' })
+  }
+
+  const organization = {
+    id: row.organization_id,
+    name: row.organization_name,
+    slug: row.organization_slug,
+    logo: row.organization_logo,
+    role: row.member_role,
+    memberId: row.member_id,
+  }
+
+  assertDashboardPathPermission(organization.role, event.path)
+
+  return {
+    env,
+    db,
+    session,
+    userId: session.user.id,
+    organization,
+    location: row,
+  }
+}
+
 export async function listDashboardLocations(db: DbClient, organizationId: string, siteId: string, principal?: { memberId: string; role: string }) {
   const locations = await queryAll<DashboardLocationRow>(db, `
     SELECT business_locations.id, business_locations.slug, business_locations.title,
@@ -358,9 +429,10 @@ export async function listDashboardLocations(db: DbClient, organizationId: strin
            business_locations.city, business_locations.address, business_locations.feature_overrides,
            COALESCE(ma_hero.thumbnail_url, ma_hero.public_url) as hero_url
     FROM business_locations
-    LEFT JOIN media_assets ma_hero ON ma_hero.id = business_locations.hero_image_asset_id
+    LEFT JOIN media_assets ma_hero ON ma_hero.id = business_locations.hero_media_asset_id
+      AND ma_hero.organization_id = business_locations.organization_id AND ma_hero.site_id = business_locations.site_id
     WHERE business_locations.organization_id = ? AND business_locations.site_id = ? AND business_locations.status = 'active'
-      ${principal && !isOrganizationWideRole(principal.role) ? 'AND EXISTS (SELECT 1 FROM member_access_scope mas WHERE mas.member_id = ? AND mas.organization_id = business_locations.organization_id AND mas.site_id = business_locations.site_id AND (mas.location_id IS NULL OR mas.location_id = business_locations.id))' : ''}
+      ${principal && !isOrganizationWideRole(principal.role) ? 'AND EXISTS (SELECT 1 FROM member m JOIN sites s ON s.id = business_locations.site_id JOIN teamMember tm ON tm.userId = m.userId AND tm.teamId IN (s.team_id, business_locations.team_id) WHERE m.id = ? AND m.organizationId = business_locations.organization_id)' : ''}
     ORDER BY is_primary DESC, title ASC
   `, principal && !isOrganizationWideRole(principal.role) ? [organizationId, siteId, principal.memberId] : [organizationId, siteId])
 

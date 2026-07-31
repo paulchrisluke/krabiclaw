@@ -26,7 +26,7 @@ export const useAiCredits = (siteId: Ref<string | null> | ComputedRef<string | n
       return
     }
     try {
-      const res = await $fetch<{ balance: number; total: number }>(`/api/ai/${siteId.value}/credits`)
+      const res = await $fetch(`/api/ai/${siteId.value}/credits`) as { balance: number; total: number }
       balance.value = res.balance
       total.value = res.total
     } catch {

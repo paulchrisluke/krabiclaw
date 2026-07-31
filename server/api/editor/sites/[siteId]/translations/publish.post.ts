@@ -5,6 +5,7 @@ import { isDemoOrg } from '~/server/utils/demo'
 import { publishTranslationDrafts } from '~/server/utils/translation-inventory'
 import { parseScope } from '~/server/utils/translation-helpers'
 import { queryFirst } from '~/server/db'
+import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -33,7 +34,7 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Translation requires a Growth plan or above.' }, { status: 403 })
   }
 
-  const isPlatformAdmin = (session.user as { role?: string }).role === 'admin'
+  const isPlatformAdmin = await hasPlatformEventPermission(event, env, { platform: ['access'] })
   if (isDemoOrg(site.organization_id) && !isPlatformAdmin) {
     return jsonResponse({ error: 'Demo site is read-only' }, { status: 403 })
   }

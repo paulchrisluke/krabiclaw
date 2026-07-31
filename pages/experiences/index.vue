@@ -38,7 +38,7 @@ const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
 const { locale } = useI18n()
 const expCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
 
-const { experiencesList, pending: bootstrapPending, getField, config } = useBootstrap()
+const { experiencesList, pending: bootstrapPending, getField, config } = await useBootstrap()
 
 const pending = computed(() => bootstrapPending.value)
 const experiences = computed<Experience[]>(() => experiencesList.value)
@@ -63,6 +63,13 @@ useTenantSocialMetadata(() => ({
     faviconUrl: config.value?.favicon_url || null,
     primaryColor: config.value?.brand_color || null,
   },
-  heroImage: experiences.value[0]?.image_url ? { url: experiences.value[0].image_url } : null,
+  heroImage: experienceSocialImage(experiences.value[0]) ? { url: experienceSocialImage(experiences.value[0])! } : null,
 }))
+
+function experienceSocialImage(experience: Experience | undefined): string | null {
+  const cover = experience?.media?.[0]
+  if (cover?.kind === 'image') return cover.public_url || null
+  if (cover?.kind === 'video') return cover.thumbnail_url || null
+  return null
+}
 </script>

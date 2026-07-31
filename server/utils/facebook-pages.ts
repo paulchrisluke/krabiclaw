@@ -400,7 +400,6 @@ export const syncPageInfoToLocation = async (
   if (page.location?.city) { updates.push('city = ?'); values.push(page.location.city) }
   if (page.location?.latitude != null) { updates.push('latitude = ?'); values.push(page.location.latitude) }
   if (page.location?.longitude != null) { updates.push('longitude = ?'); values.push(page.location.longitude) }
-  if (page.hours) { updates.push('opening_hours = ?'); values.push(JSON.stringify(page.hours)) }
   if (page.about || page.description) {
     updates.push('short_description = ?')
     values.push(page.about ?? page.description ?? '')

@@ -16,12 +16,16 @@
     :tool-label="toolLabel"
     :quick-replies="quickReplies"
     :show-prompt="showPrompt"
+    :show-assistant-avatar="showAssistantAvatar"
     @update:input="$emit('update:input', $event)"
     @submit="$emit('submit')"
     @stop="$emit('stop')"
     @starter="$emit('starter', $event)"
     @quick-reply="$emit('quick-reply', $event)"
   >
+    <template v-if="$slots.message" #message="slotProps">
+      <slot name="message" v-bind="slotProps" />
+    </template>
     <template #assistant-after="slotProps">
       <slot name="assistant-after" v-bind="slotProps" />
     </template>
@@ -54,6 +58,7 @@ withDefaults(defineProps<{
   toolLabel?: (_name: string) => string
   quickReplies?: ConversationQuickReplyOption[]
   showPrompt?: boolean
+  showAssistantAvatar?: boolean
 }>(), {
   loading: false,
   disabled: false,
@@ -67,6 +72,7 @@ withDefaults(defineProps<{
   messagesStatus: undefined,
   quickReplies: () => [],
   showPrompt: true,
+  showAssistantAvatar: true,
 })
 
 defineEmits<{

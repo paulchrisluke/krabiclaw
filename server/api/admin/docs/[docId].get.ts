@@ -1,7 +1,8 @@
 // GET /api/admin/docs/[docId] - Fetch single platform doc (including draft)
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { isPlatformAdmin, anonymizeId } from '~/server/utils/platform-auth'
+import { anonymizeId } from '~/server/utils/platform-telemetry'
+import { platformPermissionJsonResponse } from '~/server/utils/platform-admin-users'
 import { getPlatformDoc } from '~/server/utils/platform-content'
 
 function auditLog(action: string, payload: ApiRecord) {
@@ -19,12 +20,13 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  if (!isPlatformAdmin(session.user, env)) {
+  const permissionDenied = await platformPermissionJsonResponse(event, env, { platform: ['content'] })
+  if (permissionDenied) {
     auditLog('admin_read_denied', {
       user: anonymizeId(session.user.email, env),
       docId
     })
-    return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
+    return permissionDenied
   }
 
   try {

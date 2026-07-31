@@ -6,7 +6,7 @@ Accepted as the target architecture for issue #386. Implementation remains phase
 
 ## Context
 
-KrabiClaw currently contains overlapping authentication and authorization systems: Better Auth admin roles, Better Auth organization roles, `member_access_scope`, dashboard path/header guards, custom impersonation proxy routes, platform-admin tenant bypasses, custom role parsing, direct SQL against Better Auth-owned tables, and custom OAuth token verification. Issue #386 exists to remove that drift.
+KrabiClaw has been converging overlapping authentication and authorization systems into Better Auth primitives: Better Auth admin roles, Better Auth organization roles and permissions, Better Auth Teams for tenant resource scope, Better Auth impersonation, and Better Auth OAuth resource-server behavior. Issue #386 exists to remove the remaining drift around dashboard context headers, custom OAuth verification, and direct framework-table SQL.
 
 This ADR intentionally does not migrate runtime behavior. It locks the target model before behavior migration PRs begin.
 
@@ -98,7 +98,7 @@ Every tenant operation must state the permission it requires. Server authorizati
 
 ## Site And Location Teams
 
-Site and location scoping moves to Better Auth Teams. `member_access_scope` is migration debt and must not be extended.
+Site and location scoping uses Better Auth Teams. The active shadow scope table has been removed and must not be reintroduced.
 
 Target mapping:
 
@@ -110,7 +110,7 @@ Target mapping:
 - Site-team membership implies access to that site's locations.
 - Location-team membership never implies access to site-wide settings, site-wide content, or other locations.
 
-Store the Better Auth team IDs directly on `sites` and `business_locations`, or in one explicit resource-to-team mapping table if a separate mapping is required. Do not create another membership/scope table. All team creation, deletion, invitation, and membership mutation must use Better Auth Organization/Teams APIs.
+Store the Better Auth team IDs directly on `sites` and `business_locations`. Do not create another membership/scope table. All team creation, deletion, invitation, and membership mutation must use Better Auth Organization/Teams APIs or the shared resource-team utilities that wrap that contract.
 
 The application may compare the authenticated user's Better Auth team membership with the team ID attached to a site or location. It must not maintain duplicate membership rows.
 
@@ -187,6 +187,6 @@ New auth work must not add:
 ## Consequences
 
 - This ADR does not claim that issue #386 is complete.
-- Current references to `member_access_scope`, custom platform-admin checks, custom OAuth verification, direct Better Auth table SQL, and dashboard context headers are known migration debt until their #386 child work lands.
+- Current references to custom OAuth verification, direct Better Auth table SQL, and dashboard context headers are known migration debt until their #386 child work lands.
 - Each migration child must delete obsolete custom paths when the documented Better Auth API covers the behavior.
 - Architecture checks should grow alongside each deletion so removed auth patterns cannot be reintroduced silently.

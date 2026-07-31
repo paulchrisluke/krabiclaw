@@ -3,7 +3,7 @@ import { createError } from 'h3'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { isOrganizationWideRole } from '~/server/utils/member-access'
-import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { requirePlatformEventPermission } from '~/server/utils/platform-admin-users'
 import { loadMemberSiteRow, requireSiteAccess } from '~/server/utils/location-access'
 import { queryFirst, type DbClient } from '~/server/db'
 import type { AgentSkillIdentity, AgentSkillScopeType } from './types'
@@ -22,7 +22,7 @@ export async function requirePlatformAgentSkillAccess(event: H3Event) {
   if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
-  if (!isPlatformAdmin(session.user, env)) throw createError({ statusCode: 403, statusMessage: 'Platform admin access required' })
+  await requirePlatformEventPermission(event, env, { platform: ['content'] })
   return { env, db, session }
 }
 

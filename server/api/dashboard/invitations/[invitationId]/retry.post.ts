@@ -36,10 +36,9 @@ export default defineEventHandler(async (event) => {
   if (!primaryScope) return jsonResponse({ error: 'This invitation has no assigned site or location' }, { status: 409 })
 
   try {
-    // Provision every stored scope, not just the primary one — if the phone
-    // was verified elsewhere in the meantime, ensureWhatsAppRecipientAccess
-    // grants member_access_scope per-scope, so skipping scopes here would
-    // silently leave the recipient without access to them.
+    // Provision every stored scope, not just the primary one. If the phone was
+    // verified elsewhere in the meantime, ensureWhatsAppRecipientAccess grants
+    // resource team membership per scope.
     let allActive = true
     let resolvedInvitationId = invitation.id
     for (const scope of invitation.scopes) {

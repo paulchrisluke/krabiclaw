@@ -17,6 +17,28 @@
       </div>
 
       <div v-else class="space-y-6">
+        <UCard>
+          <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-wider text-primary">Today</p>
+              <h2 class="mt-1 text-xl font-semibold text-highlighted">Your workspace at a glance</h2>
+              <p class="mt-1 text-sm text-muted">
+                {{ liveSitesCount }} {{ liveSitesCount === 1 ? 'live site' : 'live sites' }} across {{ verticalCount }} {{ verticalCount === 1 ? 'vertical' : 'verticals' }}.
+              </p>
+            </div>
+            <div class="grid grid-cols-2 gap-3 sm:min-w-72">
+              <div class="rounded-lg border border-default bg-muted px-3 py-2">
+                <p class="text-xs text-muted">Live sites</p>
+                <p class="mt-1 text-2xl font-semibold text-highlighted">{{ liveSitesCount }}</p>
+              </div>
+              <div class="rounded-lg border border-default bg-muted px-3 py-2">
+                <p class="text-xs text-muted">Plans</p>
+                <p class="mt-1 truncate text-sm font-semibold text-highlighted">{{ planSummary }}</p>
+              </div>
+            </div>
+          </div>
+        </UCard>
+
         <div v-if="sitesWithSubdomain.length === 0" class="py-16 text-center">
           <UIcon name="i-lucide-globe" class="size-8 text-muted mx-auto mb-3" />
           <p class="text-sm text-muted">No sites available.</p>
@@ -47,7 +69,7 @@
                 <div class="flex items-start justify-between gap-2">
                   <div class="min-w-0">
                     <p class="text-sm font-semibold text-highlighted truncate">{{ s.brand_name ?? s.subdomain }}</p>
-                    <p class="text-xs text-muted">{{ s.subdomain }}.krabiclaw.com</p>
+                    <p class="text-xs text-muted">{{ verticalLabel(s.vertical) }} · {{ s.subdomain }}.krabiclaw.com</p>
                   </div>
                   <UBadge :label="s.plan ?? 'free'" color="neutral" variant="soft" size="xs" />
                 </div>
@@ -61,6 +83,8 @@
 </template>
 
 <script setup lang="ts">
+import { getVerticalLabel } from '~/utils/vertical-copy'
+
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Dashboard | KrabiClaw', robots: 'noindex, nofollow' })
 
@@ -73,6 +97,18 @@ const sites = computed(() => dashboard.sites.value)
 const canManageOrganization = computed(() => ['owner', 'admin'].includes(dashboard.organization.value?.role ?? ''))
 const sitesWithSubdomain = computed(() => sites.value.filter((site): site is (typeof sites.value)[number] & { subdomain: string } => Boolean(site.subdomain)))
 const previewSites = computed(() => sitesWithSubdomain.value.slice(0, 3))
+const liveSitesCount = computed(() => sitesWithSubdomain.value.filter(site => site.status === 'active' && site.onboarding_status === 'active').length)
+const verticalCount = computed(() => new Set(sitesWithSubdomain.value.map(site => site.vertical ?? 'unknown')).size)
+const planSummary = computed(() => {
+  const plans = [...new Set(sitesWithSubdomain.value.map(site => site.plan ?? 'free'))]
+  if (plans.length === 0) return 'No sites'
+  if (plans.length === 1) return plans[0]!
+  return `${plans.length} plans`
+})
+
+function verticalLabel(vertical: string | null) {
+  return getVerticalLabel(vertical)
+}
 
 onMounted(async () => {
   try {

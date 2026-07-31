@@ -10,7 +10,7 @@
       </div>
       <AuthEmailSignUpForm :callback-url="verificationCallback" @success="emailSignupComplete" />
     </div>
-    <p class="mt-6 text-center text-sm text-muted">Already have an account? <NuxtLink to="/login" class="font-semibold text-primary">Sign in</NuxtLink></p>
+    <p class="mt-6 text-center text-sm text-muted">Already have an account? <NuxtLink :to="loginUrl" class="font-semibold text-primary">Sign in</NuxtLink></p>
   </div>
 </template>
 
@@ -23,8 +23,15 @@ useSeoMeta({ robots: 'noindex, nofollow' })
 const route = useRoute()
 const router = useRouter()
 const { trackSignUp } = useAnalytics()
-const postLoginUrl = computed(() => buildPostLoginUrl({ redirect: validatedInternalPath(route.query.redirect) }))
-const verificationCallback = computed(() => `${useRequestURL().origin}/login?verified=1`)
+const redirect = computed(() => validatedInternalPath(route.query.redirect))
+const postLoginUrl = computed(() => buildPostLoginUrl({ redirect: redirect.value }))
+const loginUrl = computed(() => redirect.value ? { path: '/login', query: { redirect: redirect.value } } : '/login')
+const verificationCallback = computed(() => {
+  const url = new URL('/login', useRequestURL().origin)
+  url.searchParams.set('verified', '1')
+  if (redirect.value) url.searchParams.set('redirect', redirect.value)
+  return url.toString()
+})
 const { loading, error, signInWithGoogle } = useAuthOperation()
 
 async function googleSignup() {
@@ -34,6 +41,13 @@ async function googleSignup() {
 
 async function emailSignupComplete(email: string) {
   trackSignUp('email')
-  await router.push({ path: '/login', query: { signup: 'success', email } })
+  await router.push({
+    path: '/login',
+    query: {
+      signup: 'success',
+      email,
+      ...(redirect.value ? { redirect: redirect.value } : {}),
+    },
+  })
 }
 </script>

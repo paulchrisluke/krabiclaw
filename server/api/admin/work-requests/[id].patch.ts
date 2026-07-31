@@ -1,7 +1,7 @@
 // PATCH /api/admin/work-requests/[id] — update status, notes, assignment
 import { cloudflareEnv, jsonResponse } from "~/server/utils/api-response";
 import { getAuthSession } from "~/server/utils/auth";
-import { isPlatformAdmin } from "~/server/utils/platform-auth";
+import { platformPermissionJsonResponse } from "~/server/utils/platform-admin-users";
 import { execute, queryFirst } from "~/server/db";
 import { fireSiteEventSafe, resolvePrimarySiteForEvent } from "~/server/utils/site-events";
 
@@ -14,11 +14,8 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env);
   if (!session?.user?.email)
     return jsonResponse({ error: "Authentication required" }, { status: 401 });
-  if (!isPlatformAdmin(session.user, env))
-    return jsonResponse(
-      { error: "Platform admin access required" },
-      { status: 403 },
-    );
+  const permissionDenied = await platformPermissionJsonResponse(event, env, { platform: ["support"] });
+  if (permissionDenied) return permissionDenied;
 
   const id = getRouterParam(event, "id");
   if (!id) return jsonResponse({ error: "ID required" }, { status: 400 });

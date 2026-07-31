@@ -135,7 +135,7 @@
             <div v-if="openGroups.includes(group.id)" class="space-y-1 px-2 pb-2">
               <template v-for="fieldKey in group.fields" :key="fieldKey">
                 <UButton
-                  v-if="getFieldDef(selectedPageId, fieldKey)"
+                  v-if="getFieldDef(selectedPageId, fieldKey, selectedPageEditor)"
                   block
                   :variant="activeField === fieldKey ? 'soft' : 'ghost'"
                   :color="activeField === fieldKey ? 'primary' : 'neutral'"
@@ -151,7 +151,7 @@
                     />
                     <span class="min-w-0 flex-1">
                       <span class="flex items-center gap-2">
-                        <span class="truncate text-sm font-medium">{{ getFieldDef(selectedPageId, fieldKey)?.label }}</span>
+                        <span class="truncate text-sm font-medium">{{ getFieldDef(selectedPageId, fieldKey, selectedPageEditor)?.label }}</span>
                       </span>
                       <span class="block truncate text-xs text-muted">{{ fieldPreview(fieldKey) }}</span>
                     </span>
@@ -248,7 +248,7 @@
           <div v-else-if="activeFieldDef?.type === 'media'" class="space-y-2">
             <label class="block text-sm font-medium text-default">{{ activeFieldDef.label }}</label>
             <MediaPicker
-              :model-value="(activeField === 'hero.image' || activeField === 'hero.video') ? editingValue || null : pendingMediaAssetId"
+              :model-value="activeField === 'hero.media' ? editingValue || null : pendingMediaAssetId"
               :site-id="props.siteId"
               :accept="activeFieldDef?.mediaKind ?? 'any'"
               :title="activeFieldDef.label"
@@ -295,7 +295,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 
-import { buildDisplayUrl, contentRegistry, getFieldDef, getScopedEditablePages, resolvePreviewPath } from '~/config/content-registry'
+import { buildDisplayUrl, contentRegistry, getEditablePageGroups, getFieldDef, getScopedEditablePages, resolvePreviewPath } from '~/config/content-registry'
 import type { FieldDefinition } from '~/config/content-registry'
 import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities } from '~/config/cms-registry'
 import type { PublicTemplateSlug } from '~/utils/template-registry'
@@ -404,6 +404,7 @@ const pages = computed(() => getScopedEditablePages(siteVertical.value, cmsCapab
 const selectedPageId = computed(() => props.pageId)
 const currentPagePath = computed(() => pages.value.find(p => p.id === selectedPageId.value)?.path || '/')
 const selectedPageLabel = computed(() => pages.value.find(p => p.id === selectedPageId.value)?.label || '')
+const selectedPageEditor = computed(() => pages.value.find(p => p.id === selectedPageId.value)?.editor || 'site_content')
 const selectedPageScopeLabel = computed(() => {
   const scope = pages.value.find(p => p.id === selectedPageId.value)?.scopeLabelKey
   return scope === 'site' ? 'Site' : scope === 'office' ? 'Office' : 'Location'
@@ -496,7 +497,7 @@ watch(() => dashboardLocation.currentLocationId.value, async (newVal, oldVal) =>
 // ─── Groups ───────────────────────────────────────────────────────────
 const openGroups = ref<string[]>(['hero'])
 
-const currentPageGroups = computed(() => contentRegistry[selectedPageId.value]?.groups ?? [])
+const currentPageGroups = computed(() => getEditablePageGroups(selectedPageId.value, selectedPageEditor.value))
 
 const toggleGroup = (id: string) => {
   const idx = openGroups.value.indexOf(id)
@@ -509,7 +510,7 @@ const activeField = ref<string | null>(null)
 const editingValue = ref('')
 
 const activeFieldDef = computed<FieldDefinition | undefined>(() =>
-  activeField.value ? getFieldDef(selectedPageId.value, activeField.value) : undefined
+  activeField.value ? getFieldDef(selectedPageId.value, activeField.value, selectedPageEditor.value) : undefined
 )
 
 const hasGoogleBusinessEntitlement = computed(() => siteEntitlements.value.google_business === true)
@@ -522,7 +523,7 @@ const activeFieldRequiresGoogleUpgrade = computed(() =>
 const { open: openUpgradeModal } = useUpgradeModal()
 
 const fieldSupportsGoogle = (fieldKey: string): boolean =>
-  getFieldDef(selectedPageId.value, fieldKey)?.sources?.includes('google') === true
+  getFieldDef(selectedPageId.value, fieldKey, selectedPageEditor.value)?.sources?.includes('google') === true
 const fieldHasActiveGoogleSync = (fieldKey: string): boolean =>
   hasGoogleBusinessEntitlement.value && fieldSupportsGoogle(fieldKey)
 
@@ -575,7 +576,7 @@ watch(editingValue, () => {
 const pendingMediaAssetId = ref<string | null>(null)
 
 function onMediaChange(asset: { id: string; publicUrl: string } | null) {
-  const isHeroMedia = activeField.value === 'hero.image' || activeField.value === 'hero.video'
+  const isHeroMedia = activeField.value === 'hero.media'
   // Hero media: backend stores asset ID in a dedicated column and resolves URL via JOIN.
   // Other media fields: store the public URL in the content column so it's directly
   // usable as an <img src> on public pages without an additional API round-trip.
@@ -625,13 +626,9 @@ const loadPageContent = async () => {
     const map: Record<string, string> = {}
     for (const row of res.fields) {
       if (row.field === 'hero') {
-        // Hero fields use dedicated columns, support both asset_id and url for migration
         if (row.hero_title) map['hero.title'] = row.hero_title
         if (row.hero_subtitle) map['hero.subtitle'] = row.hero_subtitle
-        if (row.hero_image_asset_id) map['hero.image'] = row.hero_image_asset_id
-        else if (row.hero_public_url) map['hero.image'] = row.hero_public_url
-        if (row.hero_video_asset_id) map['hero.video'] = row.hero_video_asset_id
-        else if (row.hero_video_public_url) map['hero.video'] = row.hero_video_public_url
+        if (row.hero_media_asset_id) map['hero.media'] = row.hero_media_asset_id
       } else {
         map[row.field] = row.content || ''
       }
@@ -679,7 +676,7 @@ if (import.meta.client) {
 const handleSaveContent = async () => {
   if (!localHasChanges.value) return
   for (const [field, value] of Object.entries(currentValues.value)) {
-    const fieldDefinition = getFieldDef(selectedPageId.value, field)
+    const fieldDefinition = getFieldDef(selectedPageId.value, field, selectedPageEditor.value)
     if (!fieldDefinition?.validate) continue
     const validationResult = fieldDefinition.validate(value)
     if (validationResult !== true) {
@@ -731,7 +728,7 @@ onBeforeRouteLeave(() => {
 const stripHtml = (html: string) => html.replace(/<[^>]*>/g, '').trim()
 
 const fieldPreview = (fieldKey: string): string => {
-  const fieldDef = getFieldDef(selectedPageId.value, fieldKey)
+  const fieldDef = getFieldDef(selectedPageId.value, fieldKey, selectedPageEditor.value)
   const raw = currentValues.value[fieldKey] || fieldDef?.defaultValue
   if (!raw) return fieldHasActiveGoogleSync(fieldKey) ? 'Synced from Google Business' : 'Add content'
   const text = stripHtml(raw)

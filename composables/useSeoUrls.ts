@@ -44,13 +44,12 @@ export function useSharedOgImage(value?: MaybeRefOrGetter<string | null | undefi
  * location's hero photo → logo → the generic platform placeholder.
  */
 export function useTenantOgImage(value?: MaybeRefOrGetter<string | null | undefined>) {
-  const { config, locations } = useBootstrap()
+  const { config, locations } = useSiteShell()
   return useSeoUrl(() =>
     toValue(value) ||
     config.value?.og_image_url ||
-    locations.value[0]?.hero_image_public_url ||
+    (locations.value[0]?.kind !== 'video' ? locations.value[0]?.public_url : null) ||
     config.value?.logo_url ||
     SHARED_OG_IMAGE_PATH
   )
 }
-

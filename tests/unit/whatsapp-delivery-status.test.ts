@@ -1,7 +1,32 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { compareWhatsAppDeliveryStatus } from '../../server/utils/whatsapp.ts'
+import { buildWhatsAppTemplatePayload, compareWhatsAppDeliveryStatus, toDashboardButtonPath } from '../../server/utils/whatsapp.ts'
+
+test('dashboard WhatsApp button paths preserve full guest-thread routes', () => {
+  const fullUrl = 'https://staging.krabiclaw.com/dashboard/krabi-team/sites/sunset-cafe/locations/ao-nang/inbox/thread%2Fwith%20spaces'
+
+  assert.equal(
+    toDashboardButtonPath(fullUrl),
+    'krabi-team/sites/sunset-cafe/locations/ao-nang/inbox/thread%2Fwith%20spaces',
+  )
+
+  const payload = buildWhatsAppTemplatePayload('new_reservation', {
+    guest_name: 'Alex',
+    date: 'Tue, Jul 14, 2026',
+    time: '7:00 PM',
+    guests: '2',
+    phone: '+15551234567',
+    email: 'alex@example.com',
+    context: 'Location: Ao Nang',
+    requests: 'Window seat',
+    reply_path: toDashboardButtonPath(fullUrl),
+  })
+
+  const button = payload.components.find(component => component.type === 'button')
+  assert.equal(button?.parameters[0]?.text, 'krabi-team/sites/sunset-cafe/locations/ao-nang/inbox/thread%2Fwith%20spaces')
+  assert.doesNotMatch(button?.parameters[0]?.text ?? '', /\?thread=/)
+})
 
 test('null current status always advances', () => {
   assert.equal(compareWhatsAppDeliveryStatus(null, 'accepted'), true)

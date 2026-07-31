@@ -5,9 +5,9 @@ import { chowbotToolFromMcp } from './from-mcp'
 // get_site, update_site_settings, and set_brand_color exist on MCP's sites
 // domain but were never exposed to ChowBot — narrower granularity/dashboard
 // utility not currently offered there (see docs/tool-parity.md's
-// "Client MCP-only tool" table). get_site_settings/set_default_currency/
-// set_logo are the three that overlap and are derived below.
-const SITES_DOMAIN_TOOL_NAMES = new Set(['get_site_settings', 'set_default_currency', 'set_logo'])
+// "Client MCP-only tool" table). Media placement now lives in the media domain
+// through set_media rather than site-specific wrappers.
+const SITES_DOMAIN_TOOL_NAMES = new Set(['get_site_settings', 'set_default_currency'])
 
 export const SITES_CHOWBOT_TOOLS: AiTool[] = [
   ...SITES_TOOLS.filter((tool) => SITES_DOMAIN_TOOL_NAMES.has(tool.name)).map(chowbotToolFromMcp),

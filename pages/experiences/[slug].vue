@@ -64,16 +64,22 @@
               </div>
 
               <!-- Single image / video -->
-              <div
+              <button
                 v-else-if="mediaItems.length === 1"
-                class="relative aspect-4/3 lg:h-[520px] overflow-hidden"
-                :class="mediaItems[0]?.kind === 'image' ? 'cursor-zoom-in' : ''"
-                @click="mediaItems[0]?.kind === 'image' && openLightbox(0)"
+                type="button"
+                class="relative block aspect-4/3 w-full overflow-hidden border-0 bg-transparent p-0 text-left lg:h-[520px]"
+                :aria-label="mediaItems[0]?.kind === 'video' ? `Play video, ${experience.title}` : undefined"
+                @click="openLightbox(0)"
               >
                 <video
-                  v-if="mediaItems[0]?.kind === 'video'"
-                  :src="mediaItems[0]?.url"
-                  autoplay muted loop playsinline
+                  v-if="mediaItems[0]?.kind === 'video' && mediaItems[0]?.url"
+                  :ref="el => setGalleryVideoRef(el, 0)"
+                  :src="mediaItems[0].url"
+                  :poster="mediaItems[0].poster || undefined"
+                  preload="none"
+                  muted
+                  loop
+                  playsinline
                   class="h-full w-full object-cover"
                 />
                 <img
@@ -82,7 +88,16 @@
                   :alt="experience.title"
                   class="h-full w-full object-cover"
                 />
-              </div>
+                <span
+                  v-if="mediaItems[0]?.kind === 'video'"
+                  class="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/10 text-white"
+                  aria-hidden="true"
+                >
+                  <span class="flex size-14 items-center justify-center rounded-full bg-black/45 backdrop-blur-sm">
+                    <SayaIcon name="play" class="ml-0.5 size-6" />
+                  </span>
+                </span>
+              </button>
 
               <!-- 2+ items — grid on all screen sizes -->
               <div v-else>
@@ -91,18 +106,22 @@
                   :class="mediaItems.length === 2 ? 'grid-cols-2' : 'grid-cols-2 grid-rows-2'"
                 >
                   <!-- Hero — spans 2 rows when 3+ items -->
-                  <div
-                    class="relative overflow-hidden"
-                    :class="[
-                      mediaItems.length >= 3 ? 'row-span-2' : '',
-                      mediaItems[0]?.kind === 'image' ? 'cursor-zoom-in' : ''
-                    ]"
-                    @click="mediaItems[0]?.kind === 'image' && openLightbox(0)"
+                  <button
+                    type="button"
+                    class="relative h-full w-full overflow-hidden border-0 bg-transparent p-0 text-left"
+                    :class="mediaItems.length >= 3 ? 'row-span-2' : ''"
+                    :aria-label="mediaItems[0]?.kind === 'video' ? `Play video, ${experience.title}` : undefined"
+                    @click="openLightbox(0)"
                   >
                     <video
-                      v-if="mediaItems[0]?.kind === 'video'"
-                      :src="mediaItems[0]?.url"
-                      autoplay muted loop playsinline
+                      v-if="mediaItems[0]?.kind === 'video' && mediaItems[0]?.url"
+                      :ref="el => setGalleryVideoRef(el, 0)"
+                      :src="mediaItems[0].url"
+                      :poster="mediaItems[0].poster || undefined"
+                      preload="none"
+                      muted
+                      loop
+                      playsinline
                       class="h-full w-full object-cover"
                     />
                     <img
@@ -111,20 +130,35 @@
                       :alt="experience.title"
                       class="h-full w-full object-cover transition-transform duration-300 hover:scale-[1.02]"
                     />
-                  </div>
+                    <span
+                      v-if="mediaItems[0]?.kind === 'video'"
+                      class="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/10 text-white"
+                      aria-hidden="true"
+                    >
+                      <span class="flex size-12 items-center justify-center rounded-full bg-black/45 backdrop-blur-sm">
+                        <SayaIcon name="play" class="ml-0.5 size-5" />
+                      </span>
+                    </span>
+                  </button>
 
                   <!-- Thumbnails 2–4 -->
-                  <div
+                  <button
                     v-for="(item, i) in mediaItems.slice(1, 4)"
                     :key="item.url"
-                    class="relative overflow-hidden"
-                    :class="item.kind === 'image' ? 'cursor-zoom-in' : ''"
-                    @click="item.kind === 'image' && openLightbox(i + 1)"
+                    type="button"
+                    class="relative h-full w-full overflow-hidden border-0 bg-transparent p-0 text-left"
+                    :aria-label="item.kind === 'video' ? `Play video, ${experience.title}` : undefined"
+                    @click="openLightbox(i + 1)"
                   >
                     <video
                       v-if="item.kind === 'video'"
+                      :ref="el => setGalleryVideoRef(el, i + 1)"
                       :src="item.url"
-                      autoplay muted loop playsinline
+                      :poster="item.poster || undefined"
+                      preload="none"
+                      muted
+                      loop
+                      playsinline
                       class="h-full w-full object-cover"
                     />
                     <img
@@ -133,17 +167,24 @@
                       :alt="experience.title"
                       class="h-full w-full object-cover transition-transform duration-300 hover:scale-[1.02]"
                     />
+                    <span
+                      v-if="item.kind === 'video'"
+                      class="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/10 text-white"
+                      aria-hidden="true"
+                    >
+                      <span class="flex size-12 items-center justify-center rounded-full bg-black/45 backdrop-blur-sm">
+                        <SayaIcon name="play" class="ml-0.5 size-5" />
+                      </span>
+                    </span>
                     <!-- "Show all" overlay only on last thumbnail when extras exist -->
-                    <button
+                    <span
                       v-if="i === 2 && mediaItems.length > 4"
-                      type="button"
                       class="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/50 text-white text-sm font-semibold backdrop-blur-[2px] hover:bg-black/60 transition-colors"
-                      @click.stop="openLightbox(0)"
                     >
                       <SayaIcon name="squares-2x2" class="size-5" />
-                      Show all {{ mediaItems.length }} photos
-                    </button>
-                  </div>
+                      Show all {{ mediaItems.length }} media
+                    </span>
+                  </button>
                 </div>
               </div>
 
@@ -151,7 +192,7 @@
 
 
             <!-- Lightbox -->
-            <SayaLightbox v-model:open="lightboxOpen" v-model:index="lightboxIdx" :items="imageItems" :title="experience.title">
+            <SayaLightbox v-model:open="lightboxOpen" v-model:index="lightboxIdx" :items="mediaItems" :title="experience.title">
               <template v-if="experience.tagline" #caption>
                 <p class="text-sm text-white/80">{{ experience.tagline }}</p>
               </template>
@@ -445,7 +486,7 @@ const siteName = computed(() => (site as ApiValue)?.brand_name || (site as ApiVa
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
 
-const { experienceDetail: experience, config: siteConfig, pending, locations, experiencePolicyById } = useBootstrap()
+const { experienceDetail: experience, config: siteConfig, pending, locations, experiencePolicyById } = await useBootstrap()
 
 const experienceIsOnSale = computed(() => isSaleActive((experience.value as ApiValue) ?? {}))
 const experienceCompareAtPrice = computed(() =>
@@ -509,33 +550,29 @@ const sanitizedBody = computed(() => {
   return DOMPurify.sanitize(raw)
 })
 
-// Media items for carousel - supports both images and videos
 const mediaItems = computed(() => {
   const exp = experience.value
   if (!exp) return []
 
-  const items: Array<{ url: string; kind: 'image' | 'video' }> = []
-
-  // Add primary image/video
-  if (exp.image_url) {
-    items.push({ url: exp.image_url, kind: 'image' })
-  }
-  if (exp.video_url) {
-    items.push({ url: exp.video_url, kind: 'video' })
-  }
-
-  // Add additional images/videos if they exist in the data
-  if (exp.images && Array.isArray(exp.images)) {
-    type ExperienceMedia = { url?: string; kind?: string }
-    exp.images.forEach((img) => {
-      const media = img as ExperienceMedia
-      if (media.url && !items.find(i => i.url === media.url)) {
-        items.push({ url: media.url, kind: media.kind === 'video' ? 'video' : 'image' })
-      }
-    })
+  if (Array.isArray(exp.media)) {
+    return exp.media
+      .map(item => ({
+        url: item.kind === 'video' ? (item.public_url || '') : item.public_url,
+        kind: item.kind,
+        poster: item.kind === 'video' ? (item.thumbnail_url || undefined) : undefined,
+        alt: item.alt_text || exp.title,
+      }))
+      .filter(item => item.url)
   }
 
-  return items
+  return []
+})
+
+const experienceCoverImageUrl = computed(() => {
+  const cover = experience.value?.media?.[0]
+  if (cover?.kind === 'image') return cover.public_url || null
+  if (cover?.kind === 'video') return cover.thumbnail_url || null
+  return null
 })
 
 function formatDuration(minutes: number): string {
@@ -579,19 +616,134 @@ function handleContactSubmit(contactData: ContactFormState) {
   submitBooking()
 }
 
-// ── Lightbox ──────────────────────────────────────────────────────────────────
-
-const imageItems = computed(() => mediaItems.value.filter(i => i.kind === 'image'))
 const lightboxOpen = ref(false)
 const lightboxIdx = ref(0)
+const galleryVideoRefs = ref<Record<number, HTMLVideoElement>>({})
+const galleryVideoVisibility = ref<Record<number, number>>({})
+let galleryVideoObserver: IntersectionObserver | null = null
+let galleryVideoSyncToken = 0
+
+function pauseGalleryVideo(video: HTMLVideoElement) {
+  video.pause()
+}
+
+function pauseGalleryVideos() {
+  Object.values(galleryVideoRefs.value).forEach(pauseGalleryVideo)
+}
+
+function mostVisibleGalleryVideoIndex() {
+  let selectedIndex: number | null = null
+  let selectedRatio = 0
+
+  for (const [key, ratio] of Object.entries(galleryVideoVisibility.value)) {
+    const index = Number(key)
+    if (ratio > selectedRatio && galleryVideoRefs.value[index]) {
+      selectedIndex = index
+      selectedRatio = ratio
+    }
+  }
+
+  return selectedRatio > 0 ? selectedIndex : null
+}
+
+async function syncGalleryVideoPreviews() {
+  const syncToken = ++galleryVideoSyncToken
+  if (!import.meta.client) return
+  if (lightboxOpen.value || document.visibilityState !== 'visible') {
+    pauseGalleryVideos()
+    return
+  }
+
+  const selectedIndex = mostVisibleGalleryVideoIndex()
+
+  for (const [key, video] of Object.entries(galleryVideoRefs.value)) {
+    if (syncToken !== galleryVideoSyncToken) return
+
+    const index = Number(key)
+    if (index !== selectedIndex) {
+      pauseGalleryVideo(video)
+      continue
+    }
+
+    try {
+      await video.play()
+      if (syncToken !== galleryVideoSyncToken) {
+        pauseGalleryVideo(video)
+        return
+      }
+    } catch {
+      // Muted preview autoplay can still be blocked by browser policy.
+    }
+  }
+}
+
+function setGalleryVideoRef(el: Element | ComponentPublicInstance | null, index: number) {
+  if (!import.meta.client || !(el instanceof HTMLVideoElement)) return
+  createGalleryVideoObserver()
+  galleryVideoRefs.value[index] = el
+  galleryVideoObserver?.observe(el)
+  void syncGalleryVideoPreviews()
+}
+
+function disconnectGalleryVideoObserver() {
+  galleryVideoObserver?.disconnect()
+  galleryVideoObserver = null
+  galleryVideoRefs.value = {}
+  galleryVideoVisibility.value = {}
+}
+
+function createGalleryVideoObserver() {
+  if (galleryVideoObserver) return
+  if (!import.meta.client || !('IntersectionObserver' in window)) return
+
+  galleryVideoObserver = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      const index = Object.entries(galleryVideoRefs.value)
+        .find(([, video]) => video === entry.target)?.[0]
+      if (index === undefined) continue
+      galleryVideoVisibility.value[Number(index)] = entry.isIntersecting ? entry.intersectionRatio : 0
+    }
+
+    void syncGalleryVideoPreviews()
+  }, {
+    threshold: [0, 0.25, 0.5, 0.75, 1],
+  })
+}
+
+function onVisibilityChange() {
+  void syncGalleryVideoPreviews()
+}
 
 function openLightbox(mediaIdx: number) {
   const item = mediaItems.value[mediaIdx]
   if (!item) return
-  const imgIdx = imageItems.value.findIndex(i => i.url === item.url)
-  lightboxIdx.value = imgIdx >= 0 ? imgIdx : 0
+  pauseGalleryVideos()
+  lightboxIdx.value = mediaIdx
   lightboxOpen.value = true
 }
+
+watch(lightboxOpen, () => {
+  void syncGalleryVideoPreviews()
+})
+
+watch(mediaItems, async () => {
+  disconnectGalleryVideoObserver()
+  createGalleryVideoObserver()
+  await nextTick()
+  void syncGalleryVideoPreviews()
+})
+
+onMounted(() => {
+  createGalleryVideoObserver()
+  document.addEventListener('visibilitychange', onVisibilityChange)
+  void syncGalleryVideoPreviews()
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+  pauseGalleryVideos()
+  disconnectGalleryVideoObserver()
+})
 
 // ── Booking form ──────────────────────────────────────────────────────────────
 
@@ -707,7 +859,7 @@ const seoDescription = computed(() =>
 )
 
 const { canonicalUrl } = useTenantSocialMetadata(() => {
-  const heroImageUrl = experience.value?.og_image_public_url || experience.value?.image_url || null
+  const heroImageUrl = experience.value?.og_image_public_url || experienceCoverImageUrl.value
   return {
     path: experience.value?.canonical_url || `/experiences/${slug}`,
     title: seoTitle.value,
@@ -750,10 +902,9 @@ useHead({
         // Collect all image URLs in order: og override, then primary, then gallery images
         const images = [
           ...(val.og_image_public_url ? [val.og_image_public_url] : []),
-          ...(val.image_url ? [val.image_url] : []),
-          ...(Array.isArray(val.images)
-            ? val.images.filter((i: { kind?: string }) => i.kind !== 'video').map((i: { url: string }) => i.url)
-            : []),
+          ...mediaItems.value
+            .map(item => item.kind === 'video' ? item.poster : item.url)
+            .filter((url): url is string => Boolean(url)),
         ]
 
         // Use price_amount (canonical numeric) directly; fall back to parsing price string for legacy rows

@@ -5,7 +5,7 @@ import { ALL_VERTICALS } from '~/utils/vertical-copy'
 export const SITES_TOOLS: McpToolDefinition[] = [
   globalTool(withToolAnnotations({
       name: 'list_sites',
-      description: 'List the caller\'s accessible sites and current authenticated account identity.',
+      description: 'List the caller\'s accessible sites and current authenticated account identity. Use this to choose the internal site id for site_id. If the user provides a public URL, hostname, custom domain, subdomain, slug, or site name, match it against the returned sites and pass the matching site.id as site_id; never pass the URL/domain/name itself as site_id.',
       domain: 'sites',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -53,7 +53,7 @@ export const SITES_TOOLS: McpToolDefinition[] = [
     })),
   siteTool({
       name: 'get_site',
-      description: 'Get site details.',
+      description: 'Get site details for an internal KrabiClaw site_id. Do not pass a public URL, hostname, custom domain, subdomain, slug, or site name as site_id; call get_workspace_context or list_sites first and use the returned site.id.',
       domain: 'sites',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -84,7 +84,7 @@ export const SITES_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'get_site_settings',
-      description: 'Get editable site settings.',
+      description: 'Get editable site settings for an internal KrabiClaw site_id. Do not pass a public URL, hostname, custom domain, subdomain, slug, or site name as site_id; call get_workspace_context or list_sites first and use the returned site.id.',
       domain: 'sites',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -144,7 +144,6 @@ export const SITES_TOOLS: McpToolDefinition[] = [
         brand_name: { type: 'string' },
         brand_description: { type: 'string' },
         logo_url: { type: 'string' },
-        logo_asset_id: { type: 'string' },
         contact_email: { type: ['string', 'null'], description: 'Public contact email shown to guests. Pass null to clear it.' },
         default_currency: { type: 'string', enum: [...SUPPORTED_CURRENCIES] },
         social_facebook: { type: 'string', description: 'Full Facebook page URL, e.g. https://facebook.com/yourpage. Must include the https:// scheme — bare domains or handles are rejected.' },
@@ -162,7 +161,6 @@ export const SITES_TOOLS: McpToolDefinition[] = [
         seo_description: { type: ['string', 'null'], description: 'Optional site-wide default SEO description override. Falls back to brand_description if unset.' },
         canonical_url: { type: ['string', 'null'], description: 'Optional site-wide canonical URL override for the homepage.' },
         robots: { type: ['string', 'null'], enum: [...ROBOTS_DIRECTIVE_ENUM, null], description: 'Search engine indexing directive for the homepage. Leave unset for the default index,follow.' },
-        og_image_asset_id: { type: ['string', 'null'], description: 'Asset id from get_site_media_assets used as the default social share image site-wide when a page has no more specific image set.' },
       },
       outputSchema: {
         type: 'object',
@@ -214,26 +212,6 @@ export const SITES_TOOLS: McpToolDefinition[] = [
           description: { type: 'string', description: 'Human-readable description of what color was set.' },
         },
         required: ['brand_color', 'updated', 'description'],
-      },
-    }),
-  siteTool({
-      name: 'set_logo',
-      description: 'Use this when the user wants to change their logo or business mark. Call get_site_media_assets first to find an active image asset id, then pass it here as asset_id.',
-      domain: 'sites',
-      minimumRole: 'admin',
-      confirmRequired: false,
-      inputSchema: {
-        asset_id: { type: 'string', description: 'Active image asset id from get_site_media_assets.' },
-      },
-      required: ['asset_id'],
-      outputSchema: {
-        type: 'object',
-        properties: {
-          id: { type: 'string' },
-          updated: { type: 'boolean' },
-          logo_asset_id: { type: 'string' },
-        },
-        required: ['id', 'updated', 'logo_asset_id'],
       },
     }),
 ]

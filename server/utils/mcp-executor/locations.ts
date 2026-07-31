@@ -5,7 +5,7 @@ import { createLocation, deleteLocation, syncLocationWhatsAppAccess, updateLocat
 import { getLocationForMcp, hydrateSeededLocationForOnboarding } from '~/server/utils/mcp-workflows'
 import { resolveMcpWorkspace } from '~/server/utils/mcp-context'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
-import { NOT_HANDLED, assertDomainSuccess, mutationContextPayload, omit, optionalString, requireActiveImageAsset, requireActiveVideoAsset, requiredString, requiredStringArray, workspaceContextPayload, workspaceLocationsPayload } from './shared'
+import { NOT_HANDLED, assertDomainSuccess, mutationContextPayload, omit, optionalString, requiredString, requiredStringArray, workspaceContextPayload, workspaceLocationsPayload } from './shared'
 import { queryFirst } from '~/server/db'
 
 // MCP's create_location/update_location tools write notification_phone
@@ -38,11 +38,6 @@ async function syncLocationWhatsAppPhone(
   })
 }
 
-// Mirrors the warning-surfacing convention used elsewhere in this file (e.g.
-// set_location_hero_image/set_location_hero_video) — a non-fatal issue with
-// a mutation that otherwise succeeded is reported via a `warning` string on
-// the structured response rather than failing the whole tool call, so the
-// AI/user sees the location was saved but WhatsApp access needs attention.
 export function whatsAppSyncWarning(result: { ok: boolean; provisioningError?: string; scopeRecalcError?: string }): string | undefined {
   if (result.ok) return undefined
   const detail = result.provisioningError || result.scopeRecalcError || 'unknown error'
@@ -56,7 +51,6 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
       const workspace = await resolveMcpWorkspace(
         site.db,
         site.userId,
-        site.isPlatformAdmin,
         { siteId: site.siteId },
       );
       return {
@@ -70,7 +64,6 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
         const workspace = await resolveMcpWorkspace(
           site.db,
           site.userId,
-          site.isPlatformAdmin,
           { siteId: site.siteId, locationId },
         );
         return {
@@ -228,134 +221,6 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
         },
         `Copied ${entityTypes.join(", ")} into "${manifest.target_location_slug}".`,
         { manifest },
-      );
-    }
-    case "set_location_hero_image": {
-      const locationId = requiredString(args, "location_id");
-      const assetId = requiredString(args, "asset_id");
-      await requireActiveImageAsset(site.db, site.siteId, assetId, "asset_id");
-      const currentLocation = await getLocationForMcp(
-        site.db,
-        site.organizationId,
-        site.siteId,
-        locationId,
-      ) as { hero_video_asset_id?: string | null };
-      const result = await updateLocation(
-        site.db,
-        site.organizationId,
-        site.siteId,
-        locationId,
-        { hero_image_asset_id: assetId } as never,
-        site.userId,
-      );
-      assertDomainSuccess(result);
-      const heroImageLocation = (result.data as { location: LocationRecord }).location;
-      const heroImageContext = await mutationContextPayload(site, { locationId });
-      return renderStructuredResponse(
-        {
-          ok: true,
-          entity: "location",
-          id: heroImageLocation.id,
-          updated_at: heroImageLocation.updated_at,
-          context: heroImageContext,
-          ...(currentLocation.hero_video_asset_id
-            ? {
-                warning:
-                  "This location already has a hero video, which takes display priority over a hero image. The video will keep showing. Call clear_location_hero_video first if you want this image to display instead.",
-              }
-            : {}),
-        },
-        `Updated hero image for "${heroImageLocation.title}".`,
-        { location: heroImageLocation },
-      );
-    }
-    case "set_location_hero_video": {
-      const locationId = requiredString(args, "location_id");
-      const assetId = requiredString(args, "asset_id");
-      await requireActiveVideoAsset(site.db, site.siteId, assetId, "asset_id");
-      const currentLocation = await getLocationForMcp(
-        site.db,
-        site.organizationId,
-        site.siteId,
-        locationId,
-      ) as { hero_image_asset_id?: string | null };
-      const result = await updateLocation(
-        site.db,
-        site.organizationId,
-        site.siteId,
-        locationId,
-        { hero_video_asset_id: assetId } as never,
-        site.userId,
-      );
-      assertDomainSuccess(result);
-      const heroVideoLocation = (result.data as { location: LocationRecord }).location;
-      const heroVideoContext = await mutationContextPayload(site, { locationId });
-      return renderStructuredResponse(
-        {
-          ok: true,
-          entity: "location",
-          id: heroVideoLocation.id,
-          updated_at: heroVideoLocation.updated_at,
-          context: heroVideoContext,
-          ...(currentLocation.hero_image_asset_id
-            ? {
-                warning:
-                  "This location already has a hero image, but the new hero video will take display priority over it.",
-              }
-            : {}),
-        },
-        `Updated hero video for "${heroVideoLocation.title}".`,
-        { location: heroVideoLocation },
-      );
-    }
-    case "clear_location_hero_image": {
-      const locationId = requiredString(args, "location_id");
-      const result = await updateLocation(
-        site.db,
-        site.organizationId,
-        site.siteId,
-        locationId,
-        { hero_image_asset_id: null } as never,
-        site.userId,
-      );
-      assertDomainSuccess(result);
-      const clearedImageLocation = (result.data as { location: LocationRecord }).location;
-      const clearImageContext = await mutationContextPayload(site, { locationId });
-      return renderStructuredResponse(
-        {
-          ok: true,
-          entity: "location",
-          id: clearedImageLocation.id,
-          updated_at: clearedImageLocation.updated_at,
-          context: clearImageContext,
-        },
-        `Cleared hero image for "${clearedImageLocation.title}".`,
-        { location: clearedImageLocation },
-      );
-    }
-    case "clear_location_hero_video": {
-      const locationId = requiredString(args, "location_id");
-      const result = await updateLocation(
-        site.db,
-        site.organizationId,
-        site.siteId,
-        locationId,
-        { hero_video_asset_id: null } as never,
-        site.userId,
-      );
-      assertDomainSuccess(result);
-      const clearedVideoLocation = (result.data as { location: LocationRecord }).location;
-      const clearVideoContext = await mutationContextPayload(site, { locationId });
-      return renderStructuredResponse(
-        {
-          ok: true,
-          entity: "location",
-          id: clearedVideoLocation.id,
-          updated_at: clearedVideoLocation.updated_at,
-          context: clearVideoContext,
-        },
-        `Cleared hero video for "${clearedVideoLocation.title}".`,
-        { location: clearedVideoLocation },
       );
     }
     case "delete_location": {

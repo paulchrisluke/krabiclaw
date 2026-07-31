@@ -23,7 +23,7 @@
       </div>
     </div>
 
-    <p v-if="!isWhatsAppMode" class="mt-6 text-center text-sm text-muted">New to KrabiClaw? <NuxtLink to="/signup" class="font-semibold text-primary">Create an account</NuxtLink></p>
+    <p v-if="!isWhatsAppMode" class="mt-6 text-center text-sm text-muted">New to KrabiClaw? <NuxtLink :to="signupUrl" class="font-semibold text-primary">Create an account</NuxtLink></p>
   </div>
 </template>
 
@@ -37,7 +37,9 @@ useSeoMeta({ robots: 'noindex, nofollow' })
 const route = useRoute()
 const queryEmail = typeof route.query.email === 'string' ? route.query.email : ''
 const isWhatsAppMode = computed(() => route.query.mode === 'whatsapp')
-const postLoginUrl = computed(() => buildPostLoginUrl({ redirect: validatedInternalPath(route.query.redirect) }))
+const redirect = computed(() => validatedInternalPath(route.query.redirect))
+const postLoginUrl = computed(() => buildPostLoginUrl({ redirect: redirect.value }))
+const signupUrl = computed(() => redirect.value ? { path: '/signup', query: { redirect: redirect.value } } : '/signup')
 const showPhone = ref(false)
 const verificationEmail = ref('')
 const resending = ref(false)

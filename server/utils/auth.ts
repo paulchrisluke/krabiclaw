@@ -20,64 +20,12 @@ import { validatePassword } from '~/utils/password-validation'
 import { fireSiteEventSafe, resolvePrimarySiteForEvent } from '~/server/utils/site-events'
 import type { InferSelectModel } from 'drizzle-orm'
 import { organizationAccessControl, organizationRoles } from '~/utils/organization-access'
+import { platformAdminAccessControl, platformAdminRoles } from '~/utils/platform-admin-access'
 
 type MemberRow = InferSelectModel<typeof schema.member>
 type InvitationRow = InferSelectModel<typeof schema.invitation>
-type OAuthClientHookData = Record<string, unknown> & {
-  clientId?: unknown
-  scopes?: unknown
-}
 
 const CIMD_TENANT_SCOPES = ['openid', 'offline_access', 'tenant'] as const
-
-function isUrlClientId(value: unknown): value is string {
-  if (typeof value !== 'string') return false
-  try {
-    const url = new URL(value)
-    return url.protocol === 'https:' || (import.meta.dev && url.protocol === 'http:')
-  } catch {
-    return false
-  }
-}
-
-// The adapter serializes string[] fields as JSON. Letting SQLite apply
-// oauthClient.scopes' historical empty-string default makes the adapter
-// JSON.parse('') on the first CIMD registration response. URL clients
-// without metadata scopes are tenant connectors, not platform clients.
-//
-// create and update need different defaulting rules here: a fresh row with
-// no scopes value at all must still get a real array so the invalid empty-
-// string column default never applies. An update that doesn't touch scopes
-// must leave the persisted value alone — defaulting there would silently
-// wipe whatever scopes an unrelated update (renaming a client, rotating
-// jwksUri) happens to pass through this same hook.
-function normalizeOAuthClientScopesOnCreate(data: OAuthClientHookData) {
-  if (Array.isArray(data.scopes)) return
-
-  return {
-    data: {
-      ...data,
-      scopes: isUrlClientId(data.clientId) ? [...CIMD_TENANT_SCOPES] : [],
-    },
-  }
-}
-
-function normalizeOAuthClientScopesOnUpdate(data: OAuthClientHookData) {
-  if (Array.isArray(data.scopes) || !('scopes' in data)) return
-  // clientId isn't necessarily part of every update payload (the row is
-  // targeted by a WHERE clause, not by data.clientId). Without it there's no
-  // way to tell a CIMD tenant connector from a non-URL client, and guessing
-  // "non-URL" would misclassify a URL client and overwrite its real scopes.
-  // Leave scopes untouched rather than guess.
-  if (typeof data.clientId !== 'string') return
-
-  return {
-    data: {
-      ...data,
-      scopes: isUrlClientId(data.clientId) ? [...CIMD_TENANT_SCOPES] : [],
-    },
-  }
-}
 
 async function normalizeCimdClientAuthentication(data: {
   client: SchemaClient<Scope[]>
@@ -97,11 +45,16 @@ async function normalizeCimdClientAuthentication(data: {
     update.scopes = [...CIMD_TENANT_SCOPES]
   }
   if (supportsPrivateKeyJwt) {
-    // ChatGPT currently advertises both `none` and `private_key_jwt` in the
-    // plural capability field. CIMD only reads the singular preference and
-    // otherwise registers `none`, even though ChatGPT exchanges the code with
-    // a signed client assertion. Prefer the authenticated method when a JWKS
-    // URI is actually supplied.
+    // @better-auth/cimd@1.7.0-beta.10's convertDocToClient only reads the
+    // singular doc.token_endpoint_auth_method (node_modules/@better-auth/cimd/
+    // dist/index.mjs lines ~106-115, ~298) — it never checks the plural
+    // capability field, token_endpoint_auth_methods_supported, that
+    // ChatGPT-shaped CIMD documents advertise private_key_jwt through.
+    // Confirmed against the installed package source; remove this once a
+    // newer @better-auth/cimd release maps that field itself. Covered by
+    // tests/e2e/oauth-discovery.spec.ts's "ChatGPT-shaped CIMD uses
+    // private_key_jwt" test — removing this hook without an upstream fix
+    // breaks that flow.
     update.tokenEndpointAuthMethod = 'private_key_jwt'
     update.public = false
     update.jwksUri = jwksUri
@@ -222,10 +175,6 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
       schema,
     }),
     databaseHooks: {
-      oauthClient: {
-        create: { before: normalizeOAuthClientScopesOnCreate },
-        update: { before: normalizeOAuthClientScopesOnUpdate },
-      },
       user: {
         create: {
           after: async (user) => {
@@ -442,10 +391,19 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
         onClientCreated: normalizeCimdClientAuthentication,
         onClientRefreshed: normalizeCimdClientAuthentication,
       }),
-      organization({ ac: organizationAccessControl, roles: organizationRoles }),
+      organization({
+        ac: organizationAccessControl,
+        roles: organizationRoles,
+        teams: {
+          enabled: true,
+          defaultTeam: { enabled: false },
+        },
+      }),
       admin({
+        ac: platformAdminAccessControl,
         adminRoles: ['admin'],
         defaultRole: 'user',
+        roles: platformAdminRoles,
         impersonationSessionDuration: 60 * 60,
       }),
       phoneNumber({

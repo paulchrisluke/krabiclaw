@@ -416,10 +416,10 @@ async function handleSetupMessage(text: string) {
   creatingRestaurant.value = true
 
   try {
-    const validation = await $fetch<{ available: boolean; message?: string }>('/api/sites/validate-subdomain', {
+    const validation = await $fetch('/api/sites/validate-subdomain', {
       method: 'POST',
       body: { subdomain: requestedSubdomain }
-    })
+    }) as { available: boolean; message?: string }
 
     if (!validation.available) {
       creatingRestaurant.value = false

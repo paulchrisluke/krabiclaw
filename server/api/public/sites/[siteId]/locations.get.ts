@@ -85,21 +85,19 @@ export default defineEventHandler(async (event) => {
 
     // Get active business locations for this site
     const locationRows = await queryAll<LocationRow & {
-      hero_image_public_url: string | null
-      hero_image_kind: string | null
-      hero_video_public_url: string | null
-      hero_video_kind: string | null
+      hero_public_url: string | null
+      hero_kind: string | null
+      thumbnail_url: string | null
     }>(db, `
       SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.website_url, bl.maps_url,
              bl.latitude, bl.longitude, bl.opening_hours, bl.rating, bl.review_count,
              bl.is_primary, bl.status, bl.last_synced_at, bl.google_location_id,
              bl.google_connection_id, bl.city, bl.neighborhood, bl.grab_url, bl.uber_eats_url, bl.foodpanda_url,
-             bl.hero_image_asset_id, bl.hero_video_asset_id,
-             ma_img.public_url AS hero_image_public_url, ma_img.kind AS hero_image_kind,
-             ma_vid.public_url AS hero_video_public_url, ma_vid.kind AS hero_video_kind
+             bl.hero_media_asset_id,
+             ma.public_url AS hero_public_url, ma.kind AS hero_kind, ma.thumbnail_url
       FROM business_locations bl
-      LEFT JOIN media_assets ma_img ON bl.hero_image_asset_id = ma_img.id AND ma_img.status = 'active'
-      LEFT JOIN media_assets ma_vid ON bl.hero_video_asset_id = ma_vid.id AND ma_vid.status = 'active'
+      LEFT JOIN media_assets ma ON bl.hero_media_asset_id = ma.id AND ma.status = 'active'
+        AND ma.organization_id = bl.organization_id AND ma.site_id = bl.site_id
       WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'
       ORDER BY bl.is_primary DESC, bl.title ASC
     `, [site.organization_id, siteId])
@@ -107,8 +105,8 @@ export default defineEventHandler(async (event) => {
 
     // Parse JSON fields and return public-safe data
     const parsedLocations = locationRows.map((location) => {
-      const public_url = (location.hero_video_public_url || location.hero_image_public_url || null) as string | null
-      const kind = public_url ? (location.hero_video_public_url ? 'video' : 'image') : null
+      const public_url = (location.hero_public_url || null) as string | null
+      const kind = public_url ? location.hero_kind : null
       return {
         id: location.id,
         slug: location.slug,
@@ -134,8 +132,8 @@ export default defineEventHandler(async (event) => {
         status: location.status,
         public_url,
         kind,
-        hero_image_public_url: location.hero_image_public_url,
-        hero_video_public_url: location.hero_video_public_url,
+        hero_public_url: public_url,
+        thumbnail_url: location.thumbnail_url,
         city: location.city,
         neighborhood: location.neighborhood || null,
         grab_url: location.grab_url || null,

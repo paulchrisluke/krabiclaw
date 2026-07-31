@@ -21,6 +21,7 @@ export interface ChowbotExecutorSite {
   db: D1Database
   env: CloudflareEnv
   userId: string
+  memberId: string
   organizationId: string
   siteId: string
   role: McpToolRole
@@ -92,6 +93,7 @@ export async function runMcpExecutorToolForChowbot(
         env: site.env,
         db: site.db,
         userId: site.userId,
+        memberId: site.memberId,
         // ChowBot's dashboard route resolves site access via membership only
         // (getSiteForMember), never the platform-admin bypass requireMcpSite
         // supports for MCP — so this is always accurate for this caller.

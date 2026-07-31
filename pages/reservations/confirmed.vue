@@ -61,7 +61,7 @@ import type { RenderedBookingPolicySummaryItem } from '~/server/utils/booking-po
 definePageMeta({ layout: 'saya' })
 
 const { site, siteId } = useTenantSite()
-const { reservationPolicySiteDefault, reservationPolicyByLocation } = useBootstrap()
+const { reservationPolicySiteDefault, reservationPolicyByLocation } = await useBootstrap()
 const { locale } = useI18n()
 const resCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
 const { formatDate } = useLocaleDate()

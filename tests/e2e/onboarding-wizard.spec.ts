@@ -24,6 +24,13 @@ async function completeManualWizard(
   businessName: string,
   { skipVertical = false, vertical = 'restaurant' as 'restaurant' | 'experience' | 'professional_service' } = {},
 ) {
+  const activeWidget = page.locator('.onboarding-step-widget').last()
+  const actionButton = (name: string | RegExp) => activeWidget.getByRole('button', { name })
+  const expectNoHistoricalControls = async () => {
+    await expect(page.getByRole('button', { name: 'Continue' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Skip for now' })).toHaveCount(0)
+  }
+
   await page.getByRole('button', { name: 'Start building' }).click()
   if (!skipVertical) {
     const verticalLabel = vertical === 'professional_service'
@@ -37,39 +44,40 @@ async function completeManualWizard(
   const input = page.getByPlaceholder('Your business name…')
   await input.fill(businessName)
   await input.press('Enter')
-  await expect(page.getByText(/Business details|Location details/)).toBeVisible({ timeout: 15_000 })
-  await page.getByLabel('City').fill('Ao Nang')
-  await page.getByLabel('Address').fill('123 Moo 5, Ao Nang, Krabi')
-  await page.getByLabel('Phone').fill('+66812345678')
-  await page.getByLabel('Hours').fill('Monday: 9:00 AM - 6:00 PM\nTuesday: 9:00 AM - 6:00 PM')
-  await page.getByLabel('Manager alert number').fill('+66812345678')
-  await page.getByRole('button', { name: /Create site|Add location/ }).click()
-  // New-site creation now stages a private draft first ("Draft ready...") and
-  // needs a second "Create site" quick-reply click to commit it; adding a
-  // location to an existing site skips drafting and goes straight to "Done".
-  // The quick-reply chip is tagged with data-reply-action so it can be targeted
-  // unambiguously — the original form button (same "Create site" label) stays
-  // visible and re-enabled in the chat transcript once the draft save completes,
-  // so a text/role locator alone (or DOM-order .last()) can't reliably tell them apart.
-  const draftOrDone = page.getByText(/Draft ready\.|Done\. Your workspace is live/)
-  // Site/location creation does several sequential D1 round trips (org lookup,
-  // location insert, review upserts) against a remote preview deploy, which can
-  // outrun a 15s wait even though the wizard's own bot-message delay is fixed at ~640ms.
-  await expect(draftOrDone.first()).toBeVisible({ timeout: 30_000 })
-  if (await page.getByText('Draft ready.').isVisible().catch(() => false)) {
-    await page.locator('[data-testid="chowbot-quick-reply"][data-reply-action="commit_draft"]').click()
-    // Commit chains several sequential round trips (runSiteCreation, primary location
-    // update, the content/menu/qa/posts/reviews batch insert, then currency + social
-    // status follow-ups) — give this more headroom than the draft-save wait above.
-    try {
-      await expect(page.getByText('Done. Your workspace is live')).toBeVisible({ timeout: 60_000 })
-    } catch (waitError) {
-      // Surface the wizard's own error banner (if the commit actually failed server-side)
-      // instead of just a bare timeout, since the banner text is dropped otherwise — CI
-      // doesn't upload screenshots/videos for this job.
-      const bannerText = await page.getByTestId('wizard-error-banner').textContent().catch(() => null)
-      throw new Error(`commitDraft never reached "Done"${bannerText ? ` — wizard error banner: ${bannerText}` : ' (no error banner visible either)'}`, { cause: waitError })
-    }
+  await expect(page.getByText('Where should guests find you?')).toBeVisible({ timeout: 15_000 })
+  if (!skipVertical) {
+    await expect(page.locator('iframe[title="Site preview"]').first()).toHaveAttribute('src', /\/preview\/draft\/[^?]+\?preview=true&token=/, { timeout: 15_000 })
+  }
+  await expectNoHistoricalControls()
+  await page.getByLabel('Street address').fill('123 Moo 5, Ao Nang, Krabi')
+  await page.getByLabel('City or town').fill('Ao Nang')
+  await actionButton('Save location').click()
+  await expect(page.getByText('Add the number guests should use first.')).toBeVisible()
+  await expectNoHistoricalControls()
+  await page.getByRole('textbox', { name: /\(___\) ___-____/ }).fill('4233586761')
+  await actionButton('Save contact').click()
+  await expect(page.getByText('Choose how guests will see prices.')).toBeVisible()
+  await expectNoHistoricalControls()
+  await actionButton('Use this currency').click()
+  await expect(page.getByText('Add your weekly hours so bookings and visit details line up.')).toBeVisible()
+  await expectNoHistoricalControls()
+  await actionButton('Save hours').click()
+  await expect(page.getByText('Choose the color and logo guests will recognize across your site.')).toBeVisible()
+  await expectNoHistoricalControls()
+  await actionButton('Save brand').click()
+  await expect(page.getByText('Add the photo and opening words guests see first on the homepage.')).toBeVisible()
+  await expectNoHistoricalControls()
+  await actionButton('Save hero').click()
+  if (!skipVertical) {
+    await expect(page.getByText('Draft ready. Tap the preview any time')).toBeVisible()
+    await expect(page.getByText('Tap to preview your site')).toBeVisible()
+    await page.getByRole('button', { name: 'Create site' }).click()
+  }
+  try {
+    await expect(page.getByText('Done. Your workspace is live')).toBeVisible({ timeout: 60_000 })
+  } catch (waitError) {
+    const bannerText = await page.getByTestId('wizard-error-banner').textContent().catch(() => null)
+    throw new Error(`site creation never reached "Done"${bannerText ? ` — wizard error banner: ${bannerText}` : ' (no error banner visible either)'}`, { cause: waitError })
   }
 }
 
@@ -214,46 +222,18 @@ async function reachNotificationStep(page: Page) {
 test.describe('onboarding wizard UI', () => {
   test.describe.configure({ mode: 'serial' })
 
-  test('a new user can build a site manually and add a second location manually', async ({ page, baseURL }) => {
-    // Two full manual wizard completions (site + second location) routinely
-    // exceed the default 30s test timeout against a remote preview deploy. Each
-    // completion can wait up to 30s for the draft save plus 45s for the commit
-    // chain (worst case), so give the overall test enough budget for both.
-    test.setTimeout(180_000)
+  test('a new user can build a site manually and open the dashboard', async ({ page, baseURL }) => {
+    test.setTimeout(120_000)
     const suffix = Date.now()
     const userId = `e2e-onboard-${suffix}`
     await loginFreshUser(page, baseURL!, userId)
 
     await page.goto(`${baseURL}/dashboard/onboarding`, { waitUntil: 'load' })
     await completeManualWizard(page, `Onboard Test Cafe ${suffix}`)
-
-    await page.getByRole('button', { name: 'Add another location' }).click()
-    await expect(page).toHaveURL(/\/dashboard\/.+\/new$/)
-
-    // Regression coverage: manual location entry used to call the new-site
-    // onboarding endpoint, which rejects any user who already has a site.
-    await completeManualWizard(page, `Onboard Test Cafe Second Location ${suffix}`, {
-      skipVertical: true,
-    })
-    // Adding a location stays on /new with a live preview of the new location.
-    await expect(page).toHaveURL(/\/dashboard\/.+\/new$/)
-
-    const pathSegments = new URL(page.url()).pathname.split('/')
-    const orgSlug = pathSegments[2]
-    const siteSlug = pathSegments[4]
-    // page.request bypasses the browser's JS entirely, so the dashboard-site-header
-    // plugin never runs — both URL-backed organization and site context must be
-    // attached explicitly for this direct dashboard API request.
-    const locationsRes = await page.request.get(`${baseURL}/api/dashboard/locations`, {
-      headers: {
-        ...dashboardOrgHeaders(orgSlug!),
-        'x-dashboard-site-slug': siteSlug!,
-      },
-    })
-    expect(locationsRes.status()).toBe(200)
-    const { locations } = await locationsRes.json() as { locations: Array<{ title: string }> }
-    expect(locations.length).toBeGreaterThanOrEqual(2)
-    expect(orgSlug).toBeTruthy()
+    await expect(page.getByText('From here, head to your dashboard to keep building')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Add another location' })).toHaveCount(0)
+    await page.getByRole('button', { name: 'Open my dashboard' }).click()
+    await expect(page).toHaveURL(/\/dashboard\/[^/]+\/sites\/[^/]+$/)
   })
 
   test('wizard shows all three business-type choices on mobile and desktop, and Legal/professional services creates a Blawby site', async ({ page, baseURL }) => {

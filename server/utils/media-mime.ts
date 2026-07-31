@@ -3,12 +3,32 @@
 // Behavior must stay identical to the dashboard's sniffMimeType — this is the
 // single source of truth both paths import from.
 
-export const VIDEO_MIME_TYPES = new Set(["video/mp4", "video/webm", "video/quicktime", "video/x-msvideo"]);
+export const VIDEO_MIME_TYPES = new Set(["video/mp4", "video/webm"]);
 export const POSTER_IMAGE_MIME_TYPES = new Set(["image/avif", "image/gif", "image/jpeg", "image/png", "image/webp"]);
 export const R2_IMAGE_MIME_TYPES = new Set(["image/avif"]);
 
 export const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 export const MAX_POSTER_BYTES = 10 * 1024 * 1024;
+const MP4_BRANDS = new Set([
+  "avc1",
+  "dash",
+  "iso2",
+  "iso3",
+  "iso4",
+  "iso5",
+  "iso6",
+  "iso7",
+  "iso8",
+  "iso9",
+  "isom",
+  "m4v ",
+  "m4vp",
+  "mmp4",
+  "mp41",
+  "mp42",
+  "mp4v",
+  "msnv",
+])
 
 export function sniffMediaMimeType(data: Uint8Array): string {
   if (
@@ -51,14 +71,15 @@ export function sniffMediaMimeType(data: Uint8Array): string {
     data[0] === 0x52 && data[1] === 0x49 && data[2] === 0x46 && data[3] === 0x46 &&
     data[8] === 0x41 && data[9] === 0x56 && data[10] === 0x49 && data[11] === 0x20
   ) {
-    return "video/x-msvideo";
+    return "application/octet-stream";
   }
 
   if (data.byteLength >= 12 && data[4] === 0x66 && data[5] === 0x74 && data[6] === 0x79 && data[7] === 0x70) {
     const brand = String.fromCharCode(data[8] ?? 0, data[9] ?? 0, data[10] ?? 0, data[11] ?? 0).toLowerCase();
     if (brand.startsWith("avif") || brand.startsWith("avis")) return "image/avif";
-    if (brand.startsWith("qt")) return "video/quicktime";
-    return "video/mp4";
+    if (brand.startsWith("qt")) return "application/octet-stream";
+    if (MP4_BRANDS.has(brand)) return "video/mp4";
+    return "application/octet-stream";
   }
 
   const sample = new TextDecoder().decode(data.slice(0, Math.min(data.byteLength, 1024))).trimStart().toLowerCase();

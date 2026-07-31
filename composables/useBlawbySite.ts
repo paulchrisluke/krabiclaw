@@ -33,12 +33,14 @@ export function useBlawbySite() {
           if (import.meta.server) {
             const requestEvent = useRequestEvent()
             if (!requestEvent) return emptyBlawbyPayload()
-            const [{ cloudflareEnv }, { getPublicBlawbyData }] = await Promise.all([
+            const [{ cloudflareEnv }, { getActiveBlawbySite, getPublicBlawbyData }] = await Promise.all([
               import('~/server/utils/api-response'),
               import('~/server/utils/professional-services'),
             ])
             const db = cloudflareEnv(requestEvent).db
             if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+            const site = await getActiveBlawbySite(db, siteId)
+            if (!site) throw createError({ statusCode: 404, statusMessage: 'Blawby is not enabled for this site' })
             const payload = await getPublicBlawbyData(db, siteId)
             return {
               success: true,

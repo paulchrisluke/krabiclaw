@@ -17,10 +17,14 @@ import {
   type ChowBotConversation,
 } from '~/server/utils/chowbot-conversations'
 import { execute, queryAll, queryFirst } from '~/server/db'
-import { ensureGuestThread, getGuestThreadBySubmission, getGuestThreadDetail, getGuestThreadSource, postGuestThreadReply } from '~/server/utils/guest-threads'
+import { ensureGuestThread, getGuestThreadById, getGuestThreadBySubmission, updateThreadProjection } from '~/server/domain/guest-threads/repository'
+import { getAdapter } from '~/server/domain/guest-threads/adapters/registry'
+import { executeGuestThreadOperation } from '~/server/domain/guest-threads/operations'
+import { appendEntry } from '~/server/domain/guest-threads/entries'
+import { nextConversationState } from '~/server/domain/guest-threads/state-machine'
 import { notifyGuestThreadReply } from '~/server/utils/notifications'
-import { findSubmissionByPhone, insertInboundSubmissionReply } from '~/server/utils/submission-messages'
-import { isAuthorizedWhatsAppRecipient } from '~/server/utils/member-access'
+import { findSubmissionByPhone } from '~/server/utils/submission-messages'
+import { isAuthorizedWhatsAppRecipient, resolveMemberId, teamAccessPredicate } from '~/server/utils/member-access'
 import {
   ASK_CHOWBOT_OR_QUOTE_MESSAGE,
   REPLY_SENT_CONFIRMATION,
@@ -192,6 +196,7 @@ async function runChowBotAndReply(
     organizationId: string
     siteId: string
     userId: string
+    memberId: string
     userRole?: string
     siteName: string | null
     pendingMedia: { assetId: string; siteId: string } | null
@@ -209,6 +214,7 @@ async function runChowBotAndReply(
     orgId: opts.organizationId,
     siteId: opts.siteId,
     userId: opts.userId,
+    memberId: opts.memberId,
     userRole: opts.userRole,
     siteName: opts.siteName ?? 'your site',
     defaultCurrency: site?.default_currency || 'THB',
@@ -300,7 +306,7 @@ async function resolveQuotedNotification(
 
 // Tier 3 candidate list: recent (24h) guest-related operational notifications scoped to
 // sites/locations the manager is authorized for (org-wide roles see everything in their
-// org; editor always needs a matching member_access_scope row). Grouped by
+// org; editor always needs matching resource team membership). Grouped by
 // guest thread so a guest with multiple notification events in the window (e.g. created
 // + a reply) only appears once, most recent first.
 async function listRecentGuestNotificationCandidates(db: D1Database, userId: string): Promise<DisambiguationCandidate[]> {
@@ -318,12 +324,12 @@ async function listRecentGuestNotificationCandidates(db: D1Database, userId: str
     FROM notifications n
     JOIN member m ON m.organizationId = n.organization_id AND m.userId = ?
     JOIN guest_threads gt ON gt.submission_type = n.related_submission_type AND gt.submission_id = n.related_submission_id
-    LEFT JOIN member_access_scope mas ON mas.member_id = m.id AND mas.organization_id = n.organization_id
-      AND mas.site_id = n.site_id AND (mas.location_id IS NULL OR mas.location_id = n.location_id)
+    LEFT JOIN sites s ON s.id = n.site_id AND s.organization_id = n.organization_id
+    LEFT JOIN business_locations bl ON bl.id = n.location_id AND bl.site_id = n.site_id AND bl.organization_id = n.organization_id
     WHERE n.channel = 'whatsapp'
       AND n.related_submission_type IS NOT NULL AND n.related_submission_id IS NOT NULL
       AND n.created_at > ?
-      AND (m.role IN ('owner', 'admin') OR (m.role = 'editor' AND mas.id IS NOT NULL))
+      AND (m.role IN ('owner', 'admin') OR (m.role = 'editor' AND ${teamAccessPredicate({ userIdExpr: 'm.userId', siteTeamExpr: 's.team_id', locationTeamExpr: 'bl.team_id' })}))
     GROUP BY gt.id
     ORDER BY createdAt DESC
     LIMIT 5
@@ -492,18 +498,24 @@ async function routeManagerWhatsAppMessage(
         await sendWhatsAppText(env, opts.toPhone, 'Your WhatsApp access has been revoked. Please contact your organization administrator.')
         return { handled: true }
       }
-      const result = await postGuestThreadReply(db, env, {
-        threadId: pendingState.threadId,
-        siteId: pendingState.siteId,
-        senderUserId: opts.userId,
-        body: pendingState.replyBody,
-      })
+      const actorMemberId = await resolveMemberId({ organizationId: pendingState.organizationId, userId: opts.userId, env })
+      const result = actorMemberId
+        ? await executeGuestThreadOperation(db, {
+            threadId: pendingState.threadId,
+            siteId: pendingState.siteId,
+            action: 'reply',
+            actorUserId: opts.userId,
+            actorMemberId,
+            body: pendingState.replyBody,
+            env,
+            idempotencyKey: `whatsapp:${opts.messageId}:reply`,
+          })
+        : { ok: false as const, status: 404 as const, reason: 'thread_not_found' as const }
       await clearPending()
       if (result.ok) {
         await sendWhatsAppText(env, opts.toPhone, REPLY_SENT_CONFIRMATION)
       } else {
-        const errorText = result.reason === 'send_failed' ? result.error : result.reason
-        await sendWhatsAppText(env, opts.toPhone, buildReplyFailedMessage(errorText))
+        await sendWhatsAppText(env, opts.toPhone, buildReplyFailedMessage(result.reason))
       }
       return { handled: true }
     }
@@ -529,13 +541,16 @@ async function routeManagerWhatsAppMessage(
         return { handled: true }
       }
 
-      const detail = await getGuestThreadDetail(db, chosen.threadId, chosen.siteId)
-      if (!detail || !detail.source.guest_email) {
+      const chosenThread = await getGuestThreadById(db, chosen.threadId, chosen.siteId)
+      const chosenAdapter = chosenThread ? getAdapter(chosenThread.submission_type) : null
+      const chosenSource = chosenThread && chosenAdapter ? await chosenAdapter.loadSource({ db }, chosenThread.submission_id) : null
+      const chosenGuestEmail = chosenSource && chosenAdapter ? chosenAdapter.summarize(chosenSource).guestEmail : null
+      if (!chosenGuestEmail) {
         await clearPending()
         await sendWhatsAppText(env, opts.toPhone, 'That guest has no email on file, so a reply cannot be sent.')
         return { handled: true }
       }
-      const guestEmailMasked = maskEmailForDisplay(detail.source.guest_email)
+      const guestEmailMasked = maskEmailForDisplay(chosenGuestEmail)
       const newState: PendingWhatsAppReplyState = { kind: 'collect_reply', threadId: chosen.threadId, siteId: chosen.siteId, organizationId: chosen.organizationId, locationId: chosen.locationId, guestEmailMasked }
       const sendResult = await sendWhatsAppText(env, opts.toPhone, buildCollectReplyPrompt(guestEmailMasked))
       if (!sendResult.success) throw new Error(sendResult.error || 'Failed to send WhatsApp reply prompt')
@@ -748,6 +763,7 @@ async function handleManagerChowBotMessage(
         organizationId: site.organization_id,
         siteId: site.id,
         userId: user.id,
+        memberId: site.member_id,
         userRole: site.role,
         siteName: site.brand_name,
         pendingMedia: { assetId: asset.id, siteId: site.id },
@@ -775,6 +791,7 @@ async function handleManagerChowBotMessage(
       toPhone,
       conversation,
       userId: user.id,
+      memberId: site.member_id,
       organizationId: site.organization_id,
       siteId: site.id,
       userRole: site.role,
@@ -817,32 +834,39 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
       const text = messageText(message)
       if (text) {
         try {
-          await insertInboundSubmissionReply(env, db, {
-            submissionType: match.submissionType,
-            submissionId: match.submissionId,
+          const adapter = getAdapter(match.submissionType)
+          const thread = await ensureGuestThread(db, adapter, match.submissionId)
+          const entry = await appendEntry(db, {
+            threadId: thread.id,
             organizationId: match.organizationId,
             siteId: match.siteId,
+            kind: 'message',
+            actorKind: 'guest',
             channel: 'whatsapp',
             body: text,
-            metaMessageId: message.id,
-            from: toPhone,
+            externalId: message.id,
           })
-          const thread = await ensureGuestThread(db, match.submissionType, match.submissionId)
-          const source = await getGuestThreadSource(db, match.submissionType, match.submissionId)
-          if (source) {
-            await notifyGuestThreadReply(env, db, {
-              organizationId: match.organizationId,
-              siteId: match.siteId,
-              locationId: source.location_id,
-              threadId: thread.id,
-              submissionType: match.submissionType,
-              submissionId: match.submissionId,
-              guestName: source.guest_name,
-              guestEmail: source.guest_email,
-              guestPhone: source.guest_phone,
-              inboundChannel: 'whatsapp',
-              messagePreview: text,
-            })
+          if (entry.created) {
+            const conversationState = nextConversationState(thread.conversation_state, { type: 'inbound_guest_message' })
+            await updateThreadProjection(db, thread.id, { conversationState })
+
+            const source = await adapter.loadSource({ db }, match.submissionId)
+            if (source) {
+              const summary = adapter.summarize(source)
+              await notifyGuestThreadReply(env, db, {
+                organizationId: match.organizationId,
+                siteId: match.siteId,
+                locationId: summary.locationId,
+                threadId: thread.id,
+                submissionType: match.submissionType,
+                submissionId: match.submissionId,
+                guestName: summary.guestName,
+                guestEmail: summary.guestEmail,
+                guestPhone: summary.guestPhone,
+                inboundChannel: 'whatsapp',
+                messagePreview: text,
+              })
+            }
           }
         } catch (err) {
           console.error('[whatsapp] Failed to insert guest reply for submission:', err)

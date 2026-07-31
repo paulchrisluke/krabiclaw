@@ -172,8 +172,8 @@ const loadRequestId = ref(0)
 const pendingConfirmIds = ref<string[]>([])
 
 const computedAccept = computed(() => {
-  if (props.accept === 'video') return 'video/mp4,video/webm,video/quicktime'
-  if (props.accept === 'any') return 'image/*,video/*'
+  if (props.accept === 'video') return 'video/mp4,video/webm'
+  if (props.accept === 'any') return 'image/*,video/mp4,video/webm'
   return 'image/*'
 })
 
@@ -261,9 +261,22 @@ async function upload(file: File) {
   uploadError.value = null
   const isImage = file.type.startsWith('image/')
   const isVideo = file.type.startsWith('video/')
+  const acceptedTypes = computedAccept.value.split(',').map(type => type.trim())
+  const isAccepted = acceptedTypes.some(type => type.endsWith('/*')
+    ? file.type.startsWith(type.slice(0, -1))
+    : file.type === type
+  )
 
   if (!isImage && !isVideo) {
     uploadError.value = 'Only images and videos are supported.'
+    return
+  }
+  if (!isAccepted) {
+    uploadError.value = props.accept === 'video'
+      ? 'Only MP4 and WebM videos are supported.'
+      : props.accept === 'image'
+        ? 'Only image files are supported.'
+        : 'Only images, MP4 videos, and WebM videos are supported.'
     return
   }
 

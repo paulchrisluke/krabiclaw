@@ -7,7 +7,7 @@
       </div>
       <span class="shrink-0 text-muted">{{ value }}</span>
     </div>
-    <UProgress :value="boundedPercent" class="h-1.5" />
+    <UProgress :model-value="boundedPercent" :max="100" class="h-1.5" />
   </div>
 </template>
 

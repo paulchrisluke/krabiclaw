@@ -1,5 +1,5 @@
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
-import { isOperationalRole, isOrganizationWideRole } from '~/server/utils/member-access'
+import { addMemberResourceAccess, isOperationalRole, isOrganizationWideRole } from '~/server/utils/member-access'
 import { sendWhatsAppNotification } from '~/server/utils/whatsapp'
 import { isPhoneInvitationEmail, phoneDigitsFromInvitationEmail, phoneTemporaryEmail } from '~/server/utils/phone-invitations'
 import { parsePhoneOrThrow } from '~/utils/phone'
@@ -59,11 +59,12 @@ export async function ensureWhatsAppRecipientAccess(db: DbClient, target: WhatsA
       throw createError({ statusCode: 409, statusMessage: `Existing member role ${existing.role} cannot receive operational notifications` })
     }
     if (!isOrganizationWideRole(existing.role)) {
-      await execute(db, `
-        INSERT OR IGNORE INTO member_access_scope
-          (id, member_id, organization_id, site_id, location_id, grant_source, created_at)
-        VALUES (?, ?, ?, ?, ?, 'whatsapp_config', ?)
-      `, [crypto.randomUUID(), existing.memberId, target.organizationId, target.siteId, target.locationId, new Date().toISOString()])
+      await addMemberResourceAccess(db, {
+        userId: existing.userId,
+        organizationId: target.organizationId,
+        siteId: target.siteId,
+        locationId: target.locationId,
+      })
     }
     return { status: 'active', normalizedPhone, memberId: existing.memberId }
   }

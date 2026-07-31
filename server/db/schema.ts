@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm"
-import { sqliteTable, integer, text, numeric, real, unique, primaryKey, uniqueIndex, index, check } from "drizzle-orm/sqlite-core"
+import { sqliteTable, integer, text, numeric, real, unique, primaryKey, uniqueIndex, index, check, foreignKey } from "drizzle-orm/sqlite-core"
 import type { AnySQLiteColumn } from "drizzle-orm/sqlite-core"
 
 export const account = sqliteTable("account", {
@@ -258,8 +258,7 @@ export const business_locations = sqliteTable("business_locations", {
 	foodpanda_url: text(),
 	google_place_id: text(),
 	google_review_url: text(),
-	hero_image_asset_id: text().references(() => media_assets_old.id, { onDelete: "set null" } ),
-	hero_video_asset_id: text().references(() => media_assets_old.id, { onDelete: "set null" } ),
+	hero_media_asset_id: text().references((): AnySQLiteColumn => media_assets.id, { onDelete: "set null" } ),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 	notification_phone: text(),
@@ -270,6 +269,7 @@ export const business_locations = sqliteTable("business_locations", {
 	canonical_url: text(),
 	robots: text(),
 	og_image_asset_id: text().references((): AnySQLiteColumn => media_assets.id, { onDelete: "set null" } ),
+	team_id: text().references((): AnySQLiteColumn => team.id, { onDelete: "set null" } ),
 	// JSON { enabled?: ProductFeature[]; disabled?: ProductFeature[] } delta (config/cms-registry.ts).
 	// NULL means "inherit the parent site's effective feature set" — never the vertical defaults
 	// directly. `enabled` entries must always be a subset of what the site itself resolves to;
@@ -362,7 +362,7 @@ export const guest_threads = sqliteTable("guest_threads", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	location_id: text().references(() => business_locations.id, { onDelete: "set null" } ),
+	location_id: text().references((): AnySQLiteColumn => business_locations.id, { onDelete: "set null" } ),
 	submission_type: text().notNull(),
 	submission_id: text().notNull(),
 	guest_name: text().notNull(),
@@ -375,6 +375,16 @@ export const guest_threads = sqliteTable("guest_threads", {
 	last_outbound_at: text(),
 	last_message_preview: text(),
 	owner_last_seen_at: text(),
+	// Conversation-state machine (issue #442). Independent of the source's operational status;
+	// updated only by server/domain/guest-threads/state-machine.ts via the canonical operation
+	// service, never inferred client-side from raw source status.
+	conversation_state: text().default("needs_attention").notNull(),
+	// Read-optimized projection of the underlying source record's operational status
+	// (e.g. reservation 'confirmed'). Not independently editable; refreshed only by
+	// server/domain/guest-threads/operations.ts after a successful source mutation.
+	operational_status: text(),
+	version: integer().default(0).notNull(),
+	resolved_at: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
@@ -382,34 +392,139 @@ export const guest_threads = sqliteTable("guest_threads", {
 	index("guest_threads_site_updated_idx").on(table.site_id, table.updated_at),
 	index("guest_threads_location_updated_idx").on(table.location_id, table.updated_at),
 	index("guest_threads_inbox_status_idx").on(table.site_id, table.inbox_status, table.updated_at),
+	index("guest_threads_conversation_state_idx").on(table.site_id, table.conversation_state, table.updated_at),
+	index("guest_threads_site_version_idx").on(table.site_id, table.version),
 	check("guest_threads_submission_type_check", sql`submission_type IN ('contact', 'reservation', 'experience_booking')`),
 	check("guest_threads_inbox_status_check", sql`inbox_status IN ('open', 'waiting_on_owner', 'waiting_on_guest', 'closed')`),
+	check("guest_threads_conversation_state_check", sql`conversation_state IN ('needs_attention', 'waiting_on_guest', 'resolved')`),
 	index("guest_threads_organization_id_idx").on(table.organization_id),
 ]);
 
-export const submission_messages = sqliteTable("submission_messages", {
+// Canonical append-only conversation/history ledger for a guest thread (issue #442).
+// Replaces submission_messages as the sole timeline store. Entries are facts and are
+// never rewritten; corrections are new entries.
+export const guest_thread_entries = sqliteTable("guest_thread_entries", {
 	id: text().primaryKey(),
-	thread_id: text().references(() => guest_threads.id, { onDelete: "cascade" } ),
-	submission_type: text().notNull(), // 'contact' | 'reservation' | 'experience_booking'
-	submission_id: text().notNull(),
+	thread_id: text().notNull().references(() => guest_threads.id, { onDelete: "cascade" } ),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	direction: text().notNull(), // 'out' | 'in'
-	channel: text().notNull(), // 'email' | 'whatsapp'
-	body: text().notNull(),
-	sender_user_id: text().references(() => user.id, { onDelete: "set null" } ),
-	meta_message_id: text().unique(),
-	status: text().default("sent").notNull(),
-	error: text(),
+	kind: text().notNull(),
+	actor_kind: text().notNull(),
+	actor_user_id: text().references(() => user.id, { onDelete: "set null" } ),
+	channel: text(),
+	body: text(),
+	event_name: text(),
+	payload_json: text(),
+	external_id: text(),
+	sequence: integer(),
+	occurred_at: text().notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
-	check("submission_type_check", sql`submission_type IN ('contact', 'reservation', 'experience_booking')`),
-	check("direction_check", sql`direction IN ('in', 'out')`),
-	check("channel_check", sql`channel IN ('email', 'whatsapp')`),
-	index("submission_type_id_idx").on(table.submission_type, table.submission_id),
-	index("submission_messages_thread_created_idx").on(table.thread_id, table.created_at),
-	index("submission_messages_org_site_idx").on(table.organization_id, table.site_id),
+	index("guest_thread_entries_thread_occurred_idx").on(table.thread_id, table.occurred_at),
+	unique("guest_thread_entries_thread_sequence_unique").on(table.thread_id, table.sequence),
+	uniqueIndex("guest_thread_entries_external_id_unique").on(table.external_id).where(sql`external_id IS NOT NULL`),
+	index("guest_thread_entries_site_kind_occurred_idx").on(table.site_id, table.kind, table.occurred_at),
+	index("guest_thread_entries_organization_id_idx").on(table.organization_id),
+	check("guest_thread_entries_kind_check", sql`kind IN ('submission', 'message', 'operation', 'delivery', 'assignment', 'resolution')`),
+	check("guest_thread_entries_actor_kind_check", sql`actor_kind IN ('guest', 'member', 'system')`),
+	check("guest_thread_entries_channel_check", sql`channel IS NULL OR channel IN ('web', 'email', 'whatsapp', 'system')`),
 ]);
+
+export const guest_thread_sequence_counters = sqliteTable("guest_thread_sequence_counters", {
+	thread_id: text().primaryKey().references(() => guest_threads.id, { onDelete: "cascade" } ),
+	next_sequence: integer().default(1).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+});
+
+// Per-member read cursor for a thread (issue #442). Keyed on member.id (not raw user.id) to
+// match how server/utils/location-access.ts resolves identity everywhere else.
+export const guest_thread_member_state = sqliteTable("guest_thread_member_state", {
+	thread_id: text().notNull().references(() => guest_threads.id, { onDelete: "cascade" } ),
+	member_id: text().notNull().references(() => member.id, { onDelete: "cascade" } ),
+	last_read_entry_id: text().references(() => guest_thread_entries.id, { onDelete: "set null" } ),
+	last_read_sequence: integer().default(0).notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	primaryKey({ columns: [table.thread_id, table.member_id] }),
+	index("guest_thread_member_state_member_updated_idx").on(table.member_id, table.updated_at),
+]);
+
+// Durable delivery outbox for guest-facing transactional sends tied to a thread entry
+// (issue #442). Intent is persisted before any external send attempt so a durable
+// message/intent record always exists even if the provider call fails.
+export const guest_thread_deliveries = sqliteTable("guest_thread_deliveries", {
+	id: text().primaryKey(),
+	thread_id: text().notNull().references(() => guest_threads.id, { onDelete: "cascade" } ),
+	entry_id: text().references(() => guest_thread_entries.id, { onDelete: "set null" } ),
+	channel: text().notNull(),
+	provider: text(),
+	idempotency_key: text().notNull(),
+	status: text().default("queued").notNull(),
+	attempt_count: integer().default(0).notNull(),
+	last_error: text(),
+	provider_message_id: text(),
+	to_address: text(),
+	from_name: text(),
+	subject: text(),
+	text_body: text(),
+	reply_to: text(),
+	locale: text(),
+	template_version: text(),
+	source_snapshot_json: text(),
+	payload_hash: text(),
+	provider_idempotency_key: text(),
+	processing_lease_until: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	uniqueIndex("guest_thread_deliveries_idempotency_key_unique").on(table.idempotency_key),
+	index("guest_thread_deliveries_thread_status_idx").on(table.thread_id, table.status),
+	index("guest_thread_deliveries_status_updated_idx").on(table.status, table.updated_at),
+	check("guest_thread_deliveries_channel_check", sql`channel IN ('email', 'whatsapp')`),
+		check("guest_thread_deliveries_status_check", sql`status IN ('queued', 'sent', 'failed')`),
+]);
+
+export const guest_thread_commands = sqliteTable("guest_thread_commands", {
+	id: text().primaryKey(),
+	thread_id: text().notNull().references(() => guest_threads.id, { onDelete: "cascade" } ),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	action: text().notNull(),
+	idempotency_key: text().notNull(),
+	actor_kind: text().notNull(),
+	actor_user_id: text().references(() => user.id, { onDelete: "set null" } ),
+	actor_member_id: text().references(() => member.id, { onDelete: "set null" } ),
+	request_hash: text().notNull(),
+		status: text().default("pending").notNull(),
+	result_json: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	completed_at: text(),
+}, (table) => [
+	unique("guest_thread_commands_thread_idempotency_unique").on(table.thread_id, table.idempotency_key),
+	index("guest_thread_commands_site_created_idx").on(table.site_id, table.created_at),
+	check("guest_thread_commands_actor_kind_check", sql`actor_kind IN ('member', 'guest', 'system')`),
+		check("guest_thread_commands_status_check", sql`status IN ('pending', 'completed', 'failed')`),
+]);
+
+export const guest_thread_outbox = sqliteTable("guest_thread_outbox", {
+	id: text().primaryKey(),
+	thread_id: text().notNull().references(() => guest_threads.id, { onDelete: "cascade" } ),
+	delivery_id: text().references(() => guest_thread_deliveries.id, { onDelete: "cascade" } ),
+	event_type: text().notNull(),
+	status: text().default("pending").notNull(),
+	attempt_count: integer().default(0).notNull(),
+	next_attempt_at: text(),
+	locked_at: text(),
+	last_error: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	index("guest_thread_outbox_status_next_idx").on(table.status, table.next_attempt_at),
+	index("guest_thread_outbox_thread_idx").on(table.thread_id),
+		check("guest_thread_outbox_status_check", sql`status IN ('pending', 'publishing', 'published', 'failed', 'dead')`),
+]);
+
 
 export const notification_events = sqliteTable("notification_events", {
 	id: text().primaryKey(),
@@ -576,6 +691,7 @@ export const invitation = sqliteTable("invitation", {
 	status: text().default("pending").notNull(),
 	expiresAt: integer({ mode: "timestamp" }).notNull(),
 	inviterId: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
+	teamId: text().references((): AnySQLiteColumn => team.id, { onDelete: "set null" } ),
 	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 }, (table) => [
 	index("invitation_organizationId_idx").on(table.organizationId),
@@ -671,36 +787,10 @@ export const media_assets = sqliteTable("media_assets", {
 	// immutable migrations/0001_initial.sql (pre-dates schema.ts as source of truth) and were
 	// never mirrored back here. organization_id adds no separate selectivity once site_id is
 	// fixed (a site belongs to exactly one org), so no additional index is needed.
-}, () => [
+}, (table) => [
 	check("media_assets_category_check", sql`category IS NULL OR category IN ('exterior', 'interior', 'food', 'menu', 'team', 'other', 'logo', 'blog')`),
+	uniqueIndex("media_assets_org_site_id_unique").on(table.organization_id, table.site_id, table.id),
 ]);
-
-export const media_assets_old = sqliteTable("media_assets_old", {
-	id: text().primaryKey(),
-	organization_id: text().notNull(),
-	site_id: text().notNull(),
-	location_id: text(),
-	kind: text().notNull(),
-	provider: text().notNull(),
-	source: text().notNull(),
-	cloudflare_image_id: text(),
-	r2_key: text(),
-	google_media_name: text(),
-	public_url: text(),
-	thumbnail_url: text(),
-	mime_type: text(),
-	file_name: text(),
-	file_size: integer(),
-	width: integer(),
-	height: integer(),
-	duration: integer(),
-	alt_text: text(),
-	category: text(),
-	status: text().default("active").notNull(),
-	created_by_user_id: text(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-});
 
 export const member = sqliteTable("member", {
 	id: text().primaryKey(),
@@ -719,19 +809,25 @@ export const member = sqliteTable("member", {
 	index("member_organizationId_idx").on(table.organizationId),
 ]);
 
-export const member_access_scope = sqliteTable("member_access_scope", {
+export const team = sqliteTable("team", {
 	id: text().primaryKey(),
-	member_id: text().notNull().references(() => member.id, { onDelete: "cascade" }),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" }),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" }),
-	location_id: text().references(() => business_locations.id, { onDelete: "cascade" }),
-	grant_source: text().default("manual").notNull(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	name: text().notNull(),
+	organizationId: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
+	updatedAt: integer({ mode: "timestamp" }),
 }, (table) => [
-	uniqueIndex("idx_member_access_scope_unique").on(table.member_id, table.site_id, table.location_id),
-	uniqueIndex("idx_member_access_scope_site_unique").on(table.member_id, table.site_id).where(sql`location_id IS NULL`),
-	index("idx_member_access_scope_member_id").on(table.member_id),
-	index("idx_member_access_scope_resource").on(table.organization_id, table.site_id, table.location_id),
+	index("team_organizationId_idx").on(table.organizationId),
+]);
+
+export const teamMember = sqliteTable("teamMember", {
+	id: text().primaryKey(),
+	teamId: text().notNull().references(() => team.id, { onDelete: "cascade" } ),
+	userId: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
+	membershipKey: text().unique(),
+	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
+}, (table) => [
+	index("teamMember_teamId_idx").on(table.teamId),
+	index("teamMember_userId_idx").on(table.userId),
 ]);
 
 export const menu_item_translations = sqliteTable("menu_item_translations", {
@@ -770,7 +866,7 @@ export const menu_items = sqliteTable("menu_items", {
 	compare_at_price_amount: numeric(),
 	sale_starts_at: text(),
 	sale_ends_at: text(),
-	image_asset_id: text().references(() => media_assets_old.id, { onDelete: "set null" } ),
+	image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 	available: numeric().default(sql`1`).notNull(),
 	featured: numeric().default(sql`false`).notNull(),
 	featured_sort_order: integer().default(0).notNull(),
@@ -1056,7 +1152,7 @@ export const oauthRefreshToken = sqliteTable("oauthRefreshToken", {
 export const organization = sqliteTable("organization", {
 	id: text().primaryKey(),
 	name: text().notNull(),
-	slug: text().unique(),
+	slug: text().notNull().unique(),
 	logo: text(),
 	metadata: text(),
 	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
@@ -1138,7 +1234,7 @@ export const blog_posts = sqliteTable("blog_posts", {
 	status: text().default("draft").notNull(), // draft | published | scheduled | archived
 	visibility: text().default("public").notNull(), // public | unlisted
 	author_id: text().references(() => user.id, { onDelete: "set null" } ),
-	featured_image_asset_id: text().references(() => media_assets_old.id, { onDelete: "set null" } ),
+	featured_image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 	social_image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 	published_at: text(),
 	first_published_at: text(),
@@ -1215,7 +1311,7 @@ export const platform_docs = sqliteTable("platform_docs", {
 	author_id: text().references(() => user.id, { onDelete: "set null" } ),
 	seo_description: text(),
 	seo_keywords: text(),
-	featured_image_asset_id: text().references(() => media_assets_old.id, { onDelete: "set null" } ),
+	featured_image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 	sort_order: integer().default(0),
 	parent_doc_id: text(),
 	difficulty_level: text(),
@@ -1274,7 +1370,7 @@ export const posts = sqliteTable("posts", {
 	post_type: text().default("standard").notNull(),
 	title: text(),
 	body: text().notNull(),
-	image_asset_id: text().references(() => media_assets_old.id, { onDelete: "set null" } ),
+	image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 	seo_title: text(),
 	seo_description: text(),
 	og_image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
@@ -1592,8 +1688,7 @@ export const site_content = sqliteTable("site_content", {
 	content: text(),
 	hero_title: text(),
 	hero_subtitle: text(),
-	hero_image_asset_id: text().references(() => media_assets_old.id, { onDelete: "set null" } ),
-	hero_video_asset_id: text().references(() => media_assets_old.id, { onDelete: "set null" } ),
+	hero_media_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 	value: text(),
 	type: text().default("text").notNull(),
 	source: text().default("manual").notNull(),
@@ -1695,6 +1790,45 @@ export const tenant_pages = sqliteTable("tenant_pages", {
 	index("tenant_pages_site_status_sort_idx").on(table.site_id, table.status, table.sort_order),
 	check("tenant_pages_path_check", sql`path LIKE '/%'`),
 	check("tenant_pages_status_check", sql`status IN ('draft', 'published', 'archived')`),
+]);
+
+export const site_link_pages = sqliteTable("site_link_pages", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ).unique(),
+	path: text().default("/links").notNull(),
+	title: text().notNull(),
+	status: text().default("draft").notNull(),
+	robots: text().default("noindex,follow").notNull(),
+	seo_title: text(),
+	seo_description: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_by: text(),
+}, (table) => [
+	unique("site_link_pages_organization_id_site_id_path_unique").on(table.organization_id, table.site_id, table.path),
+	index("site_link_pages_site_status_idx").on(table.site_id, table.status),
+	check("site_link_pages_path_check", sql`path LIKE '/%' AND path NOT LIKE '//%'`),
+	check("site_link_pages_status_check", sql`status IN ('draft', 'published', 'archived')`),
+	check("site_link_pages_robots_check", sql`robots IN ('index,follow', 'noindex,follow', 'index,nofollow', 'noindex,nofollow')`),
+]);
+
+export const site_link_items = sqliteTable("site_link_items", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	link_page_id: text().notNull().references(() => site_link_pages.id, { onDelete: "cascade" } ),
+	label: text().notNull(),
+	destination: text().notNull(),
+	sort_order: integer().default(0).notNull(),
+	status: text().default("active").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_by: text(),
+}, (table) => [
+	index("site_link_items_page_status_sort_idx").on(table.link_page_id, table.status, table.sort_order),
+	index("site_link_items_site_idx").on(table.site_id),
+	check("site_link_items_status_check", sql`status IN ('active', 'hidden')`),
 ]);
 
 export const tenant_compliance = sqliteTable("tenant_compliance", {
@@ -1882,6 +2016,7 @@ export const site_domains = sqliteTable("site_domains", {
 	ssl_validation_name_2: text(),
 	ssl_validation_type_2: text(),
 	ssl_validation_value_2: text(),
+	validation_strategy: text().default("http_auto").notNull(),
 	dcv_delegation_name: text(),
 	dcv_delegation_type: text(),
 	dcv_delegation_value: text(),
@@ -1893,6 +2028,10 @@ export const site_domains = sqliteTable("site_domains", {
 	next_check_at: text(),
 	retry_count: integer().default(0).notNull(),
 	activated_at: text(),
+	certificate_last_active_at: text(),
+	renewal_issue_started_at: text(),
+	renewal_notification_sent_at: text(),
+	certificate_expires_at: text(),
 	error_message: text(),
 	metadata: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
@@ -2106,6 +2245,7 @@ export const sites = sqliteTable("sites", {
 	seo_description: text(),
 	canonical_url: text(),
 	robots: text(),
+	team_id: text().references((): AnySQLiteColumn => team.id, { onDelete: "set null" } ),
 	// JSON { enabled?: ProductFeature[]; disabled?: ProductFeature[] } delta (config/cms-registry.ts)
 	// layered additively/subtractively on top of the vertical's own module defaults — NULL means
 	// "use vertical defaults as-is." Only real business modules (menu/ordering/reservations/
@@ -2270,9 +2410,6 @@ export const experiences = sqliteTable("experiences", {
 	slug: text().notNull(),
 	tagline: text(),
 	body: text(),
-	image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
-	video_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
-	images: text(),
 	price: text(),
 	price_amount: numeric(),
 	compare_at_price_amount: numeric(),
@@ -2304,6 +2441,34 @@ export const experiences = sqliteTable("experiences", {
 }, (table) => [
 	check("experiences_source_check", sql`source IN ('manual', 'template')`),
 	index("experiences_org_site_idx").on(table.organization_id, table.site_id),
+	uniqueIndex("experiences_org_site_id_unique").on(table.organization_id, table.site_id, table.id),
+]);
+
+export const experience_media = sqliteTable("experience_media", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	experience_id: text().notNull(),
+	asset_id: text().notNull(),
+	sort_order: integer().notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	foreignKey({
+		columns: [table.organization_id, table.site_id, table.experience_id],
+		foreignColumns: [experiences.organization_id, experiences.site_id, experiences.id],
+		name: "experience_media_experience_scope_fk",
+	}).onDelete("cascade"),
+	foreignKey({
+		columns: [table.organization_id, table.site_id, table.asset_id],
+		foreignColumns: [media_assets.organization_id, media_assets.site_id, media_assets.id],
+		name: "experience_media_asset_scope_fk",
+	}).onDelete("cascade"),
+	unique("experience_media_experience_asset_unique").on(table.experience_id, table.asset_id),
+	unique("experience_media_experience_sort_unique").on(table.experience_id, table.sort_order),
+	index("experience_media_experience_order_idx").on(table.experience_id, table.sort_order),
+	index("experience_media_asset_scope_idx").on(table.organization_id, table.site_id, table.asset_id),
+	index("experience_media_site_experience_idx").on(table.site_id, table.experience_id),
 ]);
 
 export const mcp_workspace_preferences = sqliteTable("mcp_workspace_preferences", {

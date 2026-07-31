@@ -6,6 +6,7 @@ import { parsePhone } from "~/utils/phone";
 import type { CmsCapabilityOverrideDelta, ProductFeature } from "~/config/cms-registry";
 import { resolveSiteCmsCapabilities } from "~/server/utils/cms-capabilities";
 import { checkModuleHasLiveData } from "~/server/utils/module-content-guard";
+import { ensureLocationTeam } from "~/server/utils/member-access";
 
 // Require format-valid E.164 at the shared location write boundary (issue
 // #293 Section D/I) — this is the one place createLocation/updateLocation
@@ -155,8 +156,7 @@ export interface CreateLocationInput {
   grab_url?: string | null;
   uber_eats_url?: string | null;
   foodpanda_url?: string | null;
-  hero_image_asset_id?: string | null;
-  hero_video_asset_id?: string | null;
+  hero_media_asset_id?: string | null;
   notification_phone?: string | null;
   timezone?: string | null;
   max_capacity?: number | null;
@@ -197,8 +197,7 @@ export interface LocationRecord {
   address?: string | null;
   opening_hours?: string | null;
   special_hours?: string | null;
-  hero_image_asset_id?: string | null;
-  hero_video_asset_id?: string | null;
+  hero_media_asset_id?: string | null;
   price_level?: string | null;
   facebook_url?: string | null;
   instagram_url?: string | null;
@@ -289,7 +288,7 @@ function serializeAddress(value: unknown) {
   return addressLines.length ? JSON.stringify({ addressLines }) : null;
 }
 
-function serializeOpeningHours(value: unknown) {
+export function serializeOpeningHours(value: unknown): string | null {
   if (value === undefined || value === null) return null;
   if (typeof value !== "string") {
     // Google Places returns a bare weekdayDescriptions string[] — normalize to the
@@ -309,7 +308,27 @@ function serializeOpeningHours(value: unknown) {
         "opening_hours must be a string, a string[], or an object like { weekdayDescriptions: string[] }.",
       );
     }
-    return JSON.stringify(value);
+    const weekdayDescriptions = (value as { weekdayDescriptions?: unknown }).weekdayDescriptions;
+    if (!Array.isArray(weekdayDescriptions) || !weekdayDescriptions.every((item) => typeof item === "string")) {
+      throw new Error("opening_hours.weekdayDescriptions must be an array of strings.");
+    }
+    if (weekdayDescriptions.length === 1) {
+      const [onlyDescription] = weekdayDescriptions;
+      const normalized: string | null = serializeOpeningHours(onlyDescription);
+      if (normalized) return normalized;
+    }
+    return weekdayDescriptions.length ? JSON.stringify({ weekdayDescriptions }) : null;
+  }
+  const trimmed = value.trim();
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      // Not valid JSON — fall through and treat as one line per day.
+      parsed = undefined;
+    }
+    if (parsed !== undefined) return serializeOpeningHours(parsed);
   }
   const weekdayDescriptions = value
     .split(/\r?\n/)
@@ -378,23 +397,27 @@ export async function validateMediaAsset(
   organizationId: string,
   siteId: string,
   assetId: string | null | undefined,
-  kind: "image" | "video",
+  kind: "image" | "video" | undefined,
   fieldName: string,
 ) {
   if (!assetId) return;
+  const kindClause = kind ? "AND kind = ?" : "AND kind IN ('image', 'video')";
+  const params = kind
+    ? [assetId, organizationId, siteId, kind]
+    : [assetId, organizationId, siteId];
   const asset = await queryFirst(
     db,
     `
     SELECT id
     FROM media_assets
-    WHERE id = ? AND organization_id = ? AND site_id = ? AND status = 'active' AND kind = ?
+    WHERE id = ? AND organization_id = ? AND site_id = ? AND status = 'active' ${kindClause}
     LIMIT 1
   `,
-    [assetId, organizationId, siteId, kind],
+    params,
   );
 
   if (!asset) {
-    throw new Error(`${fieldName} not found, unauthorized, or not a ${kind}`);
+    throw new Error(`${fieldName} not found, unauthorized, or not valid media`);
   }
 }
 
@@ -522,7 +545,7 @@ async function loadLocation(
 ) {
   const columns = `id, slug, title, city, neighborhood, phone, email, website_url, maps_url, google_review_url, google_place_id,
            rating, review_count, description, short_description, status, is_primary,
-           address, opening_hours, special_hours, hero_image_asset_id, hero_video_asset_id, price_level,
+           address, opening_hours, special_hours, hero_media_asset_id, price_level,
            facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
            notification_phone, timezone, max_capacity, seo_title, seo_description, canonical_url, robots, og_image_asset_id,
            feature_overrides, created_at, updated_at`;
@@ -623,17 +646,9 @@ export async function createLocation(
       db,
       organizationId,
       siteId,
-      input.hero_image_asset_id,
-      "image",
-      "hero_image_asset_id",
-    );
-    await validateMediaAsset(
-      db,
-      organizationId,
-      siteId,
-      input.hero_video_asset_id,
-      "video",
-      "hero_video_asset_id",
+      input.hero_media_asset_id,
+      undefined,
+      "hero_media_asset_id",
     );
     await validateMediaAsset(
       db,
@@ -675,6 +690,18 @@ export async function createLocation(
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
 
+  // Captured up front so a team-provisioning failure after the location is
+  // already committed (see the ensureLocationTeam catch below) can restore
+  // the prior primary pointer instead of leaving sites.primary_location_id
+  // dangling at a location we're about to delete.
+  const previousPrimaryLocationId = isPrimary
+    ? (await queryFirst<{ primary_location_id: string | null }>(
+        db,
+        `SELECT primary_location_id FROM sites WHERE id = ? AND organization_id = ? LIMIT 1`,
+        [siteId, organizationId],
+      ))?.primary_location_id ?? null
+    : null;
+
   for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
     const slug = attempt === 0 ? baseSlug : `${baseSlug}-${attempt + 1}`;
 
@@ -697,10 +724,10 @@ export async function createLocation(
             id, organization_id, site_id, title, slug, city, neighborhood, phone, email, website_url, maps_url,
             google_review_url, google_place_id, description, short_description, address, opening_hours, special_hours, rating, review_count,
             price_level, facebook_url, instagram_url, tiktok_url, grab_url, uber_eats_url, foodpanda_url,
-            hero_image_asset_id, hero_video_asset_id, notification_phone, timezone, max_capacity, is_primary, status,
+            hero_media_asset_id, notification_phone, timezone, max_capacity, is_primary, status,
             seo_title, seo_description, canonical_url, robots, og_image_asset_id, feature_overrides, created_at, updated_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         params: [
           id,
@@ -730,8 +757,7 @@ export async function createLocation(
           normalizeOrderingUrl(input.grab_url, "grab_url"),
           normalizeOrderingUrl(input.uber_eats_url, "uber_eats_url"),
           normalizeOrderingUrl(input.foodpanda_url, "foodpanda_url"),
-          input.hero_image_asset_id ?? null,
-          input.hero_video_asset_id ?? null,
+          input.hero_media_asset_id ?? null,
           normalizedNotificationPhone,
           normalizedTimezone ?? null,
           input.max_capacity ?? null,
@@ -759,6 +785,38 @@ export async function createLocation(
       }
 
       await executeBatch(db, statements);
+      try {
+        await ensureLocationTeam(db, { organizationId, siteId, locationId: id, name: title });
+      } catch (teamError) {
+        // D1 has no cross-statement transactions (see CLAUDE.md), so the
+        // location row above is already committed. Team provisioning is not
+        // optional — a location with no team can never be granted editor
+        // access — so compensate by removing the orphaned row (and
+        // restoring the primary pointer this attempt just moved) rather
+        // than leaving a stray row that would keep colliding with this
+        // slug on every retry.
+        const compensating: { query: string; params: unknown[] }[] = [];
+        if (isPrimary) {
+          compensating.push({
+            query: `UPDATE sites SET primary_location_id = ?, updated_at = ? WHERE id = ? AND organization_id = ?`,
+            params: [previousPrimaryLocationId, new Date().toISOString(), siteId, organizationId],
+          });
+          if (previousPrimaryLocationId) {
+            compensating.push({
+              query: `UPDATE business_locations SET is_primary = 1, updated_at = ? WHERE id = ? AND organization_id = ? AND site_id = ?`,
+              params: [new Date().toISOString(), previousPrimaryLocationId, organizationId, siteId],
+            });
+          }
+        }
+        compensating.push({
+          query: `DELETE FROM business_locations WHERE id = ? AND organization_id = ? AND site_id = ?`,
+          params: [id, organizationId, siteId],
+        });
+        await executeBatch(db, compensating).catch((cleanupError) => {
+          console.error("Failed to roll back orphaned location after team provisioning failure:", cleanupError);
+        });
+        throw teamError;
+      }
       const location = await loadLocation(db, organizationId, siteId, id);
       await fireSiteEventSafe({
         db,
@@ -878,17 +936,9 @@ export async function updateLocation(
       db,
       organizationId,
       siteId,
-      input.hero_image_asset_id,
-      "image",
-      "hero_image_asset_id",
-    );
-    await validateMediaAsset(
-      db,
-      organizationId,
-      siteId,
-      input.hero_video_asset_id,
-      "video",
-      "hero_video_asset_id",
+      input.hero_media_asset_id,
+      undefined,
+      "hero_media_asset_id",
     );
     await validateMediaAsset(
       db,
@@ -952,8 +1002,7 @@ export async function updateLocation(
     "maps_url",
     "google_review_url",
     "google_place_id",
-    "hero_image_asset_id",
-    "hero_video_asset_id",
+    "hero_media_asset_id",
     "notification_phone",
     "timezone",
     "max_capacity",

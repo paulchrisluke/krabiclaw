@@ -353,7 +353,7 @@ section('Image 404 detection (contract check)')
 if (bootstrapData) {
   const imageUrls = []
   for (const loc of (bootstrapData.locations ?? [])) {
-    if (loc.hero_image_public_url) imageUrls.push(loc.hero_image_public_url)
+    if (loc.public_url && loc.kind !== 'video') imageUrls.push(loc.public_url)
     if (loc.public_url) imageUrls.push(loc.public_url)
   }
   const uniqueImageUrls = [...new Set(imageUrls)]

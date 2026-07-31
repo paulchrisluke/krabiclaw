@@ -21,14 +21,14 @@ export async function resolveSiteLocationSlugs(
   opts: { organizationId: string; siteId: string; locationId?: string | null },
 ): Promise<SiteLocationSlugs | null> {
   try {
-    const site = await queryFirst<{ org_slug: string | null; site_slug: string | null }>(db, `
+    const site = await queryFirst<{ org_slug: string; site_slug: string | null }>(db, `
       SELECT o.slug AS org_slug, s.subdomain AS site_slug
       FROM organization o
       JOIN sites s ON s.organization_id = o.id
       WHERE o.id = ? AND s.id = ?
       LIMIT 1
     `, [opts.organizationId, opts.siteId])
-    if (!site?.org_slug || !site.site_slug) return null
+    if (!site?.site_slug) return null
 
     let locationSlug: string | null = null
     if (opts.locationId) {
@@ -50,10 +50,9 @@ export function composeOwnerThreadInboxUrl(
   slugs: SiteLocationSlugs,
   threadId: string,
 ): string {
-  const query = new URLSearchParams({ thread: threadId })
   const base = `https://${getPlatformDomain(env)}/dashboard/${slugs.orgSlug}/sites/${slugs.siteSlug}`
   const inboxPath = slugs.locationSlug ? `/locations/${slugs.locationSlug}/inbox` : '/inbox'
-  return `${base}${inboxPath}?${query.toString()}`
+  return `${base}${inboxPath}/${encodeURIComponent(threadId)}`
 }
 
 export async function buildOwnerThreadInboxUrl(

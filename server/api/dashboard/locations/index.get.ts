@@ -19,10 +19,11 @@ export default defineEventHandler(async (event) => {
     FROM business_locations
     WHERE organization_id = ? AND site_id = ?
       ${scoped ? `AND EXISTS (
-        SELECT 1 FROM member_access_scope mas
-        WHERE mas.member_id = ? AND mas.organization_id = business_locations.organization_id
-          AND mas.site_id = business_locations.site_id
-          AND (mas.location_id IS NULL OR mas.location_id = business_locations.id)
+        SELECT 1
+        FROM member m
+        JOIN sites s ON s.id = business_locations.site_id
+        JOIN teamMember tm ON tm.userId = m.userId AND tm.teamId IN (s.team_id, business_locations.team_id)
+        WHERE m.id = ? AND m.organizationId = business_locations.organization_id
       )` : ''}
     ORDER BY is_primary DESC, title ASC
   `, scoped ? [organization.id, site.id, organization.memberId] : [organization.id, site.id])

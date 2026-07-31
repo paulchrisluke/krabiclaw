@@ -103,6 +103,14 @@ test.describe('dashboard functional smoke', () => {
     await page.setViewportSize({ width: 1280, height: 800 })
     await page.goto(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house`, { waitUntil: 'load' })
     await expect(page.locator('[data-sidebar-control-ready="true"]')).toBeVisible()
+    await expect(page.getByRole('button', { name: /Search dashboard, docs, help/i })).toBeVisible()
+    await page.getByRole('button', { name: /Search dashboard, docs, help/i }).click()
+    await expect(page.getByRole('dialog')).toBeVisible()
+    await page.keyboard.press('Escape')
+    await page.getByTestId('dashboard-account-menu-button').click()
+    await expect(page.getByText('Account settings', { exact: true })).toBeVisible()
+    await expect(page.getByText('Platform Status', { exact: true })).toBeVisible()
+    await page.keyboard.press('Escape')
     await page.getByRole('button', { name: 'Collapse sidebar' }).click()
     await expect(page.getByRole('button', { name: 'Expand sidebar' })).toBeVisible()
 
@@ -156,9 +164,12 @@ test.describe('dashboard functional smoke', () => {
     // toBeLessThan(400) alone would also pass on a 3xx redirect to some unrelated page (e.g. a
     // stale auth bounce to /login) — assert the exact success status AND that the final URL (after
     // following any redirect) is still the requested path, so a redirect can't silently satisfy this.
+    // This test intentionally asserts manager behavior rather than mutable client-authored records.
     const experiences = await page.goto(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi/experiences`, { waitUntil: 'load' })
     expect(experiences?.status(), 'location.experiences should resolve for an experience-vertical site').toBe(200)
     expect(new URL(page.url()).pathname).toBe('/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi/experiences')
+    await expect(page.getByText('Experiences', { exact: true }).first()).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Add experience' }).first()).toBeVisible()
 
     const services = await page.request.get(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/professional-services`)
     expect(services.status(), 'site.services has no catalog entry for saya and must 404, never redirect or render').toBe(404)
@@ -180,5 +191,37 @@ test.describe('dashboard functional smoke', () => {
 
     const locationPhotos = await page.request.get(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi/photos`)
     expect(locationPhotos.status(), 'location photos remain the location-specific gallery manager').toBe(200)
+  })
+
+  test('location experiences page distinguishes populated, empty, and failed list states', async ({ page, baseURL }) => {
+    test.setTimeout(60_000)
+    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
+    await page.goto(devLoginUrl(baseURL!, 'user-pottery-house'), { waitUntil: 'load' })
+
+    await page.route('**/api/editor/sites/site-pottery-house/experiences?**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ experiences: [] }),
+      })
+    })
+    const empty = await page.goto(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi/experiences`, { waitUntil: 'load' })
+    expect(empty?.status()).toBe(200)
+    await expect(page.getByText('Experiences', { exact: true }).first()).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Add experience' }).first()).toBeVisible()
+    await expect(page.getByText('No experiences yet')).toBeVisible()
+
+    await page.unroute('**/api/editor/sites/site-pottery-house/experiences?**')
+    await page.route('**/api/editor/sites/site-pottery-house/experiences?**', async (route) => {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'Test failure' }),
+      })
+    })
+    await page.reload({ waitUntil: 'load' })
+    await expect(page.getByText('Experiences', { exact: true }).first()).toBeVisible()
+    await expect(page.getByText('Could not load experiences')).toBeVisible()
+    await expect(page.getByText('No experiences yet')).toBeHidden()
   })
 })

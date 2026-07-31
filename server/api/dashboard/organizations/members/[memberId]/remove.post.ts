@@ -1,8 +1,8 @@
 // POST /api/dashboard/organizations/members/[memberId]/remove
 // Member-led revocation (issue #293 Section H). Better Auth's org-plugin
 // `member.delete.after` hook is `after`-only and cannot block/veto — the only
-// enforcement point for "identify assignments before removing a
-// location_manager, require a deliberate clear/reassign action" is this
+// enforcement point for "identify assignments before removing a scoped editor,
+// require a deliberate clear/reassign action" is this
 // server route, which is now the only path `members.vue` calls (it no longer
 // calls `authClient.organization.removeMember` directly).
 //
@@ -94,7 +94,7 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: message }, { status: response.status || 500 })
   }
 
-  // member row (and its now-empty member_access_scope rows, if any survived)
-  // is gone at this point — never the underlying Better Auth `user` row.
+  // The member row is gone at this point — never the underlying Better Auth
+  // `user` row.
   return jsonResponse({ success: true, clearedAssignments })
 })

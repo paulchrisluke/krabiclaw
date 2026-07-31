@@ -6,10 +6,7 @@
           <UIcon name="i-lucide-paintbrush" class="size-4" />
         </div>
         <div class="min-w-0">
-          <p class="text-[13px] font-semibold text-highlighted">Make it yours</p>
-          <p class="mt-0.5 text-[12px] leading-relaxed text-muted">
-            A logo, a real photo, and a brand color make this look like your business — not a template everyone else has too.
-          </p>
+          <p class="text-[13px] font-semibold text-highlighted">Brand identity</p>
         </div>
       </div>
     </template>
@@ -81,7 +78,7 @@
             :loading="heroUploading"
             @click="heroInput?.click()"
           >
-            {{ heroPreviewUrl ? 'Replace photo' : 'Upload a real photo' }}
+            {{ heroPreviewUrl ? 'Replace photo' : 'Upload hero photo' }}
           </UButton>
           <input
             ref="heroInput"
@@ -91,9 +88,6 @@
             @change="onHeroSelected"
           >
         </div>
-        <p class="mt-1.5 text-[11px] text-muted">
-          Until you add one, the homepage shows your brand color instead of a stock photo that isn't actually yours.
-        </p>
       </div>
 
       <div v-if="errorMessage" class="text-[12px] text-error-600 dark:text-error-400">
@@ -228,7 +222,7 @@ async function save() {
     if (heroAssetId.value) {
       await $fetch<unknown>(`${siteApiBase.value}/content/save`, {
         method: 'POST',
-        body: { page: 'home', changes: { 'hero.image': heroAssetId.value } },
+        body: { page: 'home', changes: { 'hero.media': heroAssetId.value } },
       })
     }
     

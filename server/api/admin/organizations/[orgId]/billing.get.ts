@@ -1,7 +1,6 @@
 // GET /api/admin/organizations/[orgId]/billing — admin billing status for a single org
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
-import { isPlatformAdmin } from '~/server/utils/platform-auth'
+import { platformPermissionJsonResponse } from '~/server/utils/platform-admin-users'
 import { queryAll, queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
@@ -12,9 +11,8 @@ export default defineEventHandler(async (event) => {
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
-  const session = await getAuthSession(event, env)
-  if (!session?.user?.email) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-  if (!isPlatformAdmin(session.user, env)) return jsonResponse({ error: 'Platform admin access required' }, { status: 403 })
+  const permissionDenied = await platformPermissionJsonResponse(event, env, { platform: ['billing'] })
+  if (permissionDenied) return permissionDenied
 
   const sitesBilling = await queryAll<{
     site_id: string

@@ -51,7 +51,11 @@ test('Blawby theme is a dedicated semantic Nuxt UI token scope', () => {
   assert.match(layout, /'--blawby-token-primary'/)
 
   assert.match(blawbyCss, /\.blawby-theme\s*{/)
-  assert.match(blawbyCss, /\.dark \.blawby-theme\s*{/)
+  // Blawby intentionally has no dark-mode variant — a professional-service
+  // tenant site should render identically regardless of the visitor's system
+  // color-scheme preference, not flip to a different, less-tested palette.
+  assert.doesNotMatch(blawbyCss, /\.dark \.blawby-theme/)
+  assert.match(blawbyCss, /color-scheme:\s*light/)
   assert.match(blawbyCss, /--ui-primary:\s*var\(--blawby-primary\)/)
   assert.match(blawbyCss, /--ui-bg:\s*var\(--blawby-bg\)/)
   assert.match(blawbyCss, /--ui-text:\s*var\(--blawby-ink\)/)

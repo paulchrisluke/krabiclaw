@@ -7,17 +7,24 @@ import {
   MCP_PROTOCOL_VERSION,
   mcpProtocolError,
   negotiatedMcpProtocolVersion,
+  readMcpRequest,
   SUPPORTED_PROTOCOL_VERSIONS,
 } from '../../server/utils/mcp-protocol.ts'
 
 test('MCP protocol versions advertise only supported spec revisions', () => {
-  assert.equal(MCP_PROTOCOL_VERSION, '2025-06-18')
-  assert.deepEqual(SUPPORTED_PROTOCOL_VERSIONS, ['2025-06-18', '2025-03-26', '2024-11-05'])
+  assert.equal(MCP_PROTOCOL_VERSION, '2025-11-25')
+  assert.deepEqual(SUPPORTED_PROTOCOL_VERSIONS, ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'])
   assert.equal(Array.from(SUPPORTED_PROTOCOL_VERSIONS).includes('2026-07-28'), false)
-  assert.equal(Array.from(SUPPORTED_PROTOCOL_VERSIONS).includes('2025-11-25'), false)
+  assert.equal(Array.from(SUPPORTED_PROTOCOL_VERSIONS).includes('2025-11-25'), true)
 })
 
 test('negotiatedMcpProtocolVersion returns the client version when supported', () => {
+  assert.equal(
+    negotiatedMcpProtocolVersion({
+      _meta: { 'io.modelcontextprotocol/version': '2025-11-25' },
+    }),
+    '2025-11-25',
+  )
   assert.equal(
     negotiatedMcpProtocolVersion({
       _meta: { 'io.modelcontextprotocol/version': '2025-03-26' },
@@ -28,6 +35,68 @@ test('negotiatedMcpProtocolVersion returns the client version when supported', (
 
 test('negotiatedMcpProtocolVersion falls back to the current server revision', () => {
   assert.equal(negotiatedMcpProtocolVersion({ _meta: {} }), MCP_PROTOCOL_VERSION)
+})
+
+test('readMcpRequest defaults missing protocol version to the current server revision', () => {
+  const event = {
+    node: {
+      req: {
+        headers: {},
+      },
+    },
+  } as unknown as Parameters<typeof readMcpRequest>[0]
+  const request = readMcpRequest(event, {
+    jsonrpc: '2.0',
+    id: 'missing-version-call',
+    method: 'tools/call',
+    params: {
+      name: 'list_sites',
+      arguments: {},
+    },
+    _meta: {},
+  })
+
+  assert.equal(request.method, 'tools/call')
+  assert.equal(request._meta?.['io.modelcontextprotocol/version'], MCP_PROTOCOL_VERSION)
+})
+
+test('readMcpRequest defaults notification requests without protocol metadata to the current server revision', () => {
+  const event = {
+    node: {
+      req: {
+        headers: {},
+      },
+    },
+  } as unknown as Parameters<typeof readMcpRequest>[0]
+  const request = readMcpRequest(event, {
+    jsonrpc: '2.0',
+    method: 'notifications/initialized',
+    params: {},
+  })
+
+  assert.equal(request.method, 'notifications/initialized')
+  assert.equal(request._meta?.['io.modelcontextprotocol/version'], MCP_PROTOCOL_VERSION)
+})
+
+test('readMcpRequest rejects an explicitly unsupported protocol version', () => {
+  const event = {
+    node: {
+      req: {
+        headers: {
+          'mcp-protocol-version': '2026-07-28',
+        },
+      },
+    },
+  } as unknown as Parameters<typeof readMcpRequest>[0]
+
+  assert.throws(
+    () => readMcpRequest(event, {
+      jsonrpc: '2.0',
+      method: 'notifications/initialized',
+      params: {},
+    }),
+    /Unsupported MCP protocol version: 2026-07-28/,
+  )
 })
 
 test('asMcpError maps a plain mcpProtocolError through unchanged', () => {

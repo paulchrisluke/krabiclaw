@@ -105,11 +105,11 @@ export const useSiteLocations = async () => {
     })
   }
 
-  const { data } = await useFetch<PublicLocationsResponse>(`/api/public/sites/${siteId}/locations`, {
+  const { data } = await useFetch(`/api/public/sites/${siteId}/locations`, {
     key: `site-locations-${siteId}`,
   })
 
-  return data
+  return data as unknown as Ref<PublicLocationsResponse | null>
 }
 
 export const useSiteMenus = async (locationId?: string) => {
@@ -123,10 +123,10 @@ export const useSiteMenus = async (locationId?: string) => {
     })
   }
 
-  const { data } = await useFetch<PublicMenuResponse>(`/api/public/sites/${siteId}/menus`, {
+  const { data } = await useFetch(`/api/public/sites/${siteId}/menus`, {
     query: { locationId },
     key: `site-menus-${siteId}-${locationId || 'site-wide'}`,
   })
 
-  return data
+  return data as unknown as Ref<PublicMenuResponse | null>
 }

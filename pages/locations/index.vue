@@ -117,7 +117,7 @@ const { isAuthenticated } = useAuth()
 const { locale } = useI18n()
 const locationsCopy = computed(() => getVerticalCopy(unref(site)?.vertical, locale.value))
 
-const { locations, pending, config } = useBootstrap()
+const { locations, pending, config } = await useBootstrap()
 
 function formatAddress(address: AddressInput) {
   if (!address) return ''

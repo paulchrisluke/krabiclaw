@@ -56,10 +56,17 @@ test('removed add-location and location-preference routes stay deleted', () => {
 })
 
 test('admin impersonation uses Better Auth APIs without custom proxy routes', () => {
+  const clientsPage = source('pages/admin/clients.vue')
+  const usersPage = source('pages/admin/users.vue')
+  const clientsRoute = source('server/api/admin/clients.get.ts')
+
   assert.equal(existsSync(resolve(root, 'server/api/admin/impersonation/start.post.ts')), false)
   assert.equal(existsSync(resolve(root, 'server/api/admin/impersonation/stop.post.ts')), false)
-  assert.match(source('pages/admin/users.vue'), /authClient\.admin\.impersonateUser/)
+  assert.match(usersPage, /authClient\.admin\.impersonateUser/)
+  assert.match(clientsPage, /authClient\.admin\.impersonateUser/)
   assert.match(source('layouts/dashboard.vue'), /authClient\.admin\.stopImpersonating/)
+  assert.match(clientsRoute, /impersonation_user_id/)
+  assert.doesNotMatch(clientsPage, /:to="`\/dashboard\/\$\{client\.org_slug\}/)
 
   const files = [
     ...collectSourceFiles(resolve(root, 'layouts')),
@@ -124,6 +131,24 @@ test('dashboard layout derives capability-dependent navigation from managerNavIt
   assert.match(layout, /managerNavItems\('Publishing'\)/)
   assert.match(layout, /resolveCmsCapabilities/)
   assert.doesNotMatch(layout, /label:\s*['"](Menus|Orders|Reservations|Experiences|Professional services)['"]/)
+})
+
+test('responsive dashboard navigation keeps one canonical desktop sidebar with mobile parity affordances', () => {
+  const layout = source('layouts/dashboard.vue')
+  assert.equal((layout.match(/^\s*<UDashboardSidebar\b/gm) ?? []).length, 1)
+  assert.match(layout, /data-testid="dashboard-mobile-nav"/)
+  assert.match(layout, /mobileNavItems/)
+  assert.match(layout, /mobileMoreItems/)
+  assert.match(layout, /firstLocationManagerItem/)
+  assert.match(layout, /navigationItems\.value/)
+})
+
+test('organization switcher routes directly to canonical org slugs', () => {
+  const layout = source('layouts/dashboard.vue')
+  assert.match(layout, /`\/dashboard\/\$\{encodeURIComponent\(org\.slug\)\}`/)
+  assert.doesNotMatch(layout, /switchOrganization/)
+  assert.doesNotMatch(layout, /setActive\?\.\(\{ organizationId/)
+  assert.doesNotMatch(layout, /navigateTo\('\/dashboard'\)/)
 })
 
 test('every dashboard search route resolves to the canonical hierarchy', () => {

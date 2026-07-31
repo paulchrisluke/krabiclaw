@@ -165,19 +165,6 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
       outputSchema: blogPostMutationResultObject,
     }),
   siteTool({
-      name: 'set_blog_post_image',
-      description: 'Assign a saved media asset as a blog post\'s featured image. Call get_site_media_assets first to find an active image asset id.',
-      domain: 'blog',
-      minimumRole: 'editor',
-      confirmRequired: false,
-      inputSchema: {
-        post_id: { type: 'string', description: 'Post id or slug.' },
-        asset_id: { type: 'string', description: 'Active image asset id from get_site_media_assets.' },
-      },
-      required: ['post_id', 'asset_id'],
-      outputSchema: blogPostMutationResultObject,
-    }),
-  siteTool({
       name: 'reorder_blog_posts',
       description: 'Set editorial navigation (section, title, order, visibility) for this site\'s blog posts without changing their taxonomy category or public URL. Blog posts do not support nav_group subgrouping (docs-only feature) — only nav_section.',
       domain: 'blog',

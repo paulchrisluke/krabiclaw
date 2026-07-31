@@ -5,6 +5,7 @@ import { updateSiteSettingsFields } from '~/server/utils/site-settings'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
 import { createError, getHeader, getRouterParam, readBody } from 'h3'
 import { requireSiteAccess } from '~/server/utils/location-access'
+import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 
 function timingSafeEqualText(a: string, b: string): boolean {
   const left = new TextEncoder().encode(a)
@@ -49,7 +50,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     // Demo org is read-only for everyone except platform admins
-    const isPlatformAdmin = (session.user as { role?: string }).role === 'admin'
+    const isPlatformAdmin = await hasPlatformEventPermission(event, env, { platform: ['access'] })
     if (isDemoOrg(site.organization_id) && !isPlatformAdmin) {
       return jsonResponse({ error: 'Demo site is read-only' }, { status: 403 })
     }

@@ -182,25 +182,6 @@ function parseExperienceRow(row: Record<string, unknown>): Experience {
     }
   }
 
-  let images: Array<{ url: string; kind: "image" | "video" }> = [];
-  if (row.images && typeof row.images === "string") {
-    try {
-      const parsed = JSON.parse(row.images);
-      if (Array.isArray(parsed)) {
-        images = parsed.filter(
-          (item: unknown) =>
-            typeof item === "object" &&
-            item !== null &&
-            typeof (item as { url: unknown }).url === "string" &&
-            ((item as { kind: string }).kind === "image" ||
-              (item as { kind: string }).kind === "video"),
-        ) as Array<{ url: string; kind: "image" | "video" }>;
-      }
-    } catch {
-      images = [];
-    }
-  }
-
   return {
     ...(row as unknown as Experience),
     status: row.status as Experience["status"],
@@ -210,7 +191,6 @@ function parseExperienceRow(row: Record<string, unknown>): Experience {
     meeting_point: row.meeting_point ?? null,
     time_slots,
     recurring_slots,
-    images,
     featured: Boolean(row.featured),
   } as Experience;
 }
@@ -410,13 +390,13 @@ export default defineEventHandler(async (event) => {
                  bl.grab_url, bl.uber_eats_url, bl.foodpanda_url,
                  bl.description, bl.short_description, bl.last_synced_at,
                  bl.seo_title, bl.seo_description, bl.canonical_url, bl.robots,
-                 ma_img.public_url AS hero_image_public_url,
-                 ma_vid.public_url AS hero_video_public_url,
-                 ma_vid.thumbnail_url,
+                 ma.public_url AS hero_public_url,
+                 ma.thumbnail_url AS hero_thumbnail_url,
+                 ma.kind AS hero_kind,
                  ma_og.public_url AS og_image_public_url
           FROM business_locations bl
-          LEFT JOIN media_assets ma_img ON bl.hero_image_asset_id = ma_img.id AND ma_img.status = 'active'
-          LEFT JOIN media_assets ma_vid ON bl.hero_video_asset_id = ma_vid.id AND ma_vid.status = 'active'
+          LEFT JOIN media_assets ma ON bl.hero_media_asset_id = ma.id AND ma.status = 'active'
+            AND ma.organization_id = bl.organization_id AND ma.site_id = bl.site_id
           LEFT JOIN media_assets ma_og ON bl.og_image_asset_id = ma_og.id AND ma_og.status = 'active'
             AND ma_og.organization_id = bl.organization_id AND ma_og.site_id = bl.site_id
           WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'
@@ -427,8 +407,8 @@ export default defineEventHandler(async (event) => {
                  bl.grab_url, bl.uber_eats_url, bl.foodpanda_url,
                  bl.description, bl.short_description, bl.last_synced_at,
                  bl.seo_title, bl.seo_description, bl.canonical_url, bl.robots,
-                 NULL AS hero_image_public_url, NULL AS hero_video_public_url,
-                 NULL AS thumbnail_url,
+                 NULL AS hero_public_url, NULL AS hero_thumbnail_url,
+                 NULL AS hero_kind,
                  NULL AS og_image_public_url
           FROM business_locations bl
           WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'
@@ -463,14 +443,13 @@ export default defineEventHandler(async (event) => {
     idxSourceContent = push(
       `SELECT sc.id, sc.organization_id, sc.site_id, sc.location_id, sc.page, sc.field,
               sc.value, sc.type, sc.source, sc.content, sc.hero_title, sc.hero_subtitle,
-              sc.hero_image_asset_id, sc.hero_video_asset_id, sc.component, sc.updated_at,
-              img.public_url AS hero_public_url, img.kind AS hero_kind,
-              vid.public_url AS hero_video_public_url, vid.kind AS hero_video_kind,
-              vid.thumbnail_url,
+              sc.hero_media_asset_id, sc.component, sc.updated_at,
+              hero.public_url AS hero_public_url, hero.kind AS hero_kind,
+              hero.thumbnail_url AS thumbnail_url,
               ma.public_url AS media_public_url, ma.kind AS media_kind
        FROM site_content sc
-       LEFT JOIN media_assets img ON sc.hero_image_asset_id = img.id AND img.status = 'active'
-       LEFT JOIN media_assets vid ON sc.hero_video_asset_id = vid.id AND vid.status = 'active'
+       LEFT JOIN media_assets hero ON sc.hero_media_asset_id = hero.id AND hero.status = 'active'
+         AND hero.organization_id = sc.organization_id AND hero.site_id = sc.site_id
        LEFT JOIN media_assets ma ON sc.type = 'media'
          AND ma.id = COALESCE(
            CASE WHEN sc.content NOT LIKE 'http%' AND length(sc.content) > 0 THEN sc.content END,
@@ -555,25 +534,26 @@ export default defineEventHandler(async (event) => {
   }
 
   // Experiences list + detail (mutually exclusive with the query conditions above)
+  // `page === null` covers the site-shell request (useSiteShell.ts) — it
+  // deliberately omits `page` to keep its cache key stable across
+  // navigation, but still needs the real experiences list for header/subnav
+  // CTAs, so it must qualify here the same as home/location/experiences do.
   const needsExperiencesList =
     (page === "experiences" && !experienceSlug) ||
     page === "home" ||
-    page === "location";
+    page === "location" ||
+    page === null;
 
   if (needsExperiencesList) {
     const expParams: unknown[] = [orgId, siteId];
     let expSql = `SELECT e.id, e.organization_id, e.site_id, e.location_id,
-                         e.title, e.slug, e.tagline, e.body, e.image_asset_id,
-                         e.video_asset_id, e.images,
+                         e.title, e.slug, e.tagline, e.body,
                          e.price, e.price_amount, e.compare_at_price_amount, e.sale_starts_at, e.sale_ends_at, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
                          e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point,
                          e.status, e.sort_order, e.featured, e.featured_sort_order,
                          e.seo_title, e.seo_description, e.canonical_url, e.robots, e.created_at, e.updated_at,
-                         img.public_url AS image_url, vid.public_url AS video_url,
                          og.public_url AS og_image_public_url
                   FROM experiences e
-                  LEFT JOIN media_assets img ON img.id = e.image_asset_id AND img.status = 'active'
-                  LEFT JOIN media_assets vid ON vid.id = e.video_asset_id AND vid.status = 'active'
                   LEFT JOIN media_assets og ON og.id = e.og_image_asset_id AND og.status = 'active'
          AND og.organization_id = e.organization_id AND og.site_id = e.site_id
                   WHERE e.organization_id = ? AND e.site_id = ? AND e.status != 'inactive'`;
@@ -588,17 +568,13 @@ export default defineEventHandler(async (event) => {
   if (page === "experiences" && experienceSlug) {
     idxExperienceDetail = push(
       `SELECT e.id, e.organization_id, e.site_id, e.location_id,
-              e.title, e.slug, e.tagline, e.body, e.image_asset_id,
-              e.video_asset_id, e.images,
+              e.title, e.slug, e.tagline, e.body,
               e.price, e.price_amount, e.compare_at_price_amount, e.sale_starts_at, e.sale_ends_at, e.duration_minutes, e.max_capacity, e.time_slots, e.recurring_slots,
               e.available_note, e.highlights, e.included_items, e.what_to_bring, e.meeting_point,
               e.status, e.sort_order, e.featured, e.featured_sort_order,
               e.seo_title, e.seo_description, e.canonical_url, e.robots, e.created_at, e.updated_at,
-              img.public_url AS image_url, vid.public_url AS video_url,
               og.public_url AS og_image_public_url
        FROM experiences e
-       LEFT JOIN media_assets img ON img.id = e.image_asset_id AND img.status = 'active'
-       LEFT JOIN media_assets vid ON vid.id = e.video_asset_id AND vid.status = 'active'
        LEFT JOIN media_assets og ON og.id = e.og_image_asset_id AND og.status = 'active'
          AND og.organization_id = e.organization_id AND og.site_id = e.site_id
        WHERE e.organization_id = ? AND e.site_id = ? AND e.slug = ?
@@ -777,8 +753,7 @@ export default defineEventHandler(async (event) => {
           page: page!,
           field: t.field,
           source: "manual",
-          hero_image_asset_id: undefined,
-          hero_video_asset_id: undefined,
+          hero_media_asset_id: undefined,
         } as unknown as SiteContent)),
         field: t.field,
         value: (t.value ?? t.content ?? base?.value) as string | undefined,
@@ -929,10 +904,9 @@ export default defineEventHandler(async (event) => {
 
   // Shape locations
   const locations = (locRows.results ?? []).map((loc) => {
-    const heroVideoUrl = loc.hero_video_public_url as string | null;
-    const heroImageUrl = loc.hero_image_public_url as string | null;
-    const thumbnailUrl = loc.thumbnail_url as string | null;
-    const publicUrl = heroVideoUrl || heroImageUrl || null;
+    const publicUrl = loc.hero_public_url as string | null;
+    const thumbnailUrl = loc.hero_thumbnail_url as string | null;
+    const heroKind = loc.hero_kind as string | null;
     const ogImagePublicUrl = loc.og_image_public_url as string | null;
 
     return {
@@ -962,9 +936,8 @@ export default defineEventHandler(async (event) => {
       is_primary: Boolean(loc.is_primary),
       status: loc.status,
       public_url: publicUrl,
-      kind: publicUrl ? (heroVideoUrl ? "video" : "image") : null,
-      hero_image_public_url: heroImageUrl,
-      hero_video_public_url: heroVideoUrl,
+      kind: publicUrl ? heroKind : null,
+      hero_public_url: publicUrl,
       thumbnail_url: thumbnailUrl,
       city: loc.city,
       neighborhood: loc.neighborhood || null,

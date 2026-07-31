@@ -410,7 +410,7 @@ import { resolveSiteExperienceHref } from '~/utils/experience-navigation'
 
 definePageMeta({ layout: false })
 
-const { isPlatform, siteId, site } = useTenantSite()
+const { isPlatform, siteId, draftId, site } = useTenantSite()
 const { isBlawby } = usePublicTemplate()
 const { locale } = useI18n()
 const isBlawbyPage = computed(() => isBlawby.value)
@@ -441,7 +441,7 @@ const features = [
   { icon: 'bar-chart', title: 'Real-time insights', body: 'See visits, top pages, and busy hours — ask ChatGPT or check the analytics tab.' },
 ]
 // Validate tenant context ONLY for tenant sites
-if (!isPlatform && !siteId) {
+if (!isPlatform && !siteId && !draftId) {
   throw createError({
     statusCode: 404,
     statusMessage: 'Site not found'
@@ -461,7 +461,7 @@ const {
   experiencesList,
   contentBlocks,
   blogList,
-} = useBootstrap({ enabled: shouldUseSayaBootstrap })
+} = await useBootstrap({ enabled: shouldUseSayaBootstrap })
 
 const locations = computed(() => bootstrapLocations.value)
 const hasOrderLinks = computed(() =>
@@ -689,7 +689,7 @@ const featuredContent = computed(() => {
       return {
         name: item.title,
         ...resolveOverridePriceDisplay(item, defaultCurrency.value),
-        image: item.image_url || null,
+        image: experienceCoverImage(item),
         imageKind: 'image',
         alt: item.title ? `${item.title} experience` : 'Featured experience image',
         href: item.slug ? `/experiences/${item.slug}` : '/experiences',
@@ -698,5 +698,12 @@ const featuredContent = computed(() => {
     }
   })
 })
+
+function experienceCoverImage(item) {
+  const cover = item.media?.[0]
+  if (cover?.kind === 'image') return cover.public_url || null
+  if (cover?.kind === 'video') return cover.thumbnail_url || null
+  return null
+}
 
 </script>

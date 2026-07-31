@@ -1,6 +1,6 @@
 <template>
   <div class="flex min-h-0 flex-1 flex-col">
-    <div class="min-h-0 flex-1 overflow-y-auto">
+    <div ref="scrollContainer" class="min-h-0 flex-1 overflow-y-auto">
       <UChatMessages :status="messagesStatus" should-auto-scroll class="py-4">
         <div
           v-if="showEmptyState && messages.length === 0"
@@ -37,7 +37,7 @@
               :variant="message.role === 'user' ? 'solid' : 'subtle'"
               :ui="message.role === 'user' ? { content: 'bg-primary text-(--primary-foreground,#fff)' } : {}"
             >
-              <template v-if="message.role === 'assistant'" #leading>
+              <template v-if="showAssistantAvatar && message.role === 'assistant'" #leading>
                 <div class="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                   <UIcon name="i-lucide-sparkles" class="size-3.5" />
                 </div>
@@ -62,7 +62,7 @@
                   <!-- eslint-enable vue/no-v-html -->
                   <slot name="assistant-after" :message="message" :index="index" />
                 </div>
-                <div v-else class="prose prose-sm dark:prose-invert max-w-none">
+                <div v-else class="prose prose-sm dark:prose-invert max-w-none text-(--primary-foreground,#fff)">
                   {{ message.content ?? '' }}
                 </div>
               </template>
@@ -75,14 +75,21 @@
     <div v-if="showPrompt" class="shrink-0 border-t border-default bg-elevated p-3">
       <slot name="prompt-before" />
 
-      <div v-if="quickReplies.length" class="flex gap-2 overflow-x-auto pb-1">
+      <TransitionGroup
+        v-if="quickReplies.length"
+        tag="div"
+        name="conversation-reply"
+        class="flex gap-2 pb-1"
+        :class="quickReplyRows ? 'flex-col' : 'overflow-x-auto'"
+      >
         <button
           v-for="(reply, index) in quickReplies"
           :key="index"
           data-testid="chowbot-quick-reply"
           :data-reply-action="reply.action"
           :class="[
-            'inline-flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 py-2 text-[12.5px] font-semibold transition-colors',
+            'inline-flex shrink-0 cursor-pointer items-center gap-1.5 border px-3.5 py-2 text-[12.5px] font-semibold transition-colors duration-150 ease-out',
+            quickReplyRows ? 'w-full whitespace-normal rounded-lg text-left' : 'whitespace-nowrap rounded-full',
             reply.primary
               ? 'border-primary bg-primary text-on-primary hover:bg-primary/90'
               : reply.ghost
@@ -97,6 +104,20 @@
             <span v-if="reply.sub" class="text-[10.5px] font-medium opacity-70">{{ reply.sub }}</span>
           </span>
         </button>
+      </TransitionGroup>
+
+      <div v-else-if="$slots['prompt-submit']" class="flex items-start gap-2">
+        <UChatPrompt
+          class="min-w-0 flex-1"
+          :model-value="input"
+          :placeholder="placeholder"
+          :disabled="disabled"
+          :loading="loading"
+          :maxrows="maxrows"
+          @update:model-value="$emit('update:input', $event)"
+          @submit="$emit('submit')"
+        />
+        <slot name="prompt-submit" />
       </div>
 
       <UChatPrompt
@@ -141,7 +162,7 @@ export interface ConversationQuickReplyOption {
   action?: string
 }
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   messages: TMessage[]
   input: string
   placeholder: string
@@ -164,6 +185,7 @@ withDefaults(defineProps<{
   // request) so the submit button just shows a loading spinner instead of a dead stop control.
   cancelable?: boolean
   showPrompt?: boolean
+  showAssistantAvatar?: boolean
 }>(), {
   loading: false,
   disabled: false,
@@ -181,6 +203,7 @@ withDefaults(defineProps<{
   toolLabel: (name: string) => name,
   cancelable: true,
   showPrompt: true,
+  showAssistantAvatar: true,
 })
 
 defineEmits<{
@@ -191,8 +214,53 @@ defineEmits<{
   'quick-reply': [reply: ConversationQuickReplyOption]
 }>()
 
+const quickReplyRows = computed(() => props.quickReplies.some(reply => Boolean(reply.sub)))
+const scrollContainer = ref<HTMLElement | null>(null)
+
+function scrollToLatestMessage() {
+  if (!import.meta.client) return
+  window.requestAnimationFrame(() => {
+    const container = scrollContainer.value
+    if (!container) return
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: reducedMotion ? 'auto' : 'smooth',
+    })
+  })
+}
+
+watch(
+  () => [props.messages.length, props.messagesStatus] as const,
+  async () => {
+    await nextTick()
+    scrollToLatestMessage()
+  },
+  { flush: 'post' },
+)
+
 function messageKey(message: TMessage, index: number) {
   if ('id' in message && typeof message.id === 'string' && message.id) return message.id
   return `${message.role}-${index}`
 }
 </script>
+
+<style scoped>
+.conversation-reply-enter-active,
+.conversation-reply-leave-active {
+  transition: opacity 160ms ease;
+}
+
+.conversation-reply-enter-from,
+.conversation-reply-leave-to {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conversation-reply-enter-active,
+  .conversation-reply-leave-active {
+    transition: opacity 80ms linear;
+  }
+
+}
+</style>

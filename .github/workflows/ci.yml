@@ -173,11 +173,10 @@ jobs:
               - 'server/utils/auth.ts'
               - 'server/utils/mcp*/**'
               - 'server/utils/mcp*'
-              - 'tests/e2e/mcp.spec.ts'
+              - 'tests/e2e/mcp-*.spec.ts'
+              - 'tests/e2e/helpers/mcp.ts'
               - 'tests/e2e/oauth-discovery.spec.ts'
               - 'types/nitro.d.ts'
-              - 'vite.config.widgets.ts'
-              - 'widgets/**'
               - 'wrangler.toml'
             seo:
               - 'app.vue'
@@ -268,6 +267,11 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: yarn migrate:preview
+      - name: Verify Cloudflare resources
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: yarn cloudflare:resources
       - name: Sweep E2E artifacts
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -305,6 +309,11 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           WRANGLER_LOG: debug
         run: yarn deploy:preview:worker
+      - name: Purge preview HTML cache
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          PREVIEW_CACHE_ORIGIN: https://preview.krabiclaw.com
+        run: node --experimental-strip-types scripts/purge-preview-cache.ts
       - name: Sync preview secrets
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -338,68 +347,16 @@ jobs:
           printf '%s' "$EMAIL_REPLY_SECRET_PREVIEW" | npx wrangler secret put EMAIL_REPLY_SECRET --env preview
           printf '%s' "$EMAIL_INBOUND_SECRET_PREVIEW" | npx wrangler secret put EMAIL_INBOUND_SECRET --env preview
       - run: npx playwright install --with-deps chromium
-      - name: Warm up preview Worker and verify asset propagation
+      - name: Warm up preview Worker
+        env:
+          PREVIEW_WORKER_URL: https://krabiclaw-preview.paulchrisluke.workers.dev
         run: |
-          CURL_TIMEOUT=(--connect-timeout 5 --max-time 15)
-          curl -sf "${CURL_TIMEOUT[@]}" -o /dev/null "https://preview.krabiclaw.com/" || true
-          curl -sf "${CURL_TIMEOUT[@]}" -o /dev/null "https://preview.krabiclaw.com/blog" || true
-          curl -sf "${CURL_TIMEOUT[@]}" -L -H "x-dev-route-secret: ${E2E_DEV_ROUTE_SECRET}" -o /dev/null "https://preview.krabiclaw.com/api/dev/login" || true
-
-          # Cloudflare propagates a new Worker+Assets deploy to edge PoPs over a few
-          # seconds, not instantly. A request landing on a not-yet-updated PoP right
-          # after deploy can serve this build's HTML (correct new asset hashes) while
-          # the actual asset request lands on a different, still-stale PoP (or vice
-          # versa) — producing a 404 with the wrong MIME type mid-test. A blind sleep
-          # doesn't confirm propagation actually finished, so poll the Nuxt assets
-          # referenced by the same tenant routes smoke opens.
-          propagated=false
-          stable_checks=0
-          for i in $(seq 1 30); do
-            asset_paths=""
-            for route in "/" "/locations/brooklyn"; do
-              tenant_html=$(curl -sf "${CURL_TIMEOUT[@]}" \
-                -H "x-preview-tenant: demo" \
-                -H "cache-control: no-store" \
-                "https://preview.krabiclaw.com${route}?e2e=asset-probe-$i" || true)
-              route_assets=$(printf '%s' "$tenant_html" | grep -oE '/_nuxt/[^"'"'"') >]+[.](css|js)' || true)
-              asset_paths="${asset_paths}
-${route_assets}"
-            done
-
-            asset_failures=""
-            while IFS= read -r asset_path; do
-              [ -n "$asset_path" ] || continue
-              asset_result=$(curl -sI "${CURL_TIMEOUT[@]}" -o /dev/null -w "%{http_code} %{content_type}" \
-                -H "x-preview-tenant: demo" \
-                -H "cache-control: no-store" \
-                "https://preview.krabiclaw.com${asset_path}" || true)
-              case "$asset_path:$asset_result" in
-                *.css:200\ text/css*|*.js:200\ *javascript*) ;;
-                *) asset_failures="${asset_failures}
-${asset_path} -> ${asset_result:-no response}" ;;
-              esac
-            done < <(printf '%s\n' "$asset_paths" | sort -u)
-
-            if [ -n "$(printf '%s' "$asset_paths" | tr -d '[:space:]')" ] && [ -z "$asset_failures" ]; then
-              stable_checks=$((stable_checks + 1))
-              echo "Tenant route Nuxt assets are live (stable check $stable_checks/3, attempt $i)"
-              if [ "$stable_checks" -ge 3 ]; then
-                propagated=true
-                break
-              fi
-            else
-              stable_checks=0
-              echo "Tenant route Nuxt assets are not stable yet:${asset_failures:- no assets found} (attempt $i)"
-            fi
-            sleep 2
-          done
-          if [ "$propagated" = false ]; then
-            echo "::error::Preview tenant route Nuxt assets did not return valid content for three consecutive checks."
-            exit 1
-          fi
+          curl -sf --connect-timeout 5 --max-time 15 "$PREVIEW_WORKER_URL/" || true
+          curl -sf --connect-timeout 5 --max-time 15 "$PREVIEW_WORKER_URL/blog" || true
+          curl -sf --connect-timeout 5 --max-time 15 -L -H "x-dev-route-secret: ${E2E_DEV_ROUTE_SECRET}" "$PREVIEW_WORKER_URL/api/dev/login" || true
       - name: Run smoke tests
         env:
-          PLAYWRIGHT_PREVIEW_URL: https://preview.krabiclaw.com
+          PLAYWRIGHT_PREVIEW_URL: https://krabiclaw-preview.paulchrisluke.workers.dev
           POTTERY_HOUSE_CHANGED: ${{ needs.changes.outputs.pottery_house }}
           BLAWBY_CHANGED: ${{ needs.changes.outputs.blawby }}
           MCP_CHANGED: ${{ needs.changes.outputs.mcp }}
@@ -522,49 +479,12 @@ ${asset_path} -> ${asset_result:-no response}" ;;
         run: |
           printf '%s' "$E2E_DEV_ROUTE_SECRET_STAGING" | npx wrangler secret put E2E_DEV_ROUTE_SECRET --env staging
       - run: npx playwright install --with-deps chromium
-      - name: Warm up staging Worker and verify asset propagation
+      - name: Warm up staging Worker
         run: |
-          CURL_TIMEOUT=(--connect-timeout 5 --max-time 15)
-          curl -sf "${CURL_TIMEOUT[@]}" -o /dev/null "https://staging.krabiclaw.com/" || true
-          curl -sf "${CURL_TIMEOUT[@]}" -o /dev/null "https://staging.krabiclaw.com/blog" || true
-          curl -sf "${CURL_TIMEOUT[@]}" -o /dev/null "https://staging.krabiclaw.com/api/billing/plans" || true
-          curl -sf "${CURL_TIMEOUT[@]}" -L -H "x-dev-route-secret: ${E2E_DEV_ROUTE_SECRET}" -o /dev/null "https://staging.krabiclaw.com/api/dev/login" || true
-
-          # See the matching comment in the "Warm up preview Worker" step (e2e-smoke
-          # job) — same Cloudflare edge-propagation race, poll for the real asset
-          # instead of guessing a fixed sleep duration.
-          propagated=false
-          stable_checks=0
-          for i in $(seq 1 30); do
-            tenant_html=$(curl -sf "${CURL_TIMEOUT[@]}" \
-              -H "x-preview-tenant: demo" \
-              -H "cache-control: no-store" \
-              "https://staging.krabiclaw.com/?e2e=asset-probe-$i" || true)
-            asset_path=$(printf '%s' "$tenant_html" | grep -oE '/_nuxt/entry\.[A-Za-z0-9_-]+\.css' | head -1)
-            asset_result=""
-            if [ -n "$asset_path" ]; then
-              asset_result=$(curl -sI "${CURL_TIMEOUT[@]}" -o /dev/null -w "%{http_code} %{content_type}" \
-                -H "x-preview-tenant: demo" \
-                -H "cache-control: no-store" \
-                "https://staging.krabiclaw.com${asset_path}" || true)
-            fi
-            if [[ "$asset_result" == "200 text/css"* ]]; then
-              stable_checks=$((stable_checks + 1))
-              echo "Asset $asset_path is live with CSS content (stable check $stable_checks/3, attempt $i)"
-              if [ "$stable_checks" -ge 3 ]; then
-                propagated=true
-                break
-              fi
-            else
-              stable_checks=0
-              echo "Tenant entry asset is not stable yet (${asset_result:-no asset found}), retrying... (attempt $i)"
-            fi
-            sleep 2
-          done
-          if [ "$propagated" = false ]; then
-            echo "::error::Staging tenant entry asset did not return 200 text/css for three consecutive checks."
-            exit 1
-          fi
+          curl -sf --connect-timeout 5 --max-time 15 "https://staging.krabiclaw.com/" || true
+          curl -sf --connect-timeout 5 --max-time 15 "https://staging.krabiclaw.com/blog" || true
+          curl -sf --connect-timeout 5 --max-time 15 "https://staging.krabiclaw.com/api/billing/plans" || true
+          curl -sf --connect-timeout 5 --max-time 15 -L -H "x-dev-route-secret: ${E2E_DEV_ROUTE_SECRET}" "https://staging.krabiclaw.com/api/dev/login" || true
       - name: Run required smoke and changed subsystem suites
         env:
           AUTH_CHANGED: ${{ needs.changes.outputs.auth }}

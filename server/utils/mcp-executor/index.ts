@@ -105,12 +105,10 @@ export async function executeMcpToolCall(
     const allSites = await listSitesForUser(
       user.db,
       user.userId,
-      user.isPlatformAdmin,
     );
     const workspace = await resolveMcpWorkspace(
       user.db,
       user.userId,
-      user.isPlatformAdmin,
     );
     const workspaceSitesById = new Map(workspace.sites.map((site) => [site.id, site] as const));
     const sites = allSites.map((s: Record<string, unknown>) => ({
@@ -177,7 +175,6 @@ export async function executeMcpToolCall(
     const workspace = await resolveMcpWorkspace(
       user.db,
       user.userId,
-      user.isPlatformAdmin,
     );
     const env = cloudflareEnv(event) as { NUXT_PUBLIC_FREE_SITE_DOMAIN?: string };
     return {
@@ -198,7 +195,6 @@ export async function executeMcpToolCall(
       workspace = await resolveMcpWorkspace(
         user.db,
         user.userId,
-        user.isPlatformAdmin,
         {
           organizationId,
           siteId,
@@ -224,7 +220,6 @@ export async function executeMcpToolCall(
     const refreshed = await resolveMcpWorkspace(
       user.db,
       user.userId,
-      user.isPlatformAdmin,
       {
         organizationId: workspace.organization?.id ?? null,
         siteId: workspace.site?.id ?? null,
@@ -552,7 +547,6 @@ export async function executeMcpToolCall(
     const createdSite = await resolveMcpWorkspace(
       user.db,
       user.userId,
-      user.isPlatformAdmin,
       { siteId: normalized.siteId, requireSite: true },
     );
     await upsertMcpWorkspacePreference(user.db, {
@@ -576,7 +570,6 @@ export async function executeMcpToolCall(
       workspace = await resolveMcpWorkspace(
         site.db,
         site.userId,
-        site.isPlatformAdmin,
         {
           siteId: site.siteId,
           locationId: explicitLocationId,

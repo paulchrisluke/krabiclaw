@@ -314,7 +314,9 @@ async function resolvePlace(rawUrl) {
     user_ratings_total: details.user_ratings_total ?? null,
     lat: details.geometry?.location?.lat ?? null,
     lng: details.geometry?.location?.lng ?? null,
-    opening_hours: details.opening_hours ?? null,
+    opening_hours: Array.isArray(details.opening_hours?.weekday_text)
+      ? { weekdayDescriptions: details.opening_hours.weekday_text }
+      : null,
     photos: (details.photos ?? []).slice(0, 10).map((p) => ({
       reference: p.photo_reference,
       width: p.width,

@@ -21,7 +21,7 @@ const CACHE_TTL_SECONDS = 60
 
 const SKIP_PREFIXES = [
   '/api/', '/dashboard', '/admin', '/auth/',
-  '/signup', '/login', '/_nuxt/', '/assets/', '/_ipx/',
+  '/signup', '/login', '/links', '/_nuxt/', '/assets/', '/_ipx/',
 ]
 
 const SESSION_COOKIE = 'better-auth.session_token'

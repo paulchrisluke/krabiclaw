@@ -28,7 +28,21 @@ function skip(message) {
   console.log(`skip  ${message}`)
 }
 
-async function request(method, params = {}, authHeaders = {}) {
+async function request(method, params = {}, authHeaders = {}, options = {}) {
+  const payload = {
+    jsonrpc: '2.0',
+    method,
+    params,
+    _meta: {
+      'io.modelcontextprotocol/version': MCP_VERSION,
+      'io.modelcontextprotocol/method': method,
+      ...(method === 'tools/call' && params.name ? { 'io.modelcontextprotocol/name': String(params.name) } : {}),
+    },
+  }
+  if (!options.omitId) {
+    payload.id = `${method}-${Date.now()}`
+  }
+
   const res = await fetch(MCP_URL, {
     method: 'POST',
     headers: {
@@ -38,17 +52,7 @@ async function request(method, params = {}, authHeaders = {}) {
       ...(method === 'tools/call' && params.name ? { 'mcp-name': String(params.name) } : {}),
       ...authHeaders,
     },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: `${method}-${Date.now()}`,
-      method,
-      params,
-      _meta: {
-        'io.modelcontextprotocol/version': MCP_VERSION,
-        'io.modelcontextprotocol/method': method,
-        ...(method === 'tools/call' && params.name ? { 'io.modelcontextprotocol/name': String(params.name) } : {}),
-      },
-    }),
+    body: JSON.stringify(payload),
   })
   const text = await res.text()
   let body = null
@@ -129,6 +133,11 @@ async function main() {
   expectStatus('initialize succeeds', init.res.status, 200)
   if (init.body?.result?.capabilities?.tools) pass('initialize advertises tools capability')
   else fail('initialize did not advertise tools capability', init.body)
+  if (init.body?.result?.protocolVersion === MCP_VERSION) pass('initialize negotiates requested protocol version')
+  else fail('initialize negotiated unexpected protocol version', init.body)
+
+  const initialized = await request('notifications/initialized', {}, headers, { omitId: true })
+  expectStatus('notifications/initialized is accepted', initialized.res.status, 202)
 
   const tools = await request('tools/list', {}, headers)
   expectStatus('tools/list succeeds', tools.res.status, 200)
@@ -144,8 +153,8 @@ async function main() {
     else fail(`${tool.name} missing tenant OAuth security scheme`, { securitySchemes, metaSecuritySchemes })
   }
   const renderTools = toolList.filter(tool => tool?._meta?.ui?.resourceUri || tool?._meta?.['openai/outputTemplate'])
-  if (renderTools.length > 0) pass(`found ${renderTools.length} render tools`)
-  else skip('no render tools advertised; Client MCP currently uses structured text results')
+  if (renderTools.length === 0) pass('no render tools are advertised in tools/list')
+  else fail('render tools must be attached to tool results, not tools/list', renderTools.map(tool => tool.name))
 
   for (const tool of renderTools) {
     const standardUri = tool._meta?.ui?.resourceUri
@@ -153,12 +162,15 @@ async function main() {
     if (standardUri && standardUri === openaiUri) pass(`${tool.name} has matching ui.resourceUri and openai/outputTemplate`)
     else fail(`${tool.name} metadata mismatch`, tool._meta)
   }
+  const staleUploadLaunchers = toolList.filter(tool => /^open_.*upload$/.test(tool?.name ?? ''))
+  if (staleUploadLaunchers.length === 0) pass('no widget upload launcher tools are advertised')
+  else fail('stale widget upload launcher tools are advertised', staleUploadLaunchers.map(tool => tool.name))
 
   const resources = await request('resources/list', {}, headers)
   expectStatus('resources/list succeeds', resources.res.status, 200)
   const resourceList = resources.body?.result?.resources ?? []
-  if (resourceList.length > 0) pass(`found ${resourceList.length} MCP resources`)
-  else skip('no resources advertised; Client MCP currently uses structured text results only')
+  if (resourceList.length === 0) pass('no MCP app resources are advertised')
+  else fail(`unexpected MCP app resources advertised`, resourceList)
 
   for (const resource of resourceList) {
     if (resource.mimeType === 'text/html;profile=mcp-app') pass(`${resource.uri} uses MCP Apps MIME type`)
@@ -203,6 +215,14 @@ async function main() {
     pass('list_sites returns structuredContent.sites')
   } else {
     fail('list_sites missing structuredContent.sites', welcome.body)
+  }
+
+  const malformedCall = await request('tools/call', { name: 'upload_user_media', arguments: null }, headers)
+  expectStatus('malformed tools/call arguments return JSON-RPC envelope', malformedCall.res.status, 200)
+  if (malformedCall.body?.error?.code === -32602 && String(malformedCall.body?.error?.message ?? '').includes('arguments must be an object')) {
+    pass('malformed tools/call arguments are non-terminating JSON-RPC invalidParams')
+  } else {
+    fail('malformed tools/call arguments did not return JSON-RPC invalidParams', malformedCall.body)
   }
 
   process.exit(failed ? 1 : 0)

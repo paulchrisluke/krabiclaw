@@ -1,5 +1,5 @@
 import { jsonResponse } from '~/server/utils/api-response'
-import { createLocation } from '~/server/utils/location-management'
+import { createLocation, type CreateLocationInput } from '~/server/utils/location-management'
 import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
 import { requireSiteAccess } from '~/server/utils/location-access'
 
@@ -35,8 +35,6 @@ export default defineEventHandler(async (event) => {
     address?: ApiValue
     city?: string
     phone?: string
-    hero_image_asset_id?: string
-    hero_video_asset_id?: string
     website_url?: string
     maps_url?: string
     description?: string
@@ -67,15 +65,13 @@ export default defineEventHandler(async (event) => {
       address: body?.address ? JSON.stringify(body.address) : null,
       city: body?.city ?? null,
       phone: body?.phone ?? null,
-      hero_image_asset_id: body?.hero_image_asset_id ?? null,
-      hero_video_asset_id: body?.hero_video_asset_id ?? null,
       website_url: body?.website_url ?? null,
       maps_url: body?.maps_url ?? null,
       description: body?.description ?? null,
       google_place_id: body?.google_place_id ?? null,
       rating,
       review_count: reviewCount,
-      opening_hours: body?.opening_hours ? JSON.stringify(body.opening_hours) : null,
+      opening_hours: (body?.opening_hours || null) as CreateLocationInput['opening_hours'],
       is_primary: body?.is_primary === true,
     },
     session.user.id,

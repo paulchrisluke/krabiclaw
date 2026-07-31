@@ -38,8 +38,41 @@ export default defineEventHandler(async (event) => {
      LIMIT 1
   `, [siteId])
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
-  if (site.vertical !== 'service' || site.theme_id !== 'blawby-theme-v1') {
+  if (eventName !== 'link_click' && (site.vertical !== 'service' || site.theme_id !== 'blawby-theme-v1')) {
     return jsonResponse({ error: 'Tracking is not enabled for this site' }, { status: 404 })
+  }
+
+  let ctaDestination = cleanString(body.cta_destination, 500) || null
+  let metadata = boundedMetadata(body.metadata)
+
+  if (eventName === 'link_click') {
+    const rawMetadata = body.metadata
+    const linkItemId = rawMetadata && typeof rawMetadata === 'object' && !Array.isArray(rawMetadata)
+      ? cleanString((rawMetadata as ApiRecord).link_item_id, 120)
+      : ''
+    if (!linkItemId) return jsonResponse({ error: 'metadata.link_item_id is required' }, { status: 400 })
+
+    const link = await queryFirst<{ id: string; label: string; destination: string; sort_order: number; page_path: string }>(db, `
+      SELECT li.id, li.label, li.destination, li.sort_order, lp.path AS page_path
+        FROM site_link_items li
+        JOIN site_link_pages lp ON lp.id = li.link_page_id
+       WHERE li.id = ?
+         AND li.site_id = ?
+         AND li.status = 'active'
+         AND lp.status = 'published'
+         AND lp.path = '/links'
+       LIMIT 1
+    `, [linkItemId, siteId])
+    if (!link) return jsonResponse({ error: 'Link item not found' }, { status: 404 })
+
+    ctaDestination = link.destination
+    metadata = {
+      link_item_id: link.id,
+      link_label: link.label,
+      position: Number(link.sort_order ?? 0) + 1,
+    }
+    body.page_type = 'links'
+    body.page_path = link.page_path
   }
 
   const clientIp = getClientIp(event)
@@ -60,9 +93,9 @@ export default defineEventHandler(async (event) => {
     pageType: cleanString(body.page_type, 80) || null,
     pagePath: cleanString(body.page_path, 300) || null,
     pageLocation: cleanString(body.page_location, 500) || null,
-    ctaDestination: cleanString(body.cta_destination, 500) || null,
+    ctaDestination,
     tenant: cleanString(body.tenant, 200) || null,
-    metadata: boundedMetadata(body.metadata),
+    metadata,
     ipHash,
     userAgent: cleanString(getHeader(event, 'user-agent'), 500) || null,
   })

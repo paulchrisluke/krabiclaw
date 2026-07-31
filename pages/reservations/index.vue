@@ -177,7 +177,7 @@ const { getField } = usePageContent('reservations')
 const { site, siteId } = useTenantSite()
 const { locale } = useI18n()
 const resCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
-const { locations, config, reservationPolicySiteDefault, reservationPolicyByLocation } = useBootstrap()
+const { locations, config, reservationPolicySiteDefault, reservationPolicyByLocation } = await useBootstrap()
 const isExperienceSite = computed(() => (site as { vertical?: string | null } | null)?.vertical === 'experience')
 
 // Pure experience-vertical sites book per-experience on /experiences/[slug].
@@ -235,19 +235,19 @@ function getLocationLabel(location: ApiRecord): string | null {
 }
 
 function getLocationMediaKind(location: ApiRecord): 'image' | 'video' | null {
-  if (location.kind === 'video' || location.hero_video_public_url) return 'video'
-  if (location.kind === 'image' || location.hero_image_public_url || location.public_url || location.thumbnail_url) return 'image'
+  if (location.hero_kind === 'video') return 'video'
+  if (location.hero_kind === 'image' || location.hero_public_url || location.hero_thumbnail_url) return 'image'
   return null
 }
 
 function getLocationMediaUrl(location: ApiRecord): string | null {
   const kind = getLocationMediaKind(location)
-  if (kind === 'video') return String(location.hero_video_public_url ?? location.public_url ?? '') || null
-  return String(location.hero_image_public_url ?? location.public_url ?? location.thumbnail_url ?? '') || null
+  if (kind === 'video') return String(location.hero_public_url ?? '') || null
+  return String(location.hero_public_url ?? location.hero_thumbnail_url ?? '') || null
 }
 
 function getLocationPoster(location: ApiRecord): string | null {
-  return String(location.thumbnail_url ?? location.hero_image_public_url ?? '') || null
+  return String(location.hero_thumbnail_url ?? (location.hero_kind === 'image' ? location.hero_public_url : '') ?? '') || null
 }
 
 const heroSubtitle = computed(() => {
@@ -434,6 +434,12 @@ useBreadcrumbSchema([
 ])
 
 const brandName = computed(() => (site as ApiValue)?.brand_name || (site as ApiValue)?.title || 'Our Site')
+const primaryLocationSocialImage = computed(() => {
+  const primary = locations.value[0]
+  if (!primary) return null
+  if (getLocationMediaKind(primary) === 'video') return getLocationPoster(primary)
+  return getLocationMediaUrl(primary)
+})
 
 useTenantSocialMetadata(() => ({
   path: '/reservations',
@@ -445,7 +451,7 @@ useTenantSocialMetadata(() => ({
     faviconUrl: config.value?.favicon_url || null,
     primaryColor: config.value?.brand_color || null,
   },
-  heroImage: locations.value[0]?.hero_image_public_url ? { url: locations.value[0].hero_image_public_url } : null,
+  heroImage: primaryLocationSocialImage.value ? { url: primaryLocationSocialImage.value } : null,
 }))
 
 useSchemaOrg([

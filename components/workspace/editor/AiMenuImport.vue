@@ -311,14 +311,14 @@ async function runExtraction() {
   abortController.value = controller
 
   try {
-    const res = await $fetch<{
+    const res = await $fetch(`/api/ai/${props.siteId}/menu/extract`, { method: 'POST', body: fd, signal: controller.signal }) as {
       success: boolean
       menuId: string
       menuItems: Array<Record<string, unknown>>
       warning?: string | null
       credits: { charged: number; remaining: number }
       error?: string
-    }>(`/api/ai/${props.siteId}/menu/extract`, { method: 'POST', body: fd, signal: controller.signal })
+    }
 
     resultMenuId.value = res.menuId
     creditsCharged.value = res.credits?.charged ?? null

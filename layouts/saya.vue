@@ -14,7 +14,7 @@
     <div id="saya-portal-root" />
 
     <SayaHeader
-      :site="site"
+      :site="resolvedSite"
       :locations="locations"
       :menu="menu"
       :has-experiences="hasExperiences"
@@ -24,7 +24,7 @@
       <slot />
     </main>
     <LazySayaFooter
-      :site="site"
+      :site="resolvedSite"
       :is-platform="isPlatform"
       :locations="locations"
       :locales="locales"
@@ -43,26 +43,40 @@ import { resolveLocationExperienceHref } from '~/utils/experience-navigation'
 
 if (import.meta.dev) useDebugLCP()
 
-// Single owner of the shared bootstrap/tenant-site fetch for this tree —
-// header/footer receive the fields they need as props instead of each
-// independently calling useBootstrap()/useTenantSite() and relying on
-// cache-key coincidence to dedupe.
-const { config, locations, menu, hasExperiences, experiencesList, locales, error: bootstrapError } = useBootstrap()
-const { siteId, isTenant, isPlatform, site } = useTenantSite()
+// Single owner of the shared site-shell fetch for this tree — header/footer
+// receive the fields they need as props instead of each independently
+// calling useSiteShell()/useTenantSite(). This layout persists across
+// client-side navigation (it isn't remounted per route), so it uses
+// useSiteShell() rather than useBootstrap(): useBootstrap()'s key changes
+// per route and must be `await`-ed so Suspense can block the page swap on
+// it, but a persistent layout component never remounts, so there's no
+// Suspense boundary here for an await to plug into. useSiteShell()'s key is
+// siteId+locale only — it never changes across navigation, so it doesn't
+// need blocking and can't go stale (see useSiteShell.ts).
+const { config, locations, menu, hasExperiences, experiencesList, locales, error: bootstrapError, site: shellSite } = useSiteShell()
+const { siteId, draftId, isTenant, isPlatform, site } = useTenantSite()
+const resolvedSite = computed(() => shellSite.value || site)
+const route = useRoute()
 // Called for its side effect: keeps the consent ref in sync and lets the
 // head markup emit the default signal ahead of any analytics config.
 useCookieConsent()
 
-// The full bootstrap payload above is intentionally `lazy: true` (see
-// useBootstrap.ts) so SSR doesn't block the whole page on it. But that means
+// The site-shell fetch above is intentionally `lazy: true` (see
+// useSiteShell.ts) so SSR doesn't block the whole page on it. But that means
 // brand_color isn't known yet on first paint, and the CTA button's Tailwind
 // class falls back to Nuxt UI's default color, then snaps to the real brand
 // color once bootstrap resolves client-side — a visible flash of the wrong
 // color. This tiny, non-lazy fetch blocks SSR just long enough to know the
 // real brand_color before anything paints, so no fallback color is ever shown.
-const { data: brandConfigData } = isTenant && siteId
-  ? await useFetch(`/api/public/sites/${siteId}/config`, {
-      key: `site-brand-config-${siteId}`,
+const draftPreviewToken = typeof route.query.token === 'string' ? route.query.token : ''
+const brandConfigUrl = draftId && draftPreviewToken
+  ? `/api/public/drafts/${draftId}/bootstrap?preview=true&token=${encodeURIComponent(draftPreviewToken)}&menu=1`
+  : siteId
+    ? `/api/public/sites/${siteId}/config`
+    : ''
+const { data: brandConfigData } = isTenant && brandConfigUrl
+  ? await useFetch(brandConfigUrl, {
+      key: draftId ? `draft-brand-config-${draftId}-${draftPreviewToken}` : `site-brand-config-${siteId}`,
     })
   : { data: ref(null) }
 
@@ -93,7 +107,6 @@ const ogImage = computed(() =>
 // Request-scoped URL state must be captured eagerly during setup. Tenant routing
 // already 301s alternate subdomains to the configured custom domain, so the
 // rendered request origin is the canonical origin for every indexable tenant page.
-const route = useRoute()
 const requestURL = useRequestURL()
 const requestHostname = requestURL.hostname
 const canonicalUrl = computed(() => new URL(route.path, requestURL.origin).toString())

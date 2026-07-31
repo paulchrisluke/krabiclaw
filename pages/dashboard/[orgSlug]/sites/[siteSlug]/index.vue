@@ -10,9 +10,7 @@
 
     <template #body>
       <div v-if="pending" class="space-y-6">
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <USkeleton v-for="i in 4" :key="i" class="h-20 rounded-xl" />
-        </div>
+        <USkeleton class="h-32 rounded-xl" />
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <USkeleton v-for="i in 3" :key="i" class="h-56 rounded-xl" />
         </div>
@@ -38,6 +36,47 @@
             />
           </template>
         </UChatPrompt>
+
+        <UCard>
+          <div class="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div class="min-w-0">
+              <p class="text-xs font-semibold uppercase tracking-wider text-primary">Today</p>
+              <h2 class="mt-1 text-xl font-semibold text-highlighted">{{ siteName }}</h2>
+              <p class="mt-1 text-sm text-muted">
+                {{ operations.unreadThreads }} unread {{ operations.unreadThreads === 1 ? 'message' : 'messages' }} ·
+                {{ operations.openThreads }} open guest {{ operations.openThreads === 1 ? 'request' : 'requests' }}
+              </p>
+            </div>
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:min-w-[520px]">
+              <div class="rounded-lg border border-default bg-muted px-3 py-2">
+                <p class="text-xs text-muted">Status</p>
+                <UBadge :color="dashboardState.site.value?.status === 'active' ? 'success' : 'neutral'" variant="soft" class="mt-1 capitalize">
+                  {{ dashboardState.site.value?.status || 'Unknown' }}
+                </UBadge>
+              </div>
+              <div class="rounded-lg border border-default bg-muted px-3 py-2">
+                <p class="text-xs text-muted">{{ locationsNavLabel }}</p>
+                <p class="mt-1 text-2xl font-semibold text-highlighted">{{ locations.length }}</p>
+              </div>
+              <div class="rounded-lg border border-default bg-muted px-3 py-2">
+                <p class="text-xs text-muted">Inbox</p>
+                <p class="mt-1 text-2xl font-semibold text-highlighted">{{ operations.unreadThreads }}</p>
+              </div>
+              <div class="rounded-lg border border-default bg-muted px-3 py-2">
+                <p class="text-xs text-muted">Guest work</p>
+                <p class="mt-1 text-2xl font-semibold text-highlighted">{{ operations.openThreads }}</p>
+              </div>
+            </div>
+          </div>
+          <div class="mt-4 flex flex-wrap gap-2">
+            <UButton size="sm" color="neutral" variant="soft" :to="`${siteDashboardPath}/inbox`">Open inbox</UButton>
+            <UButton size="sm" color="neutral" variant="soft" :to="locationsBase">Open {{ locationsNavLabel.toLowerCase() }}</UButton>
+            <UButton v-if="revenueAction" size="sm" color="primary" variant="soft" :icon="revenueAction.icon" :to="revenueAction.to">
+              {{ revenueAction.label }}
+            </UButton>
+          </div>
+          <p class="mt-3 text-xs text-muted">{{ operationBreakdown }}</p>
+        </UCard>
 
         <!-- Getting started task list -->
         <UCard v-if="canManageSite && !checklistDismissed && !checklistAllDone && checklistItems.length" variant="soft" class="border-primary/20">
@@ -79,7 +118,7 @@
             <ul class="space-y-2.5">
               <li v-for="item in checklistItems" :key="item.key" class="flex items-start gap-3">
                 <div :class="[
-                  'flex size-5 shrink-0 items-center justify-center rounded-full mt-0.5 transition-colors',
+                  'flex size-5 shrink-0 items-center justify-center rounded mt-0.5 transition-colors',
                   item.complete ? 'bg-(--kc-teal)' : 'border-2 border-muted bg-transparent',
                 ]">
                   <UIcon v-if="item.complete" name="i-lucide-check" class="size-3 text-white" />
@@ -121,39 +160,10 @@
             <p class="mt-1 text-xs text-muted">Manage Q&A and testimonials that apply to the whole site.</p>
           </div>
           <div class="flex flex-wrap gap-2">
-            <UButton v-if="hasSiteServicesManager" icon="i-lucide-building-2" color="neutral" variant="soft" :to="`${siteDashboardPath}/professional-services`">Professional services</UButton>
+            <UButton v-if="hasSiteServicesManager" icon="i-lucide-building-2" color="neutral" variant="soft" :to="`${siteDashboardPath}/professional-services`">Services</UButton>
             <UButton icon="i-lucide-circle-help" color="neutral" variant="soft" :to="`${siteDashboardPath}/qa`">Q&A</UButton>
             <UButton icon="i-lucide-star" color="neutral" variant="soft" :to="`${siteDashboardPath}/testimonials`">Testimonials</UButton>
           </div>
-        </div>
-
-        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <UCard>
-            <p class="text-sm text-muted">Publication</p>
-            <div class="mt-2 flex flex-wrap gap-2">
-              <UBadge :color="dashboardState.site.value?.status === 'active' ? 'success' : 'neutral'" variant="soft" class="capitalize">
-                {{ dashboardState.site.value?.status || 'Unknown' }}
-              </UBadge>
-              <UBadge v-if="dashboardState.site.value?.onboarding_status" color="neutral" variant="soft" class="capitalize">
-                {{ dashboardState.site.value.onboarding_status.replace(/_/g, ' ') }}
-              </UBadge>
-            </div>
-          </UCard>
-          <UCard>
-            <p class="text-sm text-muted">{{ locationsNavLabel }}</p>
-            <p class="mt-2 text-2xl font-semibold text-highlighted">{{ locations.length }}</p>
-            <UButton class="mt-3" size="xs" color="neutral" variant="ghost" :to="locationsBase">Open index</UButton>
-          </UCard>
-          <UCard>
-            <p class="text-sm text-muted">Unread inbox</p>
-            <p class="mt-2 text-2xl font-semibold text-highlighted">{{ operations.unreadThreads }}</p>
-            <UButton class="mt-3" size="xs" color="neutral" variant="ghost" :to="`${siteDashboardPath}/inbox`">Open inbox</UButton>
-          </UCard>
-          <UCard>
-            <p class="text-sm text-muted">Open guest work</p>
-            <p class="mt-2 text-2xl font-semibold text-highlighted">{{ operations.openThreads }}</p>
-            <p class="mt-2 text-xs text-muted">{{ operationBreakdown }}</p>
-          </UCard>
         </div>
 
         <!-- Locations preview -->
@@ -359,6 +369,24 @@ const operations = computed<OperationsSummary>(() => data.value?.operations ?? {
 const hasReservations = computed(() => Boolean(siteCapabilities.value?.managers.some(manager => manager.id === 'reservations')))
 const hasExperiences = computed(() => Boolean(siteCapabilities.value?.managers.some(manager => manager.id === 'experiences')))
 const locationsNavLabel = computed(() => siteCapabilities.value?.locationVocabulary === 'office/service area' ? 'Offices / Service Areas' : 'Locations')
+const primaryLocation = computed(() => locations.value.find(location => location.is_primary) ?? locations.value[0] ?? null)
+const revenueAction = computed(() => {
+  const managers = siteCapabilities.value?.managers ?? []
+  const ordering = managers.find(manager => manager.key === 'site.ordering')
+  if (ordering) return { label: ordering.label, icon: 'i-lucide-shopping-bag', to: `${siteDashboardPath.value}/${ordering.route}` }
+
+  const services = managers.find(manager => manager.key === 'site.services')
+  if (services) return { label: 'Schedule', icon: 'i-lucide-calendar-days', to: `${siteDashboardPath.value}/${services.route}` }
+
+  const location = primaryLocation.value
+  const reservations = managers.find(manager => manager.key === 'location.reservations')
+  if (location && reservations) return { label: reservations.label === 'Reservation policies' ? 'Bookings' : reservations.label, icon: 'i-lucide-calendar-check', to: `${locationsBase.value}/${location.slug}/reservations` }
+
+  const experiences = managers.find(manager => manager.key === 'location.experiences')
+  if (location && experiences) return { label: experiences.label, icon: 'i-lucide-ticket', to: `${locationsBase.value}/${location.slug}/experiences` }
+
+  return null
+})
 const operationBreakdown = computed(() => {
   const parts: string[] = []
   if (hasReservations.value) parts.push(`${operations.value.reservations} reservations`)
@@ -405,5 +433,6 @@ async function submitHomeInput() {
   await chowBot.sendMessage(text)
 }
 
-const { eventLabel, timeAgo } = useSiteEventLabels()
+const { eventLabel } = useSiteEventLabels()
+const { formatRelativeTime: timeAgo } = useHumanTime()
 </script>

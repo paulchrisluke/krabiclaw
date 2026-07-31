@@ -1,18 +1,18 @@
 # #341 Workstream A — authorization migration audit
 
-Tracks every endpoint/call site converted off the retired `location_manager`
-role and the unscoped `role IN ('owner','admin','editor')` pattern, onto the
-five explicit access checks in `server/utils/member-access.ts`:
+Tracks every endpoint/call site converted off legacy scoped roles, unscoped
+`role IN ('owner','admin','editor')` checks, and active shadow scope storage,
+onto the explicit access checks in `server/utils/member-access.ts`:
 
 - **Organization** — `assertOrganizationAccess`: owner/admin only.
-- **Site-wide** — `assertSiteWideAccess`: org-wide roles, or an editor with a
-  `location_id IS NULL` scope row for the site.
+- **Site-wide** — `assertSiteWideAccess`: org-wide roles, or an editor in the
+  site's Better Auth resource team.
 - **Location** — `assertLocationAccess`: org-wide roles, a site-wide-scoped
-  editor, or an editor scoped to the exact location.
+  editor, or an editor in the exact location's Better Auth resource team.
 - **Conditional** — `assertResourceAccess`: the target row's own
   `location_id` decides Site-wide vs. Location per-request.
-- **Context** — `assertSiteContextAccess`: org-wide roles, or any scope row
-  at all for the site (discovery/navigation only, never full config).
+- **Context** — `assertSiteContextAccess`: org-wide roles, or any site/location
+  team membership for the site (discovery/navigation only, never full config).
 
 Classification is derived from the resource's own schema/mutation semantics
 (does the row have a `location_id`, is it NOT NULL, does the endpoint
@@ -62,7 +62,7 @@ aggregate across locations), never from the URL shape alone.
 **media/* family: complete (6/6 — index.get + 5 mutation routes; `[assetId]` folder has 1 file (confirm) plus the 2 top-level `[assetId].*` files).**
 
 **Fixed compiler blockers (deleted-export references) and MCP/ChowBot/WhatsApp access this pass:**
-- `server/utils/mcp-auth.ts` — `requireMcpSite` now requires a site-wide `member_access_scope` row for non-org-wide roles (MCP tools have no location-scoped permission model yet; this only tightens, never loosens, since `location_manager` was never a valid `McpToolRole` before either).
+- `server/utils/mcp-auth.ts` — `requireMcpSite` now requires site resource-team membership for non-org-wide roles (MCP tools have no location-scoped permission model at this layer, so a location-only editor is rejected).
 - `server/utils/chowbot-conversations.ts` — `getSiteForMember`/`listSitesForMember` same site-wide requirement (ChowBot is whole-site conversational, no location scoping at this layer).
 - `server/utils/whatsapp-access.ts`, `server/utils/whatsapp-revocation.ts` — `LOCATION_MANAGER_ROLE` → `'editor'` literal / `isScopedRole()`.
 - `server/api/dashboard/organizations/members/[memberId]/remove.post.ts` — same.
@@ -71,8 +71,8 @@ aggregate across locations), never from the URL shape alone.
 
 `getDashboardContext` retains a deny-by-default route boundary for scoped
 editors. It is not an authorization substitute: every permitted route below
-also applies the listed authoritative guard or filters its query by
-`member_access_scope`. Routes not listed are rejected before their handler can
+also applies the listed authoritative guard or filters its query by resource
+team membership. Routes not listed are rejected before their handler can
 use context-only site resolution. Historical `/api/dashboard/editor/**`,
 `/api/dashboard/ai/**`, and `/api/dashboard/site` aliases were deleted in #345;
 site-scoped editor and AI work now uses explicit `/api/editor/sites/[siteId]/**`
@@ -81,9 +81,9 @@ and `/api/ai/[siteId]/**` routes.
 | Endpoint | Organization | Site-wide | Location | Conditional | Context-only | Guard used |
 |---|---|---|---|---|---|---|
 | `dashboard/context.get.ts` | | | | ✓ (site/location lists) | ✓ | `assertSiteContextAccess` in `getDashboardContext`; `listOrganizationSites` and `listDashboardLocations` filter by the member's scope rows |
-| `dashboard/home.get.ts` and SSR `getDashboardHomeData` caller | | | | ✓ | | locations and events use `EXISTS member_access_scope`; null-location aggregate events require a site-wide row; organization credit totals are omitted for scoped roles |
+| `dashboard/home.get.ts` and SSR `getDashboardHomeData` caller | | | | ✓ | | locations and events filter by resource team membership; null-location aggregate events require site-team membership; organization credit totals are omitted for scoped roles |
 | `dashboard/settings.get.ts`, `settings.patch.ts` | | ✓ | | | | `assertSiteWideAccess` after context resolution |
-| `dashboard/locations/index.get.ts` | | | ✓ (filtered list) | | | `EXISTS member_access_scope`; site-wide rows include all locations, location rows include only exact locations |
+| `dashboard/locations/index.get.ts` | | | ✓ (filtered list) | | | team membership filter; site-team membership includes all locations, location-team membership includes only exact locations |
 | `dashboard/locations/[id].get.ts`, `[id].patch.ts` | | | ✓ | | | target location supplies `site_id`; `assertLocationAccess`/`assertMemberScope` before return or mutation |
 | `dashboard/locations/add.post.ts` | | ✓ | | | | `assertSiteWideAccess` before preview, credit charge, or creation |
 | `dashboard/notifications/index.get.ts`, `unread-count.get.ts`, `read-all.patch.ts`, `[notificationId]/read.patch.ts` | | | | ✓ | | `getNotificationAccess`: location notifications require exact/site-wide scope; null-location site notifications require site-wide scope; reads mutate only visible notifications |
@@ -150,13 +150,13 @@ owner/admin callers and keep their existing organization-level checks.
 | `sites/[siteId]/locations/[locationId]/integrations/google-business/index.get.ts`, `auth.post.ts` | | | ✓ | | | `requireLocationAccess`; OAuth callback revalidates the state principal's exact location access before storing credentials |
 | `editor/sites/[siteId]/context.get.ts` | | | | | ✓ | inline SQL + `assertSiteContextAccess`; response now filters `locations`/`scopes` to `listAccessibleLocationIds`, and drops the "Brand-wide" scope option for location-only editors — this endpoint was previously **not caught by the initial 58-file grep** (found only in the final proof sweep) and was returning the full site directory to any editor regardless of scope |
 | `editor/sites/[siteId]/locations/[locationId]/qa/[qaId].patch.ts`, `qa/reorder.post.ts` | | | ✓ | | | inline SQL + `assertLocationAccess` — also missed by the initial grep pass, found in the proof sweep |
-| `whatsapp/webhook.post.ts` (`listRecentGuestNotificationCandidates`) | | | | | | dropped `location_manager` from the role OR; unchanged logic otherwise |
+| `whatsapp/webhook.post.ts` (`listRecentGuestNotificationCandidates`) | | | | | | filters editor candidates by site/location resource team membership |
 
 **sites/[siteId] family + proof-sweep stragglers: complete.** Domain and Google Analytics mutation routes use the same site-wide guard as their reads; they do not retain an owner/admin-only role-name query that would contradict the site-manager scope contract.
 
 **Repository-wide proof sweep (run after every family, final pass clean):**
 ```text
-location_manager        → 0 live-code hits (comments/migration file only)
+legacy scoped role names → 0 live-code hits
 LOCATION_MANAGER_ROLE    → 0 hits
 role IN ('owner', 'admin', 'editor')  → 0 hits
 role IN ("owner", "admin", "editor")  → 0 hits
@@ -165,18 +165,12 @@ role === 'editor' as bypass → 0 (only isScopedRole's own definition + normaliz
 
 **Lesson from this pass:** the initial classification table was built from a single grep pattern (`role IN ('owner', 'admin', 'editor')`) — two real endpoints (`context.get.ts`, two `qa` files) used the identical pattern but were missed in the first listing due to a stale file enumeration, not a different SQL shape. The proof-sweep step is what caught them, confirming the sweep must run for real at the end, not be treated as a formality.
 
-**WhatsApp grant provenance resolved:** migration `0060` adds `grant_source` to
-both pending and active access scopes. Existing `location_manager` grants are
-marked `whatsapp_config` before their role is converted; existing editor access
-is backfilled as `migration_backfill`; ordinary dashboard invitations remain
-`manual`. A later manual grant takes precedence over an existing WhatsApp grant.
-`recalculateScopesForPhoneChange` now deletes only `whatsapp_config` scopes, so
-changing a notification phone cannot revoke independently granted editor access.
-
-**Migration and creation paths:** Better Auth no longer registers
-`location_manager`; migration `0060` converts existing members and pending
-invitations to `editor`; the WhatsApp backfill script and all new invitation
-paths create `editor` roles with explicit scope provenance.
+**Phase 3 Teams cutover:** active site/location grants are represented by Better
+Auth Teams. Migration `0066` creates deterministic site/location team IDs,
+backfills existing active editor grants into `teamMember`, maps single-scope
+pending invitations to `invitation.teamId`, and drops the active legacy scope
+table. New site/location creation and WhatsApp provisioning attach resource
+teams through shared utilities.
 
 **Review hardening:** the site/member principal query now lives in
 `server/utils/location-access.ts` and is reused by the reviewed media, menu,

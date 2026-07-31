@@ -19,18 +19,19 @@ export function buildInvitationRedirectUrl(params: {
   orgSlug: string
   preferredSite: InvitationRedirectSite | null
   fallbackSites: InvitationRedirectSite[]
+  bypassOnboardingGate?: boolean
 }): string {
   const orgBase = `/dashboard/${encodeURIComponent(params.orgSlug)}`
 
   const site = params.preferredSite
   if (site) {
-    if (site.onboarding_status !== 'active') return `${orgBase}/onboarding`
+    if (!params.bypassOnboardingGate && site.onboarding_status !== 'active') return `${orgBase}/onboarding`
     if (site.subdomain) return `${orgBase}/sites/${encodeURIComponent(site.subdomain)}`
   }
 
   if (params.fallbackSites.length === 1) {
     const onlySite = params.fallbackSites[0]!
-    if (onlySite.onboarding_status !== 'active') return `${orgBase}/onboarding`
+    if (!params.bypassOnboardingGate && onlySite.onboarding_status !== 'active') return `${orgBase}/onboarding`
     if (onlySite.subdomain) return `${orgBase}/sites/${encodeURIComponent(onlySite.subdomain)}`
   }
 

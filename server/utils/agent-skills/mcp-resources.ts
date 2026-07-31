@@ -93,7 +93,7 @@ export async function readTenantAgentSkillResource(db: D1Database, input: {
   isPlatformAdmin: boolean
 }) {
   const parsed = parseResourceUri(input.uri)
-  const workspace = await resolveMcpWorkspace(db, input.userId, input.isPlatformAdmin, { requireSite: true })
+  const workspace = await resolveMcpWorkspace(db, input.userId, { requireSite: true })
   if (!workspace.site) throw mcpProtocolError(MCP_ERROR.invalidParams, 'Select an active site before reading Agent Skill resources.')
   if (parsed.kind === 'guidance') {
     const guidance = await resolveAgentGuidance(db, {

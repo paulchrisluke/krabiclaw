@@ -1,19 +1,17 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { hasBetterAuthAdminRole, isPlatformAdmin } from '../../server/utils/platform-auth.ts'
+import { hasPlatformAdminPermission } from '../../utils/platform-admin-access.ts'
 
-const env = {
-  BETTER_AUTH_SECRET: 'test-secret',
-} satisfies ApiRecord
-
-test('hasBetterAuthAdminRole supports Better Auth comma-separated roles', () => {
-  assert.equal(hasBetterAuthAdminRole('user,admin'), true)
-  assert.equal(hasBetterAuthAdminRole('member'), false)
+test('hasPlatformAdminPermission uses the Better Auth Admin access-control role contract', () => {
+  assert.equal(hasPlatformAdminPermission('user,admin'), true)
+  assert.equal(hasPlatformAdminPermission('admin', { platform: ['billing'] }), true)
+  assert.equal(hasPlatformAdminPermission('user', { platform: ['billing'] }), false)
+  assert.equal(hasPlatformAdminPermission('member'), false)
 })
 
-test('isPlatformAdmin requires the Better Auth admin role', () => {
-  assert.equal(isPlatformAdmin({ role: 'admin', email: 'someone@example.com' }, env), true)
-  assert.equal(isPlatformAdmin({ role: 'user,admin', email: 'someone@example.com' }, env), true)
-  assert.equal(isPlatformAdmin({ role: 'user', email: 'someone@example.com' }, env), false)
+test('hasPlatformAdminPermission authorizes default platform access', () => {
+  assert.equal(hasPlatformAdminPermission('admin'), true)
+  assert.equal(hasPlatformAdminPermission('user,admin'), true)
+  assert.equal(hasPlatformAdminPermission('user'), false)
 })

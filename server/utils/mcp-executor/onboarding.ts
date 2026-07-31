@@ -17,7 +17,6 @@ export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<un
         site.db,
         site.siteId,
         site.userId,
-        site.isPlatformAdmin,
       );
       const subdomain = (siteRow as Record<string, unknown>).subdomain as string | null | undefined;
       const customDomain = (siteRow as Record<string, unknown>).custom_domain as string | null | undefined;
@@ -37,12 +36,14 @@ export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<un
       const locationRows = await queryAll<{
         slug: string;
         title: string;
-        hero_image_public_url: string | null;
+        hero_public_url: string | null;
+        hero_kind: string | null;
       }>(
         site.db,
-        `SELECT bl.slug, bl.title, ma.public_url AS hero_image_public_url
+        `SELECT bl.slug, bl.title, ma.public_url AS hero_public_url, ma.kind AS hero_kind
          FROM business_locations bl
-         LEFT JOIN media_assets ma ON bl.hero_image_asset_id = ma.id AND ma.status = 'active'
+         LEFT JOIN media_assets ma ON bl.hero_media_asset_id = ma.id AND ma.status = 'active'
+           AND ma.organization_id = bl.organization_id AND ma.site_id = bl.site_id
          WHERE bl.site_id = ?
          ORDER BY bl.is_primary DESC, bl.title ASC
          LIMIT 5`,
@@ -53,7 +54,8 @@ export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<un
         path: `/locations/${loc.slug}`,
       }));
       const pages = [{ label: "Home", path: "/" }, ...locationPages];
-      const ogImageUrl = locationRows[0]?.hero_image_public_url ?? null;
+      const firstHero = locationRows.find((loc) => loc.hero_public_url && loc.hero_kind !== "video");
+      const ogImageUrl = firstHero?.hero_public_url ?? null;
       const siteName = String((siteRow as Record<string, unknown>).brand_name ?? subdomain ?? site.siteId);
       return renderStructuredResponse(
         {
@@ -106,7 +108,7 @@ export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<un
         publicUrl: uploaded.publicUrl,
         thumbnailUrl: uploaded.thumbnailUrl,
         nextStep:
-          "Upload complete. This image is in the media library but not assigned yet. Call a placement tool like set_home_hero_image or set_logo next.",
+          "Upload complete. This image is in the media library but not assigned yet. Call set_media with the desired target next.",
         context: await mutationContextPayload(site),
       };
     }

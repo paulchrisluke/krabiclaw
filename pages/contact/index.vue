@@ -85,7 +85,7 @@
                 <textarea :id="id" v-model="tenantForm.message" rows="6" :class="inputClass" :aria-describedby="describedBy" :aria-invalid="invalid" />
               </SayaFormField>
 
-              <SayaButton type="submit" :loading="tenantSubmitting">
+              <SayaButton type="submit" :loading="tenantSubmitting" :disabled="isDraftPreview">
                 {{ t('saya.contact_page.send_message') }}
               </SayaButton>
             </form>
@@ -244,9 +244,9 @@ import { setContactConfirmation } from '~/composables/useContactHandoff'
 
 definePageMeta({ layout: false })
 
-const { isPlatform, siteId, site } = useTenantSite()
+const { isPlatform, siteId, draftId, site } = useTenantSite()
 const { isBlawby } = usePublicTemplate()
-if (isPlatform) throw createError({ statusCode: 404 })
+if (isPlatform || (!siteId && !draftId)) throw createError({ statusCode: 404 })
 
 const { locale } = useI18n()
 const vertCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
@@ -260,9 +260,10 @@ import { FORM_INPUT_CLASS } from '~/utils/form-constants'
 const inputClass = FORM_INPUT_CLASS
 
 const businessName = computed(() => site?.brand_name || 'Our Business')
+const isDraftPreview = computed(() => Boolean(draftId && !siteId))
 
 // ── Bootstrap: locations + config in one call ─────────────
-const { locations, config: siteConfig } = useBootstrap()
+const { locations, config: siteConfig } = await useBootstrap()
 
 function formatLocAddress(loc) {
   if (!loc.address) return loc.city || ''
@@ -325,6 +326,7 @@ const validateTenantContact = (state) => {
 }
 
 const handleTenantContact = async () => {
+  if (isDraftPreview.value) return
   if (!siteId) {
     tenantSubmitError.value = t('saya.contact_page.message_failed')
     return

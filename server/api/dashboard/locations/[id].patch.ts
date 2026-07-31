@@ -1,9 +1,8 @@
 // PATCH /api/dashboard/locations/[id] — Update a location
 import { getHeaders } from 'h3'
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
-import { getDashboardContext } from '~/server/utils/dashboard-context'
-import { resolveLocationCapabilitySummary, syncLocationWhatsAppAccess, updateLocation } from '~/server/utils/location-management'
+import { jsonResponse } from '~/server/utils/api-response'
+import { getDashboardLocationContext } from '~/server/utils/dashboard-context'
+import { resolveLocationCapabilitySummary, syncLocationWhatsAppAccess, updateLocation, type UpdateLocationInput } from '~/server/utils/location-management'
 import { parseLocationPayload } from './location-helpers'
 import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
 import { queryFirst } from '~/server/db'
@@ -15,32 +14,9 @@ export default defineEventHandler(async (event) => {
   const locationId = getRouterParam(event, 'id')
   if (!locationId) return jsonResponse({ error: 'Location ID required' }, { status: 400 })
 
-  const env = cloudflareEnv(event)
-  const db = env.DB
-  if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
-
-  const session = await getAuthSession(event, env)
-  if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-
-  // Don't require the x-dashboard-site-slug header here: a location is fully
-  // self-scoping once we know the org (the id is already in the URL), and some
-  // callers — like the post-transfer onboarding wizard at the org-scoped
-  // /onboarding route — have no siteSlug route param to attach it from, and
-  // may legitimately belong to an org with multiple sites at the time of the call.
-  const dashboard = await getDashboardContext(event, { requireSite: false })
-  const { organization } = dashboard
-  if (!organization?.id) {
-    return jsonResponse({ error: 'Organization not found' }, { status: 400 })
-  }
-  const organizationId = organization.id as string
-
-  const locationSite = await queryFirst<{ site_id: string }>(db, `
-    SELECT site_id FROM business_locations WHERE id = ? AND organization_id = ? LIMIT 1
-  `, [locationId, organizationId])
-  if (!locationSite) {
-    return jsonResponse({ error: 'Location not found' }, { status: 404 })
-  }
-  const siteId = locationSite.site_id
+  const { env, db, session, organization, location: locationContext } = await getDashboardLocationContext(event, locationId)
+  const organizationId = organization.id
+  const siteId = locationContext.site_id
   await assertMemberScope(db, {
     memberId: organization.memberId,
     role: organization.role,
@@ -121,8 +97,6 @@ export default defineEventHandler(async (event) => {
       neighborhood: typeof body.neighborhood === 'string' ? body.neighborhood : body.neighborhood === null ? null : undefined,
       phone: typeof body.phone === 'string' ? body.phone : body.phone === null ? null : undefined,
       email: typeof body.email === 'string' ? body.email : body.email === null ? null : undefined,
-      hero_image_asset_id: typeof body.hero_image_asset_id === 'string' ? body.hero_image_asset_id : body.hero_image_asset_id === null ? null : undefined,
-      hero_video_asset_id: typeof body.hero_video_asset_id === 'string' ? body.hero_video_asset_id : body.hero_video_asset_id === null ? null : undefined,
       website_url: typeof body.website_url === 'string' ? body.website_url : body.website_url === null ? null : undefined,
       maps_url: typeof body.maps_url === 'string' ? body.maps_url : body.maps_url === null ? null : undefined,
       google_review_url: typeof body.google_review_url === 'string' ? body.google_review_url : body.google_review_url === null ? null : undefined,
@@ -130,9 +104,7 @@ export default defineEventHandler(async (event) => {
         ? undefined
         : body.opening_hours === null
           ? null
-          : typeof body.opening_hours === 'string'
-            ? body.opening_hours
-            : JSON.stringify(body.opening_hours),
+          : body.opening_hours as UpdateLocationInput['opening_hours'],
       description: typeof body.description === 'string' ? body.description : body.description === null ? null : undefined,
       short_description: typeof body.short_description === 'string' ? body.short_description : body.short_description === null ? null : undefined,
       price_level: typeof body.price_level === 'string' ? body.price_level : body.price_level === null ? null : undefined,

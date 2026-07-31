@@ -1,19 +1,16 @@
-import { getHeader, getRequestURL, setResponseStatus } from "h3";
+import { getHeader, setResponseStatus } from "h3";
 import type { H3Event } from "h3";
 import {
   asMcpError,
-  mcpFailure,
-  mcpProtocolError,
   mcpSuccess,
   MCP_ERROR,
-  MCP_PROTOCOL_VERSION,
+  mcpProtocolError,
   negotiatedMcpProtocolVersion,
   parseMcpToolCallArguments,
   readMcpRequest,
-  SUPPORTED_PROTOCOL_VERSIONS,
 } from "~/server/utils/mcp-protocol";
 import { catalogFingerprint, catalogMeta } from "~/server/utils/mcp-catalog";
-import { mcpHttpStatusForError, sendMcpErrorResponse, setMcpNotificationAccepted } from "~/server/utils/mcp-http-response";
+import { mcpHttpStatusForError } from "~/server/utils/mcp-http-response";
 import { executeMcpToolCall } from "~/server/utils/mcp-executor";
 import { isMcpRenderResponse } from "~/server/utils/mcp-render";
 import {
@@ -24,7 +21,6 @@ import {
 } from "~/server/utils/mcp-auth";
 import { MCP_PUBLIC_TOOLS, MCP_TOOLS } from "~/server/utils/mcp-tools";
 import { MCP_PROMPTS, renderMcpPrompt } from "~/server/utils/mcp-prompts";
-import { MCP_APP_RESOURCES, readMcpAppResource } from "~/server/utils/mcp-widgets";
 import { AGENT_SKILL_RESOURCE_TEMPLATES, readTenantAgentSkillResource } from "~/server/utils/agent-skills/mcp-resources";
 import { cloudflareEnv } from "~/server/utils/api-response";
 import { queryAll } from "~/server/db";
@@ -37,16 +33,14 @@ import {
   normalizeMcpToolForConversationalSurface,
 } from "~/server/utils/conversational-tool-surface";
 import {
-  buildMcpAuthChallengeForError,
-  buildMcpOAuthChallenge,
-  describeMcpAuthTelemetryError,
-  getCloudflareWaitUntil,
-  isMcpMutatingTool,
-  mcpAuthRequiredResult,
-  mcpToolErrorResult,
-  setMcpAuthChallenge,
-} from "~/server/utils/mcp-route-helpers";
-import { describeErrorForTelemetry, logMcpToolCallEvent } from "~/server/utils/mcp-telemetry";
+  dispatchStandardMcpMethod,
+  respondToMcpError,
+  resolveMissingMcpCredential,
+  unsupportedMcpMethodError,
+  type McpToolMeta,
+} from "~/server/utils/mcp-runtime";
+import { getCloudflareWaitUntil, isMcpMutatingTool } from "~/server/utils/mcp-route-helpers";
+import { logMcpToolCallEvent } from "~/server/utils/mcp-telemetry";
 const TENANT_CATALOG_FINGERPRINT = catalogFingerprint(MCP_PUBLIC_TOOLS);
 
 // Fires a telemetry write without ever blocking or failing the MCP response.
@@ -78,6 +72,11 @@ const TENANT_AUTH_REQUIRED_TEXT = "Authentication required: connect KrabiClaw to
 
 function resourceMetadataUrl(baseUrl: string) {
   return `${baseUrl}/.well-known/oauth-protected-resource`;
+}
+
+function resolveTenantToolMeta(toolName: string | null): McpToolMeta {
+  const tool = toolName ? MCP_TOOLS.find((t) => t.name === toolName) : undefined;
+  return { domain: tool?.domain ?? null, isMutating: isMcpMutatingTool(tool) };
 }
 
 function safeMcpEnvelopeDetails(event: H3Event, body: unknown) {
@@ -113,40 +112,34 @@ export default defineEventHandler(async (event) => {
   let requestId: string | number | null | undefined;
   let requestMethod: string | undefined;
   let requestToolName: string | undefined;
+  let requestToolArgs: Record<string, unknown> | undefined;
   let requestEnvelope: ReturnType<typeof safeMcpEnvelopeDetails> | null = null;
+  const cfEnv = cloudflareEnv(event);
+  const baseUrl = (
+    cfEnv.BETTER_AUTH_URL ?? "https://krabiclaw.com"
+  ).replace(/\/$/, "");
+  const tenantAuthOptions = {
+    audiences: [`${baseUrl}/api/mcp`],
+    requiredScopes: ["tenant"],
+  };
+  const runtimeDeps = {
+    authOptions: tenantAuthOptions,
+    resourceMetadataUrl,
+    authDescription: TENANT_AUTH_DESCRIPTION,
+    authRequiredText: TENANT_AUTH_REQUIRED_TEXT,
+    logEvent: (evt: typeof event, fields: Record<string, unknown>) =>
+      logMcpEventDetached(evt, cfEnv.DB, fields as unknown as Parameters<typeof logMcpToolCallEvent>[1]),
+    resolveToolMeta: resolveTenantToolMeta,
+  };
   try {
     // Return 401 with WWW-Authenticate before any protocol parsing so OAuth
     // clients (e.g. ChatGPT) can discover the authorization server on first touch.
     // Session-cookie requests (dashboard, E2E tests) have a Cookie header and skip this.
-    const cfEnv = cloudflareEnv(event);
-    const baseUrl = (
-      cfEnv.BETTER_AUTH_URL ?? "https://krabiclaw.com"
-    ).replace(/\/$/, "");
-    const authChallenge = buildMcpOAuthChallenge({
-      resourceMetadataUrl: resourceMetadataUrl(baseUrl),
-      description: TENANT_AUTH_DESCRIPTION,
-    });
-    const tenantAuthOptions = {
-      audiences: [`${baseUrl}/api/mcp`],
-      requiredScopes: ["tenant"],
-    };
-    if (
-      !getHeader(event, "authorization")?.startsWith("Bearer ") &&
-      !getHeader(event, "cookie")
-    ) {
-      const body = await readBody(event);
-      // Lenient extraction only — full validation happens after auth succeeds.
-      // readMcpRequest would throw on discovery payloads missing version/method.
-      const rawBody = body && typeof body === "object" && !Array.isArray(body)
-        ? (body as Record<string, unknown>)
-        : null;
-      requestId = rawBody?.id as string | number | undefined;
-      requestMethod = rawBody?.method as string | undefined;
-      requestToolName = rawBody?.params && typeof rawBody.params === "object"
-        && !Array.isArray(rawBody.params)
-        && typeof (rawBody.params as Record<string, unknown>).name === "string"
-        ? String((rawBody.params as Record<string, unknown>).name)
-        : undefined;
+    const missingCredential = await resolveMissingMcpCredential(event, runtimeDeps, baseUrl);
+    if (missingCredential.handled) {
+      requestId = missingCredential.requestId;
+      requestMethod = missingCredential.requestMethod;
+      requestToolName = missingCredential.requestToolName;
       console.warn("[MCP_AUTH]", JSON.stringify({
         event: "credential_missing",
         ray_id: getHeader(event, "cf-ray") ?? null,
@@ -154,23 +147,7 @@ export default defineEventHandler(async (event) => {
         mcp_method: requestMethod ?? null,
         tool_name: requestToolName ?? null,
       }));
-      if (requestMethod === "tools/call") {
-        logMcpEventDetached(event, cfEnv.DB, {
-          requestId: requestId ?? null,
-          method: requestMethod,
-          toolName: requestToolName ?? null,
-          toolDomain: MCP_TOOLS.find((t) => t.name === requestToolName)?.domain ?? null,
-          status: "auth_required",
-          errorMessage: "credential_missing: missing bearer token or cookie",
-        });
-        return mcpSuccess(requestId ?? null, mcpAuthRequiredResult({ challenge: authChallenge, message: TENANT_AUTH_REQUIRED_TEXT }));
-      }
-      setResponseStatus(event, 401);
-      setMcpAuthChallenge(event, authChallenge);
-      return mcpFailure(requestId ?? null, {
-        code: MCP_ERROR.invalidRequest,
-        message: "Authentication required.",
-      });
+      return missingCredential.response;
     }
 
     const body = await readBody(event);
@@ -233,8 +210,8 @@ Whenever an image is needed (hero, logo, post thumbnail, menu photo, experience 
 3. Call image_generation natively with model gpt-image-1 or gpt-image-2 and the reviewed prompt tailored to the business.
 4. Immediately call save_generated_image_file({ site_id, attachment_id: <file reference from image_generation_call>, prompt }). Pass the file reference — never extract or forward the base64 from image_generation_call.result, that will be blocked by safety checks.
 5. Call show_generated_images with the assetId and publicUrl returned by save_generated_image_file.
-6. After the user approves, assign with the appropriate tool: set_home_hero_image, set_logo, set_about_story_image, set_home_story_image, set_location_hero_image, set_post_image, set_blog_post_image, or set_experience_image.
-7. If the user wants changes, call image_generation again with a revised prompt and repeat from step 4.
+6. After the user approves, assign with set_media using the appropriate target (for example site_logo, home_hero, home_story_image, about_story_image, location_hero, menu_item_image, post_image, blog_post_image, or experience_media).
+7. If the user wants changes, revise the brief and repeat from step 2 so review_agent_guidance_candidate approves every changed image brief before image_generation or saving.
 
 This entire flow runs within the current conversation — do not tell the user to leave the app or use a different context.
 
@@ -245,14 +222,14 @@ This entire flow runs within the current conversation — do not tell the user t
 4. Do not upload media, assign an image, publish, or overwrite anything until the user explicitly confirms.
 5. After confirmation, call upload_user_media({ site_id, file: <resolved ChatGPT file reference for the attachment>, category, description }). This is the only tool for a user-provided photo — there is no separate "open upload" tool for images.
 6. The file argument is the primary contract. Pass the ChatGPT attachment through the file field and let the host rewrite it into an authorized file reference for KrabiClaw. Do not fabricate download URLs, wrap fake file objects, or suggest an in-app photo uploader.
-7. After upload_user_media returns assetId/publicUrl, call the appropriate assignment tool such as set_home_hero_image, set_logo, set_about_story_image, set_home_story_image, set_location_hero_image, set_post_image, set_blog_post_image, or set_experience_image.
-8. Reply with the exact site, placement, assetId, and publicUrl that were updated.
+7. After upload_user_media returns asset_id/public_url, call set_media with the target and complete asset_ids state. For ordered targets such as experience_media, first call the matching read tool, append or reorder the asset IDs, and pass the complete ordered list.
+8. Reply with the exact site, placement, asset_id, and public_url that were updated.
 
 **Videos:**
-- Call open_video_upload only when a video is required — this is the one and only widget-launching tool, and it is video-only. After it reports a completed upload, call the matching assignment tool (set_home_hero_video, set_location_hero_video, set_experience_video, etc.) with the returned assetId.
-- For images, always use upload_user_media (step 5 above) or native image generation — never open_video_upload, and there is no "open_media_upload"/"open_image_upload" tool.
-- If you already have a resolved ChatGPT file reference for a video, you can call upload_user_media directly instead of opening the widget.
-- The dashboard media library remains a fallback only for chat clients that do not support inline widgets.
+- Ask the user to attach the video directly in ChatGPT with the paperclip.
+- Call upload_user_media({ site_id, file: <resolved ChatGPT file reference>, category, description }) once the host supplies the file reference. This is the only video upload tool.
+- Never call or mention upload widget tools. No tool whose name starts with "open_" and contains "upload" exists in this connector.
+- After upload_user_media returns asset_id/public_url, call set_media with the matching target such as home_hero, location_hero, or experience_media. For ordered targets, preserve existing media by fetching the current entity first and sending the complete ordered asset_ids list.
 
 ## Choosing a content type
 KrabiClaw has three distinct content-creation tools — do not default to whichever one comes to mind first. Ask yourself whether the request is time-boxed, narrative, or a permanent offering:
@@ -279,6 +256,8 @@ Start every conversation by calling get_workspace_context. If no active site is 
 - Use set_workspace_context whenever the user chooses a site or location.
 - Use get_workspace_context whenever you need to confirm the active organization/site/location before mutating content.
 - If a location-scoped action is requested and the active location is missing, call list_locations and then set_workspace_context with the chosen location_id.
+- site_id means the internal KrabiClaw site ID returned by get_workspace_context, list_sites, or create_site, such as site-pottery-house. A public URL, hostname, custom domain, subdomain, slug, or site name is never a valid site_id.
+- If the user gives a public URL such as https://www.potteryhousekrabi.com/experiences/ceramics-painting-class, first call get_workspace_context or list_sites and match the URL to the returned site's public_url/domain context before calling site-scoped tools.
 
 ## Site confirmation policy — enforced before every mutation
 
@@ -303,154 +282,36 @@ After applying, always confirm: "[Placement] updated for [site name]." — never
 
 When a public-facing tool result includes \`view_url\` or \`public_url\`, include that URL in your reply so the user can open the live page immediately. Prefer \`view_url\` when both are present.
 
-All other tools require a site_id obtained from list_sites. Never guess or invent site IDs. Use get_current_user when the user asks which account is connected.
+All other tools require a site_id obtained from get_workspace_context, list_sites, or create_site. Never guess, invent, derive, or pass through site IDs from URLs/domains. Use get_current_user when the user asks which account is connected.
 
 Common workflows: update menus and items, create and publish site posts, triage contact and reservation submissions, update page content directly, upload media, reply to reviews, manage experiences and bookings, and generate or replace images for any content section. Translations, social publishing, domains, and managed-service requests are available only when explicitly enabled for this connector; otherwise direct the user to the dashboard.`,
       });
     }
 
-    // Client acknowledgement after initialize — spec requires 202 with no body
-    if (request.method === "notifications/initialized") {
-      logMcpEventDetached(event, cfEnv.DB, {
-        requestId: request.id ?? null,
-        method: request.method,
-        status: "success",
-        httpStatus: 202,
-        protocolVersion: MCP_PROTOCOL_VERSION,
-      });
-      return setMcpNotificationAccepted(event);
-    }
-
-    // Standard ping
-    if (request.method === "ping") {
-      logMcpEventDetached(event, cfEnv.DB, {
-        requestId: request.id,
-        method: request.method,
-        status: "success",
-        httpStatus: 200,
-        protocolVersion: MCP_PROTOCOL_VERSION,
-      });
-      return mcpSuccess(request.id, {});
-    }
-
-    if (request.method === "resources/list") {
-      const user = await requireMcpUser(event, tenantAuthOptions);
-      logMcpEventDetached(event, cfEnv.DB, {
-        userId: user.userId,
-        requestId: request.id,
-        method: request.method,
-        result: { count: MCP_APP_RESOURCES.length },
-        status: "success",
-        httpStatus: 200,
-        oauthClientId: user.oauthClientId ?? null,
-      });
-      return mcpSuccess(request.id, { resources: MCP_APP_RESOURCES });
-    }
-
-    if (request.method === "resources/templates/list") {
-      const user = await requireMcpUser(event, tenantAuthOptions);
-      logMcpEventDetached(event, cfEnv.DB, {
-        userId: user.userId,
-        requestId: request.id,
-        method: request.method,
-        result: { count: AGENT_SKILL_RESOURCE_TEMPLATES.length },
-        status: "success",
-        httpStatus: 200,
-        oauthClientId: user.oauthClientId ?? null,
-      });
-      return mcpSuccess(request.id, { resourceTemplates: AGENT_SKILL_RESOURCE_TEMPLATES });
-    }
-
-    if (request.method === "resources/read") {
-      const user = await requireMcpUser(event, tenantAuthOptions);
-      const uri =
-        typeof request.params?.uri === "string" ? request.params.uri : "";
-      const content = uri.startsWith("krabiclaw://")
-        ? await readTenantAgentSkillResource(user.db, { uri, userId: user.userId, isPlatformAdmin: user.isPlatformAdmin })
-        : await readMcpAppResource(uri, getRequestURL(event).origin);
-      logMcpEventDetached(event, cfEnv.DB, {
-        userId: user.userId,
-        requestId: request.id,
-        method: request.method,
-        result: { uri },
-        status: "success",
-        httpStatus: 200,
-        oauthClientId: user.oauthClientId ?? null,
-      });
-      return mcpSuccess(request.id, { contents: [content] });
-    }
-
-    if (request.method === "prompts/list") {
-      const user = await requireMcpUser(event, tenantAuthOptions);
-      logMcpEventDetached(event, cfEnv.DB, {
-        userId: user.userId,
-        requestId: request.id,
-        method: request.method,
-        result: { count: MCP_PROMPTS.length },
-        status: "success",
-        httpStatus: 200,
-        oauthClientId: user.oauthClientId ?? null,
-      });
-      return mcpSuccess(request.id, { prompts: MCP_PROMPTS });
-    }
-
-    if (request.method === "prompts/get") {
-      const user = await requireMcpUser(event, tenantAuthOptions);
-      const name =
-        typeof request.params?.name === "string" ? request.params.name : "";
-      const rawPromptArgs = request.params?.arguments;
-      const promptArgs: Record<string, string> = {};
-      if (
-        rawPromptArgs &&
-        typeof rawPromptArgs === "object" &&
-        !Array.isArray(rawPromptArgs)
-      ) {
-        for (const [key, value] of Object.entries(
-          rawPromptArgs as Record<string, unknown>,
-        )) {
-          if (typeof value === "string") promptArgs[key] = value;
-        }
-      }
-      const rendered = renderMcpPrompt(name, promptArgs);
-      logMcpEventDetached(event, cfEnv.DB, {
-        userId: user.userId,
-        requestId: request.id,
-        method: request.method,
-        toolName: name || null,
-        result: { name },
-        status: "success",
-        httpStatus: 200,
-        oauthClientId: user.oauthClientId ?? null,
-      });
-      return mcpSuccess(request.id, {
-        description: rendered.description,
-        messages: [
-          { role: "user", content: { type: "text", text: rendered.text } },
-        ],
-      });
-    }
-
-    if (request.method === "server/discover") {
-      const user = await requireMcpUser(event, tenantAuthOptions);
-      logMcpEventDetached(event, cfEnv.DB, {
-        userId: user.userId,
-        requestId: request.id,
-        method: request.method,
-        status: "success",
-        httpStatus: 200,
-        oauthClientId: user.oauthClientId ?? null,
-      });
-      return mcpSuccess(request.id, {
-        supportedVersions: SUPPORTED_PROTOCOL_VERSIONS,
-        capabilities: { tools: {} },
-        serverInfo: {
-          name: "krabiclaw-mcp",
-          version: "phase-5",
+    const standardResponse = await dispatchStandardMcpMethod(event, request, runtimeDeps, {
+      resources: {
+        list: [],
+        templates: AGENT_SKILL_RESOURCE_TEMPLATES,
+        read: (uri: string, _event, user) => {
+          if (uri.startsWith("krabiclaw://")) {
+            return readTenantAgentSkillResource(cfEnv.DB, {
+              uri,
+              userId: user.userId,
+              isPlatformAdmin: user.isPlatformAdmin,
+            });
+          }
+          throw mcpProtocolError(MCP_ERROR.invalidParams, `Unknown MCP app resource: ${uri}`);
         },
+      },
+      prompts: { list: MCP_PROMPTS, render: renderMcpPrompt },
+      discover: {
+        serverName: "krabiclaw-mcp",
+        serverVersion: "phase-5",
         instructions:
-          "KrabiClaw MCP. Call get_workspace_context at the start of every conversation. If no active site is set yet, call list_sites, let the user choose, then persist it with set_workspace_context before mutating tools.",
-      });
-    }
+          "KrabiClaw MCP. Call get_workspace_context at the start of every conversation. site_id must be an internal id from get_workspace_context/list_sites/create_site, never a URL/domain/subdomain/name. Native ChatGPT attachments upload only through upload_user_media; never call stale open_*upload widget tools. If no active site is set yet, call list_sites, let the user choose, then persist it with set_workspace_context before mutating tools.",
+      },
+    });
+    if (standardResponse !== undefined) return standardResponse;
 
     if (request.method === "tools/list") {
       const user = await requireMcpUser(event, tenantAuthOptions);
@@ -516,12 +377,6 @@ Common workflows: update menus and items, create and publish site posts, triage 
             ...(tool.fileParams?.length
               ? { "openai/fileParams": tool.fileParams }
               : {}),
-            ...(tool.uiResourceUri
-              ? {
-                  ui: { resourceUri: tool.uiResourceUri, visibility: ["model", "app"] },
-                  "openai/outputTemplate": tool.uiResourceUri,
-                }
-              : {}),
           },
         }
 
@@ -559,30 +414,12 @@ Common workflows: update menus and items, create and publish site posts, triage 
       const toolName =
         typeof request.params?.name === "string" ? request.params.name : "";
       const rawArgs = parseMcpToolCallArguments(request.params);
+      requestToolArgs = rawArgs;
 
       const toolDef = MCP_TOOLS.find((t) => t.name === toolName);
       const toolStartedAt = Date.now();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let mcpUser: any = null;
-      try {
-        mcpUser = await requireMcpUser(event, tenantAuthOptions);
-      } catch (authError) {
-        logMcpEventDetached(event, cfEnv.DB, {
-          requestId: request.id,
-          method: request.method,
-          toolName,
-          toolDomain: toolDef?.domain ?? null,
-          isMutating: isMcpMutatingTool(toolDef),
-          arguments: rawArgs,
-          status: "auth_required",
-          errorMessage: describeMcpAuthTelemetryError(authError),
-          httpStatus: 200,
-          oauthClientId: mcpUser?.oauthClientId ?? null,
-          durationMs: Date.now() - toolStartedAt,
-        });
-        throw authError;
-      }
+      const mcpUser = await requireMcpUser(event, tenantAuthOptions);
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let result: any;
@@ -592,6 +429,7 @@ Common workflows: update menus and items, create and publish site posts, triage 
       } catch (toolError) {
         const mcpErr = asMcpError(toolError);
         if (mcpErr.kind === "protocol") {
+          const telemetryErrorMessage = describeErrorForTelemetry(toolError);
           logMcpEventDetached(event, cfEnv.DB, {
             userId: mcpUser.userId,
             organizationId: mcpUser.activeOrganizationId ?? null,
@@ -604,10 +442,10 @@ Common workflows: update menus and items, create and publish site posts, triage 
             arguments: rawArgs,
             status: "error",
             errorCode: mcpErr.code,
-            errorMessage: describeErrorForTelemetry(toolError),
+            errorMessage: telemetryErrorMessage,
             httpStatus: 200,
             jsonrpcErrorCode: mcpErr.code,
-            jsonrpcErrorMessage: mcpErr.message,
+            jsonrpcErrorMessage: telemetryErrorMessage,
             unknownToolName: toolName || null,
             oauthClientId: mcpUser.oauthClientId ?? null,
             durationMs: Date.now() - toolStartedAt,
@@ -631,13 +469,18 @@ Common workflows: update menus and items, create and publish site posts, triage 
           oauthClientId: mcpUser.oauthClientId ?? null,
           durationMs: Date.now() - toolStartedAt,
         });
-        if (mcpErr.code === MCP_ERROR.invalidParams) {
-          return mcpSuccess(request.id, {
-            isError: true,
-            content: [{ type: "text", text: mcpErr.message }],
-          });
-        }
-        throw toolError;
+        // Any other tool-execution failure (including a plain `throw new
+        // Error(...)` from a business-rule guard, which asMcpError falls
+        // back to classifying as kind:'transport') must still resolve as a
+        // graceful isError:true 200, not a raw HTTP 500 — MCP clients can't
+        // act on a transport-level error mid-tool-call any more than they
+        // can act on a raw 401 (see resolveMissingMcpCredential). Confirmed
+        // via issue #386/#408 staging verification: get_google_business_connection's
+        // plain "requires a paid plan" throw was leaking as a 500.
+        return mcpSuccess(request.id, {
+          isError: true,
+          content: [{ type: "text", text: mcpErr.message }],
+        });
       }
 
       const isRender = isMcpRenderResponse(result);
@@ -750,7 +593,7 @@ Common workflows: update menus and items, create and publish site posts, triage 
       });
     }
 
-    throw mcpProtocolError(MCP_ERROR.methodNotFound, `Unsupported MCP method: ${request.method}`, undefined, "protocol");
+    throw unsupportedMcpMethodError(request.method);
   } catch (error) {
     const mcpError = asMcpError(error);
     const toolCallPermissionError = requestMethod === "tools/call" && mcpError.kind === "forbidden";
@@ -765,23 +608,13 @@ Common workflows: update menus and items, create and publish site posts, triage 
       ...(mcpError.code === MCP_ERROR.invalidRequest || mcpError.code === MCP_ERROR.invalidParams ? { envelope: requestEnvelope ?? safeMcpEnvelopeDetails(event, undefined) } : {}),
     }));
     if (mappedStatus >= 500 && error instanceof Error) console.error(error.stack ?? error.message);
-    if (mcpError.kind === "auth") {
-      const cfEnv = cloudflareEnv(event);
-      const baseUrl = (
-        cfEnv.BETTER_AUTH_URL ?? "https://krabiclaw.com"
-      ).replace(/\/$/, "");
-      const authChallenge = buildMcpAuthChallengeForError(error, {
-        resourceMetadataUrl: resourceMetadataUrl(baseUrl),
-        defaultDescription: TENANT_AUTH_DESCRIPTION,
-      });
-      if (requestMethod === "tools/call") {
-        return mcpSuccess(requestId, mcpAuthRequiredResult({ challenge: authChallenge, message: TENANT_AUTH_REQUIRED_TEXT }));
-      }
-      return sendMcpErrorResponse(event, { id: requestId, error: mcpError, authChallenge });
-    }
-    if (toolCallPermissionError) {
-      return mcpSuccess(requestId, mcpToolErrorResult(mcpError.message));
-    }
-    return sendMcpErrorResponse(event, { id: requestId, error: mcpError });
+    return respondToMcpError(event, error, {
+      requestId,
+      requestMethod,
+      requestToolName,
+      requestToolArgs,
+      baseUrl,
+      ...runtimeDeps,
+    });
   }
 });

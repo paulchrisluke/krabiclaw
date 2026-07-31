@@ -7,6 +7,7 @@ export const SITE_CONVERSION_EVENT_NAMES = [
   'book_consultation_click',
   'contact_submit',
   'donation_click',
+  'link_click',
 ] as const
 
 export type SiteConversionEventName = typeof SITE_CONVERSION_EVENT_NAMES[number]

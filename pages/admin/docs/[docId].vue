@@ -287,7 +287,7 @@ interface DocResponse {
   doc?: Doc
 }
 
-definePageMeta({ layout: 'dashboard', middleware: 'admin' })
+definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
 const docId = route.params.docId as string
