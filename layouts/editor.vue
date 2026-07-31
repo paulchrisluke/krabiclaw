@@ -37,10 +37,7 @@ import { UPGRADE_MODAL_ENABLED } from '~/composables/useUpgradeModal'
 import SayaUpgradeModal from '~/components/saya/_ignored/SayaUpgradeModal.vue'
 import { useDashboardSite } from '~/composables/useDashboardSite'
 
-// Load dashboard context using the same keyed SSR-hydrated pattern as dashboard layout
-// During SSR, ensure context is loaded before rendering
+// Load dashboard context for site-scoped editor pages
+// Since SSR is disabled for editor routes, this runs client-side
 const dashboard = useDashboardSite()
-if (import.meta.server && !dashboard.state.value) {
-  await dashboard.refresh()
-}
 </script>
