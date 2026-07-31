@@ -1,6 +1,6 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { updateLocation, type UpdateLocationInput } from '~/server/utils/location-management'
-import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
+import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
 import { requireLocationAccess } from '~/server/utils/location-access'
 
 function parseLocationPayload<T>(value: T) {
@@ -79,7 +79,7 @@ export default defineEventHandler(async (event) => {
   if (result.status >= 400) {
     return jsonResponse(result.data, { status: result.status })
   }
-  await purgeBootstrapCacheSafe(env, siteId)
+  await purgePublicResourceCacheSafe(env, siteId)
 
   const location = (result.data as { location?: unknown }).location
   return jsonResponse({

@@ -53,7 +53,7 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 const dashboard = useDashboardSite()
-await dashboard.refresh()
+if (!dashboard.state.value) await dashboard.refresh()
 const organization = dashboard.organization
 if (!['owner', 'admin'].includes(organization.value?.role ?? '')) {
   throw createError({ statusCode: 404, statusMessage: 'Page not found' })

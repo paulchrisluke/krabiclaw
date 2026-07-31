@@ -33,6 +33,13 @@
         </div>
 
         <div class="overflow-hidden rounded-lg border border-default bg-default shadow-sm">
+          <UAlert
+            v-if="threadsError"
+            color="error"
+            variant="soft"
+            title="Inbox could not be loaded"
+            :description="getErrorMessage(threadsError, 'Guest inbox request failed')"
+          />
           <NuxtLink
             v-for="thread in threads"
             :key="thread.id"
@@ -66,7 +73,7 @@
             <USkeleton v-for="i in 5" :key="i" class="h-16 rounded-lg" />
           </div>
 
-          <div v-else-if="threads.length === 0" class="px-6 py-14 text-center">
+          <div v-else-if="!threadsError && threads.length === 0" class="px-6 py-14 text-center">
             <UIcon name="i-lucide-inbox" class="mx-auto size-8 text-muted" />
             <p class="mt-3 text-sm font-medium text-highlighted">No guest threads yet</p>
             <p class="mt-1 text-xs text-muted">{{ emptyDescription }}</p>
@@ -106,6 +113,13 @@
           </section>
         </div>
 
+        <UAlert
+          v-else-if="detailError"
+          color="error"
+          variant="soft"
+          title="Thread could not be loaded"
+          :description="getErrorMessage(detailError, 'Guest thread request failed')"
+        />
         <div v-else class="mx-auto w-full max-w-5xl rounded-lg border border-default bg-default px-6 py-14 text-center shadow-sm">
           <UIcon name="i-lucide-message-circle-off" class="mx-auto size-8 text-muted" />
           <p class="mt-3 text-sm font-medium text-highlighted">Thread not found</p>
@@ -248,6 +262,8 @@ const emptyDescription = computed(() => {
 
 const loadingThreads = ref(false)
 const loadingDetail = ref(false)
+const threadsError = ref<unknown>(null)
+const detailError = ref<unknown>(null)
 const threads = ref<ThreadListItem[]>([])
 const selectedDetail = ref<ThreadDetail | null>(null)
 const replyDraft = ref('')
@@ -291,7 +307,9 @@ const capabilities = computed(() => {
   }
 })
 
-const dashboardRequestHeaders = computed(() => buildDashboardRequestHeaders())
+const dashboardScope = useDashboardRouteScope()
+const dashboardApi = useDashboardApi(dashboardScope)
+const requestEvent = useRequestEvent()
 const effectiveFeatureSet = computed(() => new Set<ProductFeature>([
   ...(capabilities.value?.pages.map(page => page.feature) ?? []),
   ...(capabilities.value?.managers.map(manager => manager.id) ?? []),
@@ -307,6 +325,103 @@ const supportedThreadLabels = computed(() => typeOptions.value.map(option => opt
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 let threadsRequestToken = 0
 let detailRequestToken = 0
+
+type InitialInboxResource =
+  | { mode: 'list'; threads: ThreadListItem[] }
+  | { mode: 'detail'; thread: ThreadDetail }
+
+const initialInboxKey = computed(() => [
+  'dashboard-guest-inbox',
+  siteId,
+  props.scope,
+  isLocationScope.value ? selectedLocationId.value ?? 'pending-location' : 'site',
+  props.threadId ?? 'list',
+  props.submissionTypeFilter ?? 'all',
+].join(':'))
+
+const {
+  data: initialInboxData,
+  pending: initialInboxPending,
+  error: initialInboxError,
+} = await useAsyncData<InitialInboxResource>(initialInboxKey, async () => {
+  if (isLocationScope.value && !selectedLocationId.value) {
+    return { mode: 'list', threads: [] }
+  }
+  if (!dashboardScope.value) {
+    throw createError({ statusCode: 400, statusMessage: 'Dashboard route scope is incomplete' })
+  }
+  if (import.meta.server) {
+    if (!requestEvent) {
+      throw createError({ statusCode: 500, statusMessage: 'Dashboard request event unavailable' })
+    }
+    const { loadDashboardGuestThread, loadDashboardGuestThreads } = await import(
+      '~/server/utils/dashboard-guest-threads'
+    )
+    if (props.threadId) {
+      const result = await loadDashboardGuestThread(requestEvent, siteId, props.threadId)
+      return { mode: 'detail', thread: result.thread as ThreadDetail }
+    }
+    const result = await loadDashboardGuestThreads(requestEvent, siteId, {
+      locationId: isLocationScope.value ? selectedLocationId.value : null,
+      type: props.submissionTypeFilter ?? null,
+    })
+    return { mode: 'list', threads: result.threads as ThreadListItem[] }
+  }
+  if (props.threadId) {
+    const result = await dashboardApi<{ thread: ThreadDetail }>(
+      `/api/dashboard/sites/${siteId}/guest-threads/${props.threadId}`,
+      { validate: isThreadDetailResponse },
+    )
+    return { mode: 'detail', thread: result.thread }
+  }
+  const result = await dashboardApi<{ threads: ThreadListItem[] }>(
+    `/api/dashboard/sites/${siteId}/guest-threads`,
+    {
+      query: {
+        location_id: isLocationScope.value ? selectedLocationId.value : undefined,
+        type: props.submissionTypeFilter,
+      },
+      validate: isThreadListResponse,
+    },
+  )
+  return { mode: 'list', threads: result.threads }
+})
+
+watch([initialInboxData, initialInboxPending, initialInboxError], ([data, pending, error]) => {
+  if (isDetailMode.value) {
+    loadingDetail.value = pending
+    detailError.value = error
+    selectedDetail.value = data?.mode === 'detail' ? data.thread : null
+    if (data?.mode === 'detail') replyDraft.value = ''
+    return
+  }
+  loadingThreads.value = pending
+  threadsError.value = error
+  threads.value = data?.mode === 'list' ? data.threads : []
+}, { immediate: true })
+
+function isThreadListResponse(value: unknown): value is { threads: ThreadListItem[] } {
+  return isRecord(value)
+    && Array.isArray(value.threads)
+    && value.threads.every(thread =>
+      isRecord(thread)
+      && typeof thread.id === 'string'
+      && typeof thread.guestName === 'string'
+      && typeof thread.submissionType === 'string'
+      && typeof thread.lastActivityAt === 'string',
+    )
+}
+
+function isThreadDetailResponse(value: unknown): value is { thread: ThreadDetail } {
+  return isRecord(value)
+    && isRecord(value.thread)
+    && typeof value.thread.id === 'string'
+    && typeof value.thread.guestName === 'string'
+    && Array.isArray(value.thread.entries)
+    && Array.isArray(value.thread.availableActions)
+}
+
+const isThreadOperationResponse = isThreadDetailResponse
 
 function actionMeta(action: string) {
   return ACTION_META[action] ?? { label: action.charAt(0).toUpperCase() + action.slice(1), icon: 'i-lucide-circle', color: 'neutral' as UiColor, variant: 'outline' as const }
@@ -338,21 +453,24 @@ async function goBackToList() {
 
 async function loadThreads() {
   if (isLocationScope.value && !selectedLocationId.value) return
+  if (!dashboardScope.value) return
   const requestToken = ++threadsRequestToken
   loadingThreads.value = true
+  threadsError.value = null
   try {
-    const res = await $fetch<{ threads: ThreadListItem[] }>(`/api/dashboard/sites/${siteId}/guest-threads`, {
-      headers: dashboardRequestHeaders.value,
+    const res = await dashboardApi<{ threads: ThreadListItem[] }>(`/api/dashboard/sites/${siteId}/guest-threads`, {
       query: {
         location_id: isLocationScope.value ? selectedLocationId.value : undefined,
         search: search.value || undefined,
         type: props.submissionTypeFilter,
       },
+      validate: isThreadListResponse,
     })
     if (requestToken !== threadsRequestToken) return
     threads.value = res.threads ?? []
   } catch (error) {
     if (requestToken !== threadsRequestToken) return
+    threadsError.value = error
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load inbox threads', color: 'error' })
   } finally {
     if (requestToken === threadsRequestToken) loadingThreads.value = false
@@ -360,18 +478,21 @@ async function loadThreads() {
 }
 
 async function loadThreadDetail(threadId: string) {
+  if (!dashboardScope.value) return
   const requestToken = ++detailRequestToken
   loadingDetail.value = true
   selectedDetail.value = null
+  detailError.value = null
   try {
-    const res = await $fetch<{ thread: ThreadDetail }>(`/api/dashboard/sites/${siteId}/guest-threads/${threadId}`, {
-      headers: dashboardRequestHeaders.value,
+    const res = await dashboardApi<{ thread: ThreadDetail }>(`/api/dashboard/sites/${siteId}/guest-threads/${threadId}`, {
+      validate: isThreadDetailResponse,
     })
     if (requestToken !== detailRequestToken) return
     selectedDetail.value = res.thread
     replyDraft.value = ''
   } catch (error) {
     if (requestToken !== detailRequestToken) return
+    detailError.value = error
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load thread', color: 'error' })
   } finally {
     if (requestToken === detailRequestToken) loadingDetail.value = false
@@ -383,15 +504,18 @@ async function refreshThread(threadId: string) {
 }
 
 async function sendReply() {
-  if (!props.threadId || !replyDraft.value.trim()) return
+  if (!dashboardScope.value || !props.threadId || !replyDraft.value.trim()) return
   const idempotencyKey = activeReplyAttemptKey()
   replySaving.value = true
   try {
-    await $fetch(`/api/dashboard/sites/${siteId}/guest-threads/${props.threadId}/operations/reply`, {
+    await dashboardApi<{ thread: ThreadDetail }>(
+      `/api/dashboard/sites/${siteId}/guest-threads/${props.threadId}/operations/reply`,
+      {
       method: 'POST',
-      headers: dashboardRequestHeaders.value,
       body: { body: replyDraft.value, idempotencyKey },
-    })
+      validate: isThreadOperationResponse,
+      },
+    )
     replyAttemptKey.value = null
     replyAttemptDraft.value = null
     toast.add({ description: 'Reply sent', color: 'success' })
@@ -404,7 +528,7 @@ async function sendReply() {
 }
 
 async function runOperationalAction(action: string) {
-  if (!selectedDetail.value) return
+  if (!dashboardScope.value || !selectedDetail.value) return
   const meta = actionMeta(action)
   if (meta.destructive && import.meta.client) {
     const confirmed = window.confirm(`${meta.label} this ${threadTypeLabel(selectedDetail.value.submissionType).toLowerCase()}? This cannot be undone.`)
@@ -415,11 +539,14 @@ async function runOperationalAction(action: string) {
   const idempotencyKey = activeAttemptMapKey(operationAttemptKeys, attemptName)
   operationActionPending.value = action
   try {
-    await $fetch(`/api/dashboard/sites/${siteId}/guest-threads/${threadId}/operations/${action}`, {
+    await dashboardApi<{ thread: ThreadDetail }>(
+      `/api/dashboard/sites/${siteId}/guest-threads/${threadId}/operations/${action}`,
+      {
       method: 'POST',
-      headers: dashboardRequestHeaders.value,
       body: { idempotencyKey },
-    })
+      validate: isThreadOperationResponse,
+      },
+    )
     clearAttemptMapKey(operationAttemptKeys, attemptName)
     toast.add({ description: `${meta.label} applied`, color: 'success' })
     await refreshThread(threadId)
@@ -435,17 +562,20 @@ async function runThreadAction(action: string) {
 }
 
 async function retryDelivery(deliveryId: string) {
-  if (!selectedDetail.value) return
+  if (!dashboardScope.value || !selectedDetail.value) return
   const threadId = selectedDetail.value.id
   const attemptName = `${threadId}:${deliveryId}`
   const idempotencyKey = activeAttemptMapKey(retryAttemptKeys, attemptName)
   retryingDeliveryId.value = deliveryId
   try {
-    await $fetch(`/api/dashboard/sites/${siteId}/guest-threads/${threadId}/operations/retry_delivery`, {
+    await dashboardApi<{ thread: ThreadDetail }>(
+      `/api/dashboard/sites/${siteId}/guest-threads/${threadId}/operations/retry_delivery`,
+      {
       method: 'POST',
-      headers: dashboardRequestHeaders.value,
       body: { deliveryId, idempotencyKey },
-    })
+      validate: isThreadOperationResponse,
+      },
+    )
     clearAttemptMapKey(retryAttemptKeys, attemptName)
     await refreshThread(threadId)
   } catch (error) {
@@ -488,18 +618,4 @@ watch(replyDraft, (draft) => {
   }
 })
 
-watch(() => dashboardLocation.currentLocationId.value, async () => {
-  if (!isLocationScope.value) return
-  if (isDetailMode.value && selectedDetail.value?.locationLabel) return
-  await loadThreads()
-})
-
-watch(() => props.threadId, async (threadId) => {
-  if (threadId) await loadThreadDetail(threadId)
-})
-
-onMounted(async () => {
-  if (props.threadId) await loadThreadDetail(props.threadId)
-  else await loadThreads()
-})
 </script>

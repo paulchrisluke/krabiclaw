@@ -143,6 +143,7 @@
 import { CURRENCY_OPTIONS, DEFAULT_CURRENCY, isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
 import type { ProductFeature } from '~/config/cms-registry'
 
+const dashboardApi = useDashboardApi()
 const FEATURE_LABELS: Partial<Record<ProductFeature, string>> = {
   menu: 'Menu',
   reservations: 'Reservations',
@@ -182,9 +183,9 @@ interface SiteSettingsResponse {
   robots?: string | null
   google_analytics_measurement_id?: string | null
   google_site_verification?: string | null
-  toggleable_features?: ProductFeature[]
-  effective_features?: ProductFeature[]
-  default_features?: ProductFeature[]
+  toggleable_features?: readonly ProductFeature[]
+  effective_features?: readonly ProductFeature[]
+  default_features?: readonly ProductFeature[]
 }
 
 interface FacebookConnectionStatus {
@@ -192,10 +193,42 @@ interface FacebookConnectionStatus {
   facebook_page_name?: string
 }
 
+const isSettingsResponse = (
+  value: unknown,
+): value is { success: boolean; settings: SiteSettingsResponse } =>
+  isRecord(value)
+  && typeof value.success === 'boolean'
+  && isRecord(value.settings)
+  && (value.settings.brand_name === undefined
+    || value.settings.brand_name === null
+    || typeof value.settings.brand_name === 'string')
+  && (value.settings.default_currency === undefined
+    || value.settings.default_currency === null
+    || typeof value.settings.default_currency === 'string')
+  && (value.settings.toggleable_features === undefined
+    || (Array.isArray(value.settings.toggleable_features)
+      && value.settings.toggleable_features.every(feature => typeof feature === 'string')))
+
+const isNotificationsResponse = (
+  value: unknown,
+): value is { success: boolean; notifications: { whatsapp_phone: string | null; channels: string[] } } =>
+  isRecord(value)
+  && typeof value.success === 'boolean'
+  && isRecord(value.notifications)
+  && (value.notifications.whatsapp_phone === null || typeof value.notifications.whatsapp_phone === 'string')
+  && Array.isArray(value.notifications.channels)
+  && value.notifications.channels.every(channel => typeof channel === 'string')
+
+const isFacebookStatus = (value: unknown): value is FacebookConnectionStatus =>
+  isRecord(value)
+  && typeof value.connected === 'boolean'
+  && (value.facebook_page_name === undefined || typeof value.facebook_page_name === 'string')
+
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 const dashboard = useDashboardSite()
+const siteId = await useDashboardSiteId()
 const loading = ref(true)
 const saving = ref(false)
 const loadError = ref<string | null>(null)
@@ -208,7 +241,6 @@ const defaultFeatures = ref<ProductFeature[]>([])
 const notificationChannels = ref<string[]>(['email'])
 const whatsappPhone = ref('')
 const facebookConnection = ref<FacebookConnectionStatus | null>(null)
-let loadToken = 0
 
 const form = reactive({
   brand_name: '', brand_description: '', logo_url: '', contact_email: '', brand_color: '',
@@ -256,39 +288,88 @@ function fillForm(settings: SiteSettingsResponse) {
   form.robots = settings.robots ?? ''
   form.google_analytics_measurement_id = settings.google_analytics_measurement_id ?? ''
   form.google_site_verification = settings.google_site_verification ?? ''
-  toggleableFeatures.value = settings.toggleable_features ?? []
-  defaultFeatures.value = settings.default_features ?? []
+  toggleableFeatures.value = [...(settings.toggleable_features ?? [])]
+  defaultFeatures.value = [...(settings.default_features ?? [])]
   const effective = new Set(settings.effective_features ?? [])
   // Only ever read through toggleableFeatures (see the template's v-for and saveFeatures'
   // filter), so a stale key from a previous load is harmless — no need to clear the object first.
   for (const feature of toggleableFeatures.value) enabledFeatureSet[feature] = effective.has(feature)
 }
 
+interface SettingsPageResource {
+  settings: { success: boolean; settings: SiteSettingsResponse }
+  notifications: {
+    success: boolean
+    notifications: { whatsapp_phone: string | null; channels: string[] }
+  }
+  facebook: FacebookConnectionStatus
+}
+
+const requestEvent = useRequestEvent()
+const settingsResourceKey = computed(() =>
+  `dashboard-site-settings:${String(route.params.orgSlug)}:${String(route.params.siteSlug)}`,
+)
+const {
+  data: settingsResource,
+  pending: settingsPending,
+  error: settingsResourceError,
+  refresh: refreshSettingsResource,
+} = await useAsyncData<SettingsPageResource>(settingsResourceKey, async () => {
+  if (import.meta.server) {
+    if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+    const { loadDashboardSettingsResource } = await import('~/server/utils/dashboard-editor-resources')
+    return await loadDashboardSettingsResource(requestEvent, {
+      includeFacebook: hasFacebookAccess.value,
+    })
+  }
+  const [settings, notifications, facebook] = await Promise.all([
+    dashboardApi<{ success: boolean; settings: SiteSettingsResponse }>(
+      '/api/dashboard/settings',
+      { validate: isSettingsResponse },
+    ),
+    dashboardApi<{
+      success: boolean
+      notifications: { whatsapp_phone: string | null; channels: string[] }
+    }>(
+      `/api/editor/sites/${siteId}/notifications`,
+      { validate: isNotificationsResponse },
+    ),
+    hasFacebookAccess.value
+      ? dashboardApi<FacebookConnectionStatus>('/api/integrations/facebook-pages/connection', {
+          query: { siteId },
+          validate: isFacebookStatus,
+        })
+      : Promise.resolve<FacebookConnectionStatus>({ connected: false }),
+  ])
+  return { settings, notifications, facebook }
+}, { lazy: import.meta.client })
+
+watch([settingsResource, settingsPending, settingsResourceError], ([resource, pending, error]) => {
+  loading.value = pending
+  if (error) {
+    loadError.value = errorMessage(error, 'Failed to load site settings')
+    return
+  }
+  if (!resource) return
+  fillForm(resource.settings.settings)
+  whatsappPhone.value = resource.notifications.notifications.whatsapp_phone ?? ''
+  notificationChannels.value = resource.notifications.notifications.channels.length
+    ? resource.notifications.notifications.channels
+    : ['email']
+  facebookConnection.value = resource.facebook
+  loadError.value = null
+}, { immediate: true })
+
 async function load() {
-  const token = ++loadToken
   loading.value = true
   loadError.value = null
   try {
-    await dashboard.refresh()
-    const siteId = dashboard.siteId.value
-    if (!siteId) throw new Error('Site not found')
-    const [settings, notifications, facebook] = await Promise.all([
-      $fetch<{ success: boolean; settings: SiteSettingsResponse }>('/api/dashboard/settings'),
-      $fetch<{ success: boolean; notifications: { whatsapp_phone: string | null; channels: string[] } }>(`/api/editor/sites/${siteId}/notifications`),
-      hasFacebookAccess.value
-        ? $fetch<FacebookConnectionStatus>('/api/integrations/facebook-pages/connection', { query: { siteId } })
-        : Promise.resolve<FacebookConnectionStatus>({ connected: false }),
-    ])
-    if (token !== loadToken) return
-    fillForm(settings.settings)
-    whatsappPhone.value = notifications.notifications.whatsapp_phone ?? ''
-    notificationChannels.value = notifications.notifications.channels?.length ? notifications.notifications.channels : ['email']
-    facebookConnection.value = facebook
+    await refreshSettingsResource()
+    if (settingsResourceError.value) throw settingsResourceError.value
   } catch (error) {
-    if (token !== loadToken) return
     loadError.value = errorMessage(error, 'Failed to load site settings')
   } finally {
-    if (token === loadToken) loading.value = false
+    loading.value = false
   }
 }
 
@@ -296,9 +377,10 @@ async function saveSiteSettings() {
   const requestedSiteSlug = route.params.siteSlug
   saving.value = true
   try {
-    const response = await $fetch<{ success: boolean; settings: SiteSettingsResponse }>('/api/dashboard/settings', {
+    const response = await dashboardApi<{ success: boolean; settings: SiteSettingsResponse }>('/api/dashboard/settings', {
       method: 'PATCH',
       body: { ...form },
+      validate: isSettingsResponse,
     })
     if (route.params.siteSlug !== requestedSiteSlug) return
     fillForm(response.settings)
@@ -323,9 +405,10 @@ async function saveFeatures() {
     const enabled = toggleableFeatures.value.filter(feature => enabledFeatureSet[feature] && !defaultSet.has(feature))
     const disabled = defaultFeatures.value.filter(feature => !enabledFeatureSet[feature])
     const featureOverrides = enabled.length === 0 && disabled.length === 0 ? null : { enabled, disabled }
-    const response = await $fetch<{ success: boolean; settings: SiteSettingsResponse }>('/api/dashboard/settings', {
+    const response = await dashboardApi<{ success: boolean; settings: SiteSettingsResponse }>('/api/dashboard/settings', {
       method: 'PATCH',
       body: { feature_overrides: featureOverrides },
+      validate: isSettingsResponse,
     })
     if (route.params.siteSlug !== requestedSiteSlug) return
     fillForm(response.settings)
@@ -348,9 +431,10 @@ async function saveNotifications() {
   try {
     const siteId = dashboard.siteId.value
     if (!siteId) throw new Error('Site not found')
-    const response = await $fetch<{ notifications: { whatsapp_phone: string | null; channels: string[] } }>(`/api/editor/sites/${siteId}/notifications`, {
+    const response = await dashboardApi<{ notifications: { whatsapp_phone: string | null; channels: string[] } }>(`/api/editor/sites/${siteId}/notifications`, {
       method: 'PATCH',
       body: { whatsapp_phone: whatsappPhone.value.trim() || null, channels: notificationChannels.value },
+      validate: isNotificationsResponse,
     })
     if (route.params.siteSlug !== requestedSiteSlug) return
     whatsappPhone.value = response.notifications.whatsapp_phone ?? ''
@@ -367,7 +451,16 @@ async function startFacebookConnect() {
   const requestedSiteSlug = route.params.siteSlug
   connectingFacebook.value = true
   try {
-    const response = await $fetch<{ authUrl?: string; error?: string }>('/api/integrations/facebook-pages/auth', { method: 'POST' })
+    const response = await dashboardApi<{ authUrl?: string; error?: string }>(
+      '/api/integrations/facebook-pages/auth',
+      {
+        method: 'POST',
+        validate: (value): value is { authUrl?: string; error?: string } =>
+          isRecord(value)
+          && (value.authUrl === undefined || typeof value.authUrl === 'string')
+          && (value.error === undefined || typeof value.error === 'string'),
+      },
+    )
     if (!response.authUrl) throw new Error(response.error || 'No authorization URL returned')
     if (route.params.siteSlug !== requestedSiteSlug) {
       connectingFacebook.value = false
@@ -385,7 +478,6 @@ async function startFacebookConnect() {
 }
 
 onMounted(async () => {
-  await load()
   const fbStatus = typeof route.query.fb === 'string' ? route.query.fb : null
   if (fbStatus === 'connected') toast.add({ description: 'Facebook Page connected', color: 'success' })
   if (fbStatus) {

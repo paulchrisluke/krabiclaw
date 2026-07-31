@@ -69,22 +69,13 @@ if (!siteId) {
 
 const loading = ref(true)
 const error = ref<string | null>(null)
-const defaultCurrency = ref('THB')
+const defaultCurrency = computed(() => dashboard.site.value?.default_currency ?? '')
 const { paths } = useDashboardSiteLinks(siteId)
 const locations = computed(() => dashboard.locations.value as BusinessLocation[])
 
 const selectedLocation = computed(() => dashboardLocation.currentLocation.value)
 
-const loadMenuWorkspace = async () => {
-  loading.value = true
-  try {
-    defaultCurrency.value = (await fetchMenuCurrency()) ?? defaultCurrency.value
-  } finally {
-    loading.value = false
-  }
-}
-
-onMounted(loadMenuWorkspace)
+loading.value = false
 
 useSeoMeta({ title: 'Menu | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>

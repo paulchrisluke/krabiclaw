@@ -149,6 +149,7 @@
 <script setup lang="ts">
 import type { CreateMenuItemRequest, MenuItem, MenuWithItems, UpdateMenuItemRequest } from '~/server/types/menu'
 
+const dashboardApi = useDashboardApi()
 const props = defineProps<{
   siteId: string
   menuId: string
@@ -257,48 +258,79 @@ const pricePlaceholder = computed(() => '250')
 
 const splitList = (value: string) => value.split(',').map((part: string) => part.trim()).filter(Boolean)
 
-const loadMenu = async () => {
-  loading.value = true
-  error.value = null
+const isMenuItem = (value: unknown): value is MenuItem =>
+  isRecord(value)
+  && typeof value.id === 'string'
+  && typeof value.name === 'string'
+  && typeof value.section === 'string'
 
-  try {
-    const response = await $fetch<{ success: boolean; menu: MenuWithItems }>(
-      `/api/editor/sites/${props.siteId}/menus/${props.menuId}`
-    )
+const isMenuResponse = (value: unknown): value is { success: boolean; menu: MenuWithItems } =>
+  isRecord(value)
+  && typeof value.success === 'boolean'
+  && isRecord(value.menu)
+  && typeof value.menu.id === 'string'
+  && Array.isArray(value.menu.items)
+  && value.menu.items.every(isMenuItem)
 
-    if (!response.success) throw new Error('Failed to load menu')
-
-    menu.value = response.menu
-    const item = props.itemId ? response.menu.items.find((candidate: MenuItem) => candidate.id === props.itemId) : null
-
-    if (props.itemId && !item) throw new Error('Menu item not found')
-
-    if (item) {
-      form.section = item.section || props.initialSection || ''
-      form.name = item.name || ''
-      form.description = item.description || ''
-      form.price_amount = item.price_amount ? String(item.price_amount) : ''
-      form.compare_at_price_amount = item.compare_at_price_amount ? String(item.compare_at_price_amount) : ''
-      form.sale_starts_at = item.sale_starts_at ? item.sale_starts_at.slice(0, 10) : ''
-      form.sale_ends_at = item.sale_ends_at ? item.sale_ends_at.slice(0, 10) : ''
-      form.available = item.available
-      form.featured = item.featured
-      form.media = (item.media ?? []).map(asset => ({ asset_id: asset.id }))
-      form.allergens = (item.allergens || []).join(', ')
-      form.ingredients = (item.ingredients || []).join(', ')
-      form.dietary_notes = (item.dietary_notes || []).join(', ')
-      form.preparation = item.preparation || ''
-      form.serving_note = item.serving_note || ''
-      emit('update:item-name', form.name)
-    } else if (!form.section) {
-      form.section = sectionOptions.value[0]?.value || 'Uncategorized'
-    }
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to load menu item'
-  } finally {
-    loading.value = false
+const applyMenu = (loadedMenu: MenuWithItems) => {
+  menu.value = loadedMenu
+  const item = props.itemId
+    ? loadedMenu.items.find((candidate: MenuItem) => candidate.id === props.itemId)
+    : null
+  if (props.itemId && !item) throw createError({ statusCode: 404, statusMessage: 'Menu item not found' })
+  if (item) {
+    form.section = item.section || props.initialSection || ''
+    form.name = item.name || ''
+    form.description = item.description || ''
+    form.price_amount = item.price_amount ? String(item.price_amount) : ''
+    form.compare_at_price_amount = item.compare_at_price_amount ? String(item.compare_at_price_amount) : ''
+    form.sale_starts_at = item.sale_starts_at ? item.sale_starts_at.slice(0, 10) : ''
+    form.sale_ends_at = item.sale_ends_at ? item.sale_ends_at.slice(0, 10) : ''
+    form.available = item.available
+    form.featured = item.featured
+    form.media = (item.media ?? []).map(asset => ({ asset_id: asset.id }))
+    form.allergens = (item.allergens || []).join(', ')
+    form.ingredients = (item.ingredients || []).join(', ')
+    form.dietary_notes = (item.dietary_notes || []).join(', ')
+    form.preparation = item.preparation || ''
+    form.serving_note = item.serving_note || ''
+    emit('update:item-name', form.name)
+  } else if (!form.section) {
+    form.section = sectionOptions.value[0]?.value || 'Uncategorized'
   }
 }
+
+const requestEvent = useRequestEvent()
+const { data: menuResource, pending: menuPending, error: menuResourceError } = await useAsyncData(
+  `dashboard-menu:${props.siteId}:${props.menuId}`,
+  async () => {
+    if (import.meta.server) {
+      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+      const { loadDashboardMenu } = await import('~/server/utils/dashboard-editor-resources')
+      return await loadDashboardMenu(requestEvent, props.siteId, props.menuId)
+    }
+    return await dashboardApi<{ success: boolean; menu: MenuWithItems }>(
+      `/api/editor/sites/${props.siteId}/menus/${props.menuId}`,
+      { validate: isMenuResponse },
+    )
+  },
+  { lazy: import.meta.client },
+)
+
+watch([menuResource, menuPending, menuResourceError], ([resource, pending, resourceError]) => {
+  loading.value = pending
+  if (resourceError) {
+    error.value = resourceError instanceof Error ? resourceError.message : 'Failed to load menu item'
+    return
+  }
+  if (!resource) return
+  try {
+    applyMenu(resource.menu)
+    error.value = null
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : 'Failed to load menu item'
+  }
+}, { immediate: true })
 
 const payload = computed<CreateMenuItemRequest & UpdateMenuItemRequest>(() => ({
   section: form.section.trim(),
@@ -325,15 +357,19 @@ const handleSave = async () => {
 
   try {
     if (props.itemId) {
-      await $fetch(`/api/editor/sites/${props.siteId}/menus/${props.menuId}/items/${props.itemId}`, {
+      await dashboardApi(`/api/editor/sites/${props.siteId}/menus/${props.menuId}/items/${props.itemId}`, {
         method: 'PATCH',
-        body: payload.value
+        body: payload.value,
+        validate: (value): value is { menuItem: MenuItem } =>
+          isRecord(value) && isMenuItem(value.menuItem),
       })
       toast.add({ description: 'Item saved', color: 'success' })
     } else {
-      const res = await $fetch<{ menuItem: MenuItem }>(`/api/editor/sites/${props.siteId}/menus/${props.menuId}/items`, {
+      const res = await dashboardApi<{ menuItem: MenuItem }>(`/api/editor/sites/${props.siteId}/menus/${props.menuId}/items`, {
         method: 'POST',
-        body: payload.value
+        body: payload.value,
+        validate: (value): value is { menuItem: MenuItem } =>
+          isRecord(value) && isMenuItem(value.menuItem),
       })
       if (res?.menuItem?.id) {
         trackMenuItemCreated(String(res.menuItem.id), props.siteId)
@@ -359,8 +395,9 @@ const handleDelete = async () => {
   error.value = null
 
   try {
-    await $fetch(`/api/editor/sites/${props.siteId}/menus/${props.menuId}/items/${props.itemId}`, {
-      method: 'DELETE'
+    await dashboardApi(`/api/editor/sites/${props.siteId}/menus/${props.menuId}/items/${props.itemId}`, {
+      method: 'DELETE',
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
     })
     toast.add({ description: 'Item deleted', color: 'success' })
     await router.push(backPath.value)
@@ -372,5 +409,4 @@ const handleDelete = async () => {
   }
 }
 
-onMounted(loadMenu)
 </script>

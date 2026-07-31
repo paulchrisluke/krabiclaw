@@ -93,6 +93,7 @@ const platformStatus = ref<'normal' | 'loading' | 'error'>('loading')
 
 async function checkPlatformStatus() {
   try {
+    // Use $fetch for platform health check (not dashboard-scoped API traffic)
     const res = await $fetch<{ status: string }>('/api/health')
     platformStatus.value = res.status === 'ok' ? 'normal' : 'error'
   } catch (err) {

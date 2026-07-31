@@ -99,6 +99,16 @@ interface WorkRequest {
   created_at: string; completed_at: string | null
 }
 
+const isWorkRequestsResponse = (value: unknown): value is { requests: WorkRequest[] } =>
+  isRecord(value)
+  && Array.isArray(value.requests)
+  && value.requests.every(request =>
+    isRecord(request)
+    && typeof request.id === 'string'
+    && typeof request.type === 'string'
+    && typeof request.status === 'string',
+  )
+
 const workRequests = ref<WorkRequest[]>([])
 const workLoading = ref(false)
 const workShowDone = ref(false)
@@ -137,7 +147,10 @@ async function loadWorkRequests() {
   const showDone = workShowDone.value
   workLoading.value = true
   try {
-    const res = await $fetch<{ requests: WorkRequest[] }>(`/api/admin/work-requests?done=${showDone ? '1' : '0'}`)
+    const res = await applicationFetch<{ requests: WorkRequest[] }>(
+      `/api/admin/work-requests?done=${showDone ? '1' : '0'}`,
+      { validate: isWorkRequestsResponse },
+    )
     if (requestToken !== workRequestToken || showDone !== workShowDone.value) return
     workRequests.value = res.requests
   } catch {
@@ -150,7 +163,11 @@ async function loadWorkRequests() {
 
 async function updateWorkRequest(id: string, patch: { status?: string; notes?: string }) {
   try {
-    await $fetch(`/api/admin/work-requests/${id}`, { method: 'PATCH', body: patch })
+    await applicationFetch(`/api/admin/work-requests/${id}`, {
+      method: 'PATCH',
+      body: patch,
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+    })
     await loadWorkRequests()
   } catch {
     toast.add({ title: 'Failed to update request', color: 'error' })

@@ -20,6 +20,7 @@ interface StoredMessage {
 const conversationsState = () => useState<Record<string, ChowBotConv[]>>('chowbot:server-conversations', () => ({}))
 
 export const useChowBotHistory = () => {
+  const dashboardApi = useDashboardApi()
   // Skip on server to avoid hydration issues
   if (import.meta.server) {
     return {
@@ -33,7 +34,17 @@ export const useChowBotHistory = () => {
   const conversationsBySite = conversationsState()
 
   const load = async (siteId: string) => {
-    const res = await $fetch<{ conversations: ChowBotConv[] }>(`/api/ai/${siteId}/conversations`)
+    const res = await dashboardApi<{ conversations: ChowBotConv[] }>(`/api/ai/${siteId}/conversations`, {
+      validate: (value): value is { conversations: ChowBotConv[] } =>
+        isRecord(value)
+        && Array.isArray(value.conversations)
+        && value.conversations.every(conversation =>
+          isRecord(conversation)
+          && typeof conversation.id === 'string'
+          && typeof conversation.site_id === 'string'
+          && typeof conversation.title === 'string',
+        ),
+    })
     conversationsBySite.value = {
       ...conversationsBySite.value,
       [siteId]: res.conversations ?? [],
@@ -43,7 +54,19 @@ export const useChowBotHistory = () => {
   const forSite = (siteId: string): ChowBotConv[] => conversationsBySite.value[siteId] ?? []
 
   const get = async (siteId: string, conversationId: string): Promise<{ conversation: ChowBotConv; messages: ChowbotMessage[] }> => {
-    const res = await $fetch<{ conversation: ChowBotConv; messages: StoredMessage[] }>(`/api/ai/${siteId}/conversations/${conversationId}`)
+    const res = await dashboardApi<{ conversation: ChowBotConv; messages: StoredMessage[] }>(`/api/ai/${siteId}/conversations/${conversationId}`, {
+      validate: (value): value is { conversation: ChowBotConv; messages: StoredMessage[] } =>
+        isRecord(value)
+        && isRecord(value.conversation)
+        && typeof value.conversation.id === 'string'
+        && Array.isArray(value.messages)
+        && value.messages.every(message =>
+          isRecord(message)
+          && typeof message.id === 'string'
+          && typeof message.role === 'string'
+          && typeof message.status === 'string',
+        ),
+    })
     return {
       conversation: res.conversation,
       messages: (res.messages ?? [])
@@ -66,7 +89,10 @@ export const useChowBotHistory = () => {
     }
 
     try {
-      await $fetch(`/api/ai/${siteId}/conversations/${conversationId}`, { method: 'DELETE' })
+      await dashboardApi(`/api/ai/${siteId}/conversations/${conversationId}`, {
+        method: 'DELETE',
+        validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+      })
       await load(siteId)
     } catch (error) {
       console.error('Failed to remove conversation:', error)
@@ -74,6 +100,7 @@ export const useChowBotHistory = () => {
         ...conversationsBySite.value,
         [siteId]: previousConversations,
       }
+      throw error
     }
   }
 

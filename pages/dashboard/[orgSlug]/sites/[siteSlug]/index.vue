@@ -242,6 +242,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 import { buildOnboardingChecklistItems, buildOnboardingStarterPrompt, type OnboardingChecklistResponse } from '~/composables/useOnboardingPrompts'
 import ChowBotPromptTrigger from '~/components/chowbot/ChowBotPromptTrigger.vue'
 import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities } from '~/config/cms-registry'
@@ -273,6 +274,37 @@ interface OperationsSummary {
   experienceBookings: number
 }
 
+type DashboardHomeResponse = {
+  locations: Location[]
+  credits: Credits | null
+  events: SiteEvent[]
+  operations: OperationsSummary
+}
+
+const isDashboardHomeResponse = (value: unknown): value is DashboardHomeResponse =>
+  isRecord(value)
+  && Array.isArray(value.locations)
+  && value.locations.every(location =>
+    isRecord(location)
+    && typeof location.id === 'string'
+    && typeof location.slug === 'string'
+    && typeof location.title === 'string',
+  )
+  && (value.credits === null || (
+    isRecord(value.credits)
+    && typeof value.credits.balance === 'number'
+    && typeof value.credits.lifetime_used === 'number'
+  ))
+  && Array.isArray(value.events)
+  && value.events.every(event =>
+    isRecord(event) && typeof event.id === 'string' && typeof event.event_type === 'string',
+  )
+  && isRecord(value.operations)
+  && typeof value.operations.openThreads === 'number'
+  && typeof value.operations.unreadThreads === 'number'
+  && typeof value.operations.reservations === 'number'
+  && typeof value.operations.experienceBookings === 'number'
+
 const requestEvent = useRequestEvent()
 
 const { data, pending } = await useAsyncData(
@@ -280,7 +312,7 @@ const { data, pending } = await useAsyncData(
   async () => {
     // Bypass the self-fetch entirely on the server — see "Nested SSR self-fetch
     // loses Cloudflare bindings" in CLAUDE.md. dashboardState.refresh() does its
-    // own $fetch to /api/dashboard/context, which has the exact same nested-fetch
+    // own dashboardApi to /api/dashboard/context, which has the exact same nested-fetch
     // problem during SSR — call getDashboardContext directly against the real
     // request event instead, and only use dashboardState.refresh() client-side.
     if (import.meta.server) {
@@ -327,7 +359,9 @@ const { data, pending } = await useAsyncData(
     }
 
     await dashboardState.refresh()
-    return $fetch<{ locations: Location[]; credits: Credits | null; events: SiteEvent[]; operations: OperationsSummary }>('/api/dashboard/home')
+    return dashboardApi<DashboardHomeResponse>('/api/dashboard/home', {
+      validate: isDashboardHomeResponse,
+    })
   },
   // Reuse the SSR payload on first hydration (avoids a redundant duplicate fetch
   // on initial load), but force a fresh fetch on every subsequent client-side

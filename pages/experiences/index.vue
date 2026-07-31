@@ -38,9 +38,9 @@ const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
 const { locale } = useI18n()
 const expCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
 
-const { experiencesList, pending: bootstrapPending, getField, config } = await useBootstrap()
+const { experiencesList, pending: pagePending, getField, config } = await usePublicPageData()
 
-const pending = computed(() => bootstrapPending.value)
+const pending = computed(() => pagePending.value)
 const experiences = computed<Experience[]>(() => experiencesList.value)
 
 const heroKicker = computed(() => getField('hero.kicker', 'Experiences') || 'Experiences')

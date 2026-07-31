@@ -17,11 +17,49 @@
       :site="resolvedSite"
       :locations="locations"
       :menu="menu"
-      :has-experiences="hasExperiences"
+      :has-menu="shell.hasMenu.value"
+      :has-experiences="showExperiences"
       :experience-cta-path="locationExperienceCtaPath"
     />
-    <main class="grow">
-      <slot />
+    <main class="grow" :data-route-shell="routeLoadState.path || route.path">
+      <div
+        v-if="publicPending"
+        class="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8"
+        data-testid="public-route-loading"
+      >
+        <div class="h-7 w-44 animate-pulse rounded bg-elevated" />
+        <div class="mt-5 h-12 max-w-2xl animate-pulse rounded bg-elevated" />
+        <div class="mt-10 grid gap-6 md:grid-cols-2">
+          <div v-for="index in 2" :key="index" class="h-56 animate-pulse rounded bg-elevated" />
+        </div>
+      </div>
+      <div
+        v-else-if="publicError"
+        class="mx-auto max-w-xl px-4 py-24 text-center sm:px-6"
+        data-testid="public-route-error"
+      >
+        <h1 class="saya-display-md text-default">{{ $t('error.page_not_loaded') }}</h1>
+        <p class="mt-4 text-sm text-muted">{{ $t('error.generic_message') }}</p>
+        <div class="mt-8 flex justify-center gap-3">
+          <button
+            v-if="shell.error.value"
+            type="button"
+            class="border border-default px-5 py-3 text-sm"
+            @click="retryShell"
+          >
+            {{ $t('action.try_again') }}
+          </button>
+          <button
+            v-if="routeLoadState.error && routeLoadState.key"
+            type="button"
+            class="border border-default px-5 py-3 text-sm"
+            @click="retryPage"
+          >
+            {{ $t('action.try_again') }}
+          </button>
+        </div>
+      </div>
+      <slot v-else />
     </main>
     <LazySayaFooter
       :site="resolvedSite"
@@ -31,57 +69,53 @@
       :error="bootstrapError"
       :config="config"
       :menu="menu"
-      :has-experiences="hasExperiences"
+      :has-menu="shell.hasMenu.value"
+      :has-experiences="showExperiences"
     />
     <ConsentBanner v-if="!isDemoHost" />
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import ConsentBanner from '~/components/ConsentBanner.vue'
 import { resolveLocationExperienceHref } from '~/utils/experience-navigation'
 
 if (import.meta.dev) useDebugLCP()
 
-// Single owner of the shared site-shell fetch for this tree — header/footer
-// receive the fields they need as props instead of each independently
-// calling useSiteShell()/useTenantSite(). This layout persists across
-// client-side navigation (it isn't remounted per route), so it uses
-// useSiteShell() rather than useBootstrap(): useBootstrap()'s key changes
-// per route and must be `await`-ed so Suspense can block the page swap on
-// it, but a persistent layout component never remounts, so there's no
-// Suspense boundary here for an await to plug into. useSiteShell()'s key is
-// siteId+locale only — it never changes across navigation, so it doesn't
-// need blocking and can't go stale (see useSiteShell.ts).
-const { config, locations, menu, hasExperiences, experiencesList, locales, error: bootstrapError, site: shellSite } = useSiteShell()
-const { siteId, draftId, isTenant, isPlatform, site } = useTenantSite()
+// Persistent chrome uses the minimal shell contract. Route-specific menu and
+// experience data comes from the keyed page loader and changes independently.
+const shell = useSiteShellState()
+const { config, locations, hasExperiences, locales, error: bootstrapError, site: shellSite } = shell
+const routeLoadState = usePublicRouteLoadState()
+const publicPending = computed(() => shell.pending.value || routeLoadState.value.pending)
+const publicError = computed(() => shell.error.value || routeLoadState.value.error)
+const retryShell = async () => await shell.refresh()
+const retryPage = async () => {
+  if (routeLoadState.value.key) await refreshNuxtData(routeLoadState.value.key)
+}
+const activePageKey = computed(() => routeLoadState.value.key)
+const nuxtApp = useNuxtApp()
+const pagePayload = computed(() =>
+  (nuxtApp.payload.data[activePageKey.value] as ApiRecord | undefined)
+  ?? (nuxtApp.static.data[activePageKey.value] as ApiRecord | undefined)
+  ?? null,
+)
+const menu = computed(() => (pagePayload.value?.menu as ApiRecord | null | undefined) ?? null)
+const experiencesList = computed(() =>
+  Array.isArray(pagePayload.value?.experiencesList)
+    ? pagePayload.value.experiencesList as ApiRecord[]
+    : [],
+)
+const showExperiences = computed(() => hasExperiences.value || experiencesList.value.length > 0)
+const { isPlatform, site } = useTenantSite()
 const resolvedSite = computed(() => shellSite.value || site)
 const route = useRoute()
 // Called for its side effect: keeps the consent ref in sync and lets the
 // head markup emit the default signal ahead of any analytics config.
 useCookieConsent()
 
-// The site-shell fetch above is intentionally `lazy: true` (see
-// useSiteShell.ts) so SSR doesn't block the whole page on it. But that means
-// brand_color isn't known yet on first paint, and the CTA button's Tailwind
-// class falls back to Nuxt UI's default color, then snaps to the real brand
-// color once bootstrap resolves client-side — a visible flash of the wrong
-// color. This tiny, non-lazy fetch blocks SSR just long enough to know the
-// real brand_color before anything paints, so no fallback color is ever shown.
-const draftPreviewToken = typeof route.query.token === 'string' ? route.query.token : ''
-const brandConfigUrl = draftId && draftPreviewToken
-  ? `/api/public/drafts/${draftId}/bootstrap?preview=true&token=${encodeURIComponent(draftPreviewToken)}&menu=1`
-  : siteId
-    ? `/api/public/sites/${siteId}/config`
-    : ''
-const { data: brandConfigData } = isTenant && brandConfigUrl
-  ? await useFetch(brandConfigUrl, {
-      key: draftId ? `draft-brand-config-${draftId}-${draftPreviewToken}` : `site-brand-config-${siteId}`,
-    })
-  : { data: ref(null) }
-
 const brandColor = computed(
-  () => brandConfigData.value?.config?.brand_color || config.value?.brand_color || null
+  () => config.value?.brand_color || null
 )
 const brandTextColor = computed(() => getContrastColor(brandColor.value))
 

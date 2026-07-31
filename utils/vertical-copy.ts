@@ -718,8 +718,15 @@ registry.th.professional_service = registry.en.professional_service!
 // sites_vertical_check + utils/template-registry.ts); 'professional_service' is the
 // copy-registry key, so callers passing either value must resolve to the same copy.
 export function normalizeVertical(vertical: string | null | undefined): string {
-  const v = String(vertical ?? "restaurant")
-  return v === "service" ? "professional_service" : v
+  // `sites.vertical` is NOT NULL (sites_vertical_check in server/db/schema.ts).
+  // Every caller already gates on the site being loaded before calling this,
+  // or uses its own local ref for a genuine pre-creation onboarding default —
+  // so a missing vertical here means the caller's data source failed to load,
+  // not a state to paper over with a default vertical's copy.
+  if (vertical == null || vertical === "") {
+    throw new Error("normalizeVertical() received a missing vertical — the site data has not loaded correctly.")
+  }
+  return vertical === "service" ? "professional_service" : vertical
 }
 
 export function getVerticalLabel(vertical: string | null | undefined): string {
@@ -738,7 +745,11 @@ export function getVerticalCopy(vertical: string | null | undefined, locale: str
   if (localized) return localized
   const english = registry.en[v as SiteVertical]
   if (english) return english
-  return byLocale.restaurant ?? registry.en.restaurant!
+  // `v` is a value the sites_vertical_check constraint allows (e.g. 'retail',
+  // 'wellness') but that isn't in ALL_VERTICALS/the copy registry yet, or an
+  // unrecognized string entirely — a real data/registry gap, not a state to
+  // paper over with restaurant copy.
+  throw new Error(`getVerticalCopy() has no registry entry for vertical "${v}".`)
 }
 
 // Restaurants and professional services get their schema.org subtype plus

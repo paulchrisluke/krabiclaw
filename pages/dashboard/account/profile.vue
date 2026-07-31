@@ -370,6 +370,12 @@ interface DeleteErrorBody {
 }
 
 function getDeleteErrorBody(error: unknown): DeleteErrorBody {
+  if (error instanceof ApiClientError) {
+    return {
+      error: typeof error.data.error === 'string' ? error.data.error : undefined,
+      message: error.message,
+    }
+  }
   if (!error || typeof error !== 'object') return {}
   const record = error as Record<string, unknown>
   const data = record.data
@@ -398,7 +404,11 @@ async function confirmDeleteAccount() {
   deleteError.value = ''
 
   try {
-    const res = await $fetch<{ success?: boolean }>('/api/user/delete-account', { method: 'POST' })
+    const res = await applicationFetch<{ success?: boolean }>('/api/user/delete-account', {
+      method: 'POST',
+      validate: (value): value is { success?: boolean } =>
+        isRecord(value) && (value.success === undefined || typeof value.success === 'boolean'),
+    })
     if (res?.success) {
       try { await authClient.signOut() } catch (_err) { /* ignore */ }
       try {

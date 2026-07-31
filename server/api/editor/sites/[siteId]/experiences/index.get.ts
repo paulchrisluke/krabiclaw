@@ -1,8 +1,9 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { listExperiences } from '~/server/utils/experiences'
-import { assertResourceAccess, findLocationInSite, listAccessibleLocationIds } from '~/server/utils/member-access'
+import { listAccessibleLocationIds } from '~/server/utils/member-access'
 import { queryFirst } from '~/server/db'
+import { loadDashboardLocationExperiences } from '~/server/utils/dashboard-editor-resources'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -28,16 +29,7 @@ export default defineEventHandler(async (event) => {
   const query = getQuery(event)
   const locationId = typeof query.location_id === 'string' && query.location_id ? query.location_id : null
   if (locationId) {
-    const location = await findLocationInSite(db, { organizationId: site.organization_id, siteId, locationId })
-    if (!location) return jsonResponse({ error: 'location_id must reference a location on this site' }, { status: 400 })
-    await assertResourceAccess(db, {
-      memberId: site.member_id,
-      role: site.member_role,
-      organizationId: site.organization_id,
-      siteId,
-      resourceLocationId: locationId,
-    })
-    return jsonResponse({ experiences: await listExperiences(db, siteId, { locationId }) })
+    return jsonResponse(await loadDashboardLocationExperiences(event, siteId, locationId))
   }
 
   // A location-scoped editor sees only experiences at their own location(s),

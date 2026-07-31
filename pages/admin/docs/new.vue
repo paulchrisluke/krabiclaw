@@ -230,6 +230,9 @@ interface CreateDocResponse {
   [key: string]: ApiValue
 }
 
+const isCreateDocResponse = (value: unknown): value is CreateDocResponse =>
+  isRecord(value) && (typeof value.id === 'string' || typeof value.id === 'number')
+
 definePageMeta({ layout: 'dashboard' })
 
 const { form, canSave, canPublish, handleImageChange } = useDocForm()
@@ -315,9 +318,10 @@ async function save(publish: boolean) {
   errorMessage.value = ''
   successMessage.value = ''
   try {
-    const res = await $fetch<CreateDocResponse>('/api/admin/docs', {
+    const res = await applicationFetch<CreateDocResponse>('/api/admin/docs', {
       method: 'POST',
       body: { ...buildPayload(), publish },
+      validate: isCreateDocResponse,
     })
     await navigateTo(`/admin/docs/${res.id}`)
   } catch (err) {

@@ -72,6 +72,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.testimonials' })
 useSeoMeta({ title: 'Testimonials | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
@@ -89,8 +90,24 @@ interface SiteTestimonial {
   status: 'pending' | 'approved' | 'rejected'
 }
 
+const isSiteTestimonial = (value: unknown): value is SiteTestimonial =>
+  isRecord(value)
+  && typeof value.id === 'string'
+  && typeof value.author_name === 'string'
+  && typeof value.rating === 'number'
+  && typeof value.content === 'string'
+  && typeof value.status === 'string'
+const isTestimonialsResponse = (value: unknown): value is { reviews: SiteTestimonial[] } =>
+  isRecord(value) && Array.isArray(value.reviews) && value.reviews.every(isSiteTestimonial)
+const isReviewCreatedResponse = (value: unknown): value is { id: string; created: true } =>
+  isRecord(value) && typeof value.id === 'string' && value.created === true
+const isReviewUpdatedResponse = (value: unknown): value is { updated: true } =>
+  isRecord(value) && value.updated === true
+const isReviewDeletedResponse = (value: unknown): value is { review_id: string; deleted: true } =>
+  isRecord(value) && typeof value.review_id === 'string' && value.deleted === true
+
 const siteId = await useDashboardSiteId()
-const headers = buildDashboardRequestHeaders()
+const route = useRoute()
 const toast = useToast()
 const saving = ref(false)
 const editingId = ref<string | null>(null)
@@ -105,7 +122,29 @@ const form = reactive({
 })
 const { data, pending, refresh } = await useAsyncData(
   `dashboard-site-testimonials-${siteId}`,
-  () => $fetch<{ reviews: SiteTestimonial[] }>(`/api/editor/sites/${siteId}/reviews`, { headers }),
+  async () => {
+    if (import.meta.server) {
+      const event = useRequestEvent()
+      if (!event) throw createError({ statusCode: 500, statusMessage: 'Dashboard request context unavailable' })
+      const orgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
+      const siteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : null
+      if (!orgSlug || !siteSlug) throw createError({ statusCode: 400, statusMessage: 'Dashboard scope is required' })
+      const [{ cloudflareEnv }, { loadDashboardContext }, { listSiteReviews }] = await Promise.all([
+        import('~/server/utils/api-response'),
+        import('~/server/utils/dashboard-context-service'),
+        import('~/server/utils/site-reviews'),
+      ])
+      const db = cloudflareEnv(event).DB
+      if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+      const context = await loadDashboardContext(event, { orgSlug, siteSlug })
+      if (context.site?.id !== siteId) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
+      return { reviews: await listSiteReviews(db, siteId) as unknown as SiteTestimonial[] }
+    }
+    return await dashboardApi<{ reviews: SiteTestimonial[] }>(
+      `/api/editor/sites/${siteId}/reviews`,
+      { validate: isTestimonialsResponse },
+    )
+  },
 )
 const testimonials = computed(() => data.value?.reviews ?? [])
 const canSave = computed(() => Boolean(form.author_name.trim() && form.content.trim() && Number.isInteger(form.rating) && form.rating >= 1 && form.rating <= 5 && form.publication_authorized))
@@ -132,8 +171,19 @@ async function save() {
   saving.value = true
   try {
     const body = { ...form, title: form.title || null, original_review_date: form.original_review_date || null, original_reference: form.original_reference || null }
-    if (editingId.value) await $fetch(`/api/editor/sites/${siteId}/reviews/${editingId.value}`, { method: 'PATCH', body })
-    else await $fetch(`/api/editor/sites/${siteId}/reviews`, { method: 'POST', body })
+    if (editingId.value) {
+      await dashboardApi(`/api/editor/sites/${siteId}/reviews/${editingId.value}`, {
+        method: 'PATCH',
+        body,
+        validate: isReviewUpdatedResponse,
+      })
+    } else {
+      await dashboardApi(`/api/editor/sites/${siteId}/reviews`, {
+        method: 'POST',
+        body,
+        validate: isReviewCreatedResponse,
+      })
+    }
     reset()
     await refresh()
     toast.add({ description: 'Testimonial saved', color: 'success' })
@@ -146,7 +196,10 @@ async function save() {
 
 async function remove(testimonial: SiteTestimonial) {
   if (!confirm(`Delete the testimonial from ${testimonial.author_name}?`)) return
-  await $fetch(`/api/editor/sites/${siteId}/reviews/${testimonial.id}`, { method: 'DELETE' })
+  await dashboardApi(`/api/editor/sites/${siteId}/reviews/${testimonial.id}`, {
+    method: 'DELETE',
+    validate: isReviewDeletedResponse,
+  })
   if (editingId.value === testimonial.id) reset()
   await refresh()
 }

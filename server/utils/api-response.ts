@@ -2,6 +2,7 @@ import { createError, getHeader, getRequestHost, type H3Event } from 'h3'
 import { createDb, type AppDb } from '~/server/db'
 import type { CloudflareEnv } from './auth'
 import { isPreviewContext } from '~/server/utils/tenant-hosts'
+import { instrumentD1 } from '~/server/utils/request-metrics'
 
 export const jsonResponse = (body: ApiValue, init: ResponseInit = {}) => {
   const mergedHeaders = new Headers(init.headers)
@@ -88,7 +89,8 @@ export const cloudflareEnv = (event: H3Event): CloudflareEnv => {
     return env ?? {}
   })()
 
-  const d1 = runtimeEnv.DB as D1Database | undefined
+  const rawD1 = runtimeEnv.DB as D1Database | undefined
+  const d1 = rawD1 ? instrumentD1(event, rawD1) : undefined
   const db = d1 ? createDb(d1) : undefined
 
   // Apply E2E delivery-mode overrides only for approved dev/E2E requests
@@ -125,6 +127,7 @@ export const cloudflareEnv = (event: H3Event): CloudflareEnv => {
     ...process.env,
     ...runtimeEnv,
     ...e2eDeliveryOverrides,
+    DB: d1,
     db,
   } as CloudflareEnv
 }

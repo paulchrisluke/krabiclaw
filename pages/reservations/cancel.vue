@@ -100,11 +100,12 @@ async function handleCancel() {
   loading.value = true
   cancelError.value = ''
   try {
-    await $fetch(`/api/public/sites/${siteId}/reservations/${resId.value}/cancel`, {
+    await publicApiMutation<{ success: true }>(`/api/public/sites/${siteId}/reservations/${resId.value}/cancel`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token.value}`
-      }
+      },
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
     })
     cancelled.value = true
   } catch (err) {

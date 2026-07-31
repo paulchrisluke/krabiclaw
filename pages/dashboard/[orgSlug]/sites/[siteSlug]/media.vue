@@ -59,6 +59,15 @@
       <input ref="fileInput" type="file" accept="image/*,video/*" class="hidden" :disabled="uploadLoading" @change="onFileSelect" />
 
       <UAlert v-if="uploadError" color="error" variant="soft" :description="uploadError" icon="i-lucide-triangle-alert" class="mb-4" />
+      <UAlert
+        v-if="loadError"
+        color="error"
+        variant="soft"
+        title="Media could not be loaded"
+        :description="loadError"
+        icon="i-lucide-triangle-alert"
+        class="mb-4"
+      />
       <div v-if="pendingRetryFile" class="mb-4">
         <UButton size="sm" color="neutral" variant="soft" :loading="uploadLoading" :disabled="uploadLoading" @click="retryPendingUpload">
           Retry confirm
@@ -70,13 +79,13 @@
         <div v-for="i in 14" :key="i" class="aspect-square rounded-lg bg-elevated animate-pulse" />
       </div>
 
-      <div v-else-if="assets.length === 0 && (search || kindFilter)" class="py-16 text-center">
+      <div v-else-if="!loadError && assets.length === 0 && (search || kindFilter)" class="py-16 text-center">
         <UIcon name="i-lucide-search-x" class="mx-auto size-10 text-muted" />
         <p class="mt-4 text-sm font-medium text-highlighted">No matches</p>
         <p class="mt-1 text-xs text-muted">Try a different search term or filter.</p>
       </div>
 
-      <div v-else-if="assets.length === 0" class="py-16 text-center">
+      <div v-else-if="!loadError && assets.length === 0" class="py-16 text-center">
         <UIcon name="i-lucide-image" class="mx-auto size-10 text-muted" />
         <p class="mt-4 text-sm font-medium text-highlighted">No media yet</p>
         <p class="mt-1 text-xs text-muted">Upload images or videos to get started.</p>
@@ -153,6 +162,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.media' })
 
 import VideoPosterPrompt from '~/components/workspace/media/VideoPosterPrompt.vue'
@@ -190,6 +200,7 @@ interface MediaAsset {
 
 const assets = ref<MediaAsset[]>([])
 const loading = ref(false)
+const loadError = ref<string | null>(null)
 const loadingMore = ref(false)
 const deleting = ref(false)
 const isDragging = ref(false)
@@ -203,6 +214,15 @@ const selected = ref(new Set<string>())
 const offset = ref(0)
 const hasMore = ref(false)
 const LIMIT = 50
+const isMediaResponse = (value: unknown): value is { media: MediaAsset[] } =>
+  isRecord(value)
+  && Array.isArray(value.media)
+  && value.media.every(asset =>
+    isRecord(asset)
+    && typeof asset.id === 'string'
+    && typeof asset.kind === 'string'
+    && typeof asset.status === 'string',
+  )
 const {
   uploading: uploadLoading,
   error: uploadError,
@@ -238,22 +258,25 @@ let mediaRequestToken = 0
 async function load() {
   const requestToken = ++mediaRequestToken
   loading.value = true
+  loadError.value = null
   offset.value = 0
   selected.value.clear()
   try {
     const params = new URLSearchParams({ limit: String(LIMIT), offset: '0' })
     if (kindFilter.value) params.set('kind', kindFilter.value)
     if (search.value) params.set('search', search.value)
-    const res = await $fetch<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`)
+    const res = await dashboardApi<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`, {
+      validate: isMediaResponse,
+    })
     if (requestToken !== mediaRequestToken) return
     assets.value = res.media ?? []
     hasMore.value = assets.value.length === LIMIT
   } catch (err) {
     if (requestToken !== mediaRequestToken) return
     if (import.meta.dev) console.error('Failed to load media:', err)
-    assets.value = []
+    loadError.value = getErrorMessage(err, 'Failed to load media')
     hasMore.value = false
-    toast.add({ title: getErrorMessage(err, 'Failed to load media'), color: 'error' })
+    toast.add({ title: loadError.value, color: 'error' })
   } finally {
     if (requestToken === mediaRequestToken) loading.value = false
   }
@@ -268,7 +291,9 @@ async function loadMore() {
     const params = new URLSearchParams({ limit: String(LIMIT), offset: String(requestOffset) })
     if (kindFilter.value) params.set('kind', kindFilter.value)
     if (search.value) params.set('search', search.value)
-    const res = await $fetch<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`)
+    const res = await dashboardApi<{ media: MediaAsset[] }>(`${siteApiBase}/media?${params}`, {
+      validate: isMediaResponse,
+    })
     if (requestToken !== mediaRequestToken) return
     const more = res.media ?? []
     assets.value.push(...more)
@@ -296,29 +321,18 @@ async function deleteSelected() {
   deleting.value = true
   const selectedIds = [...selected.value]
   try {
-    const results = await Promise.allSettled(selectedIds.map(id =>
-      $fetch(`${siteApiBase}/media/${id}`, { method: 'DELETE' })
+    await Promise.all(selectedIds.map(id =>
+      dashboardApi(`${siteApiBase}/media/${id}`, {
+        method: 'DELETE',
+        validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+      })
     ))
-
-    const successfullyDeleted = new Set<string>()
-    const failedIds: string[] = []
-
-    results.forEach((result, index) => {
-      const id = selectedIds[index]
-      if (!id) return
-      if (result.status === 'fulfilled') successfullyDeleted.add(id)
-      else failedIds.push(id)
-    })
-
-    if (successfullyDeleted.size > 0) {
-      assets.value = assets.value.filter(a => !successfullyDeleted.has(a.id))
-      successfullyDeleted.forEach(id => selected.value.delete(id))
-      toast.add({ title: `${successfullyDeleted.size} item(s) deleted`, icon: 'i-lucide-circle-check', color: 'success' })
-    }
-
-    if (failedIds.length > 0) {
-      toast.add({ title: `${failedIds.length} item(s) failed to delete`, color: 'error' })
-    }
+    const deleted = new Set(selectedIds)
+    assets.value = assets.value.filter(asset => !deleted.has(asset.id))
+    selected.value.clear()
+    toast.add({ title: `${selectedIds.length} item(s) deleted`, icon: 'i-lucide-circle-check', color: 'success' })
+  } catch (error) {
+    toast.add({ title: getErrorMessage(error, 'Failed to delete media'), color: 'error' })
   } finally { deleting.value = false }
 }
 
@@ -404,9 +418,34 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-onMounted(async () => {
-  await load()
-})
+const requestEvent = useRequestEvent()
+const { data: initialMedia, pending: initialMediaPending, error: initialMediaError } = await useAsyncData(
+  `dashboard-site-media:${siteId}`,
+  async () => {
+    if (import.meta.server) {
+      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+      const { loadDashboardMedia } = await import('~/server/utils/dashboard-editor-resources')
+      return await loadDashboardMedia(requestEvent, siteId, { limit: LIMIT, offset: 0 })
+    }
+    return await dashboardApi<{ media: MediaAsset[] }>(`${siteApiBase}/media?limit=${LIMIT}&offset=0`, {
+      validate: isMediaResponse,
+    })
+  },
+  { lazy: import.meta.client },
+)
+
+watch([initialMedia, initialMediaPending, initialMediaError], ([data, pending, error]) => {
+  loading.value = pending
+  if (error) {
+    loadError.value = getErrorMessage(error, 'Failed to load media')
+    return
+  }
+  if (data) {
+    assets.value = data.media as MediaAsset[]
+    hasMore.value = data.media.length === LIMIT
+    loadError.value = null
+  }
+}, { immediate: true })
 
 let searchDebounceTimer: ReturnType<typeof setTimeout> | undefined
 watch(search, () => {

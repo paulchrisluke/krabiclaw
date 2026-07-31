@@ -121,6 +121,17 @@ interface PlatformMediaAsset {
   alt_text: string | null
 }
 
+const isPlatformMediaResponse = (value: unknown): value is { media: PlatformMediaAsset[] } =>
+  isRecord(value)
+  && Array.isArray(value.media)
+  && value.media.every(asset =>
+    isRecord(asset)
+    && typeof asset.id === 'string'
+    && (asset.public_url === null || typeof asset.public_url === 'string')
+    && (asset.thumbnail_url === null || typeof asset.thumbnail_url === 'string')
+    && (asset.alt_text === null || typeof asset.alt_text === 'string'),
+  )
+
 const isOpen = ref(false)
 const pendingAsset = ref<{ id: string; publicUrl: string; thumbnailUrl: string; altText: string } | null>(null)
 const loading = ref(false)
@@ -149,9 +160,9 @@ watch(() => props.modelValue, async (id) => {
   modelLoadController.value = controller
 
   try {
-    const res = await $fetch<{ media: PlatformMediaAsset[] }>(
+    const res = await applicationFetch<{ media: PlatformMediaAsset[] }>(
       `/api/admin/platform/media?id=${encodeURIComponent(id)}&limit=1`,
-      { signal: controller.signal }
+      { signal: controller.signal, validate: isPlatformMediaResponse },
     )
 
     if (controller.signal.aborted) return
@@ -166,8 +177,7 @@ watch(() => props.modelValue, async (id) => {
     }
   } catch (err) {
     if (controller.signal.aborted || isAbortError(err)) return
-    selectedUrl.value = null
-    selectedAlt.value = ''
+    error.value = getErrorMessage(err, 'Failed to load the selected image')
   } finally {
     if (modelLoadController.value === controller) {
       modelLoadController.value = null
@@ -188,16 +198,16 @@ async function loadImages() {
   loading.value = true
   error.value = null
   try {
-    const res = await $fetch<{ media: PlatformMediaAsset[] }>('/api/admin/platform/media?limit=50', {
-      signal: controller.signal
+    const res = await applicationFetch<{ media: PlatformMediaAsset[] }>('/api/admin/platform/media?limit=50', {
+      signal: controller.signal,
+      validate: isPlatformMediaResponse,
     })
     if (controller.signal.aborted) return
-    images.value = res.media ?? []
+    images.value = res.media
   } catch (err) {
     if (controller.signal.aborted || isAbortError(err)) return
     console.error('Failed to load platform images:', err)
     error.value = err instanceof Error ? err.message : 'Failed to load images'
-    images.value = []
   } finally {
     if (libraryLoadController.value === controller) {
       libraryLoadController.value = null

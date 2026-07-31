@@ -1,31 +1,26 @@
 // Per-page content fetch (photos/qa/reviews/blog/menu/experience datasets,
 // CMS content fields, booking policies). Site-wide chrome data that doesn't
-// vary by route (locations, config, menu, experiencesList) lives in
-// useSiteShell() instead — see that file for why the split exists.
+// vary by route (brand, location summaries, config, locales, navigation
+// capabilities) lives in the site-shell loader instead.
 //
-// This is `await`-ed by every caller. That's load-bearing, not stylistic:
-// the key is derived from the current route, so on client-side navigation
-// the key changes on every page. A non-awaited useAsyncData here would let
-// Vue render the new page with the OLD key's leftover data for a beat (or,
-// if a component further down the tree never re-renders it, indefinitely)
-// before the new fetch resolves — see krabiclaw issue #436/#437. Awaiting it
-// at the top of each page's <script setup> makes Vue Router's Suspense
-// boundary hold the previous page on screen until the new page's real data
-// is in hand, exactly like pages/blog/[slug].vue's own post fetch already
-// does correctly.
+// SSR waits for route data so rendered HTML is complete. Client navigation
+// starts the keyed request lazily and returns immediately; the Saya layout
+// replaces the old route with a destination-local loading or error state.
 //
 // Usage (in a page):
-//   const { getField, getHero, photosList, qaList, ... } = await useBootstrap()
-import { onMounted, onBeforeUnmount, unref } from "vue";
-import type { Ref } from "vue";
+//   const { getField, getHero, photosList, qaList, ... } = await usePublicPageData()
+import { onMounted, onBeforeUnmount, toValue, type MaybeRefOrGetter } from "vue";
 import {
-  useBootstrapParams,
-  useBootstrapKey,
-  useBootstrapUrl,
-} from "~/composables/useBootstrapParams";
-import { useSiteShell } from "~/composables/useSiteShell";
-import type { RenderedBookingPolicySummary } from "~/server/utils/booking-policies";
+  usePublicPageRequest,
+  usePublicPageKey,
+  usePublicPageUrl,
+} from "~/composables/usePublicPageRequest";
+import { useSiteShellState } from "~/composables/useSiteShell";
 import type { Experience } from "~/server/utils/experiences";
+import {
+  isPublicPagePayload,
+  type PublicPagePayload,
+} from '~/utils/public-resource-contracts'
 
 interface ContentRow {
   field: string;
@@ -39,99 +34,94 @@ interface ContentRow {
   [key: string]: unknown;
 }
 
-interface BootstrapPayload {
-  content: ContentRow[];
-  locationReviews: ApiRecord[];
-  reviewsAggregate: ApiRecord | null;
-  reviewsList: ApiRecord[];
-  photosList: ApiRecord[];
-  qaList: ApiRecord[];
-  postsList: ApiRecord[];
-  blogList: ApiRecord[];
-  blogPost: ApiRecord | null;
-  reservationPolicySiteDefault: RenderedBookingPolicySummary | null;
-  reservationPolicyByLocation: Record<string, RenderedBookingPolicySummary>;
-  experiencePolicySiteDefault: RenderedBookingPolicySummary | null;
-  experiencePolicyById: Record<string, RenderedBookingPolicySummary>;
-  experienceDetail: Experience | null;
-}
-
-const emptyBootstrap = (): BootstrapPayload => ({
-  content: [],
-  locationReviews: [],
-  reviewsAggregate: null,
-  reviewsList: [],
-  photosList: [],
-  qaList: [],
-  postsList: [],
-  blogList: [],
-  blogPost: null,
-  reservationPolicySiteDefault: null,
-  reservationPolicyByLocation: {},
-  experiencePolicySiteDefault: null,
-  experiencePolicyById: {},
-  experienceDetail: null,
-});
-
-export const useBootstrap = async (options: { enabled?: boolean | Ref<boolean> } = {}) => {
+export const usePublicPageData = async (options: { enabled?: MaybeRefOrGetter<boolean> } = {}) => {
   const { isPlatform, siteId, draftId } = useTenantSite();
   const route = useRoute();
-  const requestFetch = useRequestFetch();
-  const params = useBootstrapParams();
+  const params = usePublicPageRequest();
+  const routeLoadState = usePublicRouteLoadState();
+  const routeLoadOwner = claimPublicRouteLoadOwner();
+  onScopeDispose(routeLoadOwner.release)
+  const ownedPath = route.path;
   const entityId = computed(() => siteId || draftId || null);
-  const key = computed(() => useBootstrapKey(entityId.value, params.value));
-  const enabled = computed(() => options.enabled === undefined ? true : Boolean(unref(options.enabled)));
+  const key = computed(() => usePublicPageKey(entityId.value, params.value));
+  // options.enabled may be a plain boolean, a Ref/ComputedRef, or a getter —
+  // toValue() unwraps all three. Comparing a Ref object directly to `false`
+  // (the previous `options.enabled !== false`) is always true regardless of
+  // the ref's actual value, since an object is never === the primitive false —
+  // that silently made every `enabled: someComputedRef` caller behave as
+  // always-enabled.
+  const enabled = computed(() => toValue(options.enabled) !== false);
 
-  const url = computed(() => useBootstrapUrl(siteId, params.value));
+  const url = computed(() => usePublicPageUrl(siteId, params.value));
 
-  const empty = emptyBootstrap();
+  const shell = useSiteShellState();
 
-  const shell = useSiteShell();
-
-  const { data, error, pending } =
+  const asyncData =
     isPlatform || !enabled.value || (!siteId && !draftId)
-      ? { data: ref<BootstrapPayload>(empty), error: ref<Error | null>(null), pending: ref(false) }
-      : await useAsyncData<BootstrapPayload>(
+      ? { data: ref<PublicPagePayload>(), error: ref<Error | null>(null), pending: ref(false), refresh: async () => {} }
+      : useAsyncData<PublicPagePayload>(
           key,
-          async () => {
-            if (!import.meta.server) return $fetch<BootstrapPayload>(url.value);
-            // Nested SSR self-fetch (useRequestFetch) has been the source of a real bug
-            // class elsewhere (pages/blog/[category]/[slug].vue, pages/docs/[...segments].vue):
-            // Nitro's internal dispatch for those routes sometimes returned a wrong 404 that
-            // an identical external request to the same URL didn't. This route's shape is
-            // different (one path segment + query string, not multiple path segments) and
-            // hasn't been reproduced failing the same way, but it's the highest-traffic
-            // self-fetch in the app (every tenant page goes through it) — log on failure so
-            // a future occurrence leaves evidence instead of a silent wrong render.
-            try {
-              return await requestFetch<BootstrapPayload>(url.value);
-            } catch (err) {
-              // url/key can carry a signed preview token on /preview/* routes — strip it
-              // before logging so it doesn't end up in server logs. Key fields are
-              // "~"-joined with the token last (see useBootstrapKey).
-              const redactedUrl = url.value.replace(/([?&]token=)[^&]*/, "$1[redacted]");
-              const redactedKey = params.value.token
-                ? key.value.split("~").slice(0, -1).concat("[redacted]").join("~")
-                : key.value;
-              const errorSummary = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-              console.error(
-                `[useBootstrap] SSR self-fetch failed for siteId=${siteId ?? "none"} draftId=${draftId ?? "none"} ` +
-                  `route=${route.path} url=${redactedUrl} key=${redactedKey} error=${errorSummary}`,
-              );
-              throw err;
-            }
-          },
+          (_nuxtApp, { signal }) => loadPublicResourcePayload<PublicPagePayload>({
+              draftId,
+              siteId,
+              resourceKind: 'page',
+              url: url.value,
+              key: key.value,
+              query: {
+                page: params.value.page ?? undefined,
+                location: params.value.location ?? undefined,
+                experience: params.value.experience ?? undefined,
+                datasets: [...params.value.datasets].sort().join(',') || undefined,
+                blogSlug: params.value.blogSlug ?? undefined,
+                locale: params.value.locale ?? undefined,
+                token: params.value.token ?? undefined,
+              },
+              validate: (value): value is PublicPagePayload =>
+                isPublicPagePayload(value, params.value.page ?? 'home'),
+              failureMessage: 'Public page failed',
+              signal,
+            }),
           {
-            default: emptyBootstrap,
             server: true,
-            watch: [url],
+            lazy: import.meta.client,
+            dedupe: 'cancel',
           },
         );
+  if (import.meta.server) {
+    await Promise.all([asyncData, shell.ready])
+    if (asyncData.error.value) throw asyncData.error.value
+    if (shell.error.value) throw shell.error.value
+  }
+  const { data, error, pending, refresh } = asyncData
+  watchEffect(() => {
+    if (!routeLoadOwner.ownsState()) return
+    routeLoadState.value = {
+      path: ownedPath,
+      key: key.value,
+      pending: pending.value,
+      error: normalizePublicRouteLoadError(error.value),
+      hasData: data.value !== undefined,
+    }
+  })
 
-  // ── Locations / config / menu / experiences list ─────────────
-  // Site-wide, page-independent — sourced from useSiteShell(), which never
-  // goes stale across navigation because its key never changes.
-  const { locations, config, googleBusiness, locales, hasExperiences, experiencesList, menu: menuData, menuItemsBySection } = shell;
+  // Persistent chrome data comes from the stable shell. Route-owned collections
+  // come from the keyed page response and change with navigation.
+  const { locations, config, locales, hasExperiences } = shell;
+  const googleBusiness = computed(() => ({
+    ...(shell.googleBusiness.value ?? {}),
+    reviews: data.value?.globalReviews ?? [],
+    posts: data.value?.globalPosts ?? [],
+  }))
+  const experiencesList = computed(() => data.value?.experiencesList ?? []);
+  const menuData = computed(() => data.value?.menu ?? null);
+  const menuItemsBySection = computed(() => {
+    const menu = menuData.value as { items?: ApiRecord[] } | null;
+    return (menu?.items ?? []).reduce<Record<string, ApiRecord[]>>((groups, item) => {
+      const section = typeof item.section === "string" ? item.section : "Uncategorized";
+      (groups[section] ??= []).push(item);
+      return groups;
+    }, {});
+  });
 
   // ── Single location (for /locations/[slug]/* pages) ───────
   const location = computed(() => {
@@ -269,6 +259,7 @@ export const useBootstrap = async (options: { enabled?: boolean | Ref<boolean> }
   return {
     data,
     pending,
+    refresh,
     locations,
     location,
     config,

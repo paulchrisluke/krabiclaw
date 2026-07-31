@@ -152,7 +152,11 @@ onMounted(async () => {
     await optOut()
   }
   if (requestData.value?.request?.id) {
-    await ensureCustomerSession().catch(() => undefined)
+    try {
+      await ensureCustomerSession()
+    } catch (error) {
+      submitError.value = error instanceof Error ? error.message : 'Could not initialize the review session.'
+    }
   }
 })
 
@@ -164,9 +168,11 @@ async function ensureCustomerSession() {
     if (!anonymousSignIn) throw new Error('Anonymous review sessions are not available.')
     await anonymousSignIn()
   }
-  await $fetch('/api/public/review-requests/bind-session', {
+  await publicApiMutation<{ success: true; requestId: string }>('/api/public/review-requests/bind-session', {
     method: 'POST',
     body: { token: token.value },
+    validate: (value): value is { success: true; requestId: string } =>
+      isRecord(value) && value.success === true && typeof value.requestId === 'string',
   })
 }
 
@@ -201,18 +207,30 @@ async function handleMediaSelect(event: Event) {
 async function uploadImage(file: File) {
   const requestId = requestData.value?.request?.id
   if (!requestId) return
-  const upload = await $fetch<{ assetId: string; uploadUrl: string }>(`/api/public/review-requests/${requestId}/media/request-upload`, {
+  const upload = await publicApiMutation<{ assetId: string; uploadUrl: string }>(`/api/public/review-requests/${requestId}/media/request-upload`, {
     method: 'POST',
     body: { token: token.value, kind: 'image', filename: file.name },
+    validate: (value): value is { assetId: string; uploadUrl: string } =>
+      isRecord(value)
+      && typeof value.assetId === 'string'
+      && typeof value.uploadUrl === 'string',
   })
   const form = new FormData()
   form.append('file', file)
   const uploaded = await fetch(upload.uploadUrl, { method: 'POST', body: form })
   if (!uploaded.ok) throw new Error('Image upload failed.')
-  await $fetch(`/api/public/review-requests/${requestId}/media/${upload.assetId}/confirm`, {
+  await publicApiMutation<{ id: string; publicUrl: string; thumbnailUrl: string }>(
+    `/api/public/review-requests/${requestId}/media/${upload.assetId}/confirm`,
+    {
     method: 'POST',
     body: { token: token.value },
-  })
+    validate: (value): value is { id: string; publicUrl: string; thumbnailUrl: string } =>
+      isRecord(value)
+      && typeof value.id === 'string'
+      && typeof value.publicUrl === 'string'
+      && typeof value.thumbnailUrl === 'string',
+    },
+  )
   media.value.push({ assetId: upload.assetId, kind: 'image', previewUrl: URL.createObjectURL(file) })
 }
 
@@ -223,9 +241,11 @@ async function uploadVideo(file: File) {
   const form = new FormData()
   form.append('token', token.value)
   form.append('file', file)
-  const uploaded = await $fetch<{ assetId: string }>(`/api/public/review-requests/${requestId}/media/upload`, {
+  const uploaded = await publicApiMutation<{ assetId: string }>(`/api/public/review-requests/${requestId}/media/upload`, {
     method: 'POST',
     body: form,
+    validate: (value): value is { assetId: string } =>
+      isRecord(value) && typeof value.assetId === 'string',
   })
   media.value.push({ assetId: uploaded.assetId, kind: 'video', previewUrl: null })
 }
@@ -245,7 +265,7 @@ async function submitReview() {
   submitting.value = true
   try {
     await ensureCustomerSession()
-    await $fetch('/api/public/review-requests/submit', {
+    await publicApiMutation<{ success: true; reviewId: string; status: 'pending' }>('/api/public/review-requests/submit', {
       method: 'POST',
       body: {
         token: token.value,
@@ -254,6 +274,11 @@ async function submitReview() {
         content: content.value,
         mediaAssetIds: media.value.map(item => item.assetId),
       },
+      validate: (value): value is { success: true; reviewId: string; status: 'pending' } =>
+        isRecord(value)
+        && value.success === true
+        && typeof value.reviewId === 'string'
+        && value.status === 'pending',
     })
     submitted.value = true
   } catch (error) {
@@ -271,9 +296,11 @@ async function linkAccount() {
 async function optOut() {
   submitError.value = ''
   try {
-    await $fetch('/api/public/review-requests/opt-out', {
+    await publicApiMutation<{ optedOut: true }>('/api/public/review-requests/opt-out', {
       method: 'POST',
       body: { token: token.value },
+      validate: (value): value is { optedOut: true } =>
+        isRecord(value) && value.optedOut === true,
     })
     optedOut.value = true
   } catch (error) {

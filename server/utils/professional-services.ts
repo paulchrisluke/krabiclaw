@@ -471,7 +471,12 @@ const ROUTE_PAGE_PATHS: Record<PublicBlawbyRouteData['recipe'], string | null> =
   'third-party-notices': '/third-party-notices',
 }
 
-function mapPublicQa(rows: Array<Record<string, unknown>>): PublicSiteQa[] {
+function mapPublicQa(rows: Array<{
+  id: unknown
+  question: unknown
+  answer?: unknown
+  sort_order?: unknown
+}>): PublicSiteQa[] {
   return rows.map(row => ({
     id: String(row.id),
     question: String(row.question),

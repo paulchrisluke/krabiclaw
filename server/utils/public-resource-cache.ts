@@ -1,48 +1,48 @@
-// KV read-through cache for the public bootstrap endpoint's D1 batch query.
-// Mirrors edge-cache.ts's HTML cache shape, but keyed by siteId + bootstrap
-// params instead of host + pathname — bootstrap is looked up by siteId
+// KV read-through cache for public shell and page resource queries.
+// Mirrors edge-cache.ts's HTML cache shape, but keyed by siteId + resource
+// params instead of host + pathname — public resources are looked up by siteId
 // directly, not by tenant hostname, so no hostname resolution is needed here.
 //
-// Cache key: bs~<siteId>~<page>~<location>~<experience>~<menu>~<data>~<blogSlug>~<locale>,
-// each field percent-encoded (mirrors composables/useBootstrapParams.ts's
-// useBootstrapKey(), minus `token` — cached entries are never preview/draft-authorized,
-// see the isPreviewAuthorized guard at the call site in bootstrap.get.ts).
+// Cache key: public~<siteId>~<contract>~<page>~<location>~<experience>~<datasets>~<blogSlug>~<locale>,
+// each field percent-encoded (mirrors composables/usePublicPageRequest.ts's
+// usePublicPageKey(), minus `token` — cached entries are never preview/draft-authorized,
+// see the preview authorization guard in the shell and page services).
 // Raised from 60s to 300s once every bootstrap-relevant write path was confirmed to call
-// purgeBootstrapCache/purgeBootstrapCacheSafe (dashboard editor routes + MCP were already
+// purgePublicResourceCache/purgePublicResourceCacheSafe (dashboard editor routes + MCP were already
 // covered; location CRUD, onboarding setup/commit, and Google Business/Places sync were a
-// gap closed alongside this change — see those call sites for purgeBootstrapCacheSafe).
-export const BOOTSTRAP_CACHE_TTL_SECONDS = 300
+// gap closed alongside this change — see those call sites for purgePublicResourceCacheSafe).
+export const PUBLIC_RESOURCE_CACHE_TTL_SECONDS = 300
 
-export interface BootstrapCacheParams {
+export interface PublicResourceCacheParams {
+  contract: 'shell' | 'page'
   page: string | null
   location: string | null
   experience: string | null
-  menu: boolean
-  data: string | null
+  datasets: readonly string[]
   blogSlug: string | null
   locale: string | undefined
 }
 
 // encodeURIComponent doesn't escape "~", so we replace it explicitly to avoid
-// delimiter collisions (mirrors composables/useBootstrapParams.ts).
+// delimiter collisions (mirrors composables/usePublicPageRequest.ts).
 const encodeKeyField = (value: string | null | undefined): string =>
   encodeURIComponent(value ?? '').replace(/~/g, '%7E')
 
-export function buildBootstrapCacheKey(siteId: string, params: BootstrapCacheParams): string {
+export function buildPublicResourceCacheKey(siteId: string, params: PublicResourceCacheParams): string {
   return [
-    'bs',
+    'public',
     encodeKeyField(siteId),
+    params.contract,
     encodeKeyField(params.page),
     encodeKeyField(params.location),
     encodeKeyField(params.experience),
-    params.menu ? 'm' : '',
-    encodeKeyField(params.data),
+    encodeKeyField([...params.datasets].sort().join(',')),
     encodeKeyField(params.blogSlug),
     encodeKeyField(params.locale),
   ].join('~')
 }
 
-export async function getBootstrapCache(kv: KVNamespace, key: string): Promise<string | null> {
+export async function getPublicResourceCache(kv: KVNamespace, key: string): Promise<string | null> {
   try {
     return await kv.get(key, 'text')
   } catch {
@@ -50,27 +50,27 @@ export async function getBootstrapCache(kv: KVNamespace, key: string): Promise<s
   }
 }
 
-export async function putBootstrapCache(
+export async function putPublicResourceCache(
   kv: KVNamespace,
   key: string,
   body: string,
-  ttlSeconds: number = BOOTSTRAP_CACHE_TTL_SECONDS,
+  ttlSeconds: number = PUBLIC_RESOURCE_CACHE_TTL_SECONDS,
 ): Promise<void> {
   await kv.put(key, body, { expirationTtl: ttlSeconds })
 }
 
 /**
- * Purge all cached bootstrap entries for a site.
- * Called after any write to bootstrap-relevant tables (site_content, menus,
+ * Purge all cached public resource entries for a site.
+ * Called after any write to public-resource tables (site_content, menus,
  * business_locations, experiences, blog_posts, location_qa, media_assets,
  * site_config, site_locales) so the next read reflects the edit immediately
  * instead of waiting out the TTL.
  *
- * KV keys are structured as: bs~<siteId>~...
- * We list by prefix bs~<siteId>~ and delete all matches.
+ * KV keys are structured as: public~<siteId>~...
+ * We list by prefix public~<siteId>~ and delete all matches.
  */
-export async function purgeBootstrapCache(kv: KVNamespace, siteId: string): Promise<void> {
-  const prefix = `bs~${encodeKeyField(siteId)}~`
+export async function purgePublicResourceCache(kv: KVNamespace, siteId: string): Promise<void> {
+  const prefix = `public~${encodeKeyField(siteId)}~`
   const deletions: Promise<void>[] = []
   let cursor: string | undefined
   do {
@@ -86,10 +86,10 @@ export async function purgeBootstrapCache(kv: KVNamespace, siteId: string): Prom
 /**
  * Convenience wrapper for call sites outside /api/editor/sites/** and mcp.post.ts
  * (the two paths already covered by a blanket afterResponse hook / direct call —
- * see server/plugins/bootstrap-cache-invalidate.ts). Non-fatal: swallows KV errors
+ * see server/plugins/public-resource-cache-invalidate.ts). Non-fatal: swallows KV errors
  * and missing bindings so a cache purge failure never breaks the write it follows.
  */
-export async function purgeBootstrapCacheSafe(
+export async function purgePublicResourceCacheSafe(
   env: unknown,
   siteId: string,
 ): Promise<void> {
@@ -97,8 +97,8 @@ export async function purgeBootstrapCacheSafe(
   const kv = maybeEnv?.SITE_CACHE
   if (!kv) return
   
-  const purgePromise = purgeBootstrapCache(kv, siteId).catch(err => {
-    console.warn('[bootstrap-cache] purge failed:', String(err))
+  const purgePromise = purgePublicResourceCache(kv, siteId).catch(err => {
+    console.warn('[public-resource-cache] purge failed:', String(err))
   })
 
   const waitUntil = maybeEnv?.ctx?.waitUntil

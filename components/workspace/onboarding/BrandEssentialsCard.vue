@@ -214,15 +214,17 @@ async function save() {
     }
     
     // Run mutations sequentially to handle partial failures
-    await $fetch<unknown>(`${siteApiBase.value}/settings`, {
+    await applicationFetch<{ success: true }>(`${siteApiBase.value}/settings`, {
       method: 'PATCH',
       body: { brand_color: brandColor.value, logo_asset_id: logoAssetId.value },
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
     })
     
     if (heroAssetId.value) {
-      await $fetch<unknown>(`${siteApiBase.value}/content/save`, {
+      await applicationFetch<{ success: true }>(`${siteApiBase.value}/content/save`, {
         method: 'POST',
         body: { page: 'home', changes: { 'hero.media': heroAssetId.value } },
+        validate: (value): value is { success: true } => isRecord(value) && value.success === true,
       })
     }
     

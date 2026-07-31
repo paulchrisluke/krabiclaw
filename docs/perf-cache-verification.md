@@ -1,14 +1,15 @@
 # Cache layer verification runbook
 
 The `SITE_CACHE` KV cache (full-HTML `html:` keys via `server/middleware/00.edge-cache.ts` /
-`server/plugins/edge-cache.ts`, and bootstrap-JSON `bs~` keys via `server/utils/bootstrap-cache.ts`)
+`server/plugins/edge-cache.ts`, and public-resource JSON `public~` keys via
+`server/utils/public-resource-cache.ts`)
 has been patched repeatedly over time without a repeatable way to prove a fix actually worked.
 This runbook is that proof step. It is manual and human-run, not CI-gated — run it yourself,
 then paste the numbers into your PR description.
 
 **Any PR touching a file in the caching layer (`server/middleware/00.edge-cache.ts`,
-`server/plugins/edge-cache.ts`, `server/plugins/bootstrap-cache-invalidate.ts`,
-`server/utils/bootstrap-cache.ts`, `server/utils/edge-cache.ts`, or anything that sets a
+`server/plugins/edge-cache.ts`, `server/plugins/public-resource-cache-invalidate.ts`,
+`server/utils/public-resource-cache.ts`, `server/utils/edge-cache.ts`, or anything that sets a
 response cookie/header on a tenant page) must run this and paste the before/after numbers
 into the PR description.**
 

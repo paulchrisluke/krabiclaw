@@ -208,6 +208,7 @@ const props = defineProps<{
   error: unknown
   config: Record<string, string>
   menu: ApiRecord | null
+  hasMenu?: boolean
   hasExperiences: boolean
 }>()
 
@@ -241,7 +242,7 @@ const languageItems = computed(() =>
 )
 const locationsError = computed(() => props.error)
 
-const hasMenu = computed(() => (props.menu?.items?.length ?? 0) > 0)
+const hasMenu = computed(() => props.hasMenu ?? (props.menu?.items?.length ?? 0) > 0)
 const year = new Date().getFullYear()
 const logoUrl = computed(() => props.site?.logo_url || null)
 const restaurantName = computed(() => props.site?.brand_name?.trim() || DEFAULT_BUSINESS_NAME)

@@ -50,6 +50,16 @@ const toast = useToast()
 
 interface AdminUser { id: string; email: string; name: string | null; role: string | null; banned: boolean; createdAt: string }
 
+const isUsersResponse = (value: unknown): value is { users: AdminUser[] } =>
+  isRecord(value)
+  && Array.isArray(value.users)
+  && value.users.every(user =>
+    isRecord(user)
+    && typeof user.id === 'string'
+    && typeof user.email === 'string'
+    && typeof user.banned === 'boolean',
+  )
+
 const users = ref<AdminUser[]>([])
 const userSearch = ref('')
 const usersLoading = ref(true)
@@ -67,7 +77,10 @@ async function loadUsers() {
   usersLoading.value = true
   try {
     const q = userSearch.value.trim() ? `?q=${encodeURIComponent(userSearch.value.trim())}` : ''
-    const res = await $fetch<{ users: AdminUser[] }>(`/api/admin/users${q}`)
+    const res = await applicationFetch<{ users: AdminUser[] }>(
+      `/api/admin/users${q}`,
+      { validate: isUsersResponse },
+    )
     users.value = res.users
   } catch {
     toast.add({ title: 'Failed to load users', color: 'error' })

@@ -142,7 +142,9 @@ export async function loadSettingsPayload(
     default_features: defaultFeatures,
     brand_color: siteConfig.brand_color || '',
     default_currency: updatedSite.default_currency || 'THB',
-    url_structure: siteSettings.url_structure || 'location_subdirectories',
+    url_structure: siteSettings.url_structure === 'brand_pages'
+      ? 'brand_pages' as const
+      : 'location_subdirectories' as const,
     social_facebook: siteConfig.social_facebook || '',
     social_instagram: siteConfig.social_instagram || '',
     social_tiktok: siteConfig.social_tiktok || '',

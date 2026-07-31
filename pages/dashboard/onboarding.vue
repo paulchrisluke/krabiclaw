@@ -2,7 +2,7 @@
   <div class="flex h-screen flex-col overflow-hidden bg-muted text-highlighted">
 
     <div
-      v-if="contextLoaded"
+      v-if="contextLoaded && !contextError"
       class="grid min-h-0 flex-1 overflow-hidden md:grid-cols-[minmax(24rem,45%)_1fr]"
     >
       <OnboardingWizard
@@ -67,13 +67,22 @@
         <span class="text-sm">Loading workspace…</span>
       </div>
     </div>
+    <div v-else-if="contextError" class="flex min-h-0 flex-1 items-center justify-center p-6">
+      <UCard class="w-full max-w-md text-center">
+        <h1 class="text-lg font-semibold text-highlighted">Workspace could not be loaded</h1>
+        <p class="mt-2 text-sm text-muted">{{ contextError.message }}</p>
+        <UButton class="mt-6" :loading="contextRetrying" @click="retryContext">
+          Try again
+        </UButton>
+      </UCard>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 
-definePageMeta({ layout: 'editor', ssr: false })
+definePageMeta({ layout: 'editor' })
 
 const route = useRoute()
 const config = useRuntimeConfig()
@@ -100,6 +109,8 @@ const draftPreview = ref<{
 const mobilePreviewOpen = ref(false)
 const isMobilePreviewViewport = ref(false)
 const contextLoaded = ref(false)
+const contextError = ref<Error | null>(null)
+const contextRetrying = ref(false)
 type ReadinessState = 'complete' | 'attention' | 'missing'
 
 const readiness = ref<Record<'brand' | 'hero' | 'details' | 'offer' | 'trust' | 'launch', ReadinessState>>({
@@ -167,12 +178,18 @@ const previewPagePath = computed(() => {
   return selectedPreviewPage.value === 'home' ? '/' : `/${selectedPreviewPage.value}`
 })
 
+// SSR-safe origin — derived from the incoming request on the server and from
+// window.location on the client. This page now renders server-side (SSR is
+// no longer disabled here), so a bare window.location.origin read inside a
+// computed the template evaluates would throw during SSR.
+const requestURL = useRequestURL()
+
 const iframeSrc = computed(() => {
   const baseUrl = draftPreview.value ? draftPreviewBaseUrl.value : sitePreviewBaseUrl.value
   if (!baseUrl) return ''
   if (currentPageIsLocationScoped.value && !selectedLocation.value && !draftPreview.value) return ''
   const subPath = previewPagePath.value === '/' ? '' : previewPagePath.value
-  const url = new URL(baseUrl + subPath, window.location.origin)
+  const url = new URL(baseUrl + subPath, requestURL.origin)
   url.searchParams.set('preview', 'true')
   const token = draftPreview.value?.previewToken ?? previewToken.value
   if (token) url.searchParams.set('token', token)
@@ -239,61 +256,88 @@ const readinessScore = computed(() => {
 
 // ─── Load context ─────────────────────────────────────────────────────────────
 
-// Step 1 — fast org/site resolution (works even when site doesn't exist yet)
-const loadContext = async () => {
-  try {
-    const response = await $fetch<{
-      success: boolean
-      organization?: { id: string; slug: string; name: string } | null
-      site?: ApiRecord | null
-      locations?: Array<{ id: string; slug: string; title: string; is_primary: boolean }>
-    }>('/api/dashboard/context')
+interface OnboardingContextResponse {
+  success: true
+  context: {
+    organization?: { id: string; slug: string; name: string } | null
+    site?: ApiRecord | null
+    locations?: Array<{ id: string; slug: string; title: string; is_primary: boolean }>
+  }
+  previewToken: string | null
+  checklist: {
+    items: { business_info: boolean; hero_image: boolean; core_offering: boolean; story: boolean; post: boolean }
+  }
+}
 
-    if (response.organization) orgSlug.value = response.organization.slug
-    if (response.site) {
-      siteData.value = response.site
-      siteLocations.value = response.locations ?? []
-      const primary = siteLocations.value.find(l => l.is_primary) ?? siteLocations.value[0]
-      if (primary) selectedLocationId.value = primary.id
-      // Step 2 — get preview token now that we have a site
-      await loadPreviewToken()
-    }
-  } catch {
-    // No org/site yet — expected for new users
+const isOnboardingContextResponse = (value: unknown): value is OnboardingContextResponse => {
+  if (!isRecord(value)
+    || value.success !== true
+    || !isRecord(value.context)
+    || (value.previewToken !== null && typeof value.previewToken !== 'string')
+    || !isRecord(value.checklist)
+    || !isRecord(value.checklist.items)) return false
+  const items = value.checklist.items
+  return ['business_info', 'hero_image', 'core_offering', 'story', 'post']
+    .every(key => typeof items[key] === 'boolean')
+}
+
+const requestEvent = useRequestEvent()
+const loadContextResource = async (): Promise<OnboardingContextResponse> => {
+  if (import.meta.server) {
+    if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+    const { loadDashboardOnboardingContext } = await import('~/server/utils/onboarding-context')
+    return await loadDashboardOnboardingContext(requestEvent)
+  }
+  return await applicationFetch<OnboardingContextResponse>('/api/dashboard/onboarding-context', {
+    validate: isOnboardingContextResponse,
+  })
+}
+
+const applyContext = (response: OnboardingContextResponse) => {
+  if (response.context.organization) orgSlug.value = response.context.organization.slug
+  if (response.context.site) {
+    siteData.value = response.context.site
+    siteLocations.value = response.context.locations ?? []
+    const primary = siteLocations.value.find(l => l.is_primary) ?? siteLocations.value[0]
+    if (primary) selectedLocationId.value = primary.id
+  }
+  previewToken.value = response.previewToken ?? ''
+  const items = response.checklist.items
+  readiness.value = {
+    details: items.business_info ? 'complete' : 'missing',
+    hero: items.hero_image ? 'complete' : 'missing',
+    offer: items.core_offering ? 'complete' : 'missing',
+    brand: items.story ? 'complete' : items.business_info ? 'attention' : 'missing',
+    trust: items.post ? 'complete' : items.business_info ? 'attention' : 'missing',
+    launch: (items.business_info && items.hero_image && items.core_offering) ? 'attention' : 'missing',
+  }
+}
+
+const { data: contextResource, error: initialContextError, refresh: refreshContext } =
+  await useAsyncData('dashboard-onboarding-context', loadContextResource)
+if (contextResource.value) applyContext(contextResource.value)
+if (initialContextError.value) contextError.value = normalizeApiError(initialContextError.value, 'Workspace context failed')
+contextLoaded.value = true
+
+const loadContext = async () => {
+  contextError.value = null
+  try {
+    await refreshContext()
+    if (!contextResource.value) throw initialContextError.value ?? new Error('Workspace context failed')
+    applyContext(contextResource.value)
+  } catch (error) {
+    contextError.value = normalizeApiError(error, 'Workspace context failed')
   } finally {
     contextLoaded.value = true
   }
 }
 
-// Step 2 — editor context includes the signed preview token needed to render draft sites
-const loadPreviewToken = async () => {
+const retryContext = async () => {
+  contextRetrying.value = true
   try {
-    if (!siteId.value) return
-    const res = await $fetch<{ context: { previewToken: string } }>(`/api/editor/sites/${siteId.value}/context`)
-    if (res.context?.previewToken) previewToken.value = res.context.previewToken
-  } catch {
-    // Non-fatal — preview still works if onboarding_status is 'active' (it will be after setup)
-  }
-}
-
-const loadReadiness = async () => {
-  if (!siteId.value) return
-
-  try {
-    const data = await $fetch<{
-      items: { business_info: boolean; hero_image: boolean; core_offering: boolean; story: boolean; post: boolean }
-    }>(`/api/dashboard/onboarding/checklist?siteId=${siteId.value}`)
-
-    readiness.value = {
-      details: data.items.business_info ? 'complete' : 'missing',
-      hero: data.items.hero_image ? 'complete' : 'missing',
-      offer: data.items.core_offering ? 'complete' : 'missing',
-      brand: data.items.story ? 'complete' : data.items.business_info ? 'attention' : 'missing',
-      trust: data.items.post ? 'complete' : data.items.business_info ? 'attention' : 'missing',
-      launch: (data.items.business_info && data.items.hero_image && data.items.core_offering) ? 'attention' : 'missing',
-    }
-  } catch {
-    // Not critical, readiness stays at default
+    await loadContext()
+  } finally {
+    contextRetrying.value = false
   }
 }
 
@@ -315,9 +359,8 @@ const onSelectLocation = (id: string) => {
 
 const onSiteCreated = async (_orgSlug: string | null) => {
   draftPreview.value = null
-  await loadContext()        // sets siteData + calls loadPreviewToken()
-  await loadReadiness()
-  previewReloadToken.value = Date.now()
+  await retryContext()
+  if (!contextError.value) previewReloadToken.value = Date.now()
 }
 
 const onDraftSaved = (draft: {
@@ -348,9 +391,6 @@ onMounted(async () => {
   updateMobilePreviewViewport()
   mobilePreviewQuery.addEventListener('change', updateMobilePreviewViewport)
   stopMobilePreviewViewportListener = () => mobilePreviewQuery.removeEventListener('change', updateMobilePreviewViewport)
-
-  await loadContext()
-  await loadReadiness()
 
   if (route.query.payment === 'cancelled') {
     toast.add({ title: 'Payment cancelled', description: 'Your subscription was not completed.', color: 'warning' })

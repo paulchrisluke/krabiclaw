@@ -1,8 +1,6 @@
 // Reports uncaught Vue component errors and unhandled promise rejections to
-// GA4 (zaraz.track()) as error_encountered. api_error (fetch-level failures) is
-// handled separately in dashboard-site-header.client.ts, which already owns
-// the one globalThis.$fetch override for the dashboard surface — see that
-// file's comment for why a second override here would be fragile.
+// GA4 (zaraz.track()) as error_encountered. Dashboard transport failures are
+// normalized by the scoped dashboard client.
 //
 // trackError() is a no-op on tenant/Saya pages (gated inside useAnalytics via
 // isPlatform), so this plugin is safe to register unconditionally.
