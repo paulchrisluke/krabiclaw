@@ -85,8 +85,7 @@ onMounted(() => {
       })
       await navigateTo('/')
     } catch (error) {
-      const statusCode = error?.statusCode ?? error?.response?.status
-      if (statusCode === 404) return
+      if (error instanceof ApiClientError && error.statusCode === 404) return
       clearInterval(interval)
       setupFailed.value = true
       setupFailedMessage.value = error instanceof Error ? error.message : 'Could not check setup status.'
