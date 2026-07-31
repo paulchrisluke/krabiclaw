@@ -382,7 +382,6 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 const location = ref<BusinessLocation | null>(null)
 const gbConnection = ref<GbConnection | null>(null)
-let locationLoadToken = 0
 const connectingGoogle = ref(false)
 const syncingPlace = ref(false)
 const savingLocationFeatures = ref(false)
@@ -407,6 +406,36 @@ interface LocationCapabilitySummary {
   site_effective_features?: ProductFeature[]
   location_effective_features?: ProductFeature[]
 }
+
+const isNullableString = (value: unknown): value is string | null => value === null || typeof value === 'string'
+const isBusinessLocation = (value: unknown): value is BusinessLocation => {
+  if (!isRecord(value)) return false
+  return typeof value.id === 'string'
+    && typeof value.slug === 'string'
+    && typeof value.title === 'string'
+    && typeof value.is_primary === 'boolean'
+    && typeof value.status === 'string'
+    && isNullableString(value.city)
+    && isNullableString(value.phone)
+    && isNullableString(value.google_place_id)
+}
+const isCapabilitySummary = (value: unknown): value is LocationCapabilitySummary =>
+  isRecord(value)
+  && (value.site_effective_features === undefined
+    || (Array.isArray(value.site_effective_features) && value.site_effective_features.every(item => typeof item === 'string')))
+  && (value.location_effective_features === undefined
+    || (Array.isArray(value.location_effective_features) && value.location_effective_features.every(item => typeof item === 'string')))
+const isLocationResponse = (value: unknown): value is { success: true; location: BusinessLocation } & LocationCapabilitySummary =>
+  isRecord(value) && value.success === true && isBusinessLocation(value.location) && isCapabilitySummary(value)
+const isGbConnection = (value: unknown): value is GbConnection =>
+  isRecord(value)
+  && typeof value.id === 'string'
+  && typeof value.provider_account_email === 'string'
+  && typeof value.status === 'string'
+  && typeof value.created_at === 'string'
+  && typeof value.updated_at === 'string'
+const isConnectionResponse = (value: unknown): value is { success: true; connection: GbConnection | null } =>
+  isRecord(value) && value.success === true && (value.connection === null || isGbConnection(value.connection))
 
 function fillLocationFeatures(summary: LocationCapabilitySummary) {
   siteEffectiveFeatures.value = summary.site_effective_features ?? []
@@ -435,6 +464,7 @@ async function saveLocationFeatures() {
     const response = await dashboardApi<{ success: boolean; location: BusinessLocation } & LocationCapabilitySummary>(`/api/dashboard/locations/${requestedLocationId}`, {
       method: 'PATCH',
       body: { feature_overrides: featureOverrides },
+      validate: isLocationResponse,
     })
     if (locationId.value !== requestedLocationId) return
     location.value = response.location
@@ -670,7 +700,8 @@ async function saveLocationDetails() {
         status: detailsForm.status,
         notification_phone: detailsForm.notification_phone || null,
         timezone: detailsForm.timezone || null,
-      }
+      },
+      validate: isLocationResponse,
     })
     if (locationId.value !== requestedLocationId) return
     if (!response.success) throw new Error('Failed to save location')
@@ -699,7 +730,11 @@ const connectGoogleBusiness = async () => {
   try {
     const res = await dashboardApi<{ success: boolean; authUrl: string }>(
       `/api/sites/${siteId}/locations/${requestedLocationId}/integrations/google-business/auth`,
-      { method: 'POST' }
+      {
+        method: 'POST',
+        validate: (value): value is { success: boolean; authUrl: string } =>
+          isRecord(value) && value.success === true && typeof value.authUrl === 'string',
+      }
     )
     if (locationId.value !== requestedLocationId) {
       connectingGoogle.value = false
@@ -733,7 +768,17 @@ async function syncGooglePlace() {
   try {
     const res = await dashboardApi<{ success: boolean; reviewsUpserted: number; place: { rating: number | null; ratingCount: number | null } }>(
       '/api/integrations/google-places/sync',
-      { method: 'POST', body: { locationId: requestedLocationId } }
+      {
+        method: 'POST',
+        body: { locationId: requestedLocationId },
+        validate: (value): value is { success: boolean; reviewsUpserted: number; place: { rating: number | null; ratingCount: number | null } } =>
+          isRecord(value)
+          && value.success === true
+          && typeof value.reviewsUpserted === 'number'
+          && isRecord(value.place)
+          && (value.place.rating === null || typeof value.place.rating === 'number')
+          && (value.place.ratingCount === null || typeof value.place.ratingCount === 'number'),
+      }
     )
     if (locationId.value !== requestedLocationId) return
     const parts = ['Synced hours, address, and rating']
@@ -749,43 +794,61 @@ async function syncGooglePlace() {
   }
 }
 
-const loadLocationWorkspace = async () => {
+interface LocationSettingsResource {
+  location: { success: true; location: BusinessLocation } & LocationCapabilitySummary
+  connection: { success: true; connection: GbConnection | null }
+}
+
+const requestEvent = useRequestEvent()
+const locationSettingsKey = computed(() => `dashboard-location-settings-${siteId}-${locationId.value}`)
+const {
+  data: locationSettingsResource,
+  pending: locationSettingsPending,
+  error: locationSettingsError,
+  refresh: refreshLocationWorkspace,
+} = await useAsyncData<LocationSettingsResource>(locationSettingsKey, async () => {
   const requestedLocationId = locationId.value
-  const currentToken = ++locationLoadToken
-  if (!requestedLocationId) {
-    location.value = null
-    gbConnection.value = null
-    loading.value = false
-    return false
+  if (!requestedLocationId) throw createError({ statusCode: 400, statusMessage: 'Location is required' })
+  if (import.meta.server) {
+    if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request event unavailable' })
+    const { loadDashboardLocationSettings } = await import('~/server/utils/dashboard-editor-resources')
+    return await loadDashboardLocationSettings(requestEvent, siteId, requestedLocationId)
   }
-  loading.value = true
-  error.value = null
-  try {
-    const [locationResponse, connectionResponse] = await Promise.all([
-      dashboardApi<{ success: boolean; location: BusinessLocation } & LocationCapabilitySummary>(`/api/dashboard/locations/${requestedLocationId}`),
-      dashboardApi<{ success: boolean; connection: GbConnection | null }>(`/api/sites/${siteId}/locations/${requestedLocationId}/integrations/google-business`),
-    ])
-    if (currentToken !== locationLoadToken || locationId.value !== requestedLocationId) return false
-    if (!locationResponse.success) throw new Error('Failed to load location')
-    location.value = locationResponse.location
-    gbConnection.value = connectionResponse.connection
-    fillLocationFeatures(locationResponse)
-    return true
-  } catch (err) {
-    if (currentToken !== locationLoadToken) return false
-    error.value = err instanceof Error ? err.message : 'Failed to load location'
-    return false
-  } finally {
-    if (currentToken === locationLoadToken) loading.value = false
-  }
+  const [locationResponse, connectionResponse] = await Promise.all([
+    dashboardApi<{ success: true; location: BusinessLocation } & LocationCapabilitySummary>(
+      `/api/dashboard/locations/${requestedLocationId}`,
+      { validate: isLocationResponse },
+    ),
+    dashboardApi<{ success: true; connection: GbConnection | null }>(
+      `/api/sites/${siteId}/locations/${requestedLocationId}/integrations/google-business`,
+      { validate: isConnectionResponse },
+    ),
+  ])
+  return { location: locationResponse, connection: connectionResponse }
+}, {
+  watch: [locationId],
+})
+
+watchEffect(() => {
+  loading.value = locationSettingsPending.value
+  error.value = locationSettingsError.value
+    ? getErrorMessage(locationSettingsError.value, 'Failed to load location')
+    : null
+  const resource = locationSettingsResource.value
+  if (!resource) return
+  location.value = resource.location.location
+  gbConnection.value = resource.connection.connection
+  fillLocationFeatures(resource.location)
+})
+
+const loadLocationWorkspace = async () => {
+  await refreshLocationWorkspace()
+  return !locationSettingsError.value
 }
 
 const { evaluateAndSuggest } = useUpsellTriggers()
 
-onMounted(async () => {
-  const loaded = await loadLocationWorkspace()
-  if (!loaded) return
-
+onMounted(() => {
   if (route.query.gb === 'connected') {
     toast.add({ description: 'Google Business connected successfully', color: 'success' })
     const { gb: _gb, ...restQuery } = route.query
@@ -793,10 +856,6 @@ onMounted(async () => {
   }
 
   evaluateAndSuggest()
-})
-
-watch(() => dashboardLocation.currentLocationId.value, async () => {
-  await loadLocationWorkspace()
 })
 
 useSeoMeta({ title: 'Location Settings | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

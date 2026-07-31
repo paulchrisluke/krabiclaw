@@ -473,7 +473,10 @@ async function remove() {
   saving.value = true
   errorMessage.value = ''
   try {
-    await applicationFetch(`/api/admin/docs/${docId}`, { method: 'DELETE' })
+    await applicationFetch(`/api/admin/docs/${docId}`, {
+      method: 'DELETE',
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+    })
     await navigateTo('/admin/docs')
   } catch (err) {
     errorMessage.value = getErrorMessage(err, 'Failed to delete.')

@@ -28,7 +28,18 @@ export async function assertDashboardContentPageAvailable(
   locationSlug?: string | null,
 ) {
   const dashboardApi = useDashboardApi()
-  const response = await dashboardApi<EditorContextResponse>(`/api/editor/sites/${siteId}/context`)
+  const response = await dashboardApi<EditorContextResponse>(`/api/editor/sites/${siteId}/context`, {
+    validate: (value): value is EditorContextResponse =>
+      isRecord(value)
+      && isRecord(value.context)
+      && isRecord(value.context.site)
+      && typeof value.context.site.vertical === 'string'
+      && typeof value.context.site.template === 'string'
+      && (value.context.locations === undefined || (
+        Array.isArray(value.context.locations)
+        && value.context.locations.every(location => isRecord(location) && typeof location.slug === 'string')
+      )),
+  })
   const location = scope === 'location'
     ? response.context.locations?.find(item => item.slug === locationSlug)
     : null

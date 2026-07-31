@@ -182,7 +182,9 @@ async function saveLocation(location: LocationRow & { form: OrderForm }) {
         grab_url: normalizedUrl(location.form.grab_url),
         uber_eats_url: normalizedUrl(location.form.uber_eats_url),
         foodpanda_url: normalizedUrl(location.form.foodpanda_url)
-      }
+      },
+      validate: (value): value is { success: true; location: ApiRecord } =>
+        isRecord(value) && value.success === true && isRecord(value.location),
     })
     toast.add({ description: 'Ordering links saved', color: 'success' })
   } catch (error) {

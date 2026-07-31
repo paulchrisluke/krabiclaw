@@ -132,7 +132,10 @@ async function loadQueue() {
 async function markDone(id: string) {
   fulfillingId.value = id
   try {
-    await applicationFetch(`/api/admin/fulfillment/${id}/done`, { method: 'POST' })
+    await applicationFetch(`/api/admin/fulfillment/${id}/done`, {
+      method: 'POST',
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+    })
     toast.add({ title: 'Marked as fulfilled', color: 'success' })
     await loadQueue()
   } catch {

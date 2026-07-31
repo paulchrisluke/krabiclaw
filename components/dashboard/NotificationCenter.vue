@@ -124,7 +124,10 @@ async function refreshNotifications() {
 
 async function markRead(notification: DashboardNotification) {
   if (notification.read_at) return
-  await dashboardApi(`/api/dashboard/notifications/${notification.id}/read`, { method: 'PATCH' })
+  await dashboardApi(`/api/dashboard/notifications/${notification.id}/read`, {
+    method: 'PATCH',
+    validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+  })
   notification.read_at = new Date().toISOString()
   unreadCount.value = Math.max(0, unreadCount.value - 1)
 }
@@ -132,7 +135,10 @@ async function markRead(notification: DashboardNotification) {
 async function markAllRead() {
   markingAll.value = true
   try {
-    await dashboardApi('/api/dashboard/notifications/read-all', { method: 'PATCH' })
+    await dashboardApi('/api/dashboard/notifications/read-all', {
+      method: 'PATCH',
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+    })
     const now = new Date().toISOString()
     notifications.value = notifications.value.map(notification => ({ ...notification, read_at: notification.read_at ?? now }))
     unreadCount.value = 0

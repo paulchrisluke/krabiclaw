@@ -1,9 +1,8 @@
 import type { FetchOptions } from 'ofetch'
 
 type DashboardFetchOptions<T> = FetchOptions & {
-  validate?: Validator<T>
+  validate: Validator<T>
   coalesceKey?: string
-  expectEmptyResponse?: boolean
 }
 
 export interface DashboardRequestScope {
@@ -29,7 +28,7 @@ async function executeApiFetch<T>(
   headers: Headers,
 ): Promise<T> {
   const method = String(options.method ?? 'GET').toUpperCase()
-  const { validate, coalesceKey, expectEmptyResponse = false, ...fetchOptions } = options
+  const { validate, coalesceKey, ...fetchOptions } = options
   const run = async () => {
     try {
       const value = await $fetch<unknown>(request as never, {
@@ -38,12 +37,7 @@ async function executeApiFetch<T>(
         retry: 0,
         timeout: method === 'GET' ? DASHBOARD_READ_TIMEOUT_MS : MUTATION_TIMEOUT_MS,
       } as never)
-      const responseIsValid = validate
-        ? validate(value)
-        : value === null || value === ''
-          ? method !== 'GET' && expectEmptyResponse
-          : isRecord(value) || Array.isArray(value)
-      if (!responseIsValid) {
+      if (!validate(value)) {
         throw new ApiClientError('API response did not match its contract', 502, 'INVALID_API_RESPONSE', null)
       }
       return value as T
@@ -73,7 +67,7 @@ async function executeApiFetch<T>(
 export async function dashboardFetch<T>(
   request: string,
   scope: DashboardRequestScope,
-  options: DashboardFetchOptions<T> = {},
+  options: DashboardFetchOptions<T>,
 ): Promise<T> {
   if (!scope.orgSlug) {
     throw createError({ statusCode: 400, statusMessage: 'Dashboard organization scope is required' })
@@ -97,7 +91,7 @@ export function useDashboardRouteScope() {
 }
 
 export function useDashboardApi(scope = useDashboardRouteScope()) {
-  return async <T>(request: string, options: DashboardFetchOptions<T> = {}) => {
+  return async <T>(request: string, options: DashboardFetchOptions<T>) => {
     const resolved = unref(scope)
     if (!resolved) {
       throw createError({ statusCode: 400, statusMessage: 'Dashboard organization scope is required' })
@@ -108,7 +102,7 @@ export function useDashboardApi(scope = useDashboardRouteScope()) {
 
 export async function applicationFetch<T>(
   request: string,
-  options: DashboardFetchOptions<T> = {},
+  options: DashboardFetchOptions<T>,
 ): Promise<T> {
   const headers = new Headers(options.headers as HeadersInit)
   if (import.meta.server) {

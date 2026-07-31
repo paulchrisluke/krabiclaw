@@ -514,7 +514,11 @@ async function retryInvitation(invitationId: string) {
   invitationActionError.value = null
   invitationActionErrorId.value = null
   try {
-    await dashboardApi(`/api/dashboard/invitations/${invitationId}/retry`, { method: 'POST' })
+    await dashboardApi(`/api/dashboard/invitations/${invitationId}/retry`, {
+      method: 'POST',
+      validate: (value): value is { success: true; status: string } =>
+        isRecord(value) && value.success === true && typeof value.status === 'string',
+    })
     await refresh()
   } catch (err: unknown) {
     invitationActionError.value = err instanceof ApiClientError && typeof err.data.error === 'string'
@@ -537,6 +541,7 @@ async function replaceInvitation(invitationId: string) {
     await dashboardApi(`/api/dashboard/invitations/${invitationId}/replace`, {
       method: 'POST',
       body: { phone: replacePhone.value.trim() },
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
     })
     replaceFormInvitationId.value = null
     replacePhone.value = ''
@@ -558,7 +563,10 @@ async function clearInvitation(invitationId: string) {
   invitationActionError.value = null
   invitationActionErrorId.value = null
   try {
-    await dashboardApi(`/api/dashboard/invitations/${invitationId}/clear`, { method: 'POST' })
+    await dashboardApi(`/api/dashboard/invitations/${invitationId}/clear`, {
+      method: 'POST',
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+    })
     await refresh()
   } catch (err: unknown) {
     invitationActionError.value = err instanceof ApiClientError && typeof err.data.error === 'string'
@@ -589,6 +597,11 @@ async function sendInvite() {
         siteId: inviteForm.role === 'editor' ? inviteForm.siteId : undefined,
         locationId: inviteForm.role === 'editor' ? inviteForm.locationId || null : undefined,
       },
+      validate: (value): value is { success: true; invitationId: string; reused: boolean } =>
+        isRecord(value)
+        && value.success === true
+        && typeof value.invitationId === 'string'
+        && typeof value.reused === 'boolean',
     })
 
     inviteForm.email = ''
@@ -642,6 +655,7 @@ async function submitRemoveMember(memberId: string, options?: { confirmed?: bool
     await dashboardApi(`/api/dashboard/organizations/members/${memberId}/remove`, {
       method: 'POST',
       body: options?.confirmed ? { action: 'clear', confirmed: true } : {},
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
     })
     pendingRemoval.value = null
     await refresh()

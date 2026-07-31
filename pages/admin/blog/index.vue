@@ -81,7 +81,10 @@ async function confirmDeletePost() {
   if (!pendingDeletePostId.value) return
   deletingPostId.value = pendingDeletePostId.value
   try {
-    await applicationFetch(`/api/admin/blog/posts/${pendingDeletePostId.value}`, { method: 'DELETE' })
+    await applicationFetch(`/api/admin/blog/posts/${pendingDeletePostId.value}`, {
+      method: 'DELETE',
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+    })
     toast.add({ title: 'Post deleted', color: 'success' })
     await loadBlogPosts()
   } catch {

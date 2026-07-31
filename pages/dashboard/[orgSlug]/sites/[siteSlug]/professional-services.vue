@@ -399,6 +399,8 @@ async function patchProfessionalServiceContent(body: ApiRecord, successMessage: 
   await dashboardApi(`/api/editor/sites/${siteId}/professional-services`, {
     method: 'PATCH',
     body,
+    validate: (value): value is { success: true; written: number } =>
+      isRecord(value) && value.success === true && typeof value.written === 'number',
   })
   toast.add({ description: successMessage, color: 'success' })
 }

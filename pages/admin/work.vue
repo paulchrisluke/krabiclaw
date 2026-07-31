@@ -150,7 +150,11 @@ async function loadWorkRequests() {
 
 async function updateWorkRequest(id: string, patch: { status?: string; notes?: string }) {
   try {
-    await applicationFetch(`/api/admin/work-requests/${id}`, { method: 'PATCH', body: patch })
+    await applicationFetch(`/api/admin/work-requests/${id}`, {
+      method: 'PATCH',
+      body: patch,
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+    })
     await loadWorkRequests()
   } catch {
     toast.add({ title: 'Failed to update request', color: 'error' })

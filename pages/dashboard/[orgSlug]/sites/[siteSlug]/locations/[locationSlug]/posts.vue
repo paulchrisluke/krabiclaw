@@ -512,7 +512,10 @@ const handlePublish = async () => {
 const handleDelete = async () => {
   if (!selectedPost.value) return
   try {
-    await dashboardApi(`/api/editor/sites/${siteId}/posts/${selectedPost.value.id}`, { method: 'DELETE' })
+    await dashboardApi(`/api/editor/sites/${siteId}/posts/${selectedPost.value.id}`, {
+      method: 'DELETE',
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+    })
     selectedPost.value = null
     toast.add({ description: 'Post deleted', color: 'neutral' })
     await loadPosts()

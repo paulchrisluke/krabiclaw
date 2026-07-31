@@ -1,11 +1,17 @@
 import type { H3Event } from 'h3'
-import { queryFirst } from '~/server/db'
+import { queryAll, queryFirst } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { listLocationQa } from '~/server/utils/location-qa'
 import { requireLocationAccess, requireSiteAccess } from '~/server/utils/location-access'
 import { listExperiences } from '~/server/utils/experiences'
-import { assertLocationAccess, assertResourceAccess, assertSiteWideAccess } from '~/server/utils/member-access'
+import {
+  assertLocationAccess,
+  assertResourceAccess,
+  assertSiteContextAccess,
+  assertSiteWideAccess,
+  listAccessibleLocationIds,
+} from '~/server/utils/member-access'
 import { listSiteLocales } from '~/server/utils/site-locales'
 import { getMediaAsset, listMediaAssets } from '~/server/utils/media-asset-manager'
 import { getDashboardContext, getDashboardLocationContext } from '~/server/utils/dashboard-context'
@@ -20,6 +26,145 @@ import { loadDashboardGuestThreads } from '~/server/utils/dashboard-guest-thread
 import { requireBlogAccess } from '~/server/utils/blog-access'
 import { getPlatformBlogPost, listPlatformBlogPosts } from '~/server/utils/platform-content'
 import { listPosts } from '~/server/utils/post-management'
+import { createPreviewToken } from '~/server/utils/preview-token'
+import { resolveSiteCmsCapabilities } from '~/server/utils/cms-capabilities'
+import { getEditorContent } from '~/server/utils/mcp-workflows'
+import { getEditablePages } from '~/config/content-registry'
+import { parseCmsFeatureOverrideDelta } from '~/config/cms-registry'
+
+interface EditorSiteRow {
+  id: string
+  brand_name: string
+  subdomain: string
+  organization_id: string
+  status: string
+  onboarding_status: string
+  organization_name: string
+  vertical: string
+  theme_id: string
+  feature_overrides: string | null
+  member_id: string
+  member_role: string
+}
+
+interface EditorLocationRow {
+  id: string
+  slug: string
+  title: string
+  is_primary: number | boolean
+  status: 'active' | 'inactive' | 'sync_error'
+  feature_overrides: string | null
+}
+
+export async function loadDashboardEditorContext(event: H3Event, siteId: string) {
+  const env = cloudflareEnv(event)
+  const db = env.DB
+  if (!db) throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
+  const session = await getAuthSession(event, env)
+  if (!session?.user?.id) throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
+  const site = await queryFirst<EditorSiteRow>(db, `
+    SELECT s.id, s.brand_name, s.subdomain, s.organization_id, s.status, s.onboarding_status,
+           s.vertical, s.theme_id, s.feature_overrides, o.name AS organization_name,
+           om.id AS member_id, om.role AS member_role
+      FROM sites s
+      JOIN organization o ON s.organization_id = o.id
+      JOIN member om ON o.id = om.organizationId
+     WHERE s.id = ? AND om.userId = ?
+     LIMIT 1
+  `, [siteId, session.user.id])
+  if (!site) throw createError({ statusCode: 404, statusMessage: 'Site not found or access denied' })
+
+  const principal = {
+    memberId: site.member_id,
+    role: site.member_role,
+    organizationId: site.organization_id,
+    siteId,
+  }
+  await assertSiteContextAccess(db, principal)
+  const accessibleLocationIds = await listAccessibleLocationIds(db, principal)
+  const [locationRows, entitlementRows] = await Promise.all([
+    queryAll<EditorLocationRow>(db, `
+      SELECT id, slug, title, is_primary, status, feature_overrides
+        FROM business_locations
+       WHERE organization_id = ? AND site_id = ? AND status = 'active'
+       ORDER BY is_primary DESC, title ASC
+    `, [site.organization_id, siteId]),
+    queryAll<{ key: string; value: string }>(db, 'SELECT key, value FROM site_entitlements WHERE site_id = ?', [siteId]),
+  ])
+  const locations = locationRows
+    .filter(location => accessibleLocationIds === null || accessibleLocationIds.includes(location.id))
+    .map(location => ({ ...location, is_primary: Boolean(location.is_primary) }))
+  const entitlements = entitlementRows.reduce<Record<string, string | boolean>>((result, row) => {
+    result[row.key] = row.value === 'true' ? true : row.value === 'false' ? false : row.value
+    return result
+  }, {})
+  if (typeof env.PREVIEW_SECRET !== 'string' || !env.PREVIEW_SECRET) {
+    throw createError({ statusCode: 500, statusMessage: 'PREVIEW_SECRET is required for editor previews' })
+  }
+  const previewToken = await createPreviewToken(env.PREVIEW_SECRET, siteId, Date.now() + 60 * 60 * 1000)
+  const { vertical, template } = resolveSiteCmsCapabilities(site.vertical, site.theme_id, {
+    siteEnabledFeatures: site.feature_overrides,
+  })
+  return {
+    success: true as const,
+    context: {
+      site: {
+        id: site.id,
+        brand_name: site.brand_name,
+        subdomain: site.subdomain,
+        status: site.status,
+        onboarding_status: site.onboarding_status,
+        vertical,
+        template,
+        feature_overrides: site.feature_overrides,
+        entitlements,
+      },
+      organization: { id: site.organization_id, name: site.organization_name },
+      locations,
+      scopes: [
+        ...(accessibleLocationIds === null ? [{ id: null, label: 'Brand-wide', type: 'brand' as const }] : []),
+        ...locations.map(location => ({ id: location.id, label: location.title, type: 'location' as const })),
+      ],
+      previewToken,
+      editablePages: getEditablePages(vertical, template, {
+        site: parseCmsFeatureOverrideDelta(site.feature_overrides),
+      }),
+    },
+  }
+}
+
+export async function loadDashboardEditorContent(
+  event: H3Event,
+  siteId: string,
+  page: string,
+  locationId?: string,
+) {
+  const { db, site } = await requireSiteAccess(event, siteId, 'context')
+  await assertResourceAccess(db, {
+    memberId: site.member_id,
+    role: site.member_role,
+    organizationId: site.organization_id,
+    siteId,
+    resourceLocationId: locationId ?? null,
+  })
+  return {
+    success: true as const,
+    ...await getEditorContent(db, site.organization_id, siteId, page, locationId),
+  }
+}
+
+export async function loadDashboardContentEditor(
+  event: H3Event,
+  siteId: string,
+  page: string,
+  locationId?: string,
+) {
+  const [context, content] = await Promise.all([
+    loadDashboardEditorContext(event, siteId),
+    loadDashboardEditorContent(event, siteId, page, locationId),
+  ])
+  return { context: context.context, fields: content.fields }
+}
 
 export async function loadDashboardSiteLocales(event: H3Event, siteId: string) {
   const env = cloudflareEnv(event)
@@ -198,6 +343,53 @@ export async function loadDashboardLocationOverview(
         : null,
     },
     threads: { summary: threads.summary },
+  }
+}
+
+export async function loadDashboardLocationSettings(
+  event: H3Event,
+  siteId: string,
+  locationId: string,
+) {
+  const { env, db, organization, location } = await getDashboardLocationContext(event, locationId)
+  if (location.site_id !== siteId) {
+    throw createError({ statusCode: 404, statusMessage: 'Location not found' })
+  }
+  await assertLocationAccess(db, {
+    memberId: organization.memberId,
+    role: organization.role,
+    organizationId: organization.id,
+    siteId,
+    locationId,
+  })
+  const [capabilities, connection] = await Promise.all([
+    resolveLocationCapabilitySummary(
+      db,
+      organization.id,
+      siteId,
+      location.feature_overrides as string | null ?? null,
+    ),
+    getGoogleBusinessConnection(env, organization.id, siteId, locationId),
+  ])
+  return {
+    location: {
+      success: true as const,
+      location: parseLocationPayload(location),
+      ...capabilities,
+    },
+    connection: {
+      success: true as const,
+      connection: connection
+        ? {
+            id: connection.id,
+            provider_account_email: connection.provider_account_email,
+            status: connection.status,
+            expires_at: connection.expires_at,
+            created_at: connection.created_at,
+            updated_at: connection.updated_at,
+          }
+        : null,
+    },
   }
 }
 

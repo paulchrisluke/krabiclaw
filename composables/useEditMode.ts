@@ -68,7 +68,8 @@ export const useEditMode = (siteId?: string, locationId?: string | null) => {
         body: { 
           page: currentPage.value,
           changes: pendingChanges.value
-        }
+        },
+        validate: (value): value is { success: true } => isRecord(value) && value.success === true,
       })
       // Clear local pending state; direct writes are live immediately.
       pendingChanges.value = {}

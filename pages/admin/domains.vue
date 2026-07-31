@@ -82,7 +82,10 @@ async function loadDomains() {
 async function syncDomain(id: string) {
   syncingDomainId.value = id
   try {
-    await applicationFetch(`/api/admin/domains/${id}/sync`, { method: 'POST' })
+    await applicationFetch(`/api/admin/domains/${id}/sync`, {
+      method: 'POST',
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+    })
     toast.add({ title: 'Domain synced', color: 'success' })
     await loadDomains()
   } catch {

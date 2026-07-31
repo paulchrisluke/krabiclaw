@@ -225,7 +225,10 @@ async function disconnectGoogle() {
   if (!requestedSiteId || connectionSiteId.value !== requestedSiteId) return
   disconnecting.value = true
   try {
-    await dashboardApi(`/api/sites/${requestedSiteId}/integrations/google-analytics/disconnect`, { method: 'POST' })
+    await dashboardApi(`/api/sites/${requestedSiteId}/integrations/google-analytics/disconnect`, {
+      method: 'POST',
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+    })
     if (siteId.value !== requestedSiteId) return
     connection.value = null
     ga4Properties.value = []

@@ -61,12 +61,23 @@ export function useMediaUpload(siteApiBase: string) {
   const pendingRetryFile = ref<PendingMediaUpload | null>(null)
 
   async function cleanupPendingUpload(assetId: string) {
-    await dashboardApi(`${siteApiBase}/media/${assetId}`, { method: 'DELETE' })
+    await dashboardApi(`${siteApiBase}/media/${assetId}`, {
+      method: 'DELETE',
+      validate: (value): value is { deleted: true } => isRecord(value) && value.deleted === true,
+    })
   }
 
   async function confirmPendingUpload(assetId: string) {
     try {
-      await dashboardApi(`${siteApiBase}/media/${assetId}/confirm`, { method: 'POST' })
+      await dashboardApi(`${siteApiBase}/media/${assetId}/confirm`, {
+        method: 'POST',
+        validate: (value): value is { id: string; publicUrl: string; thumbnailUrl: string; status: 'active' } =>
+          isRecord(value)
+          && typeof value.id === 'string'
+          && typeof value.publicUrl === 'string'
+          && typeof value.thumbnailUrl === 'string'
+          && value.status === 'active',
+      })
     } catch (uploadError) {
       if (getErrorStatus(uploadError) === 409) return
       throw uploadError

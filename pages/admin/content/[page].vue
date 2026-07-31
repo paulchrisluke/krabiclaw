@@ -102,6 +102,7 @@ async function saveContent() {
     await applicationFetch(`/api/admin/content/${page}`, {
       method: 'POST',
       body: { content: content.value },
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
     })
     toast.add({ title: 'Content saved', color: 'success' })
   } catch (err) {
@@ -119,7 +120,10 @@ async function confirmDelete() {
   }
   deleting.value = true
   try {
-    await applicationFetch(`/api/admin/content/${page}`, { method: 'DELETE' })
+    await applicationFetch(`/api/admin/content/${page}`, {
+      method: 'DELETE',
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+    })
     content.value = ''
     deleteConfirmOpen.value = false
     toast.add({ title: 'Content deleted', color: 'success' })

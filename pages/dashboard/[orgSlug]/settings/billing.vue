@@ -332,17 +332,6 @@ const sites = ref<SiteBillingSummary[]>([])
 const selectedSiteId = ref<string | null>(null)
 const selectedSite = computed(() => sites.value.find(s => s.siteId === selectedSiteId.value) ?? null)
 
-async function loadSites() {
-  try {
-    const res = await dashboardApi<{ sites: SiteBillingSummary[] }>('/api/billing/sites')
-    sites.value = res.sites ?? []
-    if (!selectedSiteId.value && sites.value.length === 1) {
-      selectedSiteId.value = sites.value[0]!.siteId
-    }
-  } catch {
-    sites.value = []
-  }
-}
 const creditsLoading = ref(true)
 const upgrading = ref<string | null>(null)
 const portalLoading = ref(false)
@@ -368,12 +357,6 @@ function onAutoTopupSaved(settings: { enabled: boolean; bundle: CreditBundleSize
   autoTopupThreshold.value = settings.threshold
 }
 
-async function loadPaymentMethod() {
-  try {
-    const res = await dashboardApi<{ card: SavedCard | null }>('/api/billing/payment-method')
-    savedCard.value = res.card
-  } catch { savedCard.value = null }
-}
 const buyingCredits = ref<number | null>(null)
 const { purchase: purchaseCreditsFn } = useCreditPurchase()
 
@@ -382,7 +365,11 @@ async function purchaseCredits(bundle: 500 | 2500 | 5000) {
     buyingCredits.value = bundle
     try {
       const res = await dashboardApi<{ balance?: number; error?: string }>('/api/billing/credits/add', {
-        method: 'POST', body: { bundle }
+        method: 'POST',
+        body: { bundle },
+        validate: (value): value is { balance?: number; error?: string } =>
+          isRecord(value)
+          && (typeof value.balance === 'number' || typeof value.error === 'string'),
       })
       if (res.balance !== undefined) {
         toast.add({ description: `Added ${bundle} credits. New balance: ${res.balance}`, color: 'success' })
@@ -413,33 +400,18 @@ const { open: openServiceUpsell } = useServiceUpsell()
 const loadCredits = async () => {
   creditsLoading.value = true
   try {
-    credits.value = await dashboardApi<ApiRecord>('/api/billing/credits')
-  } catch {
-    // non-critical
-    credits.value = null
+    credits.value = await dashboardApi<ApiRecord>('/api/billing/credits', {
+      validate: isCreditsResponse,
+    })
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Failed to load AI credits'
+    throw error
   } finally {
     creditsLoading.value = false
   }
 }
 
 const { formatRelativeTime, formatExactDateTime: formatDate } = useHumanTime()
-
-const loadBillingData = async () => {
-  loading.value = true
-  try {
-    const response = await dashboardApi<ApiRecord>('/api/billing/status')
-    billing.value = response.billing
-    autoTopupEnabled.value = Boolean(response.billing?.autoTopupEnabled)
-    const bundleVal = Number(response.billing?.autoTopupBundle)
-    autoTopupBundle.value = (bundleVal === 2500 || bundleVal === 5000) ? bundleVal : 500
-    autoTopupThreshold.value = Number(response.billing?.autoTopupThreshold) || 100
-  } catch (err) {
-    console.error('Failed to load billing data:', err)
-    billing.value = null
-  } finally {
-    loading.value = false
-  }
-}
 
 const upgradeToPlan = async (plan: string) => {
   if (!selectedSiteId.value) {
@@ -453,7 +425,9 @@ const upgradeToPlan = async (plan: string) => {
   try {
     const response = await dashboardApi<{ checkoutUrl: string }>('/api/billing/checkout', {
       method: 'POST',
-      body: { plan, interval: annual.value ? 'year' : 'month', siteId: selectedSiteId.value, gaClientId: getGaClientId() }
+      body: { plan, interval: annual.value ? 'year' : 'month', siteId: selectedSiteId.value, gaClientId: getGaClientId() },
+      validate: (value): value is { checkoutUrl: string } =>
+        isRecord(value) && typeof value.checkoutUrl === 'string',
     })
     if (response?.checkoutUrl) {
       await navigateTo(response.checkoutUrl, { external: true })
@@ -478,7 +452,9 @@ const openBillingPortal = async () => {
     }
     const response = await dashboardApi<{ portalUrl: string }>('/api/billing/portal', {
       method: 'POST',
-      body: { organizationId: orgId }
+      body: { organizationId: orgId },
+      validate: (value): value is { portalUrl: string } =>
+        isRecord(value) && typeof value.portalUrl === 'string',
     })
     if (response?.portalUrl) {
       await navigateTo(response.portalUrl, { external: true })
@@ -492,6 +468,100 @@ const openBillingPortal = async () => {
   }
 }
 
+interface BillingResource {
+  billing: ApiRecord
+  credits: ApiRecord
+  paymentMethod: { card: SavedCard | null }
+  sites: { success: true; sites: SiteBillingSummary[] }
+}
+
+const isSiteBillingSummary = (value: unknown): value is SiteBillingSummary =>
+  isRecord(value)
+  && typeof value.siteId === 'string'
+  && (value.brandName === null || typeof value.brandName === 'string')
+  && (value.subdomain === null || typeof value.subdomain === 'string')
+  && typeof value.plan === 'string'
+const isSitesResponse = (value: unknown): value is { success: true; sites: SiteBillingSummary[] } =>
+  isRecord(value)
+  && value.success === true
+  && Array.isArray(value.sites)
+  && value.sites.every(isSiteBillingSummary)
+const isSavedCard = (value: unknown): value is SavedCard =>
+  isRecord(value)
+  && typeof value.brand === 'string'
+  && typeof value.last4 === 'string'
+  && typeof value.exp_month === 'number'
+  && typeof value.exp_year === 'number'
+const isPaymentMethodResponse = (value: unknown): value is { card: SavedCard | null } =>
+  isRecord(value) && (value.card === null || isSavedCard(value.card))
+const isCreditsResponse = (value: unknown): value is ApiRecord =>
+  isRecord(value)
+  && typeof value.balance === 'number'
+  && typeof value.lifetime_used === 'number'
+  && Array.isArray(value.usage)
+  && value.usage.every(row =>
+    isRecord(row)
+    && typeof row.action === 'string'
+    && typeof row.credits_charged === 'number'
+    && typeof row.created_at === 'string',
+  )
+  && Array.isArray(value.by_action)
+  && value.by_action.every(row =>
+    isRecord(row)
+    && typeof row.action === 'string'
+    && typeof row.total_credits === 'number'
+    && typeof row.calls === 'number',
+  )
+const isBillingResponse = (value: unknown): value is ApiRecord =>
+  isRecord(value)
+  && value.success === true
+  && isRecord(value.billing)
+  && typeof value.billing.organizationId === 'string'
+  && typeof value.billing.plan === 'string'
+  && typeof value.billing.autoTopupEnabled === 'boolean'
+const requestEvent = useRequestEvent()
+const { data: billingResource, error: billingResourceError, pending: billingResourcePending } = await useAsyncData<BillingResource>(
+  computed(() => `dashboard-billing:${String(route.params.orgSlug || '')}`),
+  async () => {
+    if (import.meta.server) {
+      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+      const { loadDashboardBillingResource } = await import('~/server/utils/dashboard-billing-resource')
+      return await loadDashboardBillingResource(requestEvent)
+    }
+    const [billingResponse, creditsResponse, paymentMethodResponse, sitesResponse] = await Promise.all([
+      dashboardApi<ApiRecord>('/api/billing/status', { validate: isBillingResponse }),
+      dashboardApi<ApiRecord>('/api/billing/credits', { validate: isCreditsResponse }),
+      dashboardApi<{ card: SavedCard | null }>('/api/billing/payment-method', { validate: isPaymentMethodResponse }),
+      dashboardApi<{ success: true; sites: SiteBillingSummary[] }>('/api/billing/sites', { validate: isSitesResponse }),
+    ])
+    return {
+      billing: billingResponse,
+      credits: creditsResponse,
+      paymentMethod: paymentMethodResponse,
+      sites: sitesResponse,
+    }
+  },
+)
+
+watchEffect(() => {
+  loading.value = billingResourcePending.value
+  creditsLoading.value = billingResourcePending.value
+  if (billingResourceError.value) {
+    errorMessage.value = billingResourceError.value.message || 'Failed to load billing'
+    return
+  }
+  const resource = billingResource.value
+  if (!resource) return
+  billing.value = resource.billing.billing as ApiRecord
+  credits.value = resource.credits
+  savedCard.value = resource.paymentMethod.card
+  sites.value = resource.sites.sites
+  if (!selectedSiteId.value && sites.value.length === 1) selectedSiteId.value = sites.value[0]!.siteId
+  autoTopupEnabled.value = Boolean(billing.value.autoTopupEnabled)
+  const bundleValue = Number(billing.value.autoTopupBundle)
+  autoTopupBundle.value = bundleValue === 2500 || bundleValue === 5000 ? bundleValue : 500
+  autoTopupThreshold.value = Number(billing.value.autoTopupThreshold) || 100
+})
 
 onMounted(async () => {
   const { success, plan, canceled, siteId, ...restQuery } = route.query
@@ -510,8 +580,6 @@ onMounted(async () => {
 
   // Auto-start checkout if plan query param exists
   const { isAuthenticated } = useAuth()
-  await Promise.all([loadBillingData(), loadCredits(), loadPaymentMethod(), loadSites()])
-
   if (typeof siteId === 'string' && sites.value.some(s => s.siteId === siteId)) {
     selectedSiteId.value = siteId
   }

@@ -82,7 +82,10 @@ async function confirmDeleteDoc() {
   if (!pendingDeleteDocId.value) return
   deletingDocId.value = pendingDeleteDocId.value
   try {
-    await applicationFetch(`/api/admin/docs/${pendingDeleteDocId.value}`, { method: 'DELETE' })
+    await applicationFetch(`/api/admin/docs/${pendingDeleteDocId.value}`, {
+      method: 'DELETE',
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+    })
     toast.add({ title: 'Doc deleted', color: 'success' })
     await loadDocs()
   } catch {

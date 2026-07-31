@@ -789,7 +789,10 @@ async function doDelete() {
   if (!deletingExp.value) return
   deleting.value = true
   try {
-    await dashboardApi(`/api/editor/sites/${siteId}/experiences/${deletingExp.value.id}`, { method: 'DELETE' })
+    await dashboardApi(`/api/editor/sites/${siteId}/experiences/${deletingExp.value.id}`, {
+      method: 'DELETE',
+      validate: (value): value is { deleted: true } => isRecord(value) && value.deleted === true,
+    })
     toast.add({ description: 'Experience deleted.', color: 'success' })
     deleteOpen.value = false
     await loadExperiences()
@@ -860,6 +863,8 @@ async function toggleSlotOverride(slot: SlotAvailability) {
         status: slot.is_closed ? 'open' : 'closed',
         capacity_override: capacityInput != null ? capacityInput : null,
       },
+      validate: (value): value is { success: true; override: ApiRecord } =>
+        isRecord(value) && value.success === true && isRecord(value.override),
     })
     await loadAvailability()
   } catch {
@@ -872,7 +877,10 @@ async function toggleSlotOverride(slot: SlotAvailability) {
 async function deleteOverride(override: SlotOverride) {
   if (!availabilityExp.value) return
   try {
-    await dashboardApi(`/api/editor/sites/${siteId}/experiences/${availabilityExp.value.id}/slot-overrides/${override.id}`, { method: 'DELETE' })
+    await dashboardApi(`/api/editor/sites/${siteId}/experiences/${availabilityExp.value.id}/slot-overrides/${override.id}`, {
+      method: 'DELETE',
+      validate: (value): value is { deleted: true } => isRecord(value) && value.deleted === true,
+    })
     await loadAvailability()
   } catch {
     toast.add({ description: 'Failed to delete override.', color: 'error' })

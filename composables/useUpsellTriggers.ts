@@ -16,7 +16,11 @@ export const useUpsellTriggers = () => {
 
   async function loadPlanIds(): Promise<Set<string>> {
     try {
-      const plans = await dashboardApi<Plan[]>('/api/billing/plans')
+      const plans = await dashboardApi<Plan[]>('/api/billing/plans', {
+        validate: (value): value is Plan[] =>
+          Array.isArray(value)
+          && value.every(plan => isRecord(plan) && typeof plan.id === 'string'),
+      })
       return new Set(plans.map(plan => plan.id))
     } catch {
       return new Set()

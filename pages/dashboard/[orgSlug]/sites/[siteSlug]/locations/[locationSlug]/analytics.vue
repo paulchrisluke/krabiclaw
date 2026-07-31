@@ -15,6 +15,13 @@
 
     <template #body>
       <div class="space-y-6">
+        <UAlert
+          v-if="loadError"
+          color="error"
+          variant="soft"
+          title="Analytics could not be loaded"
+          :description="loadError"
+        />
         <p class="text-sm text-muted">{{ rangeLabel }}</p>
 
         <UCard variant="soft">
@@ -212,8 +219,62 @@ const presets: Array<{ key: PresetKey; label: string }> = [
 
 const activePreset = ref<PresetKey>('last_30_days')
 const loading = ref(true)
+const loadError = ref<string | null>(null)
 const analytics = ref<AnalyticsResponse | null>(null)
 const range = reactive(presetRange('last_30_days'))
+const isAnalyticsResponse = (value: unknown): value is AnalyticsResponse =>
+  isRecord(value)
+  && isRecord(value.metrics)
+  && typeof value.metrics.pageViews === 'number'
+  && typeof value.metrics.uniqueSessions === 'number'
+  && typeof value.metrics.uniqueVisitors === 'number'
+  && typeof value.metrics.avgSessionDuration === 'number'
+  && Array.isArray(value.dailyData)
+  && value.dailyData.every(day =>
+    isRecord(day)
+    && typeof day.date === 'string'
+    && typeof day.pageViews === 'number'
+    && typeof day.sessions === 'number',
+  )
+  && Array.isArray(value.topPages)
+  && Array.isArray(value.countries)
+  && Array.isArray(value.cities)
+  && Array.isArray(value.referrers)
+  && Array.isArray(value.devices)
+  && isRecord(value.period)
+  && typeof value.period.startDate === 'string'
+  && typeof value.period.endDate === 'string'
+
+const requestEvent = useRequestEvent()
+const initialRange = { ...range }
+const { data: analyticsResource, pending: analyticsPending, error: analyticsResourceError } =
+  await useAsyncData(
+    `dashboard-site-analytics:${siteId}:${initialRange.startDate}:${initialRange.endDate}`,
+    async () => {
+      if (import.meta.server) {
+        if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+        const { loadDashboardSiteAnalytics } = await import('~/server/utils/dashboard-site-analytics')
+        return await loadDashboardSiteAnalytics(requestEvent, siteId, initialRange)
+      }
+      return await dashboardApi<AnalyticsResponse>(`/api/sites/${siteId}/analytics`, {
+        query: initialRange,
+        validate: isAnalyticsResponse,
+      })
+    },
+    { lazy: import.meta.client },
+  )
+
+watch([analyticsResource, analyticsPending, analyticsResourceError], ([resource, pending, error]) => {
+  loading.value = pending
+  if (error) {
+    loadError.value = error instanceof Error ? error.message : 'Failed to load analytics'
+    return
+  }
+  if (resource) {
+    analytics.value = resource
+    loadError.value = null
+  }
+}, { immediate: true })
 
 const dailyData = computed(() => analytics.value?.dailyData || [])
 const maxTrendValue = computed(() => Math.max(1, ...dailyData.value.map(day => Math.max(day.pageViews, day.sessions))))
@@ -261,12 +322,14 @@ function markCustomAndLoad() {
 
 async function loadAnalytics() {
   loading.value = true
+  loadError.value = null
   try {
     analytics.value = await dashboardApi<AnalyticsResponse>(`/api/sites/${siteId}/analytics`, {
-      query: { startDate: range.startDate, endDate: range.endDate }
+      query: { startDate: range.startDate, endDate: range.endDate },
+      validate: isAnalyticsResponse,
     })
   } catch (error) {
-    analytics.value = null
+    loadError.value = error instanceof Error ? error.message : 'Failed to load analytics'
     toast.add({ description: error instanceof Error ? error.message : 'Failed to load analytics', color: 'error' })
   } finally {
     loading.value = false
@@ -349,10 +412,6 @@ function percentOfViews(views: number): number {
   const total = analytics.value?.metrics.pageViews || 0
   return total > 0 ? Math.round((views / total) * 100) : 0
 }
-
-onMounted(() => {
-  loadAnalytics()
-})
 
 useSeoMeta({ title: 'Analytics | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>
