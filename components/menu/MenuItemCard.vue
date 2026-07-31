@@ -7,7 +7,7 @@
       <video
         v-if="isVideo"
         :src="mediaUrl"
-        :poster="item.poster"
+        :poster="posterUrl"
         autoplay
         muted
         loop
@@ -90,6 +90,11 @@ const mediaUrl = computed(() => {
   if (cover?.public_url) return cover.public_url
   if (props.item.public_url) return props.item.public_url
   return ''
+})
+
+const posterUrl = computed(() => {
+  const cover = props.item.media?.[0]
+  return cover?.thumbnail_url || props.item.thumbnail_url || props.item.poster || undefined
 })
 
 const isVideo = computed(() => {

@@ -190,7 +190,6 @@ async function syncVideoPreviews() {
     try {
       await video.play()
       if (currentToken !== syncToken) {
-        pauseVideo(video)
         return
       }
     } catch {

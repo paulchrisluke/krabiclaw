@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:f6abb3ba9f6ccc53d9d3fe592c3b4a0bc6a3bf8699669027613f242fbf9c1846",
+  "fingerprint": "sha256:23d4b143483d46d8c9a25805ae267bbbcf01fdddd27473b32c3f0ba18fc1875e",
   "tools": [
     {
       "name": "add_menu_items_batch",
@@ -50,6 +50,22 @@
                 "ingredients": {
                   "items": {
                     "type": "string"
+                  },
+                  "type": "array"
+                },
+                "media": {
+                  "description": "Ordered image/video media asset references. Position 0 is the cover everywhere. Videos in cover position must already have thumbnail_url/poster metadata.",
+                  "items": {
+                    "properties": {
+                      "asset_id": {
+                        "description": "Active image or video asset id from get_site_media_assets.",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "asset_id"
+                    ],
+                    "type": "object"
                   },
                   "type": "array"
                 },
@@ -1523,6 +1539,22 @@
           "ingredients": {
             "items": {
               "type": "string"
+            },
+            "type": "array"
+          },
+          "media": {
+            "description": "Ordered image/video media asset references. Position 0 is the cover everywhere. Videos in cover position must already have thumbnail_url/poster metadata.",
+            "items": {
+              "properties": {
+                "asset_id": {
+                  "description": "Active image or video asset id from get_site_media_assets.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "asset_id"
+              ],
+              "type": "object"
             },
             "type": "array"
           },
@@ -10638,7 +10670,10 @@
                 "target": {
                   "properties": {
                     "type": {
-                      "const": "experience_media"
+                      "enum": [
+                        "experience_media",
+                        "menu_item_media"
+                      ]
                     }
                   }
                 }
@@ -11921,6 +11956,22 @@
                 "item_id": {
                   "description": "Existing menu item ID when known.",
                   "type": "string"
+                },
+                "media": {
+                  "description": "Ordered image/video media asset references. Position 0 is the cover everywhere. Videos in cover position must already have thumbnail_url/poster metadata.",
+                  "items": {
+                    "properties": {
+                      "asset_id": {
+                        "description": "Active image or video asset id from get_site_media_assets.",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "asset_id"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
                 },
                 "name": {
                   "type": "string"
@@ -14597,6 +14648,22 @@
           "ingredients": {
             "items": {
               "type": "string"
+            },
+            "type": "array"
+          },
+          "media": {
+            "description": "Ordered image/video media asset references. Position 0 is the cover everywhere. Videos in cover position must already have thumbnail_url/poster metadata.",
+            "items": {
+              "properties": {
+                "asset_id": {
+                  "description": "Active image or video asset id from get_site_media_assets.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "asset_id"
+              ],
+              "type": "object"
             },
             "type": "array"
           },

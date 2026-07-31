@@ -17,7 +17,9 @@ function fakeDb(input: {
     async all() {
       allCalls += 1
       if (allCalls === 1) return input.items
-      if (allCalls === 2) return input.mediaRows
+      if (allCalls === 2) {
+        return [...input.mediaRows].sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0))
+      }
       return []
     },
   } as unknown as AppDb
@@ -93,34 +95,64 @@ test('menu item media is hydrated from ordered menu_item_media rows', async () =
     fakeDb({
       menu: menuRow,
       items: [itemRow],
-      mediaRows: [{
-        ...itemRow,
-        id: 'asset-video',
-        menu_item_id: 'item-1',
-        sort_order: 0,
-        organization_id: 'org-1',
-        site_id: 'site-1',
-        location_id: null,
-        provider: 'cloudflare_r2',
-        source: 'uploaded',
-        cloudflare_image_id: null,
-        r2_key: 'videos/asset-video.mp4',
-        google_media_name: null,
-        public_url: 'https://cdn.example.com/video.mp4',
-        thumbnail_url: 'https://cdn.example.com/video-poster.jpg',
-        mime_type: 'video/mp4',
-        file_name: 'video.mp4',
-        file_size: 123,
-        width: 1080,
-        height: 1920,
-        duration: 6,
-        alt_text: 'Painting a bowl',
-        category: 'menu',
-        status: 'active',
-        created_by_user_id: 'user-1',
-        delete_pending_at: null,
-        kind: 'video',
-      }],
+      mediaRows: [
+        {
+          ...itemRow,
+          id: 'asset-image',
+          menu_item_id: 'item-1',
+          sort_order: 1,
+          organization_id: 'org-1',
+          site_id: 'site-1',
+          location_id: null,
+          provider: 'cloudflare_r2',
+          source: 'uploaded',
+          cloudflare_image_id: null,
+          r2_key: 'images/asset-image.jpg',
+          google_media_name: null,
+          public_url: 'https://cdn.example.com/image.jpg',
+          thumbnail_url: 'https://cdn.example.com/image-thumb.jpg',
+          mime_type: 'image/jpeg',
+          file_name: 'image.jpg',
+          file_size: 456,
+          width: 1200,
+          height: 900,
+          duration: null,
+          alt_text: 'Finished bowl',
+          category: 'menu',
+          status: 'active',
+          created_by_user_id: 'user-1',
+          delete_pending_at: null,
+          kind: 'image',
+        },
+        {
+          ...itemRow,
+          id: 'asset-video',
+          menu_item_id: 'item-1',
+          sort_order: 0,
+          organization_id: 'org-1',
+          site_id: 'site-1',
+          location_id: null,
+          provider: 'cloudflare_r2',
+          source: 'uploaded',
+          cloudflare_image_id: null,
+          r2_key: 'videos/asset-video.mp4',
+          google_media_name: null,
+          public_url: 'https://cdn.example.com/video.mp4',
+          thumbnail_url: 'https://cdn.example.com/video-poster.jpg',
+          mime_type: 'video/mp4',
+          file_name: 'video.mp4',
+          file_size: 123,
+          width: 1080,
+          height: 1920,
+          duration: 6,
+          alt_text: 'Painting a bowl',
+          category: 'menu',
+          status: 'active',
+          created_by_user_id: 'user-1',
+          delete_pending_at: null,
+          kind: 'video',
+        },
+      ],
     }),
     'org-1',
     'site-1',
@@ -131,5 +163,5 @@ test('menu item media is hydrated from ordered menu_item_media rows', async () =
   assert.equal(menu?.items[0]?.public_url, 'https://cdn.example.com/video.mp4')
   assert.equal(menu?.items[0]?.thumbnail_url, 'https://cdn.example.com/video-poster.jpg')
   assert.equal(menu?.items[0]?.kind, 'video')
-  assert.equal(menu?.items[0]?.media?.[0]?.id, 'asset-video')
+  assert.deepEqual(menu?.items[0]?.media?.map(media => media.id), ['asset-video', 'asset-image'])
 })

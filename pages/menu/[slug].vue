@@ -41,7 +41,7 @@
         <section class="mt-8 lg:col-span-7 lg:col-start-1 lg:row-span-3 lg:row-start-1 lg:mt-0" aria-labelledby="item-images-heading">
           <h2 id="item-images-heading" class="sr-only">Dish images</h2>
           <div class="grid grid-cols-1 gap-4 lg:grid-cols-1 lg:gap-6">
-            <SayaMediaGallery :items="lightboxItems" :title="item.name" empty-icon="sparkles" />
+            <SayaMediaGallery :items="mediaItems" :title="item.name" empty-icon="sparkles" />
           </div>
         </section>
 
@@ -269,6 +269,7 @@
 definePageMeta({ layout: 'saya' })
 import AppBreadcrumb from '~/components/ui/AppBreadcrumb.vue'
 import { formatMoneyAmount, isSaleActive } from '~/shared/money'
+import type { MenuItem } from '~/server/types/menu'
 import {
   useBootstrapParams,
   useBootstrapKey,
@@ -317,13 +318,7 @@ interface MenuItemType {
   canonical_url?: string | null
   robots?: string | null
   og_image_public_url?: string | null
-  media?: Array<{
-    id: string
-    kind: 'image' | 'video'
-    public_url: string
-    thumbnail_url: string | null
-    alt_text: string | null
-  }>
+  media?: MenuItem['media']
 }
 
 interface ReviewsResponse {
@@ -434,7 +429,7 @@ const isRobatayaki = computed(() =>
   category.value?.name?.toLowerCase().includes('robatayaki') ?? false
 )
 
-const lightboxItems = computed<LightboxMediaItem[]>(() => {
+const mediaItems = computed<LightboxMediaItem[]>(() => {
   const currentItem = item.value
   if (!currentItem) return []
   return (currentItem.media ?? [])
@@ -503,7 +498,7 @@ const reviewSummary = computed(() => {
 const reviewDateTime = (review: Review) => review.datetime ?? review.createdAt ?? ''
 
 const schemaImage = computed(() =>
-  lightboxItems.value[0]?.url
+  mediaItems.value[0]?.poster || mediaItems.value[0]?.url
 )
 const loadReviews = async () => {
   if (!item.value?.slug) return
@@ -578,7 +573,7 @@ const seoTitle = () => item.value?.seo_title || (item.value ? `${item.value.name
 const seoDescription = () => truncateForSeo(item.value?.seo_description || (item.value ? item.value.description : 'The menu item you\'re looking for doesn\'t exist.'), 160)
 
 useTenantSocialMetadata(() => {
-  const firstMedia = lightboxItems.value[0]
+  const firstMedia = mediaItems.value[0]
   const heroImageUrl = item.value?.og_image_public_url || firstMedia?.poster || firstMedia?.url || null
   return {
     path: item.value?.canonical_url || (item.value ? `/menu/${item.value.slug}` : '/menu'),

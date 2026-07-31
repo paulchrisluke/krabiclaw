@@ -203,7 +203,8 @@ const coverAssetId = computed({
   get: () => form.media[0]?.asset_id ?? null,
   set: (assetId: string | null) => {
     const next = assetId?.trim()
-    form.media = next ? [{ asset_id: next }] : []
+    const rest = form.media.slice(1)
+    form.media = next ? [{ asset_id: next }, ...rest] : rest
   },
 })
 

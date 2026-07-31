@@ -234,7 +234,7 @@
               :location-id="props.locationId"
               accept="any"
               title="Item image or video"
-              @update:model-value="handleQuickUpdateItem(item, { media: $event ? [{ asset_id: $event }] : [] })"
+              @update:model-value="handleQuickUpdateItem(item, coverMediaUpdate(item, $event))"
             >
               <div class="group relative size-14 overflow-hidden rounded-md border border-default bg-muted">
                 <img
@@ -430,6 +430,12 @@ const itemEditPath = (item: MenuItem) => ({
   path: `${paths.value.menu}/items/${item.id}`,
   query: menuRouteQuery.value
 })
+
+const coverMediaUpdate = (item: MenuItem, assetId: string | null): UpdateMenuItemRequest => {
+  const rest = (item.media ?? []).slice(1).map((media) => ({ asset_id: media.id }))
+  const next = assetId?.trim()
+  return { media: next ? [{ asset_id: next }, ...rest] : rest }
+}
 
 const handleQuickUpdateItem = async (item: MenuItem, updates: UpdateMenuItemRequest) => {
   try {

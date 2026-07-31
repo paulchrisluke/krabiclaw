@@ -17,6 +17,7 @@ import {
   hydrateMediaAssetsForMenuItems,
   hydrateMediaAssetRefs,
   type MediaAssetRefInput,
+  type ResolvedMediaAsset,
 } from "~/server/utils/media-asset-manager";
 
 const MAX_SUFFIX_ATTEMPTS = 50;
@@ -197,6 +198,43 @@ async function attachMenuItemMedia<T extends MenuItem>(
   });
 }
 
+async function validateMenuItemMediaRefs(
+  db: DbClient,
+  input: {
+    organizationId: string
+    siteId: string
+    refs: MediaAssetRefInput[]
+  },
+) {
+  return await hydrateMediaAssetRefs(db, {
+    organizationId: input.organizationId,
+    siteId: input.siteId,
+    refs: input.refs,
+    allowedKinds: ['image', 'video'],
+    requireCoverPoster: true,
+    fieldName: 'media',
+  });
+}
+
+async function replaceMenuItemMedia(
+  db: DbClient,
+  input: {
+    organizationId: string
+    siteId: string
+    menuItemId: string
+    media: ResolvedMediaAsset[]
+    now?: string
+  },
+) {
+  await executeBatch(db, buildReplaceMenuItemMediaQueries({
+    organizationId: input.organizationId,
+    siteId: input.siteId,
+    menuItemId: input.menuItemId,
+    media: input.media,
+    now: input.now,
+  }));
+}
+
 async function replaceMenuItemMediaFromRefs(
   db: DbClient,
   input: {
@@ -207,21 +245,8 @@ async function replaceMenuItemMediaFromRefs(
     now?: string
   },
 ) {
-  const media = await hydrateMediaAssetRefs(db, {
-    organizationId: input.organizationId,
-    siteId: input.siteId,
-    refs: input.refs,
-    allowedKinds: ['image', 'video'],
-    requireCoverPoster: true,
-    fieldName: 'media',
-  });
-  await executeBatch(db, buildReplaceMenuItemMediaQueries({
-    organizationId: input.organizationId,
-    siteId: input.siteId,
-    menuItemId: input.menuItemId,
-    media,
-    now: input.now,
-  }));
+  const media = await validateMenuItemMediaRefs(db, input);
+  await replaceMenuItemMedia(db, { ...input, media });
   return media;
 }
 
@@ -851,6 +876,13 @@ export async function createMenuItem(
   const now = new Date().toISOString();
   const slug = await uniqueSlug(db, menuId, item.name);
   const mediaRefs = menuItemMediaRefsFromInput(item);
+  const media = mediaRefs
+    ? await validateMenuItemMediaRefs(db, {
+        organizationId,
+        siteId,
+        refs: mediaRefs,
+      })
+    : null;
 
   const result = await execute(
     db,
@@ -898,12 +930,12 @@ export async function createMenuItem(
     throw new Error("Failed to create menu item");
   }
 
-  if (mediaRefs) {
-    await replaceMenuItemMediaFromRefs(db, {
+  if (media) {
+    await replaceMenuItemMedia(db, {
       organizationId,
       siteId,
       menuItemId: id,
-      refs: mediaRefs,
+      media,
       now,
     });
   }

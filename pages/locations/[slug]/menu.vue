@@ -69,65 +69,17 @@
             >
               <!-- Thumbnail left -->
               <NuxtLink
-                v-if="menuItemPreviewUrl(item) && item.available"
+                v-if="item.public_url && item.available"
                 :to="`/menu/${itemSlug(item)}`"
-                class="relative shrink-0 overflow-hidden rounded-xl bg-muted"
+                class="shrink-0"
               >
-                <video
-                  v-if="item.kind === 'video' && item.public_url"
-                  :src="item.public_url"
-                  :poster="item.thumbnail_url || undefined"
-                  class="size-24 object-cover"
-                  muted
-                  playsinline
-                  preload="metadata"
-                />
-                <img
-                  v-else
-                  :src="menuItemPreviewUrl(item)!"
-                  :alt="item.name"
-                  class="size-24 object-cover"
-                  loading="lazy"
-                />
-                <span
-                  v-if="item.kind === 'video' && item.public_url"
-                  class="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/10 text-white"
-                  aria-hidden="true"
-                >
-                  <span class="flex size-8 items-center justify-center rounded-full bg-black/50">
-                    <SayaIcon name="play" class="ml-0.5 size-3.5" />
-                  </span>
-                </span>
+                <SayaMenuItemPreview :item="item" />
               </NuxtLink>
               <div
-                v-else-if="menuItemPreviewUrl(item)"
-                class="relative shrink-0 overflow-hidden rounded-xl bg-muted opacity-50 grayscale"
+                v-else-if="item.public_url"
+                class="shrink-0"
               >
-                <video
-                  v-if="item.kind === 'video' && item.public_url"
-                  :src="item.public_url"
-                  :poster="item.thumbnail_url || undefined"
-                  class="size-24 object-cover"
-                  muted
-                  playsinline
-                  preload="metadata"
-                />
-                <img
-                  v-else
-                  :src="menuItemPreviewUrl(item)!"
-                  :alt="item.name"
-                  class="size-24 object-cover"
-                  loading="lazy"
-                />
-                <span
-                  v-if="item.kind === 'video' && item.public_url"
-                  class="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/10 text-white"
-                  aria-hidden="true"
-                >
-                  <span class="flex size-8 items-center justify-center rounded-full bg-black/50">
-                    <SayaIcon name="play" class="ml-0.5 size-3.5" />
-                  </span>
-                </span>
+                <SayaMenuItemPreview :item="item" disabled />
               </div>
 
               <!-- Text -->
@@ -247,11 +199,6 @@ watch(categories, () => {
 
 function itemSlug(item: ApiValue): string {
   return item.slug || item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-}
-
-function menuItemPreviewUrl(item: ApiValue): string | null {
-  if (item.kind === 'video') return item.thumbnail_url || item.public_url || null
-  return item.public_url || null
 }
 
 function getDietaryTags(item: ApiValue): string[] {
