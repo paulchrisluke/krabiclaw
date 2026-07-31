@@ -102,7 +102,7 @@ export function useDashboardSite() {
       state.value = null
       return null
     }
-    const existing = dashboardContextReads.get(requestKey)
+    const existing = import.meta.client ? dashboardContextReads.get(requestKey) : undefined
     if (existing) return await existing
     pendingByScope.value = { ...pendingByScope.value, [requestKey]: true }
     const pendingRead = (import.meta.server
@@ -122,11 +122,11 @@ export function useDashboardSite() {
       })
       .finally(() => {
         pendingByScope.value = { ...pendingByScope.value, [requestKey]: false }
-        if (dashboardContextReads.get(requestKey) === pendingRead) {
+        if (import.meta.client && dashboardContextReads.get(requestKey) === pendingRead) {
           dashboardContextReads.delete(requestKey)
         }
       })
-    dashboardContextReads.set(requestKey, pendingRead)
+    if (import.meta.client) dashboardContextReads.set(requestKey, pendingRead)
     return await pendingRead
   }
 
@@ -155,9 +155,7 @@ export function useDashboardSite() {
 
 export async function useDashboardSiteId() {
   const dashboard = useDashboardSite()
-  if (!dashboard.state.value) {
-    await dashboard.refresh()
-  }
+  if (!dashboard.state.value) throw createError({ statusCode: 503, message: 'Dashboard context not loaded' })
   const siteId = dashboard.siteId.value
   if (!siteId) {
     throw createError({ statusCode: 404, message: 'Site not found' })

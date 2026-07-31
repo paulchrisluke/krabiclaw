@@ -348,9 +348,10 @@ interface PhoneAssignment {
 }
 
 const route = useRoute()
+const membersKey = computed(() => `dashboard-org-members-${String(route.params.orgSlug ?? '')}`)
 
 const { data, pending, refresh } = await useAsyncData(
-  'dashboard-org-members',
+  membersKey,
   async () => {
     if (import.meta.server) {
       const requestEvent = useRequestEvent()

@@ -306,7 +306,7 @@ import { useDynamicComponent } from '~/composables/useDynamicComponent'
 import { resolveLocationExperienceHref } from '~/utils/experience-navigation'
 import type { Experience } from '~/server/utils/experiences'
 
-const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: string) => s }
+const DOMPurify = useHtmlSanitizer()
 
 const { resolveMedia } = useMedia()
 const { resolveComponent } = useDynamicComponent()

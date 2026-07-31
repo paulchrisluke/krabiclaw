@@ -1,10 +1,6 @@
-import type { H3Event } from 'h3'
-
 interface PublicBootstrapLoadOptions<T> {
   draftId: string | null
   siteId: string | null
-  requestEvent: H3Event | undefined
-  requestFetch: <R>(_request: string) => Promise<R>
   url: string
   key: string
   query: Record<string, string | undefined>
@@ -16,23 +12,31 @@ interface PublicBootstrapLoadOptions<T> {
 export async function loadPublicBootstrapPayload<T>(
   options: PublicBootstrapLoadOptions<T>,
 ): Promise<T> {
-  if (import.meta.server) {
-    if (options.draftId) return await options.requestFetch<T>(options.url)
-    if (!options.requestEvent || !options.siteId) {
-      throw createError({ statusCode: 500, statusMessage: `${options.failureMessage} context unavailable` })
-    }
-    const { loadPublicPage, loadPublicShell } = await import('~/server/utils/public-bootstrap')
-    if (options.query.contract === 'shell') {
-      return await loadPublicShell(options.requestEvent, options.siteId, {
-        locale: options.query.locale,
-        token: options.query.token,
-      }) as T
-    }
-    return await loadPublicPage(options.requestEvent, options.siteId, options.query) as T
-  }
-
-  return await publicApiRequest<T>(options.url, {
+  const providerOptions = {
+    draftId: options.draftId,
+    siteId: options.siteId,
+    url: options.url,
+    query: options.query,
     signal: options.signal,
-    validate: options.validate,
-  })
+  }
+  const value = import.meta.server
+    ? await (useRequestEvent()?.context.publicBootstrapProvider as
+        | import('~/utils/public-bootstrap-provider').PublicBootstrapProvider
+        | undefined)?.(providerOptions)
+    : await publicApiRequest<unknown>(options.url, {
+        signal: options.signal,
+        validate: (_value): _value is unknown => true,
+      })
+  if (value === undefined) {
+    throw createError({ statusCode: 500, statusMessage: `${options.failureMessage} provider unavailable` })
+  }
+  if (!options.validate(value)) {
+    throw new ApiClientError(
+      `${options.failureMessage}: response did not match its contract`,
+      502,
+      'INVALID_API_RESPONSE',
+      null,
+    )
+  }
+  return value
 }

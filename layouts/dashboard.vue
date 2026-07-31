@@ -16,7 +16,34 @@
       </div>
     </div>
 
-    <UDashboardGroup unit="rem" :min-size="14" :default-size="18" :max-size="24">
+    <div
+      v-if="dashboard.pending.value"
+      class="flex min-h-screen items-center justify-center bg-default px-6"
+      data-testid="dashboard-context-loading"
+    >
+      <div class="w-full max-w-xl space-y-4">
+        <div class="h-7 w-48 animate-pulse rounded bg-elevated" />
+        <div class="h-32 animate-pulse rounded-xl bg-elevated" />
+      </div>
+    </div>
+    <div
+      v-else-if="dashboardContextError"
+      class="flex min-h-screen items-center justify-center bg-default px-6"
+      data-testid="dashboard-context-error"
+    >
+      <UCard class="w-full max-w-xl">
+        <h1 class="text-xl font-semibold text-highlighted">Dashboard context could not be loaded</h1>
+        <p class="mt-3 text-sm text-muted">{{ dashboardContextErrorMessage }}</p>
+        <p v-if="dashboardContextRequestId" class="mt-2 text-xs text-dimmed">
+          Request ID: {{ dashboardContextRequestId }}
+        </p>
+        <UButton class="mt-6" :loading="dashboard.pending.value" @click="retryDashboardContext">
+          Try again
+        </UButton>
+      </UCard>
+    </div>
+
+    <UDashboardGroup v-else unit="rem" :min-size="14" :default-size="18" :max-size="24">
       <UDashboardSidebar
         v-model:collapsed="sidebarCollapsed"
         resizable
@@ -233,6 +260,23 @@ const mobileMoreSheetRef = ref<HTMLElement | null>(null)
 const mobileMoreFocusReturn = ref<HTMLElement | null>(null)
 
 const dashboardContextError = ref<unknown>(null)
+const dashboardContextErrorMessage = computed(() =>
+  getErrorMessage(dashboardContextError.value, 'Dashboard context request failed'),
+)
+const dashboardContextRequestId = computed(() =>
+  dashboardContextError.value instanceof ApiClientError
+    ? dashboardContextError.value.requestId
+    : null,
+)
+
+async function retryDashboardContext() {
+  dashboardContextError.value = null
+  try {
+    await dashboard.refresh()
+  } catch (error) {
+    dashboardContextError.value = error
+  }
+}
 
 const organization = dashboard.organization
 const site = dashboard.site

@@ -96,6 +96,8 @@ export function useDashboardSearch() {
 
   onBeforeUnmount(() => {
     if (debounceHandle) clearTimeout(debounceHandle)
+    activeController?.abort()
+    activeController = null
   })
 
   return { searchTerm, loading, groups }

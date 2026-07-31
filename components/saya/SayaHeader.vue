@@ -153,6 +153,7 @@ const props = defineProps<{
   site: Site | null
   locations: ApiRecord[]
   menu: ApiRecord | null
+  hasMenu?: boolean
   hasExperiences: boolean
   experienceCtaPath?: string | null
 }>()
@@ -185,7 +186,7 @@ const restaurantName = computed(() => props.site?.brand_name || DEFAULT_BUSINESS
 const logoUrl = computed(() => props.site?.logo_url || null)
 const isExperienceSite = computed(() => props.site?.vertical === 'experience')
 
-const hasMenu = computed(() => (props.menu?.items?.length ?? 0) > 0)
+const hasMenu = computed(() => props.hasMenu ?? (props.menu?.items?.length ?? 0) > 0)
 const hasOrderLinks = computed(() =>
   props.locations.some((loc: ApiRecord) => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
 )

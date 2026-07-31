@@ -48,7 +48,7 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       page,
       location: slug ?? null,
       experience: null,
-      menu: true,
+      menu: page === "location" || page === "menu",
       data: fullData,
       blogSlug: null,
     };
@@ -61,7 +61,7 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       page: "experiences",
       location: null,
       experience: experienceMatch[1] ?? null,
-      menu: true,
+      menu: false,
       data: null,
       blogSlug: null,
     };
@@ -109,7 +109,7 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       page: "locations",
       location: null,
       experience: null,
-      menu: true,
+      menu: false,
       data: null,
       blogSlug: null,
     };
@@ -118,7 +118,7 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       page: "about",
       location: null,
       experience: null,
-      menu: true,
+      menu: false,
       data: null,
       blogSlug: null,
     };
@@ -127,7 +127,7 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       page: "contact",
       location: null,
       experience: null,
-      menu: true,
+      menu: false,
       data: null,
       blogSlug: null,
     };
@@ -136,7 +136,7 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       page: "reservations",
       location: null,
       experience: null,
-      menu: true,
+      menu: false,
       data: null,
       blogSlug: null,
     };
@@ -145,7 +145,7 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       page: "order",
       location: null,
       experience: null,
-      menu: true,
+      menu: false,
       data: null,
       blogSlug: null,
     };
@@ -154,7 +154,7 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       page: "qa",
       location: null,
       experience: null,
-      menu: true,
+      menu: false,
       data: "qa",
       blogSlug: null,
     };
@@ -163,7 +163,7 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       page: "reviews",
       location: null,
       experience: null,
-      menu: true,
+      menu: false,
       data: null,
       blogSlug: null,
     };
@@ -172,7 +172,7 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       page: "posts",
       location: null,
       experience: null,
-      menu: true,
+      menu: false,
       data: null,
       blogSlug: null,
     };
@@ -181,7 +181,7 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       page: "experiences",
       location: null,
       experience: null,
-      menu: true,
+      menu: false,
       data: null,
       blogSlug: null,
     };
@@ -190,7 +190,7 @@ export function getBootstrapParams(path: string): Omit<BootstrapParams, "locale"
       page: "photos",
       location: null,
       experience: null,
-      menu: true,
+      menu: false,
       data: "photos",
       blogSlug: null,
     };
@@ -288,6 +288,10 @@ export const useBootstrapUrl = (
   const draftId = typeof route.params.draftId === 'string' && route.path.startsWith('/preview/draft/')
     ? route.params.draftId
     : null
-  if (draftId) return `/api/public/drafts/${draftId}/bootstrap${q ? `?${q}` : ""}`;
+  if (draftId) {
+    qs.set('contract', contract)
+    const draftQuery = qs.toString()
+    return `/api/public/drafts/${draftId}/bootstrap?${draftQuery}`
+  }
   return `/api/public/sites/${siteId}/${contract}${q ? `?${q}` : ""}`;
 };

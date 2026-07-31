@@ -29,18 +29,35 @@ interface ShellSiteInfo {
 }
 
 interface SiteShellPayload {
-  site?: ShellSiteInfo | null;
+  site: ShellSiteInfo | null;
   locations: ApiRecord[];
   config: Record<string, string>;
   googleBusiness: ApiRecord;
   locales: { code: string; label: string; is_source: boolean }[];
   hasExperiences: boolean;
+  hasMenu: boolean;
 }
+
+const isSiteShellPayload = (value: unknown): value is SiteShellPayload =>
+  isRecord(value)
+  && (
+    value.site === null
+    || (
+      isRecord(value.site)
+      && (typeof value.site.brand_name === 'string' || value.site.brand_name === null)
+      && (typeof value.site.vertical === 'string' || value.site.vertical === null)
+    )
+  )
+  && Array.isArray(value.locations)
+  && isRecord(value.config)
+  && isRecord(value.googleBusiness)
+  && Array.isArray(value.locales)
+  && typeof value.hasExperiences === 'boolean'
+  && typeof value.hasMenu === 'boolean'
 
 export const useSiteShellState = () => {
   const { isPlatform, siteId, draftId } = useTenantSite();
   const requestEvent = useRequestEvent();
-  const requestFetch = useRequestFetch();
   const route = useRoute();
   const { locale } = useI18n();
   const isSyntheticServerAssetFetch = import.meta.server
@@ -86,8 +103,6 @@ export const useSiteShellState = () => {
           (_nuxtApp, { signal }) => loadPublicBootstrapPayload<SiteShellPayload>({
               draftId,
               siteId,
-              requestEvent,
-              requestFetch,
               url: url.value,
               key: key.value,
               query: {
@@ -95,8 +110,7 @@ export const useSiteShellState = () => {
                 locale: params.value.locale ?? undefined,
                 token: params.value.token ?? undefined,
               },
-              validate: (value): value is SiteShellPayload =>
-                isRecord(value) && Array.isArray(value.locations) && Array.isArray(value.locales),
+              validate: isSiteShellPayload,
               failureMessage: 'Public shell failed',
               signal,
             }),
@@ -115,6 +129,7 @@ export const useSiteShellState = () => {
   const googleBusiness = computed(() => data.value?.googleBusiness ?? null);
   const locales = computed(() => data.value?.locales ?? []);
   const hasExperiences = computed(() => data.value?.hasExperiences ?? false);
+  const hasMenu = computed(() => data.value?.hasMenu ?? false);
   return {
     locations,
     config,
@@ -122,6 +137,7 @@ export const useSiteShellState = () => {
     googleBusiness,
     locales,
     hasExperiences,
+    hasMenu,
     data,
     pending,
     error,

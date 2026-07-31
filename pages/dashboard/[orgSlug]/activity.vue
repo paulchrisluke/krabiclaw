@@ -80,6 +80,7 @@
 
 <script setup lang="ts">
 const dashboardApi = useDashboardApi()
+const route = useRoute()
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Activity | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
@@ -88,9 +89,6 @@ const { formatRelativeTime: timeAgo } = useHumanTime()
 const dashboard = useDashboardSite()
 if (!dashboard.state.value) await dashboard.refresh()
 const toast = useToast()
-
-// Reused for requests that deliberately override the active site while retaining
-// the organization scope resolved from this dashboard route.
 
 interface SiteEvent {
   id: string; event_type: string; site_id: string; location_id: string | null
@@ -118,7 +116,8 @@ const eventTypeOptions = computed(() => [
 
 interface Member { userId: string; name: string }
 const requestEvent = useRequestEvent()
-const { data: membersData } = await useAsyncData<{ members: Member[] }>('dashboard-activity-members', async () => {
+const membersKey = computed(() => `dashboard-activity-members-${String(route.params.orgSlug ?? '')}`)
+const { data: membersData } = await useAsyncData<{ members: Member[] }>(membersKey, async () => {
   if (import.meta.server) {
     if (!requestEvent || !dashboard.organization.value?.id) {
       throw createError({ statusCode: 500, statusMessage: 'Dashboard member context unavailable' })
@@ -148,6 +147,8 @@ watch(() => filters.siteId, async (siteId) => {
   const site = dashboard.sites.value.find(s => s.id === siteId)
   if (!site?.subdomain) return
   try {
+    // Reused for requests that deliberately override the active site while retaining
+    // the organization scope resolved from this dashboard route.
     const res = await dashboardApi<{ locations: Location[] }>('/api/dashboard/locations', {
       headers: { 'x-dashboard-site-slug': site.subdomain },
     })

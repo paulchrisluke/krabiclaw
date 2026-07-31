@@ -49,7 +49,7 @@ async function executeApiFetch<T>(
     }
   }
 
-  if (method !== 'GET' || (fetchOptions.signal && !coalesceKey)) return await run()
+  if (method !== 'GET' || fetchOptions.signal) return await run()
   const key = coalesceKey ?? `${request}:${stableValue(fetchOptions.query)}:${stableValue([...headers])}`
   const existing = dashboardInFlightReads.get(key) as Promise<T> | undefined
   if (existing) return await existing

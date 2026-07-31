@@ -131,6 +131,7 @@ interface PublicBase {
     contact_phone: string | null;
     brand_name: string | null;
     brand_description: string | null;
+    vertical: string | null;
     logo_url: string | null;
     favicon_url: string | null;
     og_image_url: string | null;
@@ -142,6 +143,30 @@ interface PublicBase {
 }
 
 const publicBaseByRequest = new WeakMap<H3Event, Map<string, Promise<PublicBase>>>();
+
+interface PublicCommonData {
+  locRows: { results: Record<string, unknown>[] }
+  configRows: { results: { key: string; value: string }[] }
+  localeRows: {
+    results: {
+      locale: string
+      label: string | null
+      is_source: number
+      status: string
+    }[]
+  }
+  experienceCountVal: number
+  hasMenu: boolean
+}
+
+const publicCommonByRequest = new WeakMap<H3Event, Map<string, PublicCommonData>>()
+const publicShellReadsByRequest = new WeakMap<H3Event, Map<string, Promise<unknown>>>()
+
+const publicCommonKey = (
+  siteId: string,
+  locale: string | undefined,
+  previewAuthorized: boolean,
+) => `${siteId}:${locale ?? ''}:${previewAuthorized ? 'preview' : 'public'}`
 
 /**
  * Request-scoped site identity. Shell and page SSR providers share this
@@ -166,7 +191,7 @@ export function loadPublicBase(
     if (!db) throw createError({ statusCode: 503, statusMessage: "Database unavailable" });
     const site = await queryFirst<PublicBase["site"]>(
       db,
-      `SELECT s.id, s.organization_id, s.default_currency, s.contact_email, s.contact_phone, s.brand_name,
+      `SELECT s.id, s.organization_id, s.default_currency, s.contact_email, s.contact_phone, s.brand_name, s.vertical,
               s.brand_description, COALESCE(ma_logo.public_url, s.logo_url) AS logo_url,
               json_extract(s.settings, '$.favicon_url') AS favicon_url,
               ma_og.public_url AS og_image_url,
@@ -329,6 +354,9 @@ export async function loadPublicBootstrap(
 
   const allInputsValid = isValidDataType && isValidLocale && isValidPage &&
     isValidLocation && isValidExperience && isValidBlogSlug;
+  if (!allInputsValid) {
+    throw createError({ statusCode: 400, statusMessage: "Invalid public bootstrap query" });
+  }
 
   // Read-through KV cache for the D1 batch below. Skipped for preview-authorized
   // requests (isPreviewAuthorized gates the whole read/write, not just the key —
@@ -383,6 +411,10 @@ export async function loadPublicBootstrap(
 
   const orgId = site.organization_id;
   const locationId = locationRow?.id;
+  const commonKey = publicCommonKey(siteId, locale, isPreviewAuthorized);
+  const sharedCommon = contract === 'page'
+    ? publicCommonByRequest.get(event)?.get(commonKey)
+    : undefined;
 
   // Pages that render the sitewide reviews list
   const needsGlobalReviews =
@@ -403,7 +435,8 @@ export async function loadPublicBootstrap(
   let idxLoc = -1,
     idxConfig = -1,
     idxLocale = -1,
-    idxExpCount = -1;
+    idxExpCount = -1,
+    idxHasMenu = -1;
   let idxReviews = -1,
     idxLocReviews = -1;
   let idxFullReviews = -1,
@@ -427,8 +460,10 @@ export async function loadPublicBootstrap(
     return i;
   };
 
-  // Always — locations with or without hero media JOINs
-  idxLoc = push(
+  // Shell owns common location/config/locale/capability reads. During SSR the
+  // page service reuses the shell's request-scoped result instead of repeating
+  // those statements.
+  if (!sharedCommon) idxLoc = push(
     needsLocationHeroMedia
       ? `SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.email, bl.website_url, bl.maps_url,
                  bl.latitude, bl.longitude, bl.opening_hours, bl.special_hours, bl.timezone, bl.rating, bl.review_count,
@@ -462,12 +497,12 @@ export async function loadPublicBootstrap(
     [orgId, siteId],
   );
 
-  idxConfig = push(
+  if (!sharedCommon) idxConfig = push(
     `SELECT key, value FROM site_config WHERE organization_id = ? AND site_id = ?`,
     [orgId, siteId],
   );
 
-  idxLocale = push(
+  if (!sharedCommon) idxLocale = push(
     `SELECT locale, label, is_source, status
      FROM site_locales
      WHERE organization_id = ? AND site_id = ?
@@ -476,10 +511,19 @@ export async function loadPublicBootstrap(
     [orgId, siteId],
   );
 
-  idxExpCount = push(
+  if (!sharedCommon) idxExpCount = push(
     `SELECT COUNT(*) AS cnt FROM experiences WHERE site_id = ? AND status != 'inactive'`,
     [siteId],
   );
+  if (!sharedCommon && contract === 'shell') {
+    idxHasMenu = push(
+      `SELECT 1 AS present
+       FROM menus
+       WHERE organization_id = ? AND site_id = ? AND status = 'published'
+       LIMIT 1`,
+      [orgId, siteId],
+    );
+  }
 
   // Content for the requested page (source + translations)
   if (page) {
@@ -737,10 +781,10 @@ export async function loadPublicBootstrap(
   const batchResults = await executeBatch(db, batchStmts);
 
   // Extract batch results by tracked index
-  const locRows = batchResults[idxLoc] as { results: Record<string, unknown>[] };
-  const configRows = batchResults[idxConfig] as {
-    results: { key: string; value: string }[];
-  };
+  const locRows = sharedCommon?.locRows
+    ?? batchResults[idxLoc] as { results: Record<string, unknown>[] };
+  const configRows = sharedCommon?.configRows
+    ?? batchResults[idxConfig] as { results: { key: string; value: string }[] };
   const reviewRows =
     idxReviews >= 0
       ? (batchResults[idxReviews] as { results: Record<string, unknown>[] })
@@ -761,20 +805,31 @@ export async function loadPublicBootstrap(
     idxQa >= 0
       ? (batchResults[idxQa] as { results: Record<string, unknown>[] })
       : { results: [] as Record<string, unknown>[] };
-  const localeRows = batchResults[idxLocale] as {
-    results: {
-      locale: string;
-      label: string | null;
-      is_source: number;
-      status: string;
-    }[];
-  };
-  const experienceCountVal =
-    (
+  const localeRows = sharedCommon?.localeRows
+    ?? batchResults[idxLocale] as PublicCommonData['localeRows'];
+  const experienceCountVal = sharedCommon?.experienceCountVal
+    ?? (
       batchResults[idxExpCount]?.results?.[0] as
         | { cnt: number }
         | undefined
-    )?.cnt ?? 0;
+    )?.cnt
+    ?? 0;
+  const hasMenu = sharedCommon?.hasMenu
+    ?? (idxHasMenu >= 0 && Boolean(batchResults[idxHasMenu]?.results?.length));
+  if (contract === 'shell') {
+    let requestCommon = publicCommonByRequest.get(event);
+    if (!requestCommon) {
+      requestCommon = new Map();
+      publicCommonByRequest.set(event, requestCommon);
+    }
+    requestCommon.set(commonKey, {
+      locRows,
+      configRows,
+      localeRows,
+      experienceCountVal,
+      hasMenu,
+    });
+  }
 
   const sourceLocale = (localeRows.results ?? []).find((l) => l.is_source)?.locale;
 
@@ -965,12 +1020,10 @@ export async function loadPublicBootstrap(
     ...experience,
     media: mediaByExperience.get(experience.id) ?? [],
   });
-  const experiencesList = await attachAvailabilitySummaries(
-    db,
-    orgId,
-    siteId,
-    experiencesListRaw.map(attachExperienceMedia),
-  );
+  const experiencesWithMedia = experiencesListRaw.map(attachExperienceMedia);
+  const experiencesList = page === "experiences"
+    ? await attachAvailabilitySummaries(db, orgId, siteId, experiencesWithMedia)
+    : experiencesWithMedia;
 
   const experienceDetailRaw: Experience | null =
     idxExperienceDetail >= 0
@@ -1236,9 +1289,11 @@ export async function loadPublicBootstrap(
       is_source: Boolean(l.is_source),
     })),
     hasExperiences: experienceCountVal > 0,
+    hasMenu,
     site: {
       brand_name: site.brand_name,
       brand_description: site.brand_description,
+      vertical: site.vertical,
       logo_url: site.logo_url,
       favicon_url: site.favicon_url,
     },
@@ -1249,36 +1304,22 @@ export async function loadPublicBootstrap(
     content_blocks: groupContentBlocks(contentRows),
     menu: menuData,
     locationReviews: locationReviewRows?.results ?? [],
-    // Type A — full reviews for /locations/[slug]/reviews
-    ...(dataType === "reviews"
+    reviewsAggregate: dataType === "reviews"
+      && locationForAggregate?.last_synced_at
+      && locationForAggregate.rating != null
+      && locationForAggregate.review_count != null
       ? {
-          reviewsAggregate:
-            locationForAggregate?.last_synced_at &&
-            locationForAggregate.rating != null &&
-            locationForAggregate.review_count != null
-              ? {
-                  rating: locationForAggregate.rating,
-                  review_count: locationForAggregate.review_count,
-                  distribution: reviewsDist,
-                }
-              : null,
-          reviewsList: fullReviews,
+          rating: locationForAggregate.rating,
+          review_count: locationForAggregate.review_count,
+          distribution: reviewsDist,
         }
-      : {}),
-    // Type E — photos for /locations/[slug]/photos
-    ...(dataType === "photos" ? { photosList: photos } : {}),
-    // Type F — Q&A for /locations/[slug]/qa
-    ...(dataType === "qa" ? { qaList: qaRows?.results ?? [] } : {}),
-    // Blog list for /blog and homepage highlights
-    ...((dataType === "blog" || page === "home") ? { blogList } : {}),
-    // Blog post detail for /blog/[slug]
-    ...(dataType === "blogPost" ? { blogPost } : {}),
-    // Type G — posts for /locations/[slug]/posts
-    ...(dataType === "posts"
-      ? {
-          postsList: locationPublishedPosts,
-        }
-      : {}),
+      : null,
+    reviewsList: dataType === "reviews" ? fullReviews : [],
+    photosList: dataType === "photos" ? photos : [],
+    qaList: dataType === "qa" ? qaRows?.results ?? [] : [],
+    blogList: dataType === "blog" || page === "home" ? blogList : [],
+    blogPost: dataType === "blogPost" ? blogPost : null,
+    postsList: dataType === "posts" ? locationPublishedPosts : [],
     reservationPolicySiteDefault,
     reservationPolicyByLocation,
     experiencePolicySiteDefault,
@@ -1318,10 +1359,30 @@ export const loadPublicShell = (
   event: H3Event,
   siteId: string,
   query: Pick<Record<string, string | undefined>, 'locale' | 'token'>,
-) => loadPublicBootstrap(event, siteId, { ...query, contract: 'shell' }, { mutateResponseHeaders: false });
+  options?: { mutateResponseHeaders?: boolean },
+) => {
+  let requestReads = publicShellReadsByRequest.get(event);
+  if (!requestReads) {
+    requestReads = new Map();
+    publicShellReadsByRequest.set(event, requestReads);
+  }
+  const key = `${siteId}:${query.locale ?? ''}:${query.token ?? ''}`;
+  const existing = requestReads.get(key);
+  if (existing) return existing;
+  const pending = loadPublicBootstrap(event, siteId, { ...query, contract: 'shell' }, options);
+  requestReads.set(key, pending);
+  return pending;
+};
 
 export const loadPublicPage = (
   event: H3Event,
   siteId: string,
   query: Record<string, string | undefined>,
-) => loadPublicBootstrap(event, siteId, { ...query, contract: 'page' }, { mutateResponseHeaders: false });
+  options?: { mutateResponseHeaders?: boolean },
+) => {
+  const key = `${siteId}:${query.locale ?? ''}:${query.token ?? ''}`;
+  const shellRead = publicShellReadsByRequest.get(event)?.get(key);
+  return shellRead
+    ? shellRead.then(() => loadPublicBootstrap(event, siteId, { ...query, contract: 'page' }, options))
+    : loadPublicBootstrap(event, siteId, { ...query, contract: 'page' }, options);
+};

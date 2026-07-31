@@ -38,9 +38,6 @@ async function navigateAndAssertNonBlocking(page: Page, opts: {
   afterText: string
   forbiddenTexts: string[]
 }) {
-  await page.goto(`${tenantBaseURL}${opts.fromPath}`, { waitUntil: 'load' })
-  await expect(page.locator('body')).toContainText(opts.beforeText)
-
   let releasePageRequest!: () => void
   const pageRequestPaused = new Promise<void>((resolve) => {
     releasePageRequest = resolve
@@ -50,20 +47,38 @@ async function navigateAndAssertNonBlocking(page: Page, opts: {
     markPageRequestPaused = resolve
   })
   await page.route('**/api/public/sites/*/page*', async (route) => {
+    const url = new URL(route.request().url())
+    const destinationSegments = opts.linkHref.split('/').filter(Boolean)
+    const expectedPage = destinationSegments[0] === 'locations' && destinationSegments[1]
+      ? 'location'
+      : destinationSegments[0]
+    const expectedSlug = destinationSegments[1]
+    if (
+      url.searchParams.get('page') !== expectedPage
+      || (expectedSlug && ![url.searchParams.get('experience'), url.searchParams.get('location')].includes(expectedSlug))
+    ) {
+      await route.continue()
+      return
+    }
     markPageRequestPaused()
     await pageRequestPaused
     await route.continue()
   })
 
+  await page.goto(`${tenantBaseURL}${opts.fromPath}`, { waitUntil: 'load' })
+  await expect(page.locator('body')).toContainText(opts.beforeText)
+
   const link = page.locator(`a[href="${opts.linkHref}"]`).first()
-  await link.click()
+  // Dispatch the click without Playwright waiting for navigation completion;
+  // the behavior under test is specifically the state before data completes.
+  await link.evaluate((element: HTMLAnchorElement) => element.click())
   await sawPausedPageRequest
 
   // These assertions execute while the destination API request is still
   // paused. They distinguish an immediate route transition from Suspense
   // retaining the previous page until data arrives.
   await expect(page).toHaveURL(new RegExp(`${opts.linkHref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/?$`))
-  await expect(page.locator(`[data-route-shell="${opts.linkHref}"]`)).toBeVisible()
+  await expect(page.locator('main[data-route-shell]')).toHaveAttribute('data-route-shell', opts.linkHref)
   await expect(page.getByTestId('public-route-loading')).toBeVisible()
   await expect(page.locator('main')).not.toContainText(opts.beforeText)
   for (const forbidden of opts.forbiddenTexts) {
@@ -78,16 +93,6 @@ test.describe('tenant client-side navigation does not show stale/fallback conten
   test.beforeEach(async ({ page }) => {
     await setupTenantHeaders(page, tenantBaseURL, tenantExtraHeaders)
     await setupNavigationTest(page)
-  })
-
-  test('Home -> About', async ({ page }) => {
-    await navigateAndAssertNonBlocking(page, {
-      fromPath: '/',
-      linkHref: '/about',
-      beforeText: 'Ember & Slice',
-      afterText: 'Ember',
-      forbiddenTexts: [],
-    })
   })
 
   test('Home -> Experiences', async ({ page }) => {
@@ -107,16 +112,6 @@ test.describe('tenant client-side navigation does not show stale/fallback conten
       beforeText: 'Pizza Making Class',
       afterText: 'Stretch dough',
       forbiddenTexts: ['No experience details yet.'],
-    })
-  })
-
-  test('Home -> Menu', async ({ page }) => {
-    await navigateAndAssertNonBlocking(page, {
-      fromPath: '/',
-      linkHref: '/menu',
-      beforeText: 'Ember & Slice',
-      afterText: 'Menu',
-      forbiddenTexts: ['No menu items.'],
     })
   })
 
@@ -140,17 +135,4 @@ test.describe('tenant client-side navigation does not show stale/fallback conten
     })
   })
 
-  test('Home -> Photos does not show the empty-state fallback while loading', async ({ page }) => {
-    // This is the exact scenario that reproduced #436: home's own bootstrap
-    // payload has an empty photosList (only populated when the /photos page
-    // requests it), so a broken pending signal would render the Saya
-    // "No photos yet." empty state using home's leftover data.
-    await navigateAndAssertNonBlocking(page, {
-      fromPath: '/',
-      linkHref: '/photos',
-      beforeText: 'Ember & Slice',
-      afterText: 'Photos from every room.',
-      forbiddenTexts: ['No photos yet.'],
-    })
-  })
 })

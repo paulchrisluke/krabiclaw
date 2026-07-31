@@ -17,10 +17,11 @@
       :site="resolvedSite"
       :locations="locations"
       :menu="menu"
+      :has-menu="shell.hasMenu.value"
       :has-experiences="showExperiences"
       :experience-cta-path="locationExperienceCtaPath"
     />
-    <main class="grow" :data-route-shell="route.path">
+    <main class="grow" :data-route-shell="routeLoadState.path || route.path">
       <div
         v-if="publicPending"
         class="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8"
@@ -53,6 +54,7 @@
       :error="bootstrapError"
       :config="config"
       :menu="menu"
+      :has-menu="shell.hasMenu.value"
       :has-experiences="showExperiences"
     />
     <ConsentBanner v-if="!isDemoHost" />
@@ -62,12 +64,6 @@
 <script setup lang="ts">
 import ConsentBanner from '~/components/ConsentBanner.vue'
 import { resolveLocationExperienceHref } from '~/utils/experience-navigation'
-import { isRecord, publicApiRequest } from '~/utils/api-clients'
-
-type BrandConfigResponse = { config: Record<string, unknown> }
-
-const hasRecordConfig = (value: unknown): value is BrandConfigResponse =>
-  isRecord(value) && isRecord(value.config)
 
 if (import.meta.dev) useDebugLCP()
 
@@ -75,57 +71,35 @@ if (import.meta.dev) useDebugLCP()
 // experience data comes from the keyed page loader and changes independently.
 const shell = useSiteShellState()
 const { config, locations, hasExperiences, locales, error: bootstrapError, site: shellSite } = shell
-const pageData = await useBootstrap()
-const { menu, experiencesList } = pageData
-const publicPending = computed(() => shell.pending.value || pageData.pending.value)
-const publicError = computed(() => shell.error.value || pageData.error.value)
+const routeLoadState = usePublicRouteLoadState()
+const publicPending = computed(() => shell.pending.value || routeLoadState.value.pending)
+const publicError = computed(() => shell.error.value || routeLoadState.value.error)
 const retryPublicData = async () => {
-  await Promise.all([shell.refresh(), pageData.refresh()])
+  if (shell.error.value) {
+    await shell.refresh()
+    return
+  }
+  if (routeLoadState.value.error && routeLoadState.value.key) {
+    await refreshNuxtData(routeLoadState.value.key)
+  }
 }
+const pagePayload = computed(() => routeLoadState.value.data)
+const menu = computed(() => (pagePayload.value?.menu as ApiRecord | null | undefined) ?? null)
+const experiencesList = computed(() =>
+  Array.isArray(pagePayload.value?.experiencesList)
+    ? pagePayload.value.experiencesList as ApiRecord[]
+    : [],
+)
 const showExperiences = computed(() => hasExperiences.value || experiencesList.value.length > 0)
-const { siteId, draftId, isTenant, isPlatform, site, organizationId } = useTenantSite()
+const { isPlatform, site } = useTenantSite()
 const resolvedSite = computed(() => shellSite.value || site)
 const route = useRoute()
 // Called for its side effect: keeps the consent ref in sync and lets the
 // head markup emit the default signal ahead of any analytics config.
 useCookieConsent()
 
-// Brand config is kept as a dedicated, narrowly scoped query so theme tokens
-// are known before first paint without coupling them to route-specific data.
-const draftPreviewToken = typeof route.query.token === 'string' ? route.query.token : ''
-const brandConfigUrl = draftId && draftPreviewToken
-  ? `/api/public/drafts/${draftId}/bootstrap?preview=true&token=${encodeURIComponent(draftPreviewToken)}&menu=1`
-  : siteId
-    ? `/api/public/sites/${siteId}/config`
-    : ''
-const requestEvent = useRequestEvent()
-const requestFetch = useRequestFetch()
-const { data: brandConfigData } = isTenant && brandConfigUrl
-  ? await useAsyncData(
-      draftId ? `draft-brand-config-${draftId}-${draftPreviewToken}` : `site-brand-config-${siteId}`,
-      async () => {
-        if (import.meta.server && siteId && organizationId && requestEvent) {
-          const [{ cloudflareEnv }, { getConfig }] = await Promise.all([
-            import('~/server/utils/api-response'),
-            import('~/server/utils/site-config'),
-          ])
-          const env = cloudflareEnv(requestEvent)
-          if (!env.DB) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-          return { config: await getConfig(env.DB, organizationId, siteId) }
-        }
-        if (import.meta.server) return await requestFetch(brandConfigUrl)
-        return await publicApiRequest<BrandConfigResponse>(brandConfigUrl, {
-          coalesceKey: `brand-config:${siteId || draftId}`,
-          validate: hasRecordConfig,
-        })
-      },
-      { server: true },
-    )
-  : { data: ref(null) }
-
-const brandConfig = computed(() => hasRecordConfig(brandConfigData.value) ? brandConfigData.value.config : {})
 const brandColor = computed(
-  () => typeof brandConfig.value.brand_color === 'string' ? brandConfig.value.brand_color : config.value?.brand_color || null
+  () => config.value?.brand_color || null
 )
 const brandTextColor = computed(() => getContrastColor(brandColor.value))
 

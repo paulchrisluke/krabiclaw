@@ -188,7 +188,7 @@ definePageMeta({ layout: false })
 import { getVerticalCopy } from '~/utils/vertical-copy'
 import { useDynamicComponent } from '~/composables/useDynamicComponent'
 
-const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s) => s }
+const DOMPurify = useHtmlSanitizer()
 
 const { isPlatform, site } = useTenantSite()
 const { isBlawby } = usePublicTemplate()

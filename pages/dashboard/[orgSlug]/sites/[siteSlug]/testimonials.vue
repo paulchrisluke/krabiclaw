@@ -91,6 +91,7 @@ interface SiteTestimonial {
 }
 
 const siteId = await useDashboardSiteId()
+const route = useRoute()
 const toast = useToast()
 const saving = ref(false)
 const editingId = ref<string | null>(null)
@@ -105,7 +106,26 @@ const form = reactive({
 })
 const { data, pending, refresh } = await useAsyncData(
   `dashboard-site-testimonials-${siteId}`,
-  () => dashboardApi<{ reviews: SiteTestimonial[] }>(`/api/editor/sites/${siteId}/reviews`),
+  async () => {
+    if (import.meta.server) {
+      const event = useRequestEvent()
+      if (!event) throw createError({ statusCode: 500, statusMessage: 'Dashboard request context unavailable' })
+      const orgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
+      const siteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : null
+      if (!orgSlug || !siteSlug) throw createError({ statusCode: 400, statusMessage: 'Dashboard scope is required' })
+      const [{ cloudflareEnv }, { loadDashboardContext }, { listSiteReviews }] = await Promise.all([
+        import('~/server/utils/api-response'),
+        import('~/server/utils/dashboard-context-service'),
+        import('~/server/utils/site-reviews'),
+      ])
+      const db = cloudflareEnv(event).DB
+      if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+      const context = await loadDashboardContext(event, { orgSlug, siteSlug })
+      if (context.site?.id !== siteId) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
+      return { reviews: await listSiteReviews(db, siteId) as unknown as SiteTestimonial[] }
+    }
+    return await dashboardApi<{ reviews: SiteTestimonial[] }>(`/api/editor/sites/${siteId}/reviews`)
+  },
 )
 const testimonials = computed(() => data.value?.reviews ?? [])
 const canSave = computed(() => Boolean(form.author_name.trim() && form.content.trim() && Number.isInteger(form.rating) && form.rating >= 1 && form.rating <= 5 && form.publication_authorized))

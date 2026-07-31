@@ -267,8 +267,6 @@ const loadContext = async () => {
       siteLocations.value = response.locations ?? []
       const primary = siteLocations.value.find(l => l.is_primary) ?? siteLocations.value[0]
       if (primary) selectedLocationId.value = primary.id
-      // Step 2 — get preview token now that we have a site
-      await loadPreviewToken()
     }
   } catch (error) {
     contextError.value = normalizeApiError(error, 'Workspace context failed')
@@ -306,7 +304,10 @@ const retryContext = async () => {
   contextRetrying.value = true
   try {
     await loadContext()
-    await loadReadiness()
+    await Promise.all([loadPreviewToken(), loadReadiness()])
+  } catch (error) {
+    contextError.value ??= normalizeApiError(error, 'Workspace readiness failed')
+    throw contextError.value
   } finally {
     contextRetrying.value = false
   }
@@ -330,9 +331,9 @@ const onSelectLocation = (id: string) => {
 
 const onSiteCreated = async (_orgSlug: string | null) => {
   draftPreview.value = null
-  await loadContext()        // sets siteData + calls loadPreviewToken()
-  await loadReadiness()
-  previewReloadToken.value = Date.now()
+  await retryContext()
+    .then(() => { previewReloadToken.value = Date.now() })
+    .catch(() => {})
 }
 
 const onDraftSaved = (draft: {

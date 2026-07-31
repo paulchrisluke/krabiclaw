@@ -300,7 +300,7 @@ async function addDomain() {
     toast.add({ description: 'Domain added', color: 'success' })
     closeAddModal()
   } catch (error) {
-    const data = error instanceof ApiClientError ? error.data : {}
+    const data = error instanceof ApiClientError && isRecord(error.data) ? error.data : {}
     if (data.live_cutover_warning && typeof data.live_cutover_warning === 'object') {
       liveCutoverWarning.value = data.live_cutover_warning as LiveCutoverWarning
       addError.value = ''

@@ -170,7 +170,7 @@
 
 <script setup lang="ts">
 import { formatGoogleHours, getTodayGoogleHours } from '~/utils/formatters'
-const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: string) => s }
+const DOMPurify = useHtmlSanitizer()
 
 definePageMeta({ layout: 'saya' })
 

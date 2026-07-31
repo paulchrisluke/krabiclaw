@@ -8,7 +8,7 @@ test('location experiences route requests an experiences page scoped to the loca
     page: 'experiences',
     location: 'beachfront-pottery',
     experience: null,
-    menu: true,
+    menu: false,
     data: null,
     blogSlug: null,
   })
@@ -19,7 +19,7 @@ test('global experiences route keeps the site-wide collection unscoped', () => {
     page: 'experiences',
     location: null,
     experience: null,
-    menu: true,
+    menu: false,
     data: null,
     blogSlug: null,
   })

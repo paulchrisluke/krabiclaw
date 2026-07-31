@@ -51,12 +51,30 @@ interface BootstrapPayload {
   menu: ApiRecord | null;
 }
 
+const isBootstrapPayload = (value: unknown): value is BootstrapPayload =>
+  isRecord(value)
+  && Array.isArray(value.content)
+  && Array.isArray(value.locationReviews)
+  && (value.reviewsAggregate === null || isRecord(value.reviewsAggregate))
+  && Array.isArray(value.reviewsList)
+  && Array.isArray(value.photosList)
+  && Array.isArray(value.qaList)
+  && Array.isArray(value.postsList)
+  && Array.isArray(value.blogList)
+  && (value.blogPost === null || isRecord(value.blogPost))
+  && (value.reservationPolicySiteDefault === null || isRecord(value.reservationPolicySiteDefault))
+  && isRecord(value.reservationPolicyByLocation)
+  && (value.experiencePolicySiteDefault === null || isRecord(value.experiencePolicySiteDefault))
+  && isRecord(value.experiencePolicyById)
+  && (value.experienceDetail === null || isRecord(value.experienceDetail))
+  && Array.isArray(value.experiencesList)
+  && (value.menu === null || isRecord(value.menu))
+
 export const useBootstrap = async (options: { enabled?: boolean | Ref<boolean> } = {}) => {
   const { isPlatform, siteId, draftId } = useTenantSite();
   const route = useRoute();
-  const requestEvent = useRequestEvent();
-  const requestFetch = useRequestFetch();
   const params = useBootstrapParams();
+  const routeLoadState = usePublicRouteLoadState();
   const entityId = computed(() => siteId || draftId || null);
   const key = computed(() => useBootstrapKey(entityId.value, params.value));
   const enabled = computed(() => options.enabled === undefined ? true : Boolean(unref(options.enabled)));
@@ -73,8 +91,6 @@ export const useBootstrap = async (options: { enabled?: boolean | Ref<boolean> }
           (_nuxtApp, { signal }) => loadPublicBootstrapPayload<BootstrapPayload>({
               draftId,
               siteId,
-              requestEvent,
-              requestFetch,
               url: url.value,
               key: key.value,
               query: {
@@ -87,15 +103,13 @@ export const useBootstrap = async (options: { enabled?: boolean | Ref<boolean> }
                 locale: params.value.locale ?? undefined,
                 token: params.value.token ?? undefined,
               },
-              validate: (value): value is BootstrapPayload =>
-                isRecord(value) && Array.isArray(value.content),
+              validate: isBootstrapPayload,
               failureMessage: 'Public bootstrap failed',
               signal,
             }),
           {
             server: true,
             lazy: import.meta.client,
-            watch: [url],
             dedupe: 'cancel',
           },
         );
@@ -105,6 +119,15 @@ export const useBootstrap = async (options: { enabled?: boolean | Ref<boolean> }
     if (shell.error.value) throw shell.error.value
   }
   const { data, error, pending, refresh } = asyncData
+  watchEffect(() => {
+    routeLoadState.value = {
+      path: route.path,
+      key: key.value,
+      pending: pending.value,
+      error: error.value ?? null,
+      data: (data.value as ApiRecord | undefined) ?? null,
+    }
+  })
 
   // ── Locations / config / menu / experiences list ─────────────
   // Site-wide, page-independent — sourced from the site-shell state, which never

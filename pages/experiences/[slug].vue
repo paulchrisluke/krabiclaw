@@ -340,7 +340,7 @@ import { formatMoneyAmount, isSaleActive } from '~/shared/money'
 
 definePageMeta({ key: (route) => route.fullPath })
 
-const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: (s: string) => s }
+const DOMPurify = useHtmlSanitizer()
 
 const route = useRoute()
 const slug = route.params.slug as string
