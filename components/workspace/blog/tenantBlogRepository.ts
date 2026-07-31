@@ -1,4 +1,5 @@
 import type { BlogPostRepository, BlogPost, PlatformBlogCreateInput, PlatformBlogUpdateInput } from './types'
+import { dashboardFetch } from '~/composables/dashboardFetch'
 
 interface TenantBlogRepositoryOptions {
   siteId: string
