@@ -99,7 +99,7 @@ const tenantPagesAsyncData = useAsyncData(
   () => `dashboard-tenant-pages-${siteId}`,
   async () => {
     if (import.meta.server) {
-      if (!requestEvent) return null
+      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
       const [{ cloudflareEnv }, { getTenantPages }] = await Promise.all([
         import('~/server/utils/api-response'),
         import('~/server/utils/qa-dashboard'),
@@ -127,7 +127,7 @@ const existingQaScopesAsyncData = useAsyncData(
   () => `dashboard-qa-scopes-${siteId}`,
   async () => {
     if (import.meta.server) {
-      if (!requestEvent) return null
+      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
       const [{ cloudflareEnv }, { getQaScopes }] = await Promise.all([
         import('~/server/utils/api-response'),
         import('~/server/utils/qa-dashboard'),
@@ -162,7 +162,7 @@ const qaAsyncData = useAsyncData(
   () => `dashboard-site-qa-${siteId}-${selectedPagePath.value}`,
   async () => {
     if (import.meta.server) {
-      if (!requestEvent) return null
+      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
       const [{ cloudflareEnv }, { getSiteQa }] = await Promise.all([
         import('~/server/utils/api-response'),
         import('~/server/utils/qa-dashboard'),
