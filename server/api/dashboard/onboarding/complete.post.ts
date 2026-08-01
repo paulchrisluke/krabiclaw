@@ -11,9 +11,9 @@ export default defineEventHandler(async (event) => {
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
   // The onboarding wizard calls this with the siteId it just created/is
-  // finishing, rather than the usual x-dashboard-org-slug/x-dashboard-site-slug
-  // headers — a brand-new user has no established dashboard scope for
-  // getDashboardContext's header-based resolution to fall back to.
+  // finishing, rather than the usual dashboard-scope request headers used
+  // elsewhere — a brand-new user has no established dashboard scope for
+  // that header-based resolution to fall back to.
   const body = await readBody(event).catch(() => ({})) as { siteId?: unknown }
   const siteId = typeof body.siteId === 'string' ? body.siteId : null
   if (!siteId) return jsonResponse({ error: 'siteId is required' }, { status: 400 })
