@@ -378,32 +378,8 @@ export default defineNuxtConfig({
       pathPrefix: false,
     },
     {
-      path: '~/components/workspace/editor',
-      pathPrefix: false,
-    },
-    {
-      path: '~/components/workspace/dashboard',
-      pathPrefix: false,
-    },
-    {
-      path: '~/components/workspace/media',
-      pathPrefix: false,
-    },
-    {
-      path: '~/components/workspace/content',
-      pathPrefix: false,
-    },
-    {
       path: '~/components/billing',
       prefix: 'Billing',
-      pathPrefix: false,
-    },
-    {
-      path: '~/components/workspace/onboarding',
-      pathPrefix: false,
-    },
-    {
-      path: '~/components/workspace/settings',
       pathPrefix: false,
     },
     {

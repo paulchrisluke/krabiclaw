@@ -107,7 +107,7 @@
                     :site-id="siteId"
                     accept="any"
                     title="Select media"
-                    @change="(asset) => handleGalleryMediaChange(index, asset)"
+                    @change="(asset: any) => handleGalleryMediaChange(index, asset)"
                   />
                 </div>
                 <UButton
