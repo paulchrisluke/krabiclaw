@@ -350,4 +350,34 @@ test.describe('onboarding wizard UI', () => {
     await expect(page.locator('div[role="alert"]').filter({ hasText: saveError })).toBeVisible()
     await expect(page.getByText('Team access')).not.toBeVisible()
   })
+
+  test('a failed post-creation context refresh surfaces a terminal error instead of silently reapplying stale context', async ({ page, baseURL }) => {
+    test.setTimeout(120_000)
+    const suffix = Date.now()
+    const userId = `e2e-onboard-retry-${suffix}`
+    await loginFreshUser(page, baseURL!, userId)
+
+    // Initial load succeeds via real SSR (no HTTP request for page.route to
+    // intercept — see loadContextResource's import.meta.server branch), so
+    // this mock only ever affects the later client-side refresh triggered by
+    // onSiteCreated -> retryContext() below, exactly the "successful load,
+    // then a later failed refresh" scenario Nuxt's stale-data-retention
+    // behavior can hide (see pages/dashboard/onboarding.vue's loadContext).
+    await page.route('**/api/dashboard/onboarding-context', async (route) => {
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { message: 'Workspace context unavailable' } }),
+      })
+    })
+
+    await page.goto(`${baseURL}/dashboard/onboarding`, { waitUntil: 'load' })
+    await expect(page.locator('.onboarding-step-widget').first()).toBeVisible()
+    await completeManualWizard(page, `Onboard Retry Test ${suffix}`)
+
+    // Forbidden: the wizard's own post-creation success view (or any stale
+    // pre-creation context) must not render as if the refresh had succeeded.
+    await expect(page.getByText('From here, head to your dashboard to keep building')).not.toBeVisible()
+    await expect(page.getByText('Workspace could not be loaded')).toBeVisible()
+  })
 })
