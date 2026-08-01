@@ -1427,13 +1427,14 @@ function retryImport() {
 }
 
 async function markOnboardingComplete() {
+  const siteId = importedSiteId.value ?? props.siteId ?? null
+  if (!siteId) return
   await applicationFetch<{ success: true }>('/api/dashboard/onboarding/complete', {
     method: 'POST',
+    body: { siteId },
     validate: (value): value is { success: true } => isRecord(value) && value.success === true,
   })
-  if (importedSiteId.value) {
-    trackOnboardingCompleted(importedSiteId.value)
-  }
+  trackOnboardingCompleted(siteId)
 }
 
 // ─── Drag & drop (no-op for now, future: attach files) ───────────────────────

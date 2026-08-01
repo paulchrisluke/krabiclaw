@@ -57,7 +57,10 @@
 const dashboardApi = useDashboardApi()
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 
-definePageMeta({ layout: 'editor' })
+// Manages its own site-transfer context via loadTransferContext() below and
+// never calls useDashboardSite — must not be gated on that unrelated
+// context ever loading. See layouts/editor.vue.
+definePageMeta({ layout: 'editor', skipDashboardContext: true })
 
 const route = useRoute()
 const router = useRouter()
