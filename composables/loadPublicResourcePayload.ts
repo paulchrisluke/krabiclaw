@@ -33,7 +33,12 @@ export async function loadPublicResourcePayload<T>(
   if (value === undefined) {
     throw createError({ statusCode: 500, statusMessage: `${options.failureMessage} provider unavailable` })
   }
-  if (!options.validate(value)) {
+  // The client branch above already validates inside publicApiRequest and
+  // throws on a contract mismatch — only the SSR provider branch (which
+  // doesn't validate itself) still needs a check here. The explicit cast
+  // reflects that both branches are guaranteed valid T by this point, just
+  // via different validators — TS can't see across that boundary.
+  if (import.meta.server && !options.validate(value)) {
     throw new ApiClientError(
       `${options.failureMessage}: response did not match its contract`,
       502,
@@ -41,5 +46,5 @@ export async function loadPublicResourcePayload<T>(
       null,
     )
   }
-  return value
+  return value as T
 }
