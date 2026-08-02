@@ -65,20 +65,37 @@
                 class="group block overflow-hidden bg-default text-default no-underline transition hover:opacity-90"
                 :class="post.wide ? 'sm:col-span-2' : ''"
               >
-                <div v-if="post.image" class="overflow-hidden bg-muted" :class="post.wide ? 'aspect-video' : 'aspect-square'">
+                <div
+                  v-if="post.image"
+                  class="overflow-hidden bg-muted"
+                  :class="post.wide ? 'aspect-video' : 'aspect-square'"
+                  :ref="post.imageKind === 'video' ? (el) => setPostVideoRef(el, post.id) : undefined"
+                >
                   <video
-                    v-if="post.imageKind === 'video'"
+                    v-if="post.imageKind === 'video' && visiblePostVideos.has(post.id)"
                     :src="post.image"
+                    :poster="post.poster || undefined"
                     autoplay
                     muted
                     loop
                     playsinline
+                    preload="none"
                     class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                   />
                   <img
-                    v-else
+                    v-else-if="post.imageKind === 'video' && post.poster"
+                    :src="post.poster"
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  />
+                  <img
+                    v-else-if="post.imageKind !== 'video'"
                     :src="post.image"
                     :alt="post.alt"
+                    loading="lazy"
+                    decoding="async"
                     class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                   >
                 </div>
@@ -193,6 +210,8 @@
               <img
                 :src="post.image"
                 :alt="post.title"
+                loading="lazy"
+                decoding="async"
                 class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
               >
             </div>
@@ -420,6 +439,33 @@ const homeFeaturedContentLinkTarget = computed(() => {
 // Review location filter
 const reviewFilter = ref('all')
 
+const visiblePostVideos = ref(new Set())
+const postVideoRefs = {}
+let postVideoObserver = null
+
+function setPostVideoRef(el, postId) {
+  const node = el?.$el || el
+  if (!(node instanceof HTMLElement)) return
+  postVideoRefs[postId] = node
+  postVideoObserver?.observe(node)
+}
+
+onMounted(() => {
+  if (!('IntersectionObserver' in window)) return
+  postVideoObserver = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue
+      const postId = Object.entries(postVideoRefs).find(([, node]) => node === entry.target)?.[0]
+      if (!postId) continue
+      visiblePostVideos.value = new Set([...visiblePostVideos.value, postId])
+      postVideoObserver?.unobserve(entry.target)
+    }
+  }, { rootMargin: '200px' })
+  Object.values(postVideoRefs).forEach(node => postVideoObserver?.observe(node))
+})
+
+onBeforeUnmount(() => postVideoObserver?.disconnect())
+
 const hasGoogleBusiness = computed(() => !!googleBusiness.value?.business)
 const featuredReviews = computed(() =>
   googleReviews.value.slice(0, 3).map((review, i) => ({
@@ -443,6 +489,7 @@ const recentPosts = computed(() => {
     path: post.publicPath || post.public_path || `/posts/${post.slug}`,
     image: post.media?.[0]?.url || null,
     imageKind: post.media?.[0]?.kind || 'image',
+    poster: post.media?.[0]?.thumbnail_url || null,
     text: post.summary || '',
     alt: post.summary || 'Post image',
     wide: i === 0,
