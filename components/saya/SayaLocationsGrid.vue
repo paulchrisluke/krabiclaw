@@ -34,16 +34,14 @@
             v-else-if="loc.thumbnail_url"
             :src="loc.thumbnail_url"
             :alt="loc.title"
-            :loading="locIdx === 0 ? 'eager' : 'lazy'"
-            :fetchpriority="locIdx === 0 ? 'high' : undefined"
+            loading="lazy"
             class="aspect-video w-full object-contain transition-transform duration-500 group-hover:scale-105"
           />
           <UImage
             v-else-if="loc.kind !== 'video' && loc.public_url"
             :src="loc.public_url"
             :alt="loc.title"
-            :loading="locIdx === 0 ? 'eager' : 'lazy'"
-            :fetchpriority="locIdx === 0 ? 'high' : undefined"
+            loading="lazy"
             class="aspect-video w-full object-contain transition-transform duration-500 group-hover:scale-105"
           />
           <div v-else class="flex h-full w-full items-center justify-center" aria-hidden="true">

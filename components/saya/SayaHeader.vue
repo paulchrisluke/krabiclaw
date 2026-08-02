@@ -5,7 +5,7 @@
         <!-- Brand logo / name -->
         <NuxtLink to="/" class="shrink-0 no-underline">
           <div v-if="logoUrl" class="size-10 shrink-0 rounded-full overflow-hidden">
-            <img :src="logoUrl" :alt="restaurantName" class="h-full w-full object-cover" />
+            <img :src="logoUrl" :alt="restaurantName" loading="eager" decoding="async" class="h-full w-full object-cover" />
           </div>
           <div v-else class="flex size-10 items-center justify-center rounded-full bg-(--kc-navy) text-white font-bold text-base shrink-0">
             {{ restaurantName.charAt(0).toUpperCase() }}

@@ -73,12 +73,15 @@
                     muted
                     loop
                     playsinline
+                    preload="none"
                     class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                   />
                   <img
                     v-else
                     :src="post.image"
                     :alt="post.alt"
+                    loading="lazy"
+                    decoding="async"
                     class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                   >
                 </div>
@@ -193,6 +196,8 @@
               <img
                 :src="post.image"
                 :alt="post.title"
+                loading="lazy"
+                decoding="async"
                 class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
               >
             </div>

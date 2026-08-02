@@ -70,6 +70,13 @@ paid-plan history still has one bounded load.
   of route chunks before the public hero could paint. Public scripts remain
   available through their normal entry tags; dashboard, admin, and auth routes
   retain their private-surface hints.
+- Saya home pages preload the actual server-rendered hero image, select its
+  responsive Cloudflare Images variant, and lazy-load location, post, blog, and
+  footer images below the hero. The first location image is no longer marked
+  eager/high-priority beside the LCP image.
+- The Google Business photo contract is `google_url`. Reading it with the old
+  camel-case name left tenants without CMS hero media with an empty hero image;
+  the home hero now uses the canonical response field.
 
 Blawby also had a concrete first-paint bug: its layout manually injected a
 hashed CSS URL that could differ between the server manifest and the client
@@ -102,6 +109,23 @@ These are smoke observations, not a statistically meaningful benchmark. The
 blocking checks are request count, query count, payload size, own-origin SSR
 requests, and error propagation. Comparative wall-clock benchmarking belongs in
 the final merge-ready lane, not in every editing loop.
+
+## Browser trace follow-up
+
+The first live browser check after the dashboard release still reproduced the
+reported public delay: the platform homepage completed a cold browser
+navigation in about 4.0 seconds, and the non-canonical Pottery House hostname
+took about 5.7 seconds including its redirect. A direct warm navigation to
+`www.potteryhousekrabi.com` was about 1.9 seconds, with the hero image still
+being the critical visual resource.
+
+The production-style local Worker then verified the actionable cause and fix:
+`pottery-house.localhost` returned the hero in SSR HTML, emitted one responsive
+hero-image preload, marked ten lower-page images lazy, and produced no browser
+errors. The in-app browser rendered the hero image successfully after the
+preloaded image completed. This is a critical-path fix, not a claim that the
+remote Lighthouse run is already below one second; the staging and production
+browser checks must re-measure the deployed build.
 
 ## Validation contract
 
