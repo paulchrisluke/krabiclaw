@@ -520,7 +520,7 @@ function mapPublicBlogPost(row: ApiRecord | null): PublicBlogPost | null {
     created_at: typeof row.created_at === 'string' ? row.created_at : null,
     updated_at: typeof row.updated_at === 'string' ? row.updated_at : null,
     components: Array.isArray(row.components) ? row.components as ApiRecord[] : [],
-    content_blocks: Array.isArray(row.content_blocks) ? row.content_blocks as import('~/components/workspace/blog/types').BlogEditorBlock[] : [],
+    content_blocks: Array.isArray(row.content_blocks) ? row.content_blocks as import('~/lib/components/workspace/blog/types').BlogEditorBlock[] : [],
     social_image: row.social_image && typeof row.social_image === 'object'
       ? row.social_image as PublicBlogPost['social_image']
       : null,

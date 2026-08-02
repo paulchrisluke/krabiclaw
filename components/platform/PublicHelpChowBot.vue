@@ -32,7 +32,7 @@
             class="inline-flex items-center gap-2 rounded-full border border-default px-3 py-1.5 text-xs font-medium text-default no-underline transition hover:border-muted hover:bg-elevated"
           >
             <span>{{ link.title }}</span>
-            <UIcon name="i-lucide-move-up-right" class="size-3.5 text-muted" />
+            <PlatformIcon name="arrow-up-right" class="size-3.5 text-muted" />
           </NuxtLink>
         </div>
       </div>
@@ -86,7 +86,7 @@ import { sanitizeHtmlForSsr } from '~/utils/markdown'
 // DOMPurify needs jsdom, which breaks on the Workers SSR runtime (no real DOM
 // globals) — this component is SSR'd via defineAsyncComponent in help.vue, so
 // a static top-level import here crashes module init on the server. Mirrors
-// the same guard already used in components/workspace/dashboard/ChowBot.vue.
+// the same guard already used in lib/components/workspace/dashboard/ChowBot.vue.
 const DOMPurify = import.meta.client
   ? (await import('isomorphic-dompurify')).default
   : { sanitize: sanitizeHtmlForSsr }

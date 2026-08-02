@@ -212,10 +212,14 @@ const props = defineProps<{
   hasExperiences: boolean
 }>()
 
-const colorMode = useColorMode()
-const isDark = computed(() => colorMode.value === 'dark')
+const isDark = ref(false)
+const syncDarkMode = () => {
+  isDark.value = document.documentElement.classList.contains('dark')
+}
+onMounted(syncDarkMode)
 function toggleColorMode() {
-  colorMode.preference = isDark.value ? 'light' : 'dark'
+  window.toggleSayaDark()
+  syncDarkMode()
 }
 const { locale } = useI18n()
 const copy = computed(() => getVerticalCopy(props.site?.vertical, locale.value))

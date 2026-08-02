@@ -183,7 +183,7 @@
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard' })
 
-import DashboardAnalyticsRow from '~/components/workspace/dashboard/AnalyticsRow.vue'
+import DashboardAnalyticsRow from '~/lib/components/workspace/dashboard/AnalyticsRow.vue'
 
 type PresetKey = 'last_52_weeks' | 'last_30_days' | 'last_7_days' | 'current_month' | 'custom'
 
@@ -207,7 +207,6 @@ interface AnalyticsResponse {
 }
 
 const toast = useToast()
-const dashboard = useDashboardSite()
 const siteId = await useDashboardSiteId()
 
 const presets: Array<{ key: PresetKey; label: string }> = [

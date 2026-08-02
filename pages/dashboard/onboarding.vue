@@ -82,7 +82,11 @@
 <script setup lang="ts">
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 
-definePageMeta({ layout: 'editor' })
+// Manages its own workspace context via /api/dashboard/onboarding-context —
+// this route has no orgSlug segment (a brand-new user may have zero
+// organizations), so it never calls useDashboardSite and must not be gated
+// on that context ever loading. See layouts/editor.vue.
+definePageMeta({ layout: 'editor', skipDashboardContext: true })
 
 const route = useRoute()
 const config = useRuntimeConfig()
@@ -323,7 +327,13 @@ const loadContext = async () => {
   contextError.value = null
   try {
     await refreshContext()
-    if (!contextResource.value) throw initialContextError.value ?? new Error('Workspace context failed')
+    // Nuxt's useAsyncData retains the previous successful `data` value when a
+    // refresh fails, so a failed retry can leave contextResource.value still
+    // truthy (holding the *old* response) while error.value reflects the new
+    // failure — check the error first, or stale context gets silently
+    // reapplied as if the retry had succeeded.
+    if (initialContextError.value) throw initialContextError.value
+    if (!contextResource.value) throw new Error('Workspace context returned no data')
     applyContext(contextResource.value)
   } catch (error) {
     contextError.value = normalizeApiError(error, 'Workspace context failed')

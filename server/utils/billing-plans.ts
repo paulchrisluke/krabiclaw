@@ -37,6 +37,17 @@ export type EnvWithSiteCache = Record<string, string | undefined> & {
   SITE_CACHE?: KVNamespace
 }
 
+export class BillingPlansError extends Error {
+  readonly statusCode = 503
+  readonly code: string
+
+  constructor(code: string, message: string, cause?: unknown) {
+    super(message, { cause })
+    this.name = 'BillingPlansError'
+    this.code = code
+  }
+}
+
 // ── Internal constants ───────────────────────────────────────────────────────
 
 interface MarketingFeature {
@@ -153,9 +164,9 @@ export async function fetchStripeProducts(
   env: Record<string, string | undefined>,
 ): Promise<Plan[]> {
   const stripe = new Stripe(env.STRIPE_SECRET_KEY!, {
-    // Bound retries and timeout so a hung Stripe call doesn't consume the
-    // entire Worker CPU budget.
-    maxNetworkRetries: 2,
+    // Billing reads are one logical resource load. Do not silently multiply
+    // the provider call when it fails.
+    maxNetworkRetries: 0,
     timeout: 10_000,
   })
 
@@ -269,38 +280,51 @@ function plansCacheKey(env: EnvWithSiteCache): string {
 let _inflight: Promise<Plan[]> | null = null
 
 export async function getCachedPlans(env: EnvWithSiteCache): Promise<Plan[]> {
-  const kv = env.SITE_CACHE
-  const cacheKey = plansCacheKey(env)
+  try {
+    const kv = env.SITE_CACHE
+    const cacheKey = plansCacheKey(env)
 
-  if (kv) {
-    const cached = await kv.get(cacheKey, 'text').catch(() => null)
-    if (cached) {
-      try {
-        return JSON.parse(cached) as Plan[]
-      } catch {
-        // Invalid cached JSON — treat as a miss and regenerate
+    if (kv) {
+      const cached = await kv.get(cacheKey, 'text')
+      if (cached !== null) {
+        let parsed: unknown
+        try {
+          parsed = JSON.parse(cached)
+        } catch (error) {
+          throw new BillingPlansError('BILLING_PLANS_CACHE_INVALID', 'Billing plans cache contains invalid data', error)
+        }
+        if (!Array.isArray(parsed)) {
+          throw new BillingPlansError('BILLING_PLANS_CACHE_INVALID', 'Billing plans cache contains an invalid response')
+        }
+        return parsed as Plan[]
       }
     }
-  }
 
-  // Coalesce concurrent cache misses: if a Stripe fetch is already in
-  // progress, wait for it rather than firing a duplicate.
-  if (_inflight) return _inflight
+    // Coalesce concurrent cache misses: if the canonical Stripe fetch is
+    // already in progress, wait for it rather than firing a duplicate.
+    if (_inflight) return await _inflight
 
-  _inflight = fetchStripeProducts(env).then(async (plans) => {
-    if (kv) {
-      await kv
-        .put(cacheKey, JSON.stringify(plans), {
+    _inflight = (async () => {
+      const plans = await fetchStripeProducts(env)
+      if (kv) {
+        await kv.put(cacheKey, JSON.stringify(plans), {
           expirationTtl: PLANS_CACHE_TTL_SECONDS,
         })
-        .catch(() => {})
-    }
-    return plans
-  })
+      }
+      return plans
+    })()
 
-  try {
-    return await _inflight
-  } finally {
-    _inflight = null
+    try {
+      return await _inflight
+    } finally {
+      _inflight = null
+    }
+  } catch (error) {
+    if (error instanceof BillingPlansError) throw error
+    throw new BillingPlansError(
+      'BILLING_PLANS_UNAVAILABLE',
+      'Billing plans are temporarily unavailable',
+      error,
+    )
   }
 }

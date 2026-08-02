@@ -127,10 +127,10 @@
 import type { Plan } from '~/server/api/billing/plans.get'
 
 const props = defineProps<{
-  plans?: Plan[] | null
+  plans: Plan[]
 }>()
 
-const planList = computed(() => props.plans ?? [])
+const planList = computed(() => props.plans)
 
 const MAIN_PLAN_IDS = ['free', 'growth', 'managed']
 const mainPlans = computed(() => planList.value.filter(p => MAIN_PLAN_IDS.includes(p.id)))
@@ -140,18 +140,30 @@ const seoAcceleratorMonthlyPrice = computed(() => {
   if (!plan) return null
   return plan.prices.find(p => p.interval === 'month') || null
 })
-const { isAuthenticated } = useAuth()
-const orgSettings = useOrgSettings()
 const upgrading = ref<string | null>(null)
 const checkoutError = ref<string>('')
 
 async function handleUpgrade(planId: string) {
-  const billingUrl = `${orgSettings.billing.value}?plan=${encodeURIComponent(planId)}`
-  if (!isAuthenticated.value) {
-    await navigateTo({ path: '/login', query: { redirect: billingUrl } })
-    return
+  upgrading.value = planId
+  checkoutError.value = ''
+  try {
+    const [{ authClient }, { useOrgSettings }] = await Promise.all([
+      import('~/lib/auth-client'),
+      import('~/composables/useOrgSettings'),
+    ])
+    const session = await authClient.getSession()
+    const orgSettings = useOrgSettings()
+    const billingUrl = `${orgSettings.billing.value}?plan=${encodeURIComponent(planId)}`
+    if (!session.data?.user) {
+      await navigateTo({ path: '/login', query: { redirect: billingUrl } })
+      return
+    }
+    await navigateTo(billingUrl)
+  } catch (error) {
+    checkoutError.value = error instanceof Error ? error.message : 'Unable to open billing. Please try again.'
+  } finally {
+    upgrading.value = null
   }
-  await navigateTo(billingUrl)
 }
 
 type CellValue = boolean | string

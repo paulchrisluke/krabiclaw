@@ -199,15 +199,16 @@
 </template>
 
 <script setup lang="ts">
-import ChowBot from '~/components/workspace/dashboard/ChowBot.vue'
-import DashboardScopeHeader from '~/components/workspace/dashboard/DashboardScopeHeader.vue'
-import type { DashboardScopeHeaderModel } from '~/components/workspace/dashboard/DashboardScopeHeader.vue'
+import ChowBot from '~/lib/components/workspace/dashboard/ChowBot.vue'
+import DashboardScopeHeader from '~/lib/components/workspace/dashboard/DashboardScopeHeader.vue'
+import type { DashboardScopeHeaderModel } from '~/lib/components/workspace/dashboard/DashboardScopeHeader.vue'
 import { authClient } from '~/lib/auth-client'
 import { useAuth } from '~/composables/useAuth'
 import { useAnalytics } from '~/composables/useAnalytics'
 import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities, type CmsManagerCapability, type ProductFeature } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
+import dashboardCssUrl from '~/assets/css/dashboard.css?url'
 
 // ─────────────────────────────────────────────────────────────────────────
 // Dashboard shell architecture (issue #316 + its "Authoritative clarification:
@@ -973,4 +974,6 @@ async function stopImpersonating() {
     stoppingImpersonation.value = false
   }
 }
+
+useHead({ link: [{ rel: 'stylesheet', href: dashboardCssUrl }] })
 </script>

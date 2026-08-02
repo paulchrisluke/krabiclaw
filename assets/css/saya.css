@@ -60,9 +60,9 @@
   --ui-radius:          0.25rem; /* Platform-specific radius override */
 }
 
-/* Class-based dark mode — applied by UColorModeButton / Nuxt color-mode.
-   Nuxt's @nuxtjs/color-mode adds .dark to <html> and also respects system
-   preference, so we only need the class selector here. */
+/* Saya dark tokens are scoped to the tenant shell. The Saya theme plugin and
+   footer control own the html.dark class; this surface does not need a UI
+   color-mode component or package. */
 .dark .saya-theme {
   color-scheme: dark;
 

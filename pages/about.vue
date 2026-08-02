@@ -1,6 +1,6 @@
 <template>
   <NuxtLayout :name="isPlatform ? 'platform' : isBlawby ? 'blawby' : 'saya'">
-    <BlawbyTenantPage
+    <LazyBlawbyTenantPage
       v-if="!isPlatform && isBlawby"
       path="/about"
       fallback-eyebrow="About"
@@ -192,16 +192,20 @@ const DOMPurify = useHtmlSanitizer()
 
 const { isPlatform, site } = useTenantSite()
 const { isBlawby } = usePublicTemplate()
-const { getField, locations, contentBlocks, config } = await usePublicPageData()
+const publicPageData = !isPlatform && !isBlawby.value ? await usePublicPageData() : undefined
+const getField = publicPageData?.getField
+const locations = publicPageData?.locations
+const contentBlocks = publicPageData?.contentBlocks
+const config = publicPageData?.config
 const { resolveComponent } = useDynamicComponent()
 const { locale } = useI18n()
 const copy = computed(() => getVerticalCopy(site?.vertical, locale.value))
 
-const storyBody = computed(() => DOMPurify.sanitize(getField('story.body', '') || ''))
-const journeyBody = computed(() => DOMPurify.sanitize(getField('journey.body', '') || ''))
+const storyBody = computed(() => DOMPurify.sanitize(getField?.('story.body', '') || ''))
+const journeyBody = computed(() => DOMPurify.sanitize(getField?.('journey.body', '') || ''))
 
 const hasOrderLinks = computed(() =>
-  locations.value.some(loc => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
+  locations?.value.some(loc => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url) === true
 )
 
 function isVideoUrl(url) {
@@ -224,19 +228,19 @@ if (isPlatform) {
       { name: 'About', url: '/about' },
     ],
   })
-} else {
+} else if (!isBlawby.value) {
   useTenantSocialMetadata(() => ({
     path: '/about',
     title: `About | ${site?.brand_name || 'KrabiClaw'}`,
-    description: getField('seo.description', 'Learn about our business and our story.'),
+    description: getField?.('seo.description', 'Learn about our business and our story.'),
     brand: {
       siteName: site?.brand_name || 'KrabiClaw',
       logoUrl: config.value?.logo_url || null,
       faviconUrl: config.value?.favicon_url || null,
       primaryColor: config.value?.brand_color || null,
     },
-    heroImage: locations.value[0]?.public_url && locations.value[0]?.kind !== 'video' && !isVideoUrl(locations.value[0].public_url) ? { url: String(locations.value[0].public_url) } : null,
-    ogImageOverride: config.value?.og_image_url ? { url: config.value.og_image_url } : null,
+    heroImage: locations?.value[0]?.public_url && locations.value[0]?.kind !== 'video' && !isVideoUrl(locations.value[0].public_url) ? { url: String(locations.value[0].public_url) } : null,
+    ogImageOverride: config?.value?.og_image_url ? { url: config.value.og_image_url } : null,
   }))
 }
 </script>

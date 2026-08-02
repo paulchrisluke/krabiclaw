@@ -26,14 +26,14 @@ function percentile(values, value) {
   return sorted[Math.max(0, index)]
 }
 
-function summarize(samples, field) {
+function summarize(samples, field, sampleCount) {
   const values = samples
     .map(sample => sample[field])
     .filter(value => typeof value === 'number' && Number.isFinite(value))
   return {
     p50: percentile(values, 50),
     p95: percentile(values, 95),
-    p99: percentile(values, 99),
+    p99: sampleCount >= 100 ? percentile(values, 99) : null,
   }
 }
 
@@ -134,19 +134,19 @@ async function measureScenario(context, scenario, sampleCount) {
     errors: samples.filter(sample =>
       sample.status < 200 || sample.status >= 400 || sample.failedRequestCount > 0,
     ).length,
-    totalMs: summarize(samples, 'totalMs'),
-    ttfbMs: summarize(samples, 'ttfbMs'),
-    lcpMs: summarize(samples, 'lcpMs'),
-    interactionProxyMs: summarize(samples, 'interactionProxyMs'),
-    requestCount: summarize(samples, 'requestCount'),
-    d1QueryCount: summarize(samples, 'd1QueryCount'),
-    responseBytes: summarize(samples, 'responseBytes'),
+    totalMs: summarize(samples, 'totalMs', sampleCount),
+    ttfbMs: summarize(samples, 'ttfbMs', sampleCount),
+    lcpMs: summarize(samples, 'lcpMs', sampleCount),
+    interactionProxyMs: summarize(samples, 'interactionProxyMs', sampleCount),
+    requestCount: summarize(samples, 'requestCount', sampleCount),
+    d1QueryCount: summarize(samples, 'd1QueryCount', sampleCount),
+    responseBytes: summarize(samples, 'responseBytes', sampleCount),
   }
 }
 
 const args = parseArgs(process.argv.slice(2))
 const baseUrl = args['base-url'] ?? 'http://localhost:3000'
-const samples = Math.max(30, Number(args.samples) || 30)
+const samples = Math.max(3, Number(args.samples) || 5)
 const outputDir = path.resolve(args['output-dir'] ?? 'test-results/performance-recovery')
 const platformUrl = new URL(baseUrl)
 const sayaTarget = tenantTarget(baseUrl, 'demo')
@@ -253,10 +253,11 @@ try {
     `- Samples per scenario: ${report.sampleCount}`,
     `- Note: ${report.note}`,
     '',
-    '| Scenario | Template | Errors | total p50 | total p95 | total p99 | TTFB p95 | LCP p95 | interaction proxy p95 | data requests p95 | D1 p95 | bytes p95 |',
+    '| Scenario | Template | Errors | total p50 | total p95 | total p99* | TTFB p95 | LCP p95 | interaction proxy p95 | data requests p95 | D1 p95 | bytes p95 |',
     '|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|',
     ...rows.map(row => `| ${row} |`),
     '',
+    '* p99 is intentionally omitted unless at least 100 samples are collected.',
   ].join('\n'))
   process.stdout.write(`[benchmark] ${jsonPath}\n[benchmark] ${markdownPath}\n`)
 } finally {

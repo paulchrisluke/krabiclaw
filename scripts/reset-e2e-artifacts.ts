@@ -50,7 +50,7 @@ import { execWithRetry } from './wrangler-retry.ts'
 // Every org a seed script creates under a fixed ID, kept in sync with each
 // `DELETE FROM organization WHERE id ...` in generate-demo-seed.ts,
 // generate-pottery-house-seed.ts, generate-kikuzuki-seed.ts, and
-// generate-ncls-blawby-seed.mjs. Add new fixtures here when adding a new seed script.
+// Curated Blawby fixtures are provisioned outside the disposable E2E artifact sweep.
 const FIXTURE_ORG_IDS = [
   'org-demo',
   'org_demo',
@@ -76,7 +76,7 @@ const GUEST_BOOKING_ORGANIZATION_IDS = ['org-pottery-house', 'org-demo']
 // every dev-login test user, so several fixtures collide with it and must be excluded by ID, not
 // just by domain): user-mcp-free/growth/managed (scripts/generate-demo-seed.ts's
 // renderMcpFixtureOrg) and the site-transfer recipient both use @example.test. user-ncls-blawby
-// (generate-ncls-blawby-seed.mjs) uses 'ncls-blawby@example.test' and does match the domain — it
+// The curated Blawby fixture uses 'ncls-blawby@example.test' and does match the domain — it
 // must stay excluded by ID: it's entered_by_user_id on NCLS's owner-entered reviews, and deleting
 // it cascades entered_by_user_id to NULL (ON DELETE SET NULL), which violates
 // reviews_owner_entered_provenance_check (requires entered_by_user_id IS NOT NULL for

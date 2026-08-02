@@ -135,12 +135,11 @@ jobs:
       - run: yarn install --frozen-lockfile
       - run: npx playwright install --with-deps chromium
       - name: Run performance benchmarks
-        run: echo "Performance benchmarks to be implemented - currently placeholder"
+        run: node scripts/benchmark-performance-recovery.mjs --base-url https://staging.krabiclaw.com --samples 5
       - name: Upload benchmark results
-        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: benchmark-results
-          path: benchmark-results/
+          path: test-results/performance-recovery/
           retention-days: 30
-        continue-on-error: true
+          if-no-files-found: error

@@ -20,7 +20,12 @@
     role="img"
     :aria-label="props.alt"
   >
-    <UIcon name="i-lucide-image-off" class="size-1/4 min-size-4" />
+    <svg viewBox="0 0 24 24" class="size-1/4 min-size-4" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" aria-hidden="true">
+      <path d="m3 3 18 18" />
+      <path d="M10.5 10.5a1.5 1.5 0 1 0 2.12-2.12" />
+      <path d="M21 15.5V6a3 3 0 0 0-3-3H8.5M3 8.5V18a3 3 0 0 0 3 3h9.5" />
+      <path d="m3 16 5-5 4 4 2-2 7 7" />
+    </svg>
   </div>
 </template>
 

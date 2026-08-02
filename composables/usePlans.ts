@@ -5,13 +5,6 @@ export type { Plan, PlanPrice, PlanLimits } from '~/server/api/billing/plans.get
 export const usePlans = () => {
   const nuxtApp = useNuxtApp()
   const { data, status, error } = useAsyncData<Plan[]>('billing-plans', async () => {
-    // server/middleware/zz-platform-plans-prefetch.ts stashes this on the real
-    // inbound request so we don't have to self-fetch our own API route during
-    // SSR — a self-fetch never inherits Cloudflare bindings, so it can't reach
-    // the KV cache and would call Stripe live on every render. Fall back to a
-    // the canonical service directly if the prefetch didn't run.
-    const prefetched = useRequestEvent()?.context.platformPlans as Plan[] | undefined
-    if (prefetched) return prefetched
     if (import.meta.server) {
       const requestEvent = useRequestEvent()
       if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request event not available' })
@@ -43,7 +36,9 @@ export const usePlans = () => {
     },
   })
 
-  const plans = computed(() => data.value ?? null)
+  if (error.value) throw error.value
+
+  const plans = computed(() => data.value)
   const freePlan = computed(() => plans.value?.find(p => p.id === 'free') ?? null)
   const growthPlan = computed(() => plans.value?.find(p => p.id === 'growth') ?? null)
   const managedPlan = computed(() => plans.value?.find(p => p.id === 'managed') ?? null)

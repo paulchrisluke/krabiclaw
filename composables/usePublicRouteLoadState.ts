@@ -31,7 +31,13 @@ export function claimPublicRouteLoadOwner() {
   return {
     ownsState: () => import.meta.server || activePublicRouteOwner === owner,
     release: () => {
-      if (activePublicRouteOwner === owner) activePublicRouteOwner = null
+      if (activePublicRouteOwner !== owner) return
+      activePublicRouteOwner = null
+      // If nothing else has claimed ownership since (e.g. navigating from a
+      // Saya route to a platform/non-Saya route that never creates a public
+      // page owner), the previous path/error/hasData must not remain visible
+      // to whatever reads this shared state next.
+      if (import.meta.client) clientPublicRouteLoadState.value = createPublicRouteLoadState()
     },
   }
 }

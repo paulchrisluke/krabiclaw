@@ -1,73 +1,66 @@
 import type { PublicBlawbyData, PublicOffering, PublicTenantPage } from '~/types/blawby'
+import { isRecord, publicApiRequest } from '~/utils/api-clients'
 
 type BlawbyPayload = PublicBlawbyData & { success: boolean }
 
-const emptyBlawbyPayload = (): BlawbyPayload => ({
-  success: true,
-  offerings: [],
-  tenantPages: [],
-  compliance: null,
-  consultation: {
-    mode: 'external_url',
-    cta_label: 'Book a consultation',
-    external_url: null,
-    schedule_path: '/schedule',
-    confirmation_path: '/contact/confirmed',
-    tracking_enabled: true,
-    contact_form_enabled: true,
-    metadata: {},
-  },
-  navigation: [],
-  themeTokens: {},
-})
+const isBlawbyPayload = (value: unknown): value is BlawbyPayload =>
+  isRecord(value)
+  && value.success === true
+  && Array.isArray(value.offerings)
+  && Array.isArray(value.tenantPages)
+  && isRecord(value.consultation)
+  && Array.isArray(value.navigation)
+  && isRecord(value.themeTokens)
 
 export function useBlawbySite() {
   const { siteId, isTenant } = useTenantSite()
-  const key = computed(() => `blawby-site-${siteId || 'none'}`)
+  if (!isTenant || !siteId) {
+    throw createError({ statusCode: 404, statusMessage: 'Blawby site context is unavailable' })
+  }
+  const key = computed(() => `blawby-site-${siteId}`)
 
-  const asyncData = !isTenant || !siteId
-    ? { data: ref<BlawbyPayload>(emptyBlawbyPayload()), error: ref<Error | null>(null), pending: ref(false) }
-    : useAsyncData<BlawbyPayload>(
-        key.value,
-        async (): Promise<BlawbyPayload> => {
-          if (import.meta.server) {
-            const requestEvent = useRequestEvent()
-            if (!requestEvent) return emptyBlawbyPayload()
-            const [{ cloudflareEnv }, { getActiveBlawbySite, getPublicBlawbyData }] = await Promise.all([
-              import('~/server/utils/api-response'),
-              import('~/server/utils/professional-services'),
-            ])
-            const db = cloudflareEnv(requestEvent).db
-            if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-            const site = await getActiveBlawbySite(db, siteId)
-            if (!site) throw createError({ statusCode: 404, statusMessage: 'Blawby is not enabled for this site' })
-            const payload = await getPublicBlawbyData(db, siteId)
-            return {
-              success: true,
-              ...payload,
-            }
-          }
-          const fetchBlawby = $fetch as unknown as (_url: string) => Promise<BlawbyPayload>
-          return await fetchBlawby(`/api/public/sites/${siteId}/blawby`)
-        },
-        {
-          default: emptyBlawbyPayload,
-          server: true,
-          lazy: true,
-          getCachedData(k) {
-            return useNuxtApp().payload.data[k] as BlawbyPayload | undefined
-          },
-        },
-      )
+  const asyncData = useAsyncData<BlawbyPayload>(
+    key.value,
+    async (): Promise<BlawbyPayload> => {
+      if (import.meta.server) {
+        const requestEvent = useRequestEvent()
+        if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+        const [{ cloudflareEnv }, { getActiveBlawbySite, getPublicBlawbyData }] = await Promise.all([
+          import('~/server/utils/api-response'),
+          import('~/server/utils/professional-services'),
+        ])
+        const db = cloudflareEnv(requestEvent).db
+        if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+        const site = await getActiveBlawbySite(db, siteId)
+        if (!site) throw createError({ statusCode: 404, statusMessage: 'Blawby is not enabled for this site' })
+        const payload = await getPublicBlawbyData(db, siteId)
+        return { success: true, ...payload }
+      }
+      return await publicApiRequest<BlawbyPayload>(`/api/public/sites/${siteId}/blawby`, {
+        validate: isBlawbyPayload,
+      })
+    },
+    {
+      server: true,
+      lazy: false,
+      getCachedData(k) {
+        return useNuxtApp().payload.data[k] as BlawbyPayload | undefined
+      },
+    },
+  )
 
-  const { data, error, pending } = asyncData
+  if (asyncData.error.value) throw asyncData.error.value
+  if (!asyncData.data.value) throw createError({ statusCode: 500, statusMessage: 'Blawby data was not returned' })
 
-  const offerings = computed<PublicOffering[]>(() => data.value?.offerings ?? [])
-  const tenantPages = computed<PublicTenantPage[]>(() => data.value?.tenantPages ?? [])
-  const compliance = computed(() => data.value?.compliance ?? null)
-  const consultation = computed(() => data.value?.consultation ?? emptyBlawbyPayload().consultation)
-  const navigation = computed(() => data.value?.navigation ?? [])
-  const themeTokens = computed(() => data.value?.themeTokens ?? {})
+  const data = asyncData.data as Ref<BlawbyPayload>
+  const { error, pending } = asyncData
+
+  const offerings = computed<PublicOffering[]>(() => data.value!.offerings)
+  const tenantPages = computed<PublicTenantPage[]>(() => data.value!.tenantPages)
+  const compliance = computed(() => data.value!.compliance)
+  const consultation = computed(() => data.value!.consultation)
+  const navigation = computed(() => data.value!.navigation)
+  const themeTokens = computed(() => data.value!.themeTokens)
 
   const pageByPath = (path: string) =>
     tenantPages.value.find((page: PublicTenantPage) => page.path === path) ?? null

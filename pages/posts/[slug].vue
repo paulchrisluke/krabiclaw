@@ -42,6 +42,14 @@ interface PublicPost {
   location?: { id: string; title: string | null; slug: string | null } | null
 }
 
+const isPublicPostResponse = (value: unknown): value is { post: PublicPost } =>
+  isRecord(value)
+  && isRecord(value.post)
+  && typeof value.post.id === 'string'
+  && typeof value.post.slug === 'string'
+  && typeof value.post.title === 'string'
+  && typeof value.post.body === 'string'
+
 const route = useRoute()
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
@@ -69,7 +77,10 @@ const { data, error } = await useAsyncData(
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
       post = await getPublishedPostBySlug(db, siteId, slug.value, env) as PublicPost | null
     } else {
-      const payload = await $fetch<{ post?: PublicPost }>(`/api/public/sites/${siteId}/posts/${encodeURIComponent(slug.value)}`)
+      const payload = await publicApiRequest<{ post: PublicPost }>(
+        `/api/public/sites/${siteId}/posts/${encodeURIComponent(slug.value)}`,
+        { validate: isPublicPostResponse },
+      )
       post = payload.post
     }
     if (!post) throw createError({ statusCode: 404, statusMessage: 'Post not found' })

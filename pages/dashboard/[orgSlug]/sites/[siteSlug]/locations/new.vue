@@ -72,7 +72,7 @@
 <script setup lang="ts">
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 
-definePageMeta({ layout: 'editor', ssr: false })
+definePageMeta({ layout: 'editor', skipDashboardContext: true, ssr: false })
 
 const route = useRoute()
 const router = useRouter()
