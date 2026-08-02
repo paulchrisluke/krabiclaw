@@ -25,6 +25,7 @@ if (localHosts.has(baseUrl.hostname)) {
 const REQUEST_TIMEOUT_MS = 15_000
 const RETRY_DELAY_MS = 2_000
 const MAX_ATTEMPTS = 20
+const NUXT_BUILD_ID_PATTERN = /buildId:\"([0-9a-f-]{36})\"/
 const ENTRY_CSS_PATTERN = /\/_nuxt\/entry\.[A-Za-z0-9_-]+\.css/
 const NUXT_ASSET_PATTERN = /(?:src|href)="(\/_nuxt\/[^"?]+(?:\?[^"]*)?)"/g
 const expectedEntryCss = readdirSync('.output/public/_nuxt')
@@ -64,6 +65,20 @@ async function verifyHtmlAndAssets(url, expectedEntryPath, headers = {}) {
   if (!response.ok) throw new Error(`${url.pathname || '/'} returned HTTP ${response.status}`)
 
   const html = await response.text()
+  const buildId = html.match(NUXT_BUILD_ID_PATTERN)?.[1]
+  if (!buildId) throw new Error(`${url.pathname || '/'} did not expose a Nuxt build id`)
+
+  const buildMetaUrl = new URL(`/_nuxt/builds/meta/${buildId}.json`, baseUrl)
+  const buildMetaResponse = await fetchWithTimeout(buildMetaUrl, headers)
+  if (!buildMetaResponse.ok) {
+    throw new Error(`${url.pathname || '/'} references missing Nuxt build metadata ${buildId}`)
+  }
+  try {
+    JSON.parse(await buildMetaResponse.text())
+  } catch {
+    throw new Error(`${url.pathname || '/'} references malformed Nuxt build metadata ${buildId}`)
+  }
+
   const entryPath = html.match(ENTRY_CSS_PATTERN)?.[0]
   if (entryPath !== expectedEntryPath) {
     throw new Error(`${url.pathname || '/'} references ${entryPath ?? 'no entry CSS'}; waiting for ${expectedEntryPath}`)

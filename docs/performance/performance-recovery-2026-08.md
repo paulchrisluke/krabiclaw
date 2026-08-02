@@ -103,6 +103,11 @@ Use the production-style Worker and browser for representative smoke checks:
 - no `ERR_HTTP_HEADERS_SENT` messages;
 - public pages do not preload dashboard/editor-only CSS or chunks.
 
+Preview browser checks wait for the deployed entry stylesheet, every HTML-referenced
+Nuxt asset, and the HTML's build metadata to be available before running. A Worker
+deployment is not considered browser-ready while HTML can reference an asset or
+build manifest that still returns 404.
+
 Keep shared transport/error/request-budget tests at the invariant level. Do not
 add one page test per duplicate request or another benchmark suite that merely
 repeats the same contract.
