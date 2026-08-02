@@ -17,8 +17,8 @@ const isMenusWithDetailResponse = (value: unknown): value is { success: boolean;
 const isSuccess = (value: unknown): value is { success: true } =>
   isRecord(value) && value.success === true
 
-export const useMenuEditor = (siteId: string, locationId?: string | null) => {
-  const { currentLocationId, isBrandScope } = useEditorContext(siteId)
+export const useMenuEditor = async (siteId: string, locationId?: string | null) => {
+  const editorContext = locationId === undefined ? useEditorContext(siteId) : null
 
   const currentMenu = ref<MenuWithItems | null>(null)
   const loading = ref(false)
@@ -26,8 +26,8 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
   const saving = ref(false)
 
   const hasMenus = computed(() => !!currentMenu.value)
-  const effectiveLocationId = computed(() => locationId !== undefined ? locationId : currentLocationId.value)
-  const isEditingBrandMenu = computed(() => locationId !== undefined ? (locationId === null || locationId === '') : isBrandScope.value)
+  const effectiveLocationId = computed(() => locationId !== undefined ? locationId : editorContext!.currentLocationId.value)
+  const isEditingBrandMenu = computed(() => locationId !== undefined ? (locationId === null || locationId === '') : editorContext!.isBrandScope.value)
 
   // Reload on location change (immediate) or ChowBot menu changes
   const menuRefreshSignal = useState<number>('menu:refresh', () => 0)
@@ -43,7 +43,7 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
     pending: menusPending,
     error: menusResourceError,
     refresh: refreshMenusResource,
-  } = useAsyncData(
+  } = await useAsyncData(
     computed(() => `dashboard-menus:${siteId}:${effectiveLocationId.value ?? 'brand'}`),
     async () => {
       const currentEffectiveLocationId = effectiveLocationId.value
@@ -73,7 +73,7 @@ export const useMenuEditor = (siteId: string, locationId?: string | null) => {
       )
       return { success: true as const, menus: listResponse.menus, menu: detailResponse.menu }
     },
-    { lazy: import.meta.client, watch: [menuRefreshSignal] },
+    { watch: [menuRefreshSignal] },
   )
 
   watch([menusResource, menusPending, menusResourceError], ([resource, pending, err]) => {

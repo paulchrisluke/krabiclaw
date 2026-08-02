@@ -324,6 +324,7 @@ export interface UserBillingItem {
   organization: {
     id: string
     name: string
+    slug: string
     logo: string | null
     createdAt: string
     role: string
@@ -341,8 +342,8 @@ export async function getUserBillingItems(
   db: D1Database,
   userId: string,
 ): Promise<UserBillingItem[]> {
-  const orgRows = await queryAll<{ id: string, name: string, logo: string | null, createdAt: BetterAuthTimestamp, role: string }>(db, `
-    SELECT o.id, o.name, o.logo, o.createdAt, m.role
+  const orgRows = await queryAll<{ id: string, name: string, slug: string, logo: string | null, createdAt: BetterAuthTimestamp, role: string }>(db, `
+    SELECT o.id, o.name, o.slug, o.logo, o.createdAt, m.role
     FROM organization o
     JOIN member m ON o.id = m.organizationId
     WHERE m.userId = ?

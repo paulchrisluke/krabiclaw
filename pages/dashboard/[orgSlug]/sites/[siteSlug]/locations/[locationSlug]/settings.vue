@@ -527,10 +527,6 @@ function getErrorMessage(error: unknown, fallback: string): string {
   return fallback
 }
 
-watch(location, (loc) => {
-  if (loc) fillDetailsForm(loc)
-})
-
 function fillDetailsForm(loc: BusinessLocation) {
   detailsForm.title = loc.title
   detailsForm.slug = loc.slug
@@ -839,6 +835,7 @@ watchEffect(() => {
   location.value = resource.location.location
   gbConnection.value = resource.connection.connection
   fillLocationFeatures(resource.location)
+  fillDetailsForm(resource.location.location)
 })
 
 const loadLocationWorkspace = async () => {

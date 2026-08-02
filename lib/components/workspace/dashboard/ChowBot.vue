@@ -77,7 +77,8 @@
       </div>
       <div v-else-if="isLow" class="shrink-0 bg-warning-50 dark:bg-warning-950 px-4 py-2 text-xs text-warning-600 dark:text-warning-400 flex items-center gap-2">
         <UIcon name="i-lucide-triangle-alert" class="size-3.5 shrink-0" />
-        Low credits ({{ balance }} remaining). <NuxtLink :to="orgSettings.billing.value" class="underline" @click="close">Top up →</NuxtLink>
+        Low credits ({{ balance }} remaining).
+        <NuxtLink v-if="orgSettings.billing.value" :to="orgSettings.billing.value" class="underline" @click="close">Top up →</NuxtLink>
       </div>
 
       <ChowBotConversation

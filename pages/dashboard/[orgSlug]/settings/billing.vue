@@ -526,7 +526,9 @@ const { data: billingResource, error: billingResourceError, pending: billingReso
     if (import.meta.server) {
       if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
       const { loadDashboardBillingResource } = await import('~/server/utils/dashboard-billing-resource')
-      return await loadDashboardBillingResource(requestEvent)
+      const organizationSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
+      if (!organizationSlug) throw createError({ statusCode: 400, statusMessage: 'Organization slug is required for billing' })
+      return await loadDashboardBillingResource(requestEvent, organizationSlug)
     }
     const [billingResponse, creditsResponse, paymentMethodResponse, sitesResponse] = await Promise.all([
       dashboardApi<ApiRecord>('/api/billing/status', { validate: isBillingResponse }),

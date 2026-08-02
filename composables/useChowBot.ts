@@ -30,11 +30,10 @@ export const useChowBot = () => {
   const route = useRoute()
   const history = useChowBotHistory()
 
-  // Defer dashboard context access to avoid hydration issues
   const dashboard = useDashboardSite()
   const dashboardLocation = useDashboardLocation()
-  const siteId = computed(() => import.meta.server ? null : dashboard.siteId.value)
-  const selectedLocation = computed(() => import.meta.server ? null : dashboardLocation.currentLocation.value)
+  const siteId = computed(() => dashboard.siteId.value)
+  const selectedLocation = computed(() => dashboardLocation.currentLocation.value)
   const isConversationsWorkspace = computed(() => typeof route.name === 'string' && route.name.includes('conversations'))
   const agentLocationId = computed(() => {
     if (isConversationsWorkspace.value) return null

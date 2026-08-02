@@ -26,7 +26,7 @@
             <template #footer>
               <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <p class="text-sm text-muted">To manage your personal plan, visit your account's Billing and Usage settings page.</p>
-                <UButton color="neutral" variant="soft" size="sm" :to="orgSettings.billing.value">
+                <UButton v-if="orgSettings.billing.value" color="neutral" variant="soft" size="sm" :to="orgSettings.billing.value">
                   View All Plans
                 </UButton>
               </div>
@@ -70,7 +70,7 @@
               <template #footer>
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <p class="text-sm text-muted">Visit {{ item.organization.name }}'s billing settings for details.</p>
-                  <UButton color="neutral" variant="soft" size="sm" @click="goToWorkspaceBilling(item.organization.id)">
+                  <UButton color="neutral" variant="soft" size="sm" @click="goToWorkspaceBilling(item.organization.slug)">
                     View Billing Settings
                   </UButton>
                 </div>
@@ -99,6 +99,7 @@ interface BillingItem {
   organization: {
     id: string
     name: string
+    slug: string
     logo?: string | null
   }
   billing: {
@@ -115,6 +116,7 @@ const isBillingItemsResponse = (value: unknown): value is { items: BillingItem[]
     && isRecord(item.organization)
     && typeof item.organization.id === 'string'
     && typeof item.organization.name === 'string'
+    && typeof item.organization.slug === 'string'
     && isRecord(item.billing)
     && typeof item.billing.plan === 'string',
   )
@@ -144,7 +146,7 @@ const { data: billingItems, status, error, refresh } = await useAsyncData(
   }
 )
 
-const goToWorkspaceBilling = async (orgId: string) => {
-  await router.push({ path: orgSettings.billing.value, query: { organizationId: orgId } })
+const goToWorkspaceBilling = async (orgSlug: string) => {
+  await router.push(`/dashboard/${orgSlug}/settings/billing`)
 }
 </script>

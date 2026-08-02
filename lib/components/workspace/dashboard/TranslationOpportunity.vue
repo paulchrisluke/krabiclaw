@@ -344,7 +344,9 @@ async function startTranslation() {
       description: 'ChowBot is preparing drafts in the background. You can keep working and review them when they are ready.',
       color: 'success',
     })
-    await navigateTo(`${useOrgSettings().translations.value}?locale=${encodeURIComponent(form.locale)}`)
+    const translationsPath = useOrgSettings().translations.value
+    if (!translationsPath) throw new Error('Organization context is required to open translations')
+    await navigateTo(`${translationsPath}?locale=${encodeURIComponent(form.locale)}`)
     loadStatus().catch((err) => {
       console.warn('translation_opportunity_status_refresh_failed', err)
     })
