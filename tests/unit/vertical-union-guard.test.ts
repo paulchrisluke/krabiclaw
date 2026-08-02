@@ -46,7 +46,7 @@ const TARGET_DIRS = [
   'server/api/dashboard',
   'server/utils/dashboard-context.ts',
   'composables',
-  'components/workspace/onboarding',
+  'lib/components/workspace/onboarding',
   'pages/dashboard',
 ]
 

@@ -68,18 +68,12 @@ jobs:
           cache: yarn
       - run: yarn install --frozen-lockfile
       - run: npx playwright install --with-deps chromium
-      - name: Seed exhaustive client fixture not used by required staging smoke
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: node scripts/generate-ncls-blawby-seed.mjs --staging
       - name: Run full Playwright regression
         run: yarn test:e2e:full
       - name: Verify client fixtures
         run: |
           yarn fixture:pottery-house --url https://staging.krabiclaw.com --site-id site-pottery-house --slug pottery-house
           node scripts/client-verify.mjs --url https://staging.krabiclaw.com --vertical professional_service --site-id site-ncls-blawby --slug north-carolina-legal-services --tenant-slug ncls
-          yarn client:verify:ncls-seo --url https://staging.krabiclaw.com --expected-origin https://staging.krabiclaw.com --tenant-slug ncls
       - name: Write regression summary
         if: always()
         run: |

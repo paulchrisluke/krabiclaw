@@ -6,7 +6,7 @@
 // SSR is disabled for this route via nuxt.config.ts routeRules (Nitro reads
 // it before any Vue rendering starts), not from page meta here — see the
 // comment on that entry for why.
-definePageMeta({ layout: 'editor' })
+definePageMeta({ layout: 'editor', skipDashboardContext: true })
 
 const route = useRoute()
 // This route uses layout: 'editor', not layout: 'dashboard' — the latter is

@@ -308,6 +308,34 @@ export default defineNuxtConfig({
       path: '~/lib/components/workspace/dashboard',
       pathPrefix: false,
     },
+    {
+      path: '~/lib/components/workspace/blog',
+      pathPrefix: false,
+    },
+    {
+      path: '~/lib/components/workspace/content',
+      pathPrefix: false,
+    },
+    {
+      path: '~/lib/components/workspace/editor',
+      pathPrefix: false,
+    },
+    {
+      path: '~/lib/components/workspace/inbox',
+      pathPrefix: false,
+    },
+    {
+      path: '~/lib/components/workspace/media',
+      pathPrefix: false,
+    },
+    {
+      path: '~/lib/components/workspace/onboarding',
+      pathPrefix: false,
+    },
+    {
+      path: '~/lib/components/workspace/settings',
+      pathPrefix: false,
+    },
   ],
 
   // Global watcher exclusions

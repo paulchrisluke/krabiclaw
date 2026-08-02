@@ -54,9 +54,9 @@ useHead(() => {
 // Google Analytics loads via Cloudflare Zaraz (edge-injected, see
 // `useAnalytics.ts`'s `window.zaraz.track()` calls) — there is no
 // client-bundled gtag.js/krabiLayer bootstrap here anymore. That removes the
-// ~1.5s TTI cost the deferred-loading approach used to carry (see
-// HANDOFF-page-speed-2026-07-02.md), since Zaraz's own snippet is edge-served
-// and queues calls made before it loads the same way `dataLayer` does.
+// ~1.5s TTI cost the deferred-loading approach used to carry, since Zaraz's
+// own snippet is edge-served and queues calls made before it loads the same
+// way `dataLayer` does.
 
 const loadingColor = computed(() => {
   if (isPlatform) return 'var(--kc-loading-rainbow)'
