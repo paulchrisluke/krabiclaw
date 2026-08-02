@@ -1,5 +1,6 @@
 import { CATEGORY_SLUGS, categoryToSlug } from '~/utils/docs-categories'
 import { docNavSectionFor, groupDocItemsByNavSectionAndGroup } from '~/utils/platform-content-nav'
+import { isRecord, publicApiRequest } from '~/utils/api-clients'
 
 interface PublicDoc {
   slug: string
@@ -13,6 +14,15 @@ interface PublicDoc {
   nav_group_order?: number | null
   hide_from_nav?: boolean | number | null
 }
+
+interface PublicDocsResponse {
+  docs: PublicDoc[]
+}
+
+const isPublicDocsResponse = (value: unknown): value is PublicDocsResponse =>
+  isRecord(value)
+  && Array.isArray(value.docs)
+  && value.docs.every((doc) => isRecord(doc) && typeof doc.slug === 'string' && typeof doc.title === 'string')
 
 type DocWithNavMeta = PublicDoc & { categorySlug: string; label: string; path: string }
 
@@ -30,10 +40,25 @@ interface DocsNavCategory {
 // Used by DocsSidebar's nav. Renders a curated Section → Group → Page hierarchy
 // (max 3 levels) — docs support an optional nav_group subgroup within their
 // nav_section; blog posts never get this (see useBlogNav, which stays flat).
-export function useDocsNav() {
-  const { data } = useFetch<{ docs: PublicDoc[] }>('/api/public/docs', {
-    default: () => ({ docs: [] }),
-  })
+export async function useDocsNav() {
+  const { data, pending, error } = await useAsyncData<PublicDocsResponse>('public-docs-index', async () => {
+    if (import.meta.server) {
+      const requestEvent = useRequestEvent()
+      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+      const [{ cloudflareEnv }, { listPlatformDocs }] = await Promise.all([
+        import('~/server/utils/api-response'),
+        import('~/server/utils/platform-content'),
+      ])
+      const db = cloudflareEnv(requestEvent).db
+      if (!db) throw createError({ statusCode: 503, statusMessage: 'Documentation data is temporarily unavailable' })
+      return { docs: await listPlatformDocs(db, 'published') as PublicDoc[] }
+    }
+    return await publicApiRequest<PublicDocsResponse>('/api/public/docs', {
+      validate: isPublicDocsResponse,
+    })
+  }, { server: true, lazy: false })
+
+  if (error.value) throw error.value
 
   const docs = computed(() => data.value?.docs || [])
 
@@ -67,5 +92,5 @@ export function useDocsNav() {
     }))
   })
 
-  return { docs, categories }
+  return { data, docs, categories, pending, error }
 }

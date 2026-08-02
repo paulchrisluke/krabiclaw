@@ -165,7 +165,7 @@
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.media' })
 
-import VideoPosterPrompt from '~/components/workspace/media/VideoPosterPrompt.vue'
+import VideoPosterPrompt from '~/lib/components/workspace/media/VideoPosterPrompt.vue'
 import { IMAGE_MAX_SIZE_BYTES, VIDEO_MAX_SIZE_BYTES } from '~/composables/useMediaUpload'
 
 const siteId = await useDashboardSiteId()

@@ -51,7 +51,7 @@
 </template>
 
 <script setup lang="ts">
-import ChowBot from '~/components/workspace/dashboard/ChowBot.vue'
+import ChowBot from '~/lib/components/workspace/dashboard/ChowBot.vue'
 import { useChowBot } from '~/composables/useChowBot'
 import { useChowBotHistory } from '~/composables/useChowBotHistory'
 import type { ChowBotConv } from '~/composables/useChowBotHistory'

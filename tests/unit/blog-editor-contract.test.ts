@@ -14,7 +14,7 @@ test('platform, Saya, Blawby, and editor SEO all use the shared resolver', async
     '../../pages/blog/[category]/[slug].vue',
     '../../pages/blog/[slug].vue',
     '../../pages/article/[slug].vue',
-    '../../components/workspace/blog/BlogPostEditor.vue',
+    '../../lib/components/workspace/blog/BlogPostEditor.vue',
   ]
   for (const path of paths) {
     const source = await readFile(new URL(path, import.meta.url), 'utf8')
@@ -23,7 +23,7 @@ test('platform, Saya, Blawby, and editor SEO all use the shared resolver', async
 })
 
 test('editor supplies the complete public article model and scopes both theme token families', async () => {
-  const source = await readFile(new URL('../../components/workspace/blog/BlogPostEditor.vue', import.meta.url), 'utf8')
+  const source = await readFile(new URL('../../lib/components/workspace/blog/BlogPostEditor.vue', import.meta.url), 'utf8')
   for (const prop of ['category', 'published-at', 'updated-at', 'author-name', 'author-image', 'site-name', 'media-url', 'media-kind', 'read-minutes']) {
     assert.match(source, new RegExp(`:${prop}=`), prop)
   }
@@ -66,7 +66,7 @@ test('source-native Markdown operations preserve tables, HTML, links, lists, and
 })
 
 test('editor autosave requires canonical documents and serializes draft creation', async () => {
-  const source = await readFile(new URL('../../components/workspace/blog/BlogPostEditor.vue', import.meta.url), 'utf8')
+  const source = await readFile(new URL('../../lib/components/workspace/blog/BlogPostEditor.vue', import.meta.url), 'utf8')
   assert.match(source, /if \(!loaded\.content_document\) throw new Error\('Blog content document is missing'\)[\s\S]*structuredClone\(loaded\.content_document\.blocks \|\| \[\]\)/)
   assert.match(source, /let createDraftPromise: Promise<BlogPost \| null> \| null = null/)
   assert.match(source, /if \(createDraftPromise\) return await createDraftPromise/)
@@ -76,7 +76,7 @@ test('editor autosave requires canonical documents and serializes draft creation
 })
 
 test('settings panel behaves as an accessible modal', async () => {
-  const source = await readFile(new URL('../../components/workspace/blog/BlogPostEditor.vue', import.meta.url), 'utf8')
+  const source = await readFile(new URL('../../lib/components/workspace/blog/BlogPostEditor.vue', import.meta.url), 'utf8')
   assert.match(source, /<USlideover v-model:open="settingsOpen" title="Post settings" side="right" modal/)
   assert.match(source, /@after:enter="focusSettingsPanel" @after:leave="restoreSettingsFocus"/)
   assert.match(source, /@keydown="onSettingsKeydown"/)
@@ -88,7 +88,7 @@ test('settings panel behaves as an accessible modal', async () => {
 
 test('block controls preserve writable content and persisted-post action boundaries', async () => {
   const renderer = await readFile(new URL('../../components/blog/BlogArticleRenderer.vue', import.meta.url), 'utf8')
-  const editor = await readFile(new URL('../../components/workspace/blog/BlogPostEditor.vue', import.meta.url), 'utf8')
+  const editor = await readFile(new URL('../../lib/components/workspace/blog/BlogPostEditor.vue', import.meta.url), 'utf8')
   assert.match(renderer, /index === 0 \? 'forward' : 'back'/)
   assert.match(renderer, /\{ \.\.\.step, text: value \}/)
   assert.match(editor, /if \(!last \|\| \(last\.type !== 'markdown' && last\.type !== 'heading'\)\)/)

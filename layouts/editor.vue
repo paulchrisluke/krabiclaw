@@ -2,7 +2,7 @@
   <UApp>
     <div class="h-dvh overflow-hidden flex flex-col bg-muted">
       <div
-        v-if="dashboard.pending.value"
+        v-if="!skipDashboardContext && dashboard.pending.value"
         class="flex min-h-screen items-center justify-center bg-default px-6"
         data-testid="editor-context-loading"
       >
@@ -12,7 +12,7 @@
         </div>
       </div>
       <div
-        v-else-if="!dashboard.state.value"
+        v-else-if="!skipDashboardContext && !dashboard.state.value"
         class="flex min-h-screen items-center justify-center bg-default px-6"
         data-testid="editor-context-error"
       >
@@ -30,14 +30,22 @@
 </template>
 
 <script setup>
-// Minimal layout for full-screen editor pages
-// No sidebar, navbar, or dashboard wrapper
-// But we still need to load dashboard context for site-scoped pages
+// Minimal layout for full-screen editor pages: no sidebar, navbar, or
+// dashboard wrapper. Site-scoped editor pages (content/menu editors) need
+// this layout to gate rendering on useDashboardSite's org/site-scoped
+// context, which they load themselves via their own dashboard.refresh()
+// guard. Pages with no org/site scope of their own — the root and
+// org-scoped onboarding wizards, which manage their own independent context
+// via a dedicated endpoint and never call useDashboardSite at all — set
+// `skipDashboardContext: true` in definePageMeta to bypass this gate
+// entirely rather than being blocked on a context load they never start.
 import { UPGRADE_MODAL_ENABLED } from '~/composables/useUpgradeModal'
 import SayaUpgradeModal from '~/components/saya/_ignored/SayaUpgradeModal.vue'
 import { useDashboardSite } from '~/composables/useDashboardSite'
+import dashboardCssUrl from '~/assets/css/dashboard.css?url'
 
-// Load dashboard context for site-scoped editor pages
-// Since SSR is disabled for editor routes, this runs client-side
+const route = useRoute()
+const skipDashboardContext = computed(() => route.meta.skipDashboardContext === true)
 const dashboard = useDashboardSite()
+useHead({ link: [{ rel: 'stylesheet', href: dashboardCssUrl }] })
 </script>

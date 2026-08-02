@@ -270,14 +270,9 @@ definePageMeta({ layout: 'saya' })
 import AppBreadcrumb from '~/components/ui/AppBreadcrumb.vue'
 import { formatMoneyAmount, isSaleActive } from '~/shared/money'
 import type { MenuItem } from '~/server/types/menu'
-import {
-  usePublicPageRequest,
-  usePublicPageKey,
-  usePublicPageUrl,
-} from '~/composables/usePublicPageRequest'
 
 const route = useRoute()
-const { site, siteId, draftId } = useTenantSite()
+const { site } = useTenantSite()
 const siteName = computed(() => site?.brand_name || 'KrabiClaw')
 
 interface Review {

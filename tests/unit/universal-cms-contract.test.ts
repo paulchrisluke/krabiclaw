@@ -12,10 +12,10 @@ import test from 'node:test'
 // content/[pageId] routes, and a follow-up pass moved page *selection* out
 // of the full-screen editor entirely so the editor only ever renders one
 // already-chosen page.
-const editorPath = new URL('../../components/workspace/content/CmsContentEditor.vue', import.meta.url)
+const editorPath = new URL('../../lib/components/workspace/content/CmsContentEditor.vue', import.meta.url)
 const editorSource = readFileSync(editorPath, 'utf8')
 const nuxtConfigSource = readFileSync(new URL('../../nuxt.config.ts', import.meta.url), 'utf8')
-const pageIndexSource = readFileSync(new URL('../../components/workspace/content/ContentPageIndex.vue', import.meta.url), 'utf8')
+const pageIndexSource = readFileSync(new URL('../../lib/components/workspace/content/ContentPageIndex.vue', import.meta.url), 'utf8')
 const linksSource = readFileSync(new URL('../../composables/useDashboardSiteLinks.ts', import.meta.url), 'utf8')
 const layoutSource = readFileSync(new URL('../../layouts/dashboard.vue', import.meta.url), 'utf8')
 const siteContentIndexHostSource = readFileSync(

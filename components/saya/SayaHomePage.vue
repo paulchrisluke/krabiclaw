@@ -1,0 +1,505 @@
+<template>
+    <!-- Saya tenant homepage -->
+    <div class="saya-restaurant-theme">
+
+      <!-- ── Brand hero ─────────────────────────────────────── -->
+      <SayaHomeHero
+        :data="{
+          hero: hero,
+          eyebrow: getField('hero.eyebrow', businessCity),
+          locations: pageLocations,
+          businessTitle: businessTitle,
+          businessSubtitle: businessSubtitle,
+          businessCity: businessCity,
+          businessPrimaryPhoto: businessPrimaryPhoto,
+          hasOrderLinks: hasOrderLinks,
+          ctaRoute: homePrimaryCtaRoute,
+          reserveCta: homeCopy.reserveCta,
+          orderNowCta: homeCopy.orderNowCta,
+          viewMenuCta: homeCopy.viewMenuCta,
+          viewMenuRoute: homeCopy.viewMenuRoute,
+          brandColor: pageConfig.value?.brand_color,
+          vertical: site?.vertical
+        }"
+      />
+
+      <!-- ── Featured content (dishes / experiences) ─────────── -->
+      <LazySayaFeaturedContent
+        :data="{
+          items: featuredContent,
+          hasMenu: hasMenu,
+          vertical: site?.vertical,
+          linkTarget: homeFeaturedContentLinkTarget
+        }"
+      />
+
+      <!-- ── Locations grid ─────────────────────────────────── -->
+      <LazySayaLocationsGrid
+        :data="{
+          locations: locations,
+          heading: homeCopy.locationGroupLine(locations.length),
+          isAuthenticated: false,
+          findUsKicker: homeCopy.findUsKicker,
+          visitLocationCta: homeCopy.visitLocationCta,
+          connectGoogleCta: homeCopy.connectGoogleCta
+        }"
+      />
+
+      <!-- ── Posts / Lately ────────────────────────────────── -->
+      <section v-if="recentPosts.length" class="bg-elevated">
+        <div class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8">
+          <div class="mb-16 max-w-2xl">
+            <p class="saya-kicker mb-6">{{ homeCopy.latelyKicker }}</p>
+            <h2 class="saya-display-md text-default">{{ homeCopy.highlightsSectionHeading }}</h2>
+          </div>
+          <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <template
+              v-for="post in recentPosts"
+              :key="post.id"
+            >
+              <!-- Trigger tile — navigates to the real post page (SayaPostDetail.vue is
+                   the single source of truth for post detail UI; this used to open a
+                   separate, hand-rolled modal here that duplicated and diverged from it). -->
+              <NuxtLink
+                :to="post.path"
+                class="group block overflow-hidden bg-default text-default no-underline transition hover:opacity-90"
+                :class="post.wide ? 'sm:col-span-2' : ''"
+              >
+                <div v-if="post.image" class="overflow-hidden bg-muted" :class="post.wide ? 'aspect-video' : 'aspect-square'">
+                  <video
+                    v-if="post.imageKind === 'video'"
+                    :src="post.image"
+                    autoplay
+                    muted
+                    loop
+                    playsinline
+                    class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  />
+                  <img
+                    v-else
+                    :src="post.image"
+                    :alt="post.alt"
+                    class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  >
+                </div>
+                <div class="p-5 pt-4">
+                  <p class="saya-eyebrow mb-2 text-muted">{{ homeCopy.postsEyebrow }}</p>
+                  <p class="text-sm leading-relaxed text-default line-clamp-3">{{ post.text }}</p>
+                  <p class="mt-3 saya-eyebrow text-muted opacity-60">{{ homeCopy.readMoreCta }}</p>
+                </div>
+              </NuxtLink>
+            </template>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Brand story ─────────────────────────────────────── -->
+      <LazySayaBrandStory
+        :data="{
+          headline: getField('story.headline', businessTitle),
+          body: getField('story.body', businessSubtitle),
+          image: getField('story.image'),
+          isAuthenticated: false,
+          ourStoryKicker: homeCopy.ourStoryKicker,
+          readMoreCta: homeCopy.readMoreCta,
+          brandStoryPlaceholder: homeCopy.brandStoryPlaceholder,
+          brandStoryDescription: homeCopy.brandStoryDescription,
+          addStoryCta: homeCopy.addStoryCta
+        }"
+      />
+
+      <!-- ── Aggregated reviews ──────────────────────────────── -->
+      <section
+        v-if="featuredReviews.length || (hasGoogleBusiness && googleReviewSummary && Number(googleReviewSummary.average) > 0)"
+        class="mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8"
+      >
+        <div class="mb-12 max-w-2xl">
+          <p class="saya-kicker mb-6">{{ homeCopy.reviewsKicker }}</p>
+          <template v-if="hasGoogleBusiness && googleReviewSummary && Number(googleReviewSummary.average) > 0">
+            <h2 class="saya-display-md flex flex-wrap items-center gap-4 text-default">
+              <span class="flex text-primary" aria-hidden="true">
+                <SayaIcon
+                  v-for="i in 5"
+                  :key="i"
+                  name="star"
+                  :solid="i <= Math.round(Number(googleReviewSummary.average))"
+                  class="size-8"
+                />
+              </span>
+              {{ googleReviewSummary.average }}
+              <span v-if="googleReviewSummary.count" class="text-muted">· {{ googleReviewSummary.count?.toLocaleString() }} reviews</span>
+            </h2>
+            <p class="mt-6 text-sm text-muted">{{ homeCopy.guestReviewsLabel }}</p>
+          </template>
+          <template v-else>
+            <h2 class="saya-display-md text-default">{{ homeCopy.whatGuestsSayLabel }}</h2>
+          </template>
+        </div>
+
+        <!-- Location filter chips (multi-location only) -->
+        <div v-if="locations.length > 1 && featuredReviews.length" class="mb-8 flex flex-wrap gap-2">
+          <button
+            :class="[
+              'rounded-full border px-4 py-2 text-xs font-medium uppercase tracking-widest transition',
+              reviewFilter === 'all'
+                ? 'border-inverted bg-inverted text-inverted'
+                : 'border-default bg-default text-muted hover:border-muted hover:text-default'
+            ]"
+            @click="reviewFilter = 'all'"
+          >
+            {{ homeCopy.allLocationsFilter }}
+          </button>
+          <NuxtLink
+            v-for="loc in locations"
+            :key="loc.id"
+            :to="`/locations/${loc.slug}/reviews`"
+            class="rounded-full border border-default bg-default px-4 py-2 text-xs font-medium uppercase tracking-widest text-muted no-underline transition hover:border-muted hover:text-default"
+          >
+            {{ loc.title }}
+          </NuxtLink>
+        </div>
+
+        <!-- Real reviews -->
+        <div v-if="featuredReviews.length" class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <SayaReviewCard
+            v-for="review in featuredReviews"
+            :key="review.id"
+            :review="review"
+            variant="compact"
+          />
+        </div>
+      </section>
+
+      <!-- ── Blog highlights ──────────────────────────────────── -->
+      <AppSection v-if="recentBlogPosts.length" bg="black" padding="xl">
+        <div class="mb-16 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div class="max-w-2xl">
+            <p class="saya-kicker mb-6 text-inverted/60">From the blog</p>
+            <h2 class="saya-display-md text-inverted">Planning ideas, updates, and stories from the studio.</h2>
+          </div>
+          <NuxtLink to="/blog" class="inline-flex text-sm font-medium text-inverted no-underline hover:underline">
+            Visit the blog
+          </NuxtLink>
+        </div>
+
+        <div class="grid gap-6 lg:grid-cols-3">
+          <NuxtLink
+            v-for="post in recentBlogPosts"
+            :key="post.slug"
+            :to="`/blog/${post.slug}`"
+            class="group block overflow-hidden rounded-xl border border-inverted/10 bg-inverted/5 no-underline transition hover:-translate-y-0.5 hover:border-inverted/20"
+          >
+            <div v-if="post.image" class="aspect-4/3 overflow-hidden bg-inverted/10">
+              <img
+                :src="post.image"
+                :alt="post.title"
+                class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+              >
+            </div>
+            <div class="p-6">
+              <div class="mb-3 flex flex-wrap items-center gap-3">
+                <span v-if="post.category" class="rounded bg-inverted/10 px-2 py-1 text-xs font-medium text-inverted/70">
+                  {{ post.category }}
+                </span>
+                <span v-if="post.publishedAt" class="text-sm text-inverted/40">
+                  <NuxtTime :datetime="post.publishedAt" locale="en-US" year="numeric" month="long" day="numeric" time-zone="UTC" />
+                </span>
+              </div>
+              <h3 class="text-2xl font-semibold leading-tight text-inverted">{{ post.title }}</h3>
+              <p v-if="post.excerpt" class="mt-3 text-sm leading-relaxed text-inverted/60">{{ post.excerpt }}</p>
+              <p class="mt-4 text-sm font-medium text-inverted">Read article</p>
+            </div>
+          </NuxtLink>
+        </div>
+      </AppSection>
+
+      <!-- ── CTA strip (strict component) ───────────────────── -->
+      <LazySayaCTA
+        :title="getField('cta.title')"
+        :description="getField('cta.description')"
+        :cta-route="homePrimaryCtaRoute"
+        :reserve-cta="homeCopy.reserveCta"
+        :bg="'default'"
+        :padding="'lg'"
+      />
+
+      <!-- ── Dynamic content blocks ───────────────────────────── -->
+      <template v-if="contentBlocks.length > 0">
+        <component
+          v-for="block in contentBlocks.filter(b => b.component)"
+          :key="block._uid || block.field"
+          :is="resolveComponent(block.component)"
+          :data="block"
+          class="content-block"
+        />
+      </template>
+    </div>
+
+</template>
+
+<script setup>
+import { formatMoneyAmount, isSaleActive, resolveOverridePriceDisplay } from '~/shared/money'
+import { useDynamicComponent } from '~/composables/useDynamicComponent'
+import { getActiveSpecialClosure } from '~/utils/formatters'
+import { resolveSiteExperienceHref } from '~/utils/experience-navigation'
+
+const { siteId, draftId, site } = useTenantSite()
+const { locale } = useI18n()
+
+const homeCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
+const { resolveMedia } = useMedia()
+
+const { resolveComponent } = useDynamicComponent()
+
+// Validate tenant context ONLY for tenant sites
+if (!siteId && !draftId) {
+  throw createError({
+    statusCode: 404,
+    statusMessage: 'Site not found'
+  })
+}
+
+// Route-owned page data (home content, menu, experiences). Persistent chrome
+// (SayaHeader/SayaFooter) reads from the separate, site-wide shell composable
+// (useSiteShellState, see layouts/saya.vue) instead — the two never overlap.
+const {
+  locations: pageLocations,
+  googleBusiness: pageGoogleBusiness,
+  getField,
+  getHero,
+  config: pageConfig,
+  menuItemsBySection,
+  experiencesList,
+  contentBlocks,
+  blogList,
+} = await usePublicPageData({ enabled: true })
+
+const locations = computed(() => pageLocations.value)
+const hasOrderLinks = computed(() =>
+  locations.value.some(loc => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
+)
+
+// Location ids currently under an active special_hours closure (e.g. "closed
+// for renovations") — used to mark their experiences unavailable without
+// touching the experience's own status.
+const closedLocationIds = computed(() => new Set(
+  locations.value
+    .filter(loc => getActiveSpecialClosure(loc.special_hours, loc.timezone))
+    .map(loc => loc.id)
+))
+
+// Check if there's a menu
+const hasMenu = computed(() => {
+  const allItems = Object.values(menuItemsBySection.value).flat()
+  return allItems.length > 0
+})
+
+const googleBusiness = computed(() => {
+  const gb = pageGoogleBusiness.value
+  if (!gb) return null
+  return {
+    ...gb,
+    media: gb.media && gb.media.length ? gb.media : [{ google_url: gb.business?.profile?.photoUrl || '' }],
+    reviews: (gb.reviews || []).map((r) => ({
+      ...r,
+      author_name: r.author || r.reviewer?.displayName || r.author_name || 'Anonymous',
+      date: r.date || r.createTime || r.updateTime
+    }))
+  }
+})
+
+const starRatingMap = { ONE: 1, TWO: 2, THREE: 3, FOUR: 4, FIVE: 5 }
+const businessTitle = computed(() => googleBusiness.value?.business?.title ?? null)
+const businessSubtitle = computed(() => googleBusiness.value?.business?.profile?.description ?? null)
+const businessPrimaryPhoto = computed(() => googleBusiness.value?.media?.[0])
+const businessCity = computed(() => googleBusiness.value?.business?.city ?? null)
+const googlePosts = computed(() => googleBusiness.value?.posts || [])
+const googleReviews = computed(() => googleBusiness.value?.reviews ?? [])
+const googleReviewRating = review => starRatingMap[review.starRating] ?? Number(review.starRating ?? review.rating ?? 0)
+const googleReviewSummary = computed(() => {
+  const summary = googleBusiness.value?.business?.reviewSummary
+  if (!summary) {
+    const ratings = googleReviews.value.map(googleReviewRating).filter(Boolean)
+    if (ratings.length === 0) return null
+    return { average: (ratings.reduce((s, r) => s + r, 0) / ratings.length).toFixed(1), count: ratings.length }
+  }
+  const average = Number(summary.averageRating)
+  if (!Number.isFinite(average) || average <= 0) return null
+  return { average: average.toFixed(1), count: summary.totalReviewCount }
+})
+
+const restaurantName = computed(() => site?.brand_name || businessTitle.value || 'Business')
+
+// Hero from CMS with Google Business fallbacks — used for OG image metadata below,
+// SayaHomeHero.vue resolves its own copy via getHero() from its :data prop.
+const hero = computed(() => getHero({
+  title: businessTitle.value || '',
+  subtitle: businessSubtitle.value || '',
+  image: '',
+  video: ''
+}))
+
+// SEO for tenant sites: set ogUrl to the actual request URL so custom domains share correctly.
+if (siteId) {
+  const seoTitle = computed(() => {
+    if (pageConfig.value?.seo_title) return pageConfig.value.seo_title
+    const primary = (restaurantName.value || '').trim()
+    const secondary = (businessTitle.value || 'Business').trim() || 'Business'
+    if (!primary || primary.toLowerCase() === secondary.toLowerCase()) {
+      return secondary
+    }
+    return `${primary} | ${secondary}`
+  })
+
+  // Full-length fallback-resolved description — composeSocialMetadata (the
+  // shared #259 composer) does its own platform-appropriate truncation, so
+  // this page shouldn't pre-truncate and risk drifting from that length.
+  const seoDescription = computed(() =>
+    pageConfig.value?.seo_description || businessSubtitle.value || 'Professional business website with photos, updates and reviews.'
+  )
+
+  useTenantSocialMetadata(() => ({
+    path: pageConfig.value?.canonical_url || '/',
+    title: seoTitle.value,
+    description: seoDescription.value,
+    brand: {
+      siteName: site?.brand_name || restaurantName.value,
+      logoUrl: pageConfig.value?.logo_url || null,
+      faviconUrl: pageConfig.value?.favicon_url || null,
+      primaryColor: pageConfig.value?.brand_color || null,
+    },
+    heroImage: hero.value.image ? { url: hero.value.image } : null,
+    ogImageOverride: pageConfig.value?.og_image_url ? { url: pageConfig.value.og_image_url } : null,
+    robots: pageConfig.value?.robots || null,
+  }))
+}
+
+// Featured menu items from bootstrap menu
+const featuredMenuItems = computed(() => {
+  const allItems = Object.values(menuItemsBySection.value).flat()
+  const featured = allItems
+    .filter(item => item.available !== false && item.featured)
+    .sort((a, b) => {
+      if ((a.featured_sort_order ?? 0) !== (b.featured_sort_order ?? 0)) {
+        return (a.featured_sort_order ?? 0) - (b.featured_sort_order ?? 0)
+      }
+      if ((a.sort_order ?? 0) !== (b.sort_order ?? 0)) return (a.sort_order ?? 0) - (b.sort_order ?? 0)
+      return String(a.name ?? '').localeCompare(String(b.name ?? ''))
+    })
+  return (featured.length > 0 ? featured : allItems.filter(item => item.available !== false)).slice(0, 6)
+})
+
+// Featured experiences (used when no menu exists)
+const featuredExperiences = computed(() => {
+  const allExperiences = experiencesList.value || []
+  const featured = allExperiences
+    .filter(exp => exp.status === 'active' && exp.featured)
+    .sort((a, b) => {
+      const fa = Number(a.featured_sort_order ?? Infinity)
+      const fb = Number(b.featured_sort_order ?? Infinity)
+      if (fa !== fb) return fa - fb
+      const sa = Number(a.sort_order ?? Infinity)
+      const sb = Number(b.sort_order ?? Infinity)
+      if (sa !== sb) return sa - sb
+      return String(a.title ?? '').localeCompare(String(b.title ?? ''))
+    })
+  return (featured.length > 0 ? featured : allExperiences.filter(exp => exp.status === 'active')).slice(0, 6)
+})
+const defaultCurrency = computed(() => pageConfig.value.default_currency || 'THB')
+const isExperienceTenant = computed(() => site?.vertical === 'experience')
+const homeExperienceHref = computed(() => resolveSiteExperienceHref(experiencesList.value))
+const homePrimaryCtaRoute = computed(() => {
+  if (isExperienceTenant.value) return homeExperienceHref.value || homeCopy.value.ctaRoute
+  return homeCopy.value.ctaRoute
+})
+const homeFeaturedContentLinkTarget = computed(() => {
+  if (hasMenu.value) return '/menu'
+  return homeExperienceHref.value || '/experiences'
+})
+
+// Review location filter
+const reviewFilter = ref('all')
+
+const hasGoogleBusiness = computed(() => !!googleBusiness.value?.business)
+const featuredReviews = computed(() =>
+  googleReviews.value.slice(0, 3).map((review, i) => ({
+    id: review.id ?? review.name ?? i,
+    author: review.reviewer?.displayName || review.author_name || 'Anonymous',
+    content: review.comment?.text || review.content || '',
+    rating: googleReviewRating(review),
+    locationTitle: locations.value.length > 1 ? review.location_title || null : null,
+  }))
+)
+
+// Recent posts — shown in the "Lately" section, each tile links to the real
+// post page (pages/posts/[slug].vue, rendered by SayaPostDetail.vue). A post
+// with no resolvable path can't link anywhere meaningful, so it's excluded
+// rather than falling back to the generic /posts index.
+const recentPosts = computed(() => {
+  const posts = (googlePosts.value || [])
+    .filter(p => p.media?.[0]?.url && (p.publicPath || p.public_path || p.slug))
+  return posts.slice(0, 4).map((post, i) => ({
+    id: post.slug || String(i),
+    path: post.publicPath || post.public_path || `/posts/${post.slug}`,
+    image: post.media?.[0]?.url || null,
+    imageKind: post.media?.[0]?.kind || 'image',
+    text: post.summary || '',
+    alt: post.summary || 'Post image',
+    wide: i === 0,
+  }))
+})
+
+const recentBlogPosts = computed(() =>
+  (blogList.value || [])
+    .filter(post => post.slug)
+    .slice(0, 3)
+    .map((post) => ({
+      slug: String(post.slug || ''),
+      title: String(post.title || 'Untitled'),
+      excerpt: typeof post.excerpt === 'string' ? post.excerpt : '',
+      category: typeof post.category === 'string' ? post.category : '',
+      publishedAt: typeof post.published_at === 'string' ? post.published_at : null,
+      image: resolveMedia(post.featured_image).url,
+    }))
+)
+
+// Featured content — dishes or experiences, shown right below the hero
+const featuredContent = computed(() => {
+  const featuredItems = hasMenu.value ? featuredMenuItems.value : featuredExperiences.value
+  return featuredItems.slice(0, 4).map(item => {
+    if (hasMenu.value) {
+      // For video assets use the extracted WebP thumbnail, not the MP4 URL.
+      // Featured cards are small grid tiles — loading a video here wastes bandwidth
+      // and causes a 300-500KB download before the card is even visible.
+      const isVideo = item.kind === 'video'
+      return {
+        name: item.name,
+        price: formatMoneyAmount(item.price_amount, defaultCurrency.value, ''),
+        compareAtPrice: isSaleActive(item) ? formatMoneyAmount(item.compare_at_price_amount, defaultCurrency.value, '') : '',
+        image: isVideo ? (item.thumbnail_url || null) : (item.public_url || null),
+        imageKind: 'image',
+        alt: item.name ? `${item.name} dish` : 'Featured dish image',
+        href: item.slug ? `/menu/${item.slug}` : '/menu',
+      }
+    } else {
+      return {
+        name: item.title,
+        ...resolveOverridePriceDisplay(item, defaultCurrency.value),
+        image: experienceCoverImage(item),
+        imageKind: 'image',
+        alt: item.title ? `${item.title} experience` : 'Featured experience image',
+        href: item.slug ? `/experiences/${item.slug}` : '/experiences',
+        unavailable: item.location_id ? closedLocationIds.value.has(item.location_id) : false,
+      }
+    }
+  })
+})
+
+function experienceCoverImage(item) {
+  const cover = item.media?.[0]
+  if (cover?.kind === 'image') return cover.public_url || null
+  if (cover?.kind === 'video') return cover.thumbnail_url || null
+  return null
+}
+
+</script>

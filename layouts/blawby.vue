@@ -25,6 +25,7 @@
 
 <script setup lang="ts">
 import ConsentBanner from '~/components/ConsentBanner.vue'
+import '~/assets/css/blawby-entry.css'
 
 const { identity, navigation, consultation, compliance, themeTokens, offeringLinks } = await useBlawbyShell()
 const hydrated = ref(false)

@@ -1,71 +1,62 @@
 import type { PublicBlawbyShellData } from '~/types/blawby'
+import { isRecord, publicApiRequest } from '~/utils/api-clients'
 
 type BlawbyShellPayload = PublicBlawbyShellData & { success: boolean }
 
-function emptyShellPayload(): BlawbyShellPayload {
-  return {
-    success: true,
-    identity: { brand_name: null, brand_description: null, logo_url: null, favicon_url: null, phone: null, banner_content: null, banner_dismissible: false, primary_location_address_street: null, primary_location_address_locality: null },
-    navigation: [],
-    consultation: {
-      mode: 'external_url',
-      cta_label: 'Book a consultation',
-      external_url: null,
-      schedule_path: '/schedule',
-      confirmation_path: '/contact/confirmed',
-      tracking_enabled: true,
-      contact_form_enabled: true,
-      metadata: {},
-    },
-    compliance: null,
-    themeTokens: {},
-    offeringLinks: [],
-  }
-}
+const isBlawbyShellPayload = (value: unknown): value is BlawbyShellPayload =>
+  isRecord(value)
+  && value.success === true
+  && isRecord(value.identity)
+  && Array.isArray(value.navigation)
+  && isRecord(value.consultation)
+  && isRecord(value.themeTokens)
+  && Array.isArray(value.offeringLinks)
 
 export async function useBlawbyShell() {
   const { siteId, isTenant } = useTenantSite()
-  const key = `blawby-shell-${siteId || 'none'}`
+  if (!isTenant || !siteId) {
+    throw createError({ statusCode: 404, statusMessage: 'Blawby site context is unavailable' })
+  }
 
-  const asyncData = !isTenant || !siteId
-    ? { data: ref<BlawbyShellPayload>(emptyShellPayload()), error: ref<Error | null>(null), pending: ref(false) }
-    : await useAsyncData<BlawbyShellPayload>(
-        key,
-        async () => {
-          if (import.meta.server) {
-            const requestEvent = useRequestEvent()
-            if (!requestEvent) return emptyShellPayload()
-            const [{ cloudflareEnv }, { getActiveBlawbySite, getPublicBlawbyShellData }] = await Promise.all([
-              import('~/server/utils/api-response'),
-              import('~/server/utils/professional-services'),
-            ])
-            const db = cloudflareEnv(requestEvent).db
-            if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-            const site = await getActiveBlawbySite(db, siteId)
-            if (!site) throw createError({ statusCode: 404, statusMessage: 'Blawby is not enabled for this site' })
-            return { success: true, ...(await getPublicBlawbyShellData(db, siteId)) }
-          }
-          const fetchShell = $fetch as unknown as (_url: string) => Promise<BlawbyShellPayload>
-          return await fetchShell(`/api/public/sites/${siteId}/blawby/shell`)
-        },
-        {
-          default: emptyShellPayload,
-          server: true,
-          lazy: false,
-          getCachedData(cacheKey) {
-            return useNuxtApp().payload.data[cacheKey] as BlawbyShellPayload | undefined
-          },
-        },
-      )
+  const asyncData = await useAsyncData<BlawbyShellPayload>(
+    `blawby-shell-${siteId}`,
+    async () => {
+      if (import.meta.server) {
+        const requestEvent = useRequestEvent()
+        if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+        const [{ cloudflareEnv }, { getActiveBlawbySite, getPublicBlawbyShellData }] = await Promise.all([
+          import('~/server/utils/api-response'),
+          import('~/server/utils/professional-services'),
+        ])
+        const db = cloudflareEnv(requestEvent).db
+        if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+        const site = await getActiveBlawbySite(db, siteId)
+        if (!site) throw createError({ statusCode: 404, statusMessage: 'Blawby is not enabled for this site' })
+        return { success: true, ...(await getPublicBlawbyShellData(db, siteId)) }
+      }
+      return await publicApiRequest<BlawbyShellPayload>(`/api/public/sites/${siteId}/blawby/shell`, {
+        validate: isBlawbyShellPayload,
+      })
+    },
+    {
+      server: true,
+      lazy: false,
+      getCachedData(cacheKey) {
+        return useNuxtApp().payload.data[cacheKey] as BlawbyShellPayload | undefined
+      },
+    },
+  )
 
-  const data = asyncData.data
+  if (asyncData.error.value) throw asyncData.error.value
+  if (!asyncData.data.value) throw createError({ statusCode: 500, statusMessage: 'Blawby shell data was not returned' })
+  const data = asyncData.data as Ref<BlawbyShellPayload>
   return {
     ...asyncData,
-    identity: computed(() => data.value?.identity ?? emptyShellPayload().identity),
-    navigation: computed(() => data.value?.navigation ?? []),
-    consultation: computed(() => data.value?.consultation ?? emptyShellPayload().consultation),
-    compliance: computed(() => data.value?.compliance ?? null),
-    themeTokens: computed(() => data.value?.themeTokens ?? {}),
-    offeringLinks: computed(() => data.value?.offeringLinks ?? []),
+    identity: computed(() => data.value!.identity),
+    navigation: computed(() => data.value!.navigation),
+    consultation: computed(() => data.value!.consultation),
+    compliance: computed(() => data.value!.compliance),
+    themeTokens: computed(() => data.value!.themeTokens),
+    offeringLinks: computed(() => data.value!.offeringLinks),
   }
 }

@@ -200,13 +200,7 @@ interface PublicDoc {
   difficulty_level?: string | null
 }
 
-interface DocsResponse {
-  docs: PublicDoc[]
-}
-
-const { data, pending, error: docsError } = await useFetch<DocsResponse>('/api/public/docs', {
-  default: () => ({ docs: [] })
-})
+const { data, pending, error: docsError } = await useDocsNav()
 
 if (docsError.value) {
   throw createError({ statusCode: 500, statusMessage: 'Failed to load documentation' })

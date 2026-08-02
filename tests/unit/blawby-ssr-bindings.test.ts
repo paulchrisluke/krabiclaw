@@ -6,13 +6,16 @@ function read(path: string) {
   return readFileSync(path, 'utf8')
 }
 
-function serverBranch(source: string) {
+function splitBranches(source: string) {
   const marker = 'if (import.meta.server)'
   const start = source.indexOf(marker)
   assert.notEqual(start, -1, 'expected an import.meta.server branch')
-  const clientFetch = source.indexOf('$fetch', start)
-  assert.notEqual(clientFetch, -1, 'expected client-side fetch after the server branch')
-  return source.slice(start, clientFetch)
+  const clientRequest = source.indexOf('return await publicApiRequest', start)
+  assert.notEqual(clientRequest, -1, 'expected the canonical client request after the server branch')
+  return {
+    server: source.slice(start, clientRequest),
+    client: source.slice(clientRequest),
+  }
 }
 
 test('Blawby SSR composables read public data directly instead of self-fetching API routes', () => {
@@ -21,10 +24,12 @@ test('Blawby SSR composables read public data directly instead of self-fetching 
     'composables/useBlawbyShell.ts',
     'composables/useBlawbySite.ts',
   ]) {
-    const branch = serverBranch(read(file))
-    assert.match(branch, /cloudflareEnv\(requestEvent\)\.db/, `${file} should use Cloudflare db binding directly`)
-    assert.match(branch, /getActiveBlawbySite\(db, siteId\)/, `${file} should call the shared Blawby site contract`)
-    assert.doesNotMatch(branch, /\/api\/public\/sites\/\$\{siteId\}\/blawby/, `${file} must not self-fetch Blawby public APIs during SSR`)
+    const branches = splitBranches(read(file))
+    assert.match(branches.server, /cloudflareEnv\(requestEvent\)\.db/, `${file} should use Cloudflare db binding directly`)
+    assert.match(branches.server, /getActiveBlawbySite\(db, siteId\)/, `${file} should call the shared Blawby site contract`)
+    assert.doesNotMatch(branches.server, /\/api\/public\/sites\//, `${file} must not self-fetch Blawby public APIs during SSR`)
+    assert.match(branches.client, /publicApiRequest/, `${file} should use the canonical client request wrapper`)
+    assert.match(branches.client, /\/api\/public\/sites\//, `${file} should use the public Blawby API on the client`)
   }
 })
 

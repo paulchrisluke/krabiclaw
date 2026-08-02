@@ -2,7 +2,7 @@ import { createError, getHeader, getRequestHost, type H3Event } from 'h3'
 import { createDb, type AppDb } from '~/server/db'
 import type { CloudflareEnv } from './auth'
 import { isPreviewContext } from '~/server/utils/tenant-hosts'
-import { instrumentD1 } from '~/server/utils/request-metrics'
+import { getRequestDataMetrics, instrumentD1 } from '~/server/utils/request-metrics'
 
 export const jsonResponse = (body: ApiValue, init: ResponseInit = {}) => {
   const mergedHeaders = new Headers(init.headers)
@@ -23,6 +23,21 @@ export const textResponse = (
   return new Response(body, {
     ...init,
     headers: mergedHeaders,
+  })
+}
+
+export const apiErrorResponse = (
+  event: H3Event,
+  status: number,
+  code: string,
+  message: string,
+) => {
+  const requestId = getRequestDataMetrics(event).requestId
+  return jsonResponse({
+    error: { code, message, requestId },
+  }, {
+    status,
+    headers: { 'x-request-id': requestId },
   })
 }
 

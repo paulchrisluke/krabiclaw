@@ -78,82 +78,6 @@
           <p class="mt-3 text-xs text-muted">{{ operationBreakdown }}</p>
         </UCard>
 
-        <!-- Getting started task list -->
-        <UCard v-if="canManageSite && !checklistDismissed && !checklistAllDone && checklistItems.length" variant="soft" class="border-primary/20">
-          <div class="space-y-4">
-            <div class="flex items-start justify-between gap-4">
-              <div>
-                <p class="text-xs font-semibold uppercase tracking-wider text-primary mb-1">Getting started</p>
-                <h3 class="text-base font-semibold text-highlighted">Finish setting up with ChowBot</h3>
-                <p class="text-sm text-muted mt-0.5">
-                  Ask ChowBot to complete these — your site gets better with each one.
-                </p>
-              </div>
-              <UButton icon="i-lucide-x" color="neutral" variant="ghost" size="sm" square aria-label="Dismiss" @click="dismissChecklist" />
-            </div>
-
-            <div class="space-y-1">
-              <div class="flex items-center justify-between text-xs text-muted">
-                <span>{{ checklistCompletedCount }} of {{ checklistItems.length }} complete</span>
-              </div>
-              <UProgress :value="(checklistCompletedCount / checklistItems.length) * 100" class="h-1.5" />
-            </div>
-
-            <div class="space-y-2">
-              <div class="flex items-center justify-between gap-3">
-                <p class="text-xs font-semibold uppercase tracking-wider text-dimmed">Start here</p>
-                <ChowBotPromptTrigger :prompt="checklistStarterPrompt" auto-send>
-                  <template #default="{ trigger }">
-                    <UButton icon="i-lucide-sparkles" color="primary" variant="soft" size="xs" @click="trigger">
-                      Start
-                    </UButton>
-                  </template>
-                </ChowBotPromptTrigger>
-              </div>
-              <div class="rounded-xl border border-default bg-elevated px-3 py-3 text-sm leading-relaxed text-highlighted">
-                {{ checklistStarterPrompt }}
-              </div>
-            </div>
-
-            <ul class="space-y-2.5">
-              <li v-for="item in checklistItems" :key="item.key" class="flex items-start gap-3">
-                <div :class="[
-                  'flex size-5 shrink-0 items-center justify-center rounded mt-0.5 transition-colors',
-                  item.complete ? 'bg-(--kc-teal)' : 'border-2 border-muted bg-transparent',
-                ]">
-                  <UIcon v-if="item.complete" name="i-lucide-check" class="size-3 text-white" />
-                </div>
-                <div class="min-w-0 flex-1">
-                  <p :class="['text-sm font-medium', item.complete ? 'text-muted line-through' : 'text-highlighted']">
-                    {{ item.label }}
-                  </p>
-                  <div v-if="!item.complete" class="mt-1.5">
-                    <ChowBotPromptTrigger :prompt="item.prompt" auto-send>
-                      <template #default="{ trigger }">
-                        <UButton size="xs" color="neutral" variant="outline" @click="trigger">
-                          Start
-                        </UButton>
-                      </template>
-                    </ChowBotPromptTrigger>
-                  </div>
-                </div>
-              </li>
-            </ul>
-
-            <div class="pt-1 flex items-center gap-3">
-              <UButton to="/docs/integrations/mcp-setup" size="sm">
-                Open setup docs
-              </UButton>
-              <UButton :to="`/dashboard/${route.params.orgSlug}/settings/chatgpt`" variant="outline" color="neutral" size="sm">
-                Open ChatGPT settings
-              </UButton>
-              <UButton variant="ghost" color="neutral" size="sm" @click="dismissChecklist">
-                Dismiss
-              </UButton>
-            </div>
-          </div>
-        </UCard>
-
         <div v-if="canManageSite && isProfessionalService" class="flex flex-wrap items-center justify-between gap-3 border-y border-default py-4">
           <div>
             <h2 class="text-sm font-semibold text-highlighted">Firm-wide content</h2>
@@ -243,8 +167,6 @@
 
 <script setup lang="ts">
 const dashboardApi = useDashboardApi()
-import { buildOnboardingChecklistItems, buildOnboardingStarterPrompt, type OnboardingChecklistResponse } from '~/composables/useOnboardingPrompts'
-import ChowBotPromptTrigger from '~/components/chowbot/ChowBotPromptTrigger.vue'
 import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
@@ -427,35 +349,6 @@ const operationBreakdown = computed(() => {
   if (hasExperiences.value) parts.push(`${operations.value.experienceBookings} bookings`)
   return parts.length ? parts.join(' · ') : 'Contact messages'
 })
-
-// Getting-started task list — data source for both the checklist card and its
-// per-item ChowBotPromptTrigger auto-send prompts.
-const { data: onboardingData, execute: loadOnboardingChecklist } = await useFetch<OnboardingChecklistResponse>('/api/dashboard/onboarding/checklist', {
-  key: computed(() => `dashboard-onboarding-checklist:${String(route.params.orgSlug)}:${String(route.params.siteSlug)}`),
-  server: false,
-  lazy: true,
-  immediate: false,
-})
-watch([canManageSite, () => route.params.orgSlug, () => route.params.siteSlug], ([allowed]) => {
-  if (allowed) void loadOnboardingChecklist()
-  else onboardingData.value = undefined
-}, { immediate: true })
-
-const checklistItems = computed(() => buildOnboardingChecklistItems(onboardingData.value))
-const checklistStarterPrompt = computed(() => buildOnboardingStarterPrompt(onboardingData.value, checklistItems.value))
-const checklistCompletedCount = computed(() => checklistItems.value.filter(i => i.complete).length)
-const checklistAllDone = computed(() => checklistItems.value.length > 0 && checklistCompletedCount.value === checklistItems.value.length)
-
-const checklistDismissKey = computed(() => `kc_checklist_dismissed_${route.params.orgSlug}`)
-const checklistDismissed = ref(false)
-watch(checklistDismissKey, (key) => {
-  if (!import.meta.client) return
-  checklistDismissed.value = localStorage.getItem(key) === '1'
-}, { immediate: true })
-function dismissChecklist() {
-  localStorage.setItem(checklistDismissKey.value, '1')
-  checklistDismissed.value = true
-}
 
 const chowBot = useChowBot()
 const homeInput = ref('')

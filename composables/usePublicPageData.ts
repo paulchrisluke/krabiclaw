@@ -57,7 +57,7 @@ export const usePublicPageData = async (options: { enabled?: MaybeRefOrGetter<bo
   const shell = useSiteShellState();
 
   const asyncData =
-    isPlatform || !enabled.value || (!siteId && !draftId)
+    isPlatform || (!siteId && !draftId)
       ? { data: ref<PublicPagePayload>(), error: ref<Error | null>(null), pending: ref(false), refresh: async () => {} }
       : useAsyncData<PublicPagePayload>(
           key,
@@ -85,8 +85,24 @@ export const usePublicPageData = async (options: { enabled?: MaybeRefOrGetter<bo
             server: true,
             lazy: import.meta.client,
             dedupe: 'cancel',
+            // `enabled` starting false must not permanently stub this resource —
+            // immediate mirrors its current value, and the watcher below fires
+            // the one fetch a later false -> true transition requires. Calling
+            // execute() again while already enabled would just re-trigger the
+            // same request, so the watcher only acts on that specific edge.
+            immediate: enabled.value,
           },
         );
+  if (import.meta.client && 'execute' in asyncData) {
+    const stopEnabledWatch = watch(enabled, (isEnabled, wasEnabled) => {
+      if (isEnabled && !wasEnabled) asyncData.execute()
+    })
+    const stopKeyWatch = watch(key, () => {
+      if (enabled.value) asyncData.execute()
+    }, { immediate: false })
+    onScopeDispose(stopEnabledWatch)
+    onScopeDispose(stopKeyWatch)
+  }
   if (import.meta.server) {
     await Promise.all([asyncData, shell.ready])
     if (asyncData.error.value) throw asyncData.error.value

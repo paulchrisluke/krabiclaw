@@ -125,7 +125,7 @@
 </template>
 
 <script setup lang="ts">
-import type { BlogEditorBlock } from '~/components/workspace/blog/types'
+import type { BlogEditorBlock } from '~/lib/components/workspace/blog/types'
 import ContentAiAssistanceSection from '~/components/content/ContentAiAssistanceSection.vue'
 import { renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
 import { sanitizeUrl } from '~/utils/sanitize'

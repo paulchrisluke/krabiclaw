@@ -18,17 +18,15 @@ if (tenantType === TENANT_TYPES.TENANT_404) {
   })
 }
 
-// app.vue is the root component and never remounts across client-side
-// navigation, so it reads the stable site-shell state (siteId+locale key, never
-// stale) rather than useBootstrap() (route-keyed, must be `await`-ed inside
-// a per-page <script setup> for Suspense to block on it — see useBootstrap.ts).
-const { config } = useSiteShellState()
+const { isBlawby } = usePublicTemplate()
+const siteShell = isBlawby.value ? null : useSiteShellState()
+const config = siteShell?.config
 const route = useRoute()
 const defaultOgImage = useSharedOgImage()
 const defaultPageUrl = useSeoUrl(() => route.path)
 const defaultSiteName = isPlatform ? 'KrabiClaw' : (site?.brand_name || 'KrabiClaw')
-const tenantLogoUrl = computed(() => config.value.logo_url || site?.logo_url || null)
-const tenantBrandName = computed(() => config.value.brand_name || site?.brand_name || '')
+const tenantLogoUrl = computed(() => config?.value.logo_url || site?.logo_url || null)
+const tenantBrandName = computed(() => config?.value.brand_name || site?.brand_name || '')
 
 useSeoMeta({
   ogImage: defaultOgImage,
@@ -56,9 +54,9 @@ useHead(() => {
 // Google Analytics loads via Cloudflare Zaraz (edge-injected, see
 // `useAnalytics.ts`'s `window.zaraz.track()` calls) — there is no
 // client-bundled gtag.js/krabiLayer bootstrap here anymore. That removes the
-// ~1.5s TTI cost the deferred-loading approach used to carry (see
-// HANDOFF-page-speed-2026-07-02.md), since Zaraz's own snippet is edge-served
-// and queues calls made before it loads the same way `dataLayer` does.
+// ~1.5s TTI cost the deferred-loading approach used to carry, since Zaraz's
+// own snippet is edge-served and queues calls made before it loads the same
+// way `dataLayer` does.
 
 const loadingColor = computed(() => {
   if (isPlatform) return 'var(--kc-loading-rainbow)'
@@ -70,7 +68,7 @@ const loadingColor = computed(() => {
 // which requires an active component instance.
 if (import.meta.client) {
   watchEffect(() => {
-    const brandColor = config.value.brand_color
+    const brandColor = config?.value.brand_color
     if (!brandColor) return
     try {
       const themeColors = calculateThemeColors(brandColor)

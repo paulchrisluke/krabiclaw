@@ -14,7 +14,7 @@ import {
 const root = new URL('..', import.meta.url).pathname
 const dashboardRoots = [
   'pages/dashboard',
-  'components/workspace',
+  'lib/components/workspace',
 ]
 const adminRoots = ['pages/admin', 'components/admin']
 const applicationRoots = [
@@ -25,6 +25,7 @@ const applicationRoots = [
   'utils',
   'pages',
   'components',
+  'lib/components',
 ]
 const violations = []
 
@@ -85,7 +86,7 @@ for (const directory of dashboardRoots) {
   for (const file of await filesUnder(directory)) {
     const source = await readFile(join(root, file), 'utf8')
     // Skip DashboardAccountMenu.vue for /api/health platform health check
-    if (file === 'components/workspace/dashboard/DashboardAccountMenu.vue') continue
+    if (file === 'lib/components/workspace/dashboard/DashboardAccountMenu.vue') continue
     violations.push(...checkDashboardFetchUsage(file, source))
   }
 }

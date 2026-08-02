@@ -67,7 +67,7 @@ const slug = computed(() => String(route.params.slug))
 const reviewId = computed(() => String(route.params.reviewId))
 const { formatDate } = useLocaleDate()
 
-const { data: review, pending } = await useAsyncData<ApiRecord | null>(
+const { data: review, pending, error } = await useAsyncData<ApiRecord>(
   () => `review-${slug.value}-${reviewId.value}`,
   async () => {
     // Fetch directly against the real request's D1 binding instead of doing a nested
@@ -77,7 +77,7 @@ const { data: review, pending } = await useAsyncData<ApiRecord | null>(
     // to 404/500 on records their own API served correctly. Same fix applied here.
     if (import.meta.server) {
       const requestEvent = useRequestEvent()
-      if (!requestEvent) return null
+      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request event not available' })
 
       const [{ cloudflareEnv }, { getPublicReview }] = await Promise.all([
         import('~/server/utils/api-response'),
@@ -86,15 +86,21 @@ const { data: review, pending } = await useAsyncData<ApiRecord | null>(
       const db = cloudflareEnv(requestEvent).db
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
 
-      return await getPublicReview(db, String(siteId), slug.value, reviewId.value) as ApiRecord | null
+      const result = await getPublicReview(db, String(siteId), slug.value, reviewId.value) as ApiRecord | null
+      if (!result) throw createError({ statusCode: 404, statusMessage: 'Review not found' })
+      return result
     }
 
     const endpoint = `/api/public/sites/${siteId}/locations/${slug.value}/reviews/${reviewId.value}`
-    const response = await $fetch<{ review?: ApiRecord }>(endpoint)
-    return response?.review ?? null
+    const response = await publicApiRequest<{ review: ApiRecord }>(endpoint, {
+      validate: (value): value is { review: ApiRecord } =>
+        isRecord(value) && isRecord(value.review),
+    })
+    return response.review
   },
   { watch: [slug, reviewId] },
 )
+if (error.value) throw error.value
 const helpfulCount = ref(0)
 watchEffect(() => {
   helpfulCount.value = Number(review.value?.helpful_count ?? 0)
@@ -115,7 +121,16 @@ function openLightbox(index: number) {
 }
 
 async function markHelpful() {
-  const result = await $fetch<{ helpful: boolean; helpfulCount: number }>(`/api/public/sites/${siteId}/locations/${slug.value}/reviews/${reviewId.value}/helpful`, { method: 'POST' })
+  const result = await publicApiMutation<{ helpful: boolean; helpfulCount: number }>(
+    `/api/public/sites/${siteId}/locations/${slug.value}/reviews/${reviewId.value}/helpful`,
+    {
+      method: 'POST',
+      validate: (value): value is { helpful: boolean; helpfulCount: number } =>
+        isRecord(value)
+        && typeof value.helpful === 'boolean'
+        && typeof value.helpfulCount === 'number',
+    },
+  )
   helpfulCount.value = result.helpfulCount
 }
 

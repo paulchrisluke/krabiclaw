@@ -42,8 +42,8 @@ site → location → experience precedence in memory.
 
 ## Cache and failure semantics
 
-Fresh cache hits may avoid the source load. Corrupt entries are discarded and
-cause exactly one canonical source load. A cache-write failure after a
-successful source load is logged and does not replace the successful result.
-Transport, timeout, authorization, database, and contract errors remain errors;
-they never become empty collections or inferred tenant context.
+Fresh cache hits may avoid the source load. A missing or corrupt entry causes
+exactly one canonical source load. Cache-write failures, source failures, and
+contract failures remain terminal errors; they never become stale, static, or
+empty substitute data. Transport, timeout, authorization, and database errors
+also remain errors and never infer tenant context.

@@ -31,8 +31,9 @@ Use this workflow when running Codex or Claude agents in parallel worktrees.
   through the scheduled/manual full-regression workflow.
 - Staging runs the core smoke plus the focused dashboard or billing smoke when
   those paths changed. It does not fan out into every subsystem suite.
-- Thirty-sample Saya/Blawby/dashboard benchmarks and Lighthouse are deliberate
-  staging/release checks, not routine per-commit PR jobs.
+- Three-to-five-sample browser smoke is for performance-sensitive PRs;
+  twenty-to-thirty samples are release-only comparative evidence. Do not report
+  p99 from a 30-sample run or repeat benchmarks during editing.
 - Keep deterministic retry, request-count, query-count, payload, SSR self-fetch,
   and response-contract checks fast enough to remain mandatory.
 

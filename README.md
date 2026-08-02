@@ -108,20 +108,20 @@ yarn test:mcp:local
 The full env contract, tunnel setup, write-smoke mode, and ChatGPT handoff are
 documented in [docs/local-mcp-harness.md](docs/local-mcp-harness.md).
 
-### Data-loading benchmarks
+### Performance validation
 
-Run the fast shell/page endpoint benchmark during development. The 30-sample
-Saya, Blawby, and dashboard browser benchmark is deliberate staging/release
-evidence and is not part of routine PR smoke:
+For page performance, build the Worker and measure the real browser journeys
+against that artifact. Do not use the old dev-only isolation pages or run a
+large benchmark while editing. Deterministic data-loading checks remain useful
+when transport or query code changes:
 
 ```bash
-yarn benchmark:data-loading
-yarn benchmark:performance-recovery --base-url https://staging.krabiclaw.com --samples 30
+yarn build:cf
+yarn lint:data-loading
 ```
 
-The contracts, budgets, and measurement format are documented in
-[docs/performance/data-loading-architecture.md](docs/performance/data-loading-architecture.md)
-and [docs/performance/performance-recovery-2026-07.md](docs/performance/performance-recovery-2026-07.md).
+The current browser evidence and release-only benchmark policy are documented
+in [docs/performance/performance-recovery-2026-08.md](docs/performance/performance-recovery-2026-08.md).
 
 ### macOS file limit fix
 
