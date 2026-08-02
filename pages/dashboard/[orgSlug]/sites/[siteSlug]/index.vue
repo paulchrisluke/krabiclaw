@@ -232,11 +232,8 @@ const requestEvent = useRequestEvent()
 const { data, pending } = await useAsyncData(
   `dashboard-home-${route.params.orgSlug}-${route.params.siteSlug}`,
   async () => {
-    // Bypass the self-fetch entirely on the server — see "Nested SSR self-fetch
-    // loses Cloudflare bindings" in CLAUDE.md. dashboardState.refresh() does its
-    // own dashboardApi to /api/dashboard/context, which has the exact same nested-fetch
-    // problem during SSR — call getDashboardContext directly against the real
-    // request event instead, and only use dashboardState.refresh() client-side.
+    // Bypass the self-fetch entirely on the server — the dashboard context and
+    // home data are loaded directly against the real request event.
     if (import.meta.server) {
       if (!requestEvent) {
         throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
@@ -280,7 +277,6 @@ const { data, pending } = await useAsyncData(
       })
     }
 
-    await dashboardState.refresh()
     return dashboardApi<DashboardHomeResponse>('/api/dashboard/home', {
       validate: isDashboardHomeResponse,
     })

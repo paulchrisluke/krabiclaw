@@ -6,7 +6,14 @@ export default defineEventHandler(async (event) => {
   const { db, organization, site } = await getDashboardContext(event, { requireSite: false })
 
   if (!site) {
-    return jsonResponse({ organization, site: null, locations: [], credits: null, events: [] })
+    return jsonResponse({
+      organization,
+      site: null,
+      locations: [],
+      credits: null,
+      events: [],
+      operations: { openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 },
+    })
   }
 
   const home = await getDashboardHomeData(db, organization.id, site.id, {

@@ -19,8 +19,15 @@ export interface DashboardLocationResource {
   foodpanda_url: string | null
 }
 
-export async function listDashboardLocationsResource(event: H3Event) {
-  const { db, organization, site } = await getDashboardContext(event, { requireSite: true })
+export async function listDashboardLocationsResource(
+  event: H3Event,
+  scope: { organizationSlug?: string; siteSlug?: string } = {},
+) {
+  const { db, organization, site } = await getDashboardContext(event, {
+    requireSite: true,
+    organizationSlug: scope.organizationSlug,
+    siteSlug: scope.siteSlug,
+  })
   if (!site) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
   const scoped = !isOrganizationWideRole(organization.role)
   const locations = await queryAll<DashboardLocationResource>(db, `

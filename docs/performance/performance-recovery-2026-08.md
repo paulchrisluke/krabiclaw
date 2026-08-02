@@ -53,6 +53,11 @@ an error code and request ID.
   text and Marcellus for display text.
 - The public platform header uses static Login and Start Free links. It does not
   resolve a session or import dashboard auth code on every public navigation.
+- Public HTML removes Nuxt's broad `modulepreload` hints. The renderer emits a
+  hint for every client manifest entry, which made mobile browsers fetch dozens
+  of route chunks before the public hero could paint. Public scripts remain
+  available through their normal entry tags; dashboard, admin, and auth routes
+  retain their private-surface hints.
 
 Blawby also had a concrete first-paint bug: its layout manually injected a
 hashed CSS URL that could differ between the server manifest and the client
@@ -97,6 +102,11 @@ Use the production-style Worker and browser for representative smoke checks:
 - no duplicate logical resource requests;
 - no `ERR_HTTP_HEADERS_SENT` messages;
 - public pages do not preload dashboard/editor-only CSS or chunks.
+
+Preview browser checks wait for the deployed entry stylesheet, every HTML-referenced
+Nuxt asset, and the HTML's build metadata to be available before running. A Worker
+deployment is not considered browser-ready while HTML can reference an asset or
+build manifest that still returns 404.
 
 Keep shared transport/error/request-budget tests at the invariant level. Do not
 add one page test per duplicate request or another benchmark suite that merely

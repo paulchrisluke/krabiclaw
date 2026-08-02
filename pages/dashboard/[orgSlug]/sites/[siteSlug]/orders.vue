@@ -94,6 +94,7 @@ interface OrderForm {
 }
 
 const siteId = await useDashboardSiteId()
+const route = useRoute()
 const toast = useToast()
 const locations = ref<Array<LocationRow & { addressText: string; form: OrderForm }>>([])
 const loading = ref(true)
@@ -142,7 +143,10 @@ async function loadOrder() {
           const event = useRequestEvent()
           if (!event) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
           const { listDashboardLocationsResource } = await import('~/server/utils/dashboard-locations-resource')
-          return await listDashboardLocationsResource(event)
+          const organizationSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : ''
+          const siteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : ''
+          if (!organizationSlug || !siteSlug) throw createError({ statusCode: 400, statusMessage: 'Dashboard scope is required' })
+          return await listDashboardLocationsResource(event, { organizationSlug, siteSlug })
         })()
       : await dashboardApi<{ success: true; locations: LocationRow[] }>(`/api/dashboard/locations`, {
           validate: (value): value is { success: true; locations: LocationRow[] } =>
