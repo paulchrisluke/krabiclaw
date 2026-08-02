@@ -53,6 +53,11 @@ an error code and request ID.
   text and Marcellus for display text.
 - The public platform header uses static Login and Start Free links. It does not
   resolve a session or import dashboard auth code on every public navigation.
+- Public HTML removes Nuxt's broad `modulepreload` hints. The renderer emits a
+  hint for every client manifest entry, which made mobile browsers fetch dozens
+  of route chunks before the public hero could paint. Public scripts remain
+  available through their normal entry tags; dashboard, admin, and auth routes
+  retain their private-surface hints.
 
 Blawby also had a concrete first-paint bug: its layout manually injected a
 hashed CSS URL that could differ between the server manifest and the client

@@ -4,7 +4,8 @@
   width: var(--width);
 }
 
-@media (min-width: 992px) {
+@media (width >= 992px) {
+  /* stylelint-disable-next-line selector-class-pattern -- utility mirrors Nuxt UI's generated class */
   .lg\:w-\(--width\) {
     width: var(--width);
   }

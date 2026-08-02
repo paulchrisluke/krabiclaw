@@ -702,6 +702,7 @@ async function saveLocationDetails() {
     if (locationId.value !== requestedLocationId) return
     if (!response.success) throw new Error('Failed to save location')
     location.value = response.location
+    fillDetailsForm(response.location)
     if (response.location.slug !== route.params.locationSlug) {
       await dashboard.refresh()
       await router.replace({

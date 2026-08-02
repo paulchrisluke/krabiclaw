@@ -73,7 +73,7 @@ export const useMenuEditor = async (siteId: string, locationId?: string | null) 
       )
       return { success: true as const, menus: listResponse.menus, menu: detailResponse.menu }
     },
-    { watch: [menuRefreshSignal] },
+    { lazy: import.meta.client, watch: [menuRefreshSignal] },
   )
 
   watch([menusResource, menusPending, menusResourceError], ([resource, pending, err]) => {

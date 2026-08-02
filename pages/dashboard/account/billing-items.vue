@@ -126,7 +126,7 @@ const { data: billingItems, status, error, refresh } = await useAsyncData(
   async () => {
     if (import.meta.server) {
       const requestEvent = useRequestEvent()
-      if (!requestEvent) return []
+      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
       const [{ cloudflareEnv }, { getUserBillingItems }] = await Promise.all([
         import('~/server/utils/api-response'),
         import('~/server/utils/billing'),
@@ -135,7 +135,7 @@ const { data: billingItems, status, error, refresh } = await useAsyncData(
       const db = env.db
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
       const session = await import('~/server/utils/auth').then(m => m.getAuthSession(requestEvent, env))
-      if (!session?.user?.id) return []
+      if (!session?.user?.id) throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
       return await getUserBillingItems(env, db.$client, session.user.id)
     }
     const response = await applicationFetch<{ items: BillingItem[] }>(
