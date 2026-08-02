@@ -844,16 +844,12 @@ const loadLocationWorkspace = async () => {
   return !locationSettingsError.value
 }
 
-const { evaluateAndSuggest } = useUpsellTriggers()
-
 onMounted(() => {
   if (route.query.gb === 'connected') {
     toast.add({ description: 'Google Business connected successfully', color: 'success' })
     const { gb: _gb, ...restQuery } = route.query
     router.replace({ name: route.name as string, params: route.params, query: restQuery })
   }
-
-  evaluateAndSuggest()
 })
 
 useSeoMeta({ title: 'Location Settings | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

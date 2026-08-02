@@ -96,16 +96,6 @@ export default defineEventHandler(async (event) => {
       }
     }
   } else {
-    // Was 3 correlated EXISTS subqueries per row, each re-scanning `member` (and one re-joining
-    // `sites`) independently - with ORDER BY on the computed columns forcing SQLite to evaluate
-    // all three for every row in `user` before it could sort and apply LIMIT, so the LIMIT did
-    // nothing to reduce work. Confirmed via wrangler d1 insights as 99.5% of all D1 rows read on
-    // preview/staging (47.5M rows per execution against ~6K users, ~1,300 executions/week just on
-    // preview - this route only exists to find "any suitable E2E test user" for dev-login calls
-    // that don't pass an explicit userId, so it's hit on essentially every E2E test run).
-    // Rewritten as a single pass: one LEFT JOIN through member into sites, aggregated with
-    // COUNT(DISTINCT ...) instead of per-row correlated EXISTS. member_userId_organizationId_idx
-    // and sites_organization_id_idx (server/db/schema.ts) make both joins index-driven.
     const results = await queryAll<{ id: string; email: string; role?: string | null; has_org: number; is_owner: number; has_site: number }>(db, `
       SELECT u.id, u.email, u.role,
              COUNT(DISTINCT m.id) > 0 AS has_org,
@@ -118,23 +108,9 @@ export default defineEventHandler(async (event) => {
       ORDER BY has_site DESC, is_owner DESC, has_org DESC, u.createdAt ASC
       LIMIT 50
     `)
-    const rows = results || []
-    
-    user = rows.find((row) =>
-      row.has_site === 1 &&
-      row.is_owner === 1 &&
-      row.has_org === 1 &&
-      !hasPlatformAdminPermission(row.role)
-    ) || rows.find((row) =>
-      row.is_owner === 1 &&
-      row.has_org === 1 &&
-      !hasPlatformAdminPermission(row.role)
-    ) || rows.find((row) =>
-      row.has_org === 1 &&
-      !hasPlatformAdminPermission(row.role)
-    ) || null
+    user = results.find((row) => !hasPlatformAdminPermission(row.role)) ?? null
     if (!user) {
-      throw createError({ statusCode: 500, statusMessage: 'No suitable dev user (prefer owner with site, fallback owner with org, fallback member with org)' })
+      throw createError({ statusCode: 500, statusMessage: 'No suitable dev user' })
     }
   }
   if (!user) throw createError({ statusCode: 500, statusMessage: 'No users in database' })
