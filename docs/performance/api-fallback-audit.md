@@ -1,6 +1,6 @@
 # API fallback and retry audit
 
-Audit date: 2026-07-31. Scope: shipped public-renderer and dashboard/CMS request
+Audit date: 2026-08-02. Scope: shipped public-renderer and dashboard/CMS request
 paths. Queue/provider delivery retries and non-shipped maintenance scripts do
 not execute in these user request paths.
 
@@ -18,3 +18,5 @@ not execute in these user request paths.
 | dashboard media, settings, location overview, blog, menu, posts, and photos | initial route load | Started server-loadable reads from `onMounted()` and rendered empty state after failures | Added hydration gaps, duplicate client work, and false empty collections | Keyed `useAsyncData` calls canonical server resources during SSR and the scoped dashboard client in the browser; failures have explicit error state | dashboard route and hydration E2E |
 | `utils/menu-currency.ts` | `fetchMenuCurrency` | Self-fetched settings, swallowed every error, and let callers retain a guessed currency | Duplicated shared context and represented failed data as a valid default | Deleted; menu routes read `default_currency` from the validated dashboard context | dashboard menu E2E |
 | `components/workspace/inbox/GuestThreadInbox.vue` | list, detail, and operations | Imperative raw reads/mutations could retry and failures looked empty/not-found | Violated one-attempt behavior and hid transport errors | SSR reads use canonical services, browser reads use exact validators, mutations validate their returned thread, and list/detail errors remain distinct | guest inbox request-count E2E |
+| `middleware/platform-plans.global.ts` and `composables/usePlans.ts` | platform startup and pricing | Homepage prefetched plans and pricing could fall through to alternate/static data | Added a billing request to unrelated pages and allowed multiple sources of truth | Removed startup prefetch and fallback chain; pricing calls the canonical billing service once and surfaces typed errors | pricing request-count smoke |
+| dashboard home route | dashboard startup | Home loaded the onboarding checklist even when the onboarding surface was not mounted | Added an unconditional request to every dashboard entry | Removed the home fetch; onboarding owns its checklist load and failures remain visible | dashboard request-count smoke |

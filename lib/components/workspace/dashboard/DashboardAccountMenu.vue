@@ -31,10 +31,10 @@
             v-for="pref in ['system', 'light', 'dark'] as const"
             :key="pref"
             class="rounded-full size-7 flex items-center justify-center transition-all cursor-pointer"
-            :class="colorMode.preference === pref ? 'bg-elevated text-highlighted shadow-sm border border-default' : 'text-dimmed hover:text-muted'"
+            :class="preference === pref ? 'bg-elevated text-highlighted shadow-sm border border-default' : 'text-dimmed hover:text-muted'"
             :aria-label="`${pref} theme`"
-            :aria-pressed="colorMode.preference === pref"
-            @click="colorMode.preference = pref"
+            :aria-pressed="preference === pref"
+            @click="setPreference(pref)"
           >
             <UIcon :name="getThemeIcon(pref)" class="size-3.5" />
           </button>
@@ -80,7 +80,7 @@ defineProps<{ collapsed?: boolean }>()
 
 const { data: sessionData, signOut } = useAuth()
 const route = useRoute()
-const colorMode = useColorMode()
+const { preference, setPreference } = usePlatformTheme()
 const config = useRuntimeConfig()
 
 function getThemeIcon(pref: 'system' | 'light' | 'dark') {

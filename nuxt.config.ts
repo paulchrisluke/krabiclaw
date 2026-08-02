@@ -54,21 +54,6 @@ const publicHtmlCacheHeaders = isNonProductionDeployment
       'cache-control': 'public, s-maxage=60, stale-while-revalidate=300, max-age=0',
     }
 
-// Tried (2026-07-02): a `PERF_CSS_EXCLUDE_DASHBOARD` flag appending
-// `@source not "<glob>";` to base.css for dashboard/admin/editor/billing/
-// onboarding/media paths, to measure how much of entry.css a public/tenant
-// visitor pays for but never renders. Removed — `@source not` had no
-// measurable effect in this stack: a class unique to a single dashboard-only
-// component (`[320px]` in components/dashboard/McpQuickActions.vue) still
-// appeared in the compiled entry.css after excluding its exact path, tested
-// with both relative and absolute glob paths, and even edited directly into
-// assets/css/base.css (not just via the build-flag injection). Most likely
-// cause: @nuxt/ui's own Tailwind integration performs its own unconditional
-// project-wide content scan that a `@source not` in the app's own base.css
-// can't override. Don't re-attempt this exact approach without first
-// confirming (e.g. via @nuxt/ui's own docs/issues) whether their Tailwind
-// integration exposes a way to scope its content scan at all.
-
 export default defineNuxtConfig({
   ignore: ['**/.worktrees/**'],
   modules: [
@@ -82,6 +67,10 @@ export default defineNuxtConfig({
     '@nuxt/image',
     '@nuxt/fonts',
   ],
+
+  ui: {
+    colorMode: false,
+  },
 
   app: {
     head: {
@@ -161,11 +150,7 @@ export default defineNuxtConfig({
     },
   },
 
-  // PERF DEBUG PATCH (temporary — remove once the entry.js floor is attributed):
-  // vite.plugins is shared between the client and server Vite builds, so the
-  // visualizer is attached via this hook instead, gated to isClient only —
-  // otherwise the server (Nitro/SSR) build would overwrite the client's
-  // treemap output on whichever build ran second.
+  // Bundle analysis is opt-in and client-only; it has no runtime effect.
   hooks: {
     'vite:extendConfig'(viteConfig, { isClient }) {
       if (analyzeBundle && isClient) {
@@ -378,14 +363,10 @@ export default defineNuxtConfig({
   // Do NOT add @import from fonts.googleapis.com in base.css; that would double-load
   // and block rendering on a separate render-blocking external request.
   //
-  // Poppins: only the weights actually used in CSS (NOT all 18 variants).
-  // Instrument Serif: italic is the LCP font on tenant hero pages — kept minimal.
-  // Fredoka: platform wordmark only, weight 600 only (not all 4 weights).
-  //
-  // All three families are Google Fonts — pin `provider: 'google'` per family and
-  // disable the other providers so unifont never registers/queries them (e.g. the
-  // bunny provider fetches https://fonts.bunny.net/list on every boot otherwise,
-  // adding retry delay for a provider this project doesn't use).
+  // Keep only the weights used by the surfaces: Poppins for body/UI text,
+  // Marcellus for Blawby display text, and Fredoka for the platform wordmark.
+  // These are self-hosted by @nuxt/fonts. Do not add external font stylesheets
+  // or route plugins; surface CSS selects the family it needs.
   fonts: {
     defaults: {
       subsets: ['latin'],
@@ -399,7 +380,6 @@ export default defineNuxtConfig({
       npm: false,
     },
     families: [
-      // Instrument Serif removed from global load — loaded conditionally on tenant routes via plugin
       { name: 'Poppins', provider: 'google', weights: [400, 500, 600, 700], display: 'swap' },
       { name: 'Marcellus', provider: 'google', weights: [400], display: 'swap' },
       { name: 'Fredoka', provider: 'google', weights: [600], display: 'swap' },

@@ -125,8 +125,6 @@
     "lint:tool-parity": "node scripts/lint-tool-parity.mjs",
     "secret:cron": "yarn wrangler secret put CRON_SECRET",
     "stripe:listen": "stripe listen --forward-to localhost:3000/api/billing/webhook",
-    "benchmark": "node scripts/benchmark-data-loading.mjs",
-    "benchmark:data-loading": "node scripts/benchmark-data-loading.mjs",
     "benchmark:performance-recovery": "node scripts/benchmark-performance-recovery.mjs",
     "perf:lighthouse": "node scripts/lighthouse-check.mjs",
     "demo:record:list-devices": "bash scripts/demo-recording/list-avfoundation-devices.sh",

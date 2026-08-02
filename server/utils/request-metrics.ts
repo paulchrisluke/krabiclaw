@@ -143,6 +143,16 @@ export function finalizeTrackedRequestMetrics(event: H3Event, responseBody: unkn
   }
 
   metrics.finalized = true
+  const response = (event as H3Event & {
+    node?: { res?: { headersSent?: boolean; writableEnded?: boolean } }
+  }).node?.res
+  if (response?.headersSent || response?.writableEnded) {
+    console.error('[data-request] response started before metrics headers could be applied', JSON.stringify({
+      requestId: metrics.requestId,
+      resource: [...metrics.resources.keys()].join(',') || event.path,
+    }))
+    return
+  }
   applyMetricHeaders(
     event,
     metrics,

@@ -25,21 +25,12 @@
 
       <!-- Right actions -->
       <div class="flex items-center gap-2 shrink-0">
-        <template v-if="isAuthenticated">
-          <PlatformButton to="/dashboard" class="hidden sm:inline-flex">
-            Dashboard
-            <PlatformIcon name="arrow-right" class="size-3.5" />
-          </PlatformButton>
-        </template>
-        <template v-else>
-          <PlatformButton to="/login" variant="ghost" class="hidden sm:inline-flex">
-            Login
-          </PlatformButton>
-          <PlatformButton to="/signup" class="hidden sm:inline-flex">
-            Start free
-            <PlatformIcon name="arrow-right" class="size-3.5" />
-          </PlatformButton>
-        </template>
+        <NuxtLink to="/login" class="hidden sm:inline-flex items-center rounded-lg px-3 py-2 text-sm font-medium text-muted transition-colors hover:text-default no-underline">
+          Login
+        </NuxtLink>
+        <NuxtLink to="/signup" class="hidden sm:inline-flex items-center rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary/90 no-underline">
+          Start free
+        </NuxtLink>
         <button
           type="button"
           class="flex size-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-muted hover:text-default lg:hidden"
@@ -67,19 +58,12 @@
           {{ item.label }}
         </NuxtLink>
         <div class="pt-4 space-y-2">
-          <template v-if="isAuthenticated">
-            <NuxtLink to="/dashboard" class="block px-4 py-3 text-[13.5px] font-semibold text-primary transition-colors no-underline" @click="closeMobileMenu">
-              Dashboard →
-            </NuxtLink>
-          </template>
-          <template v-else>
-            <NuxtLink to="/login" class="block px-4 py-3 text-[13.5px] font-medium text-default hover:text-muted transition-colors no-underline" @click="closeMobileMenu">
-              Login
-            </NuxtLink>
-            <NuxtLink to="/signup" class="block px-4 py-3 text-[13.5px] font-semibold text-primary transition-colors no-underline" @click="closeMobileMenu">
-              Start free
-            </NuxtLink>
-          </template>
+          <NuxtLink to="/login" class="block px-4 py-3 text-[13.5px] font-medium text-default hover:text-muted transition-colors no-underline" @click="closeMobileMenu">
+            Login
+          </NuxtLink>
+          <NuxtLink to="/signup" class="block px-4 py-3 text-[13.5px] font-semibold text-primary transition-colors no-underline" @click="closeMobileMenu">
+            Start free
+          </NuxtLink>
         </div>
       </nav>
     </div>
@@ -87,8 +71,6 @@
 </template>
 
 <script setup lang="ts">
-const { isAuthenticated } = useAuth()
-
 const navItems = [
   { label: 'Plugin', to: '/plugin' },
   { label: 'Features', to: '/features' },

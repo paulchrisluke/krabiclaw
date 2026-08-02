@@ -1,6 +1,6 @@
 <template>
   <NuxtLayout :name="isPlatform ? 'platform' : isBlawby ? 'blawby' : 'saya'">
-    <BlawbyTenantPage
+    <LazyBlawbyTenantPage
       v-if="!isPlatform && isBlawby"
       path="/about"
       fallback-eyebrow="About"
