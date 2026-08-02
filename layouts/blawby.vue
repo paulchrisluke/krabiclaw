@@ -25,6 +25,7 @@
 
 <script setup lang="ts">
 import ConsentBanner from '~/components/ConsentBanner.vue'
+import blawbyCssUrl from '~/assets/css/blawby-entry.css?url'
 
 const { identity, navigation, consultation, compliance, themeTokens, offeringLinks } = await useBlawbyShell()
 const hydrated = ref(false)
@@ -58,5 +59,6 @@ const themeStyles = computed(() => {
 
 useHead(() => ({
   htmlAttrs: { class: 'blawby-document' },
+  link: [{ rel: 'stylesheet', href: blawbyCssUrl }],
 }))
 </script>

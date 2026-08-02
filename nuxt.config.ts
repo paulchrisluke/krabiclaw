@@ -35,45 +35,8 @@ function pickIcons(collection: string, names: string[]) {
 // dev/E2E run needs to avoid task-import side effects on the D1 proxy binding.
 const enableNitroTasks = process.env.NUXT_DISABLE_NITRO_TASKS !== 'true'
 
-// PERF DEBUG PATCH (temporary — remove once the entry.css floor is attributed):
-// build-time-only flag, not a runtime one, since global css: [...] is compiled
-// into a single stylesheet at build time and can't be conditionally skipped
-// per-request. Set PERF_NO_GLOBAL_CSS=true and rebuild to measure
-// /dev/perf-text?mode=text-no-icons with no global CSS at all.
-const skipGlobalCss = process.env.PERF_NO_GLOBAL_CSS === 'true'
-
-// PERF DEBUG PATCH (temporary — remove once the entry.js floor is attributed):
-// generates a client-bundle treemap at PERF_BUNDLE_ANALYZE_OUT (or
-// bundle-analysis.html in the repo root) to identify what's actually inside
-// the ~511KB entry chunk. Set PERF_BUNDLE_ANALYZE=true and rebuild.
+// Optional build analysis for bundle inspection; it has no runtime effect.
 const analyzeBundle = process.env.PERF_BUNDLE_ANALYZE === 'true'
-
-// PERF DEBUG PATCH (temporary — remove once the entry.css contributor matrix
-// is done): main.css's individual @import/@plugin lines can't be toggled via
-// css: [...] (that only swaps whole files), so this strips one line at a
-// time from the source before Tailwind's own Vite plugin consumes it. Only
-// one flag is meant to be set per build.
-const cssStrips: [envVar: string, line: string][] = [
-  ['PERF_NO_SAYA_CSS', '@import "./saya.css";'],
-  ['PERF_NO_BLAWBY_CSS', '@import "./blawby.css";'],
-  ['PERF_NO_TYPOGRAPHY_CSS', '@plugin "@tailwindcss/typography";'],
-  ['PERF_NO_NUXT_UI_CSS', '@import "@nuxt/ui";'],
-  ['PERF_NO_TAILWIND_CSS', '@import "tailwindcss";'],
-]
-
-// PERF DEBUG PATCH (temporary — remove once the client JS/hydration floor is
-// attributed): Nuxt's built-in features.noScripts strips every script chunk
-// from the production build entirely (no entry.js, no modulepreload, no
-// hydration at all) — it only takes effect outside dev mode, so it fits the
-// same build-once-and-measure pattern as the CSS flags above. Set
-// PERF_NO_SCRIPTS=true and rebuild to compare pure static-HTML SSR timing
-// against the normal hydrated build on /dev/perf-text.
-const skipClientScripts = process.env.PERF_NO_SCRIPTS === 'true'
-
-// PERF DEBUG PATCH (temporary): build/runtime flags for isolating global
-// client-floor items that affect every /dev/perf-text mode before the page
-// branch can opt in/out. Set one flag at a time and rebuild.
-const skipDompurifyHooks = process.env.PERF_NO_DOMPURIFY_HOOKS === 'true'
 const publicPerfTestPage = process.env.PERF_PUBLIC_TEST_PAGE !== 'false'
 
 const deploymentHost = new URL(
@@ -92,16 +55,16 @@ const publicHtmlCacheHeaders = isNonProductionDeployment
     }
 
 // Tried (2026-07-02): a `PERF_CSS_EXCLUDE_DASHBOARD` flag appending
-// `@source not "<glob>";` to main.css for dashboard/admin/editor/billing/
+// `@source not "<glob>";` to base.css for dashboard/admin/editor/billing/
 // onboarding/media paths, to measure how much of entry.css a public/tenant
 // visitor pays for but never renders. Removed — `@source not` had no
 // measurable effect in this stack: a class unique to a single dashboard-only
 // component (`[320px]` in components/dashboard/McpQuickActions.vue) still
 // appeared in the compiled entry.css after excluding its exact path, tested
 // with both relative and absolute glob paths, and even edited directly into
-// assets/css/main.css (not just via the build-flag injection). Most likely
+// assets/css/base.css (not just via the build-flag injection). Most likely
 // cause: @nuxt/ui's own Tailwind integration performs its own unconditional
-// project-wide content scan that a `@source not` in the app's own main.css
+// project-wide content scan that a `@source not` in the app's own base.css
 // can't override. Don't re-attempt this exact approach without first
 // confirming (e.g. via @nuxt/ui's own docs/issues) whether their Tailwind
 // integration exposes a way to scope its content scan at all.
@@ -152,12 +115,7 @@ export default defineNuxtConfig({
   compatibilityDate: '2024-11-01',
   debug: false,
   devtools: { enabled: false },
-  // PERF DEBUG PATCH: see skipClientScripts above.
-  features: {
-    noScripts: skipClientScripts,
-  },
-  // PERF DEBUG PATCH: see skipGlobalCss above.
-  css: skipGlobalCss ? [] : ['~/assets/css/main.css'],
+  css: ['~/assets/css/base.css'],
   icon: {
     fallbackToApi: false,
     // Nuxt UI's own internal default icons (UChatPromptSubmit's arrowUp, etc.)
@@ -189,7 +147,6 @@ export default defineNuxtConfig({
       helpUrl: process.env.NUXT_PUBLIC_HELP_URL || 'https://krabiclaw.com/help',
 
       whatsappNumber: process.env.NUXT_PUBLIC_WHATSAPP_NUMBER || process.env.WHATSAPP_NUMBER || '16197200000',
-      perfNoDompurifyHooks: skipDompurifyHooks,
       perfPublicTestPage: publicPerfTestPage,
     },
 
@@ -220,34 +177,6 @@ export default defineNuxtConfig({
         }))
       }
 
-      // PERF DEBUG PATCH: see cssStrips above. enforce: 'pre' so this runs
-      // before Tailwind's own Vite plugin consumes the @import/@plugin
-      // at-rules in main.css.
-      const activeStrips = cssStrips.filter(([envVar]) => process.env[envVar] === 'true')
-      if (activeStrips.length > 1) {
-        throw new Error(`Multiple PERF_NO_* CSS strip flags enabled: ${activeStrips.map(s => s[0]).join(', ')}. Only one is allowed.`)
-      }
-      if (activeStrips.length === 1) {
-        const activeStrip = activeStrips[0]
-        if (activeStrip) {
-          const [, line] = activeStrip
-          // unshift, not push: Tailwind's own Vite plugin is also enforce:'pre'
-          // and already registered by the time this hook runs, so a same-
-          // priority plugin appended via push still runs after it (same-enforce
-          // plugins execute in array order). Putting this one first in the
-          // array is what actually lets it see the raw source before Tailwind
-          // resolves/inlines the @import chain.
-          viteConfig.plugins?.unshift({
-            name: 'perf-debug-strip-css',
-            enforce: 'pre',
-            transform(code: string, id: string) {
-              if (!id.endsWith('assets/css/main.css')) return
-              if (!code.includes(line)) throw new Error(`Target CSS line not found for stripping: ${line}`)
-              return code.replace(line, `/* PERF DEBUG PATCH: stripped "${line}" */`)
-            },
-          })
-        }
-      }
     },
   },
 
@@ -390,6 +319,10 @@ export default defineNuxtConfig({
       path: '~/components/blog',
       pathPrefix: false,
     },
+    {
+      path: '~/lib/components/workspace/dashboard',
+      pathPrefix: false,
+    },
   ],
 
   // Global watcher exclusions
@@ -442,7 +375,7 @@ export default defineNuxtConfig({
   },
 
   // Font configuration — @nuxt/fonts downloads, subsets, and self-hosts these.
-  // Do NOT add @import from fonts.googleapis.com in main.css; that would double-load
+  // Do NOT add @import from fonts.googleapis.com in base.css; that would double-load
   // and block rendering on a separate render-blocking external request.
   //
   // Poppins: only the weights actually used in CSS (NOT all 18 variants).

@@ -38,7 +38,7 @@ export default defineEventHandler(async (event) => {
       organizationId: site.organization_id,
       siteId,
     })
-  } catch (err) {
+  } catch {
     return jsonResponse({ error: 'Site access denied' }, { status: 403 })
   }
 

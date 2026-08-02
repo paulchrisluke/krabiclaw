@@ -127,27 +127,6 @@
         </div>
       </section>
 
-      <!-- Pricing -->
-      <section class="relative py-24 overflow-hidden">
-        <!-- Ambient gradient -->
-        <div class="pointer-events-none absolute inset-0 -z-10">
-          <div class="absolute top-0 right-1/4 w-96 h-96 rounded-full blur-3xl opacity-30" style="background: radial-gradient(circle, var(--kc-coral-200) 0%, transparent 70%);"></div>
-          <div class="absolute bottom-0 left-1/4 w-[500px] h-[500px] rounded-full blur-3xl opacity-20" style="background: radial-gradient(circle, var(--kc-teal-100) 0%, transparent 70%);"></div>
-        </div>
-
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div class="text-center max-w-2xl mx-auto mb-12 flex flex-col items-center gap-4">
-            <span class="kc-eyebrow text-dimmed">Simple pricing</span>
-            <h2 class="text-[clamp(32px,4vw,48px)] font-extrabold tracking-tight leading-[1.05] m-0">
-              <span class="text-default">Start free.</span>
-              <span style="background: linear-gradient(135deg, var(--kc-coral) 0%, var(--kc-teal) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;"> Grow when you're ready.</span>
-            </h2>
-          </div>
-          <div class="relative rounded-[28px] border border-default/60 p-6 sm:p-10 shadow-2xl backdrop-blur-sm" style="background: color-mix(in srgb, var(--ui-bg-elevated) 80%, transparent);">
-            <BillingPricingTable :plans="plans" />
-          </div>
-        </div>
-      </section>
     </div>
 
     <!-- Blawby tenant homepage -->
@@ -415,9 +394,6 @@ const { isBlawby } = usePublicTemplate()
 const { locale } = useI18n()
 const isBlawbyPage = computed(() => isBlawby.value)
 const shouldLoadSayaPage = computed(() => !isBlawbyPage.value)
-
-const platformPlans = isPlatform ? usePlans().plans : ref(null)
-const plans = computed(() => isPlatform ? platformPlans.value : null)
 
 const { isAuthenticated } = useAuth()
 const homeCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))

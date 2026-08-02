@@ -25,7 +25,10 @@
 
   <article v-else class="rounded-3xl border border-default bg-default p-8 sm:p-9">
     <div class="mb-5 flex items-start gap-4">
-      <UAvatar :src="review.avatarUrl ?? undefined" :text="getInitials(review.author)" size="md" />
+      <div class="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-sm font-semibold text-muted">
+        <img v-if="review.avatarUrl" :src="review.avatarUrl" :alt="review.author" class="size-full object-cover" loading="lazy" decoding="async">
+        <span v-else>{{ getInitials(review.author) }}</span>
+      </div>
       <div class="min-w-0 flex-1">
         <div class="flex flex-wrap items-center gap-2">
           <span class="font-medium text-default">{{ review.author }}</span>

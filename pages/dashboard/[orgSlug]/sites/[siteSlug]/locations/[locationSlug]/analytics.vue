@@ -207,7 +207,6 @@ interface AnalyticsResponse {
 }
 
 const toast = useToast()
-const dashboard = useDashboardSite()
 const siteId = await useDashboardSiteId()
 
 const presets: Array<{ key: PresetKey; label: string }> = [

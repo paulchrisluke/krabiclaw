@@ -208,6 +208,7 @@ import { useAnalytics } from '~/composables/useAnalytics'
 import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities, type CmsManagerCapability, type ProductFeature } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
+import dashboardCssUrl from '~/assets/css/dashboard.css?url'
 
 // ─────────────────────────────────────────────────────────────────────────
 // Dashboard shell architecture (issue #316 + its "Authoritative clarification:
@@ -973,4 +974,6 @@ async function stopImpersonating() {
     stoppingImpersonation.value = false
   }
 }
+
+useHead({ link: [{ rel: 'stylesheet', href: dashboardCssUrl }] })
 </script>

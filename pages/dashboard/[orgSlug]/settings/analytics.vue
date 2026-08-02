@@ -147,7 +147,7 @@ const isSuccessResponse = (value: unknown): value is { success: true } =>
   isRecord(value) && value.success === true
 
 const toast = useToast()
-const { dashboard, siteOptions, selectedSiteSlug, selectedSiteId: siteId } = useOrganizationSettingsSite()
+const { siteOptions, selectedSiteSlug, selectedSiteId: siteId } = useOrganizationSettingsSite()
 const route = useRoute()
 const router = useRouter()
 

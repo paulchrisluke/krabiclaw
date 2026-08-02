@@ -32,7 +32,7 @@
             class="inline-flex items-center gap-2 rounded-full border border-default px-3 py-1.5 text-xs font-medium text-default no-underline transition hover:border-muted hover:bg-elevated"
           >
             <span>{{ link.title }}</span>
-            <UIcon name="i-lucide-move-up-right" class="size-3.5 text-muted" />
+            <PlatformIcon name="arrow-up-right" class="size-3.5 text-muted" />
           </NuxtLink>
         </div>
       </div>

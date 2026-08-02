@@ -34,7 +34,10 @@
 
       <!-- Main pricing table component -->
       <div class="relative bg-elevated/20 backdrop-blur-md border border-default/50 rounded-[32px] p-6 sm:p-10 shadow-2xl transition-all duration-500 hover:shadow-primary/5">
-        <BillingPricingTable :plans="plans" />
+        <BillingPricingTable v-if="plans" :plans="plans" />
+        <div v-else class="rounded-2xl border border-default bg-elevated p-6 text-center text-muted" aria-busy="true">
+          Loading pricing plans…
+        </div>
       </div>
 
       <!-- FAQ Section -->
@@ -85,14 +88,13 @@
 </template>
 
 <script setup lang="ts">
-const { plans } = usePlans()
 const { isBlawby } = usePublicTemplate()
 
 definePageMeta({ layout: false })
 
 const openFaq = ref<string | null>(null)
 
-const { managedPlan, seoAcceleratorPlan } = usePlans()
+const { plans, managedPlan, seoAcceleratorPlan } = usePlans()
 
 const faqs = [
   {
@@ -159,7 +161,7 @@ usePlatformPageSeo(() => ({
       '@type': 'OfferCatalog',
       '@id': `${pricingPageUrl}#offers`,
       name: 'KrabiClaw Pricing Plans',
-      itemListElement: (plans.value ?? []).map((plan) => {
+      itemListElement: plans.value?.map((plan) => {
         const monthly = plan.prices.find((p) => p.interval === 'month')
         return {
           '@type': 'Offer',

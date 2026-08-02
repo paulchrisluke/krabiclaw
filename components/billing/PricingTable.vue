@@ -127,10 +127,10 @@
 import type { Plan } from '~/server/api/billing/plans.get'
 
 const props = defineProps<{
-  plans?: Plan[] | null
+  plans: Plan[]
 }>()
 
-const planList = computed(() => props.plans ?? [])
+const planList = computed(() => props.plans)
 
 const MAIN_PLAN_IDS = ['free', 'growth', 'managed']
 const mainPlans = computed(() => planList.value.filter(p => MAIN_PLAN_IDS.includes(p.id)))

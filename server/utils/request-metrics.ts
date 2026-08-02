@@ -126,8 +126,28 @@ export function finalizeRequestMetrics(
   const serializeDuration = performance.now() - serializeStartedAt
   metrics.resources.set(resource, responseBytes)
   metrics.phases.serialize = (metrics.phases.serialize ?? 0) + serializeDuration
+  metrics.finalized = true
   applyMetricHeaders(event, metrics, resolvedCacheStatus)
   return payload
+}
+
+export function finalizeTrackedRequestMetrics(event: H3Event, responseBody: unknown) {
+  const metrics = metricsByEvent.get(event)
+  if (!metrics || metrics.finalized) return
+
+  if (metrics.resources.size === 0 && responseBody !== undefined) {
+    const serialized = typeof responseBody === 'string'
+      ? responseBody
+      : JSON.stringify(responseBody)
+    metrics.resources.set(event.path, new TextEncoder().encode(serialized).byteLength)
+  }
+
+  metrics.finalized = true
+  applyMetricHeaders(
+    event,
+    metrics,
+    String(getResponseHeader(event, 'x-bootstrap-cache') ?? 'BYPASS'),
+  )
 }
 
 function applyMetricHeaders(
@@ -175,16 +195,25 @@ function responseErrorCode(payload: unknown): string | null {
 
 export function flushRequestMetrics(event: H3Event, responseBody?: unknown) {
   const metrics = metricsByEvent.get(event)
-  if (!metrics || metrics.finalized) return
-  metrics.finalized = true
+  if (!metrics) return
+
+  // A route that finalized its response already had the diagnostic headers
+  // applied before the response started. The afterResponse hook is logging
+  // only; setting headers here causes ERR_HTTP_HEADERS_SENT in Nitro.
   if (metrics.resources.size === 0 && responseBody !== undefined) {
     const serialized = typeof responseBody === 'string'
       ? responseBody
       : JSON.stringify(responseBody)
     metrics.resources.set(event.path, new TextEncoder().encode(serialized).byteLength)
   }
+  if (!metrics.finalized) {
+    metrics.finalized = true
+    console.error('[data-request] response was not finalized before beforeResponse', JSON.stringify({
+      requestId: metrics.requestId,
+      resource: [...metrics.resources.keys()].join(',') || event.path,
+    }))
+  }
   const cacheStatus = String(getResponseHeader(event, 'x-bootstrap-cache') ?? 'BYPASS')
-  applyMetricHeaders(event, metrics, cacheStatus)
   const responseBytes = [...metrics.resources.values()].reduce((total, bytes) => total + bytes, 0)
   const status = getResponseStatus(event)
   const errorCode = status >= 400 ? responseErrorCode(responseBody) ?? `HTTP_${status}` : null

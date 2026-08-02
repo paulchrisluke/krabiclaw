@@ -79,6 +79,7 @@
 <script setup lang="ts">
 import ConsentBanner from '~/components/ConsentBanner.vue'
 import { resolveLocationExperienceHref } from '~/utils/experience-navigation'
+import sayaCssUrl from '~/assets/css/saya-entry.css?url'
 
 if (import.meta.dev) useDebugLCP()
 
@@ -198,7 +199,10 @@ useHead(() => {
   }
   return {
     meta,
-    link: [{ rel: 'canonical', href: canonicalUrl.value }],
+    link: [
+      { rel: 'canonical', href: canonicalUrl.value },
+      { rel: 'stylesheet', href: sayaCssUrl },
+    ],
   }
 })
 </script>

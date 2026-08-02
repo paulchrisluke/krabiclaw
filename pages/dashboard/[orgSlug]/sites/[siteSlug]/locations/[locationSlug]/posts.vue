@@ -261,24 +261,6 @@ const loadPosts = async () => {
   }
 }
 
-async function loadFacebookConnection() {
-  const requestedLocationId = currentLocationId.value
-  facebookLoadError.value = null
-  if (!requestedLocationId) return
-  try {
-    const res = await dashboardApi<{ connected: boolean }>('/api/integrations/facebook-pages/connection', {
-      query: { locationId: requestedLocationId },
-      validate: isFacebookResponse,
-    })
-    if (currentLocationId.value === requestedLocationId) facebookConnected.value = res.connected
-  } catch (error) {
-    if (currentLocationId.value === requestedLocationId) {
-      facebookLoadError.value = error instanceof Error ? error.message : 'Failed to load Facebook connection status'
-      toast.add({ description: 'Failed to load Facebook connection status', color: 'error' })
-    }
-  }
-}
-
 const requestEvent = useRequestEvent()
 const postsKey = computed(() =>
   `dashboard-location-posts:${siteId}:${currentLocationId.value ?? 'missing'}`,

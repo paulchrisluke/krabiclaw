@@ -38,15 +38,18 @@ test('Blawby shell has no runtime font or icon provider dependency', () => {
 
 test('Blawby theme is a dedicated semantic Nuxt UI token scope', () => {
   const layout = readFileSync('layouts/blawby.vue', 'utf8')
-  const mainCss = readFileSync('assets/css/main.css', 'utf8')
+  const baseCss = readFileSync('assets/css/base.css', 'utf8')
+  const blawbyEntryCss = readFileSync('assets/css/blawby-entry.css', 'utf8')
   const blawbyCss = readFileSync('assets/css/blawby.css', 'utf8')
   const commandSearch = readFileSync('components/platform/search/PlatformCommandSearchModal.vue', 'utf8')
   const commandTrigger = readFileSync('components/platform/search/PlatformCommandSearchTrigger.vue', 'utf8')
 
-  assert.match(mainCss, /@import "\.\/blawby\.css";/)
+  assert.match(blawbyEntryCss, /@import "\.\/blawby\.css";/)
+  assert.doesNotMatch(baseCss, /@import "\.\/blawby\.css";/)
   assert.match(layout, /class="[^"]*\bblawby-shell\b[^"]*\bblawby-theme\b[^"]*"/)
   assert.match(layout, /bg-default text-default/)
-  assert.doesNotMatch(layout, /<style\b/)
+  assert.match(layout, /import blawbyCssUrl from '~\/assets\/css\/blawby-entry\.css\?url'/)
+  assert.match(layout, /rel: 'stylesheet', href: blawbyCssUrl/)
   assert.doesNotMatch(layout, /'--blawby-(?:bg|surface|primary|accent|border|ink)'/)
   assert.match(layout, /'--blawby-token-primary'/)
 

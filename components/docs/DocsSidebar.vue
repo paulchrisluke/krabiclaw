@@ -80,7 +80,7 @@ import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformC
 const emit = defineEmits<{ navigate: [] }>()
 
 const route = useRoute()
-const { categories } = useDocsNav()
+const { categories } = await useDocsNav()
 
 // Mirrors layouts/dashboard.vue's workspace drill-down: inside a category,
 // the sidebar scopes to that category's docs (plus a back link) instead of

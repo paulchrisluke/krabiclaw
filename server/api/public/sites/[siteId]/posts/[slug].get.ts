@@ -1,17 +1,17 @@
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { apiErrorResponse, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getPublishedPostBySlug } from '~/server/utils/post-management'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const slug = getRouterParam(event, 'slug')
-  if (!siteId || !slug) return jsonResponse({ error: 'Site ID and post slug required' }, { status: 400 })
+  if (!siteId || !slug) return apiErrorResponse(event, 400, 'POST_PARAMS_REQUIRED', 'Site ID and post slug are required')
 
   const env = cloudflareEnv(event)
-  const db = env.DB
-  if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
+  const db = env.db
+  if (!db) return apiErrorResponse(event, 503, 'DATABASE_UNAVAILABLE', 'Public post data is temporarily unavailable')
 
   const post = await getPublishedPostBySlug(db, siteId, slug, env)
-  if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
+  if (!post) return apiErrorResponse(event, 404, 'POST_NOT_FOUND', 'Post not found')
 
   return jsonResponse({ success: true, post })
 })
