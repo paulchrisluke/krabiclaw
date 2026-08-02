@@ -39,19 +39,16 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
   if (import.meta.server) {
     const event = useRequestEvent()
-    if (event) {
-      const { resolveAccountAccessForEvent } = await import('~/server/utils/route-access')
-      const result = await resolveAccountAccessForEvent(event)
-      allowed = result.status === 'ok' && result.allowed
-    }
+    if (!event) throw createError({ statusCode: 500, statusMessage: 'Dashboard request context unavailable' })
+    const { resolveAccountAccessForEvent } = await import('~/server/utils/route-access')
+    const result = await resolveAccountAccessForEvent(event)
+    allowed = result.status === 'ok' && result.allowed
   } else {
-    const access = await $fetch<{ allowed?: boolean }>('/api/account/access').catch((err) => {
-      // Only treat known unauthenticated/forbidden responses as "not allowed"
-      // Let network errors, 5xx, and other unexpected failures surface
-      if (err?.statusCode === 401 || err?.statusCode === 403) return null
-      throw err
-    })
-    allowed = Boolean(access?.allowed)
+    const access = await $fetch<{ allowed?: unknown }>('/api/account/access')
+    if (typeof access.allowed !== 'boolean') {
+      throw createError({ statusCode: 502, statusMessage: 'Dashboard access response was malformed' })
+    }
+    allowed = access.allowed
   }
 
   if (!allowed) {
@@ -76,35 +73,30 @@ export default defineNuxtRouteMiddleware(async (to) => {
     let capabilityAllowed = false
     if (import.meta.server) {
       const event = useRequestEvent()
-      if (event) {
-        try {
-          const [{ cloudflareEnv }, { getAuthSession }, { isDashboardRouteCapabilityAllowed }] = await Promise.all([
-            import('~/server/utils/api-response'),
-            import('~/server/utils/auth'),
-            import('~/server/utils/dashboard-route-capability'),
-          ])
-          const env = cloudflareEnv(event)
-          const session = await getAuthSession(event, env)
-          if (session?.user?.id && env.DB) {
-            capabilityAllowed = await isDashboardRouteCapabilityAllowed(env.DB, session.user.id, {
-              organizationSlug,
-              siteSlug,
-              locationSlug,
-              capabilityKey,
-            })
-          }
-        } catch {
-          // Fail closed on a DB/auth lookup failure (transient D1 error, etc.) — the same
-          // controlled 404 an unresolvable capability gets, not an unhandled 500 that crashes
-          // the navigation.
-          capabilityAllowed = false
-        }
-      }
+      if (!event) throw createError({ statusCode: 500, statusMessage: 'Dashboard request context unavailable' })
+      const [{ cloudflareEnv }, { getAuthSession }, { isDashboardRouteCapabilityAllowed }] = await Promise.all([
+        import('~/server/utils/api-response'),
+        import('~/server/utils/auth'),
+        import('~/server/utils/dashboard-route-capability'),
+      ])
+      const env = cloudflareEnv(event)
+      if (!env.DB) throw createError({ statusCode: 503, statusMessage: 'Database not available' })
+      const session = await getAuthSession(event, env)
+      if (!session?.user?.id) throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
+      capabilityAllowed = await isDashboardRouteCapabilityAllowed(env.DB, session.user.id, {
+        organizationSlug,
+        siteSlug,
+        locationSlug,
+        capabilityKey,
+      })
     } else {
-      const result = await $fetch<{ allowed?: boolean }>('/api/dashboard/route-capability', {
+      const result = await $fetch<{ allowed?: unknown }>('/api/dashboard/route-capability', {
         query: { orgSlug: organizationSlug, siteSlug, locationSlug: locationSlug ?? undefined, key: capabilityKey },
-      }).catch(() => null)
-      capabilityAllowed = Boolean(result?.allowed)
+      })
+      if (typeof result.allowed !== 'boolean') {
+        throw createError({ statusCode: 502, statusMessage: 'Dashboard capability response was malformed' })
+      }
+      capabilityAllowed = result.allowed
     }
 
     if (!capabilityAllowed) {

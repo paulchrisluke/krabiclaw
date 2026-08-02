@@ -240,6 +240,7 @@ const requestEvent = useRequestEvent()
 const { data, refresh, error: requestsError } = await useAsyncData<{ requests: WorkRequest[] } | null>(
   () => `dashboard-work-requests-${dashboardScope.value?.orgSlug ?? 'unknown'}`,
   async () => {
+    if (isFree.value) return { requests: [] }
     const scope = dashboardScope.value
     if (!scope) throw createError({ statusCode: 400, statusMessage: 'Dashboard organization scope is required' })
     if (import.meta.server) {

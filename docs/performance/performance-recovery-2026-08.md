@@ -42,6 +42,11 @@ service. The API route and page share that service, so the list cannot drift
 into a second context lookup or an unbounded query. Location settings no longer
 silently fetches billing plans to decide whether to show an automatic upsell;
 billing remains an explicit user action on billing surfaces.
+Dashboard route capability checks now surface authentication, database, and
+malformed-response errors instead of converting failed guard requests into
+false capabilities or misleading 404s. Free-plan support pages do not query
+work-request history because that surface is not rendered for free plans;
+paid-plan history still has one bounded load.
 
 ## Client boundary decisions
 
@@ -111,6 +116,8 @@ Use the production-style Worker and browser for representative smoke checks:
 - public pages do not preload dashboard/editor-only CSS or chunks.
 - dashboard support does not perform a second context load or an unbounded
   work-request query during SSR.
+- dashboard capability failures remain actionable errors rather than false
+  capability responses or fallback 404s.
 
 Preview browser checks wait for the deployed entry stylesheet, every HTML-referenced
 Nuxt asset, and the HTML's build metadata to be available before running. A Worker

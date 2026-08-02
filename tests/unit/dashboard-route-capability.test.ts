@@ -102,6 +102,17 @@ test('a missing location under a real site fails closed', async () => {
   assert.equal(allowed, false)
 })
 
+test('an invalid site capability configuration remains an error', async () => {
+  fixtures.site = { ...restaurantSite, vertical: 'unsupported' }
+  fixtures.location = null
+  await assert.rejects(
+    () => isDashboardRouteCapabilityAllowed(db, 'user-1', {
+      organizationSlug: 'acme', siteSlug: 'acme-restaurant', capabilityKey: 'site.blog',
+    }),
+    /Unsupported site vertical: unsupported/,
+  )
+})
+
 test('content manager keys are always allowed, even under a site delta that tries to disable them', async () => {
   fixtures.site = { ...restaurantSite, feature_overrides: JSON.stringify({ disabled: ['qa', 'blog', 'testimonials'] }) }
   fixtures.location = null

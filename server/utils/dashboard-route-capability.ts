@@ -49,15 +49,10 @@ export async function isDashboardRouteCapabilityAllowed(
     locationFeatureOverrides = location.feature_overrides
   }
 
-  let capabilities: ReturnType<typeof resolveSiteCmsCapabilities>['capabilities']
-  try {
-    ({ capabilities } = resolveSiteCmsCapabilities(site.vertical, site.theme_id, {
-      siteEnabledFeatures: site.feature_overrides,
-      locationEnabledFeatures: locationFeatureOverrides,
-    }))
-  } catch {
-    return false
-  }
+  const { capabilities } = resolveSiteCmsCapabilities(site.vertical, site.theme_id, {
+    siteEnabledFeatures: site.feature_overrides,
+    locationEnabledFeatures: locationFeatureOverrides,
+  })
 
   return capabilities.managers.some(manager => manager.key === params.capabilityKey)
 }
