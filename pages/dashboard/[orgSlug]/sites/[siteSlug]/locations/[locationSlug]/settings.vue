@@ -527,10 +527,6 @@ function getErrorMessage(error: unknown, fallback: string): string {
   return fallback
 }
 
-watch(location, (loc) => {
-  if (loc) fillDetailsForm(loc)
-})
-
 function fillDetailsForm(loc: BusinessLocation) {
   detailsForm.title = loc.title
   detailsForm.slug = loc.slug
@@ -706,6 +702,7 @@ async function saveLocationDetails() {
     if (locationId.value !== requestedLocationId) return
     if (!response.success) throw new Error('Failed to save location')
     location.value = response.location
+    fillDetailsForm(response.location)
     if (response.location.slug !== route.params.locationSlug) {
       await dashboard.refresh()
       await router.replace({
@@ -839,6 +836,7 @@ watchEffect(() => {
   location.value = resource.location.location
   gbConnection.value = resource.connection.connection
   fillLocationFeatures(resource.location)
+  fillDetailsForm(resource.location.location)
 })
 
 const loadLocationWorkspace = async () => {
@@ -846,16 +844,12 @@ const loadLocationWorkspace = async () => {
   return !locationSettingsError.value
 }
 
-const { evaluateAndSuggest } = useUpsellTriggers()
-
 onMounted(() => {
   if (route.query.gb === 'connected') {
     toast.add({ description: 'Google Business connected successfully', color: 'success' })
     const { gb: _gb, ...restQuery } = route.query
     router.replace({ name: route.name as string, params: route.params, query: restQuery })
   }
-
-  evaluateAndSuggest()
 })
 
 useSeoMeta({ title: 'Location Settings | KrabiClaw Dashboard', robots: 'noindex, nofollow' })

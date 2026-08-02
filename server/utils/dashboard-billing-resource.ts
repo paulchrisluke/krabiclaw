@@ -15,8 +15,14 @@ interface SiteBillingRow {
   cancel_at_period_end: number | null
 }
 
-export async function loadDashboardBillingResource(event: H3Event) {
-  const { env, db, userId, organization } = await getDashboardContext(event, { requireSite: false })
+export async function loadDashboardBillingResource(event: H3Event, organizationSlug: string) {
+  if (!organizationSlug) {
+    throw createError({ statusCode: 400, statusMessage: 'Organization slug is required for billing' })
+  }
+  const { env, db, userId, organization } = await getDashboardContext(event, {
+    requireSite: false,
+    organizationSlug,
+  })
   await requireBillingAccess(env, db, organization.id, userId)
   const [billingStatus, credits, usage, byAction, siteRows, organizationBilling] = await Promise.all([
     getOrganizationBillingStatus(env, db, organization.id),

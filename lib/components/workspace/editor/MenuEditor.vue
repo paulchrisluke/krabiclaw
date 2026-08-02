@@ -342,7 +342,7 @@ const {
   renameMenuSection,
   deleteMenuSection,
   updateMenu
-} = useMenuEditor(props.siteId, props.locationId)
+} = await useMenuEditor(props.siteId, props.locationId)
 
 const handlePublish = async () => {
   if (!currentMenu.value) return

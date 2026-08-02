@@ -65,6 +65,19 @@ Collection/index page: list/table/grid for a resource collection, create action
 when authorized, loading skeletons, empty state, error/retry state, and canonical
 links to item editors or child scopes.
 
+Assistant is a collection/detail flow, not a split-panel workspace:
+
+- `/dashboard/:orgSlug/sites/:siteSlug/conversations` lists conversations and owns
+  the New conversation action.
+- `/dashboard/:orgSlug/sites/:siteSlug/conversations/new` starts one new ChowBot
+  conversation.
+- `/dashboard/:orgSlug/sites/:siteSlug/conversations/:conversationId` loads and
+  renders exactly one conversation detail experience.
+
+The index and detail surfaces must not mount together. Selecting a conversation
+is a route transition, and a failed detail load remains a visible error with an
+explicit user-triggered retry.
+
 Editor page: focused editing surface for one selected resource or CMS page. The
 content editor host routes are client-rendered through route rules and call
 explicit `/api/editor/sites/:siteId/**` endpoints. Save/publish/destructive

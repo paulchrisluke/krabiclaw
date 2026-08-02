@@ -152,12 +152,13 @@ async function handleUpgrade(planId: string) {
       import('~/composables/useOrgSettings'),
     ])
     const session = await authClient.getSession()
-    const orgSettings = useOrgSettings()
-    const billingUrl = `${orgSettings.billing.value}?plan=${encodeURIComponent(planId)}`
     if (!session.data?.user) {
-      await navigateTo({ path: '/login', query: { redirect: billingUrl } })
+      await navigateTo({ path: '/login', query: { redirect: `/pricing?plan=${encodeURIComponent(planId)}` } })
       return
     }
+    const billingPath = useOrgSettings().billing.value
+    if (!billingPath) throw new Error('Organization context is required to upgrade a plan')
+    const billingUrl = `${billingPath}?plan=${encodeURIComponent(planId)}`
     await navigateTo(billingUrl)
   } catch (error) {
     checkoutError.value = error instanceof Error ? error.message : 'Unable to open billing. Please try again.'

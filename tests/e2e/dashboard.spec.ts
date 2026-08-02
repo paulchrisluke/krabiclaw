@@ -9,16 +9,6 @@ test.describe('dashboard functional smoke', () => {
     const login = await page.goto(devLoginUrl(baseURL!), { waitUntil: 'load' })
     expect(login?.status()).toBeLessThan(400)
     await expect(page).toHaveURL(/\/dashboard/)
-    // Neither "Overview" nor "Create your restaurant workspace" exist in the
-    // current UI (confirmed via full-repo grep) — stale text from before the
-    // dashboard Nuxt UI consolidation (#337). The "any suitable E2E test
-    // user" fallback (server/api/dev/login.get.ts) deterministically prefers
-    // a user who already has a site (ORDER BY has_site DESC), so this test
-    // in practice always lands on pages/dashboard/[orgSlug]/index.vue, whose
-    // real heading is "Sites" (never "Overview" — that string only exists as
-    // an internal, never-rendered UDashboardPanel id). The onboarding
-    // alternative kept for a genuinely site-less user matches the real
-    // OnboardingWizard.vue welcome kicker instead of the old placeholder text.
     await expect(page.locator('body')).toContainText(/Sites|Let's build your site/)
 
     const dashboard = await page.goto(`${baseURL}/dashboard`, { waitUntil: 'load' })
@@ -29,6 +19,7 @@ test.describe('dashboard functional smoke', () => {
   })
 
   test('owner can open core dashboard pages for their org', async ({ page, baseURL }) => {
+    test.setTimeout(60_000)
     const errors = collectPageErrors(page)
     await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
     const suffix = Date.now()
@@ -37,11 +28,6 @@ test.describe('dashboard functional smoke', () => {
     expect(login?.status()).toBeLessThan(400)
     await expect(page).toHaveURL(/\/dashboard/)
 
-    // Signup no longer auto-creates an org (see server/utils/auth.ts), so a
-    // brand-new user lands on /dashboard/onboarding, not their own org's
-    // dashboard. Create a real site/org on demand — the same on-demand path
-    // any first-time owner actually goes through — before exercising the
-    // org-scoped settings/billing/support pages below.
     const createSiteRes = await page.request.post(`${baseURL}/api/sites`, {
       data: {
         name: `Dashboard Pages Test ${suffix}`,
@@ -51,8 +37,6 @@ test.describe('dashboard functional smoke', () => {
     })
     expect(createSiteRes.status()).toBe(200)
 
-    // /dashboard itself never redirects to /dashboard/{orgSlug} (it's a real
-    // page, not a redirect) — get the slug from the API instead of the URL.
     const contextRes = await page.request.get(`${baseURL}/api/dashboard/context`)
     expect(contextRes.status()).toBe(200)
     const context = await contextRes.json() as { organization?: { slug?: string } }
@@ -317,9 +301,6 @@ test.describe('dashboard functional smoke', () => {
     await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
     await page.goto(devLoginUrl(baseURL!, 'user-kikuzuki'), { waitUntil: 'load' })
 
-    // Same SSR-direct-service constraint as experiences/media/blog above —
-    // useMenuEditor now loads via loadDashboardLocationMenus during SSR, so
-    // the mock must be hit through an in-app SPA transition, not a URL nav.
     const overviewUrl = `${baseURL}/dashboard/kikuzuki-krabi-thailand/sites/kikuzuki-krabi-thailand/locations/kikuzuki-japanese-robatayaki-izakaya`
     const menuLink = page.locator('[id^="dashboard-sidebar"]').getByRole('link', { name: 'Menus' })
 

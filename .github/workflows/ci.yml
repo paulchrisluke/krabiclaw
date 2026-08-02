@@ -343,6 +343,10 @@ jobs:
           PREVIEW_CACHE_ORIGIN: https://preview.krabiclaw.com
         run: node --experimental-strip-types scripts/purge-preview-cache.ts
       - run: npx playwright install --with-deps chromium
+      - name: Wait for deployed assets
+        env:
+          PLAYWRIGHT_PREVIEW_URL: https://krabiclaw-preview.paulchrisluke.workers.dev
+        run: node scripts/wait-for-deployed-assets.mjs
       - name: Warm up preview Worker
         env:
           PREVIEW_WORKER_URL: https://krabiclaw-preview.paulchrisluke.workers.dev

@@ -33,7 +33,7 @@
           </li>
         </ul>
 
-        <div class="mt-6">
+        <div v-if="orgSettings.billing.value" class="mt-6">
           <UButton :to="orgSettings.billing.value" color="primary" block @click="close">
             {{ $t('saya.upgrade.get_pro') }}
           </UButton>

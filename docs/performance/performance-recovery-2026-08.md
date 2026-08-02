@@ -36,6 +36,18 @@ canonical plans load. The homepage makes no plans request. Dashboard home does
 not load the onboarding checklist. Failed API responses remain typed errors with
 an error code and request ID.
 
+Dashboard support follows the same boundary: its SSR page reuses the context
+already loaded by the dashboard layout and calls one bounded work-request
+service. The API route and page share that service, so the list cannot drift
+into a second context lookup or an unbounded query. Location settings no longer
+silently fetches billing plans to decide whether to show an automatic upsell;
+billing remains an explicit user action on billing surfaces.
+Dashboard route capability checks now surface authentication, database, and
+malformed-response errors instead of converting failed guard requests into
+false capabilities or misleading 404s. Free-plan support pages do not query
+work-request history because that surface is not rendered for free plans;
+paid-plan history still has one bounded load.
+
 ## Client boundary decisions
 
 - Public home, Saya, Blawby, platform marketing, help, and dashboard/editor CSS
@@ -53,6 +65,11 @@ an error code and request ID.
   text and Marcellus for display text.
 - The public platform header uses static Login and Start Free links. It does not
   resolve a session or import dashboard auth code on every public navigation.
+- Public HTML removes Nuxt's broad `modulepreload` hints. The renderer emits a
+  hint for every client manifest entry, which made mobile browsers fetch dozens
+  of route chunks before the public hero could paint. Public scripts remain
+  available through their normal entry tags; dashboard, admin, and auth routes
+  retain their private-surface hints.
 
 Blawby also had a concrete first-paint bug: its layout manually injected a
 hashed CSS URL that could differ between the server manifest and the client
@@ -97,6 +114,15 @@ Use the production-style Worker and browser for representative smoke checks:
 - no duplicate logical resource requests;
 - no `ERR_HTTP_HEADERS_SENT` messages;
 - public pages do not preload dashboard/editor-only CSS or chunks.
+- dashboard support does not perform a second context load or an unbounded
+  work-request query during SSR.
+- dashboard capability failures remain actionable errors rather than false
+  capability responses or fallback 404s.
+
+Preview browser checks wait for the deployed entry stylesheet, every HTML-referenced
+Nuxt asset, and the HTML's build metadata to be available before running. A Worker
+deployment is not considered browser-ready while HTML can reference an asset or
+build manifest that still returns 404.
 
 Keep shared transport/error/request-budget tests at the invariant level. Do not
 add one page test per duplicate request or another benchmark suite that merely

@@ -240,20 +240,23 @@ const requestEvent = useRequestEvent()
 const { data, refresh, error: requestsError } = await useAsyncData<{ requests: WorkRequest[] } | null>(
   () => `dashboard-work-requests-${dashboardScope.value?.orgSlug ?? 'unknown'}`,
   async () => {
+    if (isFree.value) return { requests: [] }
     const scope = dashboardScope.value
     if (!scope) throw createError({ statusCode: 400, statusMessage: 'Dashboard organization scope is required' })
     if (import.meta.server) {
       if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-      const [{ cloudflareEnv }, { loadDashboardContext }, { listWorkRequests }] = await Promise.all([
+      const [{ cloudflareEnv }, { listWorkRequests }] = await Promise.all([
         import('~/server/utils/api-response'),
-        import('~/server/utils/dashboard-context-service'),
         import('~/server/utils/work-requests-dashboard'),
       ])
       const db = cloudflareEnv(requestEvent).DB
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-      const { organization } = await loadDashboardContext(requestEvent, { orgSlug: scope.orgSlug })
-      if (!organization) throw createError({ statusCode: 404, statusMessage: 'Organization not found' })
-      const requests = await listWorkRequests(db, organization.id)
+      if (!dashboard.state.value) {
+        throw createError({ statusCode: 503, statusMessage: 'Dashboard context not loaded' })
+      }
+      const organizationId = dashboard.organization.value?.id
+      if (!organizationId) throw createError({ statusCode: 404, statusMessage: 'Organization not found' })
+      const requests = await listWorkRequests(db, organizationId)
       return { requests }
     }
     return await dashboardApi<{ requests: WorkRequest[] }>('/api/dashboard/work-requests', {

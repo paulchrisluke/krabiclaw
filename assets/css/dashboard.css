@@ -1,1 +1,12 @@
 @import "@nuxt/ui";
+
+.w-\(--width\) {
+  width: var(--width);
+}
+
+@media (width >= 992px) {
+  /* stylelint-disable-next-line selector-class-pattern -- utility mirrors Nuxt UI's generated class */
+  .lg\:w-\(--width\) {
+    width: var(--width);
+  }
+}
