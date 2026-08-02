@@ -112,6 +112,10 @@ for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
       'cache-control': 'no-store',
     })
 
+    const dashboardUrl = new URL('/dashboard', baseUrl)
+    dashboardUrl.searchParams.set('asset-propagation-check', `${Date.now()}-${attempt}`)
+    await verifyHtmlAndAssets(dashboardUrl, expectedAssetPath)
+
     consecutiveReadyChecks += 1
     if (consecutiveReadyChecks >= 2) {
       console.log(`Deployed platform and tenant assets are stable: ${expectedAssetPath} (attempt ${attempt}).`)
