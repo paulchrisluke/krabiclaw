@@ -58,20 +58,20 @@ export const useChowBot = () => {
     isOpen.value = true
   }
 
-  const loadConversation = async (conv: ChowBotConv) => {
-    if (!siteId.value) return
-
-    try {
-      const loaded = await history.get(siteId.value, conv.id)
-      if (!Array.isArray(loaded.messages) || !loaded.conversation?.id) return
-
-      messages.value = [...loaded.messages]
-      conversationId.value = loaded.conversation.id
-      isOpen.value = true
-    } catch (error) {
-      console.error('[ChowBot] loadConversation error:', error)
+  const loadConversationById = async (id: string): Promise<ChowBotConv> => {
+    if (!siteId.value) throw new Error('The site context is unavailable.')
+    const loaded = await history.get(siteId.value, id)
+    if (!Array.isArray(loaded.messages) || !loaded.conversation?.id) {
+      throw new Error('Conversation data was invalid.')
     }
+
+    messages.value = [...loaded.messages]
+    conversationId.value = loaded.conversation.id
+    isOpen.value = true
+    return loaded.conversation
   }
+
+  const loadConversation = (conv: ChowBotConv) => loadConversationById(conv.id)
 
   const handlePostActionNav = async (toolCalls: ChowbotToolCall[]) => {
     if (!siteId.value || !toolCalls.length) return
@@ -251,6 +251,6 @@ export const useChowBot = () => {
 
   return {
     isOpen, messages, isLoading, siteId, conversationId, currentPageOverride, draftMessage,
-    toggle, open, close, sendMessage, clearMessages, startNewConversation, loadConversation, setDraftMessage,
+    toggle, open, close, sendMessage, clearMessages, startNewConversation, loadConversation, loadConversationById, setDraftMessage,
   }
 }
