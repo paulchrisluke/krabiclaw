@@ -74,6 +74,8 @@ paid-plan history still has one bounded load.
   responsive Cloudflare Images variant, and lazy-load location, post, blog, and
   footer images below the hero. The first location image is no longer marked
   eager/high-priority beside the LCP image.
+- Post videos remain poster-only until their card enters a 200px viewport
+  margin; autoplay is mounted only after that visibility gate opens.
 - The Google Business photo contract is `google_url`. Reading it with the old
   camel-case name left tenants without CMS hero media with an empty hero image;
   the home hero now uses the canonical response field.

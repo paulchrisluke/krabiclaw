@@ -20,6 +20,19 @@
 // server/api/dashboard/sites/[siteId]/guest-threads/*.ts's per-route scope checks).
 import { isWhatsAppInboxDeepLinkPath } from '~/utils/dashboard-reauth'
 
+function requireDashboardRequestEvent() {
+  const event = useRequestEvent()
+  if (!event) throw createError({ statusCode: 500, statusMessage: 'Dashboard request context unavailable' })
+  return event
+}
+
+function requireAllowedResponse(value: unknown, statusMessage: string): boolean {
+  if (typeof value !== 'object' || value === null || !('allowed' in value) || typeof value.allowed !== 'boolean') {
+    throw createError({ statusCode: 502, statusMessage })
+  }
+  return value.allowed
+}
+
 export default defineNuxtRouteMiddleware(async (to) => {
   if (to.path !== '/dashboard' && !to.path.startsWith('/dashboard/')) return
 
@@ -38,17 +51,13 @@ export default defineNuxtRouteMiddleware(async (to) => {
   let allowed = false
 
   if (import.meta.server) {
-    const event = useRequestEvent()
-    if (!event) throw createError({ statusCode: 500, statusMessage: 'Dashboard request context unavailable' })
+    const event = requireDashboardRequestEvent()
     const { resolveAccountAccessForEvent } = await import('~/server/utils/route-access')
     const result = await resolveAccountAccessForEvent(event)
     allowed = result.status === 'ok' && result.allowed
   } else {
     const access = await $fetch<{ allowed?: unknown }>('/api/account/access')
-    if (typeof access.allowed !== 'boolean') {
-      throw createError({ statusCode: 502, statusMessage: 'Dashboard access response was malformed' })
-    }
-    allowed = access.allowed
+    allowed = requireAllowedResponse(access, 'Dashboard access response was malformed')
   }
 
   if (!allowed) {
@@ -72,8 +81,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
     let capabilityAllowed = false
     if (import.meta.server) {
-      const event = useRequestEvent()
-      if (!event) throw createError({ statusCode: 500, statusMessage: 'Dashboard request context unavailable' })
+      const event = requireDashboardRequestEvent()
       const [{ cloudflareEnv }, { getAuthSession }, { isDashboardRouteCapabilityAllowed }] = await Promise.all([
         import('~/server/utils/api-response'),
         import('~/server/utils/auth'),
@@ -93,10 +101,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
       const result = await $fetch<{ allowed?: unknown }>('/api/dashboard/route-capability', {
         query: { orgSlug: organizationSlug, siteSlug, locationSlug: locationSlug ?? undefined, key: capabilityKey },
       })
-      if (typeof result.allowed !== 'boolean') {
-        throw createError({ statusCode: 502, statusMessage: 'Dashboard capability response was malformed' })
-      }
-      capabilityAllowed = result.allowed
+      capabilityAllowed = requireAllowedResponse(result, 'Dashboard capability response was malformed')
     }
 
     if (!capabilityAllowed) {

@@ -22,8 +22,10 @@
         class="absolute inset-0 h-full w-full object-cover"
       />
       <img
-        v-else-if="businessPrimaryPhoto"
-        :src="businessPrimaryPhoto.google_url"
+        v-else-if="businessPrimaryPhoto?.google_url"
+        :src="heroImageUrl ?? undefined"
+        :srcset="heroImageSrcset ?? undefined"
+        sizes="100vw"
         alt="" aria-hidden="true" fetchpriority="high" decoding="async"
         class="absolute inset-0 h-full w-full object-cover"
       />
