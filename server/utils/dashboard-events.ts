@@ -5,6 +5,8 @@ export interface DashboardEvent {
   event_type: string
   site_id: string
   location_id: string | null
+  entity_type: string | null
+  entity_id: string | null
   metadata: Record<string, unknown> | null
   created_at: string
   actor_id: string | null
@@ -48,7 +50,7 @@ export async function listDashboardEvents(
   params.push(limit)
 
   const rows = await queryAll<DashboardEvent & { metadata: string | null }>(db, `
-    SELECT e.id, e.event_type, e.site_id, e.location_id, e.metadata, e.created_at,
+    SELECT e.id, e.event_type, e.site_id, e.location_id, e.entity_type, e.entity_id, e.metadata, e.created_at,
            e.actor_id, u.name AS actor_name, u.image AS actor_image,
            l.title AS location_title
     FROM site_events e

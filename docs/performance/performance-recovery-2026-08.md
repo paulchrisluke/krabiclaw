@@ -36,6 +36,13 @@ canonical plans load. The homepage makes no plans request. Dashboard home does
 not load the onboarding checklist. Failed API responses remain typed errors with
 an error code and request ID.
 
+Dashboard support follows the same boundary: its SSR page reuses the context
+already loaded by the dashboard layout and calls one bounded work-request
+service. The API route and page share that service, so the list cannot drift
+into a second context lookup or an unbounded query. Location settings no longer
+silently fetches billing plans to decide whether to show an automatic upsell;
+billing remains an explicit user action on billing surfaces.
+
 ## Client boundary decisions
 
 - Public home, Saya, Blawby, platform marketing, help, and dashboard/editor CSS
@@ -102,6 +109,8 @@ Use the production-style Worker and browser for representative smoke checks:
 - no duplicate logical resource requests;
 - no `ERR_HTTP_HEADERS_SENT` messages;
 - public pages do not preload dashboard/editor-only CSS or chunks.
+- dashboard support does not perform a second context load or an unbounded
+  work-request query during SSR.
 
 Preview browser checks wait for the deployed entry stylesheet, every HTML-referenced
 Nuxt asset, and the HTML's build metadata to be available before running. A Worker
