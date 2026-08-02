@@ -172,8 +172,10 @@ definePageMeta({ layout: 'dashboard' })
 
 const config = useRuntimeConfig()
 const dashboard = useDashboardSite()
-const plan = computed(() => dashboard.site.value?.plan ?? 'free')
-const isFree = computed(() => !plan.value || plan.value === 'free')
+const isFree = computed(() => {
+  const state = dashboard.state.value
+  return !!state && (!state.site?.plan || state.site.plan === 'free')
+})
 const managedServiceEnabled = dashboard.managedServiceEnabled
 const { open: openUpsell } = useServiceUpsell()
 
@@ -240,25 +242,23 @@ const requestEvent = useRequestEvent()
 const { data, refresh, error: requestsError } = await useAsyncData<{ requests: WorkRequest[] } | null>(
   () => `dashboard-work-requests-${dashboardScope.value?.orgSlug ?? 'unknown'}`,
   async () => {
-    if (isFree.value) return { requests: [] }
+    const dashboardContext = dashboard.state.value
+    if (!dashboardContext) throw createError({ statusCode: 503, statusMessage: 'Dashboard context not loaded' })
     const scope = dashboardScope.value
     if (!scope) throw createError({ statusCode: 400, statusMessage: 'Dashboard organization scope is required' })
+    const organizationId = dashboardContext.organization?.id
+    if (!organizationId) throw createError({ statusCode: 404, statusMessage: 'Organization not found' })
     if (import.meta.server) {
       if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-      const [{ cloudflareEnv }, { listWorkRequests }] = await Promise.all([
-        import('~/server/utils/api-response'),
-        import('~/server/utils/work-requests-dashboard'),
-      ])
+      const { cloudflareEnv } = await import('~/server/utils/api-response')
       const db = cloudflareEnv(requestEvent).DB
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-      if (!dashboard.state.value) {
-        throw createError({ statusCode: 503, statusMessage: 'Dashboard context not loaded' })
-      }
-      const organizationId = dashboard.organization.value?.id
-      if (!organizationId) throw createError({ statusCode: 404, statusMessage: 'Organization not found' })
+      if (!dashboardContext.site?.plan || dashboardContext.site.plan === 'free') return { requests: [] }
+      const { listWorkRequests } = await import('~/server/utils/work-requests-dashboard')
       const requests = await listWorkRequests(db, organizationId)
       return { requests }
     }
+    if (!dashboardContext.site?.plan || dashboardContext.site.plan === 'free') return { requests: [] }
     return await dashboardApi<{ requests: WorkRequest[] }>('/api/dashboard/work-requests', {
       validate: (value): value is { requests: WorkRequest[] } =>
         isRecord(value)

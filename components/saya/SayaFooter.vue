@@ -8,7 +8,7 @@
         <div>
           <NuxtLink to="/" class="block no-underline leading-none">
             <div v-if="logoUrl" class="size-14 rounded-full overflow-hidden">
-              <img :src="logoUrl" :alt="restaurantName" class="h-full w-full object-cover" />
+              <img :src="logoUrl" :alt="restaurantName" loading="lazy" decoding="async" class="h-full w-full object-cover" />
             </div>
             <div v-else class="flex size-14 items-center justify-center rounded-full bg-inverted/10 text-inverted font-bold text-2xl">
               {{ restaurantName.charAt(0).toUpperCase() }}

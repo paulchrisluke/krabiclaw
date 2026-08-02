@@ -6,8 +6,8 @@
            Video fades in on top after window.load + idle; poster remains painted. -->
       <img
         v-if="hero.thumbnail_url && hero.video"
-        :src="cfImageVariant(hero.thumbnail_url, { width: 1200 }) ?? undefined"
-        :srcset="cfImageSrcset(hero.thumbnail_url) ?? undefined"
+        :src="heroImageUrl ?? undefined"
+        :srcset="heroImageSrcset ?? undefined"
         sizes="100vw"
         alt="" aria-hidden="true" fetchpriority="high" decoding="async"
         class="absolute inset-0 h-full w-full object-cover"
@@ -15,15 +15,17 @@
       <!-- Image-only hero (no video) -->
       <img
         v-else-if="hero.image && hero.imageKind === 'image'"
-        :src="cfImageVariant(hero.image, { width: 1200 }) ?? undefined"
-        :srcset="cfImageSrcset(hero.image) ?? undefined"
+        :src="heroImageUrl ?? undefined"
+        :srcset="heroImageSrcset ?? undefined"
         sizes="100vw"
         alt="" aria-hidden="true" fetchpriority="high" decoding="async"
         class="absolute inset-0 h-full w-full object-cover"
       />
       <img
-        v-else-if="businessPrimaryPhoto"
-        :src="businessPrimaryPhoto.googleUrl"
+        v-else-if="businessPrimaryPhoto?.google_url"
+        :src="heroImageUrl ?? undefined"
+        :srcset="heroImageSrcset ?? undefined"
+        sizes="100vw"
         alt="" aria-hidden="true" fetchpriority="high" decoding="async"
         class="absolute inset-0 h-full w-full object-cover"
       />
@@ -126,7 +128,7 @@ interface Props {
     businessTitle?: string
     businessSubtitle?: string
     businessCity?: string
-    businessPrimaryPhoto?: { googleUrl?: string }
+    businessPrimaryPhoto?: { google_url?: string }
     hasOrderLinks?: boolean
     ctaRoute?: string
     reserveCta?: string
@@ -165,6 +167,36 @@ const showSecondaryCta = computed(() =>
 // Neutral default until the owner picks a brand color in onboarding.
 const brandColor = computed(() => props.data?.brandColor || '#3F3F46')
 const isExperienceVertical = computed(() => props.data?.vertical === 'experience')
+
+const heroImageSource = computed(() => {
+  if (hero.value.thumbnail_url && hero.value.video) return hero.value.thumbnail_url
+  if (hero.value.image && hero.value.imageKind === 'image') return hero.value.image
+  return businessPrimaryPhoto.value?.google_url || null
+})
+const heroImageUrl = computed(() => {
+  const source = heroImageSource.value
+  return source ? cfImageVariant(source, { width: 1200 }) : null
+})
+const heroImageSrcset = computed(() => cfImageSrcset(heroImageSource.value))
+
+useHead(() => {
+  const href = heroImageUrl.value
+  if (!href) return {}
+
+  const preload = {
+    rel: 'preload',
+    as: 'image' as const,
+    href,
+    ...(heroImageSrcset.value
+      ? {
+          imagesrcset: heroImageSrcset.value,
+          imagesizes: '100vw',
+        }
+      : {}),
+  }
+
+  return { link: [preload] }
+})
 
 const { videoEl, showVideo } = useHeroVideo(() => hero.value?.video)
 </script>
