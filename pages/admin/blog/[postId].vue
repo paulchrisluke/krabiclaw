@@ -19,9 +19,9 @@
 </template>
 
 <script setup lang="ts">
-import { platformBlogRepository } from '~/components/workspace/blog/platformBlogRepository'
-import BlogPostEditor from '~/components/workspace/blog/BlogPostEditor.vue'
-import type { BlogPost } from '~/components/workspace/blog/types'
+import { platformBlogRepository } from '~/lib/components/workspace/blog/platformBlogRepository'
+import BlogPostEditor from '~/lib/components/workspace/blog/BlogPostEditor.vue'
+import type { BlogPost } from '~/lib/components/workspace/blog/types'
 
 definePageMeta({ layout: 'dashboard' })
 

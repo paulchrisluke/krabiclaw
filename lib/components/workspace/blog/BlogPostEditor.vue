@@ -98,7 +98,7 @@
 <script setup lang="ts">
 import type { Component } from 'vue'
 import BlogArticleView from '~/components/blog/BlogArticleView.vue'
-import PlatformMediaPicker from '~/components/workspace/media/PlatformMediaPicker.vue'
+import PlatformMediaPicker from '~/lib/components/workspace/media/PlatformMediaPicker.vue'
 import type { BlogPostRepository, BlogPost, BlogEditorBlock, PlatformBlogUpdateInput } from './types'
 import { generatedExcerpt, initialBlogEditorBlocks, normalizeBlogSlug, resolveBlogPublicPath, resolveBlogSeo, SerializedSnapshotQueue } from '~/utils/blog-editor'
 import { getErrorMessage } from '~/utils/errors'

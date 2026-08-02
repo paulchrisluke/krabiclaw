@@ -189,7 +189,7 @@
 <script setup lang="ts">
 import { createEmptyFaqItem, createEmptyHowToStep, type useBlogForm } from '~/composables/useBlogForm'
 import { BLOG_CATEGORY_LABELS } from '~/utils/blog-categories'
-import PlatformMediaPicker from '~/components/workspace/media/PlatformMediaPicker.vue'
+import PlatformMediaPicker from '~/lib/components/workspace/media/PlatformMediaPicker.vue'
 
 interface Props {
   freeTextCategory?: boolean

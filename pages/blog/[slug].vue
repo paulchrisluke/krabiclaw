@@ -105,7 +105,7 @@ interface TenantBlogPost {
   featured_image?: { public_url: string | null; kind: string | null; width: number | null; height: number | null } | null
   social_image?: { public_url: string | null; thumbnail_url: string | null; width: number | null; height: number | null } | null
   components?: ContentComponent[]
-  content_blocks?: import('~/components/workspace/blog/types').BlogEditorBlock[] | null
+  content_blocks?: import('~/lib/components/workspace/blog/types').BlogEditorBlock[] | null
 }
 
 const route = useRoute()

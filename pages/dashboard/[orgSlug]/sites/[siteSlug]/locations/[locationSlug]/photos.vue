@@ -122,7 +122,7 @@
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.photos' })
 
-import VideoPosterPrompt from '~/components/workspace/media/VideoPosterPrompt.vue'
+import VideoPosterPrompt from '~/lib/components/workspace/media/VideoPosterPrompt.vue'
 
 interface MediaAsset {
   id: string

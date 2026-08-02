@@ -199,9 +199,9 @@
 </template>
 
 <script setup lang="ts">
-import ChowBot from '~/components/workspace/dashboard/ChowBot.vue'
-import DashboardScopeHeader from '~/components/workspace/dashboard/DashboardScopeHeader.vue'
-import type { DashboardScopeHeaderModel } from '~/components/workspace/dashboard/DashboardScopeHeader.vue'
+import ChowBot from '~/lib/components/workspace/dashboard/ChowBot.vue'
+import DashboardScopeHeader from '~/lib/components/workspace/dashboard/DashboardScopeHeader.vue'
+import type { DashboardScopeHeaderModel } from '~/lib/components/workspace/dashboard/DashboardScopeHeader.vue'
 import { authClient } from '~/lib/auth-client'
 import { useAuth } from '~/composables/useAuth'
 import { useAnalytics } from '~/composables/useAnalytics'

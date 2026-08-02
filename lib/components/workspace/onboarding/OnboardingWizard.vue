@@ -301,7 +301,7 @@ import { getLocalTimezone } from '~/utils/timezone'
 import { marked } from 'marked'
 import { DEFAULT_CURRENCY } from '~/shared/currencies'
 import ChowBotConversation from '~/components/chowbot/ChowBotConversation.vue'
-import type { DraftBrandForm } from '~/components/workspace/onboarding/DraftBrandCard.vue'
+import type { DraftBrandForm } from '~/lib/components/workspace/onboarding/DraftBrandCard.vue'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
 interface WizardMessage {

@@ -103,7 +103,7 @@ export interface PublicBlogPost extends PublicBlogSummary {
   created_at: string | null
   updated_at: string | null
   components: ApiRecord[]
-  content_blocks: import('~/components/workspace/blog/types').BlogEditorBlock[]
+  content_blocks: import('~/lib/components/workspace/blog/types').BlogEditorBlock[]
   social_image: { public_url: string | null; thumbnail_url: string | null; width: number | null; height: number | null } | null
 }
 

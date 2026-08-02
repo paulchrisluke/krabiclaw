@@ -48,7 +48,7 @@
 </template>
 
 <script setup lang="ts">
-import type { BlogEditorBlock } from '~/components/workspace/blog/types'
+import type { BlogEditorBlock } from '~/lib/components/workspace/blog/types'
 
 const props = withDefaults(defineProps<{
   title: string
