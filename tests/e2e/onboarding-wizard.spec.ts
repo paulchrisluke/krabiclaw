@@ -22,7 +22,7 @@ async function loginFreshUser(page: Page, baseURL: string, userId: string) {
 async function completeManualWizard(
   page: Page,
   businessName: string,
-  { skipVertical = false, vertical = 'restaurant' as 'restaurant' | 'experience' | 'professional_service' } = {},
+  { skipVertical = false, skipSuccessAssertion = false, vertical = 'restaurant' as 'restaurant' | 'experience' | 'professional_service' } = {},
 ) {
   const activeWidget = page.locator('.onboarding-step-widget').last()
   const actionButton = (name: string | RegExp) => activeWidget.getByRole('button', { name })
@@ -73,11 +73,13 @@ async function completeManualWizard(
     await expect(page.getByText('Tap to preview your site')).toBeVisible()
     await page.getByRole('button', { name: 'Create site' }).click()
   }
-  try {
-    await expect(page.getByText('Done. Your workspace is live')).toBeVisible({ timeout: 60_000 })
-  } catch (waitError) {
-    const bannerText = await page.getByTestId('wizard-error-banner').textContent().catch(() => null)
-    throw new Error(`site creation never reached "Done"${bannerText ? ` — wizard error banner: ${bannerText}` : ' (no error banner visible either)'}`, { cause: waitError })
+  if (!skipSuccessAssertion) {
+    try {
+      await expect(page.getByText('Done. Your workspace is live')).toBeVisible({ timeout: 60_000 })
+    } catch (waitError) {
+      const bannerText = await page.getByTestId('wizard-error-banner').textContent().catch(() => null)
+      throw new Error(`site creation never reached "Done"${bannerText ? ` — wizard error banner: ${bannerText}` : ' (no error banner visible either)'}`, { cause: waitError })
+    }
   }
 }
 
@@ -373,7 +375,7 @@ test.describe('onboarding wizard UI', () => {
 
     await page.goto(`${baseURL}/dashboard/onboarding`, { waitUntil: 'load' })
     await expect(page.locator('.onboarding-step-widget').first()).toBeVisible()
-    await completeManualWizard(page, `Onboard Retry Test ${suffix}`)
+    await completeManualWizard(page, `Onboard Retry Test ${suffix}`, { skipSuccessAssertion: true })
 
     // Forbidden: the wizard's own post-creation success view (or any stale
     // pre-creation context) must not render as if the refresh had succeeded.

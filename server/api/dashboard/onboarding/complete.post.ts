@@ -1,6 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { execute, queryFirst } from '~/server/db'
+import { assertSiteWideAccess, resolveMemberId } from '~/server/utils/member-access'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -19,13 +20,27 @@ export default defineEventHandler(async (event) => {
   if (!siteId) return jsonResponse({ error: 'siteId is required' }, { status: 400 })
 
   const site = await queryFirst<{ id: string; organization_id: string }>(db, `
-    SELECT s.id, s.organization_id
-    FROM sites s
-    JOIN member m ON m.organizationId = s.organization_id
-    WHERE s.id = ? AND m.userId = ?
-    LIMIT 1
-  `, [siteId, session.user.id])
+    SELECT s.id, s.organization_id FROM sites WHERE id = ?
+  `, [siteId])
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
+
+  const memberId = await resolveMemberId({
+    organizationId: site.organization_id,
+    userId: session.user.id,
+    env,
+  })
+  if (!memberId) return jsonResponse({ error: 'Organization membership not found' }, { status: 404 })
+
+  try {
+    await assertSiteWideAccess(db, {
+      memberId,
+      role: 'owner',
+      organizationId: site.organization_id,
+      siteId,
+    })
+  } catch (err) {
+    return jsonResponse({ error: 'Site access denied' }, { status: 403 })
+  }
 
   try {
     // sites.onboarding_status has a CHECK constraint allowing only

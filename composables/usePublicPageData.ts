@@ -97,7 +97,11 @@ export const usePublicPageData = async (options: { enabled?: MaybeRefOrGetter<bo
     const stopEnabledWatch = watch(enabled, (isEnabled, wasEnabled) => {
       if (isEnabled && !wasEnabled) asyncData.execute()
     })
+    const stopKeyWatch = watch(key, () => {
+      if (enabled.value) asyncData.execute()
+    }, { immediate: false })
     onScopeDispose(stopEnabledWatch)
+    onScopeDispose(stopKeyWatch)
   }
   if (import.meta.server) {
     await Promise.all([asyncData, shell.ready])
