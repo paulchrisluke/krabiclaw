@@ -18,17 +18,15 @@ if (tenantType === TENANT_TYPES.TENANT_404) {
   })
 }
 
-// app.vue is the root component and never remounts across client-side
-// navigation, so it reads the stable site-shell state (siteId+locale key, never
-// stale) rather than useBootstrap() (route-keyed, must be `await`-ed inside
-// a per-page <script setup> for Suspense to block on it — see useBootstrap.ts).
-const { config } = useSiteShellState()
+const { isBlawby } = usePublicTemplate()
+const siteShell = isBlawby.value ? null : useSiteShellState()
+const config = siteShell?.config
 const route = useRoute()
 const defaultOgImage = useSharedOgImage()
 const defaultPageUrl = useSeoUrl(() => route.path)
 const defaultSiteName = isPlatform ? 'KrabiClaw' : (site?.brand_name || 'KrabiClaw')
-const tenantLogoUrl = computed(() => config.value.logo_url || site?.logo_url || null)
-const tenantBrandName = computed(() => config.value.brand_name || site?.brand_name || '')
+const tenantLogoUrl = computed(() => config?.value.logo_url || site?.logo_url || null)
+const tenantBrandName = computed(() => config?.value.brand_name || site?.brand_name || '')
 
 useSeoMeta({
   ogImage: defaultOgImage,
@@ -70,7 +68,7 @@ const loadingColor = computed(() => {
 // which requires an active component instance.
 if (import.meta.client) {
   watchEffect(() => {
-    const brandColor = config.value.brand_color
+    const brandColor = config?.value.brand_color
     if (!brandColor) return
     try {
       const themeColors = calculateThemeColors(brandColor)

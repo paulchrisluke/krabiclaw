@@ -26,6 +26,8 @@ The 5–6 second experience was the result of stacked work, not one slow Vue fil
 - fallback chains could turn one logical load into several calls;
 - public routes inherited dashboard/editor CSS and globally registered feature code;
 - public and dashboard surfaces shared global CSS and root-level client plugins;
+- `app.vue` and `pages/about.vue` still loaded the generic Saya/site shell on
+  Blawby routes even though Blawby has its own route and shell services;
 - SSR paths still had to be kept off internal HTTP self-fetches because nested
   Nitro dispatch does not carry the Worker bindings reliably.
 
@@ -44,6 +46,8 @@ an error code and request ID.
   by `usePlatformTheme`, which owns the `html.dark` class and persists the
   explicit `system`, `light`, or `dark` preference. Saya uses its existing theme
   class contract. Blawby is intentionally light-only.
+- Blawby routes bypass the generic root site-shell state and generic public-page
+  data loader. They use the canonical Blawby route and shell services only.
 - Fonts are self-hosted by `@nuxt/fonts`; no runtime plugin adds a Google Fonts
   stylesheet. Blawby keeps its gold/accent page bands and uses Poppins for body
   text and Marcellus for display text.
@@ -61,21 +65,21 @@ Nuxt emits one route-owned stylesheet reference.
 After the CSS, public-header, and lazy-boundary fixes, a smoke pass against the
 rebuilt Worker observed these server-side response times:
 
-| Route | Worker response |
+| Route | Direct local Worker response |
 | --- | ---: |
-| `/` | 362 ms |
-| `/pricing` | 730 ms |
-| `/preview/site/site-ncls-blawby/about` | 1,338 ms cold / 626 ms warm |
+| `/` | 258 ms |
+| `/pricing` | 216 ms |
+| `/preview/site/site-ncls-blawby/about` | 653 ms HTTP / 588 ms instrumented |
 | `/dashboard/pottery-house-krabi` | 999 ms |
 
-The in-app browser's full `goto` waits were higher in this run because Wrangler
-served many hashed assets through its remote preview connection; that is asset
-transport overhead, not additional application data work. Pricing is now below
-one second at the Worker boundary while performing its single canonical billing
-lookup. Blawby is below one second warm and remains the route to watch because
-its shell and page data require more D1 work on a cold request.
-The universal client entry is about 389 KB raw / 137 KB gzip. The 517 KB raw
-editor chunk is route-only and is not loaded by the public homepage.
+These are direct HTTP measurements after the production-style Worker was
+warmed. The in-app browser rendered the Blawby About page with its Poppins body
+font, Marcellus display font, navy text, and three gold bands. Its full `goto`
+waits were higher, and one first navigation timed out, because this Wrangler
+preview served hashed assets through the in-app browser's remote transport; the
+Worker's own route instrumentation remained separate from that transport. The
+universal client entry is 394.49 KB raw / 139.10 KB gzip. The 517.30 KB raw /
+161 KB gzip editor chunk is route-only and is not loaded by the public homepage.
 
 These are smoke observations, not a statistically meaningful benchmark. The
 blocking checks are request count, query count, payload size, own-origin SSR
