@@ -1,1 +1,11 @@
 @import "@nuxt/ui";
+
+.w-\(--width\) {
+  width: var(--width);
+}
+
+@media (min-width: 992px) {
+  .lg\:w-\(--width\) {
+    width: var(--width);
+  }
+}
