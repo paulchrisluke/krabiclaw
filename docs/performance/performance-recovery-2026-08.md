@@ -41,12 +41,12 @@ already loaded by the dashboard layout and calls one bounded work-request
 service. The API route and page share that service, so the list cannot drift
 into a second context lookup or an unbounded query. Location settings no longer
 silently fetches billing plans to decide whether to show an automatic upsell;
-billing remains an explicit user action on billing surfaces. Dashboard route
-capability checks now surface authentication, database, and malformed-response
-errors instead of converting failed guard requests into false capabilities or
-misleading 404s. Free-plan support pages do not query work-request history
-because that surface is not rendered for free plans; paid-plan history still
-has one bounded load.
+billing remains an explicit user action on billing surfaces.
+Dashboard route capability checks now surface authentication, database, and
+malformed-response errors instead of converting failed guard requests into
+false capabilities or misleading 404s. Free-plan support pages do not query
+work-request history because that surface is not rendered for free plans;
+paid-plan history still has one bounded load.
 
 ## Client boundary decisions
 
