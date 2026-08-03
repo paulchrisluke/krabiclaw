@@ -120,11 +120,12 @@ instead of relative and absolute duplicates.
 Dashboard/editor CSS remains outside these public entrypoints. Home routes now
 also have a critical inline shell: platform's root page is static HTML with a
 small consent script, while Saya and Blawby inline only the header/hero geometry
-and preload their full home stylesheet. The server response also sends one
-surface-specific HTTP `Link` preload header, so CSS discovery begins when the
-response headers arrive instead of waiting for the buffered HTML body. The
-stylesheet's own preload `onload` promotes it to a stylesheet; there is no
-two-frame JavaScript handoff. The Worker defers the Nuxt runtime on public GET
+and emit their full home stylesheet as an active SSR stylesheet link. The server
+response also sends one surface-specific HTTP `Link` preload header, so CSS
+discovery begins when the response headers arrive instead of waiting for the
+buffered HTML body. The stylesheet is render-blocking during the initial parse;
+there is no client-side promotion or two-frame JavaScript handoff. The Worker
+defers the Nuxt runtime on public GET
 routes and removes the public Nuxt entry script from the initial HTML. Public pages retain native links and
   server-rendered content without JavaScript; the small inline interaction
   loader fetches the Nuxt entry only when a button, submit control, or other
@@ -153,7 +154,7 @@ navigation, and the browser check verifies the initial CSS, fonts, above-fold
 image markup, iframe count, and runtime script count. The fresh single-pass
 local Worker measurements for the final build are:
 
-| Surface | Browser navigation | HTML body | Server `total` | Stylesheet preload |
+| Surface | Browser navigation | HTML body | Server `total` | Surface stylesheet |
 | --- | ---: | ---: | ---: | --- |
 | Platform `/` | 121 ms | 27,219 B | 21 ms | `platform-home.css` |
 | Saya `/` (`demo.localhost`) | 142 ms | 55,700 B | 110 ms | `saya-home.css` |

@@ -95,9 +95,7 @@ useHead(() => {
   const isHome = route.path === '/' || /^\/preview\/site\/[^/]+\/?$/.test(route.path)
   return {
     link: [isHome
-      ? import.meta.client
-        ? { key: 'saya-home-stylesheet', rel: 'stylesheet', href: sayaStylesheetForRoute.value }
-        : { key: 'saya-home-stylesheet', rel: 'preload', as: 'style', href: sayaStylesheetForRoute.value, onload: "this.onload=null;this.rel='stylesheet'" }
+      ? { key: 'saya-home-stylesheet', rel: 'stylesheet', href: sayaStylesheetForRoute.value }
       : { key: 'saya-surface-stylesheet', rel: 'stylesheet', href: sayaStylesheetForRoute.value }],
     style: isHome ? [{ innerHTML: sayaCriticalCss, tagPriority: 'critical' }] : [],
   }
