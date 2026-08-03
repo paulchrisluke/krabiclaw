@@ -52,7 +52,61 @@ const publicHtmlCacheHeaders = isNonProductionDeployment
     }
   : {
       'cache-control': 'public, s-maxage=60, stale-while-revalidate=300, max-age=0',
+  }
+
+const publicSurfaceCssPaths = {
+  'platform-entry': 'surfaces/platform.css',
+  'saya-entry': 'surfaces/saya.css',
+  'blawby-entry': 'surfaces/blawby.css',
+} as const
+
+function surfaceCssAssetPath(fileName: string) {
+  for (const [sourceName, targetPath] of Object.entries(publicSurfaceCssPaths)) {
+    if (fileName.includes(`${sourceName}.`) && fileName.endsWith('.css')) {
+      return targetPath
     }
+  }
+
+  return null
+}
+
+function publicSurfaceCssPlugin() {
+  return {
+    name: 'krabiclaw-public-surface-css-paths',
+    generateBundle(_options: unknown, bundle: Record<string, { type: string; fileName: string; code?: string }>) {
+      const renamedEntries: Array<[string, { type: string; fileName: string; code?: string }]> = []
+
+      for (const [fileName, asset] of Object.entries(bundle)) {
+        const targetPath = surfaceCssAssetPath(fileName)
+        if (!targetPath) {
+          renamedEntries.push([fileName, asset])
+          continue
+        }
+
+        asset.fileName = `_nuxt/${targetPath}`
+        renamedEntries.push([asset.fileName, asset])
+      }
+
+      for (const fileName of Object.keys(bundle)) {
+        Reflect.deleteProperty(bundle, fileName)
+      }
+
+      for (const [fileName, asset] of renamedEntries) {
+        bundle[fileName] = asset
+      }
+
+      for (const asset of Object.values(bundle)) {
+        if (asset.type !== 'chunk' || !asset.code) continue
+
+        for (const [sourceName, targetPath] of Object.entries(publicSurfaceCssPaths)) {
+          asset.code = asset.code
+            .replace(new RegExp(`${sourceName}\\.[A-Za-z0-9_-]+\\.css`, 'g'), targetPath)
+            .replace(new RegExp(`/_nuxt/${sourceName}\\.[A-Za-z0-9_-]+\\.css`, 'g'), `/_nuxt/${targetPath}`)
+        }
+      }
+    },
+  }
+}
 
 export default defineNuxtConfig({
   ignore: ['**/.worktrees/**'],
@@ -155,6 +209,8 @@ export default defineNuxtConfig({
   // Bundle analysis is opt-in and client-only; it has no runtime effect.
   hooks: {
     'vite:extendConfig'(viteConfig, { isClient }) {
+      viteConfig.plugins?.push(publicSurfaceCssPlugin())
+
       if (analyzeBundle && isClient) {
         viteConfig.plugins?.push(visualizer({
           filename: process.env.PERF_BUNDLE_ANALYZE_OUT || 'bundle-analysis.html',
@@ -351,6 +407,7 @@ export default defineNuxtConfig({
     // Versioned static assets — immutable forever
     '/assets/**': { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },
     '/_nuxt/**':  { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },
+    '/_nuxt/surfaces/**': { headers: { 'cache-control': 'no-cache, max-age=0, must-revalidate' } },
 
     // OAuth consent + login pages — anti-framing required by OpenAI MCP CSP spec.
     // frame-ancestors 'none' prevents clickjacking on the consent/auth flow.

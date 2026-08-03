@@ -89,7 +89,13 @@ complete HTML without a surface stylesheet in the document head. The browser
 painted default fonts, colors, and layout until hydration loaded the layout
 chunk. Platform, Saya, and Blawby now import their entry CSS as `?url` and add
 the URL through `useHead`, so SSR emits the stylesheet link while the CSS stays
-surface-scoped. Dashboard/editor CSS remains outside these public entrypoints.
+surface-scoped. A Vite output plugin rewrites those three CSS assets to the
+stable paths `/_nuxt/surfaces/platform.css`, `/_nuxt/surfaces/saya.css`, and
+`/_nuxt/surfaces/blawby.css` in both the client output and server references.
+This prevents independent client/server asset hashing from producing an SSR
+stylesheet URL that the deployment does not contain. Those stable files are
+served with revalidation rather than immutable caching. Dashboard/editor CSS
+remains outside these public entrypoints.
 
 ## Cold-path measurements from the production-style local Worker
 
@@ -124,13 +130,15 @@ only the entry stylesheet, while the surface stylesheet appeared later when the
 layout client chunk loaded. The resulting screenshot showed the raw browser
 layout before the finished platform, Saya, or Blawby surface.
 
-The corrected production-style local Worker now puts the surface stylesheet
-link in the initial SSR head. A fresh browser screenshot showed the styled
-platform hero at the first sampled milestone, with the surface CSS and entry
-CSS links already present; later hydration added only route/component CSS. This
-fix removes the white/default-style phase but does not by itself certify the
-remote Lighthouse result. The deployed Worker and real custom-domain image
-origin still need the same cold check after release.
+The corrected production-style local Worker now puts the stable surface
+stylesheet link in the initial SSR head. Fresh browser checks showed the
+platform, Saya, and Blawby links and styled shells at the first sampled
+milestone; later hydration added only route/component CSS. The strict preview
+asset waiter also remains in place so a deployment fails when HTML references
+an unavailable asset. This fix removes the white/default-style phase locally,
+but it does not by itself certify the remote Lighthouse result. The deployed
+Worker and real custom-domain image origin still need the same cold check after
+release.
 
 The production gate remains cold browser navigation, request budgets, query
 budgets, payload size, and visible error propagation—not an arbitrary warm-cache
