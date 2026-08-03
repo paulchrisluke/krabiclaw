@@ -36,6 +36,26 @@ test('Blawby shell has no runtime font or icon provider dependency', () => {
   assert.match(nuxtConfig, /name: 'Marcellus'.*weights: \[400\]/)
 })
 
+test('public layouts use the shared SSR surface stylesheet contract', () => {
+  const layouts = [
+    ['access', 'platform-entry', 'platformStylesheet'],
+    ['account', 'platform-entry', 'platformStylesheet'],
+    ['blog', 'platform-entry', 'platformStylesheet'],
+    ['docs', 'platform-entry', 'platformStylesheet'],
+    ['platform', 'platform-entry', 'platformStylesheet'],
+    ['saya', 'saya-entry', 'sayaStylesheet'],
+    ['blawby', 'blawby-entry', 'blawbyStylesheet'],
+  ] as const
+
+  for (const [layoutName, sourceName, stylesheetBinding] of layouts) {
+    const layout = readFileSync(`layouts/${layoutName}.vue`, 'utf8')
+    assert.match(layout, new RegExp(`import ${stylesheetBinding} from '~\\/assets\\/css\\/${sourceName}\\.css\\?url`))
+    assert.match(layout, new RegExp(`new URL\\(${stylesheetBinding}, 'http:\\/\\/nuxt\\.local'\\)\\.pathname`))
+    assert.match(layout, /useHead\(\{[\s\S]*rel: 'stylesheet'/)
+    assert.match(layout, new RegExp(`href: ${stylesheetBinding}Href`))
+  }
+})
+
 test('Blawby theme is a dedicated semantic Nuxt UI token scope', () => {
   const layout = readFileSync('layouts/blawby.vue', 'utf8')
   const baseCss = readFileSync('assets/css/base.css', 'utf8')

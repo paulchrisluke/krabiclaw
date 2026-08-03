@@ -60,14 +60,36 @@ const publicSurfaceCssPaths = {
   'blawby-entry': 'surfaces/blawby.css',
 } as const
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 function surfaceCssAssetPath(fileName: string) {
+  const basename = fileName.replaceAll('\\', '/').split('/').pop()
+  if (!basename) return null
+
   for (const [sourceName, targetPath] of Object.entries(publicSurfaceCssPaths)) {
-    if (fileName.includes(`${sourceName}.`) && fileName.endsWith('.css')) {
+    const sourcePattern = new RegExp(`^${escapeRegExp(sourceName)}\\.[A-Za-z0-9_-]+\\.css$`)
+    if (sourcePattern.test(basename)) {
       return targetPath
     }
   }
 
   return null
+}
+
+function rewriteSurfaceCssReferences(code: string) {
+  for (const [sourceName, targetPath] of Object.entries(publicSurfaceCssPaths)) {
+    const sourcePattern = escapeRegExp(sourceName)
+    const hashPattern = '[A-Za-z0-9_-]+'
+    code = code
+      .replace(new RegExp(`/_nuxt/(?:assets/)?surfaces/${sourcePattern}\\.${hashPattern}\\.css`, 'g'), `/_nuxt/${targetPath}`)
+      .replace(new RegExp(`/_nuxt/${sourcePattern}\\.${hashPattern}\\.css`, 'g'), `/_nuxt/${targetPath}`)
+      .replace(new RegExp(`(^|[^A-Za-z0-9_/-])assets/surfaces/${sourcePattern}\\.${hashPattern}\\.css`, 'g'), `$1${targetPath}`)
+      .replace(new RegExp(`(^|[^A-Za-z0-9_/-])${sourcePattern}\\.${hashPattern}\\.css`, 'g'), `$1${targetPath}`)
+  }
+
+  return code
 }
 
 function publicSurfaceCssPlugin() {
@@ -99,11 +121,7 @@ function publicSurfaceCssPlugin() {
       for (const asset of Object.values(bundle)) {
         if (asset.type !== 'chunk' || !asset.code) continue
 
-        for (const [sourceName, targetPath] of Object.entries(publicSurfaceCssPaths)) {
-          asset.code = asset.code
-            .replace(new RegExp(`${sourceName}\\.[A-Za-z0-9_-]+\\.css`, 'g'), targetPath)
-            .replace(new RegExp(`/_nuxt/${sourceName}\\.[A-Za-z0-9_-]+\\.css`, 'g'), `/_nuxt/${targetPath}`)
-        }
+        asset.code = rewriteSurfaceCssReferences(asset.code)
       }
     },
   }

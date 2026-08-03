@@ -28,10 +28,13 @@ for (const [sourceName, targetPath] of Object.entries(publicSurfaceCssPaths)) {
     throw new Error(`Missing public surface stylesheet: ${publicAssetPath}`);
   }
 
-  precomputedManifest = precomputedManifest.replace(
-    new RegExp(`${sourceName}\\.[A-Za-z0-9_-]+\\.css`, 'g'),
-    targetPath,
-  );
+  const sourcePattern = sourceName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const hashPattern = '[A-Za-z0-9_-]+';
+  precomputedManifest = precomputedManifest
+    .replace(new RegExp(`/_nuxt/(?:assets/)?surfaces/${sourcePattern}\\.${hashPattern}\\.css`, 'g'), `/_nuxt/${targetPath}`)
+    .replace(new RegExp(`/_nuxt/${sourcePattern}\\.${hashPattern}\\.css`, 'g'), `/_nuxt/${targetPath}`)
+    .replace(new RegExp(`(^|[^A-Za-z0-9_/-])assets/surfaces/${sourcePattern}\\.${hashPattern}\\.css`, 'g'), `$1${targetPath}`)
+    .replace(new RegExp(`(^|[^A-Za-z0-9_/-])${sourcePattern}\\.${hashPattern}\\.css`, 'g'), `$1${targetPath}`);
 }
 const staleSurfaceCss = Object.keys(publicSurfaceCssPaths)
   .filter(sourceName => new RegExp(`${sourceName}\\.[A-Za-z0-9_-]+\\.css`).test(precomputedManifest));
