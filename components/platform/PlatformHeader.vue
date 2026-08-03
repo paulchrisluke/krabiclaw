@@ -31,7 +31,7 @@
         <NuxtLink to="/signup" class="hidden sm:inline-flex items-center rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary/90 no-underline">
           Start free
         </NuxtLink>
-        <details class="group lg:hidden">
+        <details ref="mobileMenu" class="group lg:hidden">
           <summary
             class="flex size-8 cursor-pointer list-none items-center justify-center rounded-md text-muted transition-colors hover:bg-muted hover:text-default [&::-webkit-details-marker]:hidden"
             aria-label="Toggle menu"
@@ -45,16 +45,17 @@
                 v-for="item in navItems"
                 :key="item.label"
                 :to="item.to"
+                @click="closeMobileMenu"
                 class="block px-4 py-3 rounded-lg text-[13.5px] font-medium text-muted hover:text-default hover:bg-muted transition-colors no-underline"
                 :class="isActiveRoute(item.to) ? 'bg-muted text-default' : ''"
               >
                 {{ item.label }}
               </NuxtLink>
               <div class="pt-4 space-y-2">
-                <NuxtLink to="/login" class="block px-4 py-3 text-[13.5px] font-medium text-default hover:text-muted transition-colors no-underline">
+                <NuxtLink to="/login" class="block px-4 py-3 text-[13.5px] font-medium text-default hover:text-muted transition-colors no-underline" @click="closeMobileMenu">
                   Login
                 </NuxtLink>
-                <NuxtLink to="/signup" class="block px-4 py-3 text-[13.5px] font-semibold text-primary transition-colors no-underline">
+                <NuxtLink to="/signup" class="block px-4 py-3 text-[13.5px] font-semibold text-primary transition-colors no-underline" @click="closeMobileMenu">
                   Start free
                 </NuxtLink>
               </div>
@@ -77,6 +78,11 @@ const navItems = [
 ]
 
 const route = useRoute()
+const mobileMenu = ref<HTMLDetailsElement | null>(null)
+
+function closeMobileMenu() {
+  if (mobileMenu.value) mobileMenu.value.open = false
+}
 
 function isActiveRoute(to: string) {
   const path = to.split('#')[0]!

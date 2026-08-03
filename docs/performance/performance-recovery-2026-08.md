@@ -194,7 +194,7 @@ later when the layout client chunk loaded. The resulting screenshot showed the
 raw browser layout before the finished platform, Saya, or Blawby surface.
 
 The corrected local Worker now renders the platform root as static HTML and
-places the theme critical shell plus CSS handoff in the initial SSR head. Public
+places the theme-critical shell plus CSS handoff in the initial SSR head. Public
 tenant pages have no initial Nuxt runtime script, no Blawby YouTube iframe, and
 no remote hero/logo requirement for the first readable shell. Fresh browser
 screenshots showed readable text, correct colors, local fonts, initial logo

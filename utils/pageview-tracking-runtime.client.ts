@@ -20,8 +20,8 @@ export function registerPageviewTracking() {
   const router = useRouter()
   let pageEnteredAt = Date.now()
   let currentPath = router.currentRoute.value.fullPath
-  let isInitialRoute = true
-  let lastTrackedPath: string | null = null
+  let lastTrackedPath: string | null = currentPath
+  let durationSent = false
   let trackGa4PageView: ((_path: string, _title: string) => void) | null = null
   let trackGa4TimeOnPage: ((_path: string, _durationSeconds: number) => void) | null = null
 
@@ -65,7 +65,8 @@ export function registerPageviewTracking() {
 
   const sendDurationBeacon = () => {
     const durationSeconds = Math.round((Date.now() - pageEnteredAt) / 1000)
-    if (durationSeconds <= 0) return
+    if (durationSeconds <= 0 || durationSent) return
+    durationSent = true
     trackGa4TimeOnPage?.(currentPath, durationSeconds)
     const payload = JSON.stringify({
       ...identity,
@@ -82,10 +83,6 @@ export function registerPageviewTracking() {
   }
 
   router.afterEach((to, from) => {
-    if (isInitialRoute) {
-      isInitialRoute = false
-      return
-    }
     if (to.fullPath === from.fullPath || to.fullPath === lastTrackedPath) return
     if (isTenant && isPlatformPath(to.path)) return
 
@@ -94,6 +91,7 @@ export function registerPageviewTracking() {
     pageEnteredAt = Date.now()
     currentPath = to.fullPath
     lastTrackedPath = currentPath
+    durationSent = false
 
     sendTrack({
       ...identity,

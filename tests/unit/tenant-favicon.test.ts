@@ -134,6 +134,17 @@ describe('Tenant Favicon – Unit Tests', () => {
       })
       assert.deepEqual(links, [])
     })
+
+    test('site preview wins when both platform and preview context are set', () => {
+      const links = buildTenantHeadLinks({
+        isPlatform: true,
+        tenantLogoUrl: KIKUZUKI_LOGO,
+        tenantBrandName: 'Kikuzuki',
+        isDraftPreview: false,
+        isSitePreview: true,
+      })
+      assert.deepEqual(links, [])
+    })
   })
 
   describe('isCloudflareImagesUrl / getCloudflareImageVariantUrl', () => {

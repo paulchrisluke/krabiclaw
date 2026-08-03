@@ -1,10 +1,8 @@
 import { useAnalytics } from '~/composables/useAnalytics'
 
-type ErrorTrackingNuxtApp = {
-  hook: (_name: 'vue:error', _handler: (_error: unknown, _instance: unknown, _info: string | undefined) => void) => unknown
-}
+type VueErrorHandler = (_error: unknown, _instance: unknown, _info: string | undefined) => void
 
-export function registerErrorTracking(nuxtApp: ErrorTrackingNuxtApp) {
+export function registerErrorTracking(): VueErrorHandler {
   const { trackError } = useAnalytics()
 
   const sanitizeMessage = (raw: unknown): string => {
@@ -15,15 +13,17 @@ export function registerErrorTracking(nuxtApp: ErrorTrackingNuxtApp) {
       .slice(0, 200)
   }
 
-  nuxtApp.hook('vue:error', (err, _instance, info) => {
+  const handleVueError: VueErrorHandler = (err, _instance, info) => {
     const message = sanitizeMessage(err instanceof Error ? err.message : err)
     trackError('vue_error', message, info)
     console.error(err)
-  })
+  }
 
   window.addEventListener('unhandledrejection', (event) => {
     const reason = event.reason
     const message = sanitizeMessage(reason instanceof Error ? reason.message : reason)
     trackError('unhandled_rejection', message)
   })
+
+  return handleVueError
 }

@@ -31,8 +31,10 @@ export function registerAdminPreview() {
       return
     }
 
+    const escapedField = CSS.escape(field)
+
     let target: Element | null =
-      document.querySelector(`[data-field="${field}"]`) ||
+      document.querySelector(`[data-field="${escapedField}"]`) ||
       document.getElementById(`section-${group}`) ||
       document.getElementById(group)
 
