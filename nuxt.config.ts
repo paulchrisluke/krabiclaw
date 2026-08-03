@@ -73,6 +73,7 @@ function surfaceCssAssetPath(fileName: string) {
 function publicSurfaceCssPlugin() {
   return {
     name: 'krabiclaw-public-surface-css-paths',
+    enforce: 'post' as const,
     generateBundle(_options: unknown, bundle: Record<string, { type: string; fileName: string; code?: string }>) {
       const renamedEntries: Array<[string, { type: string; fileName: string; code?: string }]> = []
 

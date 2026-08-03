@@ -92,11 +92,14 @@ the URL through `useHead`, so SSR emits the stylesheet link while the CSS stays
 surface-scoped. A Vite output plugin rewrites those three CSS assets to the
 stable paths `/_nuxt/surfaces/platform.css`, `/_nuxt/surfaces/saya.css`, and
 `/_nuxt/surfaces/blawby.css` in both the client output and server references.
-This prevents independent client/server asset hashing from producing an SSR
-stylesheet URL that the deployment does not contain. Those stable files are
-served with revalidation rather than immutable caching. The layouts normalize
-the imported URL to that root-relative path so SSR and hydration produce one
-canonical `<link>` value instead of relative and absolute duplicates.
+The existing postbuild step also rewrites Nuxt's serialized client preload
+manifest after Nitro generates it, then fails if a stable file is missing or a
+hashed surface reference remains. This prevents independent client/server
+asset hashing from producing an SSR stylesheet or preload URL that the
+deployment does not contain. Those stable files are served with revalidation
+rather than immutable caching. The layouts normalize the imported URL to that
+root-relative path so SSR and hydration produce one canonical `<link>` value
+instead of relative and absolute duplicates.
 Dashboard/editor CSS remains outside these public entrypoints.
 
 ## Cold-path measurements from the production-style local Worker
