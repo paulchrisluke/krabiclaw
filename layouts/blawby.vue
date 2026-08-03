@@ -25,7 +25,13 @@
 
 <script setup lang="ts">
 import ConsentBanner from '~/components/ConsentBanner.vue'
-import '~/assets/css/blawby-entry.css'
+import blawbyStylesheet from '~/assets/css/blawby-entry.css?url'
+
+const blawbyStylesheetHref = new URL(blawbyStylesheet, 'http://nuxt.local').pathname
+
+useHead({
+  link: [{ rel: 'stylesheet', href: blawbyStylesheetHref }],
+})
 
 const { identity, navigation, consultation, compliance, themeTokens, offeringLinks } = await useBlawbyShell()
 const hydrated = ref(false)

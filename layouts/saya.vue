@@ -79,7 +79,13 @@
 <script setup lang="ts">
 import ConsentBanner from '~/components/ConsentBanner.vue'
 import { resolveLocationExperienceHref } from '~/utils/experience-navigation'
-import '~/assets/css/saya-entry.css'
+import sayaStylesheet from '~/assets/css/saya-entry.css?url'
+
+const sayaStylesheetHref = new URL(sayaStylesheet, 'http://nuxt.local').pathname
+
+useHead({
+  link: [{ rel: 'stylesheet', href: sayaStylesheetHref }],
+})
 
 declare global {
   interface Window {
