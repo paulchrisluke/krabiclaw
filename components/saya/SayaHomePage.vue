@@ -57,9 +57,7 @@
               v-for="post in recentPosts"
               :key="post.id"
             >
-              <!-- Trigger tile — navigates to the real post page (SayaPostDetail.vue is
-                   the single source of truth for post detail UI; this used to open a
-                   separate, hand-rolled modal here that duplicated and diverged from it). -->
+              <!-- Navigate to the canonical post detail page. -->
               <NuxtLink
                 :to="post.path"
                 class="group block overflow-hidden bg-default text-default no-underline transition hover:opacity-90"
@@ -242,6 +240,24 @@
         :padding="'lg'"
       />
 
+      <section
+        v-if="supplementalPending || supplementalError"
+        class="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8"
+        data-testid="saya-home-supplemental-status"
+      >
+        <p v-if="supplementalPending" class="text-sm text-muted">Loading homepage updates…</p>
+        <div v-else role="alert" class="border border-default bg-elevated p-5 text-sm text-default">
+          <p>{{ supplementalErrorMessage }}</p>
+          <button
+            type="button"
+            class="mt-4 border border-default px-4 py-2 font-medium"
+            @click="refreshSupplemental"
+          >
+            Try again
+          </button>
+        </div>
+      </section>
+
       <!-- ── Dynamic content blocks ───────────────────────────── -->
       <template v-if="contentBlocks.length > 0">
         <component
@@ -261,6 +277,7 @@ import { formatMoneyAmount, isSaleActive, resolveOverridePriceDisplay } from '~/
 import { useDynamicComponent } from '~/composables/useDynamicComponent'
 import { getActiveSpecialClosure } from '~/utils/formatters'
 import { resolveSiteExperienceHref } from '~/utils/experience-navigation'
+import { ApiClientError } from '~/utils/api-clients'
 
 const { siteId, draftId, site } = useTenantSite()
 const { locale } = useI18n()
@@ -290,8 +307,21 @@ const {
   menuItemsBySection,
   experiencesList,
   contentBlocks,
-  blogList,
 } = await usePublicPageData({ enabled: true })
+
+const {
+  data: supplementalData,
+  googleBusiness: supplementalGoogleBusiness,
+  blogList,
+  error: supplementalError,
+  pending: supplementalPending,
+  refresh: refreshSupplemental,
+} = await usePublicPageData({
+  datasets: ['reviews', 'posts', 'blog'],
+  server: false,
+  lazy: true,
+  routeOwned: false,
+})
 
 const locations = computed(() => pageLocations.value)
 const hasOrderLinks = computed(() =>
@@ -316,14 +346,18 @@ const hasMenu = computed(() => {
 const googleBusiness = computed(() => {
   const gb = pageGoogleBusiness.value
   if (!gb) return null
+  const supplemental = supplementalData.value !== undefined && !supplementalError.value
+    ? supplementalGoogleBusiness.value
+    : null
   return {
     ...gb,
     media: gb.media && gb.media.length ? gb.media : [{ google_url: gb.business?.profile?.photoUrl || '' }],
-    reviews: (gb.reviews || []).map((r) => ({
+    reviews: ((supplemental?.reviews ?? gb.reviews) || []).map((r) => ({
       ...r,
       author_name: r.author || r.reviewer?.displayName || r.author_name || 'Anonymous',
       date: r.date || r.createTime || r.updateTime
-    }))
+    })),
+    posts: supplemental?.posts ?? gb.posts ?? [],
   }
 })
 
@@ -349,7 +383,7 @@ const googleReviewSummary = computed(() => {
 
 const restaurantName = computed(() => site?.brand_name || businessTitle.value || 'Business')
 
-// Hero from CMS with Google Business fallbacks — used for OG image metadata below,
+// Hero metadata from CMS and Google Business — used for OG image metadata below,
 // SayaHomeHero.vue resolves its own copy via getHero() from its :data prop.
 const hero = computed(() => getHero({
   title: businessTitle.value || '',
@@ -370,8 +404,8 @@ if (siteId) {
     return `${primary} | ${secondary}`
   })
 
-  // Full-length fallback-resolved description — composeSocialMetadata (the
-  // shared #259 composer) does its own platform-appropriate truncation, so
+  // composeSocialMetadata (the shared composer) does its own platform-appropriate
+  // truncation, so
   // this page shouldn't pre-truncate and risk drifting from that length.
   const seoDescription = computed(() =>
     pageConfig.value?.seo_description || businessSubtitle.value || 'Professional business website with photos, updates and reviews.'
@@ -509,6 +543,16 @@ const recentBlogPosts = computed(() =>
       image: resolveMedia(post.featured_image).url,
     }))
 )
+
+const supplementalErrorMessage = computed(() => {
+  if (!(supplementalError.value instanceof ApiClientError)) {
+    return 'Homepage updates could not be loaded.'
+  }
+  const request = supplementalError.value.requestId
+    ? ` Request ID: ${supplementalError.value.requestId}.`
+    : ''
+  return `${supplementalError.value.message} (${supplementalError.value.code}).${request}`
+})
 
 // Featured content — dishes or experiences, shown right below the hero
 const featuredContent = computed(() => {

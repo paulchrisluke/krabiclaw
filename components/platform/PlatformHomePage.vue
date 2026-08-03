@@ -72,8 +72,13 @@
               <div class="absolute inset-0 rounded-3xl blur-2xl opacity-30" style="background: linear-gradient(135deg, var(--kc-coral-200), var(--kc-teal-100));"></div>
               <div class="relative rounded-3xl p-7 shadow-2xl border border-default/50" style="background: linear-gradient(145deg, var(--kc-coral-50) 0%, #fff8f6 100%);">
                 <img
-                  src="/krabiclaw-login-mascot.png"
+                  src="/krabiclaw-login-mascot.webp"
                   alt="KrabiClaw mascot"
+                  width="1200"
+                  height="1200"
+                  loading="eager"
+                  fetchpriority="high"
+                  decoding="async"
                   class="w-full block rounded-[20px] shadow-lg"
                 >
               </div>

@@ -5,3 +5,8 @@
     </main>
   </div>
 </template>
+
+<script setup lang="ts">
+import '~/assets/css/platform-entry.css'
+
+</script>

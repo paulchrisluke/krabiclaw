@@ -27,3 +27,7 @@ test('global reviews and posts routes request their route datasets', () => {
   assert.deepEqual(getPublicPageRequest('/reviews').datasets, ['content', 'reviews'])
   assert.deepEqual(getPublicPageRequest('/posts').datasets, ['content', 'posts'])
 })
+
+test('home requests only critical datasets for the initial document', () => {
+  assert.deepEqual(getPublicPageRequest('/').datasets, ['content', 'location', 'menu', 'experiences'])
+})

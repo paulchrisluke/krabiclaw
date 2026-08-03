@@ -22,6 +22,7 @@
 
 <script setup>
 import { authClient } from '~/lib/auth-client'
+import '~/assets/css/platform-entry.css'
 
 useSeoMeta({ robots: 'noindex, nofollow' })
 

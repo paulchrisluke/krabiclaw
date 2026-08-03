@@ -104,7 +104,6 @@ export default defineNuxtConfig({
   compatibilityDate: '2024-11-01',
   debug: false,
   devtools: { enabled: false },
-  css: ['~/assets/css/base.css'],
   icon: {
     fallbackToApi: false,
     // Nuxt UI's own internal default icons (UChatPromptSubmit's arrowUp, etc.)
@@ -142,6 +141,9 @@ export default defineNuxtConfig({
   },
 
   vite: {
+    build: {
+      modulePreload: false,
+    },
     server: {
       watch: {
         ignored: ['**/.worktrees/**', '**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
@@ -352,7 +354,7 @@ export default defineNuxtConfig({
 
     // OAuth consent + login pages — anti-framing required by OpenAI MCP CSP spec.
     // frame-ancestors 'none' prevents clickjacking on the consent/auth flow.
-    // X-Frame-Options: DENY is the legacy fallback for older browsers.
+    // Keep the legacy framing header alongside the CSP for older clients.
     '/oauth/**': {
       headers: {
         'cache-control': 'no-store',
@@ -418,8 +420,7 @@ export default defineNuxtConfig({
   nitro: {
     preset: 'cloudflare-module',
     cloudflareDev: {
-      // Force deterministic binding discovery in CI/dev; avoids fallback stub env {}
-      // when wrangler config auto-discovery fails from an unexpected cwd.
+      // Force deterministic binding discovery in CI/dev.
       configPath: './wrangler.toml',
       persistDir: '.wrangler/state/v3',
       // The MCP tunnel harness supplies one generated, untracked env file so
