@@ -234,7 +234,7 @@ async function writeRevisionFromBlocks(
     expectedDocument?: { id: string; updatedAt: string }
     publishOnly?: boolean
     additionalQueriesBefore?: BatchQuery[]
-    additionalQueriesAfter?: BatchQuery[] | ((revisionId: string) => BatchQuery[])
+    additionalQueriesAfter?: BatchQuery[] | ((_revisionId: string) => BatchQuery[])
   } = {},
 ) {
   const now = new Date().toISOString()
@@ -451,7 +451,7 @@ export async function createContentDocumentWithBlocks(
     label?: string | null
     publish?: boolean
     additionalQueriesBefore?: BatchQuery[]
-    additionalQueriesAfter?: BatchQuery[] | ((revisionId: string) => BatchQuery[])
+    additionalQueriesAfter?: BatchQuery[] | ((_revisionId: string) => BatchQuery[])
   } = {},
 ) {
   const now = new Date().toISOString()
@@ -790,7 +790,7 @@ export async function replaceContentDocumentBlocks(
   ownerType: ContentDocumentOwnerType,
   ownerId: string,
   blocks: ContentBlockInput[],
-  opts: { expected_document_updated_at: string; createdBy?: string | null; label?: string | null; publish?: boolean; additionalQueriesBefore?: BatchQuery[]; additionalQueriesAfter?: BatchQuery[] | ((revisionId: string) => BatchQuery[]) },
+  opts: { expected_document_updated_at: string; createdBy?: string | null; label?: string | null; publish?: boolean; additionalQueriesBefore?: BatchQuery[]; additionalQueriesAfter?: BatchQuery[] | ((_revisionId: string) => BatchQuery[]) },
 ) {
   const document = await getContentDocumentByOwner(db, ownerType, ownerId)
   if (!document) notFound('Content document not found')

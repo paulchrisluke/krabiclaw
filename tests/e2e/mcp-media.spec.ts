@@ -106,13 +106,13 @@ test.describe('stateless MCP server', () => {
     expect(review.status()).toBe(200)
     const reviewBody = mcpData<{
       review: {
+        id: string
         recommendation: string
-        persistence: string
         findings: Array<{ message: string }>
       }
     }>(await review.json())
+    expect(reviewBody.review.id).toMatch(/^agent_guidance_run_/)
     expect(reviewBody.review.recommendation).toBe('revise')
-    expect(reviewBody.review.persistence).toBe('not_persisted')
     expect(reviewBody.review.findings.some(finding => finding.message.includes('file reference'))).toBe(true)
   })
 

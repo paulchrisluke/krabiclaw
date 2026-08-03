@@ -98,6 +98,7 @@
     "client:approve:ncls:blawby": "node scripts/adapters/ncls-blawby.mjs --approve",
     "client:verify:blawby": "node scripts/verify-blawby-site.mjs",
     "client:verify:ncls-seo": "node scripts/verify-ncls-seo-migration.mjs",
+    "agent-skills:import": "node scripts/import-agent-skill.mjs",
     "client:screenshots:blawby": "node scripts/capture-blawby-screenshots.mjs",
     "client:parity:blawby": "node scripts/compare-blawby-screenshots.mjs",
     "client:deploy": "node scripts/client-deploy.mjs",

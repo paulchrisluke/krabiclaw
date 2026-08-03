@@ -24,29 +24,7 @@ import {
   AGENT_SKILL_STATUSES,
   AGENT_SKILL_TASKS,
 } from './types'
-
-export {
-  AGENT_GUIDANCE_CANDIDATE_TYPES,
-  AGENT_GUIDANCE_RECOMMENDATIONS,
-  AGENT_GUIDANCE_SURFACES,
-  AGENT_SKILL_SCOPES,
-  AGENT_SKILL_STATUSES,
-  AGENT_SKILL_TASKS,
-}
-
-export type {
-  AgentGuidanceCandidateType,
-  AgentGuidanceProvenance,
-  AgentGuidanceReviewFinding,
-  AgentGuidanceReviewResult,
-  AgentGuidanceScope,
-  AgentGuidanceSurface,
-  AgentSkillScopeType,
-  AgentSkillStatus,
-  AgentSkillTask,
-  ResolvedAgentGuidance,
-  ResolvedAgentSkillVersion,
-}
+import { logAgentSkillEvent } from './events'
 
 const CONFLICT_RULE = 'Apply every listed skill. When instructions directly conflict, the more-specific scope controls: site over organization over platform. Within one scope, later items in the returned order control only when two instructions directly conflict.'
 const REVIEW_MODEL = 'agent-guidance-review-v1'
@@ -62,6 +40,24 @@ function newId(prefix: string) {
 
 export function normalizeMarkdown(value: string) {
   return value.replace(/\r\n?/g, '\n').trimEnd() + '\n'
+}
+
+export function parseAgentSkillMarkdownDocument(value: string) {
+  const normalized = value.replace(/\r\n?/g, '\n')
+  if (!normalized.startsWith('---\n')) return { frontmatter: {} as Record<string, string | number>, markdown: normalizeMarkdown(normalized) }
+  const end = normalized.indexOf('\n---', 4)
+  if (end === -1) throw createError({ statusCode: 400, statusMessage: 'Markdown frontmatter is missing its closing ---' })
+  const frontmatter: Record<string, string | number> = {}
+  for (const line of normalized.slice(4, end).split('\n')) {
+    const match = line.match(/^([a-z_]+):\s*(.*)$/i)
+    if (!match) continue
+    const key = match[1]
+    const raw = match[2]
+    if (!key || raw === undefined) continue
+    const parsed = raw.trim().replace(/^(?:"([\s\S]*)"|'([\s\S]*)')$/, '$1$2')
+    frontmatter[key.toLowerCase()] = /^\d+$/.test(parsed) ? Number(parsed) : parsed
+  }
+  return { frontmatter, markdown: normalizeMarkdown(normalized.slice(end + 4).replace(/^\n+/, '')) }
 }
 
 export function stableJson(value: unknown): string {
@@ -236,6 +232,23 @@ export async function createAgentSkillWithDraft(db: DbClient, input: {
       params: [versionId, skillId, name, description, instructions, priority, hash, input.created_by_user_id ?? null, now, now],
     },
   ])
+  logAgentSkillEvent('agent_skill.created', {
+    skill_id: skillId,
+    version_id: versionId,
+    scope_type: scopeType,
+    organization_id: scope.organizationId,
+    site_id: scope.siteId,
+    task,
+    actor_id: input.created_by_user_id ?? null,
+  })
+  logAgentSkillEvent('agent_skill.version_created', {
+    skill_id: skillId,
+    version_id: versionId,
+    version: 1,
+    status: 'draft',
+    scope_type: scopeType,
+    task,
+  })
   return await getAgentSkill(db, skillId)
 }
 
@@ -269,12 +282,14 @@ export async function listAgentSkills(db: DbClient, input: {
     draft_version_id: string | null
     latest_version: number | null
     active_version: number | null
+    priority: number | null
   }>(db, `
     SELECT s.*,
            active.id AS active_version_id,
            draft.id AS draft_version_id,
            MAX(v.version) AS latest_version,
-           active.version AS active_version
+           active.version AS active_version,
+           COALESCE(active.priority, draft.priority) AS priority
     FROM agent_skills s
     LEFT JOIN agent_skill_versions v ON v.skill_id = s.id
     LEFT JOIN agent_skill_versions active ON active.skill_id = s.id AND active.status = 'active'
@@ -325,6 +340,13 @@ export async function createNextDraftVersion(db: DbClient, skillId: string, user
     },
     { query: 'UPDATE agent_skills SET updated_at = ? WHERE id = ?', params: [now, skillId] },
   ])
+  logAgentSkillEvent('agent_skill.version_created', {
+    skill_id: skillId,
+    version_id: versionId,
+    version: Number(max?.max_version ?? 0) + 1,
+    status: 'draft',
+    actor_id: userId ?? null,
+  })
   return await getAgentSkill(db, skillId)
 }
 
@@ -352,6 +374,12 @@ export async function updateDraftVersion(db: DbClient, versionId: string, input:
     },
     { query: 'UPDATE agent_skills SET updated_at = ? WHERE id = ?', params: [now, current.skill_id] },
   ])
+  logAgentSkillEvent('agent_skill.version_updated', {
+    skill_id: current.skill_id,
+    version_id: versionId,
+    version: current.version,
+    status: 'draft',
+  })
   return await getAgentSkill(db, current.skill_id)
 }
 
@@ -365,6 +393,12 @@ export async function activateDraftVersion(db: DbClient, versionId: string, appr
     { query: `UPDATE agent_skill_versions SET status = 'active', approved_by_user_id = ?, activated_at = ?, updated_at = ? WHERE id = ? AND status = 'draft'`, params: [approvedByUserId ?? null, now, now, versionId] },
     { query: 'UPDATE agent_skills SET updated_at = ? WHERE id = ?', params: [now, target.skill_id] },
   ])
+  logAgentSkillEvent('agent_skill.activated', {
+    skill_id: target.skill_id,
+    version_id: versionId,
+    version: target.version,
+    actor_id: approvedByUserId ?? null,
+  })
   return await getAgentSkill(db, target.skill_id)
 }
 
@@ -377,6 +411,11 @@ export async function archiveActiveVersion(db: DbClient, versionId: string) {
     { query: `UPDATE agent_skill_versions SET status = 'archived', updated_at = ? WHERE id = ? AND status = 'active'`, params: [now, versionId] },
     { query: 'UPDATE agent_skills SET updated_at = ? WHERE id = ?', params: [now, target.skill_id] },
   ])
+  logAgentSkillEvent('agent_skill.archived', {
+    skill_id: target.skill_id,
+    version_id: versionId,
+    version: target.version,
+  })
   return await getAgentSkill(db, target.skill_id)
 }
 
@@ -469,6 +508,14 @@ export async function resolveAgentGuidance(db: DbClient, input: {
       scope_type: skill.scope_type,
       priority: skill.priority,
     })),
+  })
+  logAgentSkillEvent('agent_guidance.resolved', {
+    task,
+    audience: input.audience,
+    organization_id: scope.organization_id,
+    site_id: scope.site_id,
+    skill_count: skills.length,
+    resolution_fingerprint,
   })
   return { task, audience: input.audience, requested_scope: scope, precedence, conflict_rule: CONFLICT_RULE, skills, resolution_fingerprint }
 }
@@ -601,6 +648,18 @@ export async function reviewAgentGuidanceCandidate(db: DbClient, input: {
     reviewedAt,
   ])
 
+  logAgentSkillEvent('agent_guidance.review_completed', {
+    guidance_run_id: id,
+    task,
+    surface,
+    organization_id: guidance.requested_scope.organization_id,
+    site_id: guidance.requested_scope.site_id,
+    skill_count: guidance.skills.length,
+    recommendation: reviewed.recommendation,
+    review_model: REVIEW_MODEL,
+    finding_count: reviewed.findings.length,
+  })
+
   return {
     review: {
       id,
@@ -669,6 +728,11 @@ export async function linkGuidanceArtifact(db: DbClient, input: {
 }) {
   const query = guidanceArtifactInsertQuery(input)
   await execute(db, query.query, query.params)
+  logAgentSkillEvent('agent_guidance.artifact_linked', {
+    guidance_run_id: input.guidanceRunId,
+    artifact_type: input.artifactType,
+    artifact_id: input.artifactId,
+  })
 }
 
 export function guidanceArtifactInsertQuery(input: {
@@ -726,18 +790,24 @@ export async function importAgentSkillMarkdown(db: DbClient, input: {
   activate?: boolean
   created_by_user_id?: string | null
 }) {
-  const name = input.name?.trim() || input.slug.split('-').map(part => part.slice(0, 1).toUpperCase() + part.slice(1)).join(' ')
-  const description = input.description?.trim() || `Use when ${input.task === 'blog.write' ? 'drafting or revising blog content' : 'preparing image-generation briefs'}.`
+  const document = parseAgentSkillMarkdownDocument(input.markdown)
+  const frontmatter = document.frontmatter
+  const slug = input.slug.trim() || (typeof frontmatter.slug === 'string' ? frontmatter.slug : '')
+  const name = input.name?.trim() || (typeof frontmatter.name === 'string' ? frontmatter.name.trim() : '') || slug.split('-').map(part => part.slice(0, 1).toUpperCase() + part.slice(1)).join(' ')
+  const description = input.description?.trim() || (typeof frontmatter.description === 'string' ? frontmatter.description.trim() : '') || `Use when ${input.task === 'blog.write' ? 'drafting or revising blog content' : 'preparing image-generation briefs'}.`
+  const priority = input.priority === undefined || input.priority === null
+    ? (typeof frontmatter.priority === 'number' ? frontmatter.priority : undefined)
+    : input.priority
   const created = await createAgentSkillWithDraft(db, {
     scope_type: input.scope_type,
     organization_id: input.organization_id,
     site_id: input.site_id,
     task: input.task,
-    slug: input.slug,
+    slug,
     name,
     description,
-    instructions_markdown: input.markdown,
-    priority: input.priority,
+    instructions_markdown: document.markdown,
+    priority,
     created_by_user_id: input.created_by_user_id,
   })
   const draft = created.versions.find(version => version.status === 'draft')

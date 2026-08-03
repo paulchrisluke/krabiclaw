@@ -3,12 +3,11 @@ import {
   parseAgentSkillTask,
   resolveAgentGuidance,
   reviewAgentGuidanceCandidate,
-  type AgentGuidanceCandidateType,
-  type AgentSkillTask,
 } from '~/server/utils/agent-skills/scoped'
 import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 import type { McpExecutorContext } from './shared'
 import { NOT_HANDLED } from './shared'
+import type { AgentGuidanceCandidateType, AgentSkillTask } from '~/server/utils/agent-skills/types'
 
 function requiredTask(args: Record<string, unknown>): AgentSkillTask {
   try {

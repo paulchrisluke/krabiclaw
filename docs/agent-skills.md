@@ -21,6 +21,24 @@ Platform tools use platform naming:
 
 MCP tools are read/review-only. They cannot create, edit, activate, or archive skills. Skill management belongs in authenticated CMS/admin routes with persisted lifecycle tables, guidance runs, artifact provenance, and Markdown import/export.
 
+## CMS and Import Workflow
+
+Platform admins manage platform skills at `/admin/agent-skills`. Organization admins manage organization skills at `/dashboard/{orgSlug}/settings/agent-skills`, and site admins manage site skills at `/dashboard/{orgSlug}/sites/{siteSlug}/agent-skills`. Each screen supports draft editing, version creation, activation/archive, and Markdown export.
+
+Markdown imports are available in the CMS and through the operator CLI:
+
+```bash
+yarn agent-skills:import \
+  --scope site \
+  --site-id site-example \
+  --task blog.write \
+  --slug blog-writing \
+  --file ./blog-writing.md \
+  --dry-run
+```
+
+Use `--activate` to activate the imported version after the API validates it. The CLI reads `AGENT_SKILLS_BASE_URL` and `AGENT_SKILLS_SESSION_COOKIE` by default; `--base-url` and `--cookie` override them. Markdown frontmatter may provide `name`, `description`, and `priority`; the persisted instruction body excludes the frontmatter and is normalized to LF line endings.
+
 ## Scope Hierarchy
 
 Resolution is scoped as:

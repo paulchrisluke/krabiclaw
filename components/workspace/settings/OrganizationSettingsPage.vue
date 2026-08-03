@@ -68,6 +68,7 @@ const managementLinks = computed(() => [
   { label: 'Billing', description: 'Manage plans, payment methods, and organization credits.', icon: 'i-lucide-credit-card', to: `${orgBase.value}/settings/billing` },
   { label: 'Analytics', description: 'Choose a site and configure its analytics connection.', icon: 'i-lucide-chart-bar', to: `${orgBase.value}/settings/analytics` },
   { label: 'ChatGPT', description: 'Configure the organization ChatGPT connection.', icon: 'i-lucide-message-square', to: `${orgBase.value}/settings/chatgpt` },
+  { label: 'Agent Skills', description: 'Create and activate guidance inherited by the organization sites.', icon: 'i-lucide-sparkles', to: `${orgBase.value}/settings/agent-skills` },
 ])
 
 let organizationLoadToken = 0

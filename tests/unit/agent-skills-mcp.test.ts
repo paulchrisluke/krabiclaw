@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { resolveAgentGuidance, reviewAgentGuidanceCandidate } from '../../server/utils/agent-skills/scoped.ts'
+import { parseAgentSkillMarkdownDocument, resolveAgentGuidance, reviewAgentGuidanceCandidate } from '../../server/utils/agent-skills/scoped.ts'
 import { AGENT_GUIDANCE_REVIEW_RESPONSE_SCHEMA, RESOLVED_AGENT_GUIDANCE_SCHEMA } from '../../server/utils/agent-skills/mcp-schema.ts'
 import { AGENT_SKILL_TOOLS } from '../../server/utils/mcp-tools/agent-skills.ts'
 import { getMcpTool } from '../../server/utils/mcp-tools/index.ts'
@@ -182,4 +182,15 @@ test('guidance tool schemas are strict at the MCP boundary', () => {
     platformTool.inputSchema,
     { task: 'image.generate', candidate_type: 'image_brief', candidate: {}, raw_base64: 'nope' },
   ), /Unknown argument: raw_base64/)
+})
+
+test('Markdown import strips frontmatter and normalizes the persisted document', () => {
+  const parsed = parseAgentSkillMarkdownDocument(`---\nname: "Blog baseline"\ndescription: Draft useful posts\npriority: 25\n---\n\n# Guidance\r\n\r\nWrite for the reader.   `)
+
+  assert.deepEqual(parsed.frontmatter, {
+    name: 'Blog baseline',
+    description: 'Draft useful posts',
+    priority: 25,
+  })
+  assert.equal(parsed.markdown, '# Guidance\n\nWrite for the reader.\n')
 })

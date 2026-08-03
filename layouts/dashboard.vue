@@ -490,6 +490,7 @@ const siteOverviewGroup = computed(() => {
     { label: 'Assistant', icon: 'i-lucide-bot', to: `${siteBase.value}/conversations` },
     { label: 'Domains', icon: 'i-lucide-globe', to: `${siteBase.value}/domains` },
     { label: 'Settings', icon: 'i-lucide-settings', to: `${siteBase.value}/settings` },
+    ...(canManageSite.value ? [{ label: 'Agent Skills', icon: 'i-lucide-sparkles', to: `${siteBase.value}/agent-skills` }] : []),
     // { label: 'Translations', icon: 'i-lucide-languages', to: `${siteBase.value}/translations` },
   ]
 })
@@ -565,6 +566,7 @@ const adminGroup = computed(() => [
   { label: 'Content', icon: 'i-lucide-file-text', to: '/admin/content' },
   { label: 'Blog', icon: 'i-lucide-pencil', to: '/admin/blog' },
   { label: 'Docs', icon: 'i-lucide-book-open', to: '/admin/docs' },
+  { label: 'Agent Skills', icon: 'i-lucide-sparkles', to: '/admin/agent-skills' },
 ])
 
 const navigationItems = computed(() => {
