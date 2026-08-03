@@ -19,5 +19,8 @@ export function publicSurfaceStylesheetForRequest(input: {
   if (template.slug === 'blawby') {
     return isHome ? '/_nuxt/surfaces/blawby-home.css' : '/_nuxt/surfaces/blawby.css'
   }
-  return isHome ? '/_nuxt/surfaces/saya-home.css' : '/_nuxt/surfaces/saya.css'
+  if (template.slug === 'saya') {
+    return isHome ? '/_nuxt/surfaces/saya-home.css' : '/_nuxt/surfaces/saya.css'
+  }
+  throw new Error(`Unsupported public template "${template.slug}".`)
 }
