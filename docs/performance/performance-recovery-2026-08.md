@@ -51,7 +51,10 @@ paid-plan history still has one bounded load.
 ## Client boundary decisions
 
 - Public home, Saya, Blawby, platform marketing, help, and dashboard/editor CSS
-  enter through their owning layouts or route components.
+  enter through their owning layouts or route components. Public surface layouts
+  import their entry CSS as a URL and emit an SSR `<link rel="stylesheet">`;
+  this keeps the CSS split by surface without waiting for the layout client
+  chunk to hydrate.
 - Dashboard/editor code is not globally imported merely for component
   registration.
 - Nuxt UI color-mode runtime is disabled. Platform theme preference is managed
@@ -80,11 +83,13 @@ paid-plan history still has one bounded load.
   camel-case name left tenants without CMS hero media with an empty hero image;
   the home hero now uses the canonical response field.
 
-Blawby also had a concrete first-paint bug: its layout manually injected a
-hashed CSS URL that could differ between the server manifest and the client
-manifest. That produced a stylesheet 404 and a flash of unstyled or inverted
-text before the correct CSS arrived. The layout now imports the CSS normally so
-Nuxt emits one route-owned stylesheet reference.
+The public surfaces also had a concrete first-paint bug: their layouts imported
+entry CSS as a client-side module side effect. SSR could therefore deliver the
+complete HTML without a surface stylesheet in the document head. The browser
+painted default fonts, colors, and layout until hydration loaded the layout
+chunk. Platform, Saya, and Blawby now import their entry CSS as `?url` and add
+the URL through `useHead`, so SSR emits the stylesheet link while the CSS stays
+surface-scoped. Dashboard/editor CSS remains outside these public entrypoints.
 
 ## Cold-path measurements from the production-style local Worker
 
@@ -114,18 +119,22 @@ source loader, record request/query counts, and surface source errors.
 
 ## Browser trace follow-up
 
-The earlier 4–6 second browser traces were reproducible before the client
-boundary change. They included the public route's own work plus a manifest-wide
-modulepreload fan-out. A fresh browser origin after the change no longer
-requested those unrelated chunks, and representative Platform, Saya, and
-Blawby routes completed below one second locally with the correct fonts and
-surface CSS. The Blawby screenshot also verified the intended navy/gold bands
-and readable body/display text.
+The live production trace reproduced the failure: SSR HTML arrived first with
+only the entry stylesheet, while the surface stylesheet appeared later when the
+layout client chunk loaded. The resulting screenshot showed the raw browser
+layout before the finished platform, Saya, or Blawby surface.
 
-This does not by itself certify remote Lighthouse: the deployed Worker and
-real custom-domain image origin still need the same cold check. The production
-gate remains cold browser navigation, request budgets, query budgets, payload
-size, and visible error propagation—not an arbitrary warm-cache number.
+The corrected production-style local Worker now puts the surface stylesheet
+link in the initial SSR head. A fresh browser screenshot showed the styled
+platform hero at the first sampled milestone, with the surface CSS and entry
+CSS links already present; later hydration added only route/component CSS. This
+fix removes the white/default-style phase but does not by itself certify the
+remote Lighthouse result. The deployed Worker and real custom-domain image
+origin still need the same cold check after release.
+
+The production gate remains cold browser navigation, request budgets, query
+budgets, payload size, and visible error propagation—not an arbitrary warm-cache
+number.
 
 ## Validation contract
 

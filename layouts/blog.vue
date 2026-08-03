@@ -27,11 +27,12 @@
 import DocsHeader from '~/components/platform/DocsHeader.vue'
 import PlatformDrawer from '~/components/platform/PlatformDrawer.vue'
 import PlatformCommandSearchModal from '~/components/platform/search/PlatformCommandSearchModal.vue'
-import '~/assets/css/platform-entry.css'
+import platformStylesheet from '~/assets/css/platform-entry.css?url'
 
 const mobileNavOpen = ref(false)
 
 useHead({
+  link: [{ rel: 'stylesheet', href: platformStylesheet }],
   titleTemplate: (title) => title ? `${title} | KrabiClaw` : 'KrabiClaw | AI Website Platform'
 })
 </script>

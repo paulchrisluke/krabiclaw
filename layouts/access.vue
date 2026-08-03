@@ -7,6 +7,9 @@
 </template>
 
 <script setup lang="ts">
-import '~/assets/css/platform-entry.css'
+import platformStylesheet from '~/assets/css/platform-entry.css?url'
 
+useHead({
+  link: [{ rel: 'stylesheet', href: platformStylesheet }],
+})
 </script>

@@ -12,7 +12,11 @@
 <script setup lang="ts">
 import PlatformHeader from '~/components/platform/PlatformHeader.vue'
 import ConsentBanner from '~/components/ConsentBanner.vue'
-import '~/assets/css/platform-entry.css'
+import platformStylesheet from '~/assets/css/platform-entry.css?url'
+
+useHead({
+  link: [{ rel: 'stylesheet', href: platformStylesheet }],
+})
 
 const platformTheme = usePlatformTheme()
 

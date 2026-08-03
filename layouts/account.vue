@@ -22,7 +22,11 @@
 
 <script setup>
 import { authClient } from '~/lib/auth-client'
-import '~/assets/css/platform-entry.css'
+import platformStylesheet from '~/assets/css/platform-entry.css?url'
+
+useHead({
+  link: [{ rel: 'stylesheet', href: platformStylesheet }],
+})
 
 useSeoMeta({ robots: 'noindex, nofollow' })
 

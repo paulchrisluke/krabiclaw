@@ -79,7 +79,11 @@
 <script setup lang="ts">
 import ConsentBanner from '~/components/ConsentBanner.vue'
 import { resolveLocationExperienceHref } from '~/utils/experience-navigation'
-import '~/assets/css/saya-entry.css'
+import sayaStylesheet from '~/assets/css/saya-entry.css?url'
+
+useHead({
+  link: [{ rel: 'stylesheet', href: sayaStylesheet }],
+})
 
 declare global {
   interface Window {
