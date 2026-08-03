@@ -455,6 +455,22 @@ export async function getPublicBlawbyShellData(db: DbClient, siteId: string): Pr
   return { identity, navigation, consultation, compliance, themeTokens, offeringLinks }
 }
 
+export async function getPublicBlawbyDocumentData(
+  db: DbClient,
+  siteId: string,
+  recipe: PublicBlawbyRouteData['recipe'],
+  options: { slug?: string | null } = {},
+): Promise<{ shell: PublicBlawbyShellData; route: PublicBlawbyRouteData } | null> {
+  const site = await getActiveBlawbySite(db, siteId)
+  if (!site) return null
+
+  const [shell, route] = await Promise.all([
+    getPublicBlawbyShellData(db, siteId),
+    getPublicBlawbyRouteData(db, siteId, recipe, options),
+  ])
+  return { shell, route }
+}
+
 const ROUTE_PAGE_PATHS: Record<PublicBlawbyRouteData['recipe'], string | null> = {
   home: '/',
   services: '/services',

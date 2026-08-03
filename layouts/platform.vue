@@ -9,10 +9,29 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import PlatformHeader from '~/components/platform/PlatformHeader.vue'
 import ConsentBanner from '~/components/ConsentBanner.vue'
+import '~/assets/css/platform-entry.css'
 
+const platformTheme = usePlatformTheme()
+
+if (import.meta.client) {
+  const stored = localStorage.getItem('krabiclaw-theme')
+  if (stored === 'system' || stored === 'light' || stored === 'dark') {
+    platformTheme.preference.value = stored
+  }
+
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)')
+  platformTheme.sync()
+  prefersDark.addEventListener('change', platformTheme.sync)
+  const stopThemeWatch = watch(platformTheme.preference, platformTheme.sync)
+
+  onBeforeUnmount(() => {
+    prefersDark.removeEventListener('change', platformTheme.sync)
+    stopThemeWatch()
+  })
+}
 
 useHead({
   titleTemplate: (title) => title ? `${title} | KrabiClaw` : 'KrabiClaw | AI Website Platform'

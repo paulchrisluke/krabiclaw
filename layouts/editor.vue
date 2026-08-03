@@ -42,10 +42,9 @@
 import { UPGRADE_MODAL_ENABLED } from '~/composables/useUpgradeModal'
 import SayaUpgradeModal from '~/components/saya/_ignored/SayaUpgradeModal.vue'
 import { useDashboardSite } from '~/composables/useDashboardSite'
-import dashboardCssUrl from '~/assets/css/dashboard.css?url'
+import '~/assets/css/dashboard.css'
 
 const route = useRoute()
 const skipDashboardContext = computed(() => route.meta.skipDashboardContext === true)
 const dashboard = useDashboardSite()
-useHead({ link: [{ rel: 'stylesheet', href: dashboardCssUrl }] })
 </script>

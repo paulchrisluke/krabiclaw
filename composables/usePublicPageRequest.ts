@@ -115,10 +115,7 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
       page: "home",
       location: null,
       experience: null,
-      datasets: [
-        'content', 'location', 'menu', 'reviews', 'posts', 'blog',
-        'experiences', 'experiencePolicies',
-      ],
+      datasets: ['content', 'location', 'menu', 'experiences'],
       blogSlug: null,
     };
   if (path.startsWith("/locations"))

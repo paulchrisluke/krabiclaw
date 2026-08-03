@@ -1,8 +1,11 @@
 # API fallback and retry audit
 
-Audit date: 2026-08-02. Scope: shipped public-renderer and dashboard/CMS request
+Audit date: 2026-08-03. Scope: shipped public-renderer and dashboard/CMS request
 paths. Queue/provider delivery retries and non-shipped maintenance scripts do
 not execute in these user request paths.
+
+Cache is not evidence of cold-path correctness. A miss or invalid entry runs the
+same canonical source once; cache state never selects a substitute response.
 
 | Path | Function/line | Old behavior | Why it was harmful | Action taken | Regression test |
 | --- | --- | --- | --- | --- | --- |
@@ -10,6 +13,7 @@ not execute in these user request paths.
 | `composables/useDashboardSite.ts` | `refresh`, `useDashboardSiteId` | Shared nullable context and a slug-mismatch repair refresh | Duplicate context requests and stale cross-route state | State is keyed by org/site; identical refreshes coalesce; no mismatch repair request | typecheck plus dashboard E2E |
 | `layouts/dashboard.vue` | SSR/client initialization | Client mount could repeat a failed/absent SSR context load | Hydration waterfall and second automatic attempt | Successful keyed SSR state suppresses the mount load; errors remain terminal | dashboard hydration E2E |
 | `composables/useSiteShell.ts` | shell loader | SSR self-fetch; shell requested full menu and experiences | Re-entered Nitro and duplicated large route data | Direct SSR service; minimal shell contract | public navigation E2E and data-loading guard |
+| Blawby public shell and route data | separate shell and route requests | One page could fetch two related documents and preview paths could resolve the wrong route key | Duplicate work and broken preview navigation | Combined `blawby/document` loader and one bounded SSR/client request; preview paths normalize to their public subpath | Blawby SSR binding and public route checks |
 | Removed legacy public page composable | page loader | Awaited route data blocked navigation; SSR self-fetch | Frozen prior route and nested Worker dispatch | Replaced by `usePublicPageData`: non-blocking keyed async data, direct SSR service, typed browser client | tenant client-navigation E2E |
 | `server/utils/experiences.ts` | `attachAvailabilitySummaries` | Location lookup plus timezone, booking, and override queries per experience, serially | Query count and latency grew with experience count | Four bulk reads and in-memory indexes/calculation | experience availability contract tests |
 | `server/utils/booking-policies.ts` | `resolveBookingPolicy` bootstrap callers | Re-read site/location/experience hierarchy per target | Query count grew with locations and experiences | `resolveBookingPolicyIndex` performs one read per policy type | booking-policy precedence tests |

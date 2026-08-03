@@ -79,7 +79,13 @@
 <script setup lang="ts">
 import ConsentBanner from '~/components/ConsentBanner.vue'
 import { resolveLocationExperienceHref } from '~/utils/experience-navigation'
-import sayaCssUrl from '~/assets/css/saya-entry.css?url'
+import '~/assets/css/saya-entry.css'
+
+declare global {
+  interface Window {
+    toggleSayaDark?: () => void
+  }
+}
 
 if (import.meta.dev) useDebugLCP()
 
@@ -149,6 +155,35 @@ const routeLocationSlug = computed(() => {
   const match = route.path.match(/^\/locations\/([^/]+)/)
   return match?.[1] ?? null
 })
+
+const applySayaTheme = () => {
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)')
+  const saved = localStorage.getItem('saya-theme-dark')
+  const isDark = saved === null ? prefersDark.matches : saved === 'true'
+  document.documentElement.classList.toggle('dark', isDark)
+}
+
+if (import.meta.client) {
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)')
+  const onSystemThemeChange = (event: MediaQueryListEvent) => {
+    if (localStorage.getItem('saya-theme-dark') === null) {
+      document.documentElement.classList.toggle('dark', event.matches)
+    }
+  }
+
+  applySayaTheme()
+  prefersDark.addEventListener('change', onSystemThemeChange)
+  window.toggleSayaDark = () => {
+    const isDark = !document.documentElement.classList.contains('dark')
+    document.documentElement.classList.toggle('dark', isDark)
+    localStorage.setItem('saya-theme-dark', String(isDark))
+  }
+
+  onBeforeUnmount(() => {
+    prefersDark.removeEventListener('change', onSystemThemeChange)
+    delete window.toggleSayaDark
+  })
+}
 const locationExperienceCtaPath = computed(() => {
   if (!routeLocationSlug.value) return undefined
   return resolveLocationExperienceHref(routeLocationSlug.value, experiencesList.value)
@@ -166,7 +201,7 @@ const DEMO_HOSTS = new Set(['demo.krabiclaw.com', 'demo.localhost'])
 const isDemoHost = DEMO_HOSTS.has(requestHostname)
 
 // Site-wide default only — individual pages set their own robots directive
-// when they have one; this is the fallback for pages that don't.
+// when they have one; this covers pages without a page-specific directive.
 const siteRobots = computed(() => {
   if (isDemoHost) {
     return 'noindex, nofollow'
@@ -201,7 +236,6 @@ useHead(() => {
     meta,
     link: [
       { rel: 'canonical', href: canonicalUrl.value },
-      { rel: 'stylesheet', href: sayaCssUrl },
     ],
   }
 })

@@ -218,6 +218,7 @@ const syncDarkMode = () => {
 }
 onMounted(syncDarkMode)
 function toggleColorMode() {
+  if (!window.toggleSayaDark) return
   window.toggleSayaDark()
   syncDarkMode()
 }

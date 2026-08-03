@@ -14,6 +14,7 @@ import {
   usePublicPageRequest,
   usePublicPageKey,
   usePublicPageUrl,
+  type PublicPageDataset,
 } from "~/composables/usePublicPageRequest";
 import { useSiteShellState } from "~/composables/useSiteShell";
 import type { Experience } from "~/server/utils/experiences";
@@ -34,16 +35,27 @@ interface ContentRow {
   [key: string]: unknown;
 }
 
-export const usePublicPageData = async (options: { enabled?: MaybeRefOrGetter<boolean> } = {}) => {
+export const usePublicPageData = async (options: {
+  enabled?: MaybeRefOrGetter<boolean>
+  datasets?: readonly PublicPageDataset[]
+  server?: boolean
+  lazy?: boolean
+  routeOwned?: boolean
+} = {}) => {
   const { isPlatform, siteId, draftId } = useTenantSite();
   const route = useRoute();
   const params = usePublicPageRequest();
   const routeLoadState = usePublicRouteLoadState();
-  const routeLoadOwner = claimPublicRouteLoadOwner();
+  const routeLoadOwner = options.routeOwned === false
+    ? { ownsState: () => false, release: () => {} }
+    : claimPublicRouteLoadOwner();
   onScopeDispose(routeLoadOwner.release)
   const ownedPath = route.path;
   const entityId = computed(() => siteId || draftId || null);
-  const key = computed(() => usePublicPageKey(entityId.value, params.value));
+  const requestedParams = computed(() => options.datasets
+    ? { ...params.value, datasets: [...options.datasets] }
+    : params.value)
+  const key = computed(() => usePublicPageKey(entityId.value, requestedParams.value));
   // options.enabled may be a plain boolean, a Ref/ComputedRef, or a getter —
   // toValue() unwraps all three. Comparing a Ref object directly to `false`
   // (the previous `options.enabled !== false`) is always true regardless of
@@ -52,7 +64,7 @@ export const usePublicPageData = async (options: { enabled?: MaybeRefOrGetter<bo
   // always-enabled.
   const enabled = computed(() => toValue(options.enabled) !== false);
 
-  const url = computed(() => usePublicPageUrl(siteId, params.value));
+  const url = computed(() => usePublicPageUrl(siteId, requestedParams.value));
 
   const shell = useSiteShellState();
 
@@ -68,22 +80,22 @@ export const usePublicPageData = async (options: { enabled?: MaybeRefOrGetter<bo
               url: url.value,
               key: key.value,
               query: {
-                page: params.value.page ?? undefined,
-                location: params.value.location ?? undefined,
-                experience: params.value.experience ?? undefined,
-                datasets: [...params.value.datasets].sort().join(',') || undefined,
-                blogSlug: params.value.blogSlug ?? undefined,
-                locale: params.value.locale ?? undefined,
-                token: params.value.token ?? undefined,
+                page: requestedParams.value.page ?? undefined,
+                location: requestedParams.value.location ?? undefined,
+                experience: requestedParams.value.experience ?? undefined,
+                datasets: [...requestedParams.value.datasets].sort().join(',') || undefined,
+                blogSlug: requestedParams.value.blogSlug ?? undefined,
+                locale: requestedParams.value.locale ?? undefined,
+                token: requestedParams.value.token ?? undefined,
               },
               validate: (value): value is PublicPagePayload =>
-                isPublicPagePayload(value, params.value.page ?? 'home'),
+                isPublicPagePayload(value, requestedParams.value.page ?? 'home'),
               failureMessage: 'Public page failed',
               signal,
             }),
           {
-            server: true,
-            lazy: import.meta.client,
+            server: options.server ?? true,
+            lazy: options.lazy ?? import.meta.client,
             dedupe: 'cancel',
             // `enabled` starting false must not permanently stub this resource —
             // immediate mirrors its current value, and the watcher below fires
@@ -106,19 +118,21 @@ export const usePublicPageData = async (options: { enabled?: MaybeRefOrGetter<bo
   if (import.meta.server) {
     await Promise.all([asyncData, shell.ready])
     if (asyncData.error.value) throw asyncData.error.value
-    if (shell.error.value) throw shell.error.value
+    if (options.routeOwned !== false && shell.error.value) throw shell.error.value
   }
   const { data, error, pending, refresh } = asyncData
-  watchEffect(() => {
-    if (!routeLoadOwner.ownsState()) return
-    routeLoadState.value = {
-      path: ownedPath,
-      key: key.value,
-      pending: pending.value,
-      error: normalizePublicRouteLoadError(error.value),
-      hasData: data.value !== undefined,
-    }
-  })
+  if (options.routeOwned !== false) {
+    watchEffect(() => {
+      if (!routeLoadOwner.ownsState()) return
+      routeLoadState.value = {
+        path: ownedPath,
+        key: key.value,
+        pending: pending.value,
+        error: normalizePublicRouteLoadError(error.value),
+        hasData: data.value !== undefined,
+      }
+    })
+  }
 
   // Persistent chrome data comes from the stable shell. Route-owned collections
   // come from the keyed page response and change with navigation.
