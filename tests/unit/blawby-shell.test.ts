@@ -49,8 +49,9 @@ test('Blawby theme is a dedicated semantic Nuxt UI token scope', () => {
   assert.match(layout, /class="[^"]*\bblawby-shell\b[^"]*\bblawby-theme\b[^"]*"/)
   assert.match(layout, /bg-default text-default/)
   assert.match(layout, /import blawbyStylesheet from '~\/assets\/css\/blawby-entry\.css\?url'/)
+  assert.match(layout, /const blawbyStylesheetHref = new URL\(blawbyStylesheet, 'http:\/\/nuxt\.local'\)\.pathname/)
   assert.match(layout, /rel: 'stylesheet'/)
-  assert.match(layout, /href: blawbyStylesheet/)
+  assert.match(layout, /href: blawbyStylesheetHref/)
   assert.doesNotMatch(layout, /'--blawby-(?:bg|surface|primary|accent|border|ink)'/)
   assert.match(layout, /'--blawby-token-primary'/)
 

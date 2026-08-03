@@ -94,8 +94,10 @@ stable paths `/_nuxt/surfaces/platform.css`, `/_nuxt/surfaces/saya.css`, and
 `/_nuxt/surfaces/blawby.css` in both the client output and server references.
 This prevents independent client/server asset hashing from producing an SSR
 stylesheet URL that the deployment does not contain. Those stable files are
-served with revalidation rather than immutable caching. Dashboard/editor CSS
-remains outside these public entrypoints.
+served with revalidation rather than immutable caching. The layouts normalize
+the imported URL to that root-relative path so SSR and hydration produce one
+canonical `<link>` value instead of relative and absolute duplicates.
+Dashboard/editor CSS remains outside these public entrypoints.
 
 ## Cold-path measurements from the production-style local Worker
 

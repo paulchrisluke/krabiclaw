@@ -14,8 +14,10 @@ import PlatformHeader from '~/components/platform/PlatformHeader.vue'
 import ConsentBanner from '~/components/ConsentBanner.vue'
 import platformStylesheet from '~/assets/css/platform-entry.css?url'
 
+const platformStylesheetHref = new URL(platformStylesheet, 'http://nuxt.local').pathname
+
 useHead({
-  link: [{ rel: 'stylesheet', href: platformStylesheet }],
+  link: [{ rel: 'stylesheet', href: platformStylesheetHref }],
 })
 
 const platformTheme = usePlatformTheme()
