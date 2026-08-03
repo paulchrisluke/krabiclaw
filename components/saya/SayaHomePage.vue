@@ -310,6 +310,7 @@ const {
 } = await usePublicPageData({ enabled: true })
 
 const {
+  data: supplementalData,
   googleBusiness: supplementalGoogleBusiness,
   blogList,
   error: supplementalError,
@@ -343,16 +344,20 @@ const hasMenu = computed(() => {
 })
 
 const googleBusiness = computed(() => {
-  const gb = supplementalGoogleBusiness.value || pageGoogleBusiness.value
+  const gb = pageGoogleBusiness.value
   if (!gb) return null
+  const supplemental = supplementalData.value !== undefined && !supplementalError.value
+    ? supplementalGoogleBusiness.value
+    : null
   return {
     ...gb,
     media: gb.media && gb.media.length ? gb.media : [{ google_url: gb.business?.profile?.photoUrl || '' }],
-    reviews: (gb.reviews || []).map((r) => ({
+    reviews: ((supplemental?.reviews ?? gb.reviews) || []).map((r) => ({
       ...r,
       author_name: r.author || r.reviewer?.displayName || r.author_name || 'Anonymous',
       date: r.date || r.createTime || r.updateTime
-    }))
+    })),
+    posts: supplemental?.posts ?? gb.posts ?? [],
   }
 })
 

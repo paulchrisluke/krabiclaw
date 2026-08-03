@@ -76,7 +76,8 @@
                   alt="KrabiClaw mascot"
                   width="1200"
                   height="1200"
-                  loading="lazy"
+                  loading="eager"
+                  fetchpriority="high"
                   decoding="async"
                   class="w-full block rounded-[20px] shadow-lg"
                 >

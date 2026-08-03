@@ -18,11 +18,26 @@ resource caches. The preview tenant header selects the fixture without relying
 on a custom-domain DNS setup:
 
 ```bash
-curl -sS -D /tmp/public-cold.headers -o /dev/null \
+probe_id="$(uuidgen)"
+cold_status="$(curl --fail-with-body -sS -D /tmp/public-cold.headers -o /tmp/public-cold.body \
+  -w '%{http_code}' \
   -H 'Host: staging.foo.localhost' \
   -H 'x-preview-tenant: site-demo' \
   -H 'cache-control: no-store' \
-  'http://localhost:8787/preview/site/site-demo/about?probe=unique-value'
+  "http://localhost:8787/preview/site/site-demo/about?probe=${probe_id}")" || {
+  echo "Cold request failed" >&2
+  sed -n '1,80p' /tmp/public-cold.body >&2
+  exit 1
+}
+test "$cold_status" = 200 || {
+  echo "Unexpected cold HTTP status: $cold_status" >&2
+  sed -n '1,80p' /tmp/public-cold.body >&2
+  exit 1
+}
+rg -q '<html' /tmp/public-cold.body || {
+  echo 'Cold response did not contain the canonical HTML payload' >&2
+  exit 1
+}
 ```
 
 Record `server-timing`, `x-d1-duration-ms`, `x-d1-query-count`,
@@ -43,14 +58,30 @@ Only after the cold check passes, verify the optional cache behavior. On a
 production host without a session cookie, hit the same URL twice and inspect:
 
 ```bash
-curl -sS -D /tmp/public-warm-1.headers -o /dev/null 'https://<tenant-host>/'
-curl -sS -D /tmp/public-warm-2.headers -o /dev/null 'https://<tenant-host>/'
+for sample in 1 2; do
+  warm_status="$(curl --fail-with-body -sS -D "/tmp/public-warm-${sample}.headers" -o "/tmp/public-warm-${sample}.body" \
+    -w '%{http_code}' 'https://<tenant-host>/')" || {
+    echo "Warm request ${sample} failed" >&2
+    sed -n '1,80p' "/tmp/public-warm-${sample}.body" >&2
+    exit 1
+  }
+  test "$warm_status" = 200 || {
+    echo "Unexpected warm HTTP status for sample ${sample}: $warm_status" >&2
+    sed -n '1,80p' "/tmp/public-warm-${sample}.body" >&2
+    exit 1
+  }
+  rg -q '<html' "/tmp/public-warm-${sample}.body" || {
+    echo "Warm response ${sample} did not contain the canonical HTML payload" >&2
+    exit 1
+  }
+done
 ```
 
 The second response may be `x-edge-cache: HIT`, or a public JSON resource may
-report its own cache hit. A miss or cache outage must still execute the one
-canonical source load and return its real error; it must not select stale,
-static, alternate-endpoint, demo, or empty substitute data.
+report its own cache hit. Check both captured status lines and response bodies
+for a successful canonical payload; a miss or cache outage must still execute
+the one canonical source load and return its real error. It must not select
+stale, static, alternate-endpoint, demo, or empty substitute data.
 
 Do not use a warm hit to claim the cold performance target, and do not add a
 benchmark suite merely to repeat these request-contract checks.

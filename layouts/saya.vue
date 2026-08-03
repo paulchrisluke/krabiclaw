@@ -156,27 +156,16 @@ const routeLocationSlug = computed(() => {
   return match?.[1] ?? null
 })
 
-const applySayaTheme = () => {
-  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)')
-  const saved = localStorage.getItem('saya-theme-dark')
-  const isDark = saved === null ? prefersDark.matches : saved === 'true'
-  document.documentElement.classList.toggle('dark', isDark)
-}
-
 if (import.meta.client) {
+  const sayaTheme = usePlatformTheme()
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)')
-  const onSystemThemeChange = (event: MediaQueryListEvent) => {
-    if (localStorage.getItem('saya-theme-dark') === null) {
-      document.documentElement.classList.toggle('dark', event.matches)
-    }
-  }
+  const onSystemThemeChange = () => sayaTheme.sync()
 
-  applySayaTheme()
+  sayaTheme.restore()
   prefersDark.addEventListener('change', onSystemThemeChange)
   window.toggleSayaDark = () => {
     const isDark = !document.documentElement.classList.contains('dark')
-    document.documentElement.classList.toggle('dark', isDark)
-    localStorage.setItem('saya-theme-dark', String(isDark))
+    sayaTheme.setPreference(isDark ? 'dark' : 'light')
   }
 
   onBeforeUnmount(() => {

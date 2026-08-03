@@ -30,7 +30,8 @@ export interface BlawbyRouteTarget {
 
 export function resolveBlawbyPath(path: string): string {
   const match = path.match(/^\/preview\/(?:site|draft)\/[^/]+(\/.*)?$/)
-  return match?.[1] || (match ? '/' : path)
+  const resolvedPath = match?.[1] || (match ? '/' : path)
+  return resolvedPath.length > 1 ? resolvedPath.replace(/\/+$/, '') : resolvedPath
 }
 
 export function resolveBlawbyRouteTarget(path: string, params: Record<string, unknown> = {}): BlawbyRouteTarget {
@@ -41,6 +42,7 @@ export function resolveBlawbyRouteTarget(path: string, params: Record<string, un
   if (routePath === '/about') return { recipe: 'about', slug: null }
   if (routePath === '/pricing') return { recipe: 'pricing', slug: null }
   if (routePath === '/contact') return { recipe: 'contact', slug: null }
+  if (routePath === '/contact/confirmed') return { recipe: 'confirmation', slug: null }
   if (routePath === '/schedule') return { recipe: 'schedule', slug: null }
   if (routePath === '/blog') return { recipe: 'blog', slug: null }
   if (/^\/article\/[^/]+$/.test(routePath)) return { recipe: 'article', slug: String(params.slug || '') }
@@ -65,18 +67,13 @@ export async function useBlawbyDocument(recipe: BlawbyRouteRecipe, slug?: string
       if (import.meta.server) {
         const requestEvent = useRequestEvent()
         if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-        const [{ cloudflareEnv }, { getPublicBlawbyDocumentData, hasPublicBlawbyRouteContent }] = await Promise.all([
+        const [{ cloudflareEnv }, { resolvePublicBlawbyDocumentOrThrow }] = await Promise.all([
           import('~/server/utils/api-response'),
           import('~/server/utils/professional-services'),
         ])
         const db = cloudflareEnv(requestEvent).db
-        if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-        const document = await getPublicBlawbyDocumentData(db, siteId, recipe, { slug: normalizedSlug })
-        if (!document) throw createError({ statusCode: 404, statusMessage: 'Blawby is not enabled for this site' })
-        if (!hasPublicBlawbyRouteContent(document.route)) {
-          throw createError({ statusCode: 404, statusMessage: 'Route content not found' })
-        }
-        return { success: true, ...document }
+        if (!db) throw createError({ statusCode: 503, statusMessage: 'Database not available' })
+        return await resolvePublicBlawbyDocumentOrThrow(db, siteId, recipe, { slug: normalizedSlug })
       }
       return await publicApiRequest<BlawbyDocumentPayload>('/api/public/sites/' + encodeURIComponent(siteId) + '/blawby/document', {
         query: { recipe, ...(normalizedSlug ? { slug: normalizedSlug } : {}) },

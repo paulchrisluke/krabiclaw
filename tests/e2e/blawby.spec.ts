@@ -320,6 +320,7 @@ test.describe('Blawby NCLS public site', () => {
       headers: blawbyExtraHeaders,
       params: { recipe: 'home' },
     })
+    expect(response.ok()).toBe(true)
     const payload = (await response.json()).route
     const urls: string[] = []
     const collectUrls = (value: unknown) => {

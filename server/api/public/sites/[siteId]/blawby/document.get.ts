@@ -1,11 +1,8 @@
 import { apiErrorResponse, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getPublicBlawbyDocumentData, hasPublicBlawbyRouteContent } from '~/server/utils/professional-services'
-import type { BlawbyRouteRecipe } from '~/types/blawby'
+import { resolvePublicBlawbyDocumentOrThrow } from '~/server/utils/professional-services'
+import { BLAWBY_ROUTE_RECIPES, type BlawbyRouteRecipe } from '~/types/blawby'
 
-const RECIPES = new Set<BlawbyRouteRecipe>([
-  'home', 'services', 'offering', 'about', 'pricing', 'contact', 'schedule',
-  'blog', 'article', 'donate', 'privacy', 'terms', 'third-party-notices',
-])
+const RECIPES = new Set(BLAWBY_ROUTE_RECIPES)
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -22,10 +19,18 @@ export default defineEventHandler(async (event) => {
   const db = cloudflareEnv(event).db
   if (!db) return apiErrorResponse(event, 503, 'DATABASE_UNAVAILABLE', 'Database unavailable')
 
-  const document = await getPublicBlawbyDocumentData(db, siteId, recipe, { slug })
-  if (!document) return apiErrorResponse(event, 404, 'BLAWBY_NOT_ENABLED', 'Blawby is not enabled for this site')
-  if (!hasPublicBlawbyRouteContent(document.route)) {
-    return apiErrorResponse(event, 404, 'BLAWBY_ROUTE_NOT_FOUND', 'Route content not found')
+  try {
+    const document = await resolvePublicBlawbyDocumentOrThrow(db, siteId, recipe, { slug })
+    return jsonResponse(document)
+  } catch (error) {
+    const typedError = error as {
+      statusCode?: unknown
+      statusMessage?: unknown
+      data?: { code?: unknown }
+    }
+    const statusCode = typeof typedError.statusCode === 'number' ? typedError.statusCode : 500
+    const code = typeof typedError.data?.code === 'string' ? typedError.data.code : 'BLAWBY_DOCUMENT_FAILED'
+    const message = typeof typedError.statusMessage === 'string' ? typedError.statusMessage : 'Blawby document lookup failed'
+    return apiErrorResponse(event, statusCode, code, message)
   }
-  return jsonResponse({ success: true, ...document })
 })

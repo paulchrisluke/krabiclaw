@@ -50,6 +50,10 @@ _Avoid_: experience, menu item, legal service table
 A tenant presence used for contact, office, service-area, hours, and routing context. For professional-service tenants, a location may omit a public street address when it represents a service-area or remote/contact presence rather than a physical storefront.
 _Avoid_: storefront-only location, fake address, required Google Places location
 
+**Dine-in order**:
+A guest order intended for on-site fulfillment at a restaurant location, associated with a service point such as a table or pickup zone. It is distinct from a reservation, a delivery order, and a payment transaction.
+_Avoid_: restaurant reservation, delivery order, payment
+
 **Tenant page**:
 A URL-bearing public page owned by one tenant, such as a privacy policy, disclaimer, notice, or other static legal/compliance page. Tenant pages are not articles and are not reusable field-level content.
 _Avoid_: blog post, site content field, platform page

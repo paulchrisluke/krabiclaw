@@ -17,18 +17,14 @@ import '~/assets/css/platform-entry.css'
 const platformTheme = usePlatformTheme()
 
 if (import.meta.client) {
-  const stored = localStorage.getItem('krabiclaw-theme')
-  if (stored === 'system' || stored === 'light' || stored === 'dark') {
-    platformTheme.preference.value = stored
-  }
-
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)')
-  platformTheme.sync()
-  prefersDark.addEventListener('change', platformTheme.sync)
+  platformTheme.restore()
+  const onSystemThemeChange = () => platformTheme.sync()
+  prefersDark.addEventListener('change', onSystemThemeChange)
   const stopThemeWatch = watch(platformTheme.preference, platformTheme.sync)
 
   onBeforeUnmount(() => {
-    prefersDark.removeEventListener('change', platformTheme.sync)
+    prefersDark.removeEventListener('change', onSystemThemeChange)
     stopThemeWatch()
   })
 }

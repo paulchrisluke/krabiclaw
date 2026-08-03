@@ -7,6 +7,7 @@ export async function useBlawbyShell() {
   const data = computed(() => asyncData.data.value.shell)
   return {
     ...asyncData,
+    data,
     identity: computed(() => data.value.identity),
     navigation: computed(() => data.value.navigation),
     consultation: computed(() => data.value.consultation),
