@@ -1,3 +1,4 @@
+@import "./base.css";
 @import "@nuxt/ui";
 
 .w-\(--width\) {

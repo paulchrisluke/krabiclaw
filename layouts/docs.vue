@@ -34,6 +34,7 @@
 import DocsHeader from '~/components/platform/DocsHeader.vue'
 import PlatformDrawer from '~/components/platform/PlatformDrawer.vue'
 import PlatformCommandSearchModal from '~/components/platform/search/PlatformCommandSearchModal.vue'
+import '~/assets/css/platform-entry.css'
 
 const mobileNavOpen = ref(false)
 

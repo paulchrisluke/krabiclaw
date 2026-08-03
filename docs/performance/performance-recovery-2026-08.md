@@ -65,11 +65,11 @@ paid-plan history still has one bounded load.
   text and Marcellus for display text.
 - The public platform header uses static Login and Start Free links. It does not
   resolve a session or import dashboard auth code on every public navigation.
-- Public HTML removes Nuxt's broad `modulepreload` hints. The renderer emits a
-  hint for every client manifest entry, which made mobile browsers fetch dozens
-  of route chunks before the public hero could paint. Public scripts remain
-  available through their normal entry tags; dashboard, admin, and auth routes
-  retain their private-surface hints.
+- Vite `build.modulePreload` is disabled for this app. This removes the broad
+  manifest-wide preload fan-out that made a public browser navigation fetch
+  dozens of unrelated route chunks before the hero could paint. Route chunks
+  still load when their route or component is actually entered; dashboard,
+  admin, and auth code remains out of public layout and CSS entrypoints.
 - Saya home pages preload the actual server-rendered hero image, select its
   responsive Cloudflare Images variant, and lazy-load location, post, blog, and
   footer images below the hero. The first location image is no longer marked
@@ -86,48 +86,46 @@ manifest. That produced a stylesheet 404 and a flash of unstyled or inverted
 text before the correct CSS arrived. The layout now imports the CSS normally so
 Nuxt emits one route-owned stylesheet reference.
 
-## Measurements from the production-style local Worker
+## Cold-path measurements from the production-style local Worker
 
-After the CSS, public-header, and lazy-boundary fixes, a smoke pass against the
-rebuilt Worker observed these server-side response times:
+The acceptance check uses a fresh local origin for each browser navigation and
+does not count a warm cache hit. The Worker was rebuilt with the public CSS
+entrypoints and `modulePreload: false`, then served on isolated ports. The
+browser saw zero modulepreload links and loaded the surface fonts before the
+check completed:
 
-| Route | Direct local Worker response |
+| Surface and route | First browser navigation |
 | --- | ---: |
-| `/` | 258 ms |
-| `/pricing` | 216 ms |
-| `/preview/site/site-ncls-blawby/about` | 653 ms HTTP / 588 ms instrumented |
-| `/dashboard/pottery-house-krabi` | 999 ms |
+| Platform `/` | 326 ms |
+| Saya `/preview/site/site-demo/` | 226 ms |
+| Blawby `/preview/site/site-ncls-blawby/about` | 235 ms |
 
-These are direct HTTP measurements after the production-style Worker was
-warmed. The in-app browser rendered the Blawby About page with its Poppins body
-font, Marcellus display font, navy text, and three gold bands. Its full `goto`
-waits were higher, and one first navigation timed out, because this Wrangler
-preview served hashed assets through the in-app browser's remote transport; the
-Worker's own route instrumentation remained separate from that transport. The
-universal client entry is 394.49 KB raw / 139.10 KB gzip. The 517.30 KB raw /
-161 KB gzip editor chunk is route-only and is not loaded by the public homepage.
+These are smoke observations, not a statistically meaningful benchmark, but
+they are cold-origin measurements rather than warm-cache claims. The server
+responses also stayed bounded on the same Worker: platform HTML returned in
+71 ms, Saya home in 66 ms, and Blawby About in 60 ms. The direct responses
+reported `x-data-cache: BYPASS`; the cold checks therefore exercised the
+canonical D1-backed loaders rather than a warm public-resource cache. D1 query
+counts were 1 for platform HTML, 2 for Saya home, and 2 for Blawby About.
 
-These are smoke observations, not a statistically meaningful benchmark. The
-blocking checks are request count, query count, payload size, own-origin SSR
-requests, and error propagation. Comparative wall-clock benchmarking belongs in
-the final merge-ready lane, not in every editing loop.
+The important split is now explicit: cache hits are a warm optimization; they
+cannot prove the `<1s` cold target. Every cold check must exercise the canonical
+source loader, record request/query counts, and surface source errors.
 
 ## Browser trace follow-up
 
-The first live browser check after the dashboard release still reproduced the
-reported public delay: the platform homepage completed a cold browser
-navigation in about 4.0 seconds, and the non-canonical Pottery House hostname
-took about 5.7 seconds including its redirect. A direct warm navigation to
-`www.potteryhousekrabi.com` was about 1.9 seconds, with the hero image still
-being the critical visual resource.
+The earlier 4–6 second browser traces were reproducible before the client
+boundary change. They included the public route's own work plus a manifest-wide
+modulepreload fan-out. A fresh browser origin after the change no longer
+requested those unrelated chunks, and representative Platform, Saya, and
+Blawby routes completed below one second locally with the correct fonts and
+surface CSS. The Blawby screenshot also verified the intended navy/gold bands
+and readable body/display text.
 
-The production-style local Worker then verified the actionable cause and fix:
-`pottery-house.localhost` returned the hero in SSR HTML, emitted one responsive
-hero-image preload, marked ten lower-page images lazy, and produced no browser
-errors. The in-app browser rendered the hero image successfully after the
-preloaded image completed. This is a critical-path fix, not a claim that the
-remote Lighthouse run is already below one second; the staging and production
-browser checks must re-measure the deployed build.
+This does not by itself certify remote Lighthouse: the deployed Worker and
+real custom-domain image origin still need the same cold check. The production
+gate remains cold browser navigation, request budgets, query budgets, payload
+size, and visible error propagation—not an arbitrary warm-cache number.
 
 ## Validation contract
 

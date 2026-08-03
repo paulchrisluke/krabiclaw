@@ -21,10 +21,29 @@ export function usePlatformTheme() {
   const setPreference = (nextPreference: PlatformThemePreference) => {
     preference.value = nextPreference
     if (import.meta.client) {
-      localStorage.setItem(STORAGE_KEY, nextPreference)
-      sync()
+      try {
+        localStorage.setItem(STORAGE_KEY, nextPreference)
+      } catch {
+        // Theme preference remains in memory when browser storage is unavailable.
+      } finally {
+        sync()
+      }
     }
   }
 
-  return { preference, value, sync, setPreference }
+  const restore = () => {
+    if (import.meta.server) return
+    let stored: string | null = null
+    try {
+      stored = localStorage.getItem(STORAGE_KEY)
+    } catch {
+      // System preference remains authoritative when browser storage is unavailable.
+    }
+    if (stored === 'system' || stored === 'light' || stored === 'dark') {
+      preference.value = stored
+    }
+    sync()
+  }
+
+  return { preference, value, sync, setPreference, restore }
 }

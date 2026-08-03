@@ -1,4 +1,5 @@
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { createError } from 'h3'
 import { listPageQa } from '~/server/utils/location-qa'
 import { listSiteReviews } from '~/server/utils/site-reviews'
 import { getPublishedSiteBlogPost } from '~/server/utils/platform-content'
@@ -455,6 +456,46 @@ export async function getPublicBlawbyShellData(db: DbClient, siteId: string): Pr
   return { identity, navigation, consultation, compliance, themeTokens, offeringLinks }
 }
 
+export async function getPublicBlawbyDocumentData(
+  db: DbClient,
+  siteId: string,
+  recipe: PublicBlawbyRouteData['recipe'],
+  options: { slug?: string | null } = {},
+): Promise<{ shell: PublicBlawbyShellData; route: PublicBlawbyRouteData } | null> {
+  const site = await getActiveBlawbySite(db, siteId)
+  if (!site) return null
+
+  const [shell, route] = await Promise.all([
+    getPublicBlawbyShellData(db, siteId),
+    getPublicBlawbyRouteData(db, siteId, recipe, options),
+  ])
+  return { shell, route }
+}
+
+export async function resolvePublicBlawbyDocumentOrThrow(
+  db: DbClient,
+  siteId: string,
+  recipe: PublicBlawbyRouteData['recipe'],
+  options: { slug?: string | null } = {},
+): Promise<{ success: true; shell: PublicBlawbyShellData; route: PublicBlawbyRouteData }> {
+  const document = await getPublicBlawbyDocumentData(db, siteId, recipe, options)
+  if (!document) {
+    throw createError({
+      statusCode: 404,
+      statusMessage: 'Blawby is not enabled for this site',
+      data: { code: 'BLAWBY_NOT_ENABLED' },
+    })
+  }
+  if (!hasPublicBlawbyRouteContent(document.route)) {
+    throw createError({
+      statusCode: 404,
+      statusMessage: 'Route content not found',
+      data: { code: 'BLAWBY_ROUTE_NOT_FOUND' },
+    })
+  }
+  return { success: true, ...document }
+}
+
 const ROUTE_PAGE_PATHS: Record<PublicBlawbyRouteData['recipe'], string | null> = {
   home: '/',
   services: '/services',
@@ -462,6 +503,7 @@ const ROUTE_PAGE_PATHS: Record<PublicBlawbyRouteData['recipe'], string | null> =
   about: '/about',
   pricing: '/pricing',
   contact: '/contact',
+  confirmation: null,
   schedule: '/schedule',
   blog: '/blog',
   article: '/blog',
@@ -582,6 +624,7 @@ export async function getPublicBlawbyRouteData(
 }
 
 export function hasPublicBlawbyRouteContent(route: PublicBlawbyRouteData): boolean {
+  if (route.recipe === 'confirmation') return true
   if (route.recipe === 'offering') return Boolean(route.offering)
   if (route.recipe === 'article') return Boolean(route.post)
   return Boolean(route.page)

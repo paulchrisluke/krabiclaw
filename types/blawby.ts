@@ -107,20 +107,24 @@ export interface PublicBlogPost extends PublicBlogSummary {
   social_image: { public_url: string | null; thumbnail_url: string | null; width: number | null; height: number | null } | null
 }
 
-export type BlawbyRouteRecipe =
-  | 'home'
-  | 'services'
-  | 'offering'
-  | 'about'
-  | 'pricing'
-  | 'contact'
-  | 'schedule'
-  | 'blog'
-  | 'article'
-  | 'donate'
-  | 'privacy'
-  | 'terms'
-  | 'third-party-notices'
+export const BLAWBY_ROUTE_RECIPES = [
+  'home',
+  'services',
+  'offering',
+  'about',
+  'pricing',
+  'contact',
+  'confirmation',
+  'schedule',
+  'blog',
+  'article',
+  'donate',
+  'privacy',
+  'terms',
+  'third-party-notices',
+] as const
+
+export type BlawbyRouteRecipe = typeof BLAWBY_ROUTE_RECIPES[number]
 
 export interface PublicBlawbyRouteData {
   recipe: BlawbyRouteRecipe

@@ -160,12 +160,12 @@ test.describe('Blawby NCLS public site', () => {
   })
 
   test('services payload excludes full bodies and unrelated pages', async ({ request }) => {
-    const response = await request.get(`${blawbyBaseURL}/api/public/sites/site-ncls-blawby/blawby/route`, {
+    const response = await request.get(`${blawbyBaseURL}/api/public/sites/site-ncls-blawby/blawby/document`, {
       headers: blawbyExtraHeaders,
       params: { recipe: 'services' },
     })
     expect(response.ok()).toBe(true)
-    const payload = await response.json()
+    const payload = (await response.json()).route
     expect(payload.recipe).toBe('services')
     expect(payload.page.path).toBe('/services')
     expect(payload.offerings.length).toBeGreaterThan(0)
@@ -177,12 +177,12 @@ test.describe('Blawby NCLS public site', () => {
   })
 
   test('article payload contains one full post and summary-only related posts', async ({ request }) => {
-    const response = await request.get(`${blawbyBaseURL}/api/public/sites/site-ncls-blawby/blawby/route`, {
+    const response = await request.get(`${blawbyBaseURL}/api/public/sites/site-ncls-blawby/blawby/document`, {
       headers: blawbyExtraHeaders,
       params: { recipe: 'article', slug: 'preparing-for-your-consultation-with-north-carolina-legal-services' },
     })
     expect(response.ok()).toBe(true)
-    const payload = await response.json()
+    const payload = (await response.json()).route
     expect(payload.post.slug).toBe('preparing-for-your-consultation-with-north-carolina-legal-services')
     expect(payload.post.body.length).toBeGreaterThan(0)
     expect(payload.posts.length).toBeGreaterThan(0)
@@ -316,11 +316,12 @@ test.describe('Blawby NCLS public site', () => {
   })
 
   test('all imported media references use approved hosts', async ({ request }) => {
-    const response = await request.get(`${blawbyBaseURL}/api/public/sites/site-ncls-blawby/blawby/route`, {
+    const response = await request.get(`${blawbyBaseURL}/api/public/sites/site-ncls-blawby/blawby/document`, {
       headers: blawbyExtraHeaders,
       params: { recipe: 'home' },
     })
-    const payload = await response.json()
+    expect(response.ok()).toBe(true)
+    const payload = (await response.json()).route
     const urls: string[] = []
     const collectUrls = (value: unknown) => {
       if (typeof value === 'string' && /^https?:\/\//.test(value)) urls.push(value)
