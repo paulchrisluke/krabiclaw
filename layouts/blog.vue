@@ -27,11 +27,14 @@
 import DocsHeader from '~/components/platform/DocsHeader.vue'
 import PlatformDrawer from '~/components/platform/PlatformDrawer.vue'
 import PlatformCommandSearchModal from '~/components/platform/search/PlatformCommandSearchModal.vue'
-import '~/assets/css/platform-entry.css'
+import platformStylesheet from '~/assets/css/platform-entry.css?url'
+
+const platformStylesheetHref = new URL(platformStylesheet, 'http://nuxt.local').pathname
 
 const mobileNavOpen = ref(false)
 
 useHead({
+  link: [{ rel: 'stylesheet', href: platformStylesheetHref }],
   titleTemplate: (title) => title ? `${title} | KrabiClaw` : 'KrabiClaw | AI Website Platform'
 })
 </script>
