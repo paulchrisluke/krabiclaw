@@ -72,15 +72,14 @@
               <div class="absolute inset-0 rounded-3xl blur-2xl opacity-30" style="background: linear-gradient(135deg, var(--kc-coral-200), var(--kc-teal-100));"></div>
               <div class="relative rounded-3xl p-7 shadow-2xl border border-default/50" style="background: linear-gradient(145deg, var(--kc-coral-50) 0%, #fff8f6 100%);">
                 <picture>
-                  <source media="(min-width: 992px)" data-platform-hero-srcset="/krabiclaw-login-mascot.webp">
+                  <source media="(min-width: 992px)" srcset="/krabiclaw-login-mascot.webp">
                   <img
                     src="data:image/gif;base64,R0lGODlhAQABAAAAACw="
-                    data-platform-hero-src="/krabiclaw-login-mascot.webp"
                     alt="KrabiClaw mascot"
                     width="1200"
                     height="1200"
-                    loading="lazy"
-                    fetchpriority="low"
+                    loading="eager"
+                    fetchpriority="high"
                     decoding="async"
                     class="w-full block rounded-[20px] shadow-lg"
                   >
@@ -165,16 +164,5 @@ usePlatformPageSeo({
   breadcrumbs: [
     { name: 'Home', url: '/' },
   ],
-})
-
-onMounted(() => {
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    const source = document.querySelector('[data-platform-hero-srcset]')
-    const image = document.querySelector('[data-platform-hero-src]')
-    const srcset = source?.getAttribute('data-platform-hero-srcset')
-    const src = image?.getAttribute('data-platform-hero-src')
-    if (source && srcset) source.setAttribute('srcset', srcset)
-    if (image && src) image.setAttribute('src', src)
-  }))
 })
 </script>

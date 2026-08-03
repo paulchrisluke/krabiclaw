@@ -12,9 +12,11 @@
         <div class="flex items-center md:gap-x-12">
           <NuxtLink to="/" class="no-underline" :aria-label="`${brandName} home`">
             <img
-              v-if="showLogo && logoUrl"
+              v-if="logoUrl"
               :src="logoUrl"
               :alt="brandName"
+              loading="eager"
+              decoding="async"
               class="max-h-16 w-min max-w-[160px] object-contain"
             >
             <span v-else class="blawby-display truncate text-lg text-[var(--blawby-primary)] sm:text-xl">
@@ -110,14 +112,10 @@ const requestHostname = import.meta.server
   : window.location.hostname
 const brandName = computed(() => props.site.brand_name || 'Blawby')
 const logoUrl = computed(() => publicMediaUrl(props.site.logo_url, requestHostname))
-const showLogo = ref(false)
 const headerCtaLabel = computed(() => typeof props.consultation.metadata.header_cta_label === 'string'
   ? props.consultation.metadata.header_cta_label
   : 'Get Started')
 const { isOpen: mobileOpen, toggle: toggleMobileNav, close: closeMobileNav } = useMobileNavToggle()
-onMounted(() => {
-  requestAnimationFrame(() => requestAnimationFrame(() => { showLogo.value = true }))
-})
 const headerItems = computed(() => {
   const configured = props.navigation.filter(item => item.area === 'header')
   if (configured.length) return configured

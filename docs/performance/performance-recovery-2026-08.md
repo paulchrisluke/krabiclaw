@@ -77,18 +77,15 @@ paid-plan history still has one bounded load.
   Route chunks load when their route or component is actually entered;
   dashboard, admin, and auth code remains out of public layout and CSS
   entrypoints.
-- Saya home pages render the header, hero copy, brand color, and controls before
-  attaching the remote hero image. The image is added after the first branded
-  shell paint and then uses a responsive Cloudflare Images
-  `320/640/960/1440` candidate at quality 45. The header logo follows the same
-  boundary and starts as a local letter mark. Location, post, blog, and footer
-  images remain lazy; the first location image is not marked high-priority beside
-  the hero shell.
-- Blawby home pages use the same opaque, branded hero shell before attaching a
-  remote hero image. The YouTube video feature is intersection-gated and never
-  creates an iframe on the initial document. A slow media origin therefore cannot
-  make white text unreadable or pull third-party video JavaScript into the cold
-  path.
+- Saya home pages render the header, hero copy, brand color, controls, and the
+  responsive hero image in SSR. The hero uses a responsive Cloudflare Images
+  `320/640/960/1440` candidate at quality 45 with high fetch priority. The
+  header logo is also emitted immediately when tenant data supplies one;
+  location, post, blog, and footer images remain lazy.
+- Blawby home pages emit the branded hero and its high-priority remote image in
+  SSR. The YouTube video feature is intersection-gated and never creates an
+  iframe on the initial document. A slow media origin therefore cannot make
+  white text unreadable or pull third-party video JavaScript into the cold path.
 - Post videos remain poster-only until their card enters a 200px viewport
   margin; autoplay is mounted only after that visibility gate opens.
 - The Google Business photo contract is `google_url`. Reading it with the old
@@ -123,12 +120,12 @@ instead of relative and absolute duplicates.
 Dashboard/editor CSS remains outside these public entrypoints. Home routes now
 also have a critical inline shell: platform's root page is static HTML with a
 small consent script, while Saya and Blawby inline only the header/hero geometry
-and preload their full home stylesheet. The Worker defers the Nuxt runtime on
-public GET routes, and the head handoff uses one stable key plus an explicit
-client-side stylesheet state so hydration cannot revert the link to `preload`.
-The full stylesheet is applied before the user reaches below-fold content, with
-  one logical surface CSS request. The Worker removes the public Nuxt entry
-  script from the initial HTML. Public pages retain native links and
+and preload their full home stylesheet. The server response also sends one
+surface-specific HTTP `Link` preload header, so CSS discovery begins when the
+response headers arrive instead of waiting for the buffered HTML body. The
+stylesheet's own preload `onload` promotes it to a stylesheet; there is no
+two-frame JavaScript handoff. The Worker defers the Nuxt runtime on public GET
+routes and removes the public Nuxt entry script from the initial HTML. Public pages retain native links and
   server-rendered content without JavaScript; the small inline interaction
   loader fetches the Nuxt entry only when a button, submit control, or other
   JavaScript-owned control is used, then replays that original action after the
@@ -151,34 +148,24 @@ own route/component sources and font faces.
 ## Current cold-path measurements from the production-style local Worker
 
 The current check uses a fresh query value for each navigation against the
-rebuilt Worker. The HTML response is measured separately from browser paint,
-and the browser check verifies the initial CSS, fonts, images, iframe count, and
-runtime script count. The final three-run mobile Lighthouse medians against the
-rebuilt Worker are:
+rebuilt Worker. The HTML response is measured separately from browser
+navigation, and the browser check verifies the initial CSS, fonts, above-fold
+image markup, iframe count, and runtime script count. The fresh single-pass
+local Worker measurements for the final build are:
 
-| Surface | Performance | FCP | LCP | Speed Index | TBT | CLS | TTFB | Total transfer |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Platform `/` | 1.00 | 0.76 s | 1.22 s | 0.99 s | 0 ms | 0 | 0.02 s | 27,531 B |
-| Saya `/preview/site/site-pottery-house` | 0.94 | 1.10 s | 1.10 s | 1.10 s | 0 ms | 0 | 0.03 s | 440,928 B |
-| Blawby `/preview/site/site-ncls-blawby` | 0.86 | 1.37 s | 1.37 s | 1.37 s | 0 ms | 0 | 0.03 s | 108,552 B |
+| Surface | Browser navigation | HTML body | Server `total` | Stylesheet preload |
+| --- | ---: | ---: | ---: | --- |
+| Platform `/` | 121 ms | 27,219 B | 21 ms | `platform-home.css` |
+| Saya `/` (`demo.localhost`) | 142 ms | 55,700 B | 110 ms | `saya-home.css` |
+| Blawby `/` (`ncls.localhost`) | 117 ms | 101,078 B | 129 ms | `blawby-home.css` |
 
-These are three cold mobile Lighthouse samples using simulated mobile
-throttling and cleared browser state. The ranges were Platform FCP
-`0.76–0.99 s`, Saya FCP `0.92–1.11 s`, and Blawby FCP `1.37–1.42 s`.
-In the corresponding Lighthouse traces, the browser-observed shell paint was
-`0.56 s` for Platform, `0.10 s` for Saya, and `0.12 s` for Blawby. The simulated
-values remain the release-gate numbers because they include the controlled
-mobile network model; the observed values show that text, color, and geometry
-are now available before remote media and Nuxt runtime work.
-
-The platform root has met the first-paint target, but the public theme set has
-not met the overall `<1s` simulated Lighthouse goal. This is now a smaller,
-measurable remainder: Saya's and Blawby's simulated metrics include CSS/font
-and remote-media scheduling, while their observed first branded shells are
-already below one second. Blawby's initial document no longer creates a
-YouTube iframe or starts Nuxt JavaScript; its hero image is attached after the
-shell paint. Real custom tenant hosts still need a post-deploy cold browser run
-through the same-origin R2 media path.
+These are local browser navigation measurements, not Lighthouse FCP/LCP and not
+the release gate. They verify the shared response contract: the correct surface
+stylesheet is advertised in the HTTP response headers, public tenant pages have
+no initial Nuxt runtime script, and the above-fold hero markup is present in the
+initial HTML. The local R2 fixture does not contain the tenant media objects, so
+pixel-level tenant image validation still requires the deployed R2-backed host.
+The `<1s` cold browser target remains open until that post-deploy check is run.
 
 Cache hits are a warm optimization and cannot prove the cold target. The next
 release gate is a cold browser run on a real tenant host with same-origin R2
@@ -188,27 +175,27 @@ media request look successful.
 
 ## Browser trace follow-up
 
-The live production trace reproduced the original failure: SSR HTML arrived
-first with only the entry stylesheet, while the surface stylesheet appeared
-later when the layout client chunk loaded. The resulting screenshot showed the
-raw browser layout before the finished platform, Saya, or Blawby surface.
+The live production trace reproduced the original failure: the Worker buffered
+the transformed SSR document, and the browser could not begin the stylesheet
+request until the document body finished. The platform and tenant hero/logo
+media were also being delayed by two animation frames, so they were absent from
+the initial HTML request graph.
 
 The corrected local Worker now renders the platform root as static HTML and
-places the theme-critical shell plus CSS handoff in the initial SSR head. Public
-tenant pages have no initial Nuxt runtime script, no Blawby YouTube iframe, and
-no remote hero/logo requirement for the first readable shell. Fresh browser
-screenshots showed readable text, correct colors, local fonts, initial logo
-marks, and stable above-fold geometry immediately; the Blawby hero remains
-visually branded while its remote image is pending. The strict preview asset
+places the theme-critical shell in the initial SSR head. Public tenant pages
+have no initial Nuxt runtime script, no Blawby YouTube iframe, and no
+animation-frame gate on above-fold hero or logo media. Fresh browser screenshots
+showed readable text, correct colors, local fonts, and stable above-fold
+geometry immediately; tenant media pixels require the R2-backed fixture noted
+above. The strict preview asset
 waiter remains in place so a deployment fails when HTML references an
 unavailable asset; it validates the six stable public surface stylesheets
 emitted by the build rather than an obsolete hashed `entry.css` filename.
 
 The local cold-path result is materially improved but not declared solved: the
-platform is under one second in simulated Lighthouse, while Saya and Blawby
-remain above that threshold in the simulated release gate. The deployed Worker
-and a real custom-domain image origin still need the same cold check after
-release.
+browser check is fast in the local Worker, while a fresh cold measurement from a
+deployed Worker and real custom-domain image origin is still required before
+claiming the `<1s` target.
 
 The production gate remains cold browser navigation, request budgets, query
 budgets, payload size, and visible error propagation—not an arbitrary warm-cache
