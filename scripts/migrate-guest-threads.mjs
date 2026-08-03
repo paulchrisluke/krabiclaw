@@ -4,7 +4,7 @@
 // conversation-state projection, and per-member read state (guest_thread_member_state).
 //
 // For each guest_threads row, sequentially (each row's writes depend on that row's own
-// reads — see CLAUDE.md's D1-no-raw-transactions rule):
+// reads — D1 does not support raw transaction statements):
 //   1. load the source submission (contact/reservation/experience_booking) via the same
 //      adapter query shape as server/domain/guest-threads/adapters/*.ts;
 //   2. insert an immutable opening `submission` entry using the source's original

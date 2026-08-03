@@ -1,0 +1,23 @@
+/* Shared public route templates plus Saya tenant components. */
+@source "../../pages/*.vue";
+@source "../../pages/blog";
+@source "../../pages/contact";
+@source "../../pages/experiences";
+@source "../../pages/locations";
+@source "../../pages/menu";
+@source "../../pages/posts";
+@source "../../pages/reservations";
+@source "../../pages/services";
+@source "../../layouts/default.vue";
+@source "../../layouts/saya.vue";
+@source "../../components/*.vue";
+@source "../../components/blog";
+@source "../../components/booking";
+@source "../../components/content";
+@source "../../components/menu";
+@source "../../components/platform/PlatformButton.vue";
+@source "../../components/platform/PlatformIcon.vue";
+@source "../../components/saya";
+@source "../../components/ui/AppBreadcrumb.vue";
+@source "../../components/ui/AppSection.vue";
+@source "../../components/ui/UImage.vue";

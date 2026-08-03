@@ -75,8 +75,9 @@ import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformC
 import { renderMarkdownToHtml, sanitizeHtmlForSsr, stripLeadingTitleHeading } from '~/utils/markdown'
 import { buildContentBlocks, normalizeContentComponent, type ContentComponent } from '~/utils/content-blocks'
 import { resolveContentComponent } from '~/utils/content-component-resolver'
+import { loadDomPurify } from '~/utils/dom-purify-loader'
 
-const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: sanitizeHtmlForSsr }
+const DOMPurify = import.meta.client ? await loadDomPurify() : { sanitize: sanitizeHtmlForSsr }
 
 const { isTenant, siteId, site } = useTenantSite()
 if (!isTenant || !siteId) throw createError({ statusCode: 404 })

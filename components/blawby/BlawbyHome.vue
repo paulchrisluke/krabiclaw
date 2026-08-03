@@ -1,24 +1,24 @@
 <template>
   <div data-parity-root>
-    <section class="relative overflow-hidden" data-parity-section="hero">
+    <section data-blawby-critical-hero class="relative overflow-hidden" data-parity-section="hero">
       <img
-        v-if="heroBackground"
-        :src="heroBackground"
+        v-if="showHeroImage && heroBackgroundSrc"
+        :src="heroBackgroundSrc"
         alt=""
         width="1920"
         height="1080"
         fetchpriority="high"
         class="absolute inset-0 size-full object-cover object-center"
       >
-      <div class="blawby-container relative pb-36 pt-16 text-left min-[1920px]:pb-48 min-[1920px]:pt-24 min-[2560px]:pb-64 min-[2560px]:pt-32">
-        <div class="flex flex-wrap gap-x-6 min-[1920px]:gap-x-12 min-[2560px]:gap-x-16">
-          <div class="w-full lg:w-3/5">
+      <div data-blawby-critical-hero-content class="blawby-container relative pb-36 pt-16 text-left min-[1920px]:pb-48 min-[1920px]:pt-24 min-[2560px]:pb-64 min-[2560px]:pt-32">
+        <div data-blawby-critical-hero-columns class="flex flex-wrap gap-x-6 min-[1920px]:gap-x-12 min-[2560px]:gap-x-16">
+          <div data-blawby-critical-hero-copy class="w-full lg:w-3/5">
             <h1 class="max-w-4xl whitespace-pre-line blawby-display text-5xl font-medium text-white sm:text-7xl min-[1920px]:max-w-6xl min-[1920px]:text-8xl min-[2560px]:max-w-7xl min-[2560px]:text-9xl">
               {{ heroTitle.before }}<span v-if="heroTitle.accent" class="relative whitespace-nowrap text-[var(--blawby-accent)]">{{ heroTitle.accent }}</span>{{ heroTitle.after }}
             </h1>
             <p v-if="hero.description" class="mt-6 max-w-2xl text-lg text-white min-[1920px]:max-w-3xl min-[1920px]:text-xl min-[2560px]:max-w-4xl min-[2560px]:text-2xl">{{ hero.description }}</p>
           </div>
-          <div class="w-full lg:w-2/5">
+          <div data-blawby-critical-hero-actions class="w-full lg:w-2/5">
             <div class="mt-10 flex justify-start gap-x-6 min-[1920px]:mt-16 min-[2560px]:mt-20">
               <BlawbyButton :to="heroDestination" class="gap-2" @click="trackConsultation('hero', heroDestination)">
                 <svg class="size-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.5 4.5h9A4.5 4.5 0 0 1 21 9v3a4.5 4.5 0 0 1-4.5 4.5h-4.86L7.2 20.2a.75.75 0 0 1-1.2-.6v-3.35A4.5 4.5 0 0 1 3 12V9a4.5 4.5 0 0 1 4.5-4.5Z" /></svg>
@@ -40,7 +40,7 @@
         />
         <BlawbyServiceGrid :offerings="routeData.offerings" class="mt-20" />
       </div>
-      <img v-if="servicesDecoration" :src="servicesDecoration" alt="" width="1920" height="400" loading="lazy" class="absolute inset-x-0 bottom-0 w-full object-contain">
+      <img v-if="servicesDecorationSrc" :src="servicesDecorationSrc || undefined" alt="" width="1920" height="400" loading="lazy" class="absolute inset-x-0 bottom-0 w-full object-contain">
     </section>
 
     <BlawbyVideoFeature
@@ -53,7 +53,7 @@
       :images="videoImages"
     />
 
-    <BlawbyFaqSection :items="routeData.qa" :decoration-url="assetUrl(qaBlock?.decoration)" />
+    <BlawbyFaqSection :items="routeData.qa" :decoration-url="qaDecorationSrc" />
     <BlawbyReviewsSection :reviews="routeData.reviews" :description="reviewsDescription" />
 
     <div v-if="routeData.posts.length" class="mx-auto my-8 max-w-7xl px-6 lg:px-8" data-parity-section="articles">
@@ -70,16 +70,22 @@
       :description="asOptionalString(ctaBlock.description)"
       :label="String(ctaBlock.label || consultation.cta_label)"
       :destination="String(ctaBlock.url || consultation.schedule_path)"
-      :background-url="assetUrl(ctaBlock.background)"
-      :featured-url="assetUrl(ctaBlock.featured)"
+      :background-url="ctaBackgroundSrc"
+      :featured-url="ctaFeaturedSrc"
       @click="trackConsultation('cta_section', String(ctaBlock.url || consultation.schedule_path))"
     />
   </div>
 </template>
 
 <script setup lang="ts">
+import { publicMediaUrl } from '~/utils/public-media-url'
+
 const { data } = await useBlawbyRoute('home')
 const { identity, consultation, compliance } = await useBlawbyShell()
+const requestHeaders = useRequestHeaders(['host'])
+const requestHostname = import.meta.server
+  ? (requestHeaders.host || '').split(':')[0]
+  : window.location.hostname
 const org = useBlawbyOrgIdentity(identity, compliance)
 const routeData = computed(() => data.value)
 
@@ -106,7 +112,13 @@ const reviewsBlock = computed(() => block('reviews'))
 const qaBlock = computed(() => block('qa'))
 const ctaBlock = computed(() => block('consultation_cta'))
 const heroBackground = computed(() => assetUrl(hero.value.background))
+const heroBackgroundSrc = computed(() => publicMediaUrl(heroBackground.value, requestHostname))
+const showHeroImage = ref(false)
 const servicesDecoration = computed(() => assetUrl(services.value.decoration))
+const servicesDecorationSrc = computed(() => publicMediaUrl(servicesDecoration.value, requestHostname))
+const qaDecorationSrc = computed(() => publicMediaUrl(assetUrl(qaBlock.value?.decoration), requestHostname))
+const ctaBackgroundSrc = computed(() => publicMediaUrl(assetUrl(ctaBlock.value?.background), requestHostname))
+const ctaFeaturedSrc = computed(() => publicMediaUrl(assetUrl(ctaBlock.value?.featured), requestHostname))
 const heroDestination = computed(() => String(hero.value.url || consultation.value.schedule_path))
 const heroTitle = computed(() => {
   const title = String(hero.value.title || identity.value.brand_name || 'Professional services')
@@ -121,7 +133,7 @@ const videoFeatures = computed(() => Array.isArray(videoFeature.value?.features)
   : [])
 const videoImages = computed(() => Array.isArray(videoFeature.value?.images)
   ? videoFeature.value.images
-      .map((item: ApiRecord) => ({ url: assetUrl(item) || '', alt: asOptionalString(item.alt) }))
+      .map((item: ApiRecord) => ({ url: publicMediaUrl(assetUrl(item), requestHostname) || '', alt: asOptionalString(item.alt) }))
       .filter((item: { url: string }) => item.url)
   : [])
 const reviewsDescription = computed(() => String(reviewsBlock.value?.description || ''))
@@ -130,6 +142,10 @@ const { trackConsultationClick } = useBlawbyConversionTracking(consultation)
 function trackConsultation(pageType: string, destination: string) {
   trackConsultationClick(pageType, '/', destination)
 }
+
+onMounted(() => {
+  requestAnimationFrame(() => requestAnimationFrame(() => { showHeroImage.value = true }))
+})
 
 const seoTitle = computed(() => routeData.value.page?.seo_title || identity.value.brand_name || 'Professional services')
 const seoDescription = computed(() => routeData.value.page?.seo_description || routeData.value.page?.summary || identity.value.brand_description || '')

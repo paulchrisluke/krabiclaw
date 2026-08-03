@@ -2,7 +2,7 @@
 // docs/adr/0017-guest-account-model-separate-from-tenant-org-membership.md.
 //
 // Server-side: bypass useRequestFetch()'s internal self-fetch entirely per
-// CLAUDE.md's "Nested SSR self-fetch loses Cloudflare bindings" rule — call the
+// The server branch calls the
 // exact same resolver GET /api/account/access uses, directly against the
 // request event. Client-side (client-only navigation): fall back to $fetch.
 export default defineNuxtRouteMiddleware(async (to) => {

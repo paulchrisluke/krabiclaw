@@ -193,7 +193,7 @@ if (bootstrapRes.ok) {
 
 section('Experience slugs route correctly')
 
-const expRes = await get(`/api/public/sites/${SITE_ID}/page?page=experiences`)
+const expRes = await get(`/api/public/sites/${SITE_ID}/page?page=experiences&datasets=experiences`)
 if (expRes.ok) {
   const expData = await expRes.json()
   const experiences = expData.experiencesList ?? []

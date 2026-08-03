@@ -7,7 +7,7 @@
     <div class="dev-perf-shell-frame">
       <header class="dev-perf-static-header">
         <NuxtLink to="/" class="dev-perf-static-brand">
-          <img src="/krabi-claw-logo.png" alt="KrabiClaw" width="34" height="34">
+          <img src="/krabi-claw-logo-96.webp" alt="KrabiClaw" width="34" height="34">
           <span>krabiclaw.com</span>
         </NuxtLink>
         <nav class="dev-perf-static-nav" aria-label="Static test navigation">

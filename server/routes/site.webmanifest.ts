@@ -1,12 +1,8 @@
-import { sendRedirect, getHeader } from 'h3'
-import { isPlatformHost } from '~/server/utils/tenant-hosts'
-import { cloudflareEnv } from '~/server/utils/api-response'
+import { sendRedirect } from 'h3'
+import { TENANT_TYPES } from '~/utils/tenant-routing'
 
 export default defineEventHandler((event) => {
-  const host = getHeader(event, 'host') || ''
-  const env = cloudflareEnv(event)
-
-  if (event.context.tenantType === 'PLATFORM' || isPlatformHost(host, env)) {
+  if (event.context.tenantType === TENANT_TYPES.PLATFORM) {
     return sendRedirect(event, '/platform/site.webmanifest', 302)
   }
 

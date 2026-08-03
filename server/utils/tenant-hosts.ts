@@ -31,7 +31,7 @@ export function hostnameOf(host: string): string {
 }
 
 // "localhost" / "krabiclaw.com" are platform routes regardless of how
-// NUXT_PUBLIC_FREE_SITE_DOMAIN is configured (see CLAUDE.md "Multi-Tenancy").
+// NUXT_PUBLIC_FREE_SITE_DOMAIN is configured.
 // This mirrors the hardcoded 'krabiclaw.com' fallback in
 // server/utils/domains.ts platformDomainCandidates.
 export function getPlatformHosts(env: TenantHostEnv): string[] {

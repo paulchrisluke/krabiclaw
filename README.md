@@ -100,9 +100,7 @@ For local-but-public connector testing through a real HTTPS origin, use the
 hybrid local harness instead of plain localhost:
 
 ```bash
-yarn dev:tunnel
-yarn tunnel
-yarn test:mcp:local
+yarn test:mcp:local:tunnel
 ```
 
 The full env contract, tunnel setup, write-smoke mode, and ChatGPT handoff are
@@ -156,12 +154,12 @@ CI + E2E auth/billing parity, tier intent, and staging-vs-production smoke rules
 
 ## Schema
 
-`server/db/schema.ts` (Drizzle ORM) is the source of truth for new schema changes. `migrations/0001_initial.sql`–`0007_*.sql` are historical and immutable (already applied everywhere) — from `0008` onward, schema changes start in `schema.ts`, then `yarn db:generate` (`drizzle-kit generate`) produces the matching additive `migrations/000N_*.sql` file, applied via `wrangler d1 migrations apply`. `drizzle-kit generate` can't emit triggers or CHECK constraints, and only emits indexes/uniques explicitly declared in `schema.ts` — those must be hand-appended to the generated migration file. Full workflow, the constraint caveats, and the 2026-06-25 incident (a squashed baseline broke staging CI and silently dropped ~80 triggers/indexes — since reverted) are documented in `CLAUDE.md`'s "Database Schema Workflow" section.
+`server/db/schema.ts` (Drizzle ORM) is the source of truth for new schema changes. `migrations/0001_initial.sql`–`0007_*.sql` are historical and immutable (already applied everywhere) — from `0008` onward, schema changes start in `schema.ts`, then `yarn db:generate` (`drizzle-kit generate`) produces the matching additive `migrations/000N_*.sql` file. Use the named environment migration scripts (`yarn schema:local`, `yarn migrate:preview`, `yarn migrate:staging`, or `yarn migrate:prod`) rather than invoking Wrangler migration commands directly. `drizzle-kit generate` cannot emit triggers or CHECK constraints, so those required constraints must be hand-appended to the generated migration; indexes and uniques declared in `schema.ts` are generated normally. Full workflow, the constraint caveats, and the 2026-06-25 incident (a squashed baseline broke staging CI and silently dropped ~80 triggers/indexes — since reverted) are documented in `AGENTS.md`'s "Database Schema Workflow" section.
 
 ```bash
 yarn db:generate     # generate a migration from schema.ts after editing it
 yarn schema:local    # apply pending migrations locally
-yarn schema:remote   # apply pending migrations to production
+yarn migrate:prod    # apply pending migrations to production
 ```
 
 ---

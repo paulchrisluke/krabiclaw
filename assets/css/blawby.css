@@ -129,3 +129,30 @@ html.blawby-document {
 .blawby-shell .prose.blawby-policy-prose :where(h1, h2, h3, h4) {
   font-family: Poppins, Arial, sans-serif;
 }
+
+.blawby-faq-answer p,
+.blawby-faq-answer li {
+  color: var(--blawby-primary) !important;
+  font-size: 0.875rem !important;
+  line-height: 1.5rem !important;
+}
+
+.blawby-faq-answer p,
+.blawby-faq-answer ul {
+  margin-block: 0.25rem !important;
+}
+
+.blawby-faq-answer li {
+  margin-block: 0 !important;
+}
+
+.blawby-footer-copy :where(.prose, p, a) {
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.blawby-footer-copy a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

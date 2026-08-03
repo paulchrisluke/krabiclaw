@@ -19,7 +19,7 @@
     class="inline-block no-underline"
     @click="$emit('click', $event)"
   >
-    <span v-bind="$attrs" :class="buttonClasses">
+    <span data-blawby-critical-button v-bind="$attrs" :class="buttonClasses">
       <slot />
     </span>
   </component>

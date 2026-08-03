@@ -6,15 +6,15 @@
       :to="offering.canonical_path"
       class="relative h-full rounded-2xl bg-gray-100 p-6 no-underline shadow-xl shadow-slate-900/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blawby-primary)] focus-visible:ring-offset-4"
     >
-      <div class="w-full overflow-hidden rounded-lg">
+      <div ref="serviceImageTargets" :data-offering-id="offering.id" class="aspect-[704/478] w-full overflow-hidden rounded-lg bg-gray-100">
         <img
-          v-if="offering.thumbnail_url"
-          :src="offering.thumbnail_url"
+          v-if="offering.thumbnail_url && loadedOfferingIds.has(offering.id)"
+          :src="publicMediaUrl(offering.thumbnail_url, requestHostname) || undefined"
           :alt="offering.name"
           width="704"
           height="478"
           loading="lazy"
-          class="aspect-[704/478] w-full object-cover"
+          class="size-full object-cover"
         >
       </div>
       <span class="mt-6 inline-block rounded bg-[var(--blawby-primary-dark)] px-2 text-sm font-semibold uppercase text-white">
@@ -31,7 +31,37 @@
 </template>
 
 <script setup lang="ts">
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import type { PublicOfferingSummary } from '~/types/blawby'
+import { publicMediaUrl } from '~/utils/public-media-url'
+
+const requestHeaders = useRequestHeaders(['host'])
+const requestHostname = import.meta.server
+  ? (requestHeaders.host || '').split(':')[0]
+  : window.location.hostname
+const serviceImageTargets = ref<HTMLElement[]>([])
+const loadedOfferingIds = ref(new Set<string>())
+let imageObserver: IntersectionObserver | null = null
+
+onMounted(() => {
+  imageObserver = new IntersectionObserver((entries) => {
+    const next = new Set(loadedOfferingIds.value)
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue
+      const id = entry.target.getAttribute('data-offering-id')
+      if (!id) continue
+      next.add(id)
+      imageObserver?.unobserve(entry.target)
+    }
+    loadedOfferingIds.value = next
+  })
+  for (const target of serviceImageTargets.value) imageObserver.observe(target)
+})
+
+onBeforeUnmount(() => {
+  imageObserver?.disconnect()
+  imageObserver = null
+})
 
 defineProps<{ offerings: PublicOfferingSummary[] }>()
 </script>

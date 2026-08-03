@@ -787,7 +787,7 @@ export async function createLocation(
       try {
         await ensureLocationTeam(db, { organizationId, siteId, locationId: id, name: title });
       } catch (teamError) {
-        // D1 has no cross-statement transactions (see CLAUDE.md), so the
+        // D1 has no cross-statement transactions, so the
         // location row above is already committed. Team provisioning is not
         // optional — a location with no team can never be granted editor
         // access — so compensate by removing the orphaned row (and

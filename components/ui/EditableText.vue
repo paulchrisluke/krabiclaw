@@ -10,9 +10,10 @@ const emit = defineEmits<{
 }>()
 
 import { useEditMode } from '@/composables/useEditMode'
+import { loadDomPurify } from '~/utils/dom-purify-loader'
 
-const DOMPurify = import.meta.client 
-  ? (await import('isomorphic-dompurify')).default 
+const DOMPurify = import.meta.client
+  ? await loadDomPurify()
   : { sanitize: (s: string) => s }
 
 const { editMode, queueChange } = useEditMode()

@@ -1,7 +1,8 @@
-import { setHeader, sendRedirect, getHeader, type H3Event } from 'h3'
+import { setHeader, sendRedirect, type H3Event } from 'h3'
 import { sanitizeUrl } from '~/utils/sanitize'
-import { isPlatformHost, type TenantHostEnv } from '~/server/utils/tenant-hosts'
+import type { TenantHostEnv } from '~/server/utils/tenant-hosts'
 import { cloudflareEnv } from '~/server/utils/api-response'
+import { TENANT_TYPES } from '~/utils/tenant-routing'
 
 function escapeXml(value: string): string {
   return value
@@ -96,10 +97,9 @@ export interface FaviconOptions {
 }
 
 export function handleFaviconRequest(event: H3Event, options: FaviconOptions) {
-  const host = getHeader(event, 'host') || ''
   const env = cloudflareEnv(event)
 
-  if (event.context.tenantType === 'PLATFORM' || isPlatformHost(host, env)) {
+  if (event.context.tenantType === TENANT_TYPES.PLATFORM) {
     const cleanFileName = options.platformFileName.replace(/^\/platform\//, '').replace(/^\//, '')
     return sendRedirect(event, `/platform/${cleanFileName}`, 302)
   }
