@@ -205,9 +205,10 @@ async function deferPublicHydration(response: Response): Promise<Response> {
 
   const html = await response.text()
   const moduleScript = /<script\b(?=[^>]*\btype="module")(?=[^>]*\bsrc="(\/_nuxt\/[^\"]+)")[^>]*><\/script>/
+  const nuxtDataScript = /<script type="application\/json" data-nuxt-data="nuxt-app"[^>]*>[\s\S]*?<\/script>/
   const match = html.match(moduleScript)
-  if (!match?.[1]) {
-    throw new Error('Interaction hydration contract is missing the Nuxt entry script')
+  if (!match?.[1] || !nuxtDataScript.test(html)) {
+    throw new Error('Interaction hydration contract is missing the Nuxt entry script or payload')
   }
 
   const entryUrl = JSON.stringify(match[1])
@@ -215,7 +216,9 @@ async function deferPublicHydration(response: Response): Promise<Response> {
   const headers = new Headers(response.headers)
   headers.delete('content-length')
   headers.set('x-public-hydration', 'interaction')
-  return new Response(removePublicNuxtUiColors(html).replace(moduleScript, hydrationLoader), {
+  return new Response(removePublicNuxtUiColors(html)
+    .replace(moduleScript, hydrationLoader)
+    .replace(nuxtDataScript, ''), {
     status: response.status,
     statusText: response.statusText,
     headers,

@@ -95,7 +95,14 @@ useHead(() => {
   const isHome = route.path === '/' || /^\/preview\/site\/[^/]+\/?$/.test(route.path)
   return {
     link: [isHome
-      ? { key: 'saya-home-stylesheet', rel: 'stylesheet', href: sayaStylesheetForRoute.value }
+      ? {
+          key: 'saya-home-stylesheet',
+          rel: 'preload',
+          as: 'style',
+          href: sayaStylesheetForRoute.value,
+          fetchpriority: 'low',
+          onload: "this.onload=null;this.rel='stylesheet'",
+        }
       : { key: 'saya-surface-stylesheet', rel: 'stylesheet', href: sayaStylesheetForRoute.value }],
     style: isHome ? [{ innerHTML: sayaCriticalCss, tagPriority: 'critical' }] : [],
   }
