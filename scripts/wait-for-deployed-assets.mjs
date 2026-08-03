@@ -72,18 +72,23 @@ async function verifyHtmlAndAssets(url, headers = {}) {
   if (!response.ok) throw new Error(`${url.pathname || '/'} returned HTTP ${response.status}`)
 
   const html = await response.text()
+  const renderMode = response.headers.get('x-public-render-mode')
   const buildId = html.match(NUXT_BUILD_ID_PATTERN)?.[1]
-  if (!buildId) throw new Error(`${url.pathname || '/'} did not expose a Nuxt build id`)
-
-  const buildMetaUrl = new URL(`/_nuxt/builds/meta/${buildId}.json`, baseUrl)
-  const buildMetaResponse = await fetchWithTimeout(buildMetaUrl, headers)
-  if (!buildMetaResponse.ok) {
-    throw new Error(`${url.pathname || '/'} references missing Nuxt build metadata ${buildId}`)
+  if (!buildId && renderMode !== 'static-html') {
+    throw new Error(`${url.pathname || '/'} did not expose a Nuxt build id or the static HTML render contract`)
   }
-  try {
-    JSON.parse(await buildMetaResponse.text())
-  } catch {
-    throw new Error(`${url.pathname || '/'} references malformed Nuxt build metadata ${buildId}`)
+
+  if (buildId) {
+    const buildMetaUrl = new URL(`/_nuxt/builds/meta/${buildId}.json`, baseUrl)
+    const buildMetaResponse = await fetchWithTimeout(buildMetaUrl, headers)
+    if (!buildMetaResponse.ok) {
+      throw new Error(`${url.pathname || '/'} references missing Nuxt build metadata ${buildId}`)
+    }
+    try {
+      JSON.parse(await buildMetaResponse.text())
+    } catch {
+      throw new Error(`${url.pathname || '/'} references malformed Nuxt build metadata ${buildId}`)
+    }
   }
 
   const assetPaths = [...html.matchAll(NUXT_ASSET_PATTERN)].map(match => match[1])
