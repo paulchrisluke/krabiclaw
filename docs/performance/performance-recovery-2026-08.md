@@ -201,7 +201,8 @@ screenshots showed readable text, correct colors, local fonts, initial logo
 marks, and stable above-fold geometry immediately; the Blawby hero remains
 visually branded while its remote image is pending. The strict preview asset
 waiter remains in place so a deployment fails when HTML references an
-unavailable asset.
+unavailable asset; it validates the six stable public surface stylesheets
+emitted by the build rather than an obsolete hashed `entry.css` filename.
 
 The local cold-path result is materially improved but not declared solved: the
 platform is under one second in simulated Lighthouse, while Saya and Blawby
