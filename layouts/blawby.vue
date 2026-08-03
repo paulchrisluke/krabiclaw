@@ -40,7 +40,14 @@ const blawbyStylesheetForRoute = computed(() => {
 useHead(() => ({
   link: [
     route.path === '/' || /^\/preview\/site\/[^/]+\/?$/.test(route.path)
-      ? { key: 'blawby-home-stylesheet', rel: 'stylesheet', href: blawbyStylesheetForRoute.value }
+      ? {
+          key: 'blawby-home-stylesheet',
+          rel: 'preload',
+          as: 'style',
+          href: blawbyStylesheetForRoute.value,
+          fetchpriority: 'low',
+          onload: "this.onload=null;this.rel='stylesheet'",
+        }
       : { key: 'blawby-surface-stylesheet', rel: 'stylesheet', href: blawbyStylesheetForRoute.value },
     ...(route.path.startsWith('/preview/site/')
       ? [{ rel: 'preconnect', href: 'https://media.krabiclaw.com' }]
