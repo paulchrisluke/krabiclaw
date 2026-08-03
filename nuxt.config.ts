@@ -96,8 +96,18 @@ function publicSurfaceCssPlugin() {
   return {
     name: 'krabiclaw-public-surface-css-paths',
     enforce: 'post' as const,
-    generateBundle(_options: unknown, bundle: Record<string, { type: string; fileName: string; code?: string }>) {
-      const renamedEntries: Array<[string, { type: string; fileName: string; code?: string }]> = []
+    generateBundle(_options: unknown, bundle: Record<string, {
+      type: string
+      fileName: string
+      code?: string
+      source?: string | Uint8Array
+    }>) {
+      const renamedEntries: Array<[string, {
+        type: string
+        fileName: string
+        code?: string
+        source?: string | Uint8Array
+      }]> = []
 
       for (const [fileName, asset] of Object.entries(bundle)) {
         const targetPath = surfaceCssAssetPath(fileName)
@@ -106,6 +116,9 @@ function publicSurfaceCssPlugin() {
           continue
         }
 
+        if (typeof asset.source === 'string') {
+          asset.source = asset.source.replaceAll('../_fonts/', '../../_fonts/')
+        }
         asset.fileName = `_nuxt/${targetPath}`
         renamedEntries.push([asset.fileName, asset])
       }

@@ -93,7 +93,8 @@ surface-scoped. A Vite output plugin rewrites those three CSS assets to the
 stable paths `/_nuxt/surfaces/platform.css`, `/_nuxt/surfaces/saya.css`, and
 `/_nuxt/surfaces/blawby.css` in both the client output and server references.
 The existing postbuild step also rewrites Nuxt's serialized client preload
-manifest after Nitro generates it, then fails if a stable file is missing or a
+manifest after Nitro generates it, adjusts `@nuxt/fonts` relative font URLs for
+the new `/_nuxt/surfaces/` depth, then fails if a stable file is missing or a
 hashed surface reference remains. This prevents independent client/server
 asset hashing from producing an SSR stylesheet or preload URL that the
 deployment does not contain. Those stable files are served with revalidation
