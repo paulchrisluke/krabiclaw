@@ -1,4 +1,4 @@
-import { getRequestURL, setHeader } from 'h3'
+import { setHeader } from 'h3'
 
 export default defineEventHandler((event) => {
   const site = event.context.site as {
@@ -8,9 +8,7 @@ export default defineEventHandler((event) => {
     favicon_url?: string | null
   } | undefined
 
-  const requestUrl = getRequestURL(event)
   const brandName = site?.brand_name?.trim() || 'KrabiClaw'
-  const origin = requestUrl.origin
 
   setHeader(event, 'x-robots-tag', 'noindex, nofollow, noarchive')
   setHeader(event, 'content-type', 'application/manifest+json')
@@ -29,19 +27,19 @@ export default defineEventHandler((event) => {
     short_name: brandName.slice(0, 32),
     icons: [
       {
-        src: `${origin}/tenant-icon-192.png?v=${v}`,
+        src: `/tenant-icon-192.png?v=${v}`,
         sizes: '192x192',
         type: 'image/png',
         purpose: 'any maskable',
       },
       {
-        src: `${origin}/tenant-icon-512.png?v=${v}`,
+        src: `/tenant-icon-512.png?v=${v}`,
         sizes: '512x512',
         type: 'image/png',
         purpose: 'any maskable',
       },
       {
-        src: `${origin}/tenant-icon.svg?v=${v}`,
+        src: `/tenant-icon.svg?v=${v}`,
         sizes: 'any',
         type: 'image/svg+xml',
         purpose: 'any',

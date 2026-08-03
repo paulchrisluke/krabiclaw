@@ -1,34 +1,22 @@
-// Reports uncaught Vue component errors and unhandled promise rejections to
-// GA4 (zaraz.track()) as error_encountered. Dashboard transport failures are
-// normalized by the scoped dashboard client.
-//
-// trackError() is a no-op on tenant/Saya pages (gated inside useAnalytics via
-// isPlatform), so this plugin is safe to register unconditionally.
 export default defineNuxtPlugin((nuxtApp) => {
-  const { trackError } = useAnalytics()
+  type VueErrorHandler = (_error: unknown, _instance: unknown, _info: string | undefined) => void
+  const pendingVueErrors: Array<Parameters<VueErrorHandler>> = []
+  let handleVueError: VueErrorHandler | null = null
 
-  const sanitizeMessage = (raw: unknown): string => {
-    const str = typeof raw === 'string' ? raw : String(raw)
-    // Remove potential sensitive patterns: emails, UUIDs, long tokens
-    return str
-      .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[REDACTED_EMAIL]')
-      .replace(/[a-f0-9]{32,}/g, '[REDACTED_ID]')
-      .slice(0, 200) // Limit length
-  }
-
-  // Use Nuxt's vue:error hook instead of overriding vueApp.config.errorHandler
-  // to avoid bypassing Nuxt's built-in error pipeline
-  nuxtApp.hook('vue:error', (err, _instance, info) => {
-    const message = sanitizeMessage(err instanceof Error ? err.message : err)
-    trackError('vue_error', message, info)
-    console.error(err)
+  nuxtApp.hook('vue:error', (error, instance, info) => {
+    if (handleVueError) {
+      handleVueError(error, instance, info)
+    } else {
+      pendingVueErrors.push([error, instance, info])
+    }
   })
 
-  if (import.meta.client) {
-    window.addEventListener('unhandledrejection', (event) => {
-      const reason = event.reason
-      const message = sanitizeMessage(reason instanceof Error ? reason.message : reason)
-      trackError('unhandled_rejection', message)
-    })
-  }
+  nuxtApp.hook('app:mounted', async () => {
+    const { registerErrorTracking } = await import('~/utils/error-tracking-runtime.client')
+    handleVueError = await nuxtApp.runWithContext(() => registerErrorTracking())
+    for (const [error, instance, info] of pendingVueErrors) {
+      handleVueError(error, instance, info)
+    }
+    pendingVueErrors.length = 0
+  })
 })

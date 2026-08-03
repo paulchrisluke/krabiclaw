@@ -291,7 +291,7 @@ async function loadPublicPageSource(
   // requests (isPreviewAuthorized gates the whole read/write, not just the key —
   // omitting the token from the key alone would let a preview response collide
   // with the public cache entry for the same page/location) and for preview/staging
-  // hosts, whose D1 gets reseeded on every CI push (see CLAUDE.md's E2E architecture) —
+  // hosts, whose D1 gets reseeded on every CI push —
   // a 60s-old cached response could serve pre-reseed content into a fresh E2E run.
   // Also skipped if any query input is invalid to prevent unbounded cache entries.
   const host = getHeader(event, "host") ?? "";

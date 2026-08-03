@@ -4,7 +4,7 @@ import { chowbotToolFromMcp } from './from-mcp'
 
 // Only get_dashboard_link is shared with MCP's settings domain — domain
 // management (create_domain, sync_domain, etc.) is intentionally not
-// exposed to ChowBot (see CLAUDE.md's Custom Domains section on ACME token
+// exposed to ChowBot (ACME token rotation is a platform-admin concern), so it's
 // rotation risk), so it's excluded here rather than derived wholesale.
 const SETTINGS_DOMAIN_TOOL_NAMES = new Set(['get_dashboard_link'])
 

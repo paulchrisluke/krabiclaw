@@ -129,7 +129,7 @@ development should stay on plain `yarn dev` at `http://localhost:3000`.
 does not currently reach the local machine.** `wrangler.toml` has a
 `pattern = "*/*"` Worker route on `zone_name = "krabiclaw.com"` (required for
 the `customers.krabiclaw.com` SaaS-fallback origin — see "Custom Domains" in
-`CLAUDE.md`). That route intercepts every hostname in the `krabiclaw.com` zone
+`AGENTS.md`). That route intercepts every hostname in the `krabiclaw.com` zone
 at Cloudflare's edge, including `local.krabiclaw.com`, before Cloudflare ever
 consults the DNS record pointing at the tunnel. Verified by killing both the
 local dev server and `cloudflared` entirely and confirming `local.krabiclaw.com`

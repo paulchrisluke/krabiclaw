@@ -12,10 +12,6 @@
 </template>
 
 <script setup lang="ts">
-// A tiny local icon set standing in for @nuxt/icon's <UIcon>. Each entry is
-// plain inline SVG path data (mostly Heroicons outline, a couple of Feather)
-// so the platform surface doesn't pull in the icon-collection runtime — see
-// CLAUDE.md's "Saya public surface" perf note, which this mirrors platform-wide.
 interface IconDef {
   paths: string[]
   fill?: boolean

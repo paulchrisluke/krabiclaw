@@ -1,0 +1,183 @@
+*,
+::before,
+::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 106%;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: Poppins, ui-sans-serif, system-ui, sans-serif;
+  line-height: 1.5;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+button {
+  font: inherit;
+}
+
+.blawby-shell {
+  min-height: 100vh;
+  background: var(--blawby-token-bg, #fbfaf7);
+  color: var(--blawby-token-ink, #162033);
+}
+
+.blawby-container {
+  width: 100%;
+  max-width: 80rem;
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+
+[data-blawby-critical-header] {
+  position: fixed;
+  inset-inline: 0;
+  top: 0;
+  z-index: 50;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fff;
+}
+
+[data-blawby-critical-banner] {
+  background: var(--blawby-primary-dark, #161f3b);
+  color: #fff;
+  padding-block: 0.625rem;
+}
+
+[data-blawby-critical-header] nav {
+  position: relative;
+  z-index: 50;
+  display: flex;
+  justify-content: space-between;
+  padding-block: 0.5rem;
+}
+
+[data-blawby-critical-header] nav > div {
+  display: flex;
+  align-items: center;
+}
+
+[data-blawby-critical-header] img {
+  width: auto;
+  max-width: 160px;
+  max-height: 4rem;
+  object-fit: contain;
+}
+
+.blawby-critical-header-spacer {
+  height: 4rem;
+  margin-bottom: 0;
+}
+
+[data-blawby-critical-hero] {
+  position: relative;
+  overflow: hidden;
+  background: var(--blawby-token-primary-dark, #161f3b);
+  color: #fff;
+}
+
+[data-blawby-critical-hero] > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+[data-blawby-critical-hero-content] {
+  position: relative;
+  z-index: 1;
+  padding-top: 4rem;
+  padding-bottom: 9rem;
+  text-align: left;
+}
+
+[data-blawby-critical-hero-columns] {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 1.5rem;
+}
+
+[data-blawby-critical-hero-copy],
+[data-blawby-critical-hero-actions] {
+  width: 100%;
+}
+
+[data-blawby-critical-hero] h1 {
+  max-width: 56rem;
+  margin: 0;
+  font-family: Marcellus, Georgia, serif;
+  font-size: 3rem;
+  font-weight: 500;
+  line-height: 1;
+  white-space: pre-line;
+}
+
+[data-blawby-critical-hero] p {
+  max-width: 32rem;
+  margin-top: 1.5rem;
+  color: #fff;
+  font-size: 1.125rem;
+}
+
+[data-blawby-critical-button] {
+  display: inline-flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0.5rem;
+  background: var(--blawby-accent-button, #b58c4f);
+  color: #fff;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+
+[data-blawby-critical-hero-actions] {
+  margin-top: 2.5rem;
+}
+
+@media (width >= 576px) {
+  [data-blawby-critical-hero] h1 {
+    font-size: 4.5rem;
+  }
+}
+
+@media (width >= 768px) {
+  .blawby-container {
+    padding-inline: 1.5rem;
+  }
+
+  [data-blawby-critical-header] nav > div:first-child {
+    column-gap: 3rem;
+  }
+
+}
+
+@media (width >= 992px) {
+  .blawby-container {
+    padding-inline: 2rem;
+  }
+
+  [data-blawby-critical-hero-copy] {
+    width: 60%;
+  }
+
+  [data-blawby-critical-hero-actions] {
+    width: 40%;
+  }
+}

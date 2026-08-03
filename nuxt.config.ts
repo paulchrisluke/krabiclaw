@@ -56,7 +56,10 @@ const publicHtmlCacheHeaders = isNonProductionDeployment
 
 const publicSurfaceCssPaths = {
   'platform-entry': 'surfaces/platform.css',
+  'platform-home-entry': 'surfaces/platform-home.css',
+  'saya-home-entry': 'surfaces/saya-home.css',
   'saya-entry': 'surfaces/saya.css',
+  'blawby-home-entry': 'surfaces/blawby-home.css',
   'blawby-entry': 'surfaces/blawby.css',
 } as const
 
@@ -116,9 +119,6 @@ function publicSurfaceCssPlugin() {
           continue
         }
 
-        if (typeof asset.source === 'string') {
-          asset.source = asset.source.replaceAll('../_fonts/', '../../_fonts/')
-        }
         asset.fileName = `_nuxt/${targetPath}`
         renamedEntries.push([asset.fileName, asset])
       }
@@ -151,11 +151,11 @@ export default defineNuxtConfig({
     '@nuxtjs/i18n',
     '@nuxt/ui',
     '@nuxt/image',
-    '@nuxt/fonts',
   ],
 
   ui: {
     colorMode: false,
+    fonts: false,
   },
 
   app: {
@@ -188,6 +188,14 @@ export default defineNuxtConfig({
   },
 
   compatibilityDate: '2024-11-01',
+
+  experimental: {
+    defaults: {
+      nuxtLink: {
+        prefetch: false,
+      },
+    },
+  },
   debug: false,
   devtools: { enabled: false },
   icon: {
@@ -478,33 +486,6 @@ export default defineNuxtConfig({
     '/**': { headers: publicHtmlCacheHeaders },
   },
 
-  // Font configuration — @nuxt/fonts downloads, subsets, and self-hosts these.
-  // Do NOT add @import from fonts.googleapis.com in base.css; that would double-load
-  // and block rendering on a separate render-blocking external request.
-  //
-  // Keep only the weights used by the surfaces: Poppins for body/UI text,
-  // Marcellus for Blawby display text, and Fredoka for the platform wordmark.
-  // These are self-hosted by @nuxt/fonts. Do not add external font stylesheets
-  // or route plugins; surface CSS selects the family it needs.
-  fonts: {
-    defaults: {
-      subsets: ['latin'],
-    },
-    providers: {
-      bunny: false,
-      adobe: false,
-      fontshare: false,
-      fontsource: false,
-      googleicons: false,
-      npm: false,
-    },
-    families: [
-      { name: 'Poppins', provider: 'google', weights: [400, 500, 600, 700], display: 'swap' },
-      { name: 'Marcellus', provider: 'google', weights: [400], display: 'swap' },
-      { name: 'Fredoka', provider: 'google', weights: [600], display: 'swap' },
-    ],
-  },
-
   // Nitro configuration for Cloudflare deployment
   nitro: {
     preset: 'cloudflare-module',
@@ -518,7 +499,7 @@ export default defineNuxtConfig({
       silent: true,
     },
     experimental: {
-      tasks: enableNitroTasks
+      tasks: enableNitroTasks,
     },
     // Set NUXT_DISABLE_NITRO_TASKS=true to keep task modules out of a local
     // dev/E2E boot if task imports break the nitro-cloudflare-dev D1 proxy binding.

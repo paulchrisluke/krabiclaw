@@ -22,9 +22,9 @@
           </dl>
         </div>
         <div>
-          <div class="aspect-video overflow-hidden rounded-lg bg-gray-100">
+          <div ref="videoFrame" class="aspect-video overflow-hidden rounded-lg bg-gray-100">
             <iframe
-              v-if="videoUrl"
+              v-if="showVideo && videoUrl"
               :title="videoTitle || title"
               :src="videoUrl"
               loading="lazy"
@@ -45,7 +45,7 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{
+const props = defineProps<{
   title: string
   accent?: string | null
   videoUrl?: string | null
@@ -53,4 +53,24 @@ defineProps<{
   features: Array<{ name: string; desc: string }>
   images: Array<{ url: string; alt?: string | null }>
 }>()
+
+const videoFrame = ref<HTMLElement | null>(null)
+const showVideo = ref(false)
+let videoObserver: IntersectionObserver | null = null
+
+onMounted(() => {
+  if (!props.videoUrl || !videoFrame.value) return
+  videoObserver = new IntersectionObserver((entries) => {
+    if (!entries.some(entry => entry.isIntersecting)) return
+    showVideo.value = true
+    videoObserver?.disconnect()
+    videoObserver = null
+  }, { rootMargin: '200px 0px' })
+  videoObserver.observe(videoFrame.value)
+})
+
+onUnmounted(() => {
+  videoObserver?.disconnect()
+  videoObserver = null
+})
 </script>

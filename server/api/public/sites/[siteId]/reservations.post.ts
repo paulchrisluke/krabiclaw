@@ -158,8 +158,8 @@ export default defineEventHandler(async (event) => {
   const customer = await findOrCreateCustomer(db, customerInput)
 
   // Single atomic statement: the capacity re-check and the insert happen in one SQL statement
-  // (D1/SQLite guarantees single-statement atomicity even without BEGIN/COMMIT support — see
-  // CLAUDE.md "D1 does not support raw transactions") so a concurrent request can't slip in
+  // (D1/SQLite guarantees single-statement atomicity even without BEGIN/COMMIT support) so a
+  // concurrent request can't slip in
   // between a separate read and write. When partySizeForCapacityCheck is null (no max_capacity,
   // or unstructured hours), the WHERE clause is unconditionally true and the insert always runs.
   const insertResult = await execute(db, `

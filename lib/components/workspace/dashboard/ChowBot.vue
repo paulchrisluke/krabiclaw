@@ -178,6 +178,7 @@ import { useChowBot } from '~/composables/useChowBot'
 import { useAiCredits } from '~/composables/useAiCredits'
 import { getQuickActionPrompts } from '~/composables/useOnboardingPrompts'
 import { sanitizeHtmlForSsr } from '~/utils/markdown'
+import { loadDomPurify } from '~/utils/dom-purify-loader'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
 const dashboardApi = useDashboardApi()
@@ -188,9 +189,7 @@ const dashboard = useDashboardSite()
 const { isOpen, messages, isLoading, siteId, close, sendMessage, clearMessages, currentPageOverride, draftMessage } = useChowBot()
 const { paths: dashboardSiteLinkPaths } = useDashboardSiteLinks(siteId.value ?? '')
 const orgSettings = useOrgSettings()
-const DOMPurify = import.meta.client
-  ? (await import('isomorphic-dompurify')).default
-  : { sanitize: sanitizeHtmlForSsr }
+const DOMPurify = import.meta.client ? await loadDomPurify() : { sanitize: sanitizeHtmlForSsr }
 const { balance, total, isLow, isDepleted, fetch: fetchCredits } = useAiCredits(siteId)
 
 watch(isOpen, (open: boolean) => { if (open && siteId.value) fetchCredits() })

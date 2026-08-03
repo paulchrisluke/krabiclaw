@@ -40,21 +40,3 @@ const columns = computed(() => {
   return Array.from({ length: 3 }, (_, index) => props.items.slice(index * size, (index + 1) * size))
 })
 </script>
-
-<style>
-.blawby-faq-answer p,
-.blawby-faq-answer li {
-  color: var(--blawby-primary) !important;
-  font-size: 0.875rem !important;
-  line-height: 1.5rem !important;
-}
-
-.blawby-faq-answer p,
-.blawby-faq-answer ul {
-  margin-block: 0.25rem !important;
-}
-
-.blawby-faq-answer li {
-  margin-block: 0 !important;
-}
-</style>

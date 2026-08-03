@@ -703,7 +703,7 @@ export async function createExperienceBooking(
  * insert happen in a single INSERT ... SELECT ... WHERE statement instead of a
  * separate read-then-write, so two concurrent requests for the last spot can't
  * both pass the check and oversell it. D1/SQLite executes a single statement
- * atomically (see CLAUDE.md — D1 rejects explicit BEGIN/COMMIT, so this is the
+ * atomically (D1 rejects explicit BEGIN/COMMIT, so this is the
  * only atomic option available, rather than a read-check followed by a write).
  * Returns null if capacity was insufficient at insert time (caller should treat
  * that as "someone else took the last spot").

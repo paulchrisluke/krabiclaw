@@ -1,4 +1,9 @@
 @import "./base.css";
+@source "../../pages/dashboard";
+@source "../../pages/admin";
+@source "../../pages/account";
+@source "../../components";
+@source "../../lib/components/workspace";
 @import "@nuxt/ui";
 
 .w-\(--width\) {

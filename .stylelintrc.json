@@ -10,7 +10,8 @@
           "apply",
           "layer",
           "config",
-          "tailwind"
+          "tailwind",
+          "source"
         ]
       }
     ]

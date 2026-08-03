@@ -29,30 +29,33 @@ test('Blawby shell has no runtime font or icon provider dependency', () => {
   const layout = readFileSync('layouts/blawby.vue', 'utf8')
   const header = readFileSync('components/blawby/BlawbyHeader.vue', 'utf8')
   const footer = readFileSync('components/blawby/BlawbyFooter.vue', 'utf8')
-  const nuxtConfig = readFileSync('nuxt.config.ts', 'utf8')
+  const fontCss = readFileSync('assets/css/public-fonts.css', 'utf8')
+  const blawbyEntryCss = readFileSync('assets/css/blawby-entry.css', 'utf8')
 
   assert.doesNotMatch(`${layout}\n${header}\n${footer}`, /fonts\.googleapis|UIcon|<U[A-Z]/)
   assert.match(header, /<svg/)
-  assert.match(nuxtConfig, /name: 'Marcellus'.*weights: \[400\]/)
+  assert.match(blawbyEntryCss, /@import "\.\/public-fonts\.css";/)
+  assert.match(fontCss, /font-family:\s*["']Marcellus["'];[\s\S]*font-weight:\s*400;/)
+  assert.match(fontCss, /font-family:\s*["']Poppins["'];[\s\S]*font-weight:\s*600;/)
 })
 
 test('public layouts use the shared SSR surface stylesheet contract', () => {
   const layouts = [
-    ['access', 'platform-entry', 'platformStylesheet'],
-    ['account', 'platform-entry', 'platformStylesheet'],
-    ['blog', 'platform-entry', 'platformStylesheet'],
-    ['docs', 'platform-entry', 'platformStylesheet'],
-    ['platform', 'platform-entry', 'platformStylesheet'],
-    ['saya', 'saya-entry', 'sayaStylesheet'],
-    ['blawby', 'blawby-entry', 'blawbyStylesheet'],
+    ['access', 'platform-entry', 'platformStylesheet', 'platformStylesheetHref'],
+    ['account', 'platform-entry', 'platformStylesheet', 'platformStylesheetHref'],
+    ['blog', 'platform-entry', 'platformStylesheet', 'platformStylesheetHref'],
+    ['docs', 'platform-entry', 'platformStylesheet', 'platformStylesheetHref'],
+    ['platform', 'platform-entry', 'platformStylesheet', 'platformStylesheetHref'],
+    ['saya', 'saya-entry', 'sayaStylesheet', 'sayaStylesheetForRoute'],
+    ['blawby', 'blawby-entry', 'blawbyStylesheet', 'blawbyStylesheetForRoute'],
   ] as const
 
-  for (const [layoutName, sourceName, stylesheetBinding] of layouts) {
+  for (const [layoutName, sourceName, stylesheetBinding, hrefBinding] of layouts) {
     const layout = readFileSync(`layouts/${layoutName}.vue`, 'utf8')
     assert.match(layout, new RegExp(`import ${stylesheetBinding} from '~\\/assets\\/css\\/${sourceName}\\.css\\?url`))
-    assert.match(layout, new RegExp(`new URL\\(${stylesheetBinding}, 'http:\\/\\/nuxt\\.local'\\)\\.pathname`))
-    assert.match(layout, /useHead\(\{[\s\S]*rel: 'stylesheet'/)
-    assert.match(layout, new RegExp(`href: ${stylesheetBinding}Href`))
+    assert.match(layout, new RegExp(`new URL\\((?:${stylesheetBinding}|stylesheet), 'http:\\/\\/nuxt\\.local'\\)\\.pathname`))
+    assert.match(layout, /useHead\([\s\S]*rel: 'stylesheet'/)
+    assert.match(layout, new RegExp(`href: ${hrefBinding}`))
   }
 })
 
@@ -71,7 +74,7 @@ test('Blawby theme is a dedicated semantic Nuxt UI token scope', () => {
   assert.match(layout, /import blawbyStylesheet from '~\/assets\/css\/blawby-entry\.css\?url'/)
   assert.match(layout, /const blawbyStylesheetHref = new URL\(blawbyStylesheet, 'http:\/\/nuxt\.local'\)\.pathname/)
   assert.match(layout, /rel: 'stylesheet'/)
-  assert.match(layout, /href: blawbyStylesheetHref/)
+  assert.match(layout, /href: blawbyStylesheetForRoute/)
   assert.doesNotMatch(layout, /'--blawby-(?:bg|surface|primary|accent|border|ink)'/)
   assert.match(layout, /'--blawby-token-primary'/)
 

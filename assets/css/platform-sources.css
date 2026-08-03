@@ -1,0 +1,25 @@
+/* Platform, docs, blog, and account routes only. */
+@source "../../pages/*.vue";
+@source "../../pages/docs";
+@source "../../pages/blog";
+@source "../../pages/templates";
+@source "../../pages/account";
+@source "../../pages/oauth";
+@source "../../pages/contact";
+@source "../../layouts/default.vue";
+@source "../../layouts/access.vue";
+@source "../../layouts/account.vue";
+@source "../../layouts/blog.vue";
+@source "../../layouts/docs.vue";
+@source "../../layouts/platform.vue";
+@source "../../components/*.vue";
+@source "../../components/auth";
+@source "../../components/billing";
+@source "../../components/blog";
+@source "../../components/content";
+@source "../../components/docs";
+@source "../../components/platform";
+@source "../../components/booking";
+@source "../../components/ui/AppBreadcrumb.vue";
+@source "../../components/ui/AppSection.vue";
+@source "../../components/ui/UImage.vue";

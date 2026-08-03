@@ -1053,7 +1053,7 @@ async function executeTool(
 
     // Domain management (create_domain, sync_domain, etc.) also lives in
     // mcp-executor/settings.ts but is intentionally not exposed to ChowBot —
-    // see CLAUDE.md's Custom Domains section on ACME token rotation risk.
+    // ACME token rotation is a platform-admin concern.
     // Only get_dashboard_link overlaps between the two surfaces.
     case "get_dashboard_link": {
       return runMcpExecutorToolForChowbot(executorSite, "get_dashboard_link", input);

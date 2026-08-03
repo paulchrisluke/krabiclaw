@@ -8,7 +8,7 @@
         <!-- Brand col -->
         <div class="col-span-2 md:col-span-1">
           <NuxtLink to="/" class="inline-flex items-center gap-2.5 mb-4 no-underline group">
-            <img src="/krabi-claw-logo.png" alt="KrabiClaw" class="w-8.5 h-8.5 rounded-[9px] group-hover:rotate-12 transition-transform duration-200" />
+            <img src="/krabi-claw-logo-96.webp" alt="KrabiClaw" width="36" height="36" class="w-8.5 h-8.5 rounded-[9px] group-hover:rotate-12 transition-transform duration-200" />
             <span class="kc-wordmark text-[19px]">
               <span class="text-inverted">krabi</span><span class="kc-wordmark__claw">claw</span><span class="text-inverted" style="font-size: 0.55em; vertical-align: top; margin-left: 1px">.com</span>
             </span>
