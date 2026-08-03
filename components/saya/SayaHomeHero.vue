@@ -1,13 +1,10 @@
 <template>
   <section id="section-hero" data-saya-critical-hero class="relative min-h-160 overflow-hidden flex items-center bg-zinc-900">
-    <!-- Background media layer — wrapper opacity-50 matches location page style.
-         The first paint is the branded color/overlay shell; remote media is
-         attached after that paint so a slow tenant origin cannot blank the
-         page's text and controls. -->
+    <!-- Background media layer — wrapper opacity-50 matches location page style. -->
     <div data-saya-critical-hero-media class="absolute inset-0 opacity-50">
-        <!-- Poster image: attached after the first branded shell paint. -->
+      <!-- Poster image -->
       <img
-        v-if="showHeroImage && hero.thumbnail_url && hero.video"
+        v-if="hero.thumbnail_url && hero.video"
         :src="heroImageUrl ?? undefined"
         :srcset="heroImageSrcset ?? undefined"
         sizes="100vw"
@@ -16,7 +13,7 @@
       />
       <!-- Image-only hero (no video) -->
       <img
-        v-else-if="showHeroImage && hero.image && hero.imageKind === 'image'"
+        v-else-if="hero.image && hero.imageKind === 'image'"
         :src="heroImageUrl ?? undefined"
         :srcset="heroImageSrcset ?? undefined"
         sizes="100vw"
@@ -24,7 +21,7 @@
         class="absolute inset-0 h-full w-full object-cover"
       />
       <img
-        v-else-if="showHeroImage && businessPrimaryPhoto?.google_url"
+        v-else-if="businessPrimaryPhoto?.google_url"
         :src="heroImageUrl ?? undefined"
         :srcset="heroImageSrcset ?? undefined"
         sizes="100vw"
@@ -43,7 +40,7 @@
         <svg v-else viewBox="0 0 24 24" class="size-24 text-white/25" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"><path d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3 3 0 0 0 3.75-.615A3 3 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a3 3 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.015q.062.07.128.136a3 3 0 0 0 3.622.478m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75"/></svg>
       </div>
 
-      <!-- Deferred video: opacity-0 in DOM, fades to opacity-100 after canplay.
+      <!-- Video: opacity-0 in DOM, fades to opacity-100 after canplay.
            Parent opacity-50 applies, so final rendered opacity is 0.5. -->
       <ClientOnly v-if="hero.video && hero.videoKind === 'video'">
         <video
@@ -180,11 +177,5 @@ const heroImageUrl = computed(() => {
   return source ? cfImageVariant(source, { width: 960, quality: 45 }) : null
 })
 const heroImageSrcset = computed(() => cfImageSrcset(heroImageSource.value, [320, 640, 960, 1440], { quality: 45 }))
-const showHeroImage = ref(false)
-
 const { videoEl, showVideo } = useHeroVideo(() => hero.value?.video)
-
-onMounted(() => {
-  requestAnimationFrame(() => requestAnimationFrame(() => { showHeroImage.value = true }))
-})
 </script>

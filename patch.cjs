@@ -19,9 +19,13 @@ const publicSurfaceCssPaths = {
   'blawby-home-entry': 'surfaces/blawby-home.css',
   'blawby-entry': 'surfaces/blawby.css',
 };
-const precomputedManifestPath = '.output/server/chunks/build/client.precomputed.mjs';
-if (!fs.existsSync(precomputedManifestPath)) {
-  throw new Error(`Unable to find Nuxt client preload manifest: ${precomputedManifestPath}`);
+const precomputedManifestCandidates = [
+  '.output/server/chunks/_/client.precomputed.mjs',
+  '.output/server/chunks/build/client.precomputed.mjs',
+];
+const precomputedManifestPath = precomputedManifestCandidates.find(candidate => fs.existsSync(candidate));
+if (!precomputedManifestPath) {
+  throw new Error(`Unable to find Nuxt client preload manifest. Checked: ${precomputedManifestCandidates.join(', ')}`);
 }
 
 let precomputedManifest = fs.readFileSync(precomputedManifestPath, 'utf8');
