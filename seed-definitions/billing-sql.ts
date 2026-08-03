@@ -20,6 +20,7 @@ function entitlementValuesForPlan(plan: string): Record<string, string | number 
     managed_service: false,
     seo_accelerator: false,
     whatsapp_notifications: false,
+    review_requests: true,
   }
 
   switch (plan) {
