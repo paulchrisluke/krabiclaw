@@ -3,7 +3,7 @@
     <div class="max-w-450 mx-auto px-4 sm:px-6 lg:px-10 flex items-center justify-between gap-4 h-16">
       <div class="flex items-center gap-2.5 min-w-0">
         <NuxtLink to="/" class="flex items-center gap-2.5 shrink-0 group no-underline">
-          <img src="/krabi-claw-logo.png" alt="KrabiClaw" class="w-8.5 h-8.5 rounded-[9px] group-hover:rotate-12 transition-transform duration-200" />
+          <img src="/krabi-claw-logo-96.webp" alt="KrabiClaw" width="36" height="36" class="w-8.5 h-8.5 rounded-[9px] group-hover:rotate-12 transition-transform duration-200" />
           <span class="kc-wordmark text-[19px]">
             <span class="kc-wordmark__krabi">krabi</span><span class="kc-wordmark__claw">claw</span><span class="kc-wordmark__tld">{{ section === 'blog' ? 'blog' : 'docs' }}</span>
           </span>

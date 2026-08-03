@@ -1,11 +1,13 @@
 <template>
-  <section id="section-hero" class="relative min-h-160 overflow-hidden flex items-center bg-zinc-900">
-    <!-- Background media layer — wrapper opacity-50 matches location page style -->
-    <div class="absolute inset-0 opacity-50">
-      <!-- Poster image: always in SSR HTML, fetchpriority high — this is the LCP element.
-           Video fades in on top after window.load + idle; poster remains painted. -->
+  <section id="section-hero" data-saya-critical-hero class="relative min-h-160 overflow-hidden flex items-center bg-zinc-900">
+    <!-- Background media layer — wrapper opacity-50 matches location page style.
+         The first paint is the branded color/overlay shell; remote media is
+         attached after that paint so a slow tenant origin cannot blank the
+         page's text and controls. -->
+    <div data-saya-critical-hero-media class="absolute inset-0 opacity-50">
+        <!-- Poster image: attached after the first branded shell paint. -->
       <img
-        v-if="hero.thumbnail_url && hero.video"
+        v-if="showHeroImage && hero.thumbnail_url && hero.video"
         :src="heroImageUrl ?? undefined"
         :srcset="heroImageSrcset ?? undefined"
         sizes="100vw"
@@ -14,7 +16,7 @@
       />
       <!-- Image-only hero (no video) -->
       <img
-        v-else-if="hero.image && hero.imageKind === 'image'"
+        v-else-if="showHeroImage && hero.image && hero.imageKind === 'image'"
         :src="heroImageUrl ?? undefined"
         :srcset="heroImageSrcset ?? undefined"
         sizes="100vw"
@@ -22,7 +24,7 @@
         class="absolute inset-0 h-full w-full object-cover"
       />
       <img
-        v-else-if="businessPrimaryPhoto?.google_url"
+        v-else-if="showHeroImage && businessPrimaryPhoto?.google_url"
         :src="heroImageUrl ?? undefined"
         :srcset="heroImageSrcset ?? undefined"
         sizes="100vw"
@@ -54,18 +56,18 @@
         />
       </ClientOnly>
     </div>
-    <div class="absolute inset-0" style="background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.3) 100%)" />
+    <div data-saya-critical-hero-overlay class="absolute inset-0" style="background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.3) 100%)" />
 
     <!-- Content — plain transparent wrapper matching the proven inline hero
          (pages/index.vue, pre-consolidation): AppSection bg="black" rendered
          an opaque bg-inverted section here that painted over the hero image
          behind it. The dark look comes entirely from the image + gradient
          overlay above, not from a background on this wrapper. -->
-    <div class="relative z-10 mx-auto w-full max-w-7xl px-4 py-36 sm:px-6 lg:px-8">
-      <p v-if="eyebrow" data-field="hero.eyebrow" class="saya-eyebrow mb-8 text-white/70">
+    <div data-saya-critical-hero-content class="relative z-10 mx-auto w-full max-w-7xl px-4 py-36 sm:px-6 lg:px-8">
+      <p v-if="eyebrow" data-field="hero.eyebrow" data-saya-critical-eyebrow class="saya-eyebrow mb-8 text-white/70">
         {{ eyebrow }}
       </p>
-      <h1 data-field="hero.title" class="saya-display-lg text-white max-w-4xl">
+      <h1 data-field="hero.title" data-saya-critical-title class="saya-display-lg text-white max-w-4xl">
         {{ hero.title || businessTitle }}<br>
         <em v-if="hero.subtitle" data-field="hero.subtitle" class="saya-italic">{{ hero.subtitle }}</em>
         <em v-else-if="businessSubtitle" data-field="hero.subtitle" class="saya-italic">{{ businessSubtitle }}</em>
@@ -175,28 +177,14 @@ const heroImageSource = computed(() => {
 })
 const heroImageUrl = computed(() => {
   const source = heroImageSource.value
-  return source ? cfImageVariant(source, { width: 1200 }) : null
+  return source ? cfImageVariant(source, { width: 960, quality: 45 }) : null
 })
-const heroImageSrcset = computed(() => cfImageSrcset(heroImageSource.value))
-
-useHead(() => {
-  const href = heroImageUrl.value
-  if (!href) return {}
-
-  const preload = {
-    rel: 'preload',
-    as: 'image' as const,
-    href,
-    ...(heroImageSrcset.value
-      ? {
-          imagesrcset: heroImageSrcset.value,
-          imagesizes: '100vw',
-        }
-      : {}),
-  }
-
-  return { link: [preload] }
-})
+const heroImageSrcset = computed(() => cfImageSrcset(heroImageSource.value, [320, 640, 960, 1440], { quality: 45 }))
+const showHeroImage = ref(false)
 
 const { videoEl, showVideo } = useHeroVideo(() => hero.value?.video)
+
+onMounted(() => {
+  requestAnimationFrame(() => requestAnimationFrame(() => { showHeroImage.value = true }))
+})
 </script>

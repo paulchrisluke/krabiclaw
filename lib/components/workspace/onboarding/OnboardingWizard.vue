@@ -301,6 +301,7 @@ import { getLocalTimezone } from '~/utils/timezone'
 import { marked } from 'marked'
 import { DEFAULT_CURRENCY } from '~/shared/currencies'
 import ChowBotConversation from '~/components/chowbot/ChowBotConversation.vue'
+import { loadDomPurify } from '~/utils/dom-purify-loader'
 import type { DraftBrandForm } from '~/lib/components/workspace/onboarding/DraftBrandCard.vue'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
@@ -522,8 +523,7 @@ let _dompurify: { sanitize: (_s: string) => string } = { sanitize: (_s: string) 
 let _dompurifyLoaded = false
 onMounted(async () => {
   if (import.meta.client) {
-    const { default: dp } = await import('isomorphic-dompurify')
-    _dompurify = dp
+    _dompurify = await loadDomPurify()
     _dompurifyLoaded = true
   }
   // If the user already has a site (returning to onboarding workspace), skip to imported state

@@ -123,6 +123,17 @@ describe('Tenant Favicon – Unit Tests', () => {
       })
       assert.ok(!links.some((l) => l.key === 'app-manifest'))
     })
+
+    test('site preview: root-level icon requests are omitted', () => {
+      const links = buildTenantHeadLinks({
+        isPlatform: false,
+        tenantLogoUrl: KIKUZUKI_LOGO,
+        tenantBrandName: 'Kikuzuki',
+        isDraftPreview: false,
+        isSitePreview: true,
+      })
+      assert.deepEqual(links, [])
+    })
   })
 
   describe('isCloudflareImagesUrl / getCloudflareImageVariantUrl', () => {

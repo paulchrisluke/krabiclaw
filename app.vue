@@ -47,6 +47,7 @@ useHead(() => {
       tenantFaviconMimeType: null, // favicon_url is a plain URL string; type inferred from extension
       tenantBrandName: tenantBrandName.value,
       isDraftPreview: route.path.startsWith('/preview/draft/'),
+      isSitePreview: route.path.startsWith('/preview/site/'),
     })
   }
 })

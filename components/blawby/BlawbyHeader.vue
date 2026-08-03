@@ -1,6 +1,7 @@
 <template>
-  <header class="fixed inset-x-0 top-0 z-50 border-b border-gray-200 bg-white">
+  <header data-blawby-critical-header class="fixed inset-x-0 top-0 z-50 border-b border-gray-200 bg-white">
     <BlawbyBanner
+      data-blawby-critical-banner
       :content="site.banner_content"
       :phone="site.phone"
       :dismissible="site.banner_dismissible"
@@ -11,8 +12,8 @@
         <div class="flex items-center md:gap-x-12">
           <NuxtLink to="/" class="no-underline" :aria-label="`${brandName} home`">
             <img
-              v-if="site.logo_url"
-              :src="site.logo_url"
+              v-if="showLogo && logoUrl"
+              :src="logoUrl"
               :alt="brandName"
               class="max-h-16 w-min max-w-[160px] object-contain"
             >
@@ -88,11 +89,12 @@
       </nav>
     </div>
   </header>
-  <div class="mb-16" aria-hidden="true" />
+  <div class="blawby-critical-header-spacer mb-16" aria-hidden="true" />
 </template>
 
 <script setup lang="ts">
 import type { PublicBlawbyIdentity, PublicConsultationSettings, PublicNavigationItem } from '~/types/blawby'
+import { publicMediaUrl } from '~/utils/public-media-url'
 
 const props = defineProps<{
   site: PublicBlawbyIdentity
@@ -102,11 +104,20 @@ const props = defineProps<{
 
 const { trackConsultationClick } = useBlawbyConversionTracking(() => props.consultation)
 const route = useRoute()
+const requestHeaders = useRequestHeaders(['host'])
+const requestHostname = import.meta.server
+  ? (requestHeaders.host || '').split(':')[0]
+  : window.location.hostname
 const brandName = computed(() => props.site.brand_name || 'Blawby')
+const logoUrl = computed(() => publicMediaUrl(props.site.logo_url, requestHostname))
+const showLogo = ref(false)
 const headerCtaLabel = computed(() => typeof props.consultation.metadata.header_cta_label === 'string'
   ? props.consultation.metadata.header_cta_label
   : 'Get Started')
 const { isOpen: mobileOpen, toggle: toggleMobileNav, close: closeMobileNav } = useMobileNavToggle()
+onMounted(() => {
+  requestAnimationFrame(() => requestAnimationFrame(() => { showLogo.value = true }))
+})
 const headerItems = computed(() => {
   const configured = props.navigation.filter(item => item.area === 'header')
   if (configured.length) return configured

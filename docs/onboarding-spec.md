@@ -58,10 +58,10 @@ The onboarding preview now renders the active draft through the same Saya bootst
 
 Today there is no way to distinguish "owner wrote this" from "template wrote this" once a row exists in `site_content`/`menu_items`/`media_assets`. A long stock paragraph and a real paragraph the owner wrote both just look like "done" to the checklist and to any future seed/reseed logic.
 
-Recommended mechanism (still just a proposal, not implemented): add a single nullable `placeholder_source` (or reuse a `source` enum: `'template' | 'owner' | null`) column to `site_content`, `menu_items`, and the hero-bearing `media_assets`/`business_locations` rows, set by `seedNewSite()`/`buildOnboardingDraftPayload()` at insert time and cleared automatically the moment the owner edits that row (dashboard CMS save, MCP tool call, or ChowBot edit all already funnel through shared server/domain utilities per the dual-surface rule in `CLAUDE.md`, so this is one clearing point, not three).
+Recommended mechanism (still just a proposal, not implemented): add a single nullable `placeholder_source` (or reuse a `source` enum: `'template' | 'owner' | null`) column to `site_content`, `menu_items`, and the hero-bearing `media_assets`/`business_locations` rows, set by `seedNewSite()`/`buildOnboardingDraftPayload()` at insert time and cleared automatically the moment the owner edits that row (dashboard CMS save, MCP tool call, or ChowBot edit all already funnel through shared server/domain utilities per the dual-surface rule in `AGENTS.md`, so this is one clearing point, not three).
 
 - Checklist completion (`core_offering`, `story`, etc.) should check `placeholder_source IS NULL`, not just "a row exists" / "length > 20."
-- This is a schema change (per the `server/db/schema.ts` workflow in `CLAUDE.md`) and a real behavior change to checklist semantics — flagged here as a decision point, not something to implement unprompted.
+- This is a schema change (per the `server/db/schema.ts` workflow in `AGENTS.md`) and a real behavior change to checklist semantics — flagged here as a decision point, not something to implement unprompted.
 - `menu_items.source != 'template'` / `site_content...source != 'template'` filters already used by `checklist.get.ts` are a partial, ad hoc version of this idea for the fields that already have a `source` column — the proposal above would make it uniform and explicit rather than column-by-column.
 
 ---

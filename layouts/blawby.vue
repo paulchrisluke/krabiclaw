@@ -25,13 +25,36 @@
 
 <script setup lang="ts">
 import ConsentBanner from '~/components/ConsentBanner.vue'
+import blawbyCriticalCss from '~/assets/css/blawby-critical.css?raw'
 import blawbyStylesheet from '~/assets/css/blawby-entry.css?url'
+import blawbyHomeStylesheet from '~/assets/css/blawby-home-entry.css?url'
 
+const route = useRoute()
 const blawbyStylesheetHref = new URL(blawbyStylesheet, 'http://nuxt.local').pathname
-
-useHead({
-  link: [{ rel: 'stylesheet', href: blawbyStylesheetHref }],
+const blawbyHomeStylesheetHref = new URL(blawbyHomeStylesheet, 'http://nuxt.local').pathname
+const blawbyStylesheetForRoute = computed(() => {
+  const isHome = route.path === '/' || /^\/preview\/site\/[^/]+\/?$/.test(route.path)
+  return isHome ? blawbyHomeStylesheetHref : blawbyStylesheetHref
 })
+
+useHead(() => ({
+  link: [
+    route.path === '/' || /^\/preview\/site\/[^/]+\/?$/.test(route.path)
+      ? import.meta.client
+        ? { key: 'blawby-home-stylesheet', rel: 'stylesheet', href: blawbyStylesheetForRoute.value }
+        : { key: 'blawby-home-stylesheet', rel: 'preload', as: 'style', href: blawbyStylesheetForRoute.value, onload: "this.onload=null;this.rel='stylesheet'" }
+      : { key: 'blawby-surface-stylesheet', rel: 'stylesheet', href: blawbyStylesheetForRoute.value },
+    ...(route.path.startsWith('/preview/site/')
+      ? [{ rel: 'preconnect', href: 'https://media.krabiclaw.com' }]
+      : []),
+  ],
+  script: route.path === '/' || /^\/preview\/site\/[^/]+\/?$/.test(route.path)
+    ? [{ key: 'blawby-home-stylesheet-handoff', innerHTML: "requestAnimationFrame(() => requestAnimationFrame(() => { const link = document.querySelector('link[data-hid=\\\"blawby-home-stylesheet\\\"]'); if (link && link.rel === 'preload') link.rel = 'stylesheet' }))" }]
+    : [],
+  style: route.path === '/' || /^\/preview\/site\/[^/]+\/?$/.test(route.path)
+    ? [{ innerHTML: blawbyCriticalCss, tagPriority: 'critical' }]
+    : [],
+}))
 
 const { identity, navigation, consultation, compliance, themeTokens, offeringLinks } = await useBlawbyShell()
 const hydrated = ref(false)

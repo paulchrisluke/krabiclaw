@@ -1,0 +1,7 @@
+@source "../../pages/index.vue";
+@source "../../layouts/platform.vue";
+@source "../../components/ConsentBanner.vue";
+@source "../../components/platform/PlatformHomePage.vue";
+@source "../../components/platform/PlatformHeader.vue";
+@source "../../components/platform/PlatformFooter.vue";
+@source "../../components/platform/PlatformIcon.vue";

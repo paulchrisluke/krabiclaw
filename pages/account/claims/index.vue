@@ -42,7 +42,7 @@
 definePageMeta({ layout: 'account', middleware: 'account' })
 
 // Server-side detail fetch: bypass the internal self-fetch entirely per
-// CLAUDE.md's "Nested SSR self-fetch loses Cloudflare bindings" rule — call the
+// The SSR branch calls the
 // exact same resolver GET /api/account/claims uses, directly against the request
 // event, instead of re-implementing its auth+query logic (and risking the two
 // drifting, as previously happened with the D1 binding name).

@@ -1,4 +1,4 @@
--- Hand-written: drizzle-kit doesn't model CHECK constraints (see CLAUDE.md).
+-- Hand-written: drizzle-kit doesn't model CHECK constraints (see AGENTS.md).
 -- location_qa.source's CHECK predates the 'template' marker convention used by
 -- menu_items.source/posts.source (added in 0013/0014, no CHECK there) and the
 -- onboarding draft-commit flow (server/api/dashboard/onboarding/drafts/[draftId]/commit.post.ts),

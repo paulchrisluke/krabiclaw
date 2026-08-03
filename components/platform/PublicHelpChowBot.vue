@@ -82,14 +82,9 @@
 import ChowBotConversation from '~/components/chowbot/ChowBotConversation.vue'
 import { marked } from 'marked'
 import { sanitizeHtmlForSsr } from '~/utils/markdown'
+import { loadDomPurify } from '~/utils/dom-purify-loader'
 
-// DOMPurify needs jsdom, which breaks on the Workers SSR runtime (no real DOM
-// globals) — this component is SSR'd via defineAsyncComponent in help.vue, so
-// a static top-level import here crashes module init on the server. Mirrors
-// the same guard already used in lib/components/workspace/dashboard/ChowBot.vue.
-const DOMPurify = import.meta.client
-  ? (await import('isomorphic-dompurify')).default
-  : { sanitize: sanitizeHtmlForSsr }
+const DOMPurify = import.meta.client ? await loadDomPurify() : { sanitize: sanitizeHtmlForSsr }
 
 const renderer = new marked.Renderer()
 renderer.link = function ({ href, title, tokens }) {

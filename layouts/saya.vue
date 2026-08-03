@@ -79,12 +79,31 @@
 <script setup lang="ts">
 import ConsentBanner from '~/components/ConsentBanner.vue'
 import { resolveLocationExperienceHref } from '~/utils/experience-navigation'
+import sayaCriticalCss from '~/assets/css/saya-critical.css?raw'
 import sayaStylesheet from '~/assets/css/saya-entry.css?url'
+import sayaHomeStylesheet from '~/assets/css/saya-home-entry.css?url'
 
+const route = useRoute()
 const sayaStylesheetHref = new URL(sayaStylesheet, 'http://nuxt.local').pathname
+const sayaHomeStylesheetHref = new URL(sayaHomeStylesheet, 'http://nuxt.local').pathname
+const sayaStylesheetForRoute = computed(() => {
+  const isHome = route.path === '/' || /^\/preview\/site\/[^/]+\/?$/.test(route.path)
+  return isHome ? sayaHomeStylesheetHref : sayaStylesheetHref
+})
 
-useHead({
-  link: [{ rel: 'stylesheet', href: sayaStylesheetHref }],
+useHead(() => {
+  const isHome = route.path === '/' || /^\/preview\/site\/[^/]+\/?$/.test(route.path)
+  return {
+    link: [isHome
+      ? import.meta.client
+        ? { key: 'saya-home-stylesheet', rel: 'stylesheet', href: sayaStylesheetForRoute.value }
+        : { key: 'saya-home-stylesheet', rel: 'preload', as: 'style', href: sayaStylesheetForRoute.value, onload: "this.onload=null;this.rel='stylesheet'" }
+      : { key: 'saya-surface-stylesheet', rel: 'stylesheet', href: sayaStylesheetForRoute.value }],
+    script: isHome
+      ? [{ key: 'saya-home-stylesheet-handoff', innerHTML: "requestAnimationFrame(() => requestAnimationFrame(() => { const link = document.querySelector('link[data-hid=\\\"saya-home-stylesheet\\\"]'); if (link && link.rel === 'preload') link.rel = 'stylesheet' }))" }]
+      : [],
+    style: isHome ? [{ innerHTML: sayaCriticalCss, tagPriority: 'critical' }] : [],
+  }
 })
 
 declare global {
@@ -122,7 +141,6 @@ const experiencesList = computed(() =>
 const showExperiences = computed(() => hasExperiences.value || experiencesList.value.length > 0)
 const { isPlatform, site } = useTenantSite()
 const resolvedSite = computed(() => shellSite.value || site)
-const route = useRoute()
 // Called for its side effect: keeps the consent ref in sync and lets the
 // head markup emit the default signal ahead of any analytics config.
 useCookieConsent()

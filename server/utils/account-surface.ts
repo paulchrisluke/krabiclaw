@@ -6,7 +6,7 @@
 //
 // Single source of truth for the auth+query logic behind GET /api/account/claims
 // and GET /api/account/bookings, reused as-is by both API routes and the
-// corresponding pages' SSR branches (per CLAUDE.md's "nested SSR self-fetch
+// corresponding pages' SSR branches (per the nested SSR self-fetch
 // loses Cloudflare bindings" rule) so the route and the page can never drift on
 // the D1 binding name or auth/visibility rules the way they previously did
 // (env.db vs env.DB).

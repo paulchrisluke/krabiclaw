@@ -106,10 +106,11 @@ import { categoryToSlug, slugToCategory } from '~/utils/docs-categories'
 import { buildContentBlocks, normalizeContentComponent, type ContentComponent } from '~/utils/content-blocks'
 import { resolveContentComponent } from '~/utils/content-component-resolver'
 import { isRecord, publicApiRequest } from '~/utils/api-clients'
+import { loadDomPurify } from '~/utils/dom-purify-loader'
 
 definePageMeta({ layout: 'docs' })
 
-const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: sanitizeHtmlForSsr }
+const DOMPurify = import.meta.client ? await loadDomPurify() : { sanitize: sanitizeHtmlForSsr }
 const { resolveMedia } = useMedia()
 
 interface Doc {

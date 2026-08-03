@@ -14,6 +14,7 @@ export interface TenantHeadLinkOptions {
   tenantFaviconMimeType?: string | null
   tenantBrandName: string
   isDraftPreview: boolean
+  isSitePreview?: boolean
 }
 
 function buildDefaultFaviconLinks(): HeadLink[] {
@@ -49,6 +50,10 @@ export function buildTenantHeadLinks(options: TenantHeadLinkOptions): HeadLink[]
   if (options.isPlatform) {
     return [...buildDefaultFaviconLinks(), { key: 'app-manifest', rel: 'manifest', href: '/site.webmanifest' }]
   }
+
+  // Root-level icon requests cannot carry the tenant identity from a
+  // platform-hosted site preview. Previews do not need app icons or manifests.
+  if (options.isSitePreview) return []
 
   // Version hash: changes whenever the active icon source changes, busting browser cache.
   const versionSource = options.tenantFaviconUrl || options.tenantLogoUrl || options.tenantBrandName || 'default'
