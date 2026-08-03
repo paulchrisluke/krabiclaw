@@ -2,12 +2,14 @@
   <div data-parity-root>
     <section data-blawby-critical-hero class="relative overflow-hidden" data-parity-section="hero">
       <img
-        v-if="showHeroImage && heroBackgroundSrc"
+        v-if="heroBackgroundSrc"
         :src="heroBackgroundSrc"
         alt=""
         width="1920"
         height="1080"
         fetchpriority="high"
+        loading="eager"
+        decoding="async"
         class="absolute inset-0 size-full object-cover object-center"
       >
       <div data-blawby-critical-hero-content class="blawby-container relative pb-36 pt-16 text-left min-[1920px]:pb-48 min-[1920px]:pt-24 min-[2560px]:pb-64 min-[2560px]:pt-32">
@@ -113,7 +115,6 @@ const qaBlock = computed(() => block('qa'))
 const ctaBlock = computed(() => block('consultation_cta'))
 const heroBackground = computed(() => assetUrl(hero.value.background))
 const heroBackgroundSrc = computed(() => publicMediaUrl(heroBackground.value, requestHostname))
-const showHeroImage = ref(false)
 const servicesDecoration = computed(() => assetUrl(services.value.decoration))
 const servicesDecorationSrc = computed(() => publicMediaUrl(servicesDecoration.value, requestHostname))
 const qaDecorationSrc = computed(() => publicMediaUrl(assetUrl(qaBlock.value?.decoration), requestHostname))
@@ -142,10 +143,6 @@ const { trackConsultationClick } = useBlawbyConversionTracking(consultation)
 function trackConsultation(pageType: string, destination: string) {
   trackConsultationClick(pageType, '/', destination)
 }
-
-onMounted(() => {
-  requestAnimationFrame(() => requestAnimationFrame(() => { showHeroImage.value = true }))
-})
 
 const seoTitle = computed(() => routeData.value.page?.seo_title || identity.value.brand_name || 'Professional services')
 const seoDescription = computed(() => routeData.value.page?.seo_description || routeData.value.page?.summary || identity.value.brand_description || '')

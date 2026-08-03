@@ -1,15 +1,4 @@
 (() => {
-  const loadHeroMedia = () => {
-    const source = document.querySelector('[data-platform-hero-srcset]')
-    const image = document.querySelector('[data-platform-hero-src]')
-    const srcset = source?.getAttribute('data-platform-hero-srcset')
-    const src = image?.getAttribute('data-platform-hero-src')
-    if (source && srcset) source.setAttribute('srcset', srcset)
-    if (image && src) image.setAttribute('src', src)
-  }
-
-  requestAnimationFrame(() => requestAnimationFrame(loadHeroMedia))
-
   const consentCategories = ['ad_storage', 'ad_user_data', 'ad_personalization', 'analytics_storage']
   const consentValue = document.cookie
     .split('; ')

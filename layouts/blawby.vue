@@ -48,9 +48,6 @@ useHead(() => ({
       ? [{ rel: 'preconnect', href: 'https://media.krabiclaw.com' }]
       : []),
   ],
-  script: route.path === '/' || /^\/preview\/site\/[^/]+\/?$/.test(route.path)
-    ? [{ key: 'blawby-home-stylesheet-handoff', innerHTML: "requestAnimationFrame(() => requestAnimationFrame(() => { const link = document.querySelector('link[data-hid=\\\"blawby-home-stylesheet\\\"]'); if (link && link.rel === 'preload') link.rel = 'stylesheet' }))" }]
-    : [],
   style: route.path === '/' || /^\/preview\/site\/[^/]+\/?$/.test(route.path)
     ? [{ innerHTML: blawbyCriticalCss, tagPriority: 'critical' }]
     : [],

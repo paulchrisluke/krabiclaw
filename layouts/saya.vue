@@ -99,9 +99,6 @@ useHead(() => {
         ? { key: 'saya-home-stylesheet', rel: 'stylesheet', href: sayaStylesheetForRoute.value }
         : { key: 'saya-home-stylesheet', rel: 'preload', as: 'style', href: sayaStylesheetForRoute.value, onload: "this.onload=null;this.rel='stylesheet'" }
       : { key: 'saya-surface-stylesheet', rel: 'stylesheet', href: sayaStylesheetForRoute.value }],
-    script: isHome
-      ? [{ key: 'saya-home-stylesheet-handoff', innerHTML: "requestAnimationFrame(() => requestAnimationFrame(() => { const link = document.querySelector('link[data-hid=\\\"saya-home-stylesheet\\\"]'); if (link && link.rel === 'preload') link.rel = 'stylesheet' }))" }]
-      : [],
     style: isHome ? [{ innerHTML: sayaCriticalCss, tagPriority: 'critical' }] : [],
   }
 })
