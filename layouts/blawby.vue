@@ -49,9 +49,7 @@ useHead(() => ({
           onload: "this.onload=null;this.rel='stylesheet'",
         }
       : { key: 'blawby-surface-stylesheet', rel: 'stylesheet', href: blawbyStylesheetForRoute.value },
-    ...(route.path.startsWith('/preview/site/')
-      ? [{ rel: 'preconnect', href: 'https://media.krabiclaw.com' }]
-      : []),
+    { rel: 'preconnect', href: 'https://media.krabiclaw.com' },
   ],
   style: route.path === '/' || /^\/preview\/site\/[^/]+\/?$/.test(route.path)
     ? [{ innerHTML: blawbyCriticalCss, tagPriority: 'critical' }]

@@ -94,8 +94,11 @@ const sayaStylesheetForRoute = computed(() => {
 useHead(() => {
   const isHome = route.path === '/' || /^\/preview\/site\/[^/]+\/?$/.test(route.path)
   return {
-    link: [isHome
-      ? {
+    link: [
+      { rel: 'preconnect', href: 'https://imagedelivery.net' },
+      { rel: 'preconnect', href: 'https://media.krabiclaw.com' },
+      isHome
+        ? {
           key: 'saya-home-stylesheet',
           rel: 'preload',
           as: 'style',
@@ -103,7 +106,8 @@ useHead(() => {
           fetchpriority: 'low',
           onload: "this.onload=null;this.rel='stylesheet'",
         }
-      : { key: 'saya-surface-stylesheet', rel: 'stylesheet', href: sayaStylesheetForRoute.value }],
+        : { key: 'saya-surface-stylesheet', rel: 'stylesheet', href: sayaStylesheetForRoute.value },
+    ],
     style: isHome ? [{ innerHTML: sayaCriticalCss, tagPriority: 'critical' }] : [],
   }
 })

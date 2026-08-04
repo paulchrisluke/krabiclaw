@@ -1,7 +1,6 @@
-// Per-page content fetch (photos/qa/reviews/blog/menu/experience datasets,
-// CMS content fields, booking policies). Site-wide chrome data that doesn't
-// vary by route (brand, location summaries, config, locales, navigation
-// capabilities) lives in the site-shell loader instead.
+// The canonical public page resource contains route content plus the shared
+// site shell (brand, location summaries, config, locales, and capabilities).
+// Route consumers select their datasets from that one validated response.
 //
 // SSR waits for route data so rendered HTML is complete. Client navigation
 // starts the keyed request lazily and returns immediately; the Saya layout
@@ -134,8 +133,8 @@ export const usePublicPageData = async (options: {
     })
   }
 
-  // Persistent chrome data comes from the stable shell. Route-owned collections
-  // come from the keyed page response and change with navigation.
+  // Persistent chrome and route-owned collections come from the same keyed page
+  // response; only the selected route datasets change with navigation.
   const { locations, config, locales, hasExperiences } = shell;
   const googleBusiness = computed(() => ({
     ...(shell.googleBusiness.value ?? {}),

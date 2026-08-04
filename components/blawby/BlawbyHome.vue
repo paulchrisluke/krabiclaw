@@ -7,8 +7,8 @@
         alt=""
         width="1920"
         height="1080"
-        fetchpriority="high"
-        loading="eager"
+        fetchpriority="low"
+        loading="lazy"
         decoding="async"
         class="absolute inset-0 size-full object-cover object-center"
       >

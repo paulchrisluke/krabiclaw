@@ -295,9 +295,8 @@ if (!siteId && !draftId) {
   })
 }
 
-// Route-owned page data (home content, menu, experiences). Persistent chrome
-// (SayaHeader/SayaFooter) reads from the separate, site-wide shell composable
-// (useSiteShellState, see layouts/saya.vue) instead — the two never overlap.
+// Route-owned page data and persistent chrome are served by the same canonical
+// page resource. The layout and this component share its keyed async-data state.
 const {
   locations: pageLocations,
   googleBusiness: pageGoogleBusiness,

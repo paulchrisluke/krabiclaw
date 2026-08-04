@@ -1,30 +1,17 @@
-// Site-wide chrome data (brand, navigation flags, location summaries, locales,
-// and persistent business metadata) for
-// components that persist across client-side navigation — SayaHeader,
-// SayaFooter, app.vue, and anything else that lives outside <NuxtPage> or
-// otherwise doesn't remount per route.
-//
-// Keyed by siteId/draftId + locale ONLY — no page/location/experience/data
-// params. That key never changes while browsing a site, so this fetch runs
-// once per visit and simply has nothing to go stale when the route changes:
-// it isn't guarded against picking up another page's data, it structurally
-// can't, because there's no "another page's data" — the response never
-// depended on the page in the first place.
-//
-// Page-specific content and collections live in usePublicPageData(). Client
-// navigation renders a destination-local loading state while that keyed page
-// request is in flight.
-import { usePublicResourceKey, usePublicPageUrl, type PublicPageRequest } from "~/composables/usePublicPageRequest";
+// Site-wide chrome and route content share one canonical SSR resource. The
+// server response includes the shell alongside the page payload, so the first
+// navigation pays for one base lookup and one D1 batch instead of waiting for
+// independent shell and page batches.
+import { usePublicPageKey, usePublicPageRequest, usePublicPageUrl } from "~/composables/usePublicPageRequest";
 import {
-  isPublicShellPayload,
+  isPublicPagePayload,
+  type PublicPagePayload,
   type PublicShellPayload as SiteShellPayload,
 } from '~/utils/public-resource-contracts'
 
 export const useSiteShellState = () => {
   const { isPlatform, siteId, draftId } = useTenantSite();
   const requestEvent = useRequestEvent();
-  const route = useRoute();
-  const { locale } = useI18n();
   const isSyntheticServerAssetFetch = import.meta.server
     && !requestEvent?.context.cloudflare?.env
     && (
@@ -36,19 +23,10 @@ export const useSiteShellState = () => {
 
   const entityId = computed(() => siteId || draftId || null);
 
-  // Fixed, page-independent params — this is what makes the key stable.
-  const params = computed<PublicPageRequest>(() => ({
-    page: null,
-    location: null,
-    experience: null,
-    datasets: [],
-    blogSlug: null,
-    locale: locale.value,
-    token: typeof route.query.token === "string" && route.path.startsWith("/preview/") ? route.query.token : null,
-  }));
+  const params = usePublicPageRequest();
 
-  const key = computed(() => usePublicResourceKey('shell', entityId.value, params.value));
-  const url = computed(() => usePublicPageUrl(siteId, params.value, 'shell'));
+  const key = computed(() => usePublicPageKey(entityId.value, params.value));
+  const url = computed(() => usePublicPageUrl(siteId, params.value));
 
   let data: Ref<SiteShellPayload | undefined>
   let error: Ref<Error | null>
@@ -62,25 +40,31 @@ export const useSiteShellState = () => {
     refresh = async () => {}
     ready = Promise.resolve()
   } else {
-    const asyncData = useAsyncData<SiteShellPayload>(
+    const asyncData = useAsyncData<PublicPagePayload>(
           key,
-          (_nuxtApp, { signal }) => loadPublicResourcePayload<SiteShellPayload>({
+          (_nuxtApp, { signal }) => loadPublicResourcePayload<PublicPagePayload>({
               draftId,
               siteId,
-              resourceKind: 'shell',
+              resourceKind: 'page',
               url: url.value,
               key: key.value,
               query: {
+                page: params.value.page ?? undefined,
+                location: params.value.location ?? undefined,
+                experience: params.value.experience ?? undefined,
+                datasets: [...params.value.datasets].sort().join(',') || undefined,
+                blogSlug: params.value.blogSlug ?? undefined,
                 locale: params.value.locale ?? undefined,
                 token: params.value.token ?? undefined,
               },
-              validate: isPublicShellPayload,
-              failureMessage: 'Public shell failed',
+              validate: (value): value is PublicPagePayload =>
+                isPublicPagePayload(value, params.value.page ?? 'home'),
+              failureMessage: 'Public page failed',
               signal,
             }),
           { server: true, dedupe: 'cancel' },
         );
-    data = asyncData.data
+    data = computed(() => asyncData.data.value?.shell)
     error = asyncData.error as Ref<Error | null>
     pending = asyncData.pending
     refresh = asyncData.refresh

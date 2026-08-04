@@ -5,18 +5,24 @@ one canonical source, one in-flight promise, and one terminal result.
 
 ## Public renderer
 
-The tenant shell is keyed by site/draft and locale. It contains only persistent
-chrome data: site identity, locations, configuration, locales, Google Business
-summary, and the `hasExperiences` capability. Full menus, experiences,
-availability, and booking policies belong to the route-keyed page payload.
+The tenant page resource is keyed by site/draft, route parameters, locale, and
+the requested datasets. Its response contains both the persistent shell
+(identity, locations, configuration, locales, Google Business summary, and
+capabilities) and the selected route data (content, menus, experiences,
+availability, policies, and optional collections).
 
-During SSR, `useSiteShell` and `usePublicPageData` call the request-scoped public
-resource provider, which invokes `loadPublicShell` and `loadPublicPage` with
-the original request event and Cloudflare bindings. The public API routes are
-browser transport wrappers over those same loaders. Browser reads use
-`publicApiRequest`, which applies a six-second
-timeout, `retry: 0`, contract validation, exact-key in-flight coalescing, and
-normalized errors.
+During SSR, `useSiteShellState` and `usePublicPageData` share the same keyed
+`useAsyncData` state and call the request-scoped page provider once. That provider
+invokes `loadPublicPage` with the original request event and Cloudflare bindings;
+the page loader performs one base lookup and one D1 batch for the combined
+resource. `loadPublicShell` remains the canonical loader for the standalone
+shell API endpoint, but tenant page SSR does not call that endpoint and then
+self-fetch the page.
+
+The public API routes are browser transport wrappers over the same loaders.
+Browser reads use `publicApiRequest`, which applies a six-second timeout,
+`retry: 0`, contract validation, exact-key in-flight coalescing, and normalized
+errors.
 
 Route-keyed async data is never copied between keys. A new route begins with its
 own pending state; an obsolete result cannot populate a different route key.

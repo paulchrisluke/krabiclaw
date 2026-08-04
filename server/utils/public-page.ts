@@ -43,6 +43,7 @@ import { getCloudflareWaitUntil } from "~/server/utils/mcp-route-helpers";
 import { isPreviewContext } from "~/server/utils/tenant-hosts";
 import { getPublishedPosts } from "~/server/utils/post-management";
 import { loadPublicBase } from "~/server/utils/public-base";
+import { appendPublicShellQueries, buildPublicShellPayload } from "~/server/utils/public-shell-query";
 import { isPublicPagePayload } from '~/utils/public-resource-contracts'
 
 function groupContentBlocks(rows: SiteContent[]): Array<SiteContent & { _section: string }> {
@@ -432,6 +433,10 @@ async function loadPublicPageSource(
     [orgId, siteId],
   );
 
+  const shellIndexes = appendPublicShellQueries(batchStmts, orgId, siteId, {
+    existingLocationsIndex: needsLocationHeroMedia && idxLoc >= 0 ? idxLoc : undefined,
+  });
+
   // Content for the requested page (source + translations)
   if (page && requestedDatasets.has("content")) {
     const contentParams: unknown[] = [orgId, siteId, page];
@@ -543,8 +548,8 @@ async function loadPublicPageSource(
     }
   }
 
-  // Experiences are page data. The persistent shell receives only the
-  // hasExperiences capability and never pays for list availability/policies.
+  // Experiences remain route data. The page response also carries the shared
+  // shell so the layout and route components consume one canonical resource.
   const needsExperiencesList =
     requestedDatasets.has("experiences") && !experienceSlug;
 
@@ -688,6 +693,8 @@ async function loadPublicPageSource(
     ? await executeBatch(db, batchStmts)
     : [];
   options.signal?.throwIfAborted();
+
+  const shell = buildPublicShellPayload(site, batchResults, shellIndexes)
 
   // Extract batch results by tracked index
   const locRows = idxLoc >= 0
@@ -1119,6 +1126,7 @@ async function loadPublicPageSource(
   const pagePayload = {
     kind: page ?? 'home',
     success: true,
+    shell,
     content: contentRows,
     content_blocks: groupContentBlocks(contentRows),
     menu: menuData,
