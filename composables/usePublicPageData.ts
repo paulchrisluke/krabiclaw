@@ -2,9 +2,9 @@
 // site shell (brand, location summaries, config, locales, and capabilities).
 // Route consumers select their datasets from that one validated response.
 //
-// SSR waits for route data so rendered HTML is complete. Client navigation
-// starts the keyed request lazily and returns immediately; the Saya layout
-// replaces the old route with a destination-local loading or error state.
+// Non-home routes still SSR their complete route payload. The homepage uses a
+// critical shell/hero resource for the first document and loads the remaining
+// route collections after that document has painted.
 //
 // Usage (in a page):
 //   const { getField, getHero, photosList, qaList, ... } = await usePublicPageData()
@@ -65,7 +65,7 @@ export const usePublicPageData = async (options: {
 
   const url = computed(() => usePublicPageUrl(siteId, requestedParams.value));
 
-  const shell = useSiteShellState();
+  const shell = useSiteShellState({ load: options.server !== false });
 
   const asyncData =
     isPlatform || (!siteId && !draftId)
@@ -178,7 +178,7 @@ export const usePublicPageData = async (options: {
 
   // ── Content ───────────────────────────────────────────────
   const contentMap = computed(() => {
-    const rows = (data.value?.content ?? []) as ContentRow[];
+    const rows = (data.value?.content ?? shell.content.value ?? []) as ContentRow[];
     return rows.reduce<Record<string, ContentRow>>((acc, row) => {
       acc[row.field] = row;
       return acc;

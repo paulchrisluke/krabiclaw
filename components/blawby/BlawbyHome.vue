@@ -32,11 +32,12 @@
       </div>
     </section>
 
-    <section class="relative bg-(--blawby-bg) pb-14 pt-14 sm:pb-20 sm:pt-14 lg:pb-14" data-parity-section="services">
+    <template v-if="routeData">
+    <section v-if="services" class="relative bg-(--blawby-bg) pb-14 pt-14 sm:pb-20 sm:pt-14 lg:pb-14" data-parity-section="services">
       <div class="blawby-container relative z-20">
         <BlawbySectionHeading
-          :title="services.title || 'Our'"
-          :accent="services.accent || 'Services'"
+          :title="String(services.title || '')"
+          :accent="String(services.accent || '')"
           :description="services.description"
           centered
         />
@@ -76,19 +77,25 @@
       :featured-url="ctaFeaturedSrc"
       @click="trackConsultation('cta_section', String(ctaBlock.url || consultation.schedule_path))"
     />
+    </template>
+    <section v-else-if="routeError" class="blawby-container py-16 text-center" data-testid="blawby-home-content-error">
+      <p role="alert" class="text-sm text-gray-500">Homepage content could not be loaded.</p>
+    </section>
   </div>
 </template>
 
 <script setup lang="ts">
-const { data } = await useBlawbyRoute('home')
-const { identity, consultation, compliance } = await useBlawbyShell()
+const critical = await useBlawbyCriticalHome()
+const { data, error: routeError } = await useBlawbyRoute('home', null, { server: false, lazy: true })
+const { identity, consultation, compliance } = critical
 const org = useBlawbyOrgIdentity(identity, compliance)
+const criticalPage = computed(() => critical.data.value.page)
 const routeData = computed(() => data.value)
 
-if (!routeData.value.page) throw createError({ statusCode: 404, statusMessage: 'Homepage content not found' })
+if (!criticalPage.value) throw createError({ statusCode: 404, statusMessage: 'Homepage content not found' })
 
 function block(type: string) {
-  return routeData.value.page?.components.find(component => component.type === type) ?? null
+  return criticalPage.value.components.find(component => component.type === type) ?? null
 }
 
 function asOptionalString(value: unknown) {
@@ -101,8 +108,10 @@ function assetUrl(value: unknown) {
     : null
 }
 
-const hero = computed(() => block('home_hero') ?? {})
-const services = computed(() => block('services_intro') ?? {})
+const heroBlock = block('home_hero')
+if (!heroBlock) throw createError({ statusCode: 502, statusMessage: 'Blawby homepage hero content is invalid' })
+const hero = computed(() => heroBlock)
+const services = computed(() => block('services_intro'))
 const videoFeature = computed(() => block('video_feature'))
 const reviewsBlock = computed(() => block('reviews'))
 const qaBlock = computed(() => block('qa'))
@@ -116,7 +125,7 @@ const ctaBackgroundSrc = computed(() => assetUrl(ctaBlock.value?.background))
 const ctaFeaturedSrc = computed(() => assetUrl(ctaBlock.value?.featured))
 const heroDestination = computed(() => String(hero.value.url || consultation.value.schedule_path))
 const heroTitle = computed(() => {
-  const title = String(hero.value.title || identity.value.brand_name || 'Professional services')
+  const title = String(hero.value.title || identity.value.brand_name || '')
   const accent = String(hero.value.accent || '')
   const index = accent ? title.indexOf(accent) : -1
   return index >= 0
@@ -138,15 +147,15 @@ function trackConsultation(pageType: string, destination: string) {
   trackConsultationClick(pageType, '/', destination)
 }
 
-const seoTitle = computed(() => routeData.value.page?.seo_title || identity.value.brand_name || 'Professional services')
-const seoDescription = computed(() => routeData.value.page?.seo_description || routeData.value.page?.summary || identity.value.brand_description || '')
+const seoTitle = computed(() => criticalPage.value.seo_title || identity.value.brand_name || '')
+const seoDescription = computed(() => criticalPage.value.seo_description || criticalPage.value.summary || identity.value.brand_description || '')
 
 const { canonicalUrl } = useTenantSocialMetadata(() => ({
   path: '/',
   title: seoTitle.value,
   description: seoDescription.value,
   brand: {
-    siteName: identity.value.brand_name || 'Professional services',
+    siteName: identity.value.brand_name || '',
     logoUrl: identity.value.logo_url || null,
     faviconUrl: identity.value.favicon_url || null,
   },
@@ -157,13 +166,13 @@ useProfessionalServiceSchema(() => ({
   recipe: 'home',
   org: org.value,
   pageUrl: canonicalUrl.value,
-  pageTitle: routeData.value.page?.seo_title || identity.value.brand_name || 'Professional services',
-  pageDescription: routeData.value.page?.seo_description || routeData.value.page?.summary || identity.value.brand_description || null,
+  pageTitle: criticalPage.value.seo_title || identity.value.brand_name || '',
+  pageDescription: criticalPage.value.seo_description || criticalPage.value.summary || identity.value.brand_description || null,
   imageUrl: heroBackground.value,
-  faqs: routeData.value.qa
+  faqs: (routeData.value?.qa ?? [])
     .map(item => ({ question: item.question.trim(), answer: item.answer?.trim() ?? '' }))
     .filter(item => item.question && item.answer),
-  items: routeData.value.offerings.map(offering => ({
+  items: (routeData.value?.offerings ?? []).map(offering => ({
     name: offering.name,
     url: offering.canonical_path,
     description: offering.short_description || offering.summary || undefined,

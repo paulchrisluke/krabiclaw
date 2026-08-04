@@ -1,15 +1,14 @@
-// Site-wide chrome and route content share one canonical SSR resource. The
-// server response includes the shell alongside the page payload, so the first
-// navigation pays for one base lookup and one D1 batch instead of waiting for
-// independent shell and page batches.
-import { usePublicPageKey, usePublicPageRequest, usePublicPageUrl } from "~/composables/usePublicPageRequest";
+// Site-wide chrome and route content share one canonical SSR resource. Home
+// routes request only the content needed to paint the real shell and hero;
+// other routes keep the complete page payload for SSR and navigation parity.
+import { getPublicCriticalHomeRequest, usePublicPageKey, usePublicPageRequest, usePublicPageUrl } from "~/composables/usePublicPageRequest";
 import {
   isPublicPagePayload,
   type PublicPagePayload,
   type PublicShellPayload as SiteShellPayload,
 } from '~/utils/public-resource-contracts'
 
-export const useSiteShellState = () => {
+export const useSiteShellState = (options: { load?: boolean } = {}) => {
   const { isPlatform, siteId, draftId } = useTenantSite();
   const requestEvent = useRequestEvent();
   const isSyntheticServerAssetFetch = import.meta.server
@@ -23,17 +22,31 @@ export const useSiteShellState = () => {
 
   const entityId = computed(() => siteId || draftId || null);
 
-  const params = usePublicPageRequest();
+  const routeParams = usePublicPageRequest();
+  const isCriticalHome = computed(() => !isPlatform && routeParams.value.page === 'home');
+  const params = computed(() => isCriticalHome.value
+    ? getPublicCriticalHomeRequest(routeParams.value)
+    : routeParams.value);
 
   const key = computed(() => usePublicPageKey(entityId.value, params.value));
   const url = computed(() => usePublicPageUrl(siteId, params.value));
 
   let data: Ref<SiteShellPayload | undefined>
+  let payload: Ref<PublicPagePayload | undefined>
   let error: Ref<Error | null>
   let pending: Ref<boolean>
   let refresh: () => Promise<unknown>
   let ready: Promise<unknown>
-  if (isSyntheticServerAssetFetch || isPlatform || (!siteId && !draftId)) {
+  if (options.load === false) {
+    const existing = useNuxtData<PublicPagePayload>(key.value)
+    payload = existing.data
+    data = computed(() => payload.value?.shell)
+    error = ref<Error | null>(null)
+    pending = ref(false)
+    refresh = async () => {}
+    ready = Promise.resolve()
+  } else if (isSyntheticServerAssetFetch || isPlatform || (!siteId && !draftId)) {
+    payload = ref<PublicPagePayload>()
     data = ref<SiteShellPayload>()
     error = ref<Error | null>(null)
     pending = ref(false)
@@ -62,9 +75,10 @@ export const useSiteShellState = () => {
               failureMessage: 'Public page failed',
               signal,
             }),
-          { server: true, dedupe: 'cancel' },
+          { server: true, dedupe: 'defer' },
         );
-    data = computed(() => asyncData.data.value?.shell)
+    payload = asyncData.data
+    data = computed(() => payload.value?.shell)
     error = asyncData.error as Ref<Error | null>
     pending = asyncData.pending
     refresh = asyncData.refresh
@@ -73,6 +87,7 @@ export const useSiteShellState = () => {
 
   const locations = computed(() => (data.value?.locations ?? []) as ApiRecord[]);
   const config = computed(() => (data.value?.config ?? {}) as Record<string, string>);
+  const content = computed(() => (payload.value?.content ?? []) as ApiRecord[]);
   const shellSite = computed(() => data.value?.site ?? null);
   const googleBusiness = computed(() => data.value?.googleBusiness ?? null);
   const locales = computed(() => data.value?.locales ?? []);
@@ -81,6 +96,7 @@ export const useSiteShellState = () => {
   return {
     locations,
     config,
+    content,
     site: shellSite,
     googleBusiness,
     locales,

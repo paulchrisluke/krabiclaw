@@ -11,13 +11,19 @@ the requested datasets. Its response contains both the persistent shell
 capabilities) and the selected route data (content, menus, experiences,
 availability, policies, and optional collections).
 
-During SSR, `useSiteShellState` and `usePublicPageData` share the same keyed
-`useAsyncData` state and call the request-scoped page provider once. That provider
-invokes `loadPublicPage` with the original request event and Cloudflare bindings;
-the page loader performs one base lookup and one D1 batch for the combined
-resource. `loadPublicShell` remains the canonical loader for the standalone
-shell API endpoint, but tenant page SSR does not call that endpoint and then
-self-fetch the page.
+The tenant homepage has a smaller critical variant of that same canonical page
+resource. It requests only the validated shell and homepage content rows needed
+for the header and hero. The complete homepage resource uses a different key and
+loads after the critical document has painted. A critical failure is still a
+terminal error; it is never replaced with an empty or generic tenant shell.
+
+During SSR, non-home `useSiteShellState` and `usePublicPageData` share the same
+keyed `useAsyncData` state and call the request-scoped page provider once. The
+homepage layout waits only for its critical keyed page resource; the home route
+then starts its complete page resource after hydration. Both providers invoke
+`loadPublicPage` with the original request event and Cloudflare bindings, so
+there is no internal HTTP self-fetch. `loadPublicShell` remains the canonical
+loader for the standalone shell API endpoint.
 
 The public API routes are browser transport wrappers over the same loaders.
 Browser reads use `publicApiRequest`, which applies a six-second timeout,

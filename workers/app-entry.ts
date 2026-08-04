@@ -204,6 +204,16 @@ async function deferPublicHydration(response: Response): Promise<Response> {
   if (!response.ok || !contentType.includes('text/html')) return response
 
   const html = await response.text()
+  if (html.includes('data-public-critical-shell="true"')) {
+    const headers = new Headers(response.headers)
+    headers.delete('content-length')
+    headers.set('x-public-hydration', 'after-paint')
+    return new Response(html, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    })
+  }
   const moduleScript = /<script\b(?=[^>]*\btype="module")(?=[^>]*\bsrc="(\/_nuxt\/[^\"]+)")[^>]*><\/script>/
   const nuxtDataScript = /<script type="application\/json" data-nuxt-data="nuxt-app"[^>]*>[\s\S]*?<\/script>/
   const match = html.match(moduleScript)

@@ -79,7 +79,7 @@ const props = defineProps<{
 }>()
 
 const year = new Date().getFullYear()
-const brandName = computed(() => props.site.brand_name || props.compliance?.entity_name || 'Blawby')
+const brandName = computed(() => props.site.brand_name || props.compliance?.entity_name || '')
 const description = computed(() => props.compliance?.footer_disclaimer || props.site.brand_description || '')
 const footerLogo = computed(() => typeof props.compliance?.metadata?.logo_dark_url === 'string'
   ? props.compliance.metadata.logo_dark_url
@@ -92,33 +92,15 @@ function groupItems(group: string) {
 }
 
 const supportItems = computed<PublicNavigationItem[]>(() => {
-  const configured = groupItems('support')
-  if (configured.length) return configured
-  return [
-    { id: 'support-consultation', area: 'footer', label: 'Request a Consultation', url: '/schedule', item_type: 'internal', sort_order: 10, metadata: { group: 'support' } },
-    { id: 'support-contact', area: 'footer', label: 'Contact', url: '/contact', item_type: 'internal', sort_order: 20, metadata: { group: 'support' } },
-    { id: 'support-pricing', area: 'footer', label: 'Pricing', url: '/pricing', item_type: 'internal', sort_order: 30, metadata: { group: 'support' } },
-  ]
+  return groupItems('support')
 })
 
 const companyItems = computed<PublicNavigationItem[]>(() => {
-  const configured = groupItems('company')
-  if (configured.length) return configured
-  return [
-    { id: 'company-about', area: 'footer', label: 'About', url: '/about', item_type: 'internal', sort_order: 10, metadata: { group: 'company' } },
-    { id: 'company-donate', area: 'footer', label: 'Donate', url: '/donate', item_type: 'internal', sort_order: 20, metadata: { group: 'company' } },
-    { id: 'company-blog', area: 'footer', label: 'Blog', url: '/blog', item_type: 'internal', sort_order: 30, metadata: { group: 'company' } },
-  ]
+  return groupItems('company')
 })
 
 const legalItems = computed<PublicNavigationItem[]>(() => {
-  const configured = props.navigation.filter(item => item.area === 'legal')
-  if (configured.length) return configured
-  return [
-    { id: 'privacy', area: 'legal', label: 'Privacy', url: '/policies/privacy', item_type: 'internal', sort_order: 10, metadata: {} },
-    { id: 'terms', area: 'legal', label: 'Terms', url: '/policies/terms', item_type: 'internal', sort_order: 20, metadata: {} },
-    { id: 'notices', area: 'legal', label: 'Third Party Notices', url: '/third-party-notices', item_type: 'internal', sort_order: 30, metadata: {} },
-  ]
+  return props.navigation.filter(item => item.area === 'legal')
 })
 
 </script>

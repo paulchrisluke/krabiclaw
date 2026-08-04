@@ -7,6 +7,7 @@ import type { SiteConversionEventName } from '~/utils/site-conversion-events'
 import { siteSupportsBlawbyTemplate } from '~/utils/template-registry'
 import type {
   PublicBlawbyData,
+  PublicBlawbyCriticalHomeData,
   PublicBlawbyIdentity,
   PublicBlawbyRouteData,
   PublicBlawbyShellData,
@@ -470,6 +471,36 @@ export async function getPublicBlawbyDocumentData(
     getPublicBlawbyRouteData(db, siteId, recipe, options),
   ])
   return { shell, route }
+}
+
+export async function getPublicBlawbyCriticalHomeData(
+  db: DbClient,
+  siteId: string,
+): Promise<PublicBlawbyCriticalHomeData | null> {
+  const site = await getActiveBlawbySite(db, siteId)
+  if (!site) return null
+
+  const [shell, page] = await Promise.all([
+    getPublicBlawbyShellData(db, siteId),
+    getPublicTenantPageByPath(db, siteId, '/'),
+  ])
+  if (!page) return null
+  return { shell, page }
+}
+
+export async function resolvePublicBlawbyCriticalHomeOrThrow(
+  db: DbClient,
+  siteId: string,
+): Promise<{ success: true; shell: PublicBlawbyShellData; page: PublicTenantPage }> {
+  const critical = await getPublicBlawbyCriticalHomeData(db, siteId)
+  if (!critical) {
+    throw createError({
+      statusCode: 404,
+      statusMessage: 'Blawby homepage content not found',
+      data: { code: 'BLAWBY_HOME_NOT_FOUND' },
+    })
+  }
+  return { success: true, ...critical }
 }
 
 export async function resolvePublicBlawbyDocumentOrThrow(

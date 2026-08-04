@@ -77,15 +77,19 @@ paid-plan history still has one bounded load.
   Route chunks load when their route or component is actually entered;
   dashboard, admin, and auth code remains out of public layout and CSS
   entrypoints.
-- Saya home pages render the header, hero copy, brand color, controls, and the
-  responsive hero markup in SSR. The header logo is emitted immediately when
-  tenant data supplies one; hero, location, post, blog, and footer media are
-  lazy so the first styled frame does not wait on an image origin.
-- Blawby home pages emit the branded hero copy and critical geometry in SSR,
-  while the remote hero image is lazy and low priority. The YouTube video
-  feature is intersection-gated and never creates an iframe on the initial
-  document. A slow media origin therefore cannot delay readable text or pull
-  third-party video JavaScript into the cold path.
+- Saya home pages use a critical canonical page resource for the header, hero
+  copy, brand color, controls, and responsive hero geometry in SSR. The complete
+  homepage collections use a separate keyed page resource after hydration. The
+  header logo is emitted immediately when tenant data supplies one; hero,
+  location, post, blog, and footer media are lazy so the first styled frame does
+  not wait on an image origin.
+- Blawby home pages use a critical canonical document containing the validated
+  shell and homepage hero document in SSR. Offerings, FAQs, reviews, posts, and
+  lower-page blocks use the complete route document after hydration. The remote
+  hero image is lazy and low priority. The YouTube video feature is
+  intersection-gated and never creates an iframe on the initial document. A
+  slow media origin therefore cannot delay readable text or pull third-party
+  video JavaScript into the cold path.
 - Post videos remain poster-only until their card enters a 200px viewport
   margin; autoplay is mounted only after that visibility gate opens.
 - The Google Business photo contract is `google_url`. Reading it with the old
@@ -207,13 +211,13 @@ was available. Blawby did not have that same two-loader database path; its first
 frame was instead coupled to eager/high-priority hero media and the complete
 hydration payload.
 
-The fix makes the Saya page response the canonical SSR resource and projects its
-validated `shell` field to the layout. The page loader performs one base lookup
-and one batch, while the standalone shell API remains available for callers
-that explicitly need it. Blawby keeps the inline critical shell but releases
-the hero media from the critical request graph. Both surfaces still fast-fail
-on malformed data; no alternate API, retry, stale payload, or empty success
-state was introduced.
+The fix keeps the Saya page response as the canonical source and adds a critical
+homepage variant that projects its validated `shell` and `content` fields to the
+layout and hero. The complete page response remains keyed separately for the
+post-paint collections. Blawby adds the equivalent critical document service and
+API wrapper, while the complete route document remains the source for lower-page
+sections. Both surfaces still fast-fail on malformed data; no alternate source,
+retry, stale payload, or empty success state was introduced.
 
 The following are single fresh local-Worker observations with KV bypassed, not a
 benchmark or a Lighthouse score:

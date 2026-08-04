@@ -2,6 +2,7 @@
   <div
     class="tenant-layout saya-theme min-h-screen flex flex-col font-sans bg-default text-default"
     :style="themeStyles"
+    :data-public-critical-shell="isHome ? 'true' : undefined"
   >
     <!-- Teleport target for Saya components (e.g. BookingModal) that need to escape
          page overflow/stacking contexts but still must render inside this div to
@@ -84,6 +85,7 @@ import sayaStylesheet from '~/assets/css/saya-entry.css?url'
 import sayaHomeStylesheet from '~/assets/css/saya-home-entry.css?url'
 
 const route = useRoute()
+const isHome = computed(() => route.path === '/' || /^\/preview\/site\/[^/]+\/?$/.test(route.path))
 const sayaStylesheetHref = new URL(sayaStylesheet, 'http://nuxt.local').pathname
 const sayaHomeStylesheetHref = new URL(sayaHomeStylesheet, 'http://nuxt.local').pathname
 const sayaStylesheetForRoute = computed(() => {
@@ -123,10 +125,11 @@ if (import.meta.dev) useDebugLCP()
 // Persistent chrome uses the minimal shell contract. Route-specific menu and
 // experience data comes from the keyed page loader and changes independently.
 const shell = useSiteShellState()
+if (import.meta.server && isHome.value) await shell.ready
 const { config, locations, hasExperiences, locales, error: bootstrapError, site: shellSite } = shell
 const routeLoadState = usePublicRouteLoadState()
-const publicPending = computed(() => shell.pending.value || routeLoadState.value.pending)
-const publicError = computed(() => shell.error.value || routeLoadState.value.error)
+const publicPending = computed(() => shell.pending.value || (!isHome.value && routeLoadState.value.pending))
+const publicError = computed(() => shell.error.value || (!isHome.value && routeLoadState.value.error))
 const retryShell = async () => await shell.refresh()
 const retryPage = async () => {
   if (routeLoadState.value.key) await refreshNuxtData(routeLoadState.value.key)
