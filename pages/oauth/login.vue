@@ -103,7 +103,7 @@
 <script setup>
 import { oauthContinuationDestination } from '~/shared/auth/oauth-login'
 
-definePageMeta({ layout: false, auth: false })
+definePageMeta({ layout: 'standalone', auth: false })
 
 useSeoMeta({ robots: 'noindex, nofollow' })
 

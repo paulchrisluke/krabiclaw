@@ -221,7 +221,7 @@
 <script setup lang="ts">
 import { buildLoginUrl } from '~/shared/auth/return-target'
 
-definePageMeta({ layout: false })
+definePageMeta({ layout: 'standalone' })
 
 const route = useRoute()
 const token = route.params.token as string

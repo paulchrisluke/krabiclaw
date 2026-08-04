@@ -9,6 +9,29 @@ test('platform home renders', async ({ page, baseURL }) => {
   await expectHealthyPage(page, errors)
 })
 
+test.describe('standalone platform routes', () => {
+  for (const path of [
+    '/help',
+    '/oauth/login',
+    '/oauth/consent',
+    '/accept-invitation/e2e-invalid-invitation',
+    '/transfer/e2e-invalid-transfer',
+  ]) {
+    test(`${path} renders with an applied stylesheet`, async ({ page, baseURL }) => {
+      const errors = collectPageErrors(page)
+      const response = await page.goto(`${baseURL}${path}`, { waitUntil: 'load' })
+      expect(response?.status()).toBeLessThan(500)
+
+      const stylesheetHrefs = await page.locator('link[rel="stylesheet"]').evaluateAll((links) =>
+        links.map((link) => link.getAttribute('href')),
+      )
+      expect(stylesheetHrefs).toContain('/_nuxt/surfaces/platform.css')
+      expect(await page.locator('script[type="module"][src^="/_nuxt/"]').count()).toBeGreaterThan(0)
+      await expectHealthyPage(page, errors)
+    })
+  }
+})
+
 test.describe('representative tenant routes', () => {
   test.beforeEach(async ({ page }) => setupTenantHeaders(page, tenantBaseURL, tenantExtraHeaders))
 
@@ -30,6 +53,26 @@ test.describe('representative tenant routes', () => {
       await expectHealthyPage(page, errors)
     })
   }
+
+  test('mobile Saya navigation and logo remain interactive after hydration', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    const errors = collectPageErrors(page)
+    const response = await page.goto(`${tenantBaseURL}/experiences`, { waitUntil: 'load' })
+    expect(response?.status()).toBeLessThan(400)
+
+    const menuButton = page.locator('[data-saya-critical-menu]')
+    await expect(menuButton).toHaveAttribute('aria-label', /open navigation/i)
+    await menuButton.click()
+    await expect(menuButton).toHaveAttribute('aria-label', /close navigation/i)
+    const mobileNav = page.locator('header > div.absolute nav')
+    await expect(mobileNav).toHaveCount(1)
+    await expect(mobileNav).toBeVisible()
+
+    await page.locator('[data-saya-critical-logo-link]').click()
+    await expect(page).toHaveURL(`${tenantBaseURL}/`)
+    await expect(page.locator('body')).toContainText('Ember & Slice')
+    await expectHealthyPage(page, errors)
+  })
 
   test('unknown tenant route returns not found', async ({ request }) => {
     const response = await request.get(`${tenantBaseURL}/e2e-this-route-does-not-exist`, { headers: tenantExtraHeaders })

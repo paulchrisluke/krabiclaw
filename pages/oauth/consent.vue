@@ -105,7 +105,7 @@
 </template>
 
 <script setup>
-definePageMeta({ layout: false, auth: false })
+definePageMeta({ layout: 'standalone', auth: false })
 
 useSeoMeta({ robots: 'noindex, nofollow' })
 
