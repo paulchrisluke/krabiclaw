@@ -39,6 +39,42 @@ async function loadDraftPreviewSource(
   return parseOnboardingDraftPayload(row.payload_json)
 }
 
+function buildDraftShellPayload(payload: Awaited<ReturnType<typeof loadDraftPreviewSource>>) {
+  const config = {
+    ...payload.preview.config,
+    brand_name: payload.preview.brandName,
+    logo_url: payload.preview.config.logo_url || payload.preview.draftMedia.logo?.publicUrl || null,
+    og_image_url: payload.preview.config.hero_image_url || payload.preview.draftMedia.hero?.publicUrl || null,
+  }
+  const draftPhone = typeof payload.preview.config.phone === 'string'
+    ? payload.preview.config.phone
+    : null
+
+  return {
+    site: {
+      brand_name: payload.preview.brandName,
+      brand_description: null,
+      logo_url: config.logo_url,
+      logo_mime_type: null,
+      favicon_url: null,
+      vertical: payload.preview.vertical,
+      config: { phone: draftPhone },
+    },
+    locations: payload.preview.locations,
+    config,
+    googleBusiness: {
+      business: null,
+      reviews: [],
+      media: [],
+      posts: [],
+      syncedAt: null,
+    },
+    locales: payload.preview.locales,
+    hasExperiences: payload.preview.hasExperiences,
+    hasMenu: Boolean(payload.preview.menu?.items.length),
+  }
+}
+
 export async function loadPublicDraftPage(
   event: H3Event,
   draftId: string,
@@ -86,6 +122,8 @@ export async function loadPublicDraftPage(
     throw createError({ statusCode: 404, statusMessage: 'Draft location not found' })
   }
 
+  const shell = buildDraftShellPayload(payload)
+
   const content = payload.preview.content.filter((item) => item.page === page)
   const reviewsList = requestedDatasets.has('reviews') ? payload.preview.reviews : []
   const photosList = requestedDatasets.has('photos')
@@ -113,6 +151,7 @@ export async function loadPublicDraftPage(
   }
   return {
     kind: page,
+    shell,
     site: {
       brand_name: payload.preview.brandName,
       logo_url: config.logo_url,
@@ -149,36 +188,5 @@ export async function loadPublicDraftShell(
   options: { signal?: AbortSignal } = {},
 ) {
   const payload = await loadDraftPreviewSource(event, draftId, query.token, options)
-  const config = {
-    ...payload.preview.config,
-    brand_name: payload.preview.brandName,
-    logo_url: payload.preview.config.logo_url || payload.preview.draftMedia.logo?.publicUrl || null,
-    og_image_url: payload.preview.config.hero_image_url || payload.preview.draftMedia.hero?.publicUrl || null,
-  }
-  const draftPhone = typeof payload.preview.config.phone === 'string'
-    ? payload.preview.config.phone
-    : null
-  return {
-    site: {
-      brand_name: payload.preview.brandName,
-      brand_description: null,
-      logo_url: config.logo_url,
-      logo_mime_type: null,
-      favicon_url: null,
-      vertical: payload.preview.vertical,
-      config: { phone: draftPhone },
-    },
-    locations: payload.preview.locations,
-    config,
-    googleBusiness: {
-      business: null,
-      reviews: [],
-      media: [],
-      posts: [],
-      syncedAt: null,
-    },
-    locales: payload.preview.locales,
-    hasExperiences: payload.preview.hasExperiences,
-    hasMenu: Boolean(payload.preview.menu?.items.length),
-  }
+  return buildDraftShellPayload(payload)
 }

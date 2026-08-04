@@ -26,8 +26,8 @@ The 5–6 second experience was the result of stacked work, not one slow Vue fil
 - fallback chains could turn one logical load into several calls;
 - public routes inherited dashboard/editor CSS and globally registered feature code;
 - public and dashboard surfaces shared global CSS and root-level client plugins;
-- `app.vue` and `pages/about.vue` still loaded the generic Saya/site shell on
-  Blawby routes even though Blawby has its own route and shell services;
+- historical root/layout ownership briefly coupled Blawby routes to the generic
+  Saya/site shell even though Blawby has its own route and shell services;
 - SSR paths still had to be kept off internal HTTP self-fetches because nested
   Nitro dispatch does not carry the Worker bindings reliably.
 
@@ -77,15 +77,19 @@ paid-plan history still has one bounded load.
   Route chunks load when their route or component is actually entered;
   dashboard, admin, and auth code remains out of public layout and CSS
   entrypoints.
-- Saya home pages render the header, hero copy, brand color, controls, and the
-  responsive hero image in SSR. The hero uses a responsive Cloudflare Images
-  `320/640/960/1440` candidate at quality 45 with high fetch priority. The
-  header logo is also emitted immediately when tenant data supplies one;
-  location, post, blog, and footer images remain lazy.
-- Blawby home pages emit the branded hero and its high-priority remote image in
-  SSR. The YouTube video feature is intersection-gated and never creates an
-  iframe on the initial document. A slow media origin therefore cannot make
-  white text unreadable or pull third-party video JavaScript into the cold path.
+- Saya home pages use a critical canonical page resource for the header, hero
+  copy, brand color, controls, and responsive hero geometry in SSR. The complete
+  homepage collections use a separate keyed page resource after hydration. The
+  header logo is emitted immediately when tenant data supplies one; hero,
+  location, post, blog, and footer media are lazy so the first styled frame does
+  not wait on an image origin.
+- Blawby home pages use a critical canonical document containing the validated
+  shell and homepage hero document in SSR. Offerings, FAQs, reviews, posts, and
+  lower-page blocks use the complete route document after hydration. The remote
+  hero image is lazy and low priority. The YouTube video feature is
+  intersection-gated and never creates an iframe on the initial document. A
+  slow media origin therefore cannot delay readable text or pull third-party
+  video JavaScript into the cold path.
 - Post videos remain poster-only until their card enters a 200px viewport
   margin; autoplay is mounted only after that visibility gate opens.
 - The Google Business photo contract is `google_url`. Reading it with the old
@@ -155,17 +159,17 @@ local Worker measurements for this build are:
 | Surface | Browser navigation | HTML body | Server `total` | Surface stylesheet |
 | --- | ---: | ---: | ---: | --- |
 | Platform `/` | 64 ms | 32,285 B | 13 ms | `platform-home.css` |
-| Saya `/` (`demo.localhost`) | 61 ms | 30,630 B | 14 ms | `saya-home.css` |
-| Blawby | not measured: local NCLS fixture absent | — | — | — |
+| Saya `/about` (`demo.localhost`) | 246 ms | 10,728 B | 29 ms | `saya.css` |
+| Blawby `/` (`ncls.localhost`) | 166 ms | 71,615 B | 170 ms | `blawby-home.css` |
 
 These are local browser navigation measurements, not Lighthouse FCP/LCP and not
 the release gate. They verify the shared response contract: the correct surface
 stylesheet is present in the document head, public tenant pages have no initial
 Nuxt runtime or `__NUXT_DATA__` payload, and the above-fold hero markup is
-present in the initial HTML. The local R2 fixture does not contain tenant media
-objects, and this checkout does not contain the NCLS fixture, so Blawby pixel
-and cold-path validation still requires the deployed R2-backed host. The `<1s`
-cold browser target remains open until that post-deploy check is run.
+present in the initial HTML. The Saya screenshot showed the about heading with
+its serif face; the Blawby screenshot showed the navy/gold shell and readable
+hero copy while the R2-backed hero image was lazy. The `<1s` cold browser target
+remains open until the same checks run against deployed tenant hosts.
 
 Cache hits are a warm optimization and cannot prove the cold target. The next
 release gate is a cold browser run on a real tenant host with same-origin R2
@@ -186,8 +190,7 @@ places the theme-critical shell in the initial SSR head. Public tenant pages
 have no initial Nuxt runtime or `__NUXT_DATA__` payload, no Blawby YouTube iframe,
 and no animation-frame gate on above-fold hero or logo media. Fresh browser
 screenshots showed readable text, correct colors, local fonts, and stable
-above-fold geometry immediately; tenant media pixels require the R2-backed
-fixture noted above. The strict preview asset
+above-fold geometry immediately. The strict preview asset
 waiter remains in place so a deployment fails when HTML references an
 unavailable asset; it validates the six stable public surface stylesheets
 emitted by the build rather than an obsolete hashed `entry.css` filename.
@@ -196,6 +199,39 @@ The local cold-path result is materially improved but not declared solved: the
 browser check is fast in the local Worker, while a fresh cold measurement from a
 deployed Worker and real custom-domain image origin is still required before
 claiming the `<1s` target.
+
+## Shared client-path diagnosis and measured fix
+
+The client-side bottleneck was shared SSR work, not the number of Vue files or a
+single theme component. Saya layout setup loaded the shell resource while the
+route component loaded the page resource. Both used the same Worker request
+context but each performed its own source batch, so a cold D1 wake-up made the
+browser wait for two logical resource loads before the complete first document
+was available. Blawby did not have that same two-loader database path; its first
+frame was instead coupled to eager/high-priority hero media and the complete
+hydration payload.
+
+The fix keeps the Saya page response as the canonical source and adds a critical
+homepage variant that projects its validated `shell` and `content` fields to the
+layout and hero. The complete page response remains keyed separately for the
+post-paint collections. Blawby adds the equivalent critical document service and
+API wrapper, while the complete route document remains the source for lower-page
+sections. Both surfaces still fast-fail on malformed data; no alternate source,
+retry, stale payload, or empty success state was introduced.
+
+The following are single fresh local-Worker observations with KV bypassed, not a
+benchmark or a Lighthouse score:
+
+| Journey | Before | After | What changed |
+| --- | ---: | ---: | --- |
+| Saya `/about` server total | 55 ms | 29 ms | Separate shell/page loads became one page load; D1 request count 5 → 2 |
+| Saya `/about` browser navigation | — | 246 ms | Styled heading, local fonts, and surface CSS were visible in the fresh tab |
+| Blawby `/` browser navigation | — | 166 ms | Critical text/colors rendered; hero image was lazy/low priority and no Nuxt payload remained |
+
+These local measurements are evidence that the duplicate shared path is gone,
+not evidence that the production `<1s` target is already met. The release gate
+remains a cold browser run against deployed tenant hosts with real media and
+server/request metrics.
 
 The production gate remains cold browser navigation, request budgets, query
 budgets, payload size, and visible error propagation—not an arbitrary warm-cache

@@ -50,7 +50,7 @@
 import { defineAsyncComponent } from 'vue'
 import { PUBLIC_SUPPORT_FAQ_ENTRIES, PUBLIC_SUPPORT_ROUTE_CARDS } from '~/utils/public-support'
 
-definePageMeta({ layout: false })
+definePageMeta({ layout: 'standalone' })
 
 const routeCards = PUBLIC_SUPPORT_ROUTE_CARDS
 const PublicHelpChatIsland = defineAsyncComponent(() => import('~/components/platform/PublicHelpChowBot.vue'))

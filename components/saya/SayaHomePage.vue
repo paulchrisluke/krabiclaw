@@ -23,6 +23,7 @@
         }"
       />
 
+      <template v-if="pageData">
       <!-- ── Featured content (dishes / experiences) ─────────── -->
       <LazySayaFeaturedContent
         :data="{
@@ -236,6 +237,7 @@
         :description="getField('cta.description')"
         :cta-route="homePrimaryCtaRoute"
         :reserve-cta="homeCopy.reserveCta"
+        :has-order-links="hasOrderLinks"
         :bg="'default'"
         :padding="'lg'"
       />
@@ -268,6 +270,10 @@
           class="content-block"
         />
       </template>
+      </template>
+      <section v-else-if="pageError" class="mx-auto max-w-xl px-4 py-16 text-center sm:px-6" data-testid="saya-home-content-error">
+        <p role="alert" class="text-sm text-muted">Homepage content could not be loaded.</p>
+      </section>
     </div>
 
 </template>
@@ -295,10 +301,11 @@ if (!siteId && !draftId) {
   })
 }
 
-// Route-owned page data (home content, menu, experiences). Persistent chrome
-// (SayaHeader/SayaFooter) reads from the separate, site-wide shell composable
-// (useSiteShellState, see layouts/saya.vue) instead — the two never overlap.
+// Route-owned page data and persistent chrome are served by the same canonical
+// page resource. The layout and this component share its keyed async-data state.
 const {
+  data: pageData,
+  error: pageError,
   locations: pageLocations,
   googleBusiness: pageGoogleBusiness,
   getField,
@@ -307,7 +314,7 @@ const {
   menuItemsBySection,
   experiencesList,
   contentBlocks,
-} = await usePublicPageData({ enabled: true })
+} = await usePublicPageData({ enabled: true, server: true, lazy: false })
 
 const {
   data: supplementalData,

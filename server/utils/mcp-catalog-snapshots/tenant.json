@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:23d4b143483d46d8c9a25805ae267bbbcf01fdddd27473b32c3f0ba18fc1875e",
+  "fingerprint": "sha256:19a71e267014691f09642596a197225289b626abe11ace55e02dd97bb6a03d92",
   "tools": [
     {
       "name": "add_menu_items_batch",
@@ -376,6 +376,84 @@
       }
     },
     {
+      "name": "create_blog_author",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "bio": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          },
+          "title": {
+            "description": "e.g. \"Attorney\" or \"Founder\".",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "author": {
+            "additionalProperties": false,
+            "properties": {
+              "bio": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "id": {
+                "type": "string"
+              },
+              "image_public_url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "name": {
+                "type": "string"
+              },
+              "title": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "title",
+              "bio",
+              "image_public_url"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "author"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "create_blog_post",
       "inputSchema": {
         "additionalProperties": false,
@@ -479,6 +557,13 @@
           },
           "seo_title": {
             "description": "Optional SEO/browser-tab title override. Falls back to the post title if unset.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "site_author_id": {
+            "description": "Id of a tenant author (from list_blog_authors) to display as the byline. Leave unset to fall back to the site name.",
             "type": [
               "string",
               "null"
@@ -759,6 +844,13 @@
                   "null"
                 ]
               },
+              "site_author_id": {
+                "description": "Selected tenant author id, if any. Null means the byline falls back to the site name.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "slug": {
                 "type": "string"
               },
@@ -816,6 +908,7 @@
               "canonical_url",
               "robots",
               "author_name",
+              "site_author_id",
               "published",
               "published_at",
               "status",
@@ -2874,6 +2967,13 @@
                   "null"
                 ]
               },
+              "site_author_id": {
+                "description": "Selected tenant author id, if any. Null means the byline falls back to the site name.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "slug": {
                 "type": "string"
               },
@@ -2931,6 +3031,7 @@
               "canonical_url",
               "robots",
               "author_name",
+              "site_author_id",
               "published",
               "published_at",
               "status",
@@ -6183,6 +6284,69 @@
       }
     },
     {
+      "name": "list_blog_authors",
+      "inputSchema": {
+        "additionalProperties": true,
+        "properties": {
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "authors": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "bio": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "id": {
+                  "type": "string"
+                },
+                "image_public_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "name": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "title",
+                "bio",
+                "image_public_url"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "authors"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "list_blog_posts",
       "inputSchema": {
         "additionalProperties": true,
@@ -8570,6 +8734,13 @@
                   "null"
                 ]
               },
+              "site_author_id": {
+                "description": "Selected tenant author id, if any. Null means the byline falls back to the site name.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "slug": {
                 "type": "string"
               },
@@ -8627,6 +8798,7 @@
               "canonical_url",
               "robots",
               "author_name",
+              "site_author_id",
               "published",
               "published_at",
               "status",
@@ -9650,6 +9822,13 @@
                   "null"
                 ]
               },
+              "site_author_id": {
+                "description": "Selected tenant author id, if any. Null means the byline falls back to the site name.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "slug": {
                 "type": "string"
               },
@@ -9707,6 +9886,7 @@
               "canonical_url",
               "robots",
               "author_name",
+              "site_author_id",
               "published",
               "published_at",
               "status",
@@ -12463,6 +12643,13 @@
                   "null"
                 ]
               },
+              "site_author_id": {
+                "description": "Selected tenant author id, if any. Null means the byline falls back to the site name.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "slug": {
                 "type": "string"
               },
@@ -12520,6 +12707,7 @@
               "canonical_url",
               "robots",
               "author_name",
+              "site_author_id",
               "published",
               "published_at",
               "status",
@@ -12655,6 +12843,13 @@
           },
           "seo_title": {
             "description": "Optional SEO/browser-tab title override. Falls back to the post title if unset.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "site_author_id": {
+            "description": "Id of a tenant author (from list_blog_authors) to display as the byline, or null to fall back to the site name.",
             "type": [
               "string",
               "null"
@@ -12940,6 +13135,13 @@
                   "null"
                 ]
               },
+              "site_author_id": {
+                "description": "Selected tenant author id, if any. Null means the byline falls back to the site name.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "slug": {
                 "type": "string"
               },
@@ -12997,6 +13199,7 @@
               "canonical_url",
               "robots",
               "author_name",
+              "site_author_id",
               "published",
               "published_at",
               "status",
@@ -13145,6 +13348,13 @@
           },
           "seo_title": {
             "description": "Optional SEO/browser-tab title override. Falls back to the post title if unset.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "site_author_id": {
+            "description": "Id of a tenant author (from list_blog_authors) to display as the byline, or null to fall back to the site name.",
             "type": [
               "string",
               "null"
@@ -13433,6 +13643,13 @@
                   "null"
                 ]
               },
+              "site_author_id": {
+                "description": "Selected tenant author id, if any. Null means the byline falls back to the site name.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "slug": {
                 "type": "string"
               },
@@ -13490,6 +13707,7 @@
               "canonical_url",
               "robots",
               "author_name",
+              "site_author_id",
               "published",
               "published_at",
               "status",

@@ -9,6 +9,42 @@ test('platform home renders', async ({ page, baseURL }) => {
   await expectHealthyPage(page, errors)
 })
 
+test('deployed platform home keeps the normal Nuxt runtime contract', async ({ page, baseURL }) => {
+  test.skip(!baseURL?.includes('workers.dev') && !baseURL?.includes('staging.'), 'Requires a deployed Worker')
+  const errors = collectPageErrors(page)
+  const response = await page.goto(baseURL!, { waitUntil: 'load' })
+  expect(response?.status()).toBeLessThan(400)
+  expect(response?.headers()['x-public-render-mode']).toBeUndefined()
+  expect(await page.locator('link[rel="stylesheet"]').count()).toBeGreaterThan(0)
+  await expect(page.locator('script[type="module"][src^="/_nuxt/"]')).toHaveCount(1)
+  await expect(page.locator('script[data-nuxt-data="nuxt-app"]')).toHaveCount(1)
+  await expect(page.locator('script[src="/platform-home-static.js"]')).toHaveCount(0)
+  await expectHealthyPage(page, errors)
+})
+
+test.describe('standalone platform routes', () => {
+  for (const path of [
+    '/help',
+    '/oauth/login',
+    '/oauth/consent',
+    '/accept-invitation/e2e-invalid-invitation',
+    '/transfer/e2e-invalid-transfer',
+  ]) {
+    test(`${path} renders with an applied stylesheet`, async ({ page, baseURL }) => {
+      const errors = collectPageErrors(page)
+      const response = await page.goto(`${baseURL}${path}`, { waitUntil: 'load' })
+      expect(response?.status()).toBeLessThan(500)
+
+      const stylesheetHrefs = await page.locator('link[rel="stylesheet"]').evaluateAll((links) =>
+        links.map((link) => link.getAttribute('href')),
+      )
+      expect(stylesheetHrefs).toContain('/_nuxt/surfaces/platform.css')
+      expect(await page.locator('script[type="module"][src^="/_nuxt/"]').count()).toBeGreaterThan(0)
+      await expectHealthyPage(page, errors)
+    })
+  }
+})
+
 test.describe('representative tenant routes', () => {
   test.beforeEach(async ({ page }) => setupTenantHeaders(page, tenantBaseURL, tenantExtraHeaders))
 
@@ -30,6 +66,43 @@ test.describe('representative tenant routes', () => {
       await expectHealthyPage(page, errors)
     })
   }
+
+  test('mobile Saya navigation and logo remain interactive after hydration', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    const errors = collectPageErrors(page)
+    const response = await page.goto(`${tenantBaseURL}/experiences`, { waitUntil: 'load' })
+    expect(response?.status()).toBeLessThan(400)
+
+    const menuButton = page.locator('[data-saya-critical-menu]')
+    await expect(menuButton).toHaveAttribute('aria-label', /open navigation/i)
+    await expect(menuButton).toHaveJSProperty('tagName', 'SUMMARY')
+    await menuButton.click()
+    await expect(menuButton).toHaveAttribute('aria-label', /close navigation/i)
+    await expect(page.locator('header details')).toHaveAttribute('open', '')
+    const mobileNav = page.locator('header details > div.absolute nav')
+    await expect(mobileNav).toHaveCount(1)
+    await expect(mobileNav).toBeVisible()
+
+    await page.locator('[data-saya-critical-logo-link]').click()
+    await expect(page).toHaveURL(`${tenantBaseURL}/`)
+    await expect(page.locator('body')).toContainText('Ember & Slice')
+    await expectHealthyPage(page, errors)
+  })
+
+  test('mobile Saya navigation and first-document content work before hydration', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.route('**/_nuxt/*.js', route => route.abort())
+    const response = await page.goto(`${tenantBaseURL}/experiences`, { waitUntil: 'load' })
+    expect(response?.status()).toBeLessThan(400)
+
+    const menuButton = page.locator('[data-saya-critical-menu]')
+    await expect(menuButton).toHaveJSProperty('tagName', 'SUMMARY')
+    await expect(page.locator('h1')).toBeVisible()
+    await expect(page.locator('link[rel="stylesheet"][href*="saya"]')).toHaveCount(1)
+    await menuButton.click()
+    await expect(page.locator('header details')).toHaveAttribute('open', '')
+    await expect(page.locator('header details > div.absolute nav')).toBeVisible()
+  })
 
   test('unknown tenant route returns not found', async ({ request }) => {
     const response = await request.get(`${tenantBaseURL}/e2e-this-route-does-not-exist`, { headers: tenantExtraHeaders })
