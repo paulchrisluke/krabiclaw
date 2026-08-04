@@ -43,6 +43,7 @@ export function useBlogForm() {
     robots: '',
     body: '',
     featured_image_asset_id: '',
+    site_author_id: '',
     faq_items: [createEmptyFaqItem()] as BlogFaqItemForm[],
     faq_label: '',
     faq_status: 'active' as 'active' | 'inactive',

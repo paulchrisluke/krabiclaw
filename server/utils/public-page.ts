@@ -639,11 +639,13 @@ async function loadPublicPageSource(
       // read_time_minutes approximates words as body length / 5 chars at 200wpm —
       // avoids shipping the full post body to list views just to estimate read time.
       `SELECT p.id, p.title, p.slug, p.excerpt, p.category, p.seo_description, p.seo_keywords,
-              p.canonical_url, p.robots, p.published_at, p.updated_at, p.featured_order, u.name AS author_name, p.featured_image_asset_id,
+              p.canonical_url, p.robots, p.published_at, p.updated_at, p.featured_order,
+              COALESCE(sa.name, u.name) AS author_name, p.featured_image_asset_id,
               ma.public_url, ma.kind, ma.width, ma.height,
               CAST(MAX(1, ROUND((LENGTH(COALESCE(p.body, '')) / 5.0) / 200.0)) AS INTEGER) AS read_time_minutes
        FROM blog_posts p
        LEFT JOIN user u ON u.id = p.author_id
+       LEFT JOIN site_authors sa ON sa.id = p.site_author_id
        LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
        WHERE p.status = 'published' AND p.site_id = ? AND p.visibility = 'public'
        ORDER BY COALESCE(p.featured_order, 999999), p.published_at IS NULL, p.published_at DESC, p.id DESC
@@ -656,10 +658,13 @@ async function loadPublicPageSource(
       `SELECT p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.seo_description, p.seo_keywords,
               p.canonical_url, p.robots, p.published_at, p.created_at, p.updated_at,
               p.featured_image_asset_id,
-              u.name AS author_name, u.image AS author_image,
+              COALESCE(sa.name, u.name) AS author_name, COALESCE(sma.public_url, u.image) AS author_image,
+              sa.title AS author_title, sa.bio AS author_bio,
               ma.public_url, ma.kind, ma.width, ma.height
        FROM blog_posts p
        LEFT JOIN user u ON u.id = p.author_id
+       LEFT JOIN site_authors sa ON sa.id = p.site_author_id
+       LEFT JOIN media_assets sma ON sma.id = sa.image_asset_id AND sma.status = 'active'
        LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
        WHERE p.slug = ? AND p.site_id = ? AND p.status = 'published'
        LIMIT 1`,

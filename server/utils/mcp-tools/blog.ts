@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { BLOG_NAV_FIELDS_SCHEMA, ROBOTS_DIRECTIVE_ENUM, blogPostMutationResultObject, blogPostObject, blogPostSummaryObject, siteTool } from './shared'
+import { BLOG_NAV_FIELDS_SCHEMA, ROBOTS_DIRECTIVE_ENUM, blogPostMutationResultObject, blogPostObject, blogPostSummaryObject, siteAuthorObject, siteTool } from './shared'
 
 const blogContentBlockSchema = {
   type: 'object',
@@ -66,6 +66,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         visibility: { type: 'string', enum: ['public', 'unlisted'], description: 'Unlisted posts work by direct URL but are excluded from indexes, search, feeds, and sitemap.' },
         scheduled_for: { type: ['string', 'null'], description: 'ISO 8601 datetime with timezone. Publishes automatically when due.' },
         publish: { type: 'boolean', description: 'Publish immediately. Defaults to false (draft).' },
+        site_author_id: { type: ['string', 'null'], description: 'Id of a tenant author (from list_blog_authors) to display as the byline. Leave unset to fall back to the site name.' },
       },
       required: ['title', 'content_blocks'],
       strict: true,
@@ -98,6 +99,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         reset_slug_override: { type: 'boolean' },
         publish: { type: 'boolean' },
         unpublish: { type: 'boolean' },
+        site_author_id: { type: ['string', 'null'], description: 'Id of a tenant author (from list_blog_authors) to display as the byline, or null to fall back to the site name.' },
       },
       required: ['post_id'],
       strict: true,
@@ -127,6 +129,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         slug: { type: ['string', 'null'], description: 'Manual URL slug override. Published slug changes preserve a permanent redirect by default.' },
         redirect_old_slug: { type: 'boolean', description: 'Defaults true after first publish.' },
         reset_slug_override: { type: 'boolean' },
+        site_author_id: { type: ['string', 'null'], description: 'Id of a tenant author (from list_blog_authors) to display as the byline, or null to fall back to the site name.' },
       },
       required: ['post_id'],
       strict: true,
@@ -204,6 +207,40 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
         type: 'object',
         properties: { post_id: { type: 'string' }, deleted: { type: 'boolean' } },
         required: ['post_id', 'deleted'],
+        additionalProperties: false,
+      },
+    }),
+  siteTool({
+      name: 'list_blog_authors',
+      description: 'List this site\'s selectable blog authors (a tenant-scoped roster distinct from CMS login accounts) for use as create_blog_post/update_blog_post site_author_id.',
+      domain: 'blog',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: {},
+      outputSchema: {
+        type: 'object',
+        properties: { authors: { type: 'array', items: siteAuthorObject } },
+        required: ['authors'],
+        additionalProperties: false,
+      },
+    }),
+  siteTool({
+      name: 'create_blog_author',
+      description: 'Create a selectable blog author (name, optional title/bio) for this site, to be used as create_blog_post/update_blog_post site_author_id. This is separate from CMS login accounts — an author does not need platform access.',
+      domain: 'blog',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      inputSchema: {
+        name: { type: 'string' },
+        title: { type: ['string', 'null'], description: 'e.g. "Attorney" or "Founder".' },
+        bio: { type: ['string', 'null'] },
+      },
+      required: ['name'],
+      strict: true,
+      outputSchema: {
+        type: 'object',
+        properties: { author: siteAuthorObject },
+        required: ['author'],
         additionalProperties: false,
       },
     }),

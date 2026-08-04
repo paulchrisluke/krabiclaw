@@ -59,6 +59,26 @@
       <template #body>
         <div ref="settingsPanel" class="space-y-7 py-5 pb-[env(safe-area-inset-bottom)]" tabindex="-1" @keydown="onSettingsKeydown">
           <UFormField label="Category"><UInput v-model="form.category" /></UFormField>
+          <UFormField v-if="siteId" label="Author">
+            <div class="flex items-center gap-2">
+              <USelect
+                v-model="form.site_author_id"
+                :items="authorItems"
+                value-key="value"
+                label-key="label"
+                placeholder="Site default"
+                class="flex-1"
+              />
+              <UButton color="neutral" variant="soft" size="sm" icon="i-lucide-plus" @click="openAddAuthor">Add</UButton>
+            </div>
+            <UFormField v-if="addingAuthor" class="mt-2">
+              <div class="flex items-center gap-2">
+                <UInput v-model="newAuthorName" placeholder="Author name" class="flex-1" @keyup.enter="submitNewAuthor" />
+                <UButton size="sm" :loading="savingAuthor" :disabled="!newAuthorName.trim()" @click="submitNewAuthor">Save</UButton>
+                <UButton color="neutral" variant="ghost" size="sm" @click="addingAuthor = false">Cancel</UButton>
+              </div>
+            </UFormField>
+          </UFormField>
           <UFormField label="Tags"><UInput v-model="tagsText" placeholder="Comma separated" /></UFormField>
           <UFormField label="Excerpt"><UTextarea v-model="form.excerpt" :placeholder="resolvedExcerpt" /><p class="mt-1 text-xs text-dimmed">{{ form.excerpt ? 'Custom' : `Auto: ${resolvedExcerpt}` }}</p></UFormField>
           <UCard>
@@ -99,7 +119,7 @@
 import type { Component } from 'vue'
 import BlogArticleView from '~/components/blog/BlogArticleView.vue'
 import PlatformMediaPicker from '~/lib/components/workspace/media/PlatformMediaPicker.vue'
-import type { BlogPostRepository, BlogPost, BlogEditorBlock, PlatformBlogUpdateInput } from './types'
+import type { BlogPostRepository, BlogPost, BlogEditorBlock, PlatformBlogUpdateInput, SiteAuthor } from './types'
 import { generatedExcerpt, initialBlogEditorBlocks, normalizeBlogSlug, resolveBlogPublicPath, resolveBlogSeo, SerializedSnapshotQueue } from '~/utils/blog-editor'
 import { getErrorMessage } from '~/utils/errors'
 
@@ -127,7 +147,31 @@ let serverPostUpdatedAt: string | undefined
 let serverDocumentUpdatedAt: string | undefined
 const slugResetRequested = ref(false)
 
-const form = reactive({ title: '', category: '', excerpt: '', seo_title: '', seo_description: '', social_image_asset_id: '', slug: '', canonical_url: '', robots: '', visibility: 'public' as 'public' | 'unlisted', scheduled_for: '', redirect_old_slug: true })
+const form = reactive({ title: '', category: '', excerpt: '', seo_title: '', seo_description: '', social_image_asset_id: '', slug: '', canonical_url: '', robots: '', visibility: 'public' as 'public' | 'unlisted', scheduled_for: '', redirect_old_slug: true, site_author_id: '' })
+const authors = ref<SiteAuthor[]>([])
+const authorItems = computed(() => [{ label: 'Site default', value: '' }, ...authors.value.map(author => ({ label: author.name, value: author.id }))])
+const addingAuthor = ref(false)
+const newAuthorName = ref('')
+const savingAuthor = ref(false)
+function openAddAuthor() { addingAuthor.value = true; newAuthorName.value = '' }
+async function submitNewAuthor() {
+  if (!newAuthorName.value.trim() || !props.repository.createAuthor) return
+  savingAuthor.value = true
+  try {
+    const created = await props.repository.createAuthor({ name: newAuthorName.value.trim() })
+    authors.value = [...authors.value, created]
+    form.site_author_id = created.id
+    addingAuthor.value = false
+  } catch (error) {
+    loadError.value = getErrorMessage(error, 'Failed to create author.')
+  } finally {
+    savingAuthor.value = false
+  }
+}
+async function loadAuthors() {
+  if (!props.siteId || !props.repository.listAuthors) return
+  try { authors.value = await props.repository.listAuthors() } catch { /* author list is a non-blocking enhancement */ }
+}
 const tagsText = ref('')
 const publishTiming = ref<'Now' | 'Scheduled'>('Now')
 const templateName = computed(() => post.value?.editor_template || (route.path.includes('/admin/') ? 'platform' : 'saya'))
@@ -163,7 +207,10 @@ const statusLabel = computed(() => post.value?.status === 'scheduled' ? 'Schedul
 const generatedSlug = computed(() => normalizeBlogSlug(form.title))
 const resolvedExcerpt = computed(() => generatedExcerpt(blocks.value))
 const resolvedSiteName = computed(() => post.value?.editor_site_name || (props.siteId ? 'Our Site' : 'KrabiClaw'))
-const resolvedAuthorName = computed(() => post.value?.author_name?.trim() || resolvedSiteName.value)
+const resolvedAuthorName = computed(() => {
+  const selected = authors.value.find(author => author.id === form.site_author_id)
+  return selected?.name.trim() || post.value?.author_name?.trim() || resolvedSiteName.value
+})
 const readMinutes = computed(() => Math.max(1, Math.ceil(serializeBody().trim().split(/\s+/).filter(Boolean).length / 200)))
 const publicPath = computed(() => resolveBlogPublicPath({ scope: props.siteId ? 'tenant' : 'platform', template: templateName.value, slug: slugResetRequested.value ? generatedSlug.value : form.slug || generatedSlug.value, category: form.category }))
 const resolvedSeo = computed(() => resolveBlogSeo({ title: form.title, seoTitle: form.seo_title, excerpt: form.excerpt || resolvedExcerpt.value, seoDescription: form.seo_description, slug: form.slug || generatedSlug.value, canonicalUrl: form.canonical_url, baseUrl: windowOrigin(), publicPath: publicPath.value, siteName: resolvedSiteName.value, robots: form.robots }))
@@ -217,6 +264,7 @@ watch([() => ({ ...form }), blocks, tagsText, publishTiming, slugResetRequested]
 onMounted(async () => {
   window.addEventListener('beforeunload', beforeUnload)
   window.addEventListener('popstate', onPopState)
+  void loadAuthors()
   if (!props.initialPost && !props.deferLoad) await load()
 })
 onBeforeUnmount(() => { if (saveTimer) clearTimeout(saveTimer); if (import.meta.client) { window.removeEventListener('beforeunload', beforeUnload); window.removeEventListener('popstate', onPopState) } })
@@ -231,7 +279,7 @@ async function load() {
 function applyLoadedPost(loaded: BlogPost) {
   syncServerVersions(loaded)
   post.value = loaded
-  Object.assign(form, { title: loaded.title, category: loaded.category || '', excerpt: loaded.excerpt || '', seo_title: loaded.seo_title || '', seo_description: loaded.seo_description || '', social_image_asset_id: loaded.social_image_asset_id || '', slug: loaded.slug || '', canonical_url: loaded.canonical_url || '', robots: loaded.robots || '', visibility: loaded.visibility || 'public', scheduled_for: toLocalDatetime(loaded.scheduled_for), redirect_old_slug: true })
+  Object.assign(form, { title: loaded.title, category: loaded.category || '', excerpt: loaded.excerpt || '', seo_title: loaded.seo_title || '', seo_description: loaded.seo_description || '', social_image_asset_id: loaded.social_image_asset_id || '', slug: loaded.slug || '', canonical_url: loaded.canonical_url || '', robots: loaded.robots || '', visibility: loaded.visibility || 'public', scheduled_for: toLocalDatetime(loaded.scheduled_for), redirect_old_slug: true, site_author_id: loaded.site_author_id || '' })
   slugResetRequested.value = false
   tagsText.value = loaded.tags?.join(', ') || ''
   publishTiming.value = loaded.scheduled_for ? 'Scheduled' : 'Now'
@@ -282,7 +330,7 @@ async function flushSave() {
 }
 function buildSaveSnapshot(id = postId.value): SaveSnapshot {
   const scheduledFor = publishTiming.value === 'Scheduled' && form.scheduled_for ? new Date(form.scheduled_for).toISOString() : null
-  return { postId: id, payload: { title: form.title, category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, social_image_asset_id: form.social_image_asset_id || null, slug: slugResetRequested.value ? null : form.slug !== post.value?.slug ? form.slug : undefined, reset_slug_override: slugResetRequested.value || undefined, redirect_old_slug: form.redirect_old_slug, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, scheduled_for: scheduledFor, content_blocks: structuredClone(toRaw(blocks.value)) } }
+  return { postId: id, payload: { title: form.title, category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, social_image_asset_id: form.social_image_asset_id || null, slug: slugResetRequested.value ? null : form.slug !== post.value?.slug ? form.slug : undefined, reset_slug_override: slugResetRequested.value || undefined, redirect_old_slug: form.redirect_old_slug, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, scheduled_for: scheduledFor, content_blocks: structuredClone(toRaw(blocks.value)), site_author_id: form.site_author_id || null } }
 }
 async function publish() { publishing.value = true; try { if (!post.value) { await createDraft(true); return } if (dirty) saveQueue.mark(buildSaveSnapshot()); await saveQueue.runExclusive(async () => { const updated = await props.repository.update(postId.value, { publish: true, scheduled_for: publishTiming.value === 'Scheduled' && form.scheduled_for ? new Date(form.scheduled_for).toISOString() : null, expected_updated_at: serverPostUpdatedAt }); syncServerVersions(updated); post.value = updated; return updated }); saveState.value = 'saved' } catch (error: unknown) { const status = Number((error as { statusCode?: number; status?: number })?.statusCode ?? (error as { status?: number })?.status); saveState.value = status === 409 ? 'conflict' : 'failed' } finally { publishing.value = false } }
 async function unpublish() { if (!post.value) return; unpublishing.value = true; try { if (dirty) saveQueue.mark(buildSaveSnapshot()); await saveQueue.runExclusive(async () => { const updated = await props.repository.update(postId.value, { unpublish: true, expected_updated_at: serverPostUpdatedAt }); syncServerVersions(updated); post.value = updated; return updated }); saveState.value = 'saved' } catch (error: unknown) { const status = Number((error as { statusCode?: number; status?: number })?.statusCode ?? (error as { status?: number })?.status); saveState.value = status === 409 ? 'conflict' : 'failed' } finally { unpublishing.value = false } }
@@ -294,7 +342,7 @@ async function createDraft(publishNow: boolean) {
     if (saveTimer) clearTimeout(saveTimer)
     saveState.value = 'saving'
     dirty = false
-    let created = await props.repository.create({ title: form.title, content_blocks: structuredClone(toRaw(blocks.value)), category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, social_image_asset_id: form.social_image_asset_id || null, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, scheduled_for: publishTiming.value === 'Scheduled' && form.scheduled_for ? new Date(form.scheduled_for).toISOString() : null, publish: publishNow })
+    let created = await props.repository.create({ title: form.title, content_blocks: structuredClone(toRaw(blocks.value)), category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, social_image_asset_id: form.social_image_asset_id || null, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, scheduled_for: publishTiming.value === 'Scheduled' && form.scheduled_for ? new Date(form.scheduled_for).toISOString() : null, publish: publishNow, site_author_id: form.site_author_id || null })
     applyingServerSnapshot = true
     post.value = created
     syncServerVersions(created)

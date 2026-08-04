@@ -1,4 +1,4 @@
-import type { BlogPostRepository, BlogPost, PlatformBlogCreateInput, PlatformBlogUpdateInput } from './types'
+import type { BlogPostRepository, BlogPost, PlatformBlogCreateInput, PlatformBlogUpdateInput, SiteAuthor } from './types'
 import { dashboardFetch } from '~/composables/dashboardFetch'
 
 interface TenantBlogRepositoryOptions {
@@ -20,6 +20,10 @@ export function tenantBlogRepository({ siteId, orgSlug, siteSlug }: TenantBlogRe
     isRecord(value) && typeof value.id === 'string' && isBlogPost(value.post)
   const isSuccess = (value: unknown): value is { success: true } =>
     isRecord(value) && value.success === true
+  const isAuthorsResponse = (value: unknown): value is { authors: SiteAuthor[] } =>
+    isRecord(value) && Array.isArray(value.authors)
+  const isAuthorResponse = (value: unknown): value is { id: string } =>
+    isRecord(value) && typeof value.id === 'string'
 
   return {
     listUrl: dashboardBaseUrl,
@@ -71,6 +75,20 @@ export function tenantBlogRepository({ siteId, orgSlug, siteSlug }: TenantBlogRe
         scope,
         { method: 'POST', validate: isSuccess },
       )
+    },
+
+    async listAuthors(): Promise<SiteAuthor[]> {
+      const res = await dashboardFetch<{ authors: SiteAuthor[] }>(`${baseUrl}/authors`, scope, { validate: isAuthorsResponse })
+      return res.authors
+    },
+
+    async createAuthor(input: { name: string; title?: string | null }): Promise<SiteAuthor> {
+      const res = await dashboardFetch<{ id: string }>(`${baseUrl}/authors`, scope, {
+        method: 'POST',
+        body: input,
+        validate: isAuthorResponse,
+      })
+      return { id: res.id, name: input.name, title: input.title ?? null }
     },
   }
 }

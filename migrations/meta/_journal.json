@@ -575,6 +575,13 @@
       "when": 1785464165957,
       "tag": "0088_black_tyger_tiger",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "6",
+      "when": 1785816808498,
+      "tag": "0090_brown_ghost_rider",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,5 @@
 import type { McpExecutorContext } from './shared'
-import { createPlatformBlogPost, deletePlatformBlogPost, getPlatformBlogPost, listPlatformBlogPosts, reorderPlatformBlogPosts, updatePlatformBlogPost } from '~/server/utils/platform-content'
+import { createPlatformBlogPost, createSiteAuthor, deletePlatformBlogPost, getPlatformBlogPost, listPlatformBlogPosts, listSiteAuthors, reorderPlatformBlogPosts, updatePlatformBlogPost } from '~/server/utils/platform-content'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 import { attachViewUrlToRecord, NOT_HANDLED, objectArray, omit, optionalString, requiredString } from './shared'
@@ -22,6 +22,7 @@ const UPDATE_BLOG_MUTATION_FIELDS = [
   'reset_slug_override',
   'publish',
   'unpublish',
+  'site_author_id',
 ]
 
 const BLOG_METADATA_FIELDS = [
@@ -45,6 +46,7 @@ const BLOG_METADATA_FIELDS = [
   'slug',
   'redirect_old_slug',
   'reset_slug_override',
+  'site_author_id',
 ]
 
 function hasAnyField(args: Record<string, unknown>, fields: readonly string[]) {
@@ -121,6 +123,7 @@ function toBlogPostProjection(post: Record<string, unknown>) {
     canonical_url: toNullableString(post.canonical_url),
     robots: toNullableString(post.robots),
     author_name: toNullableString(post.author_name),
+    site_author_id: toNullableString(post.site_author_id),
     published: Boolean(post.published),
     published_at: toNullableString(post.published_at),
     status: String(post.status ?? 'draft'),
@@ -142,7 +145,7 @@ function toBlogPostProjection(post: Record<string, unknown>) {
 
 function toBlogPostSummary(post: Record<string, unknown>) {
   const projected = toBlogPostProjection(post)
-  const { author_name: _authorName, content_blocks: _contentBlocks, document_updated_at: _documentUpdatedAt, ...summary } = projected
+  const { author_name: _authorName, site_author_id: _siteAuthorId, content_blocks: _contentBlocks, document_updated_at: _documentUpdatedAt, ...summary } = projected
   return summary
 }
 
@@ -290,6 +293,34 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
       const postId = requiredString(args, "post_id");
       await deletePlatformBlogPost(site.db, postId, site.siteId);
       return { post_id: postId, deleted: true };
+    }
+    case "list_blog_authors": {
+      if (!site.siteId) throw mcpProtocolError(MCP_ERROR.invalidParams, "list_blog_authors requires a tenant site.")
+      const authors = await listSiteAuthors(site.db, site.siteId)
+      return {
+        authors: authors.map((author) => ({
+          id: author.id,
+          name: author.name,
+          title: author.title,
+          bio: author.bio,
+          image_public_url: author.image_public_url,
+        })),
+      }
+    }
+    case "create_blog_author": {
+      if (!site.siteId || !site.organizationId) throw mcpProtocolError(MCP_ERROR.invalidParams, "create_blog_author requires a tenant site.")
+      const result = await createSiteAuthor(site.db, { site_id: site.siteId, organization_id: site.organizationId }, {
+        name: requiredString(args, "name"),
+        title: optionalString(args, "title") ?? null,
+        bio: optionalString(args, "bio") ?? null,
+      })
+      const authors = await listSiteAuthors(site.db, site.siteId)
+      const created = authors.find((author) => author.id === result.id)
+      return {
+        author: created
+          ? { id: created.id, name: created.name, title: created.title, bio: created.bio, image_public_url: created.image_public_url }
+          : { id: result.id, name: requiredString(args, "name"), title: optionalString(args, "title") ?? null, bio: optionalString(args, "bio") ?? null, image_public_url: null },
+      }
     }
     default:
       return NOT_HANDLED

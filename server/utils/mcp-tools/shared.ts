@@ -343,6 +343,7 @@ export const blogPostObject = {
     canonical_url: { type: ['string', 'null'] },
     robots: { type: ['string', 'null'] },
     author_name: { type: ['string', 'null'] },
+    site_author_id: { type: ['string', 'null'], description: 'Selected tenant author id, if any. Null means the byline falls back to the site name.' },
     published: { type: 'boolean' },
     published_at: { type: ['string', 'null'] },
     status: { type: 'string', enum: ['draft', 'published', 'scheduled', 'archived'] },
@@ -364,11 +365,24 @@ export const blogPostObject = {
     'id', 'title', 'slug', 'excerpt', 'category', 'tags',
     'nav_section', 'nav_title', 'nav_order', 'nav_section_order', 'hide_from_nav', 'featured_order',
     'seo_title', 'seo_description', 'seo_keywords', 'canonical_url', 'robots',
-    'author_name', 'published', 'published_at', 'status', 'visibility', 'scheduled_for',
+    'author_name', 'site_author_id', 'published', 'published_at', 'status', 'visibility', 'scheduled_for',
     'created_at', 'updated_at', 'featured_image', 'admin_edit_url', 'edit_url',
     'public_path', 'public_url', 'preview_url', 'view_url',
     'content_blocks', 'document_updated_at',
   ],
+  additionalProperties: false,
+}
+
+export const siteAuthorObject = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    name: { type: 'string' },
+    title: { type: ['string', 'null'] },
+    bio: { type: ['string', 'null'] },
+    image_public_url: { type: ['string', 'null'] },
+  },
+  required: ['id', 'name', 'title', 'bio', 'image_public_url'],
   additionalProperties: false,
 }
 
@@ -1111,6 +1125,7 @@ export const READ_ONLY_TOOL_NAMES = [
   'get_post',
   'list_blog_posts',
   'get_blog_post',
+  'list_blog_authors',
   'get_site_media_assets',
   'get_facebook_connection',
   'get_dashboard_link',
@@ -1159,6 +1174,7 @@ export const BOUNDED_WRITE_TOOL_NAMES = [
   'replace_blog_content',
   'publish_blog_post',
   'unpublish_blog_post',
+  'create_blog_author',
   'create_site',
   'create_post',
   'update_post',

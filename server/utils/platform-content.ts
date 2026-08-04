@@ -73,6 +73,7 @@ const BLOG_UPDATE_MUTATION_FIELDS: Array<keyof PlatformBlogUpdateInput> = [
   'content_blocks',
   'publish',
   'unpublish',
+  'site_author_id',
 ]
 
 function parseStringArray(value: unknown): string[] {
@@ -254,6 +255,7 @@ export interface PlatformBlogCreateInput extends PlatformContentNavInput {
   visibility?: 'public' | 'unlisted'
   scheduled_for?: string | null
   publish?: boolean
+  site_author_id?: string | null
 }
 
 export interface PlatformBlogUpdateInput extends PlatformContentNavInput {
@@ -278,6 +280,7 @@ export interface PlatformBlogUpdateInput extends PlatformContentNavInput {
   expected_updated_at?: string
   publish?: boolean
   unpublish?: boolean
+  site_author_id?: string | null
 }
 
 export interface PlatformDocCreateInput extends PlatformStructuredContentInput, PlatformContentNavInput, PlatformDocNavGroupInput {
@@ -780,6 +783,100 @@ async function ensureBlogFeaturedImageAssetExists(
   if (!asset) {
     badRequest(siteId ? `${field} must reference an active image asset from this site` : `${field} must reference an active platform image asset`)
   }
+}
+
+async function ensureSiteAuthorExists(db: D1Database, siteAuthorId: string, siteId: string | null) {
+  if (!siteId) badRequest('site_author_id can only be set on tenant blog posts')
+  const author = await queryFirst(db, 'SELECT id FROM site_authors WHERE id = ? AND site_id = ? LIMIT 1', [siteAuthorId, siteId])
+  if (!author) badRequest('site_author_id must reference an author belonging to this site')
+}
+
+const AUTHOR_NAME_MAX = 200
+const AUTHOR_TITLE_MAX = 200
+const AUTHOR_BIO_MAX = 2000
+
+export interface SiteAuthorInput {
+  name: string
+  title?: string | null
+  bio?: string | null
+  image_asset_id?: string | null
+  sort_order?: number | null
+}
+
+export interface SiteAuthorUpdateInput {
+  name?: string
+  title?: string | null
+  bio?: string | null
+  image_asset_id?: string | null
+  sort_order?: number | null
+}
+
+function validateSiteAuthorInput(input: SiteAuthorInput | SiteAuthorUpdateInput) {
+  if (input.name !== undefined && (!input.name?.trim() || input.name.length > AUTHOR_NAME_MAX)) {
+    badRequest(`name is required and must be ${AUTHOR_NAME_MAX} characters or fewer`)
+  }
+  if (input.title != null && input.title.length > AUTHOR_TITLE_MAX) badRequest(`title must be ${AUTHOR_TITLE_MAX} characters or fewer`)
+  if (input.bio != null && input.bio.length > AUTHOR_BIO_MAX) badRequest(`bio must be ${AUTHOR_BIO_MAX} characters or fewer`)
+}
+
+export async function listSiteAuthors(db: DbClient, siteId: string) {
+  return await queryAll<{
+    id: string
+    name: string
+    title: string | null
+    bio: string | null
+    image_asset_id: string | null
+    image_public_url: string | null
+    sort_order: number
+    created_at: string
+    updated_at: string
+  }>(db, `
+    SELECT sa.id, sa.name, sa.title, sa.bio, sa.image_asset_id, ma.public_url AS image_public_url, sa.sort_order, sa.created_at, sa.updated_at
+      FROM site_authors sa
+      LEFT JOIN media_assets ma ON ma.id = sa.image_asset_id AND ma.status = 'active'
+     WHERE sa.site_id = ?
+     ORDER BY sa.sort_order ASC, sa.created_at ASC
+  `, [siteId])
+}
+
+export async function createSiteAuthor(db: D1Database, scope: { site_id: string; organization_id: string }, input: SiteAuthorInput) {
+  validateSiteAuthorInput(input)
+  if (input.image_asset_id) await ensureBlogFeaturedImageAssetExists(db, input.image_asset_id, 'image_asset_id', scope.site_id)
+  const id = crypto.randomUUID()
+  const now = new Date().toISOString()
+  await execute(db, `
+    INSERT INTO site_authors (id, organization_id, site_id, name, title, bio, image_asset_id, sort_order, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [id, scope.organization_id, scope.site_id, input.name, input.title ?? null, input.bio ?? null, input.image_asset_id ?? null, input.sort_order ?? 0, now, now])
+  return { id }
+}
+
+export async function updateSiteAuthor(db: D1Database, siteId: string, authorId: string, input: SiteAuthorUpdateInput) {
+  validateSiteAuthorInput(input)
+  const existing = await queryFirst(db, 'SELECT id FROM site_authors WHERE id = ? AND site_id = ? LIMIT 1', [authorId, siteId])
+  if (!existing) notFound('Author not found')
+  if (input.image_asset_id) await ensureBlogFeaturedImageAssetExists(db, input.image_asset_id, 'image_asset_id', siteId)
+
+  const updates: string[] = ['updated_at = ?']
+  const params: ApiValue[] = [new Date().toISOString()]
+  const fields: Array<keyof SiteAuthorUpdateInput> = ['name', 'title', 'bio', 'image_asset_id', 'sort_order']
+  for (const field of fields) {
+    if (input[field] !== undefined) {
+      updates.push(`${field} = ?`)
+      params.push(input[field] as ApiValue)
+    }
+  }
+  if (updates.length === 1) badRequest('At least one field is required')
+  params.push(authorId, siteId)
+  await execute(db, `UPDATE site_authors SET ${updates.join(', ')} WHERE id = ? AND site_id = ?`, params)
+  return { id: authorId }
+}
+
+export async function deleteSiteAuthor(db: D1Database, siteId: string, authorId: string) {
+  const existing = await queryFirst(db, 'SELECT id FROM site_authors WHERE id = ? AND site_id = ? LIMIT 1', [authorId, siteId])
+  if (!existing) notFound('Author not found')
+  await execute(db, 'DELETE FROM site_authors WHERE id = ? AND site_id = ?', [authorId, siteId])
+  return { success: true }
 }
 
 async function normalizeEditorContentBlocks(db: D1Database, blocks: Array<ContentBlockInput & { id?: string }>, siteId: string | null) {
@@ -1410,6 +1507,8 @@ export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, si
     `SELECT
        p.id, p.title, p.slug, p.body, p.excerpt, p.category, p.tags_json, p.status, p.visibility, p.scheduled_for,
        p.first_published_at, p.slug_manually_overridden, p.social_image_asset_id, u.name AS author_name, u.image AS author_image,
+       p.site_author_id, sa.name AS site_author_name, sa.title AS site_author_title, sa.bio AS site_author_bio,
+       sma.public_url AS site_author_image_url,
        p.seo_title, p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
        p.nav_section, p.nav_title, p.nav_order, p.nav_section_order, p.hide_from_nav, p.featured_order,
        p.featured_image_asset_id, ma.public_url AS featured_image_public_url, ma.kind AS featured_image_kind,
@@ -1417,6 +1516,8 @@ export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, si
        p.published_at, p.created_at, p.updated_at
      FROM blog_posts p
      LEFT JOIN user u ON u.id = p.author_id
+     LEFT JOIN site_authors sa ON sa.id = p.site_author_id
+     LEFT JOIN media_assets sma ON sma.id = sa.image_asset_id AND sma.status = 'active'
      LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
      WHERE p.id = ?`,
     [postId],
@@ -1467,14 +1568,18 @@ export async function getPublishedSiteBlogPost(db: DbClient, siteId: string, slu
       p.canonical_url, p.robots, p.featured_order, p.visibility, p.social_image_asset_id,
       p.published_at, p.created_at, p.updated_at,
       p.featured_image_asset_id,
-      u.name AS author_name,
-      u.image AS author_image,
+      COALESCE(sa.name, u.name) AS author_name,
+      COALESCE(sma.public_url, u.image) AS author_image,
+      sa.title AS author_title,
+      sa.bio AS author_bio,
       ma.public_url,
       ma.kind,
       ma.width,
       ma.height
     FROM blog_posts p
     LEFT JOIN user u ON u.id = p.author_id
+    LEFT JOIN site_authors sa ON sa.id = p.site_author_id
+    LEFT JOIN media_assets sma ON sma.id = sa.image_asset_id AND sma.status = 'active'
     LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
     WHERE p.slug = ? AND p.site_id = ? AND p.status = 'published'
       AND (p.scheduled_for IS NULL OR p.scheduled_for <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
@@ -1507,6 +1612,7 @@ export async function createPlatformBlogPost(
   }
   if (input.featured_image_asset_id) await ensureBlogFeaturedImageAssetExists(db, input.featured_image_asset_id, 'featured_image_asset_id', scope.site_id ?? null)
   if (input.social_image_asset_id) await ensureBlogFeaturedImageAssetExists(db, input.social_image_asset_id, 'social_image_asset_id', scope.site_id ?? null)
+  if (input.site_author_id) await ensureSiteAuthorExists(db, input.site_author_id, scope.site_id ?? null)
 
   const siteId = scope.site_id ?? null
   const organizationId = scope.organization_id ?? null
@@ -1527,8 +1633,8 @@ export async function createPlatformBlogPost(
     try {
       const blogPostInsert: BatchQuery = {
         query: `
-        INSERT INTO blog_posts (id, organization_id, site_id, title, slug, body, excerpt, category, tags_json, nav_section, nav_title, nav_order, nav_section_order, hide_from_nav, featured_order, status, visibility, scheduled_for, scheduled_revision_id, seo_title, seo_description, seo_keywords, canonical_url, robots, featured_image_asset_id, social_image_asset_id, author_id, published_at, first_published_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        INSERT INTO blog_posts (id, organization_id, site_id, title, slug, body, excerpt, category, tags_json, nav_section, nav_title, nav_order, nav_section_order, hide_from_nav, featured_order, status, visibility, scheduled_for, scheduled_revision_id, seo_title, seo_description, seo_keywords, canonical_url, robots, featured_image_asset_id, social_image_asset_id, author_id, site_author_id, published_at, first_published_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         params: [
           id,
           organizationId,
@@ -1557,6 +1663,7 @@ export async function createPlatformBlogPost(
           input.featured_image_asset_id ?? null,
           input.social_image_asset_id ?? null,
           authorId,
+          input.site_author_id ?? null,
           publishedAt,
           publishedAt,
           now,
@@ -1690,6 +1797,9 @@ export async function updatePlatformBlogPost(
   if (input.featured_image_asset_id !== undefined && input.featured_image_asset_id) {
     await ensureBlogFeaturedImageAssetExists(db, input.featured_image_asset_id, 'featured_image_asset_id', siteId)
   }
+  if (input.site_author_id !== undefined && input.site_author_id) {
+    await ensureSiteAuthorExists(db, input.site_author_id, siteId)
+  }
 
   const fields: Array<keyof Omit<PlatformBlogUpdateInput,
     | 'publish'
@@ -1732,6 +1842,7 @@ export async function updatePlatformBlogPost(
     'featured_image_asset_id',
     'social_image_asset_id',
     'visibility',
+    'site_author_id',
   ]
   for (const field of fields) {
     if (input[field] !== undefined) {
