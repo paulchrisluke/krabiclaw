@@ -5,7 +5,7 @@ import { updateLocation } from '~/server/utils/location-management'
 import { parseOnboardingDraftPayload } from '~/server/utils/onboarding-drafts'
 import { runSiteCreation } from '~/server/utils/site-creation'
 import { setConfig } from '~/server/utils/site-config'
-import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
+import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
 import { createMediaAsset } from '~/server/utils/media-asset-manager'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
@@ -417,9 +417,9 @@ export default defineEventHandler(async (event) => {
     if (siteId) {
       const waitUntil = event.context.cloudflare?.context?.waitUntil
       if (typeof waitUntil === 'function') {
-        waitUntil.call(event.context.cloudflare.context, purgeBootstrapCacheSafe(env, siteId))
+        waitUntil.call(event.context.cloudflare.context, purgePublicResourceCacheSafe(env, siteId))
       } else {
-        await purgeBootstrapCacheSafe(env, siteId)
+        await purgePublicResourceCacheSafe(env, siteId)
       }
     }
 

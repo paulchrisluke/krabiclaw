@@ -309,6 +309,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 import { authClient } from '~/lib/auth-client'
 
 definePageMeta({ layout: 'dashboard' })
@@ -346,10 +347,20 @@ interface PhoneAssignment {
   locationName: string | null
 }
 
+const isMembersResponse = (
+  value: unknown,
+): value is { members: MemberRow[]; invitations: InvitationRow[] } =>
+  isRecord(value)
+  && Array.isArray(value.members)
+  && value.members.every(member => isRecord(member) && typeof member.id === 'string')
+  && Array.isArray(value.invitations)
+  && value.invitations.every(invitation => isRecord(invitation) && typeof invitation.id === 'string')
+
 const route = useRoute()
+const membersKey = computed(() => `dashboard-org-members-${String(route.params.orgSlug ?? '')}`)
 
 const { data, pending, refresh } = await useAsyncData(
-  'dashboard-org-members',
+  membersKey,
   async () => {
     if (import.meta.server) {
       const requestEvent = useRequestEvent()
@@ -375,7 +386,10 @@ const { data, pending, refresh } = await useAsyncData(
       if (!org) throw createError({ statusCode: 404, statusMessage: 'Organization not found' })
       return await getOrganizationMembersData(db, org.id)
     }
-    return await $fetch<{ members: MemberRow[]; invitations: InvitationRow[] }>('/api/dashboard/members')
+    return await dashboardApi<{ members: MemberRow[]; invitations: InvitationRow[] }>(
+      '/api/dashboard/members',
+      { validate: isMembersResponse },
+    )
   },
 )
 
@@ -425,7 +439,12 @@ async function loadOrgSites() {
   const requestId = ++sitesRequestId
   sitesPending.value = true
   try {
-    const response = await $fetch<{ sites: OrgSiteSummary[] }>('/api/dashboard/context')
+    const response = await dashboardApi<{ sites: OrgSiteSummary[] }>('/api/dashboard/context', {
+      validate: (value): value is { sites: OrgSiteSummary[] } =>
+        isRecord(value)
+        && Array.isArray(value.sites)
+        && value.sites.every(site => isRecord(site) && typeof site.id === 'string'),
+    })
     if (requestId !== sitesRequestId) return
     orgSites.value = response.sites ?? []
   } catch (err) {
@@ -451,7 +470,20 @@ watch(() => inviteForm.siteId, async (siteId) => {
   }
   locationsPending.value = true
   try {
-    const response = await $fetch<{ success: boolean; locations: OrgLocationSummary[] }>(`/api/sites/${siteId}/locations`)
+    const response = await dashboardApi<{ success: boolean; locations: OrgLocationSummary[] }>(
+      `/api/sites/${siteId}/locations`,
+      {
+        validate: (value): value is { success: boolean; locations: OrgLocationSummary[] } =>
+          isRecord(value)
+          && typeof value.success === 'boolean'
+          && Array.isArray(value.locations)
+          && value.locations.every(location =>
+            isRecord(location)
+            && typeof location.id === 'string'
+            && typeof location.title === 'string',
+          ),
+      },
+    )
     if (!isCurrentLocationsRequest(requestId, siteId)) return
     orgLocations.value = response.locations ?? []
   } catch (err) {
@@ -512,11 +544,16 @@ async function retryInvitation(invitationId: string) {
   invitationActionError.value = null
   invitationActionErrorId.value = null
   try {
-    await $fetch(`/api/dashboard/invitations/${invitationId}/retry`, { method: 'POST' })
+    await dashboardApi(`/api/dashboard/invitations/${invitationId}/retry`, {
+      method: 'POST',
+      validate: (value): value is { success: true; status: string } =>
+        isRecord(value) && value.success === true && typeof value.status === 'string',
+    })
     await refresh()
   } catch (err: unknown) {
-    const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
-    invitationActionError.value = errorData?.error ?? 'Failed to resend the invitation.'
+    invitationActionError.value = err instanceof ApiClientError && typeof err.data.error === 'string'
+      ? err.data.error
+      : err instanceof Error ? err.message : 'Failed to resend the invitation.'
     invitationActionErrorId.value = invitationId
   } finally {
     invitationActionId.value = null
@@ -531,16 +568,18 @@ async function replaceInvitation(invitationId: string) {
   invitationActionError.value = null
   invitationActionErrorId.value = null
   try {
-    await $fetch(`/api/dashboard/invitations/${invitationId}/replace`, {
+    await dashboardApi(`/api/dashboard/invitations/${invitationId}/replace`, {
       method: 'POST',
       body: { phone: replacePhone.value.trim() },
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
     })
     replaceFormInvitationId.value = null
     replacePhone.value = ''
     await refresh()
   } catch (err: unknown) {
-    const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
-    invitationActionError.value = errorData?.error ?? 'Failed to replace the phone number.'
+    invitationActionError.value = err instanceof ApiClientError && typeof err.data.error === 'string'
+      ? err.data.error
+      : err instanceof Error ? err.message : 'Failed to replace the phone number.'
     invitationActionErrorId.value = invitationId
   } finally {
     invitationActionId.value = null
@@ -554,11 +593,15 @@ async function clearInvitation(invitationId: string) {
   invitationActionError.value = null
   invitationActionErrorId.value = null
   try {
-    await $fetch(`/api/dashboard/invitations/${invitationId}/clear`, { method: 'POST' })
+    await dashboardApi(`/api/dashboard/invitations/${invitationId}/clear`, {
+      method: 'POST',
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+    })
     await refresh()
   } catch (err: unknown) {
-    const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
-    invitationActionError.value = errorData?.error ?? 'Failed to clear this invitation.'
+    invitationActionError.value = err instanceof ApiClientError && typeof err.data.error === 'string'
+      ? err.data.error
+      : err instanceof Error ? err.message : 'Failed to clear this invitation.'
     invitationActionErrorId.value = invitationId
   } finally {
     invitationActionId.value = null
@@ -576,7 +619,7 @@ async function sendInvite() {
   inviteSuccess.value = false
 
   try {
-    await $fetch('/api/dashboard/invitations', {
+    await dashboardApi('/api/dashboard/invitations', {
       method: 'POST',
       body: {
         email: inviteForm.email,
@@ -584,6 +627,11 @@ async function sendInvite() {
         siteId: inviteForm.role === 'editor' ? inviteForm.siteId : undefined,
         locationId: inviteForm.role === 'editor' ? inviteForm.locationId || null : undefined,
       },
+      validate: (value): value is { success: true; invitationId: string; reused: boolean } =>
+        isRecord(value)
+        && value.success === true
+        && typeof value.invitationId === 'string'
+        && typeof value.reused === 'boolean',
     })
 
     inviteForm.email = ''
@@ -597,8 +645,7 @@ async function sendInvite() {
     inviteSuccessTimeout.value = setTimeout(() => { inviteSuccess.value = false }, 4000)
     await refresh()
   } catch (err) {
-    const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
-    inviteError.value = errorData?.error ?? (err instanceof Error ? err.message : 'Failed to send invite.')
+    inviteError.value = err instanceof Error ? err.message : 'Failed to send invite.'
   } finally {
     inviting.value = false
   }
@@ -635,21 +682,23 @@ async function submitRemoveMember(memberId: string, options?: { confirmed?: bool
   memberError.value = null
 
   try {
-    await $fetch(`/api/dashboard/organizations/members/${memberId}/remove`, {
+    await dashboardApi(`/api/dashboard/organizations/members/${memberId}/remove`, {
       method: 'POST',
       body: options?.confirmed ? { action: 'clear', confirmed: true } : {},
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
     })
     pendingRemoval.value = null
     await refresh()
   } catch (err: unknown) {
-    const errorData = err && typeof err === 'object' && 'data' in err
-      ? (err as Record<string, { error?: string; requiresConfirmation?: boolean; assignments?: PhoneAssignment[] }>).data
-      : null
-    if (errorData?.requiresConfirmation && errorData.assignments) {
-      pendingRemoval.value = { memberId, assignments: errorData.assignments }
+    const errorData = err instanceof ApiClientError ? err.data : {}
+    const assignments = Array.isArray(errorData.assignments) ? errorData.assignments as PhoneAssignment[] : null
+    if (errorData.requiresConfirmation === true && assignments) {
+      pendingRemoval.value = { memberId, assignments }
     } else {
       pendingRemoval.value = null
-      memberError.value = errorData?.error ?? 'Failed to remove member.'
+      memberError.value = typeof errorData.error === 'string'
+        ? errorData.error
+        : err instanceof Error ? err.message : 'Failed to remove member.'
     }
   } finally {
     removingMemberId.value = null

@@ -103,24 +103,28 @@ export interface PublicBlogPost extends PublicBlogSummary {
   created_at: string | null
   updated_at: string | null
   components: ApiRecord[]
-  content_blocks: import('~/components/workspace/blog/types').BlogEditorBlock[]
+  content_blocks: import('~/lib/components/workspace/blog/types').BlogEditorBlock[]
   social_image: { public_url: string | null; thumbnail_url: string | null; width: number | null; height: number | null } | null
 }
 
-export type BlawbyRouteRecipe =
-  | 'home'
-  | 'services'
-  | 'offering'
-  | 'about'
-  | 'pricing'
-  | 'contact'
-  | 'schedule'
-  | 'blog'
-  | 'article'
-  | 'donate'
-  | 'privacy'
-  | 'terms'
-  | 'third-party-notices'
+export const BLAWBY_ROUTE_RECIPES = [
+  'home',
+  'services',
+  'offering',
+  'about',
+  'pricing',
+  'contact',
+  'confirmation',
+  'schedule',
+  'blog',
+  'article',
+  'donate',
+  'privacy',
+  'terms',
+  'third-party-notices',
+] as const
+
+export type BlawbyRouteRecipe = typeof BLAWBY_ROUTE_RECIPES[number]
 
 export interface PublicBlawbyRouteData {
   recipe: BlawbyRouteRecipe
@@ -229,6 +233,11 @@ export interface PublicBlawbyShellData {
   compliance: PublicCompliance | null
   themeTokens: ApiRecord
   offeringLinks: PublicOfferingLink[]
+}
+
+export interface PublicBlawbyCriticalHomeData {
+  shell: PublicBlawbyShellData
+  page: PublicTenantPage
 }
 
 export interface PublicBlawbyData {

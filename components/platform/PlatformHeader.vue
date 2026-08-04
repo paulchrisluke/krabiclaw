@@ -4,7 +4,7 @@
 
       <!-- Wordmark -->
       <NuxtLink to="/" class="flex items-center gap-2.5 shrink-0 group">
-        <img src="/krabi-claw-logo.png" alt="KrabiClaw" class="w-8.5 h-8.5 rounded-[9px] group-hover:rotate-12 transition-transform duration-200" />
+        <img src="/krabi-claw-logo-96.webp" alt="KrabiClaw" width="36" height="36" class="w-8.5 h-8.5 rounded-[9px] group-hover:rotate-12 transition-transform duration-200" />
         <span class="kc-wordmark text-[19px]">
           <span class="kc-wordmark__krabi">krabi</span><span class="kc-wordmark__claw">claw</span><span class="kc-wordmark__tld">.com</span>
         </span>
@@ -25,70 +25,49 @@
 
       <!-- Right actions -->
       <div class="flex items-center gap-2 shrink-0">
-        <template v-if="isAuthenticated">
-          <PlatformButton to="/dashboard" class="hidden sm:inline-flex">
-            Dashboard
-            <PlatformIcon name="arrow-right" class="size-3.5" />
-          </PlatformButton>
-        </template>
-        <template v-else>
-          <PlatformButton to="/login" variant="ghost" class="hidden sm:inline-flex">
-            Login
-          </PlatformButton>
-          <PlatformButton to="/signup" class="hidden sm:inline-flex">
-            Start free
-            <PlatformIcon name="arrow-right" class="size-3.5" />
-          </PlatformButton>
-        </template>
-        <button
-          type="button"
-          class="flex size-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-muted hover:text-default lg:hidden"
-          aria-label="Toggle menu"
-          :aria-expanded="isMobileMenuOpen"
-          aria-controls="mobile-menu"
-          @click="toggleMobileMenu"
-        >
-          <PlatformIcon :name="isMobileMenuOpen ? 'x' : 'menu'" class="size-5" />
-        </button>
-      </div>
-    </div>
-
-    <!-- Mobile menu -->
-    <div id="mobile-menu" v-if="isMobileMenuOpen" class="lg:hidden border-t border-default bg-default">
-      <nav class="px-4 py-4 space-y-2">
-        <NuxtLink
-          v-for="item in navItems"
-          :key="item.label"
-          :to="item.to"
-          class="block px-4 py-3 rounded-lg text-[13.5px] font-medium text-muted hover:text-default hover:bg-muted transition-colors no-underline"
-          :class="isActiveRoute(item.to) ? 'bg-muted text-default' : ''"
-          @click="closeMobileMenu"
-        >
-          {{ item.label }}
+        <NuxtLink to="/login" class="hidden sm:inline-flex items-center rounded-lg px-3 py-2 text-sm font-medium text-muted transition-colors hover:text-default no-underline">
+          Login
         </NuxtLink>
-        <div class="pt-4 space-y-2">
-          <template v-if="isAuthenticated">
-            <NuxtLink to="/dashboard" class="block px-4 py-3 text-[13.5px] font-semibold text-primary transition-colors no-underline" @click="closeMobileMenu">
-              Dashboard →
-            </NuxtLink>
-          </template>
-          <template v-else>
-            <NuxtLink to="/login" class="block px-4 py-3 text-[13.5px] font-medium text-default hover:text-muted transition-colors no-underline" @click="closeMobileMenu">
-              Login
-            </NuxtLink>
-            <NuxtLink to="/signup" class="block px-4 py-3 text-[13.5px] font-semibold text-primary transition-colors no-underline" @click="closeMobileMenu">
-              Start free
-            </NuxtLink>
-          </template>
-        </div>
-      </nav>
+        <NuxtLink to="/signup" class="hidden sm:inline-flex items-center rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary/90 no-underline">
+          Start free
+        </NuxtLink>
+        <details ref="mobileMenu" class="group lg:hidden">
+          <summary
+            class="flex size-8 cursor-pointer list-none items-center justify-center rounded-md text-muted transition-colors hover:bg-muted hover:text-default [&::-webkit-details-marker]:hidden"
+            aria-label="Toggle menu"
+          >
+            <PlatformIcon name="menu" class="size-5 group-open:hidden" />
+            <PlatformIcon name="x" class="hidden size-5 group-open:block" />
+          </summary>
+          <div id="mobile-menu" class="absolute inset-x-0 top-16 border-t border-default bg-default">
+            <nav class="px-4 py-4 space-y-2">
+              <NuxtLink
+                v-for="item in navItems"
+                :key="item.label"
+                :to="item.to"
+                @click="closeMobileMenu"
+                class="block px-4 py-3 rounded-lg text-[13.5px] font-medium text-muted hover:text-default hover:bg-muted transition-colors no-underline"
+                :class="isActiveRoute(item.to) ? 'bg-muted text-default' : ''"
+              >
+                {{ item.label }}
+              </NuxtLink>
+              <div class="pt-4 space-y-2">
+                <NuxtLink to="/login" class="block px-4 py-3 text-[13.5px] font-medium text-default hover:text-muted transition-colors no-underline" @click="closeMobileMenu">
+                  Login
+                </NuxtLink>
+                <NuxtLink to="/signup" class="block px-4 py-3 text-[13.5px] font-semibold text-primary transition-colors no-underline" @click="closeMobileMenu">
+                  Start free
+                </NuxtLink>
+              </div>
+            </nav>
+          </div>
+        </details>
+      </div>
     </div>
   </header>
 </template>
 
 <script setup lang="ts">
-const { isAuthenticated } = useAuth()
-
 const navItems = [
   { label: 'Plugin', to: '/plugin' },
   { label: 'Features', to: '/features' },
@@ -99,6 +78,11 @@ const navItems = [
 ]
 
 const route = useRoute()
+const mobileMenu = ref<HTMLDetailsElement | null>(null)
+
+function closeMobileMenu() {
+  if (mobileMenu.value) mobileMenu.value.open = false
+}
 
 function isActiveRoute(to: string) {
   const path = to.split('#')[0]!
@@ -106,17 +90,4 @@ function isActiveRoute(to: string) {
   return route.fullPath === to || route.fullPath.startsWith(path)
 }
 
-const isMobileMenuOpen = ref(false)
-
-function toggleMobileMenu() {
-  isMobileMenuOpen.value = !isMobileMenuOpen.value
-}
-
-function closeMobileMenu() {
-  isMobileMenuOpen.value = false
-}
-
-watch(() => route.fullPath, () => {
-  closeMobileMenu()
-})
 </script>

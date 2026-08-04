@@ -1,0 +1,348 @@
+@import "tailwindcss" source(none);
+
+@plugin "@tailwindcss/typography";
+
+@theme static {
+  --font-sans: "Poppins", sans-serif;
+  --font-poppins: "Poppins", sans-serif;
+  --font-display: "Fredoka", "Poppins", ui-rounded, system-ui, sans-serif;
+
+  --breakpoint-xs: 375px;
+  --breakpoint-sm: 576px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 992px;
+  --breakpoint-xl: 1200px;
+  --breakpoint-2xl: 1366px;
+  --breakpoint-3xl: 1600px;
+
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --radius-3xl: 24px;
+
+  /* Shadow tokens — navy-tinted, low-contrast */
+  --shadow-xs: 0 1px 2px rgba(31, 37, 71, 4%);
+  --shadow-sm: 0 1px 3px rgba(31, 37, 71, 6%), 0 1px 2px rgba(31, 37, 71, 4%);
+  --shadow-md: 0 4px 12px rgba(31, 37, 71, 8%);
+  --shadow-lg: 0 12px 32px rgba(31, 37, 71, 10%);
+  --shadow-xl: 0 24px 48px rgba(31, 37, 71, 12%);
+
+  /* Coral palette — complete 50-950 for Nuxt UI */
+  --color-coral-50: #FFF1ED;
+  --color-coral-100: #FFE3DB;
+  --color-coral-200: #FFCCC2;
+  --color-coral-300: #FFB5A9;
+  --color-coral-400: #FF9A8C;
+  --color-coral-500: #FB7461;
+  --color-coral-600: #D66A5A;
+  --color-coral-700: #C56B5C;
+  --color-coral-800: #9E544D;
+  --color-coral-900: #7B423E;
+  --color-coral-950: #4A2A27;
+
+  /* Teal palette — complete 50-950 for Nuxt UI */
+  --color-teal-50: #F0FDFA;
+  --color-teal-100: #D6F0EF;
+  --color-teal-200: #B5E6E5;
+  --color-teal-300: #7DDCD9;
+  --color-teal-400: #5DCBCB;
+  --color-teal-500: #2BB5B5;
+  --color-teal-600: #239595;
+  --color-teal-700: #1E7A7A;
+  --color-teal-800: #186363;
+  --color-teal-900: #155050;
+  --color-teal-950: #0D2E2E;
+}
+
+@theme inline {
+  --color-on-primary: var(--primary-foreground);
+  --color-primary: var(--ui-primary);
+  --color-secondary: var(--ui-secondary);
+  --color-success: var(--ui-success);
+  --color-info: var(--ui-info);
+  --color-warning: var(--ui-warning);
+  --color-error: var(--ui-error);
+  --color-default: var(--ui-text);
+  --color-muted: var(--ui-text-muted);
+  --color-dimmed: var(--ui-text-dimmed);
+  --color-toned: var(--ui-text-toned);
+  --color-highlighted: var(--ui-text-highlighted);
+  --color-inverted: var(--ui-text-inverted);
+  --background-color-default: var(--ui-bg);
+  --background-color-muted: var(--ui-bg-muted);
+  --background-color-elevated: var(--ui-bg-elevated);
+  --background-color-accented: var(--ui-bg-accented);
+  --background-color-inverted: var(--ui-bg-inverted);
+  --background-color-border: var(--ui-border);
+  --border-color-default: var(--ui-border);
+  --border-color-muted: var(--ui-border-muted);
+  --border-color-accented: var(--ui-border-accented);
+  --border-color-inverted: var(--ui-border-inverted);
+  --border-color-bg: var(--ui-bg);
+  --ring-color-default: var(--ui-border);
+  --ring-color-muted: var(--ui-border-muted);
+  --ring-color-accented: var(--ui-border-accented);
+  --ring-color-inverted: var(--ui-border-inverted);
+  --ring-color-bg: var(--ui-bg);
+  --divide-color-default: var(--ui-border);
+  --divide-color-muted: var(--ui-border-muted);
+  --divide-color-accented: var(--ui-border-accented);
+  --divide-color-inverted: var(--ui-border-inverted);
+}
+
+/* ── KrabiClaw brand palette ──────────────────────────────── */
+:root {
+  /* Global type scaling belongs at the root so rem-based sizing stays predictable. */
+  font-size: 106%;
+
+  --kc-navy:        #1F2547;
+  --kc-navy-700:    #2C3360;
+  --kc-navy-500:    #4A5380;
+  --kc-navy-300:    #8C92B0;
+  --kc-coral:       var(--color-coral-500);
+  --kc-coral-600:   var(--color-coral-600);
+  --kc-coral-400:   var(--color-coral-400);
+  --kc-coral-200:   var(--color-coral-200);
+  --kc-coral-50:    var(--color-coral-50);
+  --kc-teal:        var(--color-teal-500);
+  --kc-teal-600:    var(--color-teal-600);
+  --kc-teal-400:    var(--color-teal-400);
+  --kc-teal-100:    var(--color-teal-100);
+
+  --kc-cream:       #F8F6F3;
+  --kc-cream-elev:  #FFF;
+  --kc-sand:        #F0EBE3;
+
+  --kc-border:      #E6E1D9;
+  --kc-border-muted:#EFEAE3;
+
+  --kc-success:     #2BB573;
+  --kc-warning:     #F8A93A;
+  --kc-danger:      #E0524C;
+
+  --kc-loading-rainbow: linear-gradient(
+    90deg,
+    oklch(0.71 0.19 25),
+    oklch(0.78 0.17 55),
+    oklch(0.85 0.16 95),
+    oklch(0.79 0.16 145),
+    oklch(0.73 0.16 240),
+    oklch(0.71 0.16 300)
+  );
+}
+
+/* ── Platform theme ───────────────────────────────────────── */
+.platform-theme {
+  --ui-primary:           var(--kc-coral);
+
+  --primary-foreground:   #FFF;
+
+  --ui-secondary:         var(--kc-teal-600);
+  --ui-success:           var(--kc-success);
+  --ui-info:              #3B82F6;
+  --ui-warning:           var(--kc-warning);
+  --ui-error:             var(--kc-danger);
+
+  --ui-bg:                var(--kc-cream);
+  --ui-bg-elevated:       var(--kc-cream-elev);
+  --ui-bg-muted:          #F2EFEA;
+  --ui-bg-accented:       #F5F0EB;
+  --ui-bg-inverted:       var(--kc-navy);
+
+  --ui-text:              #454864;
+  --ui-text-muted:        #5B5E73;
+  --ui-text-dimmed:       #6E7189;
+  --ui-text-toned:        #383B52;
+  --ui-text-highlighted:  var(--kc-navy);
+  --ui-text-inverted:     #FFF;
+
+  --ui-border:            var(--kc-border);
+  --ui-border-muted:      var(--kc-border-muted);
+  --ui-border-accented:   #D8D3CB;
+  --ui-border-inverted:   var(--kc-navy-300);
+}
+
+/* ── Platform theme dark mode ─────────────────────────────── */
+/*
+   Rule: --kc-* brand palette variables are NEVER overridden for dark mode.
+   They represent absolute brand colours (navy = #1F2547, coral = #FB7461 …)
+   used as backgrounds, borders AND text — overriding them cascades
+   incorrectly into backgrounds. Only --ui-* semantic tokens are redefined.
+
+   Dark palette:
+   - bg:          very dark navy-adjacent (#0F1225) — warmer than pure black
+   - elevated:    #1F2547  (the original --kc-navy becomes the card surface)
+   - muted:       #141836  (slightly darker than elevated, for subtle sections)
+   - inverted:    #080A18  (near-black — Pro card, CTA bands keep text-white legible)
+   - text:        #EEF0F8  (warm cream-white, 16:1 on bg)
+   - text-muted:  #9CA4C6  (blue-grey, 7:1 on bg)
+   - text-dimmed: #6B7198  (muted, 4.8:1 on bg — eyebrows / captions)
+   - Coral, teal, yellow are unchanged — vibrant accents work on dark surfaces.
+
+   Hardcoded text-(--kc-navy) in templates must be changed to text-default
+   individually — see index.vue. Do NOT override --kc-navy here.
+*/
+.dark .platform-theme {
+  --ui-primary:           #FB7461;
+
+  --primary-foreground:   #F5F4FB;
+
+  --ui-secondary:         #5DCBCB;
+  --ui-success:           #34D399;
+  --ui-info:              #60A5FA;
+  --ui-warning:           #FBBF24;
+  --ui-error:             #F87171;
+
+  --ui-bg:                #0F1225;
+  --ui-bg-elevated:       #1F2547;
+  --ui-bg-muted:          #141836;
+  --ui-bg-accented:       #1A1E3A;
+  --ui-bg-inverted:       var(--kc-cream-elev);
+
+  --ui-text:              #C4C6DE;
+  --ui-text-muted:        #A0A3C4;
+  --ui-text-dimmed:       #9092B8;
+  --ui-text-toned:        #DBDBEA;
+  --ui-text-highlighted:  #F5F4FB;
+  --ui-text-inverted:     var(--kc-navy);
+
+  --ui-border:            rgba(255,255,255,9%);
+  --ui-border-muted:      rgba(255,255,255,5%);
+  --ui-border-accented:   rgba(255,255,255,12%);
+  --ui-border-inverted:   var(--kc-cream-elev);
+}
+
+/* Dark mode wordmark: swap navy text to cream */
+.dark .kc-wordmark__krabi { color: #EEF0F8; }
+.dark .kc-wordmark__tld   { color: #EEF0F8; }
+
+/* ── Platform type utilities ──────────────────────────────── */
+.kc-wordmark {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.kc-wordmark__krabi { color: var(--kc-navy); }
+.kc-wordmark__claw  { color: var(--kc-coral); }
+.kc-wordmark__tld   { color: var(--kc-navy); font-size: 0.55em; vertical-align: top; margin-left: 1px; }
+
+.kc-eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+}
+
+
+.hide {
+    bottom: -115%;
+    opacity: 0;
+    visibility: hidden;
+}
+
+.show-offcanvse {
+    bottom: 0;
+    opacity: 1;
+    visibility: visible;
+    transition: all ease-in-out 0.1s;
+}
+  
+  .active {
+    display: block;
+  }
+  .layer-main{
+    transform: translateY(100%);
+    transition: all ease-in-out 0.5s;
+  }
+  .menu-open {
+    overflow: hidden;
+  }
+  .menu-open   .layer-main{
+    transform: translateY(0%);
+    transition: all ease-in-out 0.5s;
+  }
+  /* Hide scrollbar for Chrome, Safari and Opera */
+.example::-webkit-scrollbar {
+    display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.example {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hide {
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Code block text wrapping ─────────────────────────────── */
+.prose pre {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-x: auto;
+}
+
+/* ── Prose overflow fixes for tables and code ───────────────── */
+.prose {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+
+  --tw-prose-body: var(--ui-text-highlighted);
+  --tw-prose-headings: var(--ui-text-highlighted);
+  --tw-prose-lead: var(--ui-text);
+  --tw-prose-links: var(--ui-primary);
+  --tw-prose-bold: var(--ui-text-highlighted);
+  --tw-prose-counters: var(--ui-text-muted);
+  --tw-prose-bullets: var(--ui-text-muted);
+  --tw-prose-hr: var(--ui-border);
+  --tw-prose-quotes: var(--ui-text-highlighted);
+  --tw-prose-quote-borders: var(--ui-border-accented);
+  --tw-prose-captions: var(--ui-text-muted);
+  --tw-prose-code: var(--ui-text-highlighted);
+  --tw-prose-pre-code: var(--ui-text-highlighted);
+  --tw-prose-pre-bg: var(--ui-bg-muted);
+  --tw-prose-th-borders: var(--ui-border-accented);
+  --tw-prose-td-borders: var(--ui-border);
+  --tw-prose-invert-body: var(--ui-text-highlighted);
+  --tw-prose-invert-headings: var(--ui-text-highlighted);
+  --tw-prose-invert-lead: var(--ui-text);
+  --tw-prose-invert-links: var(--ui-primary);
+  --tw-prose-invert-bold: var(--ui-text-highlighted);
+  --tw-prose-invert-counters: var(--ui-text-muted);
+  --tw-prose-invert-bullets: var(--ui-text-muted);
+  --tw-prose-invert-hr: var(--ui-border);
+  --tw-prose-invert-quotes: var(--ui-text-highlighted);
+  --tw-prose-invert-quote-borders: var(--ui-border-accented);
+  --tw-prose-invert-captions: var(--ui-text-muted);
+  --tw-prose-invert-code: var(--ui-text-highlighted);
+  --tw-prose-invert-pre-code: var(--ui-text-highlighted);
+  --tw-prose-invert-pre-bg: var(--ui-bg-muted);
+  --tw-prose-invert-th-borders: var(--ui-border-accented);
+  --tw-prose-invert-td-borders: var(--ui-border);
+}
+
+.prose code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.prose table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.prose :where(td, th) code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.prose th,
+.prose td {
+  word-break: break-word;
+}

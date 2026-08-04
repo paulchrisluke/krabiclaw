@@ -105,10 +105,12 @@ import { useContentPageSchema } from '~/composables/useContentPageSchema'
 import { categoryToSlug, slugToCategory } from '~/utils/docs-categories'
 import { buildContentBlocks, normalizeContentComponent, type ContentComponent } from '~/utils/content-blocks'
 import { resolveContentComponent } from '~/utils/content-component-resolver'
+import { isRecord, publicApiRequest } from '~/utils/api-clients'
+import { loadDomPurify } from '~/utils/dom-purify-loader'
 
 definePageMeta({ layout: 'docs' })
 
-const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: sanitizeHtmlForSsr }
+const DOMPurify = import.meta.client ? await loadDomPurify() : { sanitize: sanitizeHtmlForSsr }
 const { resolveMedia } = useMedia()
 
 interface Doc {
@@ -146,6 +148,14 @@ interface DocListItem {
   hide_from_nav?: boolean | number | null
 }
 
+const isPublicDocResponse = (value: unknown): value is { doc: Doc } =>
+  isRecord(value)
+  && isRecord(value.doc)
+  && typeof value.doc.id === 'string'
+  && typeof value.doc.title === 'string'
+  && typeof value.doc.slug === 'string'
+  && typeof value.doc.body === 'string'
+
 const route = useRoute()
 const segments = computed(() => {
   const raw = route.params.segments
@@ -167,9 +177,7 @@ if (!slugToCategory(categoryParam.value)) {
   throw createError({ statusCode: 404, statusMessage: 'Documentation category not found' })
 }
 
-const { data: docsList, error: docsListError } = await useFetch<{ docs: DocListItem[] }>('/api/public/docs', {
-  default: () => ({ docs: [] })
-})
+const { data: docsList, error: docsListError } = await useDocsNav()
 
 if (docsListError.value) {
   throw createError({ statusCode: 500, statusMessage: 'Failed to load documentation index' })
@@ -228,8 +236,10 @@ const { data: doc, pending: loading, error } = await useAsyncData(
       doc = await getPublishedPlatformDoc(db, category, effectiveSlug.value) as Doc | null
     } else {
       const endpoint = `/api/public/docs/${categoryParam.value}/${effectiveSlug.value}`
-      const response = await $fetch<{ doc?: Doc }>(endpoint)
-      doc = response?.doc
+      const response = await publicApiRequest<{ doc: Doc }>(endpoint, {
+        validate: isPublicDocResponse,
+      })
+      doc = response.doc
     }
 
     if (!doc) {
@@ -237,9 +247,6 @@ const { data: doc, pending: loading, error } = await useAsyncData(
     }
     return doc
   },
-  {
-    default: () => null,
-  }
 )
 
 if (error.value) {

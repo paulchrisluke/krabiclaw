@@ -1,4 +1,4 @@
-name: CI
+name: CI (Required PR Lane)
 
 on:
   pull_request:
@@ -66,12 +66,15 @@ jobs:
             pottery_house:
               - 'scripts/**'
               - '!scripts/*blawby*.mjs'
-              - '!scripts/adapters/ncls-blawby.mjs'
               - 'components/saya/**'
               - 'pages/**'
+              - '!pages/admin/**'
+              - '!pages/dashboard/**'
+              - '!pages/account/**'
+              - '!pages/auth/**'
+              - '!pages/oauth/**'
               - 'utils/vertical-copy.ts'
             blawby:
-              - 'client-imports/north-carolina-legal-services/**'
               - 'components/blawby/**'
               - 'composables/useBlawby**'
               - 'layouts/blawby.vue'
@@ -87,9 +90,7 @@ jobs:
               - 'pages/services/**'
               - 'pages/third-party-notices.vue'
               - 'scripts/*blawby*.mjs'
-              - 'scripts/adapters/ncls-blawby.mjs'
               - 'scripts/client-verify.mjs'
-              - 'scripts/verify-ncls-seo-migration.mjs'
               - 'scripts/utils/seo-migration-contract.mjs'
               - 'server/api/editor/sites/**/professional-services*'
               - 'server/api/editor/sites/**/qa/**'
@@ -116,10 +117,13 @@ jobs:
               - 'tests/e2e/blawby.spec.ts'
               - 'tests/e2e/site-content-scopes.spec.ts'
               - 'tests/unit/blawby*.test.ts'
-              - 'tests/unit/ncls-seo-migration.test.ts'
               - 'tests/unit/site-content-scopes.test.ts'
             seed_relevant:
-              - 'scripts/**'
+              - 'scripts/generate-demo-bundle.ts'
+              - 'scripts/generate-demo-seed.ts'
+              - 'scripts/generate-pottery-house-seed.ts'
+              - 'scripts/generate-kikuzuki-seed.ts'
+              - 'scripts/utils/d1-seed-file.mjs'
               - 'seed-definitions/**'
               - 'server/db/schema.ts'
               - 'migrations/**'
@@ -150,14 +154,12 @@ jobs:
               - 'server/api/**/reservations/**'
               - 'tests/e2e/notifications.spec.ts'
             mcp:
-              - '.github/workflows/ci.yml'
               - 'build/cloudflare-dev-module.ts'
               - 'build/runtime/cloudflare-bindings-dev.ts'
               - 'docs/local-mcp-harness.md'
               - 'docs/media-workflow-contract.md'
               - 'migrations/**'
               - 'nuxt.config.ts'
-              - 'package.json'
               - 'pages/oauth/login.vue'
               - 'playwright.config.ts'
               - 'scripts/check-*mcp*.mjs'
@@ -215,13 +217,10 @@ jobs:
             scripts/client-deploy.mjs \
             scripts/canary-prod.mjs \
             scripts/canary-notifications.mjs \
-            scripts/generate-ncls-blawby-seed.mjs \
-            scripts/prepare-ncls-blawby-media.mjs \
             scripts/capture-blawby-screenshots.mjs \
             scripts/compare-blawby-screenshots.mjs \
             scripts/rollback-prod.mjs \
             scripts/verify-blawby-site.mjs \
-            scripts/verify-ncls-seo-migration.mjs \
             scripts/lint-seeds.mjs \
             scripts/lint-migrations.mjs \
             scripts/lint-tool-parity.mjs \
@@ -229,11 +228,12 @@ jobs:
             node --check "$f" && echo "✓ $f" || exit 1
           done
 
-  e2e-smoke:
-    name: E2E smoke
+  e2e-representative:
+    name: E2E representative tests
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.draft == false
     needs: [changes]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     concurrency:
       group: shared-preview-deployment
       cancel-in-progress: false
@@ -297,23 +297,6 @@ jobs:
           node --experimental-strip-types scripts/generate-pottery-house-seed.ts --preview --stdout >> /tmp/preview-seed.sql
           node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --preview --stdout >> /tmp/preview-seed.sql
           npx wrangler d1 execute DB --env preview --remote --file /tmp/preview-seed.sql
-      - name: Seed NCLS/Blawby fixture
-        if: needs.changes.outputs.blawby == 'true'
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: node scripts/generate-ncls-blawby-seed.mjs --preview
-      - name: Deploy preview Worker
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          WRANGLER_LOG: debug
-        run: yarn deploy:preview:worker
-      - name: Purge preview HTML cache
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          PREVIEW_CACHE_ORIGIN: https://preview.krabiclaw.com
-        run: node --experimental-strip-types scripts/purge-preview-cache.ts
       - name: Sync preview secrets
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -346,7 +329,24 @@ jobs:
         run: |
           printf '%s' "$EMAIL_REPLY_SECRET_PREVIEW" | npx wrangler secret put EMAIL_REPLY_SECRET --env preview
           printf '%s' "$EMAIL_INBOUND_SECRET_PREVIEW" | npx wrangler secret put EMAIL_INBOUND_SECRET --env preview
+      - name: Deploy preview Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_LOG: debug
+        # Secret updates publish Worker versions. Deploy last so HTML and the
+        # immutable Nuxt assets always propagate as one final version.
+        run: yarn deploy:preview:worker
+      - name: Purge preview HTML cache
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          PREVIEW_CACHE_ORIGIN: https://preview.krabiclaw.com
+        run: node --experimental-strip-types scripts/purge-preview-cache.ts
       - run: npx playwright install --with-deps chromium
+      - name: Wait for deployed assets
+        env:
+          PLAYWRIGHT_PREVIEW_URL: https://krabiclaw-preview.paulchrisluke.workers.dev
+        run: node scripts/wait-for-deployed-assets.mjs
       - name: Warm up preview Worker
         env:
           PREVIEW_WORKER_URL: https://krabiclaw-preview.paulchrisluke.workers.dev
@@ -354,21 +354,11 @@ jobs:
           curl -sf --connect-timeout 5 --max-time 15 "$PREVIEW_WORKER_URL/" || true
           curl -sf --connect-timeout 5 --max-time 15 "$PREVIEW_WORKER_URL/blog" || true
           curl -sf --connect-timeout 5 --max-time 15 -L -H "x-dev-route-secret: ${E2E_DEV_ROUTE_SECRET}" "$PREVIEW_WORKER_URL/api/dev/login" || true
-      - name: Run smoke tests
+      - name: Run representative tests
         env:
           PLAYWRIGHT_PREVIEW_URL: https://krabiclaw-preview.paulchrisluke.workers.dev
-          POTTERY_HOUSE_CHANGED: ${{ needs.changes.outputs.pottery_house }}
-          BLAWBY_CHANGED: ${{ needs.changes.outputs.blawby }}
-          MCP_CHANGED: ${{ needs.changes.outputs.mcp }}
-        run: |
-          yarn test:e2e:smoke
-          [ "$MCP_CHANGED" != "true" ] || PLAYWRIGHT_WORKERS=1 yarn test:e2e:mcp
-          if [ "$POTTERY_HOUSE_CHANGED" = "true" ]; then
-            yarn test:e2e:pottery-house
-          fi
-          if [ "$BLAWBY_CHANGED" = "true" ]; then
-            yarn test:e2e:blawby
-          fi
+        # Focused representative subset, not full matrix
+        run: yarn test:e2e:representative
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -426,18 +416,6 @@ jobs:
           node --experimental-strip-types scripts/generate-demo-seed.ts --staging
           node --experimental-strip-types scripts/generate-pottery-house-seed.ts --staging
           node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --staging
-      - name: Seed NCLS/Blawby staging fixture
-        if: needs.changes.outputs.blawby == 'true'
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: node scripts/generate-ncls-blawby-seed.mjs --staging
-      - name: Deploy staging Worker
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          WRANGLER_LOG: debug
-        run: yarn deploy:staging:worker
       - name: Sync staging Stripe secrets
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -478,6 +456,14 @@ jobs:
         # the E2E_DEV_ROUTE_SECRET env var above.
         run: |
           printf '%s' "$E2E_DEV_ROUTE_SECRET_STAGING" | npx wrangler secret put E2E_DEV_ROUTE_SECRET --env staging
+      - name: Deploy staging Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_LOG: debug
+        # Secret updates publish Worker versions. Deploy last so HTML and the
+        # immutable Nuxt assets always propagate as one final version.
+        run: yarn deploy:staging:worker
       - run: npx playwright install --with-deps chromium
       - name: Warm up staging Worker
         run: |
@@ -485,26 +471,14 @@ jobs:
           curl -sf --connect-timeout 5 --max-time 15 "https://staging.krabiclaw.com/blog" || true
           curl -sf --connect-timeout 5 --max-time 15 "https://staging.krabiclaw.com/api/billing/plans" || true
           curl -sf --connect-timeout 5 --max-time 15 -L -H "x-dev-route-secret: ${E2E_DEV_ROUTE_SECRET}" "https://staging.krabiclaw.com/api/dev/login" || true
-      - name: Run required smoke and changed subsystem suites
+      - name: Run focused smoke tests
         env:
-          AUTH_CHANGED: ${{ needs.changes.outputs.auth }}
           DASHBOARD_CHANGED: ${{ needs.changes.outputs.dashboard }}
           BILLING_CHANGED: ${{ needs.changes.outputs.billing }}
-          NOTIFICATIONS_CHANGED: ${{ needs.changes.outputs.notifications }}
-          MCP_CHANGED: ${{ needs.changes.outputs.mcp }}
-          SEO_CHANGED: ${{ needs.changes.outputs.seo }}
-          POTTERY_HOUSE_CHANGED: ${{ needs.changes.outputs.pottery_house }}
-          BLAWBY_CHANGED: ${{ needs.changes.outputs.blawby }}
         run: |
           yarn test:e2e:smoke
-          [ "$AUTH_CHANGED" != "true" ] || yarn test:e2e:auth
-          [ "$DASHBOARD_CHANGED" != "true" ] || yarn test:e2e:dashboard
-          [ "$BILLING_CHANGED" != "true" ] || yarn test:e2e:billing
-          [ "$NOTIFICATIONS_CHANGED" != "true" ] || PLAYWRIGHT_WORKERS=1 yarn test:e2e:notifications
-          [ "$MCP_CHANGED" != "true" ] || PLAYWRIGHT_WORKERS=1 yarn test:e2e:mcp
-          [ "$SEO_CHANGED" != "true" ] || yarn test:e2e:seo
-          [ "$POTTERY_HOUSE_CHANGED" != "true" ] || PLAYWRIGHT_WORKERS=1 yarn test:e2e:pottery-house
-          [ "$BLAWBY_CHANGED" != "true" ] || yarn test:e2e:blawby
+          [ "$DASHBOARD_CHANGED" != "true" ] || yarn test:e2e:dashboard:smoke
+          [ "$BILLING_CHANGED" != "true" ] || yarn test:e2e:smoke:billing
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

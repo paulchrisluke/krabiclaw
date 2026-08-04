@@ -17,8 +17,15 @@
 
       <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
         <section class="space-y-3">
+          <UAlert
+            v-if="qaError"
+            color="error"
+            variant="soft"
+            title="Q&A could not be loaded"
+            :description="getErrorMessage(qaError, 'Q&A request failed')"
+          />
           <USkeleton v-if="pending" class="h-32" />
-          <div v-else-if="qaRows.length === 0" class="border border-dashed border-default px-6 py-12 text-center">
+          <div v-else-if="!qaError && qaRows.length === 0" class="border border-dashed border-default px-6 py-12 text-center">
             <UIcon name="i-lucide-circle-help" class="mx-auto size-9 text-muted" />
             <p class="mt-3 text-sm font-medium text-highlighted">No site Q&A yet</p>
           </div>
@@ -62,6 +69,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.qa' })
 useSeoMeta({ title: 'Site Q&A | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
@@ -75,7 +83,6 @@ interface QaRow {
 }
 
 const siteId = await useDashboardSiteId()
-const headers = buildDashboardRequestHeaders()
 const toast = useToast()
 const saving = ref(false)
 const editingId = ref<string | null>(null)
@@ -83,38 +90,66 @@ const selectedPagePath = ref('general')
 
 const STANDARD_ROUTES = ['/', '/about', '/services', '/pricing', '/contact', '/schedule', '/blog', '/donate'] as const
 
-const { data: tenantPages } = await useAsyncData(
+const requestEvent = useRequestEvent()
+// tenantPages, existingQaScopes, and the main qa query below are independent of
+// each other (none reads another's result) — issue them together instead of
+// sequentially awaiting each one, which otherwise turns three independent
+// requests into a waterfall during SSR.
+const tenantPagesAsyncData = useAsyncData(
   () => `dashboard-tenant-pages-${siteId}`,
-  () => $fetch<Array<{ path: string; title: string }>>(`/api/editor/sites/${siteId}/tenant-pages`, { headers }),
+  async () => {
+    if (import.meta.server) {
+      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+      const [{ cloudflareEnv }, { getTenantPages }] = await Promise.all([
+        import('~/server/utils/api-response'),
+        import('~/server/utils/qa-dashboard'),
+      ])
+      const db = cloudflareEnv(requestEvent).db
+      if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+      return await getTenantPages(db, siteId)
+    }
+    return await dashboardApi<Array<{ path: string; title: string }>>(
+      `/api/editor/sites/${siteId}/tenant-pages`,
+      {
+        validate: (value): value is Array<{ path: string; title: string }> =>
+          Array.isArray(value)
+          && value.every(page =>
+            isRecord(page)
+            && typeof page.path === 'string'
+            && typeof page.title === 'string',
+          ),
+      },
+    )
+  },
 )
 
-const { data: existingQaScopes } = await useAsyncData(
+const existingQaScopesAsyncData = useAsyncData(
   () => `dashboard-qa-scopes-${siteId}`,
-  () => $fetch<Array<{ page_path: string | null }>>(`/api/editor/sites/${siteId}/qa/scopes`, { headers }),
+  async () => {
+    if (import.meta.server) {
+      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+      const [{ cloudflareEnv }, { getQaScopes }] = await Promise.all([
+        import('~/server/utils/api-response'),
+        import('~/server/utils/qa-dashboard'),
+      ])
+      const db = cloudflareEnv(requestEvent).db
+      if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+      return await getQaScopes(db, siteId)
+    }
+    return await dashboardApi<Array<{ page_path: string | null }>>(
+      `/api/editor/sites/${siteId}/qa/scopes`,
+      {
+        validate: (value): value is Array<{ page_path: string | null }> =>
+          Array.isArray(value)
+          && value.every(scope =>
+            isRecord(scope)
+            && (scope.page_path === null || typeof scope.page_path === 'string'),
+          ),
+      },
+    )
+  },
 )
 
-const pageScopes = computed(() => {
-  const scopes = new Map<string, string>()
-  scopes.set('general', 'General fallback')
-  
-  for (const path of STANDARD_ROUTES) {
-    scopes.set(path, path === '/' ? 'Home' : path)
-  }
-  
-  for (const page of tenantPages.value ?? []) {
-    if (page.path && !scopes.has(page.path)) {
-      scopes.set(page.path, page.title || page.path)
-    }
-  }
-  
-  for (const scope of existingQaScopes.value ?? []) {
-    if (scope.page_path && !scopes.has(scope.page_path)) {
-      scopes.set(scope.page_path, scope.page_path)
-    }
-  }
-  
-  return Array.from(scopes.entries()).map(([value, label]) => ({ label, value }))
-})
 const pagePath = computed(() => selectedPagePath.value === 'general' ? null : selectedPagePath.value)
 const form = reactive({ question: '', answer: '', published: true })
 watch(selectedPagePath, () => {
@@ -123,11 +158,70 @@ watch(selectedPagePath, () => {
   form.answer = ''
   form.published = true
 })
-const { data, pending, refresh } = await useAsyncData(
+const qaAsyncData = useAsyncData(
   () => `dashboard-site-qa-${siteId}-${selectedPagePath.value}`,
-  () => $fetch<{ qa: QaRow[] }>(`/api/editor/sites/${siteId}/qa`, { headers, query: pagePath.value ? { page_path: pagePath.value } : undefined }),
+  async () => {
+    if (import.meta.server) {
+      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+      const [{ cloudflareEnv }, { getSiteQa }] = await Promise.all([
+        import('~/server/utils/api-response'),
+        import('~/server/utils/qa-dashboard'),
+      ])
+      const db = cloudflareEnv(requestEvent).db
+      if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+      const qa = await getSiteQa(db, siteId, pagePath.value)
+      return { qa }
+    }
+    return await dashboardApi<{ qa: QaRow[] }>(
+      `/api/editor/sites/${siteId}/qa`,
+      {
+        query: pagePath.value ? { page_path: pagePath.value } : undefined,
+        validate: (value): value is { qa: QaRow[] } =>
+          isRecord(value)
+          && Array.isArray(value.qa)
+          && value.qa.every(item =>
+            isRecord(item)
+            && typeof item.id === 'string'
+            && typeof item.question === 'string'
+            && (item.answer === null || typeof item.answer === 'string')
+            && (item.status === 'published' || item.status === 'hidden')
+            && typeof item.sort_order === 'number'
+            && (item.page_path === null || typeof item.page_path === 'string'),
+          ),
+      },
+    )
+  },
   { watch: [selectedPagePath] },
 )
+
+const [
+  { data: tenantPages },
+  { data: existingQaScopes },
+  { data, pending, refresh, error: qaError },
+] = await Promise.all([tenantPagesAsyncData, existingQaScopesAsyncData, qaAsyncData])
+
+const pageScopes = computed(() => {
+  const scopes = new Map<string, string>()
+  scopes.set('general', 'General fallback')
+
+  for (const path of STANDARD_ROUTES) {
+    scopes.set(path, path === '/' ? 'Home' : path)
+  }
+
+  for (const page of tenantPages.value ?? []) {
+    if (page.path && !scopes.has(page.path)) {
+      scopes.set(page.path, page.title || page.path)
+    }
+  }
+
+  for (const scope of existingQaScopes.value ?? []) {
+    if (scope.page_path && !scopes.has(scope.page_path)) {
+      scopes.set(scope.page_path, scope.page_path)
+    }
+  }
+
+  return Array.from(scopes.entries()).map(([value, label]) => ({ label, value }))
+})
 const qaRows = computed(() => data.value?.qa ?? [])
 
 function reset() {
@@ -149,9 +243,22 @@ async function save() {
   try {
     const body: Record<string, unknown> = { page_path: pagePath.value, question: form.question, answer: form.answer || null, status: form.published ? 'published' : 'hidden' }
     if (editingId.value) {
-      await $fetch(`/api/editor/sites/${siteId}/qa/${editingId.value}`, { method: 'PATCH', body })
+      await dashboardApi(`/api/editor/sites/${siteId}/qa/${editingId.value}`, {
+        method: 'PATCH',
+        body,
+        validate: (value): value is { updated: true; qa_id: string } =>
+          isRecord(value) && value.updated === true && typeof value.qa_id === 'string',
+      })
     } else {
-      await $fetch(`/api/editor/sites/${siteId}/qa`, { method: 'POST', body })
+      await dashboardApi(`/api/editor/sites/${siteId}/qa`, {
+        method: 'POST',
+        body,
+        validate: (value): value is QaRow =>
+          isRecord(value)
+          && typeof value.id === 'string'
+          && typeof value.question === 'string'
+          && typeof value.sort_order === 'number',
+      })
     }
     reset()
     await refresh()
@@ -167,16 +274,23 @@ async function move(item: QaRow, direction: -1 | 1) {
   const index = qaRows.value.findIndex(row => row.id === item.id)
   const target = qaRows.value[index + direction]
   if (!target) return
-  await $fetch(`/api/editor/sites/${siteId}/qa/reorder`, {
+  await dashboardApi(`/api/editor/sites/${siteId}/qa/reorder`, {
     method: 'POST',
     body: { page_path: pagePath.value, updates: [{ id: item.id, sort_order: target.sort_order }, { id: target.id, sort_order: item.sort_order }] },
+    validate: (value): value is { updated: number } =>
+      isRecord(value) && typeof value.updated === 'number',
   })
   await refresh()
 }
 
 async function remove(item: QaRow) {
   if (!confirm(`Delete this question?\n\n${item.question}`)) return
-  await $fetch(`/api/editor/sites/${siteId}/qa/${item.id}`, { method: 'DELETE', query: pagePath.value ? { page_path: pagePath.value } : undefined })
+  await dashboardApi(`/api/editor/sites/${siteId}/qa/${item.id}`, {
+    method: 'DELETE',
+    query: pagePath.value ? { page_path: pagePath.value } : undefined,
+    validate: (value): value is { qa_id: string; deleted: true } =>
+      isRecord(value) && typeof value.qa_id === 'string' && value.deleted === true,
+  })
   if (editingId.value === item.id) reset()
   await refresh()
 }

@@ -3,7 +3,7 @@
     <div class="max-w-450 mx-auto px-4 sm:px-6 lg:px-10 flex items-center justify-between gap-4 h-16">
       <div class="flex items-center gap-2.5 min-w-0">
         <NuxtLink to="/" class="flex items-center gap-2.5 shrink-0 group no-underline">
-          <img src="/krabi-claw-logo.png" alt="KrabiClaw" class="w-8.5 h-8.5 rounded-[9px] group-hover:rotate-12 transition-transform duration-200" />
+          <img src="/krabi-claw-logo-96.webp" alt="KrabiClaw" width="36" height="36" class="w-8.5 h-8.5 rounded-[9px] group-hover:rotate-12 transition-transform duration-200" />
           <span class="kc-wordmark text-[19px]">
             <span class="kc-wordmark__krabi">krabi</span><span class="kc-wordmark__claw">claw</span><span class="kc-wordmark__tld">{{ section === 'blog' ? 'blog' : 'docs' }}</span>
           </span>
@@ -11,23 +11,12 @@
       </div>
 
       <div class="flex items-center gap-1.5 shrink-0">
-        <template v-if="mounted">
-          <template v-if="showAuthenticated">
-            <PlatformButton to="/dashboard" size="sm">
-              Dashboard
-              <PlatformIcon name="arrow-right" class="size-3.5" />
-            </PlatformButton>
-          </template>
-          <template v-else>
-            <PlatformButton to="/login" variant="ghost" size="sm" class="hidden sm:inline-flex">
-              Login
-            </PlatformButton>
-            <PlatformButton to="/signup" size="sm">
-              Start free
-              <PlatformIcon name="arrow-right" class="size-3.5" />
-            </PlatformButton>
-          </template>
-        </template>
+        <NuxtLink to="/login" class="hidden sm:inline-flex items-center rounded-lg px-3 py-2 text-sm font-medium text-muted transition-colors hover:text-default no-underline">
+          Login
+        </NuxtLink>
+        <NuxtLink to="/signup" class="hidden sm:inline-flex items-center rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary/90 no-underline">
+          Start free
+        </NuxtLink>
         <button
           type="button"
           class="flex size-8 items-center justify-center rounded-md text-muted transition-colors hover:bg-muted hover:text-default lg:hidden"
@@ -50,11 +39,4 @@ const emit = defineEmits<{
   'toggle-nav': []
 }>()
 
-const { isAuthenticated } = useAuth()
-const mounted = ref(false)
-const showAuthenticated = computed(() => mounted.value && isAuthenticated.value)
-
-onMounted(() => {
-  mounted.value = true
-})
 </script>

@@ -14,7 +14,7 @@ import { sendWhatsAppNotification, getOrgWhatsAppPhone } from '~/server/utils/wh
 import { createMenu, createMenuItem } from '~/server/utils/menu-management'
 import { callAiGateway, imageBlock, textBlock, documentBlock } from '~/server/utils/ai-gateway'
 import { hasCredits, chargeCredits } from '~/server/utils/ai-credits'
-import { purgeBootstrapCacheSafe } from '~/server/utils/bootstrap-cache'
+import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
 import { assertResourceAccess, assertSiteWideAccess } from '~/server/utils/member-access'
 import { execute, queryFirst } from '~/server/db'
 
@@ -284,7 +284,7 @@ export default defineEventHandler(async (event) => {
     }
     return jsonResponse({ error: 'Failed to save menu items. Please try again.' }, { status: 500 })
   }
-  await purgeBootstrapCacheSafe(env, siteId)
+  await purgePublicResourceCacheSafe(env, siteId)
 
   // Fire WhatsApp notifications — non-blocking
   getOrgWhatsAppPhone(db, orgId, siteId).then((phone) => {

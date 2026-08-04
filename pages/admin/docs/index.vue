@@ -56,6 +56,16 @@ const toast = useToast()
 
 interface Doc { id: string; title: string; slug: string | null; category: string | null; status: string }
 
+const isDocsResponse = (value: unknown): value is { docs: Doc[] } =>
+  isRecord(value)
+  && Array.isArray(value.docs)
+  && value.docs.every(doc =>
+    isRecord(doc)
+    && typeof doc.id === 'string'
+    && typeof doc.title === 'string'
+    && typeof doc.status === 'string',
+  )
+
 const docs = ref<Doc[]>([])
 const docsError = ref('')
 const deleteConfirmOpen = ref(false)
@@ -64,7 +74,7 @@ const deletingDocId = ref<string | null>(null)
 
 async function loadDocs() {
   try {
-    const res = await $fetch<{ docs: Doc[] }>('/api/admin/docs')
+    const res = await applicationFetch<{ docs: Doc[] }>('/api/admin/docs', { validate: isDocsResponse })
     docs.value = res.docs ?? []
     docsError.value = ''
   } catch {
@@ -82,7 +92,10 @@ async function confirmDeleteDoc() {
   if (!pendingDeleteDocId.value) return
   deletingDocId.value = pendingDeleteDocId.value
   try {
-    await $fetch(`/api/admin/docs/${pendingDeleteDocId.value}`, { method: 'DELETE' })
+    await applicationFetch(`/api/admin/docs/${pendingDeleteDocId.value}`, {
+      method: 'DELETE',
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+    })
     toast.add({ title: 'Doc deleted', color: 'success' })
     await loadDocs()
   } catch {

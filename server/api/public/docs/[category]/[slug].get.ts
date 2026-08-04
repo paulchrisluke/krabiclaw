@@ -1,27 +1,27 @@
 // GET /api/public/docs/[category]/[slug] - Get single published doc, scoped to its category
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { apiErrorResponse, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getPublishedPlatformDoc } from '~/server/utils/platform-content'
 import { slugToCategory } from '~/utils/docs-categories'
 
 export default defineEventHandler(async (event) => {
   const categorySlug = getRouterParam(event, 'category')
   const slug = getRouterParam(event, 'slug')
-  if (!categorySlug || !slug) return jsonResponse({ error: 'Category and slug required' }, { status: 400 })
+  if (!categorySlug || !slug) return apiErrorResponse(event, 400, 'DOC_PARAMS_REQUIRED', 'Documentation category and slug are required')
 
   const category = slugToCategory(categorySlug)
-  if (!category) return jsonResponse({ error: 'Documentation not found' }, { status: 404 })
+  if (!category) return apiErrorResponse(event, 404, 'DOC_NOT_FOUND', 'Documentation not found')
 
   const env = cloudflareEnv(event)
   const db = env.db
-  if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
+  if (!db) return apiErrorResponse(event, 503, 'DATABASE_UNAVAILABLE', 'Documentation data is temporarily unavailable')
 
   try {
     const doc = await getPublishedPlatformDoc(db, category, slug)
-    if (!doc) return jsonResponse({ error: 'Documentation not found' }, { status: 404 })
+    if (!doc) return apiErrorResponse(event, 404, 'DOC_NOT_FOUND', 'Documentation not found')
 
     return jsonResponse({ doc })
-  } catch (err) {
-    console.error('Failed to fetch doc:', err)
-    return jsonResponse({ error: 'Failed to load doc' }, { status: 500 })
+  } catch (error) {
+    console.error('Failed to fetch doc:', error)
+    return apiErrorResponse(event, 503, 'DOC_UNAVAILABLE', 'Documentation data is temporarily unavailable')
   }
 })

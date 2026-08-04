@@ -3,7 +3,7 @@
 </template>
 
 <script setup lang="ts">
-import GuestThreadInbox from '~/components/workspace/inbox/GuestThreadInbox.vue'
+import GuestThreadInbox from '~/lib/components/workspace/inbox/GuestThreadInbox.vue'
 
 const route = useRoute()
 const threadId = computed(() => typeof route.params.threadId === 'string' ? route.params.threadId : null)

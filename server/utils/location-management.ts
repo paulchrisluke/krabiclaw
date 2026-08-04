@@ -1,4 +1,3 @@
-import { updateSubscriptionQuantity } from "~/server/utils/billing";
 import { fireSiteEventSafe } from "~/server/utils/site-events";
 import { execute, executeBatch, queryFirst, type DbClient } from "~/server/db";
 import { isValidTimezone, normalizeTimezone } from "~/utils/timezone";
@@ -788,7 +787,7 @@ export async function createLocation(
       try {
         await ensureLocationTeam(db, { organizationId, siteId, locationId: id, name: title });
       } catch (teamError) {
-        // D1 has no cross-statement transactions (see CLAUDE.md), so the
+        // D1 has no cross-statement transactions, so the
         // location row above is already committed. Team provisioning is not
         // optional — a location with no team can never be granted editor
         // access — so compensate by removing the orphaned row (and
@@ -832,14 +831,6 @@ export async function createLocation(
           is_primary: isPrimary,
         },
       })
-      void updateSubscriptionQuantity(env, db, organizationId).catch(
-        (error) => {
-          console.error(
-            "Failed to update Stripe subscription quantity after location create:",
-            error,
-          );
-        },
-      );
       return { status: 201, data: { success: true, location } };
     } catch (error) {
       if (isUniqueConstraintError(error)) continue;
@@ -1301,13 +1292,6 @@ export async function deleteLocation(
   `,
     [now, userId, siteId, organizationId, locationId],
   );
-
-  void updateSubscriptionQuantity(env, db, organizationId).catch((error) => {
-    console.error(
-      "Failed to update Stripe subscription quantity after location delete:",
-      error,
-    );
-  });
 
   return {
     status: 200,

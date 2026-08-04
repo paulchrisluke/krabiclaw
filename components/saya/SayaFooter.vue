@@ -8,7 +8,7 @@
         <div>
           <NuxtLink to="/" class="block no-underline leading-none">
             <div v-if="logoUrl" class="size-14 rounded-full overflow-hidden">
-              <img :src="logoUrl" :alt="restaurantName" class="h-full w-full object-cover" />
+              <img :src="logoUrl" :alt="restaurantName" loading="lazy" decoding="async" class="h-full w-full object-cover" />
             </div>
             <div v-else class="flex size-14 items-center justify-center rounded-full bg-inverted/10 text-inverted font-bold text-2xl">
               {{ restaurantName.charAt(0).toUpperCase() }}
@@ -208,13 +208,19 @@ const props = defineProps<{
   error: unknown
   config: Record<string, string>
   menu: ApiRecord | null
+  hasMenu?: boolean
   hasExperiences: boolean
 }>()
 
-const colorMode = useColorMode()
-const isDark = computed(() => colorMode.value === 'dark')
+const isDark = ref(false)
+const syncDarkMode = () => {
+  isDark.value = document.documentElement.classList.contains('dark')
+}
+onMounted(syncDarkMode)
 function toggleColorMode() {
-  colorMode.preference = isDark.value ? 'light' : 'dark'
+  if (!window.toggleSayaDark) return
+  window.toggleSayaDark()
+  syncDarkMode()
 }
 const { locale } = useI18n()
 const copy = computed(() => getVerticalCopy(props.site?.vertical, locale.value))
@@ -241,7 +247,7 @@ const languageItems = computed(() =>
 )
 const locationsError = computed(() => props.error)
 
-const hasMenu = computed(() => (props.menu?.items?.length ?? 0) > 0)
+const hasMenu = computed(() => props.hasMenu ?? (props.menu?.items?.length ?? 0) > 0)
 const year = new Date().getFullYear()
 const logoUrl = computed(() => props.site?.logo_url || null)
 const restaurantName = computed(() => props.site?.brand_name?.trim() || DEFAULT_BUSINESS_NAME)

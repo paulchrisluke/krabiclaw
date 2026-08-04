@@ -25,7 +25,7 @@ import { AGENT_SKILL_RESOURCE_TEMPLATES, readTenantAgentSkillResource } from "~/
 import { cloudflareEnv } from "~/server/utils/api-response";
 import { queryAll } from "~/server/db";
 import { purgeSiteKvCache } from "~/server/utils/edge-cache";
-import { purgeBootstrapCache } from "~/server/utils/bootstrap-cache";
+import { purgePublicResourceCache } from "~/server/utils/public-resource-cache";
 import { schedulePlatformKnowledgeIndexRebuild } from "~/server/utils/platform-search-rebuild";
 import {
   assertConversationalToolEnabled,
@@ -210,7 +210,7 @@ Whenever an image is needed (hero, logo, post thumbnail, menu photo, experience 
 3. Call image_generation natively with model gpt-image-1 or gpt-image-2 and the reviewed prompt tailored to the business.
 4. Immediately call save_generated_image_file({ site_id, attachment_id: <file reference from image_generation_call>, prompt }). Pass the file reference — never extract or forward the base64 from image_generation_call.result, that will be blocked by safety checks.
 5. Call show_generated_images with the assetId and publicUrl returned by save_generated_image_file.
-6. After the user approves, assign with set_media using the appropriate target (for example site_logo, home_hero, home_story_image, about_story_image, location_hero, menu_item_image, post_image, blog_post_image, or experience_media).
+6. After the user approves, assign with set_media using the appropriate target (for example site_logo, home_hero, home_story_image, about_story_image, location_hero, menu_item_media, post_image, blog_post_image, or experience_media).
 7. If the user wants changes, revise the brief and repeat from step 2 so review_agent_guidance_candidate approves every changed image brief before image_generation or saving.
 
 This entire flow runs within the current conversation — do not tell the user to leave the app or use a different context.
@@ -534,16 +534,16 @@ Common workflows: update menus and items, create and publish site posts, triage 
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const db = (env as any).DB as D1Database | undefined;
           if (kv) {
-            // Bootstrap cache is keyed by siteId directly (not hostname), so no
+            // Public resource cache is keyed by siteId directly (not hostname), so no
             // domain lookup is needed here — unlike the HTML purge below.
             // Awaited inline (not waitUntil) so the MCP response never returns
-            // before the stale bootstrap entry is cleared — otherwise a client
-            // that reads bootstrap immediately after this mutation could still
+            // before the stale public resource entry is cleared — otherwise a client
+            // that reads public resources immediately after this mutation could still
             // see stale data.
             try {
-              await purgeBootstrapCache(kv, siteId)
+              await purgePublicResourceCache(kv, siteId)
             } catch (err: unknown) {
-              console.warn("[mcp-cache-purge] bootstrap purge failed:", String(err))
+              console.warn("[mcp-cache-purge] public resource purge failed:", String(err))
             }
           }
           if (kv && db) {

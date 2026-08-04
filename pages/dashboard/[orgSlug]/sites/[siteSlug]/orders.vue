@@ -13,6 +13,11 @@
         <USkeleton v-for="i in 3" :key="i" class="h-48 rounded-lg" />
       </div>
 
+      <div v-else-if="loadError" class="space-y-3">
+        <UAlert color="error" variant="soft" title="Ordering links unavailable" :description="loadError" />
+        <UButton color="neutral" variant="soft" @click="loadOrder">Try again</UButton>
+      </div>
+
       <div v-else-if="locations.length === 0" class="rounded-lg border border-dashed border-default px-6 py-12 text-center">
         <UIcon name="i-lucide-map-pin" class="mx-auto size-9 text-muted" />
         <p class="mt-3 text-sm font-medium text-highlighted">Add a location before configuring orders</p>
@@ -69,6 +74,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.ordering' })
 
 interface LocationRow {
@@ -88,9 +94,11 @@ interface OrderForm {
 }
 
 const siteId = await useDashboardSiteId()
+const route = useRoute()
 const toast = useToast()
 const locations = ref<Array<LocationRow & { addressText: string; form: OrderForm }>>([])
 const loading = ref(true)
+const loadError = ref<string | null>(null)
 const savingId = ref<string | null>(null)
 const { paths, locationPath } = useDashboardSiteLinks(siteId)
 
@@ -128,8 +136,30 @@ function previewLinks(location: { form: OrderForm }) {
 
 async function loadOrder() {
   loading.value = true
+  loadError.value = null
   try {
-    const locationsRes = await $fetch<{ locations: LocationRow[] }>(`/api/dashboard/locations`)
+    const locationsRes = import.meta.server
+      ? await (async () => {
+          const event = useRequestEvent()
+          if (!event) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+          const { listDashboardLocationsResource } = await import('~/server/utils/dashboard-locations-resource')
+          const organizationSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : ''
+          const siteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : ''
+          if (!organizationSlug || !siteSlug) throw createError({ statusCode: 400, statusMessage: 'Dashboard scope is required' })
+          return await listDashboardLocationsResource(event, { organizationSlug, siteSlug })
+        })()
+      : await dashboardApi<{ success: true; locations: LocationRow[] }>(`/api/dashboard/locations`, {
+          validate: (value): value is { success: true; locations: LocationRow[] } =>
+            isRecord(value)
+            && value.success === true
+            && Array.isArray(value.locations)
+            && value.locations.every(location =>
+              isRecord(location)
+              && typeof location.id === 'string'
+              && typeof location.slug === 'string'
+              && typeof location.title === 'string',
+            ),
+        })
     locations.value = (locationsRes.locations ?? []).map(location => ({
       ...location,
       addressText: addressText(location.address),
@@ -140,7 +170,7 @@ async function loadOrder() {
       }
     }))
   } catch (error) {
-    toast.add({ description: error instanceof Error ? error.message : 'Failed to load ordering links', color: 'error' })
+    loadError.value = error instanceof Error ? error.message : 'Failed to load ordering links'
   } finally {
     loading.value = false
   }
@@ -150,13 +180,15 @@ async function saveLocation(location: LocationRow & { form: OrderForm }) {
   if (!canSaveLocation(location)) return
   savingId.value = location.id
   try {
-    await $fetch(`/api/dashboard/locations/${location.id}`, {
+    await dashboardApi(`/api/dashboard/locations/${location.id}`, {
       method: 'PATCH',
       body: {
         grab_url: normalizedUrl(location.form.grab_url),
         uber_eats_url: normalizedUrl(location.form.uber_eats_url),
         foodpanda_url: normalizedUrl(location.form.foodpanda_url)
-      }
+      },
+      validate: (value): value is { success: true; location: ApiRecord } =>
+        isRecord(value) && value.success === true && isRecord(value.location),
     })
     toast.add({ description: 'Ordering links saved', color: 'success' })
   } catch (error) {
@@ -166,6 +198,6 @@ async function saveLocation(location: LocationRow & { form: OrderForm }) {
   }
 }
 
-onMounted(loadOrder)
+await loadOrder()
 useSeoMeta({ title: 'Orders | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>

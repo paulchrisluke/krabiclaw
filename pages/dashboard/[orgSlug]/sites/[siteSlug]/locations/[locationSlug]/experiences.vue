@@ -107,7 +107,7 @@
                     :site-id="siteId"
                     accept="any"
                     title="Select media"
-                    @change="(asset) => handleGalleryMediaChange(index, asset)"
+                    @change="handleGalleryMediaChange(index, $event)"
                   />
                 </div>
                 <UButton
@@ -353,10 +353,11 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 import type { Experience, SlotAvailability, SlotOverride, WeekdayName } from '~/server/utils/experiences'
 import type { BookingPolicyPatch, RenderedBookingPolicySummary } from '~/server/utils/booking-policies'
 import BookingPolicyForm from '~/components/dashboard/BookingPolicyForm.vue'
-import VideoPosterPrompt from '~/components/workspace/media/VideoPosterPrompt.vue'
+import VideoPosterPrompt from '~/lib/components/workspace/media/VideoPosterPrompt.vue'
 
 const weekdayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const satisfies WeekdayName[]
 
@@ -364,24 +365,96 @@ definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.experiences' }
 
 type ApiRecord = Experience
 
+const isSlotsResponse = (value: unknown): value is { slots: string[] } =>
+  isRecord(value)
+  && Array.isArray(value.slots)
+  && value.slots.every(slot => typeof slot === 'string')
+const isPosterResponse = (value: unknown): value is { thumbnailUrl: string } =>
+  isRecord(value) && typeof value.thumbnailUrl === 'string'
+const isExperienceResponse = (value: unknown): value is { experience: ApiRecord } =>
+  isRecord(value)
+  && isRecord(value.experience)
+  && typeof value.experience.id === 'string'
+  && typeof value.experience.title === 'string'
+const isPolicyResponse = (
+  value: unknown,
+): value is { policy: BookingPolicyPatch | null; summary: RenderedBookingPolicySummary | null } =>
+  isRecord(value)
+  && (value.policy === null || isRecord(value.policy))
+  && (value.summary === null || isRecord(value.summary))
+const isPolicySummaryResponse = (
+  value: unknown,
+): value is { summary: RenderedBookingPolicySummary | null } =>
+  isRecord(value) && (value.summary === null || isRecord(value.summary))
+const isAvailabilityResponse = (
+  value: unknown,
+): value is { timezone: string; dates: Array<{ date: string; slots: SlotAvailability[] }> } =>
+  isRecord(value)
+  && typeof value.timezone === 'string'
+  && Array.isArray(value.dates)
+  && value.dates.every(day =>
+    isRecord(day)
+    && typeof day.date === 'string'
+    && Array.isArray(day.slots)
+    && day.slots.every(isRecord),
+  )
+const isOverridesResponse = (value: unknown): value is { overrides: SlotOverride[] } =>
+  isRecord(value)
+  && Array.isArray(value.overrides)
+  && value.overrides.every(override => isRecord(override) && typeof override.id === 'string')
+
 const toast = useToast()
 const siteId = await useDashboardSiteId()
 const dashboardLocation = useDashboardLocation()
 
-const sitePublicUrl = ref<string | null>(null)
-const defaultCurrency = ref('THB')
+const dashboard = useDashboardSite()
+const defaultCurrency = computed(() => dashboard.site.value?.default_currency || 'THB')
 
 // ── List ──────────────────────────────────────────────────
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const experiences = ref<ApiRecord[]>([])
 const currentLocationId = computed(() => dashboardLocation.currentLocationId.value)
-let experiencesLoadGeneration = 0
+const requestEvent = useRequestEvent()
+const {
+  data: experiencesResource,
+  error: experiencesResourceError,
+  pending: experiencesPending,
+  refresh: refreshExperiences,
+} = await useAsyncData(
+  computed(() => `dashboard-location-experiences-${siteId}-${currentLocationId.value ?? 'missing'}`),
+  async () => {
+    const locationId = currentLocationId.value
+    if (!locationId) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
+    if (import.meta.server) {
+      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+      const { loadDashboardLocationExperiences } = await import('~/server/utils/dashboard-editor-resources')
+      return await loadDashboardLocationExperiences(requestEvent, siteId, locationId)
+    }
+    return await dashboardApi<{ experiences: ApiRecord[] }>(
+      `/api/editor/sites/${siteId}/experiences`,
+      {
+        query: { location_id: locationId },
+        validate: (value): value is { experiences: ApiRecord[] } =>
+          isRecord(value)
+          && Array.isArray(value.experiences)
+          && value.experiences.every(experience =>
+            isRecord(experience) && typeof experience.id === 'string',
+          ),
+      },
+    )
+  },
+)
+watch(experiencesResource, value => {
+  if (value) experiences.value = value.experiences
+}, { immediate: true })
+watch([experiencesPending, experiencesResourceError], () => {
+  loading.value = experiencesPending.value
+  loadError.value = experiencesResourceError.value?.message ?? null
+}, { immediate: true })
 
 async function loadExperiences() {
-  const locationId = currentLocationId.value
-  const generation = ++experiencesLoadGeneration
-  if (!locationId) {
+  if (!currentLocationId.value) {
     experiences.value = []
     loadError.value = null
     loading.value = false
@@ -390,34 +463,16 @@ async function loadExperiences() {
   loading.value = true
   loadError.value = null
   try {
-    const res = await $fetch<{ experiences: ApiRecord[] }>(`/api/editor/sites/${siteId}/experiences`, {
-      query: { location_id: locationId },
-    })
-    if (generation !== experiencesLoadGeneration || currentLocationId.value !== locationId) return
-    experiences.value = res.experiences
+    await refreshExperiences()
+    if (experiencesResourceError.value) throw experiencesResourceError.value
+    if (!experiencesResource.value) throw new Error('Experiences response unavailable')
+    experiences.value = experiencesResource.value.experiences
   } catch (error) {
-    if (generation !== experiencesLoadGeneration || currentLocationId.value !== locationId) return
     loadError.value = error instanceof Error && error.message ? error.message : 'The server did not return the experiences list.'
   } finally {
-    if (generation === experiencesLoadGeneration && currentLocationId.value === locationId) {
-      loading.value = false
-    }
+    loading.value = false
   }
 }
-
-async function loadSitePublicUrl() {
-  try {
-      const response = await $fetch<{ success: boolean; settings: { public_url?: string | null; default_currency?: string } }>(`/api/dashboard/settings`)
-    sitePublicUrl.value = response.settings?.public_url || null
-    defaultCurrency.value = response.settings?.default_currency || 'THB'
-  } catch {
-    sitePublicUrl.value = null
-  }
-}
-
-onMounted(() => {
-  Promise.all([loadExperiences(), loadSitePublicUrl()])
-})
 
 // ── Form ──────────────────────────────────────────────────
 const sliderOpen = ref(false)
@@ -443,8 +498,9 @@ const posterUploading = ref(false)
 async function runGenerator(target: 'flat' | 'recurring', day?: WeekdayName) {
   generating.value = true
   try {
-    const res = await $fetch<{ slots: string[] }>(`/api/utils/generate-slots`, {
+    const res = await dashboardApi<{ slots: string[] }>(`/api/utils/generate-slots`, {
       query: { start: generator.start, end: generator.end, interval_minutes: generator.interval },
+      validate: isSlotsResponse,
     })
     if (target === 'flat') {
       timeSlotsInput.value = res.slots.join(', ')
@@ -517,7 +573,6 @@ const posterlessCoverVideoAsset = computed(() => posterlessCoverVideo.value ? fo
 watch(currentLocationId, () => {
   sliderOpen.value = false
   editing.value = null
-  void loadExperiences()
 })
 
 function openCreate() {
@@ -577,9 +632,10 @@ async function submitCoverPoster(poster: File | null) {
   try {
     const body = new FormData()
     body.append('poster', poster)
-    const response = await $fetch<{ thumbnailUrl: string }>(`/api/editor/sites/${siteId}/media/${cover.asset_id}/poster`, {
+    const response = await dashboardApi<{ thumbnailUrl: string }>(`/api/editor/sites/${siteId}/media/${cover.asset_id}/poster`, {
       method: 'POST',
       body,
+      validate: isPosterResponse,
     })
     cover.thumbnail_url = response.thumbnailUrl
     cover.url = cover.url ?? response.thumbnailUrl
@@ -640,13 +696,14 @@ function openEdit(exp: ApiRecord) {
 
 async function loadExperiencePolicy(experienceId: string, locationId: string | null | undefined) {
   try {
-    const res = await $fetch<{ policy: BookingPolicyPatch | null; summary: RenderedBookingPolicySummary | null }>(`/api/editor/sites/${siteId}/booking-policy`, {
+    const res = await dashboardApi<{ policy: BookingPolicyPatch | null; summary: RenderedBookingPolicySummary | null }>(`/api/editor/sites/${siteId}/booking-policy`, {
       query: {
         policy_type: 'experience',
         scope_type: 'experience',
         experience_id: experienceId,
         location_id: locationId ?? undefined,
       },
+      validate: isPolicyResponse,
     })
     if (currentLocationId.value !== locationId || editing.value?.id !== experienceId) return
     bookingPolicyDraft.value = res.policy ?? {}
@@ -710,12 +767,18 @@ async function save() {
     }
     let experienceResult: ApiRecord | null = null
     if (editing.value) {
-      const response = await $fetch<{ experience: ApiRecord }>(`/api/editor/sites/${siteId}/experiences/${editing.value.id}`, { method: 'PATCH', body: payload })
+      const response = await dashboardApi<{ experience: ApiRecord }>(
+        `/api/editor/sites/${siteId}/experiences/${editing.value.id}`,
+        { method: 'PATCH', body: payload, validate: isExperienceResponse },
+      )
       if (currentLocationId.value !== locationId) return
       experienceResult = response.experience ?? null
       toast.add({ description: 'Experience updated.', color: 'success' })
     } else {
-      const response = await $fetch<{ experience: ApiRecord }>(`/api/editor/sites/${siteId}/experiences`, { method: 'POST', body: payload })
+      const response = await dashboardApi<{ experience: ApiRecord }>(
+        `/api/editor/sites/${siteId}/experiences`,
+        { method: 'POST', body: payload, validate: isExperienceResponse },
+      )
       if (currentLocationId.value !== locationId) return
       experienceResult = response.experience ?? null
       toast.add({ description: 'Experience created.', color: 'success' })
@@ -725,7 +788,7 @@ async function save() {
     // shouldn't be reported as an experience save failure, since the experience already saved.
     if (experienceResult?.id) {
       try {
-        const policyResponse = await $fetch<{ summary: RenderedBookingPolicySummary | null }>(`/api/editor/sites/${siteId}/booking-policy`, {
+        const policyResponse = await dashboardApi<{ summary: RenderedBookingPolicySummary | null }>(`/api/editor/sites/${siteId}/booking-policy`, {
           method: 'PATCH',
           body: {
             ...bookingPolicyDraft.value,
@@ -734,6 +797,7 @@ async function save() {
             experience_id: experienceResult.id,
             location_id: locationId,
           },
+          validate: isPolicySummaryResponse,
         })
         if (currentLocationId.value !== locationId) return
         bookingPolicySummary.value = policyResponse.summary ?? null
@@ -754,17 +818,8 @@ async function save() {
 }
 
 function getApiErrorMessage(error: unknown, fallback: string): string {
-  if (error && typeof error === 'object') {
-    const data = (error as Record<string, unknown>).data
-    if (data && typeof data === 'object') {
-      const dataError = (data as Record<string, unknown>).error
-      if (typeof dataError === 'string' && dataError.trim()) return dataError
-      const statusMessage = (data as Record<string, unknown>).statusMessage
-      if (typeof statusMessage === 'string' && statusMessage.trim()) return statusMessage
-    }
-    const message = (error as Record<string, unknown>).message
-    if (typeof message === 'string' && message.trim()) return message
-  }
+  if (error instanceof ApiClientError) return error.message
+  if (error instanceof Error && error.message.trim()) return error.message
   return fallback
 }
 
@@ -782,7 +837,10 @@ async function doDelete() {
   if (!deletingExp.value) return
   deleting.value = true
   try {
-    await $fetch(`/api/editor/sites/${siteId}/experiences/${deletingExp.value.id}`, { method: 'DELETE' })
+    await dashboardApi(`/api/editor/sites/${siteId}/experiences/${deletingExp.value.id}`, {
+      method: 'DELETE',
+      validate: (value): value is { deleted: true } => isRecord(value) && value.deleted === true,
+    })
     toast.add({ description: 'Experience deleted.', color: 'success' })
     deleteOpen.value = false
     await loadExperiences()
@@ -819,12 +877,13 @@ async function loadAvailability() {
   availabilityLoading.value = true
   try {
     const [avail, overrides] = await Promise.all([
-      $fetch<{ timezone: string; dates: Array<{ date: string; slots: SlotAvailability[] }> }>(
+      dashboardApi<{ timezone: string; dates: Array<{ date: string; slots: SlotAvailability[] }> }>(
         `/api/editor/sites/${siteId}/experiences/${availabilityExp.value.id}/availability`,
-        { query: { date: availabilityDate.value } },
+        { query: { date: availabilityDate.value }, validate: isAvailabilityResponse },
       ),
-      $fetch<{ overrides: SlotOverride[] }>(
+      dashboardApi<{ overrides: SlotOverride[] }>(
         `/api/editor/sites/${siteId}/experiences/${availabilityExp.value.id}/slot-overrides`,
+        { validate: isOverridesResponse },
       ),
     ])
     availabilityTimezone.value = avail.timezone
@@ -845,7 +904,7 @@ async function toggleSlotOverride(slot: SlotAvailability) {
   savingOverride.value = slot.time_slot
   try {
     const capacityInput = slotCapacityOverrides[slot.time_slot]
-    await $fetch(`/api/editor/sites/${siteId}/experiences/${availabilityExp.value.id}/slot-overrides`, {
+    await dashboardApi(`/api/editor/sites/${siteId}/experiences/${availabilityExp.value.id}/slot-overrides`, {
       method: 'POST',
       body: {
         override_date: availabilityDate.value,
@@ -853,6 +912,8 @@ async function toggleSlotOverride(slot: SlotAvailability) {
         status: slot.is_closed ? 'open' : 'closed',
         capacity_override: capacityInput != null ? capacityInput : null,
       },
+      validate: (value): value is { success: true; override: ApiRecord } =>
+        isRecord(value) && value.success === true && isRecord(value.override),
     })
     await loadAvailability()
   } catch {
@@ -865,7 +926,10 @@ async function toggleSlotOverride(slot: SlotAvailability) {
 async function deleteOverride(override: SlotOverride) {
   if (!availabilityExp.value) return
   try {
-    await $fetch(`/api/editor/sites/${siteId}/experiences/${availabilityExp.value.id}/slot-overrides/${override.id}`, { method: 'DELETE' })
+    await dashboardApi(`/api/editor/sites/${siteId}/experiences/${availabilityExp.value.id}/slot-overrides/${override.id}`, {
+      method: 'DELETE',
+      validate: (value): value is { deleted: true } => isRecord(value) && value.deleted === true,
+    })
     await loadAvailability()
   } catch {
     toast.add({ description: 'Failed to delete override.', color: 'error' })

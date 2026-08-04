@@ -51,7 +51,7 @@ definePageMeta({ layout: 'saya' })
 const { formatDate } = useLocaleDate()
 const justCopied = ref(false)
 const { siteId } = useTenantSite()
-const { experiencePolicyById, experiencePolicySiteDefault } = await useBootstrap()
+const { experiencePolicyById, experiencePolicySiteDefault } = await usePublicPageData()
 
 const confirmation = ref<BookingConfirmationData | null>(null)
 
@@ -78,11 +78,9 @@ const receiptRows = computed(() => {
   return rows
 })
 
-// Fallback used only when the /experiences/confirmed bootstrap call has no
-// experience-scoped data to resolve a policy for (this route has no slug param,
-// so experiencePolicyById is typically empty) — experiencePolicySiteDefault is
-// the server-rendered site-level default policy (server/utils/booking-policies.ts),
-// so this never duplicates policy copy on the client.
+// Policy source precedence: use the booking snapshot first, then an
+// experience-specific policy, then the server-rendered site default. This
+// route has no slug parameter, so experiencePolicyById is typically empty.
 const resolvedPolicySummary = computed(() => {
   if (confirmation.value?.sitePolicySummary) return confirmation.value.sitePolicySummary as ApiRecord
   const experienceId = confirmation.value?.experienceId

@@ -2,7 +2,7 @@
 /**
  * D1 migration guardrails.
  *
- * D1 rejects raw BEGIN/COMMIT/ROLLBACK (see CLAUDE.md "D1 does not support raw
+ * D1 rejects raw BEGIN/COMMIT/ROLLBACK (see AGENTS.md "D1 does not support raw
  * transactions" — confirmed both via Drizzle's execute() and the raw binding).
  * A migration that slips one in applies fine in isolation but breaks the first
  * write path that tries to wrap it, so this is checked at the SQL-file level:
@@ -11,7 +11,7 @@
  *    of CREATE TRIGGER ... BEGIN ... END bodies (where BEGIN/END are trigger
  *    body delimiters, not transaction control, and are always allowed).
  * 2. Rejects renaming/removing the historical, already-applied 0001-0007
- *    migration filenames (see CLAUDE.md "Database Schema Workflow" — wrangler
+ *    migration filenames (see AGENTS.md "Database Schema Workflow" — wrangler
  *    tracks applied migrations by filename, not content, so renaming a
  *    filename that's already applied anywhere makes wrangler re-run it and
  *    fail with "table X already exists").
@@ -57,7 +57,7 @@ function lintTransactionControl(sql, filePath) {
     violations.push({
       file: relative(ROOT, filePath),
       line,
-      message: `Bare "${match[1]}" statement outside a CREATE TRIGGER body — D1 rejects raw transaction control (see CLAUDE.md "D1 does not support raw transactions").`,
+      message: `Bare "${match[1]}" statement outside a CREATE TRIGGER body — D1 rejects raw transaction control (see AGENTS.md "D1 does not support raw transactions").`,
     })
   }
 

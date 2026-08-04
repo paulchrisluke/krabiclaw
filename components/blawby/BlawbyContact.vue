@@ -94,7 +94,11 @@ async function submitContact() {
   submitting.value = true
   submitMessage.value = ''
   try {
-    await $fetch(`/api/public/sites/${siteId}/contact`, { method: 'POST', body: form })
+    await publicApiMutation<{ success: true }>(`/api/public/sites/${siteId}/contact`, {
+      method: 'POST',
+      body: form,
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+    })
     trackContactSubmit()
     try {
       setContactConfirmation({

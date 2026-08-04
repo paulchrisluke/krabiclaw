@@ -6,15 +6,15 @@
       :to="offering.canonical_path"
       class="relative h-full rounded-2xl bg-gray-100 p-6 no-underline shadow-xl shadow-slate-900/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blawby-primary)] focus-visible:ring-offset-4"
     >
-      <div class="w-full overflow-hidden rounded-lg">
+      <div :data-offering-id="offering.id" class="aspect-[704/478] w-full overflow-hidden rounded-lg bg-gray-100">
         <img
           v-if="offering.thumbnail_url"
-          :src="offering.thumbnail_url"
+          :src="offering.thumbnail_url || undefined"
           :alt="offering.name"
           width="704"
           height="478"
           loading="lazy"
-          class="aspect-[704/478] w-full object-cover"
+          class="size-full object-cover"
         >
       </div>
       <span class="mt-6 inline-block rounded bg-[var(--blawby-primary-dark)] px-2 text-sm font-semibold uppercase text-white">

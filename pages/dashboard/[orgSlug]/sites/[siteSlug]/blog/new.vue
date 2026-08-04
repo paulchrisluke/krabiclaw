@@ -12,9 +12,9 @@
 </template>
 
 <script setup lang="ts">
-import { tenantBlogRepository } from '~/components/workspace/blog/tenantBlogRepository'
-import BlogPostEditor from '~/components/workspace/blog/BlogPostEditor.vue'
-import MediaPicker from '~/components/workspace/media/MediaPicker.vue'
+import { tenantBlogRepository } from '~/lib/components/workspace/blog/tenantBlogRepository'
+import BlogPostEditor from '~/lib/components/workspace/blog/BlogPostEditor.vue'
+import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
 
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.blog' })
 

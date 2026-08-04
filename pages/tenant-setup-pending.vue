@@ -39,15 +39,25 @@
       </div>
 
       <!-- Refresh Message -->
-      <div class="mt-8 text-sm text-stone-500">
+      <div v-if="!setupFailed" class="mt-8 text-sm text-stone-500">
         This page will automatically update when setup is complete.<br>
         You can also refresh this page to check the status.
       </div>
+
+      <!-- Failure state: a real error, not "still provisioning" -->
+      <UAlert
+        v-else
+        class="mt-8 text-left"
+        color="error"
+        variant="soft"
+        title="Setup could not be verified"
+        :description="setupFailedMessage"
+      />
     </div>
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 definePageMeta({ layout: 'saya' })
 // SEO: Add noindex for setup pages
 useHead({
@@ -57,20 +67,31 @@ useHead({
   title: 'Setting Up Your Site - KrabiClaw'
 })
 
-// Auto-refresh every 5 seconds to check status
+const setupFailed = ref(false)
+const setupFailedMessage = ref('')
+
+// Auto-refresh every 5 seconds to check status. A 404 here means the site is
+// genuinely still provisioning — expected, keep polling. Any other failure
+// (500, network error) is a real problem, not a "not ready yet" signal, so it
+// stops the loop and surfaces an error instead of polling silently forever.
 onMounted(() => {
   const interval = setInterval(async () => {
     try {
-      // Check if site is ready by trying to load the homepage
-      await $fetch('/api/site-status')
-      // If successful, redirect to homepage
+      await publicApiRequest<{ status: 'ready'; onboarding_status: string }>('/api/site-status', {
+        validate: (value): value is { status: 'ready'; onboarding_status: string } =>
+          isRecord(value)
+          && value.status === 'ready'
+          && typeof value.onboarding_status === 'string',
+      })
       await navigateTo('/')
-    } catch {
-      // Still setting up, continue checking
+    } catch (error) {
+      if (error instanceof ApiClientError && error.statusCode === 404) return
+      clearInterval(interval)
+      setupFailed.value = true
+      setupFailedMessage.value = error instanceof Error ? error.message : 'Could not check setup status.'
     }
   }, 5000)
 
-  // Cleanup interval on unmount
   onUnmounted(() => {
     clearInterval(interval)
   })

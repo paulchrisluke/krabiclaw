@@ -46,7 +46,7 @@ mock.module('stripe', {
   defaultExport: FakeStripe,
 })
 
-const { getCachedPlans } = await import('../../server/utils/billing-plans.ts')
+const { BillingPlansError, getCachedPlans } = await import('../../server/utils/billing-plans.ts')
 
 // Cache key is versioned by the MANAGED_SERVICE_ENABLED flag state
 // (billing-plans.ts plansCacheKey()) — baseEnv() below never sets the flag,
@@ -113,15 +113,18 @@ describe('getCachedPlans — KV read-through cache', () => {
     assert.deepEqual(JSON.parse(stored as string), JSON.parse(JSON.stringify(result)))
   })
 
-  test('falls back to Stripe when cached JSON is invalid', async () => {
-    stripeProducts = [GROWTH_PRODUCT]
-    stripePrices = [GROWTH_PRICE]
+  test('fails fast when cached JSON is invalid without calling Stripe', async () => {
     const kv = makeKv({ [CACHE_KEY]: 'not-valid-json{{{' })
 
-    const result = await getCachedPlans(baseEnv(kv))
+    await assert.rejects(
+      () => getCachedPlans(baseEnv(kv)),
+      (error: unknown) =>
+        error instanceof BillingPlansError
+        && error.code === 'BILLING_PLANS_CACHE_INVALID'
+        && error.statusCode === 503,
+    )
 
-    assert.equal(stripeCallCount, 1)
-    assert.ok(result.some((p) => p.id === 'growth'))
+    assert.equal(stripeCallCount, 0)
   })
 
   test('skips KV entirely when SITE_CACHE is undefined', async () => {

@@ -12,10 +12,10 @@ import test from 'node:test'
 // content/[pageId] routes, and a follow-up pass moved page *selection* out
 // of the full-screen editor entirely so the editor only ever renders one
 // already-chosen page.
-const editorPath = new URL('../../components/workspace/content/CmsContentEditor.vue', import.meta.url)
+const editorPath = new URL('../../lib/components/workspace/content/CmsContentEditor.vue', import.meta.url)
 const editorSource = readFileSync(editorPath, 'utf8')
 const nuxtConfigSource = readFileSync(new URL('../../nuxt.config.ts', import.meta.url), 'utf8')
-const pageIndexSource = readFileSync(new URL('../../components/workspace/content/ContentPageIndex.vue', import.meta.url), 'utf8')
+const pageIndexSource = readFileSync(new URL('../../lib/components/workspace/content/ContentPageIndex.vue', import.meta.url), 'utf8')
 const linksSource = readFileSync(new URL('../../composables/useDashboardSiteLinks.ts', import.meta.url), 'utf8')
 const layoutSource = readFileSync(new URL('../../layouts/dashboard.vue', import.meta.url), 'utf8')
 const siteContentIndexHostSource = readFileSync(
@@ -60,7 +60,7 @@ test('CMS status never fabricates a Live state from local dirty state', () => {
   assert.match(editorSource, /siteStatusLabel/)
 })
 
-test('CMS editor host routes disable SSR via routeRules; editor uses $fetch for client-side fetching and avoids useFetch/useRequestFetch', () => {
+test('CMS editor host routes disable SSR via routeRules; editor uses the canonical dashboard API client for client-side fetching and avoids useFetch/useRequestFetch', () => {
   // ssr:false must come from routeRules (read by Nitro before any Vue
   // rendering starts), not definePageMeta — a page-level ssr:false depends on
   // Nuxt's page-render path resolving first, which isn't a guarantee at the
@@ -71,13 +71,16 @@ test('CMS editor host routes disable SSR via routeRules; editor uses $fetch for 
   assert.doesNotMatch(locationContentEditorHostSource, /ssr:\s*false/)
 
   // The editor component must never introduce useFetch or useRequestFetch —
-  // those bypass cloudflare bindings in SSR (see AGENTS.md) and are
-  // unnecessary here since SSR is disabled on the host page.
+  // those bypass cloudflare bindings in SSR (see AGENTS.md). Since SSR is
+  // disabled for editor routes, $fetch is safe for client-side data loading.
   assert.doesNotMatch(editorSource, /useFetch\b/)
   assert.doesNotMatch(editorSource, /useRequestFetch\b/)
 
-  // Client-side fetching uses $fetch (the correct pattern for ssr:false pages).
-  assert.match(editorSource, /\$fetch/)
+  // Editor uses the canonical dashboard API client (dashboardApi/useDashboardApi,
+  // itself backed by $fetch — see composables/dashboardFetch.ts) for client-side
+  // data loading, rather than calling $fetch directly or reintroducing an
+  // SSR-unsafe primitive. SSR is disabled for editor routes, so this is safe.
+  assert.match(editorSource, /\bdashboardApi\(/)
 })
 
 test('CMS content editor host pages render the shared editor with siteId and pageId props', () => {

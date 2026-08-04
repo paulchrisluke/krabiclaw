@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "6ed63f72-5422-4194-8b37-338679178378",
+  "id": "d18243a5-2707-4e7f-b461-778909a8bde8",
   "prevId": "129513b5-8749-4ca1-828b-b613db440a74",
   "tables": {
     "account": {
@@ -135,667 +135,6 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
-    },
-    "agent_guidance_artifacts": {
-      "name": "agent_guidance_artifacts",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "guidance_run_id": {
-          "name": "guidance_run_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "artifact_type": {
-          "name": "artifact_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "artifact_id": {
-          "name": "artifact_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        }
-      },
-      "indexes": {
-        "agent_guidance_artifacts_unique": {
-          "name": "agent_guidance_artifacts_unique",
-          "columns": [
-            "guidance_run_id",
-            "artifact_type",
-            "artifact_id"
-          ],
-          "isUnique": true
-        },
-        "agent_guidance_artifacts_artifact_idx": {
-          "name": "agent_guidance_artifacts_artifact_idx",
-          "columns": [
-            "artifact_type",
-            "artifact_id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "agent_guidance_artifacts_guidance_run_id_agent_guidance_runs_id_fk": {
-          "name": "agent_guidance_artifacts_guidance_run_id_agent_guidance_runs_id_fk",
-          "tableFrom": "agent_guidance_artifacts",
-          "tableTo": "agent_guidance_runs",
-          "columnsFrom": [
-            "guidance_run_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "agent_guidance_artifacts_type_check": {
-          "name": "agent_guidance_artifacts_type_check",
-          "value": "artifact_type IN ('content_revision', 'media_asset')"
-        }
-      }
-    },
-    "agent_guidance_runs": {
-      "name": "agent_guidance_runs",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "task": {
-          "name": "task",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "candidate_type": {
-          "name": "candidate_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "surface": {
-          "name": "surface",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "site_id": {
-          "name": "site_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "resolution_fingerprint": {
-          "name": "resolution_fingerprint",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "resolved_skills_json": {
-          "name": "resolved_skills_json",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "candidate_fingerprint": {
-          "name": "candidate_fingerprint",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "recommendation": {
-          "name": "recommendation",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "findings_json": {
-          "name": "findings_json",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "review_model": {
-          "name": "review_model",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_by_user_id": {
-          "name": "created_by_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        },
-        "reviewed_at": {
-          "name": "reviewed_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "agent_guidance_runs_site_idx": {
-          "name": "agent_guidance_runs_site_idx",
-          "columns": [
-            "site_id",
-            "task",
-            "created_at"
-          ],
-          "isUnique": false
-        },
-        "agent_guidance_runs_organization_idx": {
-          "name": "agent_guidance_runs_organization_idx",
-          "columns": [
-            "organization_id",
-            "task",
-            "created_at"
-          ],
-          "isUnique": false
-        },
-        "agent_guidance_runs_fingerprint_idx": {
-          "name": "agent_guidance_runs_fingerprint_idx",
-          "columns": [
-            "resolution_fingerprint",
-            "candidate_fingerprint"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "agent_guidance_runs_organization_id_organization_id_fk": {
-          "name": "agent_guidance_runs_organization_id_organization_id_fk",
-          "tableFrom": "agent_guidance_runs",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "agent_guidance_runs_site_id_sites_id_fk": {
-          "name": "agent_guidance_runs_site_id_sites_id_fk",
-          "tableFrom": "agent_guidance_runs",
-          "tableTo": "sites",
-          "columnsFrom": [
-            "site_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "agent_guidance_runs_created_by_user_id_user_id_fk": {
-          "name": "agent_guidance_runs_created_by_user_id_user_id_fk",
-          "tableFrom": "agent_guidance_runs",
-          "tableTo": "user",
-          "columnsFrom": [
-            "created_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "agent_guidance_runs_task_check": {
-          "name": "agent_guidance_runs_task_check",
-          "value": "task IN ('blog.write', 'image.generate')"
-        },
-        "agent_guidance_runs_candidate_type_check": {
-          "name": "agent_guidance_runs_candidate_type_check",
-          "value": "candidate_type IN ('blog_draft', 'image_brief')"
-        },
-        "agent_guidance_runs_surface_check": {
-          "name": "agent_guidance_runs_surface_check",
-          "value": "surface IN ('tenant_mcp', 'platform_mcp', 'dashboard_ai', 'internal_api')"
-        },
-        "agent_guidance_runs_recommendation_check": {
-          "name": "agent_guidance_runs_recommendation_check",
-          "value": "recommendation IN ('ready', 'revise')"
-        }
-      }
-    },
-    "agent_skill_versions": {
-      "name": "agent_skill_versions",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "skill_id": {
-          "name": "skill_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "instructions_markdown": {
-          "name": "instructions_markdown",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "priority": {
-          "name": "priority",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 100
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "content_hash": {
-          "name": "content_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_by_user_id": {
-          "name": "created_by_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "approved_by_user_id": {
-          "name": "approved_by_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        },
-        "activated_at": {
-          "name": "activated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "agent_skill_versions_skill_version_unique": {
-          "name": "agent_skill_versions_skill_version_unique",
-          "columns": [
-            "skill_id",
-            "version"
-          ],
-          "isUnique": true
-        },
-        "agent_skill_versions_one_active_unique": {
-          "name": "agent_skill_versions_one_active_unique",
-          "columns": [
-            "skill_id"
-          ],
-          "isUnique": true,
-          "where": "status = 'active'"
-        },
-        "agent_skill_versions_skill_status_idx": {
-          "name": "agent_skill_versions_skill_status_idx",
-          "columns": [
-            "skill_id",
-            "status"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "agent_skill_versions_skill_id_agent_skills_id_fk": {
-          "name": "agent_skill_versions_skill_id_agent_skills_id_fk",
-          "tableFrom": "agent_skill_versions",
-          "tableTo": "agent_skills",
-          "columnsFrom": [
-            "skill_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "agent_skill_versions_created_by_user_id_user_id_fk": {
-          "name": "agent_skill_versions_created_by_user_id_user_id_fk",
-          "tableFrom": "agent_skill_versions",
-          "tableTo": "user",
-          "columnsFrom": [
-            "created_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "agent_skill_versions_approved_by_user_id_user_id_fk": {
-          "name": "agent_skill_versions_approved_by_user_id_user_id_fk",
-          "tableFrom": "agent_skill_versions",
-          "tableTo": "user",
-          "columnsFrom": [
-            "approved_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "agent_skill_versions_status_check": {
-          "name": "agent_skill_versions_status_check",
-          "value": "status IN ('draft', 'active', 'archived')"
-        },
-        "agent_skill_versions_version_check": {
-          "name": "agent_skill_versions_version_check",
-          "value": "version >= 1"
-        },
-        "agent_skill_versions_name_check": {
-          "name": "agent_skill_versions_name_check",
-          "value": "length(name) BETWEEN 1 AND 160"
-        },
-        "agent_skill_versions_description_check": {
-          "name": "agent_skill_versions_description_check",
-          "value": "length(description) BETWEEN 1 AND 1000"
-        },
-        "agent_skill_versions_instructions_check": {
-          "name": "agent_skill_versions_instructions_check",
-          "value": "length(cast(instructions_markdown AS blob)) BETWEEN 1 AND 100000"
-        },
-        "agent_skill_versions_priority_check": {
-          "name": "agent_skill_versions_priority_check",
-          "value": "priority BETWEEN 0 AND 1000"
-        },
-        "agent_skill_versions_hash_check": {
-          "name": "agent_skill_versions_hash_check",
-          "value": "length(content_hash) = 64 AND lower(content_hash) = content_hash"
-        }
-      }
-    },
-    "agent_skills": {
-      "name": "agent_skills",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "scope_type": {
-          "name": "scope_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "site_id": {
-          "name": "site_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "task": {
-          "name": "task",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "slug": {
-          "name": "slug",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_by_user_id": {
-          "name": "created_by_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        }
-      },
-      "indexes": {
-        "agent_skills_platform_identity_unique": {
-          "name": "agent_skills_platform_identity_unique",
-          "columns": [
-            "task",
-            "slug"
-          ],
-          "isUnique": true,
-          "where": "scope_type = 'platform'"
-        },
-        "agent_skills_organization_identity_unique": {
-          "name": "agent_skills_organization_identity_unique",
-          "columns": [
-            "organization_id",
-            "task",
-            "slug"
-          ],
-          "isUnique": true,
-          "where": "scope_type = 'organization'"
-        },
-        "agent_skills_site_identity_unique": {
-          "name": "agent_skills_site_identity_unique",
-          "columns": [
-            "organization_id",
-            "site_id",
-            "task",
-            "slug"
-          ],
-          "isUnique": true,
-          "where": "scope_type = 'site'"
-        },
-        "agent_skills_resolution_idx": {
-          "name": "agent_skills_resolution_idx",
-          "columns": [
-            "task",
-            "scope_type",
-            "organization_id",
-            "site_id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "agent_skills_organization_id_organization_id_fk": {
-          "name": "agent_skills_organization_id_organization_id_fk",
-          "tableFrom": "agent_skills",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "agent_skills_site_id_sites_id_fk": {
-          "name": "agent_skills_site_id_sites_id_fk",
-          "tableFrom": "agent_skills",
-          "tableTo": "sites",
-          "columnsFrom": [
-            "site_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "agent_skills_created_by_user_id_user_id_fk": {
-          "name": "agent_skills_created_by_user_id_user_id_fk",
-          "tableFrom": "agent_skills",
-          "tableTo": "user",
-          "columnsFrom": [
-            "created_by_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "agent_skills_scope_type_check": {
-          "name": "agent_skills_scope_type_check",
-          "value": "scope_type IN ('platform', 'organization', 'site')"
-        },
-        "agent_skills_task_check": {
-          "name": "agent_skills_task_check",
-          "value": "task IN ('blog.write', 'image.generate')"
-        },
-        "agent_skills_scope_target_check": {
-          "name": "agent_skills_scope_target_check",
-          "value": "\n\t\t(scope_type = 'platform' AND organization_id IS NULL AND site_id IS NULL) OR\n\t\t(scope_type = 'organization' AND organization_id IS NOT NULL AND site_id IS NULL) OR\n\t\t(scope_type = 'site' AND organization_id IS NOT NULL AND site_id IS NOT NULL)\n\t"
-        },
-        "agent_skills_slug_check": {
-          "name": "agent_skills_slug_check",
-          "value": "slug GLOB '[a-z0-9]*' AND slug NOT GLOB '*[^a-z0-9-]*' AND slug NOT LIKE '%--%' AND slug NOT LIKE '-%' AND slug NOT LIKE '%-'"
-        }
-      }
     },
     "ai_credits": {
       "name": "ai_credits",
@@ -8465,6 +7804,173 @@
             "userId"
           ],
           "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "menu_item_media": {
+      "name": "menu_item_media",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "menu_item_id": {
+          "name": "menu_item_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "asset_id": {
+          "name": "asset_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        }
+      },
+      "indexes": {
+        "menu_item_media_menu_item_order_idx": {
+          "name": "menu_item_media_menu_item_order_idx",
+          "columns": [
+            "menu_item_id",
+            "sort_order"
+          ],
+          "isUnique": false
+        },
+        "menu_item_media_asset_scope_idx": {
+          "name": "menu_item_media_asset_scope_idx",
+          "columns": [
+            "organization_id",
+            "site_id",
+            "asset_id"
+          ],
+          "isUnique": false
+        },
+        "menu_item_media_site_menu_item_idx": {
+          "name": "menu_item_media_site_menu_item_idx",
+          "columns": [
+            "site_id",
+            "menu_item_id"
+          ],
+          "isUnique": false
+        },
+        "menu_item_media_menu_item_asset_unique": {
+          "name": "menu_item_media_menu_item_asset_unique",
+          "columns": [
+            "menu_item_id",
+            "asset_id"
+          ],
+          "isUnique": true
+        },
+        "menu_item_media_menu_item_sort_unique": {
+          "name": "menu_item_media_menu_item_sort_unique",
+          "columns": [
+            "menu_item_id",
+            "sort_order"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "menu_item_media_organization_id_organization_id_fk": {
+          "name": "menu_item_media_organization_id_organization_id_fk",
+          "tableFrom": "menu_item_media",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "menu_item_media_site_id_sites_id_fk": {
+          "name": "menu_item_media_site_id_sites_id_fk",
+          "tableFrom": "menu_item_media",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "menu_item_media_menu_item_fk": {
+          "name": "menu_item_media_menu_item_fk",
+          "tableFrom": "menu_item_media",
+          "tableTo": "menu_items",
+          "columnsFrom": [
+            "menu_item_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "menu_item_media_asset_scope_fk": {
+          "name": "menu_item_media_asset_scope_fk",
+          "tableFrom": "menu_item_media",
+          "tableTo": "media_assets",
+          "columnsFrom": [
+            "organization_id",
+            "site_id",
+            "asset_id"
+          ],
+          "columnsTo": [
+            "organization_id",
+            "site_id",
             "id"
           ],
           "onDelete": "cascade",

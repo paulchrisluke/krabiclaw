@@ -7,7 +7,7 @@
           just visually collapsed — it used to render above the article on mobile with no
           breakpoint gate, delaying the headline by roughly a full screen and reading as the
           page's primary content. It only reappears once the grid actually puts it side by
-          side with the article at `lg:` (~992px, see --breakpoint-lg in assets/css/main.css).
+                 side with the article at `lg:` (~992px, see --breakpoint-lg in assets/css/base.css).
         -->
         <aside class="hidden lg:sticky lg:top-28 lg:block lg:h-fit lg:pt-6">
           <PlatformCommandSearchTrigger surface="tenant_blog" variant="blawby" label="Search articles..." aria-label="Open article search" class="mb-6" />

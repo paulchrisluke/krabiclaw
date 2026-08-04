@@ -7,7 +7,7 @@
       <video
         v-if="isVideo"
         :src="mediaUrl"
-        :poster="item.poster"
+        :poster="posterUrl"
         autoplay
         muted
         loop
@@ -62,8 +62,15 @@ import { formatMoneyAmount, isSaleActive } from '~/shared/money'
 interface MenuItem {
   slug: string
   name: string
-  image_asset_id?: string | null
   public_url?: string
+  thumbnail_url?: string | null
+  kind?: string | null
+  media?: Array<{
+    id: string
+    kind: 'image' | 'video'
+    public_url: string
+    thumbnail_url: string | null
+  }>
   poster?: string
   price_amount?: string | number | null
   compare_at_price_amount?: string | number | null
@@ -74,22 +81,26 @@ interface MenuItem {
   description?: string
 }
 
-const props = defineProps<{
-  item: MenuItem
-  resolveAssetUrl?: (_assetId: string) => string
-}>()
+const props = defineProps<{ item: MenuItem }>()
 
 const onSale = computed(() => isSaleActive(props.item))
 
 const mediaUrl = computed(() => {
+  const cover = props.item.media?.[0]
+  if (cover?.public_url) return cover.public_url
   if (props.item.public_url) return props.item.public_url
-  if (props.item.image_asset_id && props.resolveAssetUrl) {
-    return props.resolveAssetUrl(props.item.image_asset_id)
-  }
   return ''
 })
 
+const posterUrl = computed(() => {
+  const cover = props.item.media?.[0]
+  return cover?.thumbnail_url || props.item.thumbnail_url || props.item.poster || undefined
+})
+
 const isVideo = computed(() => {
+  const cover = props.item.media?.[0]
+  if (cover?.kind) return cover.kind === 'video'
+  if (props.item.kind) return props.item.kind === 'video'
   const url = mediaUrl.value
   return /\.(mp4|webm|mov)$/i.test(url)
 })

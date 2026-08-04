@@ -63,8 +63,25 @@
               </div>
             </div>
 
+            <UAlert
+              v-if="postsLoadError"
+              color="error"
+              variant="soft"
+              title="Posts could not be loaded"
+              :description="postsLoadError"
+              class="m-4"
+            />
+            <UAlert
+              v-if="facebookLoadError"
+              color="warning"
+              variant="soft"
+              title="Publishing connection could not be loaded"
+              :description="facebookLoadError"
+              class="m-4"
+            />
+
             <!-- Empty state -->
-            <div v-if="!loading && posts.length === 0" class="px-4 py-10 text-center">
+            <div v-if="!loading && !postsLoadError && posts.length === 0" class="px-4 py-10 text-center">
               <UIcon name="i-lucide-newspaper" class="mx-auto size-8 text-muted" />
               <p class="mt-3 text-sm text-muted">No posts yet. Use the AI composer or write one manually.</p>
               <UButton size="sm" color="neutral" variant="soft" icon="i-lucide-pencil" class="mt-3" @click="openCompose">
@@ -174,6 +191,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.posts' })
 
 const siteId = await useDashboardSiteId()
@@ -184,9 +202,34 @@ const dashboardLocation = useDashboardLocation()
 // Posts list
 const posts = ref<ApiRecord[]>([])
 const loading = ref(false)
+const postsLoadError = ref<string | null>(null)
+const facebookLoadError = ref<string | null>(null)
+const facebookConnected = ref(false)
 const activeTab = ref('all')
 const currentLocationId = computed(() => dashboardLocation.currentLocationId.value)
 let postsLoadGeneration = 0
+const isPostsResponse = (value: unknown): value is { posts: ApiRecord[] } =>
+  isRecord(value)
+  && Array.isArray(value.posts)
+  && value.posts.every(post =>
+    isRecord(post)
+    && typeof post.id === 'string'
+    && typeof post.status === 'string',
+  )
+const isFacebookResponse = (value: unknown): value is { connected: boolean } =>
+  isRecord(value) && typeof value.connected === 'boolean'
+const isPostResponse = (value: unknown): value is ApiRecord =>
+  isRecord(value)
+  && isRecord(value.post)
+  && typeof value.post.id === 'string'
+  && (value.socialErrors === undefined || isRecord(value.socialErrors))
+const isGeneratedPostResponse = (value: unknown): value is ApiRecord =>
+  isRecord(value)
+  && isRecord(value.generated)
+  && typeof value.generated.title === 'string'
+  && typeof value.generated.body === 'string'
+  && isRecord(value.credits)
+  && typeof value.credits.remaining === 'number'
 
 const loadPosts = async () => {
   const requestedLocationId = currentLocationId.value
@@ -197,40 +240,69 @@ const loadPosts = async () => {
     return
   }
   loading.value = true
+  postsLoadError.value = null
   try {
     const query: Record<string, string> = {}
     if (activeTab.value !== 'all') query.status = activeTab.value
     query.location_id = requestedLocationId
-    const res = await $fetch<{ posts: ApiRecord[] }>(`/api/editor/sites/${siteId}/posts`, { query })
+    const res = await dashboardApi<{ posts: ApiRecord[] }>(`/api/editor/sites/${siteId}/posts`, {
+      query,
+      validate: isPostsResponse,
+    })
     if (generation !== postsLoadGeneration || currentLocationId.value !== requestedLocationId) return
     posts.value = res.posts ?? []
-  } catch {
-    if (generation === postsLoadGeneration) toast.add({ description: 'Failed to load posts', color: 'error' })
+  } catch (error) {
+    if (generation === postsLoadGeneration) {
+      postsLoadError.value = error instanceof Error ? error.message : 'Failed to load posts'
+      toast.add({ description: postsLoadError.value, color: 'error' })
+    }
   } finally {
     if (generation === postsLoadGeneration) loading.value = false
   }
 }
 
-async function loadFacebookConnection() {
-  const requestedLocationId = currentLocationId.value
-  facebookConnected.value = false
-  if (!requestedLocationId) return
-  try {
-    const res = await $fetch<{ connected: boolean }>('/api/integrations/facebook-pages/connection', {
-      query: { locationId: requestedLocationId },
-    })
-    if (currentLocationId.value === requestedLocationId) facebookConnected.value = res.connected
-  } catch {
-    if (currentLocationId.value === requestedLocationId) {
-      facebookConnected.value = false
-      toast.add({ description: 'Failed to load Facebook connection status', color: 'error' })
+const requestEvent = useRequestEvent()
+const postsKey = computed(() =>
+  `dashboard-location-posts:${siteId}:${currentLocationId.value ?? 'missing'}`,
+)
+const { data: postsResource, pending: postsPending, error: postsResourceError } = await useAsyncData(
+  postsKey,
+  async () => {
+    if (!currentLocationId.value) throw createError({ statusCode: 404, statusMessage: 'Location not found' })
+    if (import.meta.server) {
+      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+      const { loadDashboardLocationPosts } = await import('~/server/utils/dashboard-editor-resources')
+      return await loadDashboardLocationPosts(requestEvent, siteId, currentLocationId.value)
     }
-  }
-}
+    const [postsResponse, facebookResponse] = await Promise.all([
+      dashboardApi<{ posts: ApiRecord[] }>(`/api/editor/sites/${siteId}/posts`, {
+        query: { location_id: currentLocationId.value },
+        validate: isPostsResponse,
+      }),
+      dashboardApi<{ connected: boolean }>('/api/integrations/facebook-pages/connection', {
+        query: { locationId: currentLocationId.value },
+        validate: isFacebookResponse,
+      }),
+    ])
+    return { posts: postsResponse, facebook: facebookResponse }
+  },
+  { lazy: import.meta.client },
+)
 
-onMounted(async () => {
-  await Promise.all([loadPosts(), loadFacebookConnection()])
-})
+watch([postsResource, postsPending, postsResourceError], ([resource, pending, error]) => {
+  loading.value = pending
+  if (error) {
+    const message = error instanceof Error ? error.message : 'Failed to load posts'
+    postsLoadError.value = message
+    facebookLoadError.value = message
+    return
+  }
+  if (!resource) return
+  posts.value = resource.posts.posts as ApiRecord[]
+  facebookConnected.value = resource.facebook.connected
+  postsLoadError.value = null
+  facebookLoadError.value = null
+}, { immediate: true })
 
 // Selection / compose
 const selectedPost = ref<ApiRecord | null>(null)
@@ -257,8 +329,6 @@ const editForm = reactive({
   gallery_media: [] as GalleryFormItem[],
 })
 const selectedChannels = ref<string[]>(['site'])
-
-const facebookConnected = ref(false)
 
 const channelOptions = computed(() => [
   { value: 'site', label: 'This website', disabled: false },
@@ -362,14 +432,16 @@ const handleSave = async () => {
   saving.value = true
   try {
     if (selectedPost.value) {
-      const res = await $fetch<ApiRecord>(`/api/editor/sites/${siteId}/posts/${selectedPost.value.id}`, {
+      const res = await dashboardApi<ApiRecord>(`/api/editor/sites/${siteId}/posts/${selectedPost.value.id}`, {
         method: 'PATCH', body: buildPostPayload(locationId, String(selectedPost.value.id)),
+        validate: isPostResponse,
       })
       if (currentLocationId.value !== locationId) return
       selectedPost.value = res.post
     } else {
-      const res = await $fetch<ApiRecord>(`/api/editor/sites/${siteId}/posts`, {
+      const res = await dashboardApi<ApiRecord>(`/api/editor/sites/${siteId}/posts`, {
         method: 'POST', body: buildPostPayload(locationId),
+        validate: isPostResponse,
       })
       if (currentLocationId.value !== locationId) return
       selectedPost.value = res.post
@@ -409,13 +481,18 @@ const handlePublish = async () => {
     if (!postId || hasUnsavedEdits()) {
       const method = postId ? 'PATCH' : 'POST'
       const url = postId ? `/api/editor/sites/${siteId}/posts/${postId}` : `/api/editor/sites/${siteId}/posts`
-      const res = await $fetch<ApiRecord>(url, { method, body: buildPostPayload(locationId, postId ? String(postId) : undefined) })
+      const res = await dashboardApi<ApiRecord>(url, {
+        method,
+        body: buildPostPayload(locationId, postId ? String(postId) : undefined),
+        validate: isPostResponse,
+      })
       if (currentLocationId.value !== locationId) return
       postId = res.post.id
       selectedPost.value = res.post
     }
-    const res = await $fetch<ApiRecord>(`/api/editor/sites/${siteId}/posts/${postId}/publish`, {
+    const res = await dashboardApi<ApiRecord>(`/api/editor/sites/${siteId}/posts/${postId}/publish`, {
       method: 'POST', body: { channels: selectedChannels.value },
+      validate: isPostResponse,
     })
     if (currentLocationId.value !== locationId) return
     selectedPost.value = res.post
@@ -436,7 +513,10 @@ const handlePublish = async () => {
 const handleDelete = async () => {
   if (!selectedPost.value) return
   try {
-    await $fetch(`/api/editor/sites/${siteId}/posts/${selectedPost.value.id}`, { method: 'DELETE' })
+    await dashboardApi(`/api/editor/sites/${siteId}/posts/${selectedPost.value.id}`, {
+      method: 'DELETE',
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+    })
     selectedPost.value = null
     toast.add({ description: 'Post deleted', color: 'neutral' })
     await loadPosts()
@@ -510,9 +590,10 @@ const generatePost = async () => {
       image_base64 = dataUrl.slice(commaIndex + 1)
     }
 
-    const res = await $fetch<ApiRecord>(`/api/ai/${siteId}/posts/generate`, {
+    const res = await dashboardApi<ApiRecord>(`/api/ai/${siteId}/posts/generate`, {
       method: 'POST',
       body: { prompt: aiPrompt.value.trim(), image_base64, image_mime },
+      validate: isGeneratedPostResponse,
     })
 
     credits.value = res.credits?.remaining ?? null
@@ -539,6 +620,5 @@ watch(currentLocationId, () => {
   composing.value = false
   resetEditForm()
   selectedChannels.value = []
-  void Promise.all([loadPosts(), loadFacebookConnection()])
 })
 </script>

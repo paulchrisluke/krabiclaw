@@ -16,12 +16,13 @@ async function loginAsNclsOwner(page: Page, baseURL: string) {
 }
 
 async function publicRoute(request: APIRequestContext, baseURL: string, recipe: string) {
-  const response = await request.get(`${baseURL}/api/public/sites/${SITE_ID}/blawby/route`, {
+  const response = await request.get(`${baseURL}/api/public/sites/${SITE_ID}/blawby/document`, {
     headers: blawbyExtraHeaders,
     params: { recipe },
   })
   expect(response.status()).toBe(200)
-  return await response.json() as {
+  const payload = await response.json()
+  return payload.route as {
     page: {
       title: string
       summary: string | null

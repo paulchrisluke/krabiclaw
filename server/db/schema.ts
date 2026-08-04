@@ -891,6 +891,33 @@ export const menu_items = sqliteTable("menu_items", {
 	index("menu_items_menu_id_idx").on(table.menu_id),
 ]);
 
+export const menu_item_media = sqliteTable("menu_item_media", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	menu_item_id: text().notNull(),
+	asset_id: text().notNull(),
+	sort_order: integer().notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	foreignKey({
+		columns: [table.menu_item_id],
+		foreignColumns: [menu_items.id],
+		name: "menu_item_media_menu_item_fk",
+	}).onDelete("cascade"),
+	foreignKey({
+		columns: [table.organization_id, table.site_id, table.asset_id],
+		foreignColumns: [media_assets.organization_id, media_assets.site_id, media_assets.id],
+		name: "menu_item_media_asset_scope_fk",
+	}).onDelete("cascade"),
+	unique("menu_item_media_menu_item_asset_unique").on(table.menu_item_id, table.asset_id),
+	unique("menu_item_media_menu_item_sort_unique").on(table.menu_item_id, table.sort_order),
+	index("menu_item_media_menu_item_order_idx").on(table.menu_item_id, table.sort_order),
+	index("menu_item_media_asset_scope_idx").on(table.organization_id, table.site_id, table.asset_id),
+	index("menu_item_media_site_menu_item_idx").on(table.site_id, table.menu_item_id),
+]);
+
 export const menu_translations = sqliteTable("menu_translations", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),

@@ -1,4 +1,5 @@
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { createError } from 'h3'
 import { listPageQa } from '~/server/utils/location-qa'
 import { listSiteReviews } from '~/server/utils/site-reviews'
 import { getPublishedSiteBlogPost } from '~/server/utils/platform-content'
@@ -6,6 +7,7 @@ import type { SiteConversionEventName } from '~/utils/site-conversion-events'
 import { siteSupportsBlawbyTemplate } from '~/utils/template-registry'
 import type {
   PublicBlawbyData,
+  PublicBlawbyCriticalHomeData,
   PublicBlawbyIdentity,
   PublicBlawbyRouteData,
   PublicBlawbyShellData,
@@ -455,6 +457,76 @@ export async function getPublicBlawbyShellData(db: DbClient, siteId: string): Pr
   return { identity, navigation, consultation, compliance, themeTokens, offeringLinks }
 }
 
+export async function getPublicBlawbyDocumentData(
+  db: DbClient,
+  siteId: string,
+  recipe: PublicBlawbyRouteData['recipe'],
+  options: { slug?: string | null } = {},
+): Promise<{ shell: PublicBlawbyShellData; route: PublicBlawbyRouteData } | null> {
+  const site = await getActiveBlawbySite(db, siteId)
+  if (!site) return null
+
+  const [shell, route] = await Promise.all([
+    getPublicBlawbyShellData(db, siteId),
+    getPublicBlawbyRouteData(db, siteId, recipe, options),
+  ])
+  return { shell, route }
+}
+
+export async function getPublicBlawbyCriticalHomeData(
+  db: DbClient,
+  siteId: string,
+): Promise<PublicBlawbyCriticalHomeData | null> {
+  const site = await getActiveBlawbySite(db, siteId)
+  if (!site) return null
+
+  const [shell, page] = await Promise.all([
+    getPublicBlawbyShellData(db, siteId),
+    getPublicTenantPageByPath(db, siteId, '/'),
+  ])
+  if (!page) return null
+  return { shell, page }
+}
+
+export async function resolvePublicBlawbyCriticalHomeOrThrow(
+  db: DbClient,
+  siteId: string,
+): Promise<{ success: true; shell: PublicBlawbyShellData; page: PublicTenantPage }> {
+  const critical = await getPublicBlawbyCriticalHomeData(db, siteId)
+  if (!critical) {
+    throw createError({
+      statusCode: 404,
+      statusMessage: 'Blawby homepage content not found',
+      data: { code: 'BLAWBY_HOME_NOT_FOUND' },
+    })
+  }
+  return { success: true, ...critical }
+}
+
+export async function resolvePublicBlawbyDocumentOrThrow(
+  db: DbClient,
+  siteId: string,
+  recipe: PublicBlawbyRouteData['recipe'],
+  options: { slug?: string | null } = {},
+): Promise<{ success: true; shell: PublicBlawbyShellData; route: PublicBlawbyRouteData }> {
+  const document = await getPublicBlawbyDocumentData(db, siteId, recipe, options)
+  if (!document) {
+    throw createError({
+      statusCode: 404,
+      statusMessage: 'Blawby is not enabled for this site',
+      data: { code: 'BLAWBY_NOT_ENABLED' },
+    })
+  }
+  if (!hasPublicBlawbyRouteContent(document.route)) {
+    throw createError({
+      statusCode: 404,
+      statusMessage: 'Route content not found',
+      data: { code: 'BLAWBY_ROUTE_NOT_FOUND' },
+    })
+  }
+  return { success: true, ...document }
+}
+
 const ROUTE_PAGE_PATHS: Record<PublicBlawbyRouteData['recipe'], string | null> = {
   home: '/',
   services: '/services',
@@ -462,6 +534,7 @@ const ROUTE_PAGE_PATHS: Record<PublicBlawbyRouteData['recipe'], string | null> =
   about: '/about',
   pricing: '/pricing',
   contact: '/contact',
+  confirmation: null,
   schedule: '/schedule',
   blog: '/blog',
   article: '/blog',
@@ -471,7 +544,12 @@ const ROUTE_PAGE_PATHS: Record<PublicBlawbyRouteData['recipe'], string | null> =
   'third-party-notices': '/third-party-notices',
 }
 
-function mapPublicQa(rows: Array<Record<string, unknown>>): PublicSiteQa[] {
+function mapPublicQa(rows: Array<{
+  id: unknown
+  question: unknown
+  answer?: unknown
+  sort_order?: unknown
+}>): PublicSiteQa[] {
   return rows.map(row => ({
     id: String(row.id),
     question: String(row.question),
@@ -515,7 +593,7 @@ function mapPublicBlogPost(row: ApiRecord | null): PublicBlogPost | null {
     created_at: typeof row.created_at === 'string' ? row.created_at : null,
     updated_at: typeof row.updated_at === 'string' ? row.updated_at : null,
     components: Array.isArray(row.components) ? row.components as ApiRecord[] : [],
-    content_blocks: Array.isArray(row.content_blocks) ? row.content_blocks as import('~/components/workspace/blog/types').BlogEditorBlock[] : [],
+    content_blocks: Array.isArray(row.content_blocks) ? row.content_blocks as import('~/lib/components/workspace/blog/types').BlogEditorBlock[] : [],
     social_image: row.social_image && typeof row.social_image === 'object'
       ? row.social_image as PublicBlogPost['social_image']
       : null,
@@ -577,6 +655,7 @@ export async function getPublicBlawbyRouteData(
 }
 
 export function hasPublicBlawbyRouteContent(route: PublicBlawbyRouteData): boolean {
+  if (route.recipe === 'confirmation') return true
   if (route.recipe === 'offering') return Boolean(route.offering)
   if (route.recipe === 'article') return Boolean(route.post)
   return Boolean(route.page)

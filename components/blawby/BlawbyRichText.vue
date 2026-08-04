@@ -9,6 +9,7 @@
 
 <script setup lang="ts">
 import { renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
+import { loadDomPurify } from '~/utils/dom-purify-loader'
 
 const props = defineProps<{
   content?: string | null
@@ -32,8 +33,7 @@ const html = ref(sanitizeContent(props.content))
 watch(() => props.content, content => { html.value = sanitizeContent(content) })
 
 onMounted(async () => {
-  const { default: DOMPurify } = await import('dompurify')
-  clientSanitizer.value = DOMPurify as HtmlSanitizer
+  clientSanitizer.value = await loadDomPurify()
   html.value = sanitizeContent(props.content)
 })
 </script>

@@ -239,7 +239,7 @@
   </NuxtLayout>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { setContactConfirmation } from '~/composables/useContactHandoff'
 
 definePageMeta({ layout: false })
@@ -263,21 +263,42 @@ const businessName = computed(() => site?.brand_name || 'Our Business')
 const isDraftPreview = computed(() => Boolean(draftId && !siteId))
 
 // ── Bootstrap: locations + config in one call ─────────────
-const { locations, config: siteConfig } = await useBootstrap()
+const { locations, config: siteConfig } = await usePublicPageData()
 
-function formatLocAddress(loc) {
+interface ContactLocation {
+  address?: string | {
+    addressLines?: string[]
+    locality?: string
+    administrativeArea?: string
+  } | null
+  city?: string | null
+}
+
+interface TenantContactForm {
+  name: string
+  email: string
+  subject: string
+  message: string
+}
+
+interface TenantFieldError {
+  name: keyof TenantContactForm
+  message: string
+}
+
+function formatLocAddress(loc: ContactLocation) {
   if (!loc.address) return loc.city || ''
   if (typeof loc.address === 'string') return loc.address
   const a = loc.address
   return [a.addressLines?.[0], a.locality, a.administrativeArea].filter(Boolean).join(', ')
 }
 
-function safeUrl(val) {
-  if (!val || typeof val !== 'string') return null
+function safeUrl(val: unknown): string | undefined {
+  if (!val || typeof val !== 'string') return undefined
   try {
     const u = new URL(val.trim())
-    return ['http:', 'https:'].includes(u.protocol) ? u.toString() : null
-  } catch { return null }
+    return ['http:', 'https:'].includes(u.protocol) ? u.toString() : undefined
+  } catch { return undefined }
 }
 
 const activeSocials = computed(() => [
@@ -303,7 +324,7 @@ const subjectOptions = computed(() => [
 const inquiryExperienceId = typeof route.query.experienceId === 'string' ? route.query.experienceId : null
 const inquiryExperienceTitle = typeof route.query.experienceTitle === 'string' ? route.query.experienceTitle : null
 
-const tenantForm = ref({
+const tenantForm = ref<TenantContactForm>({
   name: '',
   email: '',
   subject: 'general',
@@ -312,12 +333,13 @@ const tenantForm = ref({
     : '',
 })
 const tenantSubmitting = ref(false)
-const tenantErrors = ref([])
-const tenantSubmitError = ref(null)
-const tenantFieldError = (name) => tenantErrors.value.find(e => e.name === name)?.message ?? null
+const tenantErrors = ref<TenantFieldError[]>([])
+const tenantSubmitError = ref<string | null>(null)
+const tenantFieldError = (name: keyof TenantContactForm) =>
+  tenantErrors.value.find(error => error.name === name)?.message ?? null
 
-const validateTenantContact = (state) => {
-  const errors = []
+const validateTenantContact = (state: TenantContactForm): TenantFieldError[] => {
+  const errors: TenantFieldError[] = []
   if (!state.name) errors.push({ name: 'name', message: t('saya.contact_page.enter_name') })
   if (!state.email) errors.push({ name: 'email', message: t('saya.contact_page.enter_email') })
   else if (!emailPattern.test(state.email)) errors.push({ name: 'email', message: t('saya.contact_page.invalid_email') })
@@ -337,9 +359,10 @@ const handleTenantContact = async () => {
 
   tenantSubmitting.value = true
   try {
-    await $fetch(`/api/public/sites/${siteId}/contact`, {
+    await publicApiMutation<{ success: true }>(`/api/public/sites/${siteId}/contact`, {
       method: 'POST',
-      body: { ...tenantForm.value, experienceId: inquiryExperienceId }
+      body: { ...tenantForm.value, experienceId: inquiryExperienceId },
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
     })
   } catch {
     tenantSubmitError.value = t('saya.contact_page.message_failed')

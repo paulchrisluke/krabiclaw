@@ -5,8 +5,8 @@ import { computeOgImageCacheKey } from '~/utils/social-metadata'
 import { renderOgImagePng } from './render.ts'
 
 const KV_KEY_PREFIX = 'og-image:v1:'
-// No content-edit-triggered purge exists yet for generated cards (unlike bootstrap-cache.ts's
-// purgeBootstrapCache). 30 days bounds staleness for a title/description/hero-photo edit
+// No content-edit-triggered purge exists yet for generated cards (unlike the public resource cache's
+// purgePublicResourceCache). 30 days bounds staleness for a title/description/hero-photo edit
 // without needing that wiring immediately; revisit if editors report stale previews.
 const KV_TTL_SECONDS = 60 * 60 * 24 * 30
 

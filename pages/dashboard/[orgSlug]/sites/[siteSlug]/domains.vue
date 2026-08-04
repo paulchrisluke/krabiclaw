@@ -14,12 +14,20 @@
     <template #body>
       <div class="mx-auto max-w-5xl space-y-4">
         <UCard>
+          <UAlert
+            v-if="loadError"
+            color="error"
+            variant="soft"
+            title="Domains could not be loaded"
+            :description="loadError"
+            class="mb-4"
+          />
           <div v-if="loading" class="space-y-3">
             <USkeleton v-for="i in 3" :key="i" class="h-16 rounded-md" />
           </div>
 
           <UEmpty
-            v-else-if="domainGroups.length === 0"
+            v-else-if="!loadError && domainGroups.length === 0"
             icon="i-lucide-globe"
             title="No custom domains"
             description="Add a paid-plan domain when you are ready to connect one."
@@ -152,6 +160,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard' })
 
 type DomainStatus = 'pending' | 'verifying' | 'active' | 'blocked' | 'failed' | 'stuck' | 'disabled' | 'deleted'
@@ -202,9 +211,31 @@ interface LiveCutoverWarning {
   message: string
 }
 
+const isDomainRow = (value: unknown): value is DomainRow =>
+  isRecord(value)
+  && typeof value.id === 'string'
+  && typeof value.domain === 'string'
+  && (value.type === 'subdomain' || value.type === 'custom')
+  && (value.role === 'canonical' || value.role === 'secondary')
+  && typeof value.status === 'string'
+
+const isDomainGroup = (value: unknown): value is DomainGroup =>
+  isRecord(value)
+  && typeof value.id === 'string'
+  && typeof value.domain === 'string'
+  && Array.isArray(value.domains)
+  && value.domains.every(isDomainRow)
+  && Array.isArray(value.records)
+
+const isDomainsResponse = (value: unknown): value is DomainsResponse =>
+  isRecord(value)
+  && Array.isArray(value.domains)
+  && value.domains.every(isDomainRow)
+  && Array.isArray(value.domain_groups)
+  && value.domain_groups.every(isDomainGroup)
+
 const toast = useToast()
 const dashboard = useDashboardSite()
-await dashboard.refresh()
 
 const siteId = computed(() => dashboard.site.value?.id ?? null)
 if (!siteId.value) {
@@ -215,6 +246,7 @@ const { trackDomainConnected } = useAnalytics()
 const route = useRoute()
 
 const loading = ref(true)
+const loadError = ref<string | null>(null)
 const adding = ref(false)
 const syncingGroupId = ref<string | null>(null)
 const promotingGroupId = ref<string | null>(null)
@@ -239,13 +271,21 @@ const recordColumns = [
 async function loadDomains({ background = false }: { background?: boolean } = {}) {
   if (!siteId.value) return
   if (!background) loading.value = true
+  loadError.value = null
   try {
     const response = import.meta.server
       ? await loadDomainsForServer(siteId.value)
-      : await $fetch<DomainsResponse>(`/api/sites/${siteId.value}/domains`)
-    domainGroups.value = response.domain_groups ?? []
-  } catch {
-    if (!background) toast.add({ description: 'Failed to load domains', color: 'error' })
+      : await dashboardApi<DomainsResponse>(
+          `/api/sites/${siteId.value}/domains`,
+          { validate: isDomainsResponse },
+        )
+    if (!isDomainsResponse(response)) {
+      throw new ApiClientError('Domains response did not match its contract', 502, 'INVALID_API_RESPONSE', null)
+    }
+    domainGroups.value = response.domain_groups
+  } catch (error) {
+    loadError.value = getErrorMessage(error, 'Failed to load domains')
+    if (!background) toast.add({ description: loadError.value, color: 'error' })
   } finally {
     if (!background) loading.value = false
   }
@@ -284,12 +324,18 @@ async function addDomain() {
   adding.value = true
   addError.value = ''
   try {
-    const response = await $fetch<AddDomainResponse>(`/api/sites/${siteId.value}/domains`, {
+    const response = await dashboardApi<AddDomainResponse>(`/api/sites/${siteId.value}/domains`, {
       method: 'POST',
       body: {
         domain: addForm.domain.trim(),
         include_www: true,
         acknowledge_live_cutover: addForm.acknowledge_live_cutover,
+      },
+      validate: (value): value is AddDomainResponse => {
+        const requestedHostnames = isRecord(value) ? value.requested_hostnames : null
+        return isDomainsResponse(value)
+          && Array.isArray(requestedHostnames)
+          && requestedHostnames.every(hostname => typeof hostname === 'string')
       },
     })
     domainGroups.value = mergeGroups(domainGroups.value, response.domain_groups ?? [])
@@ -299,13 +345,15 @@ async function addDomain() {
     toast.add({ description: 'Domain added', color: 'success' })
     closeAddModal()
   } catch (error) {
-    const data = (error as { data?: { error?: string; live_cutover_warning?: LiveCutoverWarning } })?.data
-    if (data?.live_cutover_warning) {
-      liveCutoverWarning.value = data.live_cutover_warning
+    const data = error instanceof ApiClientError && isRecord(error.data) ? error.data : {}
+    if (data.live_cutover_warning && typeof data.live_cutover_warning === 'object') {
+      liveCutoverWarning.value = data.live_cutover_warning as LiveCutoverWarning
       addError.value = ''
     } else {
       liveCutoverWarning.value = null
-      addError.value = data?.error ?? 'Failed to add domain'
+      addError.value = typeof data.error === 'string'
+        ? data.error
+        : error instanceof Error ? error.message : 'Failed to add domain'
     }
   } finally {
     adding.value = false
@@ -383,7 +431,11 @@ async function syncGroup(group: DomainGroup) {
   if (!siteId.value || !group.primary_domain_id) return
   syncingGroupId.value = group.id
   try {
-    await $fetch(`/api/sites/${siteId.value}/domains/${group.primary_domain_id}/sync`, { method: 'POST' })
+    await dashboardApi(`/api/sites/${siteId.value}/domains/${group.primary_domain_id}/sync`, {
+      method: 'POST',
+      validate: (value): value is { success: true; domain: ApiRecord } =>
+        isRecord(value) && value.success === true && isRecord(value.domain),
+    })
     await loadDomains({ background: true })
     toast.add({ description: 'Domain checked', color: 'success' })
   } catch {
@@ -397,9 +449,11 @@ async function makePrimary(group: DomainGroup) {
   if (!siteId.value || !group.primary_domain_id) return
   promotingGroupId.value = group.id
   try {
-    await $fetch(`/api/sites/${siteId.value}/domains/${group.primary_domain_id}`, {
+    await dashboardApi(`/api/sites/${siteId.value}/domains/${group.primary_domain_id}`, {
       method: 'PATCH',
       body: { role: 'canonical' },
+      validate: (value): value is { success: true; domain: ApiRecord } =>
+        isRecord(value) && value.success === true && isRecord(value.domain),
     })
     await loadDomains({ background: true })
     toast.add({ description: 'Primary domain updated', color: 'success' })
@@ -416,7 +470,11 @@ async function deleteGroup(group: DomainGroup) {
   deletingGroupId.value = group.id
   try {
     for (const domain of group.domains.filter((domain) => domain.type === 'custom')) {
-      await $fetch(`/api/sites/${siteId.value}/domains/${domain.id}`, { method: 'DELETE' })
+      await dashboardApi(`/api/sites/${siteId.value}/domains/${domain.id}`, {
+        method: 'DELETE',
+        validate: (value): value is { success: true } =>
+          isRecord(value) && value.success === true,
+      })
     }
     domainGroups.value = domainGroups.value.filter((candidate) => candidate.id !== group.id)
     toast.add({ description: 'Domain removed', color: 'success' })

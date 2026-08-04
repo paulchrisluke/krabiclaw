@@ -1,5 +1,5 @@
 // Get consolidated billing status for all of the user's organizations
-import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
+import { apiErrorResponse, cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getUserBillingItems } from '../../utils/billing'
 
@@ -8,17 +8,13 @@ export default defineEventHandler(async (event) => {
   const db = env.DB
 
   if (!db) {
-    return jsonResponse({
-      error: 'Database not available'
-    }, { status: 500 })
+    return apiErrorResponse(event, 500, 'DATABASE_UNAVAILABLE', 'Database not available')
   }
 
   const session = await getAuthSession(event, env)
 
   if (!session?.user?.id) {
-    return jsonResponse({
-      error: 'Authentication required'
-    }, { status: 401 })
+    return apiErrorResponse(event, 401, 'AUTHENTICATION_REQUIRED', 'Authentication required')
   }
 
   try {
@@ -31,8 +27,6 @@ export default defineEventHandler(async (event) => {
 
   } catch (error) {
     console.error('Failed to fetch user billing items:', error)
-    return jsonResponse({
-      error: 'Failed to fetch billing items'
-    }, { status: 500 })
+    return apiErrorResponse(event, 502, 'BILLING_ITEMS_LOAD_FAILED', 'Billing items could not be loaded')
   }
 })

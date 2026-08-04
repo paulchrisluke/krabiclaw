@@ -15,11 +15,16 @@ const BUNDLE_PRICES = Object.fromEntries(CREDIT_BUNDLES.map(b => [b.credits, b.p
 // Per-flow callback — keyed by a unique transaction ID so concurrent callers don't clobber each other
 const _successHandlers = new Map<string, (_balance: number) => void>()
 
-async function _redirectToCheckout(bundle: CreditBundle) {
-  const res = await $fetch('/api/billing/credits/add', {
+async function _redirectToCheckout(
+  bundle: CreditBundle,
+  dashboardApi: ReturnType<typeof useDashboardApi>,
+) {
+  const res = await dashboardApi<{ checkoutUrl?: string }>('/api/billing/credits/add', {
     method: 'POST',
     body: { bundle },
-  }) as { checkoutUrl?: string }
+    validate: (value): value is { checkoutUrl?: string } =>
+      isRecord(value) && (value.checkoutUrl === undefined || typeof value.checkoutUrl === 'string'),
+  })
   if (!res.checkoutUrl) {
     throw new Error('Missing checkout URL from billing API')
   }
@@ -27,6 +32,7 @@ async function _redirectToCheckout(bundle: CreditBundle) {
 }
 
 export const useCreditPurchase = () => {
+  const dashboardApi = useDashboardApi()
   const isOpen = useState<boolean>('credits:modal:open', () => false)
   const pendingBundle = useState<CreditBundle | null>('credits:modal:bundle', () => null)
   const pendingTxId = useState<string | null>('credits:modal:txid', () => null)
@@ -45,7 +51,9 @@ export const useCreditPurchase = () => {
 
   async function purchase(bundle: CreditBundle, onSuccess?: (_balance: number) => void) {
     try {
-      const res = await $fetch('/api/billing/payment-method') as { card: SavedCard | null }
+      const res = await dashboardApi<{ card: SavedCard | null }>('/api/billing/payment-method', {
+        validate: validateApiShape({ card: 'nullable-object' }),
+      })
       if (res.card) {
         const txId = crypto.randomUUID()
         savedCard.value = res.card
@@ -55,13 +63,9 @@ export const useCreditPurchase = () => {
         if (onSuccess) _successHandlers.set(txId, onSuccess)
         return
       }
-    } catch {
-      // No saved card — fall through to Checkout
-    }
-    try {
-      await _redirectToCheckout(bundle)
-    } catch {
-      toast.add({ title: 'Unable to start checkout — please try again', color: 'error' })
+      await _redirectToCheckout(bundle, dashboardApi)
+    } catch (error) {
+      toast.add({ title: error instanceof Error ? error.message : 'Unable to start checkout — please try again', color: 'error' })
     }
   }
 
@@ -71,10 +75,14 @@ export const useCreditPurchase = () => {
     const bundle = pendingBundle.value
     const txId = pendingTxId.value
     try {
-      const res = await $fetch(
+      const res = await dashboardApi<{ balance: number; requiresCheckout?: boolean }>(
         '/api/billing/credits/charge',
-        { method: 'POST', body: { bundle, txId, enableAutoTopup: wantsAutoTopup.value, autoTopupBundle: bundle } }
-      ) as { balance: number; requiresCheckout?: boolean }
+        {
+          method: 'POST',
+          body: { bundle, txId, enableAutoTopup: wantsAutoTopup.value, autoTopupBundle: bundle },
+          validate: validateApiShape({ balance: 'number' }),
+        },
+      )
       const balance = res.balance
       isOpen.value = false
       pendingBundle.value = null
@@ -86,15 +94,15 @@ export const useCreditPurchase = () => {
         _successHandlers.delete(txId)
       }
     } catch (err) {
-      const data = (err as { data?: { requiresCheckout?: boolean } }).data
+      const data = err instanceof ApiClientError ? err.data : {}
       isOpen.value = false
       pendingBundle.value = null
       pendingTxId.value = null
       wantsAutoTopup.value = false
       if (txId) _successHandlers.delete(txId)
-      if (data?.requiresCheckout) {
+      if (data.requiresCheckout === true) {
         try {
-          await _redirectToCheckout(bundle)
+          await _redirectToCheckout(bundle, dashboardApi)
         } catch {
           toast.add({ title: 'Unable to start checkout — please try again', color: 'error' })
         }

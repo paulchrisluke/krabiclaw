@@ -34,11 +34,12 @@ definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'location.menu' })
 const route = useRoute()
 
 const siteId = await useDashboardSiteId()
+const dashboard = useDashboardSite()
 const dashboardLocation = useDashboardLocation()
 const menuId = computed(() => typeof route.query.menuId === 'string' ? route.query.menuId : '')
 const locationId = computed(() => dashboardLocation.currentLocationId.value)
 const section = computed(() => typeof route.query.section === 'string' ? route.query.section : null)
-const defaultCurrency = ref('THB')
+const defaultCurrency = computed(() => dashboard.site.value?.default_currency ?? '')
 
 if (!siteId) {
   throw createError({
@@ -51,10 +52,6 @@ const { menuPath } = useDashboardSiteLinks(siteId)
 const _backPath = computed(() => menuPath())
 
 const pageError = computed(() => menuId.value ? null : 'Menu ID is required to create an item')
-
-onMounted(async () => {
-  defaultCurrency.value = (await fetchMenuCurrency()) ?? defaultCurrency.value
-})
 
 useSeoMeta({ title: 'Create Menu Item | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>

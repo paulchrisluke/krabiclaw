@@ -13,7 +13,7 @@ Global first, local second, persistent after that.
 
 - **Site/org level** (once per site): brand, currency, timezone default, team, ChatGPT app, socials, core offering.
 - **Location level** (once per location, repeats on every new location): hours, contact, notification destination, location hero/media, location-specific copy.
-- Onboarding is not a single linear wizard that ends at "Create site." The wizard collects the first handful of critical steps; everything else surfaces as a **persistent adaptive checklist** in the dashboard, shown to every admin (not just brand-new ones) until the site is complete. `components/dashboard/OnboardingChecklist.vue` does this in miniature — this spec extends it rather than replacing it.
+- Onboarding is not a single linear wizard that ends at "Create site." The wizard collects the first handful of critical steps; everything else surfaces as a **persistent adaptive checklist** in the onboarding surface until the site is complete. The canonical checklist is loaded by `server/utils/onboarding-checklist.ts` through the onboarding context; the dashboard home does not prefetch it.
 
 ---
 
@@ -27,7 +27,7 @@ Global first, local second, persistent after that.
 - `commitDraft()` turns that draft into a real site via `POST /api/dashboard/onboarding/drafts/[draftId]/commit`, which calls the same `runSiteCreation()` used everywhere else a site gets created (`POST /api/sites`, the MCP `create_site` tool).
 - There is no other new-site creation path. `server/api/dashboard/onboarding/setup.post.ts` and `setup-manual.post.ts` used to also contain full site-creation implementations, but the wizard never reached them; #277 removed both files, and new-site onboarding now goes through the active draft endpoint above. The still-needed Google Maps preview-only lookup for the wizard's confirm card now lives at its own single-purpose endpoint, `POST /api/dashboard/onboarding/places-preview`.
 - Adding a location to an *existing* site is a separate mode of the same `OnboardingWizard.vue` component (`mode="add-location"`), and creates exclusively through `POST /api/dashboard/locations/add` — that endpoint owns both the Places-preview lookup and the mutation for add-location, since (unlike new-site creation) there's no draft/commit split for adding to an already-live site.
-- `OnboardingChecklist.vue` tracks 5 items (`business_info`, `hero_image`, `core_offering`, `story`, `post`; `core_offering` was renamed from `menu_or_experiences` in #277 — see completion logic in `server/api/dashboard/onboarding/checklist.get.ts`), rendered on `pages/dashboard/[orgSlug]/sites/[siteSlug]/index.vue`.
+- The onboarding context tracks 5 items (`business_info`, `hero_image`, `core_offering`, `story`, `post`; `core_offering` was renamed from `menu_or_experiences` in #277 — see completion logic in `server/utils/onboarding-checklist.ts` and `server/api/dashboard/onboarding/checklist.get.ts`). The dashboard home does not load this resource.
 
 **Resolved** — kept as dated history, not current findings:
 
@@ -38,7 +38,7 @@ Global first, local second, persistent after that.
 **Deferred** — real, tracked gaps, not silently left as current-behavior claims:
 
 - `checklist.get.ts`'s `core_offering` item still only has real completion logic for `restaurant` (menu items) and `experience` (experiences) — a `professional_service` site can never complete it, because there is no offerings/practice-areas content model yet for it to check against. Tracked in #284, which depends on the offerings model from #194/#278.
-- `components/workspace/onboarding/OnboardingPreviewPane.vue`'s tab list (`Home`/`Menu`/`About`/`Contact`) is hardcoded and not vertical-aware — a `professional_service` preview shows a `Menu` tab that doesn't exist for that template instead of `/services`. Tracked in #285, deferred to #278's vertical-aware CMS/preview registry.
+- `lib/components/workspace/onboarding/OnboardingPreviewPane.vue`'s tab list (`Home`/`Menu`/`About`/`Contact`) is hardcoded and not vertical-aware — a `professional_service` preview shows a `Menu` tab that doesn't exist for that template instead of `/services`. Tracked in #285, deferred to #278's vertical-aware CMS/preview registry.
 
 ---
 
@@ -58,10 +58,10 @@ The onboarding preview now renders the active draft through the same Saya bootst
 
 Today there is no way to distinguish "owner wrote this" from "template wrote this" once a row exists in `site_content`/`menu_items`/`media_assets`. A long stock paragraph and a real paragraph the owner wrote both just look like "done" to the checklist and to any future seed/reseed logic.
 
-Recommended mechanism (still just a proposal, not implemented): add a single nullable `placeholder_source` (or reuse a `source` enum: `'template' | 'owner' | null`) column to `site_content`, `menu_items`, and the hero-bearing `media_assets`/`business_locations` rows, set by `seedNewSite()`/`buildOnboardingDraftPayload()` at insert time and cleared automatically the moment the owner edits that row (dashboard CMS save, MCP tool call, or ChowBot edit all already funnel through shared server/domain utilities per the dual-surface rule in `CLAUDE.md`, so this is one clearing point, not three).
+Recommended mechanism (still just a proposal, not implemented): add a single nullable `placeholder_source` (or reuse a `source` enum: `'template' | 'owner' | null`) column to `site_content`, `menu_items`, and the hero-bearing `media_assets`/`business_locations` rows, set by `seedNewSite()`/`buildOnboardingDraftPayload()` at insert time and cleared automatically the moment the owner edits that row (dashboard CMS save, MCP tool call, or ChowBot edit all already funnel through shared server/domain utilities per the dual-surface rule in `AGENTS.md`, so this is one clearing point, not three).
 
 - Checklist completion (`core_offering`, `story`, etc.) should check `placeholder_source IS NULL`, not just "a row exists" / "length > 20."
-- This is a schema change (per the `server/db/schema.ts` workflow in `CLAUDE.md`) and a real behavior change to checklist semantics — flagged here as a decision point, not something to implement unprompted.
+- This is a schema change (per the `server/db/schema.ts` workflow in `AGENTS.md`) and a real behavior change to checklist semantics — flagged here as a decision point, not something to implement unprompted.
 - `menu_items.source != 'template'` / `site_content...source != 'template'` filters already used by `checklist.get.ts` are a partial, ad hoc version of this idea for the fields that already have a `source` column — the proposal above would make it uniform and explicit rather than column-by-column.
 
 ---

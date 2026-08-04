@@ -35,45 +35,8 @@ function pickIcons(collection: string, names: string[]) {
 // dev/E2E run needs to avoid task-import side effects on the D1 proxy binding.
 const enableNitroTasks = process.env.NUXT_DISABLE_NITRO_TASKS !== 'true'
 
-// PERF DEBUG PATCH (temporary — remove once the entry.css floor is attributed):
-// build-time-only flag, not a runtime one, since global css: [...] is compiled
-// into a single stylesheet at build time and can't be conditionally skipped
-// per-request. Set PERF_NO_GLOBAL_CSS=true and rebuild to measure
-// /dev/perf-text?mode=text-no-icons with no global CSS at all.
-const skipGlobalCss = process.env.PERF_NO_GLOBAL_CSS === 'true'
-
-// PERF DEBUG PATCH (temporary — remove once the entry.js floor is attributed):
-// generates a client-bundle treemap at PERF_BUNDLE_ANALYZE_OUT (or
-// bundle-analysis.html in the repo root) to identify what's actually inside
-// the ~511KB entry chunk. Set PERF_BUNDLE_ANALYZE=true and rebuild.
+// Optional build analysis for bundle inspection; it has no runtime effect.
 const analyzeBundle = process.env.PERF_BUNDLE_ANALYZE === 'true'
-
-// PERF DEBUG PATCH (temporary — remove once the entry.css contributor matrix
-// is done): main.css's individual @import/@plugin lines can't be toggled via
-// css: [...] (that only swaps whole files), so this strips one line at a
-// time from the source before Tailwind's own Vite plugin consumes it. Only
-// one flag is meant to be set per build.
-const cssStrips: [envVar: string, line: string][] = [
-  ['PERF_NO_SAYA_CSS', '@import "./saya.css";'],
-  ['PERF_NO_BLAWBY_CSS', '@import "./blawby.css";'],
-  ['PERF_NO_TYPOGRAPHY_CSS', '@plugin "@tailwindcss/typography";'],
-  ['PERF_NO_NUXT_UI_CSS', '@import "@nuxt/ui";'],
-  ['PERF_NO_TAILWIND_CSS', '@import "tailwindcss";'],
-]
-
-// PERF DEBUG PATCH (temporary — remove once the client JS/hydration floor is
-// attributed): Nuxt's built-in features.noScripts strips every script chunk
-// from the production build entirely (no entry.js, no modulepreload, no
-// hydration at all) — it only takes effect outside dev mode, so it fits the
-// same build-once-and-measure pattern as the CSS flags above. Set
-// PERF_NO_SCRIPTS=true and rebuild to compare pure static-HTML SSR timing
-// against the normal hydrated build on /dev/perf-text.
-const skipClientScripts = process.env.PERF_NO_SCRIPTS === 'true'
-
-// PERF DEBUG PATCH (temporary): build/runtime flags for isolating global
-// client-floor items that affect every /dev/perf-text mode before the page
-// branch can opt in/out. Set one flag at a time and rebuild.
-const skipDompurifyHooks = process.env.PERF_NO_DOMPURIFY_HOOKS === 'true'
 const publicPerfTestPage = process.env.PERF_PUBLIC_TEST_PAGE !== 'false'
 
 const deploymentHost = new URL(
@@ -89,22 +52,93 @@ const publicHtmlCacheHeaders = isNonProductionDeployment
     }
   : {
       'cache-control': 'public, s-maxage=60, stale-while-revalidate=300, max-age=0',
-    }
+  }
 
-// Tried (2026-07-02): a `PERF_CSS_EXCLUDE_DASHBOARD` flag appending
-// `@source not "<glob>";` to main.css for dashboard/admin/editor/billing/
-// onboarding/media paths, to measure how much of entry.css a public/tenant
-// visitor pays for but never renders. Removed — `@source not` had no
-// measurable effect in this stack: a class unique to a single dashboard-only
-// component (`[320px]` in components/dashboard/McpQuickActions.vue) still
-// appeared in the compiled entry.css after excluding its exact path, tested
-// with both relative and absolute glob paths, and even edited directly into
-// assets/css/main.css (not just via the build-flag injection). Most likely
-// cause: @nuxt/ui's own Tailwind integration performs its own unconditional
-// project-wide content scan that a `@source not` in the app's own main.css
-// can't override. Don't re-attempt this exact approach without first
-// confirming (e.g. via @nuxt/ui's own docs/issues) whether their Tailwind
-// integration exposes a way to scope its content scan at all.
+const publicSurfaceCssPaths = {
+  'platform-entry': 'surfaces/platform.css',
+  'platform-home-entry': 'surfaces/platform-home.css',
+  'saya-home-entry': 'surfaces/saya-home.css',
+  'saya-entry': 'surfaces/saya.css',
+  'blawby-home-entry': 'surfaces/blawby-home.css',
+  'blawby-entry': 'surfaces/blawby.css',
+} as const
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function surfaceCssAssetPath(fileName: string) {
+  const basename = fileName.replaceAll('\\', '/').split('/').pop()
+  if (!basename) return null
+
+  for (const [sourceName, targetPath] of Object.entries(publicSurfaceCssPaths)) {
+    const sourcePattern = new RegExp(`^${escapeRegExp(sourceName)}\\.[A-Za-z0-9_-]+\\.css$`)
+    if (sourcePattern.test(basename)) {
+      return targetPath
+    }
+  }
+
+  return null
+}
+
+function rewriteSurfaceCssReferences(code: string) {
+  for (const [sourceName, targetPath] of Object.entries(publicSurfaceCssPaths)) {
+    const sourcePattern = escapeRegExp(sourceName)
+    const hashPattern = '[A-Za-z0-9_-]+'
+    code = code
+      .replace(new RegExp(`/_nuxt/(?:assets/)?surfaces/${sourcePattern}\\.${hashPattern}\\.css`, 'g'), `/_nuxt/${targetPath}`)
+      .replace(new RegExp(`/_nuxt/${sourcePattern}\\.${hashPattern}\\.css`, 'g'), `/_nuxt/${targetPath}`)
+      .replace(new RegExp(`(^|[^A-Za-z0-9_/-])assets/surfaces/${sourcePattern}\\.${hashPattern}\\.css`, 'g'), `$1${targetPath}`)
+      .replace(new RegExp(`(^|[^A-Za-z0-9_/-])${sourcePattern}\\.${hashPattern}\\.css`, 'g'), `$1${targetPath}`)
+  }
+
+  return code
+}
+
+function publicSurfaceCssPlugin() {
+  return {
+    name: 'krabiclaw-public-surface-css-paths',
+    enforce: 'post' as const,
+    generateBundle(_options: unknown, bundle: Record<string, {
+      type: string
+      fileName: string
+      code?: string
+      source?: string | Uint8Array
+    }>) {
+      const renamedEntries: Array<[string, {
+        type: string
+        fileName: string
+        code?: string
+        source?: string | Uint8Array
+      }]> = []
+
+      for (const [fileName, asset] of Object.entries(bundle)) {
+        const targetPath = surfaceCssAssetPath(fileName)
+        if (!targetPath) {
+          renamedEntries.push([fileName, asset])
+          continue
+        }
+
+        asset.fileName = `_nuxt/${targetPath}`
+        renamedEntries.push([asset.fileName, asset])
+      }
+
+      for (const fileName of Object.keys(bundle)) {
+        Reflect.deleteProperty(bundle, fileName)
+      }
+
+      for (const [fileName, asset] of renamedEntries) {
+        bundle[fileName] = asset
+      }
+
+      for (const asset of Object.values(bundle)) {
+        if (asset.type !== 'chunk' || !asset.code) continue
+
+        asset.code = rewriteSurfaceCssReferences(asset.code)
+      }
+    },
+  }
+}
 
 export default defineNuxtConfig({
   ignore: ['**/.worktrees/**'],
@@ -117,8 +151,12 @@ export default defineNuxtConfig({
     '@nuxtjs/i18n',
     '@nuxt/ui',
     '@nuxt/image',
-    '@nuxt/fonts',
   ],
+
+  ui: {
+    colorMode: false,
+    fonts: false,
+  },
 
   app: {
     head: {
@@ -150,14 +188,16 @@ export default defineNuxtConfig({
   },
 
   compatibilityDate: '2024-11-01',
+
+  experimental: {
+    defaults: {
+      nuxtLink: {
+        prefetch: false,
+      },
+    },
+  },
   debug: false,
   devtools: { enabled: false },
-  // PERF DEBUG PATCH: see skipClientScripts above.
-  features: {
-    noScripts: skipClientScripts,
-  },
-  // PERF DEBUG PATCH: see skipGlobalCss above.
-  css: skipGlobalCss ? [] : ['~/assets/css/main.css'],
   icon: {
     fallbackToApi: false,
     // Nuxt UI's own internal default icons (UChatPromptSubmit's arrowUp, etc.)
@@ -189,13 +229,15 @@ export default defineNuxtConfig({
       helpUrl: process.env.NUXT_PUBLIC_HELP_URL || 'https://krabiclaw.com/help',
 
       whatsappNumber: process.env.NUXT_PUBLIC_WHATSAPP_NUMBER || process.env.WHATSAPP_NUMBER || '16197200000',
-      perfNoDompurifyHooks: skipDompurifyHooks,
       perfPublicTestPage: publicPerfTestPage,
     },
 
   },
 
   vite: {
+    build: {
+      modulePreload: false,
+    },
     server: {
       watch: {
         ignored: ['**/.worktrees/**', '**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
@@ -204,13 +246,11 @@ export default defineNuxtConfig({
     },
   },
 
-  // PERF DEBUG PATCH (temporary — remove once the entry.js floor is attributed):
-  // vite.plugins is shared between the client and server Vite builds, so the
-  // visualizer is attached via this hook instead, gated to isClient only —
-  // otherwise the server (Nitro/SSR) build would overwrite the client's
-  // treemap output on whichever build ran second.
+  // Bundle analysis is opt-in and client-only; it has no runtime effect.
   hooks: {
     'vite:extendConfig'(viteConfig, { isClient }) {
+      viteConfig.plugins?.push(publicSurfaceCssPlugin())
+
       if (analyzeBundle && isClient) {
         viteConfig.plugins?.push(visualizer({
           filename: process.env.PERF_BUNDLE_ANALYZE_OUT || 'bundle-analysis.html',
@@ -220,34 +260,6 @@ export default defineNuxtConfig({
         }))
       }
 
-      // PERF DEBUG PATCH: see cssStrips above. enforce: 'pre' so this runs
-      // before Tailwind's own Vite plugin consumes the @import/@plugin
-      // at-rules in main.css.
-      const activeStrips = cssStrips.filter(([envVar]) => process.env[envVar] === 'true')
-      if (activeStrips.length > 1) {
-        throw new Error(`Multiple PERF_NO_* CSS strip flags enabled: ${activeStrips.map(s => s[0]).join(', ')}. Only one is allowed.`)
-      }
-      if (activeStrips.length === 1) {
-        const activeStrip = activeStrips[0]
-        if (activeStrip) {
-          const [, line] = activeStrip
-          // unshift, not push: Tailwind's own Vite plugin is also enforce:'pre'
-          // and already registered by the time this hook runs, so a same-
-          // priority plugin appended via push still runs after it (same-enforce
-          // plugins execute in array order). Putting this one first in the
-          // array is what actually lets it see the raw source before Tailwind
-          // resolves/inlines the @import chain.
-          viteConfig.plugins?.unshift({
-            name: 'perf-debug-strip-css',
-            enforce: 'pre',
-            transform(code: string, id: string) {
-              if (!id.endsWith('assets/css/main.css')) return
-              if (!code.includes(line)) throw new Error(`Target CSS line not found for stripping: ${line}`)
-              return code.replace(line, `/* PERF DEBUG PATCH: stripped "${line}" */`)
-            },
-          })
-        }
-      }
     },
   },
 
@@ -378,32 +390,8 @@ export default defineNuxtConfig({
       pathPrefix: false,
     },
     {
-      path: '~/components/workspace/editor',
-      pathPrefix: false,
-    },
-    {
-      path: '~/components/workspace/dashboard',
-      pathPrefix: false,
-    },
-    {
-      path: '~/components/workspace/media',
-      pathPrefix: false,
-    },
-    {
-      path: '~/components/workspace/content',
-      pathPrefix: false,
-    },
-    {
       path: '~/components/billing',
       prefix: 'Billing',
-      pathPrefix: false,
-    },
-    {
-      path: '~/components/workspace/onboarding',
-      pathPrefix: false,
-    },
-    {
-      path: '~/components/workspace/settings',
       pathPrefix: false,
     },
     {
@@ -412,6 +400,38 @@ export default defineNuxtConfig({
     },
     {
       path: '~/components/blog',
+      pathPrefix: false,
+    },
+    {
+      path: '~/lib/components/workspace/dashboard',
+      pathPrefix: false,
+    },
+    {
+      path: '~/lib/components/workspace/blog',
+      pathPrefix: false,
+    },
+    {
+      path: '~/lib/components/workspace/content',
+      pathPrefix: false,
+    },
+    {
+      path: '~/lib/components/workspace/editor',
+      pathPrefix: false,
+    },
+    {
+      path: '~/lib/components/workspace/inbox',
+      pathPrefix: false,
+    },
+    {
+      path: '~/lib/components/workspace/media',
+      pathPrefix: false,
+    },
+    {
+      path: '~/lib/components/workspace/onboarding',
+      pathPrefix: false,
+    },
+    {
+      path: '~/lib/components/workspace/settings',
       pathPrefix: false,
     },
   ],
@@ -427,10 +447,11 @@ export default defineNuxtConfig({
     // Versioned static assets — immutable forever
     '/assets/**': { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },
     '/_nuxt/**':  { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },
+    '/_nuxt/surfaces/**': { headers: { 'cache-control': 'no-cache, max-age=0, must-revalidate' } },
 
     // OAuth consent + login pages — anti-framing required by OpenAI MCP CSP spec.
     // frame-ancestors 'none' prevents clickjacking on the consent/auth flow.
-    // X-Frame-Options: DENY is the legacy fallback for older browsers.
+    // Keep the legacy framing header alongside the CSP for older clients.
     '/oauth/**': {
       headers: {
         'cache-control': 'no-store',
@@ -465,44 +486,11 @@ export default defineNuxtConfig({
     '/**': { headers: publicHtmlCacheHeaders },
   },
 
-  // Font configuration — @nuxt/fonts downloads, subsets, and self-hosts these.
-  // Do NOT add @import from fonts.googleapis.com in main.css; that would double-load
-  // and block rendering on a separate render-blocking external request.
-  //
-  // Poppins: only the weights actually used in CSS (NOT all 18 variants).
-  // Instrument Serif: italic is the LCP font on tenant hero pages — kept minimal.
-  // Fredoka: platform wordmark only, weight 600 only (not all 4 weights).
-  //
-  // All three families are Google Fonts — pin `provider: 'google'` per family and
-  // disable the other providers so unifont never registers/queries them (e.g. the
-  // bunny provider fetches https://fonts.bunny.net/list on every boot otherwise,
-  // adding retry delay for a provider this project doesn't use).
-  fonts: {
-    defaults: {
-      subsets: ['latin'],
-    },
-    providers: {
-      bunny: false,
-      adobe: false,
-      fontshare: false,
-      fontsource: false,
-      googleicons: false,
-      npm: false,
-    },
-    families: [
-      // Instrument Serif removed from global load — loaded conditionally on tenant routes via plugin
-      { name: 'Poppins', provider: 'google', weights: [400, 500, 600, 700], display: 'swap' },
-      { name: 'Marcellus', provider: 'google', weights: [400], display: 'swap' },
-      { name: 'Fredoka', provider: 'google', weights: [600], display: 'swap' },
-    ],
-  },
-
   // Nitro configuration for Cloudflare deployment
   nitro: {
     preset: 'cloudflare-module',
     cloudflareDev: {
-      // Force deterministic binding discovery in CI/dev; avoids fallback stub env {}
-      // when wrangler config auto-discovery fails from an unexpected cwd.
+      // Force deterministic binding discovery in CI/dev.
       configPath: './wrangler.toml',
       persistDir: '.wrangler/state/v3',
       // The MCP tunnel harness supplies one generated, untracked env file so
@@ -511,7 +499,7 @@ export default defineNuxtConfig({
       silent: true,
     },
     experimental: {
-      tasks: enableNitroTasks
+      tasks: enableNitroTasks,
     },
     // Set NUXT_DISABLE_NITRO_TASKS=true to keep task modules out of a local
     // dev/E2E boot if task imports break the nitro-cloudflare-dev D1 proxy binding.

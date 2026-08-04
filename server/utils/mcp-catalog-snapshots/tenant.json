@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:d2a1e1f4603506d55cf8e470df3242f43e7b440979c482a2a04a40e0b450bea0",
+  "fingerprint": "sha256:8febf798c0fb69c3dd267ec3dc2ccfcdc4517f0edef28bf16620624b72e9de20",
   "tools": [
     {
       "name": "add_menu_items_batch",
@@ -50,6 +50,22 @@
                 "ingredients": {
                   "items": {
                     "type": "string"
+                  },
+                  "type": "array"
+                },
+                "media": {
+                  "description": "Ordered image/video media asset references. Position 0 is the cover everywhere. Videos in cover position must already have thumbnail_url/poster metadata.",
+                  "items": {
+                    "properties": {
+                      "asset_id": {
+                        "description": "Active image or video asset id from get_site_media_assets.",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "asset_id"
+                    ],
+                    "type": "object"
                   },
                   "type": "array"
                 },
@@ -1528,6 +1544,22 @@
           "ingredients": {
             "items": {
               "type": "string"
+            },
+            "type": "array"
+          },
+          "media": {
+            "description": "Ordered image/video media asset references. Position 0 is the cover everywhere. Videos in cover position must already have thumbnail_url/poster metadata.",
+            "items": {
+              "properties": {
+                "asset_id": {
+                  "description": "Active image or video asset id from get_site_media_assets.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "asset_id"
+              ],
+              "type": "object"
             },
             "type": "array"
           },
@@ -11636,7 +11668,10 @@
                 "target": {
                   "properties": {
                     "type": {
-                      "const": "experience_media"
+                      "enum": [
+                        "experience_media",
+                        "menu_item_media"
+                      ]
                     }
                   }
                 }
@@ -11659,7 +11694,7 @@
             "type": "string"
           },
           "target": {
-            "description": "Discriminated media placement target. Supported types: site_logo, home_hero, home_story_image, about_story_image, location_hero, menu_item_image, post_image, blog_post_image, experience_media.",
+            "description": "Discriminated media placement target. Supported types: site_logo, home_hero, home_story_image, about_story_image, location_hero, menu_item_media, post_image, blog_post_image, experience_media.",
             "oneOf": [
               {
                 "properties": {
@@ -11727,7 +11762,7 @@
                     "type": "string"
                   },
                   "type": {
-                    "const": "menu_item_image"
+                    "const": "menu_item_media"
                   }
                 },
                 "required": [
@@ -12210,7 +12245,7 @@
               "home_story_image",
               "location_hero",
               "post_image",
-              "menu_item_image",
+              "menu_item_media",
               "experience_image"
             ],
             "type": "string"
@@ -12919,6 +12954,22 @@
                 "item_id": {
                   "description": "Existing menu item ID when known.",
                   "type": "string"
+                },
+                "media": {
+                  "description": "Ordered image/video media asset references. Position 0 is the cover everywhere. Videos in cover position must already have thumbnail_url/poster metadata.",
+                  "items": {
+                    "properties": {
+                      "asset_id": {
+                        "description": "Active image or video asset id from get_site_media_assets.",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "asset_id"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
                 },
                 "name": {
                   "type": "string"
@@ -15599,6 +15650,22 @@
           "ingredients": {
             "items": {
               "type": "string"
+            },
+            "type": "array"
+          },
+          "media": {
+            "description": "Ordered image/video media asset references. Position 0 is the cover everywhere. Videos in cover position must already have thumbnail_url/poster metadata.",
+            "items": {
+              "properties": {
+                "asset_id": {
+                  "description": "Active image or video asset id from get_site_media_assets.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "asset_id"
+              ],
+              "type": "object"
             },
             "type": "array"
           },

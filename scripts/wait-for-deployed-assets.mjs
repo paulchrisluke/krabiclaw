@@ -1,3 +1,5 @@
+import { readdirSync } from 'node:fs'
+
 const rawBaseUrl = process.env.PLAYWRIGHT_PREVIEW_URL
 
 if (!rawBaseUrl) {
@@ -23,13 +25,30 @@ if (localHosts.has(baseUrl.hostname)) {
 const REQUEST_TIMEOUT_MS = 15_000
 const RETRY_DELAY_MS = 2_000
 const MAX_ATTEMPTS = 20
-const ENTRY_CSS_PATTERN = /\/_nuxt\/entry\.[A-Za-z0-9_-]+\.css/
+const NUXT_BUILD_ID_PATTERN = /buildId:\"([0-9a-f-]{36})\"/
+const NUXT_ASSET_PATTERN = /(?:src|href)="(\/_nuxt\/[^"?]+(?:\?[^"]*)?)"/g
+const expectedSurfaceCss = [
+  'platform.css',
+  'platform-home.css',
+  'saya.css',
+  'saya-home.css',
+  'blawby.css',
+  'blawby-home.css',
+]
+const localSurfaceCss = new Set(readdirSync('.output/public/_nuxt/surfaces'))
+const missingSurfaceCss = expectedSurfaceCss.filter(filename => !localSurfaceCss.has(filename))
+
+if (missingSurfaceCss.length) {
+  throw new Error('The local production build is missing stable public surface CSS assets: ' + missingSurfaceCss.join(', '))
+}
+
+const expectedSurfacePaths = new Set(expectedSurfaceCss.map(filename => '/_nuxt/surfaces/' + filename))
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-async function fetchWithTimeout(url) {
+async function fetchWithTimeout(url, headers = {}) {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
 
@@ -38,6 +57,7 @@ async function fetchWithTimeout(url) {
       headers: {
         'cache-control': 'no-cache',
         pragma: 'no-cache',
+        ...headers,
       },
       redirect: 'follow',
       signal: controller.signal,
@@ -47,35 +67,74 @@ async function fetchWithTimeout(url) {
   }
 }
 
+async function verifyHtmlAndAssets(url, headers = {}) {
+  const response = await fetchWithTimeout(url, headers)
+  if (!response.ok) throw new Error(`${url.pathname || '/'} returned HTTP ${response.status}`)
+
+  const html = await response.text()
+  const renderMode = response.headers.get('x-public-render-mode')
+  const buildId = html.match(NUXT_BUILD_ID_PATTERN)?.[1]
+  if (!buildId && renderMode !== 'static-html') {
+    throw new Error(`${url.pathname || '/'} did not expose a Nuxt build id or the static HTML render contract`)
+  }
+
+  if (buildId) {
+    const buildMetaUrl = new URL(`/_nuxt/builds/meta/${buildId}.json`, baseUrl)
+    const buildMetaResponse = await fetchWithTimeout(buildMetaUrl, headers)
+    if (!buildMetaResponse.ok) {
+      throw new Error(`${url.pathname || '/'} references missing Nuxt build metadata ${buildId}`)
+    }
+    try {
+      JSON.parse(await buildMetaResponse.text())
+    } catch {
+      throw new Error(`${url.pathname || '/'} references malformed Nuxt build metadata ${buildId}`)
+    }
+  }
+
+  const assetPaths = [...html.matchAll(NUXT_ASSET_PATTERN)].map(match => match[1])
+  if (!assetPaths.length) throw new Error(`${url.pathname || '/'} did not reference Nuxt assets`)
+  const surfacePaths = [...new Set(assetPaths.map(path => path.split('?')[0]).filter(path => expectedSurfacePaths.has(path)))]
+  if (!surfacePaths.length) {
+    throw new Error(`${url.pathname || '/'} did not reference a stable public surface stylesheet`)
+  }
+
+  await Promise.all([...new Set(assetPaths)].map(async (assetPath) => {
+    const assetUrl = new URL(assetPath, baseUrl)
+    assetUrl.searchParams.set('asset-propagation-check', `${Date.now()}`)
+    const assetResponse = await fetchWithTimeout(assetUrl, headers)
+    if (!assetResponse.ok) {
+      throw new Error(`${assetPath} returned HTTP ${assetResponse.status}`)
+    }
+  }))
+}
+
+let consecutiveReadyChecks = 0
 for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
   try {
     const homepageUrl = new URL(baseUrl)
     homepageUrl.searchParams.set('asset-propagation-check', `${Date.now()}-${attempt}`)
 
-    const homepageResponse = await fetchWithTimeout(homepageUrl)
-    if (!homepageResponse.ok) {
-      throw new Error(`homepage returned HTTP ${homepageResponse.status}`)
-    }
+    await verifyHtmlAndAssets(homepageUrl)
 
-    const html = await homepageResponse.text()
-    const assetPath = html.match(ENTRY_CSS_PATTERN)?.[0]
-    if (!assetPath) {
-      throw new Error('homepage did not reference an entry CSS asset')
-    }
+    const tenantUrl = new URL(baseUrl)
+    tenantUrl.searchParams.set('asset-propagation-check', `${Date.now()}-${attempt}`)
+    await verifyHtmlAndAssets(tenantUrl, {
+      'x-preview-tenant': 'demo',
+      'cache-control': 'no-store',
+    })
 
-    const assetUrl = new URL(assetPath, baseUrl)
-    assetUrl.searchParams.set('asset-propagation-check', `${Date.now()}-${attempt}`)
+    const dashboardUrl = new URL('/dashboard', baseUrl)
+    dashboardUrl.searchParams.set('asset-propagation-check', `${Date.now()}-${attempt}`)
+    await verifyHtmlAndAssets(dashboardUrl)
 
-    const assetResponse = await fetchWithTimeout(assetUrl)
-    const contentType = assetResponse.headers.get('content-type') || '<missing>'
-
-    if (assetResponse.ok && contentType.toLowerCase().includes('text/css')) {
-      console.log(`Deployed asset is ready: ${assetPath} (attempt ${attempt}).`)
+    consecutiveReadyChecks += 1
+    if (consecutiveReadyChecks >= 2) {
+      console.log(`Deployed public surface assets are stable (attempt ${attempt}).`)
       process.exit(0)
     }
-
-    throw new Error(`asset returned HTTP ${assetResponse.status} with content-type ${contentType}`)
+    console.log(`Deployed assets passed readiness check ${consecutiveReadyChecks}/2.`)
   } catch (error) {
+    consecutiveReadyChecks = 0
     const message = error instanceof Error ? error.message : String(error)
     console.log(`Deployed assets are not ready (attempt ${attempt}/${MAX_ATTEMPTS}): ${message}`)
 

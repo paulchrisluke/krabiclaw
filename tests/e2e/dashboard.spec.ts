@@ -9,16 +9,6 @@ test.describe('dashboard functional smoke', () => {
     const login = await page.goto(devLoginUrl(baseURL!), { waitUntil: 'load' })
     expect(login?.status()).toBeLessThan(400)
     await expect(page).toHaveURL(/\/dashboard/)
-    // Neither "Overview" nor "Create your restaurant workspace" exist in the
-    // current UI (confirmed via full-repo grep) — stale text from before the
-    // dashboard Nuxt UI consolidation (#337). The "any suitable E2E test
-    // user" fallback (server/api/dev/login.get.ts) deterministically prefers
-    // a user who already has a site (ORDER BY has_site DESC), so this test
-    // in practice always lands on pages/dashboard/[orgSlug]/index.vue, whose
-    // real heading is "Sites" (never "Overview" — that string only exists as
-    // an internal, never-rendered UDashboardPanel id). The onboarding
-    // alternative kept for a genuinely site-less user matches the real
-    // OnboardingWizard.vue welcome kicker instead of the old placeholder text.
     await expect(page.locator('body')).toContainText(/Sites|Let's build your site/)
 
     const dashboard = await page.goto(`${baseURL}/dashboard`, { waitUntil: 'load' })
@@ -29,6 +19,7 @@ test.describe('dashboard functional smoke', () => {
   })
 
   test('owner can open core dashboard pages for their org', async ({ page, baseURL }) => {
+    test.setTimeout(60_000)
     const errors = collectPageErrors(page)
     await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
     const suffix = Date.now()
@@ -37,11 +28,6 @@ test.describe('dashboard functional smoke', () => {
     expect(login?.status()).toBeLessThan(400)
     await expect(page).toHaveURL(/\/dashboard/)
 
-    // Signup no longer auto-creates an org (see server/utils/auth.ts), so a
-    // brand-new user lands on /dashboard/onboarding, not their own org's
-    // dashboard. Create a real site/org on demand — the same on-demand path
-    // any first-time owner actually goes through — before exercising the
-    // org-scoped settings/billing/support pages below.
     const createSiteRes = await page.request.post(`${baseURL}/api/sites`, {
       data: {
         name: `Dashboard Pages Test ${suffix}`,
@@ -51,8 +37,6 @@ test.describe('dashboard functional smoke', () => {
     })
     expect(createSiteRes.status()).toBe(200)
 
-    // /dashboard itself never redirects to /dashboard/{orgSlug} (it's a real
-    // page, not a redirect) — get the slug from the API instead of the URL.
     const contextRes = await page.request.get(`${baseURL}/api/dashboard/context`)
     expect(contextRes.status()).toBe(200)
     const context = await contextRes.json() as { organization?: { slug?: string } }
@@ -90,7 +74,11 @@ test.describe('dashboard functional smoke', () => {
       ['/dashboard/pottery-house-krabi/sites/pottery-house', 'Pottery House Krabi'],
       ['/dashboard/pottery-house-krabi/sites/pottery-house/locations', 'Locations'],
       ['/dashboard/pottery-house-krabi/sites/pottery-house/settings', 'Site Settings'],
-      ['/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi', 'Location Overview'],
+      // The navbar falls back to the literal 'Location Overview' only when the
+      // location hasn't loaded yet (see locations/[locationSlug]/index.vue) —
+      // the Krabi fixture location always has a real title, so it renders
+      // that instead; asserting the fallback string here never matched.
+      ['/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi', 'Pottery House Krabi'],
       ['/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi/settings', 'Location Settings'],
     ] as const
 
@@ -198,6 +186,26 @@ test.describe('dashboard functional smoke', () => {
     await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
     await page.goto(devLoginUrl(baseURL!, 'user-pottery-house'), { waitUntil: 'load' })
 
+    // The experiences page fetches its list via a direct server-side call during
+    // SSR (see loadDashboardLocationExperiences in dashboard-editor-resources.ts),
+    // which never goes through the browser's network stack — page.route() cannot
+    // intercept it on a page.goto/page.reload (hard) navigation. It only fetches
+    // client-side (interceptable) when the component mounts via an in-app SPA
+    // transition, so every mocked visit below arrives via a NuxtLink click from
+    // the location overview page rather than a URL navigation. That click must
+    // land after hydration completes — waitUntil: 'load' resolves as soon as the
+    // document and its resources finish loading, which can race ahead of Vue
+    // attaching NuxtLink's client-side router interception; a click before that
+    // point falls through to the anchor's plain href and forces a hard reload
+    // (bypassing the mock again). 'networkidle' waits out that gap reliably.
+    const overviewUrl = `${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi`
+    const experiencesLink = page.locator('[id^="dashboard-sidebar"]').getByRole('link', { name: 'Experiences' })
+
+    // The route mock must be registered before the overview page loads, not
+    // after — NuxtLink eagerly prefetches its target route's data as soon as
+    // the link scrolls into view, so registering the mock after page.goto
+    // would let that prefetch slip through with real data, which the later
+    // click would then reuse from cache instead of hitting our mock.
     await page.route('**/api/editor/sites/site-pottery-house/experiences?**', async (route) => {
       await route.fulfill({
         status: 200,
@@ -205,13 +213,17 @@ test.describe('dashboard functional smoke', () => {
         body: JSON.stringify({ experiences: [] }),
       })
     })
-    const empty = await page.goto(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi/experiences`, { waitUntil: 'load' })
-    expect(empty?.status()).toBe(200)
+    await page.goto(overviewUrl, { waitUntil: 'networkidle' })
+    await experiencesLink.click()
+    await expect(page).toHaveURL(/\/experiences$/)
     await expect(page.getByText('Experiences', { exact: true }).first()).toBeVisible()
     await expect(page.getByRole('button', { name: 'Add experience' }).first()).toBeVisible()
     await expect(page.getByText('No experiences yet')).toBeVisible()
-
     await page.unroute('**/api/editor/sites/site-pottery-house/experiences?**')
+
+    // A fresh hard navigation back to the overview page discards the client-side
+    // Nuxt payload cache, so the next click below performs a genuine new fetch
+    // under the 500 mock rather than reusing the cached empty result above.
     await page.route('**/api/editor/sites/site-pottery-house/experiences?**', async (route) => {
       await route.fulfill({
         status: 500,
@@ -219,9 +231,95 @@ test.describe('dashboard functional smoke', () => {
         body: JSON.stringify({ error: 'Test failure' }),
       })
     })
-    await page.reload({ waitUntil: 'load' })
+    await page.goto(overviewUrl, { waitUntil: 'networkidle' })
+    await experiencesLink.click()
+    await expect(page).toHaveURL(/\/experiences$/)
     await expect(page.getByText('Experiences', { exact: true }).first()).toBeVisible()
     await expect(page.getByText('Could not load experiences')).toBeVisible()
     await expect(page.getByText('No experiences yet')).toBeHidden()
+  })
+
+  test('site media library distinguishes empty and failed list states', async ({ page, baseURL }) => {
+    test.setTimeout(60_000)
+    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
+    await page.goto(devLoginUrl(baseURL!, 'user-kikuzuki'), { waitUntil: 'load' })
+
+    // Same SSR-direct-service constraint as the experiences page above (see the
+    // comment there) — media.vue fetches via loadDashboardMedia during SSR, so
+    // the mock must be hit through an in-app SPA transition, not a URL nav.
+    const settingsUrl = `${baseURL}/dashboard/kikuzuki-krabi-thailand/sites/kikuzuki-krabi-thailand/settings`
+    const mediaLink = page.locator('[id^="dashboard-sidebar"]').getByRole('link', { name: 'Media library' })
+
+    await page.route('**/api/editor/sites/site-kikuzuki/media?**', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ media: [] }) })
+    })
+    await page.goto(settingsUrl, { waitUntil: 'networkidle' })
+    await mediaLink.click()
+    await expect(page).toHaveURL(/\/media$/)
+    await expect(page.getByText('No media yet')).toBeVisible()
+    await page.unroute('**/api/editor/sites/site-kikuzuki/media?**')
+
+    await page.route('**/api/editor/sites/site-kikuzuki/media?**', async (route) => {
+      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Test failure' }) })
+    })
+    await page.goto(settingsUrl, { waitUntil: 'networkidle' })
+    await mediaLink.click()
+    await expect(page).toHaveURL(/\/media$/)
+    await expect(page.getByText('No media yet')).toBeHidden()
+    await expect(page.getByText('Test failure')).toBeVisible()
+  })
+
+  test('blog posts list distinguishes empty and failed list states', async ({ page, baseURL }) => {
+    test.setTimeout(60_000)
+    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
+    await page.goto(devLoginUrl(baseURL!, 'user-kikuzuki'), { waitUntil: 'load' })
+
+    const settingsUrl = `${baseURL}/dashboard/kikuzuki-krabi-thailand/sites/kikuzuki-krabi-thailand/settings`
+    const blogLink = page.locator('[id^="dashboard-sidebar"]').getByRole('link', { name: 'Blog posts' })
+
+    await page.route('**/api/editor/sites/site-kikuzuki/blog/posts', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ posts: [] }) })
+    })
+    await page.goto(settingsUrl, { waitUntil: 'networkidle' })
+    await blogLink.click()
+    await expect(page).toHaveURL(/\/blog$/)
+    await expect(page.getByText('No blog posts yet. Create your first post to get started.')).toBeVisible()
+    await page.unroute('**/api/editor/sites/site-kikuzuki/blog/posts')
+
+    await page.route('**/api/editor/sites/site-kikuzuki/blog/posts', async (route) => {
+      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Test failure' }) })
+    })
+    await page.goto(settingsUrl, { waitUntil: 'networkidle' })
+    await blogLink.click()
+    await expect(page).toHaveURL(/\/blog$/)
+    await expect(page.getByText('No blog posts yet. Create your first post to get started.')).toBeHidden()
+    await expect(page.getByText('Test failure')).toBeVisible()
+  })
+
+  test('location menu distinguishes empty and failed list states', async ({ page, baseURL }) => {
+    test.setTimeout(60_000)
+    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
+    await page.goto(devLoginUrl(baseURL!, 'user-kikuzuki'), { waitUntil: 'load' })
+
+    const overviewUrl = `${baseURL}/dashboard/kikuzuki-krabi-thailand/sites/kikuzuki-krabi-thailand/locations/kikuzuki-japanese-robatayaki-izakaya`
+    const menuLink = page.locator('[id^="dashboard-sidebar"]').getByRole('link', { name: 'Menus' })
+
+    await page.route('**/api/editor/sites/site-kikuzuki/menus?**', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, menus: [] }) })
+    })
+    await page.goto(overviewUrl, { waitUntil: 'networkidle' })
+    await menuLink.click()
+    await expect(page).toHaveURL(/\/menu$/)
+    await expect(page.getByText('No menus yet')).toBeVisible()
+    await page.unroute('**/api/editor/sites/site-kikuzuki/menus?**')
+
+    await page.route('**/api/editor/sites/site-kikuzuki/menus?**', async (route) => {
+      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Test failure' }) })
+    })
+    await page.goto(overviewUrl, { waitUntil: 'networkidle' })
+    await menuLink.click()
+    await expect(page).toHaveURL(/\/menu$/)
+    await expect(page.getByText('No menus yet')).toBeHidden()
+    await expect(page.getByText('Test failure')).toBeVisible()
   })
 })

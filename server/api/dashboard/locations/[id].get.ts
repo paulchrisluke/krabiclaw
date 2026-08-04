@@ -1,7 +1,7 @@
 // GET /api/dashboard/locations/[id] — Fetch a single location for the workspace page
 import { jsonResponse } from '~/server/utils/api-response'
 import { getDashboardLocationContext } from '~/server/utils/dashboard-context'
-import { parseLocationPayload } from './location-helpers'
+import { parseLocationPayload } from '~/server/utils/location-payload'
 import { assertLocationAccess } from '~/server/utils/member-access'
 import { resolveLocationCapabilitySummary } from '~/server/utils/location-management'
 

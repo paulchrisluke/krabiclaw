@@ -1,9 +1,6 @@
 // GET single menu with items
-import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
-import { getMenuWithItems } from '~/server/utils/menu-management'
-import { assertResourceAccess } from '~/server/utils/member-access'
-import { loadMemberSiteRow } from '~/server/utils/location-access'
+import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
+import { loadDashboardMenu } from '~/server/utils/dashboard-editor-resources'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -13,41 +10,8 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Site ID and menu ID are required' }, { status: 400 })
   }
 
-  const env = cloudflareEnv(event)
-  const db = env.DB
-
-  if (!db) {
-    return jsonResponse({ error: 'Database not available' }, { status: 500 })
-  }
-
-  const session = await getAuthSession(event, env)
-
-  if (!session?.user?.id) {
-    return jsonResponse({ error: 'Authentication required' }, { status: 401 })
-  }
-
   try {
-    const site = await loadMemberSiteRow(db, siteId, session.user.id)
-
-    if (!site) {
-      return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
-    }
-
-    const menu = await getMenuWithItems(db, site.organization_id, siteId, menuId)
-
-    if (!menu) {
-      return jsonResponse({ error: 'Menu not found' }, { status: 404 })
-    }
-
-    await assertResourceAccess(db, {
-      memberId: site.member_id,
-      role: site.member_role,
-      organizationId: site.organization_id,
-      siteId,
-      resourceLocationId: menu.location_id ?? null,
-    })
-
-    return jsonResponse({ success: true, menu })
+    return jsonResponse(await loadDashboardMenu(event, siteId, menuId))
   } catch (error) {
     rethrowHttpError(error)
     console.error('Failed to get menu:', error)

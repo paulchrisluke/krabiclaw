@@ -22,6 +22,13 @@
 
 <script setup>
 import { authClient } from '~/lib/auth-client'
+import platformStylesheet from '~/assets/css/platform-entry.css?url'
+
+const platformStylesheetHref = new URL(platformStylesheet, 'http://nuxt.local').pathname
+
+useHead({
+  link: [{ rel: 'stylesheet', href: platformStylesheetHref }],
+})
 
 useSeoMeta({ robots: 'noindex, nofollow' })
 

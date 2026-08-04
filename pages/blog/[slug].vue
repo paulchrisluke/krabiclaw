@@ -75,8 +75,9 @@ import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformC
 import { renderMarkdownToHtml, sanitizeHtmlForSsr, stripLeadingTitleHeading } from '~/utils/markdown'
 import { buildContentBlocks, normalizeContentComponent, type ContentComponent } from '~/utils/content-blocks'
 import { resolveContentComponent } from '~/utils/content-component-resolver'
+import { loadDomPurify } from '~/utils/dom-purify-loader'
 
-const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: sanitizeHtmlForSsr }
+const DOMPurify = import.meta.client ? await loadDomPurify() : { sanitize: sanitizeHtmlForSsr }
 
 const { isTenant, siteId, site } = useTenantSite()
 if (!isTenant || !siteId) throw createError({ statusCode: 404 })
@@ -105,15 +106,24 @@ interface TenantBlogPost {
   featured_image?: { public_url: string | null; kind: string | null; width: number | null; height: number | null } | null
   social_image?: { public_url: string | null; thumbnail_url: string | null; width: number | null; height: number | null } | null
   components?: ContentComponent[]
-  content_blocks?: import('~/components/workspace/blog/types').BlogEditorBlock[] | null
+  content_blocks?: import('~/lib/components/workspace/blog/types').BlogEditorBlock[] | null
 }
 
 const route = useRoute()
 const postEndpoint = computed(() => `/api/public/sites/${siteId}/blog/${String(route.params.slug)}`)
 
-interface BootstrapBlogResponse {
+interface PublicBlogResponse {
   post: TenantBlogPost | null
 }
+
+const isPublicBlogResponse = (value: unknown): value is PublicBlogResponse =>
+  isRecord(value)
+  && (value.post === null || (
+    isRecord(value.post)
+    && typeof value.post.id === 'string'
+    && typeof value.post.title === 'string'
+    && typeof value.post.slug === 'string'
+  ))
 
 const { data, pending, error } = await useAsyncData(
   () => `tenant-blog-post-${siteId}-${String(route.params.slug)}`,
@@ -133,9 +143,11 @@ const { data, pending, error } = await useAsyncData(
 
       post = await getPublishedSiteBlogPost(db, siteId, String(route.params.slug)) as TenantBlogPost | null
     } else {
-      let payload: BootstrapBlogResponse
+      let payload: PublicBlogResponse
       try {
-        payload = await $fetch<BootstrapBlogResponse>(postEndpoint.value)
+        payload = await publicApiRequest<PublicBlogResponse>(postEndpoint.value, {
+          validate: isPublicBlogResponse,
+        })
       } catch (err) {
         const statusCode = typeof err === 'object' && err !== null
           ? Number((err as { statusCode?: unknown; status?: unknown }).statusCode ?? (err as { status?: unknown }).status)
@@ -167,7 +179,7 @@ if (!data.value?.post) {
 }
 
 const post = computed(() => data.value?.post ?? null)
-const { blogList, config } = await useBootstrap()
+const { blogList, config } = await usePublicPageData()
 const allPosts = computed(() => (blogList.value ?? []) as unknown as TenantBlogPost[])
 const { categories } = useTenantBlogNav(allPosts)
 const relatedPosts = computed(() => allPosts.value.filter(item => item.slug !== post.value?.slug).slice(0, 4))

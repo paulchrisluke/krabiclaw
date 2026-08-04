@@ -56,10 +56,21 @@ export const useEditorContext = (siteId?: string) => {
     error.value = null
 
     try {
-      const response = await $fetch(`/api/editor/sites/${effectiveSiteId.value}/context`) as {
+      const response = await applicationFetch<{
         success: boolean
         context: EditorContext
-      }
+      }>(`/api/editor/sites/${effectiveSiteId.value}/context`, {
+        validate: (value): value is { success: boolean; context: EditorContext } =>
+          isRecord(value)
+          && value.success === true
+          && isRecord(value.context)
+          && isRecord(value.context.site)
+          && typeof value.context.site.id === 'string'
+          && isRecord(value.context.organization)
+          && typeof value.context.organization.id === 'string'
+          && Array.isArray(value.context.locations)
+          && Array.isArray(value.context.scopes),
+      })
 
       if (response.success) {
         context.value = response.context

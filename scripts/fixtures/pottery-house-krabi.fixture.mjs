@@ -168,7 +168,7 @@ for (const route of REQUIRED_ROUTES) {
 
 section('Bootstrap: two locations (primary + beachfront)')
 
-const bootstrapRes = await get(`/api/public/sites/${SITE_ID}/bootstrap`)
+const bootstrapRes = await get(`/api/public/sites/${SITE_ID}/shell`)
 let bootstrapData = null
 
 if (bootstrapRes.ok) {
@@ -193,7 +193,7 @@ if (bootstrapRes.ok) {
 
 section('Experience slugs route correctly')
 
-const expRes = await get(`/api/public/sites/${SITE_ID}/bootstrap?page=experiences`)
+const expRes = await get(`/api/public/sites/${SITE_ID}/page?page=experiences&datasets=experiences`)
 if (expRes.ok) {
   const expData = await expRes.json()
   const experiences = expData.experiencesList ?? []
@@ -317,7 +317,7 @@ if (bootstrapData) {
 
   // Location email is legitimately nullable: Google Places doesn't expose a
   // per-location email, and this client has no site-level contact_email
-  // configured. bootstrap.get.ts used to backfill it with the org owner's
+  // configured. The legacy combined public loader used to backfill it with the org owner's
   // private account email, which leaked personal contact info onto a public
   // page (fixed in 4d08888a) — so "no email at all" is the correct state
   // here, not a regression.

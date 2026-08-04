@@ -29,7 +29,7 @@ export interface DashboardInvitationRow {
 
 // Shared by server/api/dashboard/members.get.ts and settings/members.vue's SSR
 // branch — see the "Nested SSR self-fetch loses Cloudflare bindings" rule in
-// CLAUDE.md for why the page can't just $fetch its own API route during SSR.
+// the SSR boundary rule for why the page can't just $fetch its own API route.
 export async function getOrganizationMembersData(db: DbClient, organizationId: string): Promise<{
   members: DashboardMemberRow[]
   invitations: DashboardInvitationRow[]

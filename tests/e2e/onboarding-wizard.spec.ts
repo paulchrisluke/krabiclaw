@@ -22,7 +22,7 @@ async function loginFreshUser(page: Page, baseURL: string, userId: string) {
 async function completeManualWizard(
   page: Page,
   businessName: string,
-  { skipVertical = false, vertical = 'restaurant' as 'restaurant' | 'experience' | 'professional_service' } = {},
+  { skipVertical = false, skipSuccessAssertion = false, vertical = 'restaurant' as 'restaurant' | 'experience' | 'professional_service' } = {},
 ) {
   const activeWidget = page.locator('.onboarding-step-widget').last()
   const actionButton = (name: string | RegExp) => activeWidget.getByRole('button', { name })
@@ -73,11 +73,13 @@ async function completeManualWizard(
     await expect(page.getByText('Tap to preview your site')).toBeVisible()
     await page.getByRole('button', { name: 'Create site' }).click()
   }
-  try {
-    await expect(page.getByText('Done. Your workspace is live')).toBeVisible({ timeout: 60_000 })
-  } catch (waitError) {
-    const bannerText = await page.getByTestId('wizard-error-banner').textContent().catch(() => null)
-    throw new Error(`site creation never reached "Done"${bannerText ? ` — wizard error banner: ${bannerText}` : ' (no error banner visible either)'}`, { cause: waitError })
+  if (!skipSuccessAssertion) {
+    try {
+      await expect(page.getByText('Done. Your workspace is live')).toBeVisible({ timeout: 60_000 })
+    } catch (waitError) {
+      const bannerText = await page.getByTestId('wizard-error-banner').textContent().catch(() => null)
+      throw new Error(`site creation never reached "Done"${bannerText ? ` — wizard error banner: ${bannerText}` : ' (no error banner visible either)'}`, { cause: waitError })
+    }
   }
 }
 
@@ -228,8 +230,26 @@ test.describe('onboarding wizard UI', () => {
     const userId = `e2e-onboard-${suffix}`
     await loginFreshUser(page, baseURL!, userId)
 
+    let onboardingContextRequests = 0
+    let legacyContextRequests = 0
+    page.on('request', (request) => {
+      const pathname = new URL(request.url()).pathname
+      if (pathname === '/api/dashboard/onboarding-context') onboardingContextRequests += 1
+      if (
+        pathname === '/api/dashboard/context'
+        || pathname === '/api/dashboard/onboarding/checklist'
+        || /^\/api\/editor\/sites\/[^/]+\/context$/.test(pathname)
+      ) {
+        legacyContextRequests += 1
+      }
+    })
+
     await page.goto(`${baseURL}/dashboard/onboarding`, { waitUntil: 'load' })
+    await expect.poll(() => onboardingContextRequests).toBe(0)
+    expect(legacyContextRequests).toBe(0)
     await completeManualWizard(page, `Onboard Test Cafe ${suffix}`)
+    await expect.poll(() => onboardingContextRequests).toBe(1)
+    expect(legacyContextRequests).toBe(0)
     await expect(page.getByText('From here, head to your dashboard to keep building')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Add another location' })).toHaveCount(0)
     await page.getByRole('button', { name: 'Open my dashboard' }).click()
@@ -331,5 +351,35 @@ test.describe('onboarding wizard UI', () => {
 
     await expect(page.locator('div[role="alert"]').filter({ hasText: saveError })).toBeVisible()
     await expect(page.getByText('Team access')).not.toBeVisible()
+  })
+
+  test('a failed post-creation context refresh surfaces a terminal error instead of silently reapplying stale context', async ({ page, baseURL }) => {
+    test.setTimeout(120_000)
+    const suffix = Date.now()
+    const userId = `e2e-onboard-retry-${suffix}`
+    await loginFreshUser(page, baseURL!, userId)
+
+    // Initial load succeeds via real SSR (no HTTP request for page.route to
+    // intercept — see loadContextResource's import.meta.server branch), so
+    // this mock only ever affects the later client-side refresh triggered by
+    // onSiteCreated -> retryContext() below, exactly the "successful load,
+    // then a later failed refresh" scenario Nuxt's stale-data-retention
+    // behavior can hide (see pages/dashboard/onboarding.vue's loadContext).
+    await page.route('**/api/dashboard/onboarding-context', async (route) => {
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { message: 'Workspace context unavailable' } }),
+      })
+    })
+
+    await page.goto(`${baseURL}/dashboard/onboarding`, { waitUntil: 'load' })
+    await expect(page.locator('.onboarding-step-widget').first()).toBeVisible()
+    await completeManualWizard(page, `Onboard Retry Test ${suffix}`, { skipSuccessAssertion: true })
+
+    // Forbidden: the wizard's own post-creation success view (or any stale
+    // pre-creation context) must not render as if the refresh had succeeded.
+    await expect(page.getByText('From here, head to your dashboard to keep building')).not.toBeVisible()
+    await expect(page.getByText('Workspace could not be loaded')).toBeVisible()
   })
 })

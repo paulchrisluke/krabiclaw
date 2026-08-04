@@ -79,8 +79,9 @@ import { useContentPageSchema } from '~/composables/useContentPageSchema'
 import { blogCategoryToSlug, getBlogPostPath, slugToBlogCategory } from '~/utils/blog-categories'
 import { buildContentBlocks, normalizeContentComponent, type ContentComponent } from '~/utils/content-blocks'
 import { resolveContentComponent } from '~/utils/content-component-resolver'
+import { loadDomPurify } from '~/utils/dom-purify-loader'
 
-const DOMPurify = import.meta.client ? (await import('isomorphic-dompurify')).default : { sanitize: sanitizeHtmlForSsr }
+const DOMPurify = import.meta.client ? await loadDomPurify() : { sanitize: sanitizeHtmlForSsr }
 
 const { resolveMedia } = useMedia()
 
@@ -115,7 +116,7 @@ interface BlogPost {
   } | null
   social_image?: { public_url: string | null; thumbnail_url: string | null; width: number | null; height: number | null } | null
   components?: ContentComponent[]
-  content_blocks?: import('~/components/workspace/blog/types').BlogEditorBlock[] | null
+  content_blocks?: import('~/lib/components/workspace/blog/types').BlogEditorBlock[] | null
 }
 
 const route = useRoute()

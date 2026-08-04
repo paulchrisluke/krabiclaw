@@ -1,11 +1,11 @@
 <template>
   <div>
-    <header ref="headerRef" class="sticky top-0 z-50 border-b border-default bg-default/80 backdrop-blur-md">
-      <div class="mx-auto grid h-16 max-w-7xl grid-cols-[1fr_auto_1fr] items-center px-4 sm:px-6 lg:px-8">
+    <header ref="headerRef" data-saya-critical-header class="sticky top-0 z-50 border-b border-default bg-default/80 backdrop-blur-md">
+      <div data-saya-critical-header-inner class="mx-auto grid h-16 max-w-7xl grid-cols-[1fr_auto_1fr] items-center px-4 sm:px-6 lg:px-8">
         <!-- Brand logo / name -->
-        <NuxtLink to="/" class="shrink-0 no-underline">
+          <NuxtLink to="/" data-saya-critical-logo-link class="shrink-0 no-underline">
           <div v-if="logoUrl" class="size-10 shrink-0 rounded-full overflow-hidden">
-            <img :src="logoUrl" :alt="restaurantName" class="h-full w-full object-cover" />
+            <img :src="logoUrl" :alt="restaurantName" loading="eager" decoding="async" class="h-full w-full object-cover" />
           </div>
           <div v-else class="flex size-10 items-center justify-center rounded-full bg-(--kc-navy) text-white font-bold text-base shrink-0">
             {{ restaurantName.charAt(0).toUpperCase() }}
@@ -13,7 +13,7 @@
         </NuxtLink>
 
         <!-- Desktop nav -->
-        <nav class="hidden items-center gap-1 lg:flex" :aria-label="$t('saya.header.nav_aria')">
+        <nav data-saya-critical-nav class="hidden items-center gap-1 lg:flex" :aria-label="$t('saya.header.nav_aria')">
           <NuxtLink
             v-if="hasMenu"
             to="/menu"
@@ -51,6 +51,7 @@
           <NuxtLink
             v-if="primaryCtaPath"
             :to="primaryCtaPath"
+            data-saya-critical-cta
             class="inline-flex items-center justify-center rounded-full bg-(--brand-color) px-3 py-1.5 text-xs sm:text-sm font-medium text-(--brand-color-foreground) no-underline transition hover:opacity-90"
           >
             {{ primaryCtaLabel }}
@@ -59,6 +60,7 @@
           <!-- Mobile menu toggle -->
           <button
             type="button"
+            data-saya-critical-menu
             class="lg:hidden inline-flex size-8 items-center justify-center rounded-full text-muted transition hover:bg-muted hover:text-default"
             :aria-label="mobileMenuOpen ? $t('saya.header.close_navigation') : $t('saya.header.open_navigation')"
             @click="toggleMobileNav"
@@ -153,6 +155,7 @@ const props = defineProps<{
   site: Site | null
   locations: ApiRecord[]
   menu: ApiRecord | null
+  hasMenu?: boolean
   hasExperiences: boolean
   experienceCtaPath?: string | null
 }>()
@@ -185,7 +188,7 @@ const restaurantName = computed(() => props.site?.brand_name || DEFAULT_BUSINESS
 const logoUrl = computed(() => props.site?.logo_url || null)
 const isExperienceSite = computed(() => props.site?.vertical === 'experience')
 
-const hasMenu = computed(() => (props.menu?.items?.length ?? 0) > 0)
+const hasMenu = computed(() => props.hasMenu ?? (props.menu?.items?.length ?? 0) > 0)
 const hasOrderLinks = computed(() =>
   props.locations.some((loc: ApiRecord) => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
 )

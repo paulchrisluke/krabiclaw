@@ -1,6 +1,7 @@
 <template>
-  <header class="fixed inset-x-0 top-0 z-50 border-b border-gray-200 bg-white">
+  <header data-blawby-critical-header class="fixed inset-x-0 top-0 z-50 border-b border-gray-200 bg-white">
     <BlawbyBanner
+      data-blawby-critical-banner
       :content="site.banner_content"
       :phone="site.phone"
       :dismissible="site.banner_dismissible"
@@ -11,9 +12,11 @@
         <div class="flex items-center md:gap-x-12">
           <NuxtLink to="/" class="no-underline" :aria-label="`${brandName} home`">
             <img
-              v-if="site.logo_url"
-              :src="site.logo_url"
+              v-if="logoUrl"
+              :src="logoUrl"
               :alt="brandName"
+              loading="eager"
+              decoding="async"
               class="max-h-16 w-min max-w-[160px] object-contain"
             >
             <span v-else class="blawby-display truncate text-lg text-[var(--blawby-primary)] sm:text-xl">
@@ -88,7 +91,7 @@
       </nav>
     </div>
   </header>
-  <div class="mb-16" aria-hidden="true" />
+  <div class="blawby-critical-header-spacer mb-16" aria-hidden="true" />
 </template>
 
 <script setup lang="ts">
@@ -102,22 +105,14 @@ const props = defineProps<{
 
 const { trackConsultationClick } = useBlawbyConversionTracking(() => props.consultation)
 const route = useRoute()
-const brandName = computed(() => props.site.brand_name || 'Blawby')
+const brandName = computed(() => props.site.brand_name || '')
+const logoUrl = computed(() => props.site.logo_url || null)
 const headerCtaLabel = computed(() => typeof props.consultation.metadata.header_cta_label === 'string'
   ? props.consultation.metadata.header_cta_label
   : 'Get Started')
 const { isOpen: mobileOpen, toggle: toggleMobileNav, close: closeMobileNav } = useMobileNavToggle()
 const headerItems = computed(() => {
-  const configured = props.navigation.filter(item => item.area === 'header')
-  if (configured.length) return configured
-  return [
-    { id: 'services', area: 'header', label: 'Services', url: '/services', item_type: 'internal', sort_order: 10, metadata: {} },
-    { id: 'pricing', area: 'header', label: 'Pricing', url: '/pricing', item_type: 'internal', sort_order: 20, metadata: {} },
-    { id: 'about', area: 'header', label: 'About', url: '/about', item_type: 'internal', sort_order: 30, metadata: {} },
-    { id: 'contact', area: 'header', label: 'Contact', url: '/contact', item_type: 'internal', sort_order: 40, metadata: {} },
-    { id: 'blog', area: 'header', label: 'Blog', url: '/blog', item_type: 'internal', sort_order: 50, metadata: {} },
-    { id: 'donate', area: 'header', label: 'Donate', url: '/donate', item_type: 'internal', sort_order: 60, metadata: {} },
-  ] as PublicNavigationItem[]
+  return props.navigation.filter(item => item.area === 'header')
 })
 const mobileItems = headerItems
 

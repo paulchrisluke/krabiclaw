@@ -26,7 +26,7 @@
             <template #footer>
               <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <p class="text-sm text-muted">To manage your personal plan, visit your account's Billing and Usage settings page.</p>
-                <UButton color="neutral" variant="soft" size="sm" :to="orgSettings.billing.value">
+                <UButton v-if="orgSettings.billing.value" color="neutral" variant="soft" size="sm" :to="orgSettings.billing.value">
                   View All Plans
                 </UButton>
               </div>
@@ -70,7 +70,7 @@
               <template #footer>
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <p class="text-sm text-muted">Visit {{ item.organization.name }}'s billing settings for details.</p>
-                  <UButton color="neutral" variant="soft" size="sm" @click="goToWorkspaceBilling(item.organization.id)">
+                  <UButton color="neutral" variant="soft" size="sm" @click="goToWorkspaceBilling(item.organization.slug)">
                     View Billing Settings
                   </UButton>
                 </div>
@@ -99,6 +99,7 @@ interface BillingItem {
   organization: {
     id: string
     name: string
+    slug: string
     logo?: string | null
   }
   billing: {
@@ -107,12 +108,25 @@ interface BillingItem {
   }
 }
 
+const isBillingItemsResponse = (value: unknown): value is { items: BillingItem[] } =>
+  isRecord(value)
+  && Array.isArray(value.items)
+  && value.items.every(item =>
+    isRecord(item)
+    && isRecord(item.organization)
+    && typeof item.organization.id === 'string'
+    && typeof item.organization.name === 'string'
+    && typeof item.organization.slug === 'string'
+    && isRecord(item.billing)
+    && typeof item.billing.plan === 'string',
+  )
+
 const { data: billingItems, status, error, refresh } = await useAsyncData(
   'user-billing-items',
   async () => {
     if (import.meta.server) {
       const requestEvent = useRequestEvent()
-      if (!requestEvent) return []
+      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
       const [{ cloudflareEnv }, { getUserBillingItems }] = await Promise.all([
         import('~/server/utils/api-response'),
         import('~/server/utils/billing'),
@@ -121,15 +135,18 @@ const { data: billingItems, status, error, refresh } = await useAsyncData(
       const db = env.db
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
       const session = await import('~/server/utils/auth').then(m => m.getAuthSession(requestEvent, env))
-      if (!session?.user?.id) return []
+      if (!session?.user?.id) throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
       return await getUserBillingItems(env, db.$client, session.user.id)
     }
-    const response = await $fetch<{ items: BillingItem[] }>('/api/user/billing-items')
+    const response = await applicationFetch<{ items: BillingItem[] }>(
+      '/api/user/billing-items',
+      { validate: isBillingItemsResponse },
+    )
     return response.items
   }
 )
 
-const goToWorkspaceBilling = async (orgId: string) => {
-  await router.push({ path: orgSettings.billing.value, query: { organizationId: orgId } })
+const goToWorkspaceBilling = async (orgSlug: string) => {
+  await router.push(`/dashboard/${orgSlug}/settings/billing`)
 }
 </script>

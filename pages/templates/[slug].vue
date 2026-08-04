@@ -257,7 +257,8 @@ const slug = String(route.params.slug ?? '')
 
 // Static, local-data-driven lookup — no server round trip and no async
 // fetch, so the "nested SSR self-fetch loses Cloudflare bindings" pitfall in
-// CLAUDE.md doesn't apply here. Unknown/unpublished slugs 404 immediately.
+// This route does not use the public tenant data loader. Unknown or unpublished
+// slugs 404 immediately.
 const template = findPublishedTemplateMarketing(slug)
 
 if (!template) {

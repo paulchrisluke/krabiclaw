@@ -131,6 +131,13 @@
           </UCard>
 
           <!-- Request history -->
+          <UAlert
+            v-if="requestsError"
+            color="error"
+            variant="soft"
+            title="Requests could not be loaded"
+            :description="getErrorMessage(requestsError, 'Support requests failed')"
+          />
           <UCard v-if="requests && requests.length > 0">
             <template #header>
               <h2 class="font-semibold text-highlighted">Your requests</h2>
@@ -159,13 +166,16 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
+const dashboardScope = useDashboardRouteScope()
 definePageMeta({ layout: 'dashboard' })
 
 const config = useRuntimeConfig()
 const dashboard = useDashboardSite()
-if (!dashboard.state.value) await dashboard.refresh()
-const plan = computed(() => dashboard.site.value?.plan ?? 'free')
-const isFree = computed(() => !plan.value || plan.value === 'free')
+const isFree = computed(() => {
+  const state = dashboard.state.value
+  return !!state && (!state.site?.plan || state.site.plan === 'free')
+})
 const managedServiceEnabled = dashboard.managedServiceEnabled
 const { open: openUpsell } = useServiceUpsell()
 
@@ -228,8 +238,43 @@ interface WorkRequest {
   notes: string | null; created_at: string
 }
 
-const requestHeaders = buildDashboardRequestHeaders()
-const { data, refresh } = await useFetch<{ requests: WorkRequest[] }>('/api/dashboard/work-requests', { headers: requestHeaders })
+const requestEvent = useRequestEvent()
+const { data, refresh, error: requestsError } = await useAsyncData<{ requests: WorkRequest[] } | null>(
+  () => `dashboard-work-requests-${dashboardScope.value?.orgSlug ?? 'unknown'}`,
+  async () => {
+    const dashboardContext = dashboard.state.value
+    if (!dashboardContext) throw createError({ statusCode: 503, statusMessage: 'Dashboard context not loaded' })
+    const scope = dashboardScope.value
+    if (!scope) throw createError({ statusCode: 400, statusMessage: 'Dashboard organization scope is required' })
+    const organizationId = dashboardContext.organization?.id
+    if (!organizationId) throw createError({ statusCode: 404, statusMessage: 'Organization not found' })
+    if (import.meta.server) {
+      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+      const { cloudflareEnv } = await import('~/server/utils/api-response')
+      const db = cloudflareEnv(requestEvent).DB
+      if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+      if (!dashboardContext.site?.plan || dashboardContext.site.plan === 'free') return { requests: [] }
+      const { listWorkRequests } = await import('~/server/utils/work-requests-dashboard')
+      const requests = await listWorkRequests(db, organizationId)
+      return { requests }
+    }
+    if (!dashboardContext.site?.plan || dashboardContext.site.plan === 'free') return { requests: [] }
+    return await dashboardApi<{ requests: WorkRequest[] }>('/api/dashboard/work-requests', {
+      validate: (value): value is { requests: WorkRequest[] } =>
+        isRecord(value)
+        && Array.isArray(value.requests)
+        && value.requests.every(request =>
+          isRecord(request)
+          && typeof request.id === 'string'
+          && typeof request.type === 'string'
+          && typeof request.title === 'string'
+          && typeof request.status === 'string'
+          && (request.notes === null || typeof request.notes === 'string')
+          && typeof request.created_at === 'string',
+        ),
+    })
+  },
+)
 const requests = computed(() => data.value?.requests)
 
 async function submitRequest() {
@@ -238,10 +283,11 @@ async function submitRequest() {
   submitError.value = ''
   submitSuccess.value = false
   try {
-    await $fetch('/api/dashboard/work-requests', {
+    await dashboardApi('/api/dashboard/work-requests', {
       method: 'POST',
-      headers: requestHeaders,
       body: { type: form.type, title: form.title.trim(), description: form.description.trim() || undefined, priority: form.priority },
+      validate: (value): value is { success: true; id: string } =>
+        isRecord(value) && value.success === true && typeof value.id === 'string',
     })
     form.title = ''
     form.description = ''

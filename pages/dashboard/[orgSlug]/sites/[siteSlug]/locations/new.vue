@@ -72,19 +72,19 @@
 <script setup lang="ts">
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
 
-definePageMeta({ layout: 'editor', ssr: false })
+definePageMeta({ layout: 'editor', skipDashboardContext: true, ssr: false })
 
 const route = useRoute()
 const router = useRouter()
 const config = useRuntimeConfig()
-const toast = useToast()
 
 const orgSlug = route.params.orgSlug as string
 const siteSlug = route.params.siteSlug as string
 
-const siteData = ref<ApiRecord | null>(null)
+const dashboard = useDashboardSite()
+const siteData = computed(() => dashboard.site.value as ApiRecord | null)
 const previewVertical = computed<SiteVertical>(() => normalizeVertical(siteData.value?.vertical as string | undefined) as SiteVertical)
-const siteLocations = ref<Array<{ id: string; slug: string; title: string; is_primary: boolean }>>([])
+const siteLocations = computed(() => dashboard.locations.value)
 const contextLoaded = ref(false)
 const contextError = ref<string | null>(null)
 const selectedLocationId = ref<string | null>(null)
@@ -137,31 +137,6 @@ const computedSiteStatus = computed((): 'setup' | 'progress' | 'ready' | 'live' 
   siteData.value?.status === 'active' ? 'live' : 'setup'
 )
 
-const loadContext = async () => {
-  contextError.value = null
-  try {
-    const response = await $fetch<{
-      success: boolean
-      site?: ApiRecord | null
-      locations?: Array<{ id: string; slug: string; title: string; is_primary: boolean }>
-    }>('/api/dashboard/context', { headers: buildDashboardRequestHeaders() })
-
-    if (response.site) {
-      siteData.value = response.site
-      siteLocations.value = response.locations ?? []
-    } else {
-      contextError.value = 'Workspace data could not be loaded.'
-    }
-  } catch (error) {
-    // This page requires an existing site, so a failed context load is unexpected here
-    console.error('Failed to load dashboard context:', error)
-    contextError.value = 'Failed to load workspace. Please try again.'
-    toast.add({ description: 'Failed to load workspace. Please try again.', color: 'error' })
-  } finally {
-    contextLoaded.value = true
-  }
-}
-
 const onSelectPage = (page: string) => {
   selectedPreviewPage.value = page
   if (locationScopedPages.has(page) && !selectedLocationId.value && siteLocations.value.length > 0) {
@@ -174,16 +149,34 @@ const onSelectLocation = (id: string) => {
   selectedLocationId.value = id
 }
 
+const loadContext = async () => {
+  contextLoaded.value = false
+  contextError.value = null
+  try {
+    const context = await dashboard.refresh()
+    if (!context) throw new Error('Workspace data could not be loaded.')
+  } catch (error) {
+    contextError.value = getErrorMessage(error, 'Workspace data could not be loaded.')
+  } finally {
+    contextLoaded.value = true
+  }
+}
+
 // Called by OnboardingWizard after the location is created — reload locations and preview the new one
 const onLocationCreated = async (_orgSlug: string | null, locationSlug: string | null | undefined) => {
-  await loadContext()
+  contextError.value = null
+  try {
+    await dashboard.refresh()
+  } catch (error) {
+    contextError.value = getErrorMessage(error, 'Workspace data could not be loaded.')
+    return
+  }
   previewReloadToken.value = Date.now()
 
   const created = locationSlug ? siteLocations.value.find(l => l.slug === locationSlug) : null
   if (created) selectedLocationId.value = created.id
 }
 
-onMounted(async () => {
-  await loadContext()
-})
+onMounted(loadContext)
+
 </script>

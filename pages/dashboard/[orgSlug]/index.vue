@@ -110,11 +110,5 @@ function verticalLabel(vertical: string | null) {
   return getVerticalLabel(vertical)
 }
 
-onMounted(async () => {
-  try {
-    await dashboard.refresh()
-  } finally {
-    pending.value = false
-  }
-})
+pending.value = false
 </script>

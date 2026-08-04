@@ -67,27 +67,17 @@
               >
                 <!-- Thumbnail -->
                 <NuxtLink
-                  v-if="item.public_url && item.kind === 'image' && item.available"
+                  v-if="item.public_url && item.available"
                   :to="`/menu/${itemSlug(item)}`"
                   class="shrink-0"
                 >
-                  <img
-                    :src="item.public_url"
-                    :alt="item.name"
-                    class="size-24 rounded-xl object-cover bg-muted"
-                    loading="lazy"
-                  />
+                  <SayaMenuItemPreview :item="item" />
                 </NuxtLink>
                 <div
-                  v-else-if="item.public_url && item.kind === 'image'"
-                  class="shrink-0 opacity-50 grayscale"
+                  v-else-if="item.public_url"
+                  class="shrink-0"
                 >
-                  <img
-                    :src="item.public_url"
-                    :alt="item.name"
-                    class="size-24 rounded-xl object-cover bg-muted"
-                    loading="lazy"
-                  />
+                  <SayaMenuItemPreview :item="item" disabled />
                 </div>
 
                 <!-- Text -->
@@ -147,9 +137,9 @@ if (!siteId && !draftId) throw createError({ statusCode: 404 })
 
 const restaurantName = computed(() => (site as ApiValue)?.brand_name || (site as ApiValue)?.title || 'Menu')
 
-const { menu: bootstrapMenu, menuItemsBySection, pending, locations, config: bootstrapConfig, hasExperiences } = await useBootstrap()
+const { menu: pageMenu, menuItemsBySection, pending, locations, config: pageConfig, hasExperiences } = await usePublicPageData()
 
-const hasMenu = computed(() => ((bootstrapMenu.value as { items?: unknown[] } | null)?.items?.length ?? 0) > 0)
+const hasMenu = computed(() => ((pageMenu.value as { items?: unknown[] } | null)?.items?.length ?? 0) > 0)
 
 function slugifyCategory(input: string): string {
   return String(input)
@@ -203,7 +193,7 @@ function getDietaryTags(item: ApiValue): string[] {
 }
 
 const defaultCurrency = computed(() => {
-  const currency = (bootstrapConfig.value as Record<string, string> | undefined)?.default_currency
+  const currency = (pageConfig.value as Record<string, string> | undefined)?.default_currency
   return currency || 'THB'
 })
 
@@ -217,9 +207,9 @@ useTenantSocialMetadata(() => ({
   label: 'Menu',
   brand: {
     siteName: restaurantName.value,
-    logoUrl: bootstrapConfig.value?.logo_url || null,
-    faviconUrl: bootstrapConfig.value?.favicon_url || null,
-    primaryColor: bootstrapConfig.value?.brand_color || null,
+    logoUrl: pageConfig.value?.logo_url || null,
+    faviconUrl: pageConfig.value?.favicon_url || null,
+    primaryColor: pageConfig.value?.brand_color || null,
   },
 }))
 </script>

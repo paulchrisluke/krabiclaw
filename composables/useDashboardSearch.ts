@@ -18,6 +18,7 @@ const RESULT_GROUP_LABEL: Record<PublicSearchResult['type'], string> = {
  *  against /api/public/search (the same endpoint and result grouping the Saya/Blawby
  *  tenant search modal uses), scoped to the current org/site/location route context. */
 export function useDashboardSearch() {
+  const dashboardApi = useDashboardApi()
   const route = useRoute()
   const router = useRouter()
   const searchTerm = ref('')
@@ -47,7 +48,11 @@ export function useDashboardSearch() {
     return [...byLabel.entries()].map(([label, items]) => ({ id: label, label, items, ignoreFilter: true }))
   }
 
+  let activeController: AbortController | null = null
+
   async function runSearch() {
+    activeController?.abort()
+    activeController = null
     const normalized = searchTerm.value.trim()
     if (!normalized) {
       requestSequence += 1
@@ -57,9 +62,13 @@ export function useDashboardSearch() {
     }
 
     const requestId = ++requestSequence
+    const controller = new AbortController()
+    activeController = controller
     loading.value = true
     try {
-      const response = await $fetch('/api/public/search', {
+      const response = await dashboardApi<SearchResponse>('/api/public/search', {
+        signal: controller.signal,
+        validate: validateApiShape({ results: 'array' }),
         query: {
           q: normalized,
           surface: 'dashboard',
@@ -67,7 +76,7 @@ export function useDashboardSearch() {
           siteSlug: typeof route.params.siteSlug === 'string' ? route.params.siteSlug : '',
           locationSlug: typeof route.params.locationSlug === 'string' ? route.params.locationSlug : '',
         },
-      }) as SearchResponse
+      })
       if (requestId !== requestSequence) return
       groups.value = groupResults(response.results ?? [])
     } catch (error) {
@@ -75,17 +84,21 @@ export function useDashboardSearch() {
       console.error('Dashboard search failed:', error)
       groups.value = []
     } finally {
+      if (activeController === controller) activeController = null
       if (requestId === requestSequence) loading.value = false
     }
   }
 
   watch(searchTerm, () => {
     if (debounceHandle) clearTimeout(debounceHandle)
+    activeController?.abort()
     debounceHandle = setTimeout(() => { void runSearch() }, 120)
   })
 
   onBeforeUnmount(() => {
     if (debounceHandle) clearTimeout(debounceHandle)
+    activeController?.abort()
+    activeController = null
   })
 
   return { searchTerm, loading, groups }

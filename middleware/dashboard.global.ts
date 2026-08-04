@@ -20,6 +20,19 @@
 // server/api/dashboard/sites/[siteId]/guest-threads/*.ts's per-route scope checks).
 import { isWhatsAppInboxDeepLinkPath } from '~/utils/dashboard-reauth'
 
+function requireDashboardRequestEvent() {
+  const event = useRequestEvent()
+  if (!event) throw createError({ statusCode: 500, statusMessage: 'Dashboard request context unavailable' })
+  return event
+}
+
+function requireAllowedResponse(value: unknown, statusMessage: string): boolean {
+  if (typeof value !== 'object' || value === null || !('allowed' in value) || typeof value.allowed !== 'boolean') {
+    throw createError({ statusCode: 502, statusMessage })
+  }
+  return value.allowed
+}
+
 export default defineNuxtRouteMiddleware(async (to) => {
   if (to.path !== '/dashboard' && !to.path.startsWith('/dashboard/')) return
 
@@ -38,20 +51,13 @@ export default defineNuxtRouteMiddleware(async (to) => {
   let allowed = false
 
   if (import.meta.server) {
-    const event = useRequestEvent()
-    if (event) {
-      const { resolveAccountAccessForEvent } = await import('~/server/utils/route-access')
-      const result = await resolveAccountAccessForEvent(event)
-      allowed = result.status === 'ok' && result.allowed
-    }
+    const event = requireDashboardRequestEvent()
+    const { resolveAccountAccessForEvent } = await import('~/server/utils/route-access')
+    const result = await resolveAccountAccessForEvent(event)
+    allowed = result.status === 'ok' && result.allowed
   } else {
-    const access = await ($fetch('/api/account/access') as Promise<{ allowed?: boolean }>).catch((err) => {
-      // Only treat known unauthenticated/forbidden responses as "not allowed"
-      // Let network errors, 5xx, and other unexpected failures surface
-      if (err?.statusCode === 401 || err?.statusCode === 403) return null
-      throw err
-    })
-    allowed = Boolean(access?.allowed)
+    const access = await $fetch<{ allowed?: unknown }>('/api/account/access')
+    allowed = requireAllowedResponse(access, 'Dashboard access response was malformed')
   }
 
   if (!allowed) {
@@ -75,36 +81,27 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
     let capabilityAllowed = false
     if (import.meta.server) {
-      const event = useRequestEvent()
-      if (event) {
-        try {
-          const [{ cloudflareEnv }, { getAuthSession }, { isDashboardRouteCapabilityAllowed }] = await Promise.all([
-            import('~/server/utils/api-response'),
-            import('~/server/utils/auth'),
-            import('~/server/utils/dashboard-route-capability'),
-          ])
-          const env = cloudflareEnv(event)
-          const session = await getAuthSession(event, env)
-          if (session?.user?.id && env.DB) {
-            capabilityAllowed = await isDashboardRouteCapabilityAllowed(env.DB, session.user.id, {
-              organizationSlug,
-              siteSlug,
-              locationSlug,
-              capabilityKey,
-            })
-          }
-        } catch {
-          // Fail closed on a DB/auth lookup failure (transient D1 error, etc.) — the same
-          // controlled 404 an unresolvable capability gets, not an unhandled 500 that crashes
-          // the navigation.
-          capabilityAllowed = false
-        }
-      }
+      const event = requireDashboardRequestEvent()
+      const [{ cloudflareEnv }, { getAuthSession }, { isDashboardRouteCapabilityAllowed }] = await Promise.all([
+        import('~/server/utils/api-response'),
+        import('~/server/utils/auth'),
+        import('~/server/utils/dashboard-route-capability'),
+      ])
+      const env = cloudflareEnv(event)
+      if (!env.DB) throw createError({ statusCode: 503, statusMessage: 'Database not available' })
+      const session = await getAuthSession(event, env)
+      if (!session?.user?.id) throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
+      capabilityAllowed = await isDashboardRouteCapabilityAllowed(env.DB, session.user.id, {
+        organizationSlug,
+        siteSlug,
+        locationSlug,
+        capabilityKey,
+      })
     } else {
-      const result = await ($fetch('/api/dashboard/route-capability', {
+      const result = await $fetch<{ allowed?: unknown }>('/api/dashboard/route-capability', {
         query: { orgSlug: organizationSlug, siteSlug, locationSlug: locationSlug ?? undefined, key: capabilityKey },
-      }) as Promise<{ allowed?: boolean }>).catch(() => null)
-      capabilityAllowed = Boolean(result?.allowed)
+      })
+      capabilityAllowed = requireAllowedResponse(result, 'Dashboard capability response was malformed')
     }
 
     if (!capabilityAllowed) {

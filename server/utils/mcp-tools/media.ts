@@ -11,14 +11,14 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
       inputSchema: {
         target: {
           type: 'object',
-          description: 'Discriminated media placement target. Supported types: site_logo, home_hero, home_story_image, about_story_image, location_hero, menu_item_image, post_image, blog_post_image, experience_media.',
+          description: 'Discriminated media placement target. Supported types: site_logo, home_hero, home_story_image, about_story_image, location_hero, menu_item_media, post_image, blog_post_image, experience_media.',
           oneOf: [
             { properties: { type: { const: 'site_logo' } }, required: ['type'] },
             { properties: { type: { const: 'home_hero' }, location_id: { type: ['string', 'null'] } }, required: ['type'] },
             { properties: { type: { const: 'home_story_image' } }, required: ['type'] },
             { properties: { type: { const: 'about_story_image' } }, required: ['type'] },
             { properties: { type: { const: 'location_hero' }, location_id: { type: 'string' } }, required: ['type', 'location_id'] },
-            { properties: { type: { const: 'menu_item_image' }, menu_item_id: { type: 'string' } }, required: ['type', 'menu_item_id'] },
+            { properties: { type: { const: 'menu_item_media' }, menu_item_id: { type: 'string' } }, required: ['type', 'menu_item_id'] },
             { properties: { type: { const: 'post_image' }, post_id: { type: 'string' } }, required: ['type', 'post_id'] },
             { properties: { type: { const: 'blog_post_image' }, post_id: { type: 'string' } }, required: ['type', 'post_id'] },
             { properties: { type: { const: 'experience_media' }, experience_id: { type: 'string' } }, required: ['type', 'experience_id'] },
@@ -32,7 +32,7 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
         },
         allOf: [
           {
-            if: { properties: { target: { properties: { type: { const: 'experience_media' } } } } },
+            if: { properties: { target: { properties: { type: { enum: ['experience_media', 'menu_item_media'] } } } } },
             then: {},
             else: { properties: { asset_ids: { maxItems: 1 } } },
           },

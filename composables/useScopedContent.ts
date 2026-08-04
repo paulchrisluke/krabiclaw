@@ -44,16 +44,37 @@ export const useScopedContent = (siteId: string, page: string, locationId?: stri
         queryParams.set('locationId', effectiveLocationId.value)
       }
 
-      const response = await $fetch(`/api/editor/sites/${siteId}/content/${page}?${queryParams.toString()}`) as {
+      const response = await applicationFetch<{
         success: boolean
-        content: SiteContent[]
+        fields: SiteContent[]
         siteId: string
         locationId: string | null
         page: string
-      }
+      }>(`/api/editor/sites/${siteId}/content/${page}?${queryParams.toString()}`, {
+        validate: (value): value is {
+          success: boolean
+          fields: SiteContent[]
+          siteId: string
+          locationId: string | null
+          page: string
+        } =>
+          isRecord(value)
+          && value.success === true
+          && Array.isArray(value.fields)
+          && value.fields.every(item =>
+            isRecord(item)
+            && typeof item.id === 'string'
+            && typeof item.site_id === 'string'
+            && typeof item.page === 'string'
+            && typeof item.field === 'string',
+          )
+          && typeof value.siteId === 'string'
+          && (value.locationId === null || typeof value.locationId === 'string')
+          && typeof value.page === 'string',
+      })
 
       if (response.success) {
-        content.value = response.content
+        content.value = response.fields
       } else {
         error.value = 'Failed to load content'
       }

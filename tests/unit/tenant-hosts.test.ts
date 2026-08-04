@@ -44,7 +44,7 @@ test('hostnameOf strips the port from a Host header', () => {
 })
 
 test('getPlatformHosts always includes localhost, loopback and the documented production domains', () => {
-  // CLAUDE.md "Multi-Tenancy": "localhost / krabiclaw.com = platform routes"
+  // Routing contract: localhost / krabiclaw.com are platform routes.
   for (const env of [prodEnv, localEnv, {}]) {
     const hosts = getPlatformHosts(env)
     assert.ok(hosts.includes('localhost'))
@@ -85,7 +85,7 @@ test('isPlatformHost recognizes the configured platform domain with and without 
 })
 
 test('isPlatformHost treats krabiclaw.com as a platform host even when NUXT_PUBLIC_FREE_SITE_DOMAIN points elsewhere (e.g. local/CI)', () => {
-  // CLAUDE.md: "localhost / krabiclaw.com = platform routes" — this must hold
+  // The routing contract requires this to hold
   // regardless of how the free-site domain is configured for the environment.
   assert.equal(isPlatformHost('krabiclaw.com', localEnv), true)
   assert.equal(isPlatformHost('www.krabiclaw.com', localEnv), true)

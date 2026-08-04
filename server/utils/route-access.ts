@@ -1,6 +1,6 @@
 // Shared auth-check logic behind GET /api/account/access and GET /api/admin/access,
 // reused as-is by middleware/account.ts's server-side branch
-// (per CLAUDE.md's "nested SSR self-fetch loses Cloudflare bindings" rule) so route
+// (per the nested SSR self-fetch boundary) so route
 // middleware never has to go through useRequestFetch()'s internal self-fetch just to
 // answer a question the request event can resolve directly.
 import type { H3Event } from 'h3'

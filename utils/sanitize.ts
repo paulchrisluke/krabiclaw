@@ -1,3 +1,5 @@
+import { loadDomPurify } from './dom-purify-loader'
+
 /**
  * Sanitizes HTML to prevent XSS attacks.
  * IMPORTANT: When import.meta.server is true, this function returns UN-SANITIZED HTML.
@@ -13,7 +15,7 @@ export async function sanitizeHtml(html: string): Promise<string> {
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;')
   }
-  const DOMPurify = (await import('isomorphic-dompurify')).default
+  const DOMPurify = await loadDomPurify()
   return DOMPurify.sanitize(html)
 }
 

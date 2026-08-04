@@ -32,6 +32,7 @@
 </template>
 
 <script setup lang="ts">
+const dashboardApi = useDashboardApi()
 import type { SiteVertical } from '~/utils/vertical-copy'
 
 definePageMeta({ layout: 'dashboard' })
@@ -66,7 +67,7 @@ async function submit() {
   creating.value = true
   error.value = null
   try {
-    const res = await $fetch<{
+    const res = await dashboardApi<{
       siteId: string
       subdomain: string
       offerSubscribePlan: string | null
@@ -74,6 +75,17 @@ async function submit() {
     }>('/api/sites', {
       method: 'POST',
       body: { name: name.value.trim(), subdomain: subdomain.value.trim(), vertical: vertical.value },
+      validate: (value): value is {
+        siteId: string
+        subdomain: string
+        offerSubscribePlan: string | null
+        error?: string
+      } =>
+        isRecord(value)
+        && typeof value.siteId === 'string'
+        && typeof value.subdomain === 'string'
+        && (value.offerSubscribePlan === null || typeof value.offerSubscribePlan === 'string')
+        && (value.error === undefined || typeof value.error === 'string'),
     })
 
     await router.push(`/dashboard/${orgSlug}/sites/${res.subdomain}`)
@@ -81,8 +93,7 @@ async function submit() {
       await offerSubscribe(res.siteId, res.offerSubscribePlan)
     }
   } catch (err) {
-    const data = (err as { data?: { error?: string } })?.data
-    error.value = data?.error ?? 'Could not create site. Please try again.'
+    error.value = err instanceof Error ? err.message : 'Could not create site. Please try again.'
   } finally {
     creating.value = false
   }

@@ -9,10 +9,36 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import PlatformHeader from '~/components/platform/PlatformHeader.vue'
 import ConsentBanner from '~/components/ConsentBanner.vue'
+import platformStylesheet from '~/assets/css/platform-entry.css?url'
+import platformHomeStylesheet from '~/assets/css/platform-home-entry.css?url'
 
+const route = useRoute()
+const platformStylesheetHref = computed(() => {
+  const stylesheet = route.path === '/' ? platformHomeStylesheet : platformStylesheet
+  return new URL(stylesheet, 'http://nuxt.local').pathname
+})
+
+useHead(() => ({
+  link: [{ rel: 'stylesheet', href: platformStylesheetHref.value }],
+}))
+
+const platformTheme = usePlatformTheme()
+
+if (import.meta.client) {
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)')
+  platformTheme.restore()
+  const onSystemThemeChange = () => platformTheme.sync()
+  prefersDark.addEventListener('change', onSystemThemeChange)
+  const stopThemeWatch = watch(platformTheme.preference, platformTheme.sync)
+
+  onBeforeUnmount(() => {
+    prefersDark.removeEventListener('change', onSystemThemeChange)
+    stopThemeWatch()
+  })
+}
 
 useHead({
   titleTemplate: (title) => title ? `${title} | KrabiClaw` : 'KrabiClaw | AI Website Platform'

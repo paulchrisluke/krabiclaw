@@ -7,10 +7,13 @@ import { publishPendingGuestDeliveryOutbox, type GuestDeliveryQueueMessage } fro
 import { getGuestThreadById } from '../server/domain/guest-threads/repository'
 import { getAdapter } from '../server/domain/guest-threads/adapters/registry'
 import { nextConversationState } from '../server/domain/guest-threads/state-machine'
+import { isPlatformHost } from '../server/utils/tenant-hosts'
 
 interface Env {
   DB: D1Database
   GUEST_DELIVERY_QUEUE: Queue<GuestDeliveryQueueMessage>
+  NUXT_PUBLIC_FREE_SITE_DOMAIN?: string
+  NUXT_PUBLIC_PLATFORM_DOMAIN?: string
 }
 
 type HandlerWithQueue = ExportedHandler<Env, GuestDeliveryQueueMessage>
@@ -141,9 +144,113 @@ async function processGuestDelivery(env: Env, message: GuestDeliveryQueueMessage
 
 const handler = nitroApp as HandlerWithQueue
 
+function isStaticPlatformHomeRequest(request: Request, env: Env): boolean {
+  const url = new URL(request.url)
+  return request.method === 'GET'
+    && url.pathname === '/'
+    && isPlatformHost(url.host, env)
+    && !request.headers.has('x-preview-tenant')
+}
+
+function shouldDeferPublicHydration(request: Request): boolean {
+  if (request.method !== 'GET') return false
+  const pathname = new URL(request.url).pathname
+  const privatePrefixes = [
+    '/api/', '/_nuxt/', '/assets/', '/admin', '/dashboard', '/auth/', '/oauth/',
+    '/account', '/login', '/signup', '/forgot-password', '/reset-password',
+    '/accept-invitation', '/transfer',
+  ]
+  return !privatePrefixes.some(prefix => pathname === prefix || pathname.startsWith(prefix))
+}
+
+function removePublicNuxtUiColors(html: string): string {
+  return html.replace(/<style\b[^>]*id="nuxt-ui-colors"[^>]*>[\s\S]*?<\/style>/, '')
+}
+
+function renderDeferredHydrationLoader(entryUrl: string): string {
+  const serializedEntryUrl = JSON.stringify(entryUrl)
+  return `<script>(()=>{const entry=${serializedEntryUrl};let started=false;let loaded=false;let pending=null;const control=node=>node instanceof Element?node.closest('button,[role="button"],input[type="submit"],input[type="button"]'):null;const start=action=>{if(started)return;started=true;pending=action;const script=document.createElement("script");script.type="module";script.src=entry;script.crossOrigin="anonymous";script.addEventListener("load",()=>{loaded=true;document.removeEventListener("pointerdown",onPointerDown,true);document.removeEventListener("click",onClick,true);document.removeEventListener("submit",onSubmit,true);setTimeout(()=>{document.querySelectorAll("#nuxt-ui-colors,[data-nuxt-ui-colors]").forEach(style=>style.remove());const actionToReplay=pending;pending=null;if(!actionToReplay||!actionToReplay.target.isConnected){if(actionToReplay)console.error("Public interaction could not be replayed after hydration",actionToReplay);return}if(actionToReplay.kind==="click"){actionToReplay.target.dispatchEvent(new MouseEvent("click",{bubbles:true,cancelable:true,view:window}))}else{actionToReplay.target.requestSubmit(actionToReplay.submitter||undefined)}},0)},{once:true});script.addEventListener("error",()=>console.error("Public interaction hydration failed",entry),{once:true});document.head.append(script)};const onPointerDown=event=>{const target=control(event.target);if(target&&!target.disabled)start(null)};const onClick=event=>{const target=control(event.target);if(!target||target.disabled||loaded)return;if(!started)start({kind:"click",target});else pending={kind:"click",target};event.preventDefault();event.stopImmediatePropagation()};const onSubmit=event=>{if(loaded)return;const target=event.target;if(!(target instanceof HTMLFormElement))return;if(!started)start({kind:"submit",target,submitter:event.submitter});else pending={kind:"submit",target,submitter:event.submitter};event.preventDefault();event.stopImmediatePropagation()};const hydrateVisibleMedia=()=>{const videos=Array.from(document.querySelectorAll("video"));if(videos.length===0)return;if(!("IntersectionObserver" in window)){if(videos.some(video=>{const rect=video.getBoundingClientRect();return rect.bottom>0&&rect.top<window.innerHeight}))start(null);return}const observer=new IntersectionObserver(entries=>{if(entries.some(entry=>entry.isIntersecting)){observer.disconnect();start(null)}},{threshold:0.01});videos.forEach(video=>observer.observe(video))};if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",hydrateVisibleMedia,{once:true});else hydrateVisibleMedia()})()</script>`
+}
+
+async function renderStaticPlatformHome(response: Response): Promise<Response> {
+  const contentType = response.headers.get('content-type') || ''
+  if (!response.ok || !contentType.includes('text/html')) return response
+
+  const html = await response.text()
+  const moduleScript = /<script\b(?=[^>]*\btype="module")(?=[^>]*\bsrc="\/_nuxt\/)[^>]*><\/script>/
+  const nuxtConfigScript = /<script>window\.__NUXT__=[\s\S]*?<\/script>/
+  const nuxtDataScript = /<script type="application\/json" data-nuxt-data="nuxt-app"[^>]*>[\s\S]*?<\/script>/
+
+  if (!moduleScript.test(html) || !nuxtConfigScript.test(html) || !nuxtDataScript.test(html)) {
+    throw new Error('Static platform homepage contract is missing the Nuxt runtime markers')
+  }
+
+  const staticHtml = removePublicNuxtUiColors(html)
+    .replace(moduleScript, '<script defer src="/platform-home-static.js"></script>')
+    .replace(nuxtConfigScript, '')
+    .replace(nuxtDataScript, '')
+    .replace(
+      '</head>',
+      '<script>try{const p=localStorage.getItem("krabiclaw-theme");document.documentElement.classList.toggle("dark",p==="dark"||p!=="light"&&window.matchMedia("(prefers-color-scheme: dark)").matches)}catch(error){console.error("Unable to restore platform theme",error)}</script></head>',
+    )
+
+  const headers = new Headers(response.headers)
+  headers.delete('content-length')
+  headers.set('x-public-render-mode', 'static-html')
+  return new Response(staticHtml, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  })
+}
+
+async function deferPublicHydration(response: Response): Promise<Response> {
+  const contentType = response.headers.get('content-type') || ''
+  if (!response.ok || !contentType.includes('text/html')) return response
+
+  const html = await response.text()
+  if (html.includes('data-public-critical-shell="true"')) {
+    const moduleScript = /<script\b(?=[^>]*\btype="module")(?=[^>]*\bsrc="(\/_nuxt\/[^\"]+)")[^>]*><\/script>/
+    const match = html.match(moduleScript)
+    if (!match?.[1]) {
+      throw new Error('Critical public shell contract is missing the Nuxt entry script')
+    }
+    const entryUrl = JSON.stringify(match[1])
+    const hydrationLoader = `<script>(()=>{const entry=${entryUrl};const start=()=>{const script=document.createElement("script");script.type="module";script.src=entry;script.crossOrigin="anonymous";script.addEventListener("error",()=>console.error("Public after-paint hydration failed",entry),{once:true});document.head.append(script)};if("requestAnimationFrame" in window){requestAnimationFrame(()=>requestAnimationFrame(start))}else{setTimeout(start,0)}})()</script>`
+    const headers = new Headers(response.headers)
+    headers.delete('content-length')
+    headers.set('x-public-hydration', 'after-paint')
+    return new Response(html.replace(moduleScript, hydrationLoader), {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    })
+  }
+  const moduleScript = /<script\b(?=[^>]*\btype="module")(?=[^>]*\bsrc="(\/_nuxt\/[^\"]+)")[^>]*><\/script>/
+  const nuxtDataScript = /<script type="application\/json" data-nuxt-data="nuxt-app"[^>]*>[\s\S]*?<\/script>/
+  const match = html.match(moduleScript)
+  if (!match?.[1] || !nuxtDataScript.test(html)) {
+    throw new Error('Interaction hydration contract is missing the Nuxt entry script or payload')
+  }
+
+  const hydrationLoader = renderDeferredHydrationLoader(match[1])
+  const headers = new Headers(response.headers)
+  headers.delete('content-length')
+  headers.set('x-public-hydration', 'interaction-or-visible-media')
+  return new Response(removePublicNuxtUiColors(html)
+    .replace(moduleScript, hydrationLoader), {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  })
+}
+
 export default {
-  fetch(request, env, ctx) {
-    return handler.fetch(request, env, ctx)
+  async fetch(request, env, ctx) {
+    const response = await handler.fetch(request, env, ctx)
+    if (isStaticPlatformHomeRequest(request, env)) return renderStaticPlatformHome(response)
+    if (!shouldDeferPublicHydration(request)) return response
+    return deferPublicHydration(response)
   },
   scheduled(controller, env, ctx) {
     ctx.waitUntil(publishPendingGuestDeliveryOutbox(createDb(env.DB), env, 50))

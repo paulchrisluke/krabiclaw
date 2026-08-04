@@ -4,15 +4,31 @@ export type { Plan, PlanPrice, PlanLimits } from '~/server/api/billing/plans.get
 
 export const usePlans = () => {
   const nuxtApp = useNuxtApp()
-  const { data, status, error } = useAsyncData<Plan[]>('billing-plans', () => {
-    // server/middleware/zz-platform-plans-prefetch.ts stashes this on the real
-    // inbound request so we don't have to self-fetch our own API route during
-    // SSR — a self-fetch never inherits Cloudflare bindings, so it can't reach
-    // the KV cache and would call Stripe live on every render. Fall back to a
-    // self-fetch if the prefetch didn't run (e.g. non-platform-homepage caller).
-    const prefetched = useRequestEvent()?.context.platformPlans as Plan[] | undefined
-    if (prefetched) return Promise.resolve(prefetched)
-    return $fetch('/api/billing/plans') as Promise<Plan[]>
+  const { data, status, error } = useAsyncData<Plan[]>('billing-plans', async () => {
+    if (import.meta.server) {
+      const requestEvent = useRequestEvent()
+      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request event not available' })
+      const [{ cloudflareEnv }, { getCachedPlans }] = await Promise.all([
+        import('~/server/utils/api-response'),
+        import('~/server/utils/billing-plans'),
+      ])
+      return await getCachedPlans(cloudflareEnv(requestEvent))
+    }
+    return await applicationFetch<Plan[]>('/api/billing/plans', {
+      validate: validateApiArrayItems<Plan>({
+        id: 'string',
+        name: 'string',
+        tagline: 'string',
+        highlighted: 'boolean',
+        prices: 'array',
+        features: 'array',
+        limits: 'object',
+        cta: {
+          label: 'string',
+          href: 'string',
+        },
+      }),
+    })
   }, {
     server: true,
     getCachedData(key) {
@@ -20,7 +36,9 @@ export const usePlans = () => {
     },
   })
 
-  const plans = computed(() => data.value ?? null)
+  if (error.value) throw error.value
+
+  const plans = computed(() => data.value)
   const freePlan = computed(() => plans.value?.find(p => p.id === 'free') ?? null)
   const growthPlan = computed(() => plans.value?.find(p => p.id === 'growth') ?? null)
   const managedPlan = computed(() => plans.value?.find(p => p.id === 'managed') ?? null)

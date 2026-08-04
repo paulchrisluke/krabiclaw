@@ -1,6 +1,7 @@
 <template>
   <div
     v-if="consent === null"
+    data-consent-banner
     class="fixed inset-x-0 bottom-0 z-[200] border-t px-4 py-4 shadow-[0_-4px_24px_rgba(0,0,0,0.25)] sm:px-6"
     :class="variant === 'blawby' ? 'border-[var(--blawby-border)] bg-[var(--blawby-primary-800)]' : 'border-default bg-elevated'"
     role="region"
@@ -21,6 +22,7 @@
       <div class="flex shrink-0 gap-2">
         <button
           type="button"
+          data-consent-action="rejected"
           class="rounded-md border px-4 py-2 text-sm font-semibold transition"
           :class="variant === 'blawby' ? 'border-white/20 text-white hover:bg-white/10' : 'border-default text-default hover:bg-muted'"
           @click="reject"
@@ -29,6 +31,7 @@
         </button>
         <button
           type="button"
+          data-consent-action="accepted"
           class="rounded-md px-4 py-2 text-sm font-semibold transition"
           :class="variant === 'blawby' ? 'bg-[var(--blawby-accent)] text-white hover:bg-[var(--blawby-accent-strong)]' : 'bg-primary text-inverted hover:opacity-90'"
           @click="accept"

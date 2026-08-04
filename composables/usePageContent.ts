@@ -1,6 +1,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useFetch } from '#app'
 import { getFieldDef } from '~/config/content-registry'
+import { loadDomPurify } from '~/utils/dom-purify-loader'
 import type { FieldDefinition } from '~/config/content-registry'
 
 interface ContentRow {
@@ -118,7 +119,7 @@ export const usePageContent = (pageName?: string) => {
 
     let value = message.value
     if (needsSanitization(message.field) && process.client) {
-      const DOMPurify = (await import('dompurify')).default
+      const DOMPurify = await loadDomPurify()
       value = DOMPurify.sanitize(message.value)
     }
 

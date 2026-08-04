@@ -22,24 +22,6 @@ interface TenantSiteInfo {
   } | null
 }
 
-interface PublicLocationsResponse {
-  success: boolean
-  locations: unknown[]
-  count: number
-}
-
-interface PublicMenuResponse {
-  success: boolean
-  menu: unknown | null
-  message?: string
-  siteId?: string
-  locationId?: string
-  locale?: string
-  requestedLocale?: string
-  sourceLocale?: string
-  currency?: string
-}
-
 // Tenant site composable for Saya theme rendering
 export const useTenantSite = () => {
   const event = useRequestEvent()
@@ -77,56 +59,4 @@ export const useTenantSite = () => {
     themeId: tenantContext.value.themeId,
     site: tenantContext.value.site
   }
-}
-
-export const useSiteContent = async (page: string, locationId?: string) => {
-  const { siteId, organizationId } = useTenantSite()
-  
-  if (!siteId || !organizationId) {
-    throw createError({ statusCode: 404, message: 'Site not found' })
-  }
-  
-  const { data } = await useFetch(`/api/public/sites/${siteId}/content/${page}`, {
-    query: { locationId },
-    key: `site-content-${siteId}-${page}-${locationId || 'site-wide'}`
-  })
-  
-  return data
-}
-
-export const useSiteLocations = async () => {
-  const { isTenant, siteId } = useTenantSite()
-
-  if (!isTenant || !siteId) {
-    return ref<PublicLocationsResponse>({
-      success: false,
-      locations: [],
-      count: 0,
-    })
-  }
-
-  const { data } = await useFetch(`/api/public/sites/${siteId}/locations`, {
-    key: `site-locations-${siteId}`,
-  })
-
-  return data as unknown as Ref<PublicLocationsResponse | null>
-}
-
-export const useSiteMenus = async (locationId?: string) => {
-  const { isTenant, siteId } = useTenantSite()
-
-  if (!isTenant || !siteId) {
-    return ref<PublicMenuResponse>({
-      success: false,
-      menu: null,
-      message: 'No menu available for this scope',
-    })
-  }
-
-  const { data } = await useFetch(`/api/public/sites/${siteId}/menus`, {
-    query: { locationId },
-    key: `site-menus-${siteId}-${locationId || 'site-wide'}`,
-  })
-
-  return data as unknown as Ref<PublicMenuResponse | null>
 }
