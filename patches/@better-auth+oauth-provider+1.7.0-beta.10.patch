@@ -1,0 +1,19 @@
+diff --git a/node_modules/@better-auth/oauth-provider/dist/client-assertion-D-tAYsKC.mjs b/node_modules/@better-auth/oauth-provider/dist/client-assertion-D-tAYsKC.mjs
+index 43e3573..d0dd224 100644
+--- a/node_modules/@better-auth/oauth-provider/dist/client-assertion-D-tAYsKC.mjs
++++ b/node_modules/@better-auth/oauth-provider/dist/client-assertion-D-tAYsKC.mjs
+@@ -98,7 +98,13 @@ async function fetchClientJwks(ctx, client) {
+ 		const jwks = await fetchJwksFromUri(client.jwksUri);
+ 		setJwksCache(client.jwksUri, jwks, now);
+ 		return jwks;
+-	} catch {
++	} catch (fetchErr) {
++		console.error("[OAUTH_JWKS_FETCH_FAILED]", JSON.stringify({
++			jwks_uri: client.jwksUri,
++			client_id: client.clientId,
++			error_name: fetchErr instanceof Error ? fetchErr.name : typeof fetchErr,
++			error_message: fetchErr instanceof Error ? fetchErr.message : String(fetchErr)
++		}));
+ 		const staleLimitMs = JWKS_CACHE_TTL_MS * 2;
+ 		if (cached && now - cached.fetchedAt < staleLimitMs) return cached.jwks;
+ 		throw new APIError("BAD_REQUEST", {
