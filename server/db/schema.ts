@@ -1598,9 +1598,6 @@ export const site_billing = sqliteTable("site_billing", {
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	stripe_customer_id: text(),
 	payment_method: text().default("stripe").notNull(),
-	local_rate: integer(),
-	local_currency: text(),
-	last_reminder_sent_at: text(),
 });
 
 export const site_config = sqliteTable("site_config", {
