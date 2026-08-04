@@ -33,9 +33,20 @@ export interface PublicPageRequest {
   token: string | null; // signed preview token — non-null only on /preview/site/... routes
 }
 
+export function getPublicCriticalHomeRequest(params: PublicPageRequest): PublicPageRequest {
+  return {
+    ...params,
+    page: 'home',
+    location: null,
+    experience: null,
+    datasets: ['content'],
+    blogSlug: null,
+  }
+}
+
 // Extracts the page sub-path from a platform preview route path.
 // Returns null if the path is not a preview route.
-function getPreviewSubpath(path: string): string | null {
+export function getPreviewSubpath(path: string): string | null {
   const match = path.match(/^\/preview\/(?:site|draft)\/[^/]+(\/.*)?$/)
   if (!match) return null
   return match[1] || '/'

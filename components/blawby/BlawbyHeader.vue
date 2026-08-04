@@ -105,23 +105,14 @@ const props = defineProps<{
 
 const { trackConsultationClick } = useBlawbyConversionTracking(() => props.consultation)
 const route = useRoute()
-const brandName = computed(() => props.site.brand_name || 'Blawby')
+const brandName = computed(() => props.site.brand_name || '')
 const logoUrl = computed(() => props.site.logo_url || null)
 const headerCtaLabel = computed(() => typeof props.consultation.metadata.header_cta_label === 'string'
   ? props.consultation.metadata.header_cta_label
   : 'Get Started')
 const { isOpen: mobileOpen, toggle: toggleMobileNav, close: closeMobileNav } = useMobileNavToggle()
 const headerItems = computed(() => {
-  const configured = props.navigation.filter(item => item.area === 'header')
-  if (configured.length) return configured
-  return [
-    { id: 'services', area: 'header', label: 'Services', url: '/services', item_type: 'internal', sort_order: 10, metadata: {} },
-    { id: 'pricing', area: 'header', label: 'Pricing', url: '/pricing', item_type: 'internal', sort_order: 20, metadata: {} },
-    { id: 'about', area: 'header', label: 'About', url: '/about', item_type: 'internal', sort_order: 30, metadata: {} },
-    { id: 'contact', area: 'header', label: 'Contact', url: '/contact', item_type: 'internal', sort_order: 40, metadata: {} },
-    { id: 'blog', area: 'header', label: 'Blog', url: '/blog', item_type: 'internal', sort_order: 50, metadata: {} },
-    { id: 'donate', area: 'header', label: 'Donate', url: '/donate', item_type: 'internal', sort_order: 60, metadata: {} },
-  ] as PublicNavigationItem[]
+  return props.navigation.filter(item => item.area === 'header')
 })
 const mobileItems = headerItems
 
