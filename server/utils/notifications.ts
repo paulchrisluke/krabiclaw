@@ -18,6 +18,7 @@ import BookingOwnerCancelled from '~/server/emails/templates/BookingOwnerCancell
 import BookingGuestCancelled from '~/server/emails/templates/BookingGuestCancelled'
 import BookingThankYouReviewRequest from '~/server/emails/templates/BookingThankYouReviewRequest'
 import BookingReviewReminder from '~/server/emails/templates/BookingReviewReminder'
+import OrganizationInvite from '~/server/emails/templates/OrganizationInvite'
 import { createCanonicalNotification, tenantEventTypeForTemplate } from '~/server/utils/notification-center'
 import { buildOwnerThreadInboxUrl, getPlatformDomain, resolveSiteLocationSlugs } from '~/server/utils/dashboard-notification-links'
 
@@ -1520,6 +1521,56 @@ async function notifyGuestThreadReplyInner(
   }
 }
 
+export interface OrganizationInvitationInput extends SiteContext {
+  invitationId: string
+  email: string
+  role: string
+  organizationName: string
+  inviterName: string
+}
+
+// Called from the Better Auth organization plugin's sendInvitationEmail hook
+// (server/utils/auth.ts) — the only place organization invitation emails are
+// sent, so every invite (dashboard, admin, or a future API surface) that goes
+// through auth.api.createInvitation gets this for free.
+export async function notifyOrganizationInvited(
+  env: NotificationEnv,
+  db: DbClient,
+  opts: OrganizationInvitationInput
+) {
+  const platformDomain = getPlatformDomain(env)
+  const inviteUrl = `https://${platformDomain}/accept-invitation/${opts.invitationId}`
+
+  const rendered = await useRender(OrganizationInvite, {
+    props: {
+      organizationName: opts.organizationName,
+      inviterName: opts.inviterName,
+      role: opts.role,
+      inviteUrl,
+      platformDomain,
+    },
+  })
+
+  await sendEmailNotification(env, db, {
+    organizationId: opts.organizationId,
+    siteId: opts.siteId,
+    to: opts.email,
+    template: 'organization_invited',
+    title: `You're invited to join ${opts.organizationName}`,
+    payload: {
+      invitation_id: opts.invitationId,
+      role: opts.role,
+      organization_name: opts.organizationName,
+      deep_link: inviteUrl,
+    },
+    email: {
+      subject: `You're invited to join ${opts.organizationName} on KrabiClaw`,
+      html: rendered.html,
+      text: rendered.text,
+    },
+  })
+}
+
 export async function getNotificationCopyPreviews(): Promise<NotificationCopyPreview[]> {
   const restaurant = 'Ember & Slice'
   const studio = 'Pottery House Krabi'
@@ -1534,6 +1585,7 @@ export async function getNotificationCopyPreviews(): Promise<NotificationCopyPre
     guestContact,
     ownerBooking,
     guestBooking,
+    organizationInvite,
   ] = await Promise.all([
     useRender(ReservationOwnerNew, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Tue, Jul 14, 2026', time: '7:00 PM', guests: '2', phone: '+1 555 123 4567', email: 'alex@example.com', platformDomain, replyUrl: 'https://demo.krabiclaw.com/dashboard/ember-slice/sites/ember-slice/locations/main/inbox/res-preview-1' } }),
     useRender(ReservationGuestReceived, { props: { guestName: 'Alex Carter', siteName: restaurant, date: 'Tue, Jul 14, 2026', time: '7:00 PM', guests: '2', contactPhone: '+1 555 000 0000', contactEmail: 'hello@emberslice.example', cancelUrl: 'https://demo.krabiclaw.com/reservations/cancel?id=res-preview-1', platformDomain } }),
@@ -1543,6 +1595,7 @@ export async function getNotificationCopyPreviews(): Promise<NotificationCopyPre
     useRender(ContactGuestReceived, { props: { guestName: 'Jordan Lee', siteName: restaurant, subject: 'general', message: 'Hi, do you have vegan options and parking nearby?', platformDomain, consentAcknowledged: true } }),
     useRender(BookingOwnerNew, { props: { guestName: 'Mina Park', siteName: studio, experienceTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, email: 'mina@example.com', phone: '+66 76 000 0002', platformDomain, replyUrl: 'https://demo.krabiclaw.com/dashboard/pottery-house-krabi/sites/pottery-house/locations/main/inbox/booking-preview-1' } }),
     useRender(BookingGuestReceived, { props: { guestName: 'Mina Park', siteName: studio, experienceTitle: 'Pottery Wheel Class', date: 'Mon, Jul 20, 2026', time: '10:00 AM', partySize: 2, contactPhone: '+66 76 000 0001', contactEmail: 'hello@example.com', cancelUrl: 'https://demo.krabiclaw.com/experiences/cancel?id=booking-preview-1', platformDomain } }),
+    useRender(OrganizationInvite, { props: { organizationName: studio, inviterName: 'Priya Shah', role: 'admin', inviteUrl: 'https://demo.krabiclaw.com/accept-invitation/invite-preview-1', platformDomain } }),
   ])
 
   return [
@@ -1665,6 +1718,16 @@ export async function getNotificationCopyPreviews(): Promise<NotificationCopyPre
       template: 'reservation_cancelled',
       title: 'Owner WhatsApp — experience booking cancelled',
       text: 'Booking cancelled: Mina Park, Mon, Jul 20, 2026 at 10:00 AM, 2 guests. Phone: +66 76 000 0002. Business: Pottery House Krabi · Experience: Pottery Wheel Class.',
+    },
+    {
+      id: 'organization-invite-email',
+      audience: 'guest',
+      channel: 'email',
+      template: 'organization_invited',
+      title: 'Invitee — organization invitation',
+      subject: `You're invited to join ${studio} on KrabiClaw`,
+      html: organizationInvite.html,
+      text: organizationInvite.text,
     },
   ]
 }
