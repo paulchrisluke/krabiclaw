@@ -59,6 +59,21 @@ test.describe('pottery house public site', () => {
     await expectHealthyPage(page, errors)
   })
 
+  test('experience video preview starts on initial load', async ({ page }) => {
+    const errors = collectPageErrors(page)
+    await page.goto(`${potteryHouseBaseURL}/experiences/${wheelClass.slug}`, { waitUntil: 'domcontentloaded' })
+
+    const video = page.locator('video').first()
+    await expect(video).toBeVisible()
+    await expect.poll(() => video.evaluate((element) => ({
+      currentTime: element.currentTime,
+      paused: element.paused,
+      readyState: element.readyState,
+    })), { timeout: 10_000 }).toMatchObject({ paused: false })
+
+    await expectHealthyPage(page, errors)
+  })
+
   // Regression: no restaurant-vertical copy must appear on an experience site.
   // These strings come from the restaurant branch of getVerticalCopy().
   test('site does not render restaurant-vertical copy', async ({ page }) => {
