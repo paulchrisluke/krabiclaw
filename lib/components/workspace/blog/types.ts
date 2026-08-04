@@ -37,6 +37,7 @@ export interface BlogPost {
   editor_theme_tokens?: Record<string, unknown>
   author_name?: string | null
   author_image?: string | null
+  site_author_id?: string | null
   created_at?: string | null
   editor_site_name?: string | null
   editor_brand_color?: string | null
@@ -103,6 +104,7 @@ export interface PlatformBlogCreateInput {
   visibility?: 'public' | 'unlisted'
   scheduled_for?: string | null
   social_image_asset_id?: string | null
+  site_author_id?: string | null
 }
 
 export interface PlatformBlogUpdateInput {
@@ -148,6 +150,17 @@ export interface PlatformBlogUpdateInput {
   content_blocks?: BlogEditorBlock[]
   expected_document_updated_at?: string
   expected_updated_at?: string
+  site_author_id?: string | null
+}
+
+export interface SiteAuthor {
+  id: string
+  name: string
+  title?: string | null
+  bio?: string | null
+  image_asset_id?: string | null
+  image_public_url?: string | null
+  sort_order?: number
 }
 
 export interface BlogPostRepository {
@@ -159,4 +172,6 @@ export interface BlogPostRepository {
   delete(_postId: string): Promise<void>
   publish(_postId: string): Promise<void>
   unpublish(_postId: string): Promise<void>
+  listAuthors?(): Promise<SiteAuthor[]>
+  createAuthor?(_input: { name: string; title?: string | null }): Promise<SiteAuthor>
 }

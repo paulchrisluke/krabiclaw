@@ -1151,6 +1151,21 @@ export const platform_analytics = sqliteTable("platform_analytics", {
 	unique("platform_analytics_metric_date_unique").on(table.metric, table.date),
 ]);
 
+export const site_authors = sqliteTable("site_authors", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	name: text().notNull(),
+	title: text(),
+	bio: text(),
+	image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
+	sort_order: integer().default(0).notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	index("site_authors_site_idx").on(table.site_id),
+]);
+
 export const blog_posts = sqliteTable("blog_posts", {
 	id: text().primaryKey(),
 	organization_id: text().references(() => organization.id, { onDelete: "cascade" } ), // null = platform blog post
@@ -1169,7 +1184,8 @@ export const blog_posts = sqliteTable("blog_posts", {
 	featured_order: integer(),
 	status: text().default("draft").notNull(), // draft | published | scheduled | archived
 	visibility: text().default("public").notNull(), // public | unlisted
-	author_id: text().references(() => user.id, { onDelete: "set null" } ),
+	author_id: text().references(() => user.id, { onDelete: "set null" } ), // CMS creator identity (Better Auth user), not the displayed byline
+	site_author_id: text().references(() => site_authors.id, { onDelete: "set null" } ), // displayed byline, tenant-scoped
 	featured_image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 	social_image_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
 	published_at: text(),

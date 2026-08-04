@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "8ea36ad6-c5b2-4d52-a965-d57ec5bdc9d0",
-  "prevId": "d18243a5-2707-4e7f-b461-778909a8bde8",
+  "id": "c34fe9de-e454-401b-9686-b71337714449",
+  "prevId": "8ea36ad6-c5b2-4d52-a965-d57ec5bdc9d0",
   "tables": {
     "account": {
       "name": "account",
@@ -14497,27 +14497,6 @@
           "notNull": true,
           "autoincrement": false,
           "default": "'stripe'"
-        },
-        "local_rate": {
-          "name": "local_rate",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "local_currency": {
-          "name": "local_currency",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "last_reminder_sent_at": {
-          "name": "last_reminder_sent_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         }
       },
       "indexes": {
