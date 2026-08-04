@@ -58,74 +58,41 @@
           </NuxtLink>
 
           <!-- Mobile menu toggle -->
-          <button
-            type="button"
-            data-saya-critical-menu
-            class="lg:hidden inline-flex size-8 items-center justify-center rounded-full text-muted transition hover:bg-muted hover:text-default"
-            :aria-label="mobileMenuOpen ? $t('saya.header.close_navigation') : $t('saya.header.open_navigation')"
-            @click="toggleMobileNav"
-          >
-            <svg viewBox="0 0 20 20" fill="currentColor" class="size-5"><path fill-rule="evenodd" d="M2.75 5.75a.75.75 0 01.75-.75h13a.75.75 0 010 1.5h-13a.75.75 0 01-.75-.75zM2.75 10a.75.75 0 01.75-.75h13a.75.75 0 010 1.5h-13A.75.75 0 012.75 10zM2.75 14.25a.75.75 0 01.75-.75h13a.75.75 0 010 1.5h-13a.75.75 0 01-.75-.75z" clip-rule="evenodd" /></svg>
-          </button>
+          <details ref="mobileNavDetails" class="lg:hidden" @toggle="syncMobileNavState">
+            <summary
+              data-saya-critical-menu
+              class="inline-flex size-8 list-none items-center justify-center rounded-full text-muted transition hover:bg-muted hover:text-default [&::-webkit-details-marker]:hidden"
+              :aria-label="mobileMenuOpen ? $t('saya.header.close_navigation') : $t('saya.header.open_navigation')"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" class="size-5"><path fill-rule="evenodd" d="M2.75 5.75a.75.75 0 01.75-.75h13a.75.75 0 010 1.5h-13a.75.75 0 01-.75-.75zM2.75 10a.75.75 0 01.75-.75h13a.75.75 0 010 1.5h-13A.75.75 0 012.75 10zM2.75 14.25a.75.75 0 01.75-.75h13a.75.75 0 010 1.5h-13a.75.75 0 01-.75-.75z" clip-rule="evenodd" /></svg>
+            </summary>
+            <div class="absolute inset-x-0 top-16 border-b border-default bg-default p-4 shadow-sm lg:hidden">
+              <nav class="grid gap-1" :aria-label="$t('saya.header.mobile_nav_aria')">
+                <NuxtLink v-if="hasMenu" to="/menu" class="rounded-full px-4 py-3 text-sm font-semibold text-default hover:bg-muted" @click="closeMobileNav">
+                  {{ $t('saya.header.menu') }}
+                </NuxtLink>
+                <NuxtLink v-if="locations.length > 1" to="/locations" class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted" @click="closeMobileNav">
+                  {{ $t('saya.header.locations') }}
+                </NuxtLink>
+                <div class="my-1 border-t border-default" />
+                <NuxtLink v-if="hasOrderLinks && !isExperienceSite" to="/order" class="rounded-full px-4 py-3 text-sm font-semibold text-default hover:bg-muted" @click="closeMobileNav">
+                  {{ $t('saya.header.order_now') }}
+                </NuxtLink>
+                <NuxtLink v-if="!isExperienceSite" to="/reservations" class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted" @click="closeMobileNav">
+                  {{ $t('saya.header.reservations') }}
+                </NuxtLink>
+                <NuxtLink v-if="hasExperiences" to="/experiences" class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted" @click="closeMobileNav">
+                  {{ $t('saya.header.experiences') }}
+                </NuxtLink>
+                <NuxtLink to="/contact" class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted" @click="closeMobileNav">
+                  {{ $t('saya.header.contact') }}
+                </NuxtLink>
+              </nav>
+            </div>
+          </details>
         </div>
       </div>
 
-      <!-- Mobile menu -->
-      <div
-        v-if="mobileMenuOpen"
-        class="absolute inset-x-0 top-16 border-b border-default bg-default p-4 shadow-sm lg:hidden"
-      >
-        <nav class="grid gap-1" :aria-label="$t('saya.header.mobile_nav_aria')">
-          <NuxtLink
-            v-if="hasMenu"
-            to="/menu"
-            class="rounded-full px-4 py-3 text-sm font-semibold text-default hover:bg-muted"
-            @click="closeMobileNav"
-          >
-            {{ $t('saya.header.menu') }}
-          </NuxtLink>
-          <NuxtLink
-            v-if="locations.length > 1"
-            to="/locations"
-            class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted"
-            @click="closeMobileNav"
-          >
-            {{ $t('saya.header.locations') }}
-          </NuxtLink>
-          <div class="my-1 border-t border-default" />
-          <NuxtLink
-            v-if="hasOrderLinks && !isExperienceSite"
-            to="/order"
-            class="rounded-full px-4 py-3 text-sm font-semibold text-default hover:bg-muted"
-            @click="closeMobileNav"
-          >
-            {{ $t('saya.header.order_now') }}
-          </NuxtLink>
-          <NuxtLink
-            v-if="!isExperienceSite"
-            to="/reservations"
-            class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted"
-            @click="closeMobileNav"
-          >
-            {{ $t('saya.header.reservations') }}
-          </NuxtLink>
-          <NuxtLink
-            v-if="hasExperiences"
-            to="/experiences"
-            class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted"
-            @click="closeMobileNav"
-          >
-            {{ $t('saya.header.experiences') }}
-          </NuxtLink>
-          <NuxtLink
-            to="/contact"
-            class="rounded-full px-4 py-3 text-sm text-default hover:bg-muted"
-            @click="closeMobileNav"
-          >
-            {{ $t('saya.header.contact') }}
-          </NuxtLink>
-        </nav>
-      </div>
     </header>
   </div>
 </template>
@@ -163,9 +130,19 @@ const props = defineProps<{
 const i18n = useI18n() as ApiValue as I18nComposable
 const { locale, t } = i18n
 const verticalCopy = computed(() => getVerticalCopy(props.site?.vertical, locale.value))
-const { isOpen: mobileMenuOpen, toggle: toggleMobileNav, close: closeMobileNav } = useMobileNavToggle()
+const mobileMenuOpen = ref(false)
+const mobileNavDetails = ref<HTMLDetailsElement | null>(null)
 const headerRef = ref<HTMLElement | null>(null)
 let headerResizeObserver: ResizeObserver | null = null
+
+function syncMobileNavState(event: Event) {
+  mobileMenuOpen.value = (event.currentTarget as HTMLDetailsElement).open
+}
+
+function closeMobileNav() {
+  mobileMenuOpen.value = false
+  if (mobileNavDetails.value) mobileNavDetails.value.open = false
+}
 
 function syncHeaderHeight() {
   if (!headerRef.value) return
@@ -173,6 +150,7 @@ function syncHeaderHeight() {
 }
 
 onMounted(() => {
+  mobileMenuOpen.value = mobileNavDetails.value?.open ?? false
   syncHeaderHeight()
   headerResizeObserver = new ResizeObserver(syncHeaderHeight)
   if (headerRef.value) headerResizeObserver.observe(headerRef.value)

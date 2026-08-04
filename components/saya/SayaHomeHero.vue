@@ -8,7 +8,7 @@
         :src="heroImageUrl ?? undefined"
         :srcset="heroImageSrcset ?? undefined"
         sizes="100vw"
-        alt="" aria-hidden="true" loading="lazy" fetchpriority="low" decoding="async"
+        alt="" aria-hidden="true" loading="eager" fetchpriority="high" decoding="async"
         class="absolute inset-0 h-full w-full object-cover"
       />
       <!-- Image-only hero (no video) -->
@@ -17,7 +17,7 @@
         :src="heroImageUrl ?? undefined"
         :srcset="heroImageSrcset ?? undefined"
         sizes="100vw"
-        alt="" aria-hidden="true" loading="lazy" fetchpriority="low" decoding="async"
+        alt="" aria-hidden="true" loading="eager" fetchpriority="high" decoding="async"
         class="absolute inset-0 h-full w-full object-cover"
       />
       <img
@@ -25,7 +25,7 @@
         :src="heroImageUrl ?? undefined"
         :srcset="heroImageSrcset ?? undefined"
         sizes="100vw"
-        alt="" aria-hidden="true" loading="lazy" fetchpriority="low" decoding="async"
+        alt="" aria-hidden="true" loading="eager" fetchpriority="high" decoding="async"
         class="absolute inset-0 h-full w-full object-cover"
       />
       <!-- No real photo yet: a brand-color + icon treatment, not a stock photo that

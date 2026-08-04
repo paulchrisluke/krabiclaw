@@ -7,8 +7,8 @@
         alt=""
         width="1920"
         height="1080"
-        fetchpriority="low"
-        loading="lazy"
+        fetchpriority="high"
+        loading="eager"
         decoding="async"
         class="absolute inset-0 size-full object-cover object-center"
       >
@@ -81,12 +81,18 @@
     <section v-else-if="routeError" class="blawby-container py-16 text-center" data-testid="blawby-home-content-error">
       <p role="alert" class="text-sm text-gray-500">Homepage content could not be loaded.</p>
     </section>
+    <section v-else class="blawby-container space-y-8 py-16" data-testid="blawby-home-content-loading" aria-busy="true">
+      <div class="h-8 w-48 animate-pulse rounded bg-slate-200" />
+      <div class="grid gap-6 md:grid-cols-3">
+        <div v-for="index in 3" :key="index" class="h-48 animate-pulse rounded-2xl bg-slate-200" />
+      </div>
+    </section>
   </div>
 </template>
 
 <script setup lang="ts">
 const critical = await useBlawbyCriticalHome()
-const { data, error: routeError } = await useBlawbyRoute('home', null, { server: false, lazy: true })
+const { data, error: routeError } = await useBlawbyRoute('home', null, { server: true, lazy: false })
 const { identity, consultation, compliance } = critical
 const org = useBlawbyOrgIdentity(identity, compliance)
 const criticalPage = computed(() => critical.data.value.page)

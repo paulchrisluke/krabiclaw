@@ -39,16 +39,11 @@ const blawbyStylesheetForRoute = computed(() => {
 
 useHead(() => ({
   link: [
-    isHome.value
-      ? {
-          key: 'blawby-home-stylesheet',
-          rel: 'preload',
-          as: 'style',
-          href: blawbyStylesheetForRoute.value,
-          fetchpriority: 'low',
-          onload: "this.onload=null;this.rel='stylesheet'",
-        }
-      : { key: 'blawby-surface-stylesheet', rel: 'stylesheet', href: blawbyStylesheetForRoute.value },
+    {
+      key: isHome.value ? 'blawby-home-stylesheet' : 'blawby-surface-stylesheet',
+      rel: 'stylesheet',
+      href: blawbyStylesheetForRoute.value,
+    },
     { rel: 'preconnect', href: 'https://media.krabiclaw.com' },
   ],
   style: isHome.value
