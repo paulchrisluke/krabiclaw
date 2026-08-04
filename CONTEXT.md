@@ -54,6 +54,46 @@ _Avoid_: storefront-only location, fake address, required Google Places location
 A guest order intended for on-site fulfillment at a restaurant location, associated with a service point such as a table or pickup zone. It is distinct from a reservation, a delivery order, and a payment transaction.
 _Avoid_: restaurant reservation, delivery order, payment
 
+**Anonymous ordering session**:
+The Better Auth Anonymous user/session used to provide guest identity and continuity for native ordering without requiring sign-in or PII. Cart and Order records may reference that Better Auth user; KrabiClaw does not create a second guest-session principal or session table. A QR credential separately authorizes the service point and is not the guest identity.
+_Avoid_: custom guest session, ordering context, QR as authentication
+
+**Ordering QR credential**:
+A generated, revocable QR credential that routes an order to an explicit fixed Service Point, Service Area, or pickup queue. Businesses may print it on any physical medium—card, disk, table marker, sticker, or sign. The medium is presentation, not the domain object; the QR is not a Better Auth identity or session.
+_Avoid_: ordering card as the canonical model, QR as guest identity, arbitrary location note as fulfillment routing
+
+**Service Point**:
+A location-scoped, user-named physical or operational target for a Dine-in order, such as a table, seat, bar position, patio spot, pickup point, or named service area. The name is presentation; the point’s stable ID and Ordering QR credential provide routing context. It is not a kitchen station or a guest identity.
+_Avoid_: fixed bar-seat type, ordering card, QR as authentication, kitchen station
+
+**Ordering menu**:
+The interactive menu used by a guest to build and submit Dine-in orders. It is distinct from the SEO/public menu presentation, even when both are generated from the same published Product/Price catalog.
+_Avoid_: SEO menu as the cart, menu item as the whole product model, separate catalog for QR ordering
+
+**Product**:
+The stable catalog identity and content record for a sellable offering. Product content is separate from Menu placement, location/channel availability, inventory quantity, and Price records.
+_Avoid_: menu item as the combined product/price/placement model
+
+**Price**:
+The sellable monetary definition for a Product, including amount, currency, tax behavior, and active/versioned validity. Order lines snapshot the Price and displayed values; changing an amount creates a new sellable Price rather than rewriting historical order data.
+_Avoid_: mutable price field on an immutable order, sale as an untracked total override
+
+**Order round**:
+One immutable guest submission from the current Cart. Multiple Order rounds may accumulate on one open Invoice/check; each round is independently delivered to the merchant handoff and independently idempotent.
+_Avoid_: one order per prep station, a new guest session per round, separate invoice for every round
+
+**Invoice/check**:
+The canonical running commercial record that groups Order rounds, line items, tax, service charge, discounts, payments, and balance. “Check” is the customer/venue presentation; `Invoice` is the canonical commerce term. It may remain a draft/open unpaid check while the guest continues ordering.
+_Avoid_: payment transaction as the order, payment pending as the invoice lifecycle, separate check for each round
+
+**Merchant handoff**:
+The boundary where KrabiClaw delivers a canonical restaurant order to one configured external operational receiver and mirrors the receiver’s status. It follows the Uber Eats restaurant integration pattern—notify/fetch, accept or deny, ready-time, ready, cancel, complete—and stops before the receiver’s POS/KDS/kitchen workflow.
+_Avoid_: native KDS, station router, fallback kitchen queue, automatic alternate receiver
+
+**Integration destination**:
+One location-scoped, Better Auth-authorized external receiver for native order handoff. A location has one active merchant handoff destination and fails closed when it cannot receive orders; KrabiClaw does not silently fail over to another destination.
+_Avoid_: provider enum as the order model, multiple automatic receivers, fallback routing
+
 **Tenant page**:
 A URL-bearing public page owned by one tenant, such as a privacy policy, disclaimer, notice, or other static legal/compliance page. Tenant pages are not articles and are not reusable field-level content.
 _Avoid_: blog post, site content field, platform page

@@ -29,6 +29,23 @@ const applicationRoots = [
 ]
 const violations = []
 
+const publicLoadingProhibitions = [
+  ['workers/app-entry.ts', [
+    'platform-home-static.js',
+    'renderStaticPlatformHome',
+    'x-public-render-mode',
+    'isStaticPlatformHomeRequest',
+  ]],
+  ['layouts/saya.vue', [
+    "rel: 'preload'",
+    "onload: \"this.onload=null;this.rel='stylesheet'\"",
+  ]],
+  ['layouts/blawby.vue', [
+    "rel: 'preload'",
+    "onload: \"this.onload=null;this.rel='stylesheet'\"",
+  ]],
+]
+
 async function filesUnder(directory) {
   const entries = await readdir(join(root, directory), { withFileTypes: true }).catch((error) => {
     if (error?.code === 'ENOENT') return []
@@ -96,6 +113,22 @@ for (const directory of adminRoots) {
     const source = await readFile(join(root, file), 'utf8')
     violations.push(...checkAdminFetchUsage(file, source))
   }
+}
+
+for (const [path, prohibited] of publicLoadingProhibitions) {
+  const source = await readFile(join(root, path), 'utf8')
+  for (const marker of prohibited) {
+    if (source.includes(marker)) violations.push(`${path}: prohibited public loading strategy marker: ${marker}`)
+  }
+}
+
+const removedPublicLoadingPaths = ['public/platform-home-static.js']
+for (const path of removedPublicLoadingPaths) {
+  const source = await readFile(join(root, path), 'utf8').catch(error => {
+    if (error?.code === 'ENOENT') return null
+    throw error
+  })
+  if (source !== null) violations.push(`${path}: obsolete interaction/static loader must remain deleted`)
 }
 
 if (violations.length) {
