@@ -59,6 +59,26 @@ test.describe('pottery house public site', () => {
     await expectHealthyPage(page, errors)
   })
 
+  // Regression: client-side logo navigation from /experiences must load the homepage
+  // without retaining the old route or surfacing a shell error.
+  test('mobile header logo returns to the homepage', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    const errors = collectPageErrors(page)
+    await page.goto(`${potteryHouseBaseURL}/experiences`, { waitUntil: 'domcontentloaded' })
+
+    const banner = page.getByRole('banner')
+    await expect(banner).toHaveCount(1)
+    const logo = banner.getByRole('link', { name: 'Pottery House Krabi', exact: true })
+    await expect(logo).toHaveCount(1)
+    await expect(logo).toHaveAttribute('href', '/')
+
+    await logo.click()
+    await expect(page).toHaveURL(`${potteryHouseBaseURL}/`)
+    await expect(page).toHaveTitle(/Pottery House Krabi/)
+    await expect(page.locator('body')).toContainText('Clay, calm, and a place to return to.')
+    await expectHealthyPage(page, errors)
+  })
+
   // Regression: no restaurant-vertical copy must appear on an experience site.
   // These strings come from the restaurant branch of getVerticalCopy().
   test('site does not render restaurant-vertical copy', async ({ page }) => {
