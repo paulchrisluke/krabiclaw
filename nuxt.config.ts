@@ -508,7 +508,6 @@ export default defineNuxtConfig({
       '*/10 * * * *': ['domain-reconciliation'],
       '0 3 * * *': ['domain-reconciliation-daily', 'analytics-aggregate-daily'],
       '0 4 * * *': ['site-transfer-reminders'],
-      '0 1 * * *': ['cash-billing-reminders'],
       '0 0 * * 0': ['google-business-sync'],
       '0 * * * *': ['instagram-sync-process', 'review-request-automation']
     } : {},

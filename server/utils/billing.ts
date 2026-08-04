@@ -242,8 +242,7 @@ export async function applySiteSubscription(
   `, [`billing-${organizationId}`, organizationId, customerId, now])
 
   // ON CONFLICT(site_id) DO UPDATE, not INSERT OR REPLACE — REPLACE deletes and
-  // recreates the row, wiping cash-billing fields (payment_method, local_rate,
-  // local_currency, last_reminder_sent_at) that aren't in this column list.
+  // recreates the row, wiping any column (e.g. payment_method) not in this list.
   await execute(db, `
     INSERT INTO site_billing
       (id, site_id, organization_id, stripe_subscription_id, stripe_subscription_item_id,

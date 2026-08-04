@@ -1,5 +1,5 @@
 // POST /api/admin/sites/[siteId]/transfer/force-accept
-// Admin-only: execute a pending transfer without Stripe checkout (for cash payments)
+// Admin-only: execute a pending transfer without the recipient going through Stripe checkout
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { platformPermissionJsonResponse } from '~/server/utils/platform-admin-users'
 import { queryFirst } from '~/server/db'
