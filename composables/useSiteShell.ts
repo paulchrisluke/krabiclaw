@@ -1,16 +1,17 @@
-// Site-wide chrome and route content share one canonical SSR resource. Home
-// routes request only the content needed to paint the real shell and hero;
-// other routes keep the complete page payload for SSR and navigation parity.
-import { getPublicCriticalHomeRequest, usePublicPageKey, usePublicPageRequest, usePublicPageUrl } from "~/composables/usePublicPageRequest";
+// Site-wide chrome is a stable SSR resource keyed only by tenant and locale.
+// Route-specific content is loaded separately so client navigation cannot
+// replace the persistent header/footer state with another route's request.
+import { usePublicPageUrl, usePublicResourceKey, type PublicPageRequest } from "~/composables/usePublicPageRequest";
 import {
-  isPublicPagePayload,
-  type PublicPagePayload,
+  isPublicShellPayload,
   type PublicShellPayload as SiteShellPayload,
 } from '~/utils/public-resource-contracts'
 
-export const useSiteShellState = (options: { load?: boolean } = {}) => {
+export const useSiteShellState = () => {
   const { isPlatform, siteId, draftId } = useTenantSite();
   const requestEvent = useRequestEvent();
+  const route = useRoute();
+  const { locale } = useI18n();
   const isSyntheticServerAssetFetch = import.meta.server
     && !requestEvent?.context.cloudflare?.env
     && (
@@ -22,63 +23,52 @@ export const useSiteShellState = (options: { load?: boolean } = {}) => {
 
   const entityId = computed(() => siteId || draftId || null);
 
-  const routeParams = usePublicPageRequest();
-  const isCriticalHome = computed(() => !isPlatform && routeParams.value.page === 'home');
-  const params = computed(() => isCriticalHome.value
-    ? getPublicCriticalHomeRequest(routeParams.value)
-    : routeParams.value);
+  const params = computed<PublicPageRequest>(() => ({
+    page: null,
+    location: null,
+    experience: null,
+    datasets: [],
+    blogSlug: null,
+    locale: locale.value,
+    token: typeof route.query.token === 'string' && route.path.startsWith('/preview/')
+      ? route.query.token
+      : null,
+  }));
 
-  const key = computed(() => usePublicPageKey(entityId.value, params.value));
-  const url = computed(() => usePublicPageUrl(siteId, params.value));
+  const key = computed(() => usePublicResourceKey('shell', entityId.value, params.value));
+  const url = computed(() => usePublicPageUrl(siteId, params.value, 'shell'));
 
   let data: Ref<SiteShellPayload | undefined>
-  let payload: Ref<PublicPagePayload | undefined>
   let error: Ref<Error | null>
   let pending: Ref<boolean>
   let refresh: () => Promise<unknown>
   let ready: Promise<unknown>
-  if (options.load === false) {
-    const existing = useNuxtData<PublicPagePayload>(key.value)
-    payload = existing.data
-    data = computed(() => payload.value?.shell)
-    error = ref<Error | null>(null)
-    pending = ref(false)
-    refresh = async () => {}
-    ready = Promise.resolve()
-  } else if (isSyntheticServerAssetFetch || isPlatform || (!siteId && !draftId)) {
-    payload = ref<PublicPagePayload>()
+  if (isSyntheticServerAssetFetch || isPlatform || (!siteId && !draftId)) {
     data = ref<SiteShellPayload>()
     error = ref<Error | null>(null)
     pending = ref(false)
     refresh = async () => {}
     ready = Promise.resolve()
   } else {
-    const asyncData = useAsyncData<PublicPagePayload>(
+    const asyncData = useAsyncData<SiteShellPayload>(
           key,
-          (_nuxtApp, { signal }) => loadPublicResourcePayload<PublicPagePayload>({
+          (_nuxtApp, { signal }) => loadPublicResourcePayload<SiteShellPayload>({
               draftId,
               siteId,
-              resourceKind: 'page',
+              resourceKind: 'shell',
               url: url.value,
               key: key.value,
               query: {
-                page: params.value.page ?? undefined,
-                location: params.value.location ?? undefined,
-                experience: params.value.experience ?? undefined,
-                datasets: [...params.value.datasets].sort().join(',') || undefined,
-                blogSlug: params.value.blogSlug ?? undefined,
                 locale: params.value.locale ?? undefined,
                 token: params.value.token ?? undefined,
               },
-              validate: (value): value is PublicPagePayload =>
-                isPublicPagePayload(value, params.value.page ?? 'home'),
-              failureMessage: 'Public page failed',
+              validate: isPublicShellPayload,
+              failureMessage: 'Public shell failed',
               signal,
             }),
-          { server: true, dedupe: 'defer' },
+          { server: true, dedupe: 'cancel' },
         );
-    payload = asyncData.data
-    data = computed(() => payload.value?.shell)
+    data = asyncData.data
     error = asyncData.error as Ref<Error | null>
     pending = asyncData.pending
     refresh = asyncData.refresh
@@ -87,7 +77,6 @@ export const useSiteShellState = (options: { load?: boolean } = {}) => {
 
   const locations = computed(() => (data.value?.locations ?? []) as ApiRecord[]);
   const config = computed(() => (data.value?.config ?? {}) as Record<string, string>);
-  const content = computed(() => (payload.value?.content ?? []) as ApiRecord[]);
   const shellSite = computed(() => data.value?.site ?? null);
   const googleBusiness = computed(() => data.value?.googleBusiness ?? null);
   const locales = computed(() => data.value?.locales ?? []);
@@ -96,7 +85,6 @@ export const useSiteShellState = (options: { load?: boolean } = {}) => {
   return {
     locations,
     config,
-    content,
     site: shellSite,
     googleBusiness,
     locales,
