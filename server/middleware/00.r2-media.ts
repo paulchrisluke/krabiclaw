@@ -8,11 +8,6 @@ import { isPreviewContext } from '~/server/utils/tenant-hosts'
 
 const MEDIA_HOST = 'media.krabiclaw.com'
 const WORKER_MEDIA_PREFIX = '/__media/'
-const PUBLIC_MEDIA_PREFIX = '/__public-media/'
-
-function isPublicMediaPath(pathname: string): boolean {
-  return new RegExp(`^${PUBLIC_MEDIA_PREFIX}sites/[^/]+/media/.+`).test(pathname)
-}
 
 // Local single-origin quick-tunnel harnesses (no separate media.krabiclaw.com
 // host available) need media served from the same origin as the app. Gated
@@ -35,11 +30,7 @@ export default defineEventHandler(async (event) => {
   const url = getRequestURL(event)
   const isMediaHost = host === MEDIA_HOST
   const isWorkerMediaPath = url.pathname.startsWith(WORKER_MEDIA_PREFIX) && isWorkerMediaPathAllowed(event)
-  const isPublicMedia = isPublicMediaPath(url.pathname)
-  if (!isMediaHost && !isWorkerMediaPath && !isPublicMedia) return
-  if (isPublicMedia && event.method !== 'GET') {
-    return sendError(event, createError({ statusCode: 405, statusMessage: 'Public media is read-only' }))
-  }
+  if (!isMediaHost && !isWorkerMediaPath) return
 
   const env = cloudflareEnv(event)
   const bucket = env.MEDIA_BUCKET
@@ -49,8 +40,6 @@ export default defineEventHandler(async (event) => {
 
   const key = isWorkerMediaPath
     ? url.pathname.slice(WORKER_MEDIA_PREFIX.length)
-    : isPublicMedia
-      ? url.pathname.slice(PUBLIC_MEDIA_PREFIX.length)
     : url.pathname.replace(/^\/+/, '')
   if (!key) {
     return sendError(event, createError({ statusCode: 400 }))

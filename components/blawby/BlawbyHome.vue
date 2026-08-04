@@ -80,14 +80,8 @@
 </template>
 
 <script setup lang="ts">
-import { publicMediaUrl } from '~/utils/public-media-url'
-
 const { data } = await useBlawbyRoute('home')
 const { identity, consultation, compliance } = await useBlawbyShell()
-const requestHeaders = useRequestHeaders(['host'])
-const requestHostname = import.meta.server
-  ? (requestHeaders.host || '').split(':')[0]
-  : window.location.hostname
 const org = useBlawbyOrgIdentity(identity, compliance)
 const routeData = computed(() => data.value)
 
@@ -114,12 +108,12 @@ const reviewsBlock = computed(() => block('reviews'))
 const qaBlock = computed(() => block('qa'))
 const ctaBlock = computed(() => block('consultation_cta'))
 const heroBackground = computed(() => assetUrl(hero.value.background))
-const heroBackgroundSrc = computed(() => publicMediaUrl(heroBackground.value, requestHostname))
+const heroBackgroundSrc = heroBackground
 const servicesDecoration = computed(() => assetUrl(services.value.decoration))
-const servicesDecorationSrc = computed(() => publicMediaUrl(servicesDecoration.value, requestHostname))
-const qaDecorationSrc = computed(() => publicMediaUrl(assetUrl(qaBlock.value?.decoration), requestHostname))
-const ctaBackgroundSrc = computed(() => publicMediaUrl(assetUrl(ctaBlock.value?.background), requestHostname))
-const ctaFeaturedSrc = computed(() => publicMediaUrl(assetUrl(ctaBlock.value?.featured), requestHostname))
+const servicesDecorationSrc = servicesDecoration
+const qaDecorationSrc = computed(() => assetUrl(qaBlock.value?.decoration))
+const ctaBackgroundSrc = computed(() => assetUrl(ctaBlock.value?.background))
+const ctaFeaturedSrc = computed(() => assetUrl(ctaBlock.value?.featured))
 const heroDestination = computed(() => String(hero.value.url || consultation.value.schedule_path))
 const heroTitle = computed(() => {
   const title = String(hero.value.title || identity.value.brand_name || 'Professional services')
@@ -134,7 +128,7 @@ const videoFeatures = computed(() => Array.isArray(videoFeature.value?.features)
   : [])
 const videoImages = computed(() => Array.isArray(videoFeature.value?.images)
   ? videoFeature.value.images
-      .map((item: ApiRecord) => ({ url: publicMediaUrl(assetUrl(item), requestHostname) || '', alt: asOptionalString(item.alt) }))
+      .map((item: ApiRecord) => ({ url: assetUrl(item) || '', alt: asOptionalString(item.alt) }))
       .filter((item: { url: string }) => item.url)
   : [])
 const reviewsDescription = computed(() => String(reviewsBlock.value?.description || ''))

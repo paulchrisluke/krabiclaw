@@ -89,6 +89,15 @@ video {
   gap: 0.25rem;
 }
 
+[data-saya-critical-nav] a {
+  display: block;
+  border-radius: 9999px;
+  padding: 0.5rem 0.75rem;
+  color: var(--saya-fg-muted, #52525b);
+  font-size: 0.875rem;
+  text-decoration: none;
+}
+
 [data-saya-critical-cta] {
   display: inline-flex;
   align-items: center;
