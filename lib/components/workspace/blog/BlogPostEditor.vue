@@ -78,6 +78,7 @@
                 <UButton color="neutral" variant="ghost" size="sm" @click="addingAuthor = false">Cancel</UButton>
               </div>
             </UFormField>
+            <p v-if="authorError" class="mt-1 text-xs text-error">{{ authorError }}</p>
           </UFormField>
           <UFormField label="Tags"><UInput v-model="tagsText" placeholder="Comma separated" /></UFormField>
           <UFormField label="Excerpt"><UTextarea v-model="form.excerpt" :placeholder="resolvedExcerpt" /><p class="mt-1 text-xs text-dimmed">{{ form.excerpt ? 'Custom' : `Auto: ${resolvedExcerpt}` }}</p></UFormField>
@@ -153,9 +154,11 @@ const authorItems = computed(() => [{ label: 'Site default', value: '' }, ...aut
 const addingAuthor = ref(false)
 const newAuthorName = ref('')
 const savingAuthor = ref(false)
+const authorError = ref('')
 function openAddAuthor() { addingAuthor.value = true; newAuthorName.value = '' }
 async function submitNewAuthor() {
   if (!newAuthorName.value.trim() || !props.repository.createAuthor) return
+  authorError.value = ''
   savingAuthor.value = true
   try {
     const created = await props.repository.createAuthor({ name: newAuthorName.value.trim() })
@@ -163,14 +166,14 @@ async function submitNewAuthor() {
     form.site_author_id = created.id
     addingAuthor.value = false
   } catch (error) {
-    loadError.value = getErrorMessage(error, 'Failed to create author.')
+    authorError.value = getErrorMessage(error, 'Failed to create author.')
   } finally {
     savingAuthor.value = false
   }
 }
 async function loadAuthors() {
   if (!props.siteId || !props.repository.listAuthors) return
-  try { authors.value = await props.repository.listAuthors() } catch { /* author list is a non-blocking enhancement */ }
+  try { authors.value = await props.repository.listAuthors() } catch (error) { authorError.value = getErrorMessage(error, 'Failed to load authors.') }
 }
 const tagsText = ref('')
 const publishTiming = ref<'Now' | 'Scheduled'>('Now')

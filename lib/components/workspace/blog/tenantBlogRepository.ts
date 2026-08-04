@@ -20,8 +20,12 @@ export function tenantBlogRepository({ siteId, orgSlug, siteSlug }: TenantBlogRe
     isRecord(value) && typeof value.id === 'string' && isBlogPost(value.post)
   const isSuccess = (value: unknown): value is { success: true } =>
     isRecord(value) && value.success === true
+  const isSiteAuthor = (value: unknown): value is SiteAuthor =>
+    isRecord(value)
+    && typeof value.id === 'string'
+    && typeof value.name === 'string'
   const isAuthorsResponse = (value: unknown): value is { authors: SiteAuthor[] } =>
-    isRecord(value) && Array.isArray(value.authors)
+    isRecord(value) && Array.isArray(value.authors) && value.authors.every(isSiteAuthor)
   const isAuthorResponse = (value: unknown): value is { id: string } =>
     isRecord(value) && typeof value.id === 'string'
 

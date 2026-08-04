@@ -15,4 +15,4 @@ CREATE TABLE `site_authors` (
 );
 --> statement-breakpoint
 CREATE INDEX `site_authors_site_idx` ON `site_authors` (`site_id`);--> statement-breakpoint
-ALTER TABLE `blog_posts` ADD `site_author_id` text REFERENCES site_authors(id);
+ALTER TABLE `blog_posts` ADD `site_author_id` text REFERENCES site_authors(id) ON DELETE SET NULL;

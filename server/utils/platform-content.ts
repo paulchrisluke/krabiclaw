@@ -863,7 +863,7 @@ export async function updateSiteAuthor(db: D1Database, siteId: string, authorId:
   for (const field of fields) {
     if (input[field] !== undefined) {
       updates.push(`${field} = ?`)
-      params.push(input[field] as ApiValue)
+      params.push(field === 'sort_order' ? (input.sort_order ?? 0) : (input[field] as ApiValue))
     }
   }
   if (updates.length === 1) badRequest('At least one field is required')
