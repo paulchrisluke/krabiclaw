@@ -170,6 +170,21 @@ function mostVisibleVideoIndex() {
   return selectedRatio > 0 ? selectedIndex : null
 }
 
+function getViewportIntersectionRatio(video: HTMLVideoElement) {
+  const rect = video.getBoundingClientRect()
+  if (rect.width <= 0 || rect.height <= 0) return 0
+
+  const visibleWidth = Math.max(0, Math.min(rect.right, window.innerWidth) - Math.max(rect.left, 0))
+  const visibleHeight = Math.max(0, Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0))
+  return (visibleWidth * visibleHeight) / (rect.width * rect.height)
+}
+
+function syncVideoVisibility() {
+  for (const [key, video] of Object.entries(videoRefs.value)) {
+    videoVisibility.value[Number(key)] = getViewportIntersectionRatio(video)
+  }
+}
+
 async function syncVideoPreviews() {
   const currentToken = ++syncToken
   if (!import.meta.client) return
@@ -230,6 +245,7 @@ function setVideoRef(el: Element | ComponentPublicInstance | null, index: number
   if (el.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) markVideoReady(index)
   if (!el.paused && !el.ended) markVideoPlaying(index)
   videoObserver?.observe(el)
+  syncVideoVisibility()
   void syncVideoPreviews()
 }
 
@@ -283,6 +299,7 @@ watch(items, async () => {
 onMounted(() => {
   if (!import.meta.client) return
   document.addEventListener('visibilitychange', onVisibilityChange)
+  syncVideoVisibility()
   void syncVideoPreviews()
 })
 
