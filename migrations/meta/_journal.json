@@ -577,6 +577,13 @@
       "breakpoints": true
     },
     {
+      "idx": 89,
+      "version": "6",
+      "when": 1785733592000,
+      "tag": "0089_enable_review_requests_entitlement",
+      "breakpoints": true
+    },
+    {
       "idx": 90,
       "version": "6",
       "when": 1785826610479,
