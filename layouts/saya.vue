@@ -2,6 +2,7 @@
   <div
     class="tenant-layout saya-theme min-h-screen flex flex-col font-sans bg-default text-default"
     :style="themeStyles"
+    :data-public-critical-shell="isHome ? 'true' : undefined"
   >
     <!-- Teleport target for Saya components (e.g. BookingModal) that need to escape
          page overflow/stacking contexts but still must render inside this div to
@@ -79,23 +80,28 @@
 <script setup lang="ts">
 import ConsentBanner from '~/components/ConsentBanner.vue'
 import { resolveLocationExperienceHref } from '~/utils/experience-navigation'
+import { getPreviewSubpath } from '~/composables/usePublicPageRequest'
 import sayaCriticalCss from '~/assets/css/saya-critical.css?raw'
 import sayaStylesheet from '~/assets/css/saya-entry.css?url'
 import sayaHomeStylesheet from '~/assets/css/saya-home-entry.css?url'
 
 const route = useRoute()
+const isHome = computed(() => route.path === '/' || getPreviewSubpath(route.path) === '/')
 const sayaStylesheetHref = new URL(sayaStylesheet, 'http://nuxt.local').pathname
 const sayaHomeStylesheetHref = new URL(sayaHomeStylesheet, 'http://nuxt.local').pathname
 const sayaStylesheetForRoute = computed(() => {
-  const isHome = route.path === '/' || /^\/preview\/site\/[^/]+\/?$/.test(route.path)
+  const isHome = route.path === '/' || getPreviewSubpath(route.path) === '/'
   return isHome ? sayaHomeStylesheetHref : sayaStylesheetHref
 })
 
 useHead(() => {
   const isHome = route.path === '/' || /^\/preview\/site\/[^/]+\/?$/.test(route.path)
   return {
-    link: [isHome
-      ? {
+    link: [
+      { rel: 'preconnect', href: 'https://imagedelivery.net' },
+      { rel: 'preconnect', href: 'https://media.krabiclaw.com' },
+      isHome
+        ? {
           key: 'saya-home-stylesheet',
           rel: 'preload',
           as: 'style',
@@ -103,7 +109,8 @@ useHead(() => {
           fetchpriority: 'low',
           onload: "this.onload=null;this.rel='stylesheet'",
         }
-      : { key: 'saya-surface-stylesheet', rel: 'stylesheet', href: sayaStylesheetForRoute.value }],
+        : { key: 'saya-surface-stylesheet', rel: 'stylesheet', href: sayaStylesheetForRoute.value },
+    ],
     style: isHome ? [{ innerHTML: sayaCriticalCss, tagPriority: 'critical' }] : [],
   }
 })
@@ -119,10 +126,11 @@ if (import.meta.dev) useDebugLCP()
 // Persistent chrome uses the minimal shell contract. Route-specific menu and
 // experience data comes from the keyed page loader and changes independently.
 const shell = useSiteShellState()
+if (import.meta.server && isHome.value) await shell.ready
 const { config, locations, hasExperiences, locales, error: bootstrapError, site: shellSite } = shell
 const routeLoadState = usePublicRouteLoadState()
-const publicPending = computed(() => shell.pending.value || routeLoadState.value.pending)
-const publicError = computed(() => shell.error.value || routeLoadState.value.error)
+const publicPending = computed(() => shell.pending.value || (!isHome.value && routeLoadState.value.pending))
+const publicError = computed(() => shell.error.value || (!isHome.value && routeLoadState.value.error))
 const retryShell = async () => await shell.refresh()
 const retryPage = async () => {
   if (routeLoadState.value.key) await refreshNuxtData(routeLoadState.value.key)

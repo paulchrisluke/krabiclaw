@@ -19,7 +19,7 @@ if (tenantType === TENANT_TYPES.TENANT_404) {
 }
 
 const { isBlawby } = usePublicTemplate()
-const siteShell = isBlawby.value ? null : useSiteShellState()
+const siteShell = isBlawby.value ? null : useSiteShellState({ load: false })
 const config = siteShell?.config
 const route = useRoute()
 const defaultOgImage = useSharedOgImage()

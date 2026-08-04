@@ -1,5 +1,5 @@
 <template>
-  <div class="blawby-shell blawby-theme min-h-screen bg-default text-default" :style="themeStyles" :data-hydrated="hydrated ? 'true' : 'false'">
+  <div class="blawby-shell blawby-theme min-h-screen bg-default text-default" :style="themeStyles" :data-hydrated="hydrated ? 'true' : 'false'" :data-public-critical-shell="isHome ? 'true' : undefined">
     <!-- Teleport target for components (e.g. PlatformCommandSearchModal) that need to
          escape page overflow/stacking contexts but still must render inside this div to
          inherit the Blawby --ui-* and --blawby-* tokens. Teleporting straight to <body>
@@ -30,16 +30,16 @@ import blawbyStylesheet from '~/assets/css/blawby-entry.css?url'
 import blawbyHomeStylesheet from '~/assets/css/blawby-home-entry.css?url'
 
 const route = useRoute()
+const isHome = computed(() => route.path === '/' || /^\/preview\/site\/[^/]+\/?$/.test(route.path))
 const blawbyStylesheetHref = new URL(blawbyStylesheet, 'http://nuxt.local').pathname
 const blawbyHomeStylesheetHref = new URL(blawbyHomeStylesheet, 'http://nuxt.local').pathname
 const blawbyStylesheetForRoute = computed(() => {
-  const isHome = route.path === '/' || /^\/preview\/site\/[^/]+\/?$/.test(route.path)
-  return isHome ? blawbyHomeStylesheetHref : blawbyStylesheetHref
+  return isHome.value ? blawbyHomeStylesheetHref : blawbyStylesheetHref
 })
 
 useHead(() => ({
   link: [
-    route.path === '/' || /^\/preview\/site\/[^/]+\/?$/.test(route.path)
+    isHome.value
       ? {
           key: 'blawby-home-stylesheet',
           rel: 'preload',
@@ -49,16 +49,16 @@ useHead(() => ({
           onload: "this.onload=null;this.rel='stylesheet'",
         }
       : { key: 'blawby-surface-stylesheet', rel: 'stylesheet', href: blawbyStylesheetForRoute.value },
-    ...(route.path.startsWith('/preview/site/')
-      ? [{ rel: 'preconnect', href: 'https://media.krabiclaw.com' }]
-      : []),
+    { rel: 'preconnect', href: 'https://media.krabiclaw.com' },
   ],
-  style: route.path === '/' || /^\/preview\/site\/[^/]+\/?$/.test(route.path)
+  style: isHome.value
     ? [{ innerHTML: blawbyCriticalCss, tagPriority: 'critical' }]
     : [],
 }))
 
-const { identity, navigation, consultation, compliance, themeTokens, offeringLinks } = await useBlawbyShell()
+const { identity, navigation, consultation, compliance, themeTokens, offeringLinks } = isHome.value
+  ? await useBlawbyCriticalHome()
+  : await useBlawbyShell()
 const hydrated = ref(false)
 onMounted(() => { hydrated.value = true })
 
