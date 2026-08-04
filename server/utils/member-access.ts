@@ -191,6 +191,18 @@ export async function removeMemberResourceAccess(db: DbClient, input: ResourceTe
   return await removeUserFromResourceTeam(db, { userId: input.userId, teamId })
 }
 
+// Called when a member's role changes away from 'editor' — an editor can
+// accumulate site/location team memberships over time (each accepted or
+// re-scoped invitation adds one via addMemberResourceAccess), so demoting or
+// promoting them to a non-scoped role has to sweep all of them, not just one.
+export async function removeAllMemberResourceAccess(db: DbClient, input: { organizationId: string; userId: string }): Promise<void> {
+  await execute(db, `
+    DELETE FROM teamMember
+    WHERE userId = ?
+      AND teamId IN (SELECT id FROM team WHERE organizationId = ?)
+  `, [input.userId, input.organizationId])
+}
+
 export async function memberHasTeamAccess(db: DbClient, input: { userId: string; teamId: string | null }): Promise<boolean> {
   if (!input.teamId) return false
   const row = await queryFirst<{ id: string }>(db, `

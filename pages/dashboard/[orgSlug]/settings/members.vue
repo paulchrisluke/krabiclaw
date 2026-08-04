@@ -44,7 +44,16 @@
                   </div>
                 </div>
                 <div class="flex items-center gap-2">
-                  <UBadge :label="member.role" color="neutral" variant="soft" class="capitalize" />
+                  <USelect
+                    v-if="canEditMemberRole(member)"
+                    :model-value="member.role"
+                    :items="roleOptionsFor(member)"
+                    size="xs"
+                    class="w-32 capitalize"
+                    :loading="roleUpdatingId === member.id"
+                    @update:model-value="value => onRoleSelected(member, String(value))"
+                  />
+                  <UBadge v-else :label="member.role" color="neutral" variant="soft" class="capitalize" />
                   <UButton
                     v-if="member.role !== 'owner'"
                     icon="i-lucide-x"
@@ -57,6 +66,46 @@
                   />
                 </div>
               </div>
+
+              <div v-if="editingRoleMemberId === member.id" class="flex flex-col gap-4 sm:flex-row sm:items-end">
+                <UFormField label="Site" description="Which site can this editor access?" class="flex-1">
+                  <USelect
+                    v-model="memberRoleForm.siteId"
+                    :items="siteOptions"
+                    :loading="sitesPending"
+                    placeholder="Select a site"
+                    class="w-full"
+                  />
+                </UFormField>
+                <UFormField label="Location" description="Leave unset for the whole site." class="flex-1">
+                  <USelect
+                    v-model="memberRoleForm.locationId"
+                    :items="memberRoleLocationOptions"
+                    :loading="memberRoleLocationsPending"
+                    :disabled="!memberRoleForm.siteId"
+                    placeholder="Whole site"
+                    class="w-full"
+                  />
+                </UFormField>
+                <div class="flex gap-2">
+                  <UButton
+                    label="Save"
+                    color="primary"
+                    size="sm"
+                    :loading="roleUpdatingId === member.id"
+                    :disabled="!memberRoleForm.siteId"
+                    @click="submitEditorRoleChange(member)"
+                  />
+                  <UButton label="Cancel" color="neutral" variant="ghost" size="sm" @click="cancelRoleEdit" />
+                </div>
+              </div>
+
+              <UAlert
+                v-if="roleUpdateError && roleUpdateErrorMemberId === member.id"
+                color="error"
+                variant="soft"
+                :description="roleUpdateError"
+              />
 
               <UAlert
                 v-if="pendingRemoval && pendingRemoval.memberId === member.id"
@@ -396,11 +445,35 @@ const { data, pending, refresh } = await useAsyncData(
 const members = computed(() => data.value?.members ?? [])
 const invitations = computed(() => data.value?.invitations ?? [])
 
-const roleOptions = [
+const { user: currentUser } = await useAuthSession()
+const currentUserRole = computed(() => {
+  const match = members.value.find(member => member.userId === currentUser.value?.id)
+  return match?.role ?? null
+})
+const isOwner = computed(() => currentUserRole.value === 'owner')
+
+const BASE_ROLE_OPTIONS = [
   { label: 'Member', value: 'member' },
   { label: 'Admin', value: 'admin' },
   { label: 'Editor', value: 'editor' },
 ]
+// Owner is only offered as a choice to an existing owner — mirrors Better
+// Auth's own creatorRole rule (only an owner can grant/touch the owner role),
+// enforced again server-side since this is just UI affordance.
+const roleOptions = computed(() => (
+  isOwner.value ? [...BASE_ROLE_OPTIONS, { label: 'Owner', value: 'owner' }] : BASE_ROLE_OPTIONS
+))
+
+function roleOptionsFor(member: MemberRow) {
+  return isOwner.value || member.role !== 'owner' ? roleOptions.value : BASE_ROLE_OPTIONS
+}
+
+function canEditMemberRole(member: MemberRow): boolean {
+  if (currentUserRole.value !== 'owner' && currentUserRole.value !== 'admin') return false
+  // Only an owner may touch another owner's role.
+  if (member.role === 'owner' && !isOwner.value) return false
+  return true
+}
 
 const inviteForm = reactive({ email: '', role: 'member', siteId: '', locationId: '' })
 const inviting = ref(false)
@@ -513,6 +586,110 @@ const memberError = ref<string | null>(null)
 const pendingInvitationError = ref<string | null>(null)
 const pendingRemoval = ref<{ memberId: string; assignments: PhoneAssignment[] } | null>(null)
 
+const editingRoleMemberId = ref<string | null>(null)
+const memberRoleForm = reactive({ siteId: '', locationId: '' })
+const roleUpdatingId = ref<string | null>(null)
+const roleUpdateError = ref<string | null>(null)
+const roleUpdateErrorMemberId = ref<string | null>(null)
+
+const memberRoleLocationsPending = ref(false)
+const memberRoleLocations = ref<OrgLocationSummary[]>([])
+let memberRoleLocationsRequestId = 0
+const memberRoleLocationOptions = computed(() => memberRoleLocations.value.map(location => ({
+  label: location.title,
+  value: location.id,
+})))
+
+function isCurrentMemberRoleLocationsRequest(requestId: number, siteId: string) {
+  return requestId === memberRoleLocationsRequestId && memberRoleForm.siteId === siteId
+}
+
+watch(() => memberRoleForm.siteId, async (siteId) => {
+  const requestId = ++memberRoleLocationsRequestId
+  memberRoleForm.locationId = ''
+  memberRoleLocations.value = []
+  if (!siteId) {
+    memberRoleLocationsPending.value = false
+    return
+  }
+  memberRoleLocationsPending.value = true
+  try {
+    const response = await dashboardApi<{ success: boolean; locations: OrgLocationSummary[] }>(
+      `/api/sites/${siteId}/locations`,
+      {
+        validate: (value): value is { success: boolean; locations: OrgLocationSummary[] } =>
+          isRecord(value)
+          && typeof value.success === 'boolean'
+          && Array.isArray(value.locations)
+          && value.locations.every(location =>
+            isRecord(location)
+            && typeof location.id === 'string'
+            && typeof location.title === 'string',
+          ),
+      },
+    )
+    if (!isCurrentMemberRoleLocationsRequest(requestId, siteId)) return
+    memberRoleLocations.value = response.locations ?? []
+  } catch (err) {
+    if (!isCurrentMemberRoleLocationsRequest(requestId, siteId)) return
+    memberRoleLocations.value = []
+    roleUpdateError.value = err instanceof Error ? err.message : 'Failed to load locations for this site.'
+    roleUpdateErrorMemberId.value = editingRoleMemberId.value
+  } finally {
+    if (isCurrentMemberRoleLocationsRequest(requestId, siteId)) memberRoleLocationsPending.value = false
+  }
+})
+
+function cancelRoleEdit() {
+  editingRoleMemberId.value = null
+  memberRoleForm.siteId = ''
+  memberRoleForm.locationId = ''
+}
+
+function onRoleSelected(member: MemberRow, role: string) {
+  roleUpdateError.value = null
+  roleUpdateErrorMemberId.value = null
+  if (role === member.role) return
+  if (role === 'editor') {
+    editingRoleMemberId.value = member.id
+    memberRoleForm.siteId = ''
+    memberRoleForm.locationId = ''
+    loadOrgSites()
+    return
+  }
+  void submitRoleChange(member, role)
+}
+
+async function submitEditorRoleChange(member: MemberRow) {
+  if (!memberRoleForm.siteId) return
+  await submitRoleChange(member, 'editor', {
+    siteId: memberRoleForm.siteId,
+    locationId: memberRoleForm.locationId || null,
+  })
+}
+
+async function submitRoleChange(member: MemberRow, role: string, scope?: { siteId: string; locationId: string | null }) {
+  roleUpdatingId.value = member.id
+  roleUpdateError.value = null
+  roleUpdateErrorMemberId.value = null
+  try {
+    await dashboardApi(`/api/dashboard/organizations/members/${member.id}/role`, {
+      method: 'POST',
+      body: { role, siteId: scope?.siteId, locationId: scope?.locationId },
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+    })
+    cancelRoleEdit()
+    await refresh()
+  } catch (err: unknown) {
+    roleUpdateError.value = err instanceof ApiClientError && typeof err.data.error === 'string'
+      ? err.data.error
+      : err instanceof Error ? err.message : 'Failed to update member role.'
+    roleUpdateErrorMemberId.value = member.id
+  } finally {
+    roleUpdatingId.value = null
+  }
+}
+
 const invitationActionId = ref<string | null>(null)
 const invitationAction = ref<'retry' | 'replace' | 'clear' | null>(null)
 const invitationActionError = ref<string | null>(null)
@@ -623,7 +800,7 @@ async function sendInvite() {
       method: 'POST',
       body: {
         email: inviteForm.email,
-        role: inviteForm.role as 'member' | 'admin' | 'editor',
+        role: inviteForm.role as 'member' | 'admin' | 'editor' | 'owner',
         siteId: inviteForm.role === 'editor' ? inviteForm.siteId : undefined,
         locationId: inviteForm.role === 'editor' ? inviteForm.locationId || null : undefined,
       },
