@@ -58,6 +58,7 @@ export const isPublicShellPayload = (value: unknown): value is PublicShellPayloa
 
 export interface PublicPagePayload {
   kind: string
+  shell: PublicShellPayload
   content: ApiRecord[]
   locationReviews: ApiRecord[]
   globalReviews: ApiRecord[]
@@ -84,6 +85,7 @@ export const isPublicPagePayload = (
 ): value is PublicPagePayload =>
   isRecord(value)
   && typeof value.kind === 'string'
+  && isPublicShellPayload(value.shell)
   && (!expectedKind || value.kind === expectedKind)
   && Array.isArray(value.content)
   && value.content.every(item => isRecord(item) && typeof item.field === 'string')

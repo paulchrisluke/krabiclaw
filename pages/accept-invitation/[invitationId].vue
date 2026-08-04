@@ -97,7 +97,7 @@
 import { completeVerifiedInvitation } from '~/shared/auth/invitation-activation'
 import { buildLoginUrl } from '~/shared/auth/return-target'
 
-definePageMeta({ layout: false })
+definePageMeta({ layout: 'standalone' })
 
 const route = useRoute()
 const invitationId = route.params.invitationId as string

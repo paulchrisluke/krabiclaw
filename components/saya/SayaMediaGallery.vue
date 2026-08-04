@@ -21,7 +21,7 @@
         loop
         playsinline
         class="h-full w-full object-cover"
-        @loadeddata="markVideoReady(0)"
+        @loadeddata="handleVideoLoaded(0)"
         @playing="markVideoPlaying(0)"
         @pause="markVideoPaused(0)"
         @waiting="markVideoWaiting(0)"
@@ -72,7 +72,7 @@
             loop
             playsinline
             class="h-full w-full object-cover"
-            @loadeddata="markVideoReady(index)"
+            @loadeddata="handleVideoLoaded(index)"
             @playing="markVideoPlaying(index)"
             @pause="markVideoPaused(index)"
             @waiting="markVideoWaiting(index)"
@@ -185,6 +185,14 @@ function syncVideoVisibility() {
   }
 }
 
+function scheduleVideoPreviewSync() {
+  if (!import.meta.client) return
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    syncVideoVisibility()
+    void syncVideoPreviews()
+  }))
+}
+
 async function syncVideoPreviews() {
   const currentToken = ++syncToken
   if (!import.meta.client) return
@@ -217,6 +225,12 @@ function markVideoReady(index: number) {
   videoReady.value[index] = true
 }
 
+function handleVideoLoaded(index: number) {
+  markVideoReady(index)
+  syncVideoVisibility()
+  void syncVideoPreviews()
+}
+
 function markVideoPlaying(index: number) {
   videoReady.value[index] = true
   videoPlaying.value[index] = true
@@ -245,8 +259,7 @@ function setVideoRef(el: Element | ComponentPublicInstance | null, index: number
   if (el.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) markVideoReady(index)
   if (!el.paused && !el.ended) markVideoPlaying(index)
   videoObserver?.observe(el)
-  syncVideoVisibility()
-  void syncVideoPreviews()
+  scheduleVideoPreviewSync()
 }
 
 function disconnectVideoObserver() {
@@ -299,8 +312,7 @@ watch(items, async () => {
 onMounted(() => {
   if (!import.meta.client) return
   document.addEventListener('visibilitychange', onVisibilityChange)
-  syncVideoVisibility()
-  void syncVideoPreviews()
+  scheduleVideoPreviewSync()
 })
 
 onBeforeUnmount(() => {

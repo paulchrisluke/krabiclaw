@@ -1,11 +1,10 @@
-// Per-page content fetch (photos/qa/reviews/blog/menu/experience datasets,
-// CMS content fields, booking policies). Site-wide chrome data that doesn't
-// vary by route (brand, location summaries, config, locales, navigation
-// capabilities) lives in the site-shell loader instead.
+// The canonical public page resource contains route content plus the shared
+// site shell (brand, location summaries, config, locales, and capabilities).
+// Route consumers select their datasets from that one validated response.
 //
-// SSR waits for route data so rendered HTML is complete. Client navigation
-// starts the keyed request lazily and returns immediately; the Saya layout
-// replaces the old route with a destination-local loading or error state.
+// Non-home routes still SSR their complete route payload. The homepage uses a
+// critical shell/hero resource for the first document and loads the remaining
+// route collections after that document has painted.
 //
 // Usage (in a page):
 //   const { getField, getHero, photosList, qaList, ... } = await usePublicPageData()
@@ -66,7 +65,7 @@ export const usePublicPageData = async (options: {
 
   const url = computed(() => usePublicPageUrl(siteId, requestedParams.value));
 
-  const shell = useSiteShellState();
+  const shell = useSiteShellState({ load: options.server !== false });
 
   const asyncData =
     isPlatform || (!siteId && !draftId)
@@ -96,7 +95,10 @@ export const usePublicPageData = async (options: {
           {
             server: options.server ?? true,
             lazy: options.lazy ?? import.meta.client,
-            dedupe: 'cancel',
+            // The layout and route composable share this canonical key. Defer
+            // duplicate consumers to the existing request instead of cancelling
+            // it and starting a second SSR load.
+            dedupe: 'defer',
             // `enabled` starting false must not permanently stub this resource —
             // immediate mirrors its current value, and the watcher below fires
             // the one fetch a later false -> true transition requires. Calling
@@ -134,8 +136,8 @@ export const usePublicPageData = async (options: {
     })
   }
 
-  // Persistent chrome data comes from the stable shell. Route-owned collections
-  // come from the keyed page response and change with navigation.
+  // Persistent chrome and route-owned collections come from the same keyed page
+  // response; only the selected route datasets change with navigation.
   const { locations, config, locales, hasExperiences } = shell;
   const googleBusiness = computed(() => ({
     ...(shell.googleBusiness.value ?? {}),
@@ -179,7 +181,7 @@ export const usePublicPageData = async (options: {
 
   // ── Content ───────────────────────────────────────────────
   const contentMap = computed(() => {
-    const rows = (data.value?.content ?? []) as ContentRow[];
+    const rows = (data.value?.content ?? shell.content.value ?? []) as ContentRow[];
     return rows.reduce<Record<string, ContentRow>>((acc, row) => {
       acc[row.field] = row;
       return acc;

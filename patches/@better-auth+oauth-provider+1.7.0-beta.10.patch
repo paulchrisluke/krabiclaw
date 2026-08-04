@@ -1,0 +1,45 @@
+diff --git a/node_modules/@better-auth/oauth-provider/dist/client-assertion-D-tAYsKC.mjs b/node_modules/@better-auth/oauth-provider/dist/client-assertion-D-tAYsKC.mjs
+index 43e3573..ccd6e56 100644
+--- a/node_modules/@better-auth/oauth-provider/dist/client-assertion-D-tAYsKC.mjs
++++ b/node_modules/@better-auth/oauth-provider/dist/client-assertion-D-tAYsKC.mjs
+@@ -74,8 +74,11 @@ async function fetchJwksFromUri(jwksUri) {
+ 		const response = await fetch(jwksUri, {
+ 			signal: controller.signal,
+ 			headers: { accept: "application/json" },
+-			redirect: "error"
++			redirect: "manual"
+ 		});
++		if (response.type === "opaqueredirect" || (response.status >= 300 && response.status < 400)) {
++			throw new Error("JWKS fetch was redirected, which is not allowed");
++		}
+ 		if (!response.ok) throw new Error(`JWKS fetch returned ${response.status}`);
+ 		const jwks = await response.json();
+ 		if (!jwks.keys || !Array.isArray(jwks.keys)) throw new Error("JWKS response missing keys array");
+@@ -98,7 +101,13 @@ async function fetchClientJwks(ctx, client) {
+ 		const jwks = await fetchJwksFromUri(client.jwksUri);
+ 		setJwksCache(client.jwksUri, jwks, now);
+ 		return jwks;
+-	} catch {
++	} catch (fetchErr) {
++		console.error("[OAUTH_JWKS_FETCH_FAILED]", JSON.stringify({
++			jwks_uri: client.jwksUri,
++			client_id: client.clientId,
++			error_name: fetchErr instanceof Error ? fetchErr.name : typeof fetchErr,
++			error_message: fetchErr instanceof Error ? fetchErr.message : String(fetchErr)
++		}));
+ 		const staleLimitMs = JWKS_CACHE_TTL_MS * 2;
+ 		if (cached && now - cached.fetchedAt < staleLimitMs) return cached.jwks;
+ 		throw new APIError("BAD_REQUEST", {
+diff --git a/node_modules/@better-auth/oauth-provider/dist/index.mjs b/node_modules/@better-auth/oauth-provider/dist/index.mjs
+index 4590481..0eb0c74 100644
+--- a/node_modules/@better-auth/oauth-provider/dist/index.mjs
++++ b/node_modules/@better-auth/oauth-provider/dist/index.mjs
+@@ -327,7 +327,7 @@ async function deliverBackchannelLogoutTokens(ctx, plan) {
+ 				},
+ 				body: new URLSearchParams({ logout_token: token }),
+ 				signal: AbortSignal.timeout(BACKCHANNEL_DISPATCH_TIMEOUT_MS),
+-				redirect: "error"
++				redirect: "manual"
+ 			});
+ 			if (response.status !== 200 && response.status !== 204) logger.warn(`back-channel logout to client ${client.clientId} returned ${response.status}`);
+ 		} catch (error) {

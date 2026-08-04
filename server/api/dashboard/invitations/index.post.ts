@@ -3,11 +3,12 @@ import { jsonResponse } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { isOrganizationWideRole } from '~/server/utils/member-access'
 import { fireSiteEventSafe } from '~/server/utils/site-events'
+import { notifyOrganizationInvited } from '~/server/utils/notifications'
 
-const ALLOWED_INVITATION_ROLES = new Set(['member', 'admin', 'editor'])
+const ALLOWED_INVITATION_ROLES = new Set(['member', 'admin', 'editor', 'owner'])
 
 export default defineEventHandler(async (event) => {
-  const { db, session, organization } = await getDashboardContext(event, { requireSite: false })
+  const { env, db, session, organization } = await getDashboardContext(event, { requireSite: false })
   if (!isOrganizationWideRole(organization.role)) {
     return jsonResponse({ error: 'Only owners and admins can invite organization members' }, { status: 403 })
   }
@@ -27,7 +28,14 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Enter a valid email address' }, { status: 400 })
   }
   if (!ALLOWED_INVITATION_ROLES.has(role)) {
-    return jsonResponse({ error: 'Invitation role must be member, admin, or editor' }, { status: 400 })
+    return jsonResponse({ error: 'Invitation role must be member, admin, editor, or owner' }, { status: 400 })
+  }
+  // Mirrors Better Auth's own organization plugin rule (creatorRole):
+  // only an existing owner may invite someone else in as an owner. This
+  // route writes the invitation directly rather than through
+  // auth.api.createInvitation, so that rule has to be enforced by hand here.
+  if (role === 'owner' && organization.role !== 'owner') {
+    return jsonResponse({ error: 'Only an owner can invite someone as owner' }, { status: 403 })
   }
   if (role === 'editor' && !siteId) {
     return jsonResponse({ error: 'Editors must be assigned to a site' }, { status: 400 })
@@ -111,22 +119,46 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to create the invitation' }, { status: 500 })
   }
 
-  if (!existing) {
-    const eventSiteId = siteId || (await queryFirst<{ id: string }>(db, `
+  let eventSiteId: string | null = siteId || null
+  if (!eventSiteId) {
+    eventSiteId = (await queryFirst<{ id: string }>(db, `
       SELECT id FROM sites WHERE organization_id = ? ORDER BY created_at ASC LIMIT 1
-    `, [organization.id]))?.id
-    if (eventSiteId) {
+    `, [organization.id]))?.id ?? null
+  }
+
+  if (!existing && eventSiteId) {
     await fireSiteEventSafe({
       db,
       organizationId: organization.id,
-        siteId: eventSiteId,
+      siteId: eventSiteId,
       actorId: session.user.id,
       eventType: 'member.invited',
       entityType: 'invitation',
       entityId: invitationId,
       metadata: { role },
     })
-    }
+  }
+
+  // Not wrapped in the batch above: this is a Resend network call, not a D1
+  // write, so it can't be part of an atomic D1 batch anyway. A failure here
+  // is logged by notifyOrganizationInvited itself (via the notifications
+  // table) and never blocks the invitation from existing — the invitee just
+  // won't have gotten an email and can be resent one.
+  if (eventSiteId) {
+    await notifyOrganizationInvited(env, db, {
+      organizationId: organization.id,
+      siteId: eventSiteId,
+      invitationId,
+      email,
+      role,
+      organizationName: organization.name,
+      inviterName: session.user.name || session.user.email,
+    }).catch((error) => {
+      console.error('dashboard_invitation_email_failed', {
+        invitationId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    })
   }
 
   return jsonResponse({ success: true, invitationId, reused: Boolean(existing) })
