@@ -365,9 +365,8 @@ async function loadPublicPageSource(
   // Pages that render the posts feed
   const needsGlobalPosts = requestedDatasets.has("posts") && !locationSlug;
   // Pages that display location hero images (cards or detail header)
-  const needsLocationHeroMedia = requestedDatasets.has("location");
   const needsLocations =
-    needsLocationHeroMedia ||
+    requestedDatasets.has("location") ||
     requestedDatasets.has("menu") ||
     requestedDatasets.has("experiences") ||
     requestedDatasets.has("reservationPolicies") ||
@@ -399,43 +398,8 @@ async function loadPublicPageSource(
     return i;
   };
 
-  if (needsLocations) idxLoc = push(
-    needsLocationHeroMedia
-      ? `SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.email, bl.website_url, bl.maps_url,
-                 bl.latitude, bl.longitude, bl.opening_hours, bl.special_hours, bl.timezone, bl.rating, bl.review_count,
-                 bl.is_primary, bl.status, bl.city, bl.neighborhood,
-                 bl.grab_url, bl.uber_eats_url, bl.foodpanda_url,
-                 bl.description, bl.short_description, bl.last_synced_at,
-                 bl.seo_title, bl.seo_description, bl.canonical_url, bl.robots,
-                 ma.public_url AS hero_public_url,
-                 ma.thumbnail_url AS hero_thumbnail_url,
-                 ma.kind AS hero_kind,
-                 ma_og.public_url AS og_image_public_url
-          FROM business_locations bl
-          LEFT JOIN media_assets ma ON bl.hero_media_asset_id = ma.id AND ma.status = 'active'
-            AND ma.organization_id = bl.organization_id AND ma.site_id = bl.site_id
-          LEFT JOIN media_assets ma_og ON bl.og_image_asset_id = ma_og.id AND ma_og.status = 'active'
-            AND ma_og.organization_id = bl.organization_id AND ma_og.site_id = bl.site_id
-          WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'
-          ORDER BY bl.is_primary DESC, bl.title ASC`
-      : `SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.email, bl.website_url, bl.maps_url,
-                 bl.latitude, bl.longitude, bl.opening_hours, bl.special_hours, bl.timezone, bl.rating, bl.review_count,
-                 bl.is_primary, bl.status, bl.city, bl.neighborhood,
-                 bl.grab_url, bl.uber_eats_url, bl.foodpanda_url,
-                 bl.description, bl.short_description, bl.last_synced_at,
-                 bl.seo_title, bl.seo_description, bl.canonical_url, bl.robots,
-                 NULL AS hero_public_url, NULL AS hero_thumbnail_url,
-                 NULL AS hero_kind,
-                 NULL AS og_image_public_url
-          FROM business_locations bl
-          WHERE bl.organization_id = ? AND bl.site_id = ? AND bl.status = 'active'
-          ORDER BY bl.is_primary DESC, bl.title ASC`,
-    [orgId, siteId],
-  );
-
-  const shellIndexes = appendPublicShellQueries(batchStmts, orgId, siteId, {
-    existingLocationsIndex: needsLocationHeroMedia && idxLoc >= 0 ? idxLoc : undefined,
-  });
+  const shellIndexes = appendPublicShellQueries(batchStmts, orgId, siteId);
+  if (needsLocations) idxLoc = shellIndexes.locations;
 
   // Content for the requested page (source + translations)
   if (page && requestedDatasets.has("content")) {

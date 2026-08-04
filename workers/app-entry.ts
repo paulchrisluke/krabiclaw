@@ -205,10 +205,17 @@ async function deferPublicHydration(response: Response): Promise<Response> {
 
   const html = await response.text()
   if (html.includes('data-public-critical-shell="true"')) {
+    const moduleScript = /<script\b(?=[^>]*\btype="module")(?=[^>]*\bsrc="(\/_nuxt\/[^\"]+)")[^>]*><\/script>/
+    const match = html.match(moduleScript)
+    if (!match?.[1]) {
+      throw new Error('Critical public shell contract is missing the Nuxt entry script')
+    }
+    const entryUrl = JSON.stringify(match[1])
+    const hydrationLoader = `<script>(()=>{const entry=${entryUrl};const start=()=>{const script=document.createElement("script");script.type="module";script.src=entry;script.crossOrigin="anonymous";script.addEventListener("error",()=>console.error("Public after-paint hydration failed",entry),{once:true});document.head.append(script)};if("requestAnimationFrame" in window){requestAnimationFrame(()=>requestAnimationFrame(start))}else{setTimeout(start,0)}})()</script>`
     const headers = new Headers(response.headers)
     headers.delete('content-length')
     headers.set('x-public-hydration', 'after-paint')
-    return new Response(html, {
+    return new Response(html.replace(moduleScript, hydrationLoader), {
       status: response.status,
       statusText: response.statusText,
       headers,

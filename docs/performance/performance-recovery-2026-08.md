@@ -202,7 +202,7 @@ claiming the `<1s` target.
 
 ## Shared client-path diagnosis and measured fix
 
-The client-site bottleneck was shared SSR work, not the number of Vue files or a
+The client-side bottleneck was shared SSR work, not the number of Vue files or a
 single theme component. Saya layout setup loaded the shell resource while the
 route component loaded the page resource. Both used the same Worker request
 context but each performed its own source batch, so a cold D1 wake-up made the

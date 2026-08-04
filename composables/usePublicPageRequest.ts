@@ -46,7 +46,7 @@ export function getPublicCriticalHomeRequest(params: PublicPageRequest): PublicP
 
 // Extracts the page sub-path from a platform preview route path.
 // Returns null if the path is not a preview route.
-function getPreviewSubpath(path: string): string | null {
+export function getPreviewSubpath(path: string): string | null {
   const match = path.match(/^\/preview\/(?:site|draft)\/[^/]+(\/.*)?$/)
   if (!match) return null
   return match[1] || '/'

@@ -11,10 +11,6 @@ export interface PublicShellQueryIndexes {
   locales: number
 }
 
-interface PublicShellQueryOptions {
-  existingLocationsIndex?: number
-}
-
 function parseJson(raw: string | null) {
   if (!raw) return null
   try {
@@ -28,7 +24,6 @@ export function appendPublicShellQueries(
   queries: BatchQuery[],
   organizationId: string,
   siteId: string,
-  options: PublicShellQueryOptions = {},
 ): PublicShellQueryIndexes {
   const push = (query: string, params: unknown[]) => {
     const index = queries.length
@@ -37,7 +32,7 @@ export function appendPublicShellQueries(
   }
 
   return {
-    locations: options.existingLocationsIndex ?? push(`SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.email,
+    locations: push(`SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.email,
                      bl.website_url, bl.maps_url, bl.latitude, bl.longitude,
                      bl.opening_hours, bl.special_hours, bl.timezone, bl.rating,
                      bl.review_count, bl.is_primary, bl.status, bl.city,
@@ -185,7 +180,7 @@ export function buildPublicShellPayload(
             phoneNumbers: primary.phone ? [{ phoneNumber: primary.phone }] : [],
             websiteUri: primary.website_url,
             mapsUri: primary.maps_url,
-            latlng: primary.latitude && primary.longitude
+            latlng: primary.latitude != null && primary.longitude != null
               ? { latitude: primary.latitude, longitude: primary.longitude }
               : null,
             profile: { description: primary.description },

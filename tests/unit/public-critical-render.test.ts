@@ -35,5 +35,6 @@ test('critical public homepage keeps SSR shell and defers only the full route re
   assert.match(blawbyPage, /useBlawbyCriticalHome\(\)/)
   assert.match(blawbyPage, /useBlawbyRoute\('home', null, \{ server: false, lazy: true \}\)/)
   assert.match(worker, /data-public-critical-shell="true"/)
+  assert.match(worker, /requestAnimationFrame\(\(\)=>requestAnimationFrame\(start\)\)/)
   assert.match(worker, /x-public-hydration', 'after-paint'/)
 })

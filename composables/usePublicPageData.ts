@@ -95,7 +95,10 @@ export const usePublicPageData = async (options: {
           {
             server: options.server ?? true,
             lazy: options.lazy ?? import.meta.client,
-            dedupe: 'cancel',
+            // The layout and route composable share this canonical key. Defer
+            // duplicate consumers to the existing request instead of cancelling
+            // it and starting a second SSR load.
+            dedupe: 'defer',
             // `enabled` starting false must not permanently stub this resource —
             // immediate mirrors its current value, and the watcher below fires
             // the one fetch a later false -> true transition requires. Calling

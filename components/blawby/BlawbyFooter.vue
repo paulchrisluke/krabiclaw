@@ -4,7 +4,7 @@
     <div class="mx-auto max-w-7xl px-6 pb-8 pt-8 sm:pt-12 lg:px-8 lg:pt-16">
       <div class="xl:grid xl:grid-cols-3 xl:gap-8">
         <div class="space-y-8">
-          <NuxtLink to="/" class="inline-flex no-underline" :aria-label="`${brandName} home`">
+          <NuxtLink v-if="brandName || footerLogo" to="/" class="inline-flex no-underline" :aria-label="`${brandName} home`">
             <img v-if="footerLogo" :src="footerLogo" :alt="brandName" loading="lazy" decoding="async" class="max-h-16 w-auto max-w-[248px]">
             <span v-else class="blawby-display text-2xl text-white">{{ brandName }}</span>
           </NuxtLink>
@@ -28,9 +28,9 @@
           </div>
         </div>
 
-        <div class="mt-16 grid grid-cols-2 gap-8 xl:col-span-2 xl:mt-0">
+        <div v-if="offeringLinks.length || supportItems.length || companyItems.length || legalItems.length" class="mt-16 grid grid-cols-2 gap-8 xl:col-span-2 xl:mt-0">
           <div class="md:grid md:grid-cols-2 md:gap-8">
-            <div>
+            <div v-if="offeringLinks.length">
               <h3 class="text-sm font-semibold leading-6 text-white">Services</h3>
               <ul class="mt-6 space-y-4" role="list">
                 <li v-for="offering in offeringLinks" :key="offering.id">
@@ -40,18 +40,18 @@
                 </li>
               </ul>
             </div>
-            <div class="mt-10 md:mt-0">
+            <div v-if="supportItems.length" class="mt-10 md:mt-0">
               <h3 class="text-sm font-semibold leading-6 text-white">Support</h3>
               <BlawbyFooterLinks :items="supportItems" />
             </div>
           </div>
 
           <div class="md:grid md:grid-cols-2 md:gap-8">
-            <div>
+            <div v-if="companyItems.length">
               <h3 class="text-sm font-semibold leading-6 text-white">Company</h3>
               <BlawbyFooterLinks :items="companyItems" />
             </div>
-            <div class="mt-10 md:mt-0">
+            <div v-if="legalItems.length" class="mt-10 md:mt-0">
               <h3 class="text-sm font-semibold leading-6 text-white">Legal</h3>
               <BlawbyFooterLinks :items="legalItems" />
             </div>
