@@ -29,13 +29,19 @@
 
 <script setup lang="ts">
 
+import { computed } from 'vue'
+
 defineProps({
   title: String,
   description: String,
   ctaRoute: String,
   reserveCta: String,
-  hasOrderLinks: { type: Boolean, default: false },
   bg: { type: String, default: 'white' },
   padding: { type: String, default: 'lg' }
 })
+
+const { locations } = useSiteShellState()
+const hasOrderLinks = computed(() =>
+  locations.value.some((loc: { grab_url?: string; uber_eats_url?: string; foodpanda_url?: string }) => loc.grab_url || loc.uber_eats_url || loc.foodpanda_url)
+)
 </script>

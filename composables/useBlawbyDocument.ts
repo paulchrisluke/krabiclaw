@@ -53,11 +53,7 @@ export function resolveBlawbyRouteTarget(path: string, params: Record<string, un
   throw createError({ statusCode: 404, statusMessage: 'Unsupported Blawby route' })
 }
 
-export async function useBlawbyDocument(
-  recipe: BlawbyRouteRecipe,
-  slug?: string | null,
-  options: { server?: boolean; lazy?: boolean } = {},
-) {
+export async function useBlawbyDocument(recipe: BlawbyRouteRecipe, slug?: string | null) {
   const { siteId, isTenant } = useTenantSite()
   if (!isTenant || !siteId) {
     throw createError({ statusCode: 404, statusMessage: 'Blawby site context is unavailable' })
@@ -85,8 +81,8 @@ export async function useBlawbyDocument(
       })
     },
     {
-      server: options.server ?? true,
-      lazy: options.lazy ?? false,
+      server: true,
+      lazy: false,
       getCachedData(cacheKey) {
         return useNuxtApp().payload.data[cacheKey] as BlawbyDocumentPayload | undefined
       },
@@ -94,9 +90,7 @@ export async function useBlawbyDocument(
   )
 
   if (asyncData.error.value) throw asyncData.error.value
-  if (!asyncData.data.value && options.server !== false) {
-    throw createError({ statusCode: 500, statusMessage: 'Blawby document data was not returned' })
-  }
+  if (!asyncData.data.value) throw createError({ statusCode: 500, statusMessage: 'Blawby document data was not returned' })
 
   return {
     ...asyncData,

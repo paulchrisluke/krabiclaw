@@ -1,15 +1,11 @@
 import type { BlawbyRouteRecipe } from '~/types/blawby'
 import { useBlawbyDocument } from '~/composables/useBlawbyDocument'
 
-export async function useBlawbyRoute(
-  recipe: BlawbyRouteRecipe,
-  slug?: string | null,
-  options: { server?: boolean; lazy?: boolean } = {},
-) {
-  const asyncData = await useBlawbyDocument(recipe, slug, options)
+export async function useBlawbyRoute(recipe: BlawbyRouteRecipe, slug?: string | null) {
+  const asyncData = await useBlawbyDocument(recipe, slug)
 
   return {
     ...asyncData,
-    data: computed(() => asyncData.data.value?.route ?? null),
+    data: computed(() => asyncData.data.value.route),
   }
 }
