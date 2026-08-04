@@ -70,7 +70,6 @@
 
 <script setup lang="ts">
 import type { PublicBlawbyIdentity, PublicCompliance, PublicNavigationItem, PublicOfferingLink } from '~/types/blawby'
-import { publicMediaUrl } from '~/utils/public-media-url'
 
 const props = defineProps<{
   site: PublicBlawbyIdentity
@@ -82,13 +81,9 @@ const props = defineProps<{
 const year = new Date().getFullYear()
 const brandName = computed(() => props.site.brand_name || props.compliance?.entity_name || 'Blawby')
 const description = computed(() => props.compliance?.footer_disclaimer || props.site.brand_description || '')
-const requestHeaders = useRequestHeaders(['host'])
-const requestHostname = import.meta.server
-  ? (requestHeaders.host || '').split(':')[0]
-  : window.location.hostname
-const footerLogo = computed(() => publicMediaUrl(typeof props.compliance?.metadata?.logo_dark_url === 'string'
+const footerLogo = computed(() => typeof props.compliance?.metadata?.logo_dark_url === 'string'
   ? props.compliance.metadata.logo_dark_url
-  : props.site.logo_url, requestHostname))
+  : props.site.logo_url)
 const footerItems = computed(() => props.navigation.filter(item => item.area === 'footer'))
 const socialItems = computed(() => props.navigation.filter(item => item.area === 'social' && item.url !== '/none'))
 

@@ -9,7 +9,7 @@
       <div ref="serviceImageTargets" :data-offering-id="offering.id" class="aspect-[704/478] w-full overflow-hidden rounded-lg bg-gray-100">
         <img
           v-if="offering.thumbnail_url && loadedOfferingIds.has(offering.id)"
-          :src="publicMediaUrl(offering.thumbnail_url, requestHostname) || undefined"
+          :src="offering.thumbnail_url || undefined"
           :alt="offering.name"
           width="704"
           height="478"
@@ -33,12 +33,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import type { PublicOfferingSummary } from '~/types/blawby'
-import { publicMediaUrl } from '~/utils/public-media-url'
 
-const requestHeaders = useRequestHeaders(['host'])
-const requestHostname = import.meta.server
-  ? (requestHeaders.host || '').split(':')[0]
-  : window.location.hostname
 const serviceImageTargets = ref<HTMLElement[]>([])
 const loadedOfferingIds = ref(new Set<string>())
 let imageObserver: IntersectionObserver | null = null

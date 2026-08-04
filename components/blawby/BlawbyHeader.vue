@@ -96,7 +96,6 @@
 
 <script setup lang="ts">
 import type { PublicBlawbyIdentity, PublicConsultationSettings, PublicNavigationItem } from '~/types/blawby'
-import { publicMediaUrl } from '~/utils/public-media-url'
 
 const props = defineProps<{
   site: PublicBlawbyIdentity
@@ -106,12 +105,8 @@ const props = defineProps<{
 
 const { trackConsultationClick } = useBlawbyConversionTracking(() => props.consultation)
 const route = useRoute()
-const requestHeaders = useRequestHeaders(['host'])
-const requestHostname = import.meta.server
-  ? (requestHeaders.host || '').split(':')[0]
-  : window.location.hostname
 const brandName = computed(() => props.site.brand_name || 'Blawby')
-const logoUrl = computed(() => publicMediaUrl(props.site.logo_url, requestHostname))
+const logoUrl = computed(() => props.site.logo_url || null)
 const headerCtaLabel = computed(() => typeof props.consultation.metadata.header_cta_label === 'string'
   ? props.consultation.metadata.header_cta_label
   : 'Get Started')

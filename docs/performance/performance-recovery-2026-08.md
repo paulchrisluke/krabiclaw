@@ -119,26 +119,24 @@ root-relative path so SSR and hydration produce one canonical `<link>` value
 instead of relative and absolute duplicates.
 Dashboard/editor CSS remains outside these public entrypoints. Home routes now
 also have a critical inline shell: platform's root page is static HTML with a
-small consent script, while Saya and Blawby inline only the header/hero geometry
-and emit their full home stylesheet as an active SSR stylesheet link. The server
-response also sends one surface-specific HTTP `Link` preload header, so CSS
-discovery begins when the response headers arrive instead of waiting for the
-buffered HTML body. The stylesheet is render-blocking during the initial parse;
-there is no client-side promotion or two-frame JavaScript handoff. The Worker
-defers the Nuxt runtime on public GET
-routes and removes the public Nuxt entry script from the initial HTML. Public pages retain native links and
-  server-rendered content without JavaScript; the small inline interaction
-  loader fetches the Nuxt entry only when a button, submit control, or other
-  JavaScript-owned control is used, then replays that original action after the
-  module loads. A failed module load is logged as an actionable hydration error;
-  it is not replaced by a fallback path.
+small consent script, while Saya and Blawby inline the header/hero geometry and
+preload their full home stylesheet at low priority. The stylesheet is promoted
+to `rel="stylesheet"` by its own load event; the inline critical CSS is the
+above-fold render contract, so the full below-fold sheet does not block the
+first styled paint. The Worker defers the Nuxt runtime on public GET routes and
+removes both the public Nuxt entry script and its `__NUXT_DATA__` payload from
+the initial HTML. Public pages retain native links and server-rendered content
+without JavaScript; the small inline interaction loader fetches the Nuxt entry
+only when a button, submit control, or other JavaScript-owned control is used,
+then replays that original action after the module loads. A failed module load
+is logged as an actionable hydration error; it is not replaced by a fallback
+path.
 
-Blawby media URLs on real tenant hosts are rewritten from the separate
-`media.krabiclaw.com` origin to the same-origin `/__public-media/sites/...`
-Worker path. The R2 middleware is GET-only and fast-fails missing storage,
-missing objects, and storage errors. Platform-hosted local previews retain the
-direct media URL because the local R2 fixture is intentionally empty; this is a
-preview measurement limitation, not a production fallback.
+Blawby media keeps its canonical `media.krabiclaw.com` URL. The Worker media
+middleware serves only the explicit same-origin `/__media/...` upload path;
+public tenant media is not rewritten into an environment-specific R2 bucket,
+because preview and staging fixtures can legitimately reference the canonical
+media origin.
 
 The final local build emitted these home stylesheet sizes (raw / gzip):
 Platform `31,300 / 6,970` bytes, Saya `59,290 / 10,890` bytes, and Blawby
@@ -152,21 +150,22 @@ The current check uses a fresh query value for each navigation against the
 rebuilt Worker. The HTML response is measured separately from browser
 navigation, and the browser check verifies the initial CSS, fonts, above-fold
 image markup, iframe count, and runtime script count. The fresh single-pass
-local Worker measurements for the final build are:
+local Worker measurements for this build are:
 
 | Surface | Browser navigation | HTML body | Server `total` | Surface stylesheet |
 | --- | ---: | ---: | ---: | --- |
-| Platform `/` | 121 ms | 27,219 B | 21 ms | `platform-home.css` |
-| Saya `/` (`demo.localhost`) | 142 ms | 55,700 B | 110 ms | `saya-home.css` |
-| Blawby `/` (`ncls.localhost`) | 117 ms | 101,078 B | 129 ms | `blawby-home.css` |
+| Platform `/` | 64 ms | 32,285 B | 13 ms | `platform-home.css` |
+| Saya `/` (`demo.localhost`) | 61 ms | 30,630 B | 14 ms | `saya-home.css` |
+| Blawby | not measured: local NCLS fixture absent | — | — | — |
 
 These are local browser navigation measurements, not Lighthouse FCP/LCP and not
 the release gate. They verify the shared response contract: the correct surface
-stylesheet is advertised in the HTTP response headers, public tenant pages have
-no initial Nuxt runtime script, and the above-fold hero markup is present in the
-initial HTML. The local R2 fixture does not contain the tenant media objects, so
-pixel-level tenant image validation still requires the deployed R2-backed host.
-The `<1s` cold browser target remains open until that post-deploy check is run.
+stylesheet is present in the document head, public tenant pages have no initial
+Nuxt runtime or `__NUXT_DATA__` payload, and the above-fold hero markup is
+present in the initial HTML. The local R2 fixture does not contain tenant media
+objects, and this checkout does not contain the NCLS fixture, so Blawby pixel
+and cold-path validation still requires the deployed R2-backed host. The `<1s`
+cold browser target remains open until that post-deploy check is run.
 
 Cache hits are a warm optimization and cannot prove the cold target. The next
 release gate is a cold browser run on a real tenant host with same-origin R2
@@ -177,18 +176,18 @@ media request look successful.
 ## Browser trace follow-up
 
 The live production trace reproduced the original failure: the Worker buffered
-the transformed SSR document, and the browser could not begin the stylesheet
-request until the document body finished. The platform and tenant hero/logo
+the transformed SSR document, and the browser could not begin work discovered
+only in the body until the document finished. The platform and tenant hero/logo
 media were also being delayed by two animation frames, so they were absent from
 the initial HTML request graph.
 
 The corrected local Worker now renders the platform root as static HTML and
 places the theme-critical shell in the initial SSR head. Public tenant pages
-have no initial Nuxt runtime script, no Blawby YouTube iframe, and no
-animation-frame gate on above-fold hero or logo media. Fresh browser screenshots
-showed readable text, correct colors, local fonts, and stable above-fold
-geometry immediately; tenant media pixels require the R2-backed fixture noted
-above. The strict preview asset
+have no initial Nuxt runtime or `__NUXT_DATA__` payload, no Blawby YouTube iframe,
+and no animation-frame gate on above-fold hero or logo media. Fresh browser
+screenshots showed readable text, correct colors, local fonts, and stable
+above-fold geometry immediately; tenant media pixels require the R2-backed
+fixture noted above. The strict preview asset
 waiter remains in place so a deployment fails when HTML references an
 unavailable asset; it validates the six stable public surface stylesheets
 emitted by the build rather than an obsolete hashed `entry.css` filename.
