@@ -46,17 +46,17 @@
               <div class="h-28 relative" style="background: linear-gradient(135deg, rgba(251,116,97,0.8) 0%, rgba(43,181,181,0.8) 100%);">
                 <!-- Chat Prompt Bubble -->
                 <div class="absolute top-6 left-1/2 -translate-x-1/2 w-11/12 max-w-[240px] bg-white/90 backdrop-blur-sm rounded-2xl px-4 py-2.5 text-sm font-medium text-gray-800 shadow-md">
-                  <span class="font-bold text-[--kc-coral-600]">@KrabiClaw</span> generate hero images of a sunset beach dinner
+                  <span class="font-bold text-[--kc-coral-600]">@KrabiClaw</span> use this hero image for our dinner page
                 </div>
               </div>
               <div class="p-4 flex-1 flex flex-col justify-end relative">
                 <!-- Widget UI (Simulated) -->
                 <div class="bg-white rounded-xl overflow-hidden shadow-sm relative -mt-8 z-10 p-3">
                   <div class="w-full aspect-[3/2] bg-gray-100 rounded-lg overflow-hidden relative mb-3">
-                    <img src="/krabi-claw-free.png" class="w-full h-full object-cover" alt="Generated preview" />
+                    <img src="/krabi-claw-free.png" class="w-full h-full object-cover" alt="Hero image preview" />
                   </div>
                   <div class="flex gap-2">
-                    <div class="flex-1 h-9 rounded-md border border-gray-200 flex items-center justify-center text-xs font-semibold text-gray-600">Try again</div>
+                    <div class="flex-1 h-9 rounded-md border border-gray-200 flex items-center justify-center text-xs font-semibold text-gray-600">Change target</div>
                     <div class="flex-1 h-9 rounded-md bg-[--kc-coral-600] flex items-center justify-center text-xs font-bold text-white">Use this image</div>
                   </div>
                 </div>
@@ -94,7 +94,7 @@
                   <ul class="text-[11px] text-gray-600 space-y-2 pl-4 list-disc marker:text-gray-300">
                     <li>Create multi-language menus</li>
                     <li>Change hero text and styling</li>
-                    <li>Upload or generate photos</li>
+                    <li>Upload and place photos</li>
                     <li>Publish posts to your blog</li>
                     <li>Check your GA4 visitor analytics</li>
                     <li>Map custom domain names</li>

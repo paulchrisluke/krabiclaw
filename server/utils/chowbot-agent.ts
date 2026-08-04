@@ -482,50 +482,6 @@ async function executeTool(
       return { asset_id: ctx.pendingMedia.assetId, action, resolved: true };
     }
 
-    case "generate_image": {
-      const { uploadImageBuffer } =
-        await import("~/server/utils/cloudflare-images");
-      const { createMediaAsset } =
-        await import("~/server/utils/media-asset-manager");
-      const { generateImageViaGateway, IMAGE_MODEL } =
-        await import("~/server/utils/ai-gateway");
-      const generated = await generateImageViaGateway(env, input.prompt);
-      const image = generated.images[0];
-      if (!image) {
-        return { error: "Image generation returned no images." };
-      }
-      const { imageId, publicUrl, thumbnailUrl } = await uploadImageBuffer(
-        env,
-        image.imageBuffer,
-        image.filename || `chowbot-${Date.now()}.png`,
-      );
-      const assetId = crypto.randomUUID();
-      await createMediaAsset(db, {
-        id: assetId,
-        organization_id: orgId,
-        site_id: siteId,
-        location_id: input.location_id ?? null,
-        kind: "image",
-        provider: "cloudflare_images",
-        source: "generated",
-        cloudflare_image_id: imageId,
-        public_url: publicUrl,
-        thumbnail_url: thumbnailUrl,
-        mime_type: "image/png",
-        status: "active",
-        created_by_user_id: userId,
-      });
-      await chargeCredits(db, orgId, {
-        siteId,
-        action: "generate_image",
-        model: IMAGE_MODEL,
-        inputTokens: generated.inputTokens,
-        outputTokens: generated.outputTokens,
-        cfGatewayLogId: generated.cfLogId,
-      });
-      return { asset_id: assetId, publicUrl, thumbnailUrl };
-    }
-
     case "list_location_qa":
     case "create_location_qa":
     case "delete_location_qa": {
@@ -1167,7 +1123,7 @@ Capabilities (always use tools — never say you can't do something the tools su
 - Menus: create, rename, view, rename/delete sections/categories, add brand-new items, reconcile/update item lists, update/delete individual items, publish, delete
 - Locations: list, create, update, delete (title syncs slug, plus manual address, hours, maps URL, Place ID, rating, review count, description, email, website, socials, price level, hero media), lookup from Google Maps URL
 - Reviews: list location reviews and reply as owner
-- Media: list per location, delete, generate AI images with the configured OpenAI image model (auto-saved, returns asset_id)
+- Media: list per location, delete, use attached/uploaded media, and import menu content from media. KrabiClaw does not generate images through ChowBot.
 - Q&A: list, add, delete per location
 - Experiences: list, create (title, tagline, rich body, price, duration, capacity, time slots, image, SEO), update, delete, view/confirm/cancel guest bookings
 - Contact & reservation submissions: read

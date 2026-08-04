@@ -346,7 +346,7 @@ async function runSearch() {
   const requestId = ++requestSequence
   loading.value = true
   try {
-    const response = await $fetch<SearchResponse>('/api/public/search', {
+    const response = await $fetch('/api/public/search', {
       query: {
         q: normalized,
         surface: props.surface,
@@ -354,7 +354,7 @@ async function runSearch() {
         siteSlug: typeof route.params.siteSlug === 'string' ? route.params.siteSlug : '',
         locationSlug: typeof route.params.locationSlug === 'string' ? route.params.locationSlug : '',
       },
-    })
+    }) as SearchResponse
     if (requestId !== requestSequence) return
     results.value = response.results ?? []
     selectedIndex.value = 0

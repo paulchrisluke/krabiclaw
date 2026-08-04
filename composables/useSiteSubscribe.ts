@@ -15,10 +15,10 @@ const PLAN_LABELS: Record<string, string> = {
 const _successHandlers = new Map<string, () => void>()
 
 async function _redirectToCheckout(siteId: string, plan: string) {
-  const res = await $fetch<{ checkoutUrl?: string }>('/api/billing/checkout', {
+  const res = await $fetch('/api/billing/checkout', {
     method: 'POST',
     body: { siteId, plan },
-  })
+  }) as { checkoutUrl?: string }
   if (!res.checkoutUrl) {
     throw new Error('Missing checkout URL from billing API')
   }
@@ -42,7 +42,7 @@ export const useSiteSubscribe = () => {
   // otherwise falls back to Stripe Checkout.
   async function offerSubscribe(siteId: string, plan: string, onSuccess?: () => void) {
     try {
-      const res = await $fetch<{ card: SiteSubscribeSavedCard | null }>('/api/billing/payment-method')
+      const res = await $fetch('/api/billing/payment-method') as { card: SiteSubscribeSavedCard | null }
       if (res.card) {
         const txId = crypto.randomUUID()
         savedCard.value = res.card

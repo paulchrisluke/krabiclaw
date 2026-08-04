@@ -1,3 +1,4 @@
+import type { Ref } from 'vue'
 import { BLOG_CATEGORY_SLUGS, blogCategoryToSlug } from '~/utils/blog-categories'
 import { groupItemsByNavSection } from '~/utils/platform-content-nav'
 
@@ -30,7 +31,11 @@ interface BlogNavCategory {
 }
 
 export function useBlogNav() {
-  const { data, pending, error } = useFetch<{ posts: PublicBlogPost[] }>('/api/public/blog')
+  const { data, pending, error } = useFetch('/api/public/blog') as {
+    data: Ref<{ posts: PublicBlogPost[] } | null>
+    pending: Ref<boolean>
+    error: Ref<Error | null>
+  }
 
   const posts = computed(() => data.value?.posts || [])
 

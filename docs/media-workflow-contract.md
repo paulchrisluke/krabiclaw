@@ -17,7 +17,6 @@ The canonical route family is under:
 
 Related workflow helpers:
 
-- `POST /api/ai/[siteId]/generate-image`
 - `POST /api/ai/[siteId]/menu/extract`
 - ChowBot `import_menu_from_pending_media`
 - ChowBot `resolve_pending_media`
@@ -37,7 +36,7 @@ Related workflow helpers:
    Optional follow-up edits such as alt text, filename, location assignment, or status changes happen through `PATCH`.
 
 5. downstream workflows
-   Confirmed assets may then be used by higher-level flows like menu OCR/import, hero image selection, or AI-assisted generation.
+   Confirmed assets may then be used by higher-level flows like menu OCR/import, hero image selection, or ChatGPT-native generated-image save flows.
 
 6. delete
    Deletion is a workflow action on the asset record and storage object, not a table-row-only concern.
@@ -47,8 +46,8 @@ Related workflow helpers:
 - Do not invent a separate `create media` MCP tool that bypasses the canonical Cloudflare upload and media-asset manager paths.
 - Do not treat pending assets as usable by public-site workflows.
 - Menu extraction must only operate on confirmed or explicitly pending-media workflow inputs.
-- AI-generated images still end as normal media assets and must be visible through the canonical media listing surface.
-- AI-generated image briefs should first resolve and review `image.generate` Agent Skill guidance through the relevant MCP surface. The review is advisory; the file transport and media persistence rules below remain enforced by tool contracts.
+- KrabiClaw does not generate images through dashboard or ChowBot AI Gateway routes. ChatGPT-native generated images may still be saved into KrabiClaw as normal media assets and must be visible through the canonical media listing surface.
+- ChatGPT-native image briefs should first resolve and review `image.generate` Agent Skill guidance through the relevant MCP surface. The review is advisory; the file transport and media persistence rules below remain enforced by tool contracts.
 - Canonical MCP generated-image contracts are split by source:
   - ChatGPT native image-generation output: `save_generated_image_file({ site_id, attachment_id, prompt })`
   - Raw base64 from a non-native image source: `save_generated_image({ site_id, image_data_base64, prompt })`
@@ -57,7 +56,7 @@ Related workflow helpers:
 - ChatGPT MCP uploads use native file attachments. There are no upload widget tools in the connector; no tool whose name starts with `open_` and contains `upload` exists.
 - Do not bypass the ChatGPT file-argument rewrite by fabricating `download_url` objects or inventing attachment transport.
 - Prefer business-level image workflows over generic file handoff when the user intent is domain-specific:
-  - Generate into KrabiClaw first, persist to Cloudflare Images immediately, then assign by `assetId`
+  - Save ChatGPT-native generated output into KrabiClaw first, persist to Cloudflare Images immediately, then assign by `assetId`
   - Assignment should happen through the canonical `set_media` tool with a discriminated target and complete `asset_ids` state.
   - `set_media` uses explicit targets for `/about` and `/` story images because each page has its own `story.image` content field — they commonly point at the same asset, but the page is never inferred
 - MCP tools should be coarse-grained and business-level:

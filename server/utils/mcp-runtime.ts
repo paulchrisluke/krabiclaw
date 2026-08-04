@@ -112,7 +112,8 @@ export async function resolveMissingMcpCredential(
 
 export interface McpResourceCatalog {
   list: unknown[]
-  read: (_uri: string, _event: H3Event) => Promise<unknown> | unknown
+  templates?: unknown[]
+  read: (_uri: string, _event: H3Event, _user: Awaited<ReturnType<typeof requireMcpUser>>) => Promise<unknown> | unknown
 }
 
 export interface McpPromptCatalog {
@@ -182,22 +183,23 @@ export async function dispatchStandardMcpMethod(
 
   if (request.method === 'resources/templates/list') {
     const user = await requireMcpUser(event, runtime.authOptions)
+    const resourceTemplates = catalog.resources.templates ?? []
     runtime.logEvent(event, {
       userId: user.userId,
       requestId: request.id,
       method: request.method,
-      result: { count: 0 },
+      result: { count: resourceTemplates.length },
       status: 'success',
       httpStatus: 200,
       oauthClientId: user.oauthClientId ?? null,
     })
-    return mcpSuccess(request.id, { resourceTemplates: [] })
+    return mcpSuccess(request.id, { resourceTemplates })
   }
 
   if (request.method === 'resources/read') {
     const user = await requireMcpUser(event, runtime.authOptions)
     const uri = typeof request.params?.uri === 'string' ? request.params.uri : ''
-    const content = await catalog.resources.read(uri, event)
+    const content = await catalog.resources.read(uri, event, user)
     runtime.logEvent(event, {
       userId: user.userId,
       requestId: request.id,

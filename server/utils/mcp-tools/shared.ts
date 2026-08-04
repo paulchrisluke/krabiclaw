@@ -1140,8 +1140,9 @@ export const READ_ONLY_TOOL_NAMES = [
   'list_work_requests',
   'get_site_domains',
   'get_site_analytics',
+  'get_blog_writing_guidance',
+  'get_image_generation_guidance',
   'resolve_agent_guidance',
-  'review_agent_guidance_candidate',
 ] as const
 
 export const BOUNDED_WRITE_TOOL_NAMES = [
@@ -1149,6 +1150,9 @@ export const BOUNDED_WRITE_TOOL_NAMES = [
   'analyze_document',
   'save_generated_image',
   'save_generated_image_file',
+  'review_blog_draft_against_guidance',
+  'review_image_generation_brief',
+  'review_agent_guidance_candidate',
   'upload_user_photo',
   'upload_user_media',
   'set_media',

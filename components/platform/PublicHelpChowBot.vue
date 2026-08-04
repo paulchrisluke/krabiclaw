@@ -154,20 +154,20 @@ async function submitMessage(message: string) {
       .slice(0, -2)
       .map(item => ({ role: item.role, content: item.content }))
 
-    const response = await $fetch<{
-      reply: string
-      citations?: HelpCitation[]
-      suggestedLinks?: HelpCitation[]
-      followUpPrompts?: string[]
-      escalation?: HelpEscalation | null
-    }>('/api/public/help/agent', {
+    const response = await $fetch('/api/public/help/agent', {
       method: 'POST',
       body: {
         message: normalizedMessage,
         history,
       },
       signal: controller.signal,
-    })
+    }) as {
+      reply: string
+      citations?: HelpCitation[]
+      suggestedLinks?: HelpCitation[]
+      followUpPrompts?: string[]
+      escalation?: HelpEscalation | null
+    }
 
     messages.value = [
       ...messages.value.slice(0, -1),

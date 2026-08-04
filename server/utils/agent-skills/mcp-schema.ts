@@ -1,7 +1,7 @@
-import { AGENT_GUIDANCE_CANDIDATE_TYPES, AGENT_SKILL_TASKS } from './scoped'
+import { AGENT_GUIDANCE_CANDIDATE_TYPES, AGENT_SKILL_SCOPES, AGENT_SKILL_TASKS } from './types'
 
 const NULLABLE_STRING = { type: ['string', 'null'] }
-const SCOPE_TYPE_SCHEMA = { type: 'string', enum: ['platform', 'organization', 'site'] }
+const SCOPE_TYPE_SCHEMA = { type: 'string', enum: [...AGENT_SKILL_SCOPES] }
 
 export const AGENT_SKILL_TASK_SCHEMA = {
   type: 'string',
@@ -30,7 +30,6 @@ export const AGENT_GUIDANCE_SKILL_SCHEMA = {
     priority: { type: 'number' },
     status: { type: 'string', enum: ['active'] },
     content_hash: { type: 'string' },
-    source: { type: 'string', enum: ['code_baseline'] },
     instructions_markdown: { type: 'string' },
   },
   required: [
@@ -47,7 +46,6 @@ export const AGENT_GUIDANCE_SKILL_SCHEMA = {
     'priority',
     'status',
     'content_hash',
-    'source',
     'instructions_markdown',
   ],
   additionalProperties: false,
@@ -68,15 +66,14 @@ export const RESOLVED_AGENT_GUIDANCE_SCHEMA = {
   type: 'object',
   properties: {
     task: AGENT_SKILL_TASK_SCHEMA,
-    surface: { type: 'string', enum: ['tenant_mcp', 'platform_mcp'] },
+    audience: { type: 'string', enum: ['tenant', 'platform'] },
     requested_scope: AGENT_GUIDANCE_SCOPE_SCHEMA,
-    scope_order: { type: 'array', items: SCOPE_TYPE_SCHEMA },
-    precedence: { type: 'string' },
+    precedence: { type: 'array', items: SCOPE_TYPE_SCHEMA },
+    conflict_rule: { type: 'string' },
     skills: { type: 'array', items: AGENT_GUIDANCE_SKILL_SCHEMA },
     resolution_fingerprint: { type: 'string' },
-    notes: { type: 'array', items: { type: 'string' } },
   },
-  required: ['task', 'surface', 'requested_scope', 'scope_order', 'precedence', 'skills', 'resolution_fingerprint', 'notes'],
+  required: ['task', 'audience', 'requested_scope', 'precedence', 'conflict_rule', 'skills', 'resolution_fingerprint'],
   additionalProperties: false,
 }
 
@@ -86,28 +83,30 @@ export const AGENT_GUIDANCE_REVIEW_SCHEMA = {
     id: { type: 'string' },
     task: AGENT_SKILL_TASK_SCHEMA,
     candidate_type: AGENT_GUIDANCE_CANDIDATE_TYPE_SCHEMA,
-    surface: { type: 'string', enum: ['tenant_mcp', 'platform_mcp'] },
-    status: { type: 'string', enum: ['completed'] },
-    recommendation: { type: 'string', enum: ['pass', 'revise'] },
+    surface: { type: 'string', enum: ['tenant_mcp', 'platform_mcp', 'dashboard_ai', 'internal_api'] },
+    organization_id: NULLABLE_STRING,
+    site_id: NULLABLE_STRING,
+    recommendation: { type: 'string', enum: ['ready', 'revise'] },
+    summary: { type: 'string' },
     resolution_fingerprint: { type: 'string' },
     candidate_fingerprint: { type: 'string' },
-    finding_count: { type: 'number' },
     findings: {
       type: 'array',
       items: {
         type: 'object',
         properties: {
           severity: { type: 'string', enum: ['low', 'medium', 'high'] },
-          skill_version_id: { type: 'string' },
+          skill_version_id: NULLABLE_STRING,
           message: { type: 'string' },
         },
         required: ['severity', 'skill_version_id', 'message'],
         additionalProperties: false,
       },
     },
-    persistence: { type: 'string', enum: ['not_persisted'] },
+    review_model: { type: 'string' },
+    reviewed_at: { type: 'string' },
   },
-  required: ['id', 'task', 'candidate_type', 'surface', 'status', 'recommendation', 'resolution_fingerprint', 'candidate_fingerprint', 'finding_count', 'findings', 'persistence'],
+  required: ['id', 'task', 'candidate_type', 'surface', 'organization_id', 'site_id', 'recommendation', 'summary', 'resolution_fingerprint', 'candidate_fingerprint', 'findings', 'review_model', 'reviewed_at'],
   additionalProperties: false,
 }
 

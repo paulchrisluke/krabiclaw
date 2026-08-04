@@ -224,6 +224,7 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
         {
           content_blocks: args.content_blocks,
           expected_document_updated_at: requiredString(args, "expected_document_updated_at"),
+          guidance_run_id: requiredString(args, "guidance_run_id"),
         } as never,
         site.siteId,
       )
