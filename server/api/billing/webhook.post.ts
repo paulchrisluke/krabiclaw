@@ -1,7 +1,8 @@
 import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { verifyStripeWebhook, setSiteEntitlementsFromPlan, getPlanFromStripePrice, applySiteSubscription, getStripe } from '../../utils/billing'
-import { completePaidSiteTransfer, deleteSiteCustomDomains } from '../../utils/site-transfer'
+import { completePaidSiteTransfer } from '../../utils/site-transfer'
 import { sendGa4Event } from '../../utils/ga4-measurement-protocol'
+import { shouldApplySubscriptionDeleted } from '../../utils/billing-subscription-events'
 import { execute, queryFirst } from '~/server/db'
 import type Stripe from 'stripe'
 import { getHeader } from 'h3'
@@ -335,6 +336,15 @@ async function handleSubscriptionUpdated(
   const currentPeriodEnd = subscriptionPeriodEndIso(canonicalSubscription)
     ?? existingBilling?.current_period_end
     ?? null
+  const plan = await getPlanFromSubscription(env, canonicalSubscription)
+
+  if (!plan) {
+    console.error('Unrecognized Stripe price; leaving billing state unchanged', {
+      siteId,
+      subscriptionId: canonicalSubscription.id,
+    })
+    return
+  }
 
   await execute(db, `
     UPDATE site_billing SET stripe_subscription_id = ?, status = ?,
@@ -342,14 +352,7 @@ async function handleSubscriptionUpdated(
     WHERE site_id = ?
   `, [canonicalSubscription.id, canonicalSubscription.status, currentPeriodEnd, sub.cancel_at_period_end === true, new Date().toISOString(), siteId])
 
-  const plan = await getPlanFromSubscription(env, canonicalSubscription)
-  if (plan) {
-    await setSiteEntitlementsFromPlan(db, siteId, organizationId, plan)
-  } else {
-    console.warn('Unrecognized Stripe price; falling back to free', { siteId, subscriptionId: canonicalSubscription.id })
-    await setSiteEntitlementsFromPlan(db, siteId, organizationId, 'free')
-    await deleteSiteCustomDomains(env, db, siteId, 'system')
-  }
+  await setSiteEntitlementsFromPlan(db, siteId, organizationId, plan)
 
   const previousPlan = existingBilling?.plan ?? null
   if (plan && previousPlan && plan !== previousPlan) {
@@ -373,7 +376,22 @@ async function handleSubscriptionDeleted(
   if (!resolved) { console.error('Site not found for deleted subscription:', subscription.id); return }
 
   const { siteId, organizationId } = resolved
-  const existingBilling = await queryFirst<{ plan: string | null }>(db, `SELECT plan FROM site_billing WHERE site_id = ? LIMIT 1`, [siteId])
+  const existingBilling = await queryFirst<{
+    plan: string | null
+    stripe_subscription_id: string | null
+  }>(db, `
+    SELECT plan, stripe_subscription_id FROM site_billing WHERE site_id = ? LIMIT 1
+  `, [siteId])
+
+  if (!shouldApplySubscriptionDeleted(existingBilling?.stripe_subscription_id, subscription.id)) {
+    console.warn('Ignoring stale or untracked subscription deletion', {
+      siteId,
+      deletedSubscriptionId: subscription.id,
+      currentSubscriptionId: existingBilling?.stripe_subscription_id ?? null,
+    })
+    return
+  }
+
   await execute(db, `
     UPDATE site_billing SET stripe_subscription_id = NULL, status = 'canceled',
       current_period_end = NULL, cancel_at_period_end = false, updated_at = ?
@@ -381,7 +399,6 @@ async function handleSubscriptionDeleted(
   `, [new Date().toISOString(), siteId])
 
   await setSiteEntitlementsFromPlan(db, siteId, organizationId, 'free')
-  await deleteSiteCustomDomains(env, db, siteId, 'system')
   await sendGa4Event(env, subscription.metadata?.ga_client_id, {
     name: 'subscription_cancelled',
     params: { plan: existingBilling?.plan ?? undefined },

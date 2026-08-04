@@ -1,6 +1,5 @@
-// The canonical public page resource contains route content plus the shared
-// site shell (brand, location summaries, config, locales, and capabilities).
-// Route consumers select their datasets from that one validated response.
+// Route content and persistent site chrome are separate public resources. Route
+// consumers select their datasets from the validated route response.
 //
 // Non-home routes still SSR their complete route payload. The homepage uses a
 // critical shell/hero resource for the first document and loads the remaining
@@ -65,7 +64,7 @@ export const usePublicPageData = async (options: {
 
   const url = computed(() => usePublicPageUrl(siteId, requestedParams.value));
 
-  const shell = useSiteShellState({ load: options.server !== false });
+  const shell = useSiteShellState();
 
   const asyncData =
     isPlatform || (!siteId && !draftId)
@@ -136,8 +135,8 @@ export const usePublicPageData = async (options: {
     })
   }
 
-  // Persistent chrome and route-owned collections come from the same keyed page
-  // response; only the selected route datasets change with navigation.
+  // Persistent chrome comes from the stable shell. Route-owned collections
+  // come from the keyed page response and change with navigation.
   const { locations, config, locales, hasExperiences } = shell;
   const googleBusiness = computed(() => ({
     ...(shell.googleBusiness.value ?? {}),
@@ -181,7 +180,7 @@ export const usePublicPageData = async (options: {
 
   // ── Content ───────────────────────────────────────────────
   const contentMap = computed(() => {
-    const rows = (data.value?.content ?? shell.content.value ?? []) as ContentRow[];
+    const rows = (data.value?.content ?? []) as ContentRow[];
     return rows.reduce<Record<string, ContentRow>>((acc, row) => {
       acc[row.field] = row;
       return acc;
