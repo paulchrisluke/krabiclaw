@@ -72,10 +72,9 @@ async function verifyHtmlAndAssets(url, headers = {}) {
   if (!response.ok) throw new Error(`${url.pathname || '/'} returned HTTP ${response.status}`)
 
   const html = await response.text()
-  const renderMode = response.headers.get('x-public-render-mode')
   const buildId = html.match(NUXT_BUILD_ID_PATTERN)?.[1]
-  if (!buildId && renderMode !== 'static-html') {
-    throw new Error(`${url.pathname || '/'} did not expose a Nuxt build id or the static HTML render contract`)
+  if (!buildId) {
+    throw new Error(`${url.pathname || '/'} did not expose a Nuxt build id`)
   }
 
   if (buildId) {

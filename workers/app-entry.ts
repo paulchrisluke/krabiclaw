@@ -7,7 +7,6 @@ import { publishPendingGuestDeliveryOutbox, type GuestDeliveryQueueMessage } fro
 import { getGuestThreadById } from '../server/domain/guest-threads/repository'
 import { getAdapter } from '../server/domain/guest-threads/adapters/registry'
 import { nextConversationState } from '../server/domain/guest-threads/state-machine'
-import { isPlatformHost } from '../server/utils/tenant-hosts'
 
 interface Env {
   DB: D1Database
@@ -144,55 +143,9 @@ async function processGuestDelivery(env: Env, message: GuestDeliveryQueueMessage
 
 const handler = nitroApp as HandlerWithQueue
 
-function isStaticPlatformHomeRequest(request: Request, env: Env): boolean {
-  const url = new URL(request.url)
-  return request.method === 'GET'
-    && url.pathname === '/'
-    && isPlatformHost(url.host, env)
-    && !request.headers.has('x-preview-tenant')
-}
-
-function removePublicNuxtUiColors(html: string): string {
-  return html.replace(/<style\b[^>]*id="nuxt-ui-colors"[^>]*>[\s\S]*?<\/style>/, '')
-}
-
-async function renderStaticPlatformHome(response: Response): Promise<Response> {
-  const contentType = response.headers.get('content-type') || ''
-  if (!response.ok || !contentType.includes('text/html')) return response
-
-  const html = await response.text()
-  const moduleScript = /<script\b(?=[^>]*\btype="module")(?=[^>]*\bsrc="\/_nuxt\/)[^>]*><\/script>/
-  const nuxtConfigScript = /<script>window\.__NUXT__=[\s\S]*?<\/script>/
-  const nuxtDataScript = /<script type="application\/json" data-nuxt-data="nuxt-app"[^>]*>[\s\S]*?<\/script>/
-
-  if (!moduleScript.test(html) || !nuxtConfigScript.test(html) || !nuxtDataScript.test(html)) {
-    throw new Error('Static platform homepage contract is missing the Nuxt runtime markers')
-  }
-
-  const staticHtml = removePublicNuxtUiColors(html)
-    .replace(moduleScript, '<script defer src="/platform-home-static.js"></script>')
-    .replace(nuxtConfigScript, '')
-    .replace(nuxtDataScript, '')
-    .replace(
-      '</head>',
-      '<script>try{const p=localStorage.getItem("krabiclaw-theme");document.documentElement.classList.toggle("dark",p==="dark"||p!=="light"&&window.matchMedia("(prefers-color-scheme: dark)").matches)}catch(error){console.error("Unable to restore platform theme",error)}</script></head>',
-    )
-
-  const headers = new Headers(response.headers)
-  headers.delete('content-length')
-  headers.set('x-public-render-mode', 'static-html')
-  return new Response(staticHtml, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  })
-}
-
 export default {
-  async fetch(request, env, ctx) {
-    const response = await handler.fetch(request, env, ctx)
-    if (isStaticPlatformHomeRequest(request, env)) return renderStaticPlatformHome(response)
-    return response
+  fetch(request, env, ctx) {
+    return handler.fetch(request, env, ctx)
   },
   scheduled(controller, env, ctx) {
     ctx.waitUntil(publishPendingGuestDeliveryOutbox(createDb(env.DB), env, 50))

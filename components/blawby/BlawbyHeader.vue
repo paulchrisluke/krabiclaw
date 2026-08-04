@@ -47,46 +47,32 @@
             <span>{{ headerCtaLabel }}</span>
           </BlawbyButton>
 
-          <div class="-mr-1 md:hidden">
-            <button
-              class="relative z-10 flex size-8 items-center justify-center text-[var(--blawby-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blawby-primary)]"
-              type="button"
+          <details ref="mobileNavDetails" class="relative -mr-1 md:hidden" @toggle="syncMobileNavState">
+            <summary
+              class="relative z-10 flex size-8 list-none items-center justify-center text-[var(--blawby-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--blawby-primary)] [&::-webkit-details-marker]:hidden"
               aria-label="Toggle navigation"
-              :aria-expanded="mobileOpen"
-              aria-controls="blawby-mobile-nav"
-              @click="toggleMobileNav"
             >
               <svg class="size-4 overflow-visible stroke-current" viewBox="0 0 14 14" fill="none" stroke-width="2" stroke-linecap="round" aria-hidden="true">
                 <path :class="mobileOpen ? 'scale-90 opacity-0' : ''" class="origin-center transition" d="M0 1H14M0 7H14M0 13H14" />
                 <path :class="mobileOpen ? '' : 'scale-90 opacity-0'" class="origin-center transition" d="M2 2L12 12M12 2L2 12" />
               </svg>
-            </button>
-
-            <button
-              v-if="mobileOpen"
-              type="button"
-              class="fixed inset-0 bg-slate-300/50"
-              aria-label="Close navigation"
-              @click="closeMobileNav"
-            />
+            </summary>
 
             <div
               id="blawby-mobile-nav"
-              class="absolute inset-x-0 top-full mt-4 origin-top rounded-2xl bg-white p-4 text-lg normal-case text-[var(--blawby-primary)] shadow-xl ring-1 ring-slate-900/5 transition"
-              :class="mobileOpen ? 'scale-100 opacity-100' : 'pointer-events-none scale-95 opacity-0'"
+              class="absolute right-0 top-full mt-4 w-[min(20rem,calc(100vw-2rem))] origin-top rounded-2xl bg-white p-4 text-lg normal-case text-[var(--blawby-primary)] shadow-xl ring-1 ring-slate-900/5"
             >
               <NuxtLink
                 v-for="item in mobileItems"
                 :key="item.id"
                 :to="item.url"
                 class="block w-full p-2 no-underline"
-                :tabindex="mobileOpen ? undefined : -1"
                 @click="closeMobileNav"
               >
                 {{ item.label }}
               </NuxtLink>
             </div>
-          </div>
+          </details>
         </div>
       </nav>
     </div>
@@ -110,11 +96,25 @@ const logoUrl = computed(() => props.site.logo_url || null)
 const headerCtaLabel = computed(() => typeof props.consultation.metadata.header_cta_label === 'string'
   ? props.consultation.metadata.header_cta_label
   : 'Get Started')
-const { isOpen: mobileOpen, toggle: toggleMobileNav, close: closeMobileNav } = useMobileNavToggle()
+const mobileOpen = ref(false)
+const mobileNavDetails = ref<HTMLDetailsElement | null>(null)
 const headerItems = computed(() => {
   return props.navigation.filter(item => item.area === 'header')
 })
 const mobileItems = headerItems
+
+function syncMobileNavState(event: Event) {
+  mobileOpen.value = (event.currentTarget as HTMLDetailsElement).open
+}
+
+function closeMobileNav() {
+  mobileOpen.value = false
+  if (mobileNavDetails.value) mobileNavDetails.value.open = false
+}
+
+onMounted(() => {
+  mobileOpen.value = mobileNavDetails.value?.open ?? false
+})
 
 function trackConsultation() {
   trackConsultationClick('header', route.path, props.consultation.schedule_path)
