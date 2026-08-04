@@ -217,8 +217,7 @@ async function deferPublicHydration(response: Response): Promise<Response> {
   headers.delete('content-length')
   headers.set('x-public-hydration', 'interaction')
   return new Response(removePublicNuxtUiColors(html)
-    .replace(moduleScript, hydrationLoader)
-    .replace(nuxtDataScript, ''), {
+    .replace(moduleScript, hydrationLoader), {
     status: response.status,
     statusText: response.statusText,
     headers,
