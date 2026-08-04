@@ -132,12 +132,11 @@ then replays that original action after the module loads. A failed module load
 is logged as an actionable hydration error; it is not replaced by a fallback
 path.
 
-Blawby media URLs on real tenant hosts are rewritten from the separate
-`media.krabiclaw.com` origin to the same-origin `/__public-media/sites/...`
-Worker path. The R2 middleware is GET-only and fast-fails missing storage,
-missing objects, and storage errors. Platform-hosted local previews retain the
-direct media URL because the local R2 fixture is intentionally empty; this is a
-preview measurement limitation, not a production fallback.
+Blawby media keeps its canonical `media.krabiclaw.com` URL. The Worker media
+middleware serves only the explicit same-origin `/__media/...` upload path;
+public tenant media is not rewritten into an environment-specific R2 bucket,
+because preview and staging fixtures can legitimately reference the canonical
+media origin.
 
 The final local build emitted these home stylesheet sizes (raw / gzip):
 Platform `31,300 / 6,970` bytes, Saya `59,290 / 10,890` bytes, and Blawby
