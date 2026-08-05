@@ -190,7 +190,7 @@ if (import.meta.client) {
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)')
   const onSystemThemeChange = () => sayaTheme.sync()
 
-  sayaTheme.restore()
+  onMounted(() => sayaTheme.restore())
   prefersDark.addEventListener('change', onSystemThemeChange)
   window.toggleSayaDark = () => {
     const isDark = !document.documentElement.classList.contains('dark')
