@@ -106,7 +106,24 @@ const LEGACY_BLOCK_TYPE_MAP: Record<string, TenantPageBlockType> = {
   donation_choices: 'donation_choices',
   donation_support: 'callout',
   legal_meta: 'callout',
+  heading: 'heading',
+  markdown: 'markdown',
+  image: 'image',
+  gallery: 'gallery',
+  faq: 'faq',
+  divider: 'divider',
+  cta: 'cta',
+  callout: 'callout',
+  hero: 'hero',
+  button_group: 'button_group',
+  feature_grid: 'feature_grid',
+  testimonial_grid: 'testimonial_grid',
+  contact_cta: 'contact_cta',
+  booking_cta: 'booking_cta',
+  offering_grid: 'offering_grid',
+  location_grid: 'location_grid',
 }
+const LEGACY_NON_CONTENT_COMPONENT_TYPES = new Set(['latest_articles', 'article_filters'])
 
 function asRecord(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(label + ' must be an object.')
@@ -249,10 +266,11 @@ export function migrateLegacyComponents(value: unknown): TenantPageBlock[] {
   return value.map((component, index) => {
     const record = asRecord(component, 'legacy components[' + index + ']')
     const type = asString(record.type, 'legacy components[' + index + '].type', true)!
+    if (LEGACY_NON_CONTENT_COMPONENT_TYPES.has(type)) return null
     const data = { ...record }
     delete data.type
     return migrateLegacyComponent(type, data)
-  }).map((block, index) => ({ ...block, position: index }))
+  }).filter((block): block is TenantPageBlock => block !== null).map((block, index) => ({ ...block, position: index }))
 }
 
 export function blockDefinition(type: TenantPageBlockType): TenantPageBlockDefinition {

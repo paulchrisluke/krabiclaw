@@ -212,6 +212,31 @@ JOIN tenant_pages p
 WHERE sct.location_id IS NULL
 GROUP BY p.id, sct.locale;
 
+-- These are the complete legacy component types that can occur in tenant page
+-- JSON. latest_articles and article_filters are route-owned behavior markers,
+-- not editable page content, so they are intentionally not copied to blocks.
+-- Reject any other value before the legacy columns are removed instead of
+-- silently converting or dropping unknown content.
+CREATE TEMP TABLE `__tenant_page_legacy_component_types` (
+  `type` text NOT NULL,
+  CONSTRAINT "tenant_page_legacy_component_type_check" CHECK (`type` IN (
+    'home_hero', 'page_hero', 'schedule_hero', 'consultation_cta',
+    'contact_cards', 'services_intro', 'video_feature', 'reviews', 'qa',
+    'disclaimer', 'schedule_guidance', 'schedule_cta', 'schedule_qa',
+    'team', 'impact', 'pricing_plans', 'pricing_calculator',
+    'donation_choices', 'donation_support', 'legal_meta',
+    'latest_articles', 'article_filters',
+    'heading', 'markdown', 'image', 'gallery', 'faq', 'divider', 'cta',
+    'callout', 'hero', 'button_group', 'feature_grid', 'testimonial_grid',
+    'contact_cta', 'booking_cta', 'offering_grid', 'location_grid'
+  ))
+);
+INSERT INTO `__tenant_page_legacy_component_types` (`type`)
+SELECT DISTINCT json_extract(json_each.value, '$.type')
+FROM tenant_pages p
+JOIN json_each(CASE WHEN p.components_json IS NULL THEN '[]' ELSE p.components_json END);
+DROP TABLE `__tenant_page_legacy_component_types`;
+
 INSERT INTO content_documents
   (id, owner_type, owner_id, draft_revision_id, published_revision_id, created_at, updated_at)
 SELECT
@@ -251,7 +276,23 @@ SELECT
     WHEN 'donation_choices' THEN 'donation_choices'
     WHEN 'donation_support' THEN 'callout'
     WHEN 'legal_meta' THEN 'callout'
-    ELSE NULL
+    WHEN 'heading' THEN 'heading'
+    WHEN 'markdown' THEN 'markdown'
+    WHEN 'image' THEN 'image'
+    WHEN 'gallery' THEN 'gallery'
+    WHEN 'faq' THEN 'faq'
+    WHEN 'divider' THEN 'divider'
+    WHEN 'cta' THEN 'cta'
+    WHEN 'callout' THEN 'callout'
+    WHEN 'hero' THEN 'hero'
+    WHEN 'button_group' THEN 'button_group'
+    WHEN 'feature_grid' THEN 'feature_grid'
+    WHEN 'testimonial_grid' THEN 'testimonial_grid'
+    WHEN 'contact_cta' THEN 'contact_cta'
+    WHEN 'booking_cta' THEN 'booking_cta'
+    WHEN 'offering_grid' THEN 'offering_grid'
+    WHEN 'location_grid' THEN 'location_grid'
+    ELSE '__invalid_tenant_page_component_type__'
   END,
   CAST(json_each.key AS INTEGER),
   NULL,
@@ -262,7 +303,8 @@ FROM tenant_page_variants v
 JOIN tenant_pages p ON p.id = v.page_id
 JOIN content_documents d ON d.owner_id = v.id AND d.owner_type = 'tenant_page'
 JOIN json_each(CASE WHEN p.components_json IS NULL THEN '[]' ELSE p.components_json END)
-WHERE v.locale = COALESCE((SELECT locale FROM site_locales WHERE site_id = v.site_id AND is_source = 1 LIMIT 1), (SELECT source_locale FROM sites WHERE id = v.site_id));
+WHERE v.locale = COALESCE((SELECT locale FROM site_locales WHERE site_id = v.site_id AND is_source = 1 LIMIT 1), (SELECT source_locale FROM sites WHERE id = v.site_id))
+  AND json_extract(json_each.value, '$.type') NOT IN ('latest_articles', 'article_filters');
 
 INSERT INTO content_blocks
   (id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at)
