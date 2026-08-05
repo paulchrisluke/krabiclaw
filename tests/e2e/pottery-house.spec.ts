@@ -34,10 +34,10 @@ test.describe('pottery house public site', () => {
     expect(response?.status()).toBeLessThan(400)
     await expect(page.locator('[data-public-critical-shell]')).toBeVisible()
     await expect(page.locator('body')).toContainText('Clay, calm, and a place to return to.')
-    await expectHealthyPage(page, errors)
     await expect
       .poll(() => page.evaluate(() => document.documentElement.classList.contains('dark')))
       .toBe(true)
+    await expectHealthyPage(page, errors)
   })
 
   for (const route of routes) {

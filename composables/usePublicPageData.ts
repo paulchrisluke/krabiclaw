@@ -105,6 +105,9 @@ export const usePublicPageData = async (options: {
             // execute() again while already enabled would just re-trigger the
             // same request, so the watcher only acts on that specific edge.
             immediate: enabled.value && !deferClientFetch,
+            // Disable automatic key watching — manual watchers below gate execution
+            // on enabled.value to prevent key changes from triggering when disabled.
+            watch: [],
           },
         );
   if (import.meta.client && 'execute' in asyncData) {
