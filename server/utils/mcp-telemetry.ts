@@ -1,6 +1,6 @@
 import { execute, type DbClient } from "~/server/db";
 import { anonymizeId } from "~/server/utils/platform-telemetry";
-import { recordUsageEventDetached } from "~/server/utils/usage-metering";
+import { recordUsageEvent } from "~/server/utils/usage-metering";
 
 // Field names that must never be logged verbatim, regardless of tool.
 const SENSITIVE_KEY_PATTERN =
@@ -217,7 +217,7 @@ export async function logMcpToolCallEvent(
     );
 
     if (input.method === "tools/call" && input.organizationId) {
-      recordUsageEventDetached(db, {
+      await recordUsageEvent(db, {
         organizationId: input.organizationId,
         siteId: input.siteId,
         resource: "mcp_operation",

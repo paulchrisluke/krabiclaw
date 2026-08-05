@@ -1,7 +1,7 @@
 import { triggerAutoTopupIfNeeded } from '~/server/utils/auto-topup'
 import type { BillingEnv } from '~/server/utils/billing'
-import { execute, queryFirst, type DbClient } from '~/server/db'
-import { recordUsageEventDetached } from '~/server/utils/usage-metering'
+import { execute, executeBatch, queryFirst, type DbClient } from '~/server/db'
+import { recordUsageEvent } from '~/server/utils/usage-metering'
 
 // Credit system: 1 credit = 1,000 tokens (input + output combined).
 // Free orgs get FREE_SIGNUP_CREDITS on first check. Paid orgs get higher limits.
@@ -29,6 +29,23 @@ export const ACTION_CREDIT_COSTS = {
 } as const
 
 export type FlatCreditAction = keyof typeof ACTION_CREDIT_COSTS
+
+async function rollbackCreditCharge(db: DbClient, organizationId: string, logId: string, credits: number): Promise<void> {
+  await executeBatch(db, [
+    {
+      query: `
+        UPDATE ai_credits
+        SET balance = balance + ?, lifetime_used = lifetime_used - ?, updated_at = ?
+        WHERE organization_id = ?
+      `,
+      params: [credits, credits, new Date().toISOString(), organizationId],
+    },
+    {
+      query: `DELETE FROM ai_usage_log WHERE id = ? AND organization_id = ?`,
+      params: [logId, organizationId],
+    },
+  ])
+}
 
 export function usageForFlatCreditAction(action: FlatCreditAction): {
   resource: 'messaging' | 'maps_api'
@@ -155,27 +172,34 @@ export async function chargeCredits(
   )
 
   if (!insertResult || Number(insertResult.meta.changes ?? 0) === 0) {
+    await rollbackCreditCharge(db, organizationId, logId, creditsCharged)
     throw new Error('AI usage log insert failed.')
   }
 
-  recordUsageEventDetached(db, {
-    organizationId,
-    siteId: opts.siteId,
-    resource: 'ai_inference',
-    source: opts.source ?? (opts.action === 'chowbot' ? 'chowbot' : 'server'),
-    provider: 'ai',
-    channel: opts.action,
-    quantity: creditsCharged,
-    unit: 'credit',
-    metadata: {
-      action: opts.action,
-      model: opts.model,
-      inputTokens: opts.inputTokens,
-      outputTokens: opts.outputTokens,
-      cfGatewayLogId: opts.cfGatewayLogId ?? null,
-    },
-    idempotencyKey: `ai-usage:${logId}`,
-  })
+  try {
+    const recorded = await recordUsageEvent(db, {
+      organizationId,
+      siteId: opts.siteId,
+      resource: 'ai_inference',
+      source: opts.source ?? (opts.action === 'chowbot' ? 'chowbot' : 'server'),
+      provider: 'ai',
+      channel: opts.action,
+      quantity: creditsCharged,
+      unit: 'credit',
+      metadata: {
+        action: opts.action,
+        model: opts.model,
+        inputTokens: opts.inputTokens,
+        outputTokens: opts.outputTokens,
+        cfGatewayLogId: opts.cfGatewayLogId ?? null,
+      },
+      idempotencyKey: `ai-usage:${logId}`,
+    })
+    if (!recorded) throw new Error('AI usage event was not recorded.')
+  } catch (error) {
+    await rollbackCreditCharge(db, organizationId, logId, creditsCharged)
+    throw error
+  }
 
   const updated = await queryFirst<{ balance: number }>(db, 'SELECT balance FROM ai_credits WHERE organization_id = ? LIMIT 1', [organizationId])
 
@@ -261,18 +285,24 @@ export async function chargeFlatCredits(
     }
 
     const usage = usageForFlatCreditAction(opts.action)
-    recordUsageEventDetached(db, {
-      organizationId,
-      siteId: opts.siteId,
-      ...usage,
-      quantity: 1,
-      metadata: {
-        action: opts.action,
-        creditsCharged: credits,
-        cfGatewayLogId: opts.cfGatewayLogId ?? null,
-      },
-      idempotencyKey: `flat-usage:${logId}`,
-    })
+    try {
+      const recorded = await recordUsageEvent(db, {
+        organizationId,
+        siteId: opts.siteId,
+        ...usage,
+        quantity: 1,
+        metadata: {
+          action: opts.action,
+          creditsCharged: credits,
+          cfGatewayLogId: opts.cfGatewayLogId ?? null,
+        },
+        idempotencyKey: `flat-usage:${logId}`,
+      })
+      if (!recorded) throw new Error('Flat-credit usage event was not recorded.')
+    } catch (error) {
+      await rollbackCreditCharge(db, organizationId, logId, credits)
+      throw error
+    }
 
     const updated = await queryFirst<{ balance: number }>(db, 'SELECT balance FROM ai_credits WHERE organization_id = ? LIMIT 1', [organizationId])
     const newBalance = updated?.balance ?? 0

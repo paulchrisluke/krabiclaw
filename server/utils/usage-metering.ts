@@ -76,23 +76,6 @@ export async function recordUsageEvent(db: DbClient, input: UsageEventInput): Pr
   return Number(result?.meta.changes ?? 0) > 0
 }
 
-/**
- * Used by existing telemetry paths where accounting must not change the
- * provider response contract. Failures remain visible in logs and never turn
- * into a false successful accounting result.
- */
-export function recordUsageEventDetached(db: DbClient, input: UsageEventInput): void {
-  void recordUsageEvent(db, input).catch((error) => {
-    console.error('usage_event_record_failed', {
-      organizationId: input.organizationId,
-      resource: input.resource,
-      source: input.source,
-      idempotencyKey: input.idempotencyKey,
-      error: error instanceof Error ? error.message : String(error),
-    })
-  })
-}
-
 /** Adds an auditable quota grant without overwriting earlier grants. */
 export async function grantQuota(db: DbClient, input: QuotaGrantInput): Promise<boolean> {
   assertQuantity(input.quantity)
@@ -139,6 +122,13 @@ export async function resetOrganizationQuota(
   },
 ): Promise<void> {
   if (!input.grants.length) throw new Error('At least one quota grant is required for a reset.')
+  const resources = new Set<string>()
+  for (const grant of input.grants) {
+    if (resources.has(grant.resource)) {
+      throw new Error(`Quota reset contains duplicate resource: ${grant.resource}`)
+    }
+    resources.add(grant.resource)
+  }
   const createdAt = new Date().toISOString()
   const statements = input.grants.map((grant) => {
     assertQuantity(grant.quantity)

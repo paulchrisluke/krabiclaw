@@ -2,7 +2,7 @@
 // subdomain uniqueness, seeding, and Cloudflare subdomain registration.
 import { seedNewSite } from '~/server/utils/site-template'
 import { createSystemSubdomain } from '~/server/utils/domains'
-import { setSiteEntitlementsFromPlan } from '~/server/utils/billing'
+import { getOrganizationBillingStatus, setSiteEntitlementsFromPlan, type BillingEnv } from '~/server/utils/billing'
 import { execute, executeBatch, queryAll, queryFirst } from '~/server/db'
 import { ALL_VERTICALS, type SiteVertical } from '~/utils/vertical-copy'
 import { resolvePublicTemplate } from '~/utils/template-registry'
@@ -205,12 +205,8 @@ async function performSeeding(
 
     // New sites start with the organization's current plan projection. The
     // organization subscription remains the sole recurring Stripe subscription.
-    const organizationPlan = await queryFirst<{ plan: string }>(db, `
-      SELECT plan FROM subscription
-      WHERE referenceId = ? AND status IN ('active', 'trialing')
-      ORDER BY updatedAt DESC LIMIT 1
-    `, [organizationId])
-    await setSiteEntitlementsFromPlan(db, siteId, organizationId, organizationPlan?.plan ?? 'free')
+    const organizationBilling = await getOrganizationBillingStatus(env as BillingEnv, db, organizationId)
+    await setSiteEntitlementsFromPlan(db, siteId, organizationId, organizationBilling.plan)
 
     await execute(db, `UPDATE sites SET onboarding_status = 'active', updated_at = ? WHERE id = ?`, [now, siteId])
 

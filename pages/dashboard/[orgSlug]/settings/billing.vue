@@ -232,8 +232,8 @@
           color="primary"
           variant="soft"
           icon="i-lucide-info"
-          :title="`Changing the plan for ${selectedSite.brandName ?? selectedSite.subdomain}`"
-          description="Pick a plan below to apply it to this site only — other sites in your organization keep their own plan."
+          title="Changing your organization plan"
+          description="One subscription covers every site in this organization. The selected site is included as billing context, and site entitlements are derived from the organization plan."
         />
 
         <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -428,14 +428,23 @@ const upgradeToPlan = async (plan: string) => {
     if (typeof organizationId !== 'string' || !organizationId) {
       throw new Error('Organization ID not found')
     }
+    const currentUrl = new URL(window.location.href)
+    for (const key of ['success', 'canceled', 'plan']) currentUrl.searchParams.delete(key)
+    const successUrl = new URL(currentUrl)
+    successUrl.searchParams.set('success', 'true')
+    const cancelUrl = new URL(currentUrl)
+    cancelUrl.searchParams.set('canceled', 'true')
     const response = await authClient.subscription.upgrade({
       plan,
       annual: annual.value,
       referenceId: organizationId,
+      ...(typeof billing.value?.stripeSubscriptionId === 'string'
+        ? { subscriptionId: billing.value.stripeSubscriptionId }
+        : {}),
       customerType: 'organization',
       metadata: { site_id: selectedSiteId.value, ga_client_id: getGaClientId() },
-      successUrl: window.location.href,
-      cancelUrl: window.location.href,
+      successUrl: successUrl.toString(),
+      cancelUrl: cancelUrl.toString(),
       disableRedirect: true,
     })
     if (response.error) throw new Error(response.error.message ?? 'Failed to create checkout session')

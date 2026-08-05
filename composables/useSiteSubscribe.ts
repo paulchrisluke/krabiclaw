@@ -1,27 +1,44 @@
-export interface SiteSubscribeSavedCard {
-  brand: string
-  last4: string
-  exp_month: number
-  exp_year: number
+import { authClient } from '~/lib/auth-client'
+
+function checkoutReturnUrls(): { successUrl: string; cancelUrl: string } {
+  const current = new URL(window.location.href)
+  for (const key of ['success', 'canceled', 'plan']) current.searchParams.delete(key)
+
+  const success = new URL(current)
+  success.searchParams.set('success', 'true')
+  const cancel = new URL(current)
+  cancel.searchParams.set('canceled', 'true')
+  return { successUrl: success.toString(), cancelUrl: cancel.toString() }
 }
 
-const PLAN_LABELS: Record<string, string> = {
-  growth: 'Growth — $49/mo',
-  managed: 'Managed — $149/mo',
-  seo_accelerator: 'SEO Accelerator — $349/mo',
+async function organizationSubscriptionId(
+  dashboardApi: ReturnType<typeof useDashboardApi>,
+  organizationId: string,
+): Promise<string | undefined> {
+  const response = await dashboardApi<{ billing?: { stripeSubscriptionId?: unknown } }>('/api/billing/status', {
+    query: { organizationId },
+    validate: value => typeof value === 'object' && value !== null,
+  })
+  return typeof response.billing?.stripeSubscriptionId === 'string'
+    ? response.billing.stripeSubscriptionId
+    : undefined
 }
 
-// Per-flow callback — keyed by a unique transaction ID so concurrent callers don't clobber each other
-const _successHandlers = new Map<string, () => void>()
-
-async function _redirectToCheckout(organizationId: string, siteId: string, plan: string) {
+async function redirectToCheckout(
+  organizationId: string,
+  siteId: string,
+  plan: string,
+  subscriptionId?: string,
+) {
+  const { successUrl, cancelUrl } = checkoutReturnUrls()
   const response = await authClient.subscription.upgrade({
     plan,
     referenceId: organizationId,
+    ...(subscriptionId ? { subscriptionId } : {}),
     customerType: 'organization',
     metadata: { site_id: siteId },
-    successUrl: window.location.href,
-    cancelUrl: window.location.href,
+    successUrl,
+    cancelUrl,
     disableRedirect: true,
   })
   if (response.error) throw new Error(response.error.message ?? 'Unable to start subscription checkout')
@@ -31,82 +48,23 @@ async function _redirectToCheckout(organizationId: string, siteId: string, plan:
 }
 
 export const useSiteSubscribe = () => {
-  const isOpen = useState<boolean>('site-subscribe:modal:open', () => false)
-  const pendingSiteId = useState<string | null>('site-subscribe:modal:siteId', () => null)
-  const pendingPlan = useState<string | null>('site-subscribe:modal:plan', () => null)
-  const pendingTxId = useState<string | null>('site-subscribe:modal:txid', () => null)
-  const savedCard = useState<SiteSubscribeSavedCard | null>('site-subscribe:modal:card', () => null)
-  const subscribing = useState<boolean>('site-subscribe:modal:subscribing', () => false)
-
   const toast = useToast()
   const dashboard = useDashboardSite()
+  const dashboardApi = useDashboardApi()
 
-  const planLabel = computed(() => pendingPlan.value ? (PLAN_LABELS[pendingPlan.value] ?? pendingPlan.value) : '')
-
-  // Better Auth Stripe owns the single organization subscription. The site is
-  // metadata only; it never creates a second subscription or uses a saved-card
-  // direct-charge path.
-  async function offerSubscribe(siteId: string, plan: string, onSuccess?: () => void) {
+  // The organization owns one recurring subscription. A site is only
+  // metadata on the upgrade request and receives derived entitlements after
+  // Better Auth confirms the subscription through Stripe.
+  async function offerSubscribe(siteId: string, plan: string) {
     try {
       const organizationId = dashboard.organization.value?.id
       if (!organizationId) throw new Error('Organization context is unavailable')
-      await _redirectToCheckout(organizationId, siteId, plan)
-      onSuccess?.()
+      const subscriptionId = await organizationSubscriptionId(dashboardApi, organizationId)
+      await redirectToCheckout(organizationId, siteId, plan, subscriptionId)
     } catch {
       toast.add({ title: 'Unable to start checkout — please try again', color: 'error' })
     }
   }
 
-  async function confirm() {
-    if (!pendingSiteId.value || !pendingPlan.value) return
-    subscribing.value = true
-    const siteId = pendingSiteId.value
-    const plan = pendingPlan.value
-    const txId = pendingTxId.value
-    try {
-      const organizationId = dashboard.organization.value?.id
-      if (!organizationId) throw new Error('Organization context is unavailable')
-      await _redirectToCheckout(organizationId, siteId, plan)
-      isOpen.value = false
-      pendingSiteId.value = null
-      pendingPlan.value = null
-      pendingTxId.value = null
-      toast.add({ title: `Site subscribed to ${PLAN_LABELS[plan] ?? plan}`, color: 'success' })
-      if (txId) {
-        _successHandlers.get(txId)?.()
-        _successHandlers.delete(txId)
-      }
-    } catch (err) {
-      const data = (err as { data?: { requiresCheckout?: boolean } }).data
-      isOpen.value = false
-      pendingSiteId.value = null
-      pendingPlan.value = null
-      pendingTxId.value = null
-      if (txId) _successHandlers.delete(txId)
-      if (data?.requiresCheckout) {
-        try {
-          const organizationId = dashboard.organization.value?.id
-          if (!organizationId) throw new Error('Organization context is unavailable')
-          await _redirectToCheckout(organizationId, siteId, plan)
-        } catch {
-          toast.add({ title: 'Unable to start checkout — please try again', color: 'error' })
-        }
-      } else {
-        toast.add({ title: 'Subscription failed. Please try again.', color: 'error' })
-      }
-    } finally {
-      subscribing.value = false
-    }
-  }
-
-  function cancel() {
-    const txId = pendingTxId.value
-    isOpen.value = false
-    pendingSiteId.value = null
-    pendingPlan.value = null
-    pendingTxId.value = null
-    if (txId) _successHandlers.delete(txId)
-  }
-
-  return { isOpen, pendingSiteId, pendingPlan, savedCard, subscribing, planLabel, offerSubscribe, confirm, cancel }
+  return { offerSubscribe }
 }

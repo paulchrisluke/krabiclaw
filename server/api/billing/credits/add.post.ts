@@ -75,7 +75,6 @@ export default defineEventHandler(async (event) => {
 
   const checkoutSession = await stripe.checkout.sessions.create({
     customer: billing?.stripe_customer_id || undefined,
-    payment_method_types: ['card'],
     mode: 'payment',
     line_items: [{ price: priceId, quantity: 1 }],
     // Save the card so future purchases are one-click

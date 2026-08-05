@@ -56,6 +56,13 @@ export default defineEventHandler(async (event) => {
       periodEnd: grant.periodEnd ?? null,
     }
   })
+  const resources = new Set<string>()
+  for (const grant of grants) {
+    if (resources.has(grant.resource)) {
+      throw createError({ statusCode: 400, statusMessage: `Duplicate quota resource: ${grant.resource}` })
+    }
+    resources.add(grant.resource)
+  }
 
   const session = await getAuthSession(event, env)
   await resetOrganizationQuota(db, {

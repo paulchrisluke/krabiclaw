@@ -122,26 +122,39 @@ async function uploadProductImage(localPath) {
 }
 
 async function ensureMonthlyPrice(productId, amountCents) {
-  const prices = await stripe.prices.list({
-    product: productId,
-    active: true,
-    type: 'recurring',
-    limit: 100,
-  })
-  const matchingPrices = prices.data.filter(price =>
+  const prices = []
+  let startingAfter
+  while (true) {
+    const page = await stripe.prices.list({
+      product: productId,
+      active: true,
+      type: 'recurring',
+      limit: 100,
+      ...(startingAfter ? { starting_after: startingAfter } : {}),
+    })
+    prices.push(...page.data)
+    if (!page.has_more || page.data.length === 0) break
+    startingAfter = page.data[page.data.length - 1].id
+  }
+  const matchingPrices = prices.filter(price =>
     price.currency === 'usd'
     && price.unit_amount === amountCents
-    && price.recurring?.interval === 'month',
+    && price.recurring?.interval === 'month'
+    && price.recurring?.interval_count === 1,
   )
   const canonicalPrice = matchingPrices[0] ?? await stripe.prices.create({
     product: productId,
     currency: 'usd',
     unit_amount: amountCents,
-    recurring: { interval: 'month' },
+    recurring: { interval: 'month', interval_count: 1 },
   })
 
-  for (const price of prices.data) {
-    if (price.id === canonicalPrice.id || price.recurring?.interval !== 'month') continue
+  for (const price of prices) {
+    if (
+      price.id === canonicalPrice.id
+      || price.recurring?.interval !== 'month'
+      || price.recurring?.interval_count !== 1
+    ) continue
     await stripe.prices.update(price.id, { active: false })
     console.log(`  Deactivated duplicate monthly price: ${price.id}`)
   }
@@ -272,7 +285,7 @@ async function main() {
       'Your own domain (yourbusiness.com)',
       'Edit menus, content & photos through ChatGPT',
       'Bookings & ticketed experiences',
-      'WhatsApp booking & reservation notifications',
+      'Messaging booking & reservation notifications',
       'Auto-sync from Facebook & Instagram',
       'Google Business profile sync',
     ],

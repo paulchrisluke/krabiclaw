@@ -132,8 +132,11 @@ export async function getOrganizationBillingStatus(
     FROM organization_billing WHERE organization_id = ? LIMIT 1
   `, [organizationId])
 
+  const projectedEntitlements = await getOrganizationEntitlements(db, organizationId)
+  const plan = subscription?.plan ?? 'free'
+
   return {
-    plan: subscription?.plan ?? 'free',
+    plan,
     stripeCustomerId: subscription?.stripeCustomerId ?? orgBilling?.stripe_customer_id ?? undefined,
     stripeSubscriptionId: subscription?.stripeSubscriptionId ?? undefined,
     subscriptionStatus: subscription?.status,
@@ -142,7 +145,9 @@ export async function getOrganizationBillingStatus(
     autoTopupEnabled: Boolean(orgBilling?.auto_topup_enabled),
     autoTopupBundle: orgBilling?.auto_topup_bundle ?? 500,
     autoTopupThreshold: orgBilling?.auto_topup_threshold ?? 100,
-    entitlements: await getOrganizationEntitlements(db, organizationId),
+    entitlements: Object.keys(projectedEntitlements).length > 0
+      ? projectedEntitlements
+      : getPlanEntitlements(plan),
   }
 }
 
@@ -177,8 +182,8 @@ export async function hasEntitlement(
   const organizationEntitlement = await queryFirst<EntitlementValueRow>(db, `
     SELECT value FROM organization_entitlements WHERE organization_id = ? AND key = ? LIMIT 1
   `, [organizationId, key])
-  if (organizationEntitlement) return organizationEntitlement.value.toLowerCase() === 'true'
   const site = await queryFirst<{ id: string }>(db, `SELECT id FROM sites WHERE organization_id = ? ORDER BY id LIMIT 1`, [organizationId])
+  if (organizationEntitlement?.value.toLowerCase() === 'true') return true
   if (!site) return false
   return hasSiteEntitlement(db, site.id, key)
 }
@@ -264,11 +269,36 @@ export async function applySiteSubscription(
 
 export async function getPriceIdForPlan(env: BillingEnv, plan: string, interval: 'month' | 'year' = 'month'): Promise<string> {
   const stripe = getStripe(env)
-  const products = await stripe.products.list({ active: true, limit: 100 })
-  const product = products.data.find(p => p.metadata?.plan_id === plan)
+  const products: Stripe.Product[] = []
+  let productsStartingAfter: string | undefined
+  do {
+    const page = await stripe.products.list({
+      active: true,
+      limit: 100,
+      ...(productsStartingAfter ? { starting_after: productsStartingAfter } : {}),
+    })
+    products.push(...page.data)
+    productsStartingAfter = page.has_more ? page.data.at(-1)?.id : undefined
+  } while (productsStartingAfter)
+
+  const product = products.find(p => p.metadata?.plan_id === plan)
   if (!product) throw new Error(`No active Stripe product found for plan ${plan}`)
-  const prices = await stripe.prices.list({ active: true, product: product.id, type: 'recurring', limit: 100 })
-  const price = prices.data.find(p => p.recurring?.interval === interval)
+
+  const prices: Stripe.Price[] = []
+  let pricesStartingAfter: string | undefined
+  do {
+    const page = await stripe.prices.list({
+      active: true,
+      product: product.id,
+      type: 'recurring',
+      limit: 100,
+      ...(pricesStartingAfter ? { starting_after: pricesStartingAfter } : {}),
+    })
+    prices.push(...page.data)
+    pricesStartingAfter = page.has_more ? page.data.at(-1)?.id : undefined
+  } while (pricesStartingAfter)
+
+  const price = prices.find(p => p.recurring?.interval === interval && p.recurring.interval_count === 1)
   if (!price) throw new Error(`No active Stripe ${interval} price found for plan ${plan}`)
   return price.id
 }
@@ -376,6 +406,7 @@ async function getBetterAuthSubscription(db: D1Database, organizationId: string)
            periodEnd, cancelAtPeriodEnd
     FROM subscription
     WHERE referenceId = ?
+      AND status IN ('active', 'trialing', 'past_due', 'unpaid')
     ORDER BY
       CASE status
         WHEN 'active' THEN 0

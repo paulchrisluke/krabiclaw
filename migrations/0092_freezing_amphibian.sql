@@ -118,7 +118,15 @@ WHERE EXISTS (
   WHERE sb.organization_id = organization_billing.organization_id
     AND sb.stripe_subscription_id IS NOT NULL
     AND sb.status IN ('active', 'trialing')
-);--> statement-breakpoint
+  );--> statement-breakpoint
+
+UPDATE site_entitlements
+SET key = 'messaging'
+WHERE key = 'whatsapp_notifications';--> statement-breakpoint
+
+UPDATE organization_entitlements
+SET key = 'messaging'
+WHERE key = 'whatsapp_notifications';--> statement-breakpoint
 
 INSERT INTO subscription
   (id, plan, referenceId, stripeCustomerId, stripeSubscriptionId, status, cancelAtPeriodEnd)
@@ -166,4 +174,12 @@ WHERE NOT EXISTS (
   FROM organization_entitlements oe
   WHERE oe.organization_id = se.organization_id
     AND oe.key = se.key
+)
+AND se.id = (
+  SELECT latest.id
+  FROM site_entitlements latest
+  WHERE latest.organization_id = se.organization_id
+    AND latest.key = se.key
+  ORDER BY latest.updated_at DESC, latest.id DESC
+  LIMIT 1
 );

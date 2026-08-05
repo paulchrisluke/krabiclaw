@@ -90,6 +90,16 @@ export const ai_credits = sqliteTable("ai_credits", {
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
+export const stripe_credit_topups = sqliteTable("stripe_credit_topups", {
+	checkout_session_id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	credits: integer().notNull(),
+	processed_at: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	index("stripe_credit_topups_organization_id_idx").on(table.organization_id),
+]);
+
 export const ai_usage_log = sqliteTable("ai_usage_log", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
@@ -1092,7 +1102,7 @@ export const organization = sqliteTable("organization", {
 	logo: text(),
 	metadata: text(),
 	// Better Auth Stripe plugin organization customer field.
-	stripeCustomerId: text(),
+	stripeCustomerId: text().unique(),
 	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 });
 

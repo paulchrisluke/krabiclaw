@@ -5,22 +5,54 @@ import { getPlanEntitlements, type EntitlementsMap } from '~/server/utils/billin
 import { grantQuota } from '~/server/utils/usage-metering'
 
 export async function getBetterAuthStripePlans(stripe: Stripe): Promise<StripePlan[]> {
-  const products = await stripe.products.list({ active: true, limit: 100 })
+  const products: Stripe.Product[] = []
+  let productsStartingAfter: string | undefined
+  do {
+    const page = await stripe.products.list({
+      active: true,
+      limit: 100,
+      ...(productsStartingAfter ? { starting_after: productsStartingAfter } : {}),
+    })
+    products.push(...page.data)
+    productsStartingAfter = page.has_more ? page.data.at(-1)?.id : undefined
+  } while (productsStartingAfter)
+
+  const prices: Stripe.Price[] = []
+  let pricesStartingAfter: string | undefined
+  do {
+    const page = await stripe.prices.list({
+      active: true,
+      type: 'recurring',
+      limit: 100,
+      ...(pricesStartingAfter ? { starting_after: pricesStartingAfter } : {}),
+    })
+    prices.push(...page.data)
+    pricesStartingAfter = page.has_more ? page.data.at(-1)?.id : undefined
+  } while (pricesStartingAfter)
+
+  const pricesByProduct = new Map<string, Stripe.Price[]>()
+  for (const price of prices) {
+    const productId = typeof price.product === 'string' ? price.product : price.product.id
+    const productPrices = pricesByProduct.get(productId) ?? []
+    productPrices.push(price)
+    pricesByProduct.set(productId, productPrices)
+  }
+
   const plans: StripePlan[] = []
 
-  for (const product of products.data) {
+  for (const product of products) {
     const planId = product.metadata?.plan_id?.trim()
     if (!planId) continue
 
-    const prices = await stripe.prices.list({
-      active: true,
-      product: product.id,
-      type: 'recurring',
-      limit: 100,
-    })
-    const billablePrices = prices.data.filter(price => typeof price.unit_amount === 'number' && price.unit_amount > 0)
-    const monthly = billablePrices.find(price => price.recurring?.interval === 'month')
-    const yearly = billablePrices.find(price => price.recurring?.interval === 'year')
+    const billablePrices = (pricesByProduct.get(product.id) ?? []).filter(
+      price => typeof price.unit_amount === 'number' && price.unit_amount > 0,
+    )
+    const monthly = billablePrices.find(
+      price => price.recurring?.interval === 'month' && price.recurring.interval_count === 1,
+    )
+    const yearly = billablePrices.find(
+      price => price.recurring?.interval === 'year' && price.recurring.interval_count === 1,
+    )
     if (!monthly && !yearly) continue
 
     plans.push({
@@ -159,7 +191,15 @@ export async function projectOrganizationSubscription(
     })
   }
 
-  await executeBatch(db, queries)
+  const BATCH_SIZE = 50
+  for (let offset = 0; offset < queries.length; offset += BATCH_SIZE) {
+    await executeBatch(db, queries.slice(offset, offset + BATCH_SIZE))
+  }
+}
+
+function stripeCustomerId(customer: Stripe.Subscription['customer']): string | null {
+  if (!customer) return null
+  return typeof customer === 'string' ? customer : customer.id
 }
 
 export async function projectBetterAuthSubscription(
@@ -169,7 +209,7 @@ export async function projectBetterAuthSubscription(
 ): Promise<void> {
   await projectOrganizationSubscription(db, {
     organizationId: subscription.referenceId,
-    customerId: subscription.stripeCustomerId ?? stripeSubscription.customer?.toString() ?? null,
+    customerId: subscription.stripeCustomerId ?? stripeCustomerId(stripeSubscription.customer),
     subscriptionId: subscription.stripeSubscriptionId ?? stripeSubscription.id ?? null,
     plan: subscription.plan,
     status: subscription.status,
@@ -185,7 +225,7 @@ export async function projectDeletedBetterAuthSubscription(
 ): Promise<void> {
   await projectOrganizationSubscription(db, {
     organizationId: subscription.referenceId,
-    customerId: subscription.stripeCustomerId ?? stripeSubscription.customer?.toString() ?? null,
+    customerId: subscription.stripeCustomerId ?? stripeCustomerId(stripeSubscription.customer),
     subscriptionId: subscription.stripeSubscriptionId ?? stripeSubscription.id ?? null,
     plan: 'free',
     status: 'canceled',
@@ -205,7 +245,19 @@ export async function recordStripeEvent(
     VALUES (?, ?, ?, 'pending', ?, ?)
   `, [crypto.randomUUID(), event.id, event.type, JSON.stringify(event), new Date().toISOString()])
 
-  if (Number(inserted?.meta.changes ?? 0) === 0) return false
+  if (Number(inserted?.meta.changes ?? 0) === 0) {
+    const existing = await queryFirst<{ status: string | null }>(db, `
+      SELECT status FROM stripe_webhook_events WHERE stripe_event_id = ? LIMIT 1
+    `, [event.id])
+    if (!existing || existing.status === 'processed' || existing.status === 'pending') return false
+
+    const reclaimed = await execute(db, `
+      UPDATE stripe_webhook_events
+      SET status = 'pending', event_type = ?, payload = ?, error = NULL
+      WHERE stripe_event_id = ? AND status = 'failed'
+    `, [event.type, JSON.stringify(event), event.id])
+    if (Number(reclaimed?.meta.changes ?? 0) === 0) return false
+  }
 
   try {
     await work()
@@ -224,10 +276,16 @@ export async function grantInvoiceQuota(db: DbClient, event: Stripe.Event): Prom
   if (event.type !== 'invoice.payment_succeeded') return
   const invoice = event.data.object as Stripe.Invoice & {
     subscription?: string | { id: string } | null
+    parent?: {
+      subscription_details?: {
+        subscription?: string | { id: string } | null
+      } | null
+    } | null
   }
-  const stripeSubscriptionId = typeof invoice.subscription === 'string'
-    ? invoice.subscription
-    : invoice.subscription?.id
+  const subscriptionValue = invoice.subscription ?? invoice.parent?.subscription_details?.subscription
+  const stripeSubscriptionId = typeof subscriptionValue === 'string'
+    ? subscriptionValue
+    : subscriptionValue?.id
   if (!stripeSubscriptionId) return
 
   const subscription = await queryFirst<{

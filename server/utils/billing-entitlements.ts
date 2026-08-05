@@ -20,7 +20,7 @@ export function getPlanEntitlements(plan: string): EntitlementsMap {
     translation_languages: 0,
     managed_service: false,
     seo_accelerator: false,
-    whatsapp_notifications: false,
+    messaging: false,
     review_requests: false,
   }
 
@@ -34,7 +34,7 @@ export function getPlanEntitlements(plan: string): EntitlementsMap {
         google_business: true,
         custom_domains: true,
         managed_service: true,
-        whatsapp_notifications: true,
+        messaging: true,
         review_requests: true,
       }
     case 'managed':
@@ -47,7 +47,7 @@ export function getPlanEntitlements(plan: string): EntitlementsMap {
         custom_domains: true,
         google_business: true,
         advanced_seo: true,
-        whatsapp_notifications: true,
+        messaging: true,
         review_requests: true,
       }
     case 'seo_accelerator':
@@ -61,7 +61,7 @@ export function getPlanEntitlements(plan: string): EntitlementsMap {
         custom_domains: true,
         google_business: true,
         advanced_seo: true,
-        whatsapp_notifications: true,
+        messaging: true,
         review_requests: true,
       }
     default:

@@ -11,7 +11,7 @@ test.describe('Better Auth Stripe webhook guardrails', () => {
       return
     }
 
-    expect(response.status()).toBeGreaterThanOrEqual(400)
+    expect(response.status()).toBe(400)
     expect(await response.text()).toMatch(/STRIPE_|webhook|signature/i)
   })
 
@@ -28,7 +28,7 @@ test.describe('Better Auth Stripe webhook guardrails', () => {
       return
     }
 
-    expect(response.status()).toBeGreaterThanOrEqual(400)
+    expect(response.status()).toBe(400)
     expect(await response.text()).toMatch(/STRIPE_|webhook|signature/i)
   })
 })

@@ -1,7 +1,7 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import { syncPlaceToLocation } from '~/server/utils/google-places'
 import { queryAll } from '~/server/db'
-import { recordUsageEventDetached } from '~/server/utils/usage-metering'
+import { recordUsageEvent } from '~/server/utils/usage-metering'
 
 // NOTE: Google Business Profile API access was never provisioned.
 // All Google data for every location comes from the Places API (New, v1)
@@ -88,7 +88,7 @@ export default defineTask({
         reviews_upserted: 0,
       }
 
-      recordUsageEventDetached(db, {
+      await recordUsageEvent(db, {
         organizationId: loc.organization_id,
         siteId: loc.site_id,
         resource: 'scheduled_task',
@@ -117,7 +117,7 @@ export default defineTask({
       }
 
       if (!locResult.error) {
-        recordUsageEventDetached(db, {
+        await recordUsageEvent(db, {
           organizationId: loc.organization_id,
           siteId: loc.site_id,
           resource: 'maps_api',

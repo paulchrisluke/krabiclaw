@@ -1,6 +1,6 @@
 import type Stripe from 'stripe'
 import type { CloudflareEnv } from '~/server/utils/auth'
-import { execute } from '~/server/db'
+import { execute, executeBatch } from '~/server/db'
 import { completePaidSiteTransfer } from '~/server/utils/site-transfer'
 
 /**
@@ -12,12 +12,13 @@ export async function handleApplicationStripeEvent(
   db: D1Database,
   event: Stripe.Event,
 ): Promise<void> {
-  if (event.type !== 'checkout.session.completed') return
+  if (event.type !== 'checkout.session.completed' && event.type !== 'checkout.session.async_payment_succeeded') return
   const session = event.data.object as Stripe.Checkout.Session
-  if (session.mode === 'subscription') return
 
   const metadata = session.metadata ?? {}
   const organizationId = metadata.organization_id
+  if (session.mode === 'subscription' && metadata.type !== 'site_transfer') return
+  if (session.payment_status !== 'paid') return
 
   if (metadata.type === 'credit_topup') {
     const credits = Number(metadata.credits)
@@ -25,14 +26,47 @@ export async function handleApplicationStripeEvent(
       throw new Error(`Invalid credit top-up metadata for checkout ${session.id}`)
     }
     const now = new Date().toISOString()
-    await execute(db, `
-      INSERT INTO ai_credits (organization_id, balance, lifetime_used, last_topped_up_at, updated_at)
-      VALUES (?, ?, 0, ?, ?)
-      ON CONFLICT(organization_id) DO UPDATE SET
-        balance = balance + excluded.balance,
-        last_topped_up_at = excluded.last_topped_up_at,
-        updated_at = excluded.updated_at
-    `, [organizationId, credits, now, now])
+    await executeBatch(db, [
+      {
+        query: `
+          INSERT OR IGNORE INTO ai_credits
+            (organization_id, balance, lifetime_used, last_topped_up_at, updated_at)
+          VALUES (?, 0, 0, NULL, ?)
+        `,
+        params: [organizationId, now],
+      },
+      {
+        query: `
+          INSERT OR IGNORE INTO stripe_credit_topups
+            (checkout_session_id, organization_id, credits, created_at)
+          VALUES (?, ?, ?, ?)
+        `,
+        params: [session.id, organizationId, credits, now],
+      },
+      {
+        query: `
+          UPDATE ai_credits
+          SET balance = balance + ?, last_topped_up_at = ?, updated_at = ?
+          WHERE organization_id = ?
+            AND EXISTS (
+              SELECT 1 FROM stripe_credit_topups
+              WHERE checkout_session_id = ?
+                AND organization_id = ?
+                AND credits = ?
+                AND processed_at IS NULL
+            )
+        `,
+        params: [credits, now, now, organizationId, session.id, organizationId, credits],
+      },
+      {
+        query: `
+          UPDATE stripe_credit_topups
+          SET processed_at = ?
+          WHERE checkout_session_id = ? AND processed_at IS NULL
+        `,
+        params: [now, session.id],
+      },
+    ])
     return
   }
 
@@ -54,12 +88,11 @@ export async function handleApplicationStripeEvent(
     const transferId = metadata.transfer_request_id
     const plan = metadata.plan
     const siteId = metadata.transfer_site_id ?? metadata.site_id
-    if (!organizationId || !transferId || !plan || !siteId) {
+    const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id
+    if (!organizationId || !transferId || !plan || !siteId || !subscriptionId) {
       throw new Error(`Invalid site transfer metadata for checkout ${session.id}`)
     }
     await completePaidSiteTransfer(env, db, transferId)
-    const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id
-    if (!subscriptionId) throw new Error(`Site transfer checkout ${session.id} has no subscription`)
     await execute(db, `
       UPDATE site_billing
       SET stripe_subscription_id = ?, plan = ?, status = 'active', updated_at = ?

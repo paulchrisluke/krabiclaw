@@ -3,6 +3,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { createAuth, getAuthSession, type CloudflareEnv } from '~/server/utils/auth'
 import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
 import { queryFirst } from '~/server/db'
+import { getOrganizationBillingStatus } from '~/server/utils/billing'
 
 interface CheckoutRequest {
   organizationId?: string
@@ -54,8 +55,14 @@ export default defineEventHandler(async (event) => {
   const headers = new Headers(request.headers)
   headers.delete('content-length')
   const baseUrl = getRequestURL(event).origin
-  const callbackUrl = body.successUrl ?? `${baseUrl}/dashboard/${encodeURIComponent(organization.slug)}/settings/billing`
-  const cancelUrl = body.cancelUrl ?? callbackUrl
+  const billingUrl = new URL(`${baseUrl}/dashboard/${encodeURIComponent(organization.slug)}/settings/billing`)
+  const successUrl = new URL(billingUrl)
+  successUrl.searchParams.set('success', 'true')
+  const canceledUrl = new URL(billingUrl)
+  canceledUrl.searchParams.set('canceled', 'true')
+  const callbackUrl = body.successUrl ?? successUrl.toString()
+  const cancelUrl = body.cancelUrl ?? canceledUrl.toString()
+  const billingStatus = await getOrganizationBillingStatus(env, env.DB, organization.id)
 
   return await createAuth(env).handler(new Request(target, {
     method: 'POST',
@@ -64,6 +71,7 @@ export default defineEventHandler(async (event) => {
       plan: body.plan,
       annual: body.interval === 'year',
       referenceId: organization.id,
+      ...(billingStatus.stripeSubscriptionId ? { subscriptionId: billingStatus.stripeSubscriptionId } : {}),
       customerType: 'organization',
       metadata: {
         site_id: body.siteId,
