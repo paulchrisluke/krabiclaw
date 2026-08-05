@@ -217,7 +217,7 @@ GROUP BY p.id, sct.locale;
 -- not editable page content, so they are intentionally not copied to blocks.
 -- Reject any other value before the legacy columns are removed instead of
 -- silently converting or dropping unknown content.
-CREATE TEMP TABLE `__tenant_page_legacy_component_types` (
+CREATE TABLE IF NOT EXISTS `__tenant_page_legacy_component_types` (
   `type` text NOT NULL,
   CONSTRAINT "tenant_page_legacy_component_type_check" CHECK (`type` IN (
     'home_hero', 'page_hero', 'schedule_hero', 'consultation_cta',
@@ -231,6 +231,7 @@ CREATE TEMP TABLE `__tenant_page_legacy_component_types` (
     'contact_cta', 'booking_cta', 'offering_grid', 'location_grid'
   ))
 );
+DELETE FROM `__tenant_page_legacy_component_types`;
 INSERT INTO `__tenant_page_legacy_component_types` (`type`)
 SELECT DISTINCT json_extract(json_each.value, '$.type')
 FROM tenant_pages p
