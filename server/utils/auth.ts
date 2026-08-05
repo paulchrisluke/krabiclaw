@@ -27,6 +27,7 @@ import {
   createStripePlanLoader,
   enqueueStripeEvent,
 } from '~/server/utils/better-auth-stripe'
+import { processStripeEvent } from '~/server/utils/stripe-event-processing'
 
 type MemberRow = InferSelectModel<typeof schema.member>
 type InvitationRow = InferSelectModel<typeof schema.invitation>
@@ -427,8 +428,32 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
               && member.role.split(',').map(role => role.trim()).includes('owner')
           },
         },
+        schema: {
+          subscription: {
+            fields: {
+              limits: { type: 'string', required: false },
+            },
+          },
+        } as never,
         onEvent: async (event) => {
-          await enqueueStripeEvent(db, event)
+          const queued = await enqueueStripeEvent(db, event)
+          if (!queued || !options.waitUntil || !env.STRIPE_SECRET_KEY) return
+          const authContext = await instance.$context
+          options.waitUntil(
+            processStripeEvent(
+              env,
+              db,
+              event,
+              stripeClient,
+              authContext.adapter as unknown as import('~/server/utils/better-auth-stripe').BetterAuthSubscriptionAdapter,
+              loadStripePlans,
+            ).catch((error) => {
+              console.error('stripe_webhook_immediate_processing_failed', {
+                stripeEventId: event.id,
+                error: error instanceof Error ? error.message : String(error),
+              })
+            }),
+          )
         },
       }),
       admin({

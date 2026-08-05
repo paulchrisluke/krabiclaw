@@ -104,13 +104,12 @@ index 46684c3..0bc20e6 100644
  		const activeOrTrialingSubscription = subscriptions.find((sub) => isActiveOrTrialing(sub));
  		const activeSubscription = (await client.subscriptions.list({ customer: customerId }).then((res) => res.data.filter((sub) => isActiveOrTrialing(sub)))).find((sub) => {
  			if (subscriptionToUpdate?.stripeSubscriptionId || ctx.body.subscriptionId) return sub.id === subscriptionToUpdate?.stripeSubscriptionId || sub.id === ctx.body.subscriptionId;
-@@ -1479,19 +1489,16 @@ const stripeWebhook = (options) => {
+@@ -1479,19 +1489,15 @@ const stripeWebhook = (options) => {
  		try {
  			switch (event.type) {
  				case "checkout.session.completed":
 -					await onCheckoutSessionCompleted(ctx, options, event);
  					await options.onEvent?.(event);
-+					if (event.data.object.mode !== "subscription") await onCheckoutSessionCompleted(ctx, options, event);
  					break;
  				case "customer.subscription.created":
 -					await onSubscriptionCreated(ctx, options, event);

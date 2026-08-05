@@ -128,6 +128,9 @@ export async function getBetterAuthStripePlans(
       annualDiscountPriceId: yearly?.id,
       limits: getPlanEntitlements(planId),
       group: 'krabiclaw',
+      ...(product.metadata?.seat_price_id?.trim()
+        ? { seatPriceId: product.metadata.seat_price_id.trim() }
+        : {}),
     })
     planIds.add(planId)
   }
@@ -185,6 +188,7 @@ export interface SubscriptionProjectionInput {
   plan: string
   status: string
   paymentStatus?: string | null
+  paidThrough?: Date | string | null
   periodEnd?: Date | null
   cancelAtPeriodEnd?: boolean
 }
@@ -213,7 +217,7 @@ export async function projectOrganizationSubscription(
     FROM organization_billing WHERE organization_id = ? LIMIT 1
   `, [input.organizationId])
   const paymentStatus = input.paymentStatus ?? paymentRow?.payment_status ?? 'unknown'
-  const accessPlan = getEffectiveAccessPlan({ ...input, paymentStatus })
+  const accessPlan = getEffectiveAccessPlan({ ...input, paymentStatus, paidThrough: paymentRow?.paid_through })
   const entitlements = getPlanEntitlements(accessPlan)
   const entitlementEntries = Object.entries(entitlements)
   const entitlementKeys = entitlementEntries.map(([key]) => key)
@@ -225,14 +229,13 @@ export async function projectOrganizationSubscription(
       query: `
         INSERT INTO organization_billing
           (id, organization_id, stripe_customer_id, stripe_subscription_id,
-           status, plan, payment_status, current_period_end, cancel_at_period_end, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           status, plan, current_period_end, cancel_at_period_end, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(organization_id) DO UPDATE SET
           stripe_customer_id = excluded.stripe_customer_id,
           stripe_subscription_id = excluded.stripe_subscription_id,
           status = excluded.status,
           plan = excluded.plan,
-          payment_status = excluded.payment_status,
           current_period_end = excluded.current_period_end,
           cancel_at_period_end = excluded.cancel_at_period_end,
           updated_at = excluded.updated_at
@@ -244,7 +247,6 @@ export async function projectOrganizationSubscription(
         input.subscriptionId,
         input.status,
         input.plan,
-        paymentStatus,
         isoDate(input.periodEnd),
         input.cancelAtPeriodEnd ? 1 : 0,
         now,
@@ -301,15 +303,13 @@ export async function projectOrganizationSubscription(
       query: `
         INSERT INTO site_billing
           (id, site_id, organization_id, stripe_subscription_id, plan, status,
-           current_period_end, payment_status, paid_through, last_paid_invoice_id,
-           cancel_at_period_end, stripe_customer_id, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           current_period_end, cancel_at_period_end, stripe_customer_id, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(site_id) DO UPDATE SET
           stripe_subscription_id = excluded.stripe_subscription_id,
           plan = excluded.plan,
           status = excluded.status,
           current_period_end = excluded.current_period_end,
-          payment_status = excluded.payment_status,
           cancel_at_period_end = excluded.cancel_at_period_end,
           stripe_customer_id = excluded.stripe_customer_id,
           updated_at = excluded.updated_at
@@ -322,9 +322,6 @@ export async function projectOrganizationSubscription(
         input.plan,
         input.status,
         isoDate(input.periodEnd),
-        paymentStatus,
-        paymentRow?.paid_through ?? null,
-        paymentRow?.last_paid_invoice_id ?? null,
         input.cancelAtPeriodEnd ? 1 : 0,
         input.customerId,
         now,
@@ -385,6 +382,9 @@ interface ReconciledSubscriptionRow {
   periodStart: Date | number | string | null
   periodEnd: Date | number | string | null
   cancelAtPeriodEnd: boolean | number | null
+  trialStart?: Date | number | string | null
+  trialEnd?: Date | number | string | null
+  limits?: string | null
 }
 
 export interface BetterAuthSubscriptionAdapter {
@@ -393,8 +393,36 @@ export interface BetterAuthSubscriptionAdapter {
   update<T>(_input: { model: string; where: Array<{ field: string; value: unknown }>; update: Record<string, unknown> }): Promise<T | null>
 }
 
-function stripeSubscriptionPeriod(subscription: Stripe.Subscription): { start: Date; end: Date } {
-  const item = subscription.items.data[0]
+type ResolvedSubscriptionPlan = {
+  item: Stripe.SubscriptionItem
+  plan: StripePlan
+}
+
+async function resolveHistoricalSubscriptionPlan(
+  stripe: Stripe,
+  price: Stripe.Price,
+): Promise<StripePlan | null> {
+  const resolvedPrice = price.product
+    ? price
+    : await stripe.prices.retrieve(price.id, { expand: ['product'] })
+  const product = typeof resolvedPrice.product === 'string'
+    ? await stripe.products.retrieve(resolvedPrice.product)
+    : resolvedPrice.product
+  if (!product || 'deleted' in product) return null
+  const planId = product.metadata?.plan_id?.trim()
+  if (!planId || planId === 'free') return null
+  return {
+    name: planId,
+    priceId: resolvedPrice.id,
+    limits: getPlanEntitlements(planId),
+    group: 'krabiclaw',
+    ...(product.metadata?.seat_price_id?.trim()
+      ? { seatPriceId: product.metadata.seat_price_id.trim() }
+      : {}),
+  }
+}
+
+function stripeSubscriptionPeriod(subscription: Stripe.Subscription, item: Stripe.SubscriptionItem): { start: Date; end: Date } {
   if (!item?.current_period_start || !item.current_period_end) {
     throw new Error(`Stripe subscription ${subscription.id} has no deterministic billing period; retrying`)
   }
@@ -408,13 +436,56 @@ async function resolveSubscriptionPlan(
   stripe: Stripe,
   subscription: Stripe.Subscription,
   loadPlans: StripePlanLoader,
-): Promise<StripePlan> {
-  const priceId = subscription.items.data[0]?.price.id
-  if (!priceId) throw new Error(`Stripe subscription ${subscription.id} has no recurring price; retrying`)
+): Promise<ResolvedSubscriptionPlan> {
+  const first = subscription.items.data[0]
+  if (!first) throw new Error(`Stripe subscription ${subscription.id} has no recurring price; retrying`)
   const configuredPlans = await loadPlans({ includeFeatureDisabled: true })
-  const plan = configuredPlans.find(candidate => candidate.priceId === priceId || candidate.annualDiscountPriceId === priceId)
-  if (!plan) throw new Error(`Stripe subscription ${subscription.id} price ${priceId} is not configured; retrying`)
-  return plan
+  for (const item of subscription.items.data) {
+    const priceId = item.price.id
+    const plan = configuredPlans.find(candidate =>
+      candidate.priceId === priceId
+      || candidate.annualDiscountPriceId === priceId
+      || (item.price.lookup_key && (candidate.lookupKey === item.price.lookup_key || candidate.annualDiscountLookupKey === item.price.lookup_key)),
+    )
+    if (plan) return { item, plan }
+    const historicalPlan = await resolveHistoricalSubscriptionPlan(stripe, item.price)
+    if (historicalPlan) return { item, plan: historicalPlan }
+  }
+  throw new Error(`Stripe subscription ${subscription.id} has no items matching a configured plan; retrying`)
+}
+
+async function findExistingSubscription(
+  stripeSubscription: Stripe.Subscription,
+  adapter: BetterAuthSubscriptionAdapter,
+  metadataFallback?: Record<string, string> | null,
+): Promise<ReconciledSubscriptionRow | null> {
+  const metadata = { ...metadataFallback, ...stripeSubscription.metadata }
+  const metadataSubscriptionId = metadata.subscriptionId?.trim()
+  const metadataReferenceId = metadata.referenceId?.trim()
+  const customerId = stripeCustomerIdValue(stripeSubscription.customer)
+  let existing: ReconciledSubscriptionRow | null = null
+  if (metadataSubscriptionId) {
+    existing = await adapter.findOne<ReconciledSubscriptionRow>({
+      model: 'subscription',
+      where: [{ field: 'id', value: metadataSubscriptionId }],
+    })
+  }
+  if (!existing) {
+    existing = await adapter.findOne<ReconciledSubscriptionRow>({
+      model: 'subscription',
+      where: [{ field: 'stripeSubscriptionId', value: stripeSubscription.id }],
+    })
+  }
+  if (existing?.referenceId && metadataReferenceId && existing.referenceId !== metadataReferenceId) {
+    throw new Error(`Stripe subscription ${stripeSubscription.id} metadata reference does not own Better Auth row; retrying`)
+  }
+  if (existing?.stripeCustomerId && customerId && existing.stripeCustomerId !== customerId) {
+    throw new Error(`Stripe subscription ${stripeSubscription.id} customer does not own Better Auth row; retrying`)
+  }
+  if (existing?.stripeSubscriptionId && existing.stripeSubscriptionId !== stripeSubscription.id) {
+    throw new Error(`Better Auth subscription ${existing.id ?? metadataSubscriptionId ?? 'unknown'} is already linked to another Stripe subscription; retrying`)
+  }
+  return existing
 }
 
 async function repairBetterAuthSubscriptionRow(
@@ -425,11 +496,9 @@ async function repairBetterAuthSubscriptionRow(
   deleted: boolean,
   adapter: BetterAuthSubscriptionAdapter,
   loadPlans: StripePlanLoader,
+  metadataFallback?: Record<string, string> | null,
 ): Promise<ReconciledSubscriptionRow> {
-  const existing = await adapter.findOne<ReconciledSubscriptionRow>({
-    model: 'subscription',
-    where: [{ field: 'stripeSubscriptionId', value: stripeSubscription.id }],
-  })
+  const existing = await findExistingSubscription(stripeSubscription, adapter, metadataFallback)
 
   const version = await queryFirst<{ last_event_created: number }>(db, `
     SELECT last_event_created FROM stripe_subscription_versions
@@ -437,15 +506,18 @@ async function repairBetterAuthSubscriptionRow(
   `, [stripeSubscription.id])
   if (version && event.created < version.last_event_created && existing) return existing
 
-  let plan: StripePlan
+  let resolved: ResolvedSubscriptionPlan
   try {
-    plan = await resolveSubscriptionPlan(stripe, stripeSubscription, loadPlans)
+    resolved = await resolveSubscriptionPlan(stripe, stripeSubscription, loadPlans)
   } catch (error) {
     if (!deleted || !existing?.plan) throw error
-    plan = { name: existing.plan } as StripePlan
+    const item = stripeSubscription.items.data[0]
+    if (!item) throw error
+    resolved = { item, plan: { name: existing.plan } }
   }
-  const customerId = existing?.stripeCustomerId ?? stripeCustomerIdValue(stripeSubscription.customer)
-  let referenceId = existing?.referenceId ?? stripeSubscription.metadata?.referenceId?.trim()
+  const customerId = stripeCustomerIdValue(stripeSubscription.customer) ?? existing?.stripeCustomerId ?? null
+  const metadata = { ...metadataFallback, ...stripeSubscription.metadata }
+  let referenceId = existing?.referenceId ?? metadata.referenceId?.trim()
   if (!referenceId && customerId) {
     const organization = await adapter.findOne<{ id: string }>({
       model: 'organization',
@@ -455,9 +527,12 @@ async function repairBetterAuthSubscriptionRow(
   }
   if (!referenceId) throw new Error(`Stripe subscription ${stripeSubscription.id} has no organization reference; retrying`)
 
-  const period = stripeSubscriptionPeriod(stripeSubscription)
+  const period = stripeSubscriptionPeriod(stripeSubscription, resolved.item)
+  const quantity = resolved.plan.seatPriceId
+    ? stripeSubscription.items.data.find(item => item.price.id === resolved.plan.seatPriceId)?.quantity ?? resolved.item.quantity ?? 1
+    : resolved.item.quantity ?? 1
   const data = {
-    plan: plan.name.toLowerCase(),
+    plan: resolved.plan.name.toLowerCase(),
     referenceId,
     stripeCustomerId: customerId,
     stripeSubscriptionId: stripeSubscription.id,
@@ -468,8 +543,14 @@ async function repairBetterAuthSubscriptionRow(
     cancelAt: deleted || !stripeSubscription.cancel_at ? null : new Date(stripeSubscription.cancel_at * 1000),
     canceledAt: deleted || !stripeSubscription.canceled_at ? null : new Date(stripeSubscription.canceled_at * 1000),
     endedAt: deleted || !stripeSubscription.ended_at ? null : new Date(stripeSubscription.ended_at * 1000),
-    seats: stripeSubscription.items.data[0]?.quantity ?? 1,
-    billingInterval: stripeSubscription.items.data[0]?.price.recurring?.interval,
+    trialStart: !deleted && stripeSubscription.trial_start ? new Date(stripeSubscription.trial_start * 1000) : null,
+    trialEnd: !deleted && stripeSubscription.trial_end ? new Date(stripeSubscription.trial_end * 1000) : null,
+    limits: resolved.plan.limits ? JSON.stringify(resolved.plan.limits) : null,
+    seats: quantity,
+    billingInterval: resolved.item.price.recurring?.interval,
+    stripeScheduleId: deleted || !stripeSubscription.schedule
+      ? null
+      : typeof stripeSubscription.schedule === 'string' ? stripeSubscription.schedule : stripeSubscription.schedule.id,
     updatedAt: new Date(),
   }
 
@@ -499,8 +580,9 @@ async function projectCurrentStripeSubscription(
   event: Stripe.Event,
   adapter: BetterAuthSubscriptionAdapter,
   loadPlans: StripePlanLoader,
+  metadataFallback?: Record<string, string> | null,
 ): Promise<void> {
-  const subscription = await repairBetterAuthSubscriptionRow(db, stripe, stripeSubscription, event, deleted, adapter, loadPlans)
+  const subscription = await repairBetterAuthSubscriptionRow(db, stripe, stripeSubscription, event, deleted, adapter, loadPlans, metadataFallback)
   const periodEnd = subscription.periodEnd instanceof Date
     ? subscription.periodEnd
     : new Date(betterAuthTimestampToIso(subscription.periodEnd as number | string, 'subscription.periodEnd'))
@@ -527,7 +609,7 @@ export async function reconcileBetterAuthSubscriptionEvent(
     if (session.mode !== 'subscription' || session.metadata?.type === 'site_transfer') return
     const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id
     if (!subscriptionId) throw new Error(`Subscription checkout ${session.id} has no subscription; retrying`)
-    await projectCurrentStripeSubscription(db, await stripe.subscriptions.retrieve(subscriptionId), false, stripe, event, adapter, loadPlans)
+    await projectCurrentStripeSubscription(db, await stripe.subscriptions.retrieve(subscriptionId), false, stripe, event, adapter, loadPlans, session.metadata)
     return
   }
   if (!event.type.startsWith('customer.subscription.')) return
@@ -553,14 +635,7 @@ export async function enqueueStripeEvent(db: DbClient, event: Stripe.Event): Pro
     VALUES (?, ?, ?, 'pending', ?, 0, ?)
   `, [crypto.randomUUID(), event.id, event.type, payload, createdAt])
   if (Number(inserted?.meta.changes ?? 0) > 0) return true
-  const requeued = await execute(db, `
-    UPDATE stripe_webhook_events
-    SET status = 'pending', event_type = ?, payload = ?, error = NULL,
-        claimed_at = NULL, lease_expires_at = NULL, claim_token = NULL,
-        next_attempt_at = NULL, dead_lettered_at = NULL, attempt_count = 0
-    WHERE stripe_event_id = ? AND status = 'processed'
-  `, [event.type, payload, event.id])
-  return Number(requeued?.meta.changes ?? 0) > 0
+  return false
 }
 
 export const MAX_STRIPE_WEBHOOK_ATTEMPTS = 5
@@ -664,7 +739,6 @@ interface InvoiceSubscriptionResolution {
   organizationId: string
   customerId: string | null
   stripeSubscription: Stripe.Subscription
-  betterAuthRowExists: boolean
 }
 
 export function invoiceSubscriptionId(invoice: Stripe.Invoice & {
@@ -707,7 +781,6 @@ async function resolveInvoiceSubscription(
     organizationId,
     customerId: stripeCustomerId,
     stripeSubscription,
-    betterAuthRowExists: Boolean(local),
   }
 }
 
@@ -727,9 +800,13 @@ export async function markOrganizationPayment(
     eventId: string
     paidThrough?: string | null
     invoiceId?: string | null
+    invoicePeriodEnd?: string | null
   },
 ): Promise<void> {
   const now = new Date().toISOString()
+  const sites = await queryAll<{ id: string }>(db, `
+    SELECT id FROM sites WHERE organization_id = ? ORDER BY id
+  `, [input.organizationId])
   await executeBatch(db, [
     {
       query: `
@@ -745,8 +822,19 @@ export async function markOrganizationPayment(
           stripe_subscription_id = CASE WHEN excluded.last_payment_event_created >= COALESCE(organization_billing.last_payment_event_created, -1)
             THEN COALESCE(excluded.stripe_subscription_id, organization_billing.stripe_subscription_id)
             ELSE organization_billing.stripe_subscription_id END,
-          payment_status = CASE WHEN excluded.last_payment_event_created >= COALESCE(organization_billing.last_payment_event_created, -1)
-            THEN excluded.payment_status ELSE organization_billing.payment_status END,
+          payment_status = CASE
+            WHEN excluded.last_payment_event_created < COALESCE(organization_billing.last_payment_event_created, -1)
+              THEN organization_billing.payment_status
+            WHEN excluded.payment_status = 'paid' THEN 'paid'
+            WHEN organization_billing.payment_status = 'paid'
+              AND (
+                ? IS NULL
+                OR organization_billing.paid_through IS NULL
+                OR ? <= organization_billing.paid_through
+              )
+              THEN organization_billing.payment_status
+            ELSE excluded.payment_status
+          END,
           paid_through = CASE WHEN excluded.last_payment_event_created >= COALESCE(organization_billing.last_payment_event_created, -1)
             THEN COALESCE(excluded.paid_through, organization_billing.paid_through)
             ELSE organization_billing.paid_through END,
@@ -771,34 +859,43 @@ export async function markOrganizationPayment(
         input.eventCreated,
         input.eventId,
         now,
+        input.invoicePeriodEnd ?? null,
+        input.invoicePeriodEnd ?? null,
       ],
     },
     {
         query: `
           UPDATE site_billing
-          SET payment_status = ?, paid_through = COALESCE(?, paid_through),
-            last_paid_invoice_id = COALESCE(?, last_paid_invoice_id),
-            last_payment_event_created = ?, last_payment_event_id = ?, updated_at = ?
-        WHERE organization_id = ?
-          AND ? >= COALESCE(last_payment_event_created, -1)
-          AND ? >= COALESCE((
-            SELECT ob.last_payment_event_created FROM organization_billing ob
-            WHERE ob.organization_id = ? LIMIT 1
-          ), -1)
+          SET payment_status = (SELECT payment_status FROM organization_billing WHERE organization_id = ? LIMIT 1),
+            paid_through = (SELECT paid_through FROM organization_billing WHERE organization_id = ? LIMIT 1),
+            last_paid_invoice_id = (SELECT last_paid_invoice_id FROM organization_billing WHERE organization_id = ? LIMIT 1),
+            last_payment_event_created = (SELECT last_payment_event_created FROM organization_billing WHERE organization_id = ? LIMIT 1),
+            last_payment_event_id = (SELECT last_payment_event_id FROM organization_billing WHERE organization_id = ? LIMIT 1),
+            updated_at = ?
+          WHERE organization_id = ?
       `,
       params: [
-        input.paymentStatus,
-        input.paidThrough ?? null,
-        input.invoiceId ?? null,
-        input.eventCreated,
-        input.eventId,
-        now,
         input.organizationId,
-        input.eventCreated,
-        input.eventCreated,
+        input.organizationId,
+        input.organizationId,
+        input.organizationId,
+        input.organizationId,
+        now,
         input.organizationId,
       ],
     },
+    ...sites.map(site => ({
+      query: `
+        INSERT OR IGNORE INTO site_billing
+          (id, site_id, organization_id, payment_status, paid_through, last_paid_invoice_id,
+           last_payment_event_created, last_payment_event_id, updated_at)
+        SELECT ?, ?, ?, payment_status, paid_through, last_paid_invoice_id,
+               last_payment_event_created, last_payment_event_id, ?
+        FROM organization_billing
+        WHERE organization_id = ?
+      `,
+      params: [`sb-${site.id}`, site.id, input.organizationId, now, input.organizationId],
+    })),
   ])
 }
 
@@ -960,9 +1057,7 @@ export async function grantInvoiceQuota(
     paidThrough: periodEnd,
     invoiceId: invoice.id,
   })
-  if (subscription.betterAuthRowExists) {
-    await projectCurrentStripeSubscription(db, subscription.stripeSubscription, false, stripe, event, adapter, loadPlans)
-  }
+  await projectCurrentStripeSubscription(db, subscription.stripeSubscription, false, stripe, event, adapter, loadPlans)
   if (accessPlan === 'free') return
 
   const entitlements = getPlanEntitlements(plan.name)

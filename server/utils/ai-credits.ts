@@ -44,9 +44,10 @@ async function getOrganizationPlan(db: DbClient, organizationId: string): Promis
     plan: string | null
     status: string | null
     payment_status: string | null
+    paid_through: string | null
     current_period_end: string | null
   }>(db, `
-    SELECT plan, status, payment_status, current_period_end
+    SELECT plan, status, payment_status, paid_through, current_period_end
     FROM organization_billing
     WHERE organization_id = ?
     LIMIT 1
@@ -56,6 +57,7 @@ async function getOrganizationPlan(db: DbClient, organizationId: string): Promis
       plan: billing.plan,
       status: billing.status,
       paymentStatus: billing.payment_status,
+      paidThrough: billing.paid_through,
       periodEnd: billing.current_period_end,
     })
   }

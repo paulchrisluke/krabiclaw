@@ -11,6 +11,8 @@ async function markSubscriptionPayment(
   adapter: BetterAuthSubscriptionAdapter,
   metadataOrganizationId?: string,
   event?: Stripe.Event,
+  invoiceId?: string | null,
+  invoicePeriodEnd?: string | null,
 ): Promise<void> {
   const local = await adapter.findOne<{ referenceId: string; stripeCustomerId: string | null }>({
     model: 'subscription',
@@ -31,7 +33,14 @@ async function markSubscriptionPayment(
     paymentStatus,
     eventCreated: event?.created ?? 0,
     eventId: event?.id ?? `payment:${subscriptionId}:${paymentStatus}`,
+    invoiceId,
+    invoicePeriodEnd,
   })
+}
+
+function invoicePeriodEndIso(invoice: Stripe.Invoice & { period_end?: number; lines?: { data?: Array<{ period?: { end?: number } | null }> } }): string | null {
+  const seconds = invoice.period_end ?? invoice.lines?.data?.map(line => line.period?.end).find((value): value is number => typeof value === 'number')
+  return typeof seconds === 'number' ? new Date(seconds * 1000).toISOString() : null
 }
 
 /**
@@ -52,9 +61,19 @@ export async function handleApplicationStripeEvent(
     const invoice = event.data.object as Stripe.Invoice & {
       subscription?: string | { id: string } | null
       parent?: { subscription_details?: { subscription?: string | { id: string } | null } | null } | null
+      period_end?: number
     }
     const subscriptionId = invoiceSubscriptionId(invoice)
-    if (subscriptionId) await markSubscriptionPayment(db, subscriptionId, 'failed', adapter, undefined, event)
+    if (subscriptionId) await markSubscriptionPayment(
+      db,
+      subscriptionId,
+      'failed',
+      adapter,
+      undefined,
+      event,
+      invoice.id,
+      invoicePeriodEndIso(invoice),
+    )
     return
   }
 
@@ -77,7 +96,9 @@ export async function handleApplicationStripeEvent(
           ? 'failed'
           : event.type === 'checkout.session.async_payment_succeeded'
             ? 'paid'
-            : 'processing',
+            : session.payment_status === 'paid'
+              ? 'paid'
+              : 'processing',
         adapter,
         organizationId,
         event,
@@ -144,10 +165,21 @@ export async function handleApplicationStripeEvent(
       ? session.payment_intent
       : session.payment_intent?.id ?? null
     await execute(db, `
-      INSERT OR IGNORE INTO service_addon_purchases
-        (id, organization_id, addon_type, stripe_payment_intent_id, created_at)
-      VALUES (?, ?, ?, ?, ?)
-    `, [crypto.randomUUID(), organizationId, addonType, paymentIntentId, new Date().toISOString()])
+      INSERT INTO service_addon_purchases
+        (id, organization_id, addon_type, checkout_session_id, stripe_payment_intent_id, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(checkout_session_id) DO UPDATE SET
+        organization_id = excluded.organization_id,
+        addon_type = excluded.addon_type,
+        stripe_payment_intent_id = COALESCE(excluded.stripe_payment_intent_id, service_addon_purchases.stripe_payment_intent_id)
+    `, [
+      `stripe-addon-${session.id}`,
+      organizationId,
+      addonType,
+      session.id,
+      paymentIntentId,
+      new Date().toISOString(),
+    ])
     return
   }
 

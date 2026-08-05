@@ -1,8 +1,8 @@
-import Stripe from 'stripe'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
 import { execute, queryAll, type DbClient } from '~/server/db'
-import { createStripePlanLoader, recordStripeEvent, recordStripeEventFailure, MAX_STRIPE_WEBHOOK_ATTEMPTS, grantInvoiceQuota, reconcileBetterAuthSubscriptionEvent, type BetterAuthSubscriptionAdapter } from '~/server/utils/better-auth-stripe'
-import { handleApplicationStripeEvent } from '~/server/utils/billing-webhook-app-events'
+import { createStripePlanLoader, recordStripeEventFailure, MAX_STRIPE_WEBHOOK_ATTEMPTS, type BetterAuthSubscriptionAdapter } from '~/server/utils/better-auth-stripe'
+import Stripe from 'stripe'
+import { processStripeEvent } from '~/server/utils/stripe-event-processing'
 
 interface StripeTaskContext {
   cloudflare?: { env?: ApiRecord }
@@ -81,11 +81,7 @@ export default defineTask({
       }
 
       try {
-        const claimed = await recordStripeEvent(db, event, async () => {
-          await reconcileBetterAuthSubscriptionEvent(db, event, stripe, adapter, loadStripePlans)
-          await handleApplicationStripeEvent(env, db as D1Database, event, adapter)
-          await grantInvoiceQuota(db, stripe, event, adapter, loadStripePlans)
-        })
+        const claimed = await processStripeEvent(env as CloudflareEnv, db, event, stripe, adapter, loadStripePlans)
         if (claimed) processed += 1
       } catch (error) {
         failed += 1

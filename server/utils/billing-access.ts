@@ -5,6 +5,7 @@ export interface SubscriptionAccessInput {
   status: string | null | undefined
   paymentStatus: string | null | undefined
   periodEnd?: Date | string | number | null
+  paidThrough?: Date | string | number | null
 }
 
 function periodEndMs(value: SubscriptionAccessInput['periodEnd']): number | null {
@@ -32,7 +33,11 @@ export function getEffectiveAccessPlan(
   const plan = input.plan?.trim()
   if (!plan) return 'free'
   if (input.status === 'trialing') return plan
-  if (input.status === 'active' && input.paymentStatus === 'paid') return plan
+  if (input.status === 'active' && input.paymentStatus === 'paid') {
+    const paidThrough = periodEndMs(input.paidThrough)
+    if (paidThrough !== null && now.getTime() > paidThrough) return 'free'
+    return plan
+  }
 
   if (input.status === 'past_due') {
     const end = periodEndMs(input.periodEnd)

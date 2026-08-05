@@ -27,6 +27,11 @@ The application reconciler remains responsible for current-state repair,
 monotonic event protection, projection, and retry processing. This patch is a
 dependency-boundary measure, not a second billing implementation.
 
+The application callback durably records each verified event and schedules the
+same fenced processor with the request's Cloudflare `waitUntil` context. The
+hourly task remains a recovery sweeper for leases, missed dispatches, and
+dead-letter transitions; it is not the normal fulfillment path.
+
 ## Exit condition
 
 Remove the patch only after an upstream Better Auth Stripe release provides the

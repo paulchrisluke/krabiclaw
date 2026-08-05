@@ -9,6 +9,8 @@ import {
 test('effective access is derived from subscription status', () => {
   const now = new Date('2026-08-05T00:00:00.000Z')
   assert.equal(getEffectiveAccessPlan({ plan: 'growth', status: 'active', paymentStatus: 'paid' }, now), 'growth')
+  assert.equal(getEffectiveAccessPlan({ plan: 'growth', status: 'active', paymentStatus: 'paid', paidThrough: new Date('2026-08-06T00:00:00.000Z') }, now), 'growth')
+  assert.equal(getEffectiveAccessPlan({ plan: 'growth', status: 'active', paymentStatus: 'paid', paidThrough: new Date('2026-08-04T23:59:59.000Z') }, now), 'free')
   assert.equal(getEffectiveAccessPlan({ plan: 'growth', status: 'active', paymentStatus: 'processing' }, now), 'free')
   assert.equal(getEffectiveAccessPlan({ plan: 'growth', status: 'trialing', paymentStatus: null }, now), 'growth')
   assert.equal(getEffectiveAccessPlan({ plan: 'growth', status: 'past_due', paymentStatus: 'failed', periodEnd: new Date(now.getTime() - PAST_DUE_GRACE_PERIOD_MS + 1) }, now), 'growth')
@@ -98,6 +100,7 @@ const {
   recordStripeEvent,
   enqueueStripeEvent,
   grantInvoiceQuota,
+  markOrganizationPayment,
   selectCanonicalStripePrice,
   createStripePlanLoader,
   getBetterAuthStripePlans,
@@ -170,11 +173,11 @@ test('a stale worker cannot finalize a reclaimed webhook lease', async () => {
   assert.equal(eventState?.status, 'pending')
 })
 
-test('a processed duplicate is requeued for current-state repair', async () => {
+test('a processed duplicate remains terminal and is not requeued', async () => {
   eventState = { status: 'processed', leaseExpiresAt: null, claimToken: null, attempts: 1 }
-  assert.equal(await enqueueStripeEvent({} as never, event), true)
-  assert.equal(eventState?.status, 'pending')
-  assert.equal(eventState?.attempts, 0)
+  assert.equal(await enqueueStripeEvent({} as never, event), false)
+  assert.equal(eventState?.status, 'processed')
+  assert.equal(eventState?.attempts, 1)
 })
 
 test('Stripe plan loading coalesces refreshes and serves the last good snapshot', async () => {
@@ -301,6 +304,121 @@ test('subscription reconciliation repairs a missing Better Auth row from current
   assert.equal(createdPlan, 'growth')
 })
 
+test('subscription reconciliation updates Better Auth metadata row and resolves the base item after seats', async () => {
+  let created = false
+  let updated: Record<string, unknown> | null = null
+  const lookups: string[] = []
+  const adapter = {
+    findOne: async <T>(input: { model: string; where?: Array<{ field: string; value: unknown }> }) => {
+      const field = input.where?.[0]?.field
+      if (field) lookups.push(field)
+      if (input.model === 'subscription' && field === 'id') {
+        return {
+          id: 'ba-precreated',
+          referenceId: 'org-1',
+          plan: 'growth',
+          stripeCustomerId: 'cus-1',
+          stripeSubscriptionId: null,
+          status: 'incomplete',
+          periodStart: null,
+          periodEnd: null,
+          cancelAtPeriodEnd: false,
+        } as T
+      }
+      return null
+    },
+    update: async (input: { update: Record<string, unknown> }) => {
+      updated = input.update
+      return { id: 'ba-precreated', ...input.update, referenceId: 'org-1' }
+    },
+    create: async () => {
+      created = true
+      throw new Error('create should not run for Better Auth checkout subscriptions')
+    },
+  }
+  const stripe = {
+    subscriptions: {
+      retrieve: async () => ({
+        id: 'sub-precreated',
+        status: 'trialing',
+        customer: 'cus-1',
+        metadata: { subscriptionId: 'ba-precreated', referenceId: 'org-1' },
+        trial_start: 1_754_035_200,
+        trial_end: 1_756_627_200,
+        cancel_at_period_end: false,
+        items: {
+          data: [
+            { quantity: 4, price: { id: 'price-seat', product: 'prod-seat', recurring: { interval: 'month' } }, current_period_start: 1_754_035_200, current_period_end: 1_756_627_200 },
+            { quantity: 1, price: { id: 'price-growth', product: 'prod-growth', recurring: { interval: 'month' } }, current_period_start: 1_754_035_200, current_period_end: 1_756_627_200 },
+          ],
+        },
+      }),
+    },
+    products: {
+      list: async () => ({ data: [], has_more: false }),
+      retrieve: async (id: string) => ({ id, metadata: {} }),
+    },
+    prices: { list: async () => ({ data: [], has_more: false }) },
+  }
+  await reconcileBetterAuthSubscriptionEvent({} as never, {
+    id: 'evt_precreated',
+    created: 300,
+    type: 'customer.subscription.created',
+    data: { object: { id: 'sub-precreated' } },
+  } as never, stripe as never, adapter as never, async () => [{
+    name: 'growth',
+    priceId: 'price-growth',
+    seatPriceId: 'price-seat',
+    limits: { ai_credits: 2000 },
+    group: 'krabiclaw',
+  }] as never)
+  assert.equal(created, false)
+  assert.equal(lookups[0], 'id')
+  assert.equal(lookups.includes('stripeSubscriptionId'), false)
+  assert.equal(updated?.plan, 'growth')
+  assert.equal(updated?.seats, 4)
+  assert.equal(updated?.billingInterval, 'month')
+  assert.equal(updated?.status, 'trialing')
+  assert.equal(updated?.trialStart instanceof Date, true)
+  assert.equal(updated?.trialEnd instanceof Date, true)
+  assert.equal(updated?.limits, JSON.stringify({ ai_credits: 2000 }))
+})
+
+test('subscription reconciliation resolves an archived recurring price from product metadata', async () => {
+  let createdPlan = ''
+  const adapter = {
+    findOne: async <T>(input: { model: string }) => input.model === 'organization' ? { id: 'org-1' } as T : null,
+    update: async () => { throw new Error('update should not run') },
+    create: async (input: { data: { plan: string } }) => {
+      createdPlan = input.data.plan
+      return { id: 'ba-archived', ...input.data }
+    },
+  }
+  const stripe = {
+    subscriptions: {
+      retrieve: async () => ({
+        id: 'sub-archived',
+        status: 'active',
+        customer: 'cus-1',
+        metadata: { referenceId: 'org-1' },
+        items: { data: [{ quantity: 1, current_period_start: 1_754_035_200, current_period_end: 1_756_627_200, price: { id: 'price-growth-archived', product: 'prod-growth-archived', recurring: { interval: 'month' } } }] },
+      }),
+    },
+    products: {
+      list: async () => ({ data: [], has_more: false }),
+      retrieve: async () => ({ id: 'prod-growth-archived', metadata: { plan_id: 'growth' } }),
+    },
+    prices: { list: async () => ({ data: [], has_more: false }) },
+  }
+  await reconcileBetterAuthSubscriptionEvent({} as never, {
+    id: 'evt_archived',
+    created: 301,
+    type: 'customer.subscription.updated',
+    data: { object: { id: 'sub-archived' } },
+  } as never, stripe as never, adapter as never, planLoader('growth', 'price-current'))
+  assert.equal(createdPlan, 'growth')
+})
+
 test('past-due projection keeps billing history but projects free entitlements', async () => {
   capturedBatches = []
   mockPaymentRow = null
@@ -321,7 +439,7 @@ test('past-due projection keeps billing history but projects free entitlements',
   assert.ok(billingHistory?.params?.includes('growth'))
 })
 
-test('a first paid invoice carries payment markers into a newly projected site row', async () => {
+test('subscription projection never overwrites payment markers', async () => {
   capturedBatches = []
   mockPaymentRow = {
     payment_status: 'paid',
@@ -337,8 +455,22 @@ test('a first paid invoice carries payment markers into a newly projected site r
     paymentStatus: 'paid',
   })
   const siteBilling = capturedBatches[1]?.find(query => query.query.includes('INSERT INTO site_billing'))
-  assert.ok(siteBilling?.params?.includes('2026-09-01T00:00:00.000Z'))
-  assert.ok(siteBilling?.params?.includes('in_first_paid'))
+  assert.ok(siteBilling)
+  assert.doesNotMatch(siteBilling?.query ?? '', /payment_status|paid_through|last_paid_invoice_id/)
+
+  capturedBatches = []
+  await markOrganizationPayment({} as never, {
+    organizationId: 'org-1',
+    customerId: 'cus-1',
+    subscriptionId: 'sub-1',
+    paymentStatus: 'paid',
+    eventCreated: 100,
+    eventId: 'evt_first_paid',
+    paidThrough: '2026-09-01T00:00:00.000Z',
+    invoiceId: 'in_first_paid',
+  })
+  const paymentQueries = capturedBatches.flat()
+  assert.ok(paymentQueries.some(query => query.query.includes('INSERT OR IGNORE INTO site_billing')))
   mockPaymentRow = null
 })
 
