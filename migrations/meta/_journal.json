@@ -631,6 +631,13 @@
       "when": 1785923287278,
       "tag": "0096_spotty_bromley",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "6",
+      "when": 1785928146633,
+      "tag": "0098_tenant_page_translation_and_redirect_scope",
+      "breakpoints": true
     }
   ]
 }

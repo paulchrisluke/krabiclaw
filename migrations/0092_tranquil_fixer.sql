@@ -520,6 +520,223 @@ JOIN content_documents d ON d.owner_id = v.id AND d.owner_type = 'tenant_page'
 WHERE sct.location_id IS NOT NULL
   AND sct.page = 'location';
 
+-- A translated legacy page was rendered as source content with published
+-- translation rows overlaid. Materialize that result into the new document
+-- instead of publishing only the translation rows. The draft revision keeps
+-- the same source base plus the latest draft overrides.
+DELETE FROM content_blocks
+WHERE document_id IN (
+  SELECT d.id
+    FROM content_documents d
+    JOIN tenant_page_variants target ON target.id = d.owner_id
+   WHERE d.owner_type = 'tenant_page'
+     AND target.locale <> COALESCE((SELECT locale FROM site_locales WHERE site_id = target.site_id AND is_source = 1 LIMIT 1), (SELECT source_locale FROM sites WHERE id = target.site_id))
+);
+
+INSERT INTO content_blocks (id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at)
+SELECT
+  'migrated-source-fallback-block:' || source_block.id || ':' || target.id,
+  target_document.id,
+  source_block.parent_block_id,
+  source_block.type,
+  source_block.position,
+  source_block.level,
+  source_block.data_json,
+  CURRENT_TIMESTAMP,
+  CURRENT_TIMESTAMP
+FROM tenant_page_variants target
+JOIN tenant_page_variants source
+  ON source.page_id = target.page_id
+JOIN site_locales source_locale
+  ON source_locale.site_id = source.site_id
+ AND source_locale.locale = source.locale
+ AND source_locale.is_source = 1
+JOIN content_documents source_document
+  ON source_document.owner_type = 'tenant_page'
+ AND source_document.owner_id = source.id
+JOIN content_blocks source_block ON source_block.document_id = source_document.id
+JOIN content_documents target_document
+  ON target_document.owner_type = 'tenant_page'
+ AND target_document.owner_id = target.id
+WHERE target.locale <> source.locale
+  AND NOT EXISTS (SELECT 1 FROM content_blocks existing WHERE existing.document_id = target_document.id);
+
+UPDATE tenant_page_variants
+SET status = CASE
+  WHEN EXISTS (
+    SELECT 1
+      FROM tenant_page_variants source
+      JOIN site_locales source_locale ON source_locale.site_id = source.site_id AND source_locale.locale = source.locale AND source_locale.is_source = 1
+     WHERE source.page_id = tenant_page_variants.page_id
+       AND source.status = 'published'
+  ) AND COALESCE((SELECT fallback_enabled FROM site_locales WHERE site_id = tenant_page_variants.site_id AND locale = tenant_page_variants.locale LIMIT 1), 1) = 1
+  THEN 'published'
+  ELSE 'draft'
+END
+WHERE locale <> COALESCE((SELECT locale FROM site_locales WHERE site_id = tenant_page_variants.site_id AND is_source = 1 LIMIT 1), (SELECT source_locale FROM sites WHERE id = tenant_page_variants.site_id));
+
+UPDATE tenant_page_variants
+SET title = COALESCE(
+  (
+    SELECT NULLIF(sct.hero_title, '')
+      FROM site_content_translations sct
+      JOIN tenant_pages p ON p.id = tenant_page_variants.page_id
+      LEFT JOIN business_locations bl ON bl.id = sct.location_id AND bl.site_id = sct.site_id
+     WHERE sct.organization_id = tenant_page_variants.organization_id
+       AND sct.site_id = tenant_page_variants.site_id
+       AND sct.locale = tenant_page_variants.locale
+       AND sct.field = 'hero'
+       AND sct.status = 'published'
+       AND ((sct.location_id IS NULL AND p.path = CASE sct.page WHEN 'home' THEN '/' ELSE '/' || trim(sct.page, '/') END)
+         OR (sct.location_id IS NOT NULL AND p.path = '/locations/' || bl.slug))
+     ORDER BY sct.updated_at DESC
+     LIMIT 1
+  ),
+  (SELECT p.title FROM tenant_pages p WHERE p.id = tenant_page_variants.page_id)
+)
+WHERE locale <> COALESCE((SELECT locale FROM site_locales WHERE site_id = tenant_page_variants.site_id AND is_source = 1 LIMIT 1), (SELECT source_locale FROM sites WHERE id = tenant_page_variants.site_id));
+
+WITH translated_blocks AS (
+  SELECT block.id,
+    CASE
+      WHEN sct.field = 'hero' THEN json_set(block.data_json,
+        '$.title', COALESCE(NULLIF(sct.hero_title, ''), json_extract(block.data_json, '$.title')),
+        '$.subtitle', COALESCE(NULLIF(sct.hero_subtitle, ''), json_extract(block.data_json, '$.subtitle')),
+        '$.content', COALESCE(NULLIF(sct.content, ''), json_extract(block.data_json, '$.content')))
+      WHEN sct.field LIKE '%.title' OR sct.field LIKE '%.headline' THEN json_set(block.data_json, '$.text', COALESCE(NULLIF(sct.content, ''), NULLIF(sct.value, ''), json_extract(block.data_json, '$.text')))
+      ELSE json_set(block.data_json, '$.markdown', COALESCE(NULLIF(sct.content, ''), NULLIF(sct.value, ''), json_extract(block.data_json, '$.markdown')))
+    END AS data_json
+  FROM content_blocks block
+  JOIN site_content_translations sct
+  JOIN tenant_pages p
+    ON p.organization_id = sct.organization_id
+   AND p.site_id = sct.site_id
+   AND p.path = CASE sct.page WHEN 'home' THEN '/' ELSE '/' || trim(sct.page, '/') END
+  JOIN tenant_page_variants v ON v.page_id = p.id AND v.locale = sct.locale
+  JOIN content_documents d ON d.owner_type = 'tenant_page' AND d.owner_id = v.id
+  WHERE block.document_id = d.id
+    AND json_extract(block.data_json, '$.field') = sct.field
+    AND sct.location_id IS NULL
+    AND sct.status = 'published'
+)
+UPDATE content_blocks
+SET data_json = (SELECT translated_blocks.data_json FROM translated_blocks WHERE translated_blocks.id = content_blocks.id)
+WHERE id IN (SELECT id FROM translated_blocks);
+
+WITH translated_blocks AS (
+  SELECT block.id,
+    CASE
+      WHEN sct.field = 'hero' THEN json_set(block.data_json,
+        '$.title', COALESCE(NULLIF(sct.hero_title, ''), json_extract(block.data_json, '$.title')),
+        '$.subtitle', COALESCE(NULLIF(sct.hero_subtitle, ''), json_extract(block.data_json, '$.subtitle')),
+        '$.content', COALESCE(NULLIF(sct.content, ''), json_extract(block.data_json, '$.content')))
+      WHEN sct.field LIKE '%.title' OR sct.field LIKE '%.headline' THEN json_set(block.data_json, '$.text', COALESCE(NULLIF(sct.content, ''), NULLIF(sct.value, ''), json_extract(block.data_json, '$.text')))
+      ELSE json_set(block.data_json, '$.markdown', COALESCE(NULLIF(sct.content, ''), NULLIF(sct.value, ''), json_extract(block.data_json, '$.markdown')))
+    END AS data_json
+  FROM content_blocks block
+  JOIN site_content_translations sct
+  JOIN business_locations bl ON bl.id = sct.location_id AND bl.site_id = sct.site_id
+  JOIN tenant_pages p ON p.site_id = sct.site_id AND p.path = '/locations/' || bl.slug
+  JOIN tenant_page_variants v ON v.page_id = p.id AND v.locale = sct.locale
+  JOIN content_documents d ON d.owner_type = 'tenant_page' AND d.owner_id = v.id
+  WHERE block.document_id = d.id
+    AND json_extract(block.data_json, '$.field') = sct.field
+    AND sct.page = 'location'
+    AND sct.status = 'published'
+)
+UPDATE content_blocks
+SET data_json = (SELECT translated_blocks.data_json FROM translated_blocks WHERE translated_blocks.id = content_blocks.id)
+WHERE id IN (SELECT id FROM translated_blocks);
+
+INSERT INTO content_revisions
+  (id, document_id, snapshot_json, body_markdown, created_by, label, created_at)
+SELECT
+  'migrated-tenant-page-revision:' || v.id || ':published',
+  d.id,
+  json_object(
+    'schemaVersion', 1,
+    'metadata', json_object('locale', v.locale, 'path', v.published_path, 'title', v.title, 'summary', v.summary, 'seoTitle', v.seo_title, 'seoDescription', v.seo_description, 'canonicalUrl', v.canonical_url, 'robots', v.robots, 'pageType', p.page_type, 'recipe', p.recipe),
+    'blocks', COALESCE((SELECT json_group_array(json_object('id', b.id, 'parent_block_id', b.parent_block_id, 'type', b.type, 'position', b.position, 'level', b.level, 'data', json(b.data_json))) FROM content_blocks b WHERE b.document_id = d.id), json('[]'))
+  ),
+  COALESCE(p.body, ''), NULL, 'Migrated tenant page published content', CURRENT_TIMESTAMP
+FROM tenant_page_variants v
+JOIN tenant_pages p ON p.id = v.page_id
+JOIN content_documents d ON d.owner_id = v.id AND d.owner_type = 'tenant_page'
+WHERE v.status = 'published';
+
+WITH translated_blocks AS (
+  SELECT block.id,
+    CASE
+      WHEN sct.field = 'hero' THEN json_set(block.data_json,
+        '$.title', COALESCE(NULLIF(sct.hero_title, ''), json_extract(block.data_json, '$.title')),
+        '$.subtitle', COALESCE(NULLIF(sct.hero_subtitle, ''), json_extract(block.data_json, '$.subtitle')),
+        '$.content', COALESCE(NULLIF(sct.content, ''), json_extract(block.data_json, '$.content')))
+      WHEN sct.field LIKE '%.title' OR sct.field LIKE '%.headline' THEN json_set(block.data_json, '$.text', COALESCE(NULLIF(sct.content, ''), NULLIF(sct.value, ''), json_extract(block.data_json, '$.text')))
+      ELSE json_set(block.data_json, '$.markdown', COALESCE(NULLIF(sct.content, ''), NULLIF(sct.value, ''), json_extract(block.data_json, '$.markdown')))
+    END AS data_json
+  FROM content_blocks block
+  JOIN site_content_translations sct
+  JOIN tenant_pages p
+    ON p.organization_id = sct.organization_id
+   AND p.site_id = sct.site_id
+   AND p.path = CASE sct.page WHEN 'home' THEN '/' ELSE '/' || trim(sct.page, '/') END
+  JOIN tenant_page_variants v ON v.page_id = p.id AND v.locale = sct.locale
+  JOIN content_documents d ON d.owner_type = 'tenant_page' AND d.owner_id = v.id
+  WHERE block.document_id = d.id
+    AND json_extract(block.data_json, '$.field') = sct.field
+    AND sct.location_id IS NULL
+    AND sct.status <> 'published'
+)
+UPDATE content_blocks
+SET data_json = (SELECT translated_blocks.data_json FROM translated_blocks WHERE translated_blocks.id = content_blocks.id)
+WHERE id IN (SELECT id FROM translated_blocks);
+
+WITH translated_blocks AS (
+  SELECT block.id,
+    CASE
+      WHEN sct.field = 'hero' THEN json_set(block.data_json,
+        '$.title', COALESCE(NULLIF(sct.hero_title, ''), json_extract(block.data_json, '$.title')),
+        '$.subtitle', COALESCE(NULLIF(sct.hero_subtitle, ''), json_extract(block.data_json, '$.subtitle')),
+        '$.content', COALESCE(NULLIF(sct.content, ''), json_extract(block.data_json, '$.content')))
+      WHEN sct.field LIKE '%.title' OR sct.field LIKE '%.headline' THEN json_set(block.data_json, '$.text', COALESCE(NULLIF(sct.content, ''), NULLIF(sct.value, ''), json_extract(block.data_json, '$.text')))
+      ELSE json_set(block.data_json, '$.markdown', COALESCE(NULLIF(sct.content, ''), NULLIF(sct.value, ''), json_extract(block.data_json, '$.markdown')))
+    END AS data_json
+  FROM content_blocks block
+  JOIN site_content_translations sct
+  JOIN business_locations bl ON bl.id = sct.location_id AND bl.site_id = sct.site_id
+  JOIN tenant_pages p ON p.site_id = sct.site_id AND p.path = '/locations/' || bl.slug
+  JOIN tenant_page_variants v ON v.page_id = p.id AND v.locale = sct.locale
+  JOIN content_documents d ON d.owner_type = 'tenant_page' AND d.owner_id = v.id
+  WHERE block.document_id = d.id
+    AND json_extract(block.data_json, '$.field') = sct.field
+    AND sct.page = 'location'
+    AND sct.status <> 'published'
+)
+UPDATE content_blocks
+SET data_json = (SELECT translated_blocks.data_json FROM translated_blocks WHERE translated_blocks.id = content_blocks.id)
+WHERE id IN (SELECT id FROM translated_blocks);
+
+UPDATE tenant_page_variants
+SET title = COALESCE(
+  (
+    SELECT NULLIF(sct.hero_title, '')
+      FROM site_content_translations sct
+      JOIN tenant_pages p ON p.id = tenant_page_variants.page_id
+      LEFT JOIN business_locations bl ON bl.id = sct.location_id AND bl.site_id = sct.site_id
+     WHERE sct.organization_id = tenant_page_variants.organization_id
+       AND sct.site_id = tenant_page_variants.site_id
+       AND sct.locale = tenant_page_variants.locale
+       AND sct.field = 'hero'
+       AND sct.status IN ('published', 'draft')
+       AND ((sct.location_id IS NULL AND p.path = CASE sct.page WHEN 'home' THEN '/' ELSE '/' || trim(sct.page, '/') END)
+         OR (sct.location_id IS NOT NULL AND p.path = '/locations/' || bl.slug))
+     ORDER BY sct.updated_at DESC
+     LIMIT 1
+  ),
+  (SELECT p.title FROM tenant_pages p WHERE p.id = tenant_page_variants.page_id)
+)
+WHERE locale <> COALESCE((SELECT locale FROM site_locales WHERE site_id = tenant_page_variants.site_id AND is_source = 1 LIMIT 1), (SELECT source_locale FROM sites WHERE id = tenant_page_variants.site_id));
+
 INSERT INTO content_blocks (id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at)
 SELECT 'migrated-tenant-page-block:' || v.id || ':title', d.id, NULL, 'heading', 0, 1,
        json_object('text', v.title, 'level', 1), CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
@@ -530,30 +747,27 @@ WHERE NOT EXISTS (SELECT 1 FROM content_blocks b WHERE b.document_id = d.id);
 INSERT INTO content_revisions
   (id, document_id, snapshot_json, body_markdown, created_by, label, created_at)
 SELECT
-  'migrated-tenant-page-revision:' || v.id,
+  'migrated-tenant-page-revision:' || v.id || ':draft',
   d.id,
   json_object(
     'schemaVersion', 1,
     'metadata', json_object('locale', v.locale, 'path', v.published_path, 'title', v.title, 'summary', v.summary, 'seoTitle', v.seo_title, 'seoDescription', v.seo_description, 'canonicalUrl', v.canonical_url, 'robots', v.robots, 'pageType', p.page_type, 'recipe', p.recipe),
     'blocks', COALESCE((SELECT json_group_array(json_object('id', b.id, 'parent_block_id', b.parent_block_id, 'type', b.type, 'position', b.position, 'level', b.level, 'data', json(b.data_json))) FROM content_blocks b WHERE b.document_id = d.id), json('[]'))
   ),
-  COALESCE(p.body, ''),
-  NULL,
-  'Migrated tenant page',
-  CURRENT_TIMESTAMP
+  COALESCE(p.body, ''), NULL, 'Migrated tenant page draft content', CURRENT_TIMESTAMP
 FROM tenant_page_variants v
 JOIN tenant_pages p ON p.id = v.page_id
 JOIN content_documents d ON d.owner_id = v.id AND d.owner_type = 'tenant_page';
 
 UPDATE content_documents
-SET draft_revision_id = 'migrated-tenant-page-revision:' || owner_id,
-    published_revision_id = CASE WHEN EXISTS (SELECT 1 FROM tenant_page_variants v WHERE v.id = owner_id AND v.status = 'published') THEN 'migrated-tenant-page-revision:' || owner_id ELSE NULL END,
+SET draft_revision_id = 'migrated-tenant-page-revision:' || owner_id || ':draft',
+    published_revision_id = CASE WHEN EXISTS (SELECT 1 FROM tenant_page_variants v WHERE v.id = owner_id AND v.status = 'published') THEN 'migrated-tenant-page-revision:' || owner_id || ':published' ELSE NULL END,
     updated_at = CURRENT_TIMESTAMP
 WHERE owner_type = 'tenant_page';
 
 UPDATE tenant_page_variants
 SET draft_document_id = 'migrated-tenant-page-document:' || id,
-    published_revision_id = CASE WHEN status = 'published' THEN 'migrated-tenant-page-revision:' || id ELSE NULL END,
+    published_revision_id = CASE WHEN status = 'published' THEN 'migrated-tenant-page-revision:' || id || ':published' ELSE NULL END,
     updated_at = CURRENT_TIMESTAMP;
 
 PRAGMA foreign_keys=ON;

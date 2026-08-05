@@ -48,6 +48,7 @@ type TextRecord = {
   page?: string | null
   field: string
   label: string
+  position?: number | null
   source_text?: string | null
   source_fields?: Record<string, string>
 }
@@ -102,9 +103,8 @@ async function getTranslationStates(
   const queries = await Promise.all([
     queryAll<TranslationStateRow>(db, `
       SELECT 'tenant_page' AS entity_type, page_id AS entity_id,
-             'blocks' AS field, NULL AS source_hash,
-             CASE WHEN published_revision_id IS NOT NULL THEN 'published' ELSE 'draft' END AS status
-      FROM tenant_page_variants
+             field, source_hash, status
+      FROM tenant_page_translation_fields
       WHERE organization_id = ? AND site_id = ? AND locale = ?
     `, [organizationId, siteId, targetLocale]),
     queryAll<TranslationStateRow>(db, `
@@ -184,7 +184,31 @@ async function getSourceRecords(
     const blocks = snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot) && Array.isArray((snapshot as { blocks?: unknown }).blocks)
       ? (snapshot as { blocks: Array<{ id?: unknown; type?: unknown; data?: unknown }> }).blocks
       : []
-    for (const block of blocks) {
+    const metadata = snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot) && (snapshot as { metadata?: unknown }).metadata && typeof (snapshot as { metadata: unknown }).metadata === 'object'
+      ? (snapshot as { metadata: Record<string, unknown> }).metadata
+      : {}
+    for (const [field, value] of [
+      ['title', metadata.title],
+      ['summary', metadata.summary],
+      ['seoTitle', metadata.seoTitle],
+      ['seoDescription', metadata.seoDescription],
+      ['canonicalUrl', metadata.canonicalUrl],
+    ] as Array<[string, unknown]>) {
+      const sourceFields = compactFields({ content: value })
+      const text = fieldsToText(sourceFields)
+      if (!text) continue
+      records.push({
+        entity_type: 'tenant_page',
+        entity_id: row.page_id,
+        location_id: null,
+        page: row.published_path,
+        field: `metadata.${field}`,
+        label: `${row.title} ${field}`,
+        source_text: text,
+        source_fields: sourceFields,
+      })
+    }
+    for (const [blockIndex, block] of blocks.entries()) {
       if (typeof block.id !== 'string' || !block.data || typeof block.data !== 'object' || Array.isArray(block.data)) continue
       const sourceFields = compactFields(Object.fromEntries(Object.entries(block.data as Record<string, unknown>).filter(([key, value]) => ['title', 'subtitle', 'text', 'markdown', 'description', 'label', 'body'].includes(key) && typeof value === 'string')))
       const text = fieldsToText(sourceFields)
@@ -196,6 +220,7 @@ async function getSourceRecords(
         page: row.published_path,
         field: block.id,
         label: `${row.title} ${String(block.type ?? 'block')}`,
+        position: typeof (block as { position?: unknown }).position === 'number' ? (block as { position: number }).position : blockIndex,
         source_text: text,
         source_fields: sourceFields,
       })
@@ -289,6 +314,44 @@ async function getSourceRecords(
   return records.filter(record => record.entity_id)
 }
 
+async function ensureTenantPageTranslationFields(
+  db: DbClient,
+  organizationId: string,
+  siteId: string,
+  targetLocale: string,
+  records: TextRecord[],
+) {
+  const pageRecords = records.filter(record => record.entity_type === 'tenant_page')
+  if (!pageRecords.length) return
+  await executeBatch(db, pageRecords.map(record => ({
+      query: `
+      INSERT INTO tenant_page_translation_fields
+        (id, organization_id, site_id, page_id, variant_id, locale, field, target_block_id, status, created_at, updated_at)
+      SELECT ?, ?, ?, ?, v.id, ?, ?,
+             CASE WHEN ? IS NULL THEN NULL ELSE (
+               SELECT b.id
+                 FROM content_documents d
+                 JOIN content_revisions r ON r.id = COALESCE(d.draft_revision_id, d.published_revision_id)
+                 JOIN content_blocks b ON b.document_id = d.id AND b.position = ?
+                WHERE d.owner_type = 'tenant_page' AND d.owner_id = v.id
+                LIMIT 1
+             ) END,
+             'missing', ?, ?
+        FROM tenant_page_variants v
+       WHERE v.page_id = ? AND v.organization_id = ? AND v.site_id = ? AND v.locale = ?
+         AND NOT EXISTS (
+           SELECT 1 FROM tenant_page_translation_fields existing
+            WHERE existing.variant_id = v.id AND existing.field = ?
+         )
+    `,
+    params: [
+      crypto.randomUUID(), organizationId, siteId, record.entity_id, targetLocale, record.field,
+      record.position ?? null, record.position ?? null,
+      new Date().toISOString(), new Date().toISOString(), record.entity_id, organizationId, siteId, targetLocale, record.field,
+    ],
+  })))
+}
+
 export async function buildTranslationInventory(
   db: DbClient,
   organizationId: string,
@@ -306,8 +369,9 @@ export async function buildTranslationInventory(
   if (targetLocale === sourceLocale) throw new Error('Target locale must be different from the source locale.')
 
   const scope = opts.scope ?? 'site'
-  const translationStates = await getTranslationStates(db, organizationId, siteId, targetLocale)
   const records = await getSourceRecords(db, organizationId, siteId)
+  await ensureTenantPageTranslationFields(db, organizationId, siteId, targetLocale, records)
+  const translationStates = await getTranslationStates(db, organizationId, siteId, targetLocale)
   const items: TranslationInventoryItem[] = []
 
   for (const record of records) {
@@ -317,7 +381,6 @@ export async function buildTranslationInventory(
 
     const hash = await sourceHash(sourceText)
     const state = translationStates.get(inventoryItemStateKey(record))
-      ?? (record.entity_type === 'tenant_page' ? translationStates.get(`${record.entity_type}:${record.entity_id}:blocks`) : undefined)
     const translationStatus: TranslationInventoryStatus = state?.source_hash && state.source_hash !== hash
       ? 'stale'
       : state?.status ?? 'missing'
@@ -467,18 +530,38 @@ export async function publishTranslationDrafts(
   const now = new Date().toISOString()
 
   let publishedCount = 0
+  const tenantPageItemsByPage = new Map<string, TranslationInventoryItem[]>()
+  for (const item of inventory.items) {
+    if (item.entity_type !== 'tenant_page') continue
+    const pageItems = tenantPageItemsByPage.get(item.entity_id) ?? []
+    pageItems.push(item)
+    tenantPageItemsByPage.set(item.entity_id, pageItems)
+  }
+  const tenantPageDrafts: TranslationInventoryItem[] = []
+  for (const [pageId, pageItems] of tenantPageItemsByPage) {
+    if (pageItems.some(item => !['draft', 'published'].includes(item.translation_status))) {
+      throw new Error(`Tenant page ${pageId} has untranslated or stale fields; complete and review every block and metadata field before publishing.`)
+    }
+    tenantPageDrafts.push(...pageItems.filter(item => item.translation_status === 'draft'))
+  }
+
   if (drafts.length) {
-    const tenantPageItems = drafts.filter(item => item.entity_type === 'tenant_page')
-    if (tenantPageItems.length) {
+    if (tenantPageDrafts.length) {
       const { ensureTenantPageVariant, publishTenantPage } = await import('~/server/utils/tenant-pages')
-      const pageIds = [...new Set(tenantPageItems.map(item => item.entity_id))]
+      const pageIds = [...new Set(tenantPageDrafts.map(item => item.entity_id))]
       for (const pageId of pageIds) {
         const variant = await ensureTenantPageVariant(db, pageId, inventory.target_locale, userId ?? null)
         await publishTenantPage(db, variant.id, {
           userId: userId ?? 'translation-system',
           scope: { siteId, organizationId },
           expectedDocumentUpdatedAt: variant.document.updated_at,
+          allowDraftTranslationReview: true,
         })
+        await execute(db, `
+          UPDATE tenant_page_translation_fields
+             SET status = 'published', reviewed_at = ?, reviewed_by = ?, updated_at = ?
+           WHERE organization_id = ? AND site_id = ? AND variant_id = ?
+        `, [now, userId ?? null, now, organizationId, siteId, variant.id])
       }
     }
 
@@ -545,7 +628,7 @@ export async function publishTranslationDrafts(
         .filter(item => item.translation_status === 'published')
         .map(item => `${inventoryItemStateKey(item)}:${item.source_hash}`),
     )
-    publishedCount = tenantPageItems.length + nonTenantDrafts.filter(item => publishedKeys.has(`${inventoryItemStateKey(item)}:${item.source_hash}`)).length
+    publishedCount = tenantPageDrafts.length + nonTenantDrafts.filter(item => publishedKeys.has(`${inventoryItemStateKey(item)}:${item.source_hash}`)).length
   }
 
   return {

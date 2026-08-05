@@ -102,7 +102,9 @@ export default defineEventHandler(async (event) => {
            AND canonical.status = 'active'
           LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
           LEFT JOIN tenant_redirects redirect_rule
-            ON redirect_rule.site_id = s.id AND redirect_rule.from_path = ?
+            ON redirect_rule.site_id = s.id
+           AND redirect_rule.locale = COALESCE((SELECT locale FROM site_locales WHERE site_id = s.id AND is_source = 1 LIMIT 1), s.source_locale)
+           AND redirect_rule.from_path = ?
           WHERE s.subdomain = ? AND s.status = 'active' AND s.onboarding_status = 'active'
           LIMIT 1
         `,
@@ -315,7 +317,9 @@ async function resolveTenantSite(
       FROM sites s
       LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
       LEFT JOIN tenant_redirects redirect_rule
-        ON redirect_rule.site_id = s.id AND redirect_rule.from_path = ?
+        ON redirect_rule.site_id = s.id
+       AND redirect_rule.locale = COALESCE((SELECT locale FROM site_locales WHERE site_id = s.id AND is_source = 1 LIMIT 1), s.source_locale)
+       AND redirect_rule.from_path = ?
       WHERE s.subdomain = ? AND s.status = 'active'
       LIMIT 1
     `,
@@ -341,7 +345,9 @@ async function resolveTenantSite(
       ON canonical.site_id = s.id AND canonical.role = 'canonical' AND canonical.status = 'active'
     LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
     LEFT JOIN tenant_redirects redirect_rule
-      ON redirect_rule.site_id = s.id AND redirect_rule.from_path = ?
+      ON redirect_rule.site_id = s.id
+     AND redirect_rule.locale = COALESCE((SELECT locale FROM site_locales WHERE site_id = s.id AND is_source = 1 LIMIT 1), s.source_locale)
+     AND redirect_rule.from_path = ?
     WHERE sd.domain = ? AND sd.type = 'custom' AND sd.status = 'active'
       AND s.status = 'active' AND s.onboarding_status = 'active'
     LIMIT 1
@@ -379,7 +385,9 @@ async function resolveTenantSite(
         ON canonical.site_id = s.id AND canonical.role = 'canonical' AND canonical.status = 'active'
       LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
       LEFT JOIN tenant_redirects redirect_rule
-        ON redirect_rule.site_id = s.id AND redirect_rule.from_path = ?
+        ON redirect_rule.site_id = s.id
+       AND redirect_rule.locale = COALESCE((SELECT locale FROM site_locales WHERE site_id = s.id AND is_source = 1 LIMIT 1), s.source_locale)
+       AND redirect_rule.from_path = ?
       WHERE sd.domain = ? AND sd.type = 'subdomain' AND sd.status = 'active'
         AND s.status = 'active' AND s.onboarding_status = 'active'
       LIMIT 1
@@ -405,7 +413,9 @@ async function resolveTenantSite(
       FROM sites s
       LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
       LEFT JOIN tenant_redirects redirect_rule
-        ON redirect_rule.site_id = s.id AND redirect_rule.from_path = ?
+        ON redirect_rule.site_id = s.id
+       AND redirect_rule.locale = COALESCE((SELECT locale FROM site_locales WHERE site_id = s.id AND is_source = 1 LIMIT 1), s.source_locale)
+       AND redirect_rule.from_path = ?
       WHERE s.subdomain = ? AND s.status = 'active' AND s.onboarding_status = 'active'
       LIMIT 1
     `,

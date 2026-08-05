@@ -6,7 +6,10 @@
 -- a no-op.
 
 WITH source_documents AS (
-  SELECT d.id AS document_id, p.body AS body
+  SELECT d.id AS document_id, d.owner_type, p.body AS body,
+         NULL AS locale, NULL AS page_path, NULL AS page_title, NULL AS page_summary,
+         NULL AS seo_title, NULL AS seo_description, NULL AS canonical_url,
+         NULL AS robots, NULL AS page_type, NULL AS recipe
   FROM content_documents d
   JOIN blog_posts p ON p.id = d.owner_id
    AND d.owner_type IN ('platform_blog', 'tenant_blog')
@@ -19,7 +22,10 @@ WITH source_documents AS (
     ))
   )
   UNION ALL
-  SELECT d.id AS document_id, p.body AS body
+  SELECT d.id AS document_id, d.owner_type, p.body AS body,
+         NULL AS locale, NULL AS page_path, NULL AS page_title, NULL AS page_summary,
+         NULL AS seo_title, NULL AS seo_description, NULL AS canonical_url,
+         NULL AS robots, NULL AS page_type, NULL AS recipe
   FROM content_documents d
   JOIN platform_docs p ON p.id = d.owner_id
    AND d.owner_type = 'platform_doc'
@@ -32,7 +38,10 @@ WITH source_documents AS (
     ))
   )
   UNION ALL
-  SELECT d.id AS document_id, COALESCE(NULLIF(p.body, ''), v.title, '') AS body
+  SELECT d.id AS document_id, d.owner_type, COALESCE(NULLIF(v.title, ''), '') AS body,
+         v.locale, v.published_path, v.title, v.summary,
+         v.seo_title, v.seo_description, v.canonical_url,
+         v.robots, p.page_type, p.recipe
   FROM content_documents d
   JOIN tenant_page_variants v ON v.id = d.owner_id
    AND d.owner_type = 'tenant_page'
@@ -65,7 +74,10 @@ WHERE trim(source_documents.body) <> ''
   );
 
 WITH source_documents AS (
-  SELECT d.id AS document_id, p.body AS body
+  SELECT d.id AS document_id, d.owner_type, p.body AS body,
+         NULL AS locale, NULL AS page_path, NULL AS page_title, NULL AS page_summary,
+         NULL AS seo_title, NULL AS seo_description, NULL AS canonical_url,
+         NULL AS robots, NULL AS page_type, NULL AS recipe
   FROM content_documents d
   JOIN blog_posts p ON p.id = d.owner_id
    AND d.owner_type IN ('platform_blog', 'tenant_blog')
@@ -78,7 +90,10 @@ WITH source_documents AS (
     ))
   )
   UNION ALL
-  SELECT d.id AS document_id, p.body AS body
+  SELECT d.id AS document_id, d.owner_type, p.body AS body,
+         NULL AS locale, NULL AS page_path, NULL AS page_title, NULL AS page_summary,
+         NULL AS seo_title, NULL AS seo_description, NULL AS canonical_url,
+         NULL AS robots, NULL AS page_type, NULL AS recipe
   FROM content_documents d
   JOIN platform_docs p ON p.id = d.owner_id
    AND d.owner_type = 'platform_doc'
@@ -91,7 +106,10 @@ WITH source_documents AS (
     ))
   )
   UNION ALL
-  SELECT d.id AS document_id, COALESCE(NULLIF(p.body, ''), v.title, '') AS body
+  SELECT d.id AS document_id, d.owner_type, COALESCE(NULLIF(v.title, ''), '') AS body,
+         v.locale, v.published_path, v.title, v.summary,
+         v.seo_title, v.seo_description, v.canonical_url,
+         v.robots, p.page_type, p.recipe
   FROM content_documents d
   JOIN tenant_page_variants v ON v.id = d.owner_id
    AND d.owner_type = 'tenant_page'
@@ -110,7 +128,29 @@ INSERT INTO content_revisions
 SELECT
   'repaired-content-revision:' || source_documents.document_id,
   source_documents.document_id,
-  json_object(
+  CASE WHEN source_documents.owner_type = 'tenant_page' THEN json_object(
+    'schemaVersion', 1,
+    'metadata', json_object(
+      'locale', source_documents.locale,
+      'path', source_documents.page_path,
+      'title', source_documents.page_title,
+      'summary', source_documents.page_summary,
+      'seoTitle', source_documents.seo_title,
+      'seoDescription', source_documents.seo_description,
+      'canonicalUrl', source_documents.canonical_url,
+      'robots', source_documents.robots,
+      'pageType', source_documents.page_type,
+      'recipe', source_documents.recipe
+    ),
+    'blocks', json_array(json_object(
+      'id', 'repaired-content-block:' || source_documents.document_id,
+      'parent_block_id', NULL,
+      'type', 'markdown',
+      'position', 0,
+      'level', NULL,
+      'data', json_object('markdown', source_documents.body, 'editor_mode', 'source')
+    ))
+  ) ELSE json_object(
     'schemaVersion', 1,
     'blocks', json_array(json_object(
       'id', 'repaired-content-block:' || source_documents.document_id,
@@ -120,7 +160,7 @@ SELECT
       'level', NULL,
       'data', json_object('markdown', source_documents.body, 'editor_mode', 'source')
     ))
-  ),
+  ) END,
   source_documents.body,
   NULL,
   'Repair dangling content revision after tenant page migration',

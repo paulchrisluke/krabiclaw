@@ -69,19 +69,46 @@ async function upsertTenantPageTranslation(
   fields: Record<string, string>,
 ) {
   const page = await ensureTenantPageVariant(db, item.entity_id, job.target_locale, null)
-  const blocks = page.blocks.map(block => block.id !== item.field
-    ? block
-    : { ...block, data: { ...block.data, ...fields } })
+  const metadata = {
+    title: page.title,
+    summary: page.summary,
+    seoTitle: page.seo_title,
+    seoDescription: page.seo_description,
+    canonicalUrl: page.canonical_url,
+  }
+  let blocks = page.blocks
+  if (item.field.startsWith('metadata.')) {
+    const metadataField = item.field.slice('metadata.'.length) as keyof typeof metadata
+    const translated = fields.content ?? Object.values(fields)[0]
+    if (translated && metadataField in metadata) {
+      if (metadataField === 'title') metadata.title = translated
+      if (metadataField === 'summary') metadata.summary = translated
+      if (metadataField === 'seoTitle') metadata.seoTitle = translated
+      if (metadataField === 'seoDescription') metadata.seoDescription = translated
+      if (metadataField === 'canonicalUrl') metadata.canonicalUrl = translated
+    }
+  } else {
+    const mapping = await queryFirst<{ target_block_id: string | null } | null>(db, `
+      SELECT target_block_id
+        FROM tenant_page_translation_fields
+       WHERE organization_id = ? AND site_id = ? AND variant_id = ? AND field = ?
+       LIMIT 1
+    `, [job.organization_id, job.site_id, page.id, item.field])
+    if (!mapping?.target_block_id) throw new Error(`Translated tenant page block mapping is unavailable for ${item.field}.`)
+    blocks = page.blocks.map(block => block.id !== mapping.target_block_id
+      ? block
+      : { ...block, data: { ...block.data, ...fields } })
+  }
   await updateTenantPageDraft(db, page.id, {
     userId: null,
     scope: { siteId: job.site_id, organizationId: job.organization_id },
     data: {
       path: page.path,
-      title: page.title,
-      summary: page.summary,
-      seoTitle: page.seo_title,
-      seoDescription: page.seo_description,
-      canonicalUrl: page.canonical_url,
+      title: metadata.title,
+      summary: metadata.summary,
+      seoTitle: metadata.seoTitle,
+      seoDescription: metadata.seoDescription,
+      canonicalUrl: metadata.canonicalUrl,
       robots: page.robots,
       pageType: page.page_type,
       recipe: page.recipe,
@@ -90,6 +117,11 @@ async function upsertTenantPageTranslation(
       expectedDocumentUpdatedAt: page.document.updated_at,
     },
   })
+  await execute(db, `
+    UPDATE tenant_page_translation_fields
+       SET source_hash = ?, status = 'draft', translated_at = ?, reviewed_at = NULL, reviewed_by = NULL, updated_at = ?
+     WHERE organization_id = ? AND site_id = ? AND variant_id = ? AND field = ?
+  `, [item.source_hash, new Date().toISOString(), new Date().toISOString(), job.organization_id, job.site_id, page.id, item.field])
 }
 
 async function upsertEntityTranslation(

@@ -1822,6 +1822,8 @@ export const tenant_redirects = sqliteTable("tenant_redirects", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	locale: text().notNull(),
+	owner_variant_id: text(),
 	from_path: text().notNull(),
 	to_path: text(),
 	status_code: integer().default(301).notNull(),
@@ -1831,11 +1833,12 @@ export const tenant_redirects = sqliteTable("tenant_redirects", {
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
-	unique("tenant_redirects_site_from_path_unique").on(table.site_id, table.from_path),
+	unique("tenant_redirects_site_locale_from_path_unique").on(table.site_id, table.locale, table.from_path),
 	check("tenant_redirects_from_path_check", sql`from_path LIKE '/%'`),
 	check("tenant_redirects_behavior_check", sql`behavior IN ('redirect', 'gone', 'noindex')`),
 	check("tenant_redirects_redirect_to_path_check", sql`behavior != 'redirect' OR to_path IS NOT NULL`),
 	index("tenant_redirects_organization_id_idx").on(table.organization_id),
+	index("tenant_redirects_site_locale_path_idx").on(table.site_id, table.locale, table.from_path),
 ]);
 
 export const site_conversion_events = sqliteTable("site_conversion_events", {
@@ -2495,4 +2498,27 @@ export const tenant_page_variants = sqliteTable("tenant_page_variants", {
 	index("tenant_page_variants_page_idx").on(table.page_id),
 	check("tenant_page_variants_path_check", sql`published_path LIKE '/%' AND published_path NOT LIKE '//%'`),
 	check("tenant_page_variants_status_check", sql`status IN ('draft', 'published', 'archived')`),
+]);
+
+export const tenant_page_translation_fields = sqliteTable("tenant_page_translation_fields", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	page_id: text().notNull().references(() => tenant_pages.id, { onDelete: "cascade" } ),
+	variant_id: text().notNull().references(() => tenant_page_variants.id, { onDelete: "cascade" } ),
+	locale: text().notNull(),
+	field: text().notNull(),
+	target_block_id: text(),
+	source_hash: text(),
+	status: text().default("missing").notNull(),
+	translated_at: text(),
+	reviewed_at: text(),
+	reviewed_by: text().references(() => user.id, { onDelete: "set null" } ),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	unique("tenant_page_translation_fields_variant_field_unique").on(table.variant_id, table.field),
+	index("tenant_page_translation_fields_site_locale_idx").on(table.site_id, table.locale, table.status),
+	index("tenant_page_translation_fields_page_idx").on(table.page_id),
+	check("tenant_page_translation_fields_status_check", sql`status IN ('missing', 'draft', 'published')`),
 ]);
