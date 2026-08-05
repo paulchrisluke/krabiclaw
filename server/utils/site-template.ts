@@ -377,10 +377,10 @@ export async function seedNewSite(
   ]);
   if (vertical === 'professional_service') {
     for (const [page, path, pageType] of [
-      ['services', '/services', 'recipe'],
-      ['pricing', '/pricing', 'recipe'],
-      ['donate', '/donate', 'recipe'],
-      ['schedule', '/schedule', 'recipe'],
+      ['services', '/services', 'system'],
+      ['pricing', '/pricing', 'system'],
+      ['donate', '/donate', 'system'],
+      ['schedule', '/schedule', 'system'],
       ['privacy', '/policies/privacy', 'legal'],
       ['terms', '/policies/terms', 'legal'],
       ['third-party-notices', '/third-party-notices', 'legal'],
