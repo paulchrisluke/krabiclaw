@@ -1,7 +1,7 @@
 import { tokensToCredits } from '~/server/utils/ai-credits'
 import { getSourceLocale } from '~/server/utils/site-locales'
 import { normalizeLocale } from '~/server/utils/site-i18n'
-import { execute, executeBatch, queryAll, type BatchQuery, type DbClient } from '~/server/db'
+import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 
 export type TranslationEntityType = 'tenant_page' | 'menu' | 'menu_item' | 'business_location' | 'post'
 export type TranslationScope = 'site' | 'content' | 'menus' | 'locations' | 'posts'
@@ -53,6 +53,28 @@ type TextRecord = {
   source_fields?: Record<string, string>
 }
 
+type TenantPageSourceBlock = {
+  id: string
+  parent_block_id?: string | null
+  type: string
+  position?: number
+  level?: number | null
+  data: Record<string, unknown>
+}
+
+type TenantPageStoredBlock = {
+  id: string
+  parent_block_id: string | null
+  type: string
+  position: number
+  level: number | null
+  data_json: string
+}
+
+type TenantPageStoredBlockWithData = TenantPageStoredBlock & {
+  data: Record<string, unknown>
+}
+
 function cleanText(value: unknown): string {
   if (typeof value !== 'string') return ''
   return value.replace(/\s+/g, ' ').trim()
@@ -68,6 +90,180 @@ function compactFields(fields: Record<string, unknown>): Record<string, string> 
 
 function fieldsToText(fields: Record<string, string>): string {
   return Object.entries(fields).map(([key, value]) => `${key}: ${value}`).join('\n')
+}
+
+function parseTenantPageBlocks(snapshotJson: string, label: string): TenantPageSourceBlock[] {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(snapshotJson)
+  } catch {
+    throw new Error(`${label} has malformed translation snapshot.`)
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error(`${label} has malformed translation snapshot.`)
+  const blocks = (parsed as { blocks?: unknown }).blocks
+  if (!Array.isArray(blocks)) throw new Error(`${label} has malformed translation snapshot.`)
+  return blocks.map((block, index) => {
+    if (!block || typeof block !== 'object' || Array.isArray(block)) throw new Error(`${label} has malformed translation block ${index}.`)
+    const candidate = block as Record<string, unknown>
+    if (typeof candidate.id !== 'string' || typeof candidate.type !== 'string' || !candidate.data || typeof candidate.data !== 'object' || Array.isArray(candidate.data)) {
+      throw new Error(`${label} has malformed translation block ${index}.`)
+    }
+    return {
+      id: candidate.id,
+      parent_block_id: typeof candidate.parent_block_id === 'string' ? candidate.parent_block_id : null,
+      type: candidate.type,
+      position: typeof candidate.position === 'number' ? candidate.position : index,
+      level: typeof candidate.level === 'number' ? candidate.level : null,
+      data: candidate.data as Record<string, unknown>,
+    }
+  })
+}
+
+function parseStoredBlock(row: TenantPageStoredBlock, label: string): TenantPageStoredBlockWithData {
+  let data: unknown
+  try { data = JSON.parse(row.data_json) } catch { throw new Error(`${label} block ${row.id} has malformed data.`) }
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error(`${label} block ${row.id} has malformed data.`)
+  return { ...row, data: data as Record<string, unknown> }
+}
+
+async function reconcileTenantPageTranslationTopology(
+  db: DbClient,
+  organizationId: string,
+  siteId: string,
+  targetLocale: string,
+  pageIds: string[],
+) {
+  for (const pageId of pageIds) {
+    const source = await queryFirst<{ snapshot_json: string } | null>(db, `
+      SELECT r.snapshot_json
+        FROM tenant_page_variants v
+        JOIN site_locales sl ON sl.site_id = v.site_id AND sl.locale = v.locale AND sl.is_source = 1
+        JOIN content_documents d ON d.owner_type = 'tenant_page' AND d.owner_id = v.id
+        JOIN content_revisions r ON r.id = d.published_revision_id AND r.document_id = d.id
+       WHERE v.page_id = ? AND v.organization_id = ? AND v.site_id = ?
+         AND v.status = 'published' AND v.published_revision_id IS NOT NULL
+       LIMIT 1
+    `, [pageId, organizationId, siteId])
+    const target = await queryFirst<{
+      variant_id: string
+      document_id: string
+      draft_revision_id: string | null
+      document_updated_at: string
+      snapshot_json: string
+      body_markdown: string
+    } | null>(db, `
+      SELECT v.id AS variant_id, d.id AS document_id, d.draft_revision_id, d.updated_at AS document_updated_at,
+             r.snapshot_json, r.body_markdown
+        FROM tenant_page_variants v
+        JOIN content_documents d ON d.owner_type = 'tenant_page' AND d.owner_id = v.id
+        JOIN content_revisions r ON r.id = d.draft_revision_id AND r.document_id = d.id
+       WHERE v.page_id = ? AND v.organization_id = ? AND v.site_id = ? AND v.locale = ?
+       LIMIT 1
+    `, [pageId, organizationId, siteId, targetLocale])
+    if (!source || !target) continue
+
+    const sourceBlocks = parseTenantPageBlocks(source.snapshot_json, `Source tenant page ${pageId}`)
+    const storedBlocks = (await queryAll<TenantPageStoredBlock>(db, `
+      SELECT id, parent_block_id, type, position, level, data_json
+        FROM content_blocks
+       WHERE document_id = ?
+       ORDER BY position ASC, id ASC
+    `, [target.document_id])).map(row => parseStoredBlock(row, `Translated tenant page ${pageId}`))
+    const mappings = await queryAll<{ field: string; target_block_id: string | null }>(db, `
+      SELECT field, target_block_id
+        FROM tenant_page_translation_fields
+       WHERE variant_id = ? AND target_block_id IS NOT NULL
+    `, [target.variant_id])
+    const mappedTargetId = new Map(mappings.map(row => [row.field, row.target_block_id!]))
+    const targetById = new Map(storedBlocks.map(block => [block.id, block]))
+    const targetByLineage = new Map(storedBlocks.flatMap(block => {
+      const lineage = typeof block.data.source_block_id === 'string'
+        ? block.data.source_block_id
+        : null
+      return lineage ? [[lineage, block] as const] : []
+    }))
+    const selectedTargetBlocks = new Map<string, TenantPageStoredBlockWithData | null>()
+    const targetIdsBySourceId = new Map<string, string>()
+    for (const sourceBlock of sourceBlocks) {
+      const mapped = mappedTargetId.get(sourceBlock.id)
+      const mappedBlock = mapped ? targetById.get(mapped) : undefined
+      const mappedLineage = mappedBlock && typeof mappedBlock.data.source_block_id === 'string'
+        ? mappedBlock.data.source_block_id
+        : null
+      const targetBlock = (mappedBlock && (!mappedLineage || mappedLineage === sourceBlock.id))
+        ? mappedBlock
+        : targetByLineage.get(sourceBlock.id)
+      selectedTargetBlocks.set(sourceBlock.id, targetBlock ?? null)
+      targetIdsBySourceId.set(sourceBlock.id, targetBlock?.id ?? crypto.randomUUID())
+    }
+
+    const nextBlocks: Array<{ id: string; parent_block_id: string | null; type: string; position: number; level: number | null; data: Record<string, unknown> }> = sourceBlocks.map(sourceBlock => {
+      const targetBlock = selectedTargetBlocks.get(sourceBlock.id) ?? null
+      const parentBlockId = sourceBlock.parent_block_id
+        ? targetIdsBySourceId.get(sourceBlock.parent_block_id) ?? null
+        : null
+      const data = targetBlock
+        ? { ...targetBlock.data, source_block_id: sourceBlock.id }
+        : { ...sourceBlock.data, source_block_id: sourceBlock.id }
+      return {
+        id: targetIdsBySourceId.get(sourceBlock.id)!,
+        parent_block_id: parentBlockId,
+        type: sourceBlock.type,
+        position: sourceBlock.position ?? 0,
+        level: targetBlock?.level ?? sourceBlock.level ?? null,
+        data,
+      }
+    })
+
+    const currentShape = storedBlocks.map(block => `${block.id}:${block.type}:${block.position}:${block.data.source_block_id ?? ''}`).join('|')
+    const nextShape = nextBlocks.map(block => `${block.id}:${block.type}:${block.position}:${block.data.source_block_id ?? ''}`).join('|')
+    const mappingUpdates = sourceBlocks.flatMap(sourceBlock => {
+      const existing = mappedTargetId.get(sourceBlock.id)
+      const targetBlockId = targetIdsBySourceId.get(sourceBlock.id)
+      return existing && targetBlockId && existing !== targetBlockId
+        ? [{
+            query: `UPDATE tenant_page_translation_fields
+                       SET target_block_id = ?, updated_at = ?
+                     WHERE variant_id = ? AND field = ? AND (target_block_id IS NULL OR target_block_id <> ?)`,
+            params: [targetBlockId, new Date().toISOString(), target.variant_id, sourceBlock.id, targetBlockId],
+          }]
+        : []
+    })
+    if (currentShape === nextShape && !mappingUpdates.length) continue
+
+    const revisionId = crypto.randomUUID()
+    const snapshot = JSON.parse(target.snapshot_json) as Record<string, unknown>
+    snapshot.blocks = nextBlocks
+    const now = new Date().toISOString()
+    const queries: BatchQuery[] = [
+      {
+        query: `INSERT INTO content_blocks (id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at)
+          SELECT ?, ?, NULL, '__content_document_concurrency_guard__', 0, NULL, '{}', ?, ?
+           WHERE NOT EXISTS (SELECT 1 FROM content_documents WHERE id = ? AND updated_at = ?)`,
+        params: [crypto.randomUUID(), target.document_id, now, now, target.document_id, target.document_updated_at],
+      },
+    ]
+    if (currentShape !== nextShape) {
+      queries.push(
+        { query: 'DELETE FROM content_blocks WHERE document_id = ?', params: [target.document_id] },
+        ...nextBlocks.map(block => ({
+          query: `INSERT INTO content_blocks (id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          params: [block.id, target.document_id, block.parent_block_id, block.type, block.position, block.level, JSON.stringify(block.data), now, now],
+        })),
+        {
+          query: 'INSERT INTO content_revisions (id, document_id, snapshot_json, body_markdown, created_by, label, created_at) VALUES (?, ?, ?, ?, NULL, ?, ?)',
+          params: [revisionId, target.document_id, JSON.stringify(snapshot), target.body_markdown, 'Reconciled translated tenant page topology', now],
+        },
+        {
+          query: 'UPDATE content_documents SET draft_revision_id = ?, updated_at = ? WHERE id = ? AND updated_at = ?',
+          params: [revisionId, now, target.document_id, target.document_updated_at],
+        },
+      )
+    }
+    queries.push(...mappingUpdates)
+    await executeBatch(db, queries)
+  }
 }
 
 function estimateTokensFromChars(chars: number): number {
@@ -323,6 +519,30 @@ async function ensureTenantPageTranslationFields(
 ) {
   const pageRecords = records.filter(record => record.entity_type === 'tenant_page')
   if (!pageRecords.length) return
+  const recordsByPage = new Map<string, TextRecord[]>()
+  for (const record of pageRecords) {
+    const page = recordsByPage.get(record.entity_id) ?? []
+    page.push(record)
+    recordsByPage.set(record.entity_id, page)
+  }
+
+  await reconcileTenantPageTranslationTopology(db, organizationId, siteId, targetLocale, [...recordsByPage.keys()])
+
+  await Promise.all([...recordsByPage.entries()].map(async ([pageId, page]) => {
+    const variant = await queryFirst<{ id: string } | null>(db, `
+      SELECT id FROM tenant_page_variants
+       WHERE page_id = ? AND organization_id = ? AND site_id = ? AND locale = ?
+       LIMIT 1
+    `, [pageId, organizationId, siteId, targetLocale])
+    if (!variant) return
+    const fields = page.map(record => record.field)
+    await execute(db, `
+      DELETE FROM tenant_page_translation_fields
+       WHERE variant_id = ?
+         AND field NOT IN (${fields.map(() => '?').join(',')})
+    `, [variant.id, ...fields])
+  }))
+
   await executeBatch(db, pageRecords.map(record => ({
       query: `
       INSERT INTO tenant_page_translation_fields
@@ -331,11 +551,11 @@ async function ensureTenantPageTranslationFields(
              CASE WHEN ? IS NULL THEN NULL ELSE (
                SELECT b.id
                  FROM content_documents d
-                 JOIN content_revisions r ON r.id = COALESCE(d.draft_revision_id, d.published_revision_id)
-                 JOIN content_blocks b ON b.document_id = d.id AND b.position = ?
+                 JOIN content_blocks b ON b.document_id = d.id
                 WHERE d.owner_type = 'tenant_page' AND d.owner_id = v.id
+                  AND json_extract(b.data_json, '$.source_block_id') = ?
                 LIMIT 1
-             ) END,
+               ) END,
              'missing', ?, ?
         FROM tenant_page_variants v
        WHERE v.page_id = ? AND v.organization_id = ? AND v.site_id = ? AND v.locale = ?
@@ -346,7 +566,7 @@ async function ensureTenantPageTranslationFields(
     `,
     params: [
       crypto.randomUUID(), organizationId, siteId, record.entity_id, targetLocale, record.field,
-      record.position ?? null, record.position ?? null,
+      record.position ?? null, record.field,
       new Date().toISOString(), new Date().toISOString(), record.entity_id, organizationId, siteId, targetLocale, record.field,
     ],
   })))

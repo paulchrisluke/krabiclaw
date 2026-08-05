@@ -132,6 +132,18 @@ test.describe('restaurant translations', () => {
     )
     expect(staleItem).toBeDefined()
     expect(staleItem.translation_status).toBe('stale')
+
+    const translatedPagesResponse = await request.get(`${editorBase}/pages?locale=${encodeURIComponent(normalizedLocaleCode)}`)
+    expect(translatedPagesResponse.status()).toBe(200)
+    const translatedPages = await translatedPagesResponse.json() as { pages: Array<{ id: string; path: string }> }
+    const translatedHome = translatedPages.pages.find(page => page.path === '/')
+    expect(translatedHome).toBeDefined()
+    const translatedDetailResponse = await request.get(`${editorBase}/pages/${translatedHome!.id}`)
+    const translatedDetail = await translatedDetailResponse.json() as { page: { document: { updated_at: string } } }
+    const directPublish = await request.post(`${editorBase}/pages/${translatedHome!.id}/publish`, {
+      data: { expectedDocumentUpdatedAt: translatedDetail.page.document.updated_at },
+    })
+    expect(directPublish.status()).toBe(409)
   })
 
   test('demo site exposes Thai public menu content', async ({ request, baseURL }) => {

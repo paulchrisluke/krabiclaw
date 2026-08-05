@@ -52,9 +52,9 @@ async function hydrateBlocks(db: DbClient, siteId: string, pagePath: string, blo
                thumbnail_asset_id, hero_image_asset_id, media_asset_ids
           FROM offerings
          WHERE site_id = ? AND status = 'published'
-           ${offeringIds.size ? `AND id IN (${Array.from(offeringIds).map(() => '?').join(',')})` : ''}
+           ${hasOfferingSource ? '' : `AND id IN (${Array.from(offeringIds).map(() => '?').join(',')})`}
          ORDER BY sort_order ASC, name ASC
-      `, [siteId, ...offeringIds])
+      `, [siteId, ...(hasOfferingSource ? [] : offeringIds)])
     : []
   const locations = locationIds.size
     ? await queryAll<{ id: string; title: string; slug: string; description: string | null; short_description: string | null; hero_media_asset_id: string | null }>(db, `
@@ -63,7 +63,6 @@ async function hydrateBlocks(db: DbClient, siteId: string, pagePath: string, blo
          WHERE site_id = ? AND status = 'active' AND id IN (${Array.from(locationIds).map(() => '?').join(',')})
       `, [siteId, ...locationIds])
     : []
-  if (offerings.length !== offeringIds.size && offeringIds.size) throw createError({ statusCode: 500, statusMessage: 'Tenant page references an unavailable offering' })
   if (locations.length !== locationIds.size) throw createError({ statusCode: 500, statusMessage: 'Tenant page references an unavailable location' })
   const [qaRows, reviewRows, postRows] = await Promise.all([
     hasQaSource ? listPageQa(db, siteId, pagePath, true) : Promise.resolve([]),
@@ -99,6 +98,8 @@ async function hydrateBlocks(db: DbClient, siteId: string, pagePath: string, blo
     if (!asset?.public_url) throw createError({ statusCode: 500, statusMessage: `Tenant page media asset ${id} is unavailable` })
   }
   const offeringById = new Map(offerings.map(item => [item.id, item]))
+  const selectedOfferings = new Map(Array.from(offeringIds).map(id => [id, offeringById.get(id)] as const))
+  if ([...selectedOfferings.values()].some(offering => !offering)) throw createError({ statusCode: 500, statusMessage: 'Tenant page references an unavailable offering' })
   const locationById = new Map(locations.map(item => [item.id, item]))
   const qaItems = qaRows.map(row => ({ id: String(row.id), title: String(row.question), description: typeof row.answer === 'string' ? row.answer : undefined }))
   const reviewItems = (reviewRows as Array<Record<string, unknown>>).map(row => ({
@@ -133,7 +134,7 @@ async function hydrateBlocks(db: DbClient, siteId: string, pagePath: string, blo
     }
     if (block.type === 'offering_grid' && Array.isArray(data.offering_ids)) {
       data.items = data.offering_ids.map(id => {
-        const offering = typeof id === 'string' ? offeringById.get(id) : undefined
+        const offering = typeof id === 'string' ? selectedOfferings.get(id) : undefined
         if (!offering) throw createError({ statusCode: 500, statusMessage: 'Tenant page offering reference is unavailable' })
         const imageId = offering.thumbnail_asset_id ?? offering.hero_image_asset_id
         return {

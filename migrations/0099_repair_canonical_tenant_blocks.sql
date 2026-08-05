@@ -181,6 +181,7 @@ WHERE document_id IN (
   JOIN tenant_page_variants variant ON variant.id = document.owner_id
   JOIN tenant_pages page ON page.id = variant.page_id
   WHERE document.owner_type = 'tenant_page' AND page.path = '/'
+    AND page.site_id = 'site-ncls-blawby'
 )
 AND position >= 5;
 
@@ -198,9 +199,10 @@ SELECT
   CURRENT_TIMESTAMP
 FROM content_documents document
 JOIN tenant_page_variants variant ON variant.id = document.owner_id
-JOIN tenant_pages page ON page.id = variant.page_id
-WHERE document.owner_type = 'tenant_page'
-  AND page.path = '/'
+  JOIN tenant_pages page ON page.id = variant.page_id
+  WHERE document.owner_type = 'tenant_page'
+    AND page.path = '/'
+    AND page.site_id = 'site-ncls-blawby'
   AND NOT EXISTS (
     SELECT 1 FROM content_blocks existing
     WHERE existing.document_id = document.id
@@ -221,9 +223,10 @@ SELECT
   CURRENT_TIMESTAMP
 FROM content_documents document
 JOIN tenant_page_variants variant ON variant.id = document.owner_id
-JOIN tenant_pages page ON page.id = variant.page_id
-WHERE document.owner_type = 'tenant_page'
-  AND page.path = '/'
+  JOIN tenant_pages page ON page.id = variant.page_id
+  WHERE document.owner_type = 'tenant_page'
+    AND page.path = '/'
+    AND page.site_id = 'site-ncls-blawby'
   AND NOT EXISTS (
     SELECT 1 FROM content_blocks existing
     WHERE existing.document_id = document.id
@@ -239,6 +242,7 @@ WHERE document_id IN (
   JOIN tenant_page_variants variant ON variant.id = document.owner_id
   JOIN tenant_pages page ON page.id = variant.page_id
   WHERE document.owner_type = 'tenant_page'
+    AND page.site_id = 'site-ncls-blawby'
     AND page.path IN ('/about', '/pricing', '/contact', '/donate', '/policies/privacy', '/policies/terms', '/third-party-notices')
 )
 AND position >= 1;
@@ -257,14 +261,15 @@ SELECT
   CURRENT_TIMESTAMP
 FROM content_documents document
 JOIN tenant_page_variants variant ON variant.id = document.owner_id
-JOIN tenant_pages page ON page.id = variant.page_id
-WHERE document.owner_type = 'tenant_page'
-  AND page.path IN ('/about', '/pricing', '/contact', '/donate', '/policies/privacy', '/policies/terms', '/third-party-notices')
+  JOIN tenant_pages page ON page.id = variant.page_id
+  WHERE document.owner_type = 'tenant_page'
+    AND page.site_id = 'site-ncls-blawby'
+    AND page.path IN ('/about', '/pricing', '/contact', '/donate', '/policies/privacy', '/policies/terms', '/third-party-notices')
   AND EXISTS (SELECT 1 FROM content_blocks hero WHERE hero.document_id = document.id AND hero.type = 'hero' AND hero.position = 0)
   AND NOT EXISTS (SELECT 1 FROM content_blocks existing WHERE existing.document_id = document.id AND json_extract(existing.data_json, '$.section') = 'shield-divider');
 
--- Published pages read immutable revision snapshots. Rebuild those snapshots
--- after the canonical block repair so the database and public read model agree.
+-- Draft revisions intentionally follow the repaired mutable document. This is
+-- limited to the current draft pointer; historical revisions remain immutable.
 UPDATE content_revisions
 SET snapshot_json = json_set(
   snapshot_json,
@@ -278,4 +283,116 @@ SET snapshot_json = json_set(
     ) ordered
   ), '[]'))
 )
-WHERE document_id IN (SELECT id FROM content_documents WHERE owner_type = 'tenant_page');
+WHERE id IN (
+  SELECT draft_revision_id FROM content_documents
+   WHERE owner_type = 'tenant_page' AND draft_revision_id IS NOT NULL
+     AND NOT EXISTS (
+       SELECT 1 FROM content_documents published_document
+        WHERE published_document.owner_type = 'tenant_page'
+          AND published_document.published_revision_id = content_revisions.id
+     )
+);
+
+-- Published revisions are rebuilt from their own published snapshot, never
+-- from the mutable draft blocks. The legacy payload is normalized in-place so
+-- published translated pages cannot receive draft translation overrides.
+UPDATE content_revisions
+SET snapshot_json = json_set(
+  snapshot_json,
+  '$.blocks', json(COALESCE((
+    SELECT json_group_array(json_object(
+      'id', normalized.id,
+      'parent_block_id', normalized.parent_block_id,
+      'type', normalized.type,
+      'position', normalized.position,
+      'level', normalized.level,
+      'data', json(normalized.data_json)
+    ))
+    FROM (
+      SELECT
+        json_extract(block.value, '$.id') AS id,
+        json_extract(block.value, '$.parent_block_id') AS parent_block_id,
+        json_extract(block.value, '$.type') AS type,
+        CAST(json_extract(block.value, '$.position') AS INTEGER)
+          + CASE
+              WHEN page.site_id = 'site-ncls-blawby' AND page.path = '/' AND CAST(json_extract(block.value, '$.position') AS INTEGER) >= 5 THEN 2
+              WHEN page.site_id = 'site-ncls-blawby' AND page.path IN ('/about', '/pricing', '/contact', '/donate', '/policies/privacy', '/policies/terms', '/third-party-notices') AND CAST(json_extract(block.value, '$.position') AS INTEGER) >= 1 THEN 1
+              ELSE 0
+            END AS position,
+        json_extract(block.value, '$.level') AS level,
+        CASE json_extract(block.value, '$.data.type')
+          WHEN 'home_hero' THEN json_remove(json_set(json_extract(block.value, '$.data'), '$.section', 'hero', '$.cta_label', json_extract(block.value, '$.data.label'), '$.cta_url', json_extract(block.value, '$.data.url'), '$.asset_id', json_extract(block.value, '$.data.background.asset_id')), '$.type', '$.legacy_type')
+          WHEN 'page_hero' THEN json_remove(json_set(json_extract(block.value, '$.data'), '$.section', 'page-hero', '$.cta_label', json_extract(block.value, '$.data.label'), '$.cta_url', json_extract(block.value, '$.data.url'), '$.asset_id', json_extract(block.value, '$.data.background.asset_id')), '$.type', '$.legacy_type')
+          WHEN 'schedule_hero' THEN json_remove(json_set(json_extract(block.value, '$.data'), '$.section', 'page-hero', '$.cta_label', json_extract(block.value, '$.data.label'), '$.cta_url', json_extract(block.value, '$.data.url'), '$.asset_id', json_extract(block.value, '$.data.background.asset_id')), '$.type', '$.legacy_type')
+          WHEN 'services_intro' THEN json_remove(json_set(json_extract(block.value, '$.data'), '$.source', 'site_offerings', '$.section', 'services'), '$.type', '$.legacy_type')
+          WHEN 'video_feature' THEN json_remove(json_set(json_extract(block.value, '$.data'), '$.items', json(COALESCE((SELECT json_group_array(json_object('title', json_extract(item.value, '$.name'), 'description', json_extract(item.value, '$.desc'))) FROM json_each(json_extract(block.value, '$.data.features')) item), '[]')), '$.section', 'approach'), '$.type', '$.legacy_type', '$.features')
+          WHEN 'qa' THEN json_remove(json_set(json_extract(block.value, '$.data'), '$.source', 'page_qa', '$.section', 'qa'), '$.type', '$.legacy_type')
+          WHEN 'schedule_qa' THEN json_remove(json_set(json_extract(block.value, '$.data'), '$.source', 'page_qa', '$.section', 'qa'), '$.type', '$.legacy_type')
+          WHEN 'reviews' THEN json_remove(json_set(json_extract(block.value, '$.data'), '$.source', 'site_reviews', '$.section', 'reviews'), '$.type', '$.legacy_type')
+          WHEN 'consultation_cta' THEN json_remove(json_set(json_extract(block.value, '$.data'), '$.section', 'consultation'), '$.type', '$.legacy_type')
+          WHEN 'impact' THEN json_remove(json_set(json_extract(block.value, '$.data'), '$.items', json(COALESCE((SELECT json_group_array(json_object('title', json_extract(item.value, '$.label'), 'value', json_extract(item.value, '$.value'))) FROM json_each(json_extract(block.value, '$.data.statistics')) item), '[]')), '$.section', 'donation'), '$.type', '$.legacy_type', '$.statistics')
+          WHEN 'pricing_plans' THEN json_remove(json_set(json_extract(block.value, '$.data'), '$.items', json(COALESCE((SELECT json_group_array(json_object('title', json_extract(item.value, '$.discount'), 'value', json_extract(item.value, '$.price'), 'description', json_extract(item.value, '$.description'))) FROM json_each(json_extract(block.value, '$.data.plans')) item), '[]')), '$.section', 'pricing'), '$.type', '$.legacy_type', '$.plans')
+          WHEN 'pricing_calculator' THEN json_remove(json_set(json_extract(block.value, '$.data'), '$.calculator', json_object('rows', json(json_extract(json_extract(block.value, '$.data'), '$.table.rows')), 'note', json_extract(block.value, '$.data.note')), '$.effective_date', json_extract(block.value, '$.data.effectiveDate'), '$.section', 'pricing'), '$.type', '$.legacy_type', '$.table', '$.note', '$.enabled', '$.effectiveDate')
+          WHEN 'donation_choices' THEN json_remove(json_set(json_extract(block.value, '$.data'), '$.section', 'donation'), '$.type', '$.legacy_type')
+          WHEN 'donation_support' THEN json_remove(json_set(json_extract(block.value, '$.data'), '$.title', json_extract(block.value, '$.data.difference.title'), '$.body', json_extract(block.value, '$.data.difference.description'), '$.buttons', json(COALESCE((SELECT json_group_array(json_object('label', json_extract(item.value, '$.title'), 'url', json_extract(item.value, '$.url'))) FROM json_each(json_extract(block.value, '$.data.other_ways.items')) item), '[]')), '$.section', 'donation'), '$.type', '$.legacy_type', '$.difference', '$.other_ways')
+          WHEN 'disclaimer' THEN json_remove(json_set(json_extract(block.value, '$.data'), '$.body', json_extract(block.value, '$.data.content'), '$.section', 'disclaimer'), '$.type', '$.legacy_type', '$.content')
+          ELSE json_remove(json_extract(block.value, '$.data'), '$.legacy_type')
+        END AS data_json
+      FROM json_each(content_revisions.snapshot_json, '$.blocks') block
+      JOIN content_documents document ON document.id = content_revisions.document_id
+      JOIN tenant_page_variants variant ON variant.id = document.owner_id
+      JOIN tenant_pages page ON page.id = variant.page_id
+      ORDER BY position ASC, id ASC
+    ) normalized
+  ), '[]'))
+)
+WHERE id IN (
+  SELECT published_revision_id FROM content_documents
+   WHERE owner_type = 'tenant_page' AND published_revision_id IS NOT NULL
+);
+
+UPDATE content_revisions
+SET snapshot_json = json_insert(
+  snapshot_json,
+  '$.blocks[#]',
+  json_object('id', 'migrated-tenant-page-block:' || variant.id || ':articles', 'parent_block_id', NULL, 'type', 'feature_grid', 'position', 5, 'level', NULL, 'data', json_object('title', 'From the Blog', 'source', 'site_posts', 'limit', 3, 'section', 'articles'))
+)
+FROM content_documents document
+JOIN tenant_page_variants variant ON variant.id = document.owner_id
+JOIN tenant_pages page ON page.id = variant.page_id
+WHERE content_revisions.id = document.published_revision_id
+  AND document.owner_type = 'tenant_page'
+  AND page.site_id = 'site-ncls-blawby'
+  AND page.path = '/'
+  AND NOT EXISTS (SELECT 1 FROM json_each(content_revisions.snapshot_json, '$.blocks') existing WHERE json_extract(existing.value, '$.data.source') = 'site_posts');
+
+UPDATE content_revisions
+SET snapshot_json = json_insert(
+  snapshot_json,
+  '$.blocks[#]',
+  json_object('id', 'migrated-tenant-page-block:' || variant.id || ':articles-more', 'parent_block_id', NULL, 'type', 'button_group', 'position', 6, 'level', NULL, 'data', json_object('buttons', json('[{"label":"See All","url":"/blog"}]'), 'section', 'articles-more'))
+)
+FROM content_documents document
+JOIN tenant_page_variants variant ON variant.id = document.owner_id
+JOIN tenant_pages page ON page.id = variant.page_id
+WHERE content_revisions.id = document.published_revision_id
+  AND document.owner_type = 'tenant_page'
+  AND page.site_id = 'site-ncls-blawby'
+  AND page.path = '/'
+  AND NOT EXISTS (SELECT 1 FROM json_each(content_revisions.snapshot_json, '$.blocks') existing WHERE json_extract(existing.value, '$.data.section') = 'articles-more');
+
+UPDATE content_revisions
+SET snapshot_json = json_insert(
+  snapshot_json,
+  '$.blocks[#]',
+  json_object('id', 'migrated-tenant-page-block:' || variant.id || ':divider', 'parent_block_id', NULL, 'type', 'divider', 'position', 1, 'level', NULL, 'data', json_object('section', 'shield-divider'))
+)
+FROM content_documents document
+JOIN tenant_page_variants variant ON variant.id = document.owner_id
+JOIN tenant_pages page ON page.id = variant.page_id
+WHERE content_revisions.id = document.published_revision_id
+  AND document.owner_type = 'tenant_page'
+  AND page.site_id = 'site-ncls-blawby'
+  AND page.path IN ('/about', '/pricing', '/contact', '/donate', '/policies/privacy', '/policies/terms', '/third-party-notices')
+  AND EXISTS (SELECT 1 FROM json_each(content_revisions.snapshot_json, '$.blocks') hero WHERE json_extract(hero.value, '$.type') = 'hero' AND json_extract(hero.value, '$.position') = 0)
+  AND NOT EXISTS (SELECT 1 FROM json_each(content_revisions.snapshot_json, '$.blocks') existing WHERE json_extract(existing.value, '$.data.section') = 'shield-divider');

@@ -194,15 +194,56 @@ async function assertTenantPageSupport(db: DbClient, siteId: string, input: Tena
   }
 }
 
-async function assertTenantPageTranslationComplete(db: DbClient, variantId: string, allowDraftReview = false) {
-  const incomplete = await queryFirst<{ count: number } | null>(db, `
-    SELECT COUNT(*) AS count
+async function assertTenantPageTranslationComplete(
+  db: DbClient,
+  row: TenantPageVariantRow,
+  allowDraftReview = false,
+): Promise<{ sourceDocumentId: string; sourceDocumentUpdatedAt: string }> {
+  const { buildTranslationInventory } = await import('~/server/utils/translation-inventory')
+  const inventory = await buildTranslationInventory(db, row.organization_id, row.site_id, {
+    targetLocale: row.locale,
+    scope: 'content',
+    includePublished: true,
+  })
+  const currentItems = inventory.items.filter(item => item.entity_type === 'tenant_page' && item.entity_id === row.page_id)
+  const states = await queryAll<{ field: string; target_block_id: string | null; source_hash: string | null; status: string }>(db, `
+    SELECT field, target_block_id, source_hash, status
       FROM tenant_page_translation_fields
-     WHERE variant_id = ? AND status NOT IN (${allowDraftReview ? "'draft', 'published'" : "'published'"})
-  `, [variantId])
-  if (Number(incomplete?.count ?? 0) > 0) {
-    conflict('Every translated page block and metadata field must be translated and reviewed before publication')
+     WHERE organization_id = ? AND site_id = ? AND variant_id = ?
+  `, [row.organization_id, row.site_id, row.variant_id])
+  const targetBlockIds = new Set((await queryAll<{ id: string }>(db, `
+    SELECT b.id
+      FROM tenant_page_variants v
+      JOIN content_documents d ON d.owner_type = 'tenant_page' AND d.owner_id = v.id
+      JOIN content_blocks b ON b.document_id = d.id
+     WHERE v.id = ?
+  `, [row.variant_id])).map(block => block.id))
+  const accepted = allowDraftReview ? new Set(['draft', 'published']) : new Set(['published'])
+  const stateByField = new Map(states.map(state => [state.field, state]))
+  const expectedFields = new Set(currentItems.map(item => item.field))
+  const exactCoverage = states.length === currentItems.length && currentItems.every(item => {
+    const state = stateByField.get(item.field)
+    return Boolean(
+      state
+      && state.source_hash === item.source_hash
+      && accepted.has(state.status)
+      && (item.field.startsWith('metadata.') || Boolean(state.target_block_id && targetBlockIds.has(state.target_block_id))),
+    )
+  }) && states.every(state => expectedFields.has(state.field))
+  if (!exactCoverage) {
+    conflict('Every current translated page block and metadata field must match the source, be translated, and be reviewed before publication')
   }
+  const sourceDocument = await queryFirst<{ id: string; updated_at: string } | null>(db, `
+    SELECT d.id, d.updated_at
+      FROM tenant_page_variants v
+      JOIN site_locales sl ON sl.site_id = v.site_id AND sl.locale = v.locale AND sl.is_source = 1
+      JOIN content_documents d ON d.owner_type = 'tenant_page' AND d.owner_id = v.id
+     WHERE v.page_id = ? AND v.organization_id = ? AND v.site_id = ?
+       AND v.status = 'published' AND v.published_revision_id IS NOT NULL
+     LIMIT 1
+  `, [row.page_id, row.organization_id, row.site_id])
+  if (!sourceDocument) conflict('The source tenant page must be published before a translated page can be published')
+  return { sourceDocumentId: sourceDocument.id, sourceDocumentUpdatedAt: sourceDocument.updated_at }
 }
 
 function blocksAsInputs(blocks: TenantPageBlock[]): ContentBlockInput[] {
@@ -521,7 +562,11 @@ export async function ensureTenantPageVariant(
     recipe: sourceContent.recipe,
     blocks: sourceContent.blocks,
   }, targetLocale.locale, path)
-  const translatedBlocks = sourceContent.blocks.map(block => ({ ...block, id: crypto.randomUUID() }))
+  const translatedBlocks = sourceContent.blocks.map(block => ({
+    ...block,
+    id: crypto.randomUUID(),
+    data: { ...block.data, source_block_id: block.id },
+  }))
   const metadataValues: Array<[string, unknown]> = [
     ['metadata.title', sourceContent.title],
     ['metadata.summary', sourceContent.summary],
@@ -626,8 +671,27 @@ export async function updateTenantPageDraft(db: DbClient, variantId: string, inp
     params: [path, metadata.title, metadata.summary, metadata.seoTitle, metadata.seoDescription, metadata.canonicalUrl, metadata.robots, pageStatus, now, input.userId, variantId, input.scope.siteId, input.scope.organizationId],
   }
   const updatePage: BatchQuery = {
-    query: 'UPDATE tenant_pages SET title = ?, page_type = ?, recipe = ?, summary = ?, status = ?, sort_order = COALESCE(?, sort_order), updated_at = ?, updated_by = ? WHERE id = ? AND site_id = ? AND organization_id = ?',
-    params: [metadata.title, metadata.pageType, metadata.recipe, metadata.summary, pageStatus, input.data.sortOrder ?? null, now, input.userId, row.page_id, input.scope.siteId, input.scope.organizationId],
+    query: `UPDATE tenant_pages SET
+      title = CASE WHEN EXISTS (SELECT 1 FROM site_locales WHERE site_id = ? AND locale = ? AND is_source = 1) THEN ? ELSE title END,
+      page_type = CASE WHEN EXISTS (SELECT 1 FROM site_locales WHERE site_id = ? AND locale = ? AND is_source = 1) THEN ? ELSE page_type END,
+      recipe = CASE WHEN EXISTS (SELECT 1 FROM site_locales WHERE site_id = ? AND locale = ? AND is_source = 1) THEN ? ELSE recipe END,
+      summary = CASE WHEN EXISTS (SELECT 1 FROM site_locales WHERE site_id = ? AND locale = ? AND is_source = 1) THEN ? ELSE summary END,
+      status = CASE
+        WHEN EXISTS (SELECT 1 FROM tenant_page_variants WHERE page_id = tenant_pages.id AND status = 'published') THEN 'published'
+        WHEN EXISTS (SELECT 1 FROM tenant_page_variants WHERE page_id = tenant_pages.id AND status = 'draft') THEN 'draft'
+        ELSE 'archived'
+      END,
+      sort_order = CASE WHEN EXISTS (SELECT 1 FROM site_locales WHERE site_id = ? AND locale = ? AND is_source = 1) THEN COALESCE(?, sort_order) ELSE sort_order END,
+      updated_at = ?, updated_by = ?
+      WHERE id = ? AND site_id = ? AND organization_id = ?`,
+    params: [
+      input.scope.siteId, row.locale, metadata.title,
+      input.scope.siteId, row.locale, metadata.pageType,
+      input.scope.siteId, row.locale, metadata.recipe,
+      input.scope.siteId, row.locale, metadata.summary,
+      input.scope.siteId, row.locale, input.data.sortOrder ?? null,
+      now, input.userId, row.page_id, input.scope.siteId, input.scope.organizationId,
+    ],
   }
   const result = await replaceContentDocumentBlocks(db, 'tenant_page', variantId, blocksAsInputs(blocks), {
     expected_document_updated_at: input.data.expectedDocumentUpdatedAt,
@@ -672,7 +736,12 @@ export async function publishTenantPage(db: DbClient, variantId: string, input: 
     blocks: snapshot.blocks,
   }
   await assertTenantPageSupport(db, row.site_id, effectiveInput, snapshot.blocks)
-  await assertTenantPageTranslationComplete(db, variantId, input.allowDraftTranslationReview === true)
+  const sourceLocale = await queryFirst<{ locale: string } | null>(db, `
+    SELECT locale FROM site_locales WHERE site_id = ? AND is_source = 1 LIMIT 1
+  `, [row.site_id])
+  const sourceDocumentGuard = sourceLocale?.locale !== row.locale
+    ? await assertTenantPageTranslationComplete(db, row, input.allowDraftTranslationReview === true)
+    : null
   const publishPath = await assertTenantPagePathAvailable(db, {
     siteId: row.site_id,
     locale: row.locale,
@@ -697,10 +766,30 @@ export async function publishTenantPage(db: DbClient, variantId: string, input: 
   }
   const now = new Date().toISOString()
   await executeBatch(db, [
+    ...(sourceDocumentGuard ? [documentConcurrencyGuard(sourceDocumentGuard.sourceDocumentId, sourceDocumentGuard.sourceDocumentUpdatedAt)] : []),
     documentConcurrencyGuard(document.id, input.expectedDocumentUpdatedAt),
     { query: 'UPDATE content_documents SET published_revision_id = ?, updated_at = ? WHERE id = ? AND updated_at = ?', params: [document.draft_revision_id, now, document.id, input.expectedDocumentUpdatedAt] },
     { query: "UPDATE tenant_page_variants SET published_revision_id = ?, published_path = ?, draft_path = ?, title = ?, summary = ?, seo_title = ?, seo_description = ?, canonical_url = ?, robots = ?, status = 'published', ever_published = 1, updated_at = ?, updated_by = ? WHERE id = ? AND site_id = ? AND organization_id = ?", params: [document.draft_revision_id, publishPath, publishPath, snapshot.metadata.title, snapshot.metadata.summary, snapshot.metadata.seoTitle, snapshot.metadata.seoDescription, snapshot.metadata.canonicalUrl, snapshot.metadata.robots, now, input.userId, variantId, input.scope.siteId, input.scope.organizationId] },
-    { query: "UPDATE tenant_pages SET title = ?, page_type = ?, recipe = ?, summary = ?, path = CASE WHEN EXISTS (SELECT 1 FROM site_locales sl WHERE sl.site_id = tenant_pages.site_id AND sl.locale = ? AND sl.is_source = 1) THEN ? ELSE path END, status = 'published', updated_at = ?, updated_by = ? WHERE id = ? AND site_id = ? AND organization_id = ?", params: [snapshot.metadata.title, snapshot.metadata.pageType, snapshot.metadata.recipe, snapshot.metadata.summary, row.locale, publishPath, now, input.userId, row.page_id, input.scope.siteId, input.scope.organizationId] },
+    { query: `UPDATE tenant_pages SET
+        title = CASE WHEN EXISTS (SELECT 1 FROM site_locales WHERE site_id = ? AND locale = ? AND is_source = 1) THEN ? ELSE title END,
+        page_type = CASE WHEN EXISTS (SELECT 1 FROM site_locales WHERE site_id = ? AND locale = ? AND is_source = 1) THEN ? ELSE page_type END,
+        recipe = CASE WHEN EXISTS (SELECT 1 FROM site_locales WHERE site_id = ? AND locale = ? AND is_source = 1) THEN ? ELSE recipe END,
+        summary = CASE WHEN EXISTS (SELECT 1 FROM site_locales WHERE site_id = ? AND locale = ? AND is_source = 1) THEN ? ELSE summary END,
+        path = CASE WHEN EXISTS (SELECT 1 FROM site_locales WHERE site_id = ? AND locale = ? AND is_source = 1) THEN ? ELSE path END,
+        status = CASE
+          WHEN EXISTS (SELECT 1 FROM tenant_page_variants WHERE page_id = tenant_pages.id AND status = 'published') THEN 'published'
+          WHEN EXISTS (SELECT 1 FROM tenant_page_variants WHERE page_id = tenant_pages.id AND status = 'draft') THEN 'draft'
+          ELSE 'archived'
+        END,
+        updated_at = ?, updated_by = ?
+        WHERE id = ? AND site_id = ? AND organization_id = ?`, params: [
+      input.scope.siteId, row.locale, snapshot.metadata.title,
+      input.scope.siteId, row.locale, snapshot.metadata.pageType,
+      input.scope.siteId, row.locale, snapshot.metadata.recipe,
+      input.scope.siteId, row.locale, snapshot.metadata.summary,
+      input.scope.siteId, row.locale, publishPath,
+      now, input.userId, row.page_id, input.scope.siteId, input.scope.organizationId,
+    ] },
     ...(row.published_path !== publishPath ? [
       { query: "UPDATE tenant_redirects SET to_path = ?, updated_at = ? WHERE site_id = ? AND organization_id = ? AND locale = ? AND source = 'tenant-pages' AND owner_variant_id = ? AND to_path = ?", params: [publishPath, now, input.scope.siteId, input.scope.organizationId, row.locale, variantId, row.published_path] },
       { query: "INSERT INTO tenant_redirects (id, organization_id, site_id, locale, owner_variant_id, from_path, to_path, status_code, behavior, reason, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 301, 'redirect', 'tenant_page_path_change', 'tenant-pages', ?, ?) ON CONFLICT(site_id, locale, from_path) DO UPDATE SET owner_variant_id = excluded.owner_variant_id, to_path = excluded.to_path, status_code = excluded.status_code, behavior = excluded.behavior, reason = excluded.reason, source = excluded.source, updated_at = excluded.updated_at", params: [crypto.randomUUID(), row.organization_id, row.site_id, row.locale, variantId, row.published_path, publishPath, now, now] },
@@ -722,7 +811,7 @@ export async function unpublishTenantPage(db: DbClient, variantId: string, input
     documentConcurrencyGuard(document.id, input.expectedDocumentUpdatedAt),
     { query: 'UPDATE content_documents SET published_revision_id = NULL, updated_at = ? WHERE id = ? AND updated_at = ?', params: [now, document.id, input.expectedDocumentUpdatedAt] },
     { query: "UPDATE tenant_page_variants SET published_revision_id = NULL, status = 'draft', updated_at = ?, updated_by = ? WHERE id = ? AND site_id = ? AND organization_id = ?", params: [now, input.userId, variantId, input.scope.siteId, input.scope.organizationId] },
-    { query: "UPDATE tenant_pages SET status = CASE WHEN EXISTS (SELECT 1 FROM tenant_page_variants WHERE page_id = tenant_pages.id AND status = 'published') THEN 'published' ELSE 'draft' END, updated_at = ?, updated_by = ? WHERE id = ? AND site_id = ? AND organization_id = ?", params: [now, input.userId, row.page_id, input.scope.siteId, input.scope.organizationId] },
+    { query: "UPDATE tenant_pages SET status = CASE WHEN EXISTS (SELECT 1 FROM tenant_page_variants WHERE page_id = tenant_pages.id AND status = 'published') THEN 'published' WHEN EXISTS (SELECT 1 FROM tenant_page_variants WHERE page_id = tenant_pages.id AND status = 'draft') THEN 'draft' ELSE 'archived' END, updated_at = ?, updated_by = ? WHERE id = ? AND site_id = ? AND organization_id = ?", params: [now, input.userId, row.page_id, input.scope.siteId, input.scope.organizationId] },
   ])
   return await getTenantPageForEditor(db, variantId, input.scope)
 }
@@ -772,7 +861,7 @@ export async function archiveTenantPage(db: DbClient, variantId: string, input: 
     documentConcurrencyGuard(document.id, input.expectedDocumentUpdatedAt),
     { query: 'UPDATE content_documents SET published_revision_id = NULL, updated_at = ? WHERE id = ? AND updated_at = ?', params: [now, document.id, input.expectedDocumentUpdatedAt] },
     { query: "UPDATE tenant_page_variants SET published_revision_id = NULL, status = 'archived', updated_at = ?, updated_by = ? WHERE id = ? AND site_id = ? AND organization_id = ?", params: [now, input.userId, variantId, input.scope.siteId, input.scope.organizationId] },
-    { query: "UPDATE tenant_pages SET status = CASE WHEN EXISTS (SELECT 1 FROM tenant_page_variants WHERE page_id = tenant_pages.id AND status = 'published') THEN 'published' ELSE 'archived' END, updated_at = ?, updated_by = ? WHERE id = ? AND site_id = ? AND organization_id = ?", params: [now, input.userId, row.page_id, input.scope.siteId, input.scope.organizationId] },
+    { query: "UPDATE tenant_pages SET status = CASE WHEN EXISTS (SELECT 1 FROM tenant_page_variants WHERE page_id = tenant_pages.id AND status = 'published') THEN 'published' WHEN EXISTS (SELECT 1 FROM tenant_page_variants WHERE page_id = tenant_pages.id AND status = 'draft') THEN 'draft' ELSE 'archived' END, updated_at = ?, updated_by = ? WHERE id = ? AND site_id = ? AND organization_id = ?", params: [now, input.userId, row.page_id, input.scope.siteId, input.scope.organizationId] },
     ...(row.published_revision_id && (replacementPath || input.gone) ? [
       replacementPath
         ? { query: "INSERT INTO tenant_redirects (id, organization_id, site_id, locale, owner_variant_id, from_path, to_path, status_code, behavior, reason, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 301, 'redirect', 'tenant_page_archive_replacement', 'tenant-pages', ?, ?) ON CONFLICT(site_id, locale, from_path) DO UPDATE SET owner_variant_id = excluded.owner_variant_id, to_path = excluded.to_path, status_code = excluded.status_code, behavior = excluded.behavior, reason = excluded.reason, source = excluded.source, updated_at = excluded.updated_at", params: [crypto.randomUUID(), input.scope.organizationId, input.scope.siteId, row.locale, variantId, row.published_path, replacementPath, now, now] }
@@ -798,7 +887,7 @@ export async function restoreTenantPage(db: DbClient, variantId: string, input: 
     documentConcurrencyGuard(document.id, input.expectedDocumentUpdatedAt),
     { query: "DELETE FROM tenant_redirects WHERE site_id = ? AND organization_id = ? AND locale = ? AND owner_variant_id = ? AND source = 'tenant-pages' AND reason IN ('tenant_page_archive_replacement', 'tenant_page_archive_gone')", params: [input.scope.siteId, input.scope.organizationId, row.locale, variantId] },
     { query: "UPDATE tenant_page_variants SET status = 'draft', updated_at = ?, updated_by = ? WHERE id = ? AND site_id = ? AND organization_id = ?", params: [now, input.userId, variantId, input.scope.siteId, input.scope.organizationId] },
-    { query: "UPDATE tenant_pages SET status = 'draft', updated_at = ?, updated_by = ? WHERE id = ? AND site_id = ? AND organization_id = ?", params: [now, input.userId, row.page_id, input.scope.siteId, input.scope.organizationId] },
+    { query: "UPDATE tenant_pages SET status = CASE WHEN EXISTS (SELECT 1 FROM tenant_page_variants WHERE page_id = tenant_pages.id AND status = 'published') THEN 'published' WHEN EXISTS (SELECT 1 FROM tenant_page_variants WHERE page_id = tenant_pages.id AND status = 'draft') THEN 'draft' ELSE 'archived' END, updated_at = ?, updated_by = ? WHERE id = ? AND site_id = ? AND organization_id = ?", params: [now, input.userId, row.page_id, input.scope.siteId, input.scope.organizationId] },
   ])
   return await getTenantPageForEditor(db, variantId, input.scope)
 }

@@ -6,6 +6,10 @@ import { resolve } from 'node:path'
 
 const migrationDir = resolve(process.cwd(), 'migrations')
 const migration0092 = readFileSync(resolve(migrationDir, '0092_tranquil_fixer.sql'), 'utf8')
+const migration0093 = readFileSync(resolve(migrationDir, '0093_skinny_raider.sql'), 'utf8')
+const migration0094 = readFileSync(resolve(migrationDir, '0094_green_white_tiger.sql'), 'utf8')
+const migration0095 = readFileSync(resolve(migrationDir, '0095_remarkable_reptil.sql'), 'utf8')
+const migration0096 = readFileSync(resolve(migrationDir, '0096_spotty_bromley.sql'), 'utf8')
 const migration0097 = readFileSync(resolve(migrationDir, '0097_repair_dangling_content_revisions.sql'), 'utf8')
 const migration0098 = readFileSync(resolve(migrationDir, '0098_tenant_page_translation_and_redirect_scope.sql'), 'utf8')
 const migration0099 = readFileSync(resolve(migrationDir, '0099_repair_canonical_tenant_blocks.sql'), 'utf8')
@@ -131,6 +135,54 @@ test('0092 preserves live source fallback while keeping draft translation overri
   const siteDraft = JSON.parse((db.prepare('SELECT snapshot_json FROM content_revisions WHERE id = ?').get(siteDocument.draft_revision_id) as { snapshot_json: string }).snapshot_json) as { metadata: { title: string } }
   assert.equal(sitePublished.metadata.title, 'Home')
   assert.equal(siteDraft.metadata.title, 'หน้าแรก')
+})
+
+test('0092 through 0099 apply as one chain with translated fixtures', () => {
+  const db = databaseBeforeTenantPageMigration()
+  insertLegacyPage(db, [{ type: 'home_hero', title: 'Home', subtitle: 'Source subtitle' }])
+  db.prepare(`
+    INSERT INTO site_content (id, organization_id, site_id, page, field, content, hero_title, hero_subtitle)
+    VALUES (?, ?, ?, 'home', 'hero', ?, ?, ?)
+  `).run('chain-source', 'org-test', 'site-test', 'Source body', 'Home', 'Source subtitle')
+  db.prepare(`
+    INSERT INTO site_content (id, organization_id, site_id, page, field, content)
+    VALUES (?, ?, ?, 'home', 'body', ?)
+  `).run('chain-source-body', 'org-test', 'site-test', 'Source prose')
+  db.prepare(`
+    INSERT INTO site_content_translations (id, organization_id, site_id, locale, page, field, content, hero_title, hero_subtitle, status)
+    VALUES (?, ?, ?, 'th', 'home', 'hero', ?, ?, ?, 'published')
+  `).run('chain-published-translation', 'org-test', 'site-test', 'Translated body', 'บ้าน', 'คำบรรยาย')
+  db.prepare(`
+    INSERT INTO site_content_translations (id, organization_id, site_id, locale, page, field, content, status)
+    VALUES (?, ?, ?, 'th', 'home', 'hero.subtitle', ?, 'draft')
+  `).run('chain-draft-translation', 'org-test', 'site-test', 'ฉบับร่าง')
+  db.prepare(`
+    INSERT INTO site_content_translations (id, organization_id, site_id, locale, page, field, content, status)
+    VALUES (?, ?, ?, 'th', 'home', 'body', ?, 'draft')
+  `).run('chain-draft-body-translation', 'org-test', 'site-test', 'ฉบับร่างเนื้อหา')
+
+  for (const migration of [migration0092, migration0093, migration0094, migration0095, migration0096, migration0097, migration0098, migration0099]) {
+    db.exec(migration)
+  }
+
+  const variant = db.prepare(`
+    SELECT v.status, v.published_revision_id, d.draft_revision_id
+      FROM tenant_page_variants v
+      JOIN content_documents d ON d.owner_type = 'tenant_page' AND d.owner_id = v.id
+     WHERE v.page_id = 'page-test' AND v.locale = 'th'
+  `).get() as { status: string; published_revision_id: string | null; draft_revision_id: string | null } | undefined
+  assert.equal(variant?.status, 'published')
+  assert.ok(variant?.published_revision_id)
+  assert.ok(variant?.draft_revision_id)
+  assert.notEqual(variant?.published_revision_id, variant?.draft_revision_id)
+  const publishedSnapshot = JSON.parse((db.prepare('SELECT snapshot_json FROM content_revisions WHERE id = ?').get(variant?.published_revision_id) as { snapshot_json: string }).snapshot_json) as { blocks: Array<{ data: Record<string, unknown> }> }
+  const draftSnapshot = JSON.parse((db.prepare('SELECT snapshot_json FROM content_revisions WHERE id = ?').get(variant?.draft_revision_id) as { snapshot_json: string }).snapshot_json) as { blocks: Array<{ data: Record<string, unknown> }> }
+  assert.equal(publishedSnapshot.blocks.some(block => Object.values(block.data).includes('ฉบับร่างเนื้อหา')), false)
+  assert.equal(draftSnapshot.blocks.some(block => Object.values(block.data).includes('ฉบับร่างเนื้อหา')), true)
+  assert.equal(
+    (db.prepare("SELECT COUNT(*) AS count FROM content_blocks WHERE id LIKE 'migrated-site-content-translation-block:%' OR id LIKE 'migrated-location-translation-block:%'").get() as { count: number }).count,
+    0,
+  )
 })
 
 test('0092 preserves existing published content revisions while rebuilding content tables', () => {
