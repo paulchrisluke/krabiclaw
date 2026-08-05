@@ -357,8 +357,14 @@ jobs:
       - name: Run representative tests
         env:
           PLAYWRIGHT_PREVIEW_URL: https://krabiclaw-preview.paulchrisluke.workers.dev
+          POTTERY_HOUSE_CHANGED: ${{ needs.changes.outputs.pottery_house }}
+          BLAWBY_CHANGED: ${{ needs.changes.outputs.blawby }}
         # Focused representative subset, not full matrix
-        run: yarn test:e2e:representative
+        run: |
+          yarn test:e2e:representative
+          yarn test:e2e:public-rendering
+          [ "$POTTERY_HOUSE_CHANGED" != "true" ] || PLAYWRIGHT_WORKERS=1 yarn test:e2e:pottery-house
+          [ "$BLAWBY_CHANGED" != "true" ] || yarn test:e2e:blawby
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -475,10 +481,15 @@ jobs:
         env:
           DASHBOARD_CHANGED: ${{ needs.changes.outputs.dashboard }}
           BILLING_CHANGED: ${{ needs.changes.outputs.billing }}
+          POTTERY_HOUSE_CHANGED: ${{ needs.changes.outputs.pottery_house }}
+          BLAWBY_CHANGED: ${{ needs.changes.outputs.blawby }}
         run: |
           yarn test:e2e:smoke
+          yarn test:e2e:public-rendering
           [ "$DASHBOARD_CHANGED" != "true" ] || yarn test:e2e:dashboard:smoke
           [ "$BILLING_CHANGED" != "true" ] || yarn test:e2e:smoke:billing
+          [ "$POTTERY_HOUSE_CHANGED" != "true" ] || PLAYWRIGHT_WORKERS=1 yarn test:e2e:pottery-house
+          [ "$BLAWBY_CHANGED" != "true" ] || yarn test:e2e:blawby
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
