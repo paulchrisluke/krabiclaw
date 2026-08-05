@@ -18,8 +18,9 @@ export async function getBetterAuthStripePlans(stripe: Stripe): Promise<StripePl
       type: 'recurring',
       limit: 100,
     })
-    const monthly = prices.data.find(price => price.recurring?.interval === 'month')
-    const yearly = prices.data.find(price => price.recurring?.interval === 'year')
+    const billablePrices = prices.data.filter(price => typeof price.unit_amount === 'number' && price.unit_amount > 0)
+    const monthly = billablePrices.find(price => price.recurring?.interval === 'month')
+    const yearly = billablePrices.find(price => price.recurring?.interval === 'year')
     if (!monthly && !yearly) continue
 
     plans.push({

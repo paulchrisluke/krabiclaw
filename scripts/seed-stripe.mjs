@@ -121,6 +121,34 @@ async function uploadProductImage(localPath) {
   }
 }
 
+async function ensureMonthlyPrice(productId, amountCents) {
+  const prices = await stripe.prices.list({
+    product: productId,
+    active: true,
+    type: 'recurring',
+    limit: 100,
+  })
+  const matchingPrices = prices.data.filter(price =>
+    price.currency === 'usd'
+    && price.unit_amount === amountCents
+    && price.recurring?.interval === 'month',
+  )
+  const canonicalPrice = matchingPrices[0] ?? await stripe.prices.create({
+    product: productId,
+    currency: 'usd',
+    unit_amount: amountCents,
+    recurring: { interval: 'month' },
+  })
+
+  for (const price of prices.data) {
+    if (price.id === canonicalPrice.id || price.recurring?.interval !== 'month') continue
+    await stripe.prices.update(price.id, { active: false })
+    console.log(`  Deactivated duplicate monthly price: ${price.id}`)
+  }
+
+  return canonicalPrice
+}
+
 // --- Create or update recurring subscription plans ---
 async function createSubscriptionPlan({ name, description, planId, amountCents, highlighted, badge, features, imagePath }) {
   console.log(`\nUpserting plan: ${name} ($${amountCents / 100}/mo)`)
@@ -148,8 +176,8 @@ async function createSubscriptionPlan({ name, description, planId, amountCents, 
   const match = existing.data.find(p => p.metadata?.plan_id === planId)
 
   if (match) {
-    // Update description and marketing_features on existing product
-    await stripe.products.update(match.id, updateData)
+    const price = await ensureMonthlyPrice(match.id, amountCents)
+    await stripe.products.update(match.id, { ...updateData, default_price: price.id })
     console.log(`  Updated: ${match.id}`)
     return match
   }
@@ -159,12 +187,8 @@ async function createSubscriptionPlan({ name, description, planId, amountCents, 
     ...updateData
   })
 
-  await stripe.prices.create({
-    product: product.id,
-    currency: 'usd',
-    unit_amount: amountCents,
-    recurring: { interval: 'month' },
-  })
+  const price = await ensureMonthlyPrice(product.id, amountCents)
+  await stripe.products.update(product.id, { default_price: price.id })
 
   console.log(`  Created: ${product.id}`)
   return product
