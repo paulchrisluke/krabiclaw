@@ -6,14 +6,21 @@
 import { publicApiRequest, isRecord } from '~/utils/api-clients'
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 
-const props = defineProps<{ path: string; previewToken?: string | null }>()
+const props = defineProps<{ path: string; previewToken?: string | null; locale?: string | null }>()
 const { siteId, isTenant, site } = useTenantSite()
 const { isBlawby } = usePublicTemplate()
+const route = useRoute()
+const { locale: i18nLocale } = useI18n()
 if (!isTenant || !siteId) throw createError({ statusCode: 404, statusMessage: 'Tenant site context is unavailable' })
 
 const preview = Boolean(props.previewToken)
+const activeLocale = computed(() => {
+  if (props.locale?.trim()) return props.locale.trim()
+  if (preview && typeof route.query.locale === 'string' && route.query.locale.trim()) return route.query.locale.trim()
+  return i18nLocale.value
+})
 const pagePath = props.path === '/' ? '/' : props.path.replace(/\/+$/, '')
-const key = `tenant-page-${siteId}-${pagePath}-${preview ? 'preview' : 'published'}-${props.previewToken || ''}`
+const key = computed(() => `tenant-page-${siteId}-${activeLocale.value}-${pagePath}-${preview ? 'preview' : 'published'}-${props.previewToken || ''}`)
 const isPageResponse = (value: unknown): value is { success: true; page: PublicTenantPage } =>
   isRecord(value) && value.success === true && isRecord(value.page) && typeof value.page.path === 'string' && Array.isArray(value.page.blocks)
 
@@ -32,11 +39,11 @@ const { data, error } = await useAsyncData(key, async () => {
     }
     const db = env.db
     if (!db) throw createError({ statusCode: 503, statusMessage: 'Database not available' })
-    const page = await getPublicTenantPageForPath(db, siteId, pagePath, { preview })
+    const page = await getPublicTenantPageForPath(db, siteId, pagePath, { locale: activeLocale.value, preview })
     if (!page) throw createError({ statusCode: 404, statusMessage: 'Tenant page not found' })
     return { success: true as const, page }
   }
-  const query: Record<string, string> = { path: pagePath }
+  const query: Record<string, string> = { path: pagePath, locale: activeLocale.value }
   if (preview && props.previewToken) {
     query.preview = 'true'
     query.token = props.previewToken
@@ -44,7 +51,7 @@ const { data, error } = await useAsyncData(key, async () => {
   return await publicApiRequest<{ success: true; page: PublicTenantPage }>(`/api/public/sites/${encodeURIComponent(siteId)}/pages`, {
     query,
     validate: isPageResponse,
-    coalesceKey: key,
+    coalesceKey: key.value,
   })
 }, {
   server: true,

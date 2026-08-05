@@ -141,7 +141,7 @@ function publicSurfaceCssPlugin() {
 }
 
 export default defineNuxtConfig({
-  ignore: ['**/.worktrees/**'],
+  ignore: ['**/.worktrees/**', '**/.claude/**'],
   modules: [
     cloudflareDevModule,
     '@nuxt/scripts',
@@ -240,7 +240,7 @@ export default defineNuxtConfig({
     },
     server: {
       watch: {
-        ignored: ['**/.worktrees/**', '**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
+        ignored: ['**/.worktrees/**', '**/.claude/**', '**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
       },
       allowedHosts: ['.trycloudflare.com', 'local.krabiclaw.com', '.krabiclaw.com']
     },
@@ -443,7 +443,7 @@ export default defineNuxtConfig({
   // Global watcher exclusions
   watchers: {
     chokidar: {
-      ignored: ['**/.worktrees/**', '**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
+      ignored: ['**/.worktrees/**', '**/.claude/**', '**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
     }
   },
 

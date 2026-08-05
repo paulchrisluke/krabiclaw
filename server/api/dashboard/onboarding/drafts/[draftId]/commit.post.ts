@@ -235,10 +235,10 @@ export default defineEventHandler(async (event) => {
       const pageType = pageName === 'privacy' || pageName === 'terms' ? 'legal' : pageName === 'home' || pageName === 'about' || pageName === 'contact' ? 'system' : 'recipe'
       const blocks = onboardingPageBlocks(rows, pageName === 'home' ? heroAssetId : null)
       if (!current) {
-        await createTenantPage(db, { organizationId, siteId, userId: session.user.id, data: { locale: 'en', path, title: rows.find(row => row.field === 'hero')?.hero_title ?? pageName, pageType, recipe: pageName, blocks, publish: true } })
+        await createTenantPage(db, { organizationId, siteId, userId: session.user.id, trustedSystemPage: pageType === 'system', data: { locale: 'en', path, title: rows.find(row => row.field === 'hero')?.hero_title ?? pageName, pageType, recipe: pageName, blocks, publish: true } })
       } else {
-        const updated = await updateTenantPageDraft(db, current.id, { userId: session.user.id, data: { path: current.path, title: rows.find(row => row.field === 'hero')?.hero_title ?? current.title, summary: current.summary, seoTitle: current.seo_title, seoDescription: current.seo_description, canonicalUrl: current.canonical_url, robots: current.robots, pageType: current.page_type, recipe: current.recipe, sortOrder: current.sort_order, blocks, expectedDocumentUpdatedAt: current.document.updated_at } })
-        await publishTenantPage(db, current.id, { userId: session.user.id, expectedDocumentUpdatedAt: updated.page.document.updated_at })
+        const updated = await updateTenantPageDraft(db, current.id, { userId: session.user.id, scope: { siteId, organizationId }, data: { path: current.path, title: rows.find(row => row.field === 'hero')?.hero_title ?? current.title, summary: current.summary, seoTitle: current.seo_title, seoDescription: current.seo_description, canonicalUrl: current.canonical_url, robots: current.robots, pageType: current.page_type, recipe: current.recipe, sortOrder: current.sort_order, blocks, expectedDocumentUpdatedAt: current.document.updated_at } })
+        await publishTenantPage(db, current.id, { userId: session.user.id, scope: { siteId, organizationId }, expectedDocumentUpdatedAt: updated.page.document.updated_at })
       }
     }
 

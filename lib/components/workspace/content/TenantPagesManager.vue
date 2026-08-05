@@ -67,7 +67,10 @@
             <div class="grid gap-4 md:grid-cols-2">
               <UFormField label="Title"><UInput v-model="selected.title" /></UFormField>
               <UFormField label="Path"><UInput v-model="selected.path" placeholder="/your-page" /></UFormField>
-              <UFormField label="Page type"><USelect v-model="selected.page_type" :items="pageTypeOptions" /></UFormField>
+              <UFormField label="Page type">
+                <UInput v-if="selected.page_type === 'system'" model-value="system (site-managed)" readonly />
+                <USelect v-else v-model="selected.page_type" :items="pageTypeOptions" />
+              </UFormField>
               <UFormField label="Recipe"><UInput v-model="selected.recipe" placeholder="custom" /></UFormField>
               <UFormField class="md:col-span-2" label="Summary"><UTextarea v-model="selected.summary" :rows="3" autoresize /></UFormField>
               <UFormField label="SEO title"><UInput v-model="selected.seo_title" /></UFormField>
@@ -144,13 +147,13 @@ const dirty = ref(false)
 const hydrating = ref(false)
 
 const localeOptions = computed(() => locales.value.map(value => ({ label: value, value })))
-const pageTypeOptions = ['custom', 'system', 'recipe', 'legal'].map(value => ({ label: value, value }))
+const pageTypeOptions = ['custom', 'recipe', 'legal'].map(value => ({ label: value, value }))
 const blockTypeOptions = ['heading', 'markdown', 'image', 'gallery', 'faq', 'divider', 'cta', 'callout', 'hero', 'button_group', 'feature_grid', 'testimonial_grid', 'contact_cta', 'booking_cta', 'donation_choices', 'offering_grid', 'location_grid'].map(value => ({ label: value, value }))
 const previewUrl = computed(() => {
   if (!selected.value?.id || !previewToken.value) return ''
   const base = String(config.public.platformDomain || config.public.freeSiteDomain).replace(/\/$/, '')
   const path = selected.value.path === '/' ? '' : selected.value.path
-  return `${base}/preview/site/${siteId}${path}?preview=true&token=${encodeURIComponent(previewToken.value)}`
+  return `${base}/preview/site/${siteId}${path}?preview=true&locale=${encodeURIComponent(selected.value.locale)}&token=${encodeURIComponent(previewToken.value)}`
 })
 
 function validateList(value: unknown): value is { pages: PageSummary[] } {
@@ -288,12 +291,12 @@ async function save() {
   } finally { busy.value = null }
 }
 
-async function action(name: string, path: string, confirmMessage?: string) {
+async function action(name: string, path: string, confirmMessage?: string, extraBody: Record<string, unknown> = {}) {
   if (!selected.value?.id) return
   if (confirmMessage && !window.confirm(confirmMessage)) return
   busy.value = name; editorError.value = null
   try {
-    const response = await dashboardApi<{ page: PageDetailResponse }>(`/api/editor/sites/${siteId}/pages/${selected.value.id}/${path}`, { method: 'POST', body: { expectedDocumentUpdatedAt: selected.value.document.updated_at }, validate: validatePage })
+    const response = await dashboardApi<{ page: PageDetailResponse }>(`/api/editor/sites/${siteId}/pages/${selected.value.id}/${path}`, { method: 'POST', body: { expectedDocumentUpdatedAt: selected.value.document.updated_at, ...extraBody }, validate: validatePage })
     selected.value = toEditorPage(response.page)
     blockJson.value = selected.value.blocks.map(block => JSON.stringify(block.data, null, 2))
     await loadPages()
@@ -302,7 +305,17 @@ async function action(name: string, path: string, confirmMessage?: string) {
 }
 const publish = () => action('publish', 'publish')
 const unpublish = () => action('unpublish', 'unpublish')
-const archive = () => action('archive', 'archive', 'Archive this page? It will stop rendering publicly.')
+async function archive() {
+  if (!selected.value) return
+  const archiveOptions: Record<string, unknown> = {}
+  if (selected.value.page_type === 'legal') {
+    const decision = window.prompt('Enter a published replacement path, or type 410 to make this page return Gone. Leave blank to archive without a redirect.')
+    if (decision === null) return
+    if (decision.trim() === '410') archiveOptions.gone = true
+    else if (decision.trim()) archiveOptions.replacementPath = decision.trim()
+  }
+  await action('archive', 'archive', 'Archive this page? It will stop rendering publicly.', archiveOptions)
+}
 const restore = () => action('restore', 'restore')
 
 async function removePage() {

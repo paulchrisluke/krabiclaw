@@ -408,6 +408,7 @@ export async function seedNewSite(
     }
     await createTenantPage(db, {
       organizationId, siteId, userId: null,
+      trustedSystemPage: definition.pageType === 'system',
       data: {
         locale: 'en', path: definition.path, title: hero?.[2] ?? page.replaceAll('-', ' '),
         pageType: definition.pageType, recipe: definition.recipe, blocks, publish: true,

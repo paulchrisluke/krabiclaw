@@ -201,7 +201,10 @@ SELECT
   p.seo_description,
   p.canonical_url,
   p.robots,
-  p.status,
+  CASE
+    WHEN SUM(CASE WHEN sct.status = 'published' THEN 1 ELSE 0 END) = COUNT(*) THEN 'published'
+    ELSE 'draft'
+  END,
   p.created_at,
   p.updated_at
 FROM site_content_translations sct
@@ -210,6 +213,40 @@ JOIN tenant_pages p
  AND p.site_id = sct.site_id
  AND p.path = CASE sct.page WHEN 'home' THEN '/' ELSE '/' || trim(sct.page, '/') END
 WHERE sct.location_id IS NULL
+GROUP BY p.id, sct.locale;
+
+-- Location translations have their own page identity. Create the locale
+-- variant before importing their blocks; otherwise the later block join
+-- silently drops every non-source location translation.
+INSERT INTO tenant_page_variants
+  (id, organization_id, site_id, page_id, locale, published_path, title, summary, seo_title, seo_description, canonical_url, robots, status, created_at, updated_at)
+SELECT
+  'migrated-tenant-page-variant:' || p.id || ':' || sct.locale,
+  p.organization_id,
+  p.site_id,
+  p.id,
+  sct.locale,
+  p.path,
+  COALESCE(MAX(NULLIF(sct.hero_title, '')), MAX(NULLIF(sct.content, '')), p.title),
+  p.summary,
+  p.seo_title,
+  p.seo_description,
+  p.canonical_url,
+  p.robots,
+  CASE
+    WHEN SUM(CASE WHEN sct.status = 'published' THEN 1 ELSE 0 END) = COUNT(*) THEN 'published'
+    ELSE 'draft'
+  END,
+  p.created_at,
+  p.updated_at
+FROM site_content_translations sct
+JOIN business_locations bl ON bl.id = sct.location_id AND bl.site_id = sct.site_id
+JOIN tenant_pages p ON p.organization_id = sct.organization_id
+ AND p.site_id = sct.site_id
+ AND p.path = '/locations/' || bl.slug
+WHERE sct.location_id IS NOT NULL
+  AND sct.page = 'location'
+  AND NOT EXISTS (SELECT 1 FROM tenant_page_variants existing WHERE existing.page_id = p.id AND existing.locale = sct.locale)
 GROUP BY p.id, sct.locale;
 
 -- These are the complete legacy component types that can occur in tenant page

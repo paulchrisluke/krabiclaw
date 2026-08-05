@@ -6,12 +6,15 @@ export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const variantId = getRouterParam(event, 'variantId')
   if (!siteId || !variantId) return jsonResponse({ error: 'Site and page IDs are required' }, { status: 400 })
-  const { db, userId } = await requireTenantPageWriteAccess(event, siteId)
+  const { db, site, userId } = await requireTenantPageWriteAccess(event, siteId)
   try {
     const body = await readBody(event)
     return jsonResponse({ page: await archiveTenantPage(db, variantId, {
       userId,
+      scope: { siteId, organizationId: site.organization_id },
       expectedDocumentUpdatedAt: String(body?.expectedDocumentUpdatedAt || ''),
+      replacementPath: typeof body?.replacementPath === 'string' ? body.replacementPath : null,
+      gone: body?.gone === true,
     }) })
   } catch (error) {
     rethrowHttpError(error)

@@ -476,6 +476,7 @@ export async function publishTranslationDrafts(
         const variant = await ensureTenantPageVariant(db, pageId, inventory.target_locale, userId ?? null)
         await publishTenantPage(db, variant.id, {
           userId: userId ?? 'translation-system',
+          scope: { siteId, organizationId },
           expectedDocumentUpdatedAt: variant.document.updated_at,
         })
       }

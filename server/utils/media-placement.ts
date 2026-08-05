@@ -138,6 +138,7 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
       const home = await getTenantPageForEditorByPath(db, input.siteId, '/')
       await updateTenantPageDraft(db, home.id, {
         userId: null,
+        scope: { siteId: input.siteId, organizationId: input.organizationId },
         data: {
           path: home.path,
           title: home.title,
@@ -161,6 +162,7 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
       const canonicalPage = await getTenantPageForEditorByPath(db, input.siteId, page === 'home' ? '/' : '/about')
       await updateTenantPageDraft(db, canonicalPage.id, {
         userId: null,
+        scope: { siteId: input.siteId, organizationId: input.organizationId },
         data: {
           path: canonicalPage.path,
           title: canonicalPage.title,

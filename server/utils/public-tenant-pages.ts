@@ -63,10 +63,10 @@ async function hydrateBlocks(db: DbClient, siteId: string, blocks: TenantPageBlo
   })
 }
 
-function mapPage(page: TenantPageDto, blocks: TenantPageBlock[]): PublicTenantPage {
+function mapPage(page: TenantPageDto, blocks: TenantPageBlock[], preview: boolean): PublicTenantPage {
   return {
     id: page.id,
-    path: page.published_path,
+    path: preview ? page.draft_path : page.published_path,
     title: page.title,
     summary: page.summary,
     seo_title: page.seo_title,
@@ -92,7 +92,7 @@ export async function getPublicTenantPageForPath(
     ? await getTenantPageForEditor(db, await resolveVariantId(db, siteId, path, options.locale))
     : await getPublishedTenantPage(db, siteId, path, options.locale)
   if (!page) return null
-  return mapPage(page, await hydrateBlocks(db, siteId, page.blocks))
+  return mapPage(page, await hydrateBlocks(db, siteId, page.blocks), Boolean(options.preview))
 }
 
 async function resolveVariantId(db: DbClient, siteId: string, path: string, locale?: string | null): Promise<string> {

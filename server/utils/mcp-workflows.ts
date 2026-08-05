@@ -454,6 +454,7 @@ export async function updatePageContent(
   const page = await getTenantPageForEditorByPath(db, siteId, canonicalPath);
   const result = await updateTenantPageDraft(db, page.id, {
     userId: actorId ?? null,
+    scope: { siteId, organizationId },
     data: {
       path: typeof input.changes.path === 'string' ? input.changes.path : page.path,
       title: typeof input.changes.title === 'string' ? input.changes.title : page.title,
@@ -545,6 +546,7 @@ export async function updateHomeHero(
     : block)
   const result = await updateTenantPageDraft(db, page.id, {
     userId: null,
+    scope: { siteId, organizationId },
     data: {
       path: page.path,
       title: page.title,

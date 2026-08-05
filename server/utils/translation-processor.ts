@@ -74,6 +74,7 @@ async function upsertTenantPageTranslation(
     : { ...block, data: { ...block.data, ...fields } })
   await updateTenantPageDraft(db, page.id, {
     userId: null,
+    scope: { siteId: job.site_id, organizationId: job.organization_id },
     data: {
       path: page.path,
       title: page.title,

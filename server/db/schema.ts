@@ -2475,6 +2475,7 @@ export const tenant_page_variants = sqliteTable("tenant_page_variants", {
 	locale: text().notNull(),
 	draft_document_id: text().references(() => content_documents.id, { onDelete: "set null" } ),
 	published_revision_id: text().references(() => content_revisions.id, { onDelete: "set null" } ),
+	ever_published: integer().default(0).notNull(),
 	published_path: text().notNull(),
 	draft_path: text().notNull().default("/"),
 	title: text().notNull(),
