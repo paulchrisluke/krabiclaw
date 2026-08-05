@@ -64,7 +64,8 @@ export default defineEventHandler(async (event) => {
   `, [organizationId])
 
   let sql = `
-    SELECT id, stripe_event_id, event_type, status, payload, error, created_at
+    SELECT id, stripe_event_id, event_type, status, payload, error,
+           claimed_at, lease_expires_at, attempt_count, created_at
     FROM stripe_webhook_events
     WHERE 1 = 1
   `

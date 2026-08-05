@@ -66,7 +66,7 @@ const GROWTH_PRICE = {
   unit_amount: 4900,
   currency: 'usd',
   type: 'recurring',
-  recurring: { interval: 'month' },
+  recurring: { interval: 'month', interval_count: 1 },
   product: 'prod_growth',
 }
 
@@ -127,15 +127,60 @@ describe('getCachedPlans — KV read-through cache', () => {
     assert.equal(stripeCallCount, 0)
   })
 
-  test('skips KV entirely when SITE_CACHE is undefined', async () => {
+test('skips KV entirely when SITE_CACHE is undefined', async () => {
     stripeProducts = [GROWTH_PRODUCT]
     stripePrices = [GROWTH_PRICE]
 
     const result = await getCachedPlans(baseEnv())
 
     assert.equal(stripeCallCount, 1)
-    assert.ok(result.some((p) => p.id === 'growth'))
-  })
+  assert.ok(result.some((p) => p.id === 'growth'))
+})
+
+test('rejects an annual-only paid product instead of returning an undefined monthly price', async () => {
+  stripeProducts = [GROWTH_PRODUCT]
+  stripePrices = [{
+    ...GROWTH_PRICE,
+    id: 'price_growth_year',
+    recurring: { interval: 'year', interval_count: 1 },
+  }]
+
+  await assert.rejects(
+    () => getCachedPlans(baseEnv()),
+    (error: unknown) => error instanceof BillingPlansError && error.code === 'BILLING_PLANS_INVALID_CATALOG',
+  )
+})
+
+test('rejects duplicate canonical monthly prices', async () => {
+  stripeProducts = [GROWTH_PRODUCT]
+  stripePrices = [
+    GROWTH_PRICE,
+    { ...GROWTH_PRICE, id: 'price_growth_month_duplicate' },
+  ]
+
+  await assert.rejects(
+    () => getCachedPlans(baseEnv()),
+    (error: unknown) => error instanceof BillingPlansError && error.code === 'BILLING_PLANS_INVALID_CATALOG',
+  )
+})
+
+test('rejects mixed currencies across the canonical monthly and annual prices', async () => {
+  stripeProducts = [GROWTH_PRODUCT]
+  stripePrices = [
+    GROWTH_PRICE,
+    {
+      ...GROWTH_PRICE,
+      id: 'price_growth_year',
+      currency: 'eur',
+      recurring: { interval: 'year', interval_count: 1 },
+    },
+  ]
+
+  await assert.rejects(
+    () => getCachedPlans(baseEnv()),
+    (error: unknown) => error instanceof BillingPlansError && error.code === 'BILLING_PLANS_INVALID_CATALOG',
+  )
+})
 })
 
 describe('getCachedPlans — in-flight coalescing', () => {

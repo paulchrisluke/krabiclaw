@@ -3,6 +3,17 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { createAuth, getAuthSession, type CloudflareEnv } from '~/server/utils/auth'
 import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
 
+async function legacyPortalResponse(response: Response) {
+  const payload = await response.json().catch(() => null) as { url?: unknown } | null
+  if (!response.ok) {
+    return jsonResponse(payload ?? { error: 'Unable to create billing portal session' }, { status: response.status })
+  }
+  if (!payload || typeof payload.url !== 'string' || payload.url.length === 0) {
+    return jsonResponse({ error: 'Better Auth did not return a billing portal URL' }, { status: 502 })
+  }
+  return jsonResponse({ success: true, portalUrl: payload.url })
+}
+
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ organizationId?: string; returnUrl?: string }>(event)
   if (!body?.organizationId) return jsonResponse({ error: 'Organization ID is required' }, { status: 400 })
@@ -32,6 +43,7 @@ export default defineEventHandler(async (event) => {
       referenceId: organization.id,
       customerType: 'organization',
       returnUrl: body.returnUrl ?? `${getRequestURL(event).origin}/dashboard/${encodeURIComponent(organization.slug)}/settings/billing`,
+      disableRedirect: true,
     }),
-  }))
+  })).then(legacyPortalResponse)
 })

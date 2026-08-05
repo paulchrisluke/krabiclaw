@@ -13,9 +13,10 @@ test('dashboard recurring upsell uses the organization Better Auth Stripe subscr
   const source = await readFile('components/billing/ServiceUpsellModal.vue', 'utf8')
 
   assert.match(source, /const siteId = dashboard\.siteId\.value/)
-  assert.match(source, /authClient\.subscription\.upgrade/)
-  assert.match(source, /customerType: 'organization'/)
-  assert.match(source, /metadata: \{ site_id: siteId \}/)
+  assert.match(source, /const \{ offerSubscribe \} = useSiteSubscribe\(\)/)
+  assert.match(source, /offerSubscribe\(siteId, type\.value\)/)
+  assert.doesNotMatch(source, /authClient\.subscription\.upgrade/)
+  assert.doesNotMatch(source, /\/api\/billing\/checkout/)
 })
 
 test('saved-card site subscribe path is absent', async () => {

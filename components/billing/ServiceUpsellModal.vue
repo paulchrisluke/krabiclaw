@@ -83,7 +83,6 @@
 
 <script setup lang="ts">
 import type { UpsellType } from '~/composables/useServiceUpsell'
-import { authClient } from '~/lib/auth-client'
 
 const config = useRuntimeConfig()
 
@@ -92,10 +91,10 @@ const PAUL_PHOTO_URL = 'https://res.cloudinary.com/pcl-labs/image/upload/v171469
 const JULIA_PHOTO_URL = 'https://res.cloudinary.com/pcl-labs/image/upload/v1714706641/PCL-Labs/1682091954266_vrcx3n.webp'
 
 const { isOpen, type, close } = useServiceUpsell()
+const { offerSubscribe } = useSiteSubscribe()
 const toast = useToast()
 const loading = ref(false)
 const dashboard = useDashboardSite()
-const dashboardApi = useDashboardApi()
 const isExperience = computed(() => dashboard.site.value?.vertical === 'experience')
 
 interface UpsellContent {
@@ -207,35 +206,9 @@ async function handleCta() {
   try {
     if (RECURRING_TYPES.includes(type.value)) {
       const siteId = dashboard.siteId.value
-      const organizationId = dashboard.organization.value?.id
-      if (!siteId || !organizationId) throw new Error('Choose a site before starting checkout')
-      const billingResponse = await dashboardApi<{ billing?: { stripeSubscriptionId?: unknown } }>('/api/billing/status', {
-        query: { organizationId },
-        validate: value => typeof value === 'object' && value !== null,
-      })
-      const currentUrl = new URL(window.location.href)
-      for (const key of ['success', 'canceled', 'plan']) currentUrl.searchParams.delete(key)
-      const successUrl = new URL(currentUrl)
-      successUrl.searchParams.set('success', 'true')
-      const cancelUrl = new URL(currentUrl)
-      cancelUrl.searchParams.set('canceled', 'true')
-      const res = await authClient.subscription.upgrade({
-        plan: type.value,
-        referenceId: organizationId,
-        ...(typeof billingResponse.billing?.stripeSubscriptionId === 'string'
-          ? { subscriptionId: billingResponse.billing.stripeSubscriptionId }
-          : {}),
-        customerType: 'organization',
-        metadata: { site_id: siteId },
-        successUrl: successUrl.toString(),
-        cancelUrl: cancelUrl.toString(),
-        disableRedirect: true,
-      })
-      if (res.error) throw new Error(res.error.message ?? 'Unable to start subscription checkout')
-      const checkoutUrl = res.data && 'url' in res.data ? res.data.url : null
-      if (!checkoutUrl) throw new Error('Missing checkout URL from Better Auth Stripe')
+      if (!siteId) throw new Error('Choose a site before starting checkout')
       close()
-      await navigateTo(checkoutUrl, { external: true })
+      await offerSubscribe(siteId, type.value)
     } else {
       const res = await $fetch<{ checkoutUrl: string }>('/api/billing/service-addon', {
         method: 'POST',

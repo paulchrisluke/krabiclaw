@@ -15,6 +15,17 @@ interface CheckoutRequest {
   gaClientId?: string
 }
 
+async function legacyCheckoutResponse(response: Response) {
+  const payload = await response.json().catch(() => null) as { url?: unknown } | null
+  if (!response.ok) {
+    return jsonResponse(payload ?? { error: 'Unable to create checkout session' }, { status: response.status })
+  }
+  if (!payload || typeof payload.url !== 'string' || payload.url.length === 0) {
+    return jsonResponse({ error: 'Better Auth did not return a checkout URL' }, { status: 502 })
+  }
+  return jsonResponse({ success: true, checkoutUrl: payload.url })
+}
+
 /**
  * Compatibility alias for callers that have not moved to the Better Auth
  * client yet. It performs no Stripe work; the canonical implementation is
@@ -79,6 +90,7 @@ export default defineEventHandler(async (event) => {
       },
       successUrl: callbackUrl,
       cancelUrl,
+      disableRedirect: true,
     }),
-  }))
+  })).then(legacyCheckoutResponse)
 })

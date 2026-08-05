@@ -19,6 +19,7 @@ export default defineEventHandler(async (event) => {
 
   const headers = new Headers(request.headers)
   headers.delete('content-length')
+  headers.delete('cookie')
   const cloudflareContext = event.context.cloudflare?.context
   const waitUntil = cloudflareContext?.waitUntil?.bind(cloudflareContext)
   return await createAuth(env, { waitUntil }).handler(new Request(target, {

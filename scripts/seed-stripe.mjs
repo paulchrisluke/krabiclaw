@@ -190,7 +190,11 @@ async function createSubscriptionPlan({ name, description, planId, amountCents, 
 
   if (match) {
     const price = await ensureMonthlyPrice(match.id, amountCents)
-    await stripe.products.update(match.id, { ...updateData, default_price: price.id })
+    await stripe.products.update(match.id, {
+      ...updateData,
+      metadata: { ...updateData.metadata, monthly_price_id: price.id },
+      default_price: price.id,
+    })
     console.log(`  Updated: ${match.id}`)
     return match
   }
@@ -201,7 +205,10 @@ async function createSubscriptionPlan({ name, description, planId, amountCents, 
   })
 
   const price = await ensureMonthlyPrice(product.id, amountCents)
-  await stripe.products.update(product.id, { default_price: price.id })
+  await stripe.products.update(product.id, {
+    metadata: { ...updateData.metadata, monthly_price_id: price.id },
+    default_price: price.id,
+  })
 
   console.log(`  Created: ${product.id}`)
   return product

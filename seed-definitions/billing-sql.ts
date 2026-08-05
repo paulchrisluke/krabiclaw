@@ -1,3 +1,5 @@
+import { getPlanEntitlements } from '../server/utils/billing-entitlements.ts'
+
 export interface SeedBillingState {
   status: string
   plan: string
@@ -6,33 +8,7 @@ export interface SeedBillingState {
 type SqlValue = (_value: string | number | boolean | null) => string
 
 function entitlementValuesForPlan(plan: string): Record<string, string | number | boolean> {
-  const base = {
-    plan,
-    custom_domains: false,
-    google_business: false,
-    remove_branding: false,
-    ai_credits: 500,
-    advanced_seo: false,
-    white_label: false,
-    api_access: false,
-    translation: false,
-    translation_languages: 0,
-    managed_service: false,
-    seo_accelerator: false,
-    messaging: false,
-    review_requests: true,
-  }
-
-  switch (plan) {
-    case 'growth':
-      return { ...base, translation: true, translation_languages: 1, ai_credits: 2000, google_business: true, custom_domains: true, managed_service: true, messaging: true }
-    case 'managed':
-      return { ...base, translation: true, translation_languages: -1, ai_credits: 'unlimited', managed_service: true, custom_domains: true, google_business: true, advanced_seo: true, messaging: true }
-    case 'seo_accelerator':
-      return { ...base, translation: true, translation_languages: -1, ai_credits: 'unlimited', managed_service: true, seo_accelerator: true, custom_domains: true, google_business: true, advanced_seo: true, messaging: true }
-    default:
-      return base
-  }
+  return getPlanEntitlements(plan)
 }
 
 export function renderSiteEntitlementsSql(

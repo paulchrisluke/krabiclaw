@@ -29,6 +29,7 @@ import {
   projectDeletedBetterAuthSubscription,
   recordStripeEvent,
   grantInvoiceQuota,
+  reconcileBetterAuthSubscriptionEvent,
 } from '~/server/utils/better-auth-stripe'
 import { handleApplicationStripeEvent } from '~/server/utils/billing-webhook-app-events'
 
@@ -447,8 +448,9 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
         },
         onEvent: async (event) => {
           await recordStripeEvent(db, event, async () => {
+            await reconcileBetterAuthSubscriptionEvent(db, event, stripeClient)
             await handleApplicationStripeEvent(env, d1, event)
-            await grantInvoiceQuota(db, event)
+            await grantInvoiceQuota(db, stripeClient, event)
           })
         },
       }),

@@ -2268,6 +2268,9 @@ export const stripe_webhook_events = sqliteTable("stripe_webhook_events", {
 	status: text().default("pending"),
 	payload: text(),
 	error: text(),
+	claimed_at: text(),
+	lease_expires_at: text(),
+	attempt_count: integer().default(0).notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 

@@ -4,6 +4,7 @@ import { betterAuthTimestampToIso } from '~/server/utils/better-auth-timestamps'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
 import { getOrgAdapter } from 'better-auth/plugins'
 import { getPlanEntitlements, type EntitlementsMap } from '~/server/utils/billing-entitlements'
+import { getEffectiveAccessPlan } from '~/server/utils/billing-access'
 
 interface SiteBillingRow {
   stripe_subscription_id: string | null
@@ -27,7 +28,7 @@ interface BetterAuthSubscriptionRow {
   stripeCustomerId: string | null
   stripeSubscriptionId: string | null
   status: string
-  periodEnd: number | null
+  periodEnd: number | string | null
   cancelAtPeriodEnd: number | null
 }
 
@@ -78,7 +79,6 @@ export async function getSiteBillingStatus(
   db: D1Database,
   siteId: string,
 ): Promise<SiteBillingStatus> {
-  const entitlements = await getSiteEntitlements(db, siteId)
   const site = await queryFirst<{ organization_id: string }>(db, `
     SELECT organization_id FROM sites WHERE id = ? LIMIT 1
   `, [siteId])
@@ -93,18 +93,28 @@ export async function getSiteBillingStatus(
   // Customer + auto-topup live at org level
   const orgBilling = await queryFirst<OrgBillingRow>(db, `
     SELECT ob.stripe_customer_id, ob.auto_topup_enabled, ob.auto_topup_bundle, ob.auto_topup_threshold
-    FROM site_billing sb
-    JOIN organization_billing ob ON ob.organization_id = sb.organization_id
-    WHERE sb.site_id = ? LIMIT 1
+    FROM sites s
+    JOIN organization_billing ob ON ob.organization_id = s.organization_id
+    WHERE s.id = ? LIMIT 1
   `, [siteId])
 
+  const accessPlan = subscription
+    ? getEffectiveAccessPlan({
+        plan: subscription.plan,
+        status: subscription.status,
+        periodEnd: subscription.periodEnd,
+      })
+    : null
+
+  const legacyAccessPlan = 'free'
+
   return {
-    plan: subscription?.plan ?? siteBilling?.plan ?? String(entitlements.plan ?? 'free'),
+    plan: accessPlan ?? legacyAccessPlan,
     stripeCustomerId: subscription?.stripeCustomerId ?? orgBilling?.stripe_customer_id ?? undefined,
     stripeSubscriptionId: subscription?.stripeSubscriptionId ?? siteBilling?.stripe_subscription_id ?? undefined,
     subscriptionStatus: subscription?.status ?? siteBilling?.status ?? undefined,
     currentPeriodEnd: subscription?.periodEnd
-      ? new Date(subscription.periodEnd * 1000).toISOString()
+      ? betterAuthTimestampToIso(subscription.periodEnd, 'subscription.periodEnd')
       : siteBilling?.current_period_end ?? undefined,
     cancelAtPeriodEnd: subscription
       ? Boolean(subscription.cancelAtPeriodEnd)
@@ -112,7 +122,7 @@ export async function getSiteBillingStatus(
     autoTopupEnabled: Boolean(orgBilling?.auto_topup_enabled),
     autoTopupBundle: orgBilling?.auto_topup_bundle ?? 500,
     autoTopupThreshold: orgBilling?.auto_topup_threshold ?? 100,
-    entitlements,
+    entitlements: getPlanEntitlements(accessPlan ?? legacyAccessPlan),
   }
 }
 
@@ -132,22 +142,27 @@ export async function getOrganizationBillingStatus(
     FROM organization_billing WHERE organization_id = ? LIMIT 1
   `, [organizationId])
 
-  const projectedEntitlements = await getOrganizationEntitlements(db, organizationId)
-  const plan = subscription?.plan ?? 'free'
+  const accessPlan = subscription
+    ? getEffectiveAccessPlan({
+        plan: subscription.plan,
+        status: subscription.status,
+        periodEnd: subscription.periodEnd,
+      })
+    : 'free'
 
   return {
-    plan,
+    plan: accessPlan,
     stripeCustomerId: subscription?.stripeCustomerId ?? orgBilling?.stripe_customer_id ?? undefined,
     stripeSubscriptionId: subscription?.stripeSubscriptionId ?? undefined,
     subscriptionStatus: subscription?.status,
-    currentPeriodEnd: subscription?.periodEnd ? new Date(subscription.periodEnd * 1000).toISOString() : undefined,
+    currentPeriodEnd: subscription?.periodEnd
+      ? betterAuthTimestampToIso(subscription.periodEnd, 'subscription.periodEnd')
+      : undefined,
     cancelAtPeriodEnd: subscription ? Boolean(subscription.cancelAtPeriodEnd) : undefined,
     autoTopupEnabled: Boolean(orgBilling?.auto_topup_enabled),
     autoTopupBundle: orgBilling?.auto_topup_bundle ?? 500,
     autoTopupThreshold: orgBilling?.auto_topup_threshold ?? 100,
-    entitlements: Object.keys(projectedEntitlements).length > 0
-      ? projectedEntitlements
-      : getPlanEntitlements(plan),
+    entitlements: getPlanEntitlements(accessPlan),
   }
 }
 
@@ -168,7 +183,12 @@ export async function getOrganizationEntitlements(db: D1Database, organizationId
 export async function hasSiteEntitlement(db: D1Database, siteId: string, key: string): Promise<boolean> {
   const row = await queryFirst<EntitlementValueRow>(db, `SELECT value FROM site_entitlements WHERE site_id = ? AND key = ? LIMIT 1`, [siteId, key])
   if (!row) return false
-  return row.value.toLowerCase() === 'true'
+  const site = await queryFirst<{ organization_id: string }>(db, `
+    SELECT organization_id FROM sites WHERE id = ? LIMIT 1
+  `, [siteId])
+  const subscription = site ? await getBetterAuthSubscription(db, site.organization_id) : null
+  if (!subscription) return false
+  return getPlanEntitlements(getEffectiveAccessPlan(subscription))[key] === true
 }
 
 // Backward-compat shim
@@ -179,13 +199,9 @@ export async function hasEntitlement(
   key: string,
 ): Promise<boolean> {
   void env
-  const organizationEntitlement = await queryFirst<EntitlementValueRow>(db, `
-    SELECT value FROM organization_entitlements WHERE organization_id = ? AND key = ? LIMIT 1
-  `, [organizationId, key])
-  const site = await queryFirst<{ id: string }>(db, `SELECT id FROM sites WHERE organization_id = ? ORDER BY id LIMIT 1`, [organizationId])
-  if (organizationEntitlement?.value?.toLowerCase() === 'true') return true
-  if (!site) return false
-  return hasSiteEntitlement(db, site.id, key)
+  const subscription = await getBetterAuthSubscription(db, organizationId)
+  if (!subscription) return false
+  return getPlanEntitlements(getEffectiveAccessPlan(subscription))[key] === true
 }
 
 export async function setSiteEntitlementsFromPlan(
@@ -406,14 +422,13 @@ async function getBetterAuthSubscription(db: D1Database, organizationId: string)
            periodEnd, cancelAtPeriodEnd
     FROM subscription
     WHERE referenceId = ?
-      AND status IN ('active', 'trialing', 'past_due', 'unpaid')
+      AND status IN ('active', 'trialing', 'past_due')
     ORDER BY
       CASE status
         WHEN 'active' THEN 0
         WHEN 'trialing' THEN 1
         WHEN 'past_due' THEN 2
-        WHEN 'unpaid' THEN 3
-        ELSE 4
+        ELSE 3
       END,
       updatedAt DESC
     LIMIT 1

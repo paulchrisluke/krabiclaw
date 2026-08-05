@@ -3,6 +3,7 @@ import type { BillingEnv } from '~/server/utils/billing'
 import { execute, executeBatch, queryFirst, type DbClient } from '~/server/db'
 import { recordUsageEvent } from '~/server/utils/usage-metering'
 import { getPlanEntitlements } from '~/server/utils/billing-entitlements'
+import { getEffectiveAccessPlan } from '~/server/utils/billing-access'
 
 // Credit system: 1 credit = 1,000 tokens (input + output combined).
 
@@ -39,17 +40,25 @@ function utcWeekKey(now = new Date()): string {
 }
 
 async function getOrganizationPlan(db: DbClient, organizationId: string): Promise<string> {
-  const entitlement = await queryFirst<{ value: string | null }>(db, `
-    SELECT value FROM organization_entitlements
-    WHERE organization_id = ? AND key = 'plan'
+  const billing = await queryFirst<{
+    plan: string | null
+    status: string | null
+    current_period_end: string | null
+  }>(db, `
+    SELECT plan, status, current_period_end
+    FROM organization_billing
+    WHERE organization_id = ?
     LIMIT 1
   `, [organizationId])
-  if (entitlement?.value) return entitlement.value
+  if (billing) {
+    return getEffectiveAccessPlan({
+      plan: billing.plan,
+      status: billing.status,
+      periodEnd: billing.current_period_end,
+    })
+  }
 
-  const billing = await queryFirst<{ plan: string | null }>(db, `
-    SELECT plan FROM organization_billing WHERE organization_id = ? LIMIT 1
-  `, [organizationId])
-  return billing?.plan || 'free'
+  return 'free'
 }
 
 async function ensurePlanCreditAllowance(db: DbClient, organizationId: string): Promise<CreditRow> {
