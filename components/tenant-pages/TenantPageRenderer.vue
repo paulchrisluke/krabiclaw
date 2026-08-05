@@ -1,10 +1,11 @@
 <template>
   <article
     data-tenant-page
+    :data-parity-root="template === 'blawby' ? '' : undefined"
     :data-template="template"
     :class="template === 'blawby' ? 'blawby-container min-h-screen bg-white text-gray-900' : 'mx-auto max-w-7xl px-4 py-16 text-default sm:px-6 lg:px-8'"
   >
-    <section v-for="block in page.blocks" :key="block.id" :data-block-type="block.type" class="tenant-page-block">
+    <section v-for="block in page.blocks" :key="block.id" :data-block-type="block.type" :data-parity-section="sectionKey(block)" class="tenant-page-block">
       <template v-if="block.type === 'hero'">
         <div :class="template === 'blawby' ? 'py-20 text-center sm:py-28' : 'py-12 sm:py-20'">
           <p v-if="text(block.data.eyebrow)" class="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-primary">{{ text(block.data.eyebrow) }}</p>
@@ -69,6 +70,9 @@
         <aside v-if="text(block.data.title) || text(block.data.body)" class="my-10 rounded-2xl border border-primary/30 bg-primary/5 p-6">
           <h2 v-if="text(block.data.title)" class="text-xl font-semibold">{{ text(block.data.title) }}</h2>
           <div v-if="text(block.data.body)" class="prose mt-2 max-w-none whitespace-pre-wrap text-muted">{{ sanitize(text(block.data.body)) }}</div>
+          <div v-if="buttons(block).length" class="mt-5 flex flex-wrap gap-3">
+            <TenantPageButton v-for="button in buttons(block)" :key="button.url + button.label" :label="button.label" :url="button.url" />
+          </div>
         </aside>
       </template>
 
@@ -78,8 +82,12 @@
         </div>
       </template>
 
+      <template v-else-if="block.type === 'feature_grid' && calculatorRows(block).length">
+        <TenantPagePricingCalculator :rows="calculatorRows(block)" :note="calculatorNote(block)" />
+      </template>
+
       <template v-else-if="block.type === 'feature_grid' || block.type === 'testimonial_grid' || block.type === 'offering_grid' || block.type === 'location_grid'">
-        <section v-if="gridItems(block).length" class="my-12">
+        <section class="my-12">
           <h2 v-if="text(block.data.title)" class="mb-6 text-2xl font-semibold">{{ text(block.data.title) }}</h2>
           <div class="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
             <article v-for="(item, index) in gridItems(block)" :key="item.id || item.title || index" class="rounded-2xl border border-default bg-default p-6 shadow-sm">
@@ -90,20 +98,28 @@
               <TenantPageButton v-if="item.url && item.label" class="mt-4" :label="item.label" :url="item.url" />
             </article>
           </div>
+          <p v-if="!gridItems(block).length" class="rounded-2xl border border-dashed border-default p-6 text-sm text-muted">This section has no published items yet.</p>
         </section>
       </template>
 
       <template v-else-if="block.type === 'donation_choices'">
-        <section v-if="gridItems(block).length" class="my-12">
+        <section class="my-12">
           <h2 v-if="text(block.data.title)" class="text-2xl font-semibold">{{ text(block.data.title) }}</h2>
           <p v-if="text(block.data.description)" class="mt-2 text-muted">{{ text(block.data.description) }}</p>
           <div class="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            <article v-for="(item, index) in gridItems(block)" :key="item.id || item.title || index" class="rounded-2xl border border-default p-6">
+            <article v-for="(item, index) in donationItems(block)" :key="item.id || item.title || index" class="rounded-2xl border border-default p-6">
               <p v-if="item.amount" class="text-3xl font-bold text-primary">{{ item.amount }}</p>
               <h3 class="mt-2 font-semibold">{{ item.title }}</h3>
               <p v-if="item.description" class="mt-2 text-sm text-muted">{{ item.description }}</p>
+              <TenantPageButton v-if="text(block.data.destination) && item.amount" class="mt-5" :label="`Donate ${item.amount}`" :url="text(block.data.destination)" />
+            </article>
+            <article v-if="text(block.data.destination)" class="rounded-2xl border border-default p-6">
+              <h3 class="font-semibold">Custom Amount</h3>
+              <p class="mt-2 text-sm text-muted">Choose your own donation amount</p>
+              <TenantPageButton class="mt-5" label="Donate custom amount" :url="text(block.data.destination)" />
             </article>
           </div>
+          <p v-if="!donationItems(block).length" class="rounded-2xl border border-dashed border-default p-6 text-sm text-muted">Donation choices are not configured.</p>
         </section>
       </template>
     </section>
@@ -132,6 +148,10 @@ function headingTag(value: unknown): string {
   return `h${Number.isInteger(level) && level >= 1 && level <= 6 ? level : 2}`
 }
 
+function sectionKey(block: TenantPageBlock): string | undefined {
+  return text(block.data.section) || undefined
+}
+
 function galleryImages(block: TenantPageBlock): Array<{ id?: string; url: string; alt?: string; caption?: string }> {
   const value = block.data.images
   if (!Array.isArray(value)) return []
@@ -145,7 +165,7 @@ function asItems(value: unknown): GridItem[] {
     title: text(item.title) || text(item.name) || undefined,
     description: text(item.description) || text(item.summary) || text(item.body) || undefined,
     value: text(item.value) || undefined,
-    image_url: text(item.image_url) || text(item.url) || undefined,
+    image_url: text(item.image_url) || undefined,
     label: text(item.label) || text(item.cta_label) || undefined,
     url: text(item.url) || text(item.cta_url) || undefined,
     amount: item.amount == null ? undefined : String(item.amount),
@@ -153,7 +173,11 @@ function asItems(value: unknown): GridItem[] {
 }
 
 function gridItems(block: TenantPageBlock): GridItem[] {
-  return asItems(block.data.items ?? block.data.features ?? block.data.statistics ?? block.data.plans ?? block.data.tiers ?? block.data.people)
+  return asItems(block.data.items)
+}
+
+function donationItems(block: TenantPageBlock): GridItem[] {
+  return asItems(block.data.tiers)
 }
 
 function faqItems(block: TenantPageBlock): Array<{ question: string; answer: string }> {
@@ -163,5 +187,19 @@ function faqItems(block: TenantPageBlock): Array<{ question: string; answer: str
 function buttons(block: TenantPageBlock): Array<{ label: string; url: string }> {
   if (!Array.isArray(block.data.buttons)) return []
   return block.data.buttons.filter((button): button is Record<string, unknown> => Boolean(button && typeof button === 'object')).map(button => ({ label: text(button.label), url: text(button.url) })).filter(button => button.label && button.url)
+}
+
+function calculatorRows(block: TenantPageBlock): unknown[][] {
+  const calculator = block.data.calculator
+  if (!calculator || typeof calculator !== 'object' || Array.isArray(calculator)) return []
+  const rows = (calculator as Record<string, unknown>).rows
+  return Array.isArray(rows) ? rows.filter(Array.isArray) as unknown[][] : []
+}
+
+function calculatorNote(block: TenantPageBlock): string | undefined {
+  const calculator = block.data.calculator
+  if (!calculator || typeof calculator !== 'object' || Array.isArray(calculator)) return undefined
+  const note = (calculator as Record<string, unknown>).note
+  return typeof note === 'string' ? note : undefined
 }
 </script>

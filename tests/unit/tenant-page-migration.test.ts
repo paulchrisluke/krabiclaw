@@ -8,6 +8,7 @@ const migrationDir = resolve(process.cwd(), 'migrations')
 const migration0092 = readFileSync(resolve(migrationDir, '0092_tranquil_fixer.sql'), 'utf8')
 const migration0097 = readFileSync(resolve(migrationDir, '0097_repair_dangling_content_revisions.sql'), 'utf8')
 const migration0098 = readFileSync(resolve(migrationDir, '0098_tenant_page_translation_and_redirect_scope.sql'), 'utf8')
+const migration0099 = readFileSync(resolve(migrationDir, '0099_repair_canonical_tenant_blocks.sql'), 'utf8')
 
 function databaseBeforeTenantPageMigration() {
   const db = new Database(':memory:')
@@ -278,4 +279,46 @@ test('0098 scopes existing redirects to the owning source locale and adds transl
   assert.deepEqual(redirect, { locale: 'en', owner_variant_id: null })
   const table = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'tenant_page_translation_fields'").get() as { name: string } | undefined
   assert.equal(table?.name, 'tenant_page_translation_fields')
+})
+
+test('0099 normalizes migrated block payloads and rebuilds the published snapshot', () => {
+  const db = databaseBeforeTenantPageMigration()
+  insertLegacyPage(db, [
+    { type: 'home_hero', title: 'Home', label: 'Learn more', url: '/about' },
+    { type: 'services_intro', title: 'Our Services' },
+    { type: 'video_feature', features: [{ name: 'Approach', desc: 'How we help' }] },
+    { type: 'qa', title: 'Questions' },
+    { type: 'reviews', title: 'Client stories' },
+  ])
+
+  db.exec(migration0092)
+  db.exec(migration0099)
+
+  const rows = db.prepare(`
+    SELECT b.type, b.position, b.data_json
+      FROM content_blocks b
+      JOIN content_documents d ON d.id = b.document_id
+      JOIN tenant_page_variants v ON v.id = d.owner_id
+     WHERE v.page_id = ? AND d.owner_type = 'tenant_page'
+     ORDER BY b.position, b.id
+  `).all('page-test') as Array<{ type: string; position: number; data_json: string }>
+  const services = rows.find(row => row.type === 'offering_grid')
+  const approach = rows.find(row => row.type === 'feature_grid' && JSON.parse(row.data_json).section === 'approach')
+  const faq = rows.find(row => row.type === 'faq')
+  const reviews = rows.find(row => row.type === 'testimonial_grid')
+  assert.deepEqual(JSON.parse(services?.data_json ?? '{}'), { title: 'Our Services', source: 'site_offerings', section: 'services' })
+  assert.deepEqual(JSON.parse(approach?.data_json ?? '{}'), { items: [{ title: 'Approach', description: 'How we help' }], section: 'approach' })
+  assert.deepEqual(JSON.parse(faq?.data_json ?? '{}'), { title: 'Questions', source: 'page_qa', section: 'qa' })
+  assert.deepEqual(JSON.parse(reviews?.data_json ?? '{}'), { title: 'Client stories', source: 'site_reviews', section: 'reviews' })
+
+  const document = db.prepare(`
+    SELECT d.published_revision_id
+      FROM content_documents d
+      JOIN tenant_page_variants v ON v.id = d.owner_id AND d.owner_type = 'tenant_page'
+     WHERE v.page_id = ? AND v.locale = 'en'
+  `).get('page-test') as { published_revision_id: string } | undefined
+  assert.ok(document?.published_revision_id)
+  const snapshot = JSON.parse((db.prepare('SELECT snapshot_json FROM content_revisions WHERE id = ?').get(document.published_revision_id) as { snapshot_json: string }).snapshot_json) as { blocks: Array<{ data: Record<string, unknown> }> }
+  assert.equal(snapshot.blocks.find(block => block.data.section === 'services')?.data.source, 'site_offerings')
+  assert.equal(snapshot.blocks.find(block => block.data.section === 'approach')?.data.items instanceof Array, true)
 })

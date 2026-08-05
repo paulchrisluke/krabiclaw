@@ -1,5 +1,7 @@
 import { createError } from 'h3'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
+import { listPageQa } from '~/server/utils/location-qa'
+import { listSiteReviews } from '~/server/utils/site-reviews'
 import { getTenantPageForEditor, getPublishedTenantPage, listPublishedTenantPagePaths, type TenantPageDto } from '~/server/utils/tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
 
@@ -20,10 +22,14 @@ export interface PublicTenantPage {
   updated_at: string
 }
 
-async function hydrateBlocks(db: DbClient, siteId: string, blocks: TenantPageBlock[]): Promise<TenantPageBlock[]> {
+async function hydrateBlocks(db: DbClient, siteId: string, pagePath: string, blocks: TenantPageBlock[]): Promise<TenantPageBlock[]> {
   const assetIds = new Set<string>()
   const offeringIds = new Set<string>()
   const locationIds = new Set<string>()
+  const hasOfferingSource = blocks.some(block => block.type === 'offering_grid' && block.data.source === 'site_offerings')
+  const hasQaSource = blocks.some(block => block.type === 'faq' && block.data.source === 'page_qa')
+  const hasReviewSource = blocks.some(block => block.type === 'testimonial_grid' && block.data.source === 'site_reviews')
+  const hasPostSource = blocks.some(block => block.type === 'feature_grid' && block.data.source === 'site_posts')
   for (const block of blocks) {
     const assetId = block.data.asset_id
     if (typeof assetId === 'string' && assetId.trim()) assetIds.add(assetId)
@@ -40,12 +46,14 @@ async function hydrateBlocks(db: DbClient, siteId: string, blocks: TenantPageBlo
       for (const value of block.data.location_ids) if (typeof value === 'string' && value.trim()) locationIds.add(value)
     }
   }
-  const offerings = offeringIds.size
+  const offerings = offeringIds.size || hasOfferingSource
     ? await queryAll<{ id: string; name: string; label: string | null; summary: string | null; short_description: string | null; body: string | null; slug: string; canonical_path: string | null; thumbnail_asset_id: string | null; hero_image_asset_id: string | null; media_asset_ids: string | null }>(db, `
         SELECT id, name, label, summary, short_description, body, slug, canonical_path,
                thumbnail_asset_id, hero_image_asset_id, media_asset_ids
           FROM offerings
-         WHERE site_id = ? AND status = 'published' AND id IN (${Array.from(offeringIds).map(() => '?').join(',')})
+         WHERE site_id = ? AND status = 'published'
+           ${offeringIds.size ? `AND id IN (${Array.from(offeringIds).map(() => '?').join(',')})` : ''}
+         ORDER BY sort_order ASC, name ASC
       `, [siteId, ...offeringIds])
     : []
   const locations = locationIds.size
@@ -55,8 +63,18 @@ async function hydrateBlocks(db: DbClient, siteId: string, blocks: TenantPageBlo
          WHERE site_id = ? AND status = 'active' AND id IN (${Array.from(locationIds).map(() => '?').join(',')})
       `, [siteId, ...locationIds])
     : []
-  if (offerings.length !== offeringIds.size) throw createError({ statusCode: 500, statusMessage: 'Tenant page references an unavailable offering' })
+  if (offerings.length !== offeringIds.size && offeringIds.size) throw createError({ statusCode: 500, statusMessage: 'Tenant page references an unavailable offering' })
   if (locations.length !== locationIds.size) throw createError({ statusCode: 500, statusMessage: 'Tenant page references an unavailable location' })
+  const [qaRows, reviewRows, postRows] = await Promise.all([
+    hasQaSource ? listPageQa(db, siteId, pagePath, true) : Promise.resolve([]),
+    hasReviewSource ? listSiteReviews(db, siteId, { publishedOnly: true }) : Promise.resolve([]),
+    hasPostSource ? queryAll<{ id: string; title: string; slug: string; excerpt: string | null; canonical_url: string | null; featured_image_asset_id: string | null }>(db, `
+      SELECT id, title, slug, excerpt, canonical_url, featured_image_asset_id
+        FROM blog_posts
+       WHERE site_id = ? AND status = 'published' AND visibility = 'public'
+       ORDER BY COALESCE(featured_order, 999999), published_at IS NULL, published_at DESC, id DESC
+    `, [siteId]) : Promise.resolve([]),
+  ])
   for (const offering of offerings) {
     if (offering.thumbnail_asset_id) assetIds.add(offering.thumbnail_asset_id)
     if (offering.hero_image_asset_id) assetIds.add(offering.hero_image_asset_id)
@@ -68,6 +86,7 @@ async function hydrateBlocks(db: DbClient, siteId: string, blocks: TenantPageBlo
     }
   }
   for (const location of locations) if (location.hero_media_asset_id) assetIds.add(location.hero_media_asset_id)
+  for (const post of postRows) if (post.featured_image_asset_id) assetIds.add(post.featured_image_asset_id)
   const rows = assetIds.size ? await queryAll<{ id: string; public_url: string | null; thumbnail_url: string | null; alt_text: string | null }>(db, `
     SELECT id, public_url, thumbnail_url, alt_text
       FROM media_assets
@@ -81,6 +100,21 @@ async function hydrateBlocks(db: DbClient, siteId: string, blocks: TenantPageBlo
   }
   const offeringById = new Map(offerings.map(item => [item.id, item]))
   const locationById = new Map(locations.map(item => [item.id, item]))
+  const qaItems = qaRows.map(row => ({ id: String(row.id), title: String(row.question), description: typeof row.answer === 'string' ? row.answer : undefined }))
+  const reviewItems = (reviewRows as Array<Record<string, unknown>>).map(row => ({
+    id: String(row.id),
+    title: typeof row.author_name === 'string' ? row.author_name : 'Client',
+    description: typeof row.content === 'string' ? row.content : undefined,
+    value: row.rating == null ? undefined : String(row.rating),
+  }))
+  const postItems = postRows.map(post => ({
+    id: post.id,
+    title: post.title,
+    description: post.excerpt || undefined,
+    url: post.canonical_url || `/article/${post.slug}`,
+    label: 'Read more',
+    image_url: post.featured_image_asset_id ? (media.get(post.featured_image_asset_id)?.public_url ?? undefined) : undefined,
+  }))
   return blocks.map(block => {
     const data = { ...block.data }
     const assetId = typeof data.asset_id === 'string' ? data.asset_id : null
@@ -126,6 +160,25 @@ async function hydrateBlocks(db: DbClient, siteId: string, blocks: TenantPageBlo
         }
       })
     }
+    if (block.type === 'offering_grid' && data.source === 'site_offerings') {
+      data.items = offerings.map(offering => {
+        const imageId = offering.thumbnail_asset_id ?? offering.hero_image_asset_id
+        return {
+          id: offering.id,
+          title: offering.label || offering.name,
+          description: offering.summary || offering.short_description || offering.body || undefined,
+          url: offering.canonical_path || `/services/${offering.slug}`,
+          label: 'Learn more',
+          image_url: imageId ? (media.get(imageId)?.public_url ?? undefined) : undefined,
+        }
+      })
+    }
+    if (block.type === 'faq' && data.source === 'page_qa') data.items = qaItems
+    if (block.type === 'testimonial_grid' && data.source === 'site_reviews') data.items = reviewItems
+    if (block.type === 'feature_grid' && data.source === 'site_posts') {
+      const limit = typeof data.limit === 'number' && Number.isInteger(data.limit) && data.limit > 0 ? data.limit : postItems.length
+      data.items = postItems.slice(0, limit)
+    }
     return { ...block, data }
   })
 }
@@ -159,7 +212,7 @@ export async function getPublicTenantPageForPath(
     ? await getTenantPageForEditor(db, await resolveVariantId(db, siteId, path, options.locale))
     : await getPublishedTenantPage(db, siteId, path, options.locale)
   if (!page) return null
-  return mapPage(page, await hydrateBlocks(db, siteId, page.blocks), Boolean(options.preview))
+  return mapPage(page, await hydrateBlocks(db, siteId, options.preview ? page.draft_path : page.published_path, page.blocks), Boolean(options.preview))
 }
 
 async function resolveVariantId(db: DbClient, siteId: string, path: string, locale?: string | null): Promise<string> {

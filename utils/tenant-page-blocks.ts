@@ -75,11 +75,11 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
   callout: blockDefinitionWithMetadata('callout', 'Callout', 'A highlighted message.', ALL_RECIPES, ['title', 'body', 'tone']),
   hero: blockDefinitionWithMetadata('hero', 'Hero', 'A page hero section.', ALL_RECIPES, ['eyebrow', 'title', 'subtitle', 'asset_id', 'cta_label', 'cta_url'], { accessibility: 'required', seo: 'structured' }),
   button_group: blockDefinitionWithMetadata('button_group', 'Button group', 'A group of typed links.', ALL_RECIPES, ['buttons']),
-  feature_grid: blockDefinitionWithMetadata('feature_grid', 'Feature grid', 'A grid of structured features.', ALL_RECIPES, ['title', 'items']),
+  feature_grid: blockDefinitionWithMetadata('feature_grid', 'Feature grid', 'A grid of structured features or a configured source.', ALL_RECIPES, ['title', 'items', 'source', 'calculator']),
   testimonial_grid: blockDefinitionWithMetadata('testimonial_grid', 'Testimonials', 'A grid of customer testimonials.', ALL_RECIPES, ['title', 'items']),
   contact_cta: blockDefinitionWithMetadata('contact_cta', 'Contact CTA', 'A contact-focused call to action.', ALL_RECIPES, ['title', 'description', 'label', 'url']),
   booking_cta: blockDefinitionWithMetadata('booking_cta', 'Booking CTA', 'A booking-focused call to action.', ALL_RECIPES, ['title', 'description', 'label', 'url']),
-  donation_choices: blockDefinitionWithMetadata('donation_choices', 'Donation choices', 'Structured donation options.', ['donate'], ['title', 'description', 'tiers']),
+  donation_choices: blockDefinitionWithMetadata('donation_choices', 'Donation choices', 'Structured donation options.', ['donate'], ['title', 'description', 'tiers', 'destination']),
   offering_grid: blockDefinitionWithMetadata('offering_grid', 'Offering grid', 'References canonical offerings.', ['home', 'about', 'pricing', 'custom', 'services'], ['title', 'offering_ids']),
   location_grid: blockDefinitionWithMetadata('location_grid', 'Location grid', 'References canonical locations.', ['home', 'about', 'contact', 'custom'], ['title', 'location_ids']),
 }
@@ -167,7 +167,7 @@ function blockDefinitionWithMetadata(
 const STRING_FIELDS = new Set([
   'eyebrow', 'title', 'subtitle', 'text', 'markdown', 'alt', 'caption', 'description',
   'label', 'url', 'body', 'tone', 'asset_id', 'cta_label', 'cta_url', 'source',
-  'source_url', 'effective_date', 'field', 'legacy_type',
+  'source_url', 'effective_date', 'field', 'section', 'destination', 'legacy_type',
 ])
 const ARRAY_FIELDS = new Set(['asset_ids', 'offering_ids', 'location_ids'])
 
