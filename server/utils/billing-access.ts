@@ -3,6 +3,7 @@ export const PAST_DUE_GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000
 export interface SubscriptionAccessInput {
   plan: string | null | undefined
   status: string | null | undefined
+  paymentStatus?: string | null
   periodEnd?: Date | string | number | null
 }
 
@@ -30,7 +31,8 @@ export function getEffectiveAccessPlan(
 ): string {
   const plan = input.plan?.trim()
   if (!plan) return 'free'
-  if (input.status === 'active' || input.status === 'trialing') return plan
+  if (input.status === 'trialing') return plan
+  if (input.status === 'active' && input.paymentStatus === 'paid') return plan
 
   if (input.status === 'past_due') {
     const end = periodEndMs(input.periodEnd)

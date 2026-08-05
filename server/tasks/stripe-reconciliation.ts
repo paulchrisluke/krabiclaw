@@ -1,6 +1,7 @@
 import Stripe from 'stripe'
+import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
 import { queryAll, type DbClient } from '~/server/db'
-import { recordStripeEvent, grantInvoiceQuota, reconcileBetterAuthSubscriptionEvent } from '~/server/utils/better-auth-stripe'
+import { recordStripeEvent, grantInvoiceQuota, reconcileBetterAuthSubscriptionEvent, type BetterAuthSubscriptionAdapter } from '~/server/utils/better-auth-stripe'
 import { handleApplicationStripeEvent } from '~/server/utils/billing-webhook-app-events'
 
 interface StripeTaskContext {
@@ -33,14 +34,19 @@ export default defineTask({
     if (!env.STRIPE_SECRET_KEY) return { result: { ...empty, skipped: 'STRIPE_SECRET_KEY is not configured' } }
 
     const stripe = new Stripe(env.STRIPE_SECRET_KEY, { maxNetworkRetries: 0, timeout: 10_000 })
+    const auth = createAuth(env as CloudflareEnv)
+    const authContext = await auth.$context
+    const adapter = authContext.adapter as unknown as BetterAuthSubscriptionAdapter
     const events = await queryAll<RetryableStripeEvent>(db, `
       SELECT stripe_event_id, payload
       FROM stripe_webhook_events
-      WHERE status = 'failed'
-         OR (status = 'pending' AND (lease_expires_at IS NULL OR lease_expires_at <= ?))
-      ORDER BY created_at
+      WHERE attempt_count < 5
+        AND status IN ('failed', 'pending')
+        AND (lease_expires_at IS NULL OR lease_expires_at <= ?)
+        AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
+      ORDER BY CASE WHEN status = 'pending' THEN 0 ELSE 1 END, created_at
       LIMIT 100
-    `, [new Date().toISOString()])
+    `, [new Date().toISOString(), new Date().toISOString()])
 
     let processed = 0
     let failed = 0
@@ -59,9 +65,9 @@ export default defineTask({
 
       try {
         const claimed = await recordStripeEvent(db, event, async () => {
-          await reconcileBetterAuthSubscriptionEvent(db, event, stripe)
-          await handleApplicationStripeEvent(env, db as D1Database, event)
-          await grantInvoiceQuota(db, stripe, event)
+          await reconcileBetterAuthSubscriptionEvent(db, event, stripe, adapter)
+          await handleApplicationStripeEvent(env, db as D1Database, event, adapter)
+          await grantInvoiceQuota(db, stripe, event, adapter)
         })
         if (claimed) processed += 1
       } catch (error) {

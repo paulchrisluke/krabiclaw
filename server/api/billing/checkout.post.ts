@@ -4,6 +4,8 @@ import { createAuth, getAuthSession, type CloudflareEnv } from '~/server/utils/a
 import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
 import { queryFirst } from '~/server/db'
 import { getOrganizationBillingStatus } from '~/server/utils/billing'
+import { isManagedServiceEnabled } from '~/server/utils/feature-flags'
+import { CONCIERGE_PLAN_IDS } from '~/server/utils/better-auth-stripe'
 
 interface CheckoutRequest {
   organizationId?: string
@@ -42,6 +44,9 @@ export default defineEventHandler(async (event) => {
   }
 
   const env = cloudflareEnv(event) as CloudflareEnv
+  if (CONCIERGE_PLAN_IDS.has(body.plan) && !isManagedServiceEnabled(env)) {
+    return jsonResponse({ error: 'This plan is not currently available' }, { status: 403 })
+  }
   if (!env.DB) throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
   if (!env.STRIPE_SECRET_KEY || !env.STRIPE_WEBHOOK_SECRET) {
     throw createError({ statusCode: 503, statusMessage: 'Stripe not configured' })
@@ -75,6 +80,20 @@ export default defineEventHandler(async (event) => {
   const cancelUrl = body.cancelUrl ?? canceledUrl.toString()
   const billingStatus = await getOrganizationBillingStatus(env, env.DB, organization.id)
 
+  if (billingStatus.subscriptionStatus === 'past_due') {
+    target.pathname = '/api/auth/subscription/billing-portal'
+    return await createAuth(env).handler(new Request(target, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        referenceId: organization.id,
+        customerType: 'organization',
+        returnUrl: billingUrl.toString(),
+        disableRedirect: true,
+      }),
+    })).then(legacyCheckoutResponse)
+  }
+
   return await createAuth(env).handler(new Request(target, {
     method: 'POST',
     headers,
@@ -90,6 +109,7 @@ export default defineEventHandler(async (event) => {
       },
       successUrl: callbackUrl,
       cancelUrl,
+      returnUrl: billingUrl.toString(),
       disableRedirect: true,
     }),
   })).then(legacyCheckoutResponse)

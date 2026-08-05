@@ -15,7 +15,7 @@ async function runtimeStripeSignature(
 }
 
 test.describe('billing webhook signed flow', () => {
-  test('accepts a valid signed event and is idempotent on replay', async ({ request, baseURL }) => {
+  test('queues a valid signed event and is idempotent on replay', async ({ request, baseURL }) => {
     const login = await request.get(devLoginUrl(baseURL!), { headers: devLoginHeaders() })
     expect(login.status()).toBeLessThan(400)
 
@@ -76,7 +76,7 @@ test.describe('billing webhook signed flow', () => {
       webhook_events: Array<{ stripe_event_id: string; status?: string }>
     }
     expect(stateBody.webhook_events.some(e => e.stripe_event_id === eventId)).toBe(true)
-    expect(stateBody.webhook_events.find(e => e.stripe_event_id === eventId)?.status).toBe('processed')
+    expect(stateBody.webhook_events.find(e => e.stripe_event_id === eventId)?.status).toBe('pending')
 
     const replay = await request.post(`${baseURL}/api/billing/webhook`, {
       headers: {

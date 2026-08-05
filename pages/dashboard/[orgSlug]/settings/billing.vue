@@ -452,6 +452,10 @@ const upgradeToPlan = async (plan: string) => {
     successUrl.searchParams.set('success', 'true')
     const cancelUrl = new URL(currentUrl)
     cancelUrl.searchParams.set('canceled', 'true')
+    if (billing.value?.subscriptionStatus === 'past_due') {
+      await openBillingPortal()
+      return
+    }
     const response = await authClient.subscription.upgrade({
       plan,
       annual: annual.value,
@@ -463,6 +467,7 @@ const upgradeToPlan = async (plan: string) => {
       metadata: { site_id: selectedSiteId.value, ga_client_id: getGaClientId() },
       successUrl: successUrl.toString(),
       cancelUrl: cancelUrl.toString(),
+      returnUrl: currentUrl.toString(),
       disableRedirect: true,
     })
     if (response.error) throw new Error(response.error.message ?? 'Failed to create checkout session')
@@ -603,7 +608,13 @@ onMounted(async () => {
   const { success, plan, canceled, siteId, ...restQuery } = route.query
 
   if (success === 'true') {
-    toast.add({ description: 'Payment successful. Your plan has been updated.', color: 'success' })
+    const paymentStatus = billing.value?.paymentStatus
+    toast.add({
+      description: paymentStatus === 'paid'
+        ? 'Payment confirmed. Your plan has been updated.'
+        : 'Payment is processing. Your plan will activate after Stripe confirms the invoice.',
+      color: paymentStatus === 'paid' ? 'success' : 'warning',
+    })
   }
   if (canceled === 'true') {
     errorMessage.value = 'Payment was canceled. Your plan was not changed.'

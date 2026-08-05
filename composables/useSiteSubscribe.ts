@@ -1,6 +1,6 @@
 import { authClient } from '~/lib/auth-client'
 
-function checkoutReturnUrls(): { successUrl: string; cancelUrl: string } {
+function checkoutReturnUrls(): { successUrl: string; cancelUrl: string; returnUrl: string } {
   const current = new URL(window.location.href)
   for (const key of ['success', 'canceled', 'plan']) current.searchParams.delete(key)
 
@@ -8,20 +8,21 @@ function checkoutReturnUrls(): { successUrl: string; cancelUrl: string } {
   success.searchParams.set('success', 'true')
   const cancel = new URL(current)
   cancel.searchParams.set('canceled', 'true')
-  return { successUrl: success.toString(), cancelUrl: cancel.toString() }
+  return { successUrl: success.toString(), cancelUrl: cancel.toString(), returnUrl: current.toString() }
 }
 
 async function organizationSubscriptionId(
   dashboardApi: ReturnType<typeof useDashboardApi>,
   organizationId: string,
-): Promise<string | undefined> {
-  const response = await dashboardApi<{ billing?: { stripeSubscriptionId?: unknown } }>('/api/billing/status', {
+): Promise<{ id?: string; status?: string }> {
+  const response = await dashboardApi<{ billing?: { stripeSubscriptionId?: unknown; subscriptionStatus?: unknown } }>('/api/billing/status', {
     query: { organizationId },
     validate: value => typeof value === 'object' && value !== null,
   })
-  return typeof response.billing?.stripeSubscriptionId === 'string'
-    ? response.billing.stripeSubscriptionId
-    : undefined
+  return {
+    id: typeof response.billing?.stripeSubscriptionId === 'string' ? response.billing.stripeSubscriptionId : undefined,
+    status: typeof response.billing?.subscriptionStatus === 'string' ? response.billing.subscriptionStatus : undefined,
+  }
 }
 
 async function redirectToCheckout(
@@ -30,7 +31,7 @@ async function redirectToCheckout(
   plan: string,
   subscriptionId?: string,
 ) {
-  const { successUrl, cancelUrl } = checkoutReturnUrls()
+  const { successUrl, cancelUrl, returnUrl } = checkoutReturnUrls()
   const response = await authClient.subscription.upgrade({
     plan,
     referenceId: organizationId,
@@ -39,6 +40,7 @@ async function redirectToCheckout(
     metadata: { site_id: siteId },
     successUrl,
     cancelUrl,
+    returnUrl,
     disableRedirect: true,
   })
   if (response.error) throw new Error(response.error.message ?? 'Unable to start subscription checkout')
@@ -59,8 +61,22 @@ export const useSiteSubscribe = () => {
     try {
       const organizationId = dashboard.organization.value?.id
       if (!organizationId) throw new Error('Organization context is unavailable')
-      const subscriptionId = await organizationSubscriptionId(dashboardApi, organizationId)
-      await redirectToCheckout(organizationId, siteId, plan, subscriptionId)
+      const subscription = await organizationSubscriptionId(dashboardApi, organizationId)
+      const { returnUrl } = checkoutReturnUrls()
+      if (subscription.status === 'past_due') {
+        const portal = await authClient.subscription.billingPortal({
+          referenceId: organizationId,
+          customerType: 'organization',
+          returnUrl,
+          disableRedirect: true,
+        })
+        if (portal.error) throw new Error(portal.error.message ?? 'Unable to open billing portal')
+        const portalUrl = portal.data && 'url' in portal.data ? portal.data.url : null
+        if (!portalUrl) throw new Error('Missing billing portal URL')
+        await navigateTo(portalUrl, { external: true })
+        return
+      }
+      await redirectToCheckout(organizationId, siteId, plan, subscription.id)
     } catch (err) {
       console.error('Checkout error:', err)
       toast.add({ title: 'Unable to start checkout — please try again', color: 'error' })

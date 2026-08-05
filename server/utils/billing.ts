@@ -17,6 +17,7 @@ interface SiteBillingRow {
 
 interface OrgBillingRow {
   stripe_customer_id: string | null
+  payment_status: string | null
   auto_topup_enabled: number | null
   auto_topup_bundle: number | null
   auto_topup_threshold: number | null
@@ -28,16 +29,13 @@ interface BetterAuthSubscriptionRow {
   stripeCustomerId: string | null
   stripeSubscriptionId: string | null
   status: string
+  paymentStatus: string | null
   periodEnd: number | string | null
   cancelAtPeriodEnd: number | null
 }
 
 interface EntitlementRow {
   key: string
-  value: string
-}
-
-interface EntitlementValueRow {
   value: string
 }
 
@@ -55,6 +53,7 @@ export interface SiteBillingStatus {
   stripeCustomerId?: string
   stripeSubscriptionId?: string
   subscriptionStatus?: string
+  paymentStatus?: string
   currentPeriodEnd?: string
   cancelAtPeriodEnd?: boolean
   autoTopupEnabled: boolean
@@ -92,16 +91,17 @@ export async function getSiteBillingStatus(
 
   // Customer + auto-topup live at org level
   const orgBilling = await queryFirst<OrgBillingRow>(db, `
-    SELECT ob.stripe_customer_id, ob.auto_topup_enabled, ob.auto_topup_bundle, ob.auto_topup_threshold
+    SELECT ob.stripe_customer_id, ob.payment_status, ob.auto_topup_enabled, ob.auto_topup_bundle, ob.auto_topup_threshold
     FROM sites s
     JOIN organization_billing ob ON ob.organization_id = s.organization_id
     WHERE s.id = ? LIMIT 1
   `, [siteId])
 
   const accessPlan = subscription
-    ? getEffectiveAccessPlan({
+      ? getEffectiveAccessPlan({
         plan: subscription.plan,
         status: subscription.status,
+        paymentStatus: subscription.paymentStatus,
         periodEnd: subscription.periodEnd,
       })
     : null
@@ -113,6 +113,7 @@ export async function getSiteBillingStatus(
     stripeCustomerId: subscription?.stripeCustomerId ?? orgBilling?.stripe_customer_id ?? undefined,
     stripeSubscriptionId: subscription?.stripeSubscriptionId ?? siteBilling?.stripe_subscription_id ?? undefined,
     subscriptionStatus: subscription?.status ?? siteBilling?.status ?? undefined,
+    paymentStatus: subscription?.paymentStatus ?? orgBilling?.payment_status ?? undefined,
     currentPeriodEnd: subscription?.periodEnd
       ? betterAuthTimestampToIso(subscription.periodEnd, 'subscription.periodEnd')
       : siteBilling?.current_period_end ?? undefined,
@@ -138,14 +139,15 @@ export async function getOrganizationBillingStatus(
   const subscription = await getBetterAuthSubscription(db, organizationId)
   // No site yet — return bare org customer info
   const orgBilling = await queryFirst<OrgBillingRow>(db, `
-    SELECT stripe_customer_id, auto_topup_enabled, auto_topup_bundle, auto_topup_threshold
+    SELECT stripe_customer_id, payment_status, auto_topup_enabled, auto_topup_bundle, auto_topup_threshold
     FROM organization_billing WHERE organization_id = ? LIMIT 1
   `, [organizationId])
 
   const accessPlan = subscription
-    ? getEffectiveAccessPlan({
+      ? getEffectiveAccessPlan({
         plan: subscription.plan,
         status: subscription.status,
+        paymentStatus: subscription.paymentStatus,
         periodEnd: subscription.periodEnd,
       })
     : 'free'
@@ -155,6 +157,7 @@ export async function getOrganizationBillingStatus(
     stripeCustomerId: subscription?.stripeCustomerId ?? orgBilling?.stripe_customer_id ?? undefined,
     stripeSubscriptionId: subscription?.stripeSubscriptionId ?? undefined,
     subscriptionStatus: subscription?.status,
+    paymentStatus: subscription?.paymentStatus ?? orgBilling?.payment_status ?? undefined,
     currentPeriodEnd: subscription?.periodEnd
       ? betterAuthTimestampToIso(subscription.periodEnd, 'subscription.periodEnd')
       : undefined,
@@ -181,8 +184,6 @@ export async function getOrganizationEntitlements(db: D1Database, organizationId
 }
 
 export async function hasSiteEntitlement(db: D1Database, siteId: string, key: string): Promise<boolean> {
-  const row = await queryFirst<EntitlementValueRow>(db, `SELECT value FROM site_entitlements WHERE site_id = ? AND key = ? LIMIT 1`, [siteId, key])
-  if (!row) return false
   const site = await queryFirst<{ organization_id: string }>(db, `
     SELECT organization_id FROM sites WHERE id = ? LIMIT 1
   `, [siteId])
@@ -419,7 +420,8 @@ export async function getUserBillingItems(
 async function getBetterAuthSubscription(db: D1Database, organizationId: string): Promise<BetterAuthSubscriptionRow | null> {
   return await queryFirst<BetterAuthSubscriptionRow>(db, `
     SELECT plan, referenceId, stripeCustomerId, stripeSubscriptionId, status,
-           periodEnd, cancelAtPeriodEnd
+           periodEnd, cancelAtPeriodEnd,
+           (SELECT payment_status FROM organization_billing WHERE organization_id = referenceId LIMIT 1) AS paymentStatus
     FROM subscription
     WHERE referenceId = ?
       AND status IN ('active', 'trialing', 'past_due')

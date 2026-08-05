@@ -25,13 +25,8 @@ import { organizationAccessControl, organizationRoles } from '~/utils/organizati
 import { platformAdminAccessControl, platformAdminRoles } from '~/utils/platform-admin-access'
 import {
   getBetterAuthStripePlans,
-  projectBetterAuthSubscription,
-  projectDeletedBetterAuthSubscription,
-  recordStripeEvent,
-  grantInvoiceQuota,
-  reconcileBetterAuthSubscriptionEvent,
+  enqueueStripeEvent,
 } from '~/server/utils/better-auth-stripe'
-import { handleApplicationStripeEvent } from '~/server/utils/billing-webhook-app-events'
 
 type MemberRow = InferSelectModel<typeof schema.member>
 type InvitationRow = InferSelectModel<typeof schema.invitation>
@@ -417,7 +412,7 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
         organization: { enabled: true },
         subscription: {
           enabled: true,
-          plans: () => getBetterAuthStripePlans(stripeClient),
+          plans: () => getBetterAuthStripePlans(stripeClient, env),
           requireEmailVerification: true,
           authorizeReference: async ({ user, referenceId }, ctx) => {
             const member = await ctx.context.adapter.findOne({
@@ -430,28 +425,9 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
             return typeof member?.role === 'string'
               && member.role.split(',').map(role => role.trim()).includes('owner')
           },
-          onSubscriptionComplete: async ({ subscription, stripeSubscription }) => {
-            await projectBetterAuthSubscription(db, subscription, stripeSubscription)
-          },
-          onSubscriptionCreated: async ({ subscription, stripeSubscription }) => {
-            await projectBetterAuthSubscription(db, subscription, stripeSubscription)
-          },
-          onSubscriptionUpdate: async ({ subscription, stripeSubscription }) => {
-            await projectBetterAuthSubscription(db, subscription, stripeSubscription)
-          },
-          onSubscriptionCancel: async ({ subscription, stripeSubscription }) => {
-            await projectBetterAuthSubscription(db, subscription, stripeSubscription)
-          },
-          onSubscriptionDeleted: async ({ subscription, stripeSubscription }) => {
-            await projectDeletedBetterAuthSubscription(db, subscription, stripeSubscription)
-          },
         },
         onEvent: async (event) => {
-          await recordStripeEvent(db, event, async () => {
-            await reconcileBetterAuthSubscriptionEvent(db, event, stripeClient)
-            await handleApplicationStripeEvent(env, d1, event)
-            await grantInvoiceQuota(db, stripeClient, event)
-          })
+          await enqueueStripeEvent(db, event)
         },
       }),
       admin({

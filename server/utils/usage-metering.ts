@@ -57,6 +57,12 @@ function isAiCreditGrant(input: Pick<QuotaGrantInput, 'resource' | 'unit'>): boo
   return input.resource === 'ai_inference' && input.unit === 'credit'
 }
 
+function assertGrantUnit(input: Pick<QuotaGrantInput, 'resource' | 'unit'>): void {
+  if (input.resource === 'ai_inference' && input.unit !== 'credit') {
+    throw new Error('ai_inference quota grants require unit "credit"')
+  }
+}
+
 function applyGrantQuery(
   input: Pick<QuotaGrantInput, 'organizationId' | 'resource' | 'unit' | 'quantity' | 'grantType' | 'periodStart' | 'idempotencyKey'>,
   appliedAt: string,
@@ -138,6 +144,7 @@ export async function recordUsageEvent(db: DbClient, input: UsageEventInput): Pr
 /** Adds an auditable quota grant without overwriting earlier grants. */
 export async function grantQuota(db: DbClient, input: QuotaGrantInput): Promise<boolean> {
   assertQuantity(input.quantity)
+  assertGrantUnit(input)
   if (!input.periodKey || !input.periodStart || !input.reason || !input.idempotencyKey) {
     throw new Error('Quota grants require a period, start time, reason, and idempotency key.')
   }
@@ -213,6 +220,7 @@ export async function resetOrganizationQuota(
       throw new Error(`Quota reset contains duplicate resource: ${grant.resource}`)
     }
     resources.add(grant.resource)
+    assertGrantUnit(grant)
   }
   const createdAt = new Date().toISOString()
   const statements: Array<{ query: string; params: unknown[] }> = []

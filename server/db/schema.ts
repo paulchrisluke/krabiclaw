@@ -1140,6 +1140,11 @@ export const organization_billing = sqliteTable("organization_billing", {
 	stripe_subscription_item_id: text().unique(),
 	status: text().default("free").notNull(),
 	plan: text().default("free").notNull(),
+	payment_status: text().default("unknown").notNull(),
+	paid_through: text(),
+	last_paid_invoice_id: text(),
+	last_payment_event_created: integer(),
+	last_payment_event_id: text(),
 	current_period_end: text(),
 	cancel_at_period_end: numeric().default(sql`false`),
 	auto_topup_enabled: integer().default(0).notNull(),
@@ -1648,6 +1653,11 @@ export const site_billing = sqliteTable("site_billing", {
 	plan: text().default("free").notNull(),
 	status: text().default("free").notNull(),
 	current_period_end: text(),
+	payment_status: text().default("unknown").notNull(),
+	paid_through: text(),
+	last_paid_invoice_id: text(),
+	last_payment_event_created: integer(),
+	last_payment_event_id: text(),
 	cancel_at_period_end: numeric().default(sql`false`),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	stripe_customer_id: text(),
@@ -2270,8 +2280,18 @@ export const stripe_webhook_events = sqliteTable("stripe_webhook_events", {
 	error: text(),
 	claimed_at: text(),
 	lease_expires_at: text(),
+	claim_token: text(),
+	next_attempt_at: text(),
+	dead_lettered_at: text(),
 	attempt_count: integer().default(0).notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+});
+
+export const stripe_subscription_versions = sqliteTable("stripe_subscription_versions", {
+	stripe_subscription_id: text().primaryKey(),
+	last_event_created: integer().notNull(),
+	last_event_id: text().notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const usage_events = sqliteTable("usage_events", {
