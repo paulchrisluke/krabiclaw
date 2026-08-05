@@ -69,11 +69,22 @@ const page = computed(() => data.value!.page)
 const template = computed<'saya' | 'blawby'>(() => isBlawby.value ? 'blawby' : 'saya')
 const schemaContext = inject<{ identity: ComputedRef<PublicBlawbyIdentity>; compliance: ComputedRef<PublicCompliance | null> } | null>('blawby-schema-context', null)
 const schemaOrg = useBlawbyOrgIdentity(() => schemaContext?.identity.value, () => schemaContext?.compliance.value)
+const supportedSchemaRecipes = new Set(['home', 'about', 'contact', 'pricing', 'donate', 'schedule'])
+const schemaRecipe = computed<'home' | 'about' | 'contact' | 'pricing' | 'donate' | 'schedule' | 'tenant-page'>(() => {
+  if (page.value.recipe && supportedSchemaRecipes.has(page.value.recipe)) return page.value.recipe as 'home' | 'about' | 'contact' | 'pricing' | 'donate' | 'schedule'
+  const pathRecipes = new Map([
+    ['/', 'home'],
+    ['/about', 'about'],
+    ['/contact', 'contact'],
+    ['/pricing', 'pricing'],
+    ['/donate', 'donate'],
+    ['/schedule', 'schedule'],
+  ])
+  return (pathRecipes.get(page.value.path) || 'tenant-page') as 'home' | 'about' | 'contact' | 'pricing' | 'donate' | 'schedule' | 'tenant-page'
+})
 
 useProfessionalServiceSchema(() => {
   if (!isBlawby.value || !schemaContext) return null
-  const recipe = page.value.recipe
-  const supportedRecipes = new Set(['home', 'about', 'contact', 'pricing', 'donate', 'schedule'])
   const faqBlock = page.value.blocks.find(block => block.type === 'faq')
   const offeringBlock = page.value.blocks.find(block => block.type === 'offering_grid')
   const donationBlock = page.value.blocks.find(block => block.type === 'donation_choices')
@@ -95,7 +106,7 @@ useProfessionalServiceSchema(() => {
     : []
   const donationUrl = typeof donationBlock?.data.destination === 'string' ? donationBlock.data.destination : null
   return {
-    recipe: supportedRecipes.has(recipe || '') ? recipe as 'home' | 'about' | 'contact' | 'pricing' | 'donate' | 'schedule' : 'tenant-page',
+    recipe: schemaRecipe.value,
     org: schemaOrg.value,
     pageUrl: page.value.path,
     pageTitle: page.value.title,
