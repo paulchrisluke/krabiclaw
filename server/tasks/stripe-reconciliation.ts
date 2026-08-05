@@ -1,7 +1,7 @@
 import Stripe from 'stripe'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
-import { queryAll, type DbClient } from '~/server/db'
-import { recordStripeEvent, grantInvoiceQuota, reconcileBetterAuthSubscriptionEvent, type BetterAuthSubscriptionAdapter } from '~/server/utils/better-auth-stripe'
+import { execute, queryAll, type DbClient } from '~/server/db'
+import { createStripePlanLoader, recordStripeEvent, recordStripeEventFailure, MAX_STRIPE_WEBHOOK_ATTEMPTS, grantInvoiceQuota, reconcileBetterAuthSubscriptionEvent, type BetterAuthSubscriptionAdapter } from '~/server/utils/better-auth-stripe'
 import { handleApplicationStripeEvent } from '~/server/utils/billing-webhook-app-events'
 
 interface StripeTaskContext {
@@ -20,6 +20,19 @@ interface StripeTaskResult {
   skipped?: string
 }
 
+const STRIPE_EVENT_PAYLOAD_RETENTION_MS = 90 * 24 * 60 * 60 * 1000
+
+async function clearExpiredStripeEventPayloads(db: DbClient, now = new Date()): Promise<void> {
+  const cutoff = new Date(now.getTime() - STRIPE_EVENT_PAYLOAD_RETENTION_MS).toISOString()
+  await execute(db, `
+    UPDATE stripe_webhook_events
+    SET payload = NULL
+    WHERE status IN ('processed', 'dead_letter')
+      AND created_at < ?
+      AND payload IS NOT NULL
+  `, [cutoff])
+}
+
 export default defineTask({
   meta: {
     name: 'billing:stripe-reconciliation',
@@ -34,24 +47,27 @@ export default defineTask({
     if (!env.STRIPE_SECRET_KEY) return { result: { ...empty, skipped: 'STRIPE_SECRET_KEY is not configured' } }
 
     const stripe = new Stripe(env.STRIPE_SECRET_KEY, { maxNetworkRetries: 0, timeout: 10_000 })
+    const loadStripePlans = createStripePlanLoader(stripe, env)
     const auth = createAuth(env as CloudflareEnv)
     const authContext = await auth.$context
     const adapter = authContext.adapter as unknown as BetterAuthSubscriptionAdapter
+    await clearExpiredStripeEventPayloads(db)
     const events = await queryAll<RetryableStripeEvent>(db, `
       SELECT stripe_event_id, payload
       FROM stripe_webhook_events
-      WHERE attempt_count < 5
+      WHERE attempt_count < ?
         AND status IN ('failed', 'pending')
         AND (lease_expires_at IS NULL OR lease_expires_at <= ?)
         AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
       ORDER BY CASE WHEN status = 'pending' THEN 0 ELSE 1 END, created_at
       LIMIT 100
-    `, [new Date().toISOString(), new Date().toISOString()])
+    `, [MAX_STRIPE_WEBHOOK_ATTEMPTS, new Date().toISOString(), new Date().toISOString()])
 
     let processed = 0
     let failed = 0
     for (const row of events) {
       if (!row.payload) {
+        await recordStripeEventFailure(db, row.stripe_event_id, 'Stripe webhook payload is missing after retention cleanup')
         failed += 1
         continue
       }
@@ -59,15 +75,16 @@ export default defineTask({
       try {
         event = JSON.parse(row.payload) as Stripe.Event
       } catch {
+        await recordStripeEventFailure(db, row.stripe_event_id, 'Stripe webhook payload is not valid JSON')
         failed += 1
         continue
       }
 
       try {
         const claimed = await recordStripeEvent(db, event, async () => {
-          await reconcileBetterAuthSubscriptionEvent(db, event, stripe, adapter)
+          await reconcileBetterAuthSubscriptionEvent(db, event, stripe, adapter, loadStripePlans)
           await handleApplicationStripeEvent(env, db as D1Database, event, adapter)
-          await grantInvoiceQuota(db, stripe, event, adapter)
+          await grantInvoiceQuota(db, stripe, event, adapter, loadStripePlans)
         })
         if (claimed) processed += 1
       } catch (error) {

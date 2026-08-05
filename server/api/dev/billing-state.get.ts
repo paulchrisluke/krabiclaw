@@ -46,7 +46,7 @@ export default defineEventHandler(async (event) => {
 
   const billing = await queryFirst(db, `
     SELECT ob.organization_id, ob.stripe_customer_id,
-           sb.site_id, sb.stripe_subscription_id, sb.stripe_subscription_item_id,
+           sb.site_id, ob.stripe_subscription_id, sb.stripe_subscription_item_id,
            sb.status, sb.plan, sb.current_period_end, sb.cancel_at_period_end, sb.updated_at
     FROM organization_billing ob
     LEFT JOIN sites s ON s.organization_id = ob.organization_id

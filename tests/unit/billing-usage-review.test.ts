@@ -10,11 +10,11 @@ test('effective access is derived from subscription status', () => {
   const now = new Date('2026-08-05T00:00:00.000Z')
   assert.equal(getEffectiveAccessPlan({ plan: 'growth', status: 'active', paymentStatus: 'paid' }, now), 'growth')
   assert.equal(getEffectiveAccessPlan({ plan: 'growth', status: 'active', paymentStatus: 'processing' }, now), 'free')
-  assert.equal(getEffectiveAccessPlan({ plan: 'growth', status: 'trialing' }, now), 'growth')
+  assert.equal(getEffectiveAccessPlan({ plan: 'growth', status: 'trialing', paymentStatus: null }, now), 'growth')
   assert.equal(getEffectiveAccessPlan({ plan: 'growth', status: 'past_due', paymentStatus: 'failed', periodEnd: new Date(now.getTime() - PAST_DUE_GRACE_PERIOD_MS + 1) }, now), 'growth')
-  assert.equal(getEffectiveAccessPlan({ plan: 'growth', status: 'past_due', periodEnd: new Date(now.getTime() - PAST_DUE_GRACE_PERIOD_MS - 1) }, now), 'free')
-  assert.equal(getEffectiveAccessPlan({ plan: 'growth', status: 'unpaid' }, now), 'free')
-  assert.equal(getEffectiveAccessPlan({ plan: 'growth', status: 'canceled' }, now), 'free')
+  assert.equal(getEffectiveAccessPlan({ plan: 'growth', status: 'past_due', paymentStatus: null, periodEnd: new Date(now.getTime() - PAST_DUE_GRACE_PERIOD_MS - 1) }, now), 'free')
+  assert.equal(getEffectiveAccessPlan({ plan: 'growth', status: 'unpaid', paymentStatus: null }, now), 'free')
+  assert.equal(getEffectiveAccessPlan({ plan: 'growth', status: 'canceled', paymentStatus: null }, now), 'free')
 })
 
 let eventState: {
@@ -23,6 +23,11 @@ let eventState: {
   claimToken: string | null
   attempts: number
 } | null = null
+let mockPaymentRow: {
+  payment_status: string | null
+  paid_through: string | null
+  last_paid_invoice_id: string | null
+} | null = null
 let capturedBatches: Array<Array<{ query: string; params?: unknown[] }>> = []
 let mockSites = [{ id: 'site-1' }]
 
@@ -30,6 +35,7 @@ mock.module('../../server/db/index.ts', {
   namedExports: {
     queryAll: async () => mockSites,
     queryFirst: async (_db: unknown, query: string) => {
+      if (query.includes('SELECT payment_status, paid_through, last_paid_invoice_id')) return mockPaymentRow
       if (query.includes('FROM subscription')) return null
       if (query.includes('FROM organization')) return { id: 'org-1' }
       if (query.includes('SELECT attempt_count')) return eventState ? { attempt_count: eventState.attempts } : null
@@ -51,7 +57,7 @@ mock.module('../../server/db/index.ts', {
       }
       if (query.includes('UPDATE stripe_webhook_events') && query.includes("SET status = 'pending'") && query.includes("status = 'processed'")) {
         if (!eventState || eventState.status !== 'processed') return { meta: { changes: 0 } }
-        eventState = { ...eventState, status: 'pending', claimToken: null, leaseExpiresAt: null }
+        eventState = { ...eventState, status: 'pending', claimToken: null, leaseExpiresAt: null, attempts: 0 }
         return { meta: { changes: 1 } }
       }
       if (query.includes('claim_token = ?') && query.includes("SET status = 'pending'")) {
@@ -93,9 +99,20 @@ const {
   enqueueStripeEvent,
   grantInvoiceQuota,
   selectCanonicalStripePrice,
+  createStripePlanLoader,
   getBetterAuthStripePlans,
 } = await import('../../server/utils/better-auth-stripe.ts')
 const { grantQuota, resetOrganizationQuota } = await import('../../server/utils/usage-metering.ts')
+
+function planLoader(plan: string, priceId: string) {
+  return async () => [{ name: plan, priceId, limits: {}, group: 'krabiclaw' }] as never
+}
+
+const missingSubscriptionAdapter = {
+  findOne: async <T>(input: { model: string }) => input.model === 'organization' ? { id: 'org-1' } as T : null,
+  update: async () => { throw new Error('update should not run') },
+  create: async (input: { data: Record<string, unknown> }) => ({ id: 'ba-sub-created', ...input.data }),
+}
 
 const event = {
   id: 'evt_review_1',
@@ -157,6 +174,38 @@ test('a processed duplicate is requeued for current-state repair', async () => {
   eventState = { status: 'processed', leaseExpiresAt: null, claimToken: null, attempts: 1 }
   assert.equal(await enqueueStripeEvent({} as never, event), true)
   assert.equal(eventState?.status, 'pending')
+  assert.equal(eventState?.attempts, 0)
+})
+
+test('Stripe plan loading coalesces refreshes and serves the last good snapshot', async () => {
+  let productCalls = 0
+  let priceCalls = 0
+  let failRefresh = false
+  const stripe = {
+    products: {
+      list: async () => {
+        productCalls += 1
+        if (failRefresh) throw new Error('catalog unavailable')
+        return { data: [{ id: 'prod-growth', metadata: { plan_id: 'growth' } }], has_more: false }
+      },
+    },
+    prices: {
+      list: async () => {
+        priceCalls += 1
+        return { data: [{ id: 'price-growth', product: 'prod-growth', unit_amount: 4900, currency: 'usd', recurring: { interval: 'month', interval_count: 1 } }], has_more: false }
+      },
+    },
+  }
+  const loadPlans = createStripePlanLoader(stripe as never, undefined, 0)
+  const [first, second] = await Promise.all([loadPlans(), loadPlans()])
+  assert.deepEqual(first, second)
+  assert.equal(productCalls, 1)
+  assert.equal(priceCalls, 1)
+
+  failRefresh = true
+  const stale = await loadPlans()
+  assert.equal(stale[0]?.name, 'growth')
+  assert.equal(productCalls, 2)
 })
 
 test('subscription projection failures remain retryable when Better Auth did not persist the row', async () => {
@@ -171,8 +220,8 @@ test('subscription projection failures remain retryable when Better Auth did not
       subscriptions: {
         retrieve: async () => ({ id: 'sub_missing_ba_subscription', customer: 'cus-1', items: { data: [] } }),
       },
-    } as never),
-    /missing; retrying/,
+    } as never, missingSubscriptionAdapter, planLoader('growth', 'price-growth')),
+    /no recurring price; retrying/,
   )
 })
 
@@ -214,7 +263,7 @@ test('subscription reconciliation uses current Stripe state after an older event
     created: 100,
     type: 'customer.subscription.updated',
     data: { object: { id: 'sub-current', items: { data: [{ price: { id: 'price-growth-old' } }] }, status: 'active' } },
-  } as never, stripe as never, adapter as never)
+  } as never, stripe as never, adapter as never, planLoader('managed', 'price-managed'))
   assert.equal(updatedPlan, 'managed')
 })
 
@@ -248,12 +297,13 @@ test('subscription reconciliation repairs a missing Better Auth row from current
     created: 200,
     type: 'customer.subscription.created',
     data: { object: { id: 'sub-repair' } },
-  } as never, stripe as never, adapter as never)
+  } as never, stripe as never, adapter as never, planLoader('growth', 'price-growth'))
   assert.equal(createdPlan, 'growth')
 })
 
 test('past-due projection keeps billing history but projects free entitlements', async () => {
   capturedBatches = []
+  mockPaymentRow = null
   await projectOrganizationSubscription({} as never, {
     organizationId: 'org-1',
     customerId: 'cus-1',
@@ -269,6 +319,27 @@ test('past-due projection keeps billing history but projects free entitlements',
   assert.ok(sitePlanUpdate?.params?.includes('free'))
   const billingHistory = queries.find(query => query.query.includes('organization_billing'))
   assert.ok(billingHistory?.params?.includes('growth'))
+})
+
+test('a first paid invoice carries payment markers into a newly projected site row', async () => {
+  capturedBatches = []
+  mockPaymentRow = {
+    payment_status: 'paid',
+    paid_through: '2026-09-01T00:00:00.000Z',
+    last_paid_invoice_id: 'in_first_paid',
+  }
+  await projectOrganizationSubscription({} as never, {
+    organizationId: 'org-1',
+    customerId: 'cus-1',
+    subscriptionId: 'sub-1',
+    plan: 'growth',
+    status: 'active',
+    paymentStatus: 'paid',
+  })
+  const siteBilling = capturedBatches[1]?.find(query => query.query.includes('INSERT INTO site_billing'))
+  assert.ok(siteBilling?.params?.includes('2026-09-01T00:00:00.000Z'))
+  assert.ok(siteBilling?.params?.includes('in_first_paid'))
+  mockPaymentRow = null
 })
 
 test('entitlement replacement stays atomic per site when an organization has many sites', async () => {
@@ -288,6 +359,8 @@ test('entitlement replacement stays atomic per site when an organization has man
     assert.ok(queries.some(query => query.includes('INSERT INTO site_entitlements')))
     assert.ok(queries.some(query => query.includes('DELETE FROM site_entitlements')))
     assert.ok(queries.some(query => query.includes('UPDATE sites SET plan')))
+    const siteBilling = batch.find(statement => statement.query.includes('INSERT INTO site_billing'))
+    assert.equal(siteBilling?.params?.[3], null)
   }
   mockSites = [{ id: 'site-1' }]
 })
@@ -374,7 +447,7 @@ test('invoice.paid grants the period even when Better Auth subscription.created 
     },
   } as never
 
-  await grantInvoiceQuota({} as never, stripe as never, paidEvent)
+  await grantInvoiceQuota({} as never, stripe as never, paidEvent, missingSubscriptionAdapter, planLoader('growth', 'price_growth_month'))
   const queries = capturedBatches.flat()
   assert.ok(queries.some(query => query.query.includes('UPDATE ai_credits')))
   const grant = queries.find(query => query.query.includes('INSERT OR IGNORE INTO usage_quota_grants'))
@@ -393,17 +466,25 @@ test('delayed invoice allocation uses the invoice line price and period across p
       }),
     },
     invoices: {
-      listLineItems: async () => ({
-        data: [{
-          id: 'il-growth-old',
-          type: 'subscription',
-          subscription: 'sub-delayed',
-          proration: false,
-          price: { id: 'price-growth-old', product: 'prod-growth', recurring: { interval: 'month' } },
-          period: { start: 1_754_035_200, end: 1_756_627_200 },
-        }],
-        has_more: false,
-      }),
+      listLineItems: (() => {
+        let page = 0
+        return async () => {
+          page += 1
+          if (page === 1) return {
+            data: [{ id: 'il-page-one', parent: { type: 'invoice_item_details', invoice_item_details: { subscription: 'sub-delayed', proration: false } }, period: { start: 1_754_035_200, end: 1_756_627_200 } }],
+            has_more: true,
+          }
+          return {
+            data: [{
+              id: 'il-growth-old',
+              parent: { type: 'subscription_item_details', subscription_item_details: { subscription: 'sub-delayed', subscription_item: 'si-delayed', proration: false } },
+              pricing: { type: 'price_details', price_details: { price: { id: 'price-growth-old', product: 'prod-growth', recurring: { interval: 'month' } } } },
+              period: { start: 1_754_035_200, end: 1_756_627_200 },
+            }],
+            has_more: false,
+          }
+        }
+      })(),
     },
     products: {
       list: async () => ({
@@ -438,7 +519,7 @@ test('delayed invoice allocation uses the invoice line price and period across p
     },
   } as never
 
-  await grantInvoiceQuota({} as never, stripe as never, paidEvent)
+  await grantInvoiceQuota({} as never, stripe as never, paidEvent, missingSubscriptionAdapter, planLoader('growth', 'price-growth-current'))
   const grant = capturedBatches.flat().find(query => query.query.includes('INSERT OR IGNORE INTO usage_quota_grants'))
   assert.ok(grant?.params?.includes(2000))
   assert.ok(grant?.params?.includes('2025-08-01T08:00:00.000Z'))
@@ -451,7 +532,7 @@ test('only subscription creation and cycle invoices grant plan quota', async () 
     type: 'invoice.paid',
     data: { object: { id: 'in_manual', billing_reason: 'manual', subscription: 'sub-1' } },
   } as never
-  await grantInvoiceQuota({} as never, { subscriptions: { retrieve: async () => { throw new Error('must not retrieve') } } } as never, ignoredEvent)
+  await grantInvoiceQuota({} as never, { subscriptions: { retrieve: async () => { throw new Error('must not retrieve') } } } as never, ignoredEvent, missingSubscriptionAdapter, planLoader('growth', 'price-growth'))
   assert.equal(capturedBatches.length, 0)
 
   const legacyEvent = {
@@ -459,7 +540,7 @@ test('only subscription creation and cycle invoices grant plan quota', async () 
     type: 'invoice.payment_succeeded',
     data: { object: { id: 'in_legacy', subscription: 'sub-1' } },
   } as never
-  await grantInvoiceQuota({} as never, { subscriptions: { retrieve: async () => { throw new Error('must not retrieve') } } } as never, legacyEvent)
+  await grantInvoiceQuota({} as never, { subscriptions: { retrieve: async () => { throw new Error('must not retrieve') } } } as never, legacyEvent, missingSubscriptionAdapter, planLoader('growth', 'price-growth'))
   assert.equal(capturedBatches.length, 0)
 })
 

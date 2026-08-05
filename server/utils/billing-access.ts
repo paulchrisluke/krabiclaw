@@ -3,7 +3,7 @@ export const PAST_DUE_GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000
 export interface SubscriptionAccessInput {
   plan: string | null | undefined
   status: string | null | undefined
-  paymentStatus?: string | null
+  paymentStatus: string | null | undefined
   periodEnd?: Date | string | number | null
 }
 

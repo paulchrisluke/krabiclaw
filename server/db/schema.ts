@@ -2285,7 +2285,9 @@ export const stripe_webhook_events = sqliteTable("stripe_webhook_events", {
 	dead_lettered_at: text(),
 	attempt_count: integer().default(0).notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-});
+}, (table) => [
+	index("stripe_webhook_events_retry_idx").on(table.status, table.next_attempt_at),
+]);
 
 export const stripe_subscription_versions = sqliteTable("stripe_subscription_versions", {
 	stripe_subscription_id: text().primaryKey(),

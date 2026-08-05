@@ -2,35 +2,22 @@ import type Stripe from 'stripe'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { execute, executeBatch, queryFirst } from '~/server/db'
 import { completePaidSiteTransfer } from '~/server/utils/site-transfer'
-import { markOrganizationPayment, type BetterAuthSubscriptionAdapter } from '~/server/utils/better-auth-stripe'
-
-function invoiceSubscriptionId(invoice: Stripe.Invoice & {
-  subscription?: string | { id: string } | null
-  parent?: { subscription_details?: { subscription?: string | { id: string } | null } | null } | null
-}): string | null {
-  const value = invoice.subscription ?? invoice.parent?.subscription_details?.subscription
-  return typeof value === 'string' ? value : value?.id ?? null
-}
+import { invoiceSubscriptionId, markOrganizationPayment, type BetterAuthSubscriptionAdapter } from '~/server/utils/better-auth-stripe'
 
 async function markSubscriptionPayment(
   db: D1Database,
   subscriptionId: string,
-  paymentStatus: 'processing' | 'failed',
+  paymentStatus: 'paid' | 'processing' | 'failed',
+  adapter: BetterAuthSubscriptionAdapter,
   metadataOrganizationId?: string,
-  adapter?: BetterAuthSubscriptionAdapter,
   event?: Stripe.Event,
 ): Promise<void> {
-  const local = adapter
-    ? await adapter.findOne<{ referenceId: string; stripeCustomerId: string | null }>({
-        model: 'subscription',
-        where: [{ field: 'stripeSubscriptionId', value: subscriptionId }],
-      }).then(row => row
-        ? { organizationId: row.referenceId, customerId: row.stripeCustomerId }
-        : null)
-    : await queryFirst<{ organizationId: string; customerId: string | null }>(db, `
-        SELECT referenceId AS organizationId, stripeCustomerId AS customerId
-        FROM subscription WHERE stripeSubscriptionId = ? LIMIT 1
-      `, [subscriptionId])
+  const local = await adapter.findOne<{ referenceId: string; stripeCustomerId: string | null }>({
+    model: 'subscription',
+    where: [{ field: 'stripeSubscriptionId', value: subscriptionId }],
+  }).then(row => row
+    ? { organizationId: row.referenceId, customerId: row.stripeCustomerId }
+    : null)
   const legacy = await queryFirst<{ organizationId: string; customerId: string | null }>(db, `
     SELECT organization_id AS organizationId, stripe_customer_id AS customerId
     FROM organization_billing WHERE stripe_subscription_id = ? LIMIT 1
@@ -55,7 +42,7 @@ export async function handleApplicationStripeEvent(
   env: CloudflareEnv,
   db: D1Database,
   event: Stripe.Event,
-  adapter?: BetterAuthSubscriptionAdapter,
+  adapter: BetterAuthSubscriptionAdapter,
 ): Promise<void> {
   if (
     event.type === 'invoice.payment_failed'
@@ -67,7 +54,7 @@ export async function handleApplicationStripeEvent(
       parent?: { subscription_details?: { subscription?: string | { id: string } | null } | null } | null
     }
     const subscriptionId = invoiceSubscriptionId(invoice)
-    if (subscriptionId) await markSubscriptionPayment(db, subscriptionId, 'failed', undefined, adapter, event)
+    if (subscriptionId) await markSubscriptionPayment(db, subscriptionId, 'failed', adapter, undefined, event)
     return
   }
 
@@ -86,9 +73,13 @@ export async function handleApplicationStripeEvent(
       await markSubscriptionPayment(
         db,
         subscriptionId,
-        event.type === 'checkout.session.async_payment_failed' ? 'failed' : 'processing',
-        organizationId,
+        event.type === 'checkout.session.async_payment_failed'
+          ? 'failed'
+          : event.type === 'checkout.session.async_payment_succeeded'
+            ? 'paid'
+            : 'processing',
         adapter,
+        organizationId,
         event,
       )
     }

@@ -24,7 +24,7 @@ import type { InferSelectModel } from 'drizzle-orm'
 import { organizationAccessControl, organizationRoles } from '~/utils/organization-access'
 import { platformAdminAccessControl, platformAdminRoles } from '~/utils/platform-admin-access'
 import {
-  getBetterAuthStripePlans,
+  createStripePlanLoader,
   enqueueStripeEvent,
 } from '~/server/utils/better-auth-stripe'
 
@@ -171,6 +171,7 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
   const db = env.db ?? createDb(d1)
   const authBaseUrl = (env.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
   const stripeClient = new Stripe(env.STRIPE_SECRET_KEY ?? 'sk_test_placeholder')
+  const loadStripePlans = createStripePlanLoader(stripeClient, env)
 
   const instance = betterAuth({
     baseURL: authBaseUrl,
@@ -412,7 +413,7 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
         organization: { enabled: true },
         subscription: {
           enabled: true,
-          plans: () => getBetterAuthStripePlans(stripeClient, env),
+          plans: () => loadStripePlans(),
           requireEmailVerification: true,
           authorizeReference: async ({ user, referenceId }, ctx) => {
             const member = await ctx.context.adapter.findOne({

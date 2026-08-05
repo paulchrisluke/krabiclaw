@@ -43,9 +43,10 @@ async function getOrganizationPlan(db: DbClient, organizationId: string): Promis
   const billing = await queryFirst<{
     plan: string | null
     status: string | null
+    payment_status: string | null
     current_period_end: string | null
   }>(db, `
-    SELECT plan, status, current_period_end
+    SELECT plan, status, payment_status, current_period_end
     FROM organization_billing
     WHERE organization_id = ?
     LIMIT 1
@@ -54,6 +55,7 @@ async function getOrganizationPlan(db: DbClient, organizationId: string): Promis
     return getEffectiveAccessPlan({
       plan: billing.plan,
       status: billing.status,
+      paymentStatus: billing.payment_status,
       periodEnd: billing.current_period_end,
     })
   }

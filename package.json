@@ -65,7 +65,7 @@
     "dev:tunnel": "BETTER_AUTH_URL=https://local.krabiclaw.com NUXT_PUBLIC_PLATFORM_DOMAIN=https://local.krabiclaw.com nuxt dev",
     "tunnel": "cloudflared tunnel --config tunnel.yml run",
     "preview": "nuxt preview",
-    "postinstall": "patch-package && nuxt prepare",
+    "postinstall": "patch-package --error-on-fail && nuxt prepare",
     "schema:local": "wrangler d1 migrations apply DB --local",
     "schema:verify:media-sync": "node scripts/verify-media-legacy-sync.mjs",
     "schema:remote": "wrangler d1 migrations apply DB --remote",

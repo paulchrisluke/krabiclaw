@@ -135,6 +135,49 @@ export async function getBetterAuthStripePlans(
   return plans
 }
 
+export type StripePlanLoader = (
+  _options?: { includeFeatureDisabled?: boolean },
+) => Promise<StripePlan[]>
+
+const STRIPE_PLAN_CACHE_TTL_MS = 60_000
+
+/**
+ * Keeps one validated Stripe catalog snapshot per option set and coalesces
+ * concurrent refreshes. A transient refresh failure serves the last known-good
+ * snapshot so checkout and reconciliation do not multiply catalog requests.
+ */
+export function createStripePlanLoader(
+  stripe: Stripe,
+  env?: ApiRecord,
+  ttlMs = STRIPE_PLAN_CACHE_TTL_MS,
+): StripePlanLoader {
+  const snapshots = new Map<string, { plans: StripePlan[]; expiresAt: number }>()
+  const pending = new Map<string, Promise<StripePlan[]>>()
+
+  return async (options = {}) => {
+    const key = String(Boolean(options.includeFeatureDisabled))
+    const now = Date.now()
+    const snapshot = snapshots.get(key)
+    if (snapshot && snapshot.expiresAt > now) return snapshot.plans
+
+    const existing = pending.get(key)
+    if (existing) return existing
+
+    const refresh = getBetterAuthStripePlans(stripe, env, options)
+      .then((plans) => {
+        snapshots.set(key, { plans, expiresAt: Date.now() + ttlMs })
+        return plans
+      })
+      .catch((error) => {
+        if (snapshot) return snapshot.plans
+        throw error
+      })
+      .finally(() => pending.delete(key))
+    pending.set(key, refresh)
+    return refresh
+  }
+}
+
 export interface SubscriptionProjectionInput {
   organizationId: string
   customerId: string | null
@@ -161,8 +204,13 @@ export async function projectOrganizationSubscription(
   input: SubscriptionProjectionInput,
 ): Promise<void> {
   const now = new Date().toISOString()
-  const paymentRow = await queryFirst<{ payment_status: string | null }>(db, `
-    SELECT payment_status FROM organization_billing WHERE organization_id = ? LIMIT 1
+  const paymentRow = await queryFirst<{
+    payment_status: string | null
+    paid_through: string | null
+    last_paid_invoice_id: string | null
+  }>(db, `
+    SELECT payment_status, paid_through, last_paid_invoice_id
+    FROM organization_billing WHERE organization_id = ? LIMIT 1
   `, [input.organizationId])
   const paymentStatus = input.paymentStatus ?? paymentRow?.payment_status ?? 'unknown'
   const accessPlan = getEffectiveAccessPlan({ ...input, paymentStatus })
@@ -270,13 +318,13 @@ export async function projectOrganizationSubscription(
         `sb-${site.id}`,
         site.id,
         input.organizationId,
-        input.subscriptionId,
+        null,
         input.plan,
         input.status,
         isoDate(input.periodEnd),
         paymentStatus,
-        null,
-        null,
+        paymentRow?.paid_through ?? null,
+        paymentRow?.last_paid_invoice_id ?? null,
         input.cancelAtPeriodEnd ? 1 : 0,
         input.customerId,
         now,
@@ -356,10 +404,14 @@ function stripeSubscriptionPeriod(subscription: Stripe.Subscription): { start: D
   }
 }
 
-async function resolveSubscriptionPlan(stripe: Stripe, subscription: Stripe.Subscription): Promise<StripePlan> {
+async function resolveSubscriptionPlan(
+  stripe: Stripe,
+  subscription: Stripe.Subscription,
+  loadPlans: StripePlanLoader,
+): Promise<StripePlan> {
   const priceId = subscription.items.data[0]?.price.id
   if (!priceId) throw new Error(`Stripe subscription ${subscription.id} has no recurring price; retrying`)
-  const configuredPlans = await getBetterAuthStripePlans(stripe, undefined, { includeFeatureDisabled: true })
+  const configuredPlans = await loadPlans({ includeFeatureDisabled: true })
   const plan = configuredPlans.find(candidate => candidate.priceId === priceId || candidate.annualDiscountPriceId === priceId)
   if (!plan) throw new Error(`Stripe subscription ${subscription.id} price ${priceId} is not configured; retrying`)
   return plan
@@ -371,22 +423,13 @@ async function repairBetterAuthSubscriptionRow(
   stripeSubscription: Stripe.Subscription,
   event: Stripe.Event,
   deleted: boolean,
-  adapter?: BetterAuthSubscriptionAdapter,
+  adapter: BetterAuthSubscriptionAdapter,
+  loadPlans: StripePlanLoader,
 ): Promise<ReconciledSubscriptionRow> {
-  const existing = adapter
-    ? await adapter.findOne<ReconciledSubscriptionRow>({
-        model: 'subscription',
-        where: [{ field: 'stripeSubscriptionId', value: stripeSubscription.id }],
-      })
-    : await queryFirst<ReconciledSubscriptionRow>(db, `
-        SELECT id, referenceId, plan, stripeCustomerId, stripeSubscriptionId, status,
-               periodStart, periodEnd, cancelAtPeriodEnd
-        FROM subscription WHERE stripeSubscriptionId = ? LIMIT 1
-      `, [stripeSubscription.id])
-
-  if (!existing && !adapter) {
-    throw new Error(`Better Auth subscription ${stripeSubscription.id} is missing; retrying`)
-  }
+  const existing = await adapter.findOne<ReconciledSubscriptionRow>({
+    model: 'subscription',
+    where: [{ field: 'stripeSubscriptionId', value: stripeSubscription.id }],
+  })
 
   const version = await queryFirst<{ last_event_created: number }>(db, `
     SELECT last_event_created FROM stripe_subscription_versions
@@ -396,24 +439,19 @@ async function repairBetterAuthSubscriptionRow(
 
   let plan: StripePlan
   try {
-    plan = await resolveSubscriptionPlan(stripe, stripeSubscription)
+    plan = await resolveSubscriptionPlan(stripe, stripeSubscription, loadPlans)
   } catch (error) {
     if (!deleted || !existing?.plan) throw error
     plan = { name: existing.plan } as StripePlan
   }
   const customerId = existing?.stripeCustomerId ?? stripeCustomerIdValue(stripeSubscription.customer)
   let referenceId = existing?.referenceId ?? stripeSubscription.metadata?.referenceId?.trim()
-  if (!referenceId && adapter && customerId) {
+  if (!referenceId && customerId) {
     const organization = await adapter.findOne<{ id: string }>({
       model: 'organization',
       where: [{ field: 'stripeCustomerId', value: customerId }],
     })
     referenceId = organization?.id
-  }
-  if (!referenceId && customerId) {
-    referenceId = (await queryFirst<{ id: string }>(db, `
-      SELECT id FROM organization WHERE stripeCustomerId = ? LIMIT 1
-    `, [customerId]))?.id
   }
   if (!referenceId) throw new Error(`Stripe subscription ${stripeSubscription.id} has no organization reference; retrying`)
 
@@ -435,12 +473,9 @@ async function repairBetterAuthSubscriptionRow(
     updatedAt: new Date(),
   }
 
-  let repaired: ReconciledSubscriptionRow | null = existing ?? null
-  if (adapter) {
-    repaired = existing?.id
-      ? await adapter.update<ReconciledSubscriptionRow>({ model: 'subscription', where: [{ field: 'id', value: existing.id }], update: data })
-      : await adapter.create<ReconciledSubscriptionRow>({ model: 'subscription', data })
-  }
+  const repaired = existing?.id
+    ? await adapter.update<ReconciledSubscriptionRow>({ model: 'subscription', where: [{ field: 'id', value: existing.id }], update: data })
+    : await adapter.create<ReconciledSubscriptionRow>({ model: 'subscription', data })
   if (!repaired) {
     throw new Error(`Better Auth subscription ${stripeSubscription.id} could not be repaired; retrying`)
   }
@@ -462,9 +497,10 @@ async function projectCurrentStripeSubscription(
   deleted: boolean,
   stripe: Stripe,
   event: Stripe.Event,
-  adapter?: BetterAuthSubscriptionAdapter,
+  adapter: BetterAuthSubscriptionAdapter,
+  loadPlans: StripePlanLoader,
 ): Promise<void> {
-  const subscription = await repairBetterAuthSubscriptionRow(db, stripe, stripeSubscription, event, deleted, adapter)
+  const subscription = await repairBetterAuthSubscriptionRow(db, stripe, stripeSubscription, event, deleted, adapter, loadPlans)
   const periodEnd = subscription.periodEnd instanceof Date
     ? subscription.periodEnd
     : new Date(betterAuthTimestampToIso(subscription.periodEnd as number | string, 'subscription.periodEnd'))
@@ -483,14 +519,15 @@ export async function reconcileBetterAuthSubscriptionEvent(
   db: DbClient,
   event: Stripe.Event,
   stripe: Stripe,
-  adapter?: BetterAuthSubscriptionAdapter,
+  adapter: BetterAuthSubscriptionAdapter,
+  loadPlans: StripePlanLoader,
 ): Promise<void> {
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object as Stripe.Checkout.Session
     if (session.mode !== 'subscription' || session.metadata?.type === 'site_transfer') return
     const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id
     if (!subscriptionId) throw new Error(`Subscription checkout ${session.id} has no subscription; retrying`)
-    await projectCurrentStripeSubscription(db, await stripe.subscriptions.retrieve(subscriptionId), false, stripe, event, adapter)
+    await projectCurrentStripeSubscription(db, await stripe.subscriptions.retrieve(subscriptionId), false, stripe, event, adapter, loadPlans)
     return
   }
   if (!event.type.startsWith('customer.subscription.')) return
@@ -504,7 +541,7 @@ export async function reconcileBetterAuthSubscriptionEvent(
   } catch (error) {
     if (!deleted || (error as { code?: string })?.code !== 'resource_missing') throw error
   }
-  await projectCurrentStripeSubscription(db, currentSubscription, deleted, stripe, event, adapter)
+  await projectCurrentStripeSubscription(db, currentSubscription, deleted, stripe, event, adapter, loadPlans)
 }
 
 export async function enqueueStripeEvent(db: DbClient, event: Stripe.Event): Promise<boolean> {
@@ -520,13 +557,51 @@ export async function enqueueStripeEvent(db: DbClient, event: Stripe.Event): Pro
     UPDATE stripe_webhook_events
     SET status = 'pending', event_type = ?, payload = ?, error = NULL,
         claimed_at = NULL, lease_expires_at = NULL, claim_token = NULL,
-        next_attempt_at = NULL, dead_lettered_at = NULL
+        next_attempt_at = NULL, dead_lettered_at = NULL, attempt_count = 0
     WHERE stripe_event_id = ? AND status = 'processed'
   `, [event.type, payload, event.id])
   return Number(requeued?.meta.changes ?? 0) > 0
 }
 
-const MAX_WEBHOOK_ATTEMPTS = 5
+export const MAX_STRIPE_WEBHOOK_ATTEMPTS = 5
+
+export async function recordStripeEventFailure(
+  db: DbClient,
+  stripeEventId: string,
+  message: string,
+): Promise<boolean> {
+  const now = new Date()
+  const nowIso = now.toISOString()
+  const leaseExpiresAt = new Date(now.getTime() + WEBHOOK_LEASE_MS).toISOString()
+  const claimToken = crypto.randomUUID()
+  const claimed = await execute(db, `
+    UPDATE stripe_webhook_events
+    SET status = 'pending', claimed_at = ?, lease_expires_at = ?, claim_token = ?,
+        attempt_count = attempt_count + 1, error = ?, next_attempt_at = NULL
+    WHERE stripe_event_id = ?
+      AND status IN ('pending', 'failed')
+      AND attempt_count < ?
+      AND (lease_expires_at IS NULL OR lease_expires_at <= ?)
+      AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
+  `, [nowIso, leaseExpiresAt, claimToken, message, stripeEventId, MAX_STRIPE_WEBHOOK_ATTEMPTS, nowIso, nowIso])
+  if (Number(claimed?.meta.changes ?? 0) !== 1) return false
+
+  const retryAt = new Date(now.getTime() + 60 * 60 * 1000).toISOString()
+  const failed = await execute(db, `
+    UPDATE stripe_webhook_events
+    SET status = CASE WHEN attempt_count >= ? THEN 'dead_letter' ELSE 'failed' END,
+        error = ?, claimed_at = NULL, lease_expires_at = NULL, claim_token = NULL,
+        next_attempt_at = CASE WHEN attempt_count >= ? THEN NULL ELSE ? END,
+        dead_lettered_at = CASE WHEN attempt_count >= ? THEN ? ELSE NULL END
+    WHERE stripe_event_id = ? AND status = 'pending' AND claim_token = ?
+  `, [MAX_STRIPE_WEBHOOK_ATTEMPTS, message, MAX_STRIPE_WEBHOOK_ATTEMPTS, retryAt, MAX_STRIPE_WEBHOOK_ATTEMPTS, nowIso, stripeEventId, claimToken])
+  if (Number(failed?.meta.changes ?? 0) !== 1) {
+    console.error('stripe_webhook_failure_state_update_skipped', { stripeEventId })
+    return false
+  }
+  if (message) console.error('stripe_webhook_event_failed', { stripeEventId, error: message })
+  return true
+}
 
 export async function recordStripeEvent(
   db: DbClient,
@@ -547,7 +622,7 @@ export async function recordStripeEvent(
       AND attempt_count < ?
       AND (lease_expires_at IS NULL OR lease_expires_at <= ?)
       AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
-  `, [nowIso, leaseExpiresAt, claimToken, event.id, MAX_WEBHOOK_ATTEMPTS, nowIso, nowIso])
+  `, [nowIso, leaseExpiresAt, claimToken, event.id, MAX_STRIPE_WEBHOOK_ATTEMPTS, nowIso, nowIso])
   if (Number(claimed?.meta.changes ?? 0) !== 1) return false
 
   try {
@@ -570,14 +645,14 @@ export async function recordStripeEvent(
           next_attempt_at = CASE WHEN attempt_count >= ? THEN NULL ELSE ? END,
           dead_lettered_at = CASE WHEN attempt_count >= ? THEN ? ELSE NULL END
       WHERE stripe_event_id = ? AND status = 'pending' AND claim_token = ?
-    `, [MAX_WEBHOOK_ATTEMPTS, message, MAX_WEBHOOK_ATTEMPTS, retryAt, MAX_WEBHOOK_ATTEMPTS, nowIso, event.id, claimToken])
+    `, [MAX_STRIPE_WEBHOOK_ATTEMPTS, message, MAX_STRIPE_WEBHOOK_ATTEMPTS, retryAt, MAX_STRIPE_WEBHOOK_ATTEMPTS, nowIso, event.id, claimToken])
     if (Number(failed?.meta.changes ?? 0) !== 1) {
       console.error('stripe_webhook_failure_state_update_skipped', { stripeEventId: event.id })
     } else if (message && failed?.meta && Number(failed.meta.changes) === 1) {
       const attempts = await queryFirst<{ attempt_count: number }>(db, `
         SELECT attempt_count FROM stripe_webhook_events WHERE stripe_event_id = ? LIMIT 1
       `, [event.id])
-      if ((attempts?.attempt_count ?? 0) >= MAX_WEBHOOK_ATTEMPTS) {
+      if ((attempts?.attempt_count ?? 0) >= MAX_STRIPE_WEBHOOK_ATTEMPTS) {
         console.error('stripe_webhook_dead_lettered', { stripeEventId: event.id, error: message })
       }
     }
@@ -592,7 +667,7 @@ interface InvoiceSubscriptionResolution {
   betterAuthRowExists: boolean
 }
 
-function invoiceSubscriptionId(invoice: Stripe.Invoice & {
+export function invoiceSubscriptionId(invoice: Stripe.Invoice & {
   subscription?: string | { id: string } | null
   parent?: {
     subscription_details?: {
@@ -608,32 +683,21 @@ async function resolveInvoiceSubscription(
   db: DbClient,
   stripe: Stripe,
   stripeSubscriptionId: string,
-  adapter?: BetterAuthSubscriptionAdapter,
+  adapter: BetterAuthSubscriptionAdapter,
 ): Promise<InvoiceSubscriptionResolution> {
-  const local = adapter
-    ? await adapter.findOne<{ referenceId: string }>({
-        model: 'subscription',
-        where: [{ field: 'stripeSubscriptionId', value: stripeSubscriptionId }],
-      })
-    : await queryFirst<{ referenceId: string }>(db, `
-        SELECT referenceId
-        FROM subscription
-        WHERE stripeSubscriptionId = ?
-        LIMIT 1
-      `, [stripeSubscriptionId])
+  const local = await adapter.findOne<{ referenceId: string }>({
+    model: 'subscription',
+    where: [{ field: 'stripeSubscriptionId', value: stripeSubscriptionId }],
+  })
 
   const stripeSubscription = await stripe.subscriptions.retrieve(stripeSubscriptionId)
   const stripeCustomerId = stripeCustomerIdValue(stripeSubscription.customer)
   const metadataReferenceId = stripeSubscription.metadata?.referenceId?.trim()
   const customerOrganization = stripeCustomerId
-    ? adapter
-      ? await adapter.findOne<{ id: string }>({
-          model: 'organization',
-          where: [{ field: 'stripeCustomerId', value: stripeCustomerId }],
-        })
-      : await queryFirst<{ id: string }>(db, `
-          SELECT id FROM organization WHERE stripeCustomerId = ? LIMIT 1
-        `, [stripeCustomerId])
+    ? await adapter.findOne<{ id: string }>({
+        model: 'organization',
+        where: [{ field: 'stripeCustomerId', value: stripeCustomerId }],
+      })
     : null
   const organizationId = local?.referenceId || metadataReferenceId || customerOrganization?.id
   if (!organizationId) {
@@ -761,7 +825,8 @@ export async function grantInvoiceQuota(
   db: DbClient,
   stripe: Stripe,
   event: Stripe.Event,
-  adapter?: BetterAuthSubscriptionAdapter,
+  adapter: BetterAuthSubscriptionAdapter,
+  loadPlans: StripePlanLoader,
 ): Promise<void> {
   if (event.type !== 'invoice.paid') return
   const invoice = event.data.object as Stripe.Invoice & {
@@ -784,11 +849,28 @@ export async function grantInvoiceQuota(
     price?: string | Stripe.Price | null
     period?: { start?: number; end?: number } | null
     proration?: boolean
-    parent?: { subscription_item_details?: { subscription?: string | null; proration?: boolean } | null } | null
+    pricing?: {
+      type?: string
+      price_details?: { price?: string | Stripe.Price | null } | null
+    } | null
+    parent?: {
+      type?: string
+      subscription_item_details?: {
+        subscription?: string | null
+        subscription_item?: string | null
+        proration?: boolean
+      } | null
+      invoice_item_details?: {
+        subscription?: string | null
+        proration?: boolean
+      } | null
+    } | null
   }
+  const linePrice = (line: InvoiceLine): string | Stripe.Price | null | undefined =>
+    line.price ?? line.pricing?.price_details?.price
   let invoiceLines: InvoiceLine[] = [...(invoice.lines?.data ?? []) as InvoiceLine[]]
   let startingAfter = invoiceLines.at(-1)?.id
-  const mustReloadFirstPage = invoiceLines.some(line => typeof line.price === 'string')
+  const mustReloadFirstPage = invoiceLines.some(line => typeof linePrice(line) === 'string')
   if (mustReloadFirstPage) {
     invoiceLines = []
     startingAfter = undefined
@@ -797,7 +879,7 @@ export async function grantInvoiceQuota(
     const page = await stripe.invoices.listLineItems(invoice.id, {
       limit: 100,
       ...(startingAfter ? { starting_after: startingAfter } : {}),
-      expand: ['data.price'],
+      expand: ['data.pricing.price_details.price'],
     })
     invoiceLines.push(...page.data)
     if (!page.has_more) break
@@ -806,25 +888,31 @@ export async function grantInvoiceQuota(
     startingAfter = next
   }
   invoiceLines = await Promise.all(invoiceLines.map(async (line) => {
-    if (typeof line.price !== 'string') return line
+    const price = linePrice(line)
+    if (typeof price !== 'string') return line
     return {
       ...line,
-      price: await stripe.prices.retrieve(line.price, { expand: ['product'] }),
+      price: await stripe.prices.retrieve(price, { expand: ['product'] }),
     }
   }))
 
   const recurringLines = invoiceLines.filter((line) => {
-    const parent = (line as Stripe.InvoiceLineItem & { parent?: { subscription_item_details?: { subscription?: string | null; proration?: boolean } | null } | null }).parent
+    const parent = line.parent
     const lineSubscription = line.subscription
     const lineSubscriptionId = typeof lineSubscription === 'string'
       ? lineSubscription
-      : lineSubscription?.id ?? parent?.subscription_item_details?.subscription
-    const proration = Boolean((line as Stripe.InvoiceLineItem & { proration?: boolean }).proration)
+      : lineSubscription?.id
+        ?? parent?.subscription_item_details?.subscription
+        ?? parent?.invoice_item_details?.subscription
+    const proration = Boolean(line.proration)
       || Boolean(parent?.subscription_item_details?.proration)
-    const price = typeof line.price === 'string' ? null : line.price
+      || Boolean(parent?.invoice_item_details?.proration)
+    const price = linePrice(line)
+    const isSubscriptionLine = line.type === 'subscription' || parent?.type === 'subscription_item_details'
     return lineSubscriptionId === stripeSubscriptionId
-      && line.type === 'subscription'
+      && isSubscriptionLine
       && !proration
+      && typeof price !== 'string'
       && Boolean(price?.recurring)
       && Boolean(line.period?.start && line.period?.end)
   })
@@ -832,10 +920,11 @@ export async function grantInvoiceQuota(
     throw new Error(`Stripe invoice ${invoice.id} has no deterministic recurring subscription line; retrying`)
   }
 
-  const configuredPlans = await getBetterAuthStripePlans(stripe, undefined, { includeFeatureDisabled: true })
+  const configuredPlans = await loadPlans({ includeFeatureDisabled: true })
   const planLines = [] as Array<{ line: InvoiceLine; plan: StripePlan; priceId: string }>
   for (const line of recurringLines) {
-    const price = typeof line.price === 'string' ? null : line.price
+    const price = linePrice(line)
+    if (!price || typeof price === 'string') continue
     const priceId = price?.id
     if (!priceId) continue
     const plan = configuredPlans.find(candidate => candidate.priceId === priceId || candidate.annualDiscountPriceId === priceId)
@@ -861,8 +950,6 @@ export async function grantInvoiceQuota(
     paymentStatus: 'paid',
     periodEnd,
   })
-  if (accessPlan === 'free') return
-
   await markOrganizationPayment(db, {
     organizationId: subscription.organizationId,
     customerId: subscription.customerId,
@@ -874,8 +961,9 @@ export async function grantInvoiceQuota(
     invoiceId: invoice.id,
   })
   if (subscription.betterAuthRowExists) {
-    await projectCurrentStripeSubscription(db, subscription.stripeSubscription, false, stripe, event, adapter)
+    await projectCurrentStripeSubscription(db, subscription.stripeSubscription, false, stripe, event, adapter, loadPlans)
   }
+  if (accessPlan === 'free') return
 
   const entitlements = getPlanEntitlements(plan.name)
   const aiCredits = entitlements.ai_credits

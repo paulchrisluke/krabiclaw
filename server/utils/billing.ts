@@ -17,6 +17,7 @@ interface SiteBillingRow {
 
 interface OrgBillingRow {
   stripe_customer_id: string | null
+  stripe_subscription_id: string | null
   payment_status: string | null
   auto_topup_enabled: number | null
   auto_topup_bundle: number | null
@@ -91,7 +92,7 @@ export async function getSiteBillingStatus(
 
   // Customer + auto-topup live at org level
   const orgBilling = await queryFirst<OrgBillingRow>(db, `
-    SELECT ob.stripe_customer_id, ob.payment_status, ob.auto_topup_enabled, ob.auto_topup_bundle, ob.auto_topup_threshold
+    SELECT ob.stripe_customer_id, ob.stripe_subscription_id, ob.payment_status, ob.auto_topup_enabled, ob.auto_topup_bundle, ob.auto_topup_threshold
     FROM sites s
     JOIN organization_billing ob ON ob.organization_id = s.organization_id
     WHERE s.id = ? LIMIT 1
@@ -111,7 +112,7 @@ export async function getSiteBillingStatus(
   return {
     plan: accessPlan ?? legacyAccessPlan,
     stripeCustomerId: subscription?.stripeCustomerId ?? orgBilling?.stripe_customer_id ?? undefined,
-    stripeSubscriptionId: subscription?.stripeSubscriptionId ?? siteBilling?.stripe_subscription_id ?? undefined,
+    stripeSubscriptionId: subscription?.stripeSubscriptionId ?? orgBilling?.stripe_subscription_id ?? siteBilling?.stripe_subscription_id ?? undefined,
     subscriptionStatus: subscription?.status ?? siteBilling?.status ?? undefined,
     paymentStatus: subscription?.paymentStatus ?? orgBilling?.payment_status ?? undefined,
     currentPeriodEnd: subscription?.periodEnd
