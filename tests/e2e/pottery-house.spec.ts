@@ -20,6 +20,26 @@ test.describe('pottery house public site', () => {
     await setupTenantHeaders(page, potteryHouseBaseURL, potteryHouseExtraHeaders)
   })
 
+  test('homepage hydrates cleanly with a persisted dark theme', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.addInitScript(() => {
+      window.localStorage.setItem('krabiclaw-theme', 'dark')
+    })
+
+    const errors = collectPageErrors(page)
+    const response = await page.goto(`${potteryHouseBaseURL}/`, {
+      waitUntil: 'load',
+    })
+
+    expect(response?.status()).toBeLessThan(400)
+    await expect(page.locator('[data-public-critical-shell]')).toBeVisible()
+    await expect(page.locator('body')).toContainText('Clay, calm, and a place to return to.')
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.classList.contains('dark')))
+      .toBe(true)
+    await expectHealthyPage(page, errors)
+  })
+
   for (const route of routes) {
     test(`${route.path} renders without runtime errors`, async ({ page }) => {
       const errors = collectPageErrors(page)
