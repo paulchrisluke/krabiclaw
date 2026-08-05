@@ -426,7 +426,8 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
                 { field: 'userId', value: user.id },
               ],
             }) as { role?: string } | null
-            return member?.role === 'owner'
+            return typeof member?.role === 'string'
+              && member.role.split(',').map(role => role.trim()).includes('owner')
           },
           onSubscriptionComplete: async ({ subscription, stripeSubscription }) => {
             await projectBetterAuthSubscription(db, subscription, stripeSubscription)

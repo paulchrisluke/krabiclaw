@@ -183,7 +183,7 @@ export async function hasEntitlement(
     SELECT value FROM organization_entitlements WHERE organization_id = ? AND key = ? LIMIT 1
   `, [organizationId, key])
   const site = await queryFirst<{ id: string }>(db, `SELECT id FROM sites WHERE organization_id = ? ORDER BY id LIMIT 1`, [organizationId])
-  if (organizationEntitlement?.value.toLowerCase() === 'true') return true
+  if (organizationEntitlement?.value?.toLowerCase() === 'true') return true
   if (!site) return false
   return hasSiteEntitlement(db, site.id, key)
 }

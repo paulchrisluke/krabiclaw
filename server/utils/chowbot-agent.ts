@@ -73,6 +73,7 @@ export interface RunChowBotOptions {
   currentPage?: string;
   locationId?: string | null;
   channel?: "dashboard" | "whatsapp";
+  sessionId?: string | null;
   pendingMedia?: { assetId: string; siteId: string };
   onEvent?: (_event: ChowBotRunEvent) => Promise<void> | void;
 }
@@ -161,6 +162,7 @@ async function executeTool(
     agentMessages?: AiMessage[];
     locationId?: string | null;
     channel?: "dashboard" | "whatsapp";
+    sessionId?: string | null;
     pendingMedia?: { assetId: string; siteId: string };
     forceSubdomainRegistrationFailure?: boolean;
   },
@@ -186,6 +188,7 @@ async function executeTool(
     organizationId: orgId,
     siteId,
     role: normalizedRole,
+    sessionId: ctx.sessionId,
   };
 
   try {
@@ -517,6 +520,7 @@ async function executeTool(
       });
       await chargeCredits(db, orgId, {
         siteId,
+        sessionId: ctx.sessionId,
         action: "generate_image",
         model: IMAGE_MODEL,
         inputTokens: generated.inputTokens,
@@ -1090,7 +1094,7 @@ export async function runChowBot(
 ): Promise<RunChowBotResult> {
   const { db, env, orgId, siteId, userId } = opts;
 
-  const creditOk = await hasCredits(db, orgId);
+  const creditOk = await hasCredits(db, orgId, opts.sessionId);
   if (!creditOk) throw new Error("No AI credits remaining.");
 
   if (!Array.isArray(opts.messages) || !opts.messages.length) {
@@ -1229,6 +1233,7 @@ ${translationConfirmationGuidance}- Before publish_post, delete_post, publish_me
     locationId,
     channel,
     pendingMedia: opts.pendingMedia,
+    sessionId: opts.sessionId,
   };
   const toolCalls: ChowBotToolCall[] = [];
   const tools = filterConversationalTools(CHOWBOT_TOOLS, env)
@@ -1325,6 +1330,7 @@ ${translationConfirmationGuidance}- Before publish_post, delete_post, publish_me
 
   const charged = await chargeCredits(db, orgId, {
     siteId,
+    sessionId: opts.sessionId,
     action: "chowbot",
     model: CHOWBOT_MODEL,
     inputTokens: totalInput,

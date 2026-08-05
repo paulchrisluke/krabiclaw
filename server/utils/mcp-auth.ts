@@ -38,6 +38,7 @@ export interface McpSiteContext extends McpUserContext {
   customDomain?: string | null
   publicUrl?: string | null
   role: McpToolRole
+  sessionId?: string | null
 }
 
 interface McpAuthChallengeDetails {

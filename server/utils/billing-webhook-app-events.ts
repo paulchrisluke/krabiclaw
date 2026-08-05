@@ -86,17 +86,9 @@ export async function handleApplicationStripeEvent(
 
   if (metadata.type === 'site_transfer') {
     const transferId = metadata.transfer_request_id
-    const plan = metadata.plan
-    const siteId = metadata.transfer_site_id ?? metadata.site_id
-    const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id
-    if (!organizationId || !transferId || !plan || !siteId || !subscriptionId) {
+    if (!organizationId || !transferId || !metadata.plan || !(metadata.transfer_site_id ?? metadata.site_id)) {
       throw new Error(`Invalid site transfer metadata for checkout ${session.id}`)
     }
     await completePaidSiteTransfer(env, db, transferId)
-    await execute(db, `
-      UPDATE site_billing
-      SET stripe_subscription_id = ?, plan = ?, status = 'active', updated_at = ?
-      WHERE site_id = ? AND organization_id = ?
-    `, [subscriptionId, plan, new Date().toISOString(), siteId, organizationId])
   }
 }

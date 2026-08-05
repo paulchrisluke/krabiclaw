@@ -61,7 +61,8 @@ export const useSiteSubscribe = () => {
       if (!organizationId) throw new Error('Organization context is unavailable')
       const subscriptionId = await organizationSubscriptionId(dashboardApi, organizationId)
       await redirectToCheckout(organizationId, siteId, plan, subscriptionId)
-    } catch {
+    } catch (err) {
+      console.error('Checkout error:', err)
       toast.add({ title: 'Unable to start checkout — please try again', color: 'error' })
     }
   }

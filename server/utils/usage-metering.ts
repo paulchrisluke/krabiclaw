@@ -16,6 +16,7 @@ export interface UsageEventInput {
   source: string
   provider?: string | null
   channel?: string | null
+  sessionId?: string | null
   quantity: number
   unit: string
   metadata?: Record<string, unknown> | null
@@ -43,6 +44,63 @@ function assertQuantity(quantity: number): void {
   }
 }
 
+function utcWeekKey(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) throw new Error('Quota period start must be a valid date.')
+  const day = date.getUTCDay()
+  const daysFromMonday = (day + 6) % 7
+  date.setUTCDate(date.getUTCDate() - daysFromMonday)
+  return date.toISOString().slice(0, 10)
+}
+
+function isAiCreditGrant(input: Pick<QuotaGrantInput, 'resource' | 'unit'>): boolean {
+  return input.resource === 'ai_inference' && input.unit === 'credit'
+}
+
+function applyGrantQuery(
+  input: Pick<QuotaGrantInput, 'organizationId' | 'resource' | 'unit' | 'quantity' | 'grantType' | 'periodStart' | 'idempotencyKey'>,
+  appliedAt: string,
+): { query: string; params: unknown[] } | null {
+  if (!isAiCreditGrant(input)) return null
+
+  const grantReference = `
+    EXISTS (
+      SELECT 1 FROM usage_quota_grants
+      WHERE organization_id = ? AND idempotency_key = ? AND applied_at IS NULL
+    )
+  `
+  if (input.grantType === 'reset') {
+    return {
+      query: `
+        UPDATE ai_credits
+        SET balance = ?, balance_period_key = ?, updated_at = ?
+        WHERE organization_id = ? AND ${grantReference}
+      `,
+      params: [input.quantity, utcWeekKey(input.periodStart), appliedAt, input.organizationId, input.organizationId, input.idempotencyKey],
+    }
+  }
+
+  if (input.grantType === 'top_up' || input.grantType === 'manual') {
+    return {
+      query: `
+        UPDATE ai_credits
+        SET balance = balance + ?, last_topped_up_at = ?, updated_at = ?
+        WHERE organization_id = ? AND ${grantReference}
+      `,
+      params: [input.quantity, appliedAt, appliedAt, input.organizationId, input.organizationId, input.idempotencyKey],
+    }
+  }
+
+  return {
+    query: `
+      UPDATE ai_credits
+      SET balance = MAX(balance, ?), updated_at = ?
+      WHERE organization_id = ? AND ${grantReference}
+    `,
+    params: [input.quantity, appliedAt, input.organizationId, input.organizationId, input.idempotencyKey],
+  }
+}
+
 /**
  * Records one durable, idempotent usage event. This table is the measurement
  * source of truth; pricing and quota enforcement are deliberately separate.
@@ -56,8 +114,8 @@ export async function recordUsageEvent(db: DbClient, input: UsageEventInput): Pr
   const result = await execute(db, `
     INSERT OR IGNORE INTO usage_events
       (id, organization_id, site_id, resource, source, provider, channel,
-       quantity, unit, metadata_json, idempotency_key, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       session_id, quantity, unit, metadata_json, idempotency_key, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     crypto.randomUUID(),
     input.organizationId,
@@ -66,6 +124,7 @@ export async function recordUsageEvent(db: DbClient, input: UsageEventInput): Pr
     input.source,
     input.provider ?? null,
     input.channel ?? null,
+    input.sessionId ?? null,
     input.quantity,
     input.unit,
     input.metadata ? JSON.stringify(input.metadata) : null,
@@ -83,28 +142,54 @@ export async function grantQuota(db: DbClient, input: QuotaGrantInput): Promise<
     throw new Error('Quota grants require a period, start time, reason, and idempotency key.')
   }
 
-  const result = await execute(db, `
-    INSERT OR IGNORE INTO usage_quota_grants
-      (id, organization_id, resource, quantity, unit, period_key, period_start,
-       period_end, grant_type, reason, created_by, idempotency_key, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `, [
-    crypto.randomUUID(),
-    input.organizationId,
-    input.resource,
-    input.quantity,
-    input.unit,
-    input.periodKey,
-    input.periodStart,
-    input.periodEnd ?? null,
-    input.grantType,
-    input.reason,
-    input.createdBy ?? null,
-    input.idempotencyKey,
-    new Date().toISOString(),
-  ])
+  const createdAt = new Date().toISOString()
+  const statements: Array<{ query: string; params: unknown[] }> = []
+  if (isAiCreditGrant(input)) {
+    statements.push({
+      query: `
+        INSERT OR IGNORE INTO ai_credits
+          (organization_id, balance, lifetime_used, last_topped_up_at, balance_period_key, updated_at)
+        VALUES (?, 0, 0, NULL, NULL, ?)
+      `,
+      params: [input.organizationId, createdAt],
+    })
+  }
+  const grantStatementIndex = statements.length
+  statements.push({
+    query: `
+      INSERT OR IGNORE INTO usage_quota_grants
+        (id, organization_id, resource, quantity, unit, period_key, period_start,
+         period_end, grant_type, reason, created_by, idempotency_key, applied_at, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
+    `,
+    params: [
+      crypto.randomUUID(),
+      input.organizationId,
+      input.resource,
+      input.quantity,
+      input.unit,
+      input.periodKey,
+      input.periodStart,
+      input.periodEnd ?? null,
+      input.grantType,
+      input.reason,
+      input.createdBy ?? null,
+      input.idempotencyKey,
+      createdAt,
+    ],
+  })
+  const apply = applyGrantQuery(input, createdAt)
+  if (apply) statements.push(apply)
+  statements.push({
+    query: `
+      UPDATE usage_quota_grants SET applied_at = ?
+      WHERE organization_id = ? AND idempotency_key = ? AND applied_at IS NULL
+    `,
+    params: [createdAt, input.organizationId, input.idempotencyKey],
+  })
 
-  return Number(result?.meta.changes ?? 0) > 0
+  const results = await executeBatch(db, statements)
+  return Number(results[grantStatementIndex]?.meta.changes ?? 0) > 0
 }
 
 /**
@@ -130,14 +215,26 @@ export async function resetOrganizationQuota(
     resources.add(grant.resource)
   }
   const createdAt = new Date().toISOString()
-  const statements = input.grants.map((grant) => {
+  const statements: Array<{ query: string; params: unknown[] }> = []
+  if (input.grants.some(grant => isAiCreditGrant(grant))) {
+    statements.push({
+      query: `
+        INSERT OR IGNORE INTO ai_credits
+          (organization_id, balance, lifetime_used, last_topped_up_at, balance_period_key, updated_at)
+        VALUES (?, 0, 0, NULL, NULL, ?)
+      `,
+      params: [input.organizationId, createdAt],
+    })
+  }
+  for (const grant of input.grants) {
     assertQuantity(grant.quantity)
-    return {
+    const idempotencyKey = `reset:${input.resetId}:${grant.resource}`
+    statements.push({
       query: `
         INSERT OR IGNORE INTO usage_quota_grants
           (id, organization_id, resource, quantity, unit, period_key, period_start,
-           period_end, grant_type, reason, created_by, idempotency_key, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'reset', ?, ?, ?, ?)
+           period_end, grant_type, reason, created_by, idempotency_key, applied_at, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'reset', ?, ?, ?, NULL, ?)
       `,
       params: [
         crypto.randomUUID(),
@@ -150,11 +247,25 @@ export async function resetOrganizationQuota(
         grant.periodEnd ?? null,
         input.reason,
         input.createdBy ?? null,
-        `reset:${input.resetId}:${grant.resource}`,
+        idempotencyKey,
         createdAt,
       ],
-    }
-  })
+    })
+    const apply = applyGrantQuery({
+      ...grant,
+      organizationId: input.organizationId,
+      grantType: 'reset',
+      idempotencyKey,
+    }, createdAt)
+    if (apply) statements.push(apply)
+    statements.push({
+      query: `
+        UPDATE usage_quota_grants SET applied_at = ?
+        WHERE organization_id = ? AND idempotency_key = ? AND applied_at IS NULL
+      `,
+      params: [createdAt, input.organizationId, idempotencyKey],
+    })
+  }
 
   await executeBatch(db, statements)
 }

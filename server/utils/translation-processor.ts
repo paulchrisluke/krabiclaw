@@ -228,7 +228,7 @@ export async function processTranslationJobBatch(
 
   // ai-credits.ts is not yet migrated off raw D1Database; callers here always
   // pass the raw D1 binding today, so this cast is safe at runtime.
-  const creditOk = await hasCredits(db as D1Database, organizationId)
+  const creditOk = await hasCredits(db as D1Database, organizationId, jobId)
   if (!creditOk) throw new Error('No AI credits remaining.')
 
   const rows = await queryAll<TranslationJobItemRow>(db, `
@@ -295,6 +295,7 @@ export async function processTranslationJobBatch(
 
   const charge = await chargeCredits(db as D1Database, organizationId, {
     siteId,
+    sessionId: jobId,
     action: 'translation_job',
     model: CHOWBOT_MODEL,
     inputTokens: aiResponse.usage.input_tokens,

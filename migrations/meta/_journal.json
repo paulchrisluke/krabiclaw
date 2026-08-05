@@ -610,6 +610,13 @@
       "when": 1785913445035,
       "tag": "0093_unknown_genesis",
       "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "6",
+      "when": 1785917795474,
+      "tag": "0094_soft_jazinda",
+      "breakpoints": true
     }
   ]
 }

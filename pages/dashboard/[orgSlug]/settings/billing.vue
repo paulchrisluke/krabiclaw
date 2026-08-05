@@ -182,6 +182,24 @@
               />
             </div>
 
+            <div v-if="credits.quota" class="grid gap-2 text-xs sm:grid-cols-2">
+              <div class="rounded-lg bg-elevated px-3 py-2">
+                <p class="text-muted">Weekly AI quota</p>
+                <p class="mt-0.5 font-semibold tabular-nums">
+                  {{ Number(credits.quota.weeklyUsed).toLocaleString() }}
+                  <span v-if="credits.quota.weeklyLimit !== null"> / {{ Number(credits.quota.weeklyLimit).toLocaleString() }}</span>
+                  <span v-else> / unlimited</span>
+                </p>
+              </div>
+              <div class="rounded-lg bg-elevated px-3 py-2">
+                <p class="text-muted">Per-chat session cap</p>
+                <p class="mt-0.5 font-semibold tabular-nums">
+                  <span v-if="credits.quota.sessionLimit !== null">{{ Number(credits.quota.sessionLimit).toLocaleString() }} credits</span>
+                  <span v-else>unlimited</span>
+                </p>
+              </div>
+            </div>
+
             <div v-if="credits.by_action?.length" class="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <div v-for="row in credits.by_action" :key="row.action" class="rounded-lg bg-elevated px-3 py-2">
                 <p class="text-xs text-muted capitalize">{{ String(row.action).replace(/_/g, ' ') }}</p>

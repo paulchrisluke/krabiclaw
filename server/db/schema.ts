@@ -87,6 +87,7 @@ export const ai_credits = sqliteTable("ai_credits", {
 	balance: integer().default(0).notNull(),
 	lifetime_used: integer().default(0).notNull(),
 	last_topped_up_at: text(),
+	balance_period_key: text(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
@@ -2278,6 +2279,7 @@ export const usage_events = sqliteTable("usage_events", {
 	source: text().notNull(),
 	provider: text(),
 	channel: text(),
+	session_id: text(),
 	quantity: integer().notNull(),
 	unit: text().notNull(),
 	metadata_json: text(),
@@ -2302,6 +2304,7 @@ export const usage_quota_grants = sqliteTable("usage_quota_grants", {
 	reason: text().notNull(),
 	created_by: text().references(() => user.id, { onDelete: "set null" } ),
 	idempotency_key: text().notNull(),
+	applied_at: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
 	unique("usage_quota_grants_organization_id_idempotency_key_unique").on(table.organization_id, table.idempotency_key),
