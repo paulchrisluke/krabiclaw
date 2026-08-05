@@ -1,5 +1,5 @@
 import Stripe from 'stripe'
-import { execute, executeBatch, queryAll, queryFirst } from '~/server/db'
+import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { betterAuthTimestampToIso } from '~/server/utils/better-auth-timestamps'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
 import { getOrgAdapter } from 'better-auth/plugins'
@@ -132,7 +132,7 @@ export async function getSiteEntitlements(db: D1Database, siteId: string): Promi
   return parseEntitlementRows(rows ?? [])
 }
 
-export async function hasSiteEntitlement(db: D1Database, siteId: string, key: string): Promise<boolean> {
+export async function hasSiteEntitlement(db: DbClient, siteId: string, key: string): Promise<boolean> {
   const row = await queryFirst<EntitlementValueRow>(db, `SELECT value FROM site_entitlements WHERE site_id = ? AND key = ? LIMIT 1`, [siteId, key])
   if (!row) return false
   return row.value.toLowerCase() === 'true'
@@ -193,6 +193,7 @@ export function getPlanEntitlements(plan: string): EntitlementsMap {
   const base: EntitlementsMap = {
     plan,
     custom_domains: false,
+    custom_pages: false,
     google_business: false,
     remove_branding: false,
     ai_credits: 500,
@@ -209,11 +210,11 @@ export function getPlanEntitlements(plan: string): EntitlementsMap {
 
   switch (plan) {
     case 'growth':
-      return { ...base, translation: true, translation_languages: 1, ai_credits: 2000, google_business: true, custom_domains: true, managed_service: true, whatsapp_notifications: true, review_requests: true }
+      return { ...base, translation: true, translation_languages: 1, ai_credits: 2000, google_business: true, custom_domains: true, custom_pages: true, managed_service: true, whatsapp_notifications: true, review_requests: true }
     case 'managed':
-      return { ...base, translation: true, translation_languages: -1, ai_credits: 'unlimited', managed_service: true, custom_domains: true, google_business: true, advanced_seo: true, whatsapp_notifications: true, review_requests: true }
+      return { ...base, translation: true, translation_languages: -1, ai_credits: 'unlimited', managed_service: true, custom_domains: true, custom_pages: true, google_business: true, advanced_seo: true, whatsapp_notifications: true, review_requests: true }
     case 'seo_accelerator':
-      return { ...base, translation: true, translation_languages: -1, ai_credits: 'unlimited', managed_service: true, seo_accelerator: true, custom_domains: true, google_business: true, advanced_seo: true, whatsapp_notifications: true, review_requests: true }
+      return { ...base, translation: true, translation_languages: -1, ai_credits: 'unlimited', managed_service: true, seo_accelerator: true, custom_domains: true, custom_pages: true, google_business: true, advanced_seo: true, whatsapp_notifications: true, review_requests: true }
     default:
       return base
   }

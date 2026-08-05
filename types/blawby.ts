@@ -142,16 +142,16 @@ export interface PublicTenantPage {
   path: string
   title: string
   page_type: string
+  recipe: string | null
+  locale: string
   summary: string | null
-  body: string | null
-  components: ApiRecord[]
-  cta_label: string | null
-  cta_url: string | null
   seo_title: string | null
   seo_description: string | null
   canonical_url: string | null
   robots: string | null
-  sort_order: number
+  blocks: import('~/utils/tenant-page-blocks').TenantPageBlock[]
+  published_revision_id: string | null
+  updated_at: string
 }
 
 export interface PublicConsultationSettings {

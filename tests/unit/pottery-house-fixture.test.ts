@@ -133,19 +133,22 @@ test("pottery house posts block includes posts and channel jobs", () => {
 test("pottery house content block includes home hero and about page content", () => {
   const sql = renderCompiledPotteryHouseContentBlock();
 
-  assert.match(sql, /INSERT OR IGNORE INTO site_content/);
+  assert.match(sql, /INSERT OR REPLACE INTO tenant_pages/);
+  assert.match(sql, /INSERT OR REPLACE INTO content_documents/);
+  assert.doesNotMatch(sql, /site_content/);
   assert.match(sql, /Clay, calm, and a place to return to\./);
-  assert.match(sql, /hero_media_asset_id/);
+  assert.match(sql, /\"asset_id\":\"media-ph-homepage-custom\"/);
   assert.match(sql, /story\.headline/);
   assert.match(sql, /journey\.body/);
 });
 
 test("pottery house translations block includes Thai content and location translations", () => {
   const sql = renderCompiledPotteryHouseTranslationsBlock();
+  const pages = renderCompiledPotteryHouseContentBlock();
 
-  assert.match(sql, /INSERT OR IGNORE INTO site_content_translations/);
+  assert.doesNotMatch(sql, /site_content_translations/);
   assert.match(sql, /INSERT OR IGNORE INTO business_location_translations/);
-  assert.match(sql, /ดินเผา ความสงบ และสถานที่ที่อยากกลับมา/);
+  assert.match(pages, /ดินเผา ความสงบ และสถานที่ที่อยากกลับมา/);
   assert.match(sql, /loc-pottery-beachfront/);
 });
 

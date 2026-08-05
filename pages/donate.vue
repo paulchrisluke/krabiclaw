@@ -1,12 +1,6 @@
 <template>
   <NuxtLayout name="blawby">
-    <BlawbyTenantPage
-      path="/donate"
-      fallback-eyebrow="Support"
-      fallback-title="Donate"
-      fallback-summary="Support this organization through its preferred donation page."
-      fallback-body="Donation processing is handled externally for now. Use the donation link configured for this site to continue."
-    />
+    <BlawbyTenantPage path="/donate" />
   </NuxtLayout>
 </template>
 

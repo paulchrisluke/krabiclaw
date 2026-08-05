@@ -9,6 +9,7 @@ function entitlementValuesForPlan(plan: string): Record<string, string | number 
   const base = {
     plan,
     custom_domains: false,
+    custom_pages: false,
     google_business: false,
     remove_branding: false,
     ai_credits: 500,
@@ -25,11 +26,11 @@ function entitlementValuesForPlan(plan: string): Record<string, string | number 
 
   switch (plan) {
     case 'growth':
-      return { ...base, translation: true, translation_languages: 1, ai_credits: 2000, google_business: true, custom_domains: true, managed_service: true, whatsapp_notifications: true }
+      return { ...base, translation: true, translation_languages: 1, ai_credits: 2000, google_business: true, custom_domains: true, custom_pages: true, managed_service: true, whatsapp_notifications: true }
     case 'managed':
-      return { ...base, translation: true, translation_languages: -1, ai_credits: 'unlimited', managed_service: true, custom_domains: true, google_business: true, advanced_seo: true, whatsapp_notifications: true }
+      return { ...base, translation: true, translation_languages: -1, ai_credits: 'unlimited', managed_service: true, custom_domains: true, custom_pages: true, google_business: true, advanced_seo: true, whatsapp_notifications: true }
     case 'seo_accelerator':
-      return { ...base, translation: true, translation_languages: -1, ai_credits: 'unlimited', managed_service: true, seo_accelerator: true, custom_domains: true, google_business: true, advanced_seo: true, whatsapp_notifications: true }
+      return { ...base, translation: true, translation_languages: -1, ai_credits: 'unlimited', managed_service: true, seo_accelerator: true, custom_domains: true, custom_pages: true, google_business: true, advanced_seo: true, whatsapp_notifications: true }
     default:
       return base
   }

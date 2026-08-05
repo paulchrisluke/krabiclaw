@@ -1241,7 +1241,6 @@ export const OPEN_WORLD_DESTRUCTIVE_TOOL_NAMES = [
   'delete_menu_section',
   'delete_post',
   'delete_blog_post',
-  'delete_content_field',
   'delete_location_qa',
   'delete_site_qa',
   'delete_owner_entered_site_review',

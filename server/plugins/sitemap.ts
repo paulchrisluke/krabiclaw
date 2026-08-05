@@ -134,10 +134,10 @@ export default defineNitroPlugin((nitroApp) => {
            ORDER BY sort_order ASC, name ASC
         `, [siteId]),
         queryAll<{ path: string; updated_at: string | null; robots: string | null }>(db, `
-          SELECT path, updated_at, robots
-            FROM tenant_pages
-           WHERE site_id = ? AND status = 'published'
-           ORDER BY sort_order ASC, title ASC
+          SELECT v.published_path AS path, v.updated_at, v.robots
+            FROM tenant_page_variants v
+           WHERE v.site_id = ? AND v.status = 'published' AND v.published_revision_id IS NOT NULL
+           ORDER BY v.updated_at ASC, v.title ASC
         `, [siteId]),
         queryAll<ApiRecord>(
           db,

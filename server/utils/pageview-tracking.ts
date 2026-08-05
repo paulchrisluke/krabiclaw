@@ -98,6 +98,23 @@ export async function resolveLocationIdFromPath(
   return getLocationIdBySlug(db, siteId, slug)
 }
 
+export async function resolvePublishedTenantPageIdentity(db: AppDb, siteId: string, pagePath: string) {
+  return await queryFirst<{
+    page_id: string
+    page_type: string
+    recipe: string | null
+    locale: string
+    revision_id: string
+  }>(db, `
+    SELECT p.id AS page_id, p.page_type, p.recipe, v.locale, v.published_revision_id AS revision_id
+      FROM tenant_page_variants v
+      JOIN tenant_pages p ON p.id = v.page_id
+     WHERE v.site_id = ? AND v.published_path = ? AND v.status = 'published' AND v.published_revision_id IS NOT NULL
+     ORDER BY v.locale ASC
+     LIMIT 1
+  `, [siteId, pagePath])
+}
+
 export interface PageviewEventInput {
   siteId: string
   locationId?: string | null
@@ -111,6 +128,11 @@ export interface PageviewEventInput {
   country?: string | null
   region?: string | null
   city?: string | null
+  pageId?: string | null
+  pageType?: string | null
+  recipe?: string | null
+  locale?: string | null
+  revisionId?: string | null
 }
 
 export async function insertPageviewEvent(db: AppDb, input: PageviewEventInput): Promise<void> {
@@ -120,15 +142,20 @@ export async function insertPageviewEvent(db: AppDb, input: PageviewEventInput):
   await execute(
     db,
     `INSERT INTO site_pageview_events (
-      id, site_id, location_id, page_path, referrer, user_agent,
+      id, site_id, location_id, page_path, page_id, page_type, recipe, locale, revision_id, referrer, user_agent,
       ip_hash, session_id, visitor_id, duration_seconds,
       country, region, city, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       eventId,
       input.siteId,
       input.locationId ?? null,
       input.pagePath,
+      input.pageId ?? null,
+      input.pageType ?? null,
+      input.recipe ?? null,
+      input.locale ?? null,
+      input.revisionId ?? null,
       input.referrer ?? null,
       input.userAgent ?? null,
       input.ipHash,

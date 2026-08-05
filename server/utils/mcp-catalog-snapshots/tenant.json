@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:19a71e267014691f09642596a197225289b626abe11ace55e02dd97bb6a03d92",
+  "fingerprint": "sha256:61e23933e0b8a8cb93226c220dbc0f9256d17b8f16b5252cfa1b8a3fd084ee8f",
   "tools": [
     {
       "name": "add_menu_items_batch",
@@ -305,7 +305,6 @@
                 "menus",
                 "menu_items",
                 "media_assets",
-                "site_content",
                 "reviews",
                 "location_qa",
                 "experiences"
@@ -316,7 +315,7 @@
             "type": "array"
           },
           "include_translations": {
-            "description": "Copy existing translations for menus/menu items/site content along with the source-locale content. Defaults to true.",
+            "description": "Copy existing translations for menus and menu items along with the source-locale content. Defaults to true.",
             "type": "boolean"
           },
           "new_location_title": {
@@ -2252,55 +2251,6 @@
         },
         "required": [
           "post_id",
-          "deleted"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "delete_content_field",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "field": {
-            "type": "string"
-          },
-          "location_id": {
-            "type": "string"
-          },
-          "page": {
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "page",
-          "field"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "deleted": {
-            "type": "boolean"
-          },
-          "field": {
-            "type": "string"
-          },
-          "public_path": {
-            "type": "string"
-          },
-          "view_url": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        },
-        "required": [
           "deleted"
         ],
         "type": "object"
@@ -4340,6 +4290,12 @@
       },
       "outputSchema": {
         "properties": {
+          "blocks": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
           "fields": {
             "items": {
               "properties": {
@@ -4379,6 +4335,9 @@
           "page": {
             "type": "string"
           },
+          "page_data": {
+            "type": "object"
+          },
           "public_path": {
             "type": "string"
           },
@@ -4414,8 +4373,7 @@
         },
         "required": [
           "page",
-          "siteId",
-          "fields"
+          "siteId"
         ],
         "type": "object"
       }
@@ -4775,19 +4733,12 @@
             },
             "type": "array"
           },
-          "tenantPages": {
-            "items": {
-              "type": "object"
-            },
-            "type": "array"
-          },
           "themeTokens": {
             "type": "object"
           }
         },
         "required": [
           "offerings",
-          "tenantPages",
           "consultation",
           "navigation",
           "themeTokens"
@@ -14350,7 +14301,7 @@
         "additionalProperties": true,
         "properties": {
           "location_id": {
-            "description": "Optional location scope when the homepage content is location-specific.",
+            "description": "Not supported for the site-scoped homepage.",
             "type": "string"
           },
           "site_id": {
@@ -15549,12 +15500,6 @@
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
-          },
-          "tenantPages": {
-            "items": {
-              "type": "object"
-            },
-            "type": "array"
           },
           "themeTokens": {
             "type": "object"

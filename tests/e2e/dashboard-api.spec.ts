@@ -18,7 +18,7 @@ test.describe('dashboard API smoke', () => {
     expect(Array.isArray(requestsBody.requests)).toBe(true)
   })
 
-  test('owner can update content directly via dashboard API', async ({ request, baseURL }) => {
+  test('owner can update a canonical tenant page directly via dashboard API', async ({ request, baseURL }) => {
     const login = await request.get(devLoginUrl(baseURL!), { headers: devLoginHeaders() })
     expect(login.status()).toBeLessThan(400)
 
@@ -29,27 +29,27 @@ test.describe('dashboard API smoke', () => {
     const siteId = context?.site?.id as string | undefined
     const hasSite = Boolean(siteId)
 
-    const uniqueTitle = `Dashboard E2E ${Date.now()}`
-
     if (!hasSite) return
 
-    const saveRes = await request.post(`${baseURL}/api/editor/sites/${siteId}/content/save`, {
-      data: {
-        page: 'home',
-        changes: {
-          'hero.title': uniqueTitle,
-        },
-      },
+    const pagesRes = await request.get(`${baseURL}/api/editor/sites/${siteId}/pages`)
+    expect(pagesRes.status()).toBe(200)
+    const pagesBody = await pagesRes.json() as { pages: Array<{ id: string; path: string }> }
+    const home = pagesBody.pages.find((entry) => entry.path === '/')
+    expect(home).toBeTruthy()
+    const detailRes = await request.get(`${baseURL}/api/editor/sites/${siteId}/pages/${home!.id}`)
+    expect(detailRes.status()).toBe(200)
+    const detailBody = await detailRes.json() as { page: { blocks: Array<{ type: string; data: Record<string, unknown> }>; document: { updated_at: string } } }
+    const uniqueTitle = `Dashboard E2E ${Date.now()}`
+    const originalBlocks = detailBody.page.blocks
+    const blocks = originalBlocks.map((block) => block.type === 'hero'
+      ? { ...block, data: { ...block.data, title: uniqueTitle } }
+      : block)
+    const saveRes = await request.patch(`${baseURL}/api/editor/sites/${siteId}/pages/${home!.id}`, {
+      data: { blocks, expectedDocumentUpdatedAt: detailBody.page.document.updated_at },
     })
     expect(saveRes.status()).toBe(200)
-    const saveBody = await saveRes.json()
-    expect(saveBody.success).toBe(true)
-
-    const contentRes = await request.get(`${baseURL}/api/editor/sites/${siteId}/content/home`)
-    expect(contentRes.status()).toBe(200)
-    const contentBody = await contentRes.json() as { fields: Array<{ field: string; hero_title?: string }> }
-    const hero = contentBody.fields.find((entry) => entry.field === 'hero')
-    expect(hero?.hero_title).toBe(uniqueTitle)
+    const saved = await saveRes.json()
+    expect(saved.page.blocks.find((entry: { type: string }) => entry.type === 'hero').data.title).toBe(uniqueTitle)
 
     const eventsRes = await request.get(`${baseURL}/api/dashboard/events?limit=50`, { headers: orgHeaders })
     expect(eventsRes.status()).toBe(200)
@@ -59,19 +59,16 @@ test.describe('dashboard API smoke', () => {
     expect(
       eventsBody.events.some((entry) =>
         entry.event_type === 'content.updated'
-        && entry.entity_type === 'site_content'
+        && entry.entity_type === 'tenant_page'
         && entry.metadata?.page === 'home'
       ),
     ).toBe(true)
 
-    const removedAlias = await request.post(`${baseURL}/api/dashboard/editor/content/save`, {
-      headers: orgHeaders,
-      data: {
-        page: 'home',
-        changes: { 'hero.title': uniqueTitle },
-      },
+    const restore = await request.get(`${baseURL}/api/editor/sites/${siteId}/pages/${home!.id}`)
+    const restoreBody = await restore.json() as { page: { document: { updated_at: string }; blocks: Array<Record<string, unknown>> } }
+    await request.patch(`${baseURL}/api/editor/sites/${siteId}/pages/${home!.id}`, {
+      data: { blocks: originalBlocks, expectedDocumentUpdatedAt: restoreBody.page.document.updated_at },
     })
-    expect(removedAlias.status()).toBe(404)
   })
 
   test('location id dashboard API ignores stale dashboard headers and checks the location owner org', async ({ request, baseURL }) => {

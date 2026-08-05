@@ -16,7 +16,7 @@ import { listSiteLocales } from '~/server/utils/site-locales'
 import { getMediaAsset, listMediaAssets } from '~/server/utils/media-asset-manager'
 import { getDashboardContext, getDashboardLocationContext } from '~/server/utils/dashboard-context'
 import { loadSettingsPayload } from '~/server/utils/site-settings'
-import { getEditorContent, getNotificationsSettings } from '~/server/utils/mcp-workflows'
+import { getNotificationsSettings } from '~/server/utils/mcp-workflows'
 import { getFacebookPagesConnection } from '~/server/utils/facebook-pages'
 import { resolveLocationCapabilitySummary } from '~/server/utils/location-management'
 import { parseLocationPayload } from '~/server/utils/location-payload'
@@ -130,39 +130,6 @@ export async function loadDashboardEditorContext(event: H3Event, siteId: string)
       }),
     },
   }
-}
-
-export async function loadDashboardEditorContent(
-  event: H3Event,
-  siteId: string,
-  page: string,
-  locationId?: string,
-) {
-  const { db, site } = await requireSiteAccess(event, siteId, 'context')
-  await assertResourceAccess(db, {
-    memberId: site.member_id,
-    role: site.member_role,
-    organizationId: site.organization_id,
-    siteId,
-    resourceLocationId: locationId ?? null,
-  })
-  return {
-    success: true as const,
-    ...await getEditorContent(db, site.organization_id, siteId, page, locationId),
-  }
-}
-
-export async function loadDashboardContentEditor(
-  event: H3Event,
-  siteId: string,
-  page: string,
-  locationId?: string,
-) {
-  const [context, content] = await Promise.all([
-    loadDashboardEditorContext(event, siteId),
-    loadDashboardEditorContent(event, siteId, page, locationId),
-  ])
-  return { context: context.context, fields: content.fields }
 }
 
 export async function loadDashboardSiteLocales(event: H3Event, siteId: string) {

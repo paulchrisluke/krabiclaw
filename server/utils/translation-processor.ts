@@ -4,6 +4,7 @@ import { CHOWBOT_MODEL } from '~/server/utils/ai-models'
 import { buildTranslationInventory, type TranslationInventoryItem } from '~/server/utils/translation-inventory'
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { fireSiteEventSafe } from '~/server/utils/site-events'
+import { ensureTenantPageVariant, updateTenantPageDraft } from '~/server/utils/tenant-pages'
 
 const TRANSLATION_BATCH_SIZE = 12
 
@@ -61,51 +62,33 @@ async function markItem(db: DbClient, id: string, status: 'running' | 'succeeded
   `, [status, error ?? null, new Date().toISOString(), id])
 }
 
-async function upsertSiteContentTranslation(
+async function upsertTenantPageTranslation(
   db: DbClient,
   job: TranslationJobRow,
   item: TranslationInventoryItem,
   fields: Record<string, string>,
 ) {
-  const content = fields.content ?? null
-  const heroTitle = fields.hero_title ?? null
-  const heroSubtitle = fields.hero_subtitle ?? null
-  const value = content ?? heroTitle ?? null
-  const now = new Date().toISOString()
-  const id = `translation::${job.organization_id}::${job.site_id}::${item.location_id ?? 'site'}::${job.target_locale}::${item.page ?? 'page'}::${item.field}`
-
-  if (!item.location_id) {
-    await execute(db, `
-      INSERT INTO site_content_translations
-        (id, organization_id, site_id, location_id, locale, page, field, content, hero_title, hero_subtitle, value, type, status, source_hash, translated_at, updated_at)
-      VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 'text', 'draft', ?, ?, ?)
-      ON CONFLICT(organization_id, site_id, locale, page, field) WHERE location_id IS NULL DO UPDATE SET
-        content = excluded.content,
-        hero_title = excluded.hero_title,
-        hero_subtitle = excluded.hero_subtitle,
-        value = excluded.value,
-        status = 'draft',
-        source_hash = excluded.source_hash,
-        translated_at = excluded.translated_at,
-        updated_at = excluded.updated_at
-    `, [id, job.organization_id, job.site_id, job.target_locale, item.page, item.field, content, heroTitle, heroSubtitle, value, item.source_hash, now, now])
-    return
-  }
-
-  await execute(db, `
-    INSERT INTO site_content_translations
-      (id, organization_id, site_id, location_id, locale, page, field, content, hero_title, hero_subtitle, value, type, status, source_hash, translated_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'text', 'draft', ?, ?, ?)
-    ON CONFLICT(organization_id, site_id, location_id, locale, page, field) DO UPDATE SET
-      content = excluded.content,
-      hero_title = excluded.hero_title,
-      hero_subtitle = excluded.hero_subtitle,
-      value = excluded.value,
-      status = 'draft',
-      source_hash = excluded.source_hash,
-      translated_at = excluded.translated_at,
-      updated_at = excluded.updated_at
-  `, [id, job.organization_id, job.site_id, item.location_id, job.target_locale, item.page, item.field, content, heroTitle, heroSubtitle, value, item.source_hash, now, now])
+  const page = await ensureTenantPageVariant(db, item.entity_id, job.target_locale, null)
+  const blocks = page.blocks.map(block => block.id !== item.field
+    ? block
+    : { ...block, data: { ...block.data, ...fields } })
+  await updateTenantPageDraft(db, page.id, {
+    userId: null,
+    data: {
+      path: page.path,
+      title: page.title,
+      summary: page.summary,
+      seoTitle: page.seo_title,
+      seoDescription: page.seo_description,
+      canonicalUrl: page.canonical_url,
+      robots: page.robots,
+      pageType: page.page_type,
+      recipe: page.recipe,
+      sortOrder: page.sort_order,
+      blocks,
+      expectedDocumentUpdatedAt: page.document.updated_at,
+    },
+  })
 }
 
 async function upsertEntityTranslation(
@@ -115,8 +98,8 @@ async function upsertEntityTranslation(
   fields: Record<string, string>,
 ) {
   const now = new Date().toISOString()
-  if (item.entity_type === 'site_content') {
-    await upsertSiteContentTranslation(db, job, item, fields)
+  if (item.entity_type === 'tenant_page') {
+    await upsertTenantPageTranslation(db, job, item, fields)
     return
   }
 

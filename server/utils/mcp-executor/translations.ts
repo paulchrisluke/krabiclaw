@@ -7,7 +7,7 @@ import { processTranslationJobBatch } from '~/server/utils/translation-processor
 import { queryAll, queryFirst } from '~/server/db'
 import { NOT_HANDLED, mutationContextPayload, objectRecord, optionalString, requiredString } from './shared'
 
-const VALID_ENTITY_TYPES = ['site_content', 'menu', 'menu_item', 'business_location', 'post'] as const
+const VALID_ENTITY_TYPES = ['tenant_page', 'menu', 'menu_item', 'business_location', 'post'] as const
 const VALID_REVIEW_STATUSES = ['all', 'missing', 'draft', 'published', 'stale'] as const
 
 function validEntityType(args: Record<string, unknown>, key: string) {

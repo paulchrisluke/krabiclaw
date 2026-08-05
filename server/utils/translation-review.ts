@@ -35,11 +35,15 @@ async function getTranslatedFields(
   siteId: string,
   locale: string,
 ): Promise<Map<string, Record<string, string>>> {
-  const [contentRows, menuRows, itemRows, locationRows, postRows] = await Promise.all([
-    queryAll<Record<string, string | null>>(db, `
-      SELECT COALESCE(location_id, 'site') || ':' || COALESCE(page, '') AS entity_id, field, content, hero_title, hero_subtitle, value
-      FROM site_content_translations
-      WHERE organization_id = ? AND site_id = ? AND locale = ?
+  const [pageRows, menuRows, itemRows, locationRows, postRows] = await Promise.all([
+    queryAll<{ entity_id: string; field: string; data_json: string | null }>(db, `
+      SELECT v.page_id AS entity_id, b.id AS field, b.data_json
+      FROM tenant_page_variants v
+      JOIN content_documents d ON d.owner_type = 'tenant_page' AND d.owner_id = v.id
+      JOIN content_revisions r ON r.id = COALESCE(d.draft_revision_id, d.published_revision_id)
+      JOIN content_blocks b ON b.document_id = r.document_id
+      WHERE v.organization_id = ? AND v.site_id = ? AND v.locale = ?
+      ORDER BY b.position
     `, [organizationId, siteId, locale]),
     queryAll<Record<string, string | null>>(db, `
       SELECT menu_id AS entity_id, name, description
@@ -65,12 +69,15 @@ async function getTranslatedFields(
 
   const rows = new Map<string, Record<string, string>>()
 
-  for (const row of contentRows) {
-    const field = row.field || 'content'
-    const fields = field === 'hero'
-      ? cleanFields({ hero_title: row.hero_title, hero_subtitle: row.hero_subtitle })
-      : cleanFields({ content: row.content || row.value })
-    rows.set(stateKey('site_content', row.entity_id || '', field), fields)
+  for (const row of pageRows) {
+    let data: unknown
+    try { data = row.data_json ? JSON.parse(row.data_json) : {} } catch { throw new Error(`Translated tenant page block ${row.field} is malformed.`) }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) continue
+    const fields = cleanFields(Object.fromEntries(
+      Object.entries(data as Record<string, unknown>)
+        .filter(([key, value]) => ['title', 'subtitle', 'text', 'markdown', 'description', 'label', 'body'].includes(key) && typeof value === 'string'),
+    ))
+    if (Object.keys(fields).length) rows.set(stateKey('tenant_page', row.entity_id || '', row.field), fields)
   }
 
   for (const row of menuRows) {

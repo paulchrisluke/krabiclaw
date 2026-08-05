@@ -3,7 +3,7 @@ import { getSourceLocale } from '~/server/utils/site-locales'
 import { normalizeLocale } from '~/server/utils/site-i18n'
 import { execute, executeBatch, queryAll, type BatchQuery, type DbClient } from '~/server/db'
 
-export type TranslationEntityType = 'site_content' | 'menu' | 'menu_item' | 'business_location' | 'post'
+export type TranslationEntityType = 'tenant_page' | 'menu' | 'menu_item' | 'business_location' | 'post'
 export type TranslationScope = 'site' | 'content' | 'menus' | 'locations' | 'posts'
 export type TranslationInventoryStatus = 'missing' | 'draft' | 'published' | 'stale'
 
@@ -81,7 +81,7 @@ async function sourceHash(value: string): Promise<string> {
 
 function shouldIncludeScope(scope: TranslationScope, entityType: TranslationEntityType): boolean {
   if (scope === 'site') return true
-  if (scope === 'content') return entityType === 'site_content'
+  if (scope === 'content') return entityType === 'tenant_page'
   if (scope === 'menus') return entityType === 'menu' || entityType === 'menu_item'
   if (scope === 'locations') return entityType === 'business_location'
   if (scope === 'posts') return entityType === 'post'
@@ -101,9 +101,10 @@ async function getTranslationStates(
   const rows: TranslationStateRow[] = []
   const queries = await Promise.all([
     queryAll<TranslationStateRow>(db, `
-      SELECT 'site_content' AS entity_type, COALESCE(location_id, 'site') || ':' || page AS entity_id,
-             field, source_hash, status
-      FROM site_content_translations
+      SELECT 'tenant_page' AS entity_type, page_id AS entity_id,
+             'blocks' AS field, NULL AS source_hash,
+             CASE WHEN published_revision_id IS NOT NULL THEN 'published' ELSE 'draft' END AS status
+      FROM tenant_page_variants
       WHERE organization_id = ? AND site_id = ? AND locale = ?
     `, [organizationId, siteId, targetLocale]),
     queryAll<TranslationStateRow>(db, `
@@ -138,12 +139,14 @@ async function getSourceRecords(
   organizationId: string,
   siteId: string,
 ): Promise<TextRecord[]> {
-  const [contentRows, menuRows, itemRows, locationRows, postRows] = await Promise.all([
-    queryAll<Record<string, string | null>>(db, `
-      SELECT id, location_id, page, field, content, value, hero_title, hero_subtitle, type
-      FROM site_content
-      WHERE organization_id = ? AND site_id = ?
-      ORDER BY page, field
+  const [pageRows, menuRows, itemRows, locationRows, postRows] = await Promise.all([
+    queryAll<{ page_id: string; published_path: string; title: string; snapshot_json: string | null }>(db, `
+      SELECT v.page_id, v.published_path, v.title, r.snapshot_json
+      FROM tenant_page_variants v
+      JOIN content_revisions r ON r.id = v.published_revision_id
+      JOIN site_locales sl ON sl.site_id = v.site_id AND sl.locale = v.locale AND sl.is_source = 1
+      WHERE v.organization_id = ? AND v.site_id = ? AND v.status = 'published'
+      ORDER BY v.published_path
     `, [organizationId, siteId]),
     queryAll<Record<string, string | null>>(db, `
       SELECT id, location_id, name, description
@@ -174,38 +177,29 @@ async function getSourceRecords(
 
   const records: TextRecord[] = []
 
-  for (const row of contentRows) {
-    if (row.field === 'hero') {
-      const sourceFields = compactFields({ hero_title: row.hero_title, hero_subtitle: row.hero_subtitle })
-      const heroText = fieldsToText(sourceFields)
-      if (heroText) {
-        records.push({
-          entity_type: 'site_content',
-          entity_id: `${row.location_id ?? 'site'}:${row.page}`,
-          location_id: row.location_id ?? null,
-          page: row.page,
-          field: 'hero',
-          label: `${row.page} hero`,
-          source_text: heroText,
-          source_fields: sourceFields,
-        })
-      }
-      continue
+  for (const row of pageRows) {
+    if (!row.snapshot_json) continue
+    let snapshot: unknown
+    try { snapshot = JSON.parse(row.snapshot_json) } catch { throw new Error(`Published tenant page ${row.page_id} has malformed translation snapshot.`) }
+    const blocks = snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot) && Array.isArray((snapshot as { blocks?: unknown }).blocks)
+      ? (snapshot as { blocks: Array<{ id?: unknown; type?: unknown; data?: unknown }> }).blocks
+      : []
+    for (const block of blocks) {
+      if (typeof block.id !== 'string' || !block.data || typeof block.data !== 'object' || Array.isArray(block.data)) continue
+      const sourceFields = compactFields(Object.fromEntries(Object.entries(block.data as Record<string, unknown>).filter(([key, value]) => ['title', 'subtitle', 'text', 'markdown', 'description', 'label', 'body'].includes(key) && typeof value === 'string')))
+      const text = fieldsToText(sourceFields)
+      if (!text) continue
+      records.push({
+        entity_type: 'tenant_page',
+        entity_id: row.page_id,
+        location_id: null,
+        page: row.published_path,
+        field: block.id,
+        label: `${row.title} ${String(block.type ?? 'block')}`,
+        source_text: text,
+        source_fields: sourceFields,
+      })
     }
-
-    const text = cleanText(row.content) || cleanText(row.value)
-    if (!text) continue
-    if (row.type === 'media' || row.type === 'image') continue
-    records.push({
-      entity_type: 'site_content',
-      entity_id: `${row.location_id ?? 'site'}:${row.page}`,
-      location_id: row.location_id ?? null,
-      page: row.page,
-      field: row.field ?? 'content',
-      label: `${row.page} ${row.field}`,
-      source_text: text,
-      source_fields: { content: text },
-    })
   }
 
   for (const row of menuRows) {
@@ -323,6 +317,7 @@ export async function buildTranslationInventory(
 
     const hash = await sourceHash(sourceText)
     const state = translationStates.get(inventoryItemStateKey(record))
+      ?? (record.entity_type === 'tenant_page' ? translationStates.get(`${record.entity_type}:${record.entity_id}:blocks`) : undefined)
     const translationStatus: TranslationInventoryStatus = state?.source_hash && state.source_hash !== hash
       ? 'stale'
       : state?.status ?? 'missing'
@@ -473,34 +468,24 @@ export async function publishTranslationDrafts(
 
   let publishedCount = 0
   if (drafts.length) {
-    // executeBatch runs all per-item publish updates as a single atomic D1
-    // batch — a partial failure here must not leave some drafts published
-    // and others still pending for the same publish action.
-    const queries: BatchQuery[] = drafts.map((item) => {
-      if (item.entity_type === 'site_content') {
-        if (!item.location_id) {
-          return {
-            query: `
-              UPDATE site_content_translations
-              SET status = 'published', reviewed_at = ?, updated_at = ?, updated_by = ?
-              WHERE organization_id = ? AND site_id = ? AND locale = ? AND page = ? AND field = ?
-                AND location_id IS NULL AND source_hash = ? AND status = 'draft'
-            `,
-            params: [now, now, userId ?? null, organizationId, siteId, inventory.target_locale, item.page, item.field, item.source_hash],
-          }
-        }
-
-        return {
-          query: `
-            UPDATE site_content_translations
-            SET status = 'published', reviewed_at = ?, updated_at = ?, updated_by = ?
-            WHERE organization_id = ? AND site_id = ? AND location_id = ? AND locale = ? AND page = ? AND field = ?
-              AND source_hash = ? AND status = 'draft'
-          `,
-          params: [now, now, userId ?? null, organizationId, siteId, item.location_id, inventory.target_locale, item.page, item.field, item.source_hash],
-        }
+    const tenantPageItems = drafts.filter(item => item.entity_type === 'tenant_page')
+    if (tenantPageItems.length) {
+      const { ensureTenantPageVariant, publishTenantPage } = await import('~/server/utils/tenant-pages')
+      const pageIds = [...new Set(tenantPageItems.map(item => item.entity_id))]
+      for (const pageId of pageIds) {
+        const variant = await ensureTenantPageVariant(db, pageId, inventory.target_locale, userId ?? null)
+        await publishTenantPage(db, variant.id, {
+          userId: userId ?? 'translation-system',
+          expectedDocumentUpdatedAt: variant.document.updated_at,
+        })
       }
+    }
 
+    // executeBatch runs all non-page publish updates as a single atomic D1
+    // batch. Tenant pages use the revision publisher above so their complete
+    // block document and locale variant move together.
+    const nonTenantDrafts = drafts.filter(item => item.entity_type !== 'tenant_page')
+    const queries: BatchQuery[] = nonTenantDrafts.map((item) => {
       if (item.entity_type === 'menu') {
         return {
           query: `
@@ -548,7 +533,7 @@ export async function publishTranslationDrafts(
       }
     })
 
-    await executeBatch(db, queries)
+    if (queries.length) await executeBatch(db, queries)
     const postPublishInventory = await buildTranslationInventory(db, organizationId, siteId, {
       targetLocale: inventory.target_locale,
       scope,
@@ -559,7 +544,7 @@ export async function publishTranslationDrafts(
         .filter(item => item.translation_status === 'published')
         .map(item => `${inventoryItemStateKey(item)}:${item.source_hash}`),
     )
-    publishedCount = drafts.filter(item => publishedKeys.has(`${inventoryItemStateKey(item)}:${item.source_hash}`)).length
+    publishedCount = tenantPageItems.length + nonTenantDrafts.filter(item => publishedKeys.has(`${inventoryItemStateKey(item)}:${item.source_hash}`)).length
   }
 
   return {

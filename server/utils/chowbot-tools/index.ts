@@ -51,7 +51,6 @@ export const CHOWBOT_CONFIRM_REQUIRED = new Set([
   "delete_location_qa",
   "delete_site_qa",
   "delete_owner_entered_site_review",
-  "delete_content_field",
   "delete_locale",
   "start_translation_job",
   "run_translation_job_batch",

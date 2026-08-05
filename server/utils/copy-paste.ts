@@ -8,7 +8,6 @@ export type CopyEntityType =
   | 'menus' 
   | 'menu_items' 
   | 'media_assets' 
-  | 'site_content' 
   | 'reviews' 
   | 'location_qa' 
   | 'experiences'
@@ -143,7 +142,6 @@ export async function copyLocationBatch(
       menus: { copied: 0, new_ids: [] },
       menu_items: { copied: 0, new_ids: [] },
       media_assets: { copied: 0, new_ids: [] },
-      site_content: { copied: 0, new_ids: [] },
       reviews: { copied: 0, new_ids: [] },
       location_qa: { copied: 0, new_ids: [] },
       experiences: { copied: 0, new_ids: [] },
@@ -166,10 +164,11 @@ export async function copyLocationBatch(
   // Process entities in dependency order (media_assets before anything that
   // references image_asset_id/hero_media_asset_id; menus before menu_items)
   // regardless of the order the caller listed them in.
-  const entityOrder: CopyEntityType[] = ['media_assets', 'menus', 'menu_items', 'site_content', 'experiences', 'reviews', 'location_qa']
+  const entityOrder: CopyEntityType[] = ['media_assets', 'menus', 'menu_items', 'experiences', 'reviews', 'location_qa']
   const requestedConfigs = new Map(entities.map((config) => [config.type, config]))
 
   try {
+    await copyLocationPolicies(db, source_location_id, targetLocationId, organizationId, siteId, now, statements)
     for (const type of entityOrder) {
       const entityConfig = requestedConfigs.get(type)
       if (!entityConfig) continue
@@ -183,9 +182,6 @@ export async function copyLocationBatch(
           break
         case 'media_assets':
           await copyMediaAssets(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest)
-          break
-        case 'site_content':
-          await copySiteContent(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest, idMappings, entityConfig.include_translations)
           break
         case 'reviews':
           await copyReviews(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest)
@@ -374,7 +370,7 @@ async function copyMediaAssets(
   }
 }
 
-async function copySiteContent(
+async function copyLocationPolicies(
   db: DbClient,
   sourceLocationId: string,
   targetLocationId: string,
@@ -382,49 +378,7 @@ async function copySiteContent(
   siteId: string,
   now: string,
   statements: BatchQuery[],
-  manifest: CopyManifest,
-  idMappings: Record<string, string>,
-  includeTranslations = true,
 ) {
-  const content = await queryAll<{ id: string; page: string; field: string; hero_media_asset_id: string | null }>(
-    db,
-    'SELECT id, page, field, hero_media_asset_id FROM site_content WHERE location_id = ? AND organization_id = ? AND site_id = ?',
-    [sourceLocationId, organizationId, siteId],
-  )
-
-  for (const item of content) {
-    const newId = crypto.randomUUID()
-    manifest.id_mappings[item.id] = newId
-    manifest.entities.site_content.new_ids.push(newId)
-
-    const newHeroMediaId = item.hero_media_asset_id ? (idMappings[item.hero_media_asset_id] ?? null) : null
-
-    statements.push({
-      query: `
-        INSERT INTO site_content (id, organization_id, site_id, location_id, page, field, content, hero_title, hero_subtitle, hero_media_asset_id, value, type, source, updated_at, updated_by, component)
-        SELECT ?, organization_id, site_id, ?, page, field, content, hero_title, hero_subtitle, ?, value, type, source, ?, updated_by, component
-        FROM site_content WHERE id = ?
-      `,
-      params: [newId, targetLocationId, newHeroMediaId, now, item.id],
-    })
-
-    if (includeTranslations) {
-      // site_content_translations has no FK to site_content.id — it's keyed by
-      // (organization_id, site_id, location_id, page, field, locale), so match on that.
-      statements.push({
-        query: `
-          INSERT INTO site_content_translations (id, organization_id, site_id, location_id, locale, page, field, content, hero_title, hero_subtitle, value, type, status, source_hash, translated_at, reviewed_at, updated_at, updated_by, component)
-          SELECT lower(hex(randomblob(16))), organization_id, site_id, ?, locale, page, field, content, hero_title, hero_subtitle, value, type, status, source_hash, translated_at, reviewed_at, ?, updated_by, component
-          FROM site_content_translations
-          WHERE organization_id = ? AND site_id = ? AND location_id = ? AND page = ? AND field = ?
-        `,
-        params: [targetLocationId, now, organizationId, siteId, sourceLocationId, item.page, item.field],
-      })
-    }
-
-    manifest.entities.site_content.copied++
-  }
-
   const locationPolicies = await queryAll<{ policy_type: 'reservation' | 'experience' }>(
     db,
     `

@@ -16,14 +16,17 @@ test.describe('restaurant translations', () => {
     const sourceTitle = `Translation test ${Date.now()}`
     const editorBase = `${baseURL}/api/editor/sites/${siteId}`
 
-    const saveContent = await request.post(`${editorBase}/content/save`, {
-      data: {
-        page: 'home',
-        changes: {
-          'hero.title': sourceTitle,
-          'hero.subtitle': 'Owner-visible source copy for translation tests',
-        }
-      }
+    const pagesResponse = await request.get(`${editorBase}/pages`)
+    expect(pagesResponse.status()).toBe(200)
+    const home = ((await pagesResponse.json()) as { pages: Array<{ id: string; path: string }> }).pages.find(page => page.path === '/')
+    expect(home).toBeTruthy()
+    const detailResponse = await request.get(`${editorBase}/pages/${home!.id}`)
+    const detail = await detailResponse.json() as { page: { title: string; blocks: Array<{ type: string; data: Record<string, unknown> }>; document: { updated_at: string } } }
+    const sourceBlocks = detail.page.blocks.map(block => block.type === 'hero'
+      ? { ...block, data: { ...block.data, title: sourceTitle, subtitle: 'Owner-visible source copy for translation tests' } }
+      : block)
+    const saveContent = await request.patch(`${editorBase}/pages/${home!.id}`, {
+      data: { blocks: sourceBlocks, expectedDocumentUpdatedAt: detail.page.document.updated_at },
     })
     expect(saveContent.status()).toBe(200)
 
@@ -71,21 +74,21 @@ test.describe('restaurant translations', () => {
     const publishBody = await publish.json()
     expect(publishBody.result.published_items).toBeGreaterThan(0)
 
-    const publicContent = await request.get(`${baseURL}/api/public/sites/${siteId}/content/home?locale=${localeCode}`)
+    const publicContent = await request.get(`${baseURL}/api/public/sites/${siteId}/pages?path=%2F&locale=${localeCode}`)
     expect(publicContent.status()).toBe(200)
     const publicContentBody = await publicContent.json()
-    expect(publicContentBody.locale).toBe(localeCode.toUpperCase().replace('QAA-', 'qaa-'))
-    const hero = publicContentBody.content.find((entry: { field: string }) => entry.field === 'hero')
+    expect(publicContentBody.page.locale).toBe(localeCode)
+    const hero = publicContentBody.page.blocks.find((entry: { type: string }) => entry.type === 'hero')
     expect(hero).toBeDefined()
-    expect(hero.hero_title).toContain('[TH]')
+    expect(hero.data.title).toContain('[TH]')
 
-    const changedSource = await request.post(`${editorBase}/content/save`, {
-      data: {
-        page: 'home',
-        changes: {
-          'hero.title': `${sourceTitle} updated`,
-        }
-      }
+    const changedDetailResponse = await request.get(`${editorBase}/pages/${home!.id}`)
+    const changedDetail = await changedDetailResponse.json() as { page: { blocks: Array<{ type: string; data: Record<string, unknown> }>; document: { updated_at: string } } }
+    const changedBlocks = changedDetail.page.blocks.map(block => block.type === 'hero'
+      ? { ...block, data: { ...block.data, title: `${sourceTitle} updated` } }
+      : block)
+    const changedSource = await request.patch(`${editorBase}/pages/${home!.id}`, {
+      data: { blocks: changedBlocks, expectedDocumentUpdatedAt: changedDetail.page.document.updated_at },
     })
     expect(changedSource.status()).toBe(200)
 

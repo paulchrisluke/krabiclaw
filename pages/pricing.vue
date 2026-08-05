@@ -3,10 +3,6 @@
   <LazyBlawbyTenantPage
     v-if="isBlawby"
     path="/pricing"
-    fallback-eyebrow="Pricing"
-    fallback-title="Pricing"
-    fallback-summary="Review available service paths and use the optional calculator when it is configured."
-    fallback-body="Pricing and eligibility details vary by service area and case type. Request a consultation for confirmed next steps."
   />
   <div v-else class="relative overflow-hidden bg-default min-h-screen py-20 lg:py-28">
     <!-- Ambient Mesh Background Lights -->
