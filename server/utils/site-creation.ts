@@ -203,15 +203,19 @@ async function performSeeding(
 
     await createSystemSubdomain(env, db, siteId, organizationId, resolvedSubdomain)
 
-    // New sites always start free — a paid org does not grant paid entitlements to
-    // another site until that site has its own Stripe subscription (see
-    // POST /api/billing/site-subscribe for how a site gets upgraded after creation).
-    await setSiteEntitlementsFromPlan(db, siteId, organizationId, 'free')
+    // New sites start with the organization's current plan projection. The
+    // organization subscription remains the sole recurring Stripe subscription.
+    const organizationPlan = await queryFirst<{ plan: string }>(db, `
+      SELECT plan FROM subscription
+      WHERE referenceId = ? AND status IN ('active', 'trialing')
+      ORDER BY updatedAt DESC LIMIT 1
+    `, [organizationId])
+    await setSiteEntitlementsFromPlan(db, siteId, organizationId, organizationPlan?.plan ?? 'free')
 
     await execute(db, `UPDATE sites SET onboarding_status = 'active', updated_at = ? WHERE id = ?`, [now, siteId])
 
-    // Surface whether another site in this org is already on a paid plan, so the
-    // caller can offer to subscribe this new site too (see POST /api/billing/site-subscribe).
+    // Surface whether another site in this org is already on a paid plan so the
+    // caller can offer the organization owner the Better Auth Stripe upgrade flow.
     const existingPaidSite = await queryFirst<{ plan: string }>(db, `
       SELECT sb.plan FROM site_billing sb
       WHERE sb.organization_id = ? AND sb.site_id != ? AND sb.status = 'active' AND sb.plan != 'free'

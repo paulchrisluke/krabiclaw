@@ -307,6 +307,7 @@
 <script setup lang="ts">
 const dashboardApi = useDashboardApi()
 
+import { authClient } from '~/lib/auth-client'
 import { CREDIT_BUNDLES, type CreditBundleSize } from '~/shared/creditBundles'
 const toast = useToast()
 
@@ -423,17 +424,24 @@ const upgradeToPlan = async (plan: string) => {
   trackPlanViewed(plan)
   trackCheckoutStarted(plan)
   try {
-    const response = await dashboardApi<{ checkoutUrl: string }>('/api/billing/checkout', {
-      method: 'POST',
-      body: { plan, interval: annual.value ? 'year' : 'month', siteId: selectedSiteId.value, gaClientId: getGaClientId() },
-      validate: (value): value is { checkoutUrl: string } =>
-        isRecord(value) && typeof value.checkoutUrl === 'string',
-    })
-    if (response?.checkoutUrl) {
-      await navigateTo(response.checkoutUrl, { external: true })
-    } else {
-      errorMessage.value = 'Failed to create checkout session'
+    const organizationId = billing.value?.organizationId
+    if (typeof organizationId !== 'string' || !organizationId) {
+      throw new Error('Organization ID not found')
     }
+    const response = await authClient.subscription.upgrade({
+      plan,
+      annual: annual.value,
+      referenceId: organizationId,
+      customerType: 'organization',
+      metadata: { site_id: selectedSiteId.value, ga_client_id: getGaClientId() },
+      successUrl: window.location.href,
+      cancelUrl: window.location.href,
+      disableRedirect: true,
+    })
+    if (response.error) throw new Error(response.error.message ?? 'Failed to create checkout session')
+    const checkoutUrl = response.data && 'url' in response.data ? response.data.url : null
+    if (!checkoutUrl) throw new Error('Better Auth Stripe did not return a checkout URL')
+    await navigateTo(checkoutUrl, { external: true })
   } catch (err) {
     errorMessage.value = err instanceof Error ? err.message : 'Failed to create checkout session'
   } finally {
@@ -450,17 +458,16 @@ const openBillingPortal = async () => {
       errorMessage.value = 'Organization ID not found'
       return
     }
-    const response = await dashboardApi<{ portalUrl: string }>('/api/billing/portal', {
-      method: 'POST',
-      body: { organizationId: orgId },
-      validate: (value): value is { portalUrl: string } =>
-        isRecord(value) && typeof value.portalUrl === 'string',
+    const response = await authClient.subscription.billingPortal({
+      referenceId: orgId,
+      customerType: 'organization',
+      returnUrl: window.location.href,
+      disableRedirect: true,
     })
-    if (response?.portalUrl) {
-      await navigateTo(response.portalUrl, { external: true })
-    } else {
-      errorMessage.value = 'Failed to open billing portal'
-    }
+    if (response.error) throw new Error(response.error.message ?? 'Failed to open billing portal')
+    const portalUrl = response.data && 'url' in response.data ? response.data.url : null
+    if (!portalUrl) throw new Error('Better Auth Stripe did not return a billing portal URL')
+    await navigateTo(portalUrl, { external: true })
   } catch (err) {
     errorMessage.value = err instanceof Error ? err.message : 'Failed to open billing portal'
   } finally {

@@ -1,6 +1,7 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import { syncPlaceToLocation } from '~/server/utils/google-places'
 import { queryAll } from '~/server/db'
+import { recordUsageEventDetached } from '~/server/utils/usage-metering'
 
 // NOTE: Google Business Profile API access was never provisioned.
 // All Google data for every location comes from the Places API (New, v1)
@@ -76,6 +77,7 @@ export default defineTask({
     }
 
     const syncResults: PlacesSyncResult[] = []
+    const runId = crypto.randomUUID()
 
     for (const loc of locations) {
       const locResult: PlacesSyncResult = {
@@ -85,6 +87,19 @@ export default defineTask({
         site_id: loc.site_id,
         reviews_upserted: 0,
       }
+
+      recordUsageEventDetached(db, {
+        organizationId: loc.organization_id,
+        siteId: loc.site_id,
+        resource: 'scheduled_task',
+        source: 'google_business_sync',
+        provider: 'krabiclaw',
+        channel: 'google_places',
+        quantity: 1,
+        unit: 'location_sync',
+        metadata: { task: 'social:google-places-sync', locationId: loc.id },
+        idempotencyKey: `scheduled-task:${runId}:${loc.id}`,
+      })
 
       try {
         const { reviewsUpserted } = await syncPlaceToLocation(
@@ -99,6 +114,21 @@ export default defineTask({
       } catch (err) {
         locResult.error = err instanceof Error ? err.message : String(err)
         console.error(`[google-business-sync] Places sync failed for location ${loc.id} (${loc.title}):`, locResult.error)
+      }
+
+      if (!locResult.error) {
+        recordUsageEventDetached(db, {
+          organizationId: loc.organization_id,
+          siteId: loc.site_id,
+          resource: 'maps_api',
+          source: 'scheduled_task',
+          provider: 'google',
+          channel: 'places_sync',
+          quantity: 1,
+          unit: 'location_sync',
+          metadata: { task: 'social:google-places-sync', locationId: loc.id },
+          idempotencyKey: `maps-api:${runId}:${loc.id}`,
+        })
       }
 
       syncResults.push(locResult)

@@ -83,6 +83,7 @@
 
 <script setup lang="ts">
 import type { UpsellType } from '~/composables/useServiceUpsell'
+import { authClient } from '~/lib/auth-client'
 
 const config = useRuntimeConfig()
 
@@ -205,17 +206,22 @@ async function handleCta() {
   try {
     if (RECURRING_TYPES.includes(type.value)) {
       const siteId = dashboard.siteId.value
-      if (!siteId) throw new Error('Choose a site before starting checkout')
-      const res = await $fetch<{ checkoutUrl: string }>('/api/billing/checkout', {
-        method: 'POST',
-        body: { siteId, plan: type.value, interval: 'month' },
+      const organizationId = dashboard.organization.value?.id
+      if (!siteId || !organizationId) throw new Error('Choose a site before starting checkout')
+      const res = await authClient.subscription.upgrade({
+        plan: type.value,
+        referenceId: organizationId,
+        customerType: 'organization',
+        metadata: { site_id: siteId },
+        successUrl: window.location.href,
+        cancelUrl: window.location.href,
+        disableRedirect: true,
       })
-      if (res.checkoutUrl) {
-        close()
-        await navigateTo(res.checkoutUrl, { external: true })
-      } else {
-        throw new Error('Missing checkoutUrl')
-      }
+      if (res.error) throw new Error(res.error.message ?? 'Unable to start subscription checkout')
+      const checkoutUrl = res.data && 'url' in res.data ? res.data.url : null
+      if (!checkoutUrl) throw new Error('Missing checkout URL from Better Auth Stripe')
+      close()
+      await navigateTo(checkoutUrl, { external: true })
     } else {
       const res = await $fetch<{ checkoutUrl: string }>('/api/billing/service-addon', {
         method: 'POST',

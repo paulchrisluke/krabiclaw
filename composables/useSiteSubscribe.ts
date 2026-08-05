@@ -14,15 +14,20 @@ const PLAN_LABELS: Record<string, string> = {
 // Per-flow callback — keyed by a unique transaction ID so concurrent callers don't clobber each other
 const _successHandlers = new Map<string, () => void>()
 
-async function _redirectToCheckout(siteId: string, plan: string) {
-  const res = await $fetch<{ checkoutUrl?: string }>('/api/billing/checkout', {
-    method: 'POST',
-    body: { siteId, plan },
+async function _redirectToCheckout(organizationId: string, siteId: string, plan: string) {
+  const response = await authClient.subscription.upgrade({
+    plan,
+    referenceId: organizationId,
+    customerType: 'organization',
+    metadata: { site_id: siteId },
+    successUrl: window.location.href,
+    cancelUrl: window.location.href,
+    disableRedirect: true,
   })
-  if (!res.checkoutUrl) {
-    throw new Error('Missing checkout URL from billing API')
-  }
-  await navigateTo(res.checkoutUrl, { external: true })
+  if (response.error) throw new Error(response.error.message ?? 'Unable to start subscription checkout')
+  const checkoutUrl = response.data && 'url' in response.data ? response.data.url : null
+  if (!checkoutUrl) throw new Error('Missing checkout URL from Better Auth Stripe')
+  await navigateTo(checkoutUrl, { external: true })
 }
 
 export const useSiteSubscribe = () => {
@@ -34,30 +39,19 @@ export const useSiteSubscribe = () => {
   const subscribing = useState<boolean>('site-subscribe:modal:subscribing', () => false)
 
   const toast = useToast()
+  const dashboard = useDashboardSite()
 
   const planLabel = computed(() => pendingPlan.value ? (PLAN_LABELS[pendingPlan.value] ?? pendingPlan.value) : '')
 
-  // Offers to subscribe a newly created site to the same plan another site in
-  // the org is already on. Shows a confirm modal if a saved card exists,
-  // otherwise falls back to Stripe Checkout.
+  // Better Auth Stripe owns the single organization subscription. The site is
+  // metadata only; it never creates a second subscription or uses a saved-card
+  // direct-charge path.
   async function offerSubscribe(siteId: string, plan: string, onSuccess?: () => void) {
     try {
-      const res = await $fetch<{ card: SiteSubscribeSavedCard | null }>('/api/billing/payment-method')
-      if (res.card) {
-        const txId = crypto.randomUUID()
-        savedCard.value = res.card
-        pendingSiteId.value = siteId
-        pendingPlan.value = plan
-        pendingTxId.value = txId
-        isOpen.value = true
-        if (onSuccess) _successHandlers.set(txId, onSuccess)
-        return
-      }
-    } catch {
-      // No saved card — fall through to Checkout
-    }
-    try {
-      await _redirectToCheckout(siteId, plan)
+      const organizationId = dashboard.organization.value?.id
+      if (!organizationId) throw new Error('Organization context is unavailable')
+      await _redirectToCheckout(organizationId, siteId, plan)
+      onSuccess?.()
     } catch {
       toast.add({ title: 'Unable to start checkout — please try again', color: 'error' })
     }
@@ -70,10 +64,9 @@ export const useSiteSubscribe = () => {
     const plan = pendingPlan.value
     const txId = pendingTxId.value
     try {
-      await $fetch('/api/billing/site-subscribe', {
-        method: 'POST',
-        body: { siteId, plan, txId },
-      })
+      const organizationId = dashboard.organization.value?.id
+      if (!organizationId) throw new Error('Organization context is unavailable')
+      await _redirectToCheckout(organizationId, siteId, plan)
       isOpen.value = false
       pendingSiteId.value = null
       pendingPlan.value = null
@@ -92,7 +85,9 @@ export const useSiteSubscribe = () => {
       if (txId) _successHandlers.delete(txId)
       if (data?.requiresCheckout) {
         try {
-          await _redirectToCheckout(siteId, plan)
+          const organizationId = dashboard.organization.value?.id
+          if (!organizationId) throw new Error('Organization context is unavailable')
+          await _redirectToCheckout(organizationId, siteId, plan)
         } catch {
           toast.add({ title: 'Unable to start checkout — please try again', color: 'error' })
         }

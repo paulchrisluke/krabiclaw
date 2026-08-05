@@ -436,12 +436,16 @@ export async function getActiveEntitlements(db: D1Database, organizationId: stri
   const placeholders = keys.map(() => '?').join(', ')
   const siteFilter = siteId ? 'AND se.site_id = ?' : ''
   const bindings = siteId ? [organizationId, ...keys, siteId] : [organizationId, ...keys]
-  const results = await queryAll<{ key: string }>(db, `
+  const siteResults = await queryAll<{ key: string }>(db, `
     SELECT se.key FROM site_entitlements se
     JOIN sites s ON s.id = se.site_id
     WHERE s.organization_id = ? AND se.key IN (${placeholders}) AND se.value = 'true' ${siteFilter}
   `, bindings)
-  return new Set(results.map(r => r.key))
+  const organizationResults = await queryAll<{ key: string }>(db, `
+    SELECT key FROM organization_entitlements
+    WHERE organization_id = ? AND key IN (${placeholders}) AND value = 'true'
+  `, [organizationId, ...keys])
+  return new Set([...siteResults, ...organizationResults].map(r => r.key))
 }
 
 export function roleSatisfies(actual: McpToolRole, minimum: McpToolRole) {

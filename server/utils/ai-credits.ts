@@ -1,6 +1,7 @@
 import { triggerAutoTopupIfNeeded } from '~/server/utils/auto-topup'
 import type { BillingEnv } from '~/server/utils/billing'
 import { execute, queryFirst, type DbClient } from '~/server/db'
+import { recordUsageEventDetached } from '~/server/utils/usage-metering'
 
 // Credit system: 1 credit = 1,000 tokens (input + output combined).
 // Free orgs get FREE_SIGNUP_CREDITS on first check. Paid orgs get higher limits.
@@ -28,6 +29,31 @@ export const ACTION_CREDIT_COSTS = {
 } as const
 
 export type FlatCreditAction = keyof typeof ACTION_CREDIT_COSTS
+
+export function usageForFlatCreditAction(action: FlatCreditAction): {
+  resource: 'messaging' | 'maps_api'
+  source: string
+  provider: string
+  channel: string
+  unit: string
+} {
+  if (action.startsWith('whatsapp_')) {
+    return {
+      resource: 'messaging',
+      source: 'notification',
+      provider: 'meta',
+      channel: 'whatsapp',
+      unit: 'message',
+    }
+  }
+  return {
+    resource: 'maps_api',
+    source: 'places',
+    provider: 'google',
+    channel: 'api',
+    unit: 'api_call',
+  }
+}
 
 /** Returns current balance, creating the row with signup credits if new org */
 export async function getOrCreateCredits(
@@ -72,6 +98,7 @@ export async function chargeCredits(
   opts: {
     siteId?: string
     action: string
+    source?: string
     model: string
     inputTokens: number
     outputTokens: number
@@ -130,6 +157,25 @@ export async function chargeCredits(
   if (!insertResult || Number(insertResult.meta.changes ?? 0) === 0) {
     throw new Error('AI usage log insert failed.')
   }
+
+  recordUsageEventDetached(db, {
+    organizationId,
+    siteId: opts.siteId,
+    resource: 'ai_inference',
+    source: opts.source ?? (opts.action === 'chowbot' ? 'chowbot' : 'server'),
+    provider: 'ai',
+    channel: opts.action,
+    quantity: creditsCharged,
+    unit: 'credit',
+    metadata: {
+      action: opts.action,
+      model: opts.model,
+      inputTokens: opts.inputTokens,
+      outputTokens: opts.outputTokens,
+      cfGatewayLogId: opts.cfGatewayLogId ?? null,
+    },
+    idempotencyKey: `ai-usage:${logId}`,
+  })
 
   const updated = await queryFirst<{ balance: number }>(db, 'SELECT balance FROM ai_credits WHERE organization_id = ? LIMIT 1', [organizationId])
 
@@ -213,6 +259,20 @@ export async function chargeFlatCredits(
       ).catch(() => {})
       throw logErr
     }
+
+    const usage = usageForFlatCreditAction(opts.action)
+    recordUsageEventDetached(db, {
+      organizationId,
+      siteId: opts.siteId,
+      ...usage,
+      quantity: 1,
+      metadata: {
+        action: opts.action,
+        creditsCharged: credits,
+        cfGatewayLogId: opts.cfGatewayLogId ?? null,
+      },
+      idempotencyKey: `flat-usage:${logId}`,
+    })
 
     const updated = await queryFirst<{ balance: number }>(db, 'SELECT balance FROM ai_credits WHERE organization_id = ? LIMIT 1', [organizationId])
     const newBalance = updated?.balance ?? 0

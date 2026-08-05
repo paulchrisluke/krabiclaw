@@ -1091,8 +1091,35 @@ export const organization = sqliteTable("organization", {
 	slug: text().notNull().unique(),
 	logo: text(),
 	metadata: text(),
+	// Better Auth Stripe plugin organization customer field.
+	stripeCustomerId: text(),
 	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 });
+
+export const subscription = sqliteTable("subscription", {
+	id: text().primaryKey(),
+	plan: text().notNull(),
+	referenceId: text().notNull(),
+	stripeCustomerId: text(),
+	stripeSubscriptionId: text().unique(),
+	status: text().default("incomplete").notNull(),
+	periodStart: integer({ mode: "timestamp" }),
+	periodEnd: integer({ mode: "timestamp" }),
+	trialStart: integer({ mode: "timestamp" }),
+	trialEnd: integer({ mode: "timestamp" }),
+	cancelAtPeriodEnd: integer().default(0).notNull(),
+	cancelAt: integer({ mode: "timestamp" }),
+	canceledAt: integer({ mode: "timestamp" }),
+	endedAt: integer({ mode: "timestamp" }),
+	seats: integer(),
+	billingInterval: text(),
+	stripeScheduleId: text(),
+	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
+	updatedAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
+}, (table) => [
+	index("subscription_referenceId_idx").on(table.referenceId),
+	index("subscription_status_idx").on(table.status),
+]);
 
 export const organization_billing = sqliteTable("organization_billing", {
 	id: text(),
@@ -2233,6 +2260,44 @@ export const stripe_webhook_events = sqliteTable("stripe_webhook_events", {
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
+export const usage_events = sqliteTable("usage_events", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().references(() => sites.id, { onDelete: "set null" } ),
+	resource: text().notNull(),
+	source: text().notNull(),
+	provider: text(),
+	channel: text(),
+	quantity: integer().notNull(),
+	unit: text().notNull(),
+	metadata_json: text(),
+	idempotency_key: text().notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	unique("usage_events_organization_id_idempotency_key_unique").on(table.organization_id, table.idempotency_key),
+	index("usage_events_organization_resource_created_idx").on(table.organization_id, table.resource, table.created_at),
+	index("usage_events_site_created_idx").on(table.site_id, table.created_at),
+]);
+
+export const usage_quota_grants = sqliteTable("usage_quota_grants", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	resource: text().notNull(),
+	quantity: integer().notNull(),
+	unit: text().notNull(),
+	period_key: text().notNull(),
+	period_start: text().notNull(),
+	period_end: text(),
+	grant_type: text().notNull(),
+	reason: text().notNull(),
+	created_by: text().references(() => user.id, { onDelete: "set null" } ),
+	idempotency_key: text().notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	unique("usage_quota_grants_organization_id_idempotency_key_unique").on(table.organization_id, table.idempotency_key),
+	index("usage_quota_grants_active_idx").on(table.organization_id, table.resource, table.period_start, table.period_end),
+]);
+
 export const themes = sqliteTable("themes", {
 	id: text().primaryKey(),
 	name: text().notNull(),
@@ -2316,6 +2381,9 @@ export const user = sqliteTable("user", {
 	banReason: text(),
 	banExpires: integer({ mode: "timestamp" }),
 	isAnonymous: integer().default(0).notNull(),
+	// Better Auth Stripe plugin user customer field. Organization subscriptions
+	// use organization.stripeCustomerId instead.
+	stripeCustomerId: text(),
 	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 	updatedAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 });

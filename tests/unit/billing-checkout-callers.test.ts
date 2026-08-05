@@ -9,9 +9,19 @@ test('public pricing sends authenticated users through site-scoped billing', asy
   assert.doesNotMatch(source, /\$fetch<[^>]+>\('\/api\/billing\/checkout'/)
 })
 
-test('dashboard upsell includes the selected site in checkout requests', async () => {
+test('dashboard recurring upsell uses the organization Better Auth Stripe subscription', async () => {
   const source = await readFile('components/billing/ServiceUpsellModal.vue', 'utf8')
 
   assert.match(source, /const siteId = dashboard\.siteId\.value/)
-  assert.match(source, /body: \{ siteId, plan: type\.value, interval: 'month' \}/)
+  assert.match(source, /authClient\.subscription\.upgrade/)
+  assert.match(source, /customerType: 'organization'/)
+  assert.match(source, /metadata: \{ site_id: siteId \}/)
+})
+
+test('saved-card site subscribe path is absent', async () => {
+  const source = await readFile('composables/useSiteSubscribe.ts', 'utf8')
+
+  assert.doesNotMatch(source, /\/api\/billing\/site-subscribe/)
+  assert.match(source, /authClient\.subscription\.upgrade/)
+  assert.match(source, /customerType: 'organization'/)
 })
