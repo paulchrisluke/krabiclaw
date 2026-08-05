@@ -6,6 +6,7 @@ import { resolve } from 'node:path'
 
 const migrationDir = resolve(process.cwd(), 'migrations')
 const migration0092 = readFileSync(resolve(migrationDir, '0092_tranquil_fixer.sql'), 'utf8')
+const migration0097 = readFileSync(resolve(migrationDir, '0097_repair_dangling_content_revisions.sql'), 'utf8')
 
 function databaseBeforeTenantPageMigration() {
   const db = new Database(':memory:')
@@ -107,4 +108,86 @@ test('0092 preserves location translation variants and keeps draft translations 
      WHERE page_id = 'page-test' AND locale = 'th'
   `).get() as { status: string; published_revision_id: string | null } | undefined
   assert.deepEqual(siteVariant, { status: 'draft', published_revision_id: null })
+})
+
+test('0092 preserves existing published content revisions while rebuilding content tables', () => {
+  const db = databaseBeforeTenantPageMigration()
+  db.pragma('foreign_keys = ON')
+  db.prepare(`
+    INSERT INTO content_documents
+      (id, owner_type, owner_id, draft_revision_id, published_revision_id)
+    VALUES (?, ?, ?, ?, ?)
+  `).run('blog-document', 'tenant_blog', 'blog-post', 'blog-revision', 'blog-revision')
+  db.prepare(`
+    INSERT INTO content_revisions
+      (id, document_id, snapshot_json, body_markdown, label)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(
+    'blog-revision',
+    'blog-document',
+    JSON.stringify({ blocks: [{ id: 'blog-block', type: 'markdown', position: 0, data: { markdown: 'Body' } }] }),
+    'Body',
+    'Published',
+  )
+  db.prepare(`
+    INSERT INTO content_blocks
+      (id, document_id, type, position, data_json)
+    VALUES (?, ?, ?, ?, ?)
+  `).run('blog-block', 'blog-document', 'markdown', 0, JSON.stringify({ markdown: 'Body' }))
+
+  db.exec(migration0092)
+
+  const revision = db.prepare(`
+    SELECT d.published_revision_id, r.document_id, r.body_markdown
+      FROM content_documents d
+      JOIN content_revisions r ON r.id = d.published_revision_id
+     WHERE d.id = ?
+  `).get('blog-document') as { published_revision_id: string; document_id: string; body_markdown: string } | undefined
+  assert.deepEqual(revision, {
+    published_revision_id: 'blog-revision',
+    document_id: 'blog-document',
+    body_markdown: 'Body',
+  })
+  assert.equal(
+    (db.prepare('SELECT COUNT(*) AS count FROM content_blocks WHERE document_id = ?').get('blog-document') as { count: number }).count,
+    1,
+  )
+})
+
+test('0097 repairs a dangling published blog revision from the canonical post body', () => {
+  const db = databaseBeforeTenantPageMigration()
+  db.exec(migration0092)
+  db.prepare(`
+    INSERT INTO blog_posts
+      (id, organization_id, site_id, title, slug, body, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run('blog-post', 'org-test', 'site-test', 'Post', 'post', '# Body', 'published')
+  db.prepare(`
+    INSERT INTO content_documents
+      (id, owner_type, owner_id, draft_revision_id, published_revision_id)
+    VALUES (?, ?, ?, ?, ?)
+  `).run('blog-document', 'tenant_blog', 'blog-post', 'missing-revision', 'missing-revision')
+
+  db.exec(migration0097)
+
+  const document = db.prepare(`
+    SELECT draft_revision_id, published_revision_id
+      FROM content_documents
+     WHERE id = ?
+  `).get('blog-document') as { draft_revision_id: string; published_revision_id: string } | undefined
+  assert.deepEqual(document, {
+    draft_revision_id: 'repaired-content-revision:blog-document',
+    published_revision_id: 'repaired-content-revision:blog-document',
+  })
+  const revision = db.prepare(`
+    SELECT body_markdown, snapshot_json
+      FROM content_revisions
+     WHERE id = ?
+  `).get('repaired-content-revision:blog-document') as { body_markdown: string; snapshot_json: string } | undefined
+  assert.equal(revision?.body_markdown, '# Body')
+  assert.equal(JSON.parse(revision?.snapshot_json ?? '{}').blocks[0].data.markdown, '# Body')
+  assert.equal(
+    (db.prepare('SELECT COUNT(*) AS count FROM content_blocks WHERE document_id = ?').get('blog-document') as { count: number }).count,
+    1,
+  )
 })

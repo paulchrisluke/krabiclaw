@@ -1,6 +1,52 @@
 PRAGMA foreign_keys=OFF;
 
-CREATE TABLE `__new_content_blocks` (
+-- D1 can still apply foreign-key actions while a migration rebuilds a
+-- referenced table, even when foreign_keys is disabled in the SQL batch.
+-- Preserve every child row explicitly and remove the child tables before
+-- replacing content_documents so an applied migration cannot cascade-delete
+-- published revisions or live blocks.
+CREATE TABLE `__content_documents_backup` AS
+SELECT id, owner_type, owner_id, draft_revision_id, published_revision_id, created_at, updated_at
+FROM `content_documents`;
+CREATE TABLE `__content_revisions_backup` AS
+SELECT id, document_id, snapshot_json, body_markdown, created_by, label, created_at
+FROM `content_revisions`;
+CREATE TABLE `__content_blocks_backup` AS
+SELECT id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at
+FROM `content_blocks`;
+DROP TABLE `content_blocks`;
+DROP TABLE `content_revisions`;
+
+CREATE TABLE `__new_content_documents` (
+  `id` text PRIMARY KEY NOT NULL,
+  `owner_type` text NOT NULL,
+  `owner_id` text NOT NULL,
+  `draft_revision_id` text,
+  `published_revision_id` text,
+  `created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+  `updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+  CONSTRAINT "content_documents_owner_type_check" CHECK(owner_type IN ('platform_blog', 'platform_doc', 'tenant_blog', 'tenant_page'))
+);
+INSERT INTO `__new_content_documents` SELECT * FROM `__content_documents_backup`;
+DROP TABLE `content_documents`;
+ALTER TABLE `__new_content_documents` RENAME TO `content_documents`;
+CREATE INDEX `content_documents_owner_idx` ON `content_documents` (`owner_type`,`owner_id`);
+CREATE UNIQUE INDEX `content_documents_owner_unique` ON `content_documents` (`owner_type`,`owner_id`);
+
+CREATE TABLE `content_revisions` (
+  `id` text PRIMARY KEY NOT NULL,
+  `document_id` text NOT NULL,
+  `snapshot_json` text NOT NULL,
+  `body_markdown` text NOT NULL,
+  `created_by` text,
+  `label` text,
+  `created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
+  FOREIGN KEY (`document_id`) REFERENCES `content_documents`(`id`) ON DELETE cascade
+);
+INSERT INTO `content_revisions` SELECT * FROM `__content_revisions_backup`;
+CREATE INDEX `content_revisions_document_created_idx` ON `content_revisions` (`document_id`,`created_at`);
+
+CREATE TABLE `content_blocks` (
   `id` text PRIMARY KEY NOT NULL,
   `document_id` text NOT NULL,
   `parent_block_id` text,
@@ -13,27 +59,13 @@ CREATE TABLE `__new_content_blocks` (
   FOREIGN KEY (`document_id`) REFERENCES `content_documents`(`id`) ON DELETE cascade,
   CONSTRAINT "content_blocks_type_check" CHECK(type IN ('heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'divider', 'ai_assistance', 'cta', 'callout', 'hero', 'button_group', 'feature_grid', 'testimonial_grid', 'contact_cta', 'booking_cta', 'donation_choices', 'offering_grid', 'location_grid'))
 );
-INSERT INTO `__new_content_blocks` SELECT * FROM `content_blocks`;
-DROP TABLE `content_blocks`;
-ALTER TABLE `__new_content_blocks` RENAME TO `content_blocks`;
+INSERT INTO `content_blocks` SELECT * FROM `__content_blocks_backup`;
 CREATE INDEX `content_blocks_document_position_idx` ON `content_blocks` (`document_id`,`position`);
 CREATE INDEX `content_blocks_parent_idx` ON `content_blocks` (`parent_block_id`);
 
-CREATE TABLE `__new_content_documents` (
-  `id` text PRIMARY KEY NOT NULL,
-  `owner_type` text NOT NULL,
-  `owner_id` text NOT NULL,
-  `draft_revision_id` text,
-  `published_revision_id` text,
-  `created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-  `updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-  CONSTRAINT "content_documents_owner_type_check" CHECK(owner_type IN ('platform_blog', 'platform_doc', 'tenant_blog', 'tenant_page'))
-);
-INSERT INTO `__new_content_documents` SELECT * FROM `content_documents`;
-DROP TABLE `content_documents`;
-ALTER TABLE `__new_content_documents` RENAME TO `content_documents`;
-CREATE INDEX `content_documents_owner_idx` ON `content_documents` (`owner_type`,`owner_id`);
-CREATE UNIQUE INDEX `content_documents_owner_unique` ON `content_documents` (`owner_type`,`owner_id`);
+DROP TABLE `__content_blocks_backup`;
+DROP TABLE `__content_revisions_backup`;
+DROP TABLE `__content_documents_backup`;
 
 CREATE TABLE `__new_tenant_pages` (
   `id` text PRIMARY KEY NOT NULL,
