@@ -65,6 +65,7 @@ export const usePublicPageData = async (options: {
   const url = computed(() => usePublicPageUrl(siteId, requestedParams.value));
 
   const shell = useSiteShellState();
+  const requestEvent = import.meta.server ? useRequestEvent() : undefined
   const deferClientFetch = options.server === false && import.meta.client;
 
   const asyncData =
@@ -91,6 +92,7 @@ export const usePublicPageData = async (options: {
                 isPublicPagePayload(value, requestedParams.value.page ?? 'home'),
               failureMessage: 'Public page failed',
               signal,
+              requestEvent,
             }),
           {
             server: options.server ?? true,
