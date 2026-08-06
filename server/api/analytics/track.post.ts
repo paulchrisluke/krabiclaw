@@ -13,8 +13,10 @@ import {
   insertPageviewEvent,
   insertPlatformPageviewEvent,
   isTrackablePath,
+  resolvePageviewTenantPageIdentity,
   resolveLocationIdFromPath
 } from '~/server/utils/pageview-tracking'
+import { normalizeLocale } from '~/server/utils/site-i18n'
 import { isPlatformPath } from '~/utils/platform-routes'
 
 interface PageviewRequest {
@@ -23,6 +25,7 @@ interface PageviewRequest {
   pagePath: string
   referrer?: string
   userAgent?: string
+  locale?: string
   durationSeconds?: number
   eventType?: 'pageview' | 'duration'
 }
@@ -76,6 +79,12 @@ export default defineEventHandler(async (event) => {
     const pagePath = typeof body.pagePath === 'string' ? body.pagePath.trim() : ''
     const referrer = typeof body.referrer === 'string' ? body.referrer.trim() : undefined
     const userAgent = typeof body.userAgent === 'string' ? body.userAgent.trim() : undefined
+    const rawLocale = typeof body.locale === 'string' ? body.locale.trim() : ''
+    const locale = rawLocale ? normalizeLocale(rawLocale) : null
+
+    if (rawLocale && !locale) {
+      return jsonResponse({ error: 'locale must be a valid BCP-47 locale' }, { status: 400 })
+    }
 
     if ((!isPlatform && !siteId) || !pagePath) {
       return jsonResponse(
@@ -195,10 +204,16 @@ export default defineEventHandler(async (event) => {
       })
     } else {
       const locationId = await resolveLocationIdFromPath(db, siteId, pagePath)
+      const page = await resolvePageviewTenantPageIdentity(db, siteId, pagePath, locale)
       await insertPageviewEvent(db, {
         siteId,
         locationId,
         pagePath,
+        pageId: page?.page_id ?? null,
+        pageType: page?.page_type ?? null,
+        recipe: page?.recipe ?? null,
+        locale: page?.locale ?? null,
+        revisionId: page?.revision_id ?? null,
         referrer: referrer || null,
         userAgent: userAgent || null,
         ipHash,
