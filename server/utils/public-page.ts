@@ -181,6 +181,7 @@ function tenantPageToContentRows(page: PublicTenantPage): SiteContent[] {
         hero_media_asset_id: typeof data.asset_id === 'string' ? data.asset_id : null,
         hero_public_url: typeof data.url === 'string' ? data.url : null,
         hero_kind: typeof data.kind === 'string' ? data.kind : null,
+        thumbnail_url: typeof data.thumbnail_url === 'string' ? data.thumbnail_url : null,
       })
       if (typeof data.eyebrow === 'string' && data.eyebrow.trim()) rows.push({ ...base, field: 'hero.kicker', content: data.eyebrow })
       continue

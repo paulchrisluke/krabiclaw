@@ -1,6 +1,7 @@
 <template>
   <img
     v-if="!hasError"
+    ref="imageEl"
     :src="cfImageVariant(props.src, { width: props.displayWidth }) ?? undefined"
     :srcset="cfImageSrcset(props.src, props.widths) ?? undefined"
     :sizes="props.sizes"
@@ -11,8 +12,8 @@
     :height="props.height"
     decoding="async"
     :class="{ 'animate-pulse bg-elevated': !isLoaded }"
-    @load="isLoaded = true"
-    @error="hasError = true"
+    @load="handleLoad"
+    @error="handleError"
   >
   <div
     v-else
@@ -67,6 +68,24 @@ const props = withDefaults(defineProps<{
 // broken-image glyph on load failure instead of a native broken-img icon.
 const isLoaded = ref(false)
 const hasError = ref(false)
+const imageEl = ref<HTMLImageElement | null>(null)
+const mounted = ref(false)
+
+function handleLoad() {
+  if (mounted.value) isLoaded.value = true
+}
+
+function handleError() {
+  if (mounted.value) hasError.value = true
+}
+
+onMounted(() => {
+  mounted.value = true
+  if (imageEl.value?.complete) {
+    if (imageEl.value.naturalWidth > 0) isLoaded.value = true
+    else hasError.value = true
+  }
+})
 
 watch(() => props.src, () => {
   isLoaded.value = false

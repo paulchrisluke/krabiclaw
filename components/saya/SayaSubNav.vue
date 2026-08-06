@@ -33,7 +33,7 @@ const props = defineProps<{
   active: 'overview' | 'menu' | 'experiences' | 'posts' | 'reviews' | 'photos' | 'qa' | 'contact'
 }>()
 
-const { menu, experiencesList } = await usePublicPageData()
+const { menu, experiencesList } = await usePublicPageData({ lazy: false })
 const { t } = useI18n()
 
 const hasMenu = computed(() => {
