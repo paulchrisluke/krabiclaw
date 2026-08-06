@@ -143,7 +143,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
 
-const { location, menu: pageMenu, menuItemsBySection, pending: menuLoading, config: pageConfig, experiencesList } = await usePublicPageData()
+const { location, menu: pageMenu, menuItemsBySection, pending: menuLoading, config: pageConfig, experiencesList } = await usePublicPageData({ lazy: false })
 const { formatDate } = useLocaleDate()
 const hasMenu = computed(() => ((pageMenu.value as { items?: unknown[] } | null)?.items?.length ?? 0) > 0)
 const locationExperienceHref = computed(() => resolveLocationExperienceHref(slug.value, experiencesList.value))
