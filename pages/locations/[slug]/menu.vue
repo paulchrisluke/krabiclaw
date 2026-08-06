@@ -24,7 +24,7 @@
     </template>
 
     <!-- Loading -->
-    <div v-if="menuLoading" class="mx-auto max-w-2xl px-4 py-20 text-center sm:px-6">
+    <div v-if="menuLoading && !pageMenu" class="mx-auto max-w-2xl px-4 py-20 text-center sm:px-6">
       <p class="text-muted">{{ $t('saya.menu_page.loading') }}</p>
     </div>
 
