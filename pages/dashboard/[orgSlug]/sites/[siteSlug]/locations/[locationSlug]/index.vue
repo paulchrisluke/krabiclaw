@@ -193,7 +193,7 @@ const currentOpeningState = computed(() => {
   return getTodayGoogleHours(hours, today) || 'Hours synced'
 })
 const workspaceLinks = computed(() => [
-  { feature: 'content', label: 'Content', icon: 'i-lucide-file-text', to: `${locationBase.value}/content`, visible: true },
+  { feature: 'content', label: 'Pages', icon: 'i-lucide-file-text', to: `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/pages`, visible: true },
   { feature: 'inbox', label: 'Inbox', icon: 'i-lucide-inbox', to: `${locationBase.value}/inbox`, visible: true },
   { feature: 'menu', label: 'Menu', icon: 'i-lucide-utensils', to: `${locationBase.value}/menu`, visible: hasMenu.value },
   { feature: 'services', label: 'Services', icon: 'i-lucide-briefcase', to: `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/professional-services`, visible: featureSet.value.has('services') },

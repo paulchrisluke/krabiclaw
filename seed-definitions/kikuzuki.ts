@@ -1,6 +1,7 @@
 import { compileCuratedSiteFixture } from './compile.ts'
 import type { CuratedMenuItemDefinition, CuratedSiteDefinition } from './contracts.ts'
 import { renderSiteBillingSql, renderSiteEntitlementsSql } from './billing-sql.ts'
+import { renderTenantPagesSeedSql } from './tenant-pages.ts'
 
 function escapeSql(value: string): string {
   return value.replace(/'/g, "''")
@@ -853,32 +854,15 @@ ${itemRows};${menuItemMediaSql}
 
 export function renderKikuzukiContentBlock(): string {
   const { identity } = compiledKikuzukiSeed
-
-  const contentRows = compiledKikuzukiSeed.siteContent
-    .map((entry) => `  (${[
-      sqlValue(entry.id),
-      sqlValue(identity.organizationId),
-      sqlValue(identity.siteId),
-      sqlValue(entry.locationId),
-      sqlValue(entry.page),
-      sqlValue(entry.field),
-      sqlValue(entry.content),
-      sqlValue(entry.heroTitle),
-      sqlValue(entry.heroSubtitle),
-      sqlValue(entry.heroVideoAssetId ?? entry.heroImageAssetId),
-      sqlValue(entry.type),
-      sqlValue(entry.source),
-    ].join(', ')})`)
-    .join(',\n')
-
-  return `-- BEGIN GENERATED: kikuzuki_content
-INSERT OR IGNORE INTO site_content
-  (id, organization_id, site_id, location_id,
-   page, field, content, hero_title, hero_subtitle, hero_media_asset_id,
-   type, source)
-VALUES
-${contentRows};
--- END GENERATED: kikuzuki_content`
+  return renderTenantPagesSeedSql({
+    siteId: identity.siteId,
+    organizationId: identity.organizationId,
+    locales: compiledKikuzukiSeed.siteLocales.map(locale => locale.locale),
+    rows: compiledKikuzukiSeed.siteContent,
+    translations: compiledKikuzukiSeed.siteContentTranslations,
+    sqlValue,
+    sqlJson,
+  })
 }
 
 export function renderKikuzukiExperienceBlock(): string {

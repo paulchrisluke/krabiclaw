@@ -2,6 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { queryFirst } from '~/server/db'
 import { getStripe } from '~/server/utils/billing'
+import type Stripe from 'stripe'
 
 export default defineEventHandler(async (event) => {
   const token = getRouterParam(event, 'token')
@@ -64,10 +65,33 @@ export default defineEventHandler(async (event) => {
   if (row.invited_plan && env.STRIPE_SECRET_KEY) {
     try {
       const stripe = getStripe(env)
-      const products = await stripe.products.list({ active: true, limit: 100 })
-      const product = products.data.find((p) => p.metadata?.plan_id === row.invited_plan)
+      const products: Stripe.Product[] = []
+      let productsStartingAfter: string | undefined
+      do {
+        const page = await stripe.products.list({
+          active: true,
+          limit: 100,
+          ...(productsStartingAfter ? { starting_after: productsStartingAfter } : {}),
+        })
+        products.push(...page.data)
+        productsStartingAfter = page.has_more ? page.data.at(-1)?.id : undefined
+      } while (productsStartingAfter)
+
+      const product = products.find((p) => p.metadata?.plan_id === row.invited_plan)
       if (product) {
-        const prices = await stripe.prices.list({ active: true, product: product.id, type: 'recurring', limit: 100 })
+        const prices: Stripe.Price[] = []
+        let pricesStartingAfter: string | undefined
+        do {
+          const page = await stripe.prices.list({
+            active: true,
+            product: product.id,
+            type: 'recurring',
+            limit: 100,
+            ...(pricesStartingAfter ? { starting_after: pricesStartingAfter } : {}),
+          })
+          prices.push(...page.data)
+          pricesStartingAfter = page.has_more ? page.data.at(-1)?.id : undefined
+        } while (pricesStartingAfter)
 
         let coupon_duration: string | null = null
         let coupon_duration_months: number | null = null
@@ -91,7 +115,7 @@ export default defineEventHandler(async (event) => {
           return null
         }
 
-        const monthPrice = prices.data.find((p) => p.recurring?.interval === 'month')
+        const monthPrice = prices.find((p) => p.recurring?.interval === 'month' && p.recurring.interval_count === 1)
         if (monthPrice?.unit_amount) {
           pricing_month = {
             base_cents: monthPrice.unit_amount,
@@ -101,7 +125,7 @@ export default defineEventHandler(async (event) => {
           }
         }
 
-        const yearPrice = prices.data.find((p) => p.recurring?.interval === 'year')
+        const yearPrice = prices.find((p) => p.recurring?.interval === 'year' && p.recurring.interval_count === 1)
         if (yearPrice?.unit_amount) {
           pricing_year = {
             base_cents: yearPrice.unit_amount,

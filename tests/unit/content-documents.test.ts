@@ -78,9 +78,16 @@ async function execute(db: Store, query: string, params: unknown[] = []) {
   }
 
   if (query.startsWith('INSERT INTO content_revisions')) {
-    const [id, document_id, snapshot_json, body_markdown, created_by, label, created_at] = params
-    db.contentRevisions.push({ id, document_id, snapshot_json, body_markdown, created_by, label, created_at })
+    const [id, document_id, snapshot_json, body_markdown, created_by, label, created_at, published_at] = params
+    db.contentRevisions.push({ id, document_id, snapshot_json, body_markdown, created_by, label, created_at, published_at })
     return { meta: { changes: 1 } }
+  }
+
+  if (query.startsWith('UPDATE content_revisions SET published_at = COALESCE(published_at, ?)')) {
+    const [published_at, id, document_id] = params
+    const revision = db.contentRevisions.find(row => row.id === id && row.document_id === document_id)
+    if (revision) revision.published_at = revision.published_at ?? published_at
+    return { meta: { changes: revision ? 1 : 0 } }
   }
 
   if (query.startsWith('UPDATE content_documents SET draft_revision_id = ?, published_revision_id = ?')) {

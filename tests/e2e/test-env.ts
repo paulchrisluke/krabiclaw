@@ -130,6 +130,21 @@ export function blawbyTestBaseUrl() {
   return base.toString().replace(/\/$/, '')
 }
 
+export function kikuzukiTestBaseUrl() {
+  const base = new URL(testBaseUrl())
+  if (['localhost', '127.0.0.1', '[::1]'].includes(base.hostname)) {
+    base.hostname = 'kikuzuki-krabi-thailand.localhost'
+    return base.toString().replace(/\/$/, '')
+  }
+  if (isPreviewContext(base.hostname) || isQuickTunnelHost(base.hostname)) {
+    return base.toString().replace(/\/$/, '')
+  }
+  base.hostname = base.hostname.startsWith('kikuzuki-krabi-thailand.')
+    ? base.hostname
+    : `kikuzuki-krabi-thailand.${base.hostname}`
+  return base.toString().replace(/\/$/, '')
+}
+
 export function tenantTestExtraHeaders(): Record<string, string> {
   const base = new URL(testBaseUrl())
   return isPreviewContext(base.hostname) ? previewWorkerHeaders('demo') : {}
@@ -143,6 +158,13 @@ export function potteryHouseTestExtraHeaders(): Record<string, string> {
 export function blawbyTestExtraHeaders(): Record<string, string> {
   const base = new URL(testBaseUrl())
   return isPreviewContext(base.hostname) ? previewWorkerHeaders('ncls') : {}
+}
+
+export function kikuzukiTestExtraHeaders(): Record<string, string> {
+  const base = new URL(testBaseUrl())
+  return isPreviewContext(base.hostname)
+    ? previewWorkerHeaders('kikuzuki-krabi-thailand')
+    : {}
 }
 
 export function devLoginUrl(baseURL: string, userId?: string) {

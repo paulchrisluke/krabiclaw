@@ -1,7 +1,7 @@
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '../db/index.ts'
 
-export type ContentDocumentOwnerType = 'platform_blog' | 'platform_doc' | 'tenant_blog'
-export type ContentBlockType = 'heading' | 'markdown' | 'image' | 'gallery' | 'faq' | 'how_to' | 'divider' | 'ai_assistance' | 'cta' | 'callout'
+export type ContentDocumentOwnerType = 'platform_blog' | 'platform_doc' | 'tenant_blog' | 'tenant_page'
+export type ContentBlockType = 'heading' | 'markdown' | 'image' | 'gallery' | 'faq' | 'how_to' | 'divider' | 'ai_assistance' | 'cta' | 'callout' | 'hero' | 'button_group' | 'feature_grid' | 'testimonial_grid' | 'contact_cta' | 'booking_cta' | 'donation_choices' | 'offering_grid' | 'location_grid'
 
 export interface ContentDocumentRow {
   id: string
@@ -33,6 +33,7 @@ export interface ContentRevisionRow {
   created_by: string | null
   label: string | null
   created_at: string
+  published_at: string | null
 }
 
 export interface ContentBlockSnapshot {
@@ -55,7 +56,7 @@ export interface ContentBlockInput {
 
 type ContentBlockWriteInput = Omit<ContentBlockSnapshot, 'id'> & { id?: string; updated_at?: string | null }
 
-const VALID_BLOCK_TYPES: readonly ContentBlockType[] = ['heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'divider', 'ai_assistance', 'cta', 'callout']
+const VALID_BLOCK_TYPES: readonly ContentBlockType[] = ['heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'divider', 'ai_assistance', 'cta', 'callout', 'hero', 'button_group', 'feature_grid', 'testimonial_grid', 'contact_cta', 'booking_cta', 'donation_choices', 'offering_grid', 'location_grid']
 const HEADING_RE = /^(#{1,6})\s+(.+?)\s*$/
 
 function badRequest(message: string): never {
@@ -183,7 +184,7 @@ export async function getContentDocumentById(db: DbClient, documentId: string) {
   )
 }
 
-export async function ensureContentDocument(db: D1Database, ownerType: ContentDocumentOwnerType, ownerId: string) {
+export async function ensureContentDocument(db: DbClient, ownerType: ContentDocumentOwnerType, ownerId: string) {
   const existing = await getContentDocumentByOwner(db, ownerType, ownerId)
   if (existing) return existing
 
@@ -222,10 +223,12 @@ export async function ensureContentDocument(db: D1Database, ownerType: ContentDo
 // with per-block writes/diffed revisions if documents grow large enough for
 // this to matter.
 async function writeRevisionFromBlocks(
-  db: D1Database,
+  db: DbClient,
   document: ContentDocumentRow,
   blocks: ContentBlockWriteInput[],
   opts: {
+    revisionId?: string
+    snapshotMetadata?: Record<string, unknown>
     bodyMarkdown?: string
     createdBy?: string | null
     label?: string | null
@@ -238,7 +241,7 @@ async function writeRevisionFromBlocks(
   } = {},
 ) {
   const now = new Date().toISOString()
-  const revisionId = crypto.randomUUID()
+  const revisionId = opts.revisionId ?? crypto.randomUUID()
   const snapshots: Array<ContentBlockSnapshot & { updated_at: string }> = blocks.map((block, index) => ({
     id: block.id ?? crypto.randomUUID(),
     parent_block_id: block.parent_block_id ?? null,
@@ -321,9 +324,9 @@ async function writeRevisionFromBlocks(
     ...documentGuardQueries,
     ...liveBlockQueries,
     {
-      query: `INSERT INTO content_revisions (id, document_id, snapshot_json, body_markdown, created_by, label, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      params: [revisionId, document.id, JSON.stringify({ blocks: snapshots }), bodyMarkdown, opts.createdBy ?? null, opts.label ?? null, now],
+      query: `INSERT INTO content_revisions (id, document_id, snapshot_json, body_markdown, created_by, label, created_at, published_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      params: [revisionId, document.id, JSON.stringify({ ...(opts.snapshotMetadata ? { schemaVersion: 1, metadata: opts.snapshotMetadata } : {}), blocks: snapshots }), bodyMarkdown, opts.createdBy ?? null, opts.label ?? null, now, opts.publish || opts.publishOnly ? now : null],
     },
     {
       query: opts.publishOnly
@@ -359,7 +362,7 @@ async function writeRevisionFromBlocks(
 }
 
 export async function syncContentDocumentFromMarkdown(
-  db: D1Database,
+  db: DbClient,
   opts: {
     ownerType: ContentDocumentOwnerType
     ownerId: string
@@ -402,7 +405,7 @@ export async function syncContentDocumentFromMarkdown(
 }
 
 export async function syncContentDocumentFromBlocks(
-  db: D1Database,
+  db: DbClient,
   opts: {
     ownerType: ContentDocumentOwnerType
     ownerId: string
@@ -440,11 +443,14 @@ export async function syncContentDocumentFromBlocks(
 // to — not for adding a document to an already-existing owner row (use
 // ensureContentDocument/syncContentDocumentFromBlocks for that).
 export async function createContentDocumentWithBlocks(
-  db: D1Database,
+  db: DbClient,
   ownerType: ContentDocumentOwnerType,
   ownerId: string,
   blocks: ContentBlockInput[],
   opts: {
+    documentId?: string
+    revisionId?: string
+    snapshotMetadata?: Record<string, unknown>
     bodyMarkdown?: string
     createdBy?: string | null
     label?: string | null
@@ -454,7 +460,7 @@ export async function createContentDocumentWithBlocks(
   } = {},
 ) {
   const now = new Date().toISOString()
-  const documentId = crypto.randomUUID()
+  const documentId = opts.documentId ?? crypto.randomUUID()
   const document: ContentDocumentRow = {
     id: documentId,
     owner_type: ownerType,
@@ -476,6 +482,8 @@ export async function createContentDocumentWithBlocks(
     level: block.level ?? null,
     data: block.data,
   })), {
+    revisionId: opts.revisionId,
+    snapshotMetadata: opts.snapshotMetadata,
     bodyMarkdown: opts.bodyMarkdown,
     createdBy: opts.createdBy,
     label: opts.label,
@@ -488,7 +496,7 @@ export async function createContentDocumentWithBlocks(
   return { document: currentDocument, ...revision }
 }
 
-export async function publishCurrentContentRevision(db: D1Database, ownerType: ContentDocumentOwnerType, ownerId: string) {
+export async function publishCurrentContentRevision(db: DbClient, ownerType: ContentDocumentOwnerType, ownerId: string) {
   const document = await getContentDocumentByOwner(db, ownerType, ownerId)
   if (!document?.draft_revision_id) return null
   const revision = await queryFirst<Pick<ContentRevisionRow, 'body_markdown'> | null>(
@@ -498,16 +506,22 @@ export async function publishCurrentContentRevision(db: D1Database, ownerType: C
   )
   if (!revision) notFound('Content revision not found')
   const now = new Date().toISOString()
-  const queries: { query: string; params: unknown[] }[] = [{
-    query: 'UPDATE content_documents SET published_revision_id = ?, updated_at = ? WHERE id = ?',
-    params: [document.draft_revision_id, now, document.id],
-  }]
+  const queries: { query: string; params: unknown[] }[] = [
+    {
+      query: 'UPDATE content_revisions SET published_at = COALESCE(published_at, ?) WHERE id = ? AND document_id = ?',
+      params: [now, document.draft_revision_id, document.id],
+    },
+    {
+      query: 'UPDATE content_documents SET published_revision_id = ?, updated_at = ? WHERE id = ?',
+      params: [document.draft_revision_id, now, document.id],
+    },
+  ]
   if (ownerType === 'platform_blog' || ownerType === 'tenant_blog') {
     queries.push({
       query: 'UPDATE blog_posts SET body = ?, updated_at = ? WHERE id = ?',
       params: [revision.body_markdown, now, ownerId],
     })
-  } else {
+  } else if (ownerType === 'platform_doc') {
     queries.push({
       query: 'UPDATE platform_docs SET body = ?, updated_at = ? WHERE id = ?',
       params: [revision.body_markdown, now, ownerId],
@@ -517,7 +531,7 @@ export async function publishCurrentContentRevision(db: D1Database, ownerType: C
   return { ...document, published_revision_id: document.draft_revision_id, updated_at: now }
 }
 
-export async function publishContentDocumentRevision(db: D1Database, documentId: string) {
+export async function publishContentDocumentRevision(db: DbClient, documentId: string) {
   const document = await getContentDocumentById(db, documentId)
   if (!document) notFound('Content document not found')
   if (!document.draft_revision_id) badRequest('Content document has no draft revision')
@@ -534,6 +548,10 @@ export async function publishContentDocumentRevision(db: D1Database, documentId:
 
   const now = new Date().toISOString()
   const queries: { query: string; params: unknown[] }[] = [
+    {
+      query: 'UPDATE content_revisions SET published_at = COALESCE(published_at, ?) WHERE id = ? AND document_id = ?',
+      params: [now, revision.id, document.id],
+    },
     {
       query: 'UPDATE content_documents SET published_revision_id = ?, updated_at = ? WHERE id = ?',
       params: [revision.id, now, document.id],
@@ -560,7 +578,7 @@ export async function publishContentDocumentRevision(db: D1Database, documentId:
   return { success: true, document_id: document.id, revision_id: revision.id, body_markdown: revision.body_markdown }
 }
 
-export async function unpublishContentDocument(db: D1Database, ownerType: ContentDocumentOwnerType, ownerId: string) {
+export async function unpublishContentDocument(db: DbClient, ownerType: ContentDocumentOwnerType, ownerId: string) {
   const document = await getContentDocumentByOwner(db, ownerType, ownerId)
   if (!document) return null
   const now = new Date().toISOString()
@@ -572,7 +590,7 @@ export async function unpublishContentDocument(db: D1Database, ownerType: Conten
   return { ...document, published_revision_id: null, updated_at: now }
 }
 
-export async function deleteContentDocumentForOwner(db: D1Database, ownerType: ContentDocumentOwnerType, ownerId: string) {
+export async function deleteContentDocumentForOwner(db: DbClient, ownerType: ContentDocumentOwnerType, ownerId: string) {
   await execute(
     db,
     'DELETE FROM content_documents WHERE owner_type = ? AND owner_id = ?',
@@ -622,7 +640,7 @@ async function listBlocksForDocument(db: DbClient, documentId: string) {
 }
 
 export async function appendContentBlock(
-  db: D1Database,
+  db: DbClient,
   documentId: string,
   input: ContentBlockInput & { after_block_id?: string | null; createdBy?: string | null; label?: string | null },
 ) {
@@ -675,7 +693,7 @@ export async function appendContentBlock(
 }
 
 export async function replaceContentBlock(
-  db: D1Database,
+  db: DbClient,
   blockId: string,
   input: { data: Record<string, unknown>; expected_updated_at: string; createdBy?: string | null; label?: string | null },
 ) {
@@ -704,7 +722,7 @@ export async function replaceContentBlock(
 }
 
 export async function deleteContentBlock(
-  db: D1Database,
+  db: DbClient,
   blockId: string,
   input: { expected_updated_at: string; createdBy?: string | null; label?: string | null },
 ) {
@@ -785,11 +803,11 @@ export async function getPublishedContentSnapshot(db: DbClient, ownerType: Conte
 }
 
 export async function replaceContentDocumentBlocks(
-  db: D1Database,
+  db: DbClient,
   ownerType: ContentDocumentOwnerType,
   ownerId: string,
   blocks: ContentBlockInput[],
-  opts: { expected_document_updated_at: string; createdBy?: string | null; label?: string | null; publish?: boolean; additionalQueriesBefore?: BatchQuery[]; additionalQueriesAfter?: BatchQuery[] },
+  opts: { expected_document_updated_at: string; createdBy?: string | null; label?: string | null; publish?: boolean; revisionId?: string; snapshotMetadata?: Record<string, unknown>; additionalQueriesBefore?: BatchQuery[]; additionalQueriesAfter?: BatchQuery[] },
 ) {
   const document = await getContentDocumentByOwner(db, ownerType, ownerId)
   if (!document) notFound('Content document not found')
@@ -808,6 +826,8 @@ export async function replaceContentDocumentBlocks(
     updated_at: null,
   }))
   return await writeRevisionFromBlocks(db, document, snapshots, {
+    revisionId: opts.revisionId,
+    snapshotMetadata: opts.snapshotMetadata,
     createdBy: opts.createdBy,
     label: opts.label ?? 'Editor autosave',
     publish: opts.publish,
@@ -821,7 +841,7 @@ export async function replaceContentDocumentBlocks(
  * draft revision. Used when migrating an already-published revision while a
  * newer, intentionally unpublished draft exists. */
 export async function replacePublishedContentDocumentBlocks(
-  db: D1Database,
+  db: DbClient,
   ownerType: ContentDocumentOwnerType,
   ownerId: string,
   blocks: ContentBlockInput[],
@@ -916,7 +936,7 @@ export function mergeLegacyBlogComponents(
  * never removes legacy/unknown blocks. Compatibility component rows remain
  * readable until all external consumers have migrated. */
 export async function backfillLegacyBlogStructuredBlocks(
-  db: D1Database,
+  db: DbClient,
   opts: { apply?: boolean; siteId?: string | null } = {},
 ) {
   const rows = await queryAll<{

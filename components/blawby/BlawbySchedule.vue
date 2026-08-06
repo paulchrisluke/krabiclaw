@@ -59,6 +59,7 @@
 
 <script setup lang="ts">
 import type { PublicSiteQa } from '~/types/blawby'
+import { findTenantPageBlock } from '~/utils/tenant-page-blocks'
 
 const { data, error } = await useBlawbyRoute('schedule')
 if (error.value) throw error.value
@@ -69,7 +70,8 @@ const { identity, consultation, compliance } = await useBlawbyShell()
 const org = useBlawbyOrgIdentity(identity, compliance)
 
 function block(type: string) {
-  return page.value.components.find(component => component.type === type) ?? null
+  const canonicalType = type === 'schedule_hero' ? 'hero' : type === 'schedule_guidance' ? 'markdown' : type === 'schedule_cta' ? 'booking_cta' : type === 'schedule_qa' ? 'faq' : undefined
+  return findTenantPageBlock(page.value.blocks, type, canonicalType)
 }
 function optionalString(value: unknown) {
   return typeof value === 'string' && value ? value : null

@@ -5,7 +5,7 @@ import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { copyLocationBatch, type CopyBatchInput, type CopyEntityType } from '~/server/utils/copy-paste'
 
 const VALID_ENTITY_TYPES: CopyEntityType[] = [
-  'menus', 'menu_items', 'media_assets', 'site_content', 'reviews', 'location_qa', 'experiences',
+  'menus', 'menu_items', 'media_assets', 'reviews', 'location_qa', 'experiences',
 ]
 
 export default defineEventHandler(async (event) => {

@@ -3,6 +3,7 @@ import { createAuthClient } from 'better-auth/vue'
 import { adminClient, anonymousClient, organizationClient, phoneNumberClient } from 'better-auth/client/plugins'
 import { organizationAccessControl, organizationRoles } from '~/utils/organization-access'
 import { oauthProviderClient } from '@better-auth/oauth-provider/client'
+import { stripeClient } from '@better-auth/stripe/client'
 
 export const authClient = createAuthClient({
   plugins: [
@@ -11,6 +12,7 @@ export const authClient = createAuthClient({
     organizationClient({ ac: organizationAccessControl, roles: organizationRoles }),
     phoneNumberClient(),
     oauthProviderClient(),
+    stripeClient({ subscription: true }),
   ]
 })
 

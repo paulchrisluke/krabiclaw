@@ -9,7 +9,6 @@ const PROTECTED_PARENT_TABLES = new Set([
   'media_assets',
   'menu_items',
   'posts',
-  'site_content',
 ])
 const IMMUTABLE_ALLOWLIST = new Set(['0047_free_molecule_man.sql'])
 const FIRST_ENFORCED_MIGRATION = 72

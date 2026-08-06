@@ -70,7 +70,7 @@ export default defineEventHandler(async (event) => {
       sb.status AS subscription_status,
       sb.current_period_end,
       ob.stripe_customer_id,
-      sb.stripe_subscription_id,
+      ob.stripe_subscription_id,
       pt.to_email AS pending_transfer_email,
       wm.userId AS impersonation_user_id,
       o.createdAt AS created_at
@@ -82,7 +82,7 @@ export default defineEventHandler(async (event) => {
     LEFT JOIN workspace_member wm ON wm.organizationId = o.id AND wm.rn = 1
     WHERE COALESCE(sb.plan, s.plan) IN ('growth', 'managed', 'seo_accelerator')
     ORDER BY
-      CASE sb.plan
+      CASE COALESCE(sb.plan, s.plan)
         WHEN 'seo_accelerator' THEN 0
         WHEN 'managed' THEN 1
         WHEN 'growth' THEN 2

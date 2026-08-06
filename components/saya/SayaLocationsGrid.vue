@@ -73,7 +73,6 @@
         />
       </div>
       <div class="text-center pt-8">
-        <ChowBotPromptTrigger :prompt="sayaEmptyStates.locations.hint" />
         <div v-if="isAuthenticated" class="mt-2">
           <NuxtLink to="/dashboard" class="inline-flex items-center justify-center rounded-full border border-default px-3 py-1.5 text-sm font-medium text-default no-underline transition hover:bg-muted">
             {{ connectGoogleCta }}
@@ -87,7 +86,6 @@
 <script setup lang="ts">
 import AppSection from '~/components/ui/AppSection.vue'
 import SayaEmptyExample from '~/components/saya/SayaEmptyExample.vue'
-import ChowBotPromptTrigger from '~/components/chowbot/ChowBotPromptTrigger.vue'
 import { sayaEmptyStates } from '~/config/saya-empty-states'
 
 interface Props {

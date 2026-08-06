@@ -6,7 +6,6 @@ import { hasCredits, chargeCredits } from "~/server/utils/ai-credits";
 import { runMcpExecutorToolForChowbot } from "~/server/utils/mcp-executor/chowbot-adapter";
 import { normalizeRole } from "~/server/utils/mcp-auth";
 import { setConfig } from "~/server/utils/site-config";
-import { upsertSiteLocale } from "~/server/utils/site-locales";
 import { getPlaceDetails, searchPlaces } from "~/server/utils/google-places";
 import { upsertChannelState } from "~/server/utils/chowbot-conversations";
 import { CHOWBOT_MODEL } from "~/server/utils/ai-models";
@@ -16,6 +15,7 @@ import {
   WEEKDAY_NAMES,
 } from "~/server/utils/experiences";
 import { contentRegistry } from "~/config/content-registry";
+import { cmsCapabilityRegistry } from "~/config/cms-registry";
 import {
   CHOWBOT_TOOLS,
   CHOWBOT_CONFIRM_REQUIRED,
@@ -73,6 +73,7 @@ export interface RunChowBotOptions {
   currentPage?: string;
   locationId?: string | null;
   channel?: "dashboard" | "whatsapp";
+  sessionId?: string | null;
   pendingMedia?: { assetId: string; siteId: string };
   onEvent?: (_event: ChowBotRunEvent) => Promise<void> | void;
 }
@@ -120,7 +121,8 @@ function getToolString(
 }
 
 function isSiteContentPage(page: string): page is keyof typeof contentRegistry {
-  return Object.prototype.hasOwnProperty.call(contentRegistry, page);
+  return Object.prototype.hasOwnProperty.call(contentRegistry, page)
+    || cmsCapabilityRegistry.some((capability) => capability.pages.some((candidate) => candidate.id === page));
 }
 
 function isAllowedGoogleMapsHost(hostname: string): boolean {
@@ -161,6 +163,7 @@ async function executeTool(
     agentMessages?: AiMessage[];
     locationId?: string | null;
     channel?: "dashboard" | "whatsapp";
+    sessionId?: string | null;
     pendingMedia?: { assetId: string; siteId: string };
     forceSubdomainRegistrationFailure?: boolean;
   },
@@ -186,6 +189,7 @@ async function executeTool(
     organizationId: orgId,
     siteId,
     role: normalizedRole,
+    sessionId: ctx.sessionId,
   };
 
   try {
@@ -517,6 +521,7 @@ async function executeTool(
       });
       await chargeCredits(db, orgId, {
         siteId,
+        sessionId: ctx.sessionId,
         action: "generate_image",
         model: IMAGE_MODEL,
         inputTokens: generated.inputTokens,
@@ -551,26 +556,23 @@ async function executeTool(
       });
     }
 
-    // Regression fix: update_page_content/delete_content_field used to
-    // maintain their own inline hero-field read-merge-write logic
-    // (readHeroContentState/heroColumnForField/isEmptyHeroState), duplicating
-    // what mcp-workflows.ts's updatePageContent/deleteContentField already
-    // do correctly via a CASE-based partial upsert — that shared function
-    // accepts the exact same "hero.title"/"hero.subtitle"/"hero.media"
-    // field keys via HERO_FIELD_ALIASES. deleteContentField's
-    // hero handling didn't exist at all before this branch (see the fix in
-    // mcp-workflows.ts) — MCP's delete_content_field silently deleted
-    // nothing for hero sub-fields, since they live as columns on a single
-    // row keyed by field="hero", not their own row.
-
-    // Both delegate to mcp-executor/content.ts's get/update_professional_service_content
-    // cases, which call the same getProfessionalServiceContent/upsertProfessionalServiceContent
-    // functions the dashboard editor and MCP both use — see professional-services-editor.ts.
     case "get_professional_service_content":
       return runMcpExecutorToolForChowbot(executorSite, "get_professional_service_content", input);
 
     case "update_professional_service_content":
       return runMcpExecutorToolForChowbot(executorSite, "update_professional_service_content", input);
+
+    case "list_tenant_pages":
+    case "get_tenant_page":
+    case "create_tenant_page":
+    case "update_tenant_page_draft":
+    case "publish_tenant_page":
+    case "unpublish_tenant_page":
+    case "change_tenant_page_path":
+    case "archive_tenant_page":
+    case "restore_tenant_page":
+    case "delete_tenant_page":
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
 
     case "get_page_fields": {
       const page = getToolString(input, "page", 40);
@@ -587,33 +589,18 @@ async function executeTool(
 
     case "update_page_content": {
       const page = getToolString(input, "page", 40);
-      const field = getToolString(input, "field", 80);
-      const value = getToolString(input, "value", 20000);
       if (!page || !isSiteContentPage(page)) return { error: "Invalid page." };
-      if (!field) return { error: "Field is required." };
+      const changes = input.changes;
+      if (!changes || typeof changes !== "object" || Array.isArray(changes)) {
+        return { error: "Changes are required." };
+      }
       const targetLocationId =
         typeof input.location_id === "string" && input.location_id.trim()
           ? input.location_id.trim()
           : (ctx.locationId ?? undefined);
       return runMcpExecutorToolForChowbot(executorSite, "update_page_content", {
         page,
-        changes: { [field]: value ?? "" },
-        location_id: targetLocationId,
-      });
-    }
-
-    case "delete_content_field": {
-      const page = getToolString(input, "page", 40);
-      const field = getToolString(input, "field", 80);
-      if (!page || !isSiteContentPage(page)) return { error: "Invalid page." };
-      if (!field) return { error: "Field is required." };
-      const targetLocationId =
-        typeof input.location_id === "string" && input.location_id.trim()
-          ? input.location_id.trim()
-          : (ctx.locationId ?? undefined);
-      return runMcpExecutorToolForChowbot(executorSite, "delete_content_field", {
-        page,
-        field,
+        changes,
         location_id: targetLocationId,
       });
     }
@@ -772,48 +759,12 @@ async function executeTool(
       return { updated };
     }
 
-    // Same previously-unreachable-despite-the-feature-flag bug as the
-    // translations tools below, one mcp-executor domain over (locales).
+    // Locale management stays available for owners who maintain localized
+    // content themselves.
     case "list_locales":
     case "upsert_locale":
     case "delete_locale": {
       return runMcpExecutorToolForChowbot(executorSite, name, input);
-    }
-
-    // All six require the 'translation' entitlement on MCP (tool.
-    // requiredEntitlement), enforced generically by the adapter. These were
-    // previously unreachable from ChowBot even with
-    // CONVERSATIONAL_TOOLS_TRANSLATIONS_ENABLED=true — the case bodies
-    // existed but chowbot-tools/translations.ts never exposed their
-    // schemas, so filterConversationalTools had nothing to un-hide.
-    case "get_translation_inventory":
-    case "list_translation_jobs":
-    case "get_translation_job":
-    case "run_translation_job_batch": {
-      return runMcpExecutorToolForChowbot(executorSite, name, input);
-    }
-
-    case "start_translation_job": {
-      return runMcpExecutorToolForChowbot(executorSite, "start_translation_job", input);
-    }
-
-    case "publish_translations": {
-      const result = await runMcpExecutorToolForChowbot(executorSite, "publish_translations", input) as {
-        error?: string;
-        target_locale?: string;
-      };
-      if (result.error) return result;
-      // ChowBot-only extra step: MCP's publish_translations only marks
-      // drafts as published, it doesn't enable the site locale itself —
-      // ChowBot has historically done both in one call.
-      if (result.target_locale) {
-        await upsertSiteLocale(db, orgId, siteId, {
-          locale: result.target_locale,
-          status: "published",
-          fallback_enabled: true,
-        });
-      }
-      return result;
     }
 
     // ── Experiences ────────────────────────────────────────────────────────
@@ -1046,11 +997,6 @@ async function executeTool(
       return runMcpExecutorToolForChowbot(executorSite, name, input);
     }
 
-    case "get_translation_review_items":
-    case "save_translation_review_item": {
-      return runMcpExecutorToolForChowbot(executorSite, name, input);
-    }
-
     // Domain management (create_domain, sync_domain, etc.) also lives in
     // mcp-executor/settings.ts but is intentionally not exposed to ChowBot —
     // ACME token rotation is a platform-admin concern.
@@ -1090,7 +1036,7 @@ export async function runChowBot(
 ): Promise<RunChowBotResult> {
   const { db, env, orgId, siteId, userId } = opts;
 
-  const creditOk = await hasCredits(db, orgId);
+  const creditOk = await hasCredits(db, orgId, opts.sessionId);
   if (!creditOk) throw new Error("No AI credits remaining.");
 
   if (!Array.isArray(opts.messages) || !opts.messages.length) {
@@ -1142,17 +1088,9 @@ Rules in setup mode:
     : "";
 
   const managedServiceGuidance = isConversationalToolGroupEnabled(env, "managed_service")
-    ? "- Managed service requests: submit work to Paul & Julia's queue (content, translation, SEO, Google Business, seasonal, photos, social media)\n"
+    ? "- Managed service requests: submit work to Paul & Julia's queue (content, SEO, Google Business, seasonal, photos, social media)\n"
     : "";
-  const translationCapabilityGuidance = isConversationalToolGroupEnabled(env, "translations")
-    ? "- Languages and translations: manage locales, estimate site translation cost, queue translation jobs, inspect translation jobs, run translation batches, publish reviewed drafts\n"
-    : "";
-  const translationWorkflowGuidance = isConversationalToolGroupEnabled(env, "translations")
-    ? "- Use list_locales, upsert_locale, and delete_locale when the user asks to add, publish, disable, delete, or change the source language for translated site versions\n- Use get_translation_inventory before start_translation_job; tell the owner item count and estimated credits, then get confirmation before queuing the job\n- Use run_translation_job_batch only after a job exists and the owner confirms spending credits; it processes one batch and saves translations as drafts\n- Use publish_translations after the owner confirms drafted translations should go live; published languages become visible on the public site\n"
-    : "- If the owner asks for translations or language management, direct them to the dashboard; conversational translation tools are not enabled here.\n";
-  const translationConfirmationGuidance = isConversationalToolGroupEnabled(env, "translations")
-    ? "- Before delete_locale, start_translation_job, run_translation_job_batch, or publish_translations — confirm first\n"
-    : "";
+  const localeGuidance = "- Locale-specific content: use list_locales, upsert_locale, and delete_locale to manage locale versions, then edit each locale's page content manually in the dashboard page manager\n";
 
   const SYSTEM = `You are ChowBot, an AI assistant for restaurant website owners using Krabiclaw.
 Help manage all site content with concise, action-oriented responses.
@@ -1172,8 +1110,8 @@ Capabilities (always use tools — never say you can't do something the tools su
 - Experiences: list, create (title, tagline, rich body, price, duration, capacity, time slots, image, SEO), update, delete, view/confirm/cancel guest bookings
 - Contact & reservation submissions: read
 - Public help: search platform docs, blog posts, FAQs, and route guidance for direct links
-${managedServiceGuidance}- Site: rename (updates subdomain), set default menu currency, read/write site page content (including reservation policies via reservations page)
-${translationCapabilityGuidance}- Stats: posts, menus, locations, reviews
+${managedServiceGuidance}${localeGuidance}- Site: rename (updates subdomain), set default menu currency, read/write site page content (including reservation policies via reservations page)
+- Stats: posts, menus, locations, reviews
 
 Guidelines:
 - Use tools immediately — never say "I'll do that" without calling a tool
@@ -1188,8 +1126,8 @@ Guidelines:
 - When creating menus, omit location_id — the server links it to the current location automatically
 - Reservation rules, hold times, cancellation windows, deposits, and experience cancellation terms are structured booking policy fields specifically — not editable through any tool available here. Tell the user to edit those specific fields in the dashboard instead of attempting it. The reservations page's own copy (title, intro text, images) is regular page content and stays editable like any other page — see the next line
 - Use search_public_resources for docs/help/product questions, support routing, and when the user asks where something lives in public docs or on the platform site
-${translationWorkflowGuidance}- Use get_page_fields, update_page_content, and delete_content_field for tenant page content such as home, about, contact, reservations, and location notes
-${translationConfirmationGuidance}- Before publish_post, delete_post, publish_menu, delete_menu, delete_menu_item, delete_menu_section, delete_location, delete_media_asset, delete_location_qa, or delete_content_field — confirm first
+- Use get_page_fields to inspect page content, then update_page_content with the complete canonical blocks array for tenant pages such as home, about, contact, services, pricing, donate, and schedule. Use field changes only for registered scoped domain content such as location notes.
+- Before publish_post, delete_post, publish_menu, delete_menu, delete_menu_item, delete_menu_section, delete_location, delete_media_asset, or delete_location_qa — confirm first
 - Menus are live immediately when created — use publish_menu only to republish a menu that was set to unpublished
 - Keep responses short — this is a chat panel`;
 
@@ -1229,6 +1167,7 @@ ${translationConfirmationGuidance}- Before publish_post, delete_post, publish_me
     locationId,
     channel,
     pendingMedia: opts.pendingMedia,
+    sessionId: opts.sessionId,
   };
   const toolCalls: ChowBotToolCall[] = [];
   const tools = filterConversationalTools(CHOWBOT_TOOLS, env)
@@ -1325,6 +1264,7 @@ ${translationConfirmationGuidance}- Before publish_post, delete_post, publish_me
 
   const charged = await chargeCredits(db, orgId, {
     siteId,
+    sessionId: opts.sessionId,
     action: "chowbot",
     model: CHOWBOT_MODEL,
     inputTokens: totalInput,

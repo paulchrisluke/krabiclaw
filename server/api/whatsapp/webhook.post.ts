@@ -221,6 +221,7 @@ async function runChowBotAndReply(
     messages,
     currentPage: 'whatsapp',
     channel: 'whatsapp',
+    sessionId: opts.conversation.id,
     pendingMedia: opts.pendingMedia ?? undefined,
     onEvent: (ev) => {
       if (ev.type === 'text') assistantText = ev.content ?? ''

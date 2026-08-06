@@ -63,12 +63,19 @@ test.describe('role permission matrix', () => {
       }
     }
 
-    const contentUpdateStatus = async () => request.post(`${baseURL}/api/editor/sites/${siteId}/content/save`, {
-      data: {
-        page: 'home',
-        changes: { 'hero.title': `Role matrix ${Date.now()}` },
-      },
-    })
+    const contentUpdateStatus = async () => {
+      const pages = await request.get(`${baseURL}/api/editor/sites/${siteId}/pages`)
+      if (pages.status() !== 200) return pages
+      const home = ((await pages.json()) as { pages: Array<{ id: string; path: string }> }).pages.find(page => page.path === '/')
+      if (!home) return pages
+      const detail = await request.get(`${baseURL}/api/editor/sites/${siteId}/pages/${home.id}`)
+      if (detail.status() !== 200) return detail
+      const body = await detail.json() as { page: { blocks: Array<{ type: string; data: Record<string, unknown> }>; document: { updated_at: string } } }
+      const blocks = body.page.blocks.map(block => block.type === 'hero' ? { ...block, data: { ...block.data, title: `Role matrix ${Date.now()}` } } : block)
+      return request.patch(`${baseURL}/api/editor/sites/${siteId}/pages/${home.id}`, {
+        data: { blocks, expectedDocumentUpdatedAt: body.page.document.updated_at },
+      })
+    }
 
     const assertRole = async (
       userId: string,

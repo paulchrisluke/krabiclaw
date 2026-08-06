@@ -26,7 +26,7 @@ export interface CmsPageCapability {
   label: string
   route: string
   scope: 'site' | 'location'
-  editor: 'site_content' | 'professional_services'
+  editor: 'tenant_pages'
 }
 
 export interface CmsManagerCapability {
@@ -79,10 +79,10 @@ interface CmsTemplateCatalog {
 }
 
 const sayaCorePages: readonly CmsPageCapability[] = [
-  { id: 'home', feature: 'contact', label: 'Home', route: '/', scope: 'site', editor: 'site_content' },
-  { id: 'about', feature: 'contact', label: 'About', route: '/about', scope: 'site', editor: 'site_content' },
-  { id: 'contact', feature: 'contact', label: 'Contact', route: '/contact', scope: 'site', editor: 'site_content' },
-  { id: 'location', feature: 'locations', label: 'Location', route: '/locations/:location', scope: 'location', editor: 'site_content' },
+    { id: 'home', feature: 'contact', label: 'Home', route: '/', scope: 'site', editor: 'tenant_pages' },
+    { id: 'about', feature: 'contact', label: 'About', route: '/about', scope: 'site', editor: 'tenant_pages' },
+    { id: 'contact', feature: 'contact', label: 'Contact', route: '/contact', scope: 'site', editor: 'tenant_pages' },
+  { id: 'location', feature: 'locations', label: 'Location', route: '/locations/:location', scope: 'location', editor: 'tenant_pages' },
 ]
 
 const sayaCoreManagers: readonly CmsManagerCapability[] = [
@@ -105,10 +105,10 @@ const sayaCoreManagers: readonly CmsManagerCapability[] = [
 const sayaTemplateCatalog: CmsTemplateCatalog = {
   pages: [
     ...sayaCorePages,
-    { id: 'menu', feature: 'menu', label: 'Menu', route: '/locations/:location/menu', scope: 'location', editor: 'site_content' },
-    { id: 'order', feature: 'ordering', label: 'Order online', route: '/order?location=:location', scope: 'location', editor: 'site_content' },
-    { id: 'experiences', feature: 'experiences', label: 'Experiences', route: '/experiences', scope: 'site', editor: 'site_content' },
-    { id: 'reservations', feature: 'reservations', label: 'Reservations', route: '/reservations', scope: 'site', editor: 'site_content' },
+    { id: 'menu', feature: 'menu', label: 'Menu', route: '/menu', scope: 'site', editor: 'tenant_pages' },
+    { id: 'order', feature: 'ordering', label: 'Order online', route: '/order', scope: 'site', editor: 'tenant_pages' },
+    { id: 'experiences', feature: 'experiences', label: 'Experiences', route: '/experiences', scope: 'site', editor: 'tenant_pages' },
+    { id: 'reservations', feature: 'reservations', label: 'Reservations', route: '/reservations', scope: 'site', editor: 'tenant_pages' },
   ],
   managers: [
     ...sayaCoreManagers,
@@ -126,14 +126,14 @@ const sayaTemplateCatalog: CmsTemplateCatalog = {
 // below now rejects as a duplicate effective route at the same scope).
 const blawbyTemplateCatalog: CmsTemplateCatalog = {
   pages: [
-    { id: 'home', feature: 'contact', label: 'Home', route: '/', scope: 'site', editor: 'professional_services' },
-    { id: 'about', feature: 'contact', label: 'About', route: '/about', scope: 'site', editor: 'professional_services' },
-    { id: 'contact', feature: 'contact', label: 'Contact', route: '/contact', scope: 'site', editor: 'professional_services' },
-    { id: 'location', feature: 'locations', label: 'Office', route: '/locations/:location', scope: 'location', editor: 'professional_services' },
-    { id: 'services', feature: 'services', label: 'Services', route: '/services', scope: 'site', editor: 'professional_services' },
-    { id: 'pricing', feature: 'services', label: 'Pricing', route: '/pricing', scope: 'site', editor: 'professional_services' },
-    { id: 'donate', feature: 'services', label: 'Donate', route: '/donate', scope: 'site', editor: 'professional_services' },
-    { id: 'schedule', feature: 'services', label: 'Schedule', route: '/schedule', scope: 'site', editor: 'professional_services' },
+    { id: 'home', feature: 'contact', label: 'Home', route: '/', scope: 'site', editor: 'tenant_pages' },
+    { id: 'about', feature: 'contact', label: 'About', route: '/about', scope: 'site', editor: 'tenant_pages' },
+    { id: 'contact', feature: 'contact', label: 'Contact', route: '/contact', scope: 'site', editor: 'tenant_pages' },
+    { id: 'location', feature: 'locations', label: 'Office', route: '/locations/:location', scope: 'location', editor: 'tenant_pages' },
+    { id: 'services', feature: 'services', label: 'Services', route: '/services', scope: 'site', editor: 'tenant_pages' },
+    { id: 'pricing', feature: 'services', label: 'Pricing', route: '/pricing', scope: 'site', editor: 'tenant_pages' },
+    { id: 'donate', feature: 'services', label: 'Donate', route: '/donate', scope: 'site', editor: 'tenant_pages' },
+    { id: 'schedule', feature: 'services', label: 'Schedule', route: '/schedule', scope: 'site', editor: 'tenant_pages' },
   ],
   managers: [
     { key: 'site.blog', id: 'blog', label: 'Blog posts', section: 'collections', route: 'blog', scope: 'site' },
