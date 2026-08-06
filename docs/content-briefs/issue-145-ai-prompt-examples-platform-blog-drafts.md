@@ -19,11 +19,11 @@ Category: Marketing
 
 Publish: false
 
-Excerpt: Copy-paste AI prompt examples for restaurant owners using KrabiClaw through ChatGPT to manage menus, photos, reviews, analytics, posts, translations, locations, and launch tasks.
+Excerpt: Copy-paste AI prompt examples for restaurant owners using KrabiClaw through ChatGPT to manage menus, photos, reviews, analytics, posts, localized content, locations, and launch tasks.
 
-SEO description: Practical AI prompt examples for restaurant owners using ChatGPT and KrabiClaw to manage menus, photos, reviews, website copy, analytics, Google Business, translations, posts, and launch settings.
+SEO description: Practical AI prompt examples for restaurant owners using ChatGPT and KrabiClaw to manage menus, photos, reviews, website copy, analytics, Google Business, localized content, posts, and launch settings.
 
-SEO keywords: AI prompts for restaurant owners, ChatGPT restaurant website, AI restaurant website builder, AI menu builder, AI menu import, restaurant website analytics AI, AI restaurant review management, sync Google Business restaurant, translate restaurant menu AI, AI restaurant social media posts
+SEO keywords: AI prompts for restaurant owners, ChatGPT restaurant website, AI restaurant website builder, AI menu builder, AI menu import, restaurant website analytics AI, AI restaurant review management, sync Google Business restaurant, localized restaurant menu, AI restaurant social media posts
 
 ## Draft 1 Body
 
@@ -237,18 +237,16 @@ Copy-paste prompts:
 - "Use this uploaded photo for the post before publishing."
 - "Turn this offer into a short social post, but keep the website copy more detailed."
 
-## Translate Menus and Website Content
+## Maintain Localized Menus and Website Content
 
-Translation prompts help restaurants serve international visitors. Ask for a scope check first if you are translating a large site or menu.
+Owners can add locale versions and enter localized copy themselves when they want to serve international visitors.
 
 Copy-paste prompts:
 
-- "Translate our menu and homepage into French for visitors."
-- "Add German as a site language and estimate what needs translating."
-- "Translate this menu item description into English and Thai."
-- "Start a translation draft for our main pages, then show me what needs review."
-- "Show me translation jobs that are still waiting for review."
-- "Publish the approved translations after I review them."
+- "Add German as a site language and show me where I can enter the localized copy."
+- "List the enabled locales for this site."
+- "Open the page manager so I can enter French homepage copy myself."
+- "Show me the existing localized menu fields for this location."
 
 ## Launch, Domains, and Final Checks
 
@@ -293,11 +291,11 @@ Category: Marketing
 
 Publish: false
 
-Excerpt: Copy-paste AI prompt examples for tour, workshop, class, and experience operators using KrabiClaw through ChatGPT to manage listings, bookings, photos, reviews, analytics, translations, posts, and launch tasks.
+Excerpt: Copy-paste AI prompt examples for tour, workshop, class, and experience operators using KrabiClaw through ChatGPT to manage listings, bookings, photos, reviews, analytics, localized content, posts, and launch tasks.
 
-SEO description: 60 practical AI prompt examples for tour, workshop, class, and experience operators using ChatGPT and KrabiClaw to manage booking pages, experience listings, photos, reviews, analytics, Google Business, translations, posts, and launch settings.
+SEO description: 60 practical AI prompt examples for tour, workshop, class, and experience operators using ChatGPT and KrabiClaw to manage booking pages, experience listings, photos, reviews, analytics, Google Business, localized content, posts, and launch settings.
 
-SEO keywords: AI booking website, ChatGPT for tour operators, AI tour website builder, AI prompts for experience businesses, tour business website analytics AI, AI review management for tours, sync Google Business tour company, translate tour listing AI, AI booking page optimization, AI prompts for workshop owners
+SEO keywords: AI booking website, ChatGPT for tour operators, AI tour website builder, AI prompts for experience businesses, tour business website analytics AI, AI review management for tours, sync Google Business tour company, localized tour listing, AI booking page optimization, AI prompts for workshop owners
 
 ## Draft 2 Body
 
@@ -514,18 +512,16 @@ Copy-paste prompts:
 - "Use this uploaded class photo for the post before publishing."
 - "Turn this tour update into a short social post with a clear booking link."
 
-## Translate Listings for International Visitors
+## Maintain Localized Listings for International Visitors
 
-Many tours and workshops serve travelers who search in different languages. Translation prompts should include review steps when the scope is large.
+Owners can add locale versions and enter localized listing copy themselves for travelers who search in different languages.
 
 Copy-paste prompts:
 
-- "Translate this tour listing into German for international visitors."
-- "Translate our homepage and main experience page into French."
-- "Add Japanese as a site language and estimate what needs translating."
-- "Start a translation draft for our core pages and show me what needs review."
-- "Show me translation jobs that are still waiting for review."
-- "Publish the approved translations after I review them."
+- "Add Japanese as a site language and show me where I can enter the localized copy."
+- "List the enabled locales for this experience site."
+- "Open the page manager so I can enter French homepage and experience-page copy myself."
+- "Show me the existing localized fields for this experience."
 
 ## Domains, Launch, and Final Review
 
@@ -577,7 +573,7 @@ Restaurant draft coverage:
 - Inbox/reservations: `triage_inbox`, reservation/contact listing behavior described in issue 145
 - Analytics and growth: `get_site_analytics`, `grow_my_bookings`, `make_site_more_bookable`
 - Google Business: `get_google_business_connection`, `get_google_business_auth_url`, `list_google_business_accounts`, `sync_google_business_locations`
-- Translation: `list_locales`, `upsert_locale`, `get_translation_inventory`, `start_translation_job`, `list_translation_jobs`, `get_translation_job`, review/publish translation tools listed in issue 145
+- Localized content: `list_locales`, `upsert_locale`, `delete_locale`; owners enter localized page, menu, and location fields themselves
 - Domains and dashboard links: `get_site_domains`, `create_domain`, `sync_domain`, `set_canonical_domain`, `get_dashboard_link`
 - Managed service: `list_work_requests`, `create_work_request`
 
@@ -595,7 +591,7 @@ Experience draft coverage:
 - Posts/social: `create_post`, `update_post`, `set_media`, `publish_post`, Facebook connection tools
 - Tenant blog: `create_blog_post`, `update_blog_post`, `set_media`
 - Google Business: `get_google_business_connection`, `get_google_business_auth_url`, `list_google_business_accounts`, `sync_google_business_locations`
-- Translation: `list_locales`, `upsert_locale`, `get_translation_inventory`, `start_translation_job`, `list_translation_jobs`, `get_translation_job`, review/publish translation tools listed in issue 145
+- Localized content: `list_locales`, `upsert_locale`, `delete_locale`; owners enter localized page, menu, and location fields themselves
 - Domains and dashboard links: `get_site_domains`, `create_domain`, `sync_domain`, `set_canonical_domain`, `get_dashboard_link`
 - Managed service: `list_work_requests`, `create_work_request`
 

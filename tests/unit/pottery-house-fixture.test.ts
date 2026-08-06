@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import Database from "better-sqlite3";
 
 import {
   compiledPotteryHouseSeed,
@@ -15,6 +16,7 @@ import {
   renderCompiledPotteryHouseBillingBlock,
   renderCompiledPotteryHouseBlogBlock,
 } from "../../seed-definitions/pottery-house.ts";
+import { renderTenantPagesSeedSql } from "../../seed-definitions/tenant-pages.ts";
 
 test("pottery house fixture experience slugs are unique", () => {
   const slugs = potteryHouseFixture.experiences.map((e) => e.slug);
@@ -133,19 +135,121 @@ test("pottery house posts block includes posts and channel jobs", () => {
 test("pottery house content block includes home hero and about page content", () => {
   const sql = renderCompiledPotteryHouseContentBlock();
 
-  assert.match(sql, /INSERT OR IGNORE INTO site_content/);
+  assert.match(sql, /INSERT OR REPLACE INTO tenant_pages/);
+  assert.match(sql, /INSERT OR REPLACE INTO content_documents/);
+  assert.doesNotMatch(sql, /site_content/);
   assert.match(sql, /Clay, calm, and a place to return to\./);
-  assert.match(sql, /hero_media_asset_id/);
+  assert.match(sql, /\"asset_id\":\"media-ph-homepage-custom\"/);
   assert.match(sql, /story\.headline/);
   assert.match(sql, /journey\.body/);
 });
 
+test("multi-locale tenant page seeds preserve every locale variant", () => {
+  const db = new Database(":memory:");
+  db.pragma("foreign_keys = ON");
+  db.exec(`
+    CREATE TABLE tenant_pages (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      site_id TEXT NOT NULL,
+      path TEXT NOT NULL,
+      title TEXT NOT NULL,
+      slug TEXT NOT NULL,
+      page_type TEXT NOT NULL,
+      recipe TEXT,
+      summary TEXT,
+      status TEXT NOT NULL,
+      sort_order INTEGER NOT NULL,
+      source TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE content_documents (
+      id TEXT PRIMARY KEY,
+      owner_type TEXT NOT NULL,
+      owner_id TEXT NOT NULL,
+      draft_revision_id TEXT,
+      published_revision_id TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE content_revisions (
+      id TEXT PRIMARY KEY,
+      document_id TEXT NOT NULL,
+      snapshot_json TEXT NOT NULL,
+      body_markdown TEXT NOT NULL,
+      created_by TEXT,
+      label TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE content_blocks (
+      id TEXT PRIMARY KEY,
+      document_id TEXT NOT NULL,
+      parent_block_id TEXT,
+      type TEXT NOT NULL,
+      position INTEGER NOT NULL,
+      level INTEGER,
+      data_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE tenant_page_variants (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL,
+      site_id TEXT NOT NULL,
+      page_id TEXT NOT NULL REFERENCES tenant_pages(id) ON DELETE CASCADE,
+      locale TEXT NOT NULL,
+      draft_document_id TEXT,
+      published_revision_id TEXT,
+      published_path TEXT NOT NULL,
+      draft_path TEXT NOT NULL,
+      title TEXT NOT NULL,
+      summary TEXT,
+      seo_title TEXT,
+      seo_description TEXT,
+      canonical_url TEXT,
+      robots TEXT,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `);
+
+  const sqlValue = (value: string | number | boolean | null) => {
+    if (value === null) return "NULL";
+    if (typeof value === "number") return String(value);
+    if (typeof value === "boolean") return value ? "1" : "0";
+    return `'${value.replaceAll("'", "''")}'`;
+  };
+  const sqlJson = (value: unknown) => sqlValue(JSON.stringify(value));
+
+  db.exec(renderTenantPagesSeedSql({
+    siteId: "site-test",
+    organizationId: "org-test",
+    locales: ["en", "th"],
+    rows: [{ id: "home-hero", page: "home", field: "hero", content: null, heroTitle: "Home" }],
+    translations: [{ locale: "th", page: "home", field: "hero", content: null, heroTitle: "หน้าแรก" }],
+    sqlValue,
+    sqlJson,
+  }));
+
+  const pages = db.prepare("SELECT id FROM tenant_pages ORDER BY id").all() as Array<{ id: string }>;
+  const variants = db.prepare("SELECT page_id, locale, title FROM tenant_page_variants ORDER BY page_id, locale").all() as Array<{ page_id: string; locale: string; title: string }>;
+  assert.equal(pages.length, 3);
+  assert.equal(variants.length, 6);
+  assert.deepEqual(variants.filter(row => row.page_id.endsWith("-home")), [
+    { page_id: "tenant-page-site-test-home", locale: "en", title: "Home" },
+    { page_id: "tenant-page-site-test-home", locale: "th", title: "หน้าแรก" },
+  ]);
+  db.close();
+});
+
 test("pottery house translations block includes Thai content and location translations", () => {
   const sql = renderCompiledPotteryHouseTranslationsBlock();
+  const pages = renderCompiledPotteryHouseContentBlock();
 
-  assert.match(sql, /INSERT OR IGNORE INTO site_content_translations/);
+  assert.doesNotMatch(sql, /site_content_translations/);
   assert.match(sql, /INSERT OR IGNORE INTO business_location_translations/);
-  assert.match(sql, /ดินเผา ความสงบ และสถานที่ที่อยากกลับมา/);
+  assert.match(pages, /ดินเผา ความสงบ และสถานที่ที่อยากกลับมา/);
   assert.match(sql, /loc-pottery-beachfront/);
 });
 

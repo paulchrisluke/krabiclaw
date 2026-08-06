@@ -33,23 +33,10 @@ interface TenantSiteRow {
   logo_mime_type: string | null;
   favicon_url: string | null;
   vertical: string | null;
-  redirect_to_path: string | null;
-  redirect_status_code: number | null;
-  redirect_behavior: string | null;
 }
 
 function setTenantType(event: H3Event, tenantType: TenantType) {
   event.context.tenantType = tenantType;
-}
-
-function setTenantRedirect(event: H3Event, site: TenantSiteRow) {
-  event.context.tenantRedirect = site.redirect_behavior
-    ? {
-        toPath: site.redirect_to_path,
-        statusCode: site.redirect_status_code,
-        behavior: site.redirect_behavior,
-      }
-    : null;
 }
 
 function normalizedPath(pathname: string) {
@@ -90,10 +77,7 @@ export default defineEventHandler(async (event) => {
                  canonical.domain AS canonical_domain,
                  s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url,
                  ma.mime_type AS logo_mime_type,
-                 json_extract(s.settings, '$.favicon_url') AS favicon_url, s.vertical,
-                 redirect_rule.to_path AS redirect_to_path,
-                 redirect_rule.status_code AS redirect_status_code,
-                 redirect_rule.behavior AS redirect_behavior
+                 json_extract(s.settings, '$.favicon_url') AS favicon_url, s.vertical
           FROM sites s
           LEFT JOIN site_domains canonical
             ON canonical.site_id = s.id
@@ -101,12 +85,10 @@ export default defineEventHandler(async (event) => {
            AND canonical.role = 'canonical'
            AND canonical.status = 'active'
           LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
-          LEFT JOIN tenant_redirects redirect_rule
-            ON redirect_rule.site_id = s.id AND redirect_rule.from_path = ?
           WHERE s.subdomain = ? AND s.status = 'active' AND s.onboarding_status = 'active'
           LIMIT 1
         `,
-          [tenantPath, previewSlug],
+          [previewSlug],
         );
         if (site) {
           event.context.siteId = site.id;
@@ -120,7 +102,6 @@ export default defineEventHandler(async (event) => {
           // carry through the DB canonical domain, tenant-routing can 301 to a
           // localhost or production tenant host and break CI navigation.
           event.context.canonicalDomain = host.split(":")[0];
-          setTenantRedirect(event, site);
           event.context.site = {
             brand_name: site.brand_name || null,
             logo_url: site.logo_url || null,
@@ -270,7 +251,6 @@ export default defineEventHandler(async (event) => {
     setTenantType(event, TENANT_TYPES.TENANT);
     event.context.tenantHost = host.split(":")[0];
     event.context.canonicalDomain = site.canonical_domain || null;
-    setTenantRedirect(event, site);
     event.context.site = {
       brand_name: site.brand_name || null,
       logo_url: site.logo_url || null,
@@ -294,7 +274,6 @@ async function resolveTenantSite(
   const env = runtimeEnv as TenantResolutionEnv;
   const db = runtimeEnv.db;
   const hostname = hostnameOf(host);
-  const tenantPath = normalizedPath(getRequestURL(event).pathname);
 
   if (!db || !hostname) return null;
 
@@ -308,18 +287,13 @@ async function resolveTenantSite(
              s.subdomain || '.localhost' AS canonical_domain,
              s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url,
              ma.mime_type AS logo_mime_type,
-             json_extract(s.settings, '$.favicon_url') AS favicon_url, s.vertical,
-             redirect_rule.to_path AS redirect_to_path,
-             redirect_rule.status_code AS redirect_status_code,
-             redirect_rule.behavior AS redirect_behavior
+             json_extract(s.settings, '$.favicon_url') AS favicon_url, s.vertical
       FROM sites s
       LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
-      LEFT JOIN tenant_redirects redirect_rule
-        ON redirect_rule.site_id = s.id AND redirect_rule.from_path = ?
       WHERE s.subdomain = ? AND s.status = 'active'
       LIMIT 1
     `,
-      [tenantPath, subdomain],
+      [subdomain],
     );
   }
 
@@ -331,22 +305,17 @@ async function resolveTenantSite(
            COALESCE(canonical.domain, sd.domain) AS canonical_domain,
            s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url,
            ma.mime_type AS logo_mime_type,
-           json_extract(s.settings, '$.favicon_url') AS favicon_url, s.vertical,
-           redirect_rule.to_path AS redirect_to_path,
-           redirect_rule.status_code AS redirect_status_code,
-           redirect_rule.behavior AS redirect_behavior
+           json_extract(s.settings, '$.favicon_url') AS favicon_url, s.vertical
     FROM sites s
     JOIN site_domains sd ON s.id = sd.site_id
     LEFT JOIN site_domains canonical
       ON canonical.site_id = s.id AND canonical.role = 'canonical' AND canonical.status = 'active'
     LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
-    LEFT JOIN tenant_redirects redirect_rule
-      ON redirect_rule.site_id = s.id AND redirect_rule.from_path = ?
     WHERE sd.domain = ? AND sd.type = 'custom' AND sd.status = 'active'
       AND s.status = 'active' AND s.onboarding_status = 'active'
     LIMIT 1
   `,
-    [tenantPath, hostname],
+    [hostname],
   );
 
   if (customDomainSite) return customDomainSite;
@@ -369,22 +338,17 @@ async function resolveTenantSite(
              COALESCE(canonical.domain, sd.domain) AS canonical_domain,
              s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url,
              ma.mime_type AS logo_mime_type,
-             json_extract(s.settings, '$.favicon_url') AS favicon_url, s.vertical,
-             redirect_rule.to_path AS redirect_to_path,
-             redirect_rule.status_code AS redirect_status_code,
-             redirect_rule.behavior AS redirect_behavior
+             json_extract(s.settings, '$.favicon_url') AS favicon_url, s.vertical
       FROM sites s
       JOIN site_domains sd ON s.id = sd.site_id
       LEFT JOIN site_domains canonical
         ON canonical.site_id = s.id AND canonical.role = 'canonical' AND canonical.status = 'active'
       LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
-      LEFT JOIN tenant_redirects redirect_rule
-        ON redirect_rule.site_id = s.id AND redirect_rule.from_path = ?
       WHERE sd.domain = ? AND sd.type = 'subdomain' AND sd.status = 'active'
         AND s.status = 'active' AND s.onboarding_status = 'active'
       LIMIT 1
     `,
-      [tenantPath, `${subdomain}.${platformDomain}`],
+      [`${subdomain}.${platformDomain}`],
     );
 
     if (subdomainSite) return subdomainSite;
@@ -398,18 +362,13 @@ async function resolveTenantSite(
              ? AS canonical_domain,
              s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url,
              ma.mime_type AS logo_mime_type,
-             json_extract(s.settings, '$.favicon_url') AS favicon_url, s.vertical,
-             redirect_rule.to_path AS redirect_to_path,
-             redirect_rule.status_code AS redirect_status_code,
-             redirect_rule.behavior AS redirect_behavior
+             json_extract(s.settings, '$.favicon_url') AS favicon_url, s.vertical
       FROM sites s
       LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
-      LEFT JOIN tenant_redirects redirect_rule
-        ON redirect_rule.site_id = s.id AND redirect_rule.from_path = ?
       WHERE s.subdomain = ? AND s.status = 'active' AND s.onboarding_status = 'active'
       LIMIT 1
     `,
-      [hostname, tenantPath, subdomain],
+      [hostname, subdomain],
     );
   }
 

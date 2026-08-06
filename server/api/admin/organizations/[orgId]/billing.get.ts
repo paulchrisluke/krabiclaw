@@ -23,9 +23,10 @@ export default defineEventHandler(async (event) => {
     current_period_end: string | null
     cancel_at_period_end: number | null
   }>(db, `
-    SELECT s.id AS site_id, s.brand_name, sb.stripe_subscription_id, sb.plan, sb.status,
+    SELECT s.id AS site_id, s.brand_name, ob.stripe_subscription_id, sb.plan, sb.status,
            sb.current_period_end, sb.cancel_at_period_end
     FROM sites s
+    LEFT JOIN organization_billing ob ON ob.organization_id = s.organization_id
     LEFT JOIN site_billing sb ON sb.site_id = s.id
     WHERE s.organization_id = ?
   `, [orgId])

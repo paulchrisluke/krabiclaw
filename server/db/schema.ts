@@ -87,8 +87,19 @@ export const ai_credits = sqliteTable("ai_credits", {
 	balance: integer().default(0).notNull(),
 	lifetime_used: integer().default(0).notNull(),
 	last_topped_up_at: text(),
+	balance_period_key: text(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
+
+export const stripe_credit_topups = sqliteTable("stripe_credit_topups", {
+	checkout_session_id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	credits: integer().notNull(),
+	processed_at: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	index("stripe_credit_topups_organization_id_idx").on(table.organization_id),
+]);
 
 export const ai_usage_log = sqliteTable("ai_usage_log", {
 	id: text().primaryKey(),
@@ -1091,8 +1102,36 @@ export const organization = sqliteTable("organization", {
 	slug: text().notNull().unique(),
 	logo: text(),
 	metadata: text(),
+	// Better Auth Stripe plugin organization customer field.
+	stripeCustomerId: text().unique(),
 	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 });
+
+export const subscription = sqliteTable("subscription", {
+	id: text().primaryKey(),
+	plan: text().notNull(),
+	referenceId: text().notNull(),
+	stripeCustomerId: text(),
+	stripeSubscriptionId: text().unique(),
+	status: text().default("incomplete").notNull(),
+	periodStart: integer({ mode: "timestamp" }),
+	periodEnd: integer({ mode: "timestamp" }),
+	trialStart: integer({ mode: "timestamp" }),
+	trialEnd: integer({ mode: "timestamp" }),
+	limits: text(),
+	cancelAtPeriodEnd: integer().default(0).notNull(),
+	cancelAt: integer({ mode: "timestamp" }),
+	canceledAt: integer({ mode: "timestamp" }),
+	endedAt: integer({ mode: "timestamp" }),
+	seats: integer(),
+	billingInterval: text(),
+	stripeScheduleId: text(),
+	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
+	updatedAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
+}, (table) => [
+	index("subscription_referenceId_idx").on(table.referenceId),
+	index("subscription_status_idx").on(table.status),
+]);
 
 export const organization_billing = sqliteTable("organization_billing", {
 	id: text(),
@@ -1102,6 +1141,12 @@ export const organization_billing = sqliteTable("organization_billing", {
 	stripe_subscription_item_id: text().unique(),
 	status: text().default("free").notNull(),
 	plan: text().default("free").notNull(),
+	payment_status: text().default("unknown").notNull(),
+	paid_through: text(),
+	past_due_since: text(),
+	last_paid_invoice_id: text(),
+	last_payment_event_created: integer(),
+	last_payment_event_id: text(),
 	current_period_end: text(),
 	cancel_at_period_end: numeric().default(sql`false`),
 	auto_topup_enabled: integer().default(0).notNull(),
@@ -1561,6 +1606,7 @@ export const service_addon_purchases = sqliteTable("service_addon_purchases", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	addon_type: text().notNull(),
+	checkout_session_id: text().notNull().unique(),
 	stripe_payment_intent_id: text(),
 	fulfilled_at: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
@@ -1610,6 +1656,12 @@ export const site_billing = sqliteTable("site_billing", {
 	plan: text().default("free").notNull(),
 	status: text().default("free").notNull(),
 	current_period_end: text(),
+	payment_status: text().default("unknown").notNull(),
+	paid_through: text(),
+	past_due_since: text(),
+	last_paid_invoice_id: text(),
+	last_payment_event_created: integer(),
+	last_payment_event_id: text(),
 	cancel_at_period_end: numeric().default(sql`false`),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	stripe_customer_id: text(),
@@ -1625,53 +1677,6 @@ export const site_config = sqliteTable("site_config", {
 }, (table) => [
 	primaryKey({ columns: [table.organization_id, table.site_id, table.key] }),
 	index("site_config_org_site_idx").on(table.organization_id, table.site_id),
-]);
-
-export const site_content = sqliteTable("site_content", {
-	id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	location_id: text().references(() => business_locations.id, { onDelete: "cascade" } ),
-	page: text().notNull(),
-	field: text().notNull(),
-	content: text(),
-	hero_title: text(),
-	hero_subtitle: text(),
-	hero_media_asset_id: text().references(() => media_assets.id, { onDelete: "set null" } ),
-	value: text(),
-	type: text().default("text").notNull(),
-	source: text().default("manual").notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_by: text(),
-	component: text(),
-}, (table) => [
-	unique("site_content_organization_id_site_id_location_id_page_field_unique").on(table.organization_id, table.site_id, table.location_id, table.page, table.field),
-	uniqueIndex("idx_site_content_site_level_unique").on(table.organization_id, table.site_id, table.page, table.field).where(sql`location_id IS NULL`),
-]);
-
-export const site_content_translations = sqliteTable("site_content_translations", {
-	id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	location_id: text().references(() => business_locations.id, { onDelete: "cascade" } ),
-	locale: text().notNull(),
-	page: text().notNull(),
-	field: text().notNull(),
-	content: text(),
-	hero_title: text(),
-	hero_subtitle: text(),
-	value: text(),
-	type: text().default("text").notNull(),
-	status: text().default("draft").notNull(),
-	source_hash: text(),
-	translated_at: text(),
-	reviewed_at: text(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_by: text(),
-	component: text(),
-}, (table) => [
-	unique("site_content_translations_organization_id_site_id_location_id_locale_page_field_unique").on(table.organization_id, table.site_id, table.location_id, table.locale, table.page, table.field),
-	uniqueIndex("idx_site_content_translations_site_level_unique").on(table.organization_id, table.site_id, table.locale, table.page, table.field).where(sql`location_id IS NULL`),
 ]);
 
 export const offerings = sqliteTable("offerings", {
@@ -1717,12 +1722,9 @@ export const tenant_pages = sqliteTable("tenant_pages", {
 	path: text().notNull(),
 	title: text().notNull(),
 	slug: text(),
-	page_type: text().default("static").notNull(),
+	page_type: text().default("custom").notNull(),
+	recipe: text(),
 	summary: text(),
-	body: text(),
-	components_json: text(),
-	cta_label: text(),
-	cta_url: text(),
 	seo_title: text(),
 	seo_description: text(),
 	canonical_url: text(),
@@ -1872,6 +1874,8 @@ export const tenant_redirects = sqliteTable("tenant_redirects", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	locale: text().notNull(),
+	owner_variant_id: text(),
 	from_path: text().notNull(),
 	to_path: text(),
 	status_code: integer().default(301).notNull(),
@@ -1881,11 +1885,12 @@ export const tenant_redirects = sqliteTable("tenant_redirects", {
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
-	unique("tenant_redirects_site_from_path_unique").on(table.site_id, table.from_path),
+	unique("tenant_redirects_site_locale_from_path_unique").on(table.site_id, table.locale, table.from_path),
 	check("tenant_redirects_from_path_check", sql`from_path LIKE '/%'`),
 	check("tenant_redirects_behavior_check", sql`behavior IN ('redirect', 'gone', 'noindex')`),
 	check("tenant_redirects_redirect_to_path_check", sql`behavior != 'redirect' OR to_path IS NOT NULL`),
 	index("tenant_redirects_organization_id_idx").on(table.organization_id),
+	index("tenant_redirects_site_locale_path_idx").on(table.site_id, table.locale, table.from_path),
 ]);
 
 export const site_conversion_events = sqliteTable("site_conversion_events", {
@@ -2068,6 +2073,11 @@ export const site_pageview_events = sqliteTable("site_pageview_events", {
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
 	location_id: text().references(() => business_locations.id, { onDelete: "set null" } ),
 	page_path: text().notNull(),
+	page_id: text(),
+	page_type: text(),
+	recipe: text(),
+	locale: text(),
+	revision_id: text(),
 	referrer: text(),
 	user_agent: text(),
 	ip_hash: text(),
@@ -2230,8 +2240,80 @@ export const stripe_webhook_events = sqliteTable("stripe_webhook_events", {
 	status: text().default("pending"),
 	payload: text(),
 	error: text(),
+	claimed_at: text(),
+	lease_expires_at: text(),
+	claim_token: text(),
+	next_attempt_at: text(),
+	dead_lettered_at: text(),
+	attempt_count: integer().default(0).notNull(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	index("stripe_webhook_events_retry_idx").on(table.status, table.next_attempt_at),
+]);
+
+export const stripe_subscription_versions = sqliteTable("stripe_subscription_versions", {
+	stripe_subscription_id: text().primaryKey(),
+	last_event_created: integer().notNull(),
+	last_event_id: text().notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
+
+export const stripe_invoice_payments = sqliteTable("stripe_invoice_payments", {
+	stripe_invoice_id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	stripe_subscription_id: text().notNull(),
+	base_plan_price_id: text(),
+	status: text().notNull(),
+	period_start: text(),
+	period_end: text(),
+	past_due_since: text(),
+	last_event_created: integer().notNull(),
+	last_event_id: text().notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	index("stripe_invoice_payments_organization_idx").on(table.organization_id, table.period_end),
+	index("stripe_invoice_payments_subscription_idx").on(table.stripe_subscription_id, table.period_end),
+]);
+
+export const usage_events = sqliteTable("usage_events", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().references(() => sites.id, { onDelete: "set null" } ),
+	resource: text().notNull(),
+	source: text().notNull(),
+	provider: text(),
+	channel: text(),
+	session_id: text(),
+	quantity: integer().notNull(),
+	unit: text().notNull(),
+	metadata_json: text(),
+	idempotency_key: text().notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	unique("usage_events_organization_id_idempotency_key_unique").on(table.organization_id, table.idempotency_key),
+	index("usage_events_organization_resource_created_idx").on(table.organization_id, table.resource, table.created_at),
+	index("usage_events_site_created_idx").on(table.site_id, table.created_at),
+]);
+
+export const usage_quota_grants = sqliteTable("usage_quota_grants", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	resource: text().notNull(),
+	quantity: integer().notNull(),
+	unit: text().notNull(),
+	period_key: text().notNull(),
+	period_start: text().notNull(),
+	period_end: text(),
+	grant_type: text().notNull(),
+	reason: text().notNull(),
+	created_by: text().references(() => user.id, { onDelete: "set null" } ),
+	idempotency_key: text().notNull(),
+	applied_at: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	unique("usage_quota_grants_organization_id_idempotency_key_unique").on(table.organization_id, table.idempotency_key),
+	index("usage_quota_grants_active_idx").on(table.organization_id, table.resource, table.period_start, table.period_end),
+]);
 
 export const themes = sqliteTable("themes", {
 	id: text().primaryKey(),
@@ -2253,56 +2335,6 @@ export const token_exchange_cache = sqliteTable("token_exchange_cache", {
 	expires_at: text().notNull(),
 });
 
-export const translation_job_items = sqliteTable("translation_job_items", {
-	id: text().primaryKey(),
-	job_id: text().notNull().references(() => translation_jobs.id, { onDelete: "cascade" } ),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	target_locale: text().notNull(),
-	entity_type: text().notNull(),
-	entity_id: text().notNull(),
-	location_id: text(),
-	page: text(),
-	field: text().notNull(),
-	source_hash: text().notNull(),
-	source_chars: integer().default(0).notNull(),
-	status: text().default("queued").notNull(),
-	error: text(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	index("translation_job_items_job_id_idx").on(table.job_id),
-	index("translation_job_items_org_site_idx").on(table.organization_id, table.site_id),
-]);
-
-export const translation_jobs = sqliteTable("translation_jobs", {
-	id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	source_locale: text().notNull(),
-	target_locale: text().notNull(),
-	scope: text().default("site").notNull(),
-	status: text().default("queued").notNull(),
-	total_items: integer().default(0).notNull(),
-	total_chars: integer().default(0).notNull(),
-	estimated_input_tokens: integer().default(0).notNull(),
-	estimated_output_tokens: integer().default(0).notNull(),
-	estimated_credits: integer().default(0).notNull(),
-	actual_input_tokens: integer().default(0).notNull(),
-	actual_output_tokens: integer().default(0).notNull(),
-	actual_credits: integer().default(0).notNull(),
-	processed_items: integer().default(0).notNull(),
-	failed_items: integer().default(0).notNull(),
-	error: text(),
-	created_by: text(),
-	started_at: text(),
-	finished_at: text(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	index("translation_jobs_org_site_idx").on(table.organization_id, table.site_id),
-]);
-
 export const user = sqliteTable("user", {
 	id: text().primaryKey(),
 	name: text().notNull(),
@@ -2316,6 +2348,9 @@ export const user = sqliteTable("user", {
 	banReason: text(),
 	banExpires: integer({ mode: "timestamp" }),
 	isAnonymous: integer().default(0).notNull(),
+	// Better Auth Stripe plugin user customer field. Organization subscriptions
+	// use organization.stripeCustomerId instead.
+	stripeCustomerId: text(),
 	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 	updatedAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 });
@@ -2479,7 +2514,7 @@ export const content_documents = sqliteTable("content_documents", {
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
-	check("content_documents_owner_type_check", sql`owner_type IN ('platform_blog', 'platform_doc', 'tenant_blog')`),
+	check("content_documents_owner_type_check", sql`owner_type IN ('platform_blog', 'platform_doc', 'tenant_blog', 'tenant_page')`),
 	unique("content_documents_owner_unique").on(table.owner_type, table.owner_id),
 	index("content_documents_owner_idx").on(table.owner_type, table.owner_id),
 ]);
@@ -2495,7 +2530,7 @@ export const content_blocks = sqliteTable("content_blocks", {
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
-	check("content_blocks_type_check", sql`type IN ('heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'divider', 'ai_assistance', 'cta', 'callout')`),
+	check("content_blocks_type_check", sql`type IN ('heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'divider', 'ai_assistance', 'cta', 'callout', 'hero', 'button_group', 'feature_grid', 'testimonial_grid', 'contact_cta', 'booking_cta', 'donation_choices', 'offering_grid', 'location_grid')`),
 	index("content_blocks_document_position_idx").on(table.document_id, table.position),
 	index("content_blocks_parent_idx").on(table.parent_block_id),
 ]);
@@ -2508,6 +2543,52 @@ export const content_revisions = sqliteTable("content_revisions", {
 	created_by: text().references(() => user.id, { onDelete: "set null" } ),
 	label: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	published_at: text(),
 }, (table) => [
 	index("content_revisions_document_created_idx").on(table.document_id, table.created_at),
+]);
+
+export const tenant_page_variants = sqliteTable("tenant_page_variants", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	page_id: text().notNull().references(() => tenant_pages.id, { onDelete: "cascade" } ),
+	locale: text().notNull(),
+	draft_document_id: text().references(() => content_documents.id, { onDelete: "set null" } ),
+	published_revision_id: text().references(() => content_revisions.id, { onDelete: "set null" } ),
+	ever_published: integer().default(0).notNull(),
+	published_path: text().notNull(),
+	draft_path: text().notNull().default("/"),
+	title: text().notNull(),
+	summary: text(),
+	seo_title: text(),
+	seo_description: text(),
+	canonical_url: text(),
+	robots: text(),
+	status: text().default("draft").notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_by: text(),
+}, (table) => [
+	unique("tenant_page_variants_page_locale_unique").on(table.page_id, table.locale),
+	unique("tenant_page_variants_site_locale_path_unique").on(table.site_id, table.locale, table.published_path),
+	index("tenant_page_variants_site_status_path_idx").on(table.site_id, table.status, table.published_path),
+	index("tenant_page_variants_page_idx").on(table.page_id),
+	check("tenant_page_variants_path_check", sql`published_path LIKE '/%' AND published_path NOT LIKE '//%'`),
+	check("tenant_page_variants_status_check", sql`status IN ('draft', 'published', 'archived')`),
+]);
+
+export const public_resource_cache_invalidations = sqliteTable("public_resource_cache_invalidations", {
+	id: text().primaryKey(),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	reason: text().notNull(),
+	status: text().default("pending").notNull(),
+	attempt_count: integer().default(0).notNull(),
+	claimed_at: text(),
+	processed_at: text(),
+	last_error: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	index("public_resource_cache_invalidations_status_idx").on(table.status, table.created_at),
+	index("public_resource_cache_invalidations_site_idx").on(table.site_id, table.status),
 ]);

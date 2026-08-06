@@ -12,7 +12,7 @@ KrabiClaw now ships two separate MCP surfaces. They must stay separate in auth, 
 - Server entrypoint: `server/api/mcp.post.ts`
 - Scope: `tenant`
 - Exposes by default: site setup, menus, experiences, posts, media, reviews, submissions, notifications, content, QA, analytics
-- Feature-flagged conversational groups: translations/locales, social/OAuth publishing, domains, managed-service work requests. See `docs/tool-parity.md`.
+- Feature-flagged conversational groups: social/OAuth publishing, domains, managed-service work requests. Manual locale management remains available as ordinary content editing. See `docs/tool-parity.md`.
 
 ### Platform Admin MCP
 

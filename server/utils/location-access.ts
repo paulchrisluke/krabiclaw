@@ -79,7 +79,7 @@ export async function requireLocationAccess(event: H3Event, siteId: string, loca
 }
 
 /**
- * Site-wide management access (default): site settings, blog, translations,
+ * Site-wide management access (default): site settings, blog, localized content,
  * professional-services, analytics, domains, the contact-submissions inbox.
  * Requires org-wide roles or an editor with a location_id IS NULL scope row
  * for this site — a location-scoped-only editor is rejected here, matching

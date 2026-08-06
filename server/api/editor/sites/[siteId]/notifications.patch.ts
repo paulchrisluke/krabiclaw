@@ -25,7 +25,7 @@ export default defineEventHandler(async (event) => {
   const { env, db, site } = await requireSiteAccess(event, siteId)
 
   const wantsWhatsApp = Boolean(body.whatsapp_phone?.trim()) || (body.channels?.includes('whatsapp') ?? false)
-  if (wantsWhatsApp && !(await hasSiteEntitlement(db, siteId, 'whatsapp_notifications'))) {
+  if (wantsWhatsApp && !(await hasSiteEntitlement(db, siteId, 'messaging'))) {
     return jsonResponse({ error: 'WhatsApp notifications require a Growth plan or higher.' }, { status: 403 })
   }
 

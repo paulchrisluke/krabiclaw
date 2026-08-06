@@ -22,7 +22,6 @@ import { REVIEWS_TOOLS } from './reviews'
 import { SETTINGS_TOOLS } from './settings'
 import { SITES_TOOLS } from './sites'
 import { SUBMISSIONS_TOOLS } from './submissions'
-import { TRANSLATIONS_TOOLS } from './translations'
 
 export const MCP_PUBLIC_TOOLS: McpToolDefinition[] = [
   ...ACCOUNT_TOOLS,
@@ -47,7 +46,6 @@ export const MCP_PUBLIC_TOOLS: McpToolDefinition[] = [
   ...SETTINGS_TOOLS,
   ...SITES_TOOLS,
   ...SUBMISSIONS_TOOLS,
-  ...TRANSLATIONS_TOOLS,
 ].sort((a, b) => a.name.localeCompare(b.name))
 
 export const MCP_INTERNAL_TOOLS: McpToolDefinition[] = []

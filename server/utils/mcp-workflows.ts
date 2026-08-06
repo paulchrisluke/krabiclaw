@@ -1,4 +1,4 @@
-import { contentRegistry, getEditableFieldKeys, getFieldDef } from "~/config/content-registry";
+import { contentRegistry } from "~/config/content-registry";
 import { resolveSiteCmsCapabilities } from "~/server/utils/cms-capabilities";
 import { hasSiteEntitlement } from "~/server/utils/billing";
 import {
@@ -12,17 +12,6 @@ import {
   getOrgWhatsAppPhone,
   setOrgWhatsAppPhone,
 } from "~/server/utils/whatsapp";
-import {
-  clearSiteHeroField,
-  deleteSiteContentField,
-  getPageContent,
-  upsertSiteContent,
-} from "~/server/utils/content-management";
-import type { SiteContent } from "~/server/utils/content-management";
-import {
-  getProfessionalServiceEditorPageContent,
-  updateProfessionalServiceEditorPageContent,
-} from "~/server/utils/professional-services-editor";
 import type { CloudflareEnv } from "~/server/utils/auth";
 import { signOAuthState } from "~/server/utils/encryption";
 import { updateLocation } from "~/server/utils/location-management";
@@ -73,28 +62,6 @@ export async function getSiteForMcp(
   return site;
 }
 
-const HERO_FIELD_ALIASES: Record<
-  string,
-  "hero.title" | "hero.subtitle" | "hero.media"
-> = {
-  hero_heading: "hero.title",
-  hero_title: "hero.title",
-  "hero.title": "hero.title",
-  hero_subheading: "hero.subtitle",
-  hero_subtitle: "hero.subtitle",
-  "hero.subtitle": "hero.subtitle",
-  hero_media_asset_id: "hero.media",
-  "hero.media": "hero.media",
-};
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function editableFieldKeys(page: string, editor: "site_content" | "professional_services" = "site_content") {
-  return getEditableFieldKeys(page, editor);
-}
-
 async function assertSiteContentPage(
   db: DbClient,
   organizationId: string,
@@ -114,107 +81,10 @@ async function assertSiteContentPage(
   if (!pageCapability) {
     throw createError({ statusCode: 400, statusMessage: `Page "${page}" is not available for ${vertical}/${template}.` });
   }
-  if (pageCapability.editor !== "site_content" && pageCapability.editor !== "professional_services") {
+  if (pageCapability.editor !== "tenant_pages") {
     throw createError({ statusCode: 400, statusMessage: `Page "${page}" is owned by the ${pageCapability.editor} editor.` });
   }
   return pageCapability;
-}
-
-function normalizeStringField(value: unknown, field: string) {
-  if (typeof value !== "string") {
-    throw new Error(`Field "${field}" must be a string.`);
-  }
-  return value;
-}
-
-function normalizeHeroAssetField(
-  value: unknown,
-  field: string,
-): string | null {
-  if (value === null) return null;
-  return normalizeStringField(value, field) || null;
-}
-
-function normalizeContentChanges(
-  page: string,
-  changes: Record<string, unknown>,
-) {
-  if (!contentRegistry[page]) {
-    throw createError({ statusCode: 400, statusMessage: `Page "${page}" is not supported by the canonical content registry.` })
-  }
-  const normalizedFields = new Map<string, string>();
-  const heroChange: Partial<SiteContent> = {};
-  let hasHeroChange = false;
-
-  for (const [rawField, rawValue] of Object.entries(changes)) {
-    if (rawField === "hero") {
-      if (!isRecord(rawValue)) {
-        throw new Error(
-          'Field "hero" must be an object with hero_title/hero_subtitle/media asset IDs.',
-        );
-      }
-
-      const heroTitle = rawValue.hero_title;
-      const heroSubtitle = rawValue.hero_subtitle;
-      const heroMediaAssetId = rawValue.hero_media_asset_id;
-
-      if (heroTitle !== undefined)
-        heroChange.hero_title =
-          normalizeStringField(heroTitle, "hero.hero_title") || undefined;
-      if (heroSubtitle !== undefined)
-        heroChange.hero_subtitle =
-          normalizeStringField(heroSubtitle, "hero.hero_subtitle") || undefined;
-      if (heroMediaAssetId !== undefined)
-        heroChange.hero_media_asset_id =
-          normalizeHeroAssetField(
-            heroMediaAssetId,
-            "hero.hero_media_asset_id",
-          );
-
-      if (
-        heroTitle !== undefined ||
-        heroSubtitle !== undefined ||
-        heroMediaAssetId !== undefined
-      ) {
-        hasHeroChange = true;
-      }
-      continue;
-    }
-
-    const heroAlias = HERO_FIELD_ALIASES[rawField];
-    if (heroAlias) {
-      hasHeroChange = true;
-      if (heroAlias === "hero.title") {
-        const value = normalizeStringField(rawValue, rawField);
-        heroChange.hero_title = value || undefined;
-      }
-      if (heroAlias === "hero.subtitle") {
-        const value = normalizeStringField(rawValue, rawField);
-        heroChange.hero_subtitle = value || undefined;
-      }
-      if (heroAlias === "hero.media")
-        heroChange.hero_media_asset_id = normalizeHeroAssetField(
-          rawValue,
-          rawField,
-        );
-      continue;
-    }
-
-    const fieldDef = getFieldDef(page, rawField);
-    if (!fieldDef) {
-      const supported = editableFieldKeys(page);
-      throw new Error(
-        `Field "${rawField}" is not editable on page "${page}". Supported fields: ${supported.join(", ")}${supported.length ? ", " : ""}hero.title, hero.subtitle, hero.media.`,
-      );
-    }
-    if (fieldDef.type === "media") {
-      throw new Error(`Field "${rawField}" is a media placement. Use set_media instead.`);
-    }
-
-    normalizedFields.set(rawField, normalizeStringField(rawValue, rawField));
-  }
-
-  return { normalizedFields, heroChange, hasHeroChange };
 }
 
 export async function getLocationForMcp(
@@ -535,45 +405,20 @@ export async function listWorkRequestsForOrganization(
   `, [organizationId]);
 }
 
-function buildContentId(
-  organizationId: string,
-  siteId: string,
-  page: string,
-  field: string,
-  locationId?: string,
-) {
-  return `content::${organizationId}::${siteId}::${locationId ?? "site"}::${page}::${field}`;
+async function resolveTenantPagePath(db: DbClient, siteId: string, page: string, locationId?: string) {
+  if (page === 'location') {
+    if (!locationId) throw createError({ statusCode: 400, statusMessage: 'Location pages require an explicit location_id.' })
+    const location = await queryFirst<{ slug: string }>(db, 'SELECT slug FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1', [locationId, siteId])
+    if (!location) throw createError({ statusCode: 404, statusMessage: 'Location not found.' })
+    return `/locations/${location.slug}`
+  }
+  const path = contentRegistry[page]?.path
+  if (!path) throw createError({ statusCode: 400, statusMessage: `Page "${page}" is not registered as a tenant page.` })
+  return path
 }
 
-async function resolvePublicPath(
-  db: DbClient,
-  siteId: string,
-  page: string,
-  locationId?: string,
-) {
-  if (page === "location" && locationId) {
-    const location = await queryFirst<{ slug: string }>(db, `
-      SELECT slug
-      FROM business_locations
-      WHERE id = ? AND site_id = ?
-      LIMIT 1
-    `, [locationId, siteId]);
-
-    return location?.slug ? `/locations/${location.slug}` : "/locations";
-  }
-
-  if (page === "menu" && locationId) {
-    const location = await queryFirst<{ slug: string }>(db, `
-      SELECT slug
-      FROM business_locations
-      WHERE id = ? AND site_id = ?
-      LIMIT 1
-    `, [locationId, siteId]);
-
-    return location?.slug ? `/locations/${location.slug}/menu` : "/menu";
-  }
-
-  return contentRegistry[page]?.path ?? "/";
+export function buildTenantPageReplacementConfirmationToken(expectedDocumentUpdatedAt: string, removedBlockIds: readonly string[]) {
+  return `tenant-page-replacement:${expectedDocumentUpdatedAt}:${[...removedBlockIds].sort().join(',')}`
 }
 
 export async function updatePageContent(
@@ -604,106 +449,88 @@ export async function updatePageContent(
     if (!location) throw createError({ statusCode: 404, statusMessage: `Location "${locationId}" is not owned by site "${siteId}".` });
   }
 
-  if (pageDefinition.editor === "professional_services") {
-    const result = await updateProfessionalServiceEditorPageContent(db, {
-      organizationId,
-      siteId,
-      page: input.page,
-      changes: input.changes,
-      updatedBy: actorId ?? null,
-    });
-    await fireSiteEventSafe({
-      db,
-      organizationId,
-      siteId,
-      locationId: null,
-      actorId,
-      eventType: "content.updated",
-      entityType: "tenant_page",
-      entityId: `site:${input.page}`,
-      metadata: {
-        page: input.page,
-        fields: Object.keys(input.changes),
-        editor: "professional_services",
-      },
-    });
-    return result;
+  if (pageDefinition.editor !== "tenant_pages") throw createError({ statusCode: 410, statusMessage: 'Page authoring is available through the canonical Pages manager and complete block snapshots.' });
+  if (!Array.isArray(input.changes.blocks)) {
+    throw createError({ statusCode: 400, statusMessage: 'Tenant page updates must provide the canonical blocks array.' });
   }
-
-  const { normalizedFields, heroChange, hasHeroChange } =
-    normalizeContentChanges(input.page, input.changes);
-
-  for (const [field, value] of normalizedFields.entries()) {
-    const fieldDef = getFieldDef(input.page, field);
-    const isMediaField = fieldDef?.type === "media";
-    await upsertSiteContent(db, {
-      id: buildContentId(organizationId, siteId, input.page, field, locationId),
-      organization_id: organizationId,
-      site_id: siteId,
-      location_id: locationId,
-      page: input.page,
-      field,
-      value,
-      type: fieldDef?.type || "text",
-      source: "manual",
-      content: value,
-      hero_title: undefined,
-      hero_subtitle: undefined,
-      // Clear stale hero_media_asset_id so a leftover seed-time
-      // reference doesn't win over this field's new content value on read.
-      hero_media_asset_id: isMediaField ? null : undefined,
-    });
+  const { getTenantPageForEditorByPath, updateTenantPageDraft } = await import('~/server/utils/tenant-pages');
+  const canonicalPath = await resolveTenantPagePath(db, siteId, input.page, locationId);
+  const page = await getTenantPageForEditorByPath(db, siteId, canonicalPath);
+  const incomingBlockIds = new Set(
+    (input.changes.blocks as unknown[])
+      .map(block => block && typeof block === 'object' && 'id' in block && typeof (block as { id?: unknown }).id === 'string'
+        ? (block as { id: string }).id
+        : null)
+      .filter((id): id is string => Boolean(id)),
+  )
+  const removedBlockIds = page.blocks
+    .map(block => block.id)
+    .filter(blockId => !incomingBlockIds.has(blockId))
+  if (removedBlockIds.length) {
+    const expectedDocumentUpdatedAt = typeof input.changes.expected_document_updated_at === 'string'
+      ? input.changes.expected_document_updated_at
+      : typeof input.changes.expectedDocumentUpdatedAt === 'string'
+        ? input.changes.expectedDocumentUpdatedAt
+        : ''
+    const requestedRemovedIds = Array.isArray(input.changes.removed_block_ids)
+      ? input.changes.removed_block_ids.filter((id): id is string => typeof id === 'string').sort()
+      : []
+    const confirmationToken = typeof input.changes.confirmation_token === 'string'
+      ? input.changes.confirmation_token
+      : ''
+    const expectedToken = buildTenantPageReplacementConfirmationToken(page.document.updated_at, removedBlockIds)
+    if (expectedDocumentUpdatedAt !== page.document.updated_at || requestedRemovedIds.join(',') !== [...removedBlockIds].sort().join(',') || confirmationToken !== expectedToken) {
+      throw createError({
+        statusCode: 409,
+        statusMessage: `Complete block replacement would remove ${removedBlockIds.length} existing block(s). Confirm with expected_document_updated_at="${page.document.updated_at}", removed_block_ids=${JSON.stringify([...removedBlockIds].sort())}, confirmation_token="${expectedToken}".`,
+      })
+    }
   }
-
-  if (hasHeroChange) {
-    await upsertSiteContent(db, {
-      id: buildContentId(
-        organizationId,
-        siteId,
-        input.page,
-        "hero",
-        locationId,
-      ),
-      organization_id: organizationId,
-      site_id: siteId,
-      location_id: locationId,
-      page: input.page,
-      field: "hero",
-      type: "text",
-      source: "manual",
-      content: undefined,
-      updated_at: undefined as never,
-      ...(heroChange as Partial<SiteContent>),
-    } as Omit<SiteContent, "updated_at">);
-  }
-
+  const expectedDocumentUpdatedAt = typeof input.changes.expected_document_updated_at === 'string'
+    ? input.changes.expected_document_updated_at
+    : typeof input.changes.expectedDocumentUpdatedAt === 'string'
+      ? input.changes.expectedDocumentUpdatedAt
+      : page.document.updated_at
+  const result = await updateTenantPageDraft(db, page.id, {
+    userId: actorId ?? null,
+    scope: { siteId, organizationId },
+    data: {
+      path: typeof input.changes.path === 'string' ? input.changes.path : page.path,
+      title: typeof input.changes.title === 'string' ? input.changes.title : page.title,
+      summary: typeof input.changes.summary === 'string' ? input.changes.summary : page.summary,
+      seoTitle: typeof input.changes.seoTitle === 'string' ? input.changes.seoTitle : page.seo_title,
+      seoDescription: typeof input.changes.seoDescription === 'string' ? input.changes.seoDescription : page.seo_description,
+      canonicalUrl: typeof input.changes.canonicalUrl === 'string' ? input.changes.canonicalUrl : page.canonical_url,
+      robots: typeof input.changes.robots === 'string' ? input.changes.robots : page.robots,
+      pageType: page.page_type,
+      recipe: page.recipe,
+      sortOrder: page.sort_order,
+      blocks: input.changes.blocks,
+      expectedDocumentUpdatedAt,
+    },
+  });
   await fireSiteEventSafe({
     db,
     organizationId,
     siteId,
     locationId: locationId ?? null,
     actorId,
-    eventType: "content.updated",
-    entityType: "site_content",
-    entityId: `${locationId ?? "site"}:${input.page}`,
-    metadata: {
-      page: input.page,
-      fields: Array.from(normalizedFields.keys()),
-      includes_hero: hasHeroChange,
-    },
-  })
-
+    eventType: 'content.updated',
+    entityType: 'tenant_page',
+    entityId: page.id,
+    metadata: { page: input.page, editor: 'tenant_pages', block_count: result.page.blocks.length },
+  });
   return {
     success: true,
     page: input.page,
     location_id: locationId ?? null,
-    changes_count: normalizedFields.size + (hasHeroChange ? 1 : 0),
-    public_path: await resolvePublicPath(db, siteId, input.page, locationId),
+    changes_count: input.changes.blocks.length,
+    public_path: result.page.path,
   };
 }
 
 export async function getEditorContent(
-  db: D1Database,
+  db: DbClient,
   organizationId: string,
   siteId: string,
   page: string,
@@ -725,90 +552,22 @@ export async function getEditorContent(
     if (!location) throw createError({ statusCode: 404, statusMessage: `Location "${locationId}" is not owned by site "${siteId}".` });
   }
 
-  if (pageDefinition.editor === "professional_services") {
-    return await getProfessionalServiceEditorPageContent(db, organizationId, siteId, page);
-  }
-
-  const mergedContent = await getPageContent(
-    db,
-    organizationId,
-    siteId,
-    page,
-    locationId,
-  );
-
-  if (page === "location" && locationId) {
-    const locHero = await queryFirst<{
-      hero_media_asset_id: string | null;
-      hero_public_url: string | null;
-      hero_kind: string | null;
-    }>(db, `
-      SELECT bl.hero_media_asset_id,
-             media.public_url AS hero_public_url, media.kind AS hero_kind
-      FROM business_locations bl
-      LEFT JOIN media_assets media
-        ON bl.hero_media_asset_id = media.id
-       AND media.organization_id = bl.organization_id
-       AND media.site_id = bl.site_id
-       AND media.status = 'active'
-      WHERE bl.id = ? AND bl.site_id = ?
-      LIMIT 1
-    `, [locationId, siteId]);
-
-    if (locHero) {
-      const heroIdx = mergedContent.findIndex(
-        (content) => content.field === "hero",
-      );
-      const existing = heroIdx !== -1 ? mergedContent[heroIdx]! : null;
-      const overlaid = {
-        id: existing?.id ?? `bl-hero-${locationId}`,
-        organization_id: existing?.organization_id ?? organizationId,
-        site_id: existing?.site_id ?? siteId,
-        location_id: existing?.location_id ?? locationId,
-        page: existing?.page ?? page,
-        field: "hero",
-        type: existing?.type ?? "text",
-        source: existing?.source ?? "manual",
-        content: existing?.content,
-        value: existing?.value,
-        hero_title: existing?.hero_title,
-        hero_subtitle: existing?.hero_subtitle,
-        hero_media_asset_id: locHero.hero_media_asset_id ?? undefined,
-        hero_public_url: locHero.hero_public_url ?? null,
-        hero_kind: locHero.hero_kind ?? null,
-        updated_at: existing?.updated_at ?? new Date().toISOString(),
-      };
-      if (heroIdx !== -1) mergedContent[heroIdx] = overlaid;
-      else mergedContent.push(overlaid);
-    }
-  }
-
-  const editableKeys = editableFieldKeys(page, pageDefinition.editor);
-  const content = mergedContent.map((item) => {
-    const isStructuredHero = item.field === "hero";
-    const isEditableField =
-      isStructuredHero || Boolean(getFieldDef(page, item.field));
-    return {
-      ...item,
-      render_status: isEditableField ? "rendered" : "orphan",
-      editable_keys: isStructuredHero
-        ? ["hero.title", "hero.subtitle", "hero.media"]
-        : getFieldDef(page, item.field)
-          ? [item.field]
-          : [],
-    };
-  });
-
+  if (pageDefinition.editor !== "tenant_pages") throw createError({ statusCode: 410, statusMessage: 'Page authoring is available through the canonical Pages manager.' });
+  const { getTenantPageForEditorByPath } = await import('~/server/utils/tenant-pages');
+  const canonicalPath = await resolveTenantPagePath(db, siteId, page, locationId);
+  const canonicalPage = await getTenantPageForEditorByPath(db, siteId, canonicalPath);
   return {
-    fields: content,
+    success: true,
+    page: canonicalPage,
+    blocks: canonicalPage.blocks,
     siteId,
-    locationId,
-    page,
-    public_path: await resolvePublicPath(db, siteId, page, locationId),
-    schema: {
-      page,
-      fields: editableKeys,
-      structured: ["hero.title", "hero.subtitle", "hero.media"],
+    locationId: locationId ?? null,
+    public_path: canonicalPage.path,
+    schema: { page, fields: ['blocks'], structured: ['blocks'] },
+    replacement_confirmation: {
+      expected_document_updated_at: canonicalPage.document.updated_at,
+      current_block_ids: canonicalPage.blocks.map(block => block.id),
+      confirmation_format: 'tenant-page-replacement:<expected_document_updated_at>:<sorted_removed_block_ids_comma_separated>',
     },
   };
 }
@@ -823,26 +582,36 @@ export async function updateHomeHero(
     location_id?: string | null;
   },
 ) {
-  const changes: Record<string, unknown> = {
-    hero: {
-      ...(input.title !== undefined ? { hero_title: input.title ?? "" } : {}),
-      ...(input.subtitle !== undefined
-        ? { hero_subtitle: input.subtitle ?? "" }
-        : {}),
+  if (input.location_id) throw createError({ statusCode: 400, statusMessage: 'The canonical home page is site-scoped; update a location page for location-specific content.' })
+  const { getTenantPageForEditorByPath, updateTenantPageDraft } = await import('~/server/utils/tenant-pages')
+  const page = await getTenantPageForEditorByPath(db, siteId, '/')
+  const blocks = page.blocks.map(block => block.type === 'hero'
+    ? { ...block, data: { ...block.data, ...(input.title !== undefined ? { title: input.title } : {}), ...(input.subtitle !== undefined ? { subtitle: input.subtitle } : {}) } }
+    : block)
+  const result = await updateTenantPageDraft(db, page.id, {
+    userId: null,
+    scope: { siteId, organizationId },
+    data: {
+      path: page.path,
+      title: page.title,
+      summary: page.summary,
+      seoTitle: page.seo_title,
+      seoDescription: page.seo_description,
+      canonicalUrl: page.canonical_url,
+      robots: page.robots,
+      pageType: page.page_type,
+      recipe: page.recipe,
+      sortOrder: page.sort_order,
+      blocks,
+      expectedDocumentUpdatedAt: page.document.updated_at,
     },
-  };
-
-  const result = await updatePageContent(db, organizationId, siteId, {
-    page: "home",
-    changes,
-    location_id: input.location_id,
-  });
+  })
 
   return {
     success: true,
     page: "home",
-    changes_count: result.changes_count,
-    public_path: result.public_path,
+    changes_count: 1,
+    public_path: result.page.path,
   };
 }
 
@@ -923,47 +692,8 @@ export async function deleteContentField(
   input: { page: string; field: string; location_id?: string | null },
   actorId?: string | null,
 ) {
-  const locationId = input.location_id ?? undefined;
-  const heroAlias = HERO_FIELD_ALIASES[input.field];
-  if (heroAlias) {
-    await clearSiteHeroField(
-      db,
-      organizationId,
-      siteId,
-      input.page,
-      heroAlias,
-      locationId,
-    );
-  } else {
-    await deleteSiteContentField(
-      db,
-      organizationId,
-      siteId,
-      input.page,
-      input.field,
-      locationId,
-    );
-  }
-  await fireSiteEventSafe({
-    db,
-    organizationId,
-    siteId,
-    locationId: locationId ?? null,
-    actorId,
-    eventType: "content.updated",
-    entityType: "site_content",
-    entityId: `${locationId ?? "site"}:${input.page}`,
-    metadata: {
-      page: input.page,
-      deleted_field: input.field,
-    },
-  })
-  return {
-    deleted: true,
-    page: input.page,
-    field: input.field,
-    public_path: await resolvePublicPath(db, siteId, input.page, locationId),
-  };
+  void db; void organizationId; void siteId; void input; void actorId
+  throw createError({ statusCode: 410, statusMessage: 'Field-based page deletion has been removed. Delete a block in the Pages manager and save the complete draft.' });
 }
 
 export async function getGoogleBusinessLocationConnectionForMcp(
