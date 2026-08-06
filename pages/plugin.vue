@@ -92,7 +92,7 @@
                 <div class="bg-white rounded-xl overflow-hidden shadow-sm relative -mt-8 z-10 p-5 h-full">
                   <p class="text-xs text-gray-600 mb-3 leading-relaxed">Here are <strong>all the tools available</strong> for your site:</p>
                   <ul class="text-[11px] text-gray-600 space-y-2 pl-4 list-disc marker:text-gray-300">
-                    <li>Create multi-language menus</li>
+                    <li>Manage menu copy for each locale</li>
                     <li>Change hero text and styling</li>
                     <li>Upload or generate photos</li>
                     <li>Publish posts to your blog</li>
