@@ -4,7 +4,7 @@ import { bookingPolicyObject, bookingPolicyWriteSchema, renderedBookingPolicySum
 export const CONTENT_TOOLS: McpToolDefinition[] = [
   siteTool({
       name: 'get_page_fields',
-      description: 'Get editable field definitions and current values for a page. Call this before update_page_content to see which fields exist and what they are set to.',
+      description: 'Get the current tenant page metadata and typed blocks. Call this before update_page_content to inspect the canonical page shape.',
       domain: 'content',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -38,13 +38,15 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
               structured: { type: 'array', items: { type: 'string' } },
             },
           },
+          page_data: { type: 'object' },
+          blocks: { type: 'array', items: { type: 'object' } },
         },
-        required: ['page', 'siteId', 'fields'],
+        required: ['page', 'siteId'],
       },
     }),
   siteTool({
       name: 'update_page_content',
-      description: 'Update canonical page content directly. Validates field names against the page schema and writes live renderer-bound content immediately.',
+      description: 'Update a tenant page through the canonical editor. changes must include the complete typed blocks array plus any changed page metadata. Structured business data is edited through its own domain tool.',
       domain: 'content',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -65,7 +67,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'get_professional_service_content',
-      description: 'Get Blawby/professional-service content for a site: offerings, tenant pages, compliance text, consultation settings, navigation, and theme tokens.',
+      description: 'Get structured Blawby/professional-service data for a site: offerings, compliance text, consultation settings, navigation, and theme tokens. Page composition is managed through the canonical Pages tools.',
       domain: 'content',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -74,24 +76,22 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
         type: 'object',
         properties: {
           offerings: { type: 'array', items: { type: 'object' } },
-          tenantPages: { type: 'array', items: { type: 'object' } },
           compliance: { type: ['object', 'null'] },
           consultation: { type: 'object' },
           navigation: { type: 'array', items: { type: 'object' } },
           themeTokens: { type: 'object' },
         },
-        required: ['offerings', 'tenantPages', 'consultation', 'navigation', 'themeTokens'],
+        required: ['offerings', 'consultation', 'navigation', 'themeTokens'],
       },
     }),
   siteTool({
       name: 'update_professional_service_content',
-      description: 'Create or update Blawby/professional-service content. Use structured calculator components only; arbitrary formulas, scripts, or expressions are rejected.',
+      description: 'Create or update structured Blawby/professional-service data. Page composition is managed through the canonical Pages tools.',
       domain: 'content',
       minimumRole: 'editor',
       confirmRequired: false,
       inputSchema: {
         offerings: { type: 'array', items: { type: 'object' } },
-        tenantPages: { type: 'array', items: { type: 'object' } },
         compliance: {
           type: 'object',
           description: 'Canonical organization/compliance data used by every professional-service surface and its schema.org graph.',
@@ -214,7 +214,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       inputSchema: {
         title: { type: 'string' },
         subtitle: { type: 'string' },
-        location_id: { type: 'string', description: 'Optional location scope when the homepage content is location-specific.' },
+        location_id: { type: 'string', description: 'Not supported for the site-scoped homepage.' },
       },
       outputSchema: {
         type: 'object',
@@ -226,25 +226,6 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
           view_url: { type: ['string', 'null'] },
         },
         required: ['success', 'page', 'changes_count'],
-      },
-    }),
-  siteTool({
-      name: 'delete_content_field',
-      description: 'Delete a canonical content field from live page content.',
-      domain: 'content',
-      minimumRole: 'editor',
-      confirmRequired: true,
-      inputSchema: { page: { type: 'string' }, field: { type: 'string' }, location_id: { type: 'string' } },
-      required: ['page', 'field'],
-      outputSchema: {
-        type: 'object',
-        properties: {
-          deleted: { type: 'boolean' },
-          field: { type: 'string' },
-          public_path: { type: 'string' },
-          view_url: { type: ['string', 'null'] },
-        },
-        required: ['deleted'],
       },
     }),
 ]

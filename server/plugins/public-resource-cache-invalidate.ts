@@ -21,8 +21,11 @@
 // call: its tools only touch site_id IS NULL platform-scoped rows, which the
 // public resource endpoints's tenant-scoped queries (WHERE site_id = ?) never read.
 
-import { getResponseStatus } from 'h3'
+import { getHeader, getResponseStatus } from 'h3'
 import type { H3Event } from 'h3'
+import { queryAll } from '~/server/db'
+import { normalizeHost } from '~/server/utils/tenant-hosts'
+import { purgeSiteKvCache } from '~/server/utils/edge-cache'
 import { purgePublicResourceCache } from '~/server/utils/public-resource-cache'
 
 const EDITOR_SITES_PREFIX = '/api/editor/sites/'
@@ -38,8 +41,12 @@ export default defineNitroPlugin((nitroApp) => {
     const siteId = event.context.params?.siteId
     if (!siteId) return
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const kv = (event.context.cloudflare?.env as any)?.SITE_CACHE as KVNamespace | undefined
+    const runtimeEnv = event.context.cloudflare?.env as {
+      DB?: Parameters<typeof queryAll>[0]
+      SITE_CACHE?: KVNamespace
+      NUXT_PUBLIC_FREE_SITE_DOMAIN?: string
+    } | undefined
+    const kv = runtimeEnv?.SITE_CACHE
     if (!kv) return
 
     // Awaited inline rather than scheduled via waitUntil — afterResponse hooks
@@ -50,6 +57,29 @@ export default defineNitroPlugin((nitroApp) => {
     // complete until the purge finishes.
     try {
       await purgePublicResourceCache(kv, siteId)
+      if (runtimeEnv.DB) {
+        const domains = await queryAll<{ domain: string }>(runtimeEnv.DB, `
+          SELECT domain FROM site_domains
+           WHERE site_id = ? AND status = 'active'
+        `, [siteId])
+        const siteRows = await queryAll<{ subdomain: string | null; custom_domain: string | null }>(runtimeEnv.DB, `
+          SELECT subdomain, custom_domain FROM sites WHERE id = ? LIMIT 1
+        `, [siteId])
+        const site = siteRows[0]
+        const freeSiteDomain = normalizeHost(runtimeEnv.NUXT_PUBLIC_FREE_SITE_DOMAIN) || 'krabiclaw.com'
+        const hostnames = new Set<string>(domains.map(({ domain }) => domain))
+        if (site?.subdomain) hostnames.add(`${site.subdomain}.${freeSiteDomain}`)
+        if (site?.custom_domain) hostnames.add(site.custom_domain)
+
+        const requestHost = getHeader(event, 'host') || ''
+        const port = requestHost.split(':')[1]
+        if (port) {
+          for (const hostname of [...hostnames]) {
+            if (hostname.endsWith('.localhost')) hostnames.add(`${hostname}:${port}`)
+          }
+        }
+        await purgeSiteKvCache(kv, [...hostnames])
+      }
     } catch (err: unknown) {
       console.warn('[public-resource-cache] purge failed:', String(err))
     }

@@ -16,6 +16,7 @@ import {
   WEEKDAY_NAMES,
 } from "~/server/utils/experiences";
 import { contentRegistry } from "~/config/content-registry";
+import { cmsCapabilityRegistry } from "~/config/cms-registry";
 import {
   CHOWBOT_TOOLS,
   CHOWBOT_CONFIRM_REQUIRED,
@@ -121,7 +122,8 @@ function getToolString(
 }
 
 function isSiteContentPage(page: string): page is keyof typeof contentRegistry {
-  return Object.prototype.hasOwnProperty.call(contentRegistry, page);
+  return Object.prototype.hasOwnProperty.call(contentRegistry, page)
+    || cmsCapabilityRegistry.some((capability) => capability.pages.some((candidate) => candidate.id === page));
 }
 
 function isAllowedGoogleMapsHost(hostname: string): boolean {
@@ -555,21 +557,6 @@ async function executeTool(
       });
     }
 
-    // Regression fix: update_page_content/delete_content_field used to
-    // maintain their own inline hero-field read-merge-write logic
-    // (readHeroContentState/heroColumnForField/isEmptyHeroState), duplicating
-    // what mcp-workflows.ts's updatePageContent/deleteContentField already
-    // do correctly via a CASE-based partial upsert — that shared function
-    // accepts the exact same "hero.title"/"hero.subtitle"/"hero.media"
-    // field keys via HERO_FIELD_ALIASES. deleteContentField's
-    // hero handling didn't exist at all before this branch (see the fix in
-    // mcp-workflows.ts) — MCP's delete_content_field silently deleted
-    // nothing for hero sub-fields, since they live as columns on a single
-    // row keyed by field="hero", not their own row.
-
-    // Both delegate to mcp-executor/content.ts's get/update_professional_service_content
-    // cases, which call the same getProfessionalServiceContent/upsertProfessionalServiceContent
-    // functions the dashboard editor and MCP both use — see professional-services-editor.ts.
     case "get_professional_service_content":
       return runMcpExecutorToolForChowbot(executorSite, "get_professional_service_content", input);
 
@@ -591,33 +578,18 @@ async function executeTool(
 
     case "update_page_content": {
       const page = getToolString(input, "page", 40);
-      const field = getToolString(input, "field", 80);
-      const value = getToolString(input, "value", 20000);
       if (!page || !isSiteContentPage(page)) return { error: "Invalid page." };
-      if (!field) return { error: "Field is required." };
+      const changes = input.changes;
+      if (!changes || typeof changes !== "object" || Array.isArray(changes)) {
+        return { error: "Changes are required." };
+      }
       const targetLocationId =
         typeof input.location_id === "string" && input.location_id.trim()
           ? input.location_id.trim()
           : (ctx.locationId ?? undefined);
       return runMcpExecutorToolForChowbot(executorSite, "update_page_content", {
         page,
-        changes: { [field]: value ?? "" },
-        location_id: targetLocationId,
-      });
-    }
-
-    case "delete_content_field": {
-      const page = getToolString(input, "page", 40);
-      const field = getToolString(input, "field", 80);
-      if (!page || !isSiteContentPage(page)) return { error: "Invalid page." };
-      if (!field) return { error: "Field is required." };
-      const targetLocationId =
-        typeof input.location_id === "string" && input.location_id.trim()
-          ? input.location_id.trim()
-          : (ctx.locationId ?? undefined);
-      return runMcpExecutorToolForChowbot(executorSite, "delete_content_field", {
-        page,
-        field,
+        changes,
         location_id: targetLocationId,
       });
     }
@@ -1192,8 +1164,8 @@ Guidelines:
 - When creating menus, omit location_id — the server links it to the current location automatically
 - Reservation rules, hold times, cancellation windows, deposits, and experience cancellation terms are structured booking policy fields specifically — not editable through any tool available here. Tell the user to edit those specific fields in the dashboard instead of attempting it. The reservations page's own copy (title, intro text, images) is regular page content and stays editable like any other page — see the next line
 - Use search_public_resources for docs/help/product questions, support routing, and when the user asks where something lives in public docs or on the platform site
-${translationWorkflowGuidance}- Use get_page_fields, update_page_content, and delete_content_field for tenant page content such as home, about, contact, reservations, and location notes
-${translationConfirmationGuidance}- Before publish_post, delete_post, publish_menu, delete_menu, delete_menu_item, delete_menu_section, delete_location, delete_media_asset, delete_location_qa, or delete_content_field — confirm first
+${translationWorkflowGuidance}- Use get_page_fields to inspect page content, then update_page_content with the complete canonical blocks array for tenant pages such as home, about, contact, services, pricing, donate, and schedule. Use field changes only for registered scoped domain content such as location notes.
+${translationConfirmationGuidance}- Before publish_post, delete_post, publish_menu, delete_menu, delete_menu_item, delete_menu_section, delete_location, delete_media_asset, or delete_location_qa — confirm first
 - Menus are live immediately when created — use publish_menu only to republish a menu that was set to unpublished
 - Keep responses short — this is a chat panel`;
 

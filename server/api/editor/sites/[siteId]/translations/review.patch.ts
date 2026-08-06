@@ -10,7 +10,7 @@ import { queryFirst } from '~/server/db'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 
 function parseEntityType(value: unknown): TranslationEntityType | null {
-  return value === 'site_content' || value === 'menu' || value === 'menu_item' || value === 'business_location' || value === 'post'
+  return value === 'tenant_page' || value === 'menu' || value === 'menu_item' || value === 'business_location' || value === 'post'
     ? value
     : null
 }

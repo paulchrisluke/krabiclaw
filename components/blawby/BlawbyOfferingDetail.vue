@@ -114,6 +114,7 @@
 
 <script setup lang="ts">
 import type { PublicBlawbyRouteData, PublicSiteQa } from '~/types/blawby'
+import { findTenantPageBlock } from '~/utils/tenant-page-blocks'
 
 const props = defineProps<{ routeData: PublicBlawbyRouteData }>()
 const offering = computed(() => props.routeData.offering!)
@@ -130,7 +131,10 @@ const gallery = computed(() => {
 })
 const activeFeatureItem = computed(() => offering.value.features[activeFeature.value] ?? null)
 function pageBlock(type: string) {
-  return props.routeData.page?.components.find(component => component.type === type) ?? null
+  const page = props.routeData.page
+  if (!page) return null
+  const canonicalType = type === 'services_intro' ? 'offering_grid' : type === 'consultation_cta' ? 'contact_cta' : type === 'qa' ? 'faq' : undefined
+  return findTenantPageBlock(page.blocks, type, canonicalType)
 }
 function optionalString(value: unknown) {
   return typeof value === 'string' && value ? value : null

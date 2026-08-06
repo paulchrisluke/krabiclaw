@@ -113,7 +113,7 @@ owner/admin callers and keep their existing organization-level checks.
 | `editor/sites/[siteId]/posts/[postId]/publish.post.ts` | | | | ✓ (post row's own `location_id`) | | `loadMemberSiteRow` + `assertResourceAccess` before site/social publication |
 | `editor/sites/[siteId]/translations/{inventory.get,jobs.get,jobs/[jobId].get,review.get,review.patch}.ts` | | ✓ | | | | inline SQL + `assertSiteWideAccess` (translations have no location concept) |
 | `editor/sites/[siteId]/translations/{jobs.post,publish.post,jobs/[jobId]/run.post}.ts` | ✓ (already owner/admin-only) | | | | | unchanged — not editor-affected |
-| `editor/sites/[siteId]/content/[page].get.ts`, `content/save.post.ts`, `content/delete-field.post.ts` | | | | ✓ (query/body `locationId`) | | inline SQL + `assertResourceAccess` |
+| Canonical `editor/sites/[siteId]/pages*` endpoints | | | | ✓ (site-scoped) | | shared tenant-page service + `assertSiteWideAccess` |
 | `editor/sites/[siteId]/locales/index.get.ts` | | ✓ | | | | inline SQL + `assertSiteWideAccess` |
 | `editor/sites/[siteId]/locales/{index.post,[locale].patch,[locale].delete}.ts` | ✓ (already owner/admin-only) | | | | | unchanged — not editor-affected |
 

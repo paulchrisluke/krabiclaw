@@ -1,5 +1,5 @@
 import Stripe from 'stripe'
-import { execute, executeBatch, queryAll, queryFirst } from '~/server/db'
+import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { betterAuthTimestampToIso } from '~/server/utils/better-auth-timestamps'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
 import { getOrgAdapter } from 'better-auth/plugins'
@@ -188,7 +188,7 @@ export async function getOrganizationEntitlements(db: D1Database, organizationId
   return parseEntitlementRows(rows ?? [])
 }
 
-export async function hasSiteEntitlement(db: D1Database, siteId: string, key: string): Promise<boolean> {
+export async function hasSiteEntitlement(db: DbClient, siteId: string, key: string): Promise<boolean> {
   const site = await queryFirst<{ organization_id: string }>(db, `
     SELECT organization_id FROM sites WHERE id = ? LIMIT 1
   `, [siteId])
@@ -422,7 +422,7 @@ export async function getUserBillingItems(
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
-async function getBetterAuthSubscription(db: D1Database, organizationId: string): Promise<BetterAuthSubscriptionRow | null> {
+async function getBetterAuthSubscription(db: DbClient, organizationId: string): Promise<BetterAuthSubscriptionRow | null> {
   return await queryFirst<BetterAuthSubscriptionRow>(db, `
     SELECT plan, referenceId, stripeCustomerId, stripeSubscriptionId, status,
            periodEnd, cancelAtPeriodEnd,

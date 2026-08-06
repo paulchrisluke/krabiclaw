@@ -1,6 +1,6 @@
 import type { McpExecutorContext } from './shared'
 import { applyBookingPolicyPatch, getDirectBookingPolicy, renderBookingPolicySummary, resolveBookingPolicy, upsertBookingPolicy, validateBookingPolicyPatch, type BookingPolicyScopeType, type BookingPolicyType } from '~/server/utils/booking-policies'
-import { deleteContentField, getEditorContent, updateHomeHero, updatePageContent } from '~/server/utils/mcp-workflows'
+import { getEditorContent, updateHomeHero, updatePageContent } from '~/server/utils/mcp-workflows'
 import { getProfessionalServiceContent, upsertProfessionalServiceContent } from '~/server/utils/professional-services-editor'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { attachViewUrlToRecord, NOT_HANDLED, mutationContextPayload, objectRecord, optionalString, requiredString, rethrowAsInvalidParams } from './shared'
@@ -178,24 +178,6 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
         };
       } catch (error) {
         return rethrowAsInvalidParams(error);
-      }
-    case "delete_content_field":
-      {
-        const locationId = optionalString(args, "location_id");
-        const result = await deleteContentField(
-        site.db,
-        site.organizationId,
-        site.siteId,
-        {
-          page: requiredString(args, "page"),
-          field: requiredString(args, "field"),
-          location_id: locationId,
-        },
-        );
-        return {
-          ...attachViewUrlToRecord(result, site, {}, site.env),
-          context: await mutationContextPayload(site, { locationId }),
-        };
       }
     default:
       return NOT_HANDLED

@@ -7,6 +7,7 @@ import { runSiteCreation } from '~/server/utils/site-creation'
 import { setConfig } from '~/server/utils/site-config'
 import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
 import { createMediaAsset } from '~/server/utils/media-asset-manager'
+import { createTenantPage, getTenantPageForEditorByPath, publishTenantPage, updateTenantPageDraft } from '~/server/utils/tenant-pages'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
 type SiteEnv = Parameters<typeof runSiteCreation>[0]
@@ -21,6 +22,27 @@ function summarizeBatchQueries(batchQueries: BatchQuery[]) {
     statement: entry.query.trim().split(/\s+/).slice(0, 12).join(' '),
     params: Array.isArray(entry.params) ? entry.params.length : 0,
   }))
+}
+
+function onboardingPagePath(page: string): string {
+  if (page === 'home') return '/'
+  if (page === 'privacy') return '/policies/privacy'
+  if (page === 'terms') return '/policies/terms'
+  return `/${page}`
+}
+
+function onboardingPageBlocks(rows: Array<{ id?: string; field: string; content: string | null; hero_title: string | null; hero_subtitle: string | null; hero_media_asset_id?: string | null; type: string }>, heroAssetId: string | null) {
+  const blocks: Array<{ id: string; type: string; position: number; data: Record<string, unknown> }> = []
+  for (const row of rows) {
+    if (row.field === 'hero') {
+      blocks.push({ id: row.id ?? crypto.randomUUID(), type: 'hero', position: blocks.length, data: { title: row.hero_title ?? row.content ?? undefined, subtitle: row.hero_subtitle, asset_id: heroAssetId ?? row.hero_media_asset_id ?? null } })
+    } else if (row.content?.trim()) {
+      const type = row.type === 'media' || row.field.endsWith('.image') ? 'image' : row.field.endsWith('.title') || row.field.endsWith('.headline') ? 'heading' : 'markdown'
+      blocks.push({ id: row.id ?? crypto.randomUUID(), type, position: blocks.length, data: type === 'image' ? { field: row.field, url: row.content, alt: row.field } : type === 'heading' ? { field: row.field, text: row.content, level: 2 } : { field: row.field, markdown: row.content } })
+    }
+  }
+  if (!blocks.length) blocks.push({ id: crypto.randomUUID(), type: 'hero', position: 0, data: { title: 'Welcome', subtitle: null } })
+  return blocks
 }
 
 export default defineEventHandler(async (event) => {
@@ -198,7 +220,29 @@ export default defineEventHandler(async (event) => {
     const heroIsPlaceholder = !payload.source.place?.photos?.[0]?.photoUri
     await setConfig(db, organizationId, siteId, 'hero_image_is_placeholder', heroIsPlaceholder ? 'true' : 'false')
 
-    // The full rebuild (content/menu/qa/posts/reviews delete+insert) plus the final
+    const contentByPage = new Map<string, typeof payload.preview.content>()
+    for (const row of payload.preview.content) {
+      const rows = contentByPage.get(row.page) ?? []
+      rows.push(row)
+      contentByPage.set(row.page, rows)
+    }
+    for (const [pageName, rows] of contentByPage) {
+      const path = onboardingPagePath(pageName)
+      let current: Awaited<ReturnType<typeof getTenantPageForEditorByPath>> | null = null
+      try { current = await getTenantPageForEditorByPath(db, siteId, path) } catch (error) {
+        if (!(error && typeof error === 'object' && 'statusCode' in error && Number((error as { statusCode?: unknown }).statusCode) === 404)) throw error
+      }
+      const pageType = pageName === 'privacy' || pageName === 'terms' ? 'legal' : pageName === 'home' || pageName === 'about' || pageName === 'contact' ? 'system' : 'recipe'
+      const blocks = onboardingPageBlocks(rows, pageName === 'home' ? heroAssetId : null)
+      if (!current) {
+        await createTenantPage(db, { organizationId, siteId, userId: session.user.id, trustedSystemPage: pageType === 'system', data: { locale: 'en', path, title: rows.find(row => row.field === 'hero')?.hero_title ?? pageName, pageType, recipe: pageName, blocks, publish: true } })
+      } else {
+        const updated = await updateTenantPageDraft(db, current.id, { userId: session.user.id, scope: { siteId, organizationId }, data: { path: current.path, title: rows.find(row => row.field === 'hero')?.hero_title ?? current.title, summary: current.summary, seoTitle: current.seo_title, seoDescription: current.seo_description, canonicalUrl: current.canonical_url, robots: current.robots, pageType: current.page_type, recipe: current.recipe, sortOrder: current.sort_order, blocks, expectedDocumentUpdatedAt: current.document.updated_at } })
+        await publishTenantPage(db, current.id, { userId: session.user.id, scope: { siteId, organizationId }, expectedDocumentUpdatedAt: updated.page.document.updated_at })
+      }
+    }
+
+    // The full rebuild (menu/qa/posts/reviews delete+insert) plus the final
     // draft status flip runs as a single atomic D1 batch, so a failure partway through
     // never leaves the site with half-cleared content — see incident notes for why
     // sequential execute() calls here are unsafe.
@@ -209,46 +253,6 @@ export default defineEventHandler(async (event) => {
       batchQueries.push({
         query: `UPDATE sites SET logo_asset_id = ?, updated_at = ? WHERE id = ? AND organization_id = ?`,
         params: [logoAssetId, now, siteId, organizationId],
-      })
-    }
-
-    batchQueries.push({ query: `DELETE FROM site_content WHERE organization_id = ? AND site_id = ?`, params: [organizationId, siteId] })
-    for (const row of payload.preview.content) {
-      const isHomeHero = row.page === 'home' && row.field === 'hero'
-      const heroSource = isHomeHero && (
-        heroAssetId
-        || payload.preview.config.draft_hero_headline
-        || payload.preview.config.draft_hero_description
-      )
-        ? 'owner'
-        : 'template'
-      // Most draft content is template copy. The home hero can be owner-authored
-      // through Make it yours before commit, so preserve that source separately.
-      batchQueries.push({
-        query: `
-          INSERT INTO site_content
-            (id, organization_id, site_id, location_id, page, field, content,
-             hero_title, hero_subtitle, hero_media_asset_id, value, type, source, updated_at, updated_by, component)
-          VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT (organization_id, site_id, page, field) WHERE location_id IS NULL DO NOTHING
-        `,
-        params: [
-          crypto.randomUUID(),
-          organizationId,
-          siteId,
-          row.page,
-          row.field,
-          row.content,
-          row.hero_title,
-          row.hero_subtitle,
-          isHomeHero ? heroAssetId : null,
-          row.value,
-          row.type,
-          heroSource,
-          row.updated_at || now,
-          session.user.id,
-          row.component,
-        ],
       })
     }
 

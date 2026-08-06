@@ -34,7 +34,7 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
       site: siteBase,
       project: locationBase,
       conversations: `${siteBase}/conversations`,
-      content: `${siteBase}/content`,
+      pages: `${siteBase}/pages`,
       menu: `${locationBase}/menu`,
       posts: `${locationBase}/posts`,
       photos: `${locationBase}/photos`,
@@ -116,10 +116,7 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
     return `${paths.value.site}/locations/${location?.slug ?? locationId}`
   }
   const locationMenuPath = (locationId: string) => `${locationPath(locationId)}/menu`
-  // Points at the location-scoped content editor's "location" page (a distinct
-  // route from paths.value.content, which is site-scoped only) — see
-  // pages/dashboard/[orgSlug]/sites/[siteSlug]/locations/[locationSlug]/content/[pageId].vue.
-  const locationContentPath = (locationId: string) => `${locationPath(locationId)}/content/location`
+  const locationContentPath = (_locationId: string) => paths.value.pages
 
   const menuPath = (locationId?: string | null) => {
     if (locationId) {
@@ -136,7 +133,7 @@ export function useDashboardSiteLinks(siteId: MaybeRef<string>, sitePublicUrl?: 
     }
   }
 
-  const contentPath = (page?: string) => (page ? `${paths.value.content}/${page}` : paths.value.content)
+  const contentPath = (page?: string) => (page ? `${paths.value.pages}/${page}` : paths.value.pages)
 
   const editorBackPath = computed(() => paths.value.project)
 

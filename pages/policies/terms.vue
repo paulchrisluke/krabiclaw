@@ -1,11 +1,6 @@
 <template>
   <NuxtLayout name="blawby">
-    <BlawbyTenantPage
-      path="/policies/terms"
-      fallback-eyebrow="Policy"
-      fallback-title="Terms of Use"
-      fallback-summary="Terms and notices for using this website."
-    />
+    <BlawbyTenantPage path="/policies/terms" />
   </NuxtLayout>
 </template>
 

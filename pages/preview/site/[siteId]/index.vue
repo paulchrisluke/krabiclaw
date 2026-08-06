@@ -1,10 +1,13 @@
 <template>
-  <HomePage />
+  <NuxtLayout :name="isBlawby ? 'blawby' : 'saya'">
+    <TenantPublicPage path="/" :preview-token="previewToken" />
+  </NuxtLayout>
 </template>
 
 <script setup lang="ts">
-import HomePage from '~/pages/index.vue'
+definePageMeta({ layout: false })
 
-// HomePage sets layout: false and wraps itself in <NuxtLayout name="saya">,
-// so applying layout: 'saya' here too would double-render SayaHeader/Footer.
+const route = useRoute()
+const { isBlawby } = usePublicTemplate()
+const previewToken = computed(() => typeof route.query.token === 'string' ? route.query.token : null)
 </script>
