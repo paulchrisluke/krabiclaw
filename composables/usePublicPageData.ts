@@ -128,7 +128,10 @@ export const usePublicPageData = async (options: {
     onScopeDispose(stopKeyWatch)
   }
   if (import.meta.server) {
-    await Promise.all([asyncData, shell.ready])
+    if ('execute' in asyncData && (asyncData.pending.value || asyncData.data.value === undefined)) {
+      await asyncData.execute({ cause: 'initial', dedupe: 'defer' })
+    }
+    await shell.ready
     if (asyncData.error.value) throw asyncData.error.value
     if (options.routeOwned !== false && shell.error.value) throw shell.error.value
   }
