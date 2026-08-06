@@ -86,8 +86,8 @@ async function hydrateBlocks(db: DbClient, siteId: string, pagePath: string, blo
   }
   for (const location of locations) if (location.hero_media_asset_id) assetIds.add(location.hero_media_asset_id)
   for (const post of postRows) if (post.featured_image_asset_id) assetIds.add(post.featured_image_asset_id)
-  const rows = assetIds.size ? await queryAll<{ id: string; public_url: string | null; thumbnail_url: string | null; alt_text: string | null }>(db, `
-    SELECT id, public_url, thumbnail_url, alt_text
+  const rows = assetIds.size ? await queryAll<{ id: string; kind: string | null; public_url: string | null; thumbnail_url: string | null; alt_text: string | null }>(db, `
+    SELECT id, kind, public_url, thumbnail_url, alt_text
       FROM media_assets
      WHERE site_id = ? AND status = 'active' AND id IN (${Array.from(assetIds).map(() => '?').join(',')})
   `, [siteId, ...assetIds])
@@ -123,13 +123,14 @@ async function hydrateBlocks(db: DbClient, siteId: string, pagePath: string, blo
       const asset = media.get(assetId)
       data.url = asset?.public_url ?? null
       data.thumbnail_url = asset?.thumbnail_url ?? null
+      data.kind = asset?.kind ?? null
       data.asset_alt = asset?.alt_text ?? null
     }
     if (Array.isArray(data.asset_ids)) {
       data.images = data.asset_ids.map(value => {
         const asset = typeof value === 'string' ? media.get(value) : null
         if (!asset?.public_url) throw createError({ statusCode: 500, statusMessage: 'Tenant page gallery media is unavailable' })
-        return { id: value, url: asset.public_url, thumbnail_url: asset.thumbnail_url, alt: asset.alt_text }
+        return { id: value, url: asset.public_url, thumbnail_url: asset.thumbnail_url, kind: asset.kind, alt: asset.alt_text }
       })
     }
     if (block.type === 'offering_grid' && Array.isArray(data.offering_ids)) {
