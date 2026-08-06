@@ -70,7 +70,7 @@ export const usePublicPageData = async (options: {
   const asyncData =
     isPlatform || (!siteId && !draftId)
       ? { data: ref<PublicPagePayload>(), error: ref<Error | null>(null), pending: ref(false), refresh: async () => {} }
-      : useAsyncData<PublicPagePayload>(
+      : await useAsyncData<PublicPagePayload>(
           key,
           (_nuxtApp, { signal }) => loadPublicResourcePayload<PublicPagePayload>({
               draftId,
