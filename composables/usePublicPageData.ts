@@ -41,6 +41,7 @@ export const usePublicPageData = async (options: {
   routeOwned?: boolean
 } = {}) => {
   const { isPlatform, siteId, draftId } = useTenantSite();
+  const nuxtApp = useNuxtApp()
   const route = useRoute();
   const params = usePublicPageRequest();
   const routeLoadState = usePublicRouteLoadState();
@@ -131,7 +132,6 @@ export const usePublicPageData = async (options: {
   }
   if (import.meta.server) {
     if ('execute' in asyncData && (asyncData.pending.value || asyncData.data.value === undefined)) {
-      const nuxtApp = useNuxtApp()
       await nuxtApp.runWithContext(() => asyncData.execute({ cause: 'initial', dedupe: 'defer' }))
     }
     await shell.ready
