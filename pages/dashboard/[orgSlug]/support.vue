@@ -49,7 +49,7 @@
               <div>
                 <h2 class="text-lg font-bold text-highlighted">Managed support is included in Growth</h2>
                 <p class="mt-1 text-sm text-muted max-w-md">
-                  Upgrade and Paul & Julia handle your updates, translations, and Google presence.
+                  Upgrade and Paul & Julia handle your updates and Google presence.
                   Visit our help page for more information.
                 </p>
               </div>
@@ -181,14 +181,14 @@ const { open: openUpsell } = useServiceUpsell()
 
 const TYPE_LABELS: Record<string, string> = {
   content_update: 'Content update', menu_update: 'Menu update',
-  translation: 'Translation', seo: 'SEO',
+  seo: 'SEO',
   google_business: 'Google Business', seasonal: 'Seasonal campaign',
   photo_update: 'Photos', social_media: 'Social media',
   technical: 'Technical', other: 'Other',
 }
 const TYPE_ICONS: Record<string, string> = {
   content_update: 'i-lucide-file-text', menu_update: 'i-lucide-utensils',
-  translation: 'i-lucide-languages', seo: 'i-lucide-trending-up',
+  seo: 'i-lucide-trending-up',
   google_business: 'i-lucide-map-pin', seasonal: 'i-lucide-sparkles',
   photo_update: 'i-lucide-image', social_media: 'i-lucide-share-2',
   technical: 'i-lucide-wrench', other: 'i-lucide-circle-help',
@@ -196,7 +196,6 @@ const TYPE_ICONS: Record<string, string> = {
 const TYPE_COLORS: Record<string, string> = {
   content_update: 'bg-blue-50 dark:bg-blue-950/40 text-blue-600',
   menu_update: 'bg-amber-50 dark:bg-amber-950/40 text-amber-600',
-  translation: 'bg-violet-50 dark:bg-violet-950/40 text-violet-600',
   seo: 'bg-green-50 dark:bg-green-950/40 text-green-600',
   google_business: 'bg-red-50 dark:bg-red-950/40 text-red-500',
   seasonal: 'bg-orange-50 dark:bg-orange-950/40 text-orange-500',

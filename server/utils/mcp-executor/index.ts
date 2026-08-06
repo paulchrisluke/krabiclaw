@@ -28,7 +28,6 @@ import { handleReviewsTools } from './reviews'
 import { handleSettingsTools } from './settings'
 import { handleSitesTools } from './sites'
 import { handleSubmissionsTools } from './submissions'
-import { handleTranslationsTools } from './translations'
 import {
   NOT_HANDLED,
   humanizeEntitlement,
@@ -65,7 +64,6 @@ export const DOMAIN_HANDLERS: Record<string, (_ctx: McpExecutorContext) => Promi
   settings: handleSettingsTools,
   sites: handleSitesTools,
   submissions: handleSubmissionsTools,
-  translations: handleTranslationsTools,
 }
 
 export async function executeMcpToolCall(

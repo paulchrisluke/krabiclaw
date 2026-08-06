@@ -121,6 +121,47 @@ async function uploadProductImage(localPath) {
   }
 }
 
+async function ensureMonthlyPrice(productId, amountCents) {
+  const prices = []
+  let startingAfter
+  while (true) {
+    const page = await stripe.prices.list({
+      product: productId,
+      active: true,
+      type: 'recurring',
+      limit: 100,
+      ...(startingAfter ? { starting_after: startingAfter } : {}),
+    })
+    prices.push(...page.data)
+    if (!page.has_more || page.data.length === 0) break
+    startingAfter = page.data[page.data.length - 1].id
+  }
+  const matchingPrices = prices.filter(price =>
+    price.currency === 'usd'
+    && price.unit_amount === amountCents
+    && price.recurring?.interval === 'month'
+    && price.recurring?.interval_count === 1,
+  )
+  const canonicalPrice = matchingPrices[0] ?? await stripe.prices.create({
+    product: productId,
+    currency: 'usd',
+    unit_amount: amountCents,
+    recurring: { interval: 'month', interval_count: 1 },
+  })
+
+  for (const price of prices) {
+    if (
+      price.id === canonicalPrice.id
+      || price.recurring?.interval !== 'month'
+      || price.recurring?.interval_count !== 1
+    ) continue
+    await stripe.prices.update(price.id, { active: false })
+    console.log(`  Deactivated duplicate monthly price: ${price.id}`)
+  }
+
+  return canonicalPrice
+}
+
 // --- Create or update recurring subscription plans ---
 async function createSubscriptionPlan({ name, description, planId, amountCents, highlighted, badge, features, imagePath }) {
   console.log(`\nUpserting plan: ${name} ($${amountCents / 100}/mo)`)
@@ -148,8 +189,12 @@ async function createSubscriptionPlan({ name, description, planId, amountCents, 
   const match = existing.data.find(p => p.metadata?.plan_id === planId)
 
   if (match) {
-    // Update description and marketing_features on existing product
-    await stripe.products.update(match.id, updateData)
+    const price = await ensureMonthlyPrice(match.id, amountCents)
+    await stripe.products.update(match.id, {
+      ...updateData,
+      metadata: { ...updateData.metadata, monthly_price_id: price.id },
+      default_price: price.id,
+    })
     console.log(`  Updated: ${match.id}`)
     return match
   }
@@ -159,11 +204,10 @@ async function createSubscriptionPlan({ name, description, planId, amountCents, 
     ...updateData
   })
 
-  await stripe.prices.create({
-    product: product.id,
-    currency: 'usd',
-    unit_amount: amountCents,
-    recurring: { interval: 'month' },
+  const price = await ensureMonthlyPrice(product.id, amountCents)
+  await stripe.products.update(product.id, {
+    metadata: { ...updateData.metadata, monthly_price_id: price.id },
+    default_price: price.id,
   })
 
   console.log(`  Created: ${product.id}`)
@@ -248,7 +292,7 @@ async function main() {
       'Your own domain (yourbusiness.com)',
       'Edit menus, content & photos through ChatGPT',
       'Bookings & ticketed experiences',
-      'WhatsApp booking & reservation notifications',
+      'Messaging booking & reservation notifications',
       'Auto-sync from Facebook & Instagram',
       'Google Business profile sync',
     ],
@@ -265,7 +309,6 @@ async function main() {
     features: [
       'Everything in Growth, plus:',
       'We manage your site for you — just WhatsApp us',
-      'Unlimited language translations',
       'Full Google Business profile management',
       'Monthly content updates & photo refreshes',
       'Priority WhatsApp support from Paul & Julia',
@@ -289,23 +332,6 @@ async function main() {
   })
 
   // One-time add-ons
-  // Translation add-on: not currently marketed anywhere in the app (no UI
-  // triggers it) — the human-fulfilled translation work isn't something the
-  // launch team is taking on right now, same reasoning as MANAGED_SERVICE_ENABLED.
-  // Still seeded into Stripe as-is; don't delete or "fix" this as drift.
-  const { price: translationPrice } = await createOneTimePrice({
-    productName: 'Additional Language Translation',
-    amountCents: 4500,
-    priceKey: 'translation',
-    description: 'Professional translation into Thai, Chinese, Russian, or any target language — reviewed and published to your live site.',
-    features: [
-      'Human-reviewed AI translation',
-      'Published to your live site',
-      'Thai, Chinese, Russian, Korean & more',
-      'Covers all pages: menus, content, Q&A',
-    ],
-  })
-
   const { price: seasonalPrice } = await createOneTimePrice({
     productName: 'Seasonal Relaunch Package',
     amountCents: 9900,
@@ -333,7 +359,6 @@ async function main() {
   })
 
   console.log('\n=== Add these to your .env ===')
-  console.log(`STRIPE_PRICE_TRANSLATION=${translationPrice.id}`)
   console.log(`STRIPE_PRICE_SEASONAL=${seasonalPrice.id}`)
   console.log(`STRIPE_PRICE_GBP_SETUP=${gbpPrice.id}`)
   console.log('\nDone! Verify products at https://dashboard.stripe.com/test/products')

@@ -108,17 +108,14 @@ const fulfillingId = ref<string | null>(null)
 const showAllPurchases = ref(false)
 
 const ADDON_LABELS: Record<string, string> = {
-  translation: 'Language Translation',
   seasonal: 'Seasonal Relaunch',
   gbp_setup: 'Google Business Optimization',
 }
 const ADDON_ICONS: Record<string, string> = {
-  translation: 'i-lucide-languages',
   seasonal: 'i-lucide-sparkles',
   gbp_setup: 'i-lucide-map-pin',
 }
 const ADDON_COLORS: Record<string, string> = {
-  translation: 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400',
   seasonal: 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400',
   gbp_setup: 'bg-green-50 dark:bg-green-950/40 text-green-600 dark:text-green-400',
 }

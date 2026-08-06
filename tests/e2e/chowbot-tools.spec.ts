@@ -438,7 +438,7 @@ test.describe("mcp tools", () => {
     expect(workRequest.result.error).toBeTruthy();
   });
 
-  test("chowbot translations/locales tools stay behind the conversational-surface feature flag by default", async ({
+  test("chowbot locale tools remain available for manual localized content", async ({
     request,
     baseURL,
   }) => {
@@ -448,7 +448,8 @@ test.describe("mcp tools", () => {
     const siteId = await ensureSite(request, baseURL!, null);
 
     const result = await execChowbotTool(request, baseURL!, siteId, "list_locales", {});
-    expect(result.result.error).toContain("not exposed on the conversational surface");
+    expect(result.result.error).toBeUndefined();
+    expect(Array.isArray(result.result.locales)).toBe(true);
   });
 
   test("chowbot reviews, submissions, notifications, qa, media, and settings tools delegate to the shared executor", async ({
@@ -515,7 +516,7 @@ test.describe("mcp tools", () => {
     expect(qaDeleted.result.deleted).toBe(true);
   });
 
-  test("chowbot content/hero tools delegate to the shared executor without clobbering unrelated hero fields", async ({
+  test("chowbot page tools use the canonical tenant-page block contract", async ({
     request,
     baseURL,
   }) => {
@@ -524,48 +525,28 @@ test.describe("mcp tools", () => {
     await loginAs(request, baseURL!);
     const siteId = await ensureSite(request, baseURL!, null);
 
-    // Regression coverage for two bugs fixed together: ChowBot used to
-    // maintain its own inline hero-field read-merge-write logic instead of
-    // calling the shared updatePageContent/deleteContentField, and
-    // deleteContentField itself never handled hero sub-fields at all (they
-    // live as columns on one row keyed by field="hero", not their own row)
-    // — a delete of just "hero.title" would previously silently do nothing
-    // on both surfaces.
-    const titleSet = await execChowbotTool(request, baseURL!, siteId, "update_page_content", {
+    const before = await execChowbotTool(request, baseURL!, siteId, "get_page_fields", { page: "home" });
+    expect(before.result.error).toBeUndefined();
+    const originalBlocks = before.result.blocks as Array<{ id: string; type: string; position: number; data: Record<string, unknown> }>;
+    expect(originalBlocks.length).toBeGreaterThan(0);
+
+    const addedBlock = {
+      id: `e2e-chowbot-block-${Date.now()}`,
+      type: "callout",
+      position: originalBlocks.length,
+      data: { title: "Canonical ChowBot block", body: "Stored through the shared page writer." },
+    };
+    const updated = await execChowbotTool(request, baseURL!, siteId, "update_page_content", {
       page: "home",
-      field: "hero.title",
-      value: "E2E Hero Title",
+      changes: { blocks: [...originalBlocks, addedBlock] },
     });
-    expect(titleSet.result.error).toBeUndefined();
+    expect(updated.result.error).toBeUndefined();
+    expect(updated.result.success).toBe(true);
 
-    const subtitleSet = await execChowbotTool(request, baseURL!, siteId, "update_page_content", {
-      page: "home",
-      field: "hero.subtitle",
-      value: "E2E Hero Subtitle",
-    });
-    expect(subtitleSet.result.error).toBeUndefined();
+    const afterUpdate = await execChowbotTool(request, baseURL!, siteId, "get_page_fields", { page: "home" });
+    const savedBlocks = afterUpdate.result.blocks as Array<{ id: string; type: string; data: Record<string, unknown> }>;
+    expect(savedBlocks.some((block) => block.id === addedBlock.id && block.data.title === addedBlock.data.title)).toBe(true);
+    expect(savedBlocks.some((block) => originalBlocks.some((original) => original.id === block.id))).toBe(true);
 
-    const afterBothSet = await execChowbotTool(request, baseURL!, siteId, "get_page_fields", { page: "home" });
-    const heroRowAfterSet = (afterBothSet.result.fields as Array<{ field: string; hero_title?: string; hero_subtitle?: string }>)
-      .find((f) => f.field === "hero");
-    expect(heroRowAfterSet?.hero_title).toBe("E2E Hero Title");
-    expect(heroRowAfterSet?.hero_subtitle).toBe("E2E Hero Subtitle");
-
-    const titleDeleted = await execChowbotTool(
-      request,
-      baseURL!,
-      siteId,
-      "delete_content_field",
-      { page: "home", field: "hero.title" },
-      [{ role: "user", content: "yes confirm" }],
-    );
-    expect(titleDeleted.result.error).toBeUndefined();
-    expect(titleDeleted.result.deleted).toBe(true);
-
-    const afterTitleDeleted = await execChowbotTool(request, baseURL!, siteId, "get_page_fields", { page: "home" });
-    const heroRowAfterDelete = (afterTitleDeleted.result.fields as Array<{ field: string; hero_title?: string | null; hero_subtitle?: string }>)
-      .find((f) => f.field === "hero");
-    expect(heroRowAfterDelete?.hero_title).toBeFalsy();
-    expect(heroRowAfterDelete?.hero_subtitle).toBe("E2E Hero Subtitle");
   });
 });

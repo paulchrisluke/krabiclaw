@@ -51,12 +51,7 @@ test.describe('pottery house dashboard', () => {
     })
     expect(deniedLogin.status()).toBe(302)
 
-    const saveRes = await request.post(`${baseURL}/api/editor/sites/site-pottery-house/content/save`, {
-      data: {
-        page: 'home',
-        changes: { 'hero.title': `Unauthorized test ${Date.now()}` },
-      },
-    })
-    expect([401, 403, 404]).toContain(saveRes.status())
+    const pagesRes = await request.get(`${baseURL}/api/editor/sites/site-pottery-house/pages`)
+    expect([401, 403, 404]).toContain(pagesRes.status())
   })
 })

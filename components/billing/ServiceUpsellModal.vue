@@ -91,6 +91,7 @@ const PAUL_PHOTO_URL = 'https://res.cloudinary.com/pcl-labs/image/upload/v171469
 const JULIA_PHOTO_URL = 'https://res.cloudinary.com/pcl-labs/image/upload/v1714706641/PCL-Labs/1682091954266_vrcx3n.webp'
 
 const { isOpen, type, close } = useServiceUpsell()
+const { offerSubscribe } = useSiteSubscribe()
 const toast = useToast()
 const loading = ref(false)
 const dashboard = useDashboardSite()
@@ -129,9 +130,8 @@ function buildContentMap(experience: boolean): Record<UpsellType, UpsellContent>
     },
     managed: {
       headline: `We run your ${businessWord} online, end to end`,
-      subheading: `Send us a voice note on WhatsApp. We handle ${menuWord} updates, translations, posts, and your Google presence.`,
+      subheading: `Send us a voice note on WhatsApp. We handle ${menuWord} updates, posts, and your Google presence.`,
       bullets: [
-        'Unlimited language translations',
         `${menuCapitalized}, posts & seasonal content managed for you`,
         'Full Google Business profile management',
         'Post-booking review requests and reminders',
@@ -155,18 +155,6 @@ function buildContentMap(experience: boolean): Record<UpsellType, UpsellContent>
       price: '$349',
       priceNote: '/ month',
       cta: 'Get SEO Accelerator — $349/mo',
-    },
-    translation: {
-      headline: 'Add another language to your site',
-      subheading: `We translate your full ${menuWord}, pages, and descriptions into a new language — one-time, done right.`,
-      bullets: [
-        'Full site translation by a native speaker + AI',
-        experience ? 'Offerings, descriptions, and key details' : 'Menu items, descriptions, and allergen notes',
-        'Ready within 3–5 business days',
-      ],
-      price: '$45',
-      priceNote: 'one-time per language',
-      cta: 'Add Translation — $45',
     },
     seasonal: {
       headline: 'Seasonal relaunch package',
@@ -206,16 +194,8 @@ async function handleCta() {
     if (RECURRING_TYPES.includes(type.value)) {
       const siteId = dashboard.siteId.value
       if (!siteId) throw new Error('Choose a site before starting checkout')
-      const res = await $fetch<{ checkoutUrl: string }>('/api/billing/checkout', {
-        method: 'POST',
-        body: { siteId, plan: type.value, interval: 'month' },
-      })
-      if (res.checkoutUrl) {
-        close()
-        await navigateTo(res.checkoutUrl, { external: true })
-      } else {
-        throw new Error('Missing checkoutUrl')
-      }
+      close()
+      await offerSubscribe(siteId, type.value)
     } else {
       const res = await $fetch<{ checkoutUrl: string }>('/api/billing/service-addon', {
         method: 'POST',
