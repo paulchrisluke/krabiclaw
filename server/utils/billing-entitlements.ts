@@ -17,8 +17,6 @@ export function getPlanEntitlements(plan: string): EntitlementsMap {
     advanced_seo: false,
     white_label: false,
     api_access: false,
-    translation: false,
-    translation_languages: 0,
     managed_service: false,
     seo_accelerator: false,
     messaging: false,
@@ -29,8 +27,6 @@ export function getPlanEntitlements(plan: string): EntitlementsMap {
     case 'growth':
       return {
         ...base,
-        translation: true,
-        translation_languages: 1,
         ai_credits: 2000,
         ai_session_credits: 500,
         google_business: true,
@@ -42,8 +38,6 @@ export function getPlanEntitlements(plan: string): EntitlementsMap {
     case 'managed':
       return {
         ...base,
-        translation: true,
-        translation_languages: -1,
         ai_credits: 'unlimited',
         ai_session_credits: 'unlimited',
         managed_service: true,
@@ -56,8 +50,6 @@ export function getPlanEntitlements(plan: string): EntitlementsMap {
     case 'seo_accelerator':
       return {
         ...base,
-        translation: true,
-        translation_languages: -1,
         ai_credits: 'unlimited',
         ai_session_credits: 'unlimited',
         managed_service: true,

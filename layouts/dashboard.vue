@@ -572,7 +572,6 @@ const siteOverviewGroup = computed(() => {
     { label: 'Assistant', icon: 'i-lucide-bot', to: `${siteBase.value}/conversations` },
     { label: 'Domains', icon: 'i-lucide-globe', to: `${siteBase.value}/domains` },
     { label: 'Settings', icon: 'i-lucide-settings', to: `${siteBase.value}/settings` },
-    // { label: 'Translations', icon: 'i-lucide-languages', to: `${siteBase.value}/translations` },
   ]
 })
 

@@ -2316,56 +2316,6 @@ export const token_exchange_cache = sqliteTable("token_exchange_cache", {
 	expires_at: text().notNull(),
 });
 
-export const translation_job_items = sqliteTable("translation_job_items", {
-	id: text().primaryKey(),
-	job_id: text().notNull().references(() => translation_jobs.id, { onDelete: "cascade" } ),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	target_locale: text().notNull(),
-	entity_type: text().notNull(),
-	entity_id: text().notNull(),
-	location_id: text(),
-	page: text(),
-	field: text().notNull(),
-	source_hash: text().notNull(),
-	source_chars: integer().default(0).notNull(),
-	status: text().default("queued").notNull(),
-	error: text(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	index("translation_job_items_job_id_idx").on(table.job_id),
-	index("translation_job_items_org_site_idx").on(table.organization_id, table.site_id),
-]);
-
-export const translation_jobs = sqliteTable("translation_jobs", {
-	id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	source_locale: text().notNull(),
-	target_locale: text().notNull(),
-	scope: text().default("site").notNull(),
-	status: text().default("queued").notNull(),
-	total_items: integer().default(0).notNull(),
-	total_chars: integer().default(0).notNull(),
-	estimated_input_tokens: integer().default(0).notNull(),
-	estimated_output_tokens: integer().default(0).notNull(),
-	estimated_credits: integer().default(0).notNull(),
-	actual_input_tokens: integer().default(0).notNull(),
-	actual_output_tokens: integer().default(0).notNull(),
-	actual_credits: integer().default(0).notNull(),
-	processed_items: integer().default(0).notNull(),
-	failed_items: integer().default(0).notNull(),
-	error: text(),
-	created_by: text(),
-	started_at: text(),
-	finished_at: text(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	index("translation_jobs_org_site_idx").on(table.organization_id, table.site_id),
-]);
-
 export const user = sqliteTable("user", {
 	id: text().primaryKey(),
 	name: text().notNull(),
@@ -2606,27 +2556,4 @@ export const tenant_page_variants = sqliteTable("tenant_page_variants", {
 	index("tenant_page_variants_page_idx").on(table.page_id),
 	check("tenant_page_variants_path_check", sql`published_path LIKE '/%' AND published_path NOT LIKE '//%'`),
 	check("tenant_page_variants_status_check", sql`status IN ('draft', 'published', 'archived')`),
-]);
-
-export const tenant_page_translation_fields = sqliteTable("tenant_page_translation_fields", {
-	id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	page_id: text().notNull().references(() => tenant_pages.id, { onDelete: "cascade" } ),
-	variant_id: text().notNull().references(() => tenant_page_variants.id, { onDelete: "cascade" } ),
-	locale: text().notNull(),
-	field: text().notNull(),
-	target_block_id: text(),
-	source_hash: text(),
-	status: text().default("missing").notNull(),
-	translated_at: text(),
-	reviewed_at: text(),
-	reviewed_by: text().references(() => user.id, { onDelete: "set null" } ),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	unique("tenant_page_translation_fields_variant_field_unique").on(table.variant_id, table.field),
-	index("tenant_page_translation_fields_site_locale_idx").on(table.site_id, table.locale, table.status),
-	index("tenant_page_translation_fields_page_idx").on(table.page_id),
-	check("tenant_page_translation_fields_status_check", sql`status IN ('missing', 'draft', 'published')`),
 ]);

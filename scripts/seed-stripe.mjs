@@ -309,7 +309,6 @@ async function main() {
     features: [
       'Everything in Growth, plus:',
       'We manage your site for you — just WhatsApp us',
-      'Unlimited language translations',
       'Full Google Business profile management',
       'Monthly content updates & photo refreshes',
       'Priority WhatsApp support from Paul & Julia',
@@ -333,23 +332,6 @@ async function main() {
   })
 
   // One-time add-ons
-  // Translation add-on: not currently marketed anywhere in the app (no UI
-  // triggers it) — the human-fulfilled translation work isn't something the
-  // launch team is taking on right now, same reasoning as MANAGED_SERVICE_ENABLED.
-  // Still seeded into Stripe as-is; don't delete or "fix" this as drift.
-  const { price: translationPrice } = await createOneTimePrice({
-    productName: 'Additional Language Translation',
-    amountCents: 4500,
-    priceKey: 'translation',
-    description: 'Professional translation into Thai, Chinese, Russian, or any target language — reviewed and published to your live site.',
-    features: [
-      'Human-reviewed AI translation',
-      'Published to your live site',
-      'Thai, Chinese, Russian, Korean & more',
-      'Covers all pages: menus, content, Q&A',
-    ],
-  })
-
   const { price: seasonalPrice } = await createOneTimePrice({
     productName: 'Seasonal Relaunch Package',
     amountCents: 9900,
@@ -377,7 +359,6 @@ async function main() {
   })
 
   console.log('\n=== Add these to your .env ===')
-  console.log(`STRIPE_PRICE_TRANSLATION=${translationPrice.id}`)
   console.log(`STRIPE_PRICE_SEASONAL=${seasonalPrice.id}`)
   console.log(`STRIPE_PRICE_GBP_SETUP=${gbpPrice.id}`)
   console.log('\nDone! Verify products at https://dashboard.stripe.com/test/products')

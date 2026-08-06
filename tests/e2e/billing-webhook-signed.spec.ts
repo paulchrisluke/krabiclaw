@@ -138,7 +138,7 @@ test.describe('billing webhook signed flow', () => {
           mode: 'payment',
           payment_status: 'paid',
           payment_intent: `pi_addon_e2e_${Date.now()}`,
-          metadata: { organization_id: organizationId, type: 'service_addon', addon_type: 'translation' },
+          metadata: { organization_id: organizationId, type: 'service_addon', addon_type: 'seasonal' },
         },
       },
     }

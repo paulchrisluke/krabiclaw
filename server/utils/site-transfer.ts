@@ -25,8 +25,6 @@ const SITE_SCOPED_TABLES = [
   'menu_item_translations',
   'business_location_translations',
   'post_translations',
-  'translation_jobs',
-  'translation_job_items',
   'media_assets',
   'menus',
   'reviews',

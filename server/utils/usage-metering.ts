@@ -7,7 +7,6 @@ export type UsageResource =
   | 'maps_api'
   | 'messaging'
   | 'image_generation'
-  | 'translation'
 
 export interface UsageEventInput {
   organizationId: string

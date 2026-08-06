@@ -30,8 +30,6 @@ export type SiteEventType =
   | 'location.created'
   | 'location.updated'
   | 'location.gmb_connected'
-  // Translations
-  | 'translation.job_completed'
   // Experiences
   | 'experience.created'
   | 'experience.booking_received'

@@ -194,58 +194,6 @@ async function assertTenantPageSupport(db: DbClient, siteId: string, input: Tena
   }
 }
 
-async function assertTenantPageTranslationComplete(
-  db: DbClient,
-  row: TenantPageVariantRow,
-  allowDraftReview = false,
-): Promise<{ sourceDocumentId: string; sourceDocumentUpdatedAt: string }> {
-  const { buildTranslationInventory } = await import('~/server/utils/translation-inventory')
-  const inventory = await buildTranslationInventory(db, row.organization_id, row.site_id, {
-    targetLocale: row.locale,
-    scope: 'content',
-    includePublished: true,
-  })
-  const currentItems = inventory.items.filter(item => item.entity_type === 'tenant_page' && item.entity_id === row.page_id)
-  const states = await queryAll<{ field: string; target_block_id: string | null; source_hash: string | null; status: string }>(db, `
-    SELECT field, target_block_id, source_hash, status
-      FROM tenant_page_translation_fields
-     WHERE organization_id = ? AND site_id = ? AND variant_id = ?
-  `, [row.organization_id, row.site_id, row.variant_id])
-  const targetBlockIds = new Set((await queryAll<{ id: string }>(db, `
-    SELECT b.id
-      FROM tenant_page_variants v
-      JOIN content_documents d ON d.owner_type = 'tenant_page' AND d.owner_id = v.id
-      JOIN content_blocks b ON b.document_id = d.id
-     WHERE v.id = ?
-  `, [row.variant_id])).map(block => block.id))
-  const accepted = allowDraftReview ? new Set(['draft', 'published']) : new Set(['published'])
-  const stateByField = new Map(states.map(state => [state.field, state]))
-  const expectedFields = new Set(currentItems.map(item => item.field))
-  const exactCoverage = states.length === currentItems.length && currentItems.every(item => {
-    const state = stateByField.get(item.field)
-    return Boolean(
-      state
-      && state.source_hash === item.source_hash
-      && accepted.has(state.status)
-      && (item.field.startsWith('metadata.') || Boolean(state.target_block_id && targetBlockIds.has(state.target_block_id))),
-    )
-  }) && states.every(state => expectedFields.has(state.field))
-  if (!exactCoverage) {
-    conflict('Every current translated page block and metadata field must match the source, be translated, and be reviewed before publication')
-  }
-  const sourceDocument = await queryFirst<{ id: string; updated_at: string } | null>(db, `
-    SELECT d.id, d.updated_at
-      FROM tenant_page_variants v
-      JOIN site_locales sl ON sl.site_id = v.site_id AND sl.locale = v.locale AND sl.is_source = 1
-      JOIN content_documents d ON d.owner_type = 'tenant_page' AND d.owner_id = v.id
-     WHERE v.page_id = ? AND v.organization_id = ? AND v.site_id = ?
-       AND v.status = 'published' AND v.published_revision_id IS NOT NULL
-     LIMIT 1
-  `, [row.page_id, row.organization_id, row.site_id])
-  if (!sourceDocument) conflict('The source tenant page must be published before a translated page can be published')
-  return { sourceDocumentId: sourceDocument.id, sourceDocumentUpdatedAt: sourceDocument.updated_at }
-}
-
 function blocksAsInputs(blocks: TenantPageBlock[]): ContentBlockInput[] {
   return blocks.map(block => ({ id: block.id, type: block.type, position: block.position, data: block.data }))
 }
@@ -498,147 +446,6 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
   return { page: await getTenantPageForEditor(db, variantId), revision_id: result.revision_id }
 }
 
-/**
- * Create the draft variant used by translation workflows without publishing
- * untranslated content. The page identity and route remain shared with the
- * source variant; only the locale-specific document is new.
- */
-export async function ensureTenantPageVariant(
-  db: DbClient,
-  pageId: string,
-  locale: string,
-  userId: string | null,
-): Promise<TenantPageDto> {
-  const targetLocale = await queryFirst<{ locale: string } | null>(db, `
-    SELECT locale
-    FROM site_locales sl
-    JOIN tenant_pages p ON p.site_id = sl.site_id
-    WHERE p.id = ? AND sl.locale = ? AND sl.status IN ('active', 'published')
-    LIMIT 1
-  `, [pageId, locale.trim()])
-  if (!targetLocale) notFound('Locale is not configured for this tenant page')
-
-  const existing = await queryFirst<{ id: string } | null>(db, `
-    SELECT id FROM tenant_page_variants WHERE page_id = ? AND locale = ? LIMIT 1
-  `, [pageId, targetLocale.locale])
-  if (existing) return await getTenantPageForEditor(db, existing.id)
-
-  const source = await queryFirst<{ id: string } | null>(db, `
-    SELECT v.id
-    FROM tenant_page_variants v
-    JOIN site_locales sl ON sl.site_id = v.site_id AND sl.locale = v.locale AND sl.is_source = 1
-    WHERE v.page_id = ?
-    ORDER BY CASE WHEN v.published_revision_id IS NOT NULL THEN 0 ELSE 1 END, v.updated_at DESC
-    LIMIT 1
-  `, [pageId])
-  if (!source) throw createError({ statusCode: 500, statusMessage: 'Tenant page source variant is unavailable' })
-
-  const sourcePage = await getTenantPageForEditor(db, source.id)
-  const publishedSourcePage = sourcePage.published_revision_id
-    ? await getPublishedTenantPage(db, sourcePage.site_id, sourcePage.published_path, sourcePage.locale)
-    : null
-  const sourceContent = publishedSourcePage ?? sourcePage
-  const path = await assertTenantPagePathAvailable(db, {
-    siteId: sourceContent.site_id,
-    locale: targetLocale.locale,
-    path: sourceContent.published_path,
-    excludeVariantId: null,
-    allowSystemPath: sourceContent.page_type === 'system',
-  })
-  const variantId = crypto.randomUUID()
-  const documentId = crypto.randomUUID()
-  const revisionId = crypto.randomUUID()
-  const now = new Date().toISOString()
-  const metadata = metadataForInput({
-    locale: targetLocale.locale,
-    path,
-    title: sourceContent.title,
-    summary: sourceContent.summary,
-    seoTitle: sourceContent.seo_title,
-    seoDescription: sourceContent.seo_description,
-    canonicalUrl: sourceContent.canonical_url,
-    robots: sourceContent.robots,
-    pageType: sourceContent.page_type,
-    recipe: sourceContent.recipe,
-    blocks: sourceContent.blocks,
-  }, targetLocale.locale, path)
-  const translatedBlocks = sourceContent.blocks.map(block => ({
-    ...block,
-    id: crypto.randomUUID(),
-    data: { ...block.data, source_block_id: block.id },
-  }))
-  const metadataValues: Array<[string, unknown]> = [
-    ['metadata.title', sourceContent.title],
-    ['metadata.summary', sourceContent.summary],
-    ['metadata.seoTitle', sourceContent.seo_title],
-    ['metadata.seoDescription', sourceContent.seo_description],
-    ['metadata.canonicalUrl', sourceContent.canonical_url],
-  ]
-  const populatedTranslationFields = [
-    ...metadataValues.filter(([, value]) => typeof value === 'string' && value.trim()).map(([field]) => [field, null] as const),
-    ...sourceContent.blocks.map((block, index) => ({
-      field: block.id,
-      targetBlockId: translatedBlocks[index]!.id,
-      include: Object.entries(block.data).some(([key, value]) => ['title', 'subtitle', 'text', 'markdown', 'description', 'label', 'body'].includes(key) && typeof value === 'string' && value.trim()),
-    })).filter(entry => entry.include).map(entry => [entry.field, entry.targetBlockId] as const),
-  ]
-  const result = await createContentDocumentWithBlocks(
-    db,
-    'tenant_page',
-    variantId,
-    blocksAsInputs(translatedBlocks),
-    {
-      documentId,
-      revisionId,
-      snapshotMetadata: metadata as unknown as Record<string, unknown>,
-      createdBy: userId,
-      label: 'Translated tenant page draft',
-      publish: false,
-      additionalQueriesBefore: [{
-        query: `
-          INSERT INTO tenant_page_variants
-            (id, organization_id, site_id, page_id, locale, draft_document_id,
-             published_path, draft_path, title, summary, seo_title, seo_description,
-             canonical_url, robots, status, created_at, updated_at, updated_by)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)
-        `,
-        params: [
-          variantId,
-          sourceContent.organization_id,
-          sourceContent.site_id,
-          pageId,
-          targetLocale.locale,
-          documentId,
-          path,
-          path,
-          metadata.title,
-          metadata.summary,
-          metadata.seoTitle,
-          metadata.seoDescription,
-          metadata.canonicalUrl,
-          metadata.robots,
-          now,
-          now,
-          userId,
-        ],
-      }, ...populatedTranslationFields.map(([field, targetBlockId]) => ({
-        query: `
-          INSERT INTO tenant_page_translation_fields
-            (id, organization_id, site_id, page_id, variant_id, locale, field, target_block_id, status, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'missing', ?, ?)
-        `,
-        params: [crypto.randomUUID(), sourceContent.organization_id, sourceContent.site_id, pageId, variantId, targetLocale.locale, field, targetBlockId, now, now],
-      }))],
-      additionalQueriesAfter: [{
-        query: 'UPDATE tenant_page_variants SET published_revision_id = NULL WHERE id = ?',
-        params: [variantId],
-      }],
-    },
-  )
-  void result
-  return await getTenantPageForEditor(db, variantId)
-}
-
 export async function updateTenantPageDraft(db: DbClient, variantId: string, input: { userId: string | null; data: TenantPageEditorInput; scope: TenantPageScope }) {
   const row = await getVariantRow(db, variantId, input.scope)
   if (!row) notFound('Tenant page variant not found')
@@ -709,7 +516,6 @@ interface TenantPageLifecycleInput {
   userId: string
   expectedDocumentUpdatedAt: string
   scope: TenantPageScope
-  allowDraftTranslationReview?: boolean
 }
 
 export async function publishTenantPage(db: DbClient, variantId: string, input: TenantPageLifecycleInput) {
@@ -736,12 +542,6 @@ export async function publishTenantPage(db: DbClient, variantId: string, input: 
     blocks: snapshot.blocks,
   }
   await assertTenantPageSupport(db, row.site_id, effectiveInput, snapshot.blocks)
-  const sourceLocale = await queryFirst<{ locale: string } | null>(db, `
-    SELECT locale FROM site_locales WHERE site_id = ? AND is_source = 1 LIMIT 1
-  `, [row.site_id])
-  const sourceDocumentGuard = sourceLocale?.locale !== row.locale
-    ? await assertTenantPageTranslationComplete(db, row, input.allowDraftTranslationReview === true)
-    : null
   const publishPath = await assertTenantPagePathAvailable(db, {
     siteId: row.site_id,
     locale: row.locale,
@@ -766,7 +566,6 @@ export async function publishTenantPage(db: DbClient, variantId: string, input: 
   }
   const now = new Date().toISOString()
   await executeBatch(db, [
-    ...(sourceDocumentGuard ? [documentConcurrencyGuard(sourceDocumentGuard.sourceDocumentId, sourceDocumentGuard.sourceDocumentUpdatedAt)] : []),
     documentConcurrencyGuard(document.id, input.expectedDocumentUpdatedAt),
     { query: 'UPDATE content_documents SET published_revision_id = ?, updated_at = ? WHERE id = ? AND updated_at = ?', params: [document.draft_revision_id, now, document.id, input.expectedDocumentUpdatedAt] },
     { query: "UPDATE tenant_page_variants SET published_revision_id = ?, published_path = ?, draft_path = ?, title = ?, summary = ?, seo_title = ?, seo_description = ?, canonical_url = ?, robots = ?, status = 'published', ever_published = 1, updated_at = ?, updated_by = ? WHERE id = ? AND site_id = ? AND organization_id = ?", params: [document.draft_revision_id, publishPath, publishPath, snapshot.metadata.title, snapshot.metadata.summary, snapshot.metadata.seoTitle, snapshot.metadata.seoDescription, snapshot.metadata.canonicalUrl, snapshot.metadata.robots, now, input.userId, variantId, input.scope.siteId, input.scope.organizationId] },

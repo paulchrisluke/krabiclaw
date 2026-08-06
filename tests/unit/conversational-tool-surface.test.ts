@@ -9,8 +9,8 @@ import {
 import { asMcpError, MCP_ERROR } from '../../server/utils/mcp-protocol.ts'
 
 describe('conversational tool surface policy', () => {
-  test('hides experimental conversational groups by default', () => {
-    assert.equal(isConversationalToolEnabled('start_translation_job'), false)
+  test('keeps manual locale tools visible while hiding gated groups', () => {
+    assert.equal(isConversationalToolEnabled('list_locales'), true)
     assert.equal(isConversationalToolEnabled('get_site_domains'), false)
     assert.equal(isConversationalToolEnabled('create_work_request'), false)
     assert.equal(isConversationalToolEnabled('publish_to_facebook'), false)
@@ -18,20 +18,20 @@ describe('conversational tool surface policy', () => {
   })
 
   test('enables a group only through its explicit env flag', () => {
-    const env = { CONVERSATIONAL_TOOLS_TRANSLATIONS_ENABLED: 'true' }
+    const env = { CONVERSATIONAL_TOOLS_SOCIAL_PUBLISHING_ENABLED: 'true' }
 
-    assert.equal(isConversationalToolEnabled('start_translation_job', env), true)
+    assert.equal(isConversationalToolEnabled('publish_to_facebook', env), true)
     assert.equal(isConversationalToolEnabled('get_site_domains', env), false)
   })
 
   test('filters mixed tool lists consistently', () => {
     const tools = [
       { name: 'update_menu_item' },
-      { name: 'start_translation_job' },
+      { name: 'list_locales' },
       { name: 'get_site_domains' },
     ]
 
-    assert.deepEqual(filterConversationalTools(tools).map((tool) => tool.name), ['update_menu_item'])
+    assert.deepEqual(filterConversationalTools(tools).map((tool) => tool.name), ['update_menu_item', 'list_locales'])
   })
 
   test('blocks stale calls to hidden tools', () => {

@@ -13,6 +13,7 @@ const migration0096 = readFileSync(resolve(migrationDir, '0096_spotty_bromley.sq
 const migration0097 = readFileSync(resolve(migrationDir, '0097_repair_dangling_content_revisions.sql'), 'utf8')
 const migration0098 = readFileSync(resolve(migrationDir, '0098_tenant_page_translation_and_redirect_scope.sql'), 'utf8')
 const migration0099 = readFileSync(resolve(migrationDir, '0099_repair_canonical_tenant_blocks.sql'), 'utf8')
+const migration0100 = readFileSync(resolve(migrationDir, '0100_remove_translation_automation.sql'), 'utf8')
 
 function databaseBeforeTenantPageMigration() {
   const db = new Database(':memory:')
@@ -331,6 +332,29 @@ test('0098 scopes existing redirects to the owning source locale and adds transl
   assert.deepEqual(redirect, { locale: 'en', owner_variant_id: null })
   const table = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'tenant_page_translation_fields'").get() as { name: string } | undefined
   assert.equal(table?.name, 'tenant_page_translation_fields')
+})
+
+test('0100 retires translation automation state without dropping localized content tables', () => {
+  const db = databaseBeforeTenantPageMigration()
+  db.exec(migration0092)
+  db.exec(migration0097)
+  db.exec(migration0098)
+  db.prepare('INSERT INTO translation_jobs (id, organization_id, site_id, source_locale, target_locale) VALUES (?, ?, ?, ?, ?)').run('translation-job-test', 'org-test', 'site-test', 'en', 'th')
+  db.prepare('INSERT INTO site_entitlements (id, site_id, organization_id, key, value, source) VALUES (?, ?, ?, ?, ?, ?)').run('translation-entitlement-test', 'site-test', 'org-test', 'translation', 'true', 'test')
+  db.prepare('INSERT INTO organization_entitlements (id, organization_id, key, value, source) VALUES (?, ?, ?, ?, ?)').run('translation-languages-entitlement-test', 'org-test', 'translation_languages', '1', 'test')
+
+  db.exec(migration0100)
+
+  for (const tableName of ['translation_job_items', 'translation_jobs', 'tenant_page_translation_fields']) {
+    const table = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(tableName) as { name: string } | undefined
+    assert.equal(table, undefined)
+  }
+  const entitlements = db.prepare("SELECT COUNT(*) AS count FROM (SELECT key FROM site_entitlements WHERE key IN ('translation', 'translation_languages') UNION ALL SELECT key FROM organization_entitlements WHERE key IN ('translation', 'translation_languages'))").get() as { count: number }
+  assert.equal(entitlements.count, 0)
+  for (const tableName of ['business_location_translations', 'menu_translations', 'menu_item_translations', 'post_translations']) {
+    const table = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(tableName) as { name: string } | undefined
+    assert.equal(table?.name, tableName)
+  }
 })
 
 test('0099 normalizes migrated block payloads and rebuilds the published snapshot', () => {

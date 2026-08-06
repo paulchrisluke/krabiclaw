@@ -923,27 +923,6 @@ export const workRequestObject = {
   },
 }
 
-export const translationJobObject = {
-  type: 'object',
-  properties: {
-    id: { type: 'string' },
-    source_locale: { type: 'string' },
-    target_locale: { type: 'string' },
-    scope: { type: 'string' },
-    status: { type: 'string', enum: ['pending', 'running', 'completed', 'failed'] },
-    total_items: { type: 'number' },
-    total_chars: { type: 'number' },
-    estimated_credits: { type: 'number' },
-    actual_credits: { type: ['number', 'null'] },
-    processed_items: { type: 'number' },
-    failed_items: { type: 'number' },
-    created_at: { type: 'string' },
-    updated_at: { type: 'string' },
-    started_at: { type: ['string', 'null'] },
-    finished_at: { type: ['string', 'null'] },
-  },
-}
-
 export const siteListItem = {
   type: 'object',
   properties: {
@@ -1142,10 +1121,6 @@ export const READ_ONLY_TOOL_NAMES = [
   'list_experience_bookings',
   'list_all_experience_bookings',
   'list_locales',
-  'get_translation_inventory',
-  'list_translation_jobs',
-  'get_translation_job',
-  'get_translation_review_items',
   'get_contact_inquiries',
   'get_reservation_inquiries',
   'get_notification_settings',
@@ -1182,9 +1157,6 @@ export const BOUNDED_WRITE_TOOL_NAMES = [
   'import_menu_from_media',
   'update_experience_booking',
   'upsert_locale',
-  'start_translation_job',
-  'run_translation_job_batch',
-  'save_translation_review_item',
   'update_notification_settings',
   'create_work_request',
   'set_default_currency',
@@ -1223,7 +1195,6 @@ export const OPEN_WORLD_WRITE_TOOL_NAMES = [
   'reply_to_review',
   'create_experience',
   'update_experience',
-  'publish_translations',
   'sync_google_business_locations',
   'create_domain',
   'set_canonical_domain',

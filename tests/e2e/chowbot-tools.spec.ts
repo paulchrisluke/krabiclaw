@@ -438,7 +438,7 @@ test.describe("mcp tools", () => {
     expect(workRequest.result.error).toBeTruthy();
   });
 
-  test("chowbot translations/locales tools stay behind the conversational-surface feature flag by default", async ({
+  test("chowbot locale tools remain available for manual localized content", async ({
     request,
     baseURL,
   }) => {
@@ -448,7 +448,8 @@ test.describe("mcp tools", () => {
     const siteId = await ensureSite(request, baseURL!, null);
 
     const result = await execChowbotTool(request, baseURL!, siteId, "list_locales", {});
-    expect(result.result.error).toContain("not exposed on the conversational surface");
+    expect(result.result.error).toBeUndefined();
+    expect(Array.isArray(result.result.locales)).toBe(true);
   });
 
   test("chowbot reviews, submissions, notifications, qa, media, and settings tools delegate to the shared executor", async ({

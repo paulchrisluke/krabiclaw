@@ -7,16 +7,14 @@ import { getStripe, requireBillingAccess } from '~/server/utils/billing'
 import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
 import { queryFirst } from '~/server/db'
 
-type AddonType = 'translation' | 'seasonal' | 'gbp_setup'
+type AddonType = 'seasonal' | 'gbp_setup'
 
 const ADDON_PRICE_ENV: Record<AddonType, string> = {
-  translation: 'STRIPE_PRICE_TRANSLATION',
   seasonal: 'STRIPE_PRICE_SEASONAL',
   gbp_setup: 'STRIPE_PRICE_GBP_SETUP',
 }
 
 const ADDON_NAMES: Record<AddonType, string> = {
-  translation: 'Additional Language Translation',
   seasonal: 'Seasonal Relaunch Package',
   gbp_setup: 'Google Business Optimization',
 }

@@ -10,7 +10,6 @@ const ALLOWED_RESOURCES = new Set<UsageResource>([
   'maps_api',
   'messaging',
   'image_generation',
-  'translation',
 ])
 
 export default defineEventHandler(async (event) => {

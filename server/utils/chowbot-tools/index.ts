@@ -15,7 +15,6 @@ import { REVIEWS_CHOWBOT_TOOLS } from './reviews'
 import { SETTINGS_CHOWBOT_TOOLS } from './settings'
 import { SITES_CHOWBOT_TOOLS } from './sites'
 import { SUBMISSIONS_CHOWBOT_TOOLS } from './submissions'
-import { TRANSLATIONS_CHOWBOT_TOOLS } from './translations'
 
 export const CHOWBOT_TOOLS: AiTool[] = [
   ...BLOG_CHOWBOT_TOOLS,
@@ -34,7 +33,6 @@ export const CHOWBOT_TOOLS: AiTool[] = [
   ...SETTINGS_CHOWBOT_TOOLS,
   ...SITES_CHOWBOT_TOOLS,
   ...SUBMISSIONS_CHOWBOT_TOOLS,
-  ...TRANSLATIONS_CHOWBOT_TOOLS,
 ]
 
 export const CHOWBOT_CONFIRM_REQUIRED = new Set([
@@ -52,9 +50,6 @@ export const CHOWBOT_CONFIRM_REQUIRED = new Set([
   "delete_site_qa",
   "delete_owner_entered_site_review",
   "delete_locale",
-  "start_translation_job",
-  "run_translation_job_batch",
-  "publish_translations",
   "delete_experience",
   "create_work_request",
 ]);
