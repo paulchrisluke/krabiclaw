@@ -16,8 +16,8 @@ export function registerPageviewTracking() {
   if (!isTenant && !isPlatform) return
   if (isTenant && !siteId) return
 
-  const { locale } = useI18n()
-  const trackingIdentity = () => isTenant ? { siteId, locale: locale.value } : { platform: true }
+  const { $i18n } = useNuxtApp()
+  const trackingIdentity = () => isTenant ? { siteId, locale: $i18n.locale.value } : { platform: true }
   const router = useRouter()
   let pageEnteredAt = Date.now()
   let currentPath = router.currentRoute.value.fullPath
