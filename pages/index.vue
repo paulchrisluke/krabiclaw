@@ -1,7 +1,8 @@
 <template>
   <NuxtLayout :name="isPlatform ? 'platform' : isBlawbyPage ? 'blawby' : 'saya'">
     <LazyPlatformHomePage v-if="isPlatform" />
-    <TenantPublicPage v-else path="/" />
+    <LazyBlawbyHome v-else-if="isBlawbyPage" />
+    <LazySayaHomePage v-else />
   </NuxtLayout>
 </template>
 
