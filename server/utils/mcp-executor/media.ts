@@ -159,6 +159,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         siteId: site.siteId,
         userId: site.userId,
         assetId: requiredString(args, "asset_id"),
+        sessionId: site.sessionId,
         menuName: optionalString(args, "menu_name") ?? undefined,
       });
     }
@@ -170,6 +171,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         siteId: site.siteId,
         userId: site.userId,
         assetId: requiredString(args, "asset_id"),
+        sessionId: site.sessionId,
         question: optionalString(args, "question") ?? undefined,
       });
     }

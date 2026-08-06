@@ -20,7 +20,7 @@ export default defineEventHandler(async (event) => {
   if (!siteId) return jsonResponse({ error: 'siteId is required' }, { status: 400 })
 
   const site = await queryFirst<{ id: string; organization_id: string }>(db, `
-    SELECT s.id, s.organization_id FROM sites WHERE id = ?
+    SELECT s.id, s.organization_id FROM sites s WHERE s.id = ?
   `, [siteId])
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 

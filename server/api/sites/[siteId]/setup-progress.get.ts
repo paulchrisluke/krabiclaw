@@ -122,9 +122,15 @@ export default defineEventHandler(async (event) => {
 
     // Check About page content
     const aboutContent = await queryFirst<{ id: string }>(db, `
-      SELECT id FROM site_content
-      WHERE site_id = ? AND organization_id = ? AND page = 'about' AND field = 'body'
-        AND content IS NOT NULL AND content != ''
+      SELECT v.id
+      FROM tenant_page_variants v
+      JOIN content_revisions r ON r.id = v.published_revision_id
+      WHERE v.site_id = ? AND v.organization_id = ? AND v.published_path = '/about'
+        AND EXISTS (
+          SELECT 1 FROM json_each(json_extract(r.snapshot_json, '$.blocks')) block
+          WHERE json_extract(block.value, '$.type') = 'markdown'
+            AND length(COALESCE(json_extract(block.value, '$.data.markdown'), '')) > 0
+        )
       LIMIT 1
     `, [siteId, orgId])
 
@@ -220,7 +226,7 @@ export default defineEventHandler(async (event) => {
         description: 'Tell your story — where you came from, what makes you special.',
         done: hasAboutPage,
         required: false,
-        action_url: `${siteBase}/content/about`
+        action_url: `${siteBase}/pages`
       },
       {
         id: 'contact_email',

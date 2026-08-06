@@ -1,5 +1,6 @@
 import Stripe from 'stripe'
 import { isManagedServiceEnabled } from './feature-flags.ts'
+import { selectCanonicalStripePrice } from './better-auth-stripe'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -188,7 +189,7 @@ export async function fetchStripeProducts(
   } while (prodStartingAfter)
 
   // Paginate all prices
-  const priceLookup: Record<string, PlanPrice[]> = {}
+  const priceLookup: Record<string, Stripe.Price[]> = {}
   let startingAfter: string | undefined
   while (true) {
     const prices = await stripe.prices.list({
@@ -203,12 +204,7 @@ export async function fetchStripeProducts(
       const pid =
         typeof price.product === 'string' ? price.product : price.product.id
       if (!priceLookup[pid]) priceLookup[pid] = []
-      priceLookup[pid].push({
-        id: price.id,
-        amount: price.unit_amount,
-        currency: price.currency,
-        interval,
-      })
+      priceLookup[pid].push(price)
     }
     if (!prices.has_more || prices.data.length === 0) break
     startingAfter = prices.data[prices.data.length - 1]?.id
@@ -234,6 +230,39 @@ export async function fetchStripeProducts(
       ? productWithMarketing.marketing_features.map((f) => f.name)
       : []
 
+    let monthly: Stripe.Price | null
+    let yearly: Stripe.Price | null
+    try {
+      monthly = selectCanonicalStripePrice(product, priceLookup[product.id] ?? [], 'month')
+      yearly = selectCanonicalStripePrice(product, priceLookup[product.id] ?? [], 'year')
+    } catch (error) {
+      throw new BillingPlansError(
+        'BILLING_PLANS_INVALID_CATALOG',
+        error instanceof Error ? error.message : `Invalid Stripe catalog for plan ${planId}`,
+        error,
+      )
+    }
+    if (!monthly) {
+      throw new BillingPlansError(
+        'BILLING_PLANS_INVALID_CATALOG',
+        `Stripe product ${product.id} for plan ${planId} is missing a canonical monthly price`,
+      )
+    }
+    if (yearly && yearly.currency !== monthly.currency) {
+      throw new BillingPlansError(
+        'BILLING_PLANS_INVALID_CATALOG',
+        `Stripe product ${product.id} has monthly and annual prices in different currencies`,
+      )
+    }
+    const prices: PlanPrice[] = [monthly, yearly]
+      .filter((price): price is Stripe.Price => Boolean(price))
+      .map((price) => ({
+        id: price.id,
+        amount: price.unit_amount ?? 0,
+        currency: price.currency,
+        interval: price.recurring?.interval === 'year' ? 'year' : 'month',
+      }))
+
     plans.push({
       id: planId,
       name: product.name,
@@ -241,7 +270,7 @@ export async function fetchStripeProducts(
       highlighted: meta.highlighted === 'true',
       badge: meta.badge || undefined,
       image: product.images?.[0] ?? undefined,
-      prices: (priceLookup[product.id] ?? []).sort((a, b) => {
+      prices: prices.sort((a, b) => {
         const rank: Record<string, number> = { month: 0, year: 1 }
         return (rank[a.interval] ?? 0) - (rank[b.interval] ?? 0)
       }),

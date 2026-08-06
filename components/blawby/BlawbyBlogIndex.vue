@@ -19,6 +19,8 @@
 </template>
 
 <script setup lang="ts">
+import { findTenantPageBlock } from '~/utils/tenant-page-blocks'
+
 const { data, error } = await useBlawbyRoute('blog')
 if (error.value) throw error.value
 const routeData = computed(() => data.value)
@@ -28,7 +30,9 @@ const { identity, compliance } = await useBlawbyShell()
 const org = useBlawbyOrgIdentity(identity, compliance)
 
 function block(type: string) {
-  return page.value?.components.find(component => component.type === type) ?? null
+  if (!page.value) return null
+  const canonicalType = type === 'page_hero' ? 'hero' : type === 'disclaimer' ? 'callout' : undefined
+  return findTenantPageBlock(page.value.blocks, type, canonicalType)
 }
 
 const heroBlock = computed(() => block('page_hero'))

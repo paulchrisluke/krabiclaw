@@ -193,7 +193,6 @@
 
     <BillingCreditPurchaseModal />
     <BillingServiceUpsellModal />
-    <BillingSiteSubscribeModal />
     </div>
   </UApp>
 </template>
@@ -573,7 +572,6 @@ const siteOverviewGroup = computed(() => {
     { label: 'Assistant', icon: 'i-lucide-bot', to: `${siteBase.value}/conversations` },
     { label: 'Domains', icon: 'i-lucide-globe', to: `${siteBase.value}/domains` },
     { label: 'Settings', icon: 'i-lucide-settings', to: `${siteBase.value}/settings` },
-    // { label: 'Translations', icon: 'i-lucide-languages', to: `${siteBase.value}/translations` },
   ]
 })
 
@@ -586,7 +584,7 @@ const locationOverviewGroup = computed(() => {
   return [
     { label: 'Overview', icon: 'i-lucide-layout-dashboard', to: locationBase.value },
     ...(canManageSite.value ? [{ label: 'Analytics', icon: 'i-lucide-chart-bar', to: `${locationBase.value}/analytics` }] : []),
-    { label: 'Content', icon: 'i-lucide-file-text', to: `${locationBase.value}/content` },
+    ...(siteBase.value && canManageSite.value ? [{ label: 'Pages', icon: 'i-lucide-file-text', to: `${siteBase.value}/pages` }] : []),
     { label: 'Inbox', icon: 'i-lucide-inbox', to: `${locationBase.value}/inbox` },
     { label: 'Settings', icon: 'i-lucide-settings', to: `${locationBase.value}/settings` },
   ]
@@ -597,14 +595,13 @@ const parentGroup = computed(() => parentNavItem())
 const contentGroup = computed(() => {
   const items: { label: string; icon?: string; to?: string; type?: string }[] = []
   const managerItems = managerNavItems('Content')
-  if (managerItems.length > 0) {
+  if (scope.value === 'site' && siteBase.value && canManageSite.value) {
     items.push({ label: 'Content', type: 'label' })
+    items.push({ label: 'Pages', icon: 'i-lucide-file-text', to: `${siteBase.value}/pages` })
+  }
+  if (managerItems.length > 0) {
+    if (items.length === 0) items.push({ label: 'Content', type: 'label' })
     items.push(...managerItems)
-  } else if (scope.value === 'site' && siteBase.value && canManageSite.value) {
-    // Location scope doesn't need this fallback — locationOverviewGroup
-    // already has its own Content entry; siteOverviewGroup has none, so
-    // site scope still needs it here.
-    items.push({ label: 'Content', icon: 'i-lucide-copy', to: `${siteBase.value}/content` })
   }
   return items
 })

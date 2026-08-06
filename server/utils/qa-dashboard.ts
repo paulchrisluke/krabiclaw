@@ -3,10 +3,10 @@ import { listQa } from '~/server/utils/location-qa'
 
 export async function getTenantPages(db: DbClient, siteId: string): Promise<Array<{ path: string; title: string }>> {
   const rows = await queryAll<{ path: string; title: string }>(db,
-    `SELECT path, title
-     FROM tenant_pages
-     WHERE site_id = ? AND status = 'published'
-     ORDER BY sort_order ASC, title ASC`,
+    `SELECT v.published_path AS path, v.title
+     FROM tenant_page_variants v
+     WHERE v.site_id = ? AND v.status = 'published' AND v.published_revision_id IS NOT NULL
+     ORDER BY v.title ASC`,
     [siteId],
   )
   return rows ?? []

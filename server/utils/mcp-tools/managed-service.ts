@@ -25,7 +25,7 @@ export const MANAGED_SERVICE_TOOLS: McpToolDefinition[] = [
       inputSchema: {
         type: {
           type: 'string',
-          enum: ['content_update', 'menu_update', 'translation', 'seo', 'google_business', 'seasonal', 'photo_update', 'social_media', 'technical', 'other'],
+          enum: ['content_update', 'menu_update', 'seo', 'google_business', 'seasonal', 'photo_update', 'social_media', 'technical', 'other'],
           description: 'Category of work needed.',
         },
         title: { type: 'string', description: 'Short summary of what needs to be done (max 120 chars).' },

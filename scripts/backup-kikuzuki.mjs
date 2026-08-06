@@ -116,10 +116,12 @@ out.push(inserts('menu_items', query(
   `SELECT * FROM menu_items WHERE menu_id IN (SELECT id FROM menus WHERE organization_id = '${ORG}')`
 )))
 
-// --- Content ---
-console.log('Fetching site_content...')
-out.push('-- site_content')
-out.push(inserts('site_content', query(`SELECT * FROM site_content WHERE organization_id = '${ORG}'`)))
+// --- Canonical tenant pages ---
+console.log('Fetching tenant pages...')
+out.push('-- tenant_pages')
+out.push(inserts('tenant_pages', query(`SELECT * FROM tenant_pages WHERE organization_id = '${ORG}'`)))
+out.push('-- tenant_page_variants')
+out.push(inserts('tenant_page_variants', query(`SELECT * FROM tenant_page_variants WHERE organization_id = '${ORG}'`)))
 
 // --- Credits + booking ---
 console.log('Fetching ai_credits...')
@@ -137,7 +139,7 @@ out.push(`SELECT 'user'       , COUNT(*) FROM user               WHERE id       
 out.push(`SELECT 'sites'      , COUNT(*) FROM sites              WHERE organization_id = '${ORG}';`)
 out.push(`SELECT 'locations'  , COUNT(*) FROM business_locations WHERE organization_id = '${ORG}';`)
 out.push(`SELECT 'media'      , COUNT(*) FROM media_assets       WHERE organization_id = '${ORG}';`)
-out.push(`SELECT 'site_content', COUNT(*) FROM site_content      WHERE organization_id = '${ORG}';`)
+out.push(`SELECT 'tenant_pages', COUNT(*) FROM tenant_pages      WHERE organization_id = '${ORG}';`)
 out.push(`SELECT 'menu_items' , COUNT(*) FROM menu_items WHERE menu_id IN (SELECT id FROM menus WHERE organization_id = '${ORG}');`)
 
 const filename = `prod-backup-kikuzuki-${new Date().toISOString().slice(0, 10)}.sql`

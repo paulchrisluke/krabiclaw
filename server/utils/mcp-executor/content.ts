@@ -1,9 +1,88 @@
 import type { McpExecutorContext } from './shared'
 import { applyBookingPolicyPatch, getDirectBookingPolicy, renderBookingPolicySummary, resolveBookingPolicy, upsertBookingPolicy, validateBookingPolicyPatch, type BookingPolicyScopeType, type BookingPolicyType } from '~/server/utils/booking-policies'
-import { deleteContentField, getEditorContent, updateHomeHero, updatePageContent } from '~/server/utils/mcp-workflows'
+import { buildTenantPageReplacementConfirmationToken, getEditorContent, updateHomeHero, updatePageContent } from '~/server/utils/mcp-workflows'
+import {
+  archiveTenantPage,
+  createTenantPage,
+  deleteTenantPage,
+  getTenantPageById,
+  listTenantPages,
+  publishTenantPage,
+  restoreTenantPage,
+  unpublishTenantPage,
+  updateTenantPageDraft,
+} from '~/server/utils/tenant-pages'
 import { getProfessionalServiceContent, upsertProfessionalServiceContent } from '~/server/utils/professional-services-editor'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { attachViewUrlToRecord, NOT_HANDLED, mutationContextPayload, objectRecord, optionalString, requiredString, rethrowAsInvalidParams } from './shared'
+
+function nullableStringArg(args: Record<string, unknown>, key: string, fallback: string | null): string | null {
+  if (!Object.prototype.hasOwnProperty.call(args, key)) return fallback
+  const value = args[key]
+  if (value == null || value === '') return null
+  if (typeof value !== 'string') throw new Error(`${key} must be a string or null`)
+  return value.trim()
+}
+
+function tenantPageDraftData(args: Record<string, unknown>, page: Awaited<ReturnType<typeof getTenantPageById>>) {
+  const blocks = args.blocks === undefined ? page.blocks : args.blocks
+  return {
+    path: typeof args.path === 'string' ? args.path : page.path,
+    title: typeof args.title === 'string' ? args.title : page.title,
+    summary: nullableStringArg(args, 'summary', page.summary),
+    seoTitle: nullableStringArg(args, 'seoTitle', page.seo_title),
+    seoDescription: nullableStringArg(args, 'seoDescription', page.seo_description),
+    canonicalUrl: nullableStringArg(args, 'canonicalUrl', page.canonical_url),
+    robots: nullableStringArg(args, 'robots', page.robots),
+    pageType: typeof args.pageType === 'string' ? args.pageType as typeof page.page_type : page.page_type,
+    recipe: nullableStringArg(args, 'recipe', page.recipe),
+    sortOrder: typeof args.sortOrder === 'number' ? args.sortOrder : page.sort_order,
+    blocks,
+    expectedDocumentUpdatedAt: requiredString(args, 'expected_document_updated_at'),
+  }
+}
+
+function tenantPageLifecycleResponse(action: string, result: unknown) {
+  return renderStructuredResponse(result, `${action} tenant page.`, { tenant_page: result })
+}
+
+function tenantPageReplacementConfirmation(page: Awaited<ReturnType<typeof getTenantPageById>>) {
+  const removedBlockIds = page.blocks.map(block => block.id).sort()
+  return {
+    expected_document_updated_at: page.document.updated_at,
+    current_block_ids: page.blocks.map(block => block.id),
+    confirmation_format: 'tenant-page-replacement:<expected_document_updated_at>:<sorted_removed_block_ids_comma_separated>',
+    confirmation_token_for_removing_all_current_blocks: buildTenantPageReplacementConfirmationToken(page.document.updated_at, removedBlockIds),
+  }
+}
+
+function assertTenantPageReplacementConfirmed(
+  page: Awaited<ReturnType<typeof getTenantPageById>>,
+  args: Record<string, unknown>,
+) {
+  if (!Array.isArray(args.blocks)) throw new Error('blocks must be the complete canonical block array')
+  const incomingBlockIds = new Set(
+    args.blocks
+      .map(block => block && typeof block === 'object' && 'id' in block && typeof (block as { id?: unknown }).id === 'string'
+        ? (block as { id: string }).id
+        : null)
+      .filter((id): id is string => Boolean(id)),
+  )
+  const removedBlockIds = page.blocks.map(block => block.id).filter(id => !incomingBlockIds.has(id)).sort()
+  if (!removedBlockIds.length) return
+  const expectedDocumentUpdatedAt = typeof args.expected_document_updated_at === 'string' ? args.expected_document_updated_at : ''
+  const requestedRemovedIds = Array.isArray(args.removed_block_ids)
+    ? args.removed_block_ids.filter((id): id is string => typeof id === 'string').sort()
+    : []
+  const confirmationToken = typeof args.confirmation_token === 'string' ? args.confirmation_token : ''
+  const expectedToken = buildTenantPageReplacementConfirmationToken(page.document.updated_at, removedBlockIds)
+  if (expectedDocumentUpdatedAt !== page.document.updated_at || requestedRemovedIds.join(',') !== removedBlockIds.join(',') || confirmationToken !== expectedToken) {
+    throw createError({
+      statusCode: 409,
+      statusMessage: `Complete block replacement would remove ${removedBlockIds.length} existing block(s). Confirm with expected_document_updated_at="${page.document.updated_at}", removed_block_ids=${JSON.stringify(removedBlockIds)}, confirmation_token="${expectedToken}".`,
+    })
+  }
+}
 
 export async function handleContentTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, site } = ctx
@@ -51,6 +130,142 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
           `Updated ${page} page content.`,
           { page_content: hydratedPageContent },
         );
+      } catch (error) {
+        return rethrowAsInvalidParams(error);
+      }
+    case "list_tenant_pages":
+      try {
+        return { pages: await listTenantPages(site.db, site.siteId, { locale: optionalString(args, "locale") }) };
+      } catch (error) {
+        return rethrowAsInvalidParams(error);
+      }
+    case "get_tenant_page":
+      try {
+        const page = await getTenantPageById(site.db, requiredString(args, "variant_id"), {
+          siteId: site.siteId,
+          organizationId: site.organizationId,
+        })
+        return tenantPageLifecycleResponse("Read", {
+          page,
+          replacement_confirmation: tenantPageReplacementConfirmation(page),
+        });
+      } catch (error) {
+        return rethrowAsInvalidParams(error);
+      }
+    case "create_tenant_page":
+      try {
+        const created = await createTenantPage(site.db, {
+          organizationId: site.organizationId,
+          siteId: site.siteId,
+          userId: site.userId,
+          data: {
+            id: optionalString(args, "variant_id") ?? undefined,
+            pageId: optionalString(args, "page_id") ?? undefined,
+            locale: optionalString(args, "locale") ?? undefined,
+            path: requiredString(args, "path"),
+            title: requiredString(args, "title"),
+            summary: nullableStringArg(args, "summary", null),
+            seoTitle: nullableStringArg(args, "seoTitle", null),
+            seoDescription: nullableStringArg(args, "seoDescription", null),
+            canonicalUrl: nullableStringArg(args, "canonicalUrl", null),
+            robots: nullableStringArg(args, "robots", null),
+            pageType: optionalString(args, "pageType") as "custom" | "recipe" | "legal" | "system" | undefined,
+            recipe: nullableStringArg(args, "recipe", null),
+            sortOrder: typeof args.sortOrder === 'number' ? args.sortOrder : null,
+            blocks: args.blocks,
+            publish: args.publish === true,
+          },
+        });
+        return tenantPageLifecycleResponse("Created", created);
+      } catch (error) {
+        return rethrowAsInvalidParams(error);
+      }
+    case "update_tenant_page_draft":
+      try {
+        const variantId = requiredString(args, "variant_id");
+        const page = await getTenantPageById(site.db, variantId, {
+          siteId: site.siteId,
+          organizationId: site.organizationId,
+        });
+        assertTenantPageReplacementConfirmed(page, args)
+        const updated = await updateTenantPageDraft(site.db, variantId, {
+          userId: site.userId,
+          scope: { siteId: site.siteId, organizationId: site.organizationId },
+          data: tenantPageDraftData(args, page),
+        });
+        return tenantPageLifecycleResponse("Updated", updated);
+      } catch (error) {
+        return rethrowAsInvalidParams(error);
+      }
+    case "publish_tenant_page":
+      try {
+        const variantId = requiredString(args, "variant_id");
+        const result = await publishTenantPage(site.db, variantId, {
+          userId: site.userId,
+          expectedDocumentUpdatedAt: requiredString(args, "expected_document_updated_at"),
+          scope: { siteId: site.siteId, organizationId: site.organizationId },
+        });
+        return tenantPageLifecycleResponse("Published", { page: result });
+      } catch (error) {
+        return rethrowAsInvalidParams(error);
+      }
+    case "unpublish_tenant_page":
+      try {
+        const result = await unpublishTenantPage(site.db, requiredString(args, "variant_id"), {
+          userId: site.userId,
+          expectedDocumentUpdatedAt: requiredString(args, "expected_document_updated_at"),
+          scope: { siteId: site.siteId, organizationId: site.organizationId },
+        });
+        return tenantPageLifecycleResponse("Unpublished", { page: result });
+      } catch (error) {
+        return rethrowAsInvalidParams(error);
+      }
+    case "change_tenant_page_path":
+      try {
+        const variantId = requiredString(args, "variant_id");
+        const page = await getTenantPageById(site.db, variantId, {
+          siteId: site.siteId,
+          organizationId: site.organizationId,
+        });
+        const updated = await updateTenantPageDraft(site.db, variantId, {
+          userId: site.userId,
+          scope: { siteId: site.siteId, organizationId: site.organizationId },
+          data: tenantPageDraftData({ ...args, path: requiredString(args, "new_path") }, page),
+        });
+        return tenantPageLifecycleResponse("Changed path for", updated);
+      } catch (error) {
+        return rethrowAsInvalidParams(error);
+      }
+    case "archive_tenant_page":
+      try {
+        const result = await archiveTenantPage(site.db, requiredString(args, "variant_id"), {
+          userId: site.userId,
+          expectedDocumentUpdatedAt: requiredString(args, "expected_document_updated_at"),
+          replacementPath: optionalString(args, "replacement_path"),
+          gone: args.gone === true,
+          scope: { siteId: site.siteId, organizationId: site.organizationId },
+        });
+        return tenantPageLifecycleResponse("Archived", { page: result });
+      } catch (error) {
+        return rethrowAsInvalidParams(error);
+      }
+    case "restore_tenant_page":
+      try {
+        const result = await restoreTenantPage(site.db, requiredString(args, "variant_id"), {
+          userId: site.userId,
+          expectedDocumentUpdatedAt: requiredString(args, "expected_document_updated_at"),
+          scope: { siteId: site.siteId, organizationId: site.organizationId },
+        });
+        return tenantPageLifecycleResponse("Restored", { page: result });
+      } catch (error) {
+        return rethrowAsInvalidParams(error);
+      }
+    case "delete_tenant_page":
+      try {
+        return tenantPageLifecycleResponse("Deleted", await deleteTenantPage(site.db, requiredString(args, "variant_id"), {
+          expectedDocumentUpdatedAt: requiredString(args, "expected_document_updated_at"),
+          scope: { siteId: site.siteId, organizationId: site.organizationId },
+        }));
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
@@ -178,24 +393,6 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
         };
       } catch (error) {
         return rethrowAsInvalidParams(error);
-      }
-    case "delete_content_field":
-      {
-        const locationId = optionalString(args, "location_id");
-        const result = await deleteContentField(
-        site.db,
-        site.organizationId,
-        site.siteId,
-        {
-          page: requiredString(args, "page"),
-          field: requiredString(args, "field"),
-          location_id: locationId,
-        },
-        );
-        return {
-          ...attachViewUrlToRecord(result, site, {}, site.env),
-          context: await mutationContextPayload(site, { locationId }),
-        };
       }
     default:
       return NOT_HANDLED

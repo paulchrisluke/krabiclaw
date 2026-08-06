@@ -18,7 +18,7 @@ KrabiClaw is a website and marketing operating layer for local businesses where:
 
 - ChatGPT is the primary creation and management surface.
 - The website is SSR-rendered, SEO-first, and structured around local-business intent.
-- Google Business Profile, Google Places, Facebook, Instagram, media, posts, menus, experiences, reviews, analytics, and translation are connected into the same system.
+- Google Business Profile, Google Places, Facebook, Instagram, media, posts, menus, experiences, reviews, analytics, and locale-specific content are connected into the same system.
 - Owners can keep their existing behavior: talk to ChatGPT, send WhatsApp updates, publish to social, or use the dashboard only when needed.
 - Analytics can guide the next marketing move instead of sitting in a reporting tab nobody uses.
 
@@ -53,7 +53,7 @@ Every post should reinforce one of these beliefs:
 - Google Maps is essential, but it is not a complete website.
 - A restaurant menu should be crawlable HTML, not only a PDF or image.
 - Reviews, Q&A, photos, hours, offers, and social posts should become reusable website content.
-- Analytics should produce actions: blog posts, social posts, page updates, translation priorities, and seasonal campaigns.
+- Analytics should produce actions: blog posts, social posts, page updates, and seasonal campaigns.
 - ChatGPT is strongest when it has tools, permissions, and live business data, not when it is asked to invent generic marketing advice.
 - AI search visibility starts with useful, indexable, specific, people-first web content.
 

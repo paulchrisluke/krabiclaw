@@ -1,6 +1,7 @@
 import { compileCuratedSiteFixture } from './compile.ts'
 import type { CuratedSiteDefinition } from './contracts.ts'
 import { renderSiteBillingSql, renderSiteEntitlementsSql } from './billing-sql.ts'
+import { renderTenantPagesSeedSql } from './tenant-pages.ts'
 
 function escapeSql(value: string): string {
   return value.replace(/'/g, "''")
@@ -1287,56 +1288,18 @@ VALUES (${sqlValue(blockId)}, ${sqlValue(documentId)}, NULL, 'markdown', 0, NULL
 }
 
 export function renderCompiledPotteryHouseContentBlock(): string {
-  const contentRows = compiledPotteryHouseSeed.siteContent
-    .map((entry) => `  (${[
-      sqlValue(entry.id),
-      sqlValue(entry.organizationId),
-      sqlValue(entry.siteId),
-      sqlValue(entry.locationId),
-      sqlValue(entry.page),
-      sqlValue(entry.field),
-      sqlValue(entry.content),
-      sqlValue(entry.heroTitle),
-      sqlValue(entry.heroSubtitle),
-      sqlValue(entry.heroVideoAssetId ?? entry.heroImageAssetId),
-      sqlValue(entry.type),
-      sqlValue(entry.source),
-    ].join(', ')})`)
-    .join(',\n')
-
-  return `-- BEGIN GENERATED: pottery_content
--- Site content for Pottery House Krabi.
-INSERT OR IGNORE INTO site_content
-  (id, organization_id, site_id, location_id,
-   page, field, content, hero_title, hero_subtitle, hero_media_asset_id,
-   type, source)
-VALUES
-${contentRows};
--- END GENERATED: pottery_content`
+  return renderTenantPagesSeedSql({
+    siteId: compiledPotteryHouseSeed.identity.siteId,
+    organizationId: compiledPotteryHouseSeed.identity.organizationId,
+    locales: compiledPotteryHouseSeed.siteLocales.map(locale => locale.locale),
+    rows: compiledPotteryHouseSeed.siteContent,
+    translations: compiledPotteryHouseSeed.siteContentTranslations,
+    sqlValue,
+    sqlJson,
+  })
 }
 
 export function renderCompiledPotteryHouseTranslationsBlock(): string {
-  const siteContentTranslationRows = compiledPotteryHouseSeed.siteContentTranslations
-    .map((entry) => `  (${[
-      sqlValue(entry.id),
-      sqlValue(entry.organizationId),
-      sqlValue(entry.siteId),
-      sqlValue(entry.locationId),
-      sqlValue(entry.locale),
-      sqlValue(entry.page),
-      sqlValue(entry.field),
-      sqlValue(entry.content),
-      sqlValue(entry.heroTitle),
-      sqlValue(entry.heroSubtitle),
-      sqlValue(entry.value),
-      sqlValue(entry.type),
-      sqlValue(entry.status),
-      sqlValue(entry.sourceHash),
-      sqlValue(entry.translatedAt),
-      sqlValue(entry.reviewedAt),
-    ].join(', ')})`)
-    .join(',\n')
-
   const businessLocationTranslationRows = compiledPotteryHouseSeed.businessLocationTranslations
     .map((entry) => `  (${[
       sqlValue(entry.id),
@@ -1357,11 +1320,6 @@ export function renderCompiledPotteryHouseTranslationsBlock(): string {
     .join(',\n')
 
   return `-- BEGIN GENERATED: pottery_translations
-INSERT OR IGNORE INTO site_content_translations
-  (id, organization_id, site_id, location_id, locale, page, field, content, hero_title, hero_subtitle, value, type, status, source_hash, translated_at, reviewed_at)
-VALUES
-${siteContentTranslationRows};
-
 INSERT OR IGNORE INTO business_location_translations
   (id, organization_id, site_id, location_id, locale, title, address, city, description, short_description, status, source_hash, translated_at, reviewed_at)
 VALUES

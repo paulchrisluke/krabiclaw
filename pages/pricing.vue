@@ -3,10 +3,6 @@
   <LazyBlawbyTenantPage
     v-if="isBlawby"
     path="/pricing"
-    fallback-eyebrow="Pricing"
-    fallback-title="Pricing"
-    fallback-summary="Review available service paths and use the optional calculator when it is configured."
-    fallback-body="Pricing and eligibility details vary by service area and case type. Request a consultation for confirmed next steps."
   />
   <div v-else class="relative overflow-hidden bg-default min-h-screen py-20 lg:py-28">
     <!-- Ambient Mesh Background Lights -->
@@ -28,7 +24,7 @@
         </h1>
         
         <p class="text-lg leading-relaxed text-muted m-0 max-w-2xl mt-2">
-          Start free with the KrabiClaw ChatGPT app. Upgrade to Growth when you're ready for your own domain, WhatsApp notifications, and Google presence sync.
+          Start free with the KrabiClaw ChatGPT app. Upgrade to Growth when you're ready for your own domain, messaging notifications, and Google presence sync.
         </p>
       </div>
 
@@ -141,7 +137,7 @@ if (!isBlawby.value) {
 // get advertised to crawlers/AI even though the visual table already hides them.
 const OFFER_DESCRIPTIONS: Record<string, string> = {
   free: 'Free business website with offerings and basic SEO',
-  growth: 'Custom domain, WhatsApp notifications, and Google Business sync',
+  growth: 'Custom domain, messaging notifications, and Google Business sync',
   managed: 'Full managed service — Paul & Julia handle everything',
   seo_accelerator: "Julia's 1M impressions/day SEO playbook applied to your business",
 }
@@ -151,7 +147,7 @@ const OFFER_DESCRIPTIONS: Record<string, string> = {
 usePlatformPageSeo(() => ({
   path: '/pricing',
   title: 'Pricing',
-  description: 'Business websites from $49/month, built and edited through the free KrabiClaw ChatGPT app. Custom domain, WhatsApp notifications, and Google Business sync on Growth — or start free. No contracts.',
+  description: 'Business websites from $49/month, built and edited through the free KrabiClaw ChatGPT app. Custom domain, messaging notifications, and Google Business sync on Growth — or start free. No contracts.',
   breadcrumbs: [
     { name: 'Home', url: '/' },
     { name: 'Pricing', url: '/pricing' },

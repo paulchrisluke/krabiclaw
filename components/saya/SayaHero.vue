@@ -39,25 +39,8 @@
         <span class="w-8 h-px bg-inverted-muted opacity-30" />
       </div>
 
-      <EditableField
-        v-if="fieldKey"
-        :field-key="`${fieldKey}-title`"
-        tag="h1"
-        :class="titleClass"
-        :model-value="title"
-        @update:model-value="$emit('update:title', $event)"
-      />
-      <h1 v-else :class="titleClass">{{ title }}</h1>
-
-      <EditableField
-        v-if="fieldKey && subtitle"
-        :field-key="`${fieldKey}-subtitle`"
-        tag="p"
-        :class="subtitleClass"
-        :model-value="subtitle"
-        @update:model-value="$emit('update:subtitle', $event)"
-      />
-      <p v-else-if="subtitle" :class="subtitleClass">{{ subtitle }}</p>
+      <h1 :class="titleClass">{{ title }}</h1>
+      <p v-if="subtitle" :class="subtitleClass">{{ subtitle }}</p>
 
       <div v-if="$slots.cta" class="mt-8">
         <slot name="cta" />
@@ -68,7 +51,6 @@
 
 <script setup>
 import AppSection from '~/components/ui/AppSection.vue'
-import EditableField from '~/components/ui/EditableField.vue'
 
 const props = defineProps({
   title: { type: String, required: true },
@@ -82,11 +64,8 @@ const props = defineProps({
     default: 'page',
     validator: v => ['home', 'page', 'compact'].includes(v)
   },
-  fieldKey: { type: String, default: null },
   establishmentYear: { type: String, default: null }
 })
-
-defineEmits(['update:title', 'update:subtitle'])
 
 const heights = { home: '100vh', page: '40vh', compact: '24vh' }
 const heroStyle = computed(() => ({ minHeight: props.height ?? heights[props.size] }))
