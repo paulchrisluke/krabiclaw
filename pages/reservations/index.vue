@@ -233,19 +233,19 @@ function getLocationLabel(location: ApiRecord): string | null {
 }
 
 function getLocationMediaKind(location: ApiRecord): 'image' | 'video' | null {
-  if (location.hero_kind === 'video') return 'video'
-  if (location.hero_kind === 'image' || location.hero_public_url || location.hero_thumbnail_url) return 'image'
+  if (location.kind === 'video') return 'video'
+  if (location.kind === 'image' || location.public_url || location.thumbnail_url) return 'image'
   return null
 }
 
 function getLocationMediaUrl(location: ApiRecord): string | null {
   const kind = getLocationMediaKind(location)
-  if (kind === 'video') return String(location.hero_public_url ?? '') || null
-  return String(location.hero_public_url ?? location.hero_thumbnail_url ?? '') || null
+  if (kind === 'video') return String(location.public_url ?? '') || null
+  return String(location.public_url ?? location.thumbnail_url ?? '') || null
 }
 
 function getLocationPoster(location: ApiRecord): string | null {
-  return String(location.hero_thumbnail_url ?? (location.hero_kind === 'image' ? location.hero_public_url : '') ?? '') || null
+  return String(location.thumbnail_url ?? (location.kind === 'image' ? location.public_url : '') ?? '') || null
 }
 
 const heroSubtitle = computed(() => {
