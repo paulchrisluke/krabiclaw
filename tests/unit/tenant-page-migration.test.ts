@@ -9,11 +9,14 @@ const migration0092 = readFileSync(resolve(migrationDir, '0092_tranquil_fixer.sq
 const migration0093 = readFileSync(resolve(migrationDir, '0093_skinny_raider.sql'), 'utf8')
 const migration0094 = readFileSync(resolve(migrationDir, '0094_green_white_tiger.sql'), 'utf8')
 const migration0095 = readFileSync(resolve(migrationDir, '0095_remarkable_reptil.sql'), 'utf8')
+const migration0096Billing = readFileSync(resolve(migrationDir, '0096_parched_prism.sql'), 'utf8')
 const migration0096 = readFileSync(resolve(migrationDir, '0096_spotty_bromley.sql'), 'utf8')
+const migration0097Billing = readFileSync(resolve(migrationDir, '0097_wise_layla_miller.sql'), 'utf8')
 const migration0097 = readFileSync(resolve(migrationDir, '0097_repair_dangling_content_revisions.sql'), 'utf8')
 const migration0098 = readFileSync(resolve(migrationDir, '0098_tenant_page_translation_and_redirect_scope.sql'), 'utf8')
 const migration0099 = readFileSync(resolve(migrationDir, '0099_repair_canonical_tenant_blocks.sql'), 'utf8')
 const migration0100 = readFileSync(resolve(migrationDir, '0100_remove_translation_automation.sql'), 'utf8')
+const migration0101 = readFileSync(resolve(migrationDir, '0101_invoice_payment_ledger.sql'), 'utf8')
 
 function databaseBeforeTenantPageMigration() {
   const db = new Database(':memory:')
@@ -355,6 +358,38 @@ test('0100 retires translation automation state without dropping localized conte
     const table = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(tableName) as { name: string } | undefined
     assert.equal(table?.name, tableName)
   }
+})
+
+test('0101 preserves known billing coverage and invalidates paid rows without a boundary', () => {
+  const db = databaseBeforeTenantPageMigration()
+  for (const migration of [migration0092, migration0093, migration0094, migration0095, migration0096Billing, migration0096, migration0097Billing, migration0097, migration0098, migration0099, migration0100]) {
+    db.exec(migration)
+  }
+  db.prepare('INSERT INTO organization (id, name, slug) VALUES (?, ?, ?)').run('org-unknown', 'Unknown', 'unknown')
+  db.prepare(`
+    INSERT INTO organization_billing
+      (organization_id, stripe_subscription_id, payment_status, paid_through, last_paid_invoice_id, last_payment_event_created, last_payment_event_id)
+    VALUES (?, ?, 'paid', ?, ?, ?, ?), (?, ?, 'paid', NULL, NULL, ?, ?)
+  `).run(
+    'org-test', 'sub-known', '2026-09-01T00:00:00.000Z', 'in-known', 10, 'evt-known',
+    'org-unknown', 'sub-unknown', 11, 'evt-unknown',
+  )
+  db.prepare(`
+    INSERT INTO site_billing
+      (id, site_id, organization_id, payment_status, paid_through, last_paid_invoice_id)
+    VALUES (?, ?, ?, 'paid', ?, ?)
+  `).run('site-billing-test', 'site-test', 'org-test', '2026-09-01T00:00:00.000Z', 'in-known')
+
+  db.exec(migration0101)
+
+  const known = db.prepare('SELECT payment_status, paid_through, last_paid_invoice_id FROM organization_billing WHERE organization_id = ?').get('org-test') as { payment_status: string; paid_through: string; last_paid_invoice_id: string } | undefined
+  assert.deepEqual(known, { payment_status: 'paid', paid_through: '2026-09-01T00:00:00.000Z', last_paid_invoice_id: 'in-known' })
+  const unknown = db.prepare('SELECT payment_status, paid_through, last_paid_invoice_id FROM organization_billing WHERE organization_id = ?').get('org-unknown') as { payment_status: string; paid_through: string | null; last_paid_invoice_id: string | null } | undefined
+  assert.deepEqual(unknown, { payment_status: 'unknown', paid_through: null, last_paid_invoice_id: null })
+  const ledger = db.prepare('SELECT stripe_invoice_id, status, base_plan_price_id, period_end FROM stripe_invoice_payments WHERE organization_id = ?').get('org-test') as { stripe_invoice_id: string; status: string; base_plan_price_id: string; period_end: string } | undefined
+  assert.deepEqual(ledger, { stripe_invoice_id: 'in-known', status: 'paid', base_plan_price_id: 'legacy', period_end: '2026-09-01T00:00:00.000Z' })
+  const site = db.prepare('SELECT payment_status, paid_through, last_paid_invoice_id FROM site_billing WHERE site_id = ?').get('site-test') as { payment_status: string; paid_through: string; last_paid_invoice_id: string } | undefined
+  assert.deepEqual(site, { payment_status: 'paid', paid_through: '2026-09-01T00:00:00.000Z', last_paid_invoice_id: 'in-known' })
 })
 
 test('0099 normalizes migrated block payloads and rebuilds the published snapshot', () => {

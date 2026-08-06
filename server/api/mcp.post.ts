@@ -23,7 +23,7 @@ import { MCP_PROMPTS, renderMcpPrompt } from "~/server/utils/mcp-prompts";
 import { cloudflareEnv } from "~/server/utils/api-response";
 import { queryAll } from "~/server/db";
 import { purgeSiteKvCache } from "~/server/utils/edge-cache";
-import { purgePublicResourceCache } from "~/server/utils/public-resource-cache";
+import { purgePublicResourceCacheSafe } from "~/server/utils/public-resource-cache";
 import { schedulePlatformKnowledgeIndexRebuild } from "~/server/utils/platform-search-rebuild";
 import {
   assertConversationalToolEnabled,
@@ -531,7 +531,7 @@ Common workflows: update menus and items, create and publish site posts, triage 
             // that reads public resources immediately after this mutation could still
             // see stale data.
             try {
-              await purgePublicResourceCache(kv, siteId)
+              await purgePublicResourceCacheSafe({ DB: env.db, SITE_CACHE: kv }, siteId)
             } catch (err: unknown) {
               console.warn("[mcp-cache-purge] public resource purge failed:", String(err))
             }

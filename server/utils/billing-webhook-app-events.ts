@@ -13,6 +13,7 @@ async function markSubscriptionPayment(
   event?: Stripe.Event,
   invoiceId?: string | null,
   invoicePeriodEnd?: string | null,
+  pastDueSince?: string | null,
 ): Promise<void> {
   const local = await adapter.findOne<{ referenceId: string; stripeCustomerId: string | null }>({
     model: 'subscription',
@@ -35,6 +36,7 @@ async function markSubscriptionPayment(
     eventId: event?.id ?? `payment:${subscriptionId}:${paymentStatus}`,
     invoiceId,
     invoicePeriodEnd,
+    pastDueSince,
   })
 }
 
@@ -73,6 +75,7 @@ export async function handleApplicationStripeEvent(
       event,
       invoice.id,
       invoicePeriodEndIso(invoice),
+      typeof invoice.created === 'number' ? new Date(invoice.created * 1000).toISOString() : null,
     )
     return
   }
@@ -87,23 +90,10 @@ export async function handleApplicationStripeEvent(
   const metadata = session.metadata ?? {}
   const organizationId = metadata.organization_id
   if (session.mode === 'subscription' && metadata.type !== 'site_transfer') {
-    const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id
-    if (subscriptionId) {
-      await markSubscriptionPayment(
-        db,
-        subscriptionId,
-        event.type === 'checkout.session.async_payment_failed'
-          ? 'failed'
-          : event.type === 'checkout.session.async_payment_succeeded'
-            ? 'paid'
-            : session.payment_status === 'paid'
-              ? 'paid'
-              : 'processing',
-        adapter,
-        organizationId,
-        event,
-      )
-    }
+    // Checkout completion is only a UX/payment-processing signal. It does not
+    // identify a paid billing period reliably (and may not even have a
+    // finalized invoice yet); invoice.paid is the sole source of subscription
+    // coverage and quota grants.
     return
   }
   if (session.payment_status !== 'paid') return

@@ -125,7 +125,9 @@ export async function getBetterAuthStripePlans(
     plans.push({
       name: planId,
       priceId: monthly.id,
+      ...(monthly.lookup_key?.trim() ? { lookupKey: monthly.lookup_key.trim() } : {}),
       annualDiscountPriceId: yearly?.id,
+      ...(yearly?.lookup_key?.trim() ? { annualDiscountLookupKey: yearly.lookup_key.trim() } : {}),
       limits: getPlanEntitlements(planId),
       group: 'krabiclaw',
       ...(product.metadata?.seat_price_id?.trim()
@@ -143,6 +145,18 @@ export type StripePlanLoader = (
 ) => Promise<StripePlan[]>
 
 const STRIPE_PLAN_CACHE_TTL_MS = 60_000
+const stripePlanSnapshots = new Map<string, { plans: StripePlan[]; expiresAt: number }>()
+const stripePlanPending = new Map<string, Promise<StripePlan[]>>()
+
+function stripePlanCacheScope(env?: ApiRecord): string {
+  const account = typeof env?.STRIPE_ACCOUNT_ID === 'string' && env.STRIPE_ACCOUNT_ID.trim()
+    ? env.STRIPE_ACCOUNT_ID.trim()
+    : 'platform'
+  const secretKey = typeof env?.STRIPE_SECRET_KEY === 'string' ? env.STRIPE_SECRET_KEY : ''
+  const mode = secretKey.startsWith('sk_live') ? 'live' : 'test'
+  const managedServices = isManagedServiceEnabled(env) ? 'on' : 'off'
+  return `${account}:${mode}:managed-services:${managedServices}`
+}
 
 /**
  * Keeps one validated Stripe catalog snapshot per option set and coalesces
@@ -153,30 +167,28 @@ export function createStripePlanLoader(
   stripe: Stripe,
   env?: ApiRecord,
   ttlMs = STRIPE_PLAN_CACHE_TTL_MS,
+  cacheScope = stripePlanCacheScope(env),
 ): StripePlanLoader {
-  const snapshots = new Map<string, { plans: StripePlan[]; expiresAt: number }>()
-  const pending = new Map<string, Promise<StripePlan[]>>()
-
   return async (options = {}) => {
-    const key = String(Boolean(options.includeFeatureDisabled))
+    const key = `${cacheScope}:${String(Boolean(options.includeFeatureDisabled))}`
     const now = Date.now()
-    const snapshot = snapshots.get(key)
+    const snapshot = stripePlanSnapshots.get(key)
     if (snapshot && snapshot.expiresAt > now) return snapshot.plans
 
-    const existing = pending.get(key)
+    const existing = stripePlanPending.get(key)
     if (existing) return existing
 
     const refresh = getBetterAuthStripePlans(stripe, env, options)
       .then((plans) => {
-        snapshots.set(key, { plans, expiresAt: Date.now() + ttlMs })
+        stripePlanSnapshots.set(key, { plans, expiresAt: Date.now() + ttlMs })
         return plans
       })
       .catch((error) => {
         if (snapshot) return snapshot.plans
         throw error
       })
-      .finally(() => pending.delete(key))
-    pending.set(key, refresh)
+      .finally(() => stripePlanPending.delete(key))
+    stripePlanPending.set(key, refresh)
     return refresh
   }
 }
@@ -211,13 +223,19 @@ export async function projectOrganizationSubscription(
   const paymentRow = await queryFirst<{
     payment_status: string | null
     paid_through: string | null
+    past_due_since: string | null
     last_paid_invoice_id: string | null
   }>(db, `
-    SELECT payment_status, paid_through, last_paid_invoice_id
+    SELECT payment_status, paid_through, past_due_since, last_paid_invoice_id
     FROM organization_billing WHERE organization_id = ? LIMIT 1
   `, [input.organizationId])
   const paymentStatus = input.paymentStatus ?? paymentRow?.payment_status ?? 'unknown'
-  const accessPlan = getEffectiveAccessPlan({ ...input, paymentStatus, paidThrough: paymentRow?.paid_through })
+  const accessPlan = getEffectiveAccessPlan({
+    ...input,
+    paymentStatus,
+    paidThrough: paymentRow?.paid_through,
+    pastDueSince: paymentRow?.past_due_since,
+  })
   const entitlements = getPlanEntitlements(accessPlan)
   const entitlementEntries = Object.entries(entitlements)
   const entitlementKeys = entitlementEntries.map(([key]) => key)
@@ -402,24 +420,38 @@ async function resolveHistoricalSubscriptionPlan(
   stripe: Stripe,
   price: Stripe.Price,
 ): Promise<StripePlan | null> {
-  const resolvedPrice = price.product
-    ? price
-    : await stripe.prices.retrieve(price.id, { expand: ['product'] })
+  const resolvedPrice = await stripe.prices.retrieve(price.id, { expand: ['product'] })
   const product = typeof resolvedPrice.product === 'string'
     ? await stripe.products.retrieve(resolvedPrice.product)
     : resolvedPrice.product
   if (!product || 'deleted' in product) return null
+  if (resolvedPrice.metadata?.price_role?.trim().toLowerCase() !== 'base') return null
+  if (product.metadata?.seat_price_id?.trim() === resolvedPrice.id) return null
   const planId = product.metadata?.plan_id?.trim()
   if (!planId || planId === 'free') return null
   return {
     name: planId,
     priceId: resolvedPrice.id,
+    ...(resolvedPrice.lookup_key?.trim() ? { lookupKey: resolvedPrice.lookup_key.trim() } : {}),
     limits: getPlanEntitlements(planId),
     group: 'krabiclaw',
     ...(product.metadata?.seat_price_id?.trim()
       ? { seatPriceId: product.metadata.seat_price_id.trim() }
       : {}),
   }
+}
+
+function configuredBasePlanForItem(
+  item: Stripe.SubscriptionItem,
+  configuredPlans: StripePlan[],
+): StripePlan | null {
+  const priceId = item.price.id
+  const lookupKey = item.price.lookup_key
+  return configuredPlans.find(candidate =>
+    candidate.priceId === priceId
+    || candidate.annualDiscountPriceId === priceId
+    || (lookupKey && (candidate.lookupKey === lookupKey || candidate.annualDiscountLookupKey === lookupKey)),
+  ) ?? null
 }
 
 function stripeSubscriptionPeriod(subscription: Stripe.Subscription, item: Stripe.SubscriptionItem): { start: Date; end: Date } {
@@ -440,17 +472,34 @@ async function resolveSubscriptionPlan(
   const first = subscription.items.data[0]
   if (!first) throw new Error(`Stripe subscription ${subscription.id} has no recurring price; retrying`)
   const configuredPlans = await loadPlans({ includeFeatureDisabled: true })
-  for (const item of subscription.items.data) {
-    const priceId = item.price.id
-    const plan = configuredPlans.find(candidate =>
-      candidate.priceId === priceId
-      || candidate.annualDiscountPriceId === priceId
-      || (item.price.lookup_key && (candidate.lookupKey === item.price.lookup_key || candidate.annualDiscountLookupKey === item.price.lookup_key)),
-    )
-    if (plan) return { item, plan }
-    const historicalPlan = await resolveHistoricalSubscriptionPlan(stripe, item.price)
-    if (historicalPlan) return { item, plan: historicalPlan }
+  const configuredBasePriceIds = new Set(
+    configuredPlans.flatMap(candidate => [candidate.priceId, candidate.annualDiscountPriceId]
+      .filter((priceId): priceId is string => Boolean(priceId))),
+  )
+  const seatPriceIds = new Set(configuredPlans
+    .flatMap(candidate => candidate.seatPriceId ? [candidate.seatPriceId] : [])
+    .filter(priceId => !configuredBasePriceIds.has(priceId)))
+  const configuredBaseMatches = subscription.items.data
+    .filter(item => !seatPriceIds.has(item.price.id))
+    .map(item => ({ item, plan: configuredBasePlanForItem(item, configuredPlans) }))
+    .filter((entry): entry is { item: Stripe.SubscriptionItem; plan: StripePlan } => Boolean(entry.plan))
+  if (configuredBaseMatches.length > 1) {
+    throw new Error(`Stripe subscription ${subscription.id} has multiple configured recurring plan items; retrying`)
   }
+  const configuredBase = configuredBaseMatches[0]
+  if (configuredBase) return configuredBase
+
+  const historicalBaseMatches: ResolvedSubscriptionPlan[] = []
+  for (const item of subscription.items.data) {
+    if (seatPriceIds.has(item.price.id)) continue
+    const historicalPlan = await resolveHistoricalSubscriptionPlan(stripe, item.price)
+    if (historicalPlan) historicalBaseMatches.push({ item, plan: historicalPlan })
+  }
+  if (historicalBaseMatches.length > 1) {
+    throw new Error(`Stripe subscription ${subscription.id} has multiple historical recurring plan items; retrying`)
+  }
+  const historicalBase = historicalBaseMatches[0]
+  if (historicalBase) return historicalBase
   throw new Error(`Stripe subscription ${subscription.id} has no items matching a configured plan; retrying`)
 }
 
@@ -800,74 +849,140 @@ export async function markOrganizationPayment(
     eventId: string
     paidThrough?: string | null
     invoiceId?: string | null
+    basePlanPriceId?: string | null
+    invoicePeriodStart?: string | null
     invoicePeriodEnd?: string | null
+    pastDueSince?: string | null
   },
 ): Promise<void> {
   const now = new Date().toISOString()
+  if (!input.invoiceId) {
+    if (input.paymentStatus === 'paid') {
+      throw new Error(`Paid Stripe subscription payment ${input.subscriptionId} has no invoice; retrying`)
+    }
+    return
+  }
+
   const sites = await queryAll<{ id: string }>(db, `
     SELECT id FROM sites WHERE organization_id = ? ORDER BY id
   `, [input.organizationId])
   await executeBatch(db, [
     {
       query: `
+        INSERT INTO stripe_invoice_payments
+          (stripe_invoice_id, organization_id, stripe_subscription_id, base_plan_price_id,
+           status, period_start, period_end, past_due_since, last_event_created, last_event_id, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(stripe_invoice_id) DO UPDATE SET
+          organization_id = CASE
+            WHEN excluded.last_event_created > stripe_invoice_payments.last_event_created
+              OR (excluded.last_event_created = stripe_invoice_payments.last_event_created AND excluded.last_event_id > stripe_invoice_payments.last_event_id)
+              THEN excluded.organization_id ELSE stripe_invoice_payments.organization_id END,
+          stripe_subscription_id = CASE
+            WHEN excluded.last_event_created > stripe_invoice_payments.last_event_created
+              OR (excluded.last_event_created = stripe_invoice_payments.last_event_created AND excluded.last_event_id > stripe_invoice_payments.last_event_id)
+              THEN excluded.stripe_subscription_id ELSE stripe_invoice_payments.stripe_subscription_id END,
+          base_plan_price_id = CASE
+            WHEN excluded.last_event_created > stripe_invoice_payments.last_event_created
+              OR (excluded.last_event_created = stripe_invoice_payments.last_event_created AND excluded.last_event_id > stripe_invoice_payments.last_event_id)
+              THEN COALESCE(excluded.base_plan_price_id, stripe_invoice_payments.base_plan_price_id)
+              ELSE stripe_invoice_payments.base_plan_price_id END,
+          status = CASE
+            WHEN excluded.last_event_created > stripe_invoice_payments.last_event_created
+              OR (excluded.last_event_created = stripe_invoice_payments.last_event_created AND excluded.last_event_id > stripe_invoice_payments.last_event_id)
+              THEN excluded.status ELSE stripe_invoice_payments.status END,
+          period_start = CASE
+            WHEN excluded.last_event_created > stripe_invoice_payments.last_event_created
+              OR (excluded.last_event_created = stripe_invoice_payments.last_event_created AND excluded.last_event_id > stripe_invoice_payments.last_event_id)
+              THEN COALESCE(excluded.period_start, stripe_invoice_payments.period_start)
+              ELSE stripe_invoice_payments.period_start END,
+          period_end = CASE
+            WHEN excluded.last_event_created > stripe_invoice_payments.last_event_created
+              OR (excluded.last_event_created = stripe_invoice_payments.last_event_created AND excluded.last_event_id > stripe_invoice_payments.last_event_id)
+              THEN COALESCE(excluded.period_end, stripe_invoice_payments.period_end)
+              ELSE stripe_invoice_payments.period_end END,
+          past_due_since = CASE
+            WHEN excluded.last_event_created > stripe_invoice_payments.last_event_created
+              OR (excluded.last_event_created = stripe_invoice_payments.last_event_created AND excluded.last_event_id > stripe_invoice_payments.last_event_id)
+              THEN CASE
+                WHEN excluded.status = 'failed' THEN COALESCE(stripe_invoice_payments.past_due_since, excluded.past_due_since)
+                ELSE NULL
+              END
+              ELSE stripe_invoice_payments.past_due_since END,
+          last_event_created = CASE
+            WHEN excluded.last_event_created > stripe_invoice_payments.last_event_created
+              OR (excluded.last_event_created = stripe_invoice_payments.last_event_created AND excluded.last_event_id > stripe_invoice_payments.last_event_id)
+              THEN excluded.last_event_created ELSE stripe_invoice_payments.last_event_created END,
+          last_event_id = CASE
+            WHEN excluded.last_event_created > stripe_invoice_payments.last_event_created
+              OR (excluded.last_event_created = stripe_invoice_payments.last_event_created AND excluded.last_event_id > stripe_invoice_payments.last_event_id)
+              THEN excluded.last_event_id ELSE stripe_invoice_payments.last_event_id END,
+          updated_at = CASE
+            WHEN excluded.last_event_created > stripe_invoice_payments.last_event_created
+              OR (excluded.last_event_created = stripe_invoice_payments.last_event_created AND excluded.last_event_id > stripe_invoice_payments.last_event_id)
+              THEN excluded.updated_at ELSE stripe_invoice_payments.updated_at END
+      `,
+      params: [
+        input.invoiceId,
+        input.organizationId,
+        input.subscriptionId,
+        input.basePlanPriceId ?? null,
+        input.paymentStatus,
+        input.invoicePeriodStart ?? null,
+        input.invoicePeriodEnd ?? input.paidThrough ?? null,
+        input.paymentStatus === 'failed'
+          ? input.pastDueSince ?? new Date(input.eventCreated * 1000).toISOString()
+          : null,
+        input.eventCreated,
+        input.eventId,
+        now,
+      ],
+    },
+    {
+      query: `
         INSERT INTO organization_billing
           (id, organization_id, stripe_customer_id, stripe_subscription_id,
-           status, plan, payment_status, paid_through, last_paid_invoice_id,
+           status, plan, payment_status, paid_through, past_due_since, last_paid_invoice_id,
            last_payment_event_created, last_payment_event_id, updated_at)
-        VALUES (?, ?, ?, ?, 'free', 'free', ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, 'free', 'free',
+          (SELECT status FROM stripe_invoice_payments WHERE organization_id = ? ORDER BY last_event_created DESC, last_event_id DESC, stripe_invoice_id DESC LIMIT 1),
+          (SELECT period_end FROM stripe_invoice_payments WHERE organization_id = ? AND status = 'paid' AND base_plan_price_id IS NOT NULL AND period_end IS NOT NULL ORDER BY period_end DESC, last_event_created DESC, last_event_id DESC, stripe_invoice_id DESC LIMIT 1),
+          (SELECT past_due_since FROM stripe_invoice_payments WHERE organization_id = ? AND status = 'failed' ORDER BY last_event_created DESC, last_event_id DESC, stripe_invoice_id DESC LIMIT 1),
+          (SELECT stripe_invoice_id FROM stripe_invoice_payments WHERE organization_id = ? AND status = 'paid' AND base_plan_price_id IS NOT NULL AND period_end IS NOT NULL ORDER BY period_end DESC, last_event_created DESC, last_event_id DESC, stripe_invoice_id DESC LIMIT 1),
+          (SELECT last_event_created FROM stripe_invoice_payments WHERE organization_id = ? ORDER BY last_event_created DESC, last_event_id DESC, stripe_invoice_id DESC LIMIT 1),
+          (SELECT last_event_id FROM stripe_invoice_payments WHERE organization_id = ? ORDER BY last_event_created DESC, last_event_id DESC, stripe_invoice_id DESC LIMIT 1),
+          ?)
         ON CONFLICT(organization_id) DO UPDATE SET
-          stripe_customer_id = CASE WHEN excluded.last_payment_event_created >= COALESCE(organization_billing.last_payment_event_created, -1)
-            THEN COALESCE(excluded.stripe_customer_id, organization_billing.stripe_customer_id)
-            ELSE organization_billing.stripe_customer_id END,
-          stripe_subscription_id = CASE WHEN excluded.last_payment_event_created >= COALESCE(organization_billing.last_payment_event_created, -1)
-            THEN COALESCE(excluded.stripe_subscription_id, organization_billing.stripe_subscription_id)
-            ELSE organization_billing.stripe_subscription_id END,
-          payment_status = CASE
-            WHEN excluded.last_payment_event_created < COALESCE(organization_billing.last_payment_event_created, -1)
-              THEN organization_billing.payment_status
-            WHEN excluded.payment_status = 'paid' THEN 'paid'
-            WHEN organization_billing.payment_status = 'paid'
-              AND (
-                ? IS NULL
-                OR organization_billing.paid_through IS NULL
-                OR ? <= organization_billing.paid_through
-              )
-              THEN organization_billing.payment_status
-            ELSE excluded.payment_status
-          END,
-          paid_through = CASE WHEN excluded.last_payment_event_created >= COALESCE(organization_billing.last_payment_event_created, -1)
-            THEN COALESCE(excluded.paid_through, organization_billing.paid_through)
-            ELSE organization_billing.paid_through END,
-          last_paid_invoice_id = CASE WHEN excluded.last_payment_event_created >= COALESCE(organization_billing.last_payment_event_created, -1)
-            THEN COALESCE(excluded.last_paid_invoice_id, organization_billing.last_paid_invoice_id)
-            ELSE organization_billing.last_paid_invoice_id END,
-          last_payment_event_created = CASE WHEN excluded.last_payment_event_created >= COALESCE(organization_billing.last_payment_event_created, -1)
-            THEN excluded.last_payment_event_created ELSE organization_billing.last_payment_event_created END,
-          last_payment_event_id = CASE WHEN excluded.last_payment_event_created >= COALESCE(organization_billing.last_payment_event_created, -1)
-            THEN excluded.last_payment_event_id ELSE organization_billing.last_payment_event_id END,
-          updated_at = CASE WHEN excluded.last_payment_event_created >= COALESCE(organization_billing.last_payment_event_created, -1)
-            THEN excluded.updated_at ELSE organization_billing.updated_at END
+          stripe_customer_id = COALESCE(excluded.stripe_customer_id, organization_billing.stripe_customer_id),
+          stripe_subscription_id = COALESCE(excluded.stripe_subscription_id, organization_billing.stripe_subscription_id),
+          payment_status = excluded.payment_status,
+          paid_through = excluded.paid_through,
+          past_due_since = excluded.past_due_since,
+          last_paid_invoice_id = excluded.last_paid_invoice_id,
+          last_payment_event_created = excluded.last_payment_event_created,
+          last_payment_event_id = excluded.last_payment_event_id,
+          updated_at = excluded.updated_at
       `,
       params: [
         `billing-${input.organizationId}`,
         input.organizationId,
         input.customerId,
         input.subscriptionId,
-        input.paymentStatus,
-        input.paidThrough ?? null,
-        input.invoiceId ?? null,
-        input.eventCreated,
-        input.eventId,
+        input.organizationId,
+        input.organizationId,
+        input.organizationId,
+        input.organizationId,
+        input.organizationId,
+        input.organizationId,
         now,
-        input.invoicePeriodEnd ?? null,
-        input.invoicePeriodEnd ?? null,
       ],
     },
     {
-        query: `
-          UPDATE site_billing
+      query: `
+        UPDATE site_billing
           SET payment_status = (SELECT payment_status FROM organization_billing WHERE organization_id = ? LIMIT 1),
             paid_through = (SELECT paid_through FROM organization_billing WHERE organization_id = ? LIMIT 1),
+            past_due_since = (SELECT past_due_since FROM organization_billing WHERE organization_id = ? LIMIT 1),
             last_paid_invoice_id = (SELECT last_paid_invoice_id FROM organization_billing WHERE organization_id = ? LIMIT 1),
             last_payment_event_created = (SELECT last_payment_event_created FROM organization_billing WHERE organization_id = ? LIMIT 1),
             last_payment_event_id = (SELECT last_payment_event_id FROM organization_billing WHERE organization_id = ? LIMIT 1),
@@ -880,6 +995,7 @@ export async function markOrganizationPayment(
         input.organizationId,
         input.organizationId,
         input.organizationId,
+        input.organizationId,
         now,
         input.organizationId,
       ],
@@ -887,9 +1003,9 @@ export async function markOrganizationPayment(
     ...sites.map(site => ({
       query: `
         INSERT OR IGNORE INTO site_billing
-          (id, site_id, organization_id, payment_status, paid_through, last_paid_invoice_id,
+          (id, site_id, organization_id, payment_status, paid_through, past_due_since, last_paid_invoice_id,
            last_payment_event_created, last_payment_event_id, updated_at)
-        SELECT ?, ?, ?, payment_status, paid_through, last_paid_invoice_id,
+        SELECT ?, ?, ?, payment_status, paid_through, past_due_since, last_paid_invoice_id,
                last_payment_event_created, last_payment_event_id, ?
         FROM organization_billing
         WHERE organization_id = ?
@@ -897,25 +1013,6 @@ export async function markOrganizationPayment(
       params: [`sb-${site.id}`, site.id, input.organizationId, now, input.organizationId],
     })),
   ])
-}
-
-async function resolveHistoricalInvoicePlan(
-  stripe: Stripe,
-  price: Stripe.Price | null | undefined,
-): Promise<StripePlan | null> {
-  if (!price?.id) return null
-  const product = typeof price.product === 'string'
-    ? await stripe.products.retrieve(price.product)
-    : price.product
-  if (!product || 'deleted' in product) return null
-  const planId = product?.metadata?.plan_id?.trim()
-  if (!planId || planId === 'free') return null
-  return {
-    name: planId,
-    priceId: price.id,
-    limits: getPlanEntitlements(planId),
-    group: 'krabiclaw',
-  }
 }
 
 export async function grantInvoiceQuota(
@@ -943,6 +1040,7 @@ export async function grantInvoiceQuota(
   type InvoiceLine = Stripe.InvoiceLineItem & {
     type?: string
     subscription?: string | Stripe.Subscription | null
+    subscription_item?: string | null
     price?: string | Stripe.Price | null
     period?: { start?: number; end?: number } | null
     proration?: boolean
@@ -1017,23 +1115,34 @@ export async function grantInvoiceQuota(
     throw new Error(`Stripe invoice ${invoice.id} has no deterministic recurring subscription line; retrying`)
   }
 
-  const configuredPlans = await loadPlans({ includeFeatureDisabled: true })
-  const planLines = [] as Array<{ line: InvoiceLine; plan: StripePlan; priceId: string }>
-  for (const line of recurringLines) {
+  const resolvedSubscriptionPlan = await resolveSubscriptionPlan(stripe, subscription.stripeSubscription, loadPlans)
+  const baseSubscriptionItemId = resolvedSubscriptionPlan.item.id
+  const basePlanPriceIds = new Set([
+    resolvedSubscriptionPlan.item.price.id,
+    resolvedSubscriptionPlan.plan.priceId,
+    resolvedSubscriptionPlan.plan.annualDiscountPriceId,
+  ].filter((priceId): priceId is string => Boolean(priceId)))
+  const invoiceLineSubscriptionItemId = (line: InvoiceLine): string | null =>
+    line.subscription_item
+    ?? line.parent?.subscription_item_details?.subscription_item
+    ?? null
+  const basePlanLines = recurringLines.filter((line) => {
+    const subscriptionItemId = invoiceLineSubscriptionItemId(line)
+    if (baseSubscriptionItemId) return subscriptionItemId === baseSubscriptionItemId
     const price = linePrice(line)
-    if (!price || typeof price === 'string') continue
-    const priceId = price?.id
-    if (!priceId) continue
-    const plan = configuredPlans.find(candidate => candidate.priceId === priceId || candidate.annualDiscountPriceId === priceId)
-      ?? await resolveHistoricalInvoicePlan(stripe, price)
-    if (plan) planLines.push({ line, plan, priceId })
+    return typeof price !== 'string' && Boolean(price?.id && basePlanPriceIds.has(price.id))
+  })
+  if (basePlanLines.length !== 1) {
+    throw new Error(`Stripe invoice ${invoice.id} does not identify exactly one base subscription item line; retrying`)
   }
-  if (planLines.length !== 1) {
-    throw new Error(`Stripe invoice ${invoice.id} does not identify exactly one configured recurring plan line; retrying`)
+  const line = basePlanLines[0]
+  if (!line) throw new Error(`Stripe invoice ${invoice.id} has no base subscription item line; retrying`)
+  const price = linePrice(line)
+  if (!price || typeof price === 'string' || !price.id) {
+    throw new Error(`Stripe invoice ${invoice.id} base subscription item line has no price; retrying`)
   }
-  const selectedPlanLine = planLines[0]
-  if (!selectedPlanLine) throw new Error(`Stripe invoice ${invoice.id} has no configured recurring plan line; retrying`)
-  const { line, plan, priceId } = selectedPlanLine
+  const plan = resolvedSubscriptionPlan.plan
+  const priceId = price.id
   const periodStartSeconds = line.period?.start
   const periodEndSeconds = line.period?.end
   if (!periodStartSeconds || !periodEndSeconds) {
@@ -1045,6 +1154,7 @@ export async function grantInvoiceQuota(
     plan: plan.name,
     status: subscription.stripeSubscription.status,
     paymentStatus: 'paid',
+    paidThrough: periodEnd,
     periodEnd,
   })
   await markOrganizationPayment(db, {
@@ -1056,6 +1166,9 @@ export async function grantInvoiceQuota(
     eventId: event.id,
     paidThrough: periodEnd,
     invoiceId: invoice.id,
+    basePlanPriceId: priceId,
+    invoicePeriodStart: periodStart,
+    invoicePeriodEnd: periodEnd,
   })
   await projectCurrentStripeSubscription(db, subscription.stripeSubscription, false, stripe, event, adapter, loadPlans)
   if (accessPlan === 'free') return

@@ -498,6 +498,7 @@ export default defineNuxtConfig({
     // dev/E2E boot if task imports break the nitro-cloudflare-dev D1 proxy binding.
     scheduledTasks: enableNitroTasks ? {
       '*/5 * * * *': ['blog-scheduled-publish'],
+      '*/2 * * * *': ['public-resource-cache-invalidation'],
       '*/10 * * * *': ['domain-reconciliation'],
       '0 3 * * *': ['domain-reconciliation-daily', 'analytics-aggregate-daily'],
       '0 4 * * *': ['site-transfer-reminders'],

@@ -8,6 +8,7 @@ import { getCookie, getHeader, setCookie } from 'h3'
 import type { H3Event } from 'h3'
 import type { AppDb } from '~/server/db'
 import { execute, queryFirst } from '~/server/db'
+import { resolvePublishedTenantPageIdentity as resolveCanonicalTenantPageIdentity } from '~/server/utils/tenant-pages'
 
 export const VISITOR_COOKIE = 'kc_visitor_id'
 export const SESSION_COOKIE = 'kc_session_id'
@@ -98,21 +99,8 @@ export async function resolveLocationIdFromPath(
   return getLocationIdBySlug(db, siteId, slug)
 }
 
-export async function resolvePublishedTenantPageIdentity(db: AppDb, siteId: string, pagePath: string) {
-  return await queryFirst<{
-    page_id: string
-    page_type: string
-    recipe: string | null
-    locale: string
-    revision_id: string
-  }>(db, `
-    SELECT p.id AS page_id, p.page_type, p.recipe, v.locale, v.published_revision_id AS revision_id
-      FROM tenant_page_variants v
-      JOIN tenant_pages p ON p.id = v.page_id
-     WHERE v.site_id = ? AND v.published_path = ? AND v.status = 'published' AND v.published_revision_id IS NOT NULL
-     ORDER BY v.locale ASC
-     LIMIT 1
-  `, [siteId, pagePath])
+export async function resolvePageviewTenantPageIdentity(db: AppDb, siteId: string, pagePath: string, locale?: string | null) {
+  return await resolveCanonicalTenantPageIdentity(db, siteId, pagePath, locale)
 }
 
 export interface PageviewEventInput {

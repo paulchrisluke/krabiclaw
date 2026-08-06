@@ -1109,6 +1109,8 @@ export const READ_ONLY_TOOL_NAMES = [
   'get_facebook_connection',
   'get_dashboard_link',
   'get_page_fields',
+  'list_tenant_pages',
+  'get_tenant_page',
   'get_professional_service_content',
   'get_booking_policy',
   'preview_booking_policy',
@@ -1181,6 +1183,11 @@ export const OPEN_WORLD_WRITE_TOOL_NAMES = [
   'publish_to_facebook',
   'sync_facebook_page',
   'update_page_content',
+  'create_tenant_page',
+  'update_tenant_page_draft',
+  'publish_tenant_page',
+  'change_tenant_page_path',
+  'restore_tenant_page',
   'update_professional_service_content',
   'update_booking_policy',
   'update_home_hero',
@@ -1218,6 +1225,9 @@ export const OPEN_WORLD_DESTRUCTIVE_TOOL_NAMES = [
   'delete_experience',
   'delete_locale',
   'delete_domain',
+  'unpublish_tenant_page',
+  'archive_tenant_page',
+  'delete_tenant_page',
 ] as const
 
 export function buildToolAnnotationsByName() {

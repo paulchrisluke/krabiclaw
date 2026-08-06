@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:7d2f3b89ac1e8d13a235913cdc659e6adcff9fa45f630379f9445ce56ec1a5bd",
+  "fingerprint": "sha256:5aa62ecb9d8b8f63304e202a0755043ec0e1aec19a79f13113a3bb2bc9e01ae5",
   "tools": [
     {
       "name": "add_menu_items_batch",
@@ -278,6 +278,111 @@
           "creditsRemaining",
           "stats"
         ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "archive_tenant_page",
+      "inputSchema": {
+        "additionalProperties": true,
+        "properties": {
+          "expected_document_updated_at": {
+            "type": "string"
+          },
+          "gone": {
+            "type": "boolean"
+          },
+          "replacement_path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          },
+          "variant_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "variant_id",
+          "expected_document_updated_at"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "page": {
+            "type": "object"
+          },
+          "replacement_confirmation": {
+            "type": "object"
+          },
+          "revision_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      }
+    },
+    {
+      "name": "change_tenant_page_path",
+      "inputSchema": {
+        "additionalProperties": true,
+        "properties": {
+          "expected_document_updated_at": {
+            "type": "string"
+          },
+          "new_path": {
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          },
+          "variant_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "variant_id",
+          "new_path",
+          "expected_document_updated_at"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "page": {
+            "type": "object"
+          },
+          "replacement_confirmation": {
+            "type": "object"
+          },
+          "revision_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
         "type": "object"
       }
     },
@@ -2115,6 +2220,132 @@
       }
     },
     {
+      "name": "create_tenant_page",
+      "inputSchema": {
+        "additionalProperties": true,
+        "properties": {
+          "blocks": {
+            "description": "Complete canonical block array. Each existing block must retain its id unless its removal is explicitly confirmed.",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "canonicalUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "locale": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pageType": {
+            "enum": [
+              "custom",
+              "recipe",
+              "legal",
+              "system"
+            ],
+            "type": "string"
+          },
+          "page_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "path": {
+            "type": "string"
+          },
+          "publish": {
+            "type": "boolean"
+          },
+          "recipe": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "robots": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "seoDescription": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "seoTitle": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          },
+          "sortOrder": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "variant_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "path",
+          "title",
+          "blocks"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "page": {
+            "type": "object"
+          },
+          "replacement_confirmation": {
+            "type": "object"
+          },
+          "revision_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      }
+    },
+    {
       "name": "create_work_request",
       "inputSchema": {
         "additionalProperties": true,
@@ -2648,6 +2879,52 @@
         "required": [
           "deleted"
         ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "delete_tenant_page",
+      "inputSchema": {
+        "additionalProperties": true,
+        "properties": {
+          "expected_document_updated_at": {
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          },
+          "variant_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "variant_id",
+          "expected_document_updated_at"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "page": {
+            "type": "object"
+          },
+          "replacement_confirmation": {
+            "type": "object"
+          },
+          "revision_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
         "type": "object"
       }
     },
@@ -5399,6 +5676,48 @@
       }
     },
     {
+      "name": "get_tenant_page",
+      "inputSchema": {
+        "additionalProperties": true,
+        "properties": {
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          },
+          "variant_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "variant_id"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "page": {
+            "type": "object"
+          },
+          "replacement_confirmation": {
+            "type": "object"
+          },
+          "revision_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      }
+    },
+    {
       "name": "get_workspace_context",
       "inputSchema": {
         "additionalProperties": true,
@@ -7677,6 +7996,40 @@
       }
     },
     {
+      "name": "list_tenant_pages",
+      "inputSchema": {
+        "additionalProperties": true,
+        "properties": {
+          "locale": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "pages": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "pages"
+        ],
+        "type": "object"
+      }
+    },
+    {
       "name": "list_work_requests",
       "inputSchema": {
         "additionalProperties": true,
@@ -8514,6 +8867,52 @@
           "entity",
           "id"
         ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "publish_tenant_page",
+      "inputSchema": {
+        "additionalProperties": true,
+        "properties": {
+          "expected_document_updated_at": {
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          },
+          "variant_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "variant_id",
+          "expected_document_updated_at"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "page": {
+            "type": "object"
+          },
+          "replacement_confirmation": {
+            "type": "object"
+          },
+          "revision_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
         "type": "object"
       }
     },
@@ -9709,6 +10108,52 @@
           "resolution_fingerprint",
           "notes"
         ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "restore_tenant_page",
+      "inputSchema": {
+        "additionalProperties": true,
+        "properties": {
+          "expected_document_updated_at": {
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          },
+          "variant_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "variant_id",
+          "expected_document_updated_at"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "page": {
+            "type": "object"
+          },
+          "replacement_confirmation": {
+            "type": "object"
+          },
+          "revision_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
         "type": "object"
       }
     },
@@ -12060,6 +12505,52 @@
         "required": [
           "post"
         ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "unpublish_tenant_page",
+      "inputSchema": {
+        "additionalProperties": true,
+        "properties": {
+          "expected_document_updated_at": {
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          },
+          "variant_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "variant_id",
+          "expected_document_updated_at"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "page": {
+            "type": "object"
+          },
+          "replacement_confirmation": {
+            "type": "object"
+          },
+          "revision_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
         "type": "object"
       }
     },
@@ -15112,6 +15603,126 @@
           "entity",
           "id"
         ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "update_tenant_page_draft",
+      "inputSchema": {
+        "additionalProperties": true,
+        "properties": {
+          "blocks": {
+            "description": "Complete canonical block array. Each existing block must retain its id unless its removal is explicitly confirmed.",
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "canonicalUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confirmation_token": {
+            "type": "string"
+          },
+          "expected_document_updated_at": {
+            "type": "string"
+          },
+          "pageType": {
+            "enum": [
+              "custom",
+              "recipe",
+              "legal",
+              "system"
+            ],
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "recipe": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "removed_block_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "robots": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "seoDescription": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "seoTitle": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "site_id": {
+            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
+            "type": "string"
+          },
+          "sortOrder": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "variant_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "variant_id",
+          "expected_document_updated_at",
+          "blocks"
+        ],
+        "type": "object"
+      },
+      "outputSchema": {
+        "properties": {
+          "deleted": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "page": {
+            "type": "object"
+          },
+          "replacement_confirmation": {
+            "type": "object"
+          },
+          "revision_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
         "type": "object"
       }
     },

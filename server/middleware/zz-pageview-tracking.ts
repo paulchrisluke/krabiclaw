@@ -15,7 +15,7 @@ import {
   hashIp,
   insertPageviewEvent,
   insertPlatformPageviewEvent,
-  resolvePublishedTenantPageIdentity,
+  resolvePageviewTenantPageIdentity,
   isTrackablePath,
   resolveLocationIdFromPath
 } from '~/server/utils/pageview-tracking'
@@ -51,7 +51,12 @@ export default defineEventHandler(async (event) => {
     const insertPromise = isTenant
       ? Promise.all([
           resolveLocationIdFromPath(db, siteId as string, url.pathname),
-          resolvePublishedTenantPageIdentity(db, siteId as string, url.pathname),
+          resolvePageviewTenantPageIdentity(
+            db,
+            siteId as string,
+            url.pathname,
+            url.searchParams.get('locale') || getHeader(event, 'x-tenant-locale'),
+          ),
         ]).then(([locationId, page]) =>
           insertPageviewEvent(db, {
             siteId: siteId as string,

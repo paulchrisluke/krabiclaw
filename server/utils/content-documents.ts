@@ -33,6 +33,7 @@ export interface ContentRevisionRow {
   created_by: string | null
   label: string | null
   created_at: string
+  published_at: string | null
 }
 
 export interface ContentBlockSnapshot {
@@ -323,9 +324,9 @@ async function writeRevisionFromBlocks(
     ...documentGuardQueries,
     ...liveBlockQueries,
     {
-      query: `INSERT INTO content_revisions (id, document_id, snapshot_json, body_markdown, created_by, label, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      params: [revisionId, document.id, JSON.stringify({ ...(opts.snapshotMetadata ? { schemaVersion: 1, metadata: opts.snapshotMetadata } : {}), blocks: snapshots }), bodyMarkdown, opts.createdBy ?? null, opts.label ?? null, now],
+      query: `INSERT INTO content_revisions (id, document_id, snapshot_json, body_markdown, created_by, label, created_at, published_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      params: [revisionId, document.id, JSON.stringify({ ...(opts.snapshotMetadata ? { schemaVersion: 1, metadata: opts.snapshotMetadata } : {}), blocks: snapshots }), bodyMarkdown, opts.createdBy ?? null, opts.label ?? null, now, opts.publish || opts.publishOnly ? now : null],
     },
     {
       query: opts.publishOnly
@@ -505,10 +506,16 @@ export async function publishCurrentContentRevision(db: DbClient, ownerType: Con
   )
   if (!revision) notFound('Content revision not found')
   const now = new Date().toISOString()
-  const queries: { query: string; params: unknown[] }[] = [{
-    query: 'UPDATE content_documents SET published_revision_id = ?, updated_at = ? WHERE id = ?',
-    params: [document.draft_revision_id, now, document.id],
-  }]
+  const queries: { query: string; params: unknown[] }[] = [
+    {
+      query: 'UPDATE content_revisions SET published_at = COALESCE(published_at, ?) WHERE id = ? AND document_id = ?',
+      params: [now, document.draft_revision_id, document.id],
+    },
+    {
+      query: 'UPDATE content_documents SET published_revision_id = ?, updated_at = ? WHERE id = ?',
+      params: [document.draft_revision_id, now, document.id],
+    },
+  ]
   if (ownerType === 'platform_blog' || ownerType === 'tenant_blog') {
     queries.push({
       query: 'UPDATE blog_posts SET body = ?, updated_at = ? WHERE id = ?',
@@ -541,6 +548,10 @@ export async function publishContentDocumentRevision(db: DbClient, documentId: s
 
   const now = new Date().toISOString()
   const queries: { query: string; params: unknown[] }[] = [
+    {
+      query: 'UPDATE content_revisions SET published_at = COALESCE(published_at, ?) WHERE id = ? AND document_id = ?',
+      params: [now, revision.id, document.id],
+    },
     {
       query: 'UPDATE content_documents SET published_revision_id = ?, updated_at = ? WHERE id = ?',
       params: [revision.id, now, document.id],

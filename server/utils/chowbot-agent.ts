@@ -562,6 +562,18 @@ async function executeTool(
     case "update_professional_service_content":
       return runMcpExecutorToolForChowbot(executorSite, "update_professional_service_content", input);
 
+    case "list_tenant_pages":
+    case "get_tenant_page":
+    case "create_tenant_page":
+    case "update_tenant_page_draft":
+    case "publish_tenant_page":
+    case "unpublish_tenant_page":
+    case "change_tenant_page_path":
+    case "archive_tenant_page":
+    case "restore_tenant_page":
+    case "delete_tenant_page":
+      return runMcpExecutorToolForChowbot(executorSite, name, input);
+
     case "get_page_fields": {
       const page = getToolString(input, "page", 40);
       if (!page || !isSiteContentPage(page)) return { error: "Invalid page." };

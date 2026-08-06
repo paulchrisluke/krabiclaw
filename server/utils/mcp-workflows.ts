@@ -417,6 +417,10 @@ async function resolveTenantPagePath(db: DbClient, siteId: string, page: string,
   return path
 }
 
+export function buildTenantPageReplacementConfirmationToken(expectedDocumentUpdatedAt: string, removedBlockIds: readonly string[]) {
+  return `tenant-page-replacement:${expectedDocumentUpdatedAt}:${[...removedBlockIds].sort().join(',')}`
+}
+
 export async function updatePageContent(
   db: DbClient,
   organizationId: string,
@@ -452,6 +456,41 @@ export async function updatePageContent(
   const { getTenantPageForEditorByPath, updateTenantPageDraft } = await import('~/server/utils/tenant-pages');
   const canonicalPath = await resolveTenantPagePath(db, siteId, input.page, locationId);
   const page = await getTenantPageForEditorByPath(db, siteId, canonicalPath);
+  const incomingBlockIds = new Set(
+    (input.changes.blocks as unknown[])
+      .map(block => block && typeof block === 'object' && 'id' in block && typeof (block as { id?: unknown }).id === 'string'
+        ? (block as { id: string }).id
+        : null)
+      .filter((id): id is string => Boolean(id)),
+  )
+  const removedBlockIds = page.blocks
+    .map(block => block.id)
+    .filter(blockId => !incomingBlockIds.has(blockId))
+  if (removedBlockIds.length) {
+    const expectedDocumentUpdatedAt = typeof input.changes.expected_document_updated_at === 'string'
+      ? input.changes.expected_document_updated_at
+      : typeof input.changes.expectedDocumentUpdatedAt === 'string'
+        ? input.changes.expectedDocumentUpdatedAt
+        : ''
+    const requestedRemovedIds = Array.isArray(input.changes.removed_block_ids)
+      ? input.changes.removed_block_ids.filter((id): id is string => typeof id === 'string').sort()
+      : []
+    const confirmationToken = typeof input.changes.confirmation_token === 'string'
+      ? input.changes.confirmation_token
+      : ''
+    const expectedToken = buildTenantPageReplacementConfirmationToken(page.document.updated_at, removedBlockIds)
+    if (expectedDocumentUpdatedAt !== page.document.updated_at || requestedRemovedIds.join(',') !== [...removedBlockIds].sort().join(',') || confirmationToken !== expectedToken) {
+      throw createError({
+        statusCode: 409,
+        statusMessage: `Complete block replacement would remove ${removedBlockIds.length} existing block(s). Confirm with expected_document_updated_at="${page.document.updated_at}", removed_block_ids=${JSON.stringify([...removedBlockIds].sort())}, confirmation_token="${expectedToken}".`,
+      })
+    }
+  }
+  const expectedDocumentUpdatedAt = typeof input.changes.expected_document_updated_at === 'string'
+    ? input.changes.expected_document_updated_at
+    : typeof input.changes.expectedDocumentUpdatedAt === 'string'
+      ? input.changes.expectedDocumentUpdatedAt
+      : page.document.updated_at
   const result = await updateTenantPageDraft(db, page.id, {
     userId: actorId ?? null,
     scope: { siteId, organizationId },
@@ -467,7 +506,7 @@ export async function updatePageContent(
       recipe: page.recipe,
       sortOrder: page.sort_order,
       blocks: input.changes.blocks,
-      expectedDocumentUpdatedAt: page.document.updated_at,
+      expectedDocumentUpdatedAt,
     },
   });
   await fireSiteEventSafe({
@@ -525,6 +564,11 @@ export async function getEditorContent(
     locationId: locationId ?? null,
     public_path: canonicalPage.path,
     schema: { page, fields: ['blocks'], structured: ['blocks'] },
+    replacement_confirmation: {
+      expected_document_updated_at: canonicalPage.document.updated_at,
+      current_block_ids: canonicalPage.blocks.map(block => block.id),
+      confirmation_format: 'tenant-page-replacement:<expected_document_updated_at>:<sorted_removed_block_ids_comma_separated>',
+    },
   };
 }
 

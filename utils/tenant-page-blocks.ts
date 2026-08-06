@@ -19,6 +19,8 @@ export type TenantPageBlockType =
   | 'offering_grid'
   | 'location_grid'
 
+export type TenantPageType = 'custom' | 'recipe' | 'legal' | 'system'
+
 export interface TenantPageBlock {
   id: string
   type: TenantPageBlockType
@@ -51,6 +53,7 @@ export interface TenantPageBlockDefinition {
   description: string
   schemaVersion: typeof TENANT_PAGE_SCHEMA_VERSION
   allowedRecipes: readonly string[]
+  allowedPageTypes: readonly TenantPageType[]
   fields: readonly string[]
   editor: 'structured-json'
   renderer: { saya: 'tenant-page'; blawby: 'tenant-page' }
@@ -63,6 +66,9 @@ const ALL_RECIPES = [
   'services', 'privacy', 'terms', 'third-party-notices', 'locations', 'menu', 'order',
   'experiences', 'reservations', 'qa', 'reviews', 'posts', 'photos', 'blog',
 ] as const
+
+export const TENANT_PAGE_RECIPE_REGISTRY = new Set<string>(ALL_RECIPES)
+export const TENANT_PAGE_TYPES: readonly TenantPageType[] = ['custom', 'recipe', 'legal', 'system']
 
 export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageBlockDefinition> = {
   heading: blockDefinitionWithMetadata('heading', 'Heading', 'A semantic heading.', ALL_RECIPES, ['text', 'level'], { accessibility: 'required', seo: 'structured' }),
@@ -79,9 +85,9 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
   testimonial_grid: blockDefinitionWithMetadata('testimonial_grid', 'Testimonials', 'A grid of customer testimonials.', ALL_RECIPES, ['title', 'items']),
   contact_cta: blockDefinitionWithMetadata('contact_cta', 'Contact CTA', 'A contact-focused call to action.', ALL_RECIPES, ['title', 'description', 'label', 'url']),
   booking_cta: blockDefinitionWithMetadata('booking_cta', 'Booking CTA', 'A booking-focused call to action.', ALL_RECIPES, ['title', 'description', 'label', 'url']),
-  donation_choices: blockDefinitionWithMetadata('donation_choices', 'Donation choices', 'Structured donation options.', ['donate'], ['title', 'description', 'tiers', 'destination']),
-  offering_grid: blockDefinitionWithMetadata('offering_grid', 'Offering grid', 'References canonical offerings.', ['home', 'about', 'pricing', 'custom', 'services'], ['title', 'offering_ids']),
-  location_grid: blockDefinitionWithMetadata('location_grid', 'Location grid', 'References canonical locations.', ['home', 'about', 'contact', 'custom'], ['title', 'location_ids']),
+  donation_choices: blockDefinitionWithMetadata('donation_choices', 'Donation choices', 'Structured donation options.', ['donate'], ['title', 'description', 'tiers', 'destination'], { allowedPageTypes: ['recipe'] }),
+  offering_grid: blockDefinitionWithMetadata('offering_grid', 'Offering grid', 'References canonical offerings.', ['home', 'about', 'pricing', 'custom', 'services'], ['title', 'offering_ids'], { allowedPageTypes: ['custom', 'recipe', 'system'] }),
+  location_grid: blockDefinitionWithMetadata('location_grid', 'Location grid', 'References canonical locations.', ['home', 'about', 'contact', 'custom'], ['title', 'location_ids'], { allowedPageTypes: ['custom', 'recipe', 'system'] }),
 }
 
 const BLOCK_TYPES = new Set(Object.keys(TENANT_PAGE_BLOCK_REGISTRY))
@@ -149,7 +155,7 @@ function blockDefinitionWithMetadata(
   description: string,
   allowedRecipes: readonly string[],
   fields: readonly string[],
-  options: Pick<TenantPageBlockDefinition, 'accessibility' | 'seo'> = { accessibility: 'required', seo: 'inherited' },
+  options: Partial<Pick<TenantPageBlockDefinition, 'accessibility' | 'seo' | 'allowedPageTypes'>> = {},
 ): TenantPageBlockDefinition {
   return {
     type,
@@ -157,10 +163,12 @@ function blockDefinitionWithMetadata(
     description,
     schemaVersion: TENANT_PAGE_SCHEMA_VERSION,
     allowedRecipes,
+    allowedPageTypes: options.allowedPageTypes ?? TENANT_PAGE_TYPES,
     fields,
     editor: 'structured-json',
     renderer: { saya: 'tenant-page', blawby: 'tenant-page' },
-    ...options,
+    accessibility: options.accessibility ?? 'required',
+    seo: options.seo ?? 'inherited',
   }
 }
 

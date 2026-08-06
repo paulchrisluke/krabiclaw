@@ -1,3 +1,7 @@
+import { execute, queryAll, type BatchQuery, type DbClient } from '~/server/db'
+import { purgeSiteKvCache } from '~/server/utils/edge-cache'
+import { normalizeHost } from '~/server/utils/tenant-hosts'
+
 // KV read-through cache for public shell and page resource queries.
 // Mirrors edge-cache.ts's HTML cache shape, but keyed by siteId + resource
 // params instead of host + pathname — public resources are looked up by siteId
@@ -12,6 +16,74 @@
 // covered; location CRUD, onboarding setup/commit, and Google Business/Places sync were a
 // gap closed alongside this change — see those call sites for purgePublicResourceCacheSafe).
 export const PUBLIC_RESOURCE_CACHE_TTL_SECONDS = 300
+
+const CACHE_INVALIDATION_RETRY_AFTER_MS = 5 * 60 * 1000
+
+export function publicResourceCacheInvalidationQuery(siteId: string, reason: string): BatchQuery {
+  return {
+    query: `INSERT INTO public_resource_cache_invalidations
+      (id, site_id, reason, status, attempt_count, created_at)
+      VALUES (?, ?, ?, 'pending', 0, ?)`,
+    params: [crypto.randomUUID(), siteId, reason, new Date().toISOString()],
+  }
+}
+
+export async function drainPublicResourceCacheInvalidations(
+  db: DbClient,
+  kv: KVNamespace,
+  options: { limit?: number; now?: Date; freeSiteDomain?: string | null } = {},
+): Promise<number> {
+  const now = options.now ?? new Date()
+  const nowIso = now.toISOString()
+  const staleClaimCutoff = new Date(now.getTime() - CACHE_INVALIDATION_RETRY_AFTER_MS).toISOString()
+  const rows = await queryAll<{ id: string; site_id: string; attempt_count: number }>(db, `
+    SELECT id, site_id, attempt_count
+      FROM public_resource_cache_invalidations
+     WHERE status = 'pending'
+        OR (status = 'processing' AND claimed_at < ?)
+     ORDER BY created_at ASC
+     LIMIT ?
+  `, [staleClaimCutoff, options.limit ?? 50])
+  let processed = 0
+  for (const row of rows) {
+    const claim = await execute(db, `
+      UPDATE public_resource_cache_invalidations
+         SET status = 'processing', claimed_at = ?, attempt_count = attempt_count + 1
+       WHERE id = ? AND (status = 'pending' OR (status = 'processing' AND claimed_at < ?))
+    `, [nowIso, row.id, staleClaimCutoff])
+    if (Number(claim.meta?.changes ?? 0) !== 1) continue
+    try {
+      await purgePublicResourceCache(kv, row.site_id)
+      const domains = await queryAll<{ domain: string }>(db, `
+        SELECT domain FROM site_domains WHERE site_id = ? AND status = 'active'
+      `, [row.site_id])
+      const sites = await queryAll<{ subdomain: string | null; custom_domain: string | null }>(db, `
+        SELECT subdomain, custom_domain FROM sites WHERE id = ? LIMIT 1
+      `, [row.site_id])
+      const site = sites[0]
+      const freeSiteDomain = normalizeHost(options.freeSiteDomain) || 'krabiclaw.com'
+      const hostnames = new Set<string>(domains.map(domain => domain.domain))
+      if (site?.subdomain) hostnames.add(`${site.subdomain}.${freeSiteDomain}`)
+      if (site?.custom_domain) hostnames.add(site.custom_domain)
+      await purgeSiteKvCache(kv, [...hostnames])
+      await execute(db, `
+        UPDATE public_resource_cache_invalidations
+           SET status = 'processed', processed_at = ?, last_error = NULL
+         WHERE id = ? AND status = 'processing' AND claimed_at = ?
+      `, [nowIso, row.id, nowIso])
+      processed += 1
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      await execute(db, `
+        UPDATE public_resource_cache_invalidations
+           SET status = 'pending', claimed_at = NULL, last_error = ?
+         WHERE id = ? AND status = 'processing' AND claimed_at = ?
+      `, [message.slice(0, 2000), row.id, nowIso])
+      console.warn('[public-resource-cache] durable purge failed:', message)
+    }
+  }
+  return processed
+}
 
 export interface PublicResourceCacheParams {
   contract: 'shell' | 'page'
@@ -84,22 +156,28 @@ export async function purgePublicResourceCache(kv: KVNamespace, siteId: string):
 }
 
 /**
- * Convenience wrapper for call sites outside /api/editor/sites/** and mcp.post.ts
- * (the two paths already covered by a blanket afterResponse hook / direct call —
- * see server/plugins/public-resource-cache-invalidate.ts). Non-fatal: swallows KV errors
- * and missing bindings so a cache purge failure never breaks the write it follows.
+ * Convenience wrapper for call sites outside /api/editor/sites/** and mcp.post.ts.
+ * When D1 is available it records a durable invalidation before attempting the
+ * purge; a failed purge remains pending for the scheduled drain to retry.
  */
 export async function purgePublicResourceCacheSafe(
   env: unknown,
   siteId: string,
 ): Promise<void> {
-  const maybeEnv = env as { SITE_CACHE?: KVNamespace; ctx?: { waitUntil?: (_promise: Promise<unknown>) => void } } | null | undefined
+  const maybeEnv = env as { DB?: DbClient; SITE_CACHE?: KVNamespace; ctx?: { waitUntil?: (_promise: Promise<unknown>) => void } } | null | undefined
   const kv = maybeEnv?.SITE_CACHE
   if (!kv) return
-  
-  const purgePromise = purgePublicResourceCache(kv, siteId).catch(err => {
-    console.warn('[public-resource-cache] purge failed:', String(err))
-  })
+
+  const purgePromise = maybeEnv.DB
+    ? (async () => {
+        await execute(maybeEnv.DB!, `
+          INSERT INTO public_resource_cache_invalidations
+            (id, site_id, reason, status, attempt_count, created_at)
+          VALUES (?, ?, 'legacy-safe-wrapper', 'pending', 0, ?)
+        `, [crypto.randomUUID(), siteId, new Date().toISOString()])
+        await drainPublicResourceCacheInvalidations(maybeEnv.DB!, kv, { limit: 1 })
+      })()
+    : purgePublicResourceCache(kv, siteId)
 
   const waitUntil = maybeEnv?.ctx?.waitUntil
   if (typeof waitUntil === 'function') {
@@ -108,8 +186,5 @@ export async function purgePublicResourceCacheSafe(
   }
 
   // Hard timeout fallback if waitUntil is not available
-  await Promise.race([
-    purgePromise,
-    new Promise(resolve => setTimeout(resolve, 500))
-  ])
+  await purgePromise
 }

@@ -20,6 +20,7 @@ interface OrgBillingRow {
   stripe_subscription_id: string | null
   payment_status: string | null
   paid_through: string | null
+  past_due_since: string | null
   auto_topup_enabled: number | null
   auto_topup_bundle: number | null
   auto_topup_threshold: number | null
@@ -33,6 +34,7 @@ interface BetterAuthSubscriptionRow {
   status: string
   paymentStatus: string | null
   paidThrough: string | null
+  pastDueSince: string | null
   periodEnd: number | string | null
   cancelAtPeriodEnd: number | null
 }
@@ -94,7 +96,7 @@ export async function getSiteBillingStatus(
 
   // Customer + auto-topup live at org level
   const orgBilling = await queryFirst<OrgBillingRow>(db, `
-    SELECT ob.stripe_customer_id, ob.stripe_subscription_id, ob.payment_status, ob.paid_through, ob.auto_topup_enabled, ob.auto_topup_bundle, ob.auto_topup_threshold
+    SELECT ob.stripe_customer_id, ob.stripe_subscription_id, ob.payment_status, ob.paid_through, ob.past_due_since, ob.auto_topup_enabled, ob.auto_topup_bundle, ob.auto_topup_threshold
     FROM sites s
     JOIN organization_billing ob ON ob.organization_id = s.organization_id
     WHERE s.id = ? LIMIT 1
@@ -106,6 +108,7 @@ export async function getSiteBillingStatus(
         status: subscription.status,
         paymentStatus: subscription.paymentStatus,
         paidThrough: subscription.paidThrough ?? orgBilling?.paid_through,
+        pastDueSince: subscription.pastDueSince ?? orgBilling?.past_due_since,
         periodEnd: subscription.periodEnd,
       })
     : null
@@ -143,7 +146,7 @@ export async function getOrganizationBillingStatus(
   const subscription = await getBetterAuthSubscription(db, organizationId)
   // No site yet — return bare org customer info
   const orgBilling = await queryFirst<OrgBillingRow>(db, `
-    SELECT stripe_customer_id, payment_status, paid_through, auto_topup_enabled, auto_topup_bundle, auto_topup_threshold
+    SELECT stripe_customer_id, payment_status, paid_through, past_due_since, auto_topup_enabled, auto_topup_bundle, auto_topup_threshold
     FROM organization_billing WHERE organization_id = ? LIMIT 1
   `, [organizationId])
 
@@ -153,6 +156,7 @@ export async function getOrganizationBillingStatus(
         status: subscription.status,
         paymentStatus: subscription.paymentStatus,
         paidThrough: subscription.paidThrough ?? orgBilling?.paid_through,
+        pastDueSince: subscription.pastDueSince ?? orgBilling?.past_due_since,
         periodEnd: subscription.periodEnd,
       })
     : 'free'
@@ -427,7 +431,8 @@ async function getBetterAuthSubscription(db: DbClient, organizationId: string): 
     SELECT plan, referenceId, stripeCustomerId, stripeSubscriptionId, status,
            periodEnd, cancelAtPeriodEnd,
            (SELECT payment_status FROM organization_billing WHERE organization_id = referenceId LIMIT 1) AS paymentStatus,
-           (SELECT paid_through FROM organization_billing WHERE organization_id = referenceId LIMIT 1) AS paidThrough
+           (SELECT paid_through FROM organization_billing WHERE organization_id = referenceId LIMIT 1) AS paidThrough,
+           (SELECT past_due_since FROM organization_billing WHERE organization_id = referenceId LIMIT 1) AS pastDueSince
     FROM subscription
     WHERE referenceId = ?
       AND status IN ('active', 'trialing', 'past_due')

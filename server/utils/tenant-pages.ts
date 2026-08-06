@@ -13,15 +13,18 @@ import {
   normalizeTenantPagePath,
   validateTenantPageSnapshot,
   blockDefinition,
+  TENANT_PAGE_RECIPE_REGISTRY,
+  TENANT_PAGE_TYPES,
   type TenantPageBlock,
   type TenantPageSnapshotMetadata,
+  type TenantPageType,
 } from '~/utils/tenant-page-blocks'
 import { hasSiteEntitlement } from '~/server/utils/billing'
 import { normalizeDomain } from '~/server/utils/domain-shared'
 import { normalizeLocale } from '~/server/utils/site-i18n'
+import { publicResourceCacheInvalidationQuery } from '~/server/utils/public-resource-cache'
 
 export type TenantPageStatus = 'draft' | 'published' | 'archived'
-export type TenantPageType = 'custom' | 'recipe' | 'legal' | 'system'
 
 export interface TenantPageEditorInput {
   id?: string
@@ -147,7 +150,7 @@ function parseSnapshot(value: string): { metadata: TenantPageSnapshotMetadata; b
 
 function metadataForInput(input: TenantPageEditorInput, locale: string, path: string): TenantPageSnapshotMetadata {
   const pageType = input.pageType ?? 'custom'
-  if (!['custom', 'recipe', 'legal', 'system'].includes(pageType)) badRequest('pageType is invalid')
+  if (!TENANT_PAGE_TYPES.includes(pageType)) badRequest('pageType is invalid')
   return {
     locale,
     path,
@@ -164,15 +167,27 @@ function metadataForInput(input: TenantPageEditorInput, locale: string, path: st
 
 async function assertTenantPageSupport(db: DbClient, siteId: string, input: TenantPageEditorInput, blocks: TenantPageBlock[], options: { checkCustomPageEntitlement?: boolean } = {}) {
   const pageType = input.pageType ?? 'custom'
+  if (!TENANT_PAGE_TYPES.includes(pageType)) badRequest('pageType is invalid')
   if (pageType === 'custom' && options.checkCustomPageEntitlement !== false && !(await hasSiteEntitlement(db, siteId, 'custom_pages'))) {
     throw createError({ statusCode: 402, statusMessage: 'Custom tenant pages require the Growth plan or higher' })
   }
   const recipe = input.recipe?.trim() || null
   if (pageType === 'recipe' && !recipe) badRequest('recipe is required for recipe pages')
+  if (recipe && !TENANT_PAGE_RECIPE_REGISTRY.has(recipe)) badRequest(`Recipe "${recipe}" is not supported`)
   if (recipe) {
     for (const block of blocks) {
-      if (!blockDefinition(block.type).allowedRecipes.includes(recipe)) {
+      const definition = blockDefinition(block.type)
+      if (!definition.allowedPageTypes.includes(pageType)) {
+        badRequest(`Block type "${block.type}" is not supported by page type "${pageType}"`)
+      }
+      if (!definition.allowedRecipes.includes(recipe)) {
         badRequest(`Block type "${block.type}" is not supported by recipe "${recipe}"`)
+      }
+    }
+  } else {
+    for (const block of blocks) {
+      if (!blockDefinition(block.type).allowedPageTypes.includes(pageType)) {
+        badRequest(`Block type "${block.type}" is not supported by page type "${pageType}"`)
       }
     }
   }
@@ -291,11 +306,66 @@ async function assertTenantPageRedirectLocaleSafe(
   const owner = await queryFirst<{ locale: string } | null>(db, `
     SELECT locale
       FROM tenant_page_variants
-     WHERE site_id = ? AND locale <> ? AND published_path = ?
+     WHERE site_id = ? AND locale = ? AND published_path = ?
        AND status = 'published' AND published_revision_id IS NOT NULL AND id <> ?
      LIMIT 1
   `, [input.siteId, input.locale, input.fromPath, input.variantId])
   if (owner) conflict('A locale-specific redirect cannot replace a path still published by another locale')
+}
+
+async function prepareTenantPageRedirectFlatten(
+  db: DbClient,
+  input: {
+    siteId: string
+    organizationId: string
+    locale: string
+    fromPath: string
+    toPath: string | null
+  },
+  now: string,
+): Promise<BatchQuery[]> {
+  const incoming = await queryAll<{ from_path: string; source: string; behavior: string }>(db, `
+    SELECT from_path, source, behavior
+      FROM tenant_redirects
+     WHERE site_id = ? AND organization_id = ? AND locale = ? AND to_path = ?
+       AND behavior = 'redirect'
+  `, [input.siteId, input.organizationId, input.locale, input.fromPath])
+  if (!input.toPath) {
+    if (incoming.length) conflict('Cannot archive a page while another redirect points to it')
+    return []
+  }
+  if (incoming.some(redirect => redirect.from_path === input.toPath)) {
+    conflict('Changing this page path would create a redirect cycle')
+  }
+  if (incoming.some(redirect => redirect.source !== 'tenant-pages')) {
+    conflict('A manual tenant redirect points to this page and cannot be rewritten automatically')
+  }
+  if (!incoming.length) return []
+  return [{
+    query: `UPDATE tenant_redirects
+       SET to_path = ?, updated_at = ?
+     WHERE site_id = ? AND organization_id = ? AND locale = ? AND to_path = ? AND behavior = 'redirect'`,
+    params: [input.toPath, now, input.siteId, input.organizationId, input.locale, input.fromPath],
+  }]
+}
+
+async function canonicalTenantPageIdentity(
+  db: DbClient,
+  row: Pick<TenantPageVariantRow, 'site_id' | 'locale' | 'page_type' | 'recipe'>,
+  input: { pageType?: TenantPageType | null; recipe?: string | null },
+): Promise<{ pageType: TenantPageType; recipe: string | null }> {
+  const source = await queryFirst<{ is_source: number } | null>(db, `
+    SELECT is_source FROM site_locales WHERE site_id = ? AND locale = ? LIMIT 1
+  `, [row.site_id, row.locale])
+  const pageType = input.pageType ?? row.page_type
+  const recipe = input.recipe === undefined ? row.recipe : (input.recipe?.trim() || null)
+  if (!source?.is_source && (pageType !== row.page_type || recipe !== row.recipe)) {
+    badRequest('A translated tenant-page variant must use the source page identity')
+  }
+  return {
+    pageType: source?.is_source ? pageType : row.page_type,
+    recipe: source?.is_source ? recipe : row.recipe,
+  }
 }
 
 function pageDto(row: TenantPageVariantRow, document: TenantPageDocument, blocks: TenantPageBlock[]): TenantPageDto {
@@ -369,8 +439,11 @@ export async function getPublishedTenantPage(db: DbClient, siteId: string, path:
     '       v.title, v.summary, v.seo_title, v.seo_description, v.canonical_url, v.robots,',
     '       p.page_type, p.recipe, p.sort_order, v.status, v.ever_published, v.draft_document_id, v.published_revision_id, v.updated_at',
     '  FROM tenant_page_variants v JOIN tenant_pages p ON p.id = v.page_id',
-    " WHERE v.site_id = ? AND v.locale = ? AND v.published_path = ? AND v.status = 'published'",
-    '   AND v.published_revision_id IS NOT NULL LIMIT 1',
+    '  JOIN content_revisions r ON r.id = v.published_revision_id AND r.document_id = v.draft_document_id',
+    " WHERE v.site_id = ? AND v.locale = ? AND v.status = 'published'",
+    '   AND v.published_revision_id IS NOT NULL',
+    "   AND json_extract(r.snapshot_json, '$.metadata.locale') = v.locale",
+    "   AND json_extract(r.snapshot_json, '$.metadata.path') = ? LIMIT 1",
   ].join('\n'), [siteId, candidateLocale, normalizedPath])
   let row = await selectPublished(resolvedLocale)
   if (!row && locale?.trim()) {
@@ -393,34 +466,111 @@ export async function getPublishedTenantPage(db: DbClient, siteId: string, path:
   `, [row.published_revision_id, document?.id ?? null])
   if (!document || !revision) throw createError({ statusCode: 500, statusMessage: 'Published tenant page content is unavailable' })
   const snapshot = parseSnapshot(revision.snapshot_json)
+  const identity = await canonicalTenantPageIdentity(db, row, {
+    pageType: snapshot.metadata.pageType as TenantPageType,
+    recipe: snapshot.metadata.recipe,
+  })
   const publishedRow: TenantPageVariantRow = {
     ...row,
     published_path: snapshot.metadata.path,
+    draft_path: snapshot.metadata.path,
     title: snapshot.metadata.title,
     summary: snapshot.metadata.summary,
     seo_title: snapshot.metadata.seoTitle,
     seo_description: snapshot.metadata.seoDescription,
     canonical_url: snapshot.metadata.canonicalUrl,
     robots: snapshot.metadata.robots,
-    page_type: snapshot.metadata.pageType as TenantPageType,
-    recipe: snapshot.metadata.recipe,
+    page_type: identity.pageType,
+    recipe: identity.recipe,
   }
   return pageDto(publishedRow, document, snapshot.blocks)
 }
 
+export async function resolvePublishedTenantPageIdentity(
+  db: DbClient,
+  siteId: string,
+  path: string,
+  locale?: string | null,
+) {
+  const resolvedLocale = await resolveLocale(db, siteId, locale)
+  const normalizedPath = normalizeTenantPagePath(path)
+  const selectPublished = async (candidateLocale: string) => await queryFirst<{
+    page_id: string
+    page_type: TenantPageType
+    recipe: string | null
+    locale: string
+    revision_id: string
+  } | null>(db, `
+    SELECT p.id AS page_id, p.page_type, p.recipe, v.locale, v.published_revision_id AS revision_id
+      FROM tenant_page_variants v
+      JOIN tenant_pages p ON p.id = v.page_id
+      JOIN content_revisions r ON r.id = v.published_revision_id AND r.document_id = v.draft_document_id
+     WHERE v.site_id = ? AND v.locale = ? AND v.status = 'published'
+       AND v.published_revision_id IS NOT NULL
+       AND json_extract(r.snapshot_json, '$.metadata.locale') = v.locale
+       AND json_extract(r.snapshot_json, '$.metadata.path') = ?
+     LIMIT 1
+  `, [siteId, candidateLocale, normalizedPath])
+  let page = await selectPublished(resolvedLocale)
+  if (!page && locale?.trim()) {
+    const fallback = await queryFirst<{ locale: string } | null>(db, `
+      SELECT source.locale
+        FROM site_locales requested
+        JOIN site_locales source ON source.site_id = requested.site_id AND source.is_source = 1
+       WHERE requested.site_id = ? AND requested.locale = ?
+         AND requested.status IN ('active', 'published')
+         AND requested.fallback_enabled = 1
+       LIMIT 1
+    `, [siteId, resolvedLocale])
+    if (fallback?.locale && fallback.locale !== resolvedLocale) page = await selectPublished(fallback.locale)
+  }
+  return page
+}
+
 export async function createTenantPage(db: DbClient, input: { organizationId: string; siteId: string; userId: string | null; data: TenantPageEditorInput; trustedSystemPage?: boolean }) {
   const locale = await resolveLocale(db, input.siteId, input.data.locale)
-  if (input.data.pageType === 'system' && !input.trustedSystemPage) badRequest('System pages are managed by the site template')
+  const existingPage = input.data.pageId
+    ? await queryFirst<{ id: string; organization_id: string; site_id: string; page_type: TenantPageType; recipe: string | null } | null>(db, `
+        SELECT id, organization_id, site_id, page_type, recipe
+          FROM tenant_pages
+         WHERE id = ? AND organization_id = ? AND site_id = ?
+         LIMIT 1
+      `, [input.data.pageId, input.organizationId, input.siteId])
+    : null
+  if (input.data.pageId && !existingPage) notFound('Tenant page parent not found')
+  const localeRow = await queryFirst<{ is_source: number } | null>(db, `
+    SELECT is_source FROM site_locales WHERE site_id = ? AND locale = ? LIMIT 1
+  `, [input.siteId, locale])
+  if (!existingPage && !localeRow?.is_source) badRequest('Translated tenant-page variants must reference an existing source page')
+  const existingIdentity = existingPage
+    ? await canonicalTenantPageIdentity(db, {
+        site_id: input.siteId,
+        locale,
+        page_type: existingPage.page_type,
+        recipe: existingPage.recipe,
+      }, {
+        pageType: input.data.pageType,
+        recipe: input.data.recipe,
+      })
+    : null
+  const effectiveData: TenantPageEditorInput = {
+    ...input.data,
+    ...(existingPage ? {
+      pageType: existingIdentity?.pageType ?? existingPage.page_type,
+      recipe: existingIdentity?.recipe ?? existingPage.recipe,
+    } : {}),
+  }
+  if (effectiveData.pageType === 'system' && !input.trustedSystemPage) badRequest('System pages are managed by the site template')
   const path = await assertTenantPagePathAvailable(db, { siteId: input.siteId, locale, path: input.data.path, allowSystemPath: input.trustedSystemPage === true })
-  const metadata = metadataForInput(input.data, locale, path)
-  const blocks = normalizeTenantPageBlocks(input.data.blocks)
-  await assertTenantPageSupport(db, input.siteId, input.data, blocks)
-  const pageId = input.data.pageId ?? crypto.randomUUID()
-  const variantId = input.data.id ?? crypto.randomUUID()
+  const metadata = metadataForInput(effectiveData, locale, path)
+  const blocks = normalizeTenantPageBlocks(effectiveData.blocks)
+  await assertTenantPageSupport(db, input.siteId, effectiveData, blocks)
+  const pageId = existingPage?.id ?? crypto.randomUUID()
+  const variantId = effectiveData.id ?? crypto.randomUUID()
   const documentId = crypto.randomUUID()
   const revisionId = crypto.randomUUID()
   const now = new Date().toISOString()
-  const publish = input.data.publish === true
+  const publish = effectiveData.publish === true
   const pageStatus: TenantPageStatus = publish ? 'published' : 'draft'
   const pageQuery: BatchQuery = {
     query: "INSERT INTO tenant_pages (id, organization_id, site_id, path, title, slug, page_type, recipe, summary, status, sort_order, source, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'pages', ?, ?)",
@@ -437,11 +587,14 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
     createdBy: input.userId,
     label: 'Tenant page draft',
     publish,
-    additionalQueriesBefore: [pageQuery, variantQuery],
+    additionalQueriesBefore: [
+      ...(existingPage ? [] : [pageQuery]),
+      variantQuery,
+    ],
     additionalQueriesAfter: [{
       query: 'UPDATE tenant_page_variants SET published_revision_id = ?, updated_at = ?, updated_by = ? WHERE id = ?',
       params: [publish ? revisionId : null, now, input.userId, variantId],
-    }],
+    }, publicResourceCacheInvalidationQuery(input.siteId, 'tenant-page-create')],
   })
   return { page: await getTenantPageForEditor(db, variantId), revision_id: result.revision_id }
 }
@@ -453,7 +606,11 @@ export async function updateTenantPageDraft(db: DbClient, variantId: string, inp
   const document = await getContentDocumentById(db, row.draft_document_id)
   if (!document) throw createError({ statusCode: 500, statusMessage: 'Tenant page content document not found' })
   if (!input.data.expectedDocumentUpdatedAt || document.updated_at !== input.data.expectedDocumentUpdatedAt) conflict('Tenant page draft was updated by another writer')
-  const pageType = input.data.pageType ?? row.page_type
+  const identity = await canonicalTenantPageIdentity(db, row, {
+    pageType: input.data.pageType,
+    recipe: input.data.recipe,
+  })
+  const pageType = identity.pageType
   if (pageType === 'system' && row.page_type !== 'system') badRequest('Only an existing system page may remain a system page')
   const effectiveInput = {
     ...input.data,
@@ -464,7 +621,7 @@ export async function updateTenantPageDraft(db: DbClient, variantId: string, inp
     seoDescription: input.data.seoDescription === undefined ? row.seo_description : input.data.seoDescription,
     canonicalUrl: input.data.canonicalUrl === undefined ? row.canonical_url : input.data.canonicalUrl,
     robots: input.data.robots === undefined ? row.robots : input.data.robots,
-    recipe: input.data.recipe === undefined ? row.recipe : input.data.recipe,
+    recipe: input.data.recipe === undefined ? identity.recipe : input.data.recipe,
   }
   const path = await assertTenantPagePathAvailable(db, { siteId: row.site_id, locale: row.locale, path: input.data.path ?? row.draft_path, excludeVariantId: variantId, allowSystemPath: row.page_type === 'system' })
   const metadata = metadataForInput(effectiveInput, row.locale, path)
@@ -507,7 +664,7 @@ export async function updateTenantPageDraft(db: DbClient, variantId: string, inp
     createdBy: input.userId,
     label: 'Tenant page draft',
     publish: false,
-    additionalQueriesAfter: [updateVariant, updatePage],
+    additionalQueriesAfter: [updateVariant, updatePage, publicResourceCacheInvalidationQuery(input.scope.siteId, 'tenant-page-update-draft')],
   })
   return { page: await getTenantPageForEditor(db, variantId, input.scope), revision_id: result.revision_id }
 }
@@ -529,6 +686,10 @@ export async function publishTenantPage(db: DbClient, variantId: string, input: 
   if (!revision) throw createError({ statusCode: 500, statusMessage: 'Tenant page draft revision is unavailable' })
   const snapshot = parseSnapshot(revision.snapshot_json)
   if (snapshot.metadata.locale !== row.locale) badRequest('Tenant page draft locale does not match its variant')
+  const identity = await canonicalTenantPageIdentity(db, row, {
+    pageType: snapshot.metadata.pageType as TenantPageType,
+    recipe: snapshot.metadata.recipe,
+  })
   const effectiveInput: TenantPageEditorInput = {
     path: snapshot.metadata.path,
     title: snapshot.metadata.title,
@@ -537,8 +698,8 @@ export async function publishTenantPage(db: DbClient, variantId: string, input: 
     seoDescription: snapshot.metadata.seoDescription,
     canonicalUrl: snapshot.metadata.canonicalUrl,
     robots: snapshot.metadata.robots,
-    pageType: snapshot.metadata.pageType as TenantPageType,
-    recipe: snapshot.metadata.recipe,
+    pageType: identity.pageType,
+    recipe: identity.recipe,
     blocks: snapshot.blocks,
   }
   await assertTenantPageSupport(db, row.site_id, effectiveInput, snapshot.blocks)
@@ -565,8 +726,18 @@ export async function publishTenantPage(db: DbClient, variantId: string, input: 
     })
   }
   const now = new Date().toISOString()
+  const redirectFlattenQueries = row.published_path !== publishPath
+    ? await prepareTenantPageRedirectFlatten(db, {
+        siteId: input.scope.siteId,
+        organizationId: input.scope.organizationId,
+        locale: row.locale,
+        fromPath: row.published_path,
+        toPath: publishPath,
+      }, now)
+    : []
   await executeBatch(db, [
     documentConcurrencyGuard(document.id, input.expectedDocumentUpdatedAt),
+    { query: 'UPDATE content_revisions SET published_at = COALESCE(published_at, ?) WHERE id = ? AND document_id = ?', params: [now, document.draft_revision_id, document.id] },
     { query: 'UPDATE content_documents SET published_revision_id = ?, updated_at = ? WHERE id = ? AND updated_at = ?', params: [document.draft_revision_id, now, document.id, input.expectedDocumentUpdatedAt] },
     { query: "UPDATE tenant_page_variants SET published_revision_id = ?, published_path = ?, draft_path = ?, title = ?, summary = ?, seo_title = ?, seo_description = ?, canonical_url = ?, robots = ?, status = 'published', ever_published = 1, updated_at = ?, updated_by = ? WHERE id = ? AND site_id = ? AND organization_id = ?", params: [document.draft_revision_id, publishPath, publishPath, snapshot.metadata.title, snapshot.metadata.summary, snapshot.metadata.seoTitle, snapshot.metadata.seoDescription, snapshot.metadata.canonicalUrl, snapshot.metadata.robots, now, input.userId, variantId, input.scope.siteId, input.scope.organizationId] },
     { query: `UPDATE tenant_pages SET
@@ -590,10 +761,11 @@ export async function publishTenantPage(db: DbClient, variantId: string, input: 
       now, input.userId, row.page_id, input.scope.siteId, input.scope.organizationId,
     ] },
     ...(row.published_path !== publishPath ? [
-      { query: "UPDATE tenant_redirects SET to_path = ?, updated_at = ? WHERE site_id = ? AND organization_id = ? AND locale = ? AND source = 'tenant-pages' AND owner_variant_id = ? AND to_path = ?", params: [publishPath, now, input.scope.siteId, input.scope.organizationId, row.locale, variantId, row.published_path] },
+      ...redirectFlattenQueries,
       { query: "INSERT INTO tenant_redirects (id, organization_id, site_id, locale, owner_variant_id, from_path, to_path, status_code, behavior, reason, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 301, 'redirect', 'tenant_page_path_change', 'tenant-pages', ?, ?) ON CONFLICT(site_id, locale, from_path) DO UPDATE SET owner_variant_id = excluded.owner_variant_id, to_path = excluded.to_path, status_code = excluded.status_code, behavior = excluded.behavior, reason = excluded.reason, source = excluded.source, updated_at = excluded.updated_at", params: [crypto.randomUUID(), row.organization_id, row.site_id, row.locale, variantId, row.published_path, publishPath, now, now] },
       { query: "UPDATE tenant_navigation_items SET url = ?, updated_at = ?, updated_by = ? WHERE organization_id = ? AND site_id = ? AND item_type = 'internal' AND url = ? AND EXISTS (SELECT 1 FROM site_locales WHERE site_id = ? AND locale = ? AND is_source = 1)", params: [publishPath, now, input.userId, input.scope.organizationId, input.scope.siteId, row.published_path, input.scope.siteId, row.locale] },
     ] : []),
+    publicResourceCacheInvalidationQuery(input.scope.siteId, 'tenant-page-publish'),
   ])
   return await getTenantPageForEditor(db, variantId, input.scope)
 }
@@ -611,6 +783,7 @@ export async function unpublishTenantPage(db: DbClient, variantId: string, input
     { query: 'UPDATE content_documents SET published_revision_id = NULL, updated_at = ? WHERE id = ? AND updated_at = ?', params: [now, document.id, input.expectedDocumentUpdatedAt] },
     { query: "UPDATE tenant_page_variants SET published_revision_id = NULL, status = 'draft', updated_at = ?, updated_by = ? WHERE id = ? AND site_id = ? AND organization_id = ?", params: [now, input.userId, variantId, input.scope.siteId, input.scope.organizationId] },
     { query: "UPDATE tenant_pages SET status = CASE WHEN EXISTS (SELECT 1 FROM tenant_page_variants WHERE page_id = tenant_pages.id AND status = 'published') THEN 'published' WHEN EXISTS (SELECT 1 FROM tenant_page_variants WHERE page_id = tenant_pages.id AND status = 'draft') THEN 'draft' ELSE 'archived' END, updated_at = ?, updated_by = ? WHERE id = ? AND site_id = ? AND organization_id = ?", params: [now, input.userId, row.page_id, input.scope.siteId, input.scope.organizationId] },
+    publicResourceCacheInvalidationQuery(input.scope.siteId, 'tenant-page-unpublish'),
   ])
   return await getTenantPageForEditor(db, variantId, input.scope)
 }
@@ -656,12 +829,22 @@ export async function archiveTenantPage(db: DbClient, variantId: string, input: 
     })
   }
   const now = new Date().toISOString()
+  const redirectFlattenQueries = row.published_revision_id && (replacementPath || input.gone)
+    ? await prepareTenantPageRedirectFlatten(db, {
+        siteId: input.scope.siteId,
+        organizationId: input.scope.organizationId,
+        locale: row.locale,
+        fromPath: row.published_path,
+        toPath: replacementPath,
+      }, now)
+    : []
   await executeBatch(db, [
     documentConcurrencyGuard(document.id, input.expectedDocumentUpdatedAt),
     { query: 'UPDATE content_documents SET published_revision_id = NULL, updated_at = ? WHERE id = ? AND updated_at = ?', params: [now, document.id, input.expectedDocumentUpdatedAt] },
     { query: "UPDATE tenant_page_variants SET published_revision_id = NULL, status = 'archived', updated_at = ?, updated_by = ? WHERE id = ? AND site_id = ? AND organization_id = ?", params: [now, input.userId, variantId, input.scope.siteId, input.scope.organizationId] },
     { query: "UPDATE tenant_pages SET status = CASE WHEN EXISTS (SELECT 1 FROM tenant_page_variants WHERE page_id = tenant_pages.id AND status = 'published') THEN 'published' WHEN EXISTS (SELECT 1 FROM tenant_page_variants WHERE page_id = tenant_pages.id AND status = 'draft') THEN 'draft' ELSE 'archived' END, updated_at = ?, updated_by = ? WHERE id = ? AND site_id = ? AND organization_id = ?", params: [now, input.userId, row.page_id, input.scope.siteId, input.scope.organizationId] },
     ...(row.published_revision_id && (replacementPath || input.gone) ? [
+      ...redirectFlattenQueries,
       replacementPath
         ? { query: "INSERT INTO tenant_redirects (id, organization_id, site_id, locale, owner_variant_id, from_path, to_path, status_code, behavior, reason, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 301, 'redirect', 'tenant_page_archive_replacement', 'tenant-pages', ?, ?) ON CONFLICT(site_id, locale, from_path) DO UPDATE SET owner_variant_id = excluded.owner_variant_id, to_path = excluded.to_path, status_code = excluded.status_code, behavior = excluded.behavior, reason = excluded.reason, source = excluded.source, updated_at = excluded.updated_at", params: [crypto.randomUUID(), input.scope.organizationId, input.scope.siteId, row.locale, variantId, row.published_path, replacementPath, now, now] }
         : { query: "INSERT INTO tenant_redirects (id, organization_id, site_id, locale, owner_variant_id, from_path, to_path, status_code, behavior, reason, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, NULL, 410, 'gone', 'tenant_page_archive_gone', 'tenant-pages', ?, ?) ON CONFLICT(site_id, locale, from_path) DO UPDATE SET owner_variant_id = excluded.owner_variant_id, to_path = NULL, status_code = 410, behavior = 'gone', reason = excluded.reason, source = excluded.source, updated_at = excluded.updated_at", params: [crypto.randomUUID(), input.scope.organizationId, input.scope.siteId, row.locale, variantId, row.published_path, now, now] },
@@ -670,6 +853,7 @@ export async function archiveTenantPage(db: DbClient, variantId: string, input: 
       query: 'UPDATE tenant_compliance SET privacy_page_id = CASE WHEN privacy_page_id = ? THEN ? ELSE privacy_page_id END, terms_page_id = CASE WHEN terms_page_id = ? THEN ? ELSE terms_page_id END, notice_page_id = CASE WHEN notice_page_id = ? THEN ? ELSE notice_page_id END, updated_at = ? WHERE site_id = ? AND organization_id = ?',
       params: [row.page_id, replacementPageId, row.page_id, replacementPageId, row.page_id, replacementPageId, now, input.scope.siteId, input.scope.organizationId],
     }] : []),
+    publicResourceCacheInvalidationQuery(input.scope.siteId, 'tenant-page-archive'),
   ])
   return await getTenantPageForEditor(db, variantId, input.scope)
 }
@@ -687,6 +871,7 @@ export async function restoreTenantPage(db: DbClient, variantId: string, input: 
     { query: "DELETE FROM tenant_redirects WHERE site_id = ? AND organization_id = ? AND locale = ? AND owner_variant_id = ? AND source = 'tenant-pages' AND reason IN ('tenant_page_archive_replacement', 'tenant_page_archive_gone')", params: [input.scope.siteId, input.scope.organizationId, row.locale, variantId] },
     { query: "UPDATE tenant_page_variants SET status = 'draft', updated_at = ?, updated_by = ? WHERE id = ? AND site_id = ? AND organization_id = ?", params: [now, input.userId, variantId, input.scope.siteId, input.scope.organizationId] },
     { query: "UPDATE tenant_pages SET status = CASE WHEN EXISTS (SELECT 1 FROM tenant_page_variants WHERE page_id = tenant_pages.id AND status = 'published') THEN 'published' WHEN EXISTS (SELECT 1 FROM tenant_page_variants WHERE page_id = tenant_pages.id AND status = 'draft') THEN 'draft' ELSE 'archived' END, updated_at = ?, updated_by = ? WHERE id = ? AND site_id = ? AND organization_id = ?", params: [now, input.userId, row.page_id, input.scope.siteId, input.scope.organizationId] },
+    publicResourceCacheInvalidationQuery(input.scope.siteId, 'tenant-page-restore'),
   ])
   return await getTenantPageForEditor(db, variantId, input.scope)
 }
@@ -713,13 +898,24 @@ export async function deleteTenantPage(db: DbClient, variantId: string, input: {
     { query: 'DELETE FROM content_documents WHERE id = ? AND owner_type = \'tenant_page\' AND owner_id = ?', params: [document.id, variantId] },
     { query: 'DELETE FROM tenant_page_variants WHERE id = ? AND site_id = ? AND organization_id = ?', params: [variantId, input.scope.siteId, input.scope.organizationId] },
     ...(Number(variantCount?.count ?? 0) <= 1 ? [{ query: 'DELETE FROM tenant_pages WHERE id = ? AND site_id = ? AND organization_id = ?', params: [row.page_id, input.scope.siteId, input.scope.organizationId] }] : []),
+    publicResourceCacheInvalidationQuery(input.scope.siteId, 'tenant-page-delete'),
   ])
   return { deleted: true as const, id: variantId }
 }
 
 export async function listPublishedTenantPagePaths(db: DbClient, siteId: string, locale?: string | null) {
   const resolvedLocale = await resolveLocale(db, siteId, locale)
-  return await queryAll<{ path: string; updated_at: string; robots: string | null }>(db, "SELECT published_path AS path, updated_at, robots FROM tenant_page_variants WHERE site_id = ? AND locale = ? AND status = 'published' AND published_revision_id IS NOT NULL ORDER BY published_path ASC", [siteId, resolvedLocale])
+  return await queryAll<{ path: string; updated_at: string; robots: string | null }>(db, `
+    SELECT json_extract(r.snapshot_json, '$.metadata.path') AS path,
+           COALESCE(r.published_at, r.created_at) AS updated_at,
+           json_extract(r.snapshot_json, '$.metadata.robots') AS robots
+      FROM tenant_page_variants v
+      JOIN content_revisions r ON r.id = v.published_revision_id AND r.document_id = v.draft_document_id
+     WHERE v.site_id = ? AND v.locale = ? AND v.status = 'published'
+       AND v.published_revision_id IS NOT NULL
+       AND json_extract(r.snapshot_json, '$.metadata.locale') = v.locale
+     ORDER BY path ASC
+  `, [siteId, resolvedLocale])
 }
 
 export async function getTenantPageById(db: DbClient, variantId: string, scope?: TenantPageScope) {

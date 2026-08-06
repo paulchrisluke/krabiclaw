@@ -1,7 +1,7 @@
 import type { SitemapUrlInput } from '#sitemap/types'
 import { getRequestURL } from 'h3'
 import { defineNitroPlugin } from 'nitropack/runtime'
-import { queryAll, queryFirst } from '~/server/db'
+import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { isNonIndexableHost, PLATFORM_SITEMAP_ROUTES } from '~/server/utils/seo-policy'
 import { blogCategoryToSlug } from '~/utils/blog-categories'
@@ -12,6 +12,20 @@ import { resolvePublicTemplate } from '~/utils/template-registry'
 interface SitemapEntry {
   loc: string
   lastmod?: string
+}
+
+async function listPublishedTenantSitemapPages(db: DbClient, siteId: string) {
+  return await queryAll<{ path: string | null; lastmod: string | null; robots: string | null }>(db, `
+    SELECT json_extract(r.snapshot_json, '$.metadata.path') AS path,
+           COALESCE(r.published_at, r.created_at) AS lastmod,
+           json_extract(r.snapshot_json, '$.metadata.robots') AS robots
+      FROM tenant_page_variants v
+      JOIN content_revisions r ON r.id = v.published_revision_id AND r.document_id = v.draft_document_id
+     WHERE v.site_id = ? AND v.status = 'published' AND v.published_revision_id IS NOT NULL
+       AND json_extract(r.snapshot_json, '$.metadata.locale') = v.locale
+       AND json_extract(r.snapshot_json, '$.metadata.path') IS NOT NULL
+     ORDER BY lastmod ASC, path ASC
+  `, [siteId])
 }
 
 function addUniqueEntries(target: SitemapUrlInput[], entries: SitemapEntry[]) {
@@ -133,12 +147,7 @@ export default defineNitroPlugin((nitroApp) => {
            WHERE site_id = ? AND status = 'published'
            ORDER BY sort_order ASC, name ASC
         `, [siteId]),
-        queryAll<{ path: string; updated_at: string | null; robots: string | null }>(db, `
-          SELECT v.published_path AS path, v.updated_at, v.robots
-            FROM tenant_page_variants v
-           WHERE v.site_id = ? AND v.status = 'published' AND v.published_revision_id IS NOT NULL
-           ORDER BY v.updated_at ASC, v.title ASC
-        `, [siteId]),
+        listPublishedTenantSitemapPages(db, siteId),
         queryAll<ApiRecord>(
           db,
           `SELECT slug, updated_at
@@ -160,7 +169,7 @@ export default defineNitroPlugin((nitroApp) => {
       }
       for (const page of tenantPages ?? []) {
         if (!page.path || /noindex/i.test(page.robots || '')) continue
-        entries.push({ loc: page.path, lastmod: page.updated_at ?? undefined })
+        entries.push({ loc: page.path, lastmod: page.lastmod ?? undefined })
       }
       for (const post of posts ?? []) {
         if (!post.slug) continue
@@ -175,7 +184,7 @@ export default defineNitroPlugin((nitroApp) => {
       return
     }
 
-    const [locations, menuItems, posts, experiences] = await Promise.all([
+    const [locations, menuItems, posts, experiences, tenantPages] = await Promise.all([
       queryAll<ApiRecord>(
         db,
         `SELECT id, slug, updated_at, grab_url, uber_eats_url, foodpanda_url
@@ -214,6 +223,7 @@ export default defineNitroPlugin((nitroApp) => {
            AND (robots IS NULL OR robots NOT LIKE '%noindex%')`,
         [siteId],
       ),
+      listPublishedTenantSitemapPages(db, siteId),
     ])
 
     entries.push({ loc: '/' }, { loc: '/about' }, { loc: '/contact' })
@@ -262,6 +272,9 @@ export default defineNitroPlugin((nitroApp) => {
       ...experiences
         .filter(experience => experience.slug)
         .map(experience => ({ loc: `/experiences/${experience.slug}`, lastmod: experience.updated_at as string | undefined })),
+      ...tenantPages
+        .filter(page => page.path && !/noindex/i.test(page.robots || ''))
+        .map(page => ({ loc: page.path as string, lastmod: page.lastmod ?? undefined })),
     )
 
     ctx.urls.length = 0

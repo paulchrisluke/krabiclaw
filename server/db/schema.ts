@@ -1143,6 +1143,7 @@ export const organization_billing = sqliteTable("organization_billing", {
 	plan: text().default("free").notNull(),
 	payment_status: text().default("unknown").notNull(),
 	paid_through: text(),
+	past_due_since: text(),
 	last_paid_invoice_id: text(),
 	last_payment_event_created: integer(),
 	last_payment_event_id: text(),
@@ -1657,6 +1658,7 @@ export const site_billing = sqliteTable("site_billing", {
 	current_period_end: text(),
 	payment_status: text().default("unknown").notNull(),
 	paid_through: text(),
+	past_due_since: text(),
 	last_paid_invoice_id: text(),
 	last_payment_event_created: integer(),
 	last_payment_event_id: text(),
@@ -2256,6 +2258,23 @@ export const stripe_subscription_versions = sqliteTable("stripe_subscription_ver
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
+export const stripe_invoice_payments = sqliteTable("stripe_invoice_payments", {
+	stripe_invoice_id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	stripe_subscription_id: text().notNull(),
+	base_plan_price_id: text(),
+	status: text().notNull(),
+	period_start: text(),
+	period_end: text(),
+	past_due_since: text(),
+	last_event_created: integer().notNull(),
+	last_event_id: text().notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	index("stripe_invoice_payments_organization_idx").on(table.organization_id, table.period_end),
+	index("stripe_invoice_payments_subscription_idx").on(table.stripe_subscription_id, table.period_end),
+]);
+
 export const usage_events = sqliteTable("usage_events", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
@@ -2524,6 +2543,7 @@ export const content_revisions = sqliteTable("content_revisions", {
 	created_by: text().references(() => user.id, { onDelete: "set null" } ),
 	label: text(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	published_at: text(),
 }, (table) => [
 	index("content_revisions_document_created_idx").on(table.document_id, table.created_at),
 ]);
@@ -2556,4 +2576,19 @@ export const tenant_page_variants = sqliteTable("tenant_page_variants", {
 	index("tenant_page_variants_page_idx").on(table.page_id),
 	check("tenant_page_variants_path_check", sql`published_path LIKE '/%' AND published_path NOT LIKE '//%'`),
 	check("tenant_page_variants_status_check", sql`status IN ('draft', 'published', 'archived')`),
+]);
+
+export const public_resource_cache_invalidations = sqliteTable("public_resource_cache_invalidations", {
+	id: text().primaryKey(),
+	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
+	reason: text().notNull(),
+	status: text().default("pending").notNull(),
+	attempt_count: integer().default(0).notNull(),
+	claimed_at: text(),
+	processed_at: text(),
+	last_error: text(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	index("public_resource_cache_invalidations_status_idx").on(table.status, table.created_at),
+	index("public_resource_cache_invalidations_site_idx").on(table.site_id, table.status),
 ]);
