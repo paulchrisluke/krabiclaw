@@ -43,7 +43,7 @@ export default defineEventHandler(async (event) => {
 
   const isDev = import.meta.dev
   if (!isDev) {
-    const creditOk = await hasCredits(db, orgId, session.session.id)
+    const creditOk = await hasCredits(db, orgId)
     if (!creditOk) return jsonResponse({ error: 'No AI credits remaining.' }, { status: 402 })
   }
 
@@ -109,7 +109,6 @@ export default defineEventHandler(async (event) => {
   try {
     const charged = await chargeCredits(db, orgId, {
       siteId,
-      sessionId: session.session.id,
       action: 'post_generate',
       model: 'claude-sonnet-4-6',
       inputTokens: aiResponse.usage.input_tokens,
@@ -120,7 +119,6 @@ export default defineEventHandler(async (event) => {
     newBalance = charged.newBalance
   } catch (err) {
     console.error('Failed to charge credits for post generation:', err)
-    return jsonResponse({ error: err instanceof Error ? err.message : 'AI usage could not be charged.' }, { status: 402 })
   }
 
   const rawText = aiResponse.content.find((b: ApiValue) => b.type === 'text')?.text ?? ''

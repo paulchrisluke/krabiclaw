@@ -65,7 +65,6 @@ export const usePublicPageData = async (options: {
   const url = computed(() => usePublicPageUrl(siteId, requestedParams.value));
 
   const shell = useSiteShellState();
-  const deferClientFetch = options.server === false && import.meta.client;
 
   const asyncData =
     isPlatform || (!siteId && !draftId)
@@ -104,25 +103,15 @@ export const usePublicPageData = async (options: {
             // the one fetch a later false -> true transition requires. Calling
             // execute() again while already enabled would just re-trigger the
             // same request, so the watcher only acts on that specific edge.
-            immediate: enabled.value && !deferClientFetch,
-            // Disable automatic key watching — manual watchers below gate execution
-            // on enabled.value to prevent key changes from triggering when disabled.
-            watch: [],
+            immediate: enabled.value,
           },
         );
   if (import.meta.client && 'execute' in asyncData) {
-    let clientFetchStarted = !deferClientFetch;
-    if (deferClientFetch) {
-      onMounted(() => {
-        clientFetchStarted = true;
-        if (enabled.value) void asyncData.execute();
-      });
-    }
     const stopEnabledWatch = watch(enabled, (isEnabled, wasEnabled) => {
-      if (isEnabled && !wasEnabled && clientFetchStarted) asyncData.execute()
+      if (isEnabled && !wasEnabled) asyncData.execute()
     })
     const stopKeyWatch = watch(key, () => {
-      if (enabled.value && clientFetchStarted) asyncData.execute()
+      if (enabled.value) asyncData.execute()
     }, { immediate: false })
     onScopeDispose(stopEnabledWatch)
     onScopeDispose(stopKeyWatch)

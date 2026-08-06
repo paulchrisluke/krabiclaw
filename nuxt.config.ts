@@ -141,7 +141,7 @@ function publicSurfaceCssPlugin() {
 }
 
 export default defineNuxtConfig({
-  ignore: ['**/.worktrees/**', '**/.claude/**'],
+  ignore: ['**/.worktrees/**'],
   modules: [
     cloudflareDevModule,
     '@nuxt/scripts',
@@ -240,7 +240,7 @@ export default defineNuxtConfig({
     },
     server: {
       watch: {
-        ignored: ['**/.worktrees/**', '**/.claude/**', '**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
+        ignored: ['**/.worktrees/**', '**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
       },
       allowedHosts: ['.trycloudflare.com', 'local.krabiclaw.com', '.krabiclaw.com']
     },
@@ -361,10 +361,6 @@ export default defineNuxtConfig({
   // Components configuration
   components: [
     {
-      path: '~/components/tenant-pages',
-      pathPrefix: false,
-    },
-    {
       path: '~/components/blawby',
       pathPrefix: false,
     },
@@ -443,7 +439,7 @@ export default defineNuxtConfig({
   // Global watcher exclusions
   watchers: {
     chokidar: {
-      ignored: ['**/.worktrees/**', '**/.claude/**', '**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
+      ignored: ['**/.worktrees/**', '**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
     }
   },
 
@@ -463,6 +459,17 @@ export default defineNuxtConfig({
         'x-frame-options': 'DENY',
       },
     },
+
+    // Content editor host routes (content/[pageId].vue, site- and
+    // location-scoped) — client-only. `*` matches exactly one segment, so
+    // this covers .../content/{pageId} without also matching the bare
+    // .../content index route, which stays normally SSR'd like any other
+    // dashboard page. definePageMeta({ ssr: false }) alone is not a reliable
+    // guarantee here (page-level ssr:false depends on Nuxt's own page-render
+    // path resolving before it takes effect); routeRules are read by Nitro
+    // before any Vue rendering starts.
+    '/dashboard/*/sites/*/content/*':                    { ssr: false },
+    '/dashboard/*/sites/*/locations/*/content/*':        { ssr: false },
 
     // Auth/API/dashboard — never cache
     '/api/**':       { headers: { 'cache-control': 'no-store' } },
@@ -497,13 +504,12 @@ export default defineNuxtConfig({
     // Set NUXT_DISABLE_NITRO_TASKS=true to keep task modules out of a local
     // dev/E2E boot if task imports break the nitro-cloudflare-dev D1 proxy binding.
     scheduledTasks: enableNitroTasks ? {
-      '*/5 * * * *': ['blog-scheduled-publish'],
-      '*/2 * * * *': ['public-resource-cache-invalidation'],
+      '*/5 * * * *': ['translation-jobs-process', 'blog-scheduled-publish'],
       '*/10 * * * *': ['domain-reconciliation'],
       '0 3 * * *': ['domain-reconciliation-daily', 'analytics-aggregate-daily'],
       '0 4 * * *': ['site-transfer-reminders'],
       '0 0 * * 0': ['google-business-sync'],
-      '0 * * * *': ['instagram-sync-process', 'review-request-automation', 'stripe-reconciliation']
+      '0 * * * *': ['instagram-sync-process', 'review-request-automation']
     } : {},
     devServer: {
       watch: ['server']

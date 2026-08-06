@@ -21,6 +21,7 @@ type ChowBotToolLike = ToolLike & {
 }
 
 export type ConversationalToolSurfaceGroup =
+  | 'translations'
   | 'social_publishing'
   | 'domains'
   | 'managed_service'
@@ -28,12 +29,26 @@ export type ConversationalToolSurfaceGroup =
 const TRUE_VALUES = new Set(['1', 'true', 'yes', 'on', 'enabled'])
 
 const GROUP_FLAG_ENV: Record<ConversationalToolSurfaceGroup, string> = {
+  translations: 'CONVERSATIONAL_TOOLS_TRANSLATIONS_ENABLED',
   social_publishing: 'CONVERSATIONAL_TOOLS_SOCIAL_PUBLISHING_ENABLED',
   domains: 'CONVERSATIONAL_TOOLS_DOMAINS_ENABLED',
   managed_service: 'CONVERSATIONAL_TOOLS_MANAGED_SERVICE_ENABLED',
 }
 
 const GROUP_TOOL_NAMES: Record<ConversationalToolSurfaceGroup, readonly string[]> = {
+  translations: [
+    'list_locales',
+    'upsert_locale',
+    'delete_locale',
+    'get_translation_inventory',
+    'start_translation_job',
+    'list_translation_jobs',
+    'get_translation_job',
+    'run_translation_job_batch',
+    'get_translation_review_items',
+    'save_translation_review_item',
+    'publish_translations',
+  ],
   social_publishing: [
     'get_facebook_connection',
     'publish_to_facebook',

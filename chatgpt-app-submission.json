@@ -6,7 +6,7 @@
     "company_name": "KrabiClaw",
     "website_url": "https://krabiclaw.com",
     "description_short": "Manage your KrabiClaw business website and daily operations directly from ChatGPT.",
-    "description_long": "KrabiClaw empowers business owners to seamlessly manage their hosted websites and daily operations directly through ChatGPT. Authenticated users can update menus, draft blog posts, upload media, manage locale-specific content, moderate reviews, and triage customer contacts all within their secure KrabiClaw workspace. Note: An active KrabiClaw account is required to use this integration.",
+    "description_long": "KrabiClaw empowers business owners to seamlessly manage their hosted websites and daily operations directly through ChatGPT. Authenticated users can update menus, draft blog posts, upload media, translate content, moderate reviews, and triage customer contacts all within their secure KrabiClaw workspace. Note: An active KrabiClaw account is required to use this integration.",
     "logo_url": "https://krabiclaw.com/krabi-claw-logo.png",
     "icon_url": "https://krabiclaw.com/favicon-96x96.png",
     "support_email": "support@krabiclaw.com",
@@ -63,7 +63,7 @@
     ]
   },
   "capabilities": {
-    "tool_count": 68,
+    "tool_count": 76,
     "tool_domains": {
       "sites": 5,
       "locations": 5,
@@ -75,6 +75,7 @@
       "reviews": 2,
       "experiences": 7,
       "locales": 3,
+      "translations": 8,
       "submissions": 4,
       "notifications": 2,
       "google_business": 4,
@@ -87,7 +88,7 @@
       "Read, update, and delete live site content fields.",
       "Manage location Q&A, view reviews, and write owner replies.",
       "Manage experiences and booking statuses.",
-      "Manage locale-specific content for sites with multiple language versions.",
+      "Estimate, run, review, and publish translation jobs.",
       "Triage contact and reservation submissions.",
       "View and update notification settings.",
       "Connect and sync eligible Google Business data.",
@@ -104,7 +105,7 @@
       "The tool surface is tenant-safe and excludes admin-global, platform-content, and internal-only operations.",
       "Site-scoped tools require a visible site context and are filtered by role and active entitlements.",
       "Some tools require elevated roles such as admin or owner.",
-      "Entitlement-gated domains include Google Business and managed service features."
+      "Entitlement-gated domains include translations, Google Business, and managed service features."
     ]
   },
   "data_handling": {
@@ -130,7 +131,7 @@
     ],
     "known_review_risks": [
       "Because the app has a large write-capable tool surface, metadata and confirmation behavior must stay tightly aligned with actual tool behavior.",
-      "Reviewers may test destructive flows, publish flows, and Google Business flows, so only submit if these are stable in production.",
+      "Reviewers may test destructive flows, publish flows, translations, and Google Business flows, so only submit if these are stable in production.",
       "Screenshots and test prompts still need human curation and should reflect the current production UI and outputs."
     ]
   },
@@ -167,7 +168,7 @@
     }
   ],
   "localization": {
-    "supported_locales_note": "The MCP surface includes manual locale management for site content. The repo also contains English and Thai locale content.",
+    "supported_locales_note": "The MCP surface includes locale management and translation workflows. The repo also contains English and Thai locale content.",
     "submission_locales": [
       "en"
     ]

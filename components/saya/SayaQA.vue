@@ -50,6 +50,7 @@
         </div>
         <h3 class="mt-6 saya-display saya-italic text-3xl text-default">{{ $t('saya.qa.empty_title') }}</h3>
         <p class="mt-2 max-w-sm text-sm text-muted">{{ $t('saya.qa.empty_prompt') }}</p>
+        <ChowBotPromptTrigger :prompt="sayaEmptyStates.qa.hint" />
       </div>
     </div>
 
@@ -63,6 +64,8 @@
 
 <script setup>
 import AppSection from '~/components/ui/AppSection.vue'
+import ChowBotPromptTrigger from '~/components/chowbot/ChowBotPromptTrigger.vue'
+import { sayaEmptyStates } from '~/config/saya-empty-states'
 
 const props = defineProps({
   qa: {

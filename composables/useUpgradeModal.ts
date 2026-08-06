@@ -2,7 +2,8 @@
 // primary product features. `open()` is a no-op and SayaUpgradeModal is
 // unmounted at both its render sites (layouts/saya.vue, layouts/editor.vue)
 // so the component chunk doesn't ship to real tenant-site visitors either.
-// Existing dashboard call sites are left in place and harmlessly do nothing.
+// Existing call sites (e.g. content.vue's "Upgrade to Pro to fill this from
+// Google Business" button) are left in place and harmlessly do nothing.
 //
 // To bring this back: flip UPGRADE_MODAL_ENABLED to true, then reconsider
 // where it's mounted — it is NOT a dashboard-chrome feature despite living
@@ -11,8 +12,10 @@
 // the other real-world mount point is layouts/saya.vue's live `?edit=true`
 // preview. If you want this in actual dashboard chrome, it needs a new mount
 // point inside layouts/dashboard.vue, not just re-enabling the flag. If you
-// keep it in an authenticated dashboard surface rather than shipping it to
-// public tenant visitors.
+// keep it in the Saya tree, gate it with `useEditMode().editMode` the way
+// SayaMcpHint.vue does — the previous version had no such gate and shipped
+// the modal to every real customer regardless of whether they could ever
+// trigger it.
 export const UPGRADE_MODAL_ENABLED = false
 
 export const useUpgradeModal = () => {

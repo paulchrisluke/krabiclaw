@@ -53,6 +53,19 @@
             </div>
             <div class="flex items-center gap-2 shrink-0">
               <UButton
+                v-if="client.org_slug && client.subdomain"
+                size="xs"
+                color="neutral"
+                variant="ghost"
+                icon="i-lucide-languages"
+                :aria-label="`Open ${client.brand_name || client.org_name} translations`"
+                :disabled="isImpersonatingClient || !client.impersonation_user_id"
+                :loading="impersonatingClientOrgId === client.org_id"
+                @click="openWorkspace(client, 'translations')"
+              >
+                Translations
+              </UButton>
+              <UButton
                 v-if="client.site_id"
                 size="xs"
                 color="success"
@@ -388,7 +401,7 @@ async function loadClients() {
   }
 }
 
-async function openWorkspace(client: Client) {
+async function openWorkspace(client: Client, destination: 'overview' | 'translations' = 'overview') {
   if (isImpersonatingClient.value) return
 
   if (!client.org_slug || !client.impersonation_user_id) {
@@ -402,7 +415,10 @@ async function openWorkspace(client: Client) {
     const result = await authClient.admin.impersonateUser({ userId: client.impersonation_user_id })
     if (result.error) throw new Error(result.error.message)
     await refreshSession()
-    await navigateTo(`/dashboard/${client.org_slug}`)
+    const path = destination === 'translations' && client.subdomain
+      ? `/dashboard/${client.org_slug}/sites/${client.subdomain}/translations`
+      : `/dashboard/${client.org_slug}`
+    await navigateTo(path)
   } catch {
     toast.add({ title: 'Failed to enter client workspace', color: 'error' })
   } finally {

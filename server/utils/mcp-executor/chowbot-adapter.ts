@@ -25,7 +25,6 @@ export interface ChowbotExecutorSite {
   organizationId: string
   siteId: string
   role: McpToolRole
-  sessionId?: string | null
 }
 
 // privateMeta is, on the MCP surface, sent as JSON-RPC `_meta` — a channel

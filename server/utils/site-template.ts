@@ -4,7 +4,6 @@
 
 import type { SiteVertical } from "~/utils/vertical-copy";
 import { executeBatch, queryFirst, type BatchQuery, type DbClient } from "~/server/db";
-import { createTenantPage } from "~/server/utils/tenant-pages";
 
 function uid(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`;
@@ -126,7 +125,7 @@ const VERTICAL_QA: Partial<
   ],
 };
 
-// Per-vertical canonical page seeds. No stock story image: SayaBrandStory already
+// Per-vertical site_content seeds. No stock story image: SayaBrandStory already
 // renders a clean single-column layout with no image rather than a photo that
 // isn't actually the business's own.
 const VERTICAL_SITE_CONTENT: Partial<
@@ -356,63 +355,30 @@ export async function seedNewSite(
     params: [uid("pcj"), postId, organizationId],
   });
 
-  // ── Canonical tenant pages (vertical-specific) ────────────────────────────
+  // ── Homepage CTA + about page content (vertical-specific) ─────────────────
   const siteContentFn =
     VERTICAL_SITE_CONTENT[vertical] ?? VERTICAL_SITE_CONTENT.restaurant!;
   const siteContent = siteContentFn(name);
 
-  await executeBatch(db, statements);
-
-  const pageRows = new Map<string, Array<[string, string, string, string?]>>();
-  for (const row of siteContent) {
-    const rows = pageRows.get(row[0]) ?? [];
-    rows.push(row);
-    pageRows.set(row[0], rows);
-  }
-  const templatePages = new Map<string, { path: string; pageType: 'system' | 'recipe' | 'legal'; recipe: string }>([
-    ['home', { path: '/', pageType: 'system', recipe: 'home' }],
-    ['about', { path: '/about', pageType: 'system', recipe: 'about' }],
-    ['contact', { path: '/contact', pageType: 'system', recipe: 'contact' }],
-    ['location', { path: '/locations/main', pageType: 'system', recipe: 'locations' }],
-  ]);
-  if (vertical === 'professional_service') {
-    for (const [page, path, pageType] of [
-      ['services', '/services', 'system'],
-      ['pricing', '/pricing', 'system'],
-      ['donate', '/donate', 'system'],
-      ['schedule', '/schedule', 'system'],
-      ['privacy', '/policies/privacy', 'legal'],
-      ['terms', '/policies/terms', 'legal'],
-      ['third-party-notices', '/third-party-notices', 'legal'],
-    ] as const) templatePages.set(page, { path, pageType, recipe: page });
-  }
-  for (const [page, definition] of templatePages) {
-    const rows = pageRows.get(page) ?? [];
-    const existing = await queryFirst<{ id: string }>(db,
-      'SELECT v.id FROM tenant_page_variants v WHERE v.site_id = ? AND v.locale = \'en\' AND v.published_path = ? LIMIT 1',
-      [siteId, definition.path],
-    );
-    if (existing) continue;
-    const hero = rows.find(row => row[1] === 'hero.title');
-    const subtitle = rows.find(row => row[1] === 'hero.subtitle');
-    const blocks: Array<{ id: string; type: string; position: number; data: Record<string, unknown> }> = [{
-      id: uid('block'), type: 'hero', position: 0,
-      data: { title: hero?.[2] ?? page.replaceAll('-', ' '), subtitle: subtitle?.[2] ?? null },
-    }];
-    for (const [field, content, type] of rows.map(row => [row[1], row[2], row[3]] as const)) {
-      if (field === 'hero.title' || field === 'hero.subtitle') continue;
-      blocks.push({
-        id: uid('block'), type: type === 'richtext' || type === 'textarea' ? 'markdown' : 'heading', position: blocks.length,
-        data: { field, ...(type === 'richtext' || type === 'textarea' ? { markdown: content } : { text: content, level: 2 }) },
-      });
-    }
-    await createTenantPage(db, {
-      organizationId, siteId, userId: null,
-      trustedSystemPage: definition.pageType === 'system',
-      data: {
-        locale: 'en', path: definition.path, title: hero?.[2] ?? page.replaceAll('-', ' '),
-        pageType: definition.pageType, recipe: definition.recipe, blocks, publish: true,
-      },
+  for (const [page, field, content, type] of siteContent) {
+    const contentType = type ?? "text";
+    statements.push({
+      query: `
+      INSERT OR IGNORE INTO site_content
+        (id, organization_id, site_id, location_id, page, field, content, type, source)
+      VALUES (?, ?, ?, NULL, ?, ?, ?, ?, 'template')
+    `,
+      params: [
+        uid("sc"),
+        organizationId,
+        siteId,
+        page,
+        field,
+        content,
+        contentType,
+      ],
     });
   }
+
+  await executeBatch(db, statements);
 }

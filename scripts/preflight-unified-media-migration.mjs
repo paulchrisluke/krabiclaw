@@ -95,6 +95,11 @@ checks(check_name, failures) AS (
       SELECT COUNT(*)
       FROM business_locations
       WHERE hero_image_asset_id IS NOT NULL AND hero_video_asset_id IS NOT NULL
+    )),
+    ('dual_site_content_hero_assets', (
+      SELECT COUNT(*)
+      FROM site_content
+      WHERE hero_image_asset_id IS NOT NULL AND hero_video_asset_id IS NOT NULL
     ))
 )
 SELECT check_name, failures FROM checks WHERE failures > 0 ORDER BY check_name;
@@ -115,6 +120,11 @@ WITH checks(check_name, failures) AS (
       FROM pragma_table_info('business_locations')
       WHERE name IN ('hero_image_asset_id', 'hero_video_asset_id')
     )),
+    ('legacy_site_content_hero_columns_present', (
+      SELECT COUNT(*)
+      FROM pragma_table_info('site_content')
+      WHERE name IN ('hero_image_asset_id', 'hero_video_asset_id')
+    )),
     ('legacy_media_assets_old_table_present', (
       SELECT COUNT(*)
       FROM sqlite_master
@@ -132,6 +142,7 @@ WITH checks(check_name, failures) AS (
     ('legacy_media_assets_old_foreign_keys_present', (
       SELECT
         (SELECT COUNT(*) FROM pragma_foreign_key_list('business_locations') WHERE "table" = 'media_assets_old')
+        + (SELECT COUNT(*) FROM pragma_foreign_key_list('site_content') WHERE "table" = 'media_assets_old')
         + (SELECT COUNT(*) FROM pragma_foreign_key_list('blog_posts') WHERE "table" = 'media_assets_old')
         + (SELECT COUNT(*) FROM pragma_foreign_key_list('menu_items') WHERE "table" = 'media_assets_old')
         + (SELECT COUNT(*) FROM pragma_foreign_key_list('platform_docs') WHERE "table" = 'media_assets_old')
@@ -188,6 +199,11 @@ SELECT
   )
   + (
     SELECT COUNT(*)
+    FROM pragma_table_info('site_content')
+    WHERE name IN ('hero_image_asset_id', 'hero_video_asset_id')
+  )
+  + (
+    SELECT COUNT(*)
     FROM sqlite_master
     WHERE type = 'table' AND name = 'media_assets_old'
   )
@@ -203,6 +219,7 @@ SELECT
   + (
     SELECT
       (SELECT COUNT(*) FROM pragma_foreign_key_list('business_locations') WHERE "table" = 'media_assets_old')
+      + (SELECT COUNT(*) FROM pragma_foreign_key_list('site_content') WHERE "table" = 'media_assets_old')
       + (SELECT COUNT(*) FROM pragma_foreign_key_list('blog_posts') WHERE "table" = 'media_assets_old')
       + (SELECT COUNT(*) FROM pragma_foreign_key_list('menu_items') WHERE "table" = 'media_assets_old')
       + (SELECT COUNT(*) FROM pragma_foreign_key_list('platform_docs') WHERE "table" = 'media_assets_old')

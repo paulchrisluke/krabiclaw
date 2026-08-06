@@ -68,7 +68,7 @@ test.describe('stateless MCP server', () => {
     expect((await wrongSite.json()).result?.isError).toBe(true)
   })
 
-  test('locale tools remain available while gated groups stay hidden from the conversational surface', async ({ request, baseURL }) => {
+  test('translation, google business, and work request tools are hidden from the conversational surface by default', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!, MCP_FREE_USER_ID)
     const siteId = await ensureSite(request, baseURL!)
 
@@ -79,11 +79,33 @@ test.describe('stateless MCP server', () => {
     expect(toolsList.status()).toBe(200)
     const toolsBody = await toolsList.json() as { result: { tools: Array<{ name: string }> } }
     const toolNames = toolsBody.result.tools.map(t => t.name)
-    expect(toolNames).toContain('list_locales')
+    expect(toolNames).not.toContain('get_translation_inventory')
+    expect(toolNames).not.toContain('start_translation_job')
+    expect(toolNames).not.toContain('publish_translations')
     expect(toolNames).not.toContain('list_google_business_accounts')
     expect(toolNames).not.toContain('sync_google_business_locations')
     expect(toolNames).not.toContain('list_work_requests')
     expect(toolNames).not.toContain('create_work_request')
+
+    // Blocked by the conversational-surface flag (see conversational-tool-surface.ts) before
+    // ever reaching the free-plan entitlement check, so these now 404 (methodNotFound) rather
+    // than the old plan-based 403 — CI runs with CONVERSATIONAL_TOOLS_*_ENABLED unset, matching
+    // production default.
+    const inventoryCall = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'get_translation_inventory',
+      args: { site_id: siteId, locale: 'th' },
+    })
+    expect(inventoryCall.status()).toBe(200)
+    expect((await inventoryCall.json()).error?.code).toBe(-32601)
+
+    const startJobCall = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'start_translation_job',
+      args: { site_id: siteId, locale: 'th' },
+    })
+    expect(startJobCall.status()).toBe(200)
+    expect((await startJobCall.json()).error?.code).toBe(-32601)
 
     const locationId = await ensureLocation(request, baseURL!, siteId)
     const gbConnectionCall = await mcpRequest(request, baseURL!, {

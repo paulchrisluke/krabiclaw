@@ -1,13 +1,7 @@
 <template>
-  <NuxtLayout :name="isBlawby ? 'blawby' : 'saya'">
-    <TenantPublicPage path="/about" :preview-token="previewToken" />
-  </NuxtLayout>
+  <AboutPage />
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: false })
-
-const route = useRoute()
-const { isBlawby } = usePublicTemplate()
-const previewToken = computed(() => typeof route.query.token === 'string' ? route.query.token : null)
+import AboutPage from '~/pages/about.vue'
 </script>

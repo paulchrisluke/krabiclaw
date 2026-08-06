@@ -15,16 +15,15 @@
 // hook receives, and the same field every one of those route files already
 // reads via getRouterParam(event, 'siteId').
 //
-// MCP tool mutations are NOT covered here — server/api/mcp.post.ts already
-// records a durable invalidation for the public resource cache alongside its
-// existing HTML-cache purge. server/api/mcp/platform.post.ts needs no call:
-// its tools only touch site_id IS NULL platform-scoped rows, which the public
-// resource endpoints' tenant-scoped queries (WHERE site_id = ?) never read.
+// MCP tool mutations are NOT covered here — server/api/mcp.post.ts calls
+// purgePublicResourceCache() directly, reusing the siteId it already resolves for
+// its existing HTML-cache purge. server/api/mcp/platform.post.ts needs no
+// call: its tools only touch site_id IS NULL platform-scoped rows, which the
+// public resource endpoints's tenant-scoped queries (WHERE site_id = ?) never read.
 
 import { getResponseStatus } from 'h3'
 import type { H3Event } from 'h3'
-import type { DbClient } from '~/server/db'
-import { drainPublicResourceCacheInvalidations } from '~/server/utils/public-resource-cache'
+import { purgePublicResourceCache } from '~/server/utils/public-resource-cache'
 
 const EDITOR_SITES_PREFIX = '/api/editor/sites/'
 
@@ -39,13 +38,9 @@ export default defineNitroPlugin((nitroApp) => {
     const siteId = event.context.params?.siteId
     if (!siteId) return
 
-    const runtimeEnv = event.context.cloudflare?.env as {
-      DB?: DbClient
-      SITE_CACHE?: KVNamespace
-      NUXT_PUBLIC_FREE_SITE_DOMAIN?: string
-    } | undefined
-    const kv = runtimeEnv?.SITE_CACHE
-    if (!kv || !runtimeEnv?.DB) return
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const kv = (event.context.cloudflare?.env as any)?.SITE_CACHE as KVNamespace | undefined
+    if (!kv) return
 
     // Awaited inline rather than scheduled via waitUntil — afterResponse hooks
     // run after the client has already received the response, but leaving this
@@ -54,10 +49,7 @@ export default defineNitroPlugin((nitroApp) => {
     // already sent); it only blocks Nitro from marking the request lifecycle
     // complete until the purge finishes.
     try {
-      await drainPublicResourceCacheInvalidations(runtimeEnv.DB, kv, {
-        limit: 100,
-        freeSiteDomain: runtimeEnv.NUXT_PUBLIC_FREE_SITE_DOMAIN,
-      })
+      await purgePublicResourceCache(kv, siteId)
     } catch (err: unknown) {
       console.warn('[public-resource-cache] purge failed:', String(err))
     }

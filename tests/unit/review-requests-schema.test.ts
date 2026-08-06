@@ -12,7 +12,7 @@ function findReviewRequestMigration() {
 }
 
 const migrationSql = findReviewRequestMigration()
-const billingSource = readFileSync('server/utils/billing-entitlements.ts', 'utf8')
+const billingSource = readFileSync('server/utils/billing.ts', 'utf8')
 
 test('review request migration creates canonical request and media tables', () => {
   assert.match(migrationSql, /CREATE TABLE `review_requests`/)

@@ -1,49 +1,99 @@
-import { toWebRequest } from 'h3'
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { createAuth, getAuthSession, type CloudflareEnv } from '~/server/utils/auth'
+// Create Stripe billing portal session for organization
+import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
+import { getAuthSession } from '~/server/utils/auth'
+import { getStripe, requireBillingAccess } from '../../utils/billing'
 import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
+import { queryFirst } from '~/server/db'
 
-async function legacyPortalResponse(response: Response) {
-  const payload = await response.json().catch(() => null) as { url?: unknown } | null
-  if (!response.ok) {
-    return jsonResponse(payload ?? { error: 'Unable to create billing portal session' }, { status: response.status })
-  }
-  if (!payload || typeof payload.url !== 'string' || payload.url.length === 0) {
-    return jsonResponse({ error: 'Better Auth did not return a billing portal URL' }, { status: 502 })
-  }
-  return jsonResponse({ success: true, portalUrl: payload.url })
+interface PortalRequest {
+  organizationId: string
+  returnUrl?: string
 }
 
 export default defineEventHandler(async (event) => {
-  const body = await readBody<{ organizationId?: string; returnUrl?: string }>(event)
-  if (!body?.organizationId) return jsonResponse({ error: 'Organization ID is required' }, { status: 400 })
-
-  const env = cloudflareEnv(event) as CloudflareEnv
-  if (!env.DB) throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
-  if (!env.STRIPE_SECRET_KEY || !env.STRIPE_WEBHOOK_SECRET) {
-    throw createError({ statusCode: 503, statusMessage: 'Stripe not configured' })
+  const body = await readBody(event) as PortalRequest
+  const { organizationId, returnUrl } = body
+  
+  if (!organizationId) {
+    return jsonResponse({ 
+      error: 'Organization ID is required' 
+    }, { status: 400 })
   }
-  const session = await getAuthSession(event, env)
-  if (!session?.user?.id) throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
-  const organization = await resolveRequestedOrganization(event, env.DB, session.user.id, {
-    explicitOrganizationId: body.organizationId,
-  })
-  if (!organization) throw createError({ statusCode: 404, statusMessage: 'Organization not found' })
+  
+  const env = cloudflareEnv(event)
+  const db = env.DB
+  
+  if (!db) {
+    return jsonResponse({ 
+      error: 'Database not available' 
+    }, { status: 500 })
+  }
 
-  const request = toWebRequest(event)
-  const target = new URL(request.url)
-  target.pathname = '/api/auth/subscription/billing-portal'
-  target.search = ''
-  const headers = new Headers(request.headers)
-  headers.delete('content-length')
-  return await createAuth(env).handler(new Request(target, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      referenceId: organization.id,
-      customerType: 'organization',
-      returnUrl: body.returnUrl ?? `${getRequestURL(event).origin}/dashboard/${encodeURIComponent(organization.slug)}/settings/billing`,
-      disableRedirect: true,
-    }),
-  })).then(legacyPortalResponse)
+  // Check Stripe configuration
+  if (!env.STRIPE_SECRET_KEY) {
+    return jsonResponse({ 
+      error: 'Stripe not configured' 
+    }, { status: 503 })
+  }
+
+  // Get authenticated user
+  const session = await getAuthSession(event, env)
+  
+  if (!session?.user?.id) {
+    return jsonResponse({ 
+      error: 'Authentication required' 
+    }, { status: 401 })
+  }
+
+  try {
+    // Reject a body organizationId that disagrees with the current dashboard
+    // URL/header context instead of trusting the body alone.
+    const resolvedOrganization = await resolveRequestedOrganization(event, db, session.user.id, {
+      explicitOrganizationId: organizationId,
+    })
+    if (!resolvedOrganization) {
+      return jsonResponse({ error: 'Organization not found' }, { status: 404 })
+    }
+
+    // Require billing access
+    await requireBillingAccess(env, db, resolvedOrganization.id, session.user.id)
+
+    // Get organization with Stripe customer
+    const organization = await queryFirst<{ slug: string; stripe_customer_id: string | null }>(db, `
+      SELECT o.name, o.slug, b.stripe_customer_id FROM organization o
+      LEFT JOIN organization_billing b ON o.id = b.organization_id
+      WHERE o.id = ?
+    `, [resolvedOrganization.id])
+    
+    if (!organization) {
+      return jsonResponse({ 
+        error: 'Organization not found' 
+      }, { status: 404 })
+    }
+
+    if (!organization.stripe_customer_id) {
+      return jsonResponse({ 
+        error: 'No Stripe customer found for this organization' 
+      }, { status: 400 })
+    }
+
+    const stripe = getStripe(env)
+    
+    // Create billing portal session
+    const portalSession = await stripe.billingPortal.sessions.create({
+      customer: organization.stripe_customer_id,
+      return_url: returnUrl || `${getRequestURL(event).origin}/dashboard/${organization.slug}/settings/billing`
+    })
+
+    return jsonResponse({
+      success: true,
+      portalUrl: portalSession.url
+    })
+    
+  } catch (error) {
+    console.error('Failed to create portal session:', error)
+    return jsonResponse({ 
+      error: 'Failed to create billing portal session' 
+    }, { status: 500 })
+  }
 })

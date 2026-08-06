@@ -1,6 +1,11 @@
 <template>
   <NuxtLayout name="blawby">
-    <BlawbyTenantPage path="/third-party-notices" />
+    <BlawbyTenantPage
+      path="/third-party-notices"
+      fallback-eyebrow="Notices"
+      fallback-title="Third-Party Notices"
+      fallback-summary="Notices for third-party tools, links, and services used by this website."
+    />
   </NuxtLayout>
 </template>
 

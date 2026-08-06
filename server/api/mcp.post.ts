@@ -23,7 +23,7 @@ import { MCP_PROMPTS, renderMcpPrompt } from "~/server/utils/mcp-prompts";
 import { cloudflareEnv } from "~/server/utils/api-response";
 import { queryAll } from "~/server/db";
 import { purgeSiteKvCache } from "~/server/utils/edge-cache";
-import { purgePublicResourceCacheSafe } from "~/server/utils/public-resource-cache";
+import { purgePublicResourceCache } from "~/server/utils/public-resource-cache";
 import { schedulePlatformKnowledgeIndexRebuild } from "~/server/utils/platform-search-rebuild";
 import {
   assertConversationalToolEnabled,
@@ -282,7 +282,7 @@ When a public-facing tool result includes \`view_url\` or \`public_url\`, includ
 
 All other tools require a site_id obtained from get_workspace_context, list_sites, or create_site. Never guess, invent, derive, or pass through site IDs from URLs/domains. Use get_current_user when the user asks which account is connected.
 
-Common workflows: update menus and items, create and publish site posts, triage contact and reservation submissions, update page content directly, upload media, reply to reviews, manage experiences and bookings, and generate or replace images for any content section. Locale management, social publishing, domains, and managed-service requests are available only when explicitly enabled for this connector; otherwise direct the user to the dashboard.`,
+Common workflows: update menus and items, create and publish site posts, triage contact and reservation submissions, update page content directly, upload media, reply to reviews, manage experiences and bookings, and generate or replace images for any content section. Translations, social publishing, domains, and managed-service requests are available only when explicitly enabled for this connector; otherwise direct the user to the dashboard.`,
       });
     }
 
@@ -531,7 +531,7 @@ Common workflows: update menus and items, create and publish site posts, triage 
             // that reads public resources immediately after this mutation could still
             // see stale data.
             try {
-              await purgePublicResourceCacheSafe({ DB: env.db, SITE_CACHE: kv }, siteId)
+              await purgePublicResourceCache(kv, siteId)
             } catch (err: unknown) {
               console.warn("[mcp-cache-purge] public resource purge failed:", String(err))
             }

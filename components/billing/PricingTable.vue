@@ -180,7 +180,7 @@ const comparisonRows: ComparisonRow[] = [
   { feature: 'Facebook auto-sync',                free: false,   growth: true,      managed: true },
   { feature: 'Google Business sync',              free: false,   growth: true,  managed: true },
   { feature: 'Post-booking review requests',      free: true,   growth: true,      managed: true },
-  { feature: 'Messaging notifications',           free: false,   growth: true,      managed: true },
+  { feature: 'WhatsApp notifications',            free: false,   growth: true,      managed: true },
   { feature: 'Support',                           free: 'Community', growth: 'Priority', managed: 'Priority' },
 ]
 

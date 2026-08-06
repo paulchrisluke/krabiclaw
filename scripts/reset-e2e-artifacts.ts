@@ -180,7 +180,7 @@ PRAGMA foreign_keys = ON;
 -- parent row no longer exists. Delete them first, while organization_id is still populated.
 DELETE FROM notification_events WHERE organization_id IN (${eligibleOrgIds});
 
--- Cascades through sites, content, experiences, locations, guest_threads
+-- Cascades through sites, content, translation_jobs, experiences, locations, guest_threads
 -- (and, via guest_threads' own cascading FKs, guest_thread_entries/guest_thread_member_state/
 -- guest_thread_deliveries), etc. via organization_id -> organization(id) ON DELETE CASCADE.
 DELETE FROM organization WHERE id IN (${eligibleOrgIds});

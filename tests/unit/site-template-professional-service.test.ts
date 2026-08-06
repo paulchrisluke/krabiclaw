@@ -8,7 +8,6 @@ import assert from 'node:assert/strict'
 type Batch = { query: string; params: unknown[] }
 
 const capturedBatches: Batch[][] = []
-const createdTenantPages: unknown[] = []
 
 async function executeBatch(_db: unknown, queries: Batch[]) {
   capturedBatches.push(queries)
@@ -29,23 +28,8 @@ async function queryAll() {
   throw new Error('queryAll() should not be called by seedNewSite')
 }
 
-function createDb() {
-  throw new Error('createDb() should not be called by seedNewSite')
-}
-
-const schema = {}
-
-async function createTenantPage(_db: unknown, input: unknown) {
-  createdTenantPages.push(input)
-  return { page: null, revision_id: 'test-revision' }
-}
-
 mock.module('../../server/db/index.ts', {
-  namedExports: { createDb, execute, executeBatch, queryFirst, queryAll, schema },
-})
-
-mock.module('../../server/utils/tenant-pages.ts', {
-  namedExports: { createTenantPage },
+  namedExports: { execute, executeBatch, queryFirst, queryAll },
 })
 
 const { seedNewSite } = await import('../../server/utils/site-template.ts')
@@ -60,7 +44,6 @@ function flattenBatch(batch: Batch[]): string {
 
 test('seedNewSite creates no menu/menu_items rows for professional_service', async () => {
   capturedBatches.length = 0
-  createdTenantPages.length = 0
   await seedNewSite({} as never, {
     organizationId: 'org-1',
     siteId: 'site-1',
@@ -76,7 +59,6 @@ test('seedNewSite creates no menu/menu_items rows for professional_service', asy
 
 test('seedNewSite professional_service copy has no restaurant/experience leakage', async () => {
   capturedBatches.length = 0
-  createdTenantPages.length = 0
   await seedNewSite({} as never, {
     organizationId: 'org-1',
     siteId: 'site-1',
@@ -84,22 +66,16 @@ test('seedNewSite professional_service copy has no restaurant/experience leakage
     vertical: 'professional_service',
   })
 
-  const haystack = `${flattenBatch(capturedBatches[0]!)} ${JSON.stringify(createdTenantPages)}`.toLowerCase()
+  const haystack = flattenBatch(capturedBatches[0]!)
   for (const banned of BANNED_WORDS) {
     const wordBoundary = new RegExp(`\\b${banned}\\b`, 'i')
     assert.ok(!wordBoundary.test(haystack), `expected professional_service seed copy to omit "${banned}"`)
   }
   assert.ok(haystack.includes('talk with our team'))
-  const reservedTemplatePages = createdTenantPages as Array<{ data?: { path?: string; pageType?: string } }>
-  for (const path of ['/services', '/pricing', '/donate', '/schedule']) {
-    const page = reservedTemplatePages.find(candidate => candidate.data?.path === path)
-    assert.equal(page?.data?.pageType, 'system', `${path} must be seeded as a system page`)
-  }
 })
 
 test('seedNewSite still seeds a menu for restaurant (regression guard)', async () => {
   capturedBatches.length = 0
-  createdTenantPages.length = 0
   await seedNewSite({} as never, {
     organizationId: 'org-1',
     siteId: 'site-1',

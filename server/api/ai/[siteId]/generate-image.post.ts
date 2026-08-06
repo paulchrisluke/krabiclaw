@@ -6,7 +6,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { hasCredits, chargeCredits } from '~/server/utils/ai-credits'
 import { deleteImage, uploadImageBuffer } from '~/server/utils/cloudflare-images'
-import { createMediaAsset, deleteMediaAsset } from '~/server/utils/media-asset-manager'
+import { createMediaAsset } from '~/server/utils/media-asset-manager'
 import { generateImageViaGateway, IMAGE_MODEL } from '~/server/utils/ai-gateway'
 import { assertResourceAccess } from '~/server/utils/member-access'
 import { queryFirst } from '~/server/db'
@@ -33,7 +33,7 @@ export default defineEventHandler(async (event) => {
   const isDev = import.meta.dev
 
   if (!isDev) {
-    const creditOk = await hasCredits(db, orgId, session.session.id)
+    const creditOk = await hasCredits(db, orgId)
     if (!creditOk) return jsonResponse({ error: 'No AI credits remaining.' }, { status: 402 })
   }
 
@@ -133,20 +133,20 @@ export default defineEventHandler(async (event) => {
   }
 
   if (!isDev) {
-    try {
-      await chargeCredits(db, orgId, {
-        siteId, sessionId: session.session.id, action: 'generate_image', model: IMAGE_MODEL,
-        inputTokens: generatedImage.inputTokens,
-        outputTokens: generatedImage.outputTokens,
-        cfGatewayLogId: cfLogId,
-      })
-    } catch (error) {
+    const cfCtx = event.context.cloudflare?.context
+    const charge = chargeCredits(db, orgId, {
+      siteId, action: 'generate_image', model: IMAGE_MODEL,
+      inputTokens: generatedImage.inputTokens,
+      outputTokens: generatedImage.outputTokens,
+      cfGatewayLogId: cfLogId,
+    }).catch((error) => {
       const normalizedError = error instanceof Error ? error : new Error('Unknown error')
       console.error('chargeCredits_failed', { siteId, model: IMAGE_MODEL, error: normalizedError.message })
-      await deleteMediaAsset(db, env, assetId, siteId, session.user.id).catch((cleanupError) => {
-        console.error('generate_image_charge_cleanup_failed', { assetId, error: cleanupError })
-      })
-      return jsonResponse({ error: normalizedError.message.includes('quota') ? normalizedError.message : 'Image generation could not be charged.' }, { status: 402 })
+    })
+    if (cfCtx?.waitUntil) {
+      cfCtx.waitUntil(charge)
+    } else {
+      await charge
     }
   }
 

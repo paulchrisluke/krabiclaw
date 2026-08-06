@@ -121,27 +121,6 @@
 import { ref, computed, onUnmounted } from 'vue'
 import { useMediaUpload } from '~/composables/useMediaUpload'
 
-type EditableTenantPageBlock = Record<string, unknown> & {
-  type: string
-  data: Record<string, unknown>
-}
-
-type EditableTenantPage = {
-  locale: string
-  path: string
-  title: string
-  summary: string | null
-  seo_title: string | null
-  seo_description: string | null
-  canonical_url: string | null
-  robots: string | null
-  page_type: string
-  recipe: string | null
-  sort_order: number
-  blocks: EditableTenantPageBlock[]
-  document: { updated_at: string }
-}
-
 const props = defineProps<{
   siteId: string
 }>()
@@ -242,36 +221,10 @@ async function save() {
     })
     
     if (heroAssetId.value) {
-      const pageList = await applicationFetch<{ pages: Array<{ id: string; path: string }> }>(`${siteApiBase.value}/pages`, {
-        validate: (value): value is { pages: Array<{ id: string; path: string }> } => isRecord(value) && Array.isArray(value.pages),
-      })
-      const home = pageList.pages.find(page => page.path === '/')
-      if (!home) throw new Error('Canonical home page is unavailable.')
-      const detail = await applicationFetch<{ page: EditableTenantPage }>(`${siteApiBase.value}/pages/${home.id}`, {
-        validate: (value): value is { page: EditableTenantPage } => isRecord(value) && isRecord(value.page) && Array.isArray(value.page.blocks),
-      })
-      const page = detail.page
-      const blocks = page.blocks.map(block => block.type === 'hero'
-        ? { ...block, data: { ...block.data, asset_id: heroAssetId.value } }
-        : block)
-      await applicationFetch(`${siteApiBase.value}/pages/${home.id}`, {
-        method: 'PATCH',
-        body: {
-          locale: page.locale,
-          path: page.path,
-          title: page.title,
-          summary: page.summary,
-          seoTitle: page.seo_title,
-          seoDescription: page.seo_description,
-          canonicalUrl: page.canonical_url,
-          robots: page.robots,
-          pageType: page.page_type,
-          recipe: page.recipe,
-          sortOrder: page.sort_order,
-          blocks,
-          expectedDocumentUpdatedAt: page.document.updated_at,
-        },
-        validate: (value): value is Record<string, unknown> => isRecord(value),
+      await applicationFetch<{ success: true }>(`${siteApiBase.value}/content/save`, {
+        method: 'POST',
+        body: { page: 'home', changes: { 'hero.media': heroAssetId.value } },
+        validate: (value): value is { success: true } => isRecord(value) && value.success === true,
       })
     }
     

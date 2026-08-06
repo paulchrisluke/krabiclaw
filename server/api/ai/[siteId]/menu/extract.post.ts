@@ -81,7 +81,7 @@ export default defineEventHandler(async (event) => {
   // Check credits before doing anything expensive (skipped in local dev)
   const isDev = import.meta.dev
   if (!isDev) {
-    const creditOk = await hasCredits(db, orgId, session.session.id)
+    const creditOk = await hasCredits(db, orgId)
     if (!creditOk) {
       return jsonResponse(
         { error: 'No AI credits remaining. Upgrade your plan or purchase more credits.' },
@@ -166,7 +166,6 @@ export default defineEventHandler(async (event) => {
   try {
     const charged = await chargeCredits(db, orgId, {
       siteId,
-      sessionId: session.session.id,
       action: 'menu_extract',
       model: 'claude-sonnet-4-6',
       inputTokens: aiResponse.usage.input_tokens,
@@ -177,7 +176,6 @@ export default defineEventHandler(async (event) => {
     newBalance = charged.newBalance
   } catch (err) {
     console.error('Failed to charge credits for menu extraction:', err)
-    return jsonResponse({ error: err instanceof Error ? err.message : 'AI usage could not be charged.' }, { status: 402 })
   }
 
   // Parse model response — strip markdown fences Claude sometimes adds

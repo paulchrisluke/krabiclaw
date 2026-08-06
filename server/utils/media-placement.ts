@@ -9,7 +9,7 @@ import {
   type MediaAssetRefInput,
   type ResolvedMediaAsset,
 } from '~/server/utils/media-asset-manager'
-import { getTenantPageForEditorByPath, updateTenantPageDraft } from '~/server/utils/tenant-pages'
+import { updatePageContent } from '~/server/utils/mcp-workflows'
 
 export type MediaPlacementTarget =
   | { type: 'site_logo' }
@@ -134,24 +134,13 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
       return placementResult(input.target, media, 'site', input.siteId, now)
     }
     case 'home_hero': {
-      if (input.target.location_id) throw createError({ statusCode: 400, statusMessage: 'Home hero media is site-scoped.' })
-      const home = await getTenantPageForEditorByPath(db, input.siteId, '/')
-      await updateTenantPageDraft(db, home.id, {
-        userId: null,
-        scope: { siteId: input.siteId, organizationId: input.organizationId },
-        data: {
-          path: home.path,
-          title: home.title,
-          summary: home.summary,
-          seoTitle: home.seo_title,
-          seoDescription: home.seo_description,
-          canonicalUrl: home.canonical_url,
-          robots: home.robots,
-          pageType: home.page_type,
-          recipe: home.recipe,
-          sortOrder: home.sort_order,
-          blocks: home.blocks.map(block => block.type === 'hero' ? { ...block, data: { ...block.data, asset_id: assetId } } : block),
-          expectedDocumentUpdatedAt: home.document.updated_at,
+      await updatePageContent(db, input.organizationId, input.siteId, {
+        page: 'home',
+        location_id: input.target.location_id ?? null,
+        changes: {
+          hero: {
+            hero_media_asset_id: assetId,
+          },
         },
       })
       return placementResult(input.target, media, 'page_content', 'home', now, targetLocationId)
@@ -159,26 +148,10 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
     case 'home_story_image':
     case 'about_story_image': {
       const page = input.target.type === 'home_story_image' ? 'home' : 'about'
-      const canonicalPage = await getTenantPageForEditorByPath(db, input.siteId, page === 'home' ? '/' : '/about')
-      await updateTenantPageDraft(db, canonicalPage.id, {
-        userId: null,
-        scope: { siteId: input.siteId, organizationId: input.organizationId },
-        data: {
-          path: canonicalPage.path,
-          title: canonicalPage.title,
-          summary: canonicalPage.summary,
-          seoTitle: canonicalPage.seo_title,
-          seoDescription: canonicalPage.seo_description,
-          canonicalUrl: canonicalPage.canonical_url,
-          robots: canonicalPage.robots,
-          pageType: canonicalPage.page_type,
-          recipe: canonicalPage.recipe,
-          sortOrder: canonicalPage.sort_order,
-          blocks: canonicalPage.blocks.map(block => block.type === 'image' && block.data.field === 'story.image'
-            ? { ...block, data: { ...block.data, asset_id: assetId } }
-            : block),
-          expectedDocumentUpdatedAt: canonicalPage.document.updated_at,
-        },
+      await updatePageContent(db, input.organizationId, input.siteId, {
+        page,
+        location_id: null,
+        changes: { 'story.image': assetId },
       })
       return placementResult(input.target, media, 'page_content', page, now)
     }

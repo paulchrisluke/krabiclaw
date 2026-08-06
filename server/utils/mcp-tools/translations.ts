@@ -1,0 +1,198 @@
+import type { McpToolDefinition } from './shared'
+import { siteTool, translationJobObject } from './shared'
+
+export const TRANSLATIONS_TOOLS: McpToolDefinition[] = [
+  siteTool({
+      name: 'get_translation_inventory',
+      description: 'Estimate translation scope and cost.',
+      domain: 'translations',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      requiredEntitlement: 'translation',
+      inputSchema: { locale: { type: 'string' }, scope: { type: 'string' } },
+      required: ['locale'],
+      outputSchema: {
+        type: 'object',
+        properties: {
+          source_locale: { type: 'string' },
+          target_locale: { type: 'string' },
+          scope: { type: 'string' },
+          items: { type: 'array', description: 'Per-field translation inventory items.' },
+          estimate: {
+            type: 'object',
+            properties: {
+              total_items: { type: 'number' },
+              total_chars: { type: 'number' },
+              estimated_input_tokens: { type: 'number' },
+              estimated_output_tokens: { type: 'number' },
+              estimated_credits: { type: 'number' },
+              by_entity_type: { type: 'object', description: 'Item/char counts by content type.' },
+            },
+            required: ['total_items', 'total_chars', 'estimated_credits'],
+          },
+        },
+        required: ['target_locale', 'items', 'estimate'],
+      },
+    }),
+  siteTool({
+      name: 'start_translation_job',
+      description: 'Create a translation job and run the first batch.',
+      domain: 'translations',
+      minimumRole: 'editor',
+      confirmRequired: true,
+      requiredEntitlement: 'translation',
+      inputSchema: { locale: { type: 'string' }, scope: { type: 'string' }, includePublished: { type: 'boolean' } },
+      required: ['locale'],
+      outputSchema: {
+        type: 'object',
+        properties: {
+          job: translationJobObject,
+          first_batch: {
+            type: 'object',
+            description: 'Result of the first processing batch.',
+            properties: {
+              processed: { type: 'number' },
+              failed: { type: 'number' },
+              remaining: { type: 'number' },
+            },
+          },
+        },
+        required: ['job', 'first_batch'],
+      },
+    }),
+  siteTool({
+      name: 'list_translation_jobs',
+      description: 'List translation jobs.',
+      domain: 'translations',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      requiredEntitlement: 'translation',
+      outputSchema: {
+        type: 'object',
+        properties: { jobs: { type: 'array', items: translationJobObject } },
+        required: ['jobs'],
+      },
+    }),
+  siteTool({
+      name: 'get_translation_job',
+      description: 'Get a translation job and its items.',
+      domain: 'translations',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      requiredEntitlement: 'translation',
+      inputSchema: { job_id: { type: 'string' } },
+      required: ['job_id'],
+      outputSchema: {
+        type: 'object',
+        properties: {
+          job: translationJobObject,
+          items: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                entity_type: { type: 'string' },
+                entity_id: { type: 'string' },
+                field: { type: 'string' },
+                status: { type: 'string', enum: ['pending', 'translated', 'failed', 'skipped'] },
+                error: { type: ['string', 'null'] },
+              },
+              required: ['id', 'entity_type', 'field', 'status'],
+            },
+          },
+        },
+        required: ['job', 'items'],
+      },
+    }),
+  siteTool({
+      name: 'run_translation_job_batch',
+      description: 'Run another translation job batch.',
+      domain: 'translations',
+      minimumRole: 'editor',
+      confirmRequired: true,
+      requiredEntitlement: 'translation',
+      inputSchema: { job_id: { type: 'string' } },
+      required: ['job_id'],
+      outputSchema: {
+        type: 'object',
+        properties: {
+          processed: { type: 'number' },
+          failed: { type: 'number' },
+          remaining: { type: 'number' },
+          status: { type: 'string', enum: ['running', 'completed', 'failed'] },
+        },
+        required: ['processed'],
+      },
+    }),
+  siteTool({
+      name: 'get_translation_review_items',
+      description: 'List translation review items.',
+      domain: 'translations',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      requiredEntitlement: 'translation',
+      inputSchema: { locale: { type: 'string' }, scope: { type: 'string' }, status: { type: 'string' } },
+      required: ['locale'],
+      outputSchema: {
+        type: 'object',
+        properties: {
+          items: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                entity_type: { type: 'string' },
+                entity_id: { type: 'string' },
+                field: { type: 'string' },
+                source_text: { type: 'string' },
+                translated_text: { type: ['string', 'null'] },
+                status: { type: 'string' },
+              },
+              required: ['id', 'entity_type', 'field'],
+            },
+          },
+          total: { type: 'number' },
+        },
+        required: ['items'],
+      },
+    }),
+  siteTool({
+      name: 'save_translation_review_item',
+      description: 'Save manual translation review edits.',
+      domain: 'translations',
+      minimumRole: 'editor',
+      confirmRequired: false,
+      requiredEntitlement: 'translation',
+      inputSchema: { locale: { type: 'string' }, entity_type: { type: 'string' }, entity_id: { type: 'string' }, field: { type: 'string' }, fields: { type: 'object' }, scope: { type: 'string' } },
+      required: ['locale', 'entity_type', 'entity_id', 'field', 'fields'],
+      outputSchema: {
+        type: 'object',
+        properties: {
+          saved: { type: 'boolean' },
+          entity_id: { type: 'string' },
+          field: { type: 'string' },
+        },
+        required: ['saved'],
+      },
+    }),
+  siteTool({
+      name: 'publish_translations',
+      description: 'Publish draft translations.',
+      domain: 'translations',
+      minimumRole: 'editor',
+      confirmRequired: true,
+      requiredEntitlement: 'translation',
+      inputSchema: { locale: { type: 'string' }, scope: { type: 'string' } },
+      required: ['locale'],
+      outputSchema: {
+        type: 'object',
+        properties: {
+          published: { type: 'number', description: 'Number of translation fields published.' },
+          locale: { type: 'string' },
+        },
+        required: ['published'],
+      },
+    }),
+]

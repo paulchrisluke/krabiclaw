@@ -56,7 +56,7 @@ In practice this means:
 
 - no `/images/<tenant>/...` or `/videos/<tenant>/...` paths in `media_assets` rows for curated tenants
 - no dependency on third-party delivery URLs such as Unsplash in seeded D1 state
-- no third-party or local URLs in tenant-page media blocks, review avatars, post thumbnails, or any other tenant-facing seeded content
+- no third-party or local URLs in `site_content` media fields, review avatars, post thumbnails, or any other tenant-facing seeded content
 - no legacy `sites.logo_url` dependency for curated tenants; logos must be rehosted in Cloudflare and linked through `sites.logo_asset_id`
 - fixture media should mirror the dashboard upload split exactly:
   images -> Cloudflare Images direct upload flow
@@ -99,7 +99,7 @@ As of June 11, 2026, the curated Demo and Pottery House fixtures have been norma
 
 - seeded `media_assets` rows now use `cloudflare_images` for images and `cloudflare_r2` for videos/files
 - seeded site logos must resolve through `logo_asset_id` to Cloudflare-hosted media, not raw `logo_url` fallbacks
-- seeded tenant-page story/image block URLs are Cloudflare-hosted
+- seeded `site_content.story.image` URLs are Cloudflare-hosted
 - seeded review avatar URLs are Cloudflare-hosted
 - live tenant pages may still render `media.krabiclaw.com/...-thumb.webp` for video thumbnails; that is expected as long as the parent asset is a `cloudflare_r2` video row
 - repo-served tenant media under `public/` has been removed and must not be reintroduced for tenant content

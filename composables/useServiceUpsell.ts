@@ -2,6 +2,7 @@ export type UpsellType =
   | 'growth'
   | 'managed'
   | 'seo_accelerator'
+  | 'translation'
   | 'seasonal'
   | 'gbp_setup'
 

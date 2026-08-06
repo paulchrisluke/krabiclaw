@@ -82,7 +82,6 @@ import PlatformCommandSearchModal from '~/components/platform/search/PlatformCom
 import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
 import PlatformDrawer from '~/components/platform/PlatformDrawer.vue'
 import { stripLeadingTitleHeading } from '~/utils/markdown'
-import { findTenantPageBlock } from '~/utils/tenant-page-blocks'
 
 const { isBlawby } = usePublicTemplate()
 if (!isBlawby.value) throw createError({ statusCode: 404 })
@@ -98,11 +97,7 @@ if (!data.value.post) throw createError({ statusCode: 404, statusMessage: 'Artic
 const { identity, consultation, compliance } = await useBlawbyShell()
 const org = useBlawbyOrgIdentity(identity, compliance)
 const post = computed(() => data.value.post!)
-const ctaBlock = computed(() => {
-  const page = data.value.page
-  if (!page) return null
-  return findTenantPageBlock(page.blocks, 'consultation_cta', 'contact_cta')
-})
+const ctaBlock = computed(() => data.value.page?.components.find(component => component.type === 'consultation_cta') ?? null)
 const body = computed(() => stripLeadingTitleHeading(post.value.body || '', post.value.title))
 const displayTags = computed(() => post.value.tags.slice(1))
 const hasUpdatedDate = computed(() => Boolean(post.value.updated_at && post.value.updated_at !== post.value.published_at))

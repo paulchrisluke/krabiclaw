@@ -182,24 +182,6 @@
               />
             </div>
 
-            <div v-if="credits.quota" class="grid gap-2 text-xs sm:grid-cols-2">
-              <div class="rounded-lg bg-elevated px-3 py-2">
-                <p class="text-muted">Weekly AI quota</p>
-                <p class="mt-0.5 font-semibold tabular-nums">
-                  {{ Number(credits.quota.weeklyUsed).toLocaleString() }}
-                  <span v-if="credits.quota.weeklyLimit !== null"> / {{ Number(credits.quota.weeklyLimit).toLocaleString() }}</span>
-                  <span v-else> / unlimited</span>
-                </p>
-              </div>
-              <div class="rounded-lg bg-elevated px-3 py-2">
-                <p class="text-muted">Per-chat session cap</p>
-                <p class="mt-0.5 font-semibold tabular-nums">
-                  <span v-if="credits.quota.sessionLimit !== null">{{ Number(credits.quota.sessionLimit).toLocaleString() }} credits</span>
-                  <span v-else>unlimited</span>
-                </p>
-              </div>
-            </div>
-
             <div v-if="credits.by_action?.length" class="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <div v-for="row in credits.by_action" :key="row.action" class="rounded-lg bg-elevated px-3 py-2">
                 <p class="text-xs text-muted capitalize">{{ String(row.action).replace(/_/g, ' ') }}</p>
@@ -250,8 +232,8 @@
           color="primary"
           variant="soft"
           icon="i-lucide-info"
-          title="Changing your organization plan"
-          description="One subscription covers every site in this organization. The selected site is included as billing context, and site entitlements are derived from the organization plan."
+          :title="`Changing the plan for ${selectedSite.brandName ?? selectedSite.subdomain}`"
+          description="Pick a plan below to apply it to this site only — other sites in your organization keep their own plan."
         />
 
         <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -325,7 +307,6 @@
 <script setup lang="ts">
 const dashboardApi = useDashboardApi()
 
-import { authClient } from '~/lib/auth-client'
 import { CREDIT_BUNDLES, type CreditBundleSize } from '~/shared/creditBundles'
 const toast = useToast()
 
@@ -442,38 +423,17 @@ const upgradeToPlan = async (plan: string) => {
   trackPlanViewed(plan)
   trackCheckoutStarted(plan)
   try {
-    const organizationId = billing.value?.organizationId
-    if (typeof organizationId !== 'string' || !organizationId) {
-      throw new Error('Organization ID not found')
-    }
-    const currentUrl = new URL(window.location.href)
-    for (const key of ['success', 'canceled', 'plan']) currentUrl.searchParams.delete(key)
-    const successUrl = new URL(currentUrl)
-    successUrl.searchParams.set('success', 'true')
-    const cancelUrl = new URL(currentUrl)
-    cancelUrl.searchParams.set('canceled', 'true')
-    if (billing.value?.subscriptionStatus === 'past_due') {
-      await openBillingPortal()
-      return
-    }
-    const response = await authClient.subscription.upgrade({
-      plan,
-      annual: annual.value,
-      referenceId: organizationId,
-      ...(typeof billing.value?.stripeSubscriptionId === 'string'
-        ? { subscriptionId: billing.value.stripeSubscriptionId }
-        : {}),
-      customerType: 'organization',
-      metadata: { site_id: selectedSiteId.value, ga_client_id: getGaClientId() },
-      successUrl: successUrl.toString(),
-      cancelUrl: cancelUrl.toString(),
-      returnUrl: currentUrl.toString(),
-      disableRedirect: true,
+    const response = await dashboardApi<{ checkoutUrl: string }>('/api/billing/checkout', {
+      method: 'POST',
+      body: { plan, interval: annual.value ? 'year' : 'month', siteId: selectedSiteId.value, gaClientId: getGaClientId() },
+      validate: (value): value is { checkoutUrl: string } =>
+        isRecord(value) && typeof value.checkoutUrl === 'string',
     })
-    if (response.error) throw new Error(response.error.message ?? 'Failed to create checkout session')
-    const checkoutUrl = response.data && 'url' in response.data ? response.data.url : null
-    if (!checkoutUrl) throw new Error('Better Auth Stripe did not return a checkout URL')
-    await navigateTo(checkoutUrl, { external: true })
+    if (response?.checkoutUrl) {
+      await navigateTo(response.checkoutUrl, { external: true })
+    } else {
+      errorMessage.value = 'Failed to create checkout session'
+    }
   } catch (err) {
     errorMessage.value = err instanceof Error ? err.message : 'Failed to create checkout session'
   } finally {
@@ -490,16 +450,17 @@ const openBillingPortal = async () => {
       errorMessage.value = 'Organization ID not found'
       return
     }
-    const response = await authClient.subscription.billingPortal({
-      referenceId: orgId,
-      customerType: 'organization',
-      returnUrl: window.location.href,
-      disableRedirect: true,
+    const response = await dashboardApi<{ portalUrl: string }>('/api/billing/portal', {
+      method: 'POST',
+      body: { organizationId: orgId },
+      validate: (value): value is { portalUrl: string } =>
+        isRecord(value) && typeof value.portalUrl === 'string',
     })
-    if (response.error) throw new Error(response.error.message ?? 'Failed to open billing portal')
-    const portalUrl = response.data && 'url' in response.data ? response.data.url : null
-    if (!portalUrl) throw new Error('Better Auth Stripe did not return a billing portal URL')
-    await navigateTo(portalUrl, { external: true })
+    if (response?.portalUrl) {
+      await navigateTo(response.portalUrl, { external: true })
+    } else {
+      errorMessage.value = 'Failed to open billing portal'
+    }
   } catch (err) {
     errorMessage.value = err instanceof Error ? err.message : 'Failed to open billing portal'
   } finally {
@@ -608,13 +569,7 @@ onMounted(async () => {
   const { success, plan, canceled, siteId, ...restQuery } = route.query
 
   if (success === 'true') {
-    const paymentStatus = billing.value?.paymentStatus
-    toast.add({
-      description: paymentStatus === 'paid'
-        ? 'Payment confirmed. Your plan has been updated.'
-        : 'Payment is processing. Your plan will activate after Stripe confirms the invoice.',
-      color: paymentStatus === 'paid' ? 'success' : 'warning',
-    })
+    toast.add({ description: 'Payment successful. Your plan has been updated.', color: 'success' })
   }
   if (canceled === 'true') {
     errorMessage.value = 'Payment was canceled. Your plan was not changed.'

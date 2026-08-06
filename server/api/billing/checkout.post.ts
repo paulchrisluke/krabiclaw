@@ -1,116 +1,145 @@
-import { toWebRequest } from 'h3'
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { createAuth, getAuthSession, type CloudflareEnv } from '~/server/utils/auth'
+import Stripe from 'stripe'
+import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
+import { getAuthSession } from '~/server/utils/auth'
+import { getStripe, getPriceIdForPlan, requireBillingAccess } from '../../utils/billing'
+import { isManagedServiceEnabled } from '../../utils/feature-flags'
 import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
-import { queryFirst } from '~/server/db'
-import { getOrganizationBillingStatus } from '~/server/utils/billing'
-import { isManagedServiceEnabled } from '~/server/utils/feature-flags'
-import { CONCIERGE_PLAN_IDS } from '~/server/utils/better-auth-stripe'
+import { execute, queryFirst } from '~/server/db'
 
 interface CheckoutRequest {
   organizationId?: string
   siteId?: string
-  plan?: string
+  plan: string
   interval?: 'month' | 'year'
   successUrl?: string
   cancelUrl?: string
   gaClientId?: string
 }
 
-async function legacyCheckoutResponse(response: Response) {
-  const payload = await response.json().catch(() => null) as { url?: unknown } | null
-  if (!response.ok) {
-    return jsonResponse(payload ?? { error: 'Unable to create checkout session' }, { status: response.status })
-  }
-  if (!payload || typeof payload.url !== 'string' || payload.url.length === 0) {
-    return jsonResponse({ error: 'Better Auth did not return a checkout URL' }, { status: 502 })
-  }
-  return jsonResponse({ success: true, checkoutUrl: payload.url })
-}
-
-/**
- * Compatibility alias for callers that have not moved to the Better Auth
- * client yet. It performs no Stripe work; the canonical implementation is
- * /api/auth/subscription/upgrade.
- */
 export default defineEventHandler(async (event) => {
-  const body = await readBody<CheckoutRequest>(event)
-  if (!body?.plan) return jsonResponse({ error: 'Plan is required' }, { status: 400 })
-  if (!['growth', 'managed', 'seo_accelerator'].includes(body.plan)) {
-    return jsonResponse({ error: 'Invalid plan' }, { status: 400 })
+  const body = await readBody(event) as CheckoutRequest
+  const { plan, successUrl, cancelUrl } = body
+  const interval = body.interval ?? 'month'
+
+  if (!plan) return jsonResponse({ error: 'Plan is required' }, { status: 400 })
+
+  const env = cloudflareEnv(event)
+
+  const ALLOWED_PLANS = isManagedServiceEnabled(env)
+    ? ['growth', 'managed', 'seo_accelerator']
+    : ['growth']
+  if (!ALLOWED_PLANS.includes(plan)) {
+    return jsonResponse({ error: `Invalid plan. Allowed values are ${ALLOWED_PLANS.join(', ')}` }, { status: 400 })
   }
-  if (body.interval && body.interval !== 'month' && body.interval !== 'year') {
+  if (interval !== 'month' && interval !== 'year') {
     return jsonResponse({ error: 'Invalid interval. Allowed values are month or year' }, { status: 400 })
   }
 
-  const env = cloudflareEnv(event) as CloudflareEnv
-  if (CONCIERGE_PLAN_IDS.has(body.plan) && !isManagedServiceEnabled(env)) {
-    return jsonResponse({ error: 'This plan is not currently available' }, { status: 403 })
-  }
-  if (!env.DB) throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
-  if (!env.STRIPE_SECRET_KEY || !env.STRIPE_WEBHOOK_SECRET) {
-    throw createError({ statusCode: 503, statusMessage: 'Stripe not configured' })
-  }
+  const db = env.DB
+  if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
+  if (!env.STRIPE_SECRET_KEY) return jsonResponse({ error: 'Stripe not configured' }, { status: 503 })
 
   const session = await getAuthSession(event, env)
-  if (!session?.user?.id) throw createError({ statusCode: 401, statusMessage: 'Authentication required' })
-  const organization = await resolveRequestedOrganization(event, env.DB, session.user.id, {
+  if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
+
+  // Resolve org — from the current dashboard header, or an explicit param that
+  // must agree with it. Never guessed from session/oldest-membership.
+  const organization = await resolveRequestedOrganization(event, db, session.user.id, {
     explicitOrganizationId: body.organizationId ?? null,
   })
-  if (!organization) throw createError({ statusCode: 404, statusMessage: 'No organization found' })
-  if (!body.siteId) throw createError({ statusCode: 400, statusMessage: 'siteId is required' })
-  const site = await queryFirst<{ id: string }>(env.DB, `
-    SELECT id FROM sites WHERE id = ? AND organization_id = ? LIMIT 1
-  `, [body.siteId, organization.id])
-  if (!site) throw createError({ statusCode: 404, statusMessage: 'Site not found or does not belong to this organization' })
+  if (!organization) return jsonResponse({ error: 'No organization found' }, { status: 404 })
+  const orgId = organization.id
 
-  const request = toWebRequest(event)
-  const target = new URL(request.url)
-  target.pathname = '/api/auth/subscription/upgrade'
-  target.search = ''
-  const headers = new Headers(request.headers)
-  headers.delete('content-length')
-  const baseUrl = getRequestURL(event).origin
-  const billingUrl = new URL(`${baseUrl}/dashboard/${encodeURIComponent(organization.slug)}/settings/billing`)
-  const successUrl = new URL(billingUrl)
-  successUrl.searchParams.set('success', 'true')
-  const canceledUrl = new URL(billingUrl)
-  canceledUrl.searchParams.set('canceled', 'true')
-  const callbackUrl = body.successUrl ?? successUrl.toString()
-  const cancelUrl = body.cancelUrl ?? canceledUrl.toString()
-  const billingStatus = await getOrganizationBillingStatus(env, env.DB, organization.id)
+  // Resolve site — must be passed explicitly for multi-site orgs
+  const siteId = body.siteId
+  if (!siteId) return jsonResponse({ error: 'siteId is required' }, { status: 400 })
 
-  if (billingStatus.subscriptionStatus === 'past_due') {
-    target.pathname = '/api/auth/subscription/billing-portal'
-    return await createAuth(env).handler(new Request(target, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        referenceId: organization.id,
-        customerType: 'organization',
-        returnUrl: billingUrl.toString(),
-        disableRedirect: true,
-      }),
-    })).then(legacyCheckoutResponse)
-  }
+  const site = await queryFirst<{ id: string }>(db, `SELECT id FROM sites WHERE id = ? AND organization_id = ? LIMIT 1`, [siteId, orgId])
+  if (!site) return jsonResponse({ error: 'Site not found or does not belong to this organization' }, { status: 404 })
+  const resolvedSiteId = siteId
 
-  return await createAuth(env).handler(new Request(target, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      plan: body.plan,
-      annual: body.interval === 'year',
-      referenceId: organization.id,
-      ...(billingStatus.stripeSubscriptionId ? { subscriptionId: billingStatus.stripeSubscriptionId } : {}),
-      customerType: 'organization',
+  try {
+    await requireBillingAccess(env, db, orgId, session.user.id)
+
+    const organization = await queryFirst<{ name: string; slug: string; stripe_customer_id: string | null }>(db, `
+      SELECT o.name, o.slug, ob.stripe_customer_id
+      FROM organization o
+      LEFT JOIN organization_billing ob ON o.id = ob.organization_id
+      WHERE o.id = ? LIMIT 1
+    `, [orgId])
+    if (!organization) return jsonResponse({ error: 'Organization not found' }, { status: 404 })
+
+    let priceId: string
+    try {
+      priceId = await getPriceIdForPlan(env, plan, interval)
+    } catch (error) {
+      console.error('Invalid Stripe pricing configuration', { plan, interval, error })
+      return jsonResponse({ error: 'Billing is temporarily unavailable for the selected plan' }, { status: 503 })
+    }
+
+    const stripe = getStripe(env)
+
+    // Ensure Stripe customer exists at org level (shared payment method across sites).
+    // The stored ID can go stale (deleted in Stripe, or a synthetic ID from a test
+    // webhook) — validate before reuse rather than passing a dead ID to Checkout.
+    let customerId = organization.stripe_customer_id
+    if (customerId) {
+      try {
+        const existingCustomer = await stripe.customers.retrieve(customerId)
+        if ('deleted' in existingCustomer && existingCustomer.deleted) customerId = null
+      } catch (error) {
+        // Only a genuine "not found" means the stored ID is stale — anything else
+        // (rate limit, auth, network, Stripe 5xx) is transient and must not cause
+        // us to mint a duplicate customer or silently drop the stored ID.
+        const isNotFound = error instanceof Stripe.errors.StripeError && error.statusCode === 404
+        if (!isNotFound) {
+          console.error('checkout_customer_lookup_failed', { organizationId: orgId, customerId, error })
+          throw error
+        }
+        console.warn('checkout_customer_lookup_not_found', { organizationId: orgId, customerId })
+        customerId = null
+      }
+    }
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        name: organization.name,
+        metadata: { organization_id: orgId },
+      })
+      customerId = customer.id
+      await execute(db, `
+        INSERT OR REPLACE INTO organization_billing (id, organization_id, stripe_customer_id, updated_at)
+        VALUES (?, ?, ?, ?)
+      `, [`billing-${orgId}`, orgId, customerId, new Date().toISOString()])
+    }
+
+    const targetSlug = encodeURIComponent(organization.slug)
+    const checkoutSession = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: 'subscription',
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: successUrl || `${getRequestURL(event).origin}/dashboard/${targetSlug}/settings/billing?success=true`,
+      cancel_url: cancelUrl || `${getRequestURL(event).origin}/dashboard/${targetSlug}/settings/billing?canceled=true`,
       metadata: {
-        site_id: body.siteId,
+        organization_id: orgId,
+        site_id: resolvedSiteId,
+        plan,
         ...(body.gaClientId ? { ga_client_id: body.gaClientId } : {}),
       },
-      successUrl: callbackUrl,
-      cancelUrl,
-      returnUrl: billingUrl.toString(),
-      disableRedirect: true,
-    }),
-  })).then(legacyCheckoutResponse)
+      subscription_data: {
+        metadata: {
+          organization_id: orgId,
+          site_id: resolvedSiteId,
+          plan,
+          ...(body.gaClientId ? { ga_client_id: body.gaClientId } : {}),
+        },
+      },
+    })
+
+    return jsonResponse({ success: true, checkoutUrl: checkoutSession.url })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error('Failed to create checkout session:', message)
+    if (message.startsWith('Access denied')) return jsonResponse({ error: message }, { status: 403 })
+    return jsonResponse({ error: 'Failed to create checkout session' }, { status: 500 })
+  }
 })

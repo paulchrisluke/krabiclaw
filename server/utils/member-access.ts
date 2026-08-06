@@ -271,7 +271,7 @@ export async function resolveDashboardSiteAccess(db: DbClient, input: MemberAcce
   return siteAccess ? 'site' : 'location'
 }
 
-/** Site-wide management access: site settings, blog, localized content, professional-services, analytics, domains, contact-submissions inbox, and any menu/media/review/QA row whose own location_id is null. */
+/** Site-wide management access: site settings, blog, translations, professional-services, analytics, domains, contact-submissions inbox, and any menu/media/review/QA row whose own location_id is null. */
 export async function assertSiteWideAccess(db: DbClient, input: MemberAccessPrincipal): Promise<void> {
   if (isOrganizationWideRole(input.role)) return
   if (!isScopedRole(input.role)) throw createError({ statusCode: 403, message: 'Access denied' })

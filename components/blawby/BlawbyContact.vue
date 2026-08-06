@@ -58,8 +58,6 @@
 </template>
 
 <script setup lang="ts">
-import { findTenantPageBlock } from '~/utils/tenant-page-blocks'
-
 const { siteId } = useTenantSite()
 const { data, error } = await useBlawbyRoute('contact')
 if (error.value) throw error.value
@@ -70,9 +68,7 @@ const { identity, consultation, compliance } = await useBlawbyShell()
 const org = useBlawbyOrgIdentity(identity, compliance)
 
 function block(type: string) {
-  if (!page.value) return null
-  const canonicalType = type === 'page_hero' ? 'hero' : type === 'contact_cards' ? 'contact_cta' : type === 'consultation_cta' ? 'contact_cta' : type === 'qa' ? 'faq' : undefined
-  return findTenantPageBlock(page.value.blocks, type, canonicalType)
+  return page.value?.components.find(component => component.type === type) ?? null
 }
 function optionalString(value: unknown) {
   return typeof value === 'string' && value ? value : null
@@ -124,7 +120,7 @@ async function submitContact() {
 }
 
 function trackConsultation() {
-  trackConsultationClick('contact', '/contact', optionalString(ctaBlock.value?.url) || consultation.value.schedule_path)
+  trackConsultationClick('contact', '/contact', ctaBlock.value?.url || consultation.value.schedule_path)
 }
 
 useSeoMeta({

@@ -14,7 +14,7 @@ test('demo seed script includes standard MCP plan fixtures', () => {
   assert.match(sql, /user-mcp-free/)
   assert.match(sql, /user-mcp-growth/)
   assert.match(sql, /user-mcp-managed/)
-  assert.doesNotMatch(sql, /sent-site-mcp-growth-translation/)
+  assert.match(sql, /sent-site-mcp-growth-translation/)
   assert.match(sql, /sent-site-mcp-managed-managed_service/)
   assert.match(sql, /INSERT OR REPLACE INTO content_documents/)
   assert.match(sql, /INSERT OR REPLACE INTO content_revisions/)

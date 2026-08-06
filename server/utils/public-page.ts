@@ -7,7 +7,7 @@ import { executeBatch, queryFirst, type BatchQuery } from "~/server/db";
 import { getHeader, setHeader, type H3Event } from "h3";
 import { cloudflareEnv } from "~/server/utils/api-response";
 import { calculateMapEmbedUrl } from "~/server/utils/google-business";
-import { getPublicTenantPageForPath, type PublicTenantPage } from "~/server/utils/public-tenant-pages";
+import type { SiteContent } from "~/server/utils/content-management";
 import {
   mapMenu,
   mapMenuItem,
@@ -45,27 +45,6 @@ import { getPublishedPosts } from "~/server/utils/post-management";
 import { loadPublicBase } from "~/server/utils/public-base";
 import { appendPublicShellQueries, buildPublicShellPayload } from "~/server/utils/public-shell-query";
 import { isPublicPagePayload } from '~/utils/public-resource-contracts'
-
-interface SiteContent {
-  id: string
-  organization_id: string
-  site_id: string
-  location_id?: string
-  page: string
-  field: string
-  value?: string
-  type: string
-  source: string
-  content?: string
-  hero_title?: string | null
-  hero_subtitle?: string | null
-  hero_media_asset_id?: string | null
-  hero_public_url?: string | null
-  hero_kind?: string | null
-  thumbnail_url?: string | null
-  component?: string | null
-  updated_at: string
-}
 
 function groupContentBlocks(rows: SiteContent[]): Array<SiteContent & { _section: string }> {
   const groups = Object.create(null) as Record<string, SiteContent & { _section: string }>
@@ -107,6 +86,23 @@ interface ReviewRow {
   created_at: string | null;
 }
 
+interface ContentSourceRow extends SiteContent {
+  media_public_url: string | null;
+  media_kind: string | null;
+}
+
+interface ContentTranslationRow {
+  field: string;
+  content: string | null;
+  value: string | null;
+  type: string | null;
+  hero_title: string | null;
+  hero_subtitle: string | null;
+  component: string | null;
+  updated_at: string;
+  media_public_url: string | null;
+}
+
 interface MenuTranslationRow {
   menu_id: string;
   name: string | null;
@@ -144,58 +140,16 @@ const parseJson = (raw: string | null) => {
   }
 };
 
-function canonicalTenantPagePath(page: string | null, locationSlug: string | null): string | null {
-  if (!page) return null
-  if (page === 'home') return '/'
-  if (page === 'location') return locationSlug ? `/locations/${locationSlug}` : null
-  if (page === 'locations') return '/locations'
-  if (['about', 'contact', 'reservations', 'order', 'qa', 'reviews', 'posts', 'experiences', 'photos', 'menu', 'blog'].includes(page)) return `/${page}`
-  return null
-}
-
-function tenantPageToContentRows(page: PublicTenantPage): SiteContent[] {
-  const rows: SiteContent[] = []
-  for (const block of page.blocks) {
-    const data = block.data
-    const field = typeof data.field === 'string' && data.field.trim()
-      ? data.field.trim()
-      : `${block.type}.${block.position}`
-    const base = {
-      id: block.id,
-      organization_id: '',
-      site_id: '',
-      page: page.path === '/' ? 'home' : page.path.slice(1).replaceAll('/', '-'),
-      field,
-      type: block.type === 'image' || block.type === 'gallery' ? 'media' : 'text',
-      source: 'tenant-pages',
-      updated_at: page.updated_at,
-      component: null,
-    } satisfies SiteContent
-    if (block.type === 'hero') {
-      rows.push({
-        ...base,
-        field: 'hero',
-        content: typeof data.eyebrow === 'string' ? data.eyebrow : undefined,
-        hero_title: typeof data.title === 'string' ? data.title : null,
-        hero_subtitle: typeof data.subtitle === 'string' ? data.subtitle : null,
-        hero_media_asset_id: typeof data.asset_id === 'string' ? data.asset_id : null,
-        hero_public_url: typeof data.url === 'string' ? data.url : null,
-        hero_kind: typeof data.kind === 'string' ? data.kind : null,
-      })
-      if (typeof data.eyebrow === 'string' && data.eyebrow.trim()) rows.push({ ...base, field: 'hero.kicker', content: data.eyebrow })
-      continue
-    }
-    if (block.type === 'heading') {
-      rows.push({ ...base, field, content: typeof data.text === 'string' ? data.text : undefined })
-      continue
-    }
-    if (block.type === 'markdown') {
-      rows.push({ ...base, content: typeof data.markdown === 'string' ? data.markdown : typeof data.content === 'string' ? data.content : undefined })
-      continue
-    }
-    rows.push({ ...base, content: typeof data.title === 'string' ? data.title : undefined })
+function resolveContentMedia(row: ContentSourceRow): SiteContent {
+  const { media_public_url, ...rest } = row as unknown as Record<
+    string,
+    unknown
+  >;
+  if (rest.type === "media" && media_public_url) {
+    rest.value = media_public_url;
+    rest.content = media_public_url;
   }
-  return rows
+  return rest as unknown as SiteContent;
 }
 
 function parseExperienceRow(row: Record<string, unknown>): Experience {
@@ -426,6 +380,8 @@ async function loadPublicPageSource(
   let idxFullReviews = -1,
     idxPhotos = -1,
     idxQa = -1;
+  let idxSourceContent = -1,
+    idxContentTranslations = -1;
   let idxMenus = -1,
     idxMenuItems = -1,
     idxMenuItemMedia = -1,
@@ -444,6 +400,55 @@ async function loadPublicPageSource(
 
   const shellIndexes = appendPublicShellQueries(batchStmts, orgId, siteId);
   if (needsLocations) idxLoc = shellIndexes.locations;
+
+  // Content for the requested page (source + translations)
+  if (page && requestedDatasets.has("content")) {
+    const contentParams: unknown[] = [orgId, siteId, page];
+    if (locationId) contentParams.push(locationId);
+
+    idxSourceContent = push(
+      `SELECT sc.id, sc.organization_id, sc.site_id, sc.location_id, sc.page, sc.field,
+              sc.value, sc.type, sc.source, sc.content, sc.hero_title, sc.hero_subtitle,
+              sc.hero_media_asset_id, sc.component, sc.updated_at,
+              hero.public_url AS hero_public_url, hero.kind AS hero_kind,
+              hero.thumbnail_url AS thumbnail_url,
+              ma.public_url AS media_public_url, ma.kind AS media_kind
+       FROM site_content sc
+       LEFT JOIN media_assets hero ON sc.hero_media_asset_id = hero.id AND hero.status = 'active'
+         AND hero.organization_id = sc.organization_id AND hero.site_id = sc.site_id
+       LEFT JOIN media_assets ma ON sc.type = 'media'
+         AND ma.id = COALESCE(
+           CASE WHEN sc.content NOT LIKE 'http%' AND length(sc.content) > 0 THEN sc.content END,
+           CASE WHEN sc.value NOT LIKE 'http%' AND length(sc.value) > 0 THEN sc.value END
+         )
+         AND ma.status = 'active'
+       WHERE sc.organization_id = ? AND sc.site_id = ? AND sc.page = ?
+         AND sc.location_id ${locationId ? "= ?" : "IS NULL"}
+       ORDER BY sc.field`,
+      contentParams,
+    );
+
+    if (locale) {
+      const translationParams: unknown[] = [orgId, siteId, page, locale];
+      if (locationId) translationParams.push(locationId);
+
+      idxContentTranslations = push(
+        `SELECT sct.field, sct.content, sct.value, sct.type, sct.hero_title, sct.hero_subtitle,
+                sct.component, sct.updated_at, ma.public_url AS media_public_url, ma.kind AS media_kind
+         FROM site_content_translations sct
+         LEFT JOIN media_assets ma ON sct.type = 'media'
+           AND ma.id = COALESCE(
+             CASE WHEN sct.content NOT LIKE 'http%' AND length(sct.content) > 0 THEN sct.content END,
+             CASE WHEN sct.value NOT LIKE 'http%' AND length(sct.value) > 0 THEN sct.value END
+           )
+           AND ma.status = 'active'
+         WHERE sct.organization_id = ? AND sct.site_id = ? AND sct.page = ?
+           AND sct.locale = ? AND sct.status = 'published'
+           AND sct.location_id ${locationId ? "= ?" : "IS NULL"}`,
+        translationParams,
+      );
+    }
+  }
 
   // Menu data for the requested scope (all published menus/items + translations)
   if (includeMenu) {
@@ -685,11 +690,66 @@ async function loadPublicPageSource(
       ? (batchResults[idxQa] as { results: Record<string, unknown>[] })
       : { results: [] as Record<string, unknown>[] };
   const sourceLocale = site.source_locale;
-  const canonicalPath = requestedDatasets.has('content') ? canonicalTenantPagePath(page, locationSlug) : null
-  const tenantPage = canonicalPath
-    ? await getPublicTenantPageForPath(db, siteId, canonicalPath, { locale, preview: isPreviewAuthorized })
-    : null
-  const contentRows: SiteContent[] = tenantPage ? tenantPageToContentRows(tenantPage) : []
+
+  // Build content rows
+  const buildContentRows = (
+    sourceRows: ContentSourceRow[],
+    translationRows: ContentTranslationRow[],
+  ): SiteContent[] => {
+    if (!locale || locale === sourceLocale) {
+      return sourceRows.map(resolveContentMedia);
+    }
+
+    const sourceByField = new Map(
+      sourceRows.map((row) => [row.field, { ...row }]),
+    );
+
+    for (const t of translationRows) {
+      const base = sourceByField.get(t.field);
+      const translationHasMediaValue =
+        t.value !== null || t.content !== null;
+      const mediaPublicUrl = translationHasMediaValue
+        ? t.media_public_url
+        : (t.media_public_url ?? base?.media_public_url ?? null);
+
+      const merged: ContentSourceRow = {
+        ...(base ?? ({
+          id: `translation::${orgId}::${siteId}::${locationId ?? "site"}::${locale}::${page}::${t.field}`,
+          organization_id: orgId,
+          site_id: siteId,
+          location_id: locationId,
+          page: page!,
+          field: t.field,
+          source: "manual",
+          hero_media_asset_id: undefined,
+        } as unknown as SiteContent)),
+        field: t.field,
+        value: (t.value ?? t.content ?? base?.value) as string | undefined,
+        content: (t.content ?? t.value ?? base?.content) as string | undefined,
+        type: (t.type ?? base?.type ?? "text") as string,
+        hero_title: (t.hero_title ?? base?.hero_title) as string | null | undefined,
+        hero_subtitle: (t.hero_subtitle ?? base?.hero_subtitle) as string | null | undefined,
+        component: (t.component ?? base?.component) as string | null | undefined,
+        updated_at: t.updated_at,
+        media_public_url: mediaPublicUrl,
+        media_kind: null,
+      } as ContentSourceRow;
+
+      sourceByField.set(t.field, merged);
+    }
+
+    return Array.from(sourceByField.values())
+      .map(resolveContentMedia)
+      .sort((a, b) => a.field.localeCompare(b.field));
+  };
+
+  const contentRows: SiteContent[] =
+    idxSourceContent >= 0
+      ? buildContentRows(
+          (batchResults[idxSourceContent] as { results: ContentSourceRow[] }).results ?? [],
+          (batchResults[idxContentTranslations] as { results: ContentTranslationRow[] })?.results ?? [],
+        )
+      : [];
 
   // Build active menu
   let menuData: MenuWithItems | null = null;
@@ -1038,7 +1098,6 @@ async function loadPublicPageSource(
     shell,
     content: contentRows,
     content_blocks: groupContentBlocks(contentRows),
-    tenant_page: tenantPage,
     menu: menuData,
     locationReviews: locationReviewRows?.results ?? [],
     globalReviews: needsGlobalReviews ? reviewRows.results ?? [] : [],

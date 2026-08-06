@@ -159,7 +159,7 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
     }
     case "copy_location_batch": {
       const VALID_ENTITY_TYPES: CopyEntityType[] = [
-        "menus", "menu_items", "media_assets", "reviews", "location_qa", "experiences",
+        "menus", "menu_items", "media_assets", "site_content", "reviews", "location_qa", "experiences",
       ];
       const sourceLocationId = requiredString(args, "source_location_id");
       const targetLocationId = optionalString(args, "target_location_id");

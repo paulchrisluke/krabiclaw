@@ -1,7 +1,7 @@
 import type { H3Event } from 'h3'
 import type Stripe from 'stripe'
 import { queryAll, queryFirst } from '~/server/db'
-import { getAiQuotaStatus, getOrCreateCredits } from '~/server/utils/ai-credits'
+import { getOrCreateCredits } from '~/server/utils/ai-credits'
 import { getOrganizationBillingStatus, getStripe, requireBillingAccess } from '~/server/utils/billing'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 
@@ -24,10 +24,9 @@ export async function loadDashboardBillingResource(event: H3Event, organizationS
     organizationSlug,
   })
   await requireBillingAccess(env, db, organization.id, userId)
-  const [billingStatus, credits, quota, usage, byAction, siteRows, organizationBilling] = await Promise.all([
+  const [billingStatus, credits, usage, byAction, siteRows, organizationBilling] = await Promise.all([
     getOrganizationBillingStatus(env, db, organization.id),
     getOrCreateCredits(db, organization.id),
-    getAiQuotaStatus(db, organization.id),
     queryAll(db, `
       SELECT u.action, u.model, u.input_tokens, u.output_tokens, u.credits_charged,
              u.created_at, s.brand_name AS site_name
@@ -85,7 +84,6 @@ export async function loadDashboardBillingResource(event: H3Event, organizationS
     credits: {
       balance: credits.balance,
       lifetime_used: credits.lifetime_used,
-      quota,
       usage,
       by_action: byAction,
     },
