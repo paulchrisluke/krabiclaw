@@ -131,7 +131,8 @@ export const usePublicPageData = async (options: {
     onScopeDispose(stopKeyWatch)
   }
   if (import.meta.server) {
-    if ('execute' in asyncData && (asyncData.pending.value || asyncData.data.value === undefined)) {
+    if (options.server !== false && 'execute' in asyncData
+      && (asyncData.pending.value || asyncData.data.value === undefined)) {
       await nuxtApp.runWithContext(() => asyncData.execute({ cause: 'initial', dedupe: 'defer' }))
     }
     await shell.ready
