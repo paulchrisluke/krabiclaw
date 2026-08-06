@@ -17,7 +17,7 @@ Customer-facing ChatGPT app for tenant site management.
 - OAuth2 authorization at `/api/auth/oauth2/` — ChatGPT handles auth before any tool call
 - MCP endpoint at `/api/mcp` (`server/api/mcp.post.ts`)
 - Scope: `tenant`
-- 90+ MCP tools covering: site setup, locations, menus, experiences, posts, media, locale management, Google Business, Facebook, analytics, work requests
+- 90+ MCP tools covering: site setup, locations, menus, experiences, posts, media, translation, Google Business, Facebook, analytics, work requests
 - Widget system is legacy/deprecated for client photo uploads; Client MCP should ask users to attach photos directly in ChatGPT and then use `upload_user_photo`. `list_sites`, `import_from_maps`, `show_site_preview`, `show_generated_images`, and onboarding return plain text.
 - Image generation via ChatGPT's native `image_generation` Responses API tool (`gpt-image-1` / `gpt-image-2`) — not DALL-E
 - Plugin landing page at `/plugin`
@@ -62,11 +62,11 @@ Pricing managed entirely in Stripe — never duplicated in code. All pricing UI 
 | Tier | Price | Key Features |
 |------|-------|-------------|
 | Free (Starter) | $0 | Subdomain, Saya theme, manual editor, basic AI credits, 1 locale, Post-booking review requests |
-| Growth | $49/mo | Custom domain + SSL, Google Business sync, 2,000 AI credits/mo, manual locale editing, Priority Support |
+| Growth | $49/mo | Custom domain + SSL, Google Business sync, 2,000 AI credits/mo, translation (1 language), Priority Support |
 
 Locations are unlimited on all plans. Credit top-ups are available as one-time purchases.
 
-**Upgrade modal** triggers on: connecting Google Business, custom domain setup, removing KrabiClaw branding.
+**Upgrade modal** triggers on: connecting Google Business, custom domain setup, translation, removing KrabiClaw branding.
 
 **Managed / Concierge Services Deprecated.** The "Managed by Paul & Julia" service (including Managed and SEO Accelerator tiers) is no longer offered. The `MANAGED_SERVICE_ENABLED` feature flag remains off to hide these from the dashboard and marketing sites.
 

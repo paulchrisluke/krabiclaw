@@ -159,6 +159,7 @@ import BookingLocationStep from '@/components/booking/BookingLocationStep.vue'
 import BookingModal from '@/components/booking/BookingModal.vue'
 import BookingRecap from '@/components/booking/BookingRecap.vue'
 import BookingTimeStep, { type RawDateAvailability, type TimeSlotSelection } from '@/components/booking/BookingTimeStep.vue'
+import { usePageContent } from '~/composables/usePageContent'
 import { useBreadcrumbSchema } from '~/composables/useSchemaOrg'
 import { fmt12Hour, getTodayHoursLabel, isOpenNow } from '~/shared/reservation-hours'
 import { setBookingConfirmation } from '~/composables/useBookingHandoff'
@@ -172,10 +173,11 @@ function formatTitleItalics(text: string | null | undefined): string {
 
 definePageMeta({ layout: 'saya' })
 
+const { getField } = usePageContent('reservations')
 const { site, siteId } = useTenantSite()
 const { locale } = useI18n()
 const resCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
-const { locations, config, getField, reservationPolicySiteDefault, reservationPolicyByLocation } = await usePublicPageData()
+const { locations, config, reservationPolicySiteDefault, reservationPolicyByLocation } = await usePublicPageData()
 const isExperienceSite = computed(() => (site as { vertical?: string | null } | null)?.vertical === 'experience')
 
 // Pure experience-vertical sites book per-experience on /experiences/[slug].

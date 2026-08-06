@@ -26,8 +26,8 @@ As of 2026-07-10:
 
 | Surface | Raw tools | Default visible tools | Notes |
 | --- | ---: | ---: | --- |
-| Client MCP | 117 | 103 | Feature-flagged groups hidden (social/OAuth publishing 7, domains 5, managed service 2 = 14). Manual locale tools are visible by default. Raw/default counts include the Agent Skill guidance tools for blog and image workflows |
-| ChowBot | 87 | 85 | Same feature-flag policy for social/OAuth publishing and managed service; manual locale tools are visible by default and WhatsApp-specific tools remain ChowBot-only |
+| Client MCP | 130 | 105 | Feature-flagged groups hidden (translations/locales 11, social/OAuth publishing 7, domains 5, managed service 2 = 25). Raw/default counts now include two Agent Skill guidance tools for blog and image workflows. Raw count grew from 119 as of 2026-07-05; only +1 (`sync_menu_items`, see below) is from the ChowBot consolidation work in this doc's history — the remaining growth predates it and wasn't re-audited here |
+| ChowBot | 95 | 82 | Same feature-flag policy (translations/locales 11 + managed service 2 = 13 hidden); WhatsApp-specific tools remain ChowBot-only. Previously only 2 of the 11 translations tools and 0 of the 2 managed-service tools were actually reachable despite the flag existing — `chowbot-tools/translations.ts` and `chowbot-tools/managed-service.ts` never defined schemas for the rest. Fixed; counts above reflect the tools now actually being registered, matching what this table already described |
 
 Counts are checked by `yarn lint:tool-parity` (`scripts/lint-tool-parity.mjs`), which also verifies tool names stay in sync across definitions, executor dispatch, the confirm-required set, and feature-gate groups — update this table whenever those counts drift.
 
@@ -37,6 +37,7 @@ These groups are hidden by default on both conversational surfaces where present
 
 | Group | Env flag | Client MCP tools | ChowBot tools |
 | --- | --- | --- | --- |
+| Translations/locales | `CONVERSATIONAL_TOOLS_TRANSLATIONS_ENABLED=true` | `list_locales`, `upsert_locale`, `delete_locale`, `get_translation_inventory`, `start_translation_job`, `list_translation_jobs`, `get_translation_job`, `run_translation_job_batch`, `get_translation_review_items`, `save_translation_review_item`, `publish_translations` | Same names |
 | Social/OAuth publishing | `CONVERSATIONAL_TOOLS_SOCIAL_PUBLISHING_ENABLED=true` | `get_facebook_connection`, `publish_to_facebook`, `sync_facebook_page`, `get_google_business_connection`, `get_google_business_auth_url`, `list_google_business_accounts`, `sync_google_business_locations`; external `publish_post` channels are also blocked while disabled | None today; `publish_post` already publishes site-only |
 | Domains | `CONVERSATIONAL_TOOLS_DOMAINS_ENABLED=true` | `get_site_domains`, `create_domain`, `set_canonical_domain`, `delete_domain`, `sync_domain` | None |
 | Managed service | `CONVERSATIONAL_TOOLS_MANAGED_SERVICE_ENABLED=true` | `list_work_requests`, `create_work_request` | Same names |
@@ -74,4 +75,4 @@ Before merging surface changes:
    - update homepage content or hero image
    - create a post
    - create or update an experience
-   - ask for domains/social publishing and confirm ChatGPT routes to the dashboard unless the relevant flag is enabled
+   - ask for domains/translations/social publishing and confirm ChatGPT routes to the dashboard unless the relevant flag is enabled

@@ -1,5 +1,5 @@
 // SEO 301 redirects for legacy legal URLs
-import { createError, defineEventHandler, getMethod, getRequestHeader, getRequestURL, sendRedirect, setResponseHeader, type H3Event } from 'h3'
+import { createError, defineEventHandler, getMethod, getRequestHeader, getRequestURL, sendRedirect, setResponseHeader } from 'h3'
 import { queryAll, queryFirst } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { isBlawbyTemplate } from '~/utils/template-registry'
@@ -31,72 +31,6 @@ const redirects: Record<string, string> = {
 // these (e.g. /posts) are real, valid routes on tenant sites and must keep
 // working there.
 const PLATFORM_GONE_PATHS = new Set(['/changelog', '/posts'])
-
-async function resolveTenantRedirectForRequest(event: H3Event) {
-  const siteId = event.context.siteId as string | null | undefined
-  if (!siteId) return null
-  const db = cloudflareEnv(event).db
-  if (!db) return null
-  const url = getRequestURL(event)
-  const path = url.pathname === '/' ? '/' : url.pathname.replace(/\/$/, '')
-  const requestedLocale = url.searchParams.get('locale')?.trim() || getRequestHeader(event, 'x-tenant-locale')?.trim() || null
-  const source = await queryFirst<{ locale: string } | null>(db, `
-    SELECT COALESCE((SELECT locale FROM site_locales WHERE site_id = ? AND is_source = 1 LIMIT 1), source_locale) AS locale
-      FROM sites WHERE id = ? LIMIT 1
-  `, [siteId, siteId])
-  if (!source?.locale) return null
-  const locale = requestedLocale
-    ? (await queryFirst<{ locale: string } | null>(db, `
-        SELECT locale FROM site_locales
-         WHERE site_id = ? AND locale = ? AND status IN ('active', 'published')
-         LIMIT 1
-      `, [siteId, requestedLocale]))?.locale ?? requestedLocale
-    : source.locale
-
-  const exactPage = await queryFirst<{ id: string } | null>(db, `
-    SELECT id FROM tenant_page_variants
-     WHERE site_id = ? AND locale = ? AND published_path = ?
-       AND status = 'published' AND published_revision_id IS NOT NULL
-     LIMIT 1
-  `, [siteId, locale, path])
-  if (exactPage) return null
-
-  const localeRedirect = await queryFirst<{
-    toPath: string | null
-    statusCode: number | null
-    behavior: string
-  } | null>(db, `
-    SELECT to_path AS toPath, status_code AS statusCode, behavior
-      FROM tenant_redirects
-     WHERE site_id = ? AND locale = ? AND from_path = ?
-     LIMIT 1
-  `, [siteId, locale, path])
-  if (localeRedirect) return localeRedirect
-
-  if (locale !== source.locale) {
-    const fallback = await queryFirst<{ fallback_enabled: number } | null>(db, `
-      SELECT fallback_enabled FROM site_locales
-       WHERE site_id = ? AND locale = ? AND status IN ('active', 'published')
-       LIMIT 1
-    `, [siteId, locale])
-    if (fallback?.fallback_enabled === 1) {
-      const sourcePage = await queryFirst<{ id: string } | null>(db, `
-        SELECT id FROM tenant_page_variants
-         WHERE site_id = ? AND locale = ? AND published_path = ?
-           AND status = 'published' AND published_revision_id IS NOT NULL
-         LIMIT 1
-      `, [siteId, source.locale, path])
-      if (sourcePage) return null
-      return await queryFirst<{ toPath: string | null; statusCode: number | null; behavior: string } | null>(db, `
-        SELECT to_path AS toPath, status_code AS statusCode, behavior
-          FROM tenant_redirects
-         WHERE site_id = ? AND locale = ? AND from_path = ?
-         LIMIT 1
-      `, [siteId, source.locale, path])
-    }
-  }
-  return null
-}
 
 function safeDecodePathSegment(value: string) {
   try { return decodeURIComponent(value) } catch { return null }
@@ -130,11 +64,11 @@ export default defineEventHandler(async (event) => {
     return sendRedirect(event, targetWithParams, 301)
   }
 
-  const tenantRedirect = (event.context.tenantRedirect as {
+  const tenantRedirect = event.context.tenantRedirect as {
     toPath: string | null
     statusCode: number | null
     behavior: string
-  } | null | undefined) ?? await resolveTenantRedirectForRequest(event)
+  } | null | undefined
   if (event.context.tenantType === TENANT_TYPES.TENANT && tenantRedirect) {
     if (tenantRedirect.behavior === 'gone') {
       throw createError({ statusCode: 410, statusMessage: 'Gone' })

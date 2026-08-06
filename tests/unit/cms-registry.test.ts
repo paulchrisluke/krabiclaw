@@ -43,8 +43,8 @@ test('vertical-specific business modules never leak into another product (defaul
   assert.ok(!experience.managers.some(manager => manager.id === 'menu'))
   assert.ok(!professional.managers.some(manager => manager.id === 'menu' || manager.id === 'experiences' || manager.id === 'reservations'))
   assert.ok(professional.managers.some(manager => manager.id === 'services'))
-  assert.ok(professional.pages.every(page => page.editor === 'tenant_pages'))
-  assert.ok(restaurant.pages.every(page => page.editor === 'tenant_pages'))
+  assert.ok(professional.pages.every(page => page.editor === 'professional_services'))
+  assert.ok(restaurant.pages.every(page => page.editor === 'site_content'))
   assert.equal(professional.locationVocabulary, 'office/service area')
 })
 
@@ -58,14 +58,23 @@ test('content managers are present for every vertical regardless of business mod
   }
 })
 
-test('Pages manager owns all page composition; no field editor pages remain', () => {
+test('Blawby exposes only tenant_page-backed home/about/contact in the field editor', () => {
   const professional = resolveCmsCapabilities('professional_service', 'blawby')
   const sitePages = getScopedEditablePages('professional_service', professional, 'site')
   const locationPages = getScopedEditablePages('professional_service', professional, 'location')
 
-  assert.deepEqual(sitePages, [])
+  assert.deepEqual(sitePages.map(page => page.id), ['home', 'about', 'contact'])
+  assert.ok(sitePages.every(page => page.editor === 'professional_services'))
   assert.deepEqual(locationPages, [])
-  assert.deepEqual(getEditableFieldKeys('contact', 'tenant_pages'), [])
+  assert.deepEqual(getEditableFieldKeys('contact', 'professional_services'), [
+    'hero.title',
+    'hero.subtitle',
+    'contact.title',
+    'contact.description',
+    'contact.cards',
+    'cta.title',
+    'cta.description',
+  ])
 })
 
 test('content managers are never removable via an explicit disabled delta', () => {

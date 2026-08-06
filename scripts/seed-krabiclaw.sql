@@ -27,7 +27,15 @@ DELETE FROM site_domains WHERE id = 'domain_demo';
 INSERT INTO site_domains (id, organization_id, site_id, domain, type, status)
 VALUES ('domain_demo', 'org_demo', 'site_demo', 'demo.localhost', 'subdomain', 'active');
 
--- 6. Create a menu
+-- 6. Create some basic content
+DELETE FROM site_content WHERE site_id = 'site_demo';
+INSERT INTO site_content (id, organization_id, site_id, page, field, content, type, source)
+VALUES ('content_hero_title', 'org_demo', 'site_demo', 'home', 'hero_title', 'Welcome to Our Restaurant', 'text', 'manual');
+
+INSERT INTO site_content (id, organization_id, site_id, page, field, content, type, source)
+VALUES ('content_hero_subtitle', 'org_demo', 'site_demo', 'home', 'hero_subtitle', 'Experience the finest flavors with KrabiClaw.', 'text', 'manual');
+
+-- 7. Create a menu
 DELETE FROM menus WHERE site_id = 'site_demo';
 INSERT INTO menus (id, organization_id, site_id, name, description, status)
 VALUES ('menu_main', 'org_demo', 'site_demo', 'Main Menu', 'Our daily selection of fresh dishes', 'published');

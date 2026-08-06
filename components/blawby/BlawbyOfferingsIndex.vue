@@ -22,8 +22,6 @@
 </template>
 
 <script setup lang="ts">
-import { findTenantPageBlock } from '~/utils/tenant-page-blocks'
-
 const { data } = await useBlawbyRoute('services')
 const { identity, consultation, compliance } = await useBlawbyShell()
 const org = useBlawbyOrgIdentity(identity, compliance)
@@ -32,9 +30,7 @@ const page = computed(() => routeData.value.page)
 if (!page.value) throw createError({ statusCode: 404, statusMessage: 'Services content not found' })
 
 function block(type: string) {
-  if (!page.value) return null
-  const canonicalType = type === 'services_intro' ? 'offering_grid' : type === 'consultation_cta' ? 'contact_cta' : type === 'qa' ? 'faq' : undefined
-  return findTenantPageBlock(page.value.blocks, type, canonicalType)
+  return page.value?.components.find(component => component.type === type) ?? null
 }
 
 function assetUrl(value: unknown) {
@@ -52,7 +48,7 @@ const servicesDecoration = computed(() => assetUrl(servicesBlock.value.decoratio
 const { trackConsultationClick } = useBlawbyConversionTracking(consultation)
 
 function trackConsultation() {
-  trackConsultationClick('services_list', '/services', optionalString(ctaBlock.value?.url) || consultation.value.schedule_path)
+  trackConsultationClick('services_list', '/services', ctaBlock.value?.url || consultation.value.schedule_path)
 }
 
 useSeoMeta({

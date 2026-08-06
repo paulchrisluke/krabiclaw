@@ -29,7 +29,7 @@ const platformTheme = usePlatformTheme()
 
 if (import.meta.client) {
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)')
-  onMounted(() => platformTheme.restore())
+  platformTheme.restore()
   const onSystemThemeChange = () => platformTheme.sync()
   prefersDark.addEventListener('change', onSystemThemeChange)
   const stopThemeWatch = watch(platformTheme.preference, platformTheme.sync)

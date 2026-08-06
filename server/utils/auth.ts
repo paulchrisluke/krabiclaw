@@ -1,9 +1,7 @@
 import { APIError, betterAuth } from 'better-auth'
-import Stripe from 'stripe'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { hashPassword } from 'better-auth/crypto'
 import { admin, anonymous, jwt, organization, phoneNumber } from 'better-auth/plugins'
-import { stripe as betterAuthStripe } from '@better-auth/stripe'
 import { oauthProvider } from '@better-auth/oauth-provider'
 import type { SchemaClient, Scope } from '@better-auth/oauth-provider'
 import { cimd } from '@better-auth/cimd'
@@ -23,11 +21,6 @@ import { fireSiteEventSafe, resolvePrimarySiteForEvent } from '~/server/utils/si
 import type { InferSelectModel } from 'drizzle-orm'
 import { organizationAccessControl, organizationRoles } from '~/utils/organization-access'
 import { platformAdminAccessControl, platformAdminRoles } from '~/utils/platform-admin-access'
-import {
-  createStripePlanLoader,
-  enqueueStripeEvent,
-} from '~/server/utils/better-auth-stripe'
-import { processStripeEvent } from '~/server/utils/stripe-event-processing'
 
 type MemberRow = InferSelectModel<typeof schema.member>
 type InvitationRow = InferSelectModel<typeof schema.invitation>
@@ -171,8 +164,6 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
 
   const db = env.db ?? createDb(d1)
   const authBaseUrl = (env.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
-  const stripeClient = new Stripe(env.STRIPE_SECRET_KEY ?? 'sk_test_placeholder')
-  const loadStripePlans = createStripePlanLoader(stripeClient, env)
 
   const instance = betterAuth({
     baseURL: authBaseUrl,
@@ -406,54 +397,6 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
         teams: {
           enabled: true,
           defaultTeam: { enabled: false },
-        },
-      }),
-      betterAuthStripe({
-        stripeClient,
-        stripeWebhookSecret: env.STRIPE_WEBHOOK_SECRET ?? '',
-        organization: { enabled: true },
-        subscription: {
-          enabled: true,
-          plans: () => loadStripePlans(),
-          requireEmailVerification: true,
-          authorizeReference: async ({ user, referenceId }, ctx) => {
-            const member = await ctx.context.adapter.findOne({
-              model: 'member',
-              where: [
-                { field: 'organizationId', value: referenceId },
-                { field: 'userId', value: user.id },
-              ],
-            }) as { role?: string } | null
-            return typeof member?.role === 'string'
-              && member.role.split(',').map(role => role.trim()).includes('owner')
-          },
-        },
-        schema: {
-          subscription: {
-            fields: {
-              limits: { type: 'string', required: false },
-            },
-          },
-        } as never,
-        onEvent: async (event) => {
-          const queued = await enqueueStripeEvent(db, event)
-          if (!queued || !options.waitUntil || !env.STRIPE_SECRET_KEY) return
-          const authContext = await instance.$context
-          options.waitUntil(
-            processStripeEvent(
-              env,
-              db,
-              event,
-              stripeClient,
-              authContext.adapter as unknown as import('~/server/utils/better-auth-stripe').BetterAuthSubscriptionAdapter,
-              loadStripePlans,
-            ).catch((error) => {
-              console.error('stripe_webhook_immediate_processing_failed', {
-                stripeEventId: event.id,
-                error: error instanceof Error ? error.message : String(error),
-              })
-            }),
-          )
         },
       }),
       admin({

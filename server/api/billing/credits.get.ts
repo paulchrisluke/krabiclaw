@@ -1,7 +1,7 @@
 // GET /api/billing/credits — org AI credit balance + recent usage log
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { getAiQuotaStatus, getOrCreateCredits } from '~/server/utils/ai-credits'
+import { getOrCreateCredits } from '~/server/utils/ai-credits'
 import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
 import { queryAll } from '~/server/db'
 
@@ -18,7 +18,6 @@ export default defineEventHandler(async (event) => {
 
   const orgId = organization.id
   const credits = await getOrCreateCredits(db, orgId)
-  const quota = await getAiQuotaStatus(db, orgId)
 
   const usageRows = await queryAll(db, `
     SELECT u.action, u.model, u.input_tokens, u.output_tokens, u.credits_charged,
@@ -41,7 +40,6 @@ export default defineEventHandler(async (event) => {
   return jsonResponse({
     balance: credits.balance,
     lifetime_used: credits.lifetime_used,
-    quota,
     usage: usageRows ?? [],
     by_action: byAction ?? [],
   })

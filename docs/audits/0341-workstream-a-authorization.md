@@ -111,11 +111,13 @@ owner/admin callers and keep their existing organization-level checks.
 | `editor/sites/[siteId]/posts/[postId].patch.ts` | | | | ✓ (current + target `location_id`) | | inline SQL + `assertResourceAccess` |
 | `editor/sites/[siteId]/posts/[postId].delete.ts` | | | | ✓ (post row's own `location_id`) | | `loadMemberSiteRow` + `assertResourceAccess` |
 | `editor/sites/[siteId]/posts/[postId]/publish.post.ts` | | | | ✓ (post row's own `location_id`) | | `loadMemberSiteRow` + `assertResourceAccess` before site/social publication |
-| Canonical `editor/sites/[siteId]/pages*` endpoints | | | | ✓ (site-scoped) | | shared tenant-page service + `assertSiteWideAccess` |
+| `editor/sites/[siteId]/translations/{inventory.get,jobs.get,jobs/[jobId].get,review.get,review.patch}.ts` | | ✓ | | | | inline SQL + `assertSiteWideAccess` (translations have no location concept) |
+| `editor/sites/[siteId]/translations/{jobs.post,publish.post,jobs/[jobId]/run.post}.ts` | ✓ (already owner/admin-only) | | | | | unchanged — not editor-affected |
+| `editor/sites/[siteId]/content/[page].get.ts`, `content/save.post.ts`, `content/delete-field.post.ts` | | | | ✓ (query/body `locationId`) | | inline SQL + `assertResourceAccess` |
 | `editor/sites/[siteId]/locales/index.get.ts` | | ✓ | | | | inline SQL + `assertSiteWideAccess` |
 | `editor/sites/[siteId]/locales/{index.post,[locale].patch,[locale].delete}.ts` | ✓ (already owner/admin-only) | | | | | unchanged — not editor-affected |
 
-**blog/content/locales family: complete.** Typecheck + lint clean.
+**blog/content/translations/locales family: complete.** Typecheck + lint clean.
 
 | `editor/sites/[siteId]/professional-services.get.ts`, `.patch.ts` | | ✓ | | | | inline SQL + `assertSiteWideAccess` |
 | `editor/sites/[siteId]/booking-policy.get.ts`, `.patch.ts`, `booking-policy/preview.post.ts` | | | | ✓ (`location_id` or resolved via `experience_id`'s own location) | | inline SQL + `assertResourceAccess` |
@@ -172,7 +174,7 @@ teams through shared utilities.
 
 **Review hardening:** the site/member principal query now lives in
 `server/utils/location-access.ts` and is reused by the reviewed media, menu,
-post, content, booking, localized-content, analytics, settings, and setup routes.
+post, content, booking, translation, analytics, settings, and setup routes.
 Missing membership responses are consistently non-enumerating 404s, and media
 authorization derives the organization from the verified site rather than the
 asset row. Pending pre-migration `editor` invitations are backfilled across

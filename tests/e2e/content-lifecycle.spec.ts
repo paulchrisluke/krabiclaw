@@ -8,48 +8,36 @@ const FIRST_USER_ID = 'user-demo-growth'
 test.describe('content write lifecycle', () => {
   test.describe.configure({ mode: 'serial' })
 
-  test('canonical page writes are scoped to the requested site', async ({ request, baseURL }) => {
+  test('content writes are scoped to the requested site', async ({ request, baseURL }) => {
     test.setTimeout(60_000)
 
     await loginAs(request, baseURL!, FIRST_USER_ID)
     const firstSiteId = await ensureSite(request, baseURL!, null)
-    const firstPages = await request.get(`${baseURL}/api/editor/sites/${firstSiteId}/pages`)
-    expect(firstPages.status()).toBe(200)
-    const firstHome = ((await firstPages.json()) as { pages: Array<{ id: string; path: string }> }).pages.find(page => page.path === '/')
-    expect(firstHome).toBeTruthy()
-    const firstDetail = await request.get(`${baseURL}/api/editor/sites/${firstSiteId}/pages/${firstHome!.id}`)
-    const firstBody = await firstDetail.json() as { page: { blocks: Array<{ type: string; data: Record<string, unknown> }>; document: { updated_at: string } } }
+    const firstField = 'hero.title'
     const firstValue = `pottery-${Date.now()}`
-    const firstBlocks = firstBody.page.blocks.map(block => block.type === 'hero' ? { ...block, data: { ...block.data, title: firstValue } } : block)
-    const firstSave = await request.patch(`${baseURL}/api/editor/sites/${firstSiteId}/pages/${firstHome!.id}`, {
-      data: { blocks: firstBlocks, expectedDocumentUpdatedAt: firstBody.page.document.updated_at },
+    const firstSave = await request.post(`${baseURL}/api/editor/sites/${firstSiteId}/content/save`, {
+      data: { page: 'home', changes: { [firstField]: firstValue } },
     })
     expect(firstSave.status()).toBe(200)
 
     await loginAs(request, baseURL!, DEMO_USER_ID)
     const demoSiteId = await ensureSite(request, baseURL!, null)
-    const demoPages = await request.get(`${baseURL}/api/editor/sites/${demoSiteId}/pages`)
-    expect(demoPages.status()).toBe(200)
-    const demoHome = ((await demoPages.json()) as { pages: Array<{ id: string; path: string }> }).pages.find(page => page.path === '/')
-    expect(demoHome).toBeTruthy()
-    const demoDetail = await request.get(`${baseURL}/api/editor/sites/${demoSiteId}/pages/${demoHome!.id}`)
-    const demoBody = await demoDetail.json() as { page: { blocks: Array<{ type: string; data: Record<string, unknown> }>; document: { updated_at: string } } }
+    const demoField = 'hero.title'
     const demoValue = `demo-${Date.now()}`
-    const demoBlocks = demoBody.page.blocks.map(block => block.type === 'hero' ? { ...block, data: { ...block.data, title: demoValue } } : block)
-    const demoSave = await request.patch(`${baseURL}/api/editor/sites/${demoSiteId}/pages/${demoHome!.id}`, {
-      data: { blocks: demoBlocks, expectedDocumentUpdatedAt: demoBody.page.document.updated_at },
+    const demoSave = await request.post(`${baseURL}/api/editor/sites/${demoSiteId}/content/save`, {
+      data: { page: 'home', changes: { [demoField]: demoValue } },
     })
     expect(demoSave.status()).toBe(200)
 
     await loginAs(request, baseURL!, FIRST_USER_ID)
-    const firstRead = await request.get(`${baseURL}/api/editor/sites/${firstSiteId}/pages/${firstHome!.id}`)
+    const firstRead = await request.get(`${baseURL}/api/editor/sites/${firstSiteId}/content/home`)
     expect(firstRead.status()).toBe(200)
-    const firstReadBody = await firstRead.json() as { page: { blocks: Array<{ type: string; data: Record<string, unknown> }> } }
-    expect(firstReadBody.page.blocks.find(block => block.type === 'hero')?.data.title).toBe(firstValue)
-    expect(firstReadBody.page.blocks.find(block => block.type === 'hero')?.data.title).not.toBe(demoValue)
+    const firstBody = await firstRead.json() as { fields?: Array<{ field: string; hero_title?: string; value?: string; content?: string }> }
+    expect(firstBody.fields?.find((row) => row.field === 'hero')?.hero_title).toBe(firstValue)
+    expect(firstBody.fields?.find((row) => row.field === 'hero')?.hero_title).not.toBe(demoValue)
   })
 
-  test('canonical block snapshots replace legacy field deletion', async ({ request, baseURL }) => {
+  test('delete-field removes canonical content', async ({ request, baseURL }) => {
     test.setTimeout(60_000)
 
     await loginAs(request, baseURL!)
@@ -58,36 +46,28 @@ test.describe('content write lifecycle', () => {
     const context = await contextRes.json() as { site?: { id?: string | null } }
     const siteId = await ensureSite(request, baseURL!, context.site?.id ?? null)
 
-    const pagesRes = await request.get(`${baseURL}/api/editor/sites/${siteId}/pages`)
-    const home = ((await pagesRes.json()) as { pages: Array<{ id: string; path: string }> }).pages.find(page => page.path === '/')
-    expect(home).toBeTruthy()
-    const detailRes = await request.get(`${baseURL}/api/editor/sites/${siteId}/pages/${home!.id}`)
-    const detail = await detailRes.json() as { page: { blocks: Array<{ id: string; type: string; data: Record<string, unknown> }>; document: { updated_at: string } } }
-    const value = `canonical block sentinel ${Date.now()}`
-    const addedBlock = { id: `e2e-${Date.now()}`, type: 'markdown', position: detail.page.blocks.length, data: { markdown: value } }
-    const saveRes = await request.patch(`${baseURL}/api/editor/sites/${siteId}/pages/${home!.id}`, {
-      data: { blocks: [...detail.page.blocks, addedBlock], expectedDocumentUpdatedAt: detail.page.document.updated_at },
+    const field = 'story.body'
+    const value = `delete-field sentinel ${Date.now()}`
+
+    const saveRes = await request.post(`${baseURL}/api/editor/sites/${siteId}/content/save`, {
+      data: { page: 'home', changes: { [field]: value } },
     })
     expect(saveRes.status()).toBe(200)
 
-    const beforeRes = await request.get(`${baseURL}/api/editor/sites/${siteId}/pages/${home!.id}`)
+    const beforeRes = await request.get(`${baseURL}/api/editor/sites/${siteId}/content/home`)
     expect(beforeRes.status()).toBe(200)
-    const beforeBody = await beforeRes.json() as { page: { blocks: Array<{ id: string; data: Record<string, unknown> }> } }
-    expect(beforeBody.page.blocks.find(block => block.id === addedBlock.id)?.data.markdown).toBe(value)
+    const beforeBody = await beforeRes.json() as { fields: Array<{ field: string; value?: string; content?: string }> }
+    expect(beforeBody.fields.find((row) => row.field === field)?.value ?? beforeBody.fields.find((row) => row.field === field)?.content).toBe(value)
 
-    const deleteRes = await request.post(`${baseURL}/api/editor/sites/${siteId}/content/delete-field`, { data: { page: 'home', field: 'story.body' } })
-    expect(deleteRes.status()).toBe(404)
-
-    const afterDetail = await request.get(`${baseURL}/api/editor/sites/${siteId}/pages/${home!.id}`)
-    const afterBody = await afterDetail.json() as { page: { blocks: Array<{ id: string; data: Record<string, unknown> }>; document: { updated_at: string } } }
-    const afterBlocks = afterBody.page.blocks.filter(block => block.id !== addedBlock.id)
-    const afterRes = await request.patch(`${baseURL}/api/editor/sites/${siteId}/pages/${home!.id}`, {
-      data: { blocks: afterBlocks, expectedDocumentUpdatedAt: afterBody.page.document.updated_at },
+    const deleteRes = await request.post(`${baseURL}/api/editor/sites/${siteId}/content/delete-field`, {
+      data: { page: 'home', field },
     })
+    expect(deleteRes.status()).toBe(200)
+
+    const afterRes = await request.get(`${baseURL}/api/editor/sites/${siteId}/content/home`)
     expect(afterRes.status()).toBe(200)
-    const finalRes = await request.get(`${baseURL}/api/editor/sites/${siteId}/pages/${home!.id}`)
-    const finalBody = await finalRes.json() as { page: { blocks: Array<{ id: string }> } }
-    expect(finalBody.page.blocks.some(block => block.id === addedBlock.id)).toBe(false)
+    const afterBody = await afterRes.json() as { fields: Array<{ field: string }> }
+    expect(afterBody.fields.some((row) => row.field === field)).toBe(false)
   })
 
   test('reservation policies are readable and writable through canonical booking policy api', async ({ request, baseURL }) => {

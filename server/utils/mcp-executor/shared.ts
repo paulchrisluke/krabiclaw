@@ -5,6 +5,7 @@
 import { createError, type H3Event } from "h3";
 import { queryFirst } from "~/server/db";
 import { assertSafeDownloadUrl } from "~/server/utils/platform-mcp-executor";
+import { getPageContent } from "~/server/utils/content-management";
 import { getMediaAsset } from "~/server/utils/media-asset-manager";
 import { generateSlots, type WeekdayName } from "~/server/utils/experiences";
 import type { getMcpTool } from "~/server/utils/mcp-tools";
@@ -1122,13 +1123,16 @@ export async function getCurrentHomeHeroState(
   siteId: string,
   locationId?: string | null,
 ) {
-  void organizationId;
-  void locationId;
-  const { getTenantPageForEditorByPath } = await import('~/server/utils/tenant-pages');
-  const page = await getTenantPageForEditorByPath(db, siteId, '/');
-  const hero = page.blocks.find(entry => entry.type === 'hero');
+  const content = await getPageContent(
+    db,
+    organizationId,
+    siteId,
+    "home",
+    locationId ?? undefined,
+  );
+  const hero = content.find((entry) => entry.field === "hero");
   return {
-    hero_media_asset_id: typeof hero?.data.asset_id === 'string' ? hero.data.asset_id : null,
+    hero_media_asset_id: hero?.hero_media_asset_id ?? null,
   };
 }
 

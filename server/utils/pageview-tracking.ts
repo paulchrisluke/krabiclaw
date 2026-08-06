@@ -8,7 +8,6 @@ import { getCookie, getHeader, setCookie } from 'h3'
 import type { H3Event } from 'h3'
 import type { AppDb } from '~/server/db'
 import { execute, queryFirst } from '~/server/db'
-import { resolvePublishedTenantPageIdentity as resolveCanonicalTenantPageIdentity } from '~/server/utils/tenant-pages'
 
 export const VISITOR_COOKIE = 'kc_visitor_id'
 export const SESSION_COOKIE = 'kc_session_id'
@@ -99,10 +98,6 @@ export async function resolveLocationIdFromPath(
   return getLocationIdBySlug(db, siteId, slug)
 }
 
-export async function resolvePageviewTenantPageIdentity(db: AppDb, siteId: string, pagePath: string, locale?: string | null) {
-  return await resolveCanonicalTenantPageIdentity(db, siteId, pagePath, locale)
-}
-
 export interface PageviewEventInput {
   siteId: string
   locationId?: string | null
@@ -116,11 +111,6 @@ export interface PageviewEventInput {
   country?: string | null
   region?: string | null
   city?: string | null
-  pageId?: string | null
-  pageType?: string | null
-  recipe?: string | null
-  locale?: string | null
-  revisionId?: string | null
 }
 
 export async function insertPageviewEvent(db: AppDb, input: PageviewEventInput): Promise<void> {
@@ -130,20 +120,15 @@ export async function insertPageviewEvent(db: AppDb, input: PageviewEventInput):
   await execute(
     db,
     `INSERT INTO site_pageview_events (
-      id, site_id, location_id, page_path, page_id, page_type, recipe, locale, revision_id, referrer, user_agent,
+      id, site_id, location_id, page_path, referrer, user_agent,
       ip_hash, session_id, visitor_id, duration_seconds,
       country, region, city, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       eventId,
       input.siteId,
       input.locationId ?? null,
       input.pagePath,
-      input.pageId ?? null,
-      input.pageType ?? null,
-      input.recipe ?? null,
-      input.locale ?? null,
-      input.revisionId ?? null,
       input.referrer ?? null,
       input.userAgent ?? null,
       input.ipHash,

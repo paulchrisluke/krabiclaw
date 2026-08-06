@@ -2,7 +2,7 @@
 // subdomain uniqueness, seeding, and Cloudflare subdomain registration.
 import { seedNewSite } from '~/server/utils/site-template'
 import { createSystemSubdomain } from '~/server/utils/domains'
-import { getOrganizationBillingStatus, setSiteEntitlementsFromPlan, type BillingEnv } from '~/server/utils/billing'
+import { setSiteEntitlementsFromPlan } from '~/server/utils/billing'
 import { execute, executeBatch, queryAll, queryFirst } from '~/server/db'
 import { ALL_VERTICALS, type SiteVertical } from '~/utils/vertical-copy'
 import { resolvePublicTemplate } from '~/utils/template-registry'
@@ -203,15 +203,15 @@ async function performSeeding(
 
     await createSystemSubdomain(env, db, siteId, organizationId, resolvedSubdomain)
 
-    // New sites start with the organization's current plan projection. The
-    // organization subscription remains the sole recurring Stripe subscription.
-    const organizationBilling = await getOrganizationBillingStatus(env as BillingEnv, db, organizationId)
-    await setSiteEntitlementsFromPlan(db, siteId, organizationId, organizationBilling.plan)
+    // New sites always start free — a paid org does not grant paid entitlements to
+    // another site until that site has its own Stripe subscription (see
+    // POST /api/billing/site-subscribe for how a site gets upgraded after creation).
+    await setSiteEntitlementsFromPlan(db, siteId, organizationId, 'free')
 
     await execute(db, `UPDATE sites SET onboarding_status = 'active', updated_at = ? WHERE id = ?`, [now, siteId])
 
-    // Surface whether another site in this org is already on a paid plan so the
-    // caller can offer the organization owner the Better Auth Stripe upgrade flow.
+    // Surface whether another site in this org is already on a paid plan, so the
+    // caller can offer to subscribe this new site too (see POST /api/billing/site-subscribe).
     const existingPaidSite = await queryFirst<{ plan: string }>(db, `
       SELECT sb.plan FROM site_billing sb
       WHERE sb.organization_id = ? AND sb.site_id != ? AND sb.status = 'active' AND sb.plan != 'free'

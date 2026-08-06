@@ -46,7 +46,7 @@ export default defineEventHandler(async (event) => {
 
   const billing = await queryFirst(db, `
     SELECT ob.organization_id, ob.stripe_customer_id,
-           sb.site_id, ob.stripe_subscription_id, sb.stripe_subscription_item_id,
+           sb.site_id, sb.stripe_subscription_id, sb.stripe_subscription_item_id,
            sb.status, sb.plan, sb.current_period_end, sb.cancel_at_period_end, sb.updated_at
     FROM organization_billing ob
     LEFT JOIN sites s ON s.organization_id = ob.organization_id
@@ -63,17 +63,8 @@ export default defineEventHandler(async (event) => {
     ORDER BY se.key ASC
   `, [organizationId])
 
-  const serviceAddonPurchases = await queryAll(db, `
-    SELECT checkout_session_id, addon_type, stripe_payment_intent_id, created_at
-    FROM service_addon_purchases
-    WHERE organization_id = ?
-    ORDER BY created_at DESC
-    LIMIT 20
-  `, [organizationId])
-
   let sql = `
-    SELECT id, stripe_event_id, event_type, status, payload, error,
-           claimed_at, lease_expires_at, attempt_count, created_at
+    SELECT id, stripe_event_id, event_type, status, payload, error, created_at
     FROM stripe_webhook_events
     WHERE 1 = 1
   `
@@ -89,7 +80,6 @@ export default defineEventHandler(async (event) => {
   return jsonResponse({
     billing: billing ?? null,
     entitlements: entitlements ?? [],
-    service_addon_purchases: serviceAddonPurchases ?? [],
     webhook_events: webhookEvents ?? [],
   })
 })

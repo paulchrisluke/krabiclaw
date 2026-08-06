@@ -133,7 +133,6 @@ export async function extractMenuFromMediaAsset(
     siteId: string
     userId: string
     assetId: string
-    sessionId?: string | null
     menuName?: string
   }
 ): Promise<{ menuId: string | null; count: number; warning: string | null; creditsRemaining: number }> {
@@ -147,7 +146,7 @@ export async function extractMenuFromMediaAsset(
   const imageType = IMAGE_TYPES[asset.mime_type]
   if (!isPdf && !imageType) throw new Error(`Unsupported media type: ${asset.mime_type}`)
 
-  const creditOk = await hasCredits(db, opts.organizationId, opts.sessionId)
+  const creditOk = await hasCredits(db, opts.organizationId)
   if (!creditOk) throw new Error('No AI credits remaining.')
 
   const base64 = base64FromArrayBuffer(bytes)
@@ -164,7 +163,6 @@ export async function extractMenuFromMediaAsset(
 
   const charged = await chargeCredits(db, opts.organizationId, {
     siteId: opts.siteId,
-    sessionId: opts.sessionId,
     action: 'menu_extract',
     model: CHOWBOT_MODEL,
     inputTokens: aiResponse.usage.input_tokens,
@@ -258,7 +256,6 @@ export async function analyzeDocumentAsset(
     siteId: string
     userId: string
     assetId: string
-    sessionId?: string | null
     /** Optional question to ground-answer. Defaults to a summary request. */
     question?: string
   }
@@ -279,7 +276,7 @@ export async function analyzeDocumentAsset(
   const text = decodeMarkdownText(bytes)
   const parsed = parseMarkdownDocument(text)
 
-  const creditOk = await hasCredits(db, opts.organizationId, opts.sessionId)
+  const creditOk = await hasCredits(db, opts.organizationId)
   if (!creditOk) throw new Error('No AI credits remaining.')
 
   const question = opts.question?.trim() || 'Summarize this document.'
@@ -295,7 +292,6 @@ export async function analyzeDocumentAsset(
 
   const charged = await chargeCredits(db, opts.organizationId, {
     siteId: opts.siteId,
-    sessionId: opts.sessionId,
     action: 'document_analysis',
     model: CHOWBOT_MODEL,
     inputTokens: aiResponse.usage.input_tokens,

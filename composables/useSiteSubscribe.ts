@@ -1,87 +1,117 @@
-import { authClient } from '~/lib/auth-client'
-
-function checkoutReturnUrls(): { successUrl: string; cancelUrl: string; returnUrl: string } {
-  const current = new URL(window.location.href)
-  for (const key of ['success', 'canceled', 'plan']) current.searchParams.delete(key)
-
-  const success = new URL(current)
-  success.searchParams.set('success', 'true')
-  const cancel = new URL(current)
-  cancel.searchParams.set('canceled', 'true')
-  return { successUrl: success.toString(), cancelUrl: cancel.toString(), returnUrl: current.toString() }
+export interface SiteSubscribeSavedCard {
+  brand: string
+  last4: string
+  exp_month: number
+  exp_year: number
 }
 
-async function organizationSubscriptionId(
-  dashboardApi: ReturnType<typeof useDashboardApi>,
-  organizationId: string,
-): Promise<{ id?: string; status?: string }> {
-  const response = await dashboardApi<{ billing?: { stripeSubscriptionId?: unknown; subscriptionStatus?: unknown } }>('/api/billing/status', {
-    query: { organizationId },
-    validate: value => typeof value === 'object' && value !== null,
+const PLAN_LABELS: Record<string, string> = {
+  growth: 'Growth — $49/mo',
+  managed: 'Managed — $149/mo',
+  seo_accelerator: 'SEO Accelerator — $349/mo',
+}
+
+// Per-flow callback — keyed by a unique transaction ID so concurrent callers don't clobber each other
+const _successHandlers = new Map<string, () => void>()
+
+async function _redirectToCheckout(siteId: string, plan: string) {
+  const res = await $fetch<{ checkoutUrl?: string }>('/api/billing/checkout', {
+    method: 'POST',
+    body: { siteId, plan },
   })
-  return {
-    id: typeof response.billing?.stripeSubscriptionId === 'string' ? response.billing.stripeSubscriptionId : undefined,
-    status: typeof response.billing?.subscriptionStatus === 'string' ? response.billing.subscriptionStatus : undefined,
+  if (!res.checkoutUrl) {
+    throw new Error('Missing checkout URL from billing API')
   }
-}
-
-async function redirectToCheckout(
-  organizationId: string,
-  siteId: string,
-  plan: string,
-  subscriptionId?: string,
-) {
-  const { successUrl, cancelUrl, returnUrl } = checkoutReturnUrls()
-  const response = await authClient.subscription.upgrade({
-    plan,
-    referenceId: organizationId,
-    ...(subscriptionId ? { subscriptionId } : {}),
-    customerType: 'organization',
-    metadata: { site_id: siteId },
-    successUrl,
-    cancelUrl,
-    returnUrl,
-    disableRedirect: true,
-  })
-  if (response.error) throw new Error(response.error.message ?? 'Unable to start subscription checkout')
-  const checkoutUrl = response.data && 'url' in response.data ? response.data.url : null
-  if (!checkoutUrl) throw new Error('Missing checkout URL from Better Auth Stripe')
-  await navigateTo(checkoutUrl, { external: true })
+  await navigateTo(res.checkoutUrl, { external: true })
 }
 
 export const useSiteSubscribe = () => {
-  const toast = useToast()
-  const dashboard = useDashboardSite()
-  const dashboardApi = useDashboardApi()
+  const isOpen = useState<boolean>('site-subscribe:modal:open', () => false)
+  const pendingSiteId = useState<string | null>('site-subscribe:modal:siteId', () => null)
+  const pendingPlan = useState<string | null>('site-subscribe:modal:plan', () => null)
+  const pendingTxId = useState<string | null>('site-subscribe:modal:txid', () => null)
+  const savedCard = useState<SiteSubscribeSavedCard | null>('site-subscribe:modal:card', () => null)
+  const subscribing = useState<boolean>('site-subscribe:modal:subscribing', () => false)
 
-  // The organization owns one recurring subscription. A site is only
-  // metadata on the upgrade request and receives derived entitlements after
-  // Better Auth confirms the subscription through Stripe.
-  async function offerSubscribe(siteId: string, plan: string) {
+  const toast = useToast()
+
+  const planLabel = computed(() => pendingPlan.value ? (PLAN_LABELS[pendingPlan.value] ?? pendingPlan.value) : '')
+
+  // Offers to subscribe a newly created site to the same plan another site in
+  // the org is already on. Shows a confirm modal if a saved card exists,
+  // otherwise falls back to Stripe Checkout.
+  async function offerSubscribe(siteId: string, plan: string, onSuccess?: () => void) {
     try {
-      const organizationId = dashboard.organization.value?.id
-      if (!organizationId) throw new Error('Organization context is unavailable')
-      const subscription = await organizationSubscriptionId(dashboardApi, organizationId)
-      const { returnUrl } = checkoutReturnUrls()
-      if (subscription.status === 'past_due') {
-        const portal = await authClient.subscription.billingPortal({
-          referenceId: organizationId,
-          customerType: 'organization',
-          returnUrl,
-          disableRedirect: true,
-        })
-        if (portal.error) throw new Error(portal.error.message ?? 'Unable to open billing portal')
-        const portalUrl = portal.data && 'url' in portal.data ? portal.data.url : null
-        if (!portalUrl) throw new Error('Missing billing portal URL')
-        await navigateTo(portalUrl, { external: true })
+      const res = await $fetch<{ card: SiteSubscribeSavedCard | null }>('/api/billing/payment-method')
+      if (res.card) {
+        const txId = crypto.randomUUID()
+        savedCard.value = res.card
+        pendingSiteId.value = siteId
+        pendingPlan.value = plan
+        pendingTxId.value = txId
+        isOpen.value = true
+        if (onSuccess) _successHandlers.set(txId, onSuccess)
         return
       }
-      await redirectToCheckout(organizationId, siteId, plan, subscription.id)
-    } catch (err) {
-      console.error('Checkout error:', err)
+    } catch {
+      // No saved card — fall through to Checkout
+    }
+    try {
+      await _redirectToCheckout(siteId, plan)
+    } catch {
       toast.add({ title: 'Unable to start checkout — please try again', color: 'error' })
     }
   }
 
-  return { offerSubscribe }
+  async function confirm() {
+    if (!pendingSiteId.value || !pendingPlan.value) return
+    subscribing.value = true
+    const siteId = pendingSiteId.value
+    const plan = pendingPlan.value
+    const txId = pendingTxId.value
+    try {
+      await $fetch('/api/billing/site-subscribe', {
+        method: 'POST',
+        body: { siteId, plan, txId },
+      })
+      isOpen.value = false
+      pendingSiteId.value = null
+      pendingPlan.value = null
+      pendingTxId.value = null
+      toast.add({ title: `Site subscribed to ${PLAN_LABELS[plan] ?? plan}`, color: 'success' })
+      if (txId) {
+        _successHandlers.get(txId)?.()
+        _successHandlers.delete(txId)
+      }
+    } catch (err) {
+      const data = (err as { data?: { requiresCheckout?: boolean } }).data
+      isOpen.value = false
+      pendingSiteId.value = null
+      pendingPlan.value = null
+      pendingTxId.value = null
+      if (txId) _successHandlers.delete(txId)
+      if (data?.requiresCheckout) {
+        try {
+          await _redirectToCheckout(siteId, plan)
+        } catch {
+          toast.add({ title: 'Unable to start checkout — please try again', color: 'error' })
+        }
+      } else {
+        toast.add({ title: 'Subscription failed. Please try again.', color: 'error' })
+      }
+    } finally {
+      subscribing.value = false
+    }
+  }
+
+  function cancel() {
+    const txId = pendingTxId.value
+    isOpen.value = false
+    pendingSiteId.value = null
+    pendingPlan.value = null
+    pendingTxId.value = null
+    if (txId) _successHandlers.delete(txId)
+  }
+
+  return { isOpen, pendingSiteId, pendingPlan, savedCard, subscribing, planLabel, offerSubscribe, confirm, cancel }
 }

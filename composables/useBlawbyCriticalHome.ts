@@ -21,8 +21,8 @@ const isBlawbyCriticalHomePayload = (value: unknown): value is BlawbyCriticalHom
   && isRecord(value.page)
   && typeof value.page.path === 'string'
   && value.page.path === '/'
-  && Array.isArray(value.page.blocks)
-  && value.page.blocks.some(block => isRecord(block) && block.type === 'hero')
+  && Array.isArray(value.page.components)
+  && value.page.components.some(component => isRecord(component) && component.type === 'home_hero')
 
 interface BlawbyCriticalShellRefs {
   data: Ref<BlawbyCriticalHomePayload>

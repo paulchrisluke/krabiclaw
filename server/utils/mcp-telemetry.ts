@@ -1,6 +1,5 @@
 import { execute, type DbClient } from "~/server/db";
 import { anonymizeId } from "~/server/utils/platform-telemetry";
-import { recordUsageEvent } from "~/server/utils/usage-metering";
 
 // Field names that must never be logged verbatim, regardless of tool.
 const SENSITIVE_KEY_PATTERN =
@@ -215,26 +214,6 @@ export async function logMcpToolCallEvent(
         input.durationMs ?? null,
       ],
     );
-
-    if (input.method === "tools/call" && input.organizationId) {
-      await recordUsageEvent(db, {
-        organizationId: input.organizationId,
-        siteId: input.siteId,
-        resource: "mcp_operation",
-        source: input.mcpSurface ?? "client",
-        provider: input.mcpSurface === "client" ? "chatgpt" : "krabiclaw",
-        channel: "tools/call",
-        quantity: 1,
-        unit: "tool_call",
-        metadata: {
-          toolName: input.toolName ?? null,
-          toolDomain: input.toolDomain ?? null,
-          status: input.status,
-          httpStatus: input.httpStatus ?? null,
-        },
-        idempotencyKey: `mcp:${input.mcpSurface ?? "client"}:${input.requestId == null ? crypto.randomUUID() : String(input.requestId)}`,
-      });
-    }
   } catch (err: unknown) {
     console.warn("[mcp-telemetry] failed to log tool call event:", String(err));
   }

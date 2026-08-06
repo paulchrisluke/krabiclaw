@@ -91,11 +91,11 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
         new_location_title: { type: 'string', description: 'Title for a brand-new location to create and copy content into. Omit if using target_location_id instead.' },
         entities: {
           type: 'array',
-          items: { type: 'string', enum: ['menus', 'menu_items', 'media_assets', 'reviews', 'location_qa', 'experiences'] },
+          items: { type: 'string', enum: ['menus', 'menu_items', 'media_assets', 'site_content', 'reviews', 'location_qa', 'experiences'] },
           minItems: 1,
           description: 'Which kinds of content to copy. menu_items requires menus to also be listed, since copied items attach to newly copied menus.',
         },
-        include_translations: { type: 'boolean', description: 'Copy existing translations for menus and menu items along with the source-locale content. Defaults to true.' },
+        include_translations: { type: 'boolean', description: 'Copy existing translations for menus/menu items/site content along with the source-locale content. Defaults to true.' },
         oneOf: [
           { required: ['target_location_id'] },
           { required: ['new_location_title'] },

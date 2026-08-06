@@ -42,7 +42,7 @@ export default defineEventHandler(async (event) => {
   const isDev = import.meta.dev
 
   if (!isDev) {
-    const creditOk = await hasCredits(db, site.organization_id, session.session.id)
+    const creditOk = await hasCredits(db, site.organization_id)
     if (!creditOk) return jsonResponse({ error: 'No AI credits remaining.' }, { status: 402 })
   }
 
@@ -69,7 +69,6 @@ export default defineEventHandler(async (event) => {
       try {
         await chargeCredits(db, site.organization_id, {
           siteId,
-          sessionId: session.session.id,
           action: 'enhance_prompt',
           model: ENHANCE_MODEL,
           inputTokens: response.usage.input_tokens,
@@ -78,7 +77,6 @@ export default defineEventHandler(async (event) => {
         })
       } catch (err) {
         console.error('enhance_prompt_charge_failed', { siteId, error: err instanceof Error ? err.message : err })
-        return jsonResponse({ error: err instanceof Error ? err.message : 'AI usage could not be charged.' }, { status: 402 })
       }
     }
 

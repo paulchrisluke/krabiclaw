@@ -146,7 +146,7 @@ openssl rand -base64 32
 yarn wrangler pages secret put CRON_SECRET
 ```
 
-`CRON_SECRET` protects internal scheduled endpoints. Local `yarn dev` reads it from `.env`; `wrangler pages dev` reads it from `.dev.vars`.
+`CRON_SECRET` protects internal endpoints such as `/api/internal/translation-jobs/process`. Local `yarn dev` reads it from `.env`; `wrangler pages dev` reads it from `.dev.vars`.
 
 CI + E2E auth/billing parity, tier intent, and staging-vs-production smoke rules are documented in [docs/ci-e2e-guardrails.md](docs/ci-e2e-guardrails.md). MCP reconnect triage and Cloudflare auth debugging are documented in [docs/mcp-auth-debugging.md](docs/mcp-auth-debugging.md) and [docs/observability-debugging.md](docs/observability-debugging.md).
 

@@ -7,7 +7,6 @@ import { join } from 'node:path'
 import { execWithRetry } from './wrangler-retry.ts'
 import {
   renderCompiledDemoContentBlock,
-  renderCompiledDemoTenantPagesBlock,
   renderCompiledDemoCoreSeedBlock,
   renderCompiledDemoMediaBlock,
   renderCompiledDemoMenuBlock,
@@ -47,11 +46,6 @@ VALUES (${sqlValue(`member-${orgId}`)}, ${sqlValue(orgId)}, ${sqlValue(userId)},
 
 INSERT OR REPLACE INTO sites (id, organization_id, theme_id, theme, slug, subdomain, brand_name, status, plan, onboarding_status, source_locale, default_currency, url_structure, vertical, created_at, updated_at)
 VALUES (${sqlValue(siteId)}, ${sqlValue(orgId)}, 'saya-theme-v1', 'saya', ${sqlValue(slug)}, ${sqlValue(slug)}, ${sqlValue(name)}, 'active', ${sqlValue(plan)}, 'active', 'en', 'THB', 'location_subdirectories', 'restaurant', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
-
-INSERT OR REPLACE INTO site_locales
-  (id, organization_id, site_id, locale, label, is_source, status, fallback_enabled)
-VALUES
-  (${sqlValue(`locale::${orgId}::${siteId}::en`)}, ${sqlValue(orgId)}, ${sqlValue(siteId)}, 'en', 'English', 1, 'published', 1);
 
 INSERT OR IGNORE INTO business_locations (id, organization_id, site_id, slug, title, city, address, phone, email, maps_url, status, is_primary, created_at, updated_at)
 VALUES (${sqlValue(locationId)}, ${sqlValue(orgId)}, ${sqlValue(siteId)}, 'main', ${sqlValue(name)}, 'Krabi', '{}', NULL, NULL, NULL, 'active', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
@@ -162,8 +156,6 @@ ${renderDemoExperienceSeedBlock()}
 ${renderCompiledDemoContentBlock()}
 
 ${renderCompiledDemoTranslationsBlock()}
-
-${renderCompiledDemoTenantPagesBlock()}
 
 ${renderCompiledDemoBillingBlock()}
 `

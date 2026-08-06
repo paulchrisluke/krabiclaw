@@ -51,7 +51,7 @@ export default defineEventHandler(async (event) => {
   const userText = latestUserText(body)
   if (!userText) return jsonResponse({ error: 'message is required' }, { status: 400 })
 
-  const creditOk = await hasCredits(db, site.organization_id, typeof body.conversationId === 'string' ? body.conversationId : null)
+  const creditOk = await hasCredits(db, site.organization_id)
   if (!creditOk) return jsonResponse({ error: 'No AI credits remaining.' }, { status: 402 })
 
   const conversation = await getOrCreateConversation(db, {
@@ -63,9 +63,6 @@ export default defineEventHandler(async (event) => {
     activeChannel: 'dashboard',
     selectedLocationId: typeof body.locationId === 'string' ? body.locationId : null,
   })
-
-  const sessionCreditOk = await hasCredits(db, site.organization_id, conversation.id)
-  if (!sessionCreditOk) return jsonResponse({ error: 'AI session quota reached.' }, { status: 402 })
 
   await createMessage(db, {
     conversationId: conversation.id,
@@ -102,7 +99,6 @@ export default defineEventHandler(async (event) => {
         messages,
         currentPage: body.currentPage ?? 'dashboard',
         locationId: typeof body.locationId === 'string' ? body.locationId : null,
-        sessionId: conversation.id,
         onEvent: async (ev) => {
           if (ev.type === 'text') assistantText = ev.content ?? ''
           if (ev.type === 'done') finalEvent = ev

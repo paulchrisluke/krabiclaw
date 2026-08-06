@@ -14,7 +14,6 @@ import {
   renderCompiledDemoPostsBlock,
   renderDemoExperienceSeedBlock,
   renderCompiledDemoContentBlock,
-  renderCompiledDemoTenantPagesBlock,
   renderCompiledDemoTranslationsBlock,
   renderCompiledDemoBillingBlock,
 } from "../../seed-definitions/demo.ts";
@@ -151,27 +150,24 @@ test("demo posts block includes posts and channel jobs", () => {
   assert.match(sql, /Margherita Monday/);
 });
 
-test("demo content block delegates page composition to canonical tenant pages", () => {
+test("demo content block includes site content for all pages including home hero fields", () => {
   const sql = renderCompiledDemoContentBlock();
 
-  assert.doesNotMatch(sql, /site_content/);
-  const pages = renderCompiledDemoTenantPagesBlock();
-  assert.match(pages, /tenant_page/);
-  assert.match(pages, /Wood fire\. Brooklyn nights\./);
-  assert.match(pages, /A trattoria shaped by the oven\./);
-  assert.match(pages, /Pizza classes, tasting nights, and big-table evenings\./);
+  assert.match(sql, /INSERT OR IGNORE INTO site_content/);
+  assert.match(sql, /hero_media_asset_id/);
+  assert.match(sql, /Wood fire\. Brooklyn nights\./);
+  assert.match(sql, /story\.headline/);
+  assert.match(sql, /hero\.kicker/);
 });
 
 test("demo translations block includes Thai translations for content, locations, and menus", () => {
   const sql = renderCompiledDemoTranslationsBlock();
-  const pages = renderCompiledDemoTenantPagesBlock();
 
-  assert.doesNotMatch(sql, /site_content_translations/);
-  assert.match(sql, /demo_translations/);
+  assert.match(sql, /INSERT OR IGNORE INTO site_content_translations/);
   assert.match(sql, /INSERT OR IGNORE INTO business_location_translations/);
   assert.match(sql, /INSERT OR IGNORE INTO menu_translations/);
   assert.match(sql, /INSERT OR IGNORE INTO menu_item_translations/);
-  assert.match(pages, /ไฟฟืนและค่ำคืนในบรูคลิน/);
+  assert.match(sql, /ไฟฟืนและค่ำคืนในบรูคลิน/);
 });
 
 test("demo billing block includes ai credits and site billing state", () => {

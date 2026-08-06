@@ -368,14 +368,6 @@
   resolved "https://registry.yarnpkg.com/@better-auth/prisma-adapter/-/prisma-adapter-1.7.0-beta.10.tgz#f46c792db3ddcd276d77aa4d62ceff0c5ac0ba55"
   integrity sha512-ssJ9pV6BZt1Z3eUsh7X708XzmrM1frtvQJ+U2TKmbvauoampsjDZ4BgvOSv8IAQoUJx0bmD9e+zemudTsWNbgg==
 
-"@better-auth/stripe@1.7.0-beta.10":
-  version "1.7.0-beta.10"
-  resolved "https://registry.yarnpkg.com/@better-auth/stripe/-/stripe-1.7.0-beta.10.tgz#483fd0a65c4702f107b17f493167953a3af1bd0c"
-  integrity sha512-9xqbM4f5gM7GGuU1hIa2kUHX7yVsowMUNXEsqI0vb4prz4juaxKzuZPSjrfxU0cdRLRswPBIyV3FK7MwXwkXrg==
-  dependencies:
-    defu "^6.1.5"
-    zod "^4.3.6"
-
 "@better-auth/telemetry@1.7.0-beta.10":
   version "1.7.0-beta.10"
   resolved "https://registry.yarnpkg.com/@better-auth/telemetry/-/telemetry-1.7.0-beta.10.tgz#e906d80e1e16d6c8f82d65c311cd9cc3a4f92802"

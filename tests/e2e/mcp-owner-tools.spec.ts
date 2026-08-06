@@ -5,7 +5,7 @@ import { MCP_GROWTH_SITE_ID, MCP_MANAGED_SITE_ID, mcpRequest, mcpData, createScr
 
 // Split out of mcp.spec.ts (owner tool-coverage tests) — see helpers/mcp.ts
 // for why. This group covers the bulk of an owner's MCP tool surface: site
-// page/settings, notifications/submissions, location/reviews/QA
+// content/settings, notifications/submissions, location/reviews/QA
 // lifecycle, and menus/posts/media/experiences workflows.
 
 test.describe('stateless MCP server', () => {
@@ -31,13 +31,6 @@ test.describe('stateless MCP server', () => {
     })
     expect(siteRead.status()).toBe(200)
 
-    const pageBefore = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'get_page_fields',
-      args: { site_id: siteId, page: 'home' },
-    })
-    expect(pageBefore.status()).toBe(200)
-    const pageBeforeData = mcpData<{ blocks: Array<{ type: string; data: Record<string, unknown> }> }>(await pageBefore.json())
     const contentUpdate = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
       toolName: 'update_page_content',
@@ -45,9 +38,8 @@ test.describe('stateless MCP server', () => {
         site_id: siteId,
         page: 'home',
         changes: {
-          blocks: pageBeforeData.blocks.map(block => block.type === 'hero'
-            ? { ...block, data: { ...block.data, title: `MCP Hero ${Date.now()}`, subtitle: 'Drafted through MCP' } }
-            : block),
+          'hero.title': `MCP Hero ${Date.now()}`,
+          'hero.subtitle': 'Drafted through MCP',
         },
       },
     })
@@ -60,8 +52,8 @@ test.describe('stateless MCP server', () => {
     })
     expect(contentRead.status()).toBe(200)
     const mergedBody = await contentRead.json()
-    const mergedHero = mcpData<{ blocks: Array<{ type: string; data: Record<string, unknown> }> }>(mergedBody).blocks.find(item => item.type === 'hero')
-    expect(mergedHero?.data.title).toContain('MCP Hero')
+    const mergedHero = mcpData<{ fields: Array<{ field: string; hero_title?: string }> }>(mergedBody).fields.find(item => item.field === 'hero')
+    expect(mergedHero?.hero_title).toContain('MCP Hero')
 
     const settingsBefore = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -87,6 +79,25 @@ test.describe('stateless MCP server', () => {
     expect(mcpData<{ brand_color: string; updated: boolean }>(brandColorBody).brand_color).toBe('#0F4C5C')
     expect(mcpData<{ brand_color: string; updated: boolean }>(brandColorBody).updated).toBe(true)
 
+    const deleteFieldSeed = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'update_page_content',
+      args: {
+        site_id: siteId,
+        page: 'about',
+        changes: {
+          'story.headline': `Delete me ${Date.now()}`,
+        },
+      },
+    })
+    expect(deleteFieldSeed.status()).toBe(200)
+
+    const deleteField = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'delete_content_field',
+      args: { site_id: siteId, page: 'about', field: 'story.headline' },
+    })
+    expect(deleteField.status()).toBe(200)
   })
 
   test('owner can use notification settings and submission inquiry tools', async ({ request, baseURL }) => {

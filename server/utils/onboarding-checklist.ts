@@ -99,15 +99,9 @@ export async function loadOnboardingChecklist(
       (SELECT COUNT(*) FROM experiences WHERE site_id = s.id) AS experiences,
       (SELECT COUNT(*) FROM offerings WHERE site_id = s.id) AS offerings,
       (
-        SELECT COUNT(*)
-        FROM tenant_page_variants v
-        JOIN content_revisions r ON r.id = v.published_revision_id
-        WHERE v.site_id = s.id AND v.published_path = '/about'
-          AND EXISTS (
-            SELECT 1 FROM json_each(json_extract(r.snapshot_json, '$.blocks')) block
-            WHERE json_extract(block.value, '$.type') = 'markdown'
-              AND length(COALESCE(json_extract(block.value, '$.data.markdown'), '')) > 20
-          )
+        SELECT COUNT(*) FROM site_content
+        WHERE site_id = s.id AND page = 'about' AND field LIKE 'story%'
+          AND content IS NOT NULL AND length(content) > 20 AND (source IS NULL OR source != 'template')
       ) AS story,
       (
         SELECT COUNT(*) FROM posts

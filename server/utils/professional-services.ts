@@ -5,7 +5,6 @@ import { listSiteReviews } from '~/server/utils/site-reviews'
 import { getPublishedSiteBlogPost } from '~/server/utils/platform-content'
 import type { SiteConversionEventName } from '~/utils/site-conversion-events'
 import { siteSupportsBlawbyTemplate } from '~/utils/template-registry'
-import { getPublicTenantPageForPath, listCanonicalTenantPages } from '~/server/utils/public-tenant-pages'
 import type {
   PublicBlawbyData,
   PublicBlawbyCriticalHomeData,
@@ -48,6 +47,10 @@ type OfferingRow = ApiRecord & {
   hero_image_url: string | null
   location_address: string | null
   location_city: string | null
+}
+
+type TenantPageRow = ApiRecord & {
+  components_json: string | null
 }
 
 export async function getActiveBlawbySite(db: DbClient, siteId: string): Promise<{ vertical: string; theme_id: string } | null> {
@@ -136,6 +139,25 @@ function mapOfferingRow(row: OfferingRow, mediaById: Map<string, ApiRecord>): Pu
     // offering is site-wide (no location_id) or the location has no address.
     location_address_street: typeof row.location_address === 'string' ? row.location_address : null,
     location_address_locality: typeof row.location_city === 'string' ? row.location_city : null,
+  }
+}
+
+function mapTenantPageRow(row: TenantPageRow): PublicTenantPage {
+  return {
+    id: String(row.id),
+    path: String(row.path),
+    title: String(row.title),
+    page_type: String(row.page_type),
+    summary: typeof row.summary === 'string' ? row.summary : null,
+    body: typeof row.body === 'string' ? row.body : null,
+    components: parseJson<ApiRecord[]>(row.components_json, []),
+    cta_label: typeof row.cta_label === 'string' ? row.cta_label : null,
+    cta_url: typeof row.cta_url === 'string' ? row.cta_url : null,
+    seo_title: typeof row.seo_title === 'string' ? row.seo_title : null,
+    seo_description: typeof row.seo_description === 'string' ? row.seo_description : null,
+    canonical_url: typeof row.canonical_url === 'string' ? row.canonical_url : null,
+    robots: typeof row.robots === 'string' ? row.robots : null,
+    sort_order: Number(row.sort_order ?? 0),
   }
 }
 
@@ -257,44 +279,24 @@ export async function getPublicOfferingBySlug(db: DbClient, siteId: string, slug
 }
 
 export async function listPublicTenantPages(db: DbClient, siteId: string): Promise<PublicTenantPage[]> {
-  const pages = await listCanonicalTenantPages(db, siteId)
-  return pages.map(page => ({
-    id: page.id,
-    path: page.path,
-    title: page.title,
-    page_type: page.page_type,
-    recipe: page.recipe,
-    locale: page.locale,
-    summary: page.summary,
-    seo_title: page.seo_title,
-    seo_description: page.seo_description,
-    canonical_url: page.canonical_url,
-    robots: page.robots,
-    blocks: page.blocks,
-    published_revision_id: page.published_revision_id,
-    updated_at: page.updated_at,
-  }))
+  const rows = await queryAll<TenantPageRow>(db, `
+    SELECT *
+      FROM tenant_pages
+     WHERE site_id = ? AND status = 'published'
+     ORDER BY sort_order ASC, title ASC
+  `, [siteId])
+
+  return rows.map(mapTenantPageRow)
 }
 
 export async function getPublicTenantPageByPath(db: DbClient, siteId: string, path: string): Promise<PublicTenantPage | null> {
-  const page = await getPublicTenantPageForPath(db, siteId, path)
-  if (!page) return null
-  return {
-    id: page.id,
-    path: page.path,
-    title: page.title,
-    page_type: page.page_type,
-    recipe: page.recipe,
-    locale: page.locale,
-    summary: page.summary,
-    seo_title: page.seo_title,
-    seo_description: page.seo_description,
-    canonical_url: page.canonical_url,
-    robots: page.robots,
-    blocks: page.blocks,
-    published_revision_id: page.published_revision_id,
-    updated_at: page.updated_at,
-  }
+  const row = await queryFirst<TenantPageRow>(db, `
+    SELECT *
+      FROM tenant_pages
+     WHERE site_id = ? AND path = ? AND status = 'published'
+     LIMIT 1
+  `, [siteId, path])
+  return row ? mapTenantPageRow(row) : null
 }
 
 export async function getPublicConsultationSettings(db: DbClient, siteId: string): Promise<PublicConsultationSettings> {

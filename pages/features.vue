@@ -206,7 +206,7 @@ const faqItems = [
 usePlatformPageSeo({
   path: '/features',
   title: 'Platform Features',
-  description: 'KrabiClaw features: edit your local business site through ChatGPT, take bookings, sync with Google Business, manage localized content, and track real-time analytics.',
+  description: 'KrabiClaw features: edit your local business site through ChatGPT, take bookings, sync with Google Business, translate to multiple languages, and track real-time analytics.',
   breadcrumbs: [
     { name: 'Home', url: '/' },
     { name: 'Features', url: '/features' },
@@ -235,7 +235,7 @@ const detailedFeatures = [
     specs: [
       'Edit menus, hero content & photos through conversation',
       'Generate site images with ChatGPT image tools',
-      'Maintain localized page and menu fields yourself',
+      'Translate your site to multiple languages in one step',
       'Publish posts to your site and Facebook simultaneously',
     ]
   },

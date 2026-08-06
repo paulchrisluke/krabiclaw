@@ -92,7 +92,7 @@ if (isRemote || isStaging || isPreview) {
     console.error(
       `[seed:pottery-house] Refusing to reseed: site-pottery-house is owned by "${currentOrgId}", not the demo org "org-pottery-house".\n` +
       'This tenant has already been transferred to a real client. Reseeding would delete their live site, ' +
-      'business_locations, tenant pages, media_assets, and custom domain rows, then recreate it back under the demo org.\n' +
+      'business_locations, site_content, media_assets, and custom domain rows, then recreate it back under the demo org.\n' +
       'Aborting.'
     )
     process.exit(1)
