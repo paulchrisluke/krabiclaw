@@ -15,6 +15,7 @@ const migration0097Billing = readFileSync(resolve(migrationDir, '0097_wise_layla
 const migration0097 = readFileSync(resolve(migrationDir, '0097_repair_dangling_content_revisions.sql'), 'utf8')
 const migration0098 = readFileSync(resolve(migrationDir, '0098_tenant_page_translation_and_redirect_scope.sql'), 'utf8')
 const migration0099 = readFileSync(resolve(migrationDir, '0099_repair_canonical_tenant_blocks.sql'), 'utf8')
+const migration0104 = readFileSync(resolve(migrationDir, '0104_repair_ncls_canonical_parity.sql'), 'utf8')
 const migration0100 = readFileSync(resolve(migrationDir, '0100_remove_translation_automation.sql'), 'utf8')
 const migration0101 = readFileSync(resolve(migrationDir, '0101_invoice_payment_ledger.sql'), 'utf8')
 
@@ -432,4 +433,113 @@ test('0099 normalizes migrated block payloads and rebuilds the published snapsho
   const snapshot = JSON.parse((db.prepare('SELECT snapshot_json FROM content_revisions WHERE id = ?').get(document.published_revision_id) as { snapshot_json: string }).snapshot_json) as { blocks: Array<{ data: Record<string, unknown> }> }
   assert.equal(snapshot.blocks.find(block => block.data.section === 'services')?.data.source, 'site_offerings')
   assert.equal(snapshot.blocks.find(block => block.data.section === 'approach')?.data.items instanceof Array, true)
+})
+
+test('0104 repairs NCLS donation destinations and canonical home order in every live document', () => {
+  const db = databaseBeforeTenantPageMigration()
+  for (const migration of [migration0092, migration0093, migration0094, migration0095, migration0096, migration0097, migration0098, migration0099]) {
+    db.exec(migration)
+  }
+  db.prepare('INSERT INTO sites (id, organization_id, slug, subdomain, vertical) VALUES (?, ?, ?, ?, ?)').run('site-ncls-blawby', 'org-test', 'ncls', 'ncls', 'service')
+  db.prepare('INSERT INTO site_locales (id, organization_id, site_id, locale, label, is_source, status) VALUES (?, ?, ?, ?, ?, ?, ?)').run('locale-ncls', 'org-test', 'site-ncls-blawby', 'en', 'English', 1, 'published')
+
+  const pages = [
+    { id: 'ncls-home-page', parentPath: '/', path: '/', title: 'Home' },
+    { id: 'ncls-donate-page', parentPath: '/legacy-donate', path: '/donate', title: 'Donate' },
+  ]
+  for (const page of pages) {
+    db.prepare(`
+      INSERT INTO tenant_pages (id, organization_id, site_id, path, title, page_type, status, source)
+      VALUES (?, ?, ?, ?, ?, 'system', 'published', 'test')
+    `).run(page.id, 'org-test', 'site-ncls-blawby', page.parentPath, page.title)
+    db.prepare(`
+      INSERT INTO tenant_page_variants
+        (id, organization_id, site_id, page_id, locale, published_path, draft_path, title, status, ever_published)
+      VALUES (?, ?, ?, ?, 'en', ?, ?, ?, 'published', 1)
+    `).run(`${page.id}-variant`, 'org-test', 'site-ncls-blawby', page.id, page.path, page.path, page.title)
+  }
+
+  const homeBlocks = [
+    ['home-hero', 'hero', 0, { section: 'hero' }],
+    ['home-services', 'offering_grid', 1, { section: 'services' }],
+    ['home-approach', 'feature_grid', 2, { section: 'approach' }],
+    ['home-qa', 'faq', 3, { section: 'qa' }],
+    ['home-reviews', 'testimonial_grid', 4, { section: 'reviews' }],
+    ['home-consultation', 'contact_cta', 5, { section: 'consultation' }],
+    ['home-articles', 'feature_grid', 6, { section: 'articles' }],
+    ['home-articles-more', 'button_group', 7, { section: 'articles-more' }],
+  ] as const
+  const donationBlocks = [
+    ['donate-hero', 'hero', 0, { section: 'page-hero' }],
+    ['donate-choices', 'donation_choices', 1, { section: 'donation', tiers: [{ amount: 100, title: 'Justice Advocate' }] }],
+  ] as const
+
+  function insertDocument(variantId: string, path: string, blocks: ReadonlyArray<readonly [string, string, number, Record<string, unknown>]>) {
+    const documentId = `${variantId}-document`
+    const revisionIds = [`${variantId}-draft`, `${variantId}-published`]
+    const snapshotBlocks = blocks.map(([id, type, position, data]) => ({ id, type, position, data }))
+    const snapshot = JSON.stringify({
+      schemaVersion: 1,
+      metadata: { locale: 'en', path, title: path === '/' ? 'Home' : 'Donate', summary: null, seoTitle: null, seoDescription: null, canonicalUrl: null, robots: null, pageType: 'system', recipe: path === '/' ? 'home' : 'donate' },
+      blocks: snapshotBlocks,
+    })
+    db.prepare(`
+      INSERT INTO content_documents (id, owner_type, owner_id, draft_revision_id, published_revision_id)
+      VALUES (?, 'tenant_page', ?, ?, ?)
+    `).run(documentId, variantId, revisionIds[0], revisionIds[1])
+    for (const revisionId of revisionIds) {
+      db.prepare(`
+        INSERT INTO content_revisions (id, document_id, snapshot_json, body_markdown, label)
+        VALUES (?, ?, ?, '', ?)
+      `).run(revisionId, documentId, snapshot, revisionId)
+    }
+    for (const [id, type, position, data] of blocks) {
+      db.prepare(`
+        INSERT INTO content_blocks (id, document_id, type, position, data_json)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(id, documentId, type, position, JSON.stringify(data))
+    }
+  }
+
+  insertDocument('ncls-home-page-variant', '/', homeBlocks)
+  insertDocument('ncls-donate-page-variant', '/donate', donationBlocks)
+  db.exec(migration0104)
+
+  const donation = db.prepare(`
+    SELECT data_json FROM content_blocks WHERE id = 'donate-choices'
+  `).get() as { data_json: string }
+  assert.equal(JSON.parse(donation.data_json).destination, 'https://donate.stripe.com/bIY29UfAUec37GocMM')
+
+  const donationRevisions = db.prepare(`
+    SELECT r.snapshot_json
+      FROM content_revisions r
+      JOIN content_documents d ON d.id = r.document_id
+     WHERE d.owner_id = 'ncls-donate-page-variant'
+  `).all() as Array<{ snapshot_json: string }>
+  assert.equal(donationRevisions.length, 2)
+  for (const revision of donationRevisions) {
+    assert.equal(JSON.parse(revision.snapshot_json).blocks[1].data.destination, 'https://donate.stripe.com/bIY29UfAUec37GocMM')
+  }
+
+  const homeRows = db.prepare(`
+    SELECT json_extract(data_json, '$.section') AS section, position
+      FROM content_blocks
+     WHERE document_id = 'ncls-home-page-variant-document'
+     ORDER BY position
+  `).all() as Array<{ section: string; position: number }>
+  assert.deepEqual(homeRows.map(row => row.section), ['hero', 'services', 'approach', 'qa', 'reviews', 'articles', 'articles-more', 'consultation'])
+  assert.deepEqual(homeRows.map(row => row.position), [0, 1, 2, 3, 4, 5, 6, 7])
+
+  const homeRevisions = db.prepare(`
+    SELECT r.snapshot_json
+      FROM content_revisions r
+      JOIN content_documents d ON d.id = r.document_id
+     WHERE d.owner_id = 'ncls-home-page-variant'
+  `).all() as Array<{ snapshot_json: string }>
+  assert.equal(homeRevisions.length, 2)
+  for (const revision of homeRevisions) {
+    const homeSnapshot = JSON.parse(revision.snapshot_json) as { blocks: Array<{ position: number; data: { section: string } }> }
+    assert.deepEqual(homeSnapshot.blocks.map(block => block.data.section), ['hero', 'services', 'approach', 'qa', 'reviews', 'articles', 'articles-more', 'consultation'])
+    assert.deepEqual(homeSnapshot.blocks.map(block => block.position), [0, 1, 2, 3, 4, 5, 6, 7])
+  }
 })
