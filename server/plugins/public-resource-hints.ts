@@ -17,6 +17,7 @@ const isPrivateRoute = (event: H3Event) =>
   PRIVATE_ROUTE_PREFIXES.some(prefix => event.path === prefix || event.path.startsWith(`${prefix}/`))
 
 function addStylesheetPreload(response: { headers?: Record<string, string> }, event: H3Event) {
+  if (import.meta.dev) return
   if (event.method !== 'GET' || isPrivateRoute(event)) return
   if (!getHeader(event, 'accept')?.includes('text/html')) return
 
