@@ -1,7 +1,10 @@
 // GET /api/public/sites/[siteId]/locations/[slug]/reviews
 import { queryAll, queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { buildPublicReviewAggregate } from '~/server/utils/public-review-aggregate'
+import {
+  buildPublicReviewAggregate,
+  normalizePublicReviewAggregateRows,
+} from '~/server/utils/public-review-aggregate'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -31,6 +34,13 @@ export default defineEventHandler(async (event) => {
     ,
     [location.id],
   )
+  const aggregateResults = await queryAll<{ rating: number | string | null }>(
+    db,
+    `SELECT rating
+     FROM reviews
+     WHERE location_id = ? AND status = 'approved'`,
+    [location.id],
+  )
 
   const reviews = (results ?? []).map((r: ApiValue) => ({
     ...r,
@@ -38,7 +48,7 @@ export default defineEventHandler(async (event) => {
   }))
 
   return jsonResponse({
-    aggregate: buildPublicReviewAggregate(reviews, location),
+    aggregate: buildPublicReviewAggregate(normalizePublicReviewAggregateRows(aggregateResults), location),
     reviews,
   })
 })

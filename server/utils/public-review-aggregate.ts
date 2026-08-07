@@ -1,5 +1,5 @@
 export interface PublicReviewAggregateRow {
-  rating: number | string | null
+  rating: number
 }
 
 export interface PublicReviewAggregateLocation {
@@ -14,12 +14,25 @@ export interface PublicReviewAggregate {
   distribution: Array<{ star: number; count: number }>
 }
 
+export function normalizePublicReviewAggregateRows(
+  rows: readonly { rating?: unknown }[],
+): PublicReviewAggregateRow[] {
+  return rows.flatMap(row => {
+    const rating = typeof row.rating === 'number'
+      ? row.rating
+      : typeof row.rating === 'string' && row.rating.trim()
+        ? Number(row.rating)
+        : NaN
+    return Number.isInteger(rating) && rating >= 1 && rating <= 5 ? [{ rating }] : []
+  })
+}
+
 export function buildPublicReviewAggregate(
   reviews: readonly PublicReviewAggregateRow[],
   location: PublicReviewAggregateLocation,
 ): PublicReviewAggregate | null {
   if (reviews.length > 0) {
-    const ratings = reviews.map(review => Number(review.rating))
+    const ratings = reviews.map(review => review.rating)
     return {
       rating: ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length,
       review_count: reviews.length,

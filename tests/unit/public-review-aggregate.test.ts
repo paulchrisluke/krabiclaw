@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { buildPublicReviewAggregate } from '../../server/utils/public-review-aggregate.ts'
+import {
+  buildPublicReviewAggregate,
+  normalizePublicReviewAggregateRows,
+} from '../../server/utils/public-review-aggregate.ts'
 
 test('review rows own the aggregate when location metadata is not a verified sync', () => {
   const aggregate = buildPublicReviewAggregate(
     [{ rating: 5 }, { rating: 5 }, { rating: 4 }, { rating: 5 }, { rating: 4 }, { rating: 3 }],
-    { rating: 4.8, review_count: 188, last_synced_at: null },
+    { rating: 0, review_count: 0, last_synced_at: '2026-08-07T00:00:00.000Z' },
   )
 
   assert.deepEqual(aggregate, {
@@ -20,6 +23,21 @@ test('review rows own the aggregate when location metadata is not a verified syn
       { star: 5, count: 3 },
     ],
   })
+})
+
+test('aggregate rows exclude invalid ratings before calculation', () => {
+  assert.deepEqual(
+    normalizePublicReviewAggregateRows([
+      { rating: null },
+      {},
+      { rating: 'not-a-rating' },
+      { rating: 0 },
+      { rating: 1.5 },
+      { rating: 6 },
+      { rating: '5' },
+    ]),
+    [{ rating: 5 }],
+  )
 })
 
 test('verified location metadata remains the aggregate-only source when no rows exist', () => {
