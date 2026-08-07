@@ -54,12 +54,14 @@ test.describe('role permission matrix', () => {
     const checkoutStatus = async (expected: 'owner' | 'non_owner') => {
       expect(siteId).toEqual(expect.any(String))
       const res = await request.post(`${baseURL}/api/billing/checkout`, {
-        data: { plan: 'growth', interval: 'month', siteId },
+        headers: { origin: baseURL! },
+        data: { plan: 'growth', interval: 'month', organizationId, siteId },
       })
+      const responseBody = await res.text()
       if (expected === 'owner') {
-        expect(res.status()).toBe(200)
+        expect(res.status(), responseBody).toBe(200)
       } else {
-        expect(res.status()).toBe(403)
+        expect(res.status(), responseBody).toBe(403)
       }
     }
 
@@ -92,7 +94,7 @@ test.describe('role permission matrix', () => {
     await assertRole(ownerUserId!, 'owner', 200)
     await assertRole(admin.id, 'non_owner', 200)
     await assertRole(editor.id, 'non_owner', 200)
-    await assertRole(member.id, 'non_owner', 404)
+    await assertRole(member.id, 'non_owner', 403)
 
   })
 

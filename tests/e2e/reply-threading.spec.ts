@@ -283,6 +283,7 @@ test.describe('reply threading', () => {
     const threadResponse = await page.goto(new URL(threadHref!, baseURL).toString(), { waitUntil: 'load' })
     expect(threadResponse?.status()).toBeLessThan(400)
     await expect(page).toHaveURL(/\/inbox\/[^/?#]+$/)
+    await expect(page.locator('[data-guest-thread-inbox-hydrated="true"]')).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Owner Reply Flow Test' })).toBeVisible()
     await expect(page.locator('body')).toContainText(guestEmail)
     await expect(page.locator('body')).toContainText('+14155552673')

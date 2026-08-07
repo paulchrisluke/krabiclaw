@@ -1,5 +1,8 @@
 <template>
-  <UDashboardPanel :id="panelId">
+  <UDashboardPanel
+    :id="panelId"
+    :data-guest-thread-inbox-hydrated="inboxHydrated ? 'true' : 'false'"
+  >
     <template #header>
       <UDashboardNavbar :title="navbarTitle">
         <template #leading>
@@ -262,6 +265,7 @@ const emptyDescription = computed(() => {
 
 const loadingThreads = ref(false)
 const loadingDetail = ref(false)
+const inboxHydrated = ref(false)
 const threadsError = ref<unknown>(null)
 const detailError = ref<unknown>(null)
 const threads = ref<ThreadListItem[]>([])
@@ -275,6 +279,10 @@ const replyAttemptKey = ref<string | null>(null)
 const replyAttemptDraft = ref<string | null>(null)
 const operationAttemptKeys = ref<Record<string, string>>({})
 const retryAttemptKeys = ref<Record<string, string>>({})
+
+onMounted(() => {
+  inboxHydrated.value = true
+})
 
 const conversationEntries = computed<GuestThreadEntryMessage[]>(() => (selectedDetail.value?.entries ?? []).map(entry => ({
   ...entry,

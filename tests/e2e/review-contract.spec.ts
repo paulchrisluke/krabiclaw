@@ -100,6 +100,6 @@ test.describe('review contract regressions', () => {
         data: { owner_reply: 'editor should not be able to do this' },
       },
     )
-    expect(editorReplyRes.status()).toBe(404)
+    expect(editorReplyRes.status()).toBe(403)
   })
 })

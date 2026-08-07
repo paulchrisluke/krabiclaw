@@ -1,4 +1,5 @@
 import type Stripe from 'stripe'
+import { createError } from 'h3'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { betterAuthTimestampToIso } from '~/server/utils/better-auth-timestamps'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
@@ -337,8 +338,8 @@ export async function requireBillingAccess(
   const membership = await queryFirst<MembershipRow>(db, `
     SELECT role FROM member WHERE organizationId = ? AND userId = ? LIMIT 1
   `, [organizationId, userId])
-  if (!membership) throw new Error('Access denied: Not a member of this organization')
-  if (membership.role !== 'owner') throw new Error('Access denied: Only owners can manage billing')
+  if (!membership) throw createError({ statusCode: 403, statusMessage: 'Access denied: Not a member of this organization' })
+  if (membership.role !== 'owner') throw createError({ statusCode: 403, statusMessage: 'Access denied: Only owners can manage billing' })
 }
 
 export async function verifyStripeWebhook(
