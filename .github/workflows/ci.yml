@@ -490,6 +490,8 @@ jobs:
           yarn test:e2e:smoke
           yarn test:e2e:public-rendering
           [ "$DASHBOARD_CHANGED" != "true" ] || yarn test:e2e:dashboard:smoke
+          [ "$DASHBOARD_CHANGED" != "true" ] || yarn test:e2e:admin:smoke
+          [ "$DASHBOARD_CHANGED" != "true" ] || yarn test:e2e:blawby-cms:smoke
           [ "$BILLING_CHANGED" != "true" ] || yarn test:e2e:smoke:billing
           [ "$POTTERY_HOUSE_CHANGED" != "true" ] || PLAYWRIGHT_WORKERS=1 yarn test:e2e:pottery-house
           [ "$BLAWBY_CHANGED" != "true" ] || yarn test:e2e:blawby
