@@ -89,6 +89,19 @@ function customerIdValue(customer: Stripe.Subscription['customer'] | Stripe.Invo
   return typeof customer === 'string' ? customer : customer.id
 }
 
+function billingIntervalLabel(price: Stripe.Price | null): string | null {
+  const recurring = price?.recurring
+  if (!recurring?.interval) return null
+  const label = {
+    day: 'daily',
+    week: 'weekly',
+    month: 'monthly',
+    year: 'annual',
+  }[recurring.interval] ?? recurring.interval
+  const count = recurring.interval_count ?? 1
+  return count === 1 ? label : `${count}_${label}`
+}
+
 function itemFromInvoiceLine(line: StripeInvoiceLine, currency: string): Ga4Item | null {
   const price = invoiceLinePrice(line)
   const priceObject = typeof price === 'string' || !price ? null : price
@@ -105,11 +118,14 @@ function itemFromInvoiceLine(line: StripeInvoiceLine, currency: string): Ga4Item
   if (!itemId || !resolvedUnitAmount || resolvedUnitAmount <= 0) return null
 
   const recurring = priceObject?.recurring
+  const interval = billingIntervalLabel(priceObject)
+  const metered = recurring?.usage_type === 'metered'
   return {
     item_id: itemId,
     item_name: productName || priceObject?.nickname || line.description || 'Subscription',
     item_category: 'Subscription',
-    ...(recurring?.usage_type === 'metered' ? { item_category2: 'Metered' } : {}),
+    ...(interval ? { item_category2: interval } : metered ? { item_category2: 'Metered' } : {}),
+    ...(metered ? { item_category3: 'Metered' } : {}),
     price: resolvedUnitAmount,
     quantity,
   }
@@ -125,11 +141,14 @@ function subscriptionFallbackItems(subscription: Stripe.Subscription, currency: 
       ? stripeMinorToMajor(price.unit_amount, currency)
       : null
     if (!unitAmount || unitAmount <= 0) return []
+    const interval = billingIntervalLabel(price)
+    const metered = price.recurring?.usage_type === 'metered'
     return [{
       item_id: price.id,
       item_name: productName || price.nickname || 'Subscription',
       item_category: 'Subscription',
-      ...(price.recurring?.usage_type === 'metered' ? { item_category2: 'Metered' } : {}),
+      ...(interval ? { item_category2: interval } : metered ? { item_category2: 'Metered' } : {}),
+      ...(metered ? { item_category3: 'Metered' } : {}),
       price: unitAmount,
       quantity: item.quantity ?? 1,
     }]

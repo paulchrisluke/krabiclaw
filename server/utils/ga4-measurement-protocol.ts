@@ -8,6 +8,7 @@ export interface Ga4Item {
   item_name?: string
   item_category?: string
   item_category2?: string
+  item_category3?: string
   price?: number
   quantity?: number
 }

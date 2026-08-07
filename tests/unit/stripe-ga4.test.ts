@@ -60,6 +60,7 @@ test('GA4 purchase uses Stripe invoice identity, actual paid value, and item lin
       item_id: 'price_pro_monthly',
       item_name: 'Pro',
       item_category: 'Subscription',
+      item_category2: 'monthly',
       price: 12.37,
       quantity: 1,
     }],
@@ -92,7 +93,8 @@ test('GA4 item builder retains metered invoice lines and zero-decimal currencies
     item_id: 'price_metered',
     item_name: 'Usage',
     item_category: 'Subscription',
-    item_category2: 'Metered',
+    item_category2: 'monthly',
+    item_category3: 'Metered',
     price: 250,
     quantity: 2,
   }])

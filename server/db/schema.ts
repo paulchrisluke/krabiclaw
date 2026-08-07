@@ -2304,6 +2304,7 @@ export const stripe_ga4_subscription_intents = sqliteTable("stripe_ga4_subscript
 	index("stripe_ga4_subscription_intents_expiry_idx").on(table.status, table.expires_at),
 	check("stripe_ga4_subscription_intents_action_check", sql`${table.action} IN ('initial_subscription', 'upgrade', 'downgrade')`),
 	check("stripe_ga4_subscription_intents_status_check", sql`${table.status} IN ('pending', 'consumed', 'expired')`),
+	check("stripe_ga4_subscription_intents_timing_check", sql`${table.effective_timing} IN ('immediate', 'period_end')`),
 ]);
 
 export const usage_events = sqliteTable("usage_events", {
