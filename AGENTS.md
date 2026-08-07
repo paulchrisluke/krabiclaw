@@ -243,6 +243,11 @@ During implementation:
 - Do not rerun the full suite after each individual fix.
 - Do not run multi-sample benchmarks during the editing loop.
 
+Production builds require the heap configured by `yarn build`.
+Run `yarn build` once after focused validation. Do not run `nuxi build`
+directly or retry a failed default-heap build. Reuse the same `.output`
+artifact for all browser assertions.
+
 Required on each relevant PR push:
 - Typecheck and lint.
 - Impacted unit/integration tests.
