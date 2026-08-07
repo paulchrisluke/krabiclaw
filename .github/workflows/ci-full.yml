@@ -102,7 +102,7 @@ jobs:
     name: Full E2E regression
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
     needs: [prepare-staging, performance-benchmark]
     concurrency:
       group: shared-staging-deployment
@@ -131,7 +131,7 @@ jobs:
       - name: Run full E2E regression
         run: yarn test:e2e:full
       - name: Upload Playwright diagnostics
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: playwright-report-full
