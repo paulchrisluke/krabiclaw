@@ -150,6 +150,8 @@ yarn wrangler pages secret put CRON_SECRET
 
 CI + E2E auth/billing parity, tier intent, and staging-vs-production smoke rules are documented in [docs/ci-e2e-guardrails.md](docs/ci-e2e-guardrails.md). MCP reconnect triage and Cloudflare auth debugging are documented in [docs/mcp-auth-debugging.md](docs/mcp-auth-debugging.md) and [docs/observability-debugging.md](docs/observability-debugging.md).
 
+The mandatory deployed-browser release gate and outage recovery rules are documented in [docs/operations/release-and-outage-prevention.md](docs/operations/release-and-outage-prevention.md).
+
 ---
 
 ## Schema
