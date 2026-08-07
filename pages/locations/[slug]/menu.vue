@@ -24,7 +24,7 @@
     </template>
 
     <!-- Loading -->
-    <div v-if="menuLoading" class="mx-auto max-w-2xl px-4 py-20 text-center sm:px-6">
+    <div v-if="menuLoading && !pageData" class="mx-auto max-w-2xl px-4 py-20 text-center sm:px-6">
       <p class="text-muted">{{ $t('saya.menu_page.loading') }}</p>
     </div>
 
@@ -143,7 +143,7 @@ if (!siteId) throw createError({ statusCode: 404 })
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
 
-const { location, menu: pageMenu, menuItemsBySection, pending: menuLoading, config: pageConfig, experiencesList } = await usePublicPageData({ lazy: false })
+const { data: pageData, location, menu: pageMenu, menuItemsBySection, pending: menuLoading, config: pageConfig, experiencesList } = await usePublicPageData({ lazy: false })
 const { formatDate } = useLocaleDate()
 const hasMenu = computed(() => ((pageMenu.value as { items?: unknown[] } | null)?.items?.length ?? 0) > 0)
 const locationExperienceHref = computed(() => resolveLocationExperienceHref(slug.value, experiencesList.value))

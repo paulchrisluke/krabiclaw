@@ -10,6 +10,7 @@ export function useLocaleDate() {
       year: "numeric",
       month: "short",
       day: "numeric",
+      timeZone: "UTC",
     }).format(date);
   };
 
