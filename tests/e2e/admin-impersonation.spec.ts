@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { expect, test } from '@playwright/test'
-import { collectPageErrors } from './helpers'
+import { collectPageErrors, expectHealthyPage, setupTenantHeaders } from './helpers'
 import { dashboardOrgHeaders, devLoginHeaders, devLoginUrl } from './test-env'
 
 function promoteLocalPlatformAdmin(email: string) {
@@ -23,7 +23,7 @@ test('platform admin enters and exits a client workspace through Better Auth imp
   const adminUserId = isLocal ? `e2e-admin-impersonation-${Date.now()}` : 'user-demo'
   const adminEmail = `${adminUserId}@example.test`
 
-  await page.context().setExtraHTTPHeaders(devLoginHeaders() || {})
+  await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
   if (isLocal) {
     const initialLogin = await page.goto(devLoginUrl(baseURL!, adminUserId), { waitUntil: 'load' })
     expect(initialLogin?.status()).toBeLessThan(400)
@@ -78,5 +78,5 @@ test('platform admin enters and exits a client workspace through Better Auth imp
   await page.goto(`${baseURL}/admin/clients`, { waitUntil: 'load' })
   await expect(page.getByRole('button', { name: 'Open Pottery House Krabi workspace' })).toBeEnabled()
 
-  expect(errors).toEqual([])
+  await expectHealthyPage(page, errors)
 })
