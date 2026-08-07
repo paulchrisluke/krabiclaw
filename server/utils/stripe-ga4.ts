@@ -317,6 +317,14 @@ async function sendStripeGa4Purchase(
     metadataAction,
   )
   if (!purchaseType) return
+  if (!context.clientId && !context.userId) {
+    console.warn('stripe_ga4_purchase_unattributed', {
+      invoiceId: invoice.id,
+      subscriptionId,
+      eventId: event.id,
+    })
+    return
+  }
 
   const lines = await loadStripeInvoiceLines(stripe, invoice)
   let candidateLines = positiveSubscriptionLines(lines, subscriptionId)
