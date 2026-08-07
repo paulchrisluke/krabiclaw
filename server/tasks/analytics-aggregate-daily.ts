@@ -1,6 +1,7 @@
 import { aggregateAnalyticsForAllSites, cleanupOldPageviewEvents } from '~/server/utils/analytics'
+import { defineScheduledTask } from '~/server/utils/scheduled-task'
 
-export default defineTask({
+export default defineScheduledTask({
   meta: {
     name: 'analytics:aggregate-daily',
     description: 'Daily aggregation of site pageview events into analytics summary'

@@ -1,6 +1,7 @@
 import { publishDueBlogPosts } from '~/server/utils/blog-publishing'
+import { defineScheduledTask } from '~/server/utils/scheduled-task'
 
-export default defineTask({
+export default defineScheduledTask({
   meta: { name: 'blog-scheduled-publish', description: 'Publish due scheduled blog posts' },
   async run({ context }): Promise<{ result: { published: number; scheduled_revision_issues: string[]; skipped?: string } }> {
     const db = (context as { cloudflare?: { env?: { DB?: D1Database } } } | undefined)?.cloudflare?.env?.DB

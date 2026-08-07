@@ -1,4 +1,5 @@
 import { reconcileDueDomains } from '~/server/utils/domains'
+import { defineScheduledTask } from '~/server/utils/scheduled-task'
 
 interface ReconciliationTaskEnv {
   DB?: ApiValue
@@ -13,7 +14,7 @@ interface ReconciliationTaskContext {
   }
 }
 
-export default defineTask({
+export default defineScheduledTask({
   meta: {
     name: 'domains:reconcile-daily',
     description: 'Daily Cloudflare SaaS custom domain reconciliation sweep'

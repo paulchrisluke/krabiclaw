@@ -64,8 +64,6 @@ jobs:
           cache: yarn
       - run: yarn install --frozen-lockfile
       - name: Build production
-        env:
-          NODE_OPTIONS: --max-old-space-size=6144
         run: yarn build
 
   e2e-full:
