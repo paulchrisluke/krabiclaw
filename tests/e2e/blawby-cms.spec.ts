@@ -73,12 +73,12 @@ test.describe('Blawby professional_service CMS editing', () => {
       { pageId: 'contact', recipe: 'contact' },
     ] as const
 
-    const originals = new Map<string, string>()
+    const originals = new Map<string, { pageTitle: string; heroTitle: string }>()
     try {
       for (const edit of edits) {
         const route = await publicRoute(page.request, baseURL!, edit.recipe)
-        const originalTitle = String(block(route.page, 'hero').data.title ?? route.page.title)
-        originals.set(edit.pageId, originalTitle)
+        const originalHeroTitle = String(block(route.page, 'hero').data.title ?? route.page.title)
+        originals.set(edit.pageId, { pageTitle: route.page.title, heroTitle: originalHeroTitle })
 
         const updatedTitle = `E2E ${edit.pageId} title ${Date.now()}`
         const pages = await page.request.get(`${baseURL}/api/editor/sites/${SITE_ID}/pages`)
@@ -88,10 +88,11 @@ test.describe('Blawby professional_service CMS editing', () => {
         const detailBody = await detail.json() as { page: { blocks: Array<{ type: string; data: Record<string, unknown> }>; document: { updated_at: string } } }
         const blocks = detailBody.page.blocks.map(item => item.type === 'hero' ? { ...item, data: { ...item.data, title: updatedTitle } } : item)
         const save = await page.request.patch(`${baseURL}/api/editor/sites/${SITE_ID}/pages/${pageSummary!.id}`, {
-          data: { blocks, expectedDocumentUpdatedAt: detailBody.page.document.updated_at },
+          data: { title: updatedTitle, blocks, expectedDocumentUpdatedAt: detailBody.page.document.updated_at },
         })
         expect(save.status(), `save ${edit.pageId}`).toBe(200)
-        const saveBody = await save.json() as { page: { blocks: Array<{ type: string; data: Record<string, unknown> }>; document: { updated_at: string } } }
+        const saveBody = await save.json() as { page: { title: string; blocks: Array<{ type: string; data: Record<string, unknown> }>; document: { updated_at: string } } }
+        expect(saveBody.page.title).toBe(updatedTitle)
         expect(block(saveBody.page, 'hero').data.title).toBe(updatedTitle)
 
         const publish = await page.request.post(`${baseURL}/api/editor/sites/${SITE_ID}/pages/${pageSummary!.id}/publish`, {
@@ -105,16 +106,16 @@ test.describe('Blawby professional_service CMS editing', () => {
       }
     } finally {
       for (const edit of edits) {
-        const originalTitle = originals.get(edit.pageId)
-        if (!originalTitle) continue
+        const original = originals.get(edit.pageId)
+        if (!original) continue
         const pages = await page.request.get(`${baseURL}/api/editor/sites/${SITE_ID}/pages`)
         const pageSummary = ((await pages.json()) as { pages: Array<{ id: string; path: string }> }).pages.find(item => item.path === `/${edit.pageId === 'home' ? '' : edit.pageId}`.replace('//', '/'))
         if (!pageSummary) continue
         const detail = await page.request.get(`${baseURL}/api/editor/sites/${SITE_ID}/pages/${pageSummary.id}`)
         const detailBody = await detail.json() as { page: { blocks: Array<{ type: string; data: Record<string, unknown> }>; document: { updated_at: string } } }
-        const blocks = detailBody.page.blocks.map(item => item.type === 'hero' ? { ...item, data: { ...item.data, title: originalTitle } } : item)
+        const blocks = detailBody.page.blocks.map(item => item.type === 'hero' ? { ...item, data: { ...item.data, title: original.heroTitle } } : item)
         const restore = await page.request.patch(`${baseURL}/api/editor/sites/${SITE_ID}/pages/${pageSummary.id}`, {
-          data: { blocks, expectedDocumentUpdatedAt: detailBody.page.document.updated_at },
+          data: { title: original.pageTitle, blocks, expectedDocumentUpdatedAt: detailBody.page.document.updated_at },
         })
         expect(restore.status(), `restore ${edit.pageId}`).toBe(200)
         const restoreBody = await restore.json() as { page: { document: { updated_at: string } } }
