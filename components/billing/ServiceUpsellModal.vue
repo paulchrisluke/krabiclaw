@@ -156,30 +156,6 @@ function buildContentMap(experience: boolean): Record<UpsellType, UpsellContent>
       priceNote: '/ month',
       cta: 'Get SEO Accelerator — $349/mo',
     },
-    seasonal: {
-      headline: 'Seasonal relaunch package',
-      subheading: `Fresh photos, updated ${menuWord}, and a promotion post — all set before your next busy season.`,
-      bullets: [
-        experience ? 'Offerings refresh with seasonal updates' : 'Menu refresh with seasonal items',
-        'Updated promotional content & featured photos',
-        'Google Business post announcing the update',
-      ],
-      price: '$99',
-      priceNote: 'one-time',
-      cta: 'Get Seasonal Relaunch — $99',
-    },
-    gbp_setup: {
-      headline: 'Google Business optimization',
-      subheading: `We audit and optimize your Google Business profile so you show up when tourists search nearby ${experience ? 'businesses' : 'restaurants'}.`,
-      bullets: [
-        'Full profile audit & keyword optimization',
-        'Category, attributes, and hours review',
-        'Photo uploads and Q&A setup',
-      ],
-      price: '$49',
-      priceNote: 'one-time',
-      cta: 'Get Google Business Setup — $49',
-    },
   }
 }
 
@@ -191,23 +167,11 @@ async function handleCta() {
   if (!type.value) return
   loading.value = true
   try {
-    if (RECURRING_TYPES.includes(type.value)) {
-      const siteId = dashboard.siteId.value
-      if (!siteId) throw new Error('Choose a site before starting checkout')
-      close()
-      await offerSubscribe(siteId, type.value)
-    } else {
-      const res = await $fetch<{ checkoutUrl: string }>('/api/billing/service-addon', {
-        method: 'POST',
-        body: { addonType: type.value },
-      })
-      if (res.checkoutUrl) {
-        close()
-        await navigateTo(res.checkoutUrl, { external: true })
-      } else {
-        throw new Error('Missing checkoutUrl')
-      }
-    }
+    if (!RECURRING_TYPES.includes(type.value)) return
+    const siteId = dashboard.siteId.value
+    if (!siteId) throw new Error('Choose a site before starting checkout')
+    close()
+    await offerSubscribe(siteId, type.value)
   } catch (err) {
     console.error('Checkout error:', err)
     toast.add({ title: 'Something went wrong', description: 'Please visit our help page instead.', color: 'error' })

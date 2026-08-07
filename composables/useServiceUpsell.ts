@@ -2,8 +2,6 @@ export type UpsellType =
   | 'growth'
   | 'managed'
   | 'seo_accelerator'
-  | 'seasonal'
-  | 'gbp_setup'
 
 interface ServiceUpsellState {
   isOpen: boolean

@@ -26,6 +26,10 @@ test('the Pages manager owns the complete block lifecycle', () => {
     /Restore/,
   ]) assert.match(managerSource, pattern)
   assert.match(managerSource, /expectedDocumentUpdatedAt/)
+  assert.match(managerSource, /TenantPageBlockEditor/)
+  assert.match(managerSource, /draggable="true"/)
+  assert.doesNotMatch(managerSource, /Block data JSON/)
+  assert.doesNotMatch(managerSource, /blockJson/)
 })
 
 test('legacy field-based dashboard editor paths are not referenced', () => {

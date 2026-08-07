@@ -15,7 +15,7 @@ import {
   renderCompiledPotteryHousePostsBlock,
   renderCompiledPotteryHouseQaBlock,
   renderCompiledPotteryHouseReviewsBlock,
-  renderCompiledPotteryHouseTranslationsBlock,
+  renderCompiledPotteryHouseLocaleVariantsBlock,
 } from '../seed-definitions/pottery-house.ts'
 
 const isStdout = process.argv.includes('--stdout')
@@ -73,7 +73,7 @@ ${renderCompiledPotteryHouseBlogBlock()}
 
 ${renderCompiledPotteryHouseContentBlock()}
 
-${renderCompiledPotteryHouseTranslationsBlock()}
+${renderCompiledPotteryHouseLocaleVariantsBlock()}
 
 ${renderCompiledPotteryHouseBillingBlock()}
 `

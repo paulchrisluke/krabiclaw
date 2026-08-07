@@ -15,7 +15,7 @@ import {
   renderCompiledDemoBlogBlock,
   renderCompiledDemoQaBlock,
   renderCompiledDemoReviewsBlock,
-  renderCompiledDemoTranslationsBlock,
+  renderCompiledDemoLocaleVariantsBlock,
   renderCompiledDemoBillingBlock,
   renderDemoExperienceSeedBlock,
 } from '../seed-definitions/demo.ts'
@@ -161,7 +161,7 @@ ${renderDemoExperienceSeedBlock()}
 
 ${renderCompiledDemoContentBlock()}
 
-${renderCompiledDemoTranslationsBlock()}
+${renderCompiledDemoLocaleVariantsBlock()}
 
 ${renderCompiledDemoTenantPagesBlock()}
 

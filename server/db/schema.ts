@@ -1138,6 +1138,8 @@ export const organization_billing = sqliteTable("organization_billing", {
 	organization_id: text().primaryKey().references(() => organization.id, { onDelete: "cascade" } ),
 	stripe_customer_id: text().unique(),
 	stripe_subscription_id: text().unique(),
+	ga_client_id: text(),
+	ga_user_id: text().references(() => user.id, { onDelete: "set null" } ),
 	stripe_subscription_item_id: text().unique(),
 	status: text().default("free").notNull(),
 	plan: text().default("free").notNull(),
@@ -2273,6 +2275,35 @@ export const stripe_invoice_payments = sqliteTable("stripe_invoice_payments", {
 }, (table) => [
 	index("stripe_invoice_payments_organization_idx").on(table.organization_id, table.period_end),
 	index("stripe_invoice_payments_subscription_idx").on(table.stripe_subscription_id, table.period_end),
+]);
+
+export const stripe_ga4_subscription_intents = sqliteTable("stripe_ga4_subscription_intents", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	user_id: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
+	stripe_subscription_id: text(),
+	action: text().notNull(),
+	site_id: text().references(() => sites.id, { onDelete: "set null" } ),
+	client_id: text(),
+	session_id: text(),
+	session_captured_at: integer(),
+	previous_price_id: text(),
+	new_price_id: text(),
+	effective_timing: text().default("immediate").notNull(),
+	source: text().default("browser").notNull(),
+	status: text().default("pending").notNull(),
+	lifecycle_sent_at: text(),
+	consumed_at: text(),
+	consumed_event_id: text(),
+	expires_at: text().notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	index("stripe_ga4_subscription_intents_subscription_idx").on(table.stripe_subscription_id, table.status, table.created_at),
+	index("stripe_ga4_subscription_intents_organization_idx").on(table.organization_id, table.status, table.created_at),
+	index("stripe_ga4_subscription_intents_expiry_idx").on(table.status, table.expires_at),
+	check("stripe_ga4_subscription_intents_action_check", sql`${table.action} IN ('initial_subscription', 'upgrade', 'downgrade')`),
+	check("stripe_ga4_subscription_intents_status_check", sql`${table.status} IN ('pending', 'consumed', 'expired')`),
 ]);
 
 export const usage_events = sqliteTable("usage_events", {

@@ -61,6 +61,32 @@ test.describe('dashboard functional smoke', () => {
     expect(nonHydrationErrors).toEqual([])
   })
 
+  test('Pages manager exposes typed block editing and local block lifecycle controls', async ({ page, baseURL }) => {
+    test.setTimeout(60_000)
+    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
+    await page.goto(devLoginUrl(baseURL!, 'user-pottery-house'), { waitUntil: 'load' })
+
+    const response = await page.goto(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/pages`, { waitUntil: 'networkidle' })
+    expect(response?.status()).toBe(200)
+    await expect(page.getByText('Site pages', { exact: true })).toBeVisible()
+    await expect(page.getByText('Blocks', { exact: true })).toBeVisible()
+    await page.getByRole('button', { name: /Clay, calm, and a place to return to\./ }).click()
+    await expect(page.getByText('Block type', { exact: true })).toBeVisible()
+    await expect(page.getByText('Block data JSON', { exact: true })).toHaveCount(0)
+
+    const newBlockType = page.getByRole('combobox', { name: 'New block type' })
+    await expect(newBlockType).toBeVisible()
+    await newBlockType.click()
+    await page.getByRole('option', { name: 'Image', exact: true }).click()
+    await page.getByRole('button', { name: 'Add block', exact: true }).click()
+    await expect(page.getByText('Media asset', { exact: true })).toBeVisible()
+    await expect(page.getByText('Select media', { exact: true })).toBeVisible()
+    await expect(page.getByText('Needs attention', { exact: true })).toBeVisible()
+
+    await page.getByRole('button', { name: 'Delete block' }).last().click()
+    await expect(page.getByText('Media asset', { exact: true })).toHaveCount(0)
+  })
+
   test('canonical account, organization, site, and location routes render with responsive navigation', async ({ page, baseURL }) => {
     test.setTimeout(90_000)
     await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})

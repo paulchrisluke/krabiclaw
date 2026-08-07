@@ -15,7 +15,7 @@ import {
   renderDemoExperienceSeedBlock,
   renderCompiledDemoContentBlock,
   renderCompiledDemoTenantPagesBlock,
-  renderCompiledDemoTranslationsBlock,
+  renderCompiledDemoLocaleVariantsBlock,
   renderCompiledDemoBillingBlock,
 } from "../../seed-definitions/demo.ts";
 import { serializeCompiledSeedBundle } from "../../seed-definitions/serialize.ts";
@@ -163,11 +163,11 @@ test("demo content block delegates page composition to canonical tenant pages", 
 });
 
 test("demo translations block includes Thai translations for content, locations, and menus", () => {
-  const sql = renderCompiledDemoTranslationsBlock();
+  const sql = renderCompiledDemoLocaleVariantsBlock();
   const pages = renderCompiledDemoTenantPagesBlock();
 
   assert.doesNotMatch(sql, /site_content_translations/);
-  assert.match(sql, /demo_translations/);
+  assert.match(sql, /demo_locale_variants/);
   assert.match(sql, /INSERT OR IGNORE INTO business_location_translations/);
   assert.match(sql, /INSERT OR IGNORE INTO menu_translations/);
   assert.match(sql, /INSERT OR IGNORE INTO menu_item_translations/);

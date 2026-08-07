@@ -61,10 +61,15 @@ Pricing managed entirely in Stripe — never duplicated in code. All pricing UI 
 
 | Tier | Price | Key Features |
 |------|-------|-------------|
-| Free (Starter) | $0 | Subdomain, Saya theme, manual editor, basic AI credits, 1 locale, Post-booking review requests |
-| Growth | $49/mo | Custom domain + SSL, Google Business sync, 2,000 AI credits/mo, manual locale editing, Priority Support |
+| Free (Starter) | $0 | Subdomain, Saya theme, manual editor, weekly AI quota, 1 locale, Post-booking review requests |
+| Growth | $49/mo | Custom domain + SSL, Google Business sync, 2,000 AI credits/week, manual locale editing, Priority Support |
 
-Locations are unlimited on all plans. Credit top-ups are available as one-time purchases.
+One Better Auth organization subscription covers every site in the organization. AI
+usage is measured in the append-only `usage_events` ledger and provisioned by
+append-only `usage_quota_grants`; the `ai_credits` row is a derived enforcement
+balance, not a purchasable wallet. One-time credit purchases, service add-ons,
+and automatic top-ups are retired. Their historical tables and fulfillment rows
+remain read-only for audit history.
 
 **Upgrade modal** triggers on: connecting Google Business, custom domain setup, removing KrabiClaw branding.
 
@@ -77,7 +82,13 @@ WhatsApp Business API sends and Google Places API calls cost real per-use money 
 - Charged: WhatsApp notifications (`sendWhatsAppNotification`), ChowBot free-text WhatsApp replies, and on-demand Google Places search/details calls (dashboard autocomplete, onboarding maps import, manual re-sync, the MCP `import_from_maps` tool).
 - Never charged: WhatsApp OTP (`sendWhatsAppOtp`) — auth-critical, must always send — and the background `google-business-sync` cron task, which is infrastructure upkeep a customer didn't explicitly trigger.
 - Exhaustion is a **soft-fail** for both: the action still goes through at zero balance (losing a reservation confirmation is worse than the unpaid cost), unlike the hard 402 block on `/api/ai/*`.
-- Flat per-action credit costs (`ACTION_CREDIT_COSTS` in `ai-credits.ts`) are launch-time estimates pegged against the cheapest $9/500-credit top-up rate vs. list Meta/Google pricing — revisit once real invoiced volume exists.
+- Flat per-action quota costs (`ACTION_CREDIT_COSTS` in `ai-credits.ts`) are launch-time estimates against list Meta/Google pricing — revisit once real invoiced volume exists.
+
+### Locale model
+
+Non-source locales are manually authored variants. The editor and MCP expose
+explicit locale-variant records; there is no automated translation job, review
+queue, or translation entitlement in the active product surface.
 
 ---
 

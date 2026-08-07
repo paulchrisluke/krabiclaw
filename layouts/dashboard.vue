@@ -191,7 +191,6 @@
       </div>
     </div>
 
-    <BillingCreditPurchaseModal />
     <BillingServiceUpsellModal />
     </div>
   </UApp>
@@ -247,7 +246,7 @@ const route = useRoute()
 const config = useRuntimeConfig()
 const sidebarCollapsed = useState<boolean>('dashboard-sidebar-collapsed', () => false)
 const { data: sessionData, refreshSession, signOut } = useAuth()
-const { trackDashboardVisited } = useAnalytics()
+const { trackDashboardVisited, setUserId } = useAnalytics()
 const toast = useToast()
 const stoppingImpersonation = ref(false)
 const { searchTerm: dashboardSearchTerm, loading: dashboardSearchLoading, groups: dashboardSearchGroups } = useDashboardSearch()
@@ -258,6 +257,12 @@ const mobileMoreOpen = ref(false)
 const mobileMoreButtonElement = ref<HTMLElement | null>(null)
 const mobileMoreSheetRef = ref<HTMLElement | null>(null)
 const mobileMoreFocusReturn = ref<HTMLElement | null>(null)
+
+watch(
+  () => sessionData.value?.user?.id ?? null,
+  userId => setUserId(userId),
+  { immediate: true },
+)
 
 const dashboardContextErrors = shallowRef<Record<string, unknown>>({})
 const dashboardContextError = computed(() =>

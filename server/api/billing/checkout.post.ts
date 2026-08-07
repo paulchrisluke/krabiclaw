@@ -3,9 +3,11 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { createAuth, getAuthSession, type CloudflareEnv } from '~/server/utils/auth'
 import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
 import { queryFirst } from '~/server/db'
-import { getOrganizationBillingStatus } from '~/server/utils/billing'
+import { getOrganizationBillingStatus, requireBillingAccess } from '~/server/utils/billing'
 import { isManagedServiceEnabled } from '~/server/utils/feature-flags'
 import { CONCIERGE_PLAN_IDS } from '~/server/utils/better-auth-stripe'
+import { classifyStripePlanChange, isStripeGa4IntentAction, type StripeGa4IntentAction } from '~/shared/stripe-ga4'
+import { recordStripeGa4Intent } from '~/server/utils/stripe-ga4-intents'
 
 interface CheckoutRequest {
   organizationId?: string
@@ -15,6 +17,11 @@ interface CheckoutRequest {
   successUrl?: string
   cancelUrl?: string
   gaClientId?: string
+  gaSessionId?: string
+  gaSessionCapturedAt?: number
+  action?: string
+  previousPriceId?: string
+  newPriceId?: string
 }
 
 async function legacyCheckoutResponse(response: Response) {
@@ -36,7 +43,7 @@ async function legacyCheckoutResponse(response: Response) {
 export default defineEventHandler(async (event) => {
   const body = await readBody<CheckoutRequest>(event)
   if (!body?.plan) return jsonResponse({ error: 'Plan is required' }, { status: 400 })
-  if (!['growth', 'managed', 'seo_accelerator'].includes(body.plan)) {
+  if (!['free', 'growth', 'managed', 'seo_accelerator'].includes(body.plan)) {
     return jsonResponse({ error: 'Invalid plan' }, { status: 400 })
   }
   if (body.interval && body.interval !== 'month' && body.interval !== 'year') {
@@ -58,6 +65,7 @@ export default defineEventHandler(async (event) => {
     explicitOrganizationId: body.organizationId ?? null,
   })
   if (!organization) throw createError({ statusCode: 404, statusMessage: 'No organization found' })
+  await requireBillingAccess(env, env.DB, organization.id, session.user.id)
   if (!body.siteId) throw createError({ statusCode: 400, statusMessage: 'siteId is required' })
   const site = await queryFirst<{ id: string }>(env.DB, `
     SELECT id FROM sites WHERE id = ? AND organization_id = ? LIMIT 1
@@ -94,6 +102,44 @@ export default defineEventHandler(async (event) => {
     })).then(legacyCheckoutResponse)
   }
 
+  const subscriptionId = billingStatus.stripeSubscriptionId ?? null
+  const action = isStripeGa4IntentAction(body.action)
+    ? body.action
+    : classifyStripePlanChange(billingStatus.plan ?? 'free', body.plan, Boolean(subscriptionId))
+  if (!action) throw createError({ statusCode: 400, statusMessage: 'The selected plan is already active' })
+  if (action !== 'initial_subscription' && !subscriptionId) {
+    throw createError({ statusCode: 400, statusMessage: 'An existing subscription is required for a plan change' })
+  }
+  await recordStripeGa4Intent(env.DB, {
+    organizationId: organization.id,
+    userId: session.user.id,
+    stripeSubscriptionId: subscriptionId,
+    action: action as StripeGa4IntentAction,
+    siteId: body.siteId,
+    clientId: body.gaClientId,
+    sessionId: body.gaSessionId,
+    sessionCapturedAt: body.gaSessionCapturedAt,
+    previousPriceId: body.previousPriceId,
+    newPriceId: body.newPriceId,
+    effectiveTiming: action === 'downgrade' ? 'period_end' : 'immediate',
+    source: 'browser',
+  })
+
+  if (body.plan === 'free') {
+    target.pathname = '/api/auth/subscription/cancel'
+    return await createAuth(env).handler(new Request(target, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        referenceId: organization.id,
+        subscriptionId,
+        customerType: 'organization',
+        returnUrl: billingUrl.toString(),
+        disableRedirect: true,
+      }),
+    })).then(legacyCheckoutResponse)
+  }
+
   return await createAuth(env).handler(new Request(target, {
     method: 'POST',
     headers,
@@ -101,11 +147,18 @@ export default defineEventHandler(async (event) => {
       plan: body.plan,
       annual: body.interval === 'year',
       referenceId: organization.id,
-      ...(billingStatus.stripeSubscriptionId ? { subscriptionId: billingStatus.stripeSubscriptionId } : {}),
+      ...(subscriptionId ? { subscriptionId } : {}),
+      ...(action === 'downgrade' ? { scheduleAtPeriodEnd: true } : {}),
       customerType: 'organization',
       metadata: {
         site_id: body.siteId,
         ...(body.gaClientId ? { ga_client_id: body.gaClientId } : {}),
+        ...(body.gaSessionId ? { ga_session_id: body.gaSessionId } : {}),
+        ...(typeof body.gaSessionCapturedAt === 'number' ? { ga_session_captured_at: String(body.gaSessionCapturedAt) } : {}),
+        user_id: session.user.id,
+        analytics_action: action,
+        ...(body.previousPriceId ? { previous_price_id: body.previousPriceId } : {}),
+        ...(body.newPriceId ? { new_price_id: body.newPriceId } : {}),
       },
       successUrl: callbackUrl,
       cancelUrl,

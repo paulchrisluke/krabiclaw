@@ -25,17 +25,15 @@
       </div>
     </div>
 
-    <!-- Out of credits -->
+    <!-- Subscription quota exhausted -->
     <div v-if="outOfCredits" class="rounded-lg border border-error-200 bg-error-50 dark:border-error-800 dark:bg-error-950 px-4 py-3 flex flex-col gap-3">
       <div class="flex items-center gap-2 text-sm text-error-600 dark:text-error-400">
         <UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0" />
-        <span class="font-medium">No AI credits remaining</span>
+        <span class="font-medium">Subscription AI quota exhausted</span>
       </div>
-      <div class="flex flex-wrap gap-2">
-        <UButton size="sm" color="error" variant="solid" :loading="buyingCredits === 500" :disabled="!!buyingCredits" @click="purchaseCredits(500)">500 — $9</UButton>
-        <UButton size="sm" color="error" variant="soft" :loading="buyingCredits === 2500" :disabled="!!buyingCredits" @click="purchaseCredits(2500)">2,500 — $29</UButton>
-        <UButton size="sm" color="error" variant="soft" :loading="buyingCredits === 5000" :disabled="!!buyingCredits" @click="purchaseCredits(5000)">5,000 — $49</UButton>
-      </div>
+      <NuxtLink v-if="orgSettings.billing.value" :to="orgSettings.billing.value" class="text-sm font-medium text-error-700 underline dark:text-error-300">
+        Review your subscription plan →
+      </NuxtLink>
     </div>
 
     <UAlert v-else-if="error" color="error" variant="soft" :description="error" icon="i-lucide-triangle-alert" />
@@ -126,25 +124,12 @@ const generating = ref(false)
 const enhancing = ref(false)
 const error = ref<string | null>(null)
 const outOfCredits = ref(false)
-const buyingCredits = ref<number | null>(null)
 const result = ref<GeneratedHistoryItem | null>(null)
 const history = ref<GeneratedHistoryItem[]>([])
 const activeIdx = ref(0)
 const abortController = ref<AbortController | null>(null)
 
-const { purchase: purchaseCreditsFn } = useCreditPurchase()
-
-async function purchaseCredits(bundle: 500 | 2500 | 5000) {
-  buyingCredits.value = bundle
-  try {
-    await purchaseCreditsFn(bundle, () => { outOfCredits.value = false })
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Failed to purchase credits. Please try again.'
-    error.value = msg
-  } finally {
-    buyingCredits.value = null
-  }
-}
+const orgSettings = useOrgSettings()
 
 onMounted(() => {
   if (props.initialPrompt) prompt.value = props.initialPrompt

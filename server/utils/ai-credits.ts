@@ -1,5 +1,3 @@
-import { triggerAutoTopupIfNeeded } from '~/server/utils/auto-topup'
-import type { BillingEnv } from '~/server/utils/billing'
 import { execute, executeBatch, queryFirst, type DbClient } from '~/server/db'
 import { recordUsageEvent } from '~/server/utils/usage-metering'
 import { getPlanEntitlements } from '~/server/utils/billing-entitlements'
@@ -109,9 +107,8 @@ export function tokensToCredits(inputTokens: number, outputTokens: number): numb
 
 // Flat per-action credit costs for non-token-based external API usage
 // (WhatsApp Business API sends, Google Places API calls) that has real
-// per-call cost but no natural token count. Pegged as launch-time estimates
-// against the cheapest $9/500-credit top-up bundle (~$0.018/credit) vs. list
-// Meta/Google pricing — revisit once real invoiced volume exists.
+// per-call cost but no natural token count. These consume the same
+// subscription-backed usage quota as token-based AI work.
 export const ACTION_CREDIT_COSTS = {
   whatsapp_notification: 2,
   whatsapp_free_text: 1,
@@ -261,7 +258,6 @@ export async function hasCredits(
  * Must be called after a successful AI Gateway response.
  * Atomically checks and deducts credits to prevent TOCTOU race conditions.
  * Throws if insufficient credits remain.
- * Pass billingEnv to enable automatic top-up when balance drops below threshold.
  */
 export async function chargeCredits(
   db: DbClient,
@@ -276,8 +272,7 @@ export async function chargeCredits(
     outputTokens: number
     cfGatewayLogId?: string | null
     idempotencyKey?: string | null
-  },
-  billingEnv?: BillingEnv
+  }
 ): Promise<{ creditsCharged: number; newBalance: number }> {
   const creditsCharged = tokensToCredits(opts.inputTokens, opts.outputTokens)
   const now = new Date().toISOString()
@@ -378,10 +373,6 @@ export async function chargeCredits(
 
   const newBalance = updated?.balance ?? 0
 
-  if (billingEnv && balanceWasDebited) {
-    triggerAutoTopupIfNeeded(db, billingEnv, organizationId, newBalance).catch(() => {})
-  }
-
   return { creditsCharged, newBalance }
 }
 
@@ -402,8 +393,7 @@ export async function chargeFlatCredits(
     action: FlatCreditAction
     cfGatewayLogId?: string | null
     idempotencyKey?: string | null
-  },
-  billingEnv?: BillingEnv
+  }
 ): Promise<{ charged: boolean; creditsCharged: number; newBalance: number }> {
   const credits = ACTION_CREDIT_COSTS[opts.action]
   const now = new Date().toISOString()
@@ -492,10 +482,6 @@ export async function chargeFlatCredits(
 
     const updated = await queryFirst<{ balance: number }>(db, 'SELECT balance FROM ai_credits WHERE organization_id = ? LIMIT 1', [organizationId])
     const newBalance = updated?.balance ?? 0
-
-    if (billingEnv) {
-      triggerAutoTopupIfNeeded(db, billingEnv, organizationId, newBalance).catch(() => {})
-    }
 
     return { charged: true, creditsCharged: credits, newBalance }
   } catch (err) {

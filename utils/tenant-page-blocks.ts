@@ -55,7 +55,7 @@ export interface TenantPageBlockDefinition {
   allowedRecipes: readonly string[]
   allowedPageTypes: readonly TenantPageType[]
   fields: readonly string[]
-  editor: 'structured-json'
+  editor: 'typed-fields'
   renderer: { saya: 'tenant-page'; blawby: 'tenant-page' }
   accessibility: 'required' | 'inherited'
   seo: 'structured' | 'inherited' | 'none'
@@ -165,7 +165,7 @@ function blockDefinitionWithMetadata(
     allowedRecipes,
     allowedPageTypes: options.allowedPageTypes ?? TENANT_PAGE_TYPES,
     fields,
-    editor: 'structured-json',
+    editor: 'typed-fields',
     renderer: { saya: 'tenant-page', blawby: 'tenant-page' },
     accessibility: options.accessibility ?? 'required',
     seo: options.seo ?? 'inherited',

@@ -6,6 +6,14 @@ import { grantQuota } from '~/server/utils/usage-metering'
 import { getEffectiveAccessPlan } from '~/server/utils/billing-access'
 import { betterAuthTimestampToIso } from '~/server/utils/better-auth-timestamps'
 import { isManagedServiceEnabled } from '~/server/utils/feature-flags'
+import {
+  invoiceLineIsProration,
+  invoiceLineIsSubscription,
+  invoiceLinePrice,
+  invoiceLineSubscriptionId,
+  invoiceLineSubscriptionItemId,
+  loadStripeInvoiceLines,
+} from '~/server/utils/stripe-invoice-lines'
 
 const WEBHOOK_LEASE_MS = 5 * 60 * 1000
 const INVOICE_QUOTA_BILLING_REASONS = new Set(['subscription_create', 'subscription_cycle'])
@@ -684,7 +692,19 @@ export async function enqueueStripeEvent(db: DbClient, event: Stripe.Event): Pro
     VALUES (?, ?, ?, 'pending', ?, 0, ?)
   `, [crypto.randomUUID(), event.id, event.type, payload, createdAt])
   if (Number(inserted?.meta.changes ?? 0) > 0) return true
-  return false
+
+  // A new Stripe delivery is an explicit replay request for an event that
+  // previously exhausted its worker attempts. Keep the dead-letter timestamp
+  // as audit evidence, refresh the authoritative payload, and give the replay
+  // its own bounded attempt window.
+  const replayed = await execute(db, `
+    UPDATE stripe_webhook_events
+    SET status = 'pending', payload = ?, error = NULL,
+        claimed_at = NULL, lease_expires_at = NULL, claim_token = NULL,
+        next_attempt_at = NULL, attempt_count = 0
+    WHERE stripe_event_id = ? AND status = 'dead_letter'
+  `, [payload, event.id])
+  return Number(replayed?.meta.changes ?? 0) > 0
 }
 
 export const MAX_STRIPE_WEBHOOK_ATTEMPTS = 5
@@ -790,16 +810,17 @@ interface InvoiceSubscriptionResolution {
   stripeSubscription: Stripe.Subscription
 }
 
-export function invoiceSubscriptionId(invoice: Stripe.Invoice & {
-  subscription?: string | { id: string } | null
-  parent?: {
-    subscription_details?: {
-      subscription?: string | { id: string } | null
-    } | null
-  } | null
+export function invoiceSubscriptionId(invoice: {
+  subscription?: unknown
+  parent?: unknown
 }): string | null {
-  const subscriptionValue = invoice.subscription ?? invoice.parent?.subscription_details?.subscription
-  return typeof subscriptionValue === 'string' ? subscriptionValue : subscriptionValue?.id ?? null
+  const parent = invoice.parent as { subscription_details?: { subscription?: unknown } | null } | null | undefined
+  const subscriptionValue = invoice.subscription ?? parent?.subscription_details?.subscription
+  return typeof subscriptionValue === 'string'
+    ? subscriptionValue
+    : subscriptionValue && typeof subscriptionValue === 'object' && 'id' in subscriptionValue && typeof subscriptionValue.id === 'string'
+      ? subscriptionValue.id
+      : null
 }
 
 async function resolveInvoiceSubscription(
@@ -1037,76 +1058,13 @@ export async function grantInvoiceQuota(
   if (!stripeSubscriptionId) return
 
   const subscription = await resolveInvoiceSubscription(db, stripe, stripeSubscriptionId, adapter)
-  type InvoiceLine = Stripe.InvoiceLineItem & {
-    type?: string
-    subscription?: string | Stripe.Subscription | null
-    subscription_item?: string | null
-    price?: string | Stripe.Price | null
-    period?: { start?: number; end?: number } | null
-    proration?: boolean
-    pricing?: {
-      type?: string
-      price_details?: { price?: string | Stripe.Price | null } | null
-    } | null
-    parent?: {
-      type?: string
-      subscription_item_details?: {
-        subscription?: string | null
-        subscription_item?: string | null
-        proration?: boolean
-      } | null
-      invoice_item_details?: {
-        subscription?: string | null
-        proration?: boolean
-      } | null
-    } | null
-  }
-  const linePrice = (line: InvoiceLine): string | Stripe.Price | null | undefined =>
-    line.price ?? line.pricing?.price_details?.price
-  let invoiceLines: InvoiceLine[] = [...(invoice.lines?.data ?? []) as InvoiceLine[]]
-  let startingAfter = invoiceLines.at(-1)?.id
-  const mustReloadFirstPage = invoiceLines.some(line => typeof linePrice(line) === 'string')
-  if (mustReloadFirstPage) {
-    invoiceLines = []
-    startingAfter = undefined
-  }
-  while (invoice.lines?.has_more || mustReloadFirstPage) {
-    const page = await stripe.invoices.listLineItems(invoice.id, {
-      limit: 100,
-      ...(startingAfter ? { starting_after: startingAfter } : {}),
-      expand: ['data.pricing.price_details.price'],
-    })
-    invoiceLines.push(...page.data)
-    if (!page.has_more) break
-    const next = page.data.at(-1)?.id
-    if (!next || next === startingAfter) throw new Error(`Stripe invoice ${invoice.id} line pagination did not advance; retrying`)
-    startingAfter = next
-  }
-  invoiceLines = await Promise.all(invoiceLines.map(async (line) => {
-    const price = linePrice(line)
-    if (typeof price !== 'string') return line
-    return {
-      ...line,
-      price: await stripe.prices.retrieve(price, { expand: ['product'] }),
-    }
-  }))
+  const invoiceLines = await loadStripeInvoiceLines(stripe, invoice)
 
   const recurringLines = invoiceLines.filter((line) => {
-    const parent = line.parent
-    const lineSubscription = line.subscription
-    const lineSubscriptionId = typeof lineSubscription === 'string'
-      ? lineSubscription
-      : lineSubscription?.id
-        ?? parent?.subscription_item_details?.subscription
-        ?? parent?.invoice_item_details?.subscription
-    const proration = Boolean(line.proration)
-      || Boolean(parent?.subscription_item_details?.proration)
-      || Boolean(parent?.invoice_item_details?.proration)
-    const price = linePrice(line)
-    const isSubscriptionLine = line.type === 'subscription' || parent?.type === 'subscription_item_details'
-    return lineSubscriptionId === stripeSubscriptionId
-      && isSubscriptionLine
-      && !proration
+    const price = invoiceLinePrice(line)
+    return invoiceLineSubscriptionId(line) === stripeSubscriptionId
+      && invoiceLineIsSubscription(line)
+      && !invoiceLineIsProration(line)
       && typeof price !== 'string'
       && Boolean(price?.recurring)
       && Boolean(line.period?.start && line.period?.end)
@@ -1122,14 +1080,10 @@ export async function grantInvoiceQuota(
     resolvedSubscriptionPlan.plan.priceId,
     resolvedSubscriptionPlan.plan.annualDiscountPriceId,
   ].filter((priceId): priceId is string => Boolean(priceId)))
-  const invoiceLineSubscriptionItemId = (line: InvoiceLine): string | null =>
-    line.subscription_item
-    ?? line.parent?.subscription_item_details?.subscription_item
-    ?? null
   const basePlanLines = recurringLines.filter((line) => {
     const subscriptionItemId = invoiceLineSubscriptionItemId(line)
     if (baseSubscriptionItemId) return subscriptionItemId === baseSubscriptionItemId
-    const price = linePrice(line)
+    const price = invoiceLinePrice(line)
     return typeof price !== 'string' && Boolean(price?.id && basePlanPriceIds.has(price.id))
   })
   if (basePlanLines.length !== 1) {
@@ -1137,7 +1091,7 @@ export async function grantInvoiceQuota(
   }
   const line = basePlanLines[0]
   if (!line) throw new Error(`Stripe invoice ${invoice.id} has no base subscription item line; retrying`)
-  const price = linePrice(line)
+  const price = invoiceLinePrice(line)
   if (!price || typeof price === 'string' || !price.id) {
     throw new Error(`Stripe invoice ${invoice.id} base subscription item line has no price; retrying`)
   }

@@ -31,7 +31,7 @@ export interface QuotaGrantInput {
   periodKey: string
   periodStart: string
   periodEnd?: string | null
-  grantType: 'plan' | 'reset' | 'manual' | 'top_up'
+  grantType: 'plan' | 'reset' | 'manual'
   reason: string
   createdBy?: string | null
   idempotencyKey: string
@@ -85,7 +85,7 @@ function applyGrantQuery(
     }
   }
 
-  if (input.grantType === 'top_up' || input.grantType === 'manual') {
+  if (input.grantType === 'manual') {
     return {
       query: `
         UPDATE ai_credits

@@ -2,13 +2,10 @@
 // Run: node scripts/seed-stripe.mjs
 // Requires STRIPE_SECRET_KEY in .env (reads via dotenv-style manual parse).
 //
-// Launch note: Managed and SEO Accelerator are intentionally NOT marketed or
-// purchasable in the app right now — gated off by MANAGED_SERVICE_ENABLED
-// (server/utils/feature-flags.ts, off by default) because a lean launch team
-// can't reliably deliver their concierge promise yet. This script still seeds
-// them into Stripe as-is; that's deliberate (the Stripe products/prices stay
-// untouched so the flag can be flipped back on without re-seeding), not drift
-// to "fix" by deleting or archiving them here.
+// Launch note: Managed and SEO Accelerator remain recurring Stripe products,
+// but are not marketed while MANAGED_SERVICE_ENABLED is off. One-time credit,
+// add-on, and auto-top-up products are retired from the application; this
+// script never creates or updates those catalog entries.
 import { readFileSync, existsSync } from 'node:fs'
 import { resolve, extname, basename, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -214,61 +211,6 @@ async function createSubscriptionPlan({ name, description, planId, amountCents, 
   return product
 }
 
-// --- Create one-time prices ---
-async function createOneTimePrice({ productName, amountCents, priceKey, description, features }) {
-  console.log(`\nCreating one-time price: ${productName} ($${amountCents / 100})`)
-
-  const productData = {
-    name: productName,
-    metadata: { addon_type: priceKey },
-    ...(description ? { description } : {}),
-    ...(features?.length ? { marketing_features: features.map(f => ({ name: f })) } : {}),
-  }
-
-  // Check if product already exists by metadata.addon_type
-  const existingProducts = await stripe.products.list({ active: true, limit: 100 })
-  const existingProduct = existingProducts.data.find(p => p.metadata?.addon_type === priceKey)
-
-  if (existingProduct) {
-    console.log(`  Product already exists: ${existingProduct.id} — updating description & features`)
-    await stripe.products.update(existingProduct.id, {
-      ...(description ? { description } : {}),
-      ...(features?.length ? { marketing_features: features.map(f => ({ name: f })) } : {}),
-    })
-    const existingPrices = await stripe.prices.list({
-      product: existingProduct.id,
-      active: true,
-      limit: 100
-    })
-    const existingPrice = existingPrices.data.find(p => p.currency === 'usd' && p.unit_amount === amountCents)
-    if (existingPrice) {
-      console.log(`  Price already exists: ${existingPrice.id} — skipping`)
-      return { product: existingProduct, price: existingPrice }
-    } else {
-      console.log(`  Product exists but matching price does not. Creating price...`)
-      const price = await stripe.prices.create({
-        product: existingProduct.id,
-        currency: 'usd',
-        unit_amount: amountCents,
-      })
-      console.log(`  Created price:   ${price.id}`)
-      return { product: existingProduct, price }
-    }
-  }
-
-  const product = await stripe.products.create(productData)
-
-  const price = await stripe.prices.create({
-    product: product.id,
-    currency: 'usd',
-    unit_amount: amountCents,
-  })
-
-  console.log(`  Created product: ${product.id}`)
-  console.log(`  Created price:   ${price.id}`)
-  return { product, price }
-}
-
 async function main() {
   console.log('=== KrabiClaw Stripe Seeder ===')
   console.log(`Mode: ${STRIPE_SECRET_KEY.startsWith('sk_test') ? 'TEST' : 'LIVE'}`)
@@ -331,37 +273,8 @@ async function main() {
     ],
   })
 
-  // One-time add-ons
-  const { price: seasonalPrice } = await createOneTimePrice({
-    productName: 'Seasonal Relaunch Package',
-    amountCents: 9900,
-    priceKey: 'seasonal',
-    description: 'Content refresh for a new season, promotion, or menu change — updated copy, photos, and Google Business sync.',
-    features: [
-      'Updated homepage and menu copy',
-      'Seasonal photo refresh',
-      'Google Business profile sync',
-      'New promotion or event feature',
-    ],
-  })
-
-  const { price: gbpPrice } = await createOneTimePrice({
-    productName: 'Google Business Optimization',
-    amountCents: 4900,
-    priceKey: 'gbp_setup',
-    description: 'Full Google Business Profile setup and optimization — categories, photos, posts, Q&A, and service areas configured by our team.',
-    features: [
-      'Category and service area optimization',
-      'Photo upload and ordering',
-      'Q&A seeding for common guest questions',
-      'First Google post published',
-    ],
-  })
-
-  console.log('\n=== Add these to your .env ===')
-  console.log(`STRIPE_PRICE_SEASONAL=${seasonalPrice.id}`)
-  console.log(`STRIPE_PRICE_GBP_SETUP=${gbpPrice.id}`)
-  console.log('\nDone! Verify products at https://dashboard.stripe.com/test/products')
+  console.log('\nRecurring subscription plans reconciled. No one-time products or prices are created.')
+  console.log('Verify the catalog at https://dashboard.stripe.com/test/products')
 }
 
 main().catch(err => {

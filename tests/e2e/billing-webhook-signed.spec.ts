@@ -98,7 +98,7 @@ test.describe('billing webhook signed flow', () => {
     expect(replayBody.success).toBe(true)
   })
 
-  test('immediately fulfills a paid service add-on once and accepts subscription/setup checkout modes', async ({ page, baseURL }) => {
+  test('ignores retired one-time checkout metadata and accepts subscription/setup checkout modes', async ({ page, baseURL }) => {
     const login = await page.goto(devLoginUrl(baseURL!), {
       waitUntil: 'domcontentloaded',
       headers: devLoginHeaders(),
@@ -124,7 +124,7 @@ test.describe('billing webhook signed flow', () => {
     }
 
     const timestamp = Math.floor(Date.now() / 1000)
-    const sessionId = `cs_addon_e2e_${Date.now()}`
+    const sessionId = `cs_retired_addon_e2e_${Date.now()}`
     const paymentEvent = {
       id: `evt_addon_e2e_${Date.now()}`,
       object: 'event',
@@ -137,7 +137,7 @@ test.describe('billing webhook signed flow', () => {
           object: 'checkout.session',
           mode: 'payment',
           payment_status: 'paid',
-          payment_intent: `pi_addon_e2e_${Date.now()}`,
+          payment_intent: `pi_retired_addon_e2e_${Date.now()}`,
           metadata: { organization_id: organizationId, type: 'service_addon', addon_type: 'seasonal' },
         },
       },
@@ -153,13 +153,13 @@ test.describe('billing webhook signed flow', () => {
         event: body.webhook_events.find(item => item.stripe_event_id === paymentEvent.id)?.status,
         purchases: body.service_addon_purchases.filter(item => item.checkout_session_id === sessionId).length,
       }
-    }, { timeout: 10_000 }).toEqual({ event: 'processed', purchases: 1 })
+    }, { timeout: 10_000 }).toEqual({ event: 'processed', purchases: 0 })
 
     const replay = await sendSigned(paymentEvent)
     expect(replay.status()).toBe(200)
     const replayState = await page.request.get(stateUrl, { headers: devLoginHeaders() })
     const replayBody = await replayState.json() as { service_addon_purchases: Array<{ checkout_session_id: string }> }
-    expect(replayBody.service_addon_purchases.filter(item => item.checkout_session_id === sessionId)).toHaveLength(1)
+    expect(replayBody.service_addon_purchases.filter(item => item.checkout_session_id === sessionId)).toHaveLength(0)
 
     const modeEventIds: string[] = []
     for (const mode of ['subscription', 'setup']) {

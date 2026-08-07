@@ -27,24 +27,6 @@
           :description="errorMessage"
         />
 
-        <!-- Auto top-up warning banner -->
-        <UAlert
-          v-if="savedCard && !autoTopupEnabled"
-          color="warning"
-          variant="soft"
-          icon="i-lucide-zap"
-          title="Auto top-up is off"
-          description="When your credits run out, AI features will stop working. Enable auto top-up to keep things running."
-        >
-          <template #actions>
-            <UButton size="xs" color="warning" variant="soft" @click="autoTopupModalOpen = true">
-              Set up auto top-up
-            </UButton>
-          </template>
-        </UAlert>
-
-
-
         <UCard v-if="sites.length">
           <template #header>
             <div class="flex items-center justify-between">
@@ -124,7 +106,7 @@
             </div>
             <UBadge label="Default" color="success" variant="soft" size="xs" />
           </div>
-          <p v-else class="text-sm text-muted">No payment method saved. Add one by purchasing credits or upgrading your plan.</p>
+          <p v-else class="text-sm text-muted">No payment method saved. Add one when you subscribe or upgrade your plan.</p>
         </UCard>
 
         <!-- AI Credits -->
@@ -140,29 +122,10 @@
                 <span v-if="credits" class="text-sm text-muted">
                   {{ credits.lifetime_used.toLocaleString() }} used · {{ credits.balance.toLocaleString() }} remaining
                 </span>
-                <UDropdownMenu v-if="savedCard" :items="creditBundles" :content="{ align: 'end' }">
-                  <UButton size="xs" color="primary" variant="soft" icon="i-lucide-credit-card" trailing-icon="i-lucide-chevron-down" :loading="buyingCredits !== null">
-                    Buy credits
-                  </UButton>
-                </UDropdownMenu>
                 <UButton v-else size="xs" color="primary" variant="soft" icon="i-lucide-zap" @click="openServiceUpsell('growth', 'billing-credits')">
                   Upgrade for more
                 </UButton>
               </div>
-            </div>
-
-            <!-- Auto top-up row -->
-            <div v-if="savedCard" class="flex items-center justify-between rounded-lg border border-default px-4 py-3">
-              <div class="min-w-0 flex-1">
-                <p class="text-sm font-medium text-highlighted">Auto top-up</p>
-                <p class="text-xs text-muted">
-                  <span v-if="autoTopupEnabled">Enabled — top up {{ autoTopupBundleLabel }} when balance drops below {{ autoTopupThreshold }} credits</span>
-                  <span v-else>Off — credits won't auto-refill when you run out</span>
-                </p>
-              </div>
-              <UButton size="xs" color="neutral" variant="ghost" class="ml-4 shrink-0" @click="autoTopupModalOpen = true">
-                {{ autoTopupEnabled ? 'Settings' : 'Set up' }}
-              </UButton>
             </div>
             </div>
           </template>
@@ -313,27 +276,28 @@
     </template>
   </UDashboardPanel>
 
-  <BillingAutoTopupSettingsModal
-    v-model:open="autoTopupModalOpen"
-    :initial-enabled="autoTopupEnabled"
-    :initial-bundle="autoTopupBundle"
-    :initial-threshold="autoTopupThreshold"
-    @saved="onAutoTopupSaved"
-  />
 </template>
 
 <script setup lang="ts">
 const dashboardApi = useDashboardApi()
 
 import { authClient } from '~/lib/auth-client'
-import { CREDIT_BUNDLES, type CreditBundleSize } from '~/shared/creditBundles'
+import { classifyStripePlanChange } from '~/shared/stripe-ga4'
 const toast = useToast()
 
 definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
 const router = useRouter()
-const { trackPlanViewed, trackCheckoutStarted, trackPaymentMethodAdded } = useAnalytics()
+const {
+  trackPlanViewed,
+  trackCheckoutStarted,
+  trackSubscriptionUpgrade,
+  trackSubscriptionDowngrade,
+  trackSubscriptionCheckoutSuccess,
+  getBillingAnalyticsContext,
+} = useAnalytics()
+const { data: sessionData, isAuthenticated } = useAuth()
 const loading = ref(true)
 const billing = ref<ApiRecord | null>(null)
 const credits = ref<ApiRecord | null>(null)
@@ -360,74 +324,13 @@ const annual = ref(false)
 interface SavedCard { brand: string; last4: string; exp_month: number; exp_year: number }
 const savedCard = ref<SavedCard | null>(null)
 
-const autoTopupEnabled = ref(false)
-const autoTopupBundle = ref<CreditBundleSize>(500)
-const autoTopupThreshold = ref(100)
-const autoTopupModalOpen = ref(false)
-
-const autoTopupBundleLabel = computed(() => {
-  const b = CREDIT_BUNDLES.find(x => x.credits === autoTopupBundle.value)
-  return b ? `${b.credits.toLocaleString()} credits (${b.price})` : '500 credits ($9)'
-})
-
-function onAutoTopupSaved(settings: { enabled: boolean; bundle: CreditBundleSize; threshold: number }) {
-  autoTopupEnabled.value = settings.enabled
-  autoTopupBundle.value = settings.bundle
-  autoTopupThreshold.value = settings.threshold
-}
-
-const buyingCredits = ref<number | null>(null)
-const { purchase: purchaseCreditsFn } = useCreditPurchase()
-
-async function purchaseCredits(bundle: 500 | 2500 | 5000) {
-  if (process.env.NODE_ENV === 'development') {
-    buyingCredits.value = bundle
-    try {
-      const res = await dashboardApi<{ balance?: number; error?: string }>('/api/billing/credits/add', {
-        method: 'POST',
-        body: { bundle },
-        validate: (value): value is { balance?: number; error?: string } =>
-          isRecord(value)
-          && (typeof value.balance === 'number' || typeof value.error === 'string'),
-      })
-      if (res.balance !== undefined) {
-        toast.add({ description: `Added ${bundle} credits. New balance: ${res.balance}`, color: 'success' })
-        await loadCredits()
-      }
-    } catch { /* non-critical */ } finally {
-      buyingCredits.value = null
-    }
-    return
-  }
-  await purchaseCreditsFn(bundle, async () => {
-    trackPaymentMethodAdded()
-    await loadCredits()
-  })
-}
-
-const creditBundles = [
-  [
-    { label: '500 credits — $9', icon: 'i-lucide-zap', onSelect: () => purchaseCredits(500) },
-    { label: '2,500 credits — $29', icon: 'i-lucide-zap', onSelect: () => purchaseCredits(2500) },
-    { label: '5,000 credits — $49', icon: 'i-lucide-zap', onSelect: () => purchaseCredits(5000) },
-  ]
-]
-
 const { plans, displayPrice } = usePlans()
 const { open: openServiceUpsell } = useServiceUpsell()
 
-const loadCredits = async () => {
-  creditsLoading.value = true
-  try {
-    credits.value = await dashboardApi<ApiRecord>('/api/billing/credits', {
-      validate: isCreditsResponse,
-    })
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'Failed to load AI credits'
-    throw error
-  } finally {
-    creditsLoading.value = false
-  }
+function planPriceId(planId: string | null | undefined): string | null {
+  if (!planId) return null
+  const plan = plans.value?.find(item => item.id === planId)
+  return plan?.prices.find(price => price.interval === (annual.value ? 'year' : 'month'))?.id ?? null
 }
 
 const { formatRelativeTime, formatExactDateTime: formatDate } = useHumanTime()
@@ -456,15 +359,55 @@ const upgradeToPlan = async (plan: string) => {
       await openBillingPortal()
       return
     }
+    const currentPlan = selectedSite.value?.plan ?? (typeof billing.value?.plan === 'string' ? billing.value.plan : 'free')
+    const subscriptionId = typeof billing.value?.stripeSubscriptionId === 'string'
+      ? billing.value.stripeSubscriptionId
+      : null
+    const action = classifyStripePlanChange(currentPlan, plan, Boolean(subscriptionId))
+    if (!action) throw new Error('The selected plan is already active')
+    const analyticsContext = getBillingAnalyticsContext()
+    const previousPriceId = planPriceId(currentPlan)
+    const newPriceId = planPriceId(plan)
+    const effectiveTiming = action === 'downgrade' ? 'period_end' : 'immediate'
+    await recordBillingAnalyticsIntent(dashboardApi, {
+      organizationId,
+      siteId: selectedSiteId.value,
+      subscriptionId,
+      action,
+      ...analyticsContext,
+      previousPriceId,
+      newPriceId,
+      effectiveTiming,
+    })
+    if (action === 'upgrade') trackSubscriptionUpgrade(plan)
+    if (action === 'downgrade' && plan !== 'free') trackSubscriptionDowngrade(plan)
+
+    if (plan === 'free') {
+      if (!subscriptionId) throw new Error('No active subscription to cancel')
+      const cancelResponse = await authClient.subscription.cancel({
+        referenceId: organizationId,
+        subscriptionId,
+        customerType: 'organization',
+        returnUrl: currentUrl.toString(),
+        disableRedirect: true,
+      })
+      if (cancelResponse.error) throw new Error(cancelResponse.error.message ?? 'Failed to open cancellation flow')
+      const portalUrl = cancelResponse.data && 'url' in cancelResponse.data ? cancelResponse.data.url : null
+      if (!portalUrl) throw new Error('Better Auth Stripe did not return a cancellation URL')
+      await navigateTo(portalUrl, { external: true })
+      return
+    }
     const response = await authClient.subscription.upgrade({
       plan,
       annual: annual.value,
       referenceId: organizationId,
-      ...(typeof billing.value?.stripeSubscriptionId === 'string'
-        ? { subscriptionId: billing.value.stripeSubscriptionId }
-        : {}),
+      ...(subscriptionId ? { subscriptionId } : {}),
       customerType: 'organization',
-      metadata: { site_id: selectedSiteId.value, ga_client_id: getGaClientId() },
+      metadata: {
+        site_id: selectedSiteId.value,
+        ...buildStripeSubscriptionMetadata(action, analyticsContext, sessionData.value?.user?.id, previousPriceId, newPriceId),
+      },
+      ...(action === 'downgrade' ? { scheduleAtPeriodEnd: true } : {}),
       successUrl: successUrl.toString(),
       cancelUrl: cancelUrl.toString(),
       returnUrl: currentUrl.toString(),
@@ -557,7 +500,6 @@ const isBillingResponse = (value: unknown): value is ApiRecord =>
   && isRecord(value.billing)
   && typeof value.billing.organizationId === 'string'
   && typeof value.billing.plan === 'string'
-  && typeof value.billing.autoTopupEnabled === 'boolean'
 const requestEvent = useRequestEvent()
 const { data: billingResource, error: billingResourceError, pending: billingResourcePending } = await useAsyncData<BillingResource>(
   computed(() => `dashboard-billing:${String(route.params.orgSlug || '')}`),
@@ -598,16 +540,13 @@ watchEffect(() => {
   savedCard.value = resource.paymentMethod.card
   sites.value = resource.sites.sites
   if (!selectedSiteId.value && sites.value.length === 1) selectedSiteId.value = sites.value[0]!.siteId
-  autoTopupEnabled.value = Boolean(billing.value.autoTopupEnabled)
-  const bundleValue = Number(billing.value.autoTopupBundle)
-  autoTopupBundle.value = bundleValue === 2500 || bundleValue === 5000 ? bundleValue : 500
-  autoTopupThreshold.value = Number(billing.value.autoTopupThreshold) || 100
 })
 
 onMounted(async () => {
   const { success, plan, canceled, siteId, ...restQuery } = route.query
 
   if (success === 'true') {
+    trackSubscriptionCheckoutSuccess(selectedSite.value?.plan ?? undefined)
     const paymentStatus = billing.value?.paymentStatus
     toast.add({
       description: paymentStatus === 'paid'
@@ -626,7 +565,6 @@ onMounted(async () => {
   }
 
   // Auto-start checkout if plan query param exists
-  const { isAuthenticated } = useAuth()
   if (typeof siteId === 'string' && sites.value.some(s => s.siteId === siteId)) {
     selectedSiteId.value = siteId
   }

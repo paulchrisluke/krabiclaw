@@ -42,7 +42,7 @@ export interface CuratedSiteDefinition extends CuratedSiteIdentity {
   menus: CuratedMenuDefinition[]
   locationQa: CuratedLocationQaDefinition[]
   posts: CuratedPostDefinition[]
-  siteContentTranslations?: CuratedSiteContentTranslationDefinition[]
+  siteLocaleVariants?: CuratedPageLocaleVariantDefinition[]
   businessLocationTranslations?: CuratedBusinessLocationTranslationDefinition[]
   menuTranslations?: CuratedMenuTranslationDefinition[]
   menuItemTranslations?: CuratedMenuItemTranslationDefinition[]
@@ -251,7 +251,7 @@ export interface CuratedPostDefinition {
   channelJobs: CuratedPostChannelJobDefinition[]
 }
 
-export interface CuratedSiteContentTranslationDefinition {
+export interface CuratedPageLocaleVariantDefinition {
   id: string
   locationId: string | null
   locale: string
@@ -461,7 +461,7 @@ export interface CompiledSeedPost {
   channelJobs: CompiledSeedPostChannelJob[]
 }
 
-export interface CompiledSeedSiteContentTranslation {
+export interface CompiledSeedPageLocaleVariant {
   id: string
   organizationId: string
   siteId: string
@@ -473,8 +473,8 @@ export interface CompiledSeedSiteContentTranslation {
   heroTitle: string | null
   heroSubtitle: string | null
   value: string | null
-  type: CuratedSiteContentTranslationDefinition['type']
-  status: CuratedSiteContentTranslationDefinition['status']
+  type: CuratedPageLocaleVariantDefinition['type']
+  status: CuratedPageLocaleVariantDefinition['status']
   sourceHash: string
   translatedAt: string | null
   reviewedAt: string | null
@@ -543,7 +543,7 @@ export interface CompiledCuratedSiteBundle {
   menus: CompiledSeedMenu[]
   locationQa: CompiledSeedLocationQa[]
   posts: CompiledSeedPost[]
-  siteContentTranslations: CompiledSeedSiteContentTranslation[]
+  siteLocaleVariants: CompiledSeedPageLocaleVariant[]
   businessLocationTranslations: CompiledSeedBusinessLocationTranslation[]
   menuTranslations: CompiledSeedMenuTranslation[]
   menuItemTranslations: CompiledSeedMenuItemTranslation[]

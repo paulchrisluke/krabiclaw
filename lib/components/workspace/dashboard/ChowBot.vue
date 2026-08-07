@@ -67,18 +67,16 @@
       <div v-if="isDepleted" class="shrink-0 border-b border-error-200 dark:border-error-800 bg-error-50 dark:bg-error-950 px-4 py-3 flex flex-col gap-2">
         <div class="flex items-center gap-2 text-xs text-error-600 dark:text-error-400">
           <UIcon name="i-lucide-triangle-alert" class="size-3.5 shrink-0" />
-          <span class="font-medium">No AI credits remaining</span>
+          <span class="font-medium">Subscription AI quota exhausted</span>
         </div>
-        <div class="flex gap-2">
-          <UButton size="xs" color="error" variant="solid" :loading="buyingCredits === 500" :disabled="!!buyingCredits" @click="purchaseCredits(500)">500 — $9</UButton>
-          <UButton size="xs" color="error" variant="soft" :loading="buyingCredits === 2500" :disabled="!!buyingCredits" @click="purchaseCredits(2500)">2,500 — $29</UButton>
-          <UButton size="xs" color="error" variant="soft" :loading="buyingCredits === 5000" :disabled="!!buyingCredits" @click="purchaseCredits(5000)">5,000 — $49</UButton>
-        </div>
+        <NuxtLink v-if="orgSettings.billing.value" :to="orgSettings.billing.value" class="text-xs font-medium text-error-700 underline dark:text-error-300" @click="close">
+          Review your subscription plan →
+        </NuxtLink>
       </div>
       <div v-else-if="isLow" class="shrink-0 bg-warning-50 dark:bg-warning-950 px-4 py-2 text-xs text-warning-600 dark:text-warning-400 flex items-center gap-2">
         <UIcon name="i-lucide-triangle-alert" class="size-3.5 shrink-0" />
         Low credits ({{ balance }} remaining).
-        <NuxtLink v-if="orgSettings.billing.value" :to="orgSettings.billing.value" class="underline" @click="close">Top up →</NuxtLink>
+        <NuxtLink v-if="orgSettings.billing.value" :to="orgSettings.billing.value" class="underline" @click="close">Review plan →</NuxtLink>
       </div>
 
       <ChowBotConversation
@@ -194,18 +192,6 @@ const { balance, total, isLow, isDepleted, fetch: fetchCredits } = useAiCredits(
 
 watch(isOpen, (open: boolean) => { if (open && siteId.value) fetchCredits() })
 
-const buyingCredits = ref<number | null>(null)
-const { purchase: purchaseCreditsFn } = useCreditPurchase()
-
-async function purchaseCredits(bundle: 500 | 2500 | 5000) {
-  buyingCredits.value = bundle
-  try {
-    await purchaseCreditsFn(bundle, async () => { await fetchCredits() })
-  } finally {
-    buyingCredits.value = null
-  }
-}
-
 const input = ref('')
 
 watch(draftMessage, (text: string | null) => {
@@ -245,7 +231,7 @@ const emptyDescription = computed(() => setupMode.value && !siteId.value
 )
 const promptPlaceholder = computed(() => {
   if (setupMode.value && !siteId.value) return setupStep.value === 'source' ? 'Tell ChowBot where to start...' : 'Reply to ChowBot...'
-  if (isDepleted.value) return 'Purchase credits above to continue...'
+  if (isDepleted.value) return 'Review your subscription plan to continue...'
   if (pendingFile.value) return 'Add a caption (optional) then press send...'
   if (pendingText.value) return 'Add a note (optional) then press send...'
   return 'Ask ChowBot anything...'

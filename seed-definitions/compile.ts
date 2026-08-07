@@ -12,7 +12,7 @@ import type {
   CompiledSeedPostChannelJob,
   CompiledSeedReview,
   CompiledSeedSiteContent,
-  CompiledSeedSiteContentTranslation,
+  CompiledSeedPageLocaleVariant,
   CuratedSiteDefinition,
 } from './contracts.ts'
 
@@ -46,7 +46,7 @@ export function compileCuratedSiteFixture(
   uniqueStrings(fixture.locationQa.map((q) => q.id), 'location qa id')
   uniqueStrings(fixture.posts.map((p) => p.id), 'post id')
   uniqueStrings(fixture.posts.flatMap((p) => p.channelJobs.map((j) => j.id)), 'post channel job id')
-  uniqueStrings((fixture.siteContentTranslations ?? []).map((entry) => entry.id), 'site content translation id')
+  uniqueStrings((fixture.siteLocaleVariants ?? []).map((entry) => entry.id), 'page locale variant id')
   uniqueStrings((fixture.businessLocationTranslations ?? []).map((entry) => entry.id), 'business location translation id')
   uniqueStrings((fixture.menuTranslations ?? []).map((entry) => entry.id), 'menu translation id')
   uniqueStrings((fixture.menuItemTranslations ?? []).map((entry) => entry.id), 'menu item translation id')
@@ -257,7 +257,7 @@ export function compileCuratedSiteFixture(
     }
   })
 
-  const siteContentTranslations: CompiledSeedSiteContentTranslation[] = (fixture.siteContentTranslations ?? []).map((entry) => {
+  const siteLocaleVariants: CompiledSeedPageLocaleVariant[] = (fixture.siteLocaleVariants ?? []).map((entry) => {
     if (!siteLocaleIds.has(entry.locale)) {
       throw new Error(`Site content translation "${entry.id}" references unknown locale "${entry.locale}"`)
     }
@@ -375,7 +375,7 @@ export function compileCuratedSiteFixture(
     menus,
     locationQa,
     posts,
-    siteContentTranslations,
+    siteLocaleVariants,
     businessLocationTranslations,
     menuTranslations,
     menuItemTranslations,

@@ -12,7 +12,7 @@ import {
   renderCompiledPotteryHouseQaBlock,
   renderCompiledPotteryHousePostsBlock,
   renderCompiledPotteryHouseContentBlock,
-  renderCompiledPotteryHouseTranslationsBlock,
+  renderCompiledPotteryHouseLocaleVariantsBlock,
   renderCompiledPotteryHouseBillingBlock,
   renderCompiledPotteryHouseBlogBlock,
 } from "../../seed-definitions/pottery-house.ts";
@@ -244,7 +244,7 @@ test("multi-locale tenant page seeds preserve every locale variant", () => {
 });
 
 test("pottery house translations block includes Thai content and location translations", () => {
-  const sql = renderCompiledPotteryHouseTranslationsBlock();
+  const sql = renderCompiledPotteryHouseLocaleVariantsBlock();
   const pages = renderCompiledPotteryHouseContentBlock();
 
   assert.doesNotMatch(sql, /site_content_translations/);

@@ -40,12 +40,30 @@ test.describe('Blawby professional_service CMS editing', () => {
 
   test('NCLS home/about/contact page blocks are editable from the Pages manager', async ({ page, baseURL }) => {
     test.setTimeout(90_000)
+    const fixture = await page.request.get(`${baseURL}/api/public/sites/${SITE_ID}/blawby/document`, {
+      headers: blawbyExtraHeaders,
+      params: { recipe: 'home' },
+    })
+    test.skip(fixture.status() === 404, 'NCLS Blawby fixture is not seeded in this environment')
     await loginAsNclsOwner(page, baseURL!)
 
     const index = await page.goto(`${baseURL}${DASHBOARD_BASE}/pages`, { waitUntil: 'load' })
     expect(index?.status()).toBe(200)
     await expect(page.getByText('Site pages', { exact: true })).toBeVisible()
     await expect(page.getByText('Home', { exact: true })).toBeVisible()
+    await page.getByRole('button', { name: 'Home', exact: true }).click()
+    await expect(page.getByText('Block type', { exact: true })).toBeVisible()
+    await expect(page.getByText('Block data JSON', { exact: true })).toHaveCount(0)
+
+    const newBlockType = page.getByRole('combobox', { name: 'New block type' })
+    await newBlockType.click()
+    await page.getByRole('option', { name: 'Image', exact: true }).click()
+    await page.getByRole('button', { name: 'Add block', exact: true }).click()
+    await expect(page.getByText('Media asset', { exact: true })).toBeVisible()
+    await expect(page.getByText('Select media', { exact: true })).toBeVisible()
+    await expect(page.getByText('Needs attention', { exact: true })).toBeVisible()
+    await page.getByRole('button', { name: 'Delete block' }).last().click()
+    await expect(page.getByText('Media asset', { exact: true })).toHaveCount(0)
 
     const edits = [
       { pageId: 'home', recipe: 'home' },
@@ -95,6 +113,11 @@ test.describe('Blawby professional_service CMS editing', () => {
 
   test('NCLS professional-services dashboard exposes editable offerings and policy pages', async ({ page, baseURL }) => {
     test.setTimeout(90_000)
+    const fixture = await page.request.get(`${baseURL}/api/public/sites/${SITE_ID}/blawby/document`, {
+      headers: blawbyExtraHeaders,
+      params: { recipe: 'home' },
+    })
+    test.skip(fixture.status() === 404, 'NCLS Blawby fixture is not seeded in this environment')
     await loginAsNclsOwner(page, baseURL!)
 
     const dashboard = await page.goto(`${baseURL}${DASHBOARD_BASE}/professional-services`, { waitUntil: 'load' })

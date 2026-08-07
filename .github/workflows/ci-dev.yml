@@ -31,6 +31,8 @@ jobs:
         run: yarn lint:better-auth-boundaries
       - name: Run data-loading guardrails
         run: yarn lint:data-loading
+      - name: Run product-model guard
+        run: yarn lint:product-model
 
   focused-typecheck:
     name: Focused typecheck

@@ -742,7 +742,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       ],
     },
   ],
-  siteContentTranslations: [
+  siteLocaleVariants: [
     {
       id: 'sct-ph-th-home-hero',
       locationId: null,
@@ -1293,13 +1293,13 @@ export function renderCompiledPotteryHouseContentBlock(): string {
     organizationId: compiledPotteryHouseSeed.identity.organizationId,
     locales: compiledPotteryHouseSeed.siteLocales.map(locale => locale.locale),
     rows: compiledPotteryHouseSeed.siteContent,
-    translations: compiledPotteryHouseSeed.siteContentTranslations,
+    translations: compiledPotteryHouseSeed.siteLocaleVariants,
     sqlValue,
     sqlJson,
   })
 }
 
-export function renderCompiledPotteryHouseTranslationsBlock(): string {
+export function renderCompiledPotteryHouseLocaleVariantsBlock(): string {
   const businessLocationTranslationRows = compiledPotteryHouseSeed.businessLocationTranslations
     .map((entry) => `  (${[
       sqlValue(entry.id),
@@ -1319,12 +1319,12 @@ export function renderCompiledPotteryHouseTranslationsBlock(): string {
     ].join(', ')})`)
     .join(',\n')
 
-  return `-- BEGIN GENERATED: pottery_translations
+  return `-- BEGIN GENERATED: pottery_locale_variants
 INSERT OR IGNORE INTO business_location_translations
   (id, organization_id, site_id, location_id, locale, title, address, city, description, short_description, status, source_hash, translated_at, reviewed_at)
 VALUES
 ${businessLocationTranslationRows};
--- END GENERATED: pottery_translations`
+-- END GENERATED: pottery_locale_variants`
 }
 
 export function renderCompiledPotteryHouseBillingBlock(): string {

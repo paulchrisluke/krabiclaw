@@ -84,24 +84,48 @@
             <template #header>
               <div class="flex items-center justify-between gap-3">
                 <div><h3 class="font-semibold text-highlighted">Blocks</h3><p class="text-sm text-muted">Typed sections shared by Saya and Blawby.</p></div>
-                <UButton size="sm" icon="i-lucide-plus" label="Add block" @click="addBlock" />
+                <div class="flex items-center gap-2">
+                  <USelect v-model="newBlockType" :items="blockTypeOptions" size="sm" aria-label="New block type" />
+                  <UButton size="sm" icon="i-lucide-plus" label="Add block" @click="addBlock" />
+                </div>
               </div>
             </template>
             <div class="space-y-3">
-              <div v-for="(block, index) in selected.blocks" :key="block.id" class="rounded-xl border border-default p-4">
-                <div class="flex flex-wrap items-center justify-between gap-3">
-                  <div class="flex items-center gap-2">
+              <div
+                v-for="(block, index) in selected.blocks"
+                :key="block.id"
+                class="rounded-xl border p-4 transition-colors"
+                :class="selectedBlockIndex === index ? 'border-primary bg-primary/5' : 'border-default bg-default'"
+                :data-block-index="index"
+                @click="selectedBlockIndex = index"
+              >
+                <div
+                  class="flex cursor-grab flex-wrap items-center justify-between gap-3 active:cursor-grabbing"
+                  draggable="true"
+                  :aria-label="`Reorder ${block.type} block`"
+                  @dragstart="startDragging(index, $event)"
+                  @dragover.prevent
+                  @drop="dropBlock(index)"
+                  @dragend="finishDragging"
+                >
+                  <div class="flex min-w-0 items-center gap-2">
+                    <UIcon name="i-lucide-grip-vertical" class="size-4 shrink-0 text-muted" />
                     <UBadge color="neutral" variant="subtle">{{ index + 1 }}</UBadge>
-                    <USelect v-model="block.type" :items="blockTypeOptions" size="sm" />
+                    <div class="min-w-0">
+                      <p class="truncate font-medium text-highlighted">{{ blockTypeLabel(block.type) }}</p>
+                      <p v-if="selectedBlockIndex !== index" class="truncate text-xs text-muted">{{ blockSummary(block) }}</p>
+                    </div>
                   </div>
                   <div class="flex gap-1">
-                    <UButton icon="i-lucide-chevron-up" color="neutral" variant="ghost" size="xs" :disabled="index === 0" aria-label="Move block up" @click="moveBlock(index, -1)" />
-                    <UButton icon="i-lucide-chevron-down" color="neutral" variant="ghost" size="xs" :disabled="index === selected.blocks.length - 1" aria-label="Move block down" @click="moveBlock(index, 1)" />
-                    <UButton icon="i-lucide-trash-2" color="error" variant="ghost" size="xs" aria-label="Delete block" @click="selected.blocks.splice(index, 1)" />
-                    <UButton icon="i-lucide-copy" color="neutral" variant="ghost" size="xs" aria-label="Duplicate block" @click="duplicateBlock(index)" />
+                    <UButton icon="i-lucide-chevron-up" color="neutral" variant="ghost" size="xs" :disabled="index === 0" aria-label="Move block up" @click.stop="moveBlock(index, -1)" />
+                    <UButton icon="i-lucide-chevron-down" color="neutral" variant="ghost" size="xs" :disabled="index === selected.blocks.length - 1" aria-label="Move block down" @click.stop="moveBlock(index, 1)" />
+                    <UButton icon="i-lucide-trash-2" color="error" variant="ghost" size="xs" aria-label="Delete block" @click.stop="removeBlock(index)" />
+                    <UButton icon="i-lucide-copy" color="neutral" variant="ghost" size="xs" aria-label="Duplicate block" @click.stop="duplicateBlock(index)" />
                   </div>
                 </div>
-                <UTextarea v-model="blockJson[index]" class="mt-3 font-mono text-xs" :rows="6" autoresize aria-label="Block data JSON" />
+                <div v-if="selectedBlockIndex === index" class="mt-4 border-t border-default pt-4" @click.stop>
+                  <TenantPageBlockEditor :block="block" :site-id="resolvedSiteId" @update:block="updateBlock(index, $event)" />
+                </div>
               </div>
               <UAlert v-if="!selected.blocks.length" color="neutral" variant="soft" title="No blocks" description="Add a block to start composing this page." />
             </div>
@@ -119,10 +143,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
+import { TENANT_PAGE_BLOCK_REGISTRY, createTenantPageBlock, type TenantPageBlock, type TenantPageBlockType } from '~/utils/tenant-page-blocks'
+import { createTenantPageEditorData, tenantPageBlockSummary, validateTenantPageBlock } from '~/utils/tenant-page-editor'
 
 interface PageSummary { id: string; title: string; path: string; page_type: string; recipe: string | null; status: string; locale: string; sort_order: number; updated_at: string; published_revision_id: string | null }
-interface PageBlock { id: string; type: string; position: number; data: Record<string, unknown> }
-interface PageDetailResponse extends PageSummary { page_id: string; site_id: string; organization_id: string; summary: string | null; seo_title: string | null; seo_description: string | null; canonical_url: string | null; robots: string | null; blocks: PageBlock[]; document: { updated_at: string; draft_revision_id: string | null; published_revision_id: string | null } }
+interface PageDetailResponse extends PageSummary { page_id: string; site_id: string; organization_id: string; summary: string | null; seo_title: string | null; seo_description: string | null; canonical_url: string | null; robots: string | null; blocks: TenantPageBlock[]; document: { updated_at: string; draft_revision_id: string | null; published_revision_id: string | null } }
 interface PageDetail extends Omit<PageDetailResponse, 'recipe' | 'summary' | 'seo_title' | 'seo_description' | 'canonical_url' | 'robots'> { recipe: string; summary: string; seo_title: string; seo_description: string; canonical_url: string; robots: string }
 
 const dashboard = useDashboardSite()
@@ -141,14 +166,17 @@ const loading = ref(true)
 const loadError = ref<string | null>(null)
 const editorError = ref<string | null>(null)
 const busy = ref<string | null>(null)
-const blockJson = ref<string[]>([])
 const previewToken = ref('')
 const dirty = ref(false)
 const hydrating = ref(false)
+const selectedBlockIndex = ref(0)
+const draggedBlockIndex = ref<number | null>(null)
+const newBlockType = ref<TenantPageBlockType>('markdown')
 
 const localeOptions = computed(() => locales.value.map(value => ({ label: value, value })))
 const pageTypeOptions = ['custom', 'recipe', 'legal'].map(value => ({ label: value, value }))
-const blockTypeOptions = ['heading', 'markdown', 'image', 'gallery', 'faq', 'divider', 'cta', 'callout', 'hero', 'button_group', 'feature_grid', 'testimonial_grid', 'contact_cta', 'booking_cta', 'donation_choices', 'offering_grid', 'location_grid'].map(value => ({ label: value, value }))
+const blockTypeOptions = Object.values(TENANT_PAGE_BLOCK_REGISTRY).map(definition => ({ label: definition.label, value: definition.type }))
+const blockErrors = computed(() => selected.value?.blocks.map(block => validateTenantPageBlock(block)) ?? [])
 const previewUrl = computed(() => {
   if (!selected.value?.id || !previewToken.value) return ''
   const base = String(config.public.platformDomain || config.public.freeSiteDomain).replace(/\/$/, '')
@@ -215,7 +243,7 @@ async function selectPage(id: string) {
   try {
     const response = await dashboardApi<{ page: PageDetailResponse }>(`/api/editor/sites/${siteId}/pages/${id}`, { validate: validatePage })
     selected.value = toEditorPage(response.page)
-    blockJson.value = selected.value.blocks.map(block => JSON.stringify(block.data, null, 2))
+    selectedBlockIndex.value = selected.value.blocks.length ? 0 : -1
     dirty.value = false
   } catch (error) {
     editorError.value = error instanceof Error ? error.message : 'Unable to load page'
@@ -230,14 +258,15 @@ function startNewPage() {
     id: '', page_id: '', site_id: resolvedSiteId, organization_id: '', locale: locale.value, path: '/new-page', title: 'New page', page_type: 'custom', recipe: '', status: 'draft', sort_order: pages.value.length, updated_at: '', published_revision_id: null,
     summary: '', seo_title: '', seo_description: '', canonical_url: '', robots: '', blocks: [], document: { updated_at: '', draft_revision_id: null, published_revision_id: null },
   }
-  blockJson.value = []
+  selectedBlockIndex.value = -1
   dirty.value = true
 }
 
 function addBlock() {
   if (!selected.value) return
-  selected.value.blocks.push({ id: crypto.randomUUID(), type: 'markdown', position: selected.value.blocks.length, data: { markdown: '' } })
-  blockJson.value.push(JSON.stringify({ markdown: '' }, null, 2))
+  const position = selected.value.blocks.length
+  selected.value.blocks.push(createTenantPageBlock(newBlockType.value, createTenantPageEditorData(newBlockType.value), position))
+  selectedBlockIndex.value = position
 }
 
 function moveBlock(index: number, delta: number) {
@@ -246,43 +275,82 @@ function moveBlock(index: number, delta: number) {
   if (next < 0 || next >= selected.value.blocks.length) return
   const block = selected.value.blocks.splice(index, 1)[0]!
   selected.value.blocks.splice(next, 0, block)
-  const json = blockJson.value.splice(index, 1)[0]!
-  blockJson.value.splice(next, 0, json)
+  selected.value.blocks.forEach((item, position) => { item.position = position })
+  if (selectedBlockIndex.value === index) selectedBlockIndex.value = next
+  else if (selectedBlockIndex.value === next) selectedBlockIndex.value = index
 }
 
 function duplicateBlock(index: number) {
   if (!selected.value) return
   const original = selected.value.blocks[index]
   if (!original) return
-  const copy = { ...original, id: crypto.randomUUID(), data: { ...original.data }, position: index + 1 }
+  const copy: TenantPageBlock = { ...original, id: crypto.randomUUID(), data: structuredClone(original.data), position: index + 1 }
   selected.value.blocks.splice(index + 1, 0, copy)
-  blockJson.value.splice(index + 1, 0, JSON.stringify(copy.data, null, 2))
   selected.value.blocks.forEach((block, position) => { block.position = position })
+  selectedBlockIndex.value = index + 1
 }
 
-function syncBlockData() {
+function updateBlock(index: number, block: TenantPageBlock) {
+  if (!selected.value || !selected.value.blocks[index]) return
+  selected.value.blocks[index] = { ...block, position: index }
+}
+
+function removeBlock(index: number) {
   if (!selected.value) return
-  selected.value.blocks.forEach((block, index) => {
-    const raw = blockJson.value[index]
-    if (typeof raw !== 'string') throw new Error(`Block ${index + 1} data is missing`)
-    const parsed = JSON.parse(raw) as unknown
-    if (!isRecord(parsed)) throw new Error(`Block ${index + 1} data must be a JSON object`)
-    block.data = parsed
-    block.position = index
-  })
+  selected.value.blocks.splice(index, 1)
+  selected.value.blocks.forEach((block, position) => { block.position = position })
+  if (!selected.value.blocks.length) selectedBlockIndex.value = -1
+  else selectedBlockIndex.value = Math.min(index, selected.value.blocks.length - 1)
+}
+
+function startDragging(index: number, event: DragEvent) {
+  draggedBlockIndex.value = index
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', String(index))
+  }
+}
+
+function dropBlock(targetIndex: number) {
+  const sourceIndex = draggedBlockIndex.value
+  draggedBlockIndex.value = null
+  if (sourceIndex == null || sourceIndex === targetIndex) return
+  if (!selected.value) return
+  const block = selected.value.blocks.splice(sourceIndex, 1)[0]
+  if (!block) return
+  selected.value.blocks.splice(targetIndex, 0, block)
+  selected.value.blocks.forEach((item, position) => { item.position = position })
+  selectedBlockIndex.value = targetIndex
+}
+
+function finishDragging() {
+  draggedBlockIndex.value = null
+}
+
+function blockTypeLabel(type: string) {
+  return TENANT_PAGE_BLOCK_REGISTRY[type as TenantPageBlockType]?.label ?? type
+}
+
+function blockSummary(block: TenantPageBlock) {
+  return tenantPageBlockSummary(block)
 }
 
 async function save() {
   if (!selected.value) return
   busy.value = 'save'; editorError.value = null
   try {
-    syncBlockData()
+    const invalidIndex = blockErrors.value.findIndex(errors => errors.length > 0)
+    if (invalidIndex >= 0) {
+      selectedBlockIndex.value = invalidIndex
+      throw new Error(`Resolve the highlighted fields in block ${invalidIndex + 1} before saving.`)
+    }
+    selected.value.blocks.forEach((block, index) => { block.position = index })
     const body = { id: selected.value.id || undefined, pageId: selected.value.page_id || undefined, locale: selected.value.locale, path: selected.value.path, title: selected.value.title, summary: selected.value.summary, seoTitle: selected.value.seo_title, seoDescription: selected.value.seo_description, canonicalUrl: selected.value.canonical_url, robots: selected.value.robots, pageType: selected.value.page_type, recipe: selected.value.recipe, sortOrder: selected.value.sort_order, blocks: selected.value.blocks, expectedDocumentUpdatedAt: selected.value.id ? selected.value.document.updated_at : undefined }
     const response = selected.value.id
       ? await dashboardApi<{ page: PageDetailResponse }>(`/api/editor/sites/${siteId}/pages/${selected.value.id}`, { method: 'PATCH', body, validate: validatePage })
       : await dashboardApi<{ page: PageDetailResponse }>(`/api/editor/sites/${siteId}/pages`, { method: 'POST', body, validate: validatePage })
     selected.value = toEditorPage(response.page)
-    blockJson.value = selected.value.blocks.map(block => JSON.stringify(block.data, null, 2))
+    selectedBlockIndex.value = selected.value.blocks.length ? Math.min(selectedBlockIndex.value, selected.value.blocks.length - 1) : -1
     await loadPages()
     dirty.value = false
     toast.add({ title: 'Saved', description: 'Page draft saved.', color: 'success' })
@@ -298,7 +366,7 @@ async function action(name: string, path: string, confirmMessage?: string, extra
   try {
     const response = await dashboardApi<{ page: PageDetailResponse }>(`/api/editor/sites/${siteId}/pages/${selected.value.id}/${path}`, { method: 'POST', body: { expectedDocumentUpdatedAt: selected.value.document.updated_at, ...extraBody }, validate: validatePage })
     selected.value = toEditorPage(response.page)
-    blockJson.value = selected.value.blocks.map(block => JSON.stringify(block.data, null, 2))
+    selectedBlockIndex.value = selected.value.blocks.length ? Math.min(selectedBlockIndex.value, selected.value.blocks.length - 1) : -1
     await loadPages()
     dirty.value = false
   } catch (error) { editorError.value = error instanceof Error ? error.message : `Unable to ${name} page` } finally { busy.value = null }
@@ -332,15 +400,15 @@ async function removePage() {
 async function duplicate() {
   if (!selected.value) return
   const original = selected.value
-  selected.value = { ...original, id: '', page_id: '', path: `${original.path}-copy`, title: `${original.title} copy`, status: 'draft', published_revision_id: null, document: { updated_at: '', draft_revision_id: null, published_revision_id: null }, blocks: original.blocks.map(block => ({ ...block, id: crypto.randomUUID(), data: { ...block.data } })) }
-  blockJson.value = selected.value.blocks.map(block => JSON.stringify(block.data, null, 2))
+  selected.value = { ...original, id: '', page_id: '', path: `${original.path}-copy`, title: `${original.title} copy`, status: 'draft', published_revision_id: null, document: { updated_at: '', draft_revision_id: null, published_revision_id: null }, blocks: original.blocks.map((block, index) => ({ ...block, id: crypto.randomUUID(), data: structuredClone(block.data), position: index })) }
+  selectedBlockIndex.value = selected.value.blocks.length ? 0 : -1
   dirty.value = true
   await save()
 }
 
-watch([selected, blockJson], () => {
+watch(selected, () => {
   if (!hydrating.value) dirty.value = true
-}, { deep: true })
+}, { deep: true, flush: 'sync' })
 
 watch(locale, async (nextLocale, previousLocale) => {
   if (loading.value || nextLocale === previousLocale) return

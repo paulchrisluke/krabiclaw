@@ -1483,7 +1483,7 @@
       ]
     }
   ],
-  "siteContentTranslations": [
+  "siteLocaleVariants": [
     {
       "id": "sct-demo-th-home-hero",
       "organizationId": "org-demo",

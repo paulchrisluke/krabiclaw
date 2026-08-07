@@ -1142,7 +1142,7 @@ export const demoFixture: CuratedSiteDefinition = {
       ],
     },
   ],
-  siteContentTranslations: [
+  siteLocaleVariants: [
     {
       id: 'sct-demo-th-home-hero',
       locationId: null,
@@ -1878,7 +1878,7 @@ export function renderCompiledDemoTenantPagesBlock(): string {
     'home', 'about', 'contact', 'locations', 'menu', 'order', 'experiences', 'reservations', 'qa', 'reviews', 'posts', 'photos',
   ]))
   const blocks = pages.map(page => renderCanonicalSeedPage('site-demo', 'org-demo', page, 'en', sourceRows.filter(entry => entry.page === page)))
-  const translations = compiledDemoSeed.siteContentTranslations.filter(entry => !entry.locationId)
+  const translations = compiledDemoSeed.siteLocaleVariants.filter(entry => !entry.locationId)
   for (const locale of Array.from(new Set(translations.map(entry => entry.locale)))) {
     for (const page of pages) {
       const translatedRows = sourceRows.filter(entry => entry.page === page).map(source => {
@@ -1894,7 +1894,7 @@ export function renderCompiledDemoTenantPagesBlock(): string {
   return `-- BEGIN GENERATED: demo_tenant_pages\n${blocks.join('\n')}\n-- END GENERATED: demo_tenant_pages`
 }
 
-export function renderCompiledDemoTranslationsBlock(): string {
+export function renderCompiledDemoLocaleVariantsBlock(): string {
   const businessLocationTranslationRows = compiledDemoSeed.businessLocationTranslations
     .map((entry) => `  (${[
       sqlValue(entry.id),
@@ -1950,7 +1950,7 @@ export function renderCompiledDemoTranslationsBlock(): string {
     ].join(', ')})`)
     .join(',\n')
 
-  return `-- BEGIN GENERATED: demo_translations
+  return `-- BEGIN GENERATED: demo_locale_variants
 INSERT OR IGNORE INTO business_location_translations
   (id, organization_id, site_id, location_id, locale, title, address, city, description, short_description, status, source_hash, translated_at, reviewed_at)
 VALUES
@@ -1965,7 +1965,7 @@ INSERT OR IGNORE INTO menu_item_translations
   (id, organization_id, site_id, menu_item_id, locale, section, name, description, allergens, dietary_notes, status, source_hash, translated_at, reviewed_at)
 VALUES
 ${menuItemTranslationRows};
--- END GENERATED: demo_translations`
+-- END GENERATED: demo_locale_variants`
 }
 
 export function renderCompiledDemoBillingBlock(): string {

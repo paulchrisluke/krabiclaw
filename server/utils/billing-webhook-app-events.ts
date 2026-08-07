@@ -1,6 +1,6 @@
 import type Stripe from 'stripe'
 import type { CloudflareEnv } from '~/server/utils/auth'
-import { execute, executeBatch, queryFirst } from '~/server/db'
+import { queryFirst } from '~/server/db'
 import { completePaidSiteTransfer } from '~/server/utils/site-transfer'
 import { invoiceSubscriptionId, markOrganizationPayment, type BetterAuthSubscriptionAdapter } from '~/server/utils/better-auth-stripe'
 
@@ -46,8 +46,10 @@ function invoicePeriodEndIso(invoice: Stripe.Invoice & { period_end?: number; li
 }
 
 /**
- * Handles the remaining one-time application purchases. Subscription events
- * are intentionally excluded: Better Auth Stripe owns those lifecycle events.
+ * Handles the non-subscription application events that remain outside Better
+ * Auth Stripe. Subscription events are intentionally excluded: Better Auth
+ * Stripe owns those lifecycle events. Historical one-time checkout metadata
+ * is acknowledged and ignored; it must not create new credits or add-ons.
  */
 export async function handleApplicationStripeEvent(
   env: CloudflareEnv,
@@ -56,7 +58,8 @@ export async function handleApplicationStripeEvent(
   adapter: BetterAuthSubscriptionAdapter,
 ): Promise<void> {
   if (
-    event.type === 'invoice.payment_failed'
+    event.type === 'invoice.payment_succeeded'
+    || event.type === 'invoice.payment_failed'
     || event.type === 'invoice.voided'
     || event.type === 'invoice.marked_uncollectible'
   ) {
@@ -69,13 +72,15 @@ export async function handleApplicationStripeEvent(
     if (subscriptionId) await markSubscriptionPayment(
       db,
       subscriptionId,
-      'failed',
+      event.type === 'invoice.payment_succeeded' ? 'paid' : 'failed',
       adapter,
       undefined,
       event,
       invoice.id,
       invoicePeriodEndIso(invoice),
-      typeof invoice.created === 'number' ? new Date(invoice.created * 1000).toISOString() : null,
+      event.type === 'invoice.payment_succeeded'
+        ? null
+        : typeof invoice.created === 'number' ? new Date(invoice.created * 1000).toISOString() : null,
     )
     return
   }
@@ -98,78 +103,12 @@ export async function handleApplicationStripeEvent(
   }
   if (session.payment_status !== 'paid') return
 
-  if (metadata.type === 'credit_topup') {
-    const credits = Number(metadata.credits)
-    if (!organizationId || !Number.isSafeInteger(credits) || credits <= 0) {
-      throw new Error(`Invalid credit top-up metadata for checkout ${session.id}`)
-    }
-    const now = new Date().toISOString()
-    await executeBatch(db, [
-      {
-        query: `
-          INSERT OR IGNORE INTO ai_credits
-            (organization_id, balance, lifetime_used, last_topped_up_at, updated_at)
-          VALUES (?, 0, 0, NULL, ?)
-        `,
-        params: [organizationId, now],
-      },
-      {
-        query: `
-          INSERT OR IGNORE INTO stripe_credit_topups
-            (checkout_session_id, organization_id, credits, created_at)
-          VALUES (?, ?, ?, ?)
-        `,
-        params: [session.id, organizationId, credits, now],
-      },
-      {
-        query: `
-          UPDATE ai_credits
-          SET balance = balance + ?, last_topped_up_at = ?, updated_at = ?
-          WHERE organization_id = ?
-            AND EXISTS (
-              SELECT 1 FROM stripe_credit_topups
-              WHERE checkout_session_id = ?
-                AND organization_id = ?
-                AND credits = ?
-                AND processed_at IS NULL
-            )
-        `,
-        params: [credits, now, now, organizationId, session.id, organizationId, credits],
-      },
-      {
-        query: `
-          UPDATE stripe_credit_topups
-          SET processed_at = ?
-          WHERE checkout_session_id = ? AND processed_at IS NULL
-        `,
-        params: [now, session.id],
-      },
-    ])
-    return
-  }
-
-  if (metadata.type === 'service_addon') {
-    const addonType = metadata.addon_type
-    if (!organizationId || !addonType) throw new Error(`Invalid service add-on metadata for checkout ${session.id}`)
-    const paymentIntentId = typeof session.payment_intent === 'string'
-      ? session.payment_intent
-      : session.payment_intent?.id ?? null
-    await execute(db, `
-      INSERT INTO service_addon_purchases
-        (id, organization_id, addon_type, checkout_session_id, stripe_payment_intent_id, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(checkout_session_id) DO UPDATE SET
-        organization_id = excluded.organization_id,
-        addon_type = excluded.addon_type,
-        stripe_payment_intent_id = COALESCE(excluded.stripe_payment_intent_id, service_addon_purchases.stripe_payment_intent_id)
-    `, [
-      `stripe-addon-${session.id}`,
-      organizationId,
-      addonType,
-      session.id,
-      paymentIntentId,
-      new Date().toISOString(),
-    ])
+  if (metadata.type === 'credit_topup' || metadata.type === 'service_addon') {
+    console.info('retired_stripe_checkout_ignored', {
+      checkoutSessionId: session.id,
+      organizationId: organizationId ?? null,
+      type: metadata.type,
+    })
     return
   }
 

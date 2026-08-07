@@ -859,7 +859,7 @@ export function renderKikuzukiContentBlock(): string {
     organizationId: identity.organizationId,
     locales: compiledKikuzukiSeed.siteLocales.map(locale => locale.locale),
     rows: compiledKikuzukiSeed.siteContent,
-    translations: compiledKikuzukiSeed.siteContentTranslations,
+    translations: compiledKikuzukiSeed.siteLocaleVariants,
     sqlValue,
     sqlJson,
   })
