@@ -14,7 +14,11 @@ const TENANT_PAGE_METADATA_SCHEMA = {
   sortOrder: { type: ['number', 'null'] },
 }
 
-const TENANT_PAGE_BLOCKS_SCHEMA = { type: 'array', items: { type: 'object' }, description: 'Complete canonical block array. Each existing block must retain its id unless its removal is explicitly confirmed.' }
+const TENANT_PAGE_BLOCKS_SCHEMA = {
+  type: 'array',
+  items: { type: 'object' },
+  description: 'Complete canonical block array. Each existing block must retain its id unless its removal is explicitly confirmed. Image blocks store asset_id only; never write a delivery URL. Use set_media for media placement.',
+}
 
 const TENANT_PAGE_LIFECYCLE_OUTPUT = {
   type: 'object',

@@ -94,8 +94,10 @@ function renderPage(
   sqlValue: SqlValue,
   sqlJson: SqlJson,
   includePageRecord: boolean,
+  pathOverride?: string,
+  titleOverride?: string,
 ) {
-  const path = pathForPage(page)
+  const path = pathOverride ?? pathForPage(page)
   const pageKey = path.replaceAll('/', '-').replace(/^-/, '') || 'home'
   const pageId = `tenant-page-${siteId}-${pageKey}`
   const variantId = `${pageId}-${locale}`
@@ -103,7 +105,7 @@ function renderPage(
   const revisionId = `${variantId}-revision`
   const blocks = blockData(page, rows)
   const hero = rows.find(row => row.field === 'hero')
-  const title = hero?.heroTitle ?? hero?.content ?? (page === 'home' ? 'Home' : page[0]!.toUpperCase() + page.slice(1))
+  const title = titleOverride ?? hero?.heroTitle ?? hero?.content ?? (page === 'home' ? 'Home' : page[0]!.toUpperCase() + page.slice(1))
   const metadata = { schemaVersion: 1, metadata: { locale, path, title, summary: null, seoTitle: null, seoDescription: null, canonicalUrl: null, robots: null, pageType: pageTypeForPage(page), recipe: page }, blocks }
   const body = blocks.map(block => block.type === 'markdown' ? String(block.data.markdown ?? '') : block.type === 'heading' ? `# ${String(block.data.text ?? '')}` : '').filter(Boolean).join('\n\n')
   const blockSql = blocks.map(block => `INSERT OR REPLACE INTO content_blocks (id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at) VALUES (${sqlValue(block.id)}, ${sqlValue(documentId)}, NULL, ${sqlValue(block.type)}, ${block.position}, ${block.type === 'heading' ? 2 : 'NULL'}, ${sqlJson(block.data)}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);`).join('\n')
@@ -129,10 +131,12 @@ export function renderTenantPagesSeedSql(input: {
   locales: string[]
   rows: SeedTenantPageRow[]
   translations?: SeedTenantPageTranslation[]
+  pages?: string[]
+  additionalPages?: Array<{ page: string; path: string; title: string }>
   sqlValue: SqlValue
   sqlJson: SqlJson
 }) {
-  const pages = Array.from(new Set([...input.rows.map(row => row.page), 'home', 'about', 'contact']))
+  const pages = Array.from(new Set([...input.rows.map(row => row.page), ...(input.pages ?? []), 'home', 'about', 'contact']))
   const chunks: string[] = []
   for (const locale of input.locales) {
     for (const page of pages) {
@@ -154,6 +158,20 @@ export function renderTenantPagesSeedSql(input: {
         locale === input.locales[0],
       ))
     }
+  }
+  for (const page of input.additionalPages ?? []) {
+    chunks.push(renderPage(
+      input.siteId,
+      input.organizationId,
+      page.page,
+      input.locales[0]!,
+      [],
+      input.sqlValue,
+      input.sqlJson,
+      true,
+      page.path,
+      page.title,
+    ))
   }
   return `-- BEGIN GENERATED: tenant_pages\n${chunks.join('\n')}\n-- END GENERATED: tenant_pages`
 }
