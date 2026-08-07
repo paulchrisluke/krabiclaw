@@ -20,6 +20,7 @@ import {
   renderDemoExperienceSeedBlock,
 } from '../seed-definitions/demo.ts'
 import { renderSiteBillingSql, renderSiteEntitlementsSql } from '../seed-definitions/billing-sql.ts'
+import { renderTenantPagesSeedSql } from '../seed-definitions/tenant-pages.ts'
 
 function escapeSql(value: string) {
   return value.replace(/'/g, "''")
@@ -32,10 +33,43 @@ function sqlValue(value: string | number | boolean | null) {
   return `'${escapeSql(value)}'`
 }
 
+function sqlJson(value: unknown) {
+  return sqlValue(JSON.stringify(value))
+}
+
 function renderMcpFixtureOrg(orgId: string, userId: string, name: string, slug: string, plan: 'free' | 'growth' | 'managed') {
   const siteId = `site-${orgId.replace(/^org-/, '')}`
   const locationId = `loc-${orgId.replace(/^org-/, '')}`
   const status = plan === 'free' ? 'free' : 'active'
+  const tenantPages = renderTenantPagesSeedSql({
+    siteId,
+    organizationId: orgId,
+    locales: ['en'],
+    rows: [
+      {
+        id: `${siteId}-home-hero`,
+        page: 'home',
+        field: 'hero',
+        content: name,
+        heroTitle: name,
+        heroSubtitle: 'A seeded MCP fixture page.',
+      },
+      {
+        id: `${siteId}-about-body`,
+        page: 'about',
+        field: 'body',
+        content: `${name} about page.`,
+      },
+      {
+        id: `${siteId}-contact-body`,
+        page: 'contact',
+        field: 'body',
+        content: `${name} contact page.`,
+      },
+    ],
+    sqlValue,
+    sqlJson,
+  })
   return `INSERT INTO user (id, name, email, emailVerified, role, createdAt, updatedAt)
 VALUES (${sqlValue(userId)}, ${sqlValue(name)}, ${sqlValue(`${userId}@example.test`)}, 1, 'user', unixepoch(), unixepoch());
 
@@ -71,7 +105,9 @@ VALUES
 
 ${renderSiteBillingSql(siteId, orgId, { status, plan }, sqlValue)}
 
-${renderSiteEntitlementsSql(siteId, orgId, plan, sqlValue)}`
+${renderSiteEntitlementsSql(siteId, orgId, plan, sqlValue)}
+
+${tenantPages}`
 }
 
 const isStdout = process.argv.includes('--stdout')
@@ -170,18 +206,17 @@ ${renderCompiledDemoBillingBlock()}
 
 if (isStdout) {
   process.stdout.write(sql)
-  process.exit(0)
-}
+} else {
+  const dir = mkdtempSync(join(tmpdir(), 'krabiclaw-seed-demo-'))
+  const sqlPath = join(dir, 'demo.sql')
 
-const dir = mkdtempSync(join(tmpdir(), 'krabiclaw-seed-demo-'))
-const sqlPath = join(dir, 'demo.sql')
-
-try {
-  writeFileSync(sqlPath, sql, 'utf8')
-  const cmd = `npx wrangler d1 execute DB ${envFlag} ${remoteFlag} --file "${sqlPath}"`.trim()
-  console.log(`[seed:demo] Applying: ${cmd}`)
-  await execWithRetry(() => execSync(cmd, { stdio: 'inherit' }), 'seed:demo')
-  console.log('[seed:demo] Done.')
-} finally {
-  rmSync(dir, { recursive: true, force: true })
+  try {
+    writeFileSync(sqlPath, sql, 'utf8')
+    const cmd = `npx wrangler d1 execute DB ${envFlag} ${remoteFlag} --file "${sqlPath}"`.trim()
+    console.log(`[seed:demo] Applying: ${cmd}`)
+    await execWithRetry(() => execSync(cmd, { stdio: 'inherit' }), 'seed:demo')
+    console.log('[seed:demo] Done.')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 }
