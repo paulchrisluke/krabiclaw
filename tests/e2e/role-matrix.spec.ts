@@ -180,7 +180,7 @@ test.describe('role permission matrix', () => {
     await deletePostAs(editor.id, editorPostId, 404)
 
     const memberPostId = await createDraftPost(`Member edit ${Date.now()}`)
-    await updatePostAs(member.id, memberPostId, 404)
+    await updatePostAs(member.id, memberPostId, 403)
     await deletePostAs(member.id, memberPostId, 404)
   })
 })

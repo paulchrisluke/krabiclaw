@@ -539,7 +539,7 @@ test.describe("mcp tools", () => {
     const updated = await execChowbotTool(request, baseURL!, siteId, "update_page_content", {
       page: "home",
       changes: { blocks: [...originalBlocks, addedBlock] },
-    });
+    }, [{ role: "user", content: "yes confirm" }]);
     expect(updated.result.error).toBeUndefined();
     expect(updated.result.success).toBe(true);
 

@@ -3,7 +3,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { deletePost } from '~/server/utils/post-management'
 import { queryFirst } from '~/server/db'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
-import { assertResourceAccess } from '~/server/utils/member-access'
+import { assertResourceAccess, isOrganizationWideRole } from '~/server/utils/member-access'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -19,6 +19,9 @@ export default defineEventHandler(async (event) => {
 
   const site = await loadMemberSiteRow(db, siteId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+  if (!isOrganizationWideRole(site.member_role)) {
+    return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+  }
 
   const post = await queryFirst<{ location_id: string | null }>(db, `
     SELECT location_id FROM posts

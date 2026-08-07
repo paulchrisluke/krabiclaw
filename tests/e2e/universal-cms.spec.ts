@@ -7,7 +7,8 @@ test.describe('universal CMS', () => {
     await page.goto('/dashboard/mcp-free-fixture/sites/mcp-free-fixture/pages', { waitUntil: 'networkidle' })
 
     await expect(page.getByText('Site pages', { exact: true })).toBeVisible()
-    await expect(page.getByText('No pages', { exact: true })).toBeVisible()
+    await expect(page.getByText('No pages', { exact: true })).toHaveCount(0)
+    await expect(page.getByRole('button').filter({ hasText: 'MCP Free Fixture' }).first()).toBeVisible()
     await expect(page.getByRole('button', { name: 'New page', exact: true })).toBeVisible()
     await expect(page).toHaveURL(/\/dashboard\/mcp-free-fixture\/sites\/mcp-free-fixture\/pages$/)
   })
