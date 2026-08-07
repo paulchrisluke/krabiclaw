@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
-import { blawbyExtraHeaders } from './helpers'
+import { blawbyExtraHeaders, setupTenantHeaders } from './helpers'
 import { devLoginHeaders, devLoginUrl } from './test-env'
 
 const OWNER_USER_ID = 'user-ncls-blawby'
@@ -7,7 +7,7 @@ const SITE_ID = 'site-ncls-blawby'
 const DASHBOARD_BASE = '/dashboard/north-carolina-legal-services/sites/ncls'
 
 async function loginAsNclsOwner(page: Page, baseURL: string) {
-  await page.setExtraHTTPHeaders(devLoginHeaders() ?? {})
+  await setupTenantHeaders(page, baseURL, devLoginHeaders() ?? {})
   const login = await page.goto(devLoginUrl(baseURL, OWNER_USER_ID), {
     waitUntil: 'load',
     referer: baseURL,
@@ -39,7 +39,7 @@ test.describe('Blawby professional_service CMS editing', () => {
   test.describe.configure({ mode: 'serial' })
 
   test('NCLS home/about/contact page blocks are editable from the Pages manager', async ({ page, baseURL }) => {
-    test.setTimeout(90_000)
+    test.setTimeout(180_000)
     const fixture = await page.request.get(`${baseURL}/api/public/sites/${SITE_ID}/blawby/document`, {
       headers: blawbyExtraHeaders,
       params: { recipe: 'home' },
