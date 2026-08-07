@@ -12,11 +12,14 @@ mock.module('../../server/db/index.ts', {
 mock.module('../../server/utils/stripe-ga4-intents.ts', {
   namedExports: {
     consumeStripeGa4Intent: async () => undefined,
+    claimStripeGa4PurchaseDelivery: async () => 'claimed',
     findConsumedStripeGa4CancellationIntent: async () => null,
     findPendingInitialStripeGa4Intent: async () => null,
     findPendingStripeGa4Intent: async () => null,
     getPersistedStripeGa4Attribution: async () => ({ clientId: null, userId: null }),
     markStripeGa4IntentLifecycleSent: async () => undefined,
+    markStripeGa4PurchaseDeliveryFailed: async () => undefined,
+    markStripeGa4PurchaseDeliverySent: async () => undefined,
     persistStripeGa4Attribution: async () => undefined,
     attachStripeGa4IntentToSubscription: async () => undefined,
   },

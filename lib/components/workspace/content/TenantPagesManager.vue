@@ -117,6 +117,7 @@
                     </div>
                   </div>
                   <div class="flex gap-1">
+                    <UButton color="primary" variant="soft" size="xs" aria-label="Edit block" @click.stop="selectedBlockIndex = index">Edit</UButton>
                     <UButton icon="i-lucide-chevron-up" color="neutral" variant="ghost" size="xs" :disabled="index === 0" aria-label="Move block up" @click.stop="moveBlock(index, -1)" />
                     <UButton icon="i-lucide-chevron-down" color="neutral" variant="ghost" size="xs" :disabled="index === selected.blocks.length - 1" aria-label="Move block down" @click.stop="moveBlock(index, 1)" />
                     <UButton icon="i-lucide-trash-2" color="error" variant="ghost" size="xs" aria-label="Delete block" @click.stop="removeBlock(index)" />
@@ -124,7 +125,7 @@
                   </div>
                 </div>
                 <div v-if="selectedBlockIndex === index" class="mt-4 border-t border-default pt-4" @click.stop>
-                  <TenantPageBlockEditor :block="block" :site-id="resolvedSiteId" @update:block="updateBlock(index, $event)" />
+                  <TenantPageBlockEditor :block="block" :site-id="resolvedSiteId" :page-recipe="selected.recipe" :page-type="selected.page_type" @update:block="updateBlock(index, $event)" />
                 </div>
               </div>
               <UAlert v-if="!selected.blocks.length" color="neutral" variant="soft" title="No blocks" description="Add a block to start composing this page." />
@@ -143,10 +144,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
-import { TENANT_PAGE_BLOCK_REGISTRY, createTenantPageBlock, type TenantPageBlock, type TenantPageBlockType } from '~/utils/tenant-page-blocks'
+import { TENANT_PAGE_BLOCK_REGISTRY, createTenantPageBlock, isTenantPageBlockAllowed, type TenantPageBlock, type TenantPageBlockType, type TenantPageType } from '~/utils/tenant-page-blocks'
 import { createTenantPageEditorData, tenantPageBlockSummary, validateTenantPageBlock } from '~/utils/tenant-page-editor'
 
-interface PageSummary { id: string; title: string; path: string; page_type: string; recipe: string | null; status: string; locale: string; sort_order: number; updated_at: string; published_revision_id: string | null }
+interface PageSummary { id: string; title: string; path: string; page_type: TenantPageType; recipe: string | null; status: string; locale: string; sort_order: number; updated_at: string; published_revision_id: string | null }
 interface PageDetailResponse extends PageSummary { page_id: string; site_id: string; organization_id: string; summary: string | null; seo_title: string | null; seo_description: string | null; canonical_url: string | null; robots: string | null; blocks: TenantPageBlock[]; document: { updated_at: string; draft_revision_id: string | null; published_revision_id: string | null } }
 interface PageDetail extends Omit<PageDetailResponse, 'recipe' | 'summary' | 'seo_title' | 'seo_description' | 'canonical_url' | 'robots'> { recipe: string; summary: string; seo_title: string; seo_description: string; canonical_url: string; robots: string }
 
@@ -175,7 +176,9 @@ const newBlockType = ref<TenantPageBlockType>('markdown')
 
 const localeOptions = computed(() => locales.value.map(value => ({ label: value, value })))
 const pageTypeOptions = ['custom', 'recipe', 'legal'].map(value => ({ label: value, value }))
-const blockTypeOptions = Object.values(TENANT_PAGE_BLOCK_REGISTRY).map(definition => ({ label: definition.label, value: definition.type }))
+const blockTypeOptions = computed(() => Object.values(TENANT_PAGE_BLOCK_REGISTRY)
+  .filter(definition => !selected.value || isTenantPageBlockAllowed(definition, selected.value.recipe, selected.value.page_type))
+  .map(definition => ({ label: definition.label, value: definition.type })))
 const blockErrors = computed(() => selected.value?.blocks.map(block => validateTenantPageBlock(block)) ?? [])
 const previewUrl = computed(() => {
   if (!selected.value?.id || !previewToken.value) return ''
@@ -183,6 +186,12 @@ const previewUrl = computed(() => {
   const path = selected.value.path === '/' ? '' : selected.value.path
   return `${base}/preview/site/${siteId}${path}?preview=true&locale=${encodeURIComponent(selected.value.locale)}&token=${encodeURIComponent(previewToken.value)}`
 })
+
+watch(blockTypeOptions, (options) => {
+  if (!options.some(option => option.value === newBlockType.value)) {
+    newBlockType.value = options[0]?.value ?? 'markdown'
+  }
+}, { immediate: true })
 
 function validateList(value: unknown): value is { pages: PageSummary[] } {
   return isRecord(value) && Array.isArray(value.pages)
@@ -266,6 +275,8 @@ function startNewPage() {
 
 function addBlock() {
   if (!selected.value) return
+  const definition = TENANT_PAGE_BLOCK_REGISTRY[newBlockType.value]
+  if (!definition || !isTenantPageBlockAllowed(definition, selected.value.recipe, selected.value.page_type)) return
   const position = selected.value.blocks.length
   selected.value.blocks.push(createTenantPageBlock(newBlockType.value, createTenantPageEditorData(newBlockType.value), position))
   selectedBlockIndex.value = position

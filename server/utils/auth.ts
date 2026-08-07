@@ -1,5 +1,4 @@
 import { APIError, betterAuth } from 'better-auth'
-import Stripe from 'stripe'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { hashPassword } from 'better-auth/crypto'
 import { admin, anonymous, jwt, organization, phoneNumber } from 'better-auth/plugins'
@@ -28,6 +27,7 @@ import {
   enqueueStripeEvent,
 } from '~/server/utils/better-auth-stripe'
 import { processStripeEvent } from '~/server/utils/stripe-event-processing'
+import { createStripeClient } from '~/server/utils/stripe-client'
 
 type MemberRow = InferSelectModel<typeof schema.member>
 type InvitationRow = InferSelectModel<typeof schema.invitation>
@@ -171,7 +171,7 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
 
   const db = env.db ?? createDb(d1)
   const authBaseUrl = (env.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
-  const stripeClient = new Stripe(env.STRIPE_SECRET_KEY ?? 'sk_test_placeholder')
+  const stripeClient = createStripeClient(env.STRIPE_SECRET_KEY ?? 'sk_test_placeholder')
   const loadStripePlans = createStripePlanLoader(stripeClient, env)
 
   const instance = betterAuth({

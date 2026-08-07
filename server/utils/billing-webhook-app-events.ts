@@ -58,7 +58,7 @@ export async function handleApplicationStripeEvent(
   adapter: BetterAuthSubscriptionAdapter,
 ): Promise<void> {
   if (
-    event.type === 'invoice.payment_succeeded'
+    event.type === 'invoice.paid'
     || event.type === 'invoice.payment_failed'
     || event.type === 'invoice.voided'
     || event.type === 'invoice.marked_uncollectible'
@@ -72,13 +72,13 @@ export async function handleApplicationStripeEvent(
     if (subscriptionId) await markSubscriptionPayment(
       db,
       subscriptionId,
-      event.type === 'invoice.payment_succeeded' ? 'paid' : 'failed',
+      event.type === 'invoice.paid' ? 'paid' : 'failed',
       adapter,
       undefined,
       event,
       invoice.id,
       invoicePeriodEndIso(invoice),
-      event.type === 'invoice.payment_succeeded'
+      event.type === 'invoice.paid'
         ? null
         : typeof invoice.created === 'number' ? new Date(invoice.created * 1000).toISOString() : null,
     )

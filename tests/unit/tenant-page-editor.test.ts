@@ -33,6 +33,11 @@ test('typed editor validation handles repeatable fields without JSON parsing', (
   assert.deepEqual(validateTenantPageBlock(complete), [])
 })
 
+test('published page Q&A skips manual FAQ item validation', () => {
+  const blockWithConfiguredSource = block('faq', { source: 'page_qa', items: [{ title: '', description: '' }] })
+  assert.deepEqual(validateTenantPageBlock(blockWithConfiguredSource), [])
+})
+
 test('block summaries give collapsed cards useful context', () => {
   assert.equal(tenantPageBlockSummary(block('heading', { text: 'About our studio' })), 'About our studio')
   assert.equal(tenantPageBlockSummary(block('divider', {})), 'Divider')

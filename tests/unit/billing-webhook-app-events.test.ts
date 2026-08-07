@@ -26,7 +26,7 @@ mock.module('../../server/utils/better-auth-stripe.ts', {
 
 const { handleApplicationStripeEvent } = await import('../../server/utils/billing-webhook-app-events.ts')
 
-test('invoice.payment_succeeded projects paid coverage through the app billing boundary', async () => {
+test('invoice.paid projects paid coverage through the app billing boundary', async () => {
   payment = null
   await handleApplicationStripeEvent(
     {} as never,
@@ -34,7 +34,7 @@ test('invoice.payment_succeeded projects paid coverage through the app billing b
     {
       id: 'evt_paid_projection',
       created: 1_786_000_000,
-      type: 'invoice.payment_succeeded',
+      type: 'invoice.paid',
       data: {
         object: {
           id: 'in_paid_projection',
@@ -59,4 +59,15 @@ test('invoice.payment_succeeded projects paid coverage through the app billing b
     invoicePeriodEnd: '2026-09-01T00:00:00.000Z',
     pastDueSince: null,
   })
+})
+
+test('invoice.payment_succeeded is ignored by the app billing boundary', async () => {
+  payment = null
+  await handleApplicationStripeEvent(
+    {} as never,
+    {} as never,
+    { id: 'evt_legacy_paid', created: 1_786_000_000, type: 'invoice.payment_succeeded', data: { object: { id: 'in_legacy', subscription: 'sub-legacy' } } } as never,
+    { findOne: async () => ({ referenceId: 'org-paid', stripeCustomerId: 'cus-paid' }) } as never,
+  )
+  assert.equal(payment, null)
 })

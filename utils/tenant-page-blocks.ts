@@ -92,6 +92,20 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
 
 const BLOCK_TYPES = new Set(Object.keys(TENANT_PAGE_BLOCK_REGISTRY))
 
+export function isTenantPageBlockAllowed(
+  definitionOrType: TenantPageBlockDefinition | TenantPageBlockType,
+  recipe: string | null | undefined,
+  pageType: TenantPageType,
+): boolean {
+  const definition = typeof definitionOrType === 'string'
+    ? TENANT_PAGE_BLOCK_REGISTRY[definitionOrType]
+    : definitionOrType
+  const normalizedRecipe = recipe?.trim().toLowerCase() || 'custom'
+  return Boolean(definition)
+    && definition.allowedRecipes.includes(normalizedRecipe)
+    && definition.allowedPageTypes.includes(pageType)
+}
+
 function asRecord(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(label + ' must be an object.')
   return value as Record<string, unknown>

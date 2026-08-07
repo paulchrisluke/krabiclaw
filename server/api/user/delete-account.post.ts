@@ -76,6 +76,15 @@ export default defineEventHandler(async (event) => {
   // then the user row (cascades sessions/accounts)
   const statements: BatchQuery[] = []
 
+  // Attribution is user-linked data even though the client ID is stored on
+  // the organization billing projection. Erase both fields for organizations
+  // the user leaves; the FK only protects ga_user_id and would otherwise leave
+  // the client identifier behind on co-owned organizations.
+  statements.push({
+    query: `UPDATE organization_billing SET ga_client_id = NULL, ga_user_id = NULL, updated_at = ? WHERE ga_user_id = ?`,
+    params: [new Date().toISOString(), userId],
+  })
+
   // Remove user from all orgs (co-owned orgs: removes membership; sole-owned: clears before org delete)
   for (const orgId of allOrgIds) {
     statements.push({ query: `DELETE FROM member WHERE organizationId = ? AND userId = ?`, params: [orgId, userId] })

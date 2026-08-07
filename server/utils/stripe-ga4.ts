@@ -15,6 +15,9 @@ import {
 } from '~/server/utils/stripe-invoice-lines'
 import {
   consumeStripeGa4Intent,
+  claimStripeGa4PurchaseDelivery,
+  markStripeGa4PurchaseDeliveryFailed,
+  markStripeGa4PurchaseDeliverySent,
   findConsumedStripeGa4CancellationIntent,
   findPendingInitialStripeGa4Intent,
   findPendingStripeGa4Intent,
@@ -341,13 +344,22 @@ async function sendStripeGa4Purchase(
     fallbackItems: subscriptionFallbackItems(subscription, invoice.currency ?? 'usd'),
   })
 
-  await sendGa4Event(env, {
-    clientId: context.clientId,
-    userId: context.userId,
-    sessionId: context.sessionId,
-    sessionCapturedAt: context.sessionCapturedAt,
-    event: eventPayload,
-  })
+  const delivery = await claimStripeGa4PurchaseDelivery(db, invoice.id, event.id)
+  if (delivery === 'sent' || delivery === 'busy') return
+  if (delivery === 'missing') throw new Error(`Stripe invoice ${invoice.id} has no payment ledger row for GA4 delivery; retrying`)
+  try {
+    await sendGa4Event(env, {
+      clientId: context.clientId,
+      userId: context.userId,
+      sessionId: context.sessionId,
+      sessionCapturedAt: context.sessionCapturedAt,
+      event: eventPayload,
+    })
+    await markStripeGa4PurchaseDeliverySent(db, invoice.id, event.id)
+  } catch (error) {
+    await markStripeGa4PurchaseDeliveryFailed(db, invoice.id, event.id, error instanceof Error ? error.message : String(error))
+    throw error
+  }
 
   if (context.organizationId && context.clientId) {
     await persistStripeGa4Attribution(db, context.organizationId, context.userId, context.clientId)
@@ -428,7 +440,6 @@ async function sendStripeGa4Lifecycle(
 
 async function attachCheckoutIntent(
   db: DbClient,
-  stripe: Stripe,
   session: Stripe.Checkout.Session,
 ): Promise<void> {
   const subscriptionId = typeof session.subscription === 'string'
@@ -440,7 +451,6 @@ async function attachCheckoutIntent(
   if (!organizationId) return
   const intent = await findPendingInitialStripeGa4Intent(db, organizationId, userId)
   if (intent) await attachStripeGa4IntentToSubscription(db, intent.id, subscriptionId)
-  void stripe
 }
 
 async function sendStripeGa4Refund(
@@ -506,36 +516,45 @@ export async function handleStripeGa4Event(
   stripe: Stripe,
   event: Stripe.Event,
 ): Promise<void> {
-  if (event.type === 'checkout.session.completed') {
-    await attachCheckoutIntent(db, stripe, event.data.object as Stripe.Checkout.Session)
-    return
-  }
+  try {
+    if (event.type === 'checkout.session.completed') {
+      await attachCheckoutIntent(db, event.data.object as Stripe.Checkout.Session)
+      return
+    }
 
-  if (event.type === 'invoice.paid') {
-    await sendStripeGa4Purchase(env, db, stripe, event.data.object as StripeInvoiceWithSubscription, event)
-    return
-  }
+    if (event.type === 'invoice.paid') {
+      await sendStripeGa4Purchase(env, db, stripe, event.data.object as StripeInvoiceWithSubscription, event)
+      return
+    }
 
-  if (event.type === 'refund.created') {
-    await sendStripeGa4Refund(env, db, stripe, event.data.object as Stripe.Refund)
-    return
-  }
+    if (event.type === 'refund.created') {
+      await sendStripeGa4Refund(env, db, stripe, event.data.object as Stripe.Refund)
+      return
+    }
 
-  if (!event.type.startsWith('customer.subscription.')) return
-  const subscription = event.data.object as Stripe.Subscription
-  const intent = await findPendingStripeGa4Intent(db, subscription.id)
+    if (!event.type.startsWith('customer.subscription.')) return
+    const subscription = event.data.object as Stripe.Subscription
+    const intent = await findPendingStripeGa4Intent(db, subscription.id)
 
-  if (event.type === 'customer.subscription.updated' && intent?.action === 'downgrade' && intent.effectiveTiming === 'period_end') {
-    const lifecycleEvent = intent.newPriceId ? 'subscription_downgrade' : 'subscription_cancelled'
-    await sendStripeGa4Lifecycle(env, db, stripe, subscription, lifecycleEvent, event, intent)
-    return
-  }
-  if (event.type === 'customer.subscription.updated' && intent?.action === 'upgrade' && intent.source !== 'browser') {
-    await sendStripeGa4Lifecycle(env, db, stripe, subscription, 'subscription_upgrade', event, intent)
-    return
-  }
-  if (event.type === 'customer.subscription.deleted') {
-    if (!intent && await findConsumedStripeGa4CancellationIntent(db, subscription.id)) return
-    await sendStripeGa4Lifecycle(env, db, stripe, subscription, 'subscription_cancelled', event, intent)
+    if (event.type === 'customer.subscription.updated' && intent?.action === 'downgrade' && intent.effectiveTiming === 'period_end') {
+      const lifecycleEvent = intent.newPriceId ? 'subscription_downgrade' : 'subscription_cancelled'
+      await sendStripeGa4Lifecycle(env, db, stripe, subscription, lifecycleEvent, event, intent)
+      return
+    }
+    if (event.type === 'customer.subscription.updated' && intent?.action === 'upgrade' && intent.source !== 'browser') {
+      await sendStripeGa4Lifecycle(env, db, stripe, subscription, 'subscription_upgrade', event, intent)
+      return
+    }
+    if (event.type === 'customer.subscription.deleted') {
+      if (!intent && await findConsumedStripeGa4CancellationIntent(db, subscription.id)) return
+      await sendStripeGa4Lifecycle(env, db, stripe, subscription, 'subscription_cancelled', event, intent)
+    }
+  } catch (error) {
+    console.error('stripe_ga4_event_processing_failed', {
+      eventId: event.id,
+      eventType: event.type,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    throw error
   }
 }

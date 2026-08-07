@@ -6,7 +6,7 @@ import { queryFirst } from '~/server/db'
 import { getOrganizationBillingStatus, requireBillingAccess } from '~/server/utils/billing'
 import { isManagedServiceEnabled } from '~/server/utils/feature-flags'
 import { CONCIERGE_PLAN_IDS } from '~/server/utils/better-auth-stripe'
-import { classifyStripePlanChange, isStripeGa4IntentAction, type StripeGa4IntentAction } from '~/shared/stripe-ga4'
+import { buildStripeSubscriptionMetadata, classifyStripePlanChange, isStripeGa4IntentAction, type StripeGa4IntentAction } from '~/shared/stripe-ga4'
 import { recordStripeGa4Intent } from '~/server/utils/stripe-ga4-intents'
 
 interface CheckoutRequest {
@@ -103,10 +103,13 @@ export default defineEventHandler(async (event) => {
   }
 
   const subscriptionId = billingStatus.stripeSubscriptionId ?? null
-  const action = isStripeGa4IntentAction(body.action)
-    ? body.action
-    : classifyStripePlanChange(billingStatus.plan ?? 'free', body.plan, Boolean(subscriptionId))
+  const action = classifyStripePlanChange(billingStatus.plan ?? 'free', body.plan, Boolean(subscriptionId))
   if (!action) throw createError({ statusCode: 400, statusMessage: 'The selected plan is already active' })
+  if (body.action !== undefined) {
+    if (!isStripeGa4IntentAction(body.action) || body.action !== action) {
+      throw createError({ statusCode: 400, statusMessage: 'The requested billing action does not match the current subscription state' })
+    }
+  }
   if (action !== 'initial_subscription' && !subscriptionId) {
     throw createError({ statusCode: 400, statusMessage: 'An existing subscription is required for a plan change' })
   }
@@ -152,13 +155,11 @@ export default defineEventHandler(async (event) => {
       customerType: 'organization',
       metadata: {
         site_id: body.siteId,
-        ...(body.gaClientId ? { ga_client_id: body.gaClientId } : {}),
-        ...(body.gaSessionId ? { ga_session_id: body.gaSessionId } : {}),
-        ...(typeof body.gaSessionCapturedAt === 'number' ? { ga_session_captured_at: String(body.gaSessionCapturedAt) } : {}),
-        user_id: session.user.id,
-        analytics_action: action,
-        ...(body.previousPriceId ? { previous_price_id: body.previousPriceId } : {}),
-        ...(body.newPriceId ? { new_price_id: body.newPriceId } : {}),
+        ...buildStripeSubscriptionMetadata(action, {
+          gaClientId: body.gaClientId,
+          gaSessionId: body.gaSessionId,
+          gaSessionCapturedAt: body.gaSessionCapturedAt,
+        }, session.user.id, body.previousPriceId, body.newPriceId),
       },
       successUrl: callbackUrl,
       cancelUrl,

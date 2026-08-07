@@ -89,7 +89,7 @@ export async function recordStripeGa4Intent(
       (id, organization_id, user_id, stripe_subscription_id, action, site_id,
        client_id, session_id, session_captured_at, previous_price_id, new_price_id,
        effective_timing, source, status, expires_at, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     row.id,
     row.organizationId,
@@ -259,6 +259,88 @@ export async function consumeStripeGa4Intent(
   `, [now, eventId, now, intentId])
 }
 
+export type StripeGa4PurchaseDeliveryClaim = 'claimed' | 'sent' | 'busy' | 'missing'
+
+export async function claimStripeGa4PurchaseDelivery(
+  db: DbClient,
+  invoiceId: string,
+  eventId: string,
+  now = new Date(),
+): Promise<StripeGa4PurchaseDeliveryClaim> {
+  const nowIso = now.toISOString()
+  const leaseCutoff = new Date(now.getTime() - 15 * 60 * 1000).toISOString()
+  const claimed = await execute(db, `
+    UPDATE stripe_invoice_payments
+       SET ga4_purchase_status = 'sending',
+           ga4_purchase_event_id = ?,
+           ga4_purchase_attempt_count = COALESCE(ga4_purchase_attempt_count, 0) + 1,
+           ga4_purchase_claimed_at = ?,
+           ga4_purchase_error = NULL,
+           updated_at = ?
+     WHERE stripe_invoice_id = ?
+       AND (
+         ga4_purchase_status IS NULL
+         OR ga4_purchase_status IN ('pending', 'failed')
+         OR (ga4_purchase_status = 'sending' AND (ga4_purchase_claimed_at IS NULL OR ga4_purchase_claimed_at < ?))
+       )
+  `, [eventId, nowIso, nowIso, invoiceId, leaseCutoff])
+  if (Number(claimed?.meta.changes ?? 0) === 1) return 'claimed'
+
+  const row = await queryFirst<{ status: string | null }>(db, `
+    SELECT ga4_purchase_status AS status
+      FROM stripe_invoice_payments WHERE stripe_invoice_id = ? LIMIT 1
+  `, [invoiceId])
+  if (!row) return 'missing'
+  return row.status === 'sent' ? 'sent' : 'busy'
+}
+
+export async function markStripeGa4PurchaseDeliverySent(
+  db: DbClient,
+  invoiceId: string,
+  eventId: string,
+  now = new Date().toISOString(),
+): Promise<void> {
+  const result = await execute(db, `
+    UPDATE stripe_invoice_payments
+       SET ga4_purchase_status = 'sent', ga4_purchase_sent_at = ?,
+           ga4_purchase_claimed_at = NULL, ga4_purchase_error = NULL, updated_at = ?
+     WHERE stripe_invoice_id = ? AND ga4_purchase_status = 'sending' AND ga4_purchase_event_id = ?
+  `, [now, now, invoiceId, eventId])
+  if (Number(result?.meta.changes ?? 0) !== 1) throw new Error(`GA4 purchase delivery lease was lost for invoice ${invoiceId}`)
+}
+
+export async function markStripeGa4PurchaseDeliveryFailed(
+  db: DbClient,
+  invoiceId: string,
+  eventId: string,
+  error: string,
+  now = new Date().toISOString(),
+): Promise<void> {
+  await execute(db, `
+    UPDATE stripe_invoice_payments
+       SET ga4_purchase_status = 'failed', ga4_purchase_claimed_at = NULL,
+           ga4_purchase_error = ?, updated_at = ?
+     WHERE stripe_invoice_id = ? AND ga4_purchase_status = 'sending' AND ga4_purchase_event_id = ?
+  `, [error, now, invoiceId, eventId])
+}
+
+export async function expireStripeGa4Intents(
+  db: DbClient,
+  now = new Date(),
+): Promise<void> {
+  const nowIso = now.toISOString()
+  await execute(db, `
+    UPDATE stripe_ga4_subscription_intents
+       SET status = 'expired', updated_at = ?
+     WHERE status = 'pending' AND expires_at <= ?
+  `, [nowIso, nowIso])
+  const retentionCutoff = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString()
+  await execute(db, `
+    DELETE FROM stripe_ga4_subscription_intents
+     WHERE status = 'consumed' AND consumed_at IS NOT NULL AND consumed_at < ?
+  `, [retentionCutoff])
+}
+
 export async function persistStripeGa4Attribution(
   db: DbClient,
   organizationId: string,
@@ -268,13 +350,13 @@ export async function persistStripeGa4Attribution(
   const now = new Date().toISOString()
   await execute(db, `
     INSERT INTO organization_billing
-      (organization_id, ga_client_id, ga_user_id, updated_at)
-    VALUES (?, ?, ?, ?)
+      (id, organization_id, ga_client_id, ga_user_id, status, plan, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(organization_id) DO UPDATE SET
       ga_client_id = excluded.ga_client_id,
       ga_user_id = excluded.ga_user_id,
       updated_at = excluded.updated_at
-  `, [organizationId, clientId, userId, now])
+  `, [`billing-${organizationId}`, organizationId, clientId, userId, 'free', 'free', now])
 }
 
 export async function getPersistedStripeGa4Attribution(

@@ -1,4 +1,5 @@
-import Stripe from 'stripe'
+import type Stripe from 'stripe'
+import { createStripeClient } from '~/server/utils/stripe-client'
 import { isManagedServiceEnabled } from './feature-flags.ts'
 import { selectCanonicalStripePrice } from './better-auth-stripe'
 
@@ -164,12 +165,7 @@ function isMarketingFeatureArray(value: ApiValue): value is MarketingFeature[] {
 export async function fetchStripeProducts(
   env: Record<string, string | undefined>,
 ): Promise<Plan[]> {
-  const stripe = new Stripe(env.STRIPE_SECRET_KEY!, {
-    // Billing reads are one logical resource load. Do not silently multiply
-    // the provider call when it fails.
-    maxNetworkRetries: 0,
-    timeout: 10_000,
-  })
+  const stripe = createStripeClient(env.STRIPE_SECRET_KEY!)
 
   // Paginate all products
   let products: Stripe.Product[] = []

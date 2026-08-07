@@ -13,24 +13,6 @@ export interface BillingAnalyticsIntentInput extends BillingAnalyticsContext {
   source?: 'browser' | 'server'
 }
 
-export function buildStripeSubscriptionMetadata(
-  action: StripeGa4IntentAction,
-  context: BillingAnalyticsContext,
-  userId?: string | null,
-  previousPriceId?: string | null,
-  newPriceId?: string | null,
-): Record<string, string> {
-  return {
-    analytics_action: action,
-    ...(userId ? { user_id: userId } : {}),
-    ...(context.gaClientId ? { ga_client_id: context.gaClientId } : {}),
-    ...(context.gaSessionId ? { ga_session_id: context.gaSessionId } : {}),
-    ...(context.gaSessionCapturedAt ? { ga_session_captured_at: String(context.gaSessionCapturedAt) } : {}),
-    ...(previousPriceId ? { previous_price_id: previousPriceId } : {}),
-    ...(newPriceId ? { new_price_id: newPriceId } : {}),
-  }
-}
-
 export async function recordBillingAnalyticsIntent(
   dashboardApi: ReturnType<typeof useDashboardApi>,
   input: BillingAnalyticsIntentInput,

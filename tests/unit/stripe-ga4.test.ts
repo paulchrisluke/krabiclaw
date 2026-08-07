@@ -12,7 +12,7 @@ import {
   stripeMinorToMajor,
 } from '../../server/utils/stripe-ga4.ts'
 import type { StripeInvoiceLine } from '../../server/utils/stripe-invoice-lines.ts'
-import { classifyStripePlanChange } from '../../shared/stripe-ga4.ts'
+import { buildStripeSubscriptionMetadata, classifyStripePlanChange } from '../../shared/stripe-ga4.ts'
 import { parseGaClientId, parseGaSessionId } from '../../composables/useAnalytics.ts'
 
 function invoiceLine(overrides: Record<string, unknown> = {}): StripeInvoiceLine {
@@ -115,6 +115,8 @@ test('scheduled downgrade is lifecycle-only while plan rank changes classify cor
   assert.equal(classifyStripePlanChange('managed', 'growth', true), 'downgrade')
   assert.equal(classifyStripePlanChange('growth', 'free', true), 'downgrade')
   assert.equal(classifyStripePlanChange('free', 'growth', false), 'initial_subscription')
+  assert.equal(classifyStripePlanChange('free', 'free', false), null)
+  assert.equal(classifyStripePlanChange('growth', 'unknown', true), null)
 
   const event = buildStripeGa4RefundEvent({
     invoiceId: 'in_123',
@@ -129,6 +131,20 @@ test('scheduled downgrade is lifecycle-only while plan rank changes classify cor
   assert.equal(event.params?.transaction_id, 'in_123')
   assert.equal(event.params?.refund_id, 're_123')
   assert.equal(event.params?.value, 5)
+})
+
+test('Stripe subscription metadata is bounded and carries the canonical action fields', () => {
+  const metadata = buildStripeSubscriptionMetadata('upgrade', {
+    gaClientId: 'c'.repeat(300),
+    gaSessionId: 's'.repeat(100),
+    gaSessionCapturedAt: 1760000123,
+  }, 'u'.repeat(300), 'price_old', 'price_new')
+  assert.equal(metadata.ga_client_id?.length, 255)
+  assert.equal(metadata.ga_session_id?.length, 64)
+  assert.equal(metadata.user_id?.length, 255)
+  assert.equal(metadata.analytics_action, 'upgrade')
+  assert.equal(metadata.previous_price_id, 'price_old')
+  assert.equal(metadata.new_price_id, 'price_new')
 })
 
 test('GA4 session attribution is fresh-only and server fallback is deterministic', async () => {

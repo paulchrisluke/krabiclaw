@@ -58,8 +58,8 @@ mock.module('../../server/db/index.ts', {
         }
         return { meta: { changes: 1 } }
       }
-      if (query.includes("WHERE stripe_event_id = ? AND status IN ('failed', 'dead_letter')")) {
-        if (!eventState || !['failed', 'dead_letter'].includes(eventState.status)) return { meta: { changes: 0 } }
+      if (query.includes("WHERE stripe_event_id = ? AND status = 'dead_letter'")) {
+        if (!eventState || eventState.status !== 'dead_letter') return { meta: { changes: 0 } }
         eventState = { ...eventState, status: 'pending', attempts: 0, leaseExpiresAt: null, claimToken: null }
         return { meta: { changes: 1 } }
       }
@@ -69,7 +69,7 @@ mock.module('../../server/db/index.ts', {
         return { meta: { changes: 1 } }
       }
       if (query.includes('claim_token = ?') && query.includes("SET status = 'pending'")) {
-        if (!eventState) return { meta: { changes: 0 } }
+        if (!eventState || !['pending', 'failed'].includes(eventState.status)) return { meta: { changes: 0 } }
         eventState = {
           status: 'pending',
           leaseExpiresAt: String(params[1]),
@@ -85,7 +85,7 @@ mock.module('../../server/db/index.ts', {
       }
       if (query.includes("SET status = CASE")) {
         if (!eventState || eventState.claimToken !== String(params[params.length - 1])) return { meta: { changes: 0 } }
-        eventState = { ...eventState, status: 'failed', leaseExpiresAt: null, claimToken: null }
+        eventState = { ...eventState, status: eventState.attempts >= 5 ? 'dead_letter' : 'failed', leaseExpiresAt: null, claimToken: null }
         return { meta: { changes: 1 } }
       }
       if (query.includes('SELECT attempt_count FROM stripe_webhook_events')) {
@@ -105,6 +105,7 @@ const {
   reconcileBetterAuthSubscriptionEvent,
   recordStripeEvent,
   enqueueStripeEvent,
+  requeueDeadLetterStripeEvent,
   grantInvoiceQuota,
   markOrganizationPayment,
   selectCanonicalStripePrice,
@@ -145,7 +146,7 @@ test('a failed webhook lease is reclaimed and retried', async () => {
   assert.equal(processed, true)
   assert.equal(attempts, 2)
   assert.equal(eventState?.status, 'processed')
-  assert.equal(eventState?.attempts, 1)
+  assert.equal(eventState?.attempts, 2)
 })
 
 test('an expired pending webhook lease is reclaimed after a process interruption', async () => {
@@ -186,18 +187,39 @@ test('a processed duplicate remains terminal and is not requeued', async () => {
   assert.equal(eventState?.attempts, 1)
 })
 
-test('a new delivery requeues a dead-lettered Stripe event with a fresh attempt window', async () => {
+test('a duplicate delivery does not requeue a dead-lettered Stripe event', async () => {
   eventState = { status: 'dead_letter', leaseExpiresAt: null, claimToken: null, attempts: 5 }
-  assert.equal(await enqueueStripeEvent({} as never, event), true)
+  assert.equal(await enqueueStripeEvent({} as never, event), false)
+  assert.equal(eventState?.status, 'dead_letter')
+  assert.equal(eventState?.attempts, 5)
+})
+
+test('an operator replay alone requeues a dead-lettered Stripe event', async () => {
+  eventState = { status: 'dead_letter', leaseExpiresAt: null, claimToken: null, attempts: 5 }
+  assert.equal(await requeueDeadLetterStripeEvent({} as never, event), true)
   assert.equal(eventState?.status, 'pending')
   assert.equal(eventState?.attempts, 0)
 })
 
-test('a new delivery requeues a failed Stripe event with a fresh attempt window', async () => {
+test('a duplicate delivery preserves a failed Stripe event attempt budget', async () => {
   eventState = { status: 'failed', leaseExpiresAt: null, claimToken: null, attempts: 1 }
-  assert.equal(await enqueueStripeEvent({} as never, event), true)
-  assert.equal(eventState?.status, 'pending')
-  assert.equal(eventState?.attempts, 0)
+  assert.equal(await enqueueStripeEvent({} as never, event), false)
+  assert.equal(eventState?.status, 'failed')
+  assert.equal(eventState?.attempts, 1)
+})
+
+test('failed Stripe events eventually become dead-lettered', async () => {
+  eventState = null
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    await assert.rejects(() => recordStripeEvent({} as never, event, async () => {
+      throw new Error('persistent worker failure')
+    }))
+  }
+  assert.equal(eventState?.status, 'dead_letter')
+  assert.equal(eventState?.attempts, 5)
+  assert.equal(await recordStripeEvent({} as never, event, async () => {
+    throw new Error('must not run after dead letter')
+  }), false)
 })
 
 test('Stripe plan loading coalesces refreshes and serves the last good snapshot', async () => {
@@ -605,6 +627,7 @@ test('invoice.paid grants the period even when Better Auth subscription.created 
       }),
     },
     prices: {
+      retrieve: async (id: string) => ({ id, product: 'prod-growth', type: 'recurring', unit_amount: 4900, currency: 'usd', recurring: { interval: 'month', interval_count: 1 }, metadata: { price_role: 'base' } }),
       list: async () => ({
         data: [{
           id: 'price_growth_month',
@@ -736,6 +759,7 @@ test('delayed invoice allocation uses the invoice line price and period across p
       retrieve: async () => ({ id: 'prod-growth', metadata: { plan_id: 'growth' } }),
     },
     prices: {
+      retrieve: async (id: string) => ({ id, product: 'prod-growth', type: 'recurring', unit_amount: 4900, currency: 'usd', recurring: { interval: 'month', interval_count: 1 }, metadata: { price_role: 'base' } }),
       list: async () => ({
         data: [
           { id: 'price-growth-old', product: 'prod-growth', type: 'recurring', unit_amount: 4900, currency: 'usd', recurring: { interval: 'month', interval_count: 1 }, metadata: { price_role: 'base' } },

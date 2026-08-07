@@ -282,7 +282,6 @@
 const dashboardApi = useDashboardApi()
 
 import { authClient } from '~/lib/auth-client'
-import { classifyStripePlanChange } from '~/shared/stripe-ga4'
 const toast = useToast()
 
 definePageMeta({ layout: 'dashboard' })
@@ -295,9 +294,9 @@ const {
   trackSubscriptionUpgrade,
   trackSubscriptionDowngrade,
   trackSubscriptionCheckoutSuccess,
-  getBillingAnalyticsContext,
 } = useAnalytics()
-const { data: sessionData, isAuthenticated } = useAuth()
+const { isAuthenticated } = useAuth()
+const { startSubscriptionCheckout } = useSubscriptionCheckout()
 const loading = ref(true)
 const billing = ref<ApiRecord | null>(null)
 const credits = ref<ApiRecord | null>(null)
@@ -349,12 +348,6 @@ const upgradeToPlan = async (plan: string) => {
     if (typeof organizationId !== 'string' || !organizationId) {
       throw new Error('Organization ID not found')
     }
-    const currentUrl = new URL(window.location.href)
-    for (const key of ['success', 'canceled', 'plan']) currentUrl.searchParams.delete(key)
-    const successUrl = new URL(currentUrl)
-    successUrl.searchParams.set('success', 'true')
-    const cancelUrl = new URL(currentUrl)
-    cancelUrl.searchParams.set('canceled', 'true')
     if (billing.value?.subscriptionStatus === 'past_due') {
       await openBillingPortal()
       return
@@ -363,60 +356,22 @@ const upgradeToPlan = async (plan: string) => {
     const subscriptionId = typeof billing.value?.stripeSubscriptionId === 'string'
       ? billing.value.stripeSubscriptionId
       : null
-    const action = classifyStripePlanChange(currentPlan, plan, Boolean(subscriptionId))
-    if (!action) throw new Error('The selected plan is already active')
-    const analyticsContext = getBillingAnalyticsContext()
     const previousPriceId = planPriceId(currentPlan)
     const newPriceId = planPriceId(plan)
-    const effectiveTiming = action === 'downgrade' ? 'period_end' : 'immediate'
-    await recordBillingAnalyticsIntent(dashboardApi, {
+    await startSubscriptionCheckout({
       organizationId,
       siteId: selectedSiteId.value,
+      plan,
+      currentPlan,
       subscriptionId,
-      action,
-      ...analyticsContext,
+      annual: annual.value,
       previousPriceId,
       newPriceId,
-      effectiveTiming,
-    })
-    if (action === 'upgrade') trackSubscriptionUpgrade(plan)
-    if (action === 'downgrade' && plan !== 'free') trackSubscriptionDowngrade(plan)
-
-    if (plan === 'free') {
-      if (!subscriptionId) throw new Error('No active subscription to cancel')
-      const cancelResponse = await authClient.subscription.cancel({
-        referenceId: organizationId,
-        subscriptionId,
-        customerType: 'organization',
-        returnUrl: currentUrl.toString(),
-        disableRedirect: true,
-      })
-      if (cancelResponse.error) throw new Error(cancelResponse.error.message ?? 'Failed to open cancellation flow')
-      const portalUrl = cancelResponse.data && 'url' in cancelResponse.data ? cancelResponse.data.url : null
-      if (!portalUrl) throw new Error('Better Auth Stripe did not return a cancellation URL')
-      await navigateTo(portalUrl, { external: true })
-      return
-    }
-    const response = await authClient.subscription.upgrade({
-      plan,
-      annual: annual.value,
-      referenceId: organizationId,
-      ...(subscriptionId ? { subscriptionId } : {}),
-      customerType: 'organization',
-      metadata: {
-        site_id: selectedSiteId.value,
-        ...buildStripeSubscriptionMetadata(action, analyticsContext, sessionData.value?.user?.id, previousPriceId, newPriceId),
+      onAction: action => {
+        if (action === 'upgrade') trackSubscriptionUpgrade(plan)
+        if (action === 'downgrade' && plan !== 'free') trackSubscriptionDowngrade(plan)
       },
-      ...(action === 'downgrade' ? { scheduleAtPeriodEnd: true } : {}),
-      successUrl: successUrl.toString(),
-      cancelUrl: cancelUrl.toString(),
-      returnUrl: currentUrl.toString(),
-      disableRedirect: true,
     })
-    if (response.error) throw new Error(response.error.message ?? 'Failed to create checkout session')
-    const checkoutUrl = response.data && 'url' in response.data ? response.data.url : null
-    if (!checkoutUrl) throw new Error('Better Auth Stripe did not return a checkout URL')
-    await navigateTo(checkoutUrl, { external: true })
   } catch (err) {
     errorMessage.value = err instanceof Error ? err.message : 'Failed to create checkout session'
   } finally {
@@ -545,6 +500,10 @@ watchEffect(() => {
 onMounted(async () => {
   const { success, plan, canceled, siteId, ...restQuery } = route.query
 
+  if (typeof siteId === 'string' && sites.value.some(s => s.siteId === siteId)) {
+    selectedSiteId.value = siteId
+  }
+
   if (success === 'true') {
     trackSubscriptionCheckoutSuccess(selectedSite.value?.plan ?? undefined)
     const paymentStatus = billing.value?.paymentStatus
@@ -565,10 +524,6 @@ onMounted(async () => {
   }
 
   // Auto-start checkout if plan query param exists
-  if (typeof siteId === 'string' && sites.value.some(s => s.siteId === siteId)) {
-    selectedSiteId.value = siteId
-  }
-
   if (isAuthenticated.value && plan) {
     const planId = Array.isArray(plan) ? plan[0] : String(plan)
     if (planId) await upgradeToPlan(planId)

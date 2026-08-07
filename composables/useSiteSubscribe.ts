@@ -1,5 +1,4 @@
 import { authClient } from '~/lib/auth-client'
-import { classifyStripePlanChange } from '~/shared/stripe-ga4'
 
 function checkoutReturnUrls(): { successUrl: string; cancelUrl: string; returnUrl: string } {
   const current = new URL(window.location.href)
@@ -27,71 +26,12 @@ async function organizationSubscriptionId(
   }
 }
 
-async function redirectToCheckout(
-  organizationId: string,
-  siteId: string,
-  plan: string,
-  currentPlan: string,
-  subscriptionId?: string,
-  dashboardApi?: ReturnType<typeof useDashboardApi>,
-) {
-  const { successUrl, cancelUrl, returnUrl } = checkoutReturnUrls()
-  const { getBillingAnalyticsContext } = useAnalytics()
-  const analyticsContext = getBillingAnalyticsContext()
-  const action = classifyStripePlanChange(currentPlan, plan, Boolean(subscriptionId))
-  if (!action) throw new Error('The selected plan is already active')
-  if (dashboardApi) {
-    await recordBillingAnalyticsIntent(dashboardApi, {
-      organizationId,
-      siteId,
-      subscriptionId: subscriptionId ?? null,
-      action,
-      ...analyticsContext,
-      effectiveTiming: action === 'downgrade' ? 'period_end' : 'immediate',
-    })
-  }
-  const { data: sessionData } = useAuth()
-  const metadata = {
-    site_id: siteId,
-    ...buildStripeSubscriptionMetadata(action, analyticsContext, sessionData.value?.user?.id),
-  }
-  if (action === 'downgrade' && plan === 'free' && subscriptionId) {
-    const cancelResponse = await authClient.subscription.cancel({
-      referenceId: organizationId,
-      subscriptionId,
-      customerType: 'organization',
-      returnUrl,
-      disableRedirect: true,
-    })
-    if (cancelResponse.error) throw new Error(cancelResponse.error.message ?? 'Unable to open cancellation flow')
-    const portalUrl = cancelResponse.data && 'url' in cancelResponse.data ? cancelResponse.data.url : null
-    if (!portalUrl) throw new Error('Missing billing cancellation URL')
-    await navigateTo(portalUrl, { external: true })
-    return
-  }
-  const response = await authClient.subscription.upgrade({
-    plan,
-    referenceId: organizationId,
-    ...(subscriptionId ? { subscriptionId } : {}),
-    customerType: 'organization',
-    metadata,
-    ...(action === 'downgrade' ? { scheduleAtPeriodEnd: true } : {}),
-    successUrl,
-    cancelUrl,
-    returnUrl,
-    disableRedirect: true,
-  })
-  if (response.error) throw new Error(response.error.message ?? 'Unable to start subscription checkout')
-  const checkoutUrl = response.data && 'url' in response.data ? response.data.url : null
-  if (!checkoutUrl) throw new Error('Missing checkout URL from Better Auth Stripe')
-  await navigateTo(checkoutUrl, { external: true })
-}
-
 export const useSiteSubscribe = () => {
   const toast = useToast()
   const dashboard = useDashboardSite()
   const dashboardApi = useDashboardApi()
   const { trackSubscriptionUpgrade, trackSubscriptionDowngrade } = useAnalytics()
+  const { startSubscriptionCheckout } = useSubscriptionCheckout()
 
   // The organization owns one recurring subscription. A site is only
   // metadata on the upgrade request and receives derived entitlements after
@@ -116,10 +56,17 @@ export const useSiteSubscribe = () => {
         return
       }
       const currentPlan = subscription.plan ?? 'free'
-      const action = classifyStripePlanChange(currentPlan, plan, Boolean(subscription.id))
-      if (action === 'upgrade') trackSubscriptionUpgrade(plan)
-      if (action === 'downgrade' && plan !== 'free') trackSubscriptionDowngrade(plan)
-      await redirectToCheckout(organizationId, siteId, plan, currentPlan, subscription.id, dashboardApi)
+      await startSubscriptionCheckout({
+        organizationId,
+        siteId,
+        plan,
+        currentPlan,
+        subscriptionId: subscription.id,
+        onAction: action => {
+          if (action === 'upgrade') trackSubscriptionUpgrade(plan)
+          if (action === 'downgrade' && plan !== 'free') trackSubscriptionDowngrade(plan)
+        },
+      })
     } catch (err) {
       console.error('Checkout error:', err)
       toast.add({ title: 'Unable to start checkout — please try again', color: 'error' })

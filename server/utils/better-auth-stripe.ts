@@ -692,19 +692,22 @@ export async function enqueueStripeEvent(db: DbClient, event: Stripe.Event): Pro
     VALUES (?, ?, ?, 'pending', ?, 0, ?)
   `, [crypto.randomUUID(), event.id, event.type, payload, createdAt])
   if (Number(inserted?.meta.changes ?? 0) > 0) return true
+  // A duplicate Stripe delivery is not an operator replay. Leave failed and
+  // dead-lettered events in their existing bounded state so provider retries
+  // cannot reset the attempt budget. Use requeueDeadLetterStripeEvent for an
+  // explicit operator replay.
+  return false
+}
 
-  // A new Stripe delivery is an explicit replay request for an event that
-  // previously failed in the worker. Keep the dead-letter timestamp as audit
-  // evidence, refresh the authoritative payload, and give the replay its own
-  // bounded attempt window.
-  const replayed = await execute(db, `
+export async function requeueDeadLetterStripeEvent(db: DbClient, event: Stripe.Event): Promise<boolean> {
+  const updated = await execute(db, `
     UPDATE stripe_webhook_events
-    SET status = 'pending', payload = ?, error = NULL,
-        claimed_at = NULL, lease_expires_at = NULL, claim_token = NULL,
-        next_attempt_at = NULL, attempt_count = 0
-    WHERE stripe_event_id = ? AND status IN ('failed', 'dead_letter')
-  `, [payload, event.id])
-  return Number(replayed?.meta.changes ?? 0) > 0
+       SET status = 'pending', payload = ?, error = NULL,
+           claimed_at = NULL, lease_expires_at = NULL, claim_token = NULL,
+           next_attempt_at = NULL, attempt_count = 0, dead_lettered_at = NULL
+     WHERE stripe_event_id = ? AND status = 'dead_letter'
+  `, [JSON.stringify(event), event.id])
+  return Number(updated?.meta.changes ?? 0) === 1
 }
 
 export const MAX_STRIPE_WEBHOOK_ATTEMPTS = 5

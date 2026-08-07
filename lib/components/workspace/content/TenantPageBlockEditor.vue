@@ -174,13 +174,15 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import MediaPicker from '~/lib/components/workspace/media/MediaPicker.vue'
-import { TENANT_PAGE_BLOCK_REGISTRY, type TenantPageBlock, type TenantPageBlockType } from '~/utils/tenant-page-blocks'
+import { TENANT_PAGE_BLOCK_REGISTRY, isTenantPageBlockAllowed, type TenantPageBlock, type TenantPageBlockType, type TenantPageType } from '~/utils/tenant-page-blocks'
 import { createTenantPageEditorData, validateTenantPageBlock } from '~/utils/tenant-page-editor'
 
-const props = defineProps<{ block: TenantPageBlock; siteId: string }>()
+const props = defineProps<{ block: TenantPageBlock; siteId: string; pageRecipe?: string | null; pageType: TenantPageType }>()
 const emit = defineEmits<{ 'update:block': [block: TenantPageBlock] }>()
 
-const blockTypeOptions = Object.values(TENANT_PAGE_BLOCK_REGISTRY).map(definition => ({ label: definition.label, value: definition.type }))
+const blockTypeOptions = computed(() => Object.values(TENANT_PAGE_BLOCK_REGISTRY)
+  .filter(definition => isTenantPageBlockAllowed(definition, props.pageRecipe, props.pageType))
+  .map(definition => ({ label: definition.label, value: definition.type })))
 const headingLevels = [1, 2, 3, 4, 5, 6].map(level => ({ label: `H${level}`, value: level }))
 const toneOptions = ['neutral', 'info', 'success', 'warning', 'error'].map(value => ({ label: value[0]!.toUpperCase() + value.slice(1), value }))
 const faqSourceOptions = [{ label: 'Manual questions', value: 'manual' }, { label: 'Published site Q&A', value: 'page_qa' }]
@@ -207,7 +209,7 @@ function emitBlock(block: TenantPageBlock) {
 
 function changeType(value: unknown) {
   const type = String(value) as TenantPageBlockType
-  if (!TENANT_PAGE_BLOCK_REGISTRY[type] || type === props.block.type) return
+  if (!TENANT_PAGE_BLOCK_REGISTRY[type] || type === props.block.type || !isTenantPageBlockAllowed(type, props.pageRecipe, props.pageType)) return
   const preserved: Record<string, unknown> = {}
   for (const key of ['field', 'legacy_type']) if (props.block.data[key] !== undefined) preserved[key] = props.block.data[key]
   emitBlock({ ...props.block, type, data: { ...createTenantPageEditorData(type), ...preserved } })

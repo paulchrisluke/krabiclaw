@@ -2271,6 +2271,12 @@ export const stripe_invoice_payments = sqliteTable("stripe_invoice_payments", {
 	past_due_since: text(),
 	last_event_created: integer().notNull(),
 	last_event_id: text().notNull(),
+	ga4_purchase_status: text().default("pending"),
+	ga4_purchase_event_id: text(),
+	ga4_purchase_attempt_count: integer().default(0).notNull(),
+	ga4_purchase_claimed_at: text(),
+	ga4_purchase_sent_at: text(),
+	ga4_purchase_error: text(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
 	index("stripe_invoice_payments_organization_idx").on(table.organization_id, table.period_end),

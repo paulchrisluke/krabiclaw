@@ -1,9 +1,10 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { queryFirst } from '~/server/db'
 import { getAuthSession } from '~/server/utils/auth'
-import { getStripe, requireBillingAccess } from '~/server/utils/billing'
+import { getOrganizationBillingStatus, getStripe, requireBillingAccess } from '~/server/utils/billing'
 import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
 import {
+  buildStripeSubscriptionMetadata,
   isStripeGa4IntentAction,
   type StripeGa4IntentAction,
 } from '~/shared/stripe-ga4'
@@ -29,10 +30,6 @@ function optionalString(value: unknown, maxLength = 255): string | null {
   return trimmed.length > 0 ? trimmed.slice(0, maxLength) : null
 }
 
-function metadataValue(value: string | null): Record<string, string> {
-  return value ? { ga_client_id: value } : {}
-}
-
 async function updateStripeAttribution(
   env: ReturnType<typeof cloudflareEnv>,
   organizationId: string,
@@ -42,8 +39,9 @@ async function updateStripeAttribution(
 ): Promise<void> {
   if (!env.STRIPE_SECRET_KEY) throw createError({ statusCode: 503, statusMessage: 'Stripe not configured' })
   const subscriptionId = optionalString(body.subscriptionId)
+  const stripe = getStripe(env)
   const subscription = subscriptionId
-    ? await getStripe(env).subscriptions.retrieve(subscriptionId)
+    ? await stripe.subscriptions.retrieve(subscriptionId)
     : null
   const customerId = subscription
     ? (typeof subscription.customer === 'string' ? subscription.customer : subscription.customer?.id ?? null)
@@ -51,18 +49,11 @@ async function updateStripeAttribution(
         SELECT stripe_customer_id AS stripeCustomerId
           FROM organization_billing WHERE organization_id = ? LIMIT 1
       `, [organizationId]))?.stripeCustomerId ?? null
-  const stripe = getStripe(env)
-  const contextMetadata: Record<string, string> = {
-    user_id: userId,
-    analytics_action: action,
-    ...metadataValue(optionalString(body.gaClientId)),
-    ...(optionalString(body.gaSessionId, 64) ? { ga_session_id: optionalString(body.gaSessionId, 64)! } : {}),
-    ...(typeof body.gaSessionCapturedAt === 'number' && Number.isSafeInteger(body.gaSessionCapturedAt)
-      ? { ga_session_captured_at: String(body.gaSessionCapturedAt) }
-      : {}),
-    ...(optionalString(body.previousPriceId) ? { previous_price_id: optionalString(body.previousPriceId)! } : {}),
-    ...(optionalString(body.newPriceId) ? { new_price_id: optionalString(body.newPriceId)! } : {}),
-  }
+  const contextMetadata: Record<string, string> = buildStripeSubscriptionMetadata(action, {
+    gaClientId: optionalString(body.gaClientId),
+    gaSessionId: optionalString(body.gaSessionId, 64),
+    gaSessionCapturedAt: body.gaSessionCapturedAt,
+  }, userId, optionalString(body.previousPriceId), optionalString(body.newPriceId))
   if (action !== 'initial_subscription') {
     contextMetadata.pending_change_type = action
     contextMetadata.pending_user_id = userId
@@ -124,12 +115,8 @@ export default defineEventHandler(async (event) => {
 
   const subscriptionId = optionalString(body.subscriptionId)
   if (subscriptionId) {
-    const subscription = await queryFirst<{ stripeSubscriptionId: string }>(env.DB, `
-      SELECT stripe_subscription_id AS stripeSubscriptionId
-        FROM organization_billing
-       WHERE organization_id = ? AND stripe_subscription_id = ? LIMIT 1
-    `, [organization.id, subscriptionId])
-    if (!subscription) return jsonResponse({ error: 'Subscription does not belong to this organization' }, { status: 400 })
+    const billingStatus = await getOrganizationBillingStatus(env, env.DB, organization.id)
+    if (billingStatus.stripeSubscriptionId !== subscriptionId) return jsonResponse({ error: 'Subscription does not belong to this organization' }, { status: 400 })
   }
 
   const action = body.action as StripeGa4IntentAction

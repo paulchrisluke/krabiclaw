@@ -1,10 +1,11 @@
-import Stripe from 'stripe'
+import type Stripe from 'stripe'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { betterAuthTimestampToIso } from '~/server/utils/better-auth-timestamps'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
 import { getOrgAdapter } from 'better-auth/plugins'
 import { getPlanEntitlements, type EntitlementsMap } from '~/server/utils/billing-entitlements'
 import { getEffectiveAccessPlan } from '~/server/utils/billing-access'
+import { createStripeClient } from '~/server/utils/stripe-client'
 
 interface SiteBillingRow {
   stripe_subscription_id: string | null
@@ -67,7 +68,7 @@ export type OrganizationEntitlement = { id: string; site_id: string; organizatio
 
 export function getStripe(env: BillingEnv): Stripe {
   if (!env.STRIPE_SECRET_KEY) throw new Error('Stripe secret key not configured')
-  return new Stripe(env.STRIPE_SECRET_KEY)
+  return createStripeClient(env.STRIPE_SECRET_KEY)
 }
 
 // ── Per-site billing status ───────────────────────────────────────────────────

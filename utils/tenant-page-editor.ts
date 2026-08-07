@@ -113,6 +113,7 @@ export function validateTenantPageBlock(block: TenantPageBlock): string[] {
       if (!stringArray(data, 'asset_ids').length) addError(errors, 'Add at least one gallery image.')
       break
     case 'faq':
+      if (text(data.source) === 'page_qa') break
       objectArray(data, 'items').forEach((item, index) => {
         if (!itemText(item, 'title', ['question'])) addError(errors, `FAQ item ${index + 1} needs a question.`)
         if (!itemText(item, 'description', ['answer'])) addError(errors, `FAQ item ${index + 1} needs an answer.`)

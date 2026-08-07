@@ -67,6 +67,7 @@ test('intent persistence carries browser identity and change timing into the led
   assert.match(executed[0]?.query ?? '', /INSERT INTO stripe_ga4_subscription_intents/)
   assert.equal(executed[0]?.params.includes('123.456'), true)
   assert.equal(executed[0]?.params.some(value => String(value) === '1760000123'), true)
+  assert.equal((executed[0]?.query.match(/\?/g) ?? []).length, executed[0]?.params.length)
 })
 
 test('pending intents are consumed after lifecycle or paid-invoice delivery', async () => {

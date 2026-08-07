@@ -8,11 +8,13 @@ const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const ACTIVE_ROOTS = [
   'components',
   'composables',
+  'layouts',
   'lib',
   'pages',
   'scripts',
   'seed-definitions',
   'server',
+  'shared',
   'utils',
 ]
 const EXTENSIONS = new Set(['.js', '.mjs', '.ts', '.vue', '.json'])

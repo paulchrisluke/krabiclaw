@@ -74,6 +74,7 @@ export async function loadStripeInvoiceLines(
     lines?: Stripe.ApiList<Stripe.InvoiceLineItem> | null
   },
 ): Promise<StripeInvoiceLine[]> {
+  if (!invoice.id) throw new Error('Stripe invoice id is required to load invoice lines')
   let invoiceLines: StripeInvoiceLine[] = [...(invoice.lines?.data ?? []) as StripeInvoiceLine[]]
   let startingAfter = invoiceLines.at(-1)?.id
   const mustReloadFirstPage = invoiceLines.some(line => typeof invoiceLinePrice(line) === 'string')
@@ -100,10 +101,12 @@ export async function loadStripeInvoiceLines(
 
   return await Promise.all(invoiceLines.map(async (line) => {
     const price = invoiceLinePrice(line)
-    if (typeof price !== 'string') return line
+    if (!price) return line
+    if (typeof price !== 'string' && (typeof price.product !== 'string' || !price.id)) return line
+    const priceId = typeof price === 'string' ? price : price.id
     return {
       ...line,
-      price: await stripe.prices.retrieve(price, { expand: ['product'] }),
+      price: await stripe.prices.retrieve(priceId, { expand: ['product'] }),
     }
   }))
 }
