@@ -215,10 +215,6 @@ export default defineEventHandler(async (event) => {
       }
     }
 
-    const heroImageUrl = payload.preview.config.hero_image_url
-    const locationHeroImageUrl = payload.preview.config.location_hero_image_url
-    if (heroImageUrl) await setConfig(db, organizationId, siteId, 'hero_image_url', heroImageUrl)
-    if (locationHeroImageUrl) await setConfig(db, organizationId, siteId, 'location_hero_image_url', locationHeroImageUrl)
     // No real Maps photo was available, so the hero remains the non-photo Saya treatment.
     // Record this so the onboarding checklist can distinguish it from owner-provided media.
     const heroIsPlaceholder = !payload.source.place?.photos?.[0]?.photoUri

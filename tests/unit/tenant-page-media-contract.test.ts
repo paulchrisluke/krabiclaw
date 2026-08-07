@@ -122,6 +122,12 @@ test('0106 repairs every legacy tenant-page image shape in documents and revisio
       attempt_count INTEGER NOT NULL,
       created_at TEXT NOT NULL
     );
+    CREATE TABLE site_config (
+      organization_id TEXT NOT NULL,
+      site_id TEXT NOT NULL,
+      key TEXT NOT NULL,
+      value TEXT
+    );
   `)
 
   const assets = [
@@ -132,6 +138,18 @@ test('0106 repairs every legacy tenant-page image shape in documents and revisio
   ]
   const insertAsset = db.prepare('INSERT INTO media_assets (id, site_id, kind, status, public_url, cloudflare_image_id) VALUES (?, ?, \'image\', \'active\', ?, ?)')
   for (const asset of assets) insertAsset.run(...asset)
+  db.prepare('INSERT INTO site_config (organization_id, site_id, key, value) VALUES (?, ?, ?, ?)').run(
+    'org-demo',
+    'site-demo',
+    'hero_image_url',
+    'https://legacy.example/hero.jpg',
+  )
+  db.prepare('INSERT INTO site_config (organization_id, site_id, key, value) VALUES (?, ?, ?, ?)').run(
+    'org-demo',
+    'site-demo',
+    'brand_color',
+    '#123456',
+  )
 
   const cases = [
     {
@@ -246,6 +264,14 @@ test('0106 repairs every legacy tenant-page image shape in documents and revisio
   assert.equal(
     (db.prepare('SELECT COUNT(*) AS count FROM public_resource_cache_invalidations').get() as { count: number }).count,
     cases.length,
+  )
+  assert.equal(
+    (db.prepare('SELECT COUNT(*) AS count FROM site_config WHERE key IN (\'hero_image_url\', \'location_hero_image_url\')').get() as { count: number }).count,
+    0,
+  )
+  assert.equal(
+    (db.prepare('SELECT value FROM site_config WHERE key = \'brand_color\'').get() as { value: string }).value,
+    '#123456',
   )
   assert.equal(
     (db.prepare('SELECT COUNT(*) AS count FROM content_blocks WHERE id = ?').get('block-site-kikuzuki-empty-other') as { count: number }).count,

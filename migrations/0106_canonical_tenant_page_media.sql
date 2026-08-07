@@ -108,7 +108,11 @@ WHERE EXISTS (
   WHERE variant.`site_id` = 'site-demo'
     AND json_extract(revision.`snapshot_json`, '$.metadata.path') = '/about'
     AND json_extract(revision.`snapshot_json`, '$.metadata.title') LIKE 'http%'
-);
+)
+UNION
+SELECT DISTINCT config.`site_id`
+FROM `site_config` config
+WHERE config.`key` IN ('hero_image_url', 'location_hero_image_url');
 --> statement-breakpoint
 CREATE TABLE `__um_assert_0106` (
   `violation` text NOT NULL CHECK (`violation` = '')
@@ -342,6 +346,9 @@ SET `title` = 'About'
 WHERE `site_id` = 'site-demo'
   AND `path` = '/about'
   AND `title` LIKE 'http%';
+--> statement-breakpoint
+DELETE FROM `site_config`
+WHERE `key` IN ('hero_image_url', 'location_hero_image_url');
 --> statement-breakpoint
 INSERT INTO `public_resource_cache_invalidations`
   (`id`, `site_id`, `reason`, `status`, `attempt_count`, `created_at`)

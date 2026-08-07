@@ -63,8 +63,6 @@ export interface DashboardSiteRow {
   // or null for pure vertical defaults — see resolveSiteCmsCapabilities
   // (server/utils/cms-capabilities.ts), the one place this is parsed.
   feature_overrides: string | null
-  heroImageUrl?: string | null
-  locationHeroImageUrl?: string | null
 }
 
 export interface DashboardLocationRow {
@@ -344,28 +342,13 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
     })
   }
 
-  const siteConfig = site
-    ? await queryAll<{ key: string; value: string | null }>(db, `
-        SELECT key, value
-        FROM site_config
-        WHERE organization_id = ? AND site_id = ?
-          AND key IN ('hero_image_url', 'location_hero_image_url')
-      `, [organization.id, site.id])
-    : []
-
-  const configByKey = Object.fromEntries(siteConfig.map((row) => [row.key, row.value]))
-
   return {
     env,
     db,
     session,
     userId: session.user.id,
     organization,
-    site: site ? {
-      ...site,
-      heroImageUrl: configByKey.hero_image_url ?? null,
-      locationHeroImageUrl: configByKey.location_hero_image_url ?? null,
-    } : null
+    site,
   }
 }
 
