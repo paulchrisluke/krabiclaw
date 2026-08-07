@@ -83,7 +83,7 @@ NODE_OPTIONS=--max-old-space-size=8192 \
 yarn typecheck
 ```
 
-Use the same `PATH` and `NODE_OPTIONS` prefix for `yarn lint` and other heavy local checks. Production builds must run through `yarn build`, which configures its required heap itself. Do not invoke `nuxi build` directly or retry an initial default-heap failure. Do this before describing a check as blocked; local validation is still required.
+Use the same `PATH` and `NODE_OPTIONS` prefix for `yarn lint` and other heavy local checks. Production builds must run through `yarn build`, which configures its required heap itself. Do not invoke `nuxi build` directly or retry an initial default-heap failure. Scheduled jobs are exercised with `yarn test:scheduled-tasks` and the local `wrangler dev --test-scheduled` harness. Do this before describing a check as blocked; local validation is still required.
 
 ## Cloudflare Resource Readiness
 

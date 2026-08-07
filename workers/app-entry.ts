@@ -7,6 +7,7 @@ import { publishPendingGuestDeliveryOutbox, type GuestDeliveryQueueMessage } fro
 import { getGuestThreadById } from '../server/domain/guest-threads/repository'
 import { getAdapter } from '../server/domain/guest-threads/adapters/registry'
 import { nextConversationState } from '../server/domain/guest-threads/state-machine'
+import { runScheduledTasks } from '../server/scheduled-tasks'
 
 interface Env {
   DB: D1Database
@@ -148,8 +149,12 @@ export default {
     return handler.fetch(request, env, ctx)
   },
   scheduled(controller, env, ctx) {
-    ctx.waitUntil(publishPendingGuestDeliveryOutbox(createDb(env.DB), env, 50))
-    return handler.scheduled?.(controller, env, ctx)
+    if (controller.cron === '*/5 * * * *') {
+      ctx.waitUntil(publishPendingGuestDeliveryOutbox(createDb(env.DB), env, 50))
+    }
+    ctx.waitUntil(runScheduledTasks(controller.cron, env as ApiRecord, {
+      scheduledTime: controller.scheduledTime,
+    }))
   },
   async queue(batch, env) {
     for (const message of batch.messages) {

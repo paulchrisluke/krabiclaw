@@ -1,6 +1,7 @@
 import { reconcileDueDomains } from '~/server/utils/domains'
+import { defineScheduledTask } from '~/server/utils/scheduled-task'
 
-export default defineTask({
+export default defineScheduledTask({
   meta: {
     name: 'domains:reconcile',
     description: 'Reconcile due Cloudflare SaaS custom domains'

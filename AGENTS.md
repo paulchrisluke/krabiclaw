@@ -245,8 +245,10 @@ During implementation:
 
 Production builds require the heap configured by `yarn build`.
 Run `yarn build` once after focused validation. Do not run `nuxi build`
-directly or retry a failed default-heap build. Reuse the same `.output`
-artifact for all browser assertions.
+directly or retry a failed default-heap build. Scheduled jobs are dispatched by
+the Cloudflare `scheduled()` handler; do not re-enable Nitro's experimental task
+registry. Reuse one `.output` artifact for all assertions in the corresponding
+validation pass.
 
 Required on each relevant PR push:
 - Typecheck and lint.

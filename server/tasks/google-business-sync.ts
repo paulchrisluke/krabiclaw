@@ -2,6 +2,7 @@ import type { D1Database } from '@cloudflare/workers-types'
 import { syncPlaceToLocation } from '~/server/utils/google-places'
 import { queryAll } from '~/server/db'
 import { recordUsageEvent } from '~/server/utils/usage-metering'
+import { defineScheduledTask } from '~/server/utils/scheduled-task'
 
 // NOTE: Google Business Profile API access was never provisioned.
 // All Google data for every location comes from the Places API (New, v1)
@@ -36,7 +37,7 @@ interface TaskResult {
   details: PlacesSyncResult[]
 }
 
-export default defineTask({
+export default defineScheduledTask({
   meta: {
     name: 'social:google-places-sync',
     description: 'Hourly sync of Google Places hours, ratings, and reviews for all connected locations',

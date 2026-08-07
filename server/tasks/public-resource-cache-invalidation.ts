@@ -1,6 +1,7 @@
 import { drainPublicResourceCacheInvalidations } from '~/server/utils/public-resource-cache'
+import { defineScheduledTask } from '~/server/utils/scheduled-task'
 
-export default defineTask({
+export default defineScheduledTask({
   meta: {
     name: 'public-resource-cache-invalidation',
     description: 'Drain durable public-resource cache invalidations',
