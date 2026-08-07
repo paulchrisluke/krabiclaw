@@ -19,6 +19,7 @@ import {
   type TenantPageSnapshotMetadata,
   type TenantPageType,
 } from '~/utils/tenant-page-blocks'
+import { hydrateMediaAssetRefs } from '~/server/utils/media-asset-manager'
 import { hasSiteEntitlement } from '~/server/utils/billing'
 import { normalizeDomain } from '~/server/utils/domain-shared'
 import { normalizeLocale } from '~/server/utils/site-i18n'
@@ -165,7 +166,7 @@ function metadataForInput(input: TenantPageEditorInput, locale: string, path: st
   }
 }
 
-async function assertTenantPageSupport(db: DbClient, siteId: string, input: TenantPageEditorInput, blocks: TenantPageBlock[], options: { checkCustomPageEntitlement?: boolean } = {}) {
+async function assertTenantPageSupport(db: DbClient, organizationId: string, siteId: string, input: TenantPageEditorInput, blocks: TenantPageBlock[], options: { checkCustomPageEntitlement?: boolean } = {}) {
   const pageType = input.pageType ?? 'custom'
   if (!TENANT_PAGE_TYPES.includes(pageType)) badRequest('pageType is invalid')
   if (pageType === 'custom' && options.checkCustomPageEntitlement !== false && !(await hasSiteEntitlement(db, siteId, 'custom_pages'))) {
@@ -205,6 +206,36 @@ async function assertTenantPageSupport(db: DbClient, siteId: string, input: Tena
     `, [siteId, siteId, siteId])
     if (!allowedHosts.some(row => normalizeDomain(row.domain) === normalizeDomain(parsed.hostname))) {
       badRequest('canonicalUrl must use an approved domain for this site')
+    }
+  }
+  const referencedAssetIds = new Set<string>()
+  for (const block of blocks) {
+    if (block.type === 'image') {
+      const assetId = typeof block.data.asset_id === 'string' ? block.data.asset_id : ''
+      if (assetId) referencedAssetIds.add(assetId)
+    }
+    if (block.type === 'gallery' && Array.isArray(block.data.asset_ids)) {
+      for (const value of block.data.asset_ids) {
+        if (typeof value === 'string' && value.trim()) referencedAssetIds.add(value.trim())
+      }
+    }
+  }
+  const media = await hydrateMediaAssetRefs(db, {
+    organizationId,
+    siteId,
+    refs: [...referencedAssetIds].map(asset_id => ({ asset_id })),
+    allowedKinds: ['image', 'video'],
+    fieldName: 'tenant page media',
+  })
+  const mediaById = new Map(media.map(asset => [asset.id, asset]))
+  for (const block of blocks) {
+    if (block.type === 'image') {
+      const assetId = String(block.data.asset_id)
+      if (mediaById.get(assetId)?.kind !== 'image') badRequest(`Image block asset ${assetId} must be an image`)
+    }
+    if (block.type === 'gallery' && Array.isArray(block.data.asset_ids)) {
+      const nonImageId = block.data.asset_ids.find(id => mediaById.get(id)?.kind !== 'image')
+      if (nonImageId) badRequest(`Gallery asset ${nonImageId} must be an image`)
     }
   }
 }
@@ -564,7 +595,7 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
   const path = await assertTenantPagePathAvailable(db, { siteId: input.siteId, locale, path: input.data.path, allowSystemPath: input.trustedSystemPage === true })
   const metadata = metadataForInput(effectiveData, locale, path)
   const blocks = normalizeTenantPageBlocks(effectiveData.blocks)
-  await assertTenantPageSupport(db, input.siteId, effectiveData, blocks)
+  await assertTenantPageSupport(db, input.organizationId, input.siteId, effectiveData, blocks)
   const pageId = existingPage?.id ?? crypto.randomUUID()
   const variantId = effectiveData.id ?? crypto.randomUUID()
   const documentId = crypto.randomUUID()
@@ -626,7 +657,7 @@ export async function updateTenantPageDraft(db: DbClient, variantId: string, inp
   const path = await assertTenantPagePathAvailable(db, { siteId: row.site_id, locale: row.locale, path: input.data.path ?? row.draft_path, excludeVariantId: variantId, allowSystemPath: row.page_type === 'system' })
   const metadata = metadataForInput(effectiveInput, row.locale, path)
   const blocks = normalizeTenantPageBlocks(input.data.blocks)
-  await assertTenantPageSupport(db, row.site_id, effectiveInput, blocks, { checkCustomPageEntitlement: row.page_type !== 'custom' && pageType === 'custom' })
+  await assertTenantPageSupport(db, row.organization_id, row.site_id, effectiveInput, blocks, { checkCustomPageEntitlement: row.page_type !== 'custom' && pageType === 'custom' })
   const revisionId = crypto.randomUUID()
   const now = new Date().toISOString()
   const pageStatus: TenantPageStatus = row.published_revision_id ? 'published' : 'draft'
@@ -702,7 +733,7 @@ export async function publishTenantPage(db: DbClient, variantId: string, input: 
     recipe: identity.recipe,
     blocks: snapshot.blocks,
   }
-  await assertTenantPageSupport(db, row.site_id, effectiveInput, snapshot.blocks)
+  await assertTenantPageSupport(db, row.organization_id, row.site_id, effectiveInput, snapshot.blocks)
   const publishPath = await assertTenantPagePathAvailable(db, {
     siteId: row.site_id,
     locale: row.locale,

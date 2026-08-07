@@ -160,6 +160,11 @@ test("demo content block delegates page composition to canonical tenant pages", 
   assert.match(pages, /Wood fire\. Brooklyn nights\./);
   assert.match(pages, /A trattoria shaped by the oven\./);
   assert.match(pages, /Pizza classes, tasting nights, and big-table evenings\./);
+  assert.match(pages, /"asset_id":"media-demo-team-1"/);
+  const imagePayloads = [...pages.matchAll(/'image', \d+, NULL, '((?:[^']|'')*)', CURRENT_TIMESTAMP/g)]
+    .map(match => JSON.parse(match[1]!.replaceAll("''", "'")) as Record<string, unknown>);
+  assert.ok(imagePayloads.length > 0);
+  assert.ok(imagePayloads.every(payload => !("url" in payload)));
 });
 
 test("demo translations block includes Thai translations for content, locations, and menus", () => {

@@ -42,7 +42,7 @@ test.describe('Tenant Favicon Endpoints & Host Isolation E2E Tests', () => {
   })
 
   test('Kikuzuki tenant host endpoints return tenant-specific assets without platform fallbacks', async ({ request }) => {
-    const headers = { 'x-preview-tenant': 'kikuzuki' }
+    const headers = { 'x-preview-tenant': 'kikuzuki-krabi-thailand' }
 
     const resSvg = await request.get('/tenant-icon.svg', { headers })
     expect(resSvg.status()).toBe(200)

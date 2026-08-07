@@ -51,6 +51,29 @@ type PlacementDefinition = {
   requireCoverPoster: boolean
 }
 
+export function replaceStoryImageBlock(
+  blocks: Array<{ id: string; type: string; position: number; data: Record<string, unknown> }>,
+  assetId: string | null,
+) {
+  let replaced = false
+  const next = blocks.flatMap((block) => {
+    if (block.type !== 'image' || block.data.field !== 'story.image') return [block]
+    if (!assetId || replaced) return []
+    const { url: _url, ...data } = block.data
+    replaced = true
+    return [{ ...block, data: { ...data, asset_id: assetId } }]
+  })
+  if (assetId && !replaced) {
+    next.push({
+      id: crypto.randomUUID(),
+      type: 'image',
+      position: next.length,
+      data: { field: 'story.image', asset_id: assetId, alt: 'Story image' },
+    })
+  }
+  return next
+}
+
 export function mediaPlacementDefinition(target: MediaPlacementTarget): PlacementDefinition {
   switch (target.type) {
     case 'site_logo':
@@ -174,9 +197,7 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
           pageType: canonicalPage.page_type,
           recipe: canonicalPage.recipe,
           sortOrder: canonicalPage.sort_order,
-          blocks: canonicalPage.blocks.map(block => block.type === 'image' && block.data.field === 'story.image'
-            ? { ...block, data: { ...block.data, asset_id: assetId } }
-            : block),
+          blocks: replaceStoryImageBlock(canonicalPage.blocks, assetId),
           expectedDocumentUpdatedAt: canonicalPage.document.updated_at,
         },
       })

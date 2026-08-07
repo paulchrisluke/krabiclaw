@@ -21,8 +21,6 @@ interface DashboardSite {
   default_currency: string | null
   source_locale: string | null
   feature_overrides: string | null
-  heroImageUrl?: string | null
-  locationHeroImageUrl?: string | null
 }
 
 interface DashboardSiteSummary {

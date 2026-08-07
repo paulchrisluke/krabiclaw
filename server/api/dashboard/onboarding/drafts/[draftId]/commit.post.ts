@@ -36,9 +36,13 @@ function onboardingPageBlocks(rows: Array<{ id?: string; field: string; content:
   for (const row of rows) {
     if (row.field === 'hero') {
       blocks.push({ id: row.id ?? crypto.randomUUID(), type: 'hero', position: blocks.length, data: { title: row.hero_title ?? row.content ?? undefined, subtitle: row.hero_subtitle, asset_id: heroAssetId ?? row.hero_media_asset_id ?? null } })
+    } else if (row.type === 'media' || row.field.endsWith('.image')) {
+      if (row.hero_media_asset_id) {
+        blocks.push({ id: row.id ?? crypto.randomUUID(), type: 'image', position: blocks.length, data: { field: row.field, asset_id: row.hero_media_asset_id, alt: row.field } })
+      }
     } else if (row.content?.trim()) {
-      const type = row.type === 'media' || row.field.endsWith('.image') ? 'image' : row.field.endsWith('.title') || row.field.endsWith('.headline') ? 'heading' : 'markdown'
-      blocks.push({ id: row.id ?? crypto.randomUUID(), type, position: blocks.length, data: type === 'image' ? { field: row.field, url: row.content, alt: row.field } : type === 'heading' ? { field: row.field, text: row.content, level: 2 } : { field: row.field, markdown: row.content } })
+      const type = row.field.endsWith('.title') || row.field.endsWith('.headline') ? 'heading' : 'markdown'
+      blocks.push({ id: row.id ?? crypto.randomUUID(), type, position: blocks.length, data: type === 'heading' ? { field: row.field, text: row.content, level: 2 } : { field: row.field, markdown: row.content } })
     }
   }
   if (!blocks.length) blocks.push({ id: crypto.randomUUID(), type: 'hero', position: 0, data: { title: 'Welcome', subtitle: null } })
@@ -211,10 +215,6 @@ export default defineEventHandler(async (event) => {
       }
     }
 
-    const heroImageUrl = payload.preview.config.hero_image_url
-    const locationHeroImageUrl = payload.preview.config.location_hero_image_url
-    if (heroImageUrl) await setConfig(db, organizationId, siteId, 'hero_image_url', heroImageUrl)
-    if (locationHeroImageUrl) await setConfig(db, organizationId, siteId, 'location_hero_image_url', locationHeroImageUrl)
     // No real Maps photo was available, so the hero remains the non-photo Saya treatment.
     // Record this so the onboarding checklist can distinguish it from owner-provided media.
     const heroIsPlaceholder = !payload.source.place?.photos?.[0]?.photoUri
