@@ -340,8 +340,8 @@ jobs:
       - name: Purge preview HTML cache
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          PREVIEW_CACHE_ORIGIN: https://preview.krabiclaw.com
-        run: node --experimental-strip-types scripts/purge-preview-cache.ts
+          DEPLOYMENT_CACHE_ORIGIN: https://preview.krabiclaw.com
+        run: node --experimental-strip-types scripts/purge-deployment-cache.ts
       - run: npx playwright install --with-deps chromium
       - name: Wait for deployed assets
         env:
@@ -471,6 +471,11 @@ jobs:
         # Secret updates publish Worker versions. Deploy last so HTML and the
         # immutable Nuxt assets always propagate as one final version.
         run: yarn deploy:staging:worker
+      - name: Purge staging HTML cache
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          DEPLOYMENT_CACHE_ORIGIN: https://staging.krabiclaw.com
+        run: node --experimental-strip-types scripts/purge-deployment-cache.ts
       - run: npx playwright install --with-deps chromium
       - name: Warm up staging Worker
         run: |
