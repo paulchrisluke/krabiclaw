@@ -694,15 +694,15 @@ export async function enqueueStripeEvent(db: DbClient, event: Stripe.Event): Pro
   if (Number(inserted?.meta.changes ?? 0) > 0) return true
 
   // A new Stripe delivery is an explicit replay request for an event that
-  // previously exhausted its worker attempts. Keep the dead-letter timestamp
-  // as audit evidence, refresh the authoritative payload, and give the replay
-  // its own bounded attempt window.
+  // previously failed in the worker. Keep the dead-letter timestamp as audit
+  // evidence, refresh the authoritative payload, and give the replay its own
+  // bounded attempt window.
   const replayed = await execute(db, `
     UPDATE stripe_webhook_events
     SET status = 'pending', payload = ?, error = NULL,
         claimed_at = NULL, lease_expires_at = NULL, claim_token = NULL,
         next_attempt_at = NULL, attempt_count = 0
-    WHERE stripe_event_id = ? AND status = 'dead_letter'
+    WHERE stripe_event_id = ? AND status IN ('failed', 'dead_letter')
   `, [payload, event.id])
   return Number(replayed?.meta.changes ?? 0) > 0
 }

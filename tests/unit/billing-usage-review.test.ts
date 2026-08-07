@@ -58,8 +58,8 @@ mock.module('../../server/db/index.ts', {
         }
         return { meta: { changes: 1 } }
       }
-      if (query.includes("WHERE stripe_event_id = ? AND status = 'dead_letter'")) {
-        if (!eventState || eventState.status !== 'dead_letter') return { meta: { changes: 0 } }
+      if (query.includes("WHERE stripe_event_id = ? AND status IN ('failed', 'dead_letter')")) {
+        if (!eventState || !['failed', 'dead_letter'].includes(eventState.status)) return { meta: { changes: 0 } }
         eventState = { ...eventState, status: 'pending', attempts: 0, leaseExpiresAt: null, claimToken: null }
         return { meta: { changes: 1 } }
       }
@@ -145,7 +145,7 @@ test('a failed webhook lease is reclaimed and retried', async () => {
   assert.equal(processed, true)
   assert.equal(attempts, 2)
   assert.equal(eventState?.status, 'processed')
-  assert.equal(eventState?.attempts, 2)
+  assert.equal(eventState?.attempts, 1)
 })
 
 test('an expired pending webhook lease is reclaimed after a process interruption', async () => {
@@ -188,6 +188,13 @@ test('a processed duplicate remains terminal and is not requeued', async () => {
 
 test('a new delivery requeues a dead-lettered Stripe event with a fresh attempt window', async () => {
   eventState = { status: 'dead_letter', leaseExpiresAt: null, claimToken: null, attempts: 5 }
+  assert.equal(await enqueueStripeEvent({} as never, event), true)
+  assert.equal(eventState?.status, 'pending')
+  assert.equal(eventState?.attempts, 0)
+})
+
+test('a new delivery requeues a failed Stripe event with a fresh attempt window', async () => {
+  eventState = { status: 'failed', leaseExpiresAt: null, claimToken: null, attempts: 1 }
   assert.equal(await enqueueStripeEvent({} as never, event), true)
   assert.equal(eventState?.status, 'pending')
   assert.equal(eventState?.attempts, 0)
