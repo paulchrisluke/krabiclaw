@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:5aa62ecb9d8b8f63304e202a0755043ec0e1aec19a79f13113a3bb2bc9e01ae5",
+  "fingerprint": "sha256:53ad3c70f8cdc036ccf57fc0f8fa083090ad096c246992485c387d4c3d549ba4",
   "tools": [
     {
       "name": "add_menu_items_batch",
@@ -2225,7 +2225,7 @@
         "additionalProperties": true,
         "properties": {
           "blocks": {
-            "description": "Complete canonical block array. Each existing block must retain its id unless its removal is explicitly confirmed.",
+            "description": "Complete canonical block array. Each existing block must retain its id unless its removal is explicitly confirmed. Image blocks store asset_id only; never write a delivery URL. Use set_media for media placement.",
             "items": {
               "type": "object"
             },
@@ -15612,7 +15612,7 @@
         "additionalProperties": true,
         "properties": {
           "blocks": {
-            "description": "Complete canonical block array. Each existing block must retain its id unless its removal is explicitly confirmed.",
+            "description": "Complete canonical block array. Each existing block must retain its id unless its removal is explicitly confirmed. Image blocks store asset_id only; never write a delivery URL. Use set_media for media placement.",
             "items": {
               "type": "object"
             },

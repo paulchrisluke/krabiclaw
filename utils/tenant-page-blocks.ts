@@ -91,45 +91,6 @@ export const TENANT_PAGE_BLOCK_REGISTRY: Record<TenantPageBlockType, TenantPageB
 }
 
 const BLOCK_TYPES = new Set(Object.keys(TENANT_PAGE_BLOCK_REGISTRY))
-const LEGACY_BLOCK_TYPE_MAP: Record<string, TenantPageBlockType> = {
-  home_hero: 'hero',
-  page_hero: 'hero',
-  consultation_cta: 'contact_cta',
-  contact_cards: 'contact_cta',
-  services_intro: 'offering_grid',
-  video_feature: 'feature_grid',
-  reviews: 'testimonial_grid',
-  qa: 'faq',
-  disclaimer: 'callout',
-  schedule_hero: 'hero',
-  schedule_guidance: 'markdown',
-  schedule_cta: 'booking_cta',
-  schedule_qa: 'faq',
-  team: 'feature_grid',
-  impact: 'feature_grid',
-  pricing_plans: 'offering_grid',
-  pricing_calculator: 'feature_grid',
-  donation_choices: 'donation_choices',
-  donation_support: 'callout',
-  legal_meta: 'callout',
-  heading: 'heading',
-  markdown: 'markdown',
-  image: 'image',
-  gallery: 'gallery',
-  faq: 'faq',
-  divider: 'divider',
-  cta: 'cta',
-  callout: 'callout',
-  hero: 'hero',
-  button_group: 'button_group',
-  feature_grid: 'feature_grid',
-  testimonial_grid: 'testimonial_grid',
-  contact_cta: 'contact_cta',
-  booking_cta: 'booking_cta',
-  offering_grid: 'offering_grid',
-  location_grid: 'location_grid',
-}
-const LEGACY_NON_CONTENT_COMPONENT_TYPES = new Set(['latest_articles', 'article_filters'])
 
 function asRecord(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(label + ' must be an object.')
@@ -206,12 +167,12 @@ function validateBlockData(type: TenantPageBlockType, data: Record<string, unkno
       if (record.answer !== undefined && typeof record.answer !== 'string') throw new Error(`${type}.items[${index}].answer must be a string.`)
     }
   }
+  if (type === 'image') {
+    if ('url' in data) throw new Error('image.url is not canonical; use image.asset_id.')
+    if (typeof data.asset_id !== 'string' || !data.asset_id.trim()) throw new Error('image.asset_id is required.')
+    data = { ...data, asset_id: data.asset_id.trim() }
+  }
   return { ...data }
-}
-
-export function createTenantPageBlock(type: TenantPageBlockType, data: Record<string, unknown> = {}, position = 0): TenantPageBlock {
-  if (!BLOCK_TYPES.has(type)) throw new Error('Unsupported tenant page block type: ' + type)
-  return { id: crypto.randomUUID(), type, position, data: { ...data } }
 }
 
 export function normalizeTenantPageBlocks(value: unknown): TenantPageBlock[] {
@@ -261,24 +222,6 @@ export function normalizeTenantPagePath(value: string): string {
   if (!path.startsWith('/') || path.startsWith('//')) throw new Error('Page paths must be rooted and normalized.')
   if (path.includes('?') || path.includes('#')) throw new Error('Page paths may not contain query strings or fragments.')
   return path
-}
-
-export function migrateLegacyComponent(type: string, data: Record<string, unknown>): TenantPageBlock {
-  const mappedType = LEGACY_BLOCK_TYPE_MAP[type]
-  if (!mappedType) throw new Error('Legacy component type "' + type + '" has no tenant block migration.')
-  return createTenantPageBlock(mappedType, { ...data, legacy_type: type })
-}
-
-export function migrateLegacyComponents(value: unknown): TenantPageBlock[] {
-  if (!Array.isArray(value)) throw new Error('Legacy components must be an array.')
-  return value.map((component, index) => {
-    const record = asRecord(component, 'legacy components[' + index + ']')
-    const type = asString(record.type, 'legacy components[' + index + '].type', true)!
-    if (LEGACY_NON_CONTENT_COMPONENT_TYPES.has(type)) return null
-    const data = { ...record }
-    delete data.type
-    return migrateLegacyComponent(type, data)
-  }).filter((block): block is TenantPageBlock => block !== null).map((block, index) => ({ ...block, position: index }))
 }
 
 export function blockDefinition(type: TenantPageBlockType): TenantPageBlockDefinition {

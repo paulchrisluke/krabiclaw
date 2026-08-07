@@ -1,6 +1,7 @@
 import { compileCuratedSiteFixture } from './compile.ts'
-import type { CompiledSeedSiteContent, CuratedSiteDefinition } from './contracts.ts'
+import type { CuratedSiteDefinition } from './contracts.ts'
 import { renderSiteBillingSql, renderSiteEntitlementsSql } from './billing-sql.ts'
+import { renderTenantPagesSeedSql } from './tenant-pages.ts'
 
 function escapeSql(value: string): string {
   return value.replace(/'/g, "''")
@@ -517,7 +518,8 @@ export const demoFixture: CuratedSiteDefinition = {
       locationId: null,
       page: 'about',
       field: 'story.image',
-      content: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/cad82f19-5ecd-43cd-8781-606a59256000/public',
+      content: null,
+      heroImageAssetId: 'media-demo-team-1',
       type: 'media',
     },
     {
@@ -1803,95 +1805,23 @@ export function renderCompiledDemoContentBlock(): string {
   return '-- BEGIN GENERATED: demo_content\n-- Page composition is seeded by demo_tenant_pages.\n-- END GENERATED: demo_content'
 }
 
-function canonicalPathForSeedPage(page: string): string {
-  if (page === 'home') return '/'
-  if (page === 'privacy') return '/policies/privacy'
-  if (page === 'terms') return '/policies/terms'
-  return `/${page}`
-}
-
-function canonicalBlocksForSeedRows(rows: CompiledSeedSiteContent[], locale: string): Array<{ id: string; type: string; position: number; data: Record<string, unknown> }> {
-  const blocks: Array<{ id: string; type: string; position: number; data: Record<string, unknown> }> = []
-  const hero = rows.find(row => row.field === 'hero' || row.field === 'hero.title')
-  if (hero) {
-    const title = hero.heroTitle || hero.content
-    const subtitle = hero.heroSubtitle
-    blocks.push({
-      id: `${String(hero.siteId)}-block-${String(hero.page)}-hero-${locale}`,
-      type: 'hero',
-      position: blocks.length,
-      data: {
-        eyebrow: hero.field === 'hero.kicker' ? hero.content : null,
-        title: title ?? null,
-        subtitle: subtitle ?? null,
-        asset_id: hero.heroImageAssetId ?? hero.heroVideoAssetId ?? null,
-      },
-    })
-  }
-  for (const row of rows) {
-    const field = String(row.field)
-    if (field === 'hero' || field === 'hero.title' || field === 'hero.subtitle' || field === 'hero.kicker') continue
-    const content = row.content
-    if (content == null || String(content).trim() === '') continue
-    const blockType = field.endsWith('.image') || row.type === 'media' ? 'image' : field.endsWith('.title') || field.endsWith('.headline') ? 'heading' : 'markdown'
-    blocks.push({
-      id: `${String(row.id)}-block-${locale}`,
-      type: blockType,
-      position: blocks.length,
-      data: blockType === 'image' ? { url: String(content), alt: field } : blockType === 'heading' ? { text: String(content), level: 2 } : { markdown: String(content), field },
-    })
-  }
-  if (!blocks.length) blocks.push({ id: `${String(rows[0]?.siteId || 'site')}-block-${String(rows[0]?.page || 'page')}-hero-${locale}`, type: 'hero', position: 0, data: { title: String(rows[0]?.page || 'Page'), subtitle: null } })
-  return blocks
-}
-
-function renderCanonicalSeedPage(siteId: string, organizationId: string, page: string, locale: string, rows: CompiledSeedSiteContent[], status = 'published', pathOverride?: string, titleOverride?: string): string {
-  const path = pathOverride ?? canonicalPathForSeedPage(page)
-  const pageKey = path.replaceAll('/', '-').replace(/^-/, '') || 'home'
-  const pageId = `tenant-page-${siteId}-${pageKey}`
-  const variantId = `tenant-page-variant-${siteId}-${pageKey}-${locale}`
-  const documentId = `tenant-page-document-${siteId}-${pageKey}-${locale}`
-  const revisionId = `tenant-page-revision-${siteId}-${pageKey}-${locale}`
-  const titleRow = rows.find(row => row.field === 'hero' || row.field === 'hero.title' || row.field === 'hero.kicker')
-  const title = String(titleOverride || titleRow?.heroTitle || titleRow?.content || page[0]!.toUpperCase() + page.slice(1))
-  const blocks = canonicalBlocksForSeedRows(rows, locale)
-  const metadata = { locale, path, title, summary: null, seoTitle: null, seoDescription: null, canonicalUrl: null, robots: null, pageType: page === 'home' || page === 'about' || page === 'contact' ? 'system' : page === 'privacy' || page === 'terms' ? 'legal' : 'recipe', recipe: page }
-  const snapshot = { schemaVersion: 1, metadata, blocks }
-  const blockSql = blocks.map(block => `INSERT OR REPLACE INTO content_blocks (id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at) VALUES (${sqlValue(block.id)}, ${sqlValue(documentId)}, NULL, ${sqlValue(block.type)}, ${block.position}, ${block.type === 'heading' ? 2 : 'NULL'}, ${sqlJson(block.data)}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);`).join('\n')
-  return `INSERT OR IGNORE INTO tenant_pages (id, organization_id, site_id, path, title, page_type, summary, status, sort_order, source, updated_at)
-VALUES (${sqlValue(pageId)}, ${sqlValue(organizationId)}, ${sqlValue(siteId)}, ${sqlValue(path)}, ${sqlValue(title)}, ${sqlValue(metadata.pageType)}, NULL, ${sqlValue(status)}, 0, 'pages', CURRENT_TIMESTAMP);
-INSERT OR REPLACE INTO content_documents (id, owner_type, owner_id, draft_revision_id, published_revision_id, created_at, updated_at)
-VALUES (${sqlValue(documentId)}, 'tenant_page', ${sqlValue(variantId)}, ${sqlValue(revisionId)}, ${status === 'published' ? sqlValue(revisionId) : 'NULL'}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
-DELETE FROM content_blocks WHERE document_id = ${sqlValue(documentId)};
-DELETE FROM content_revisions WHERE document_id = ${sqlValue(documentId)};
-INSERT INTO content_revisions (id, document_id, snapshot_json, body_markdown, created_by, label, created_at)
-VALUES (${sqlValue(revisionId)}, ${sqlValue(documentId)}, ${sqlJson(snapshot)}, ${sqlValue(blocks.map(block => block.type === 'markdown' ? String(block.data.markdown || '') : block.type === 'heading' ? `# ${String(block.data.text || '')}` : '').filter(Boolean).join('\n\n'))}, NULL, 'Seeded tenant page', CURRENT_TIMESTAMP);
-INSERT OR REPLACE INTO tenant_page_variants (id, organization_id, site_id, page_id, locale, draft_document_id, published_revision_id, published_path, draft_path, title, summary, seo_title, seo_description, canonical_url, robots, status, created_at, updated_at)
-VALUES (${sqlValue(variantId)}, ${sqlValue(organizationId)}, ${sqlValue(siteId)}, ${sqlValue(pageId)}, ${sqlValue(locale)}, ${sqlValue(documentId)}, ${status === 'published' ? sqlValue(revisionId) : 'NULL'}, ${sqlValue(path)}, ${sqlValue(path)}, ${sqlValue(title)}, NULL, NULL, NULL, NULL, NULL, ${sqlValue(status)}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
-${blockSql}`
-}
-
 export function renderCompiledDemoTenantPagesBlock(): string {
   const sourceRows = compiledDemoSeed.siteContent.filter(entry => !entry.locationId)
-  const pages = Array.from(new Set([
-    ...sourceRows.map(entry => entry.page),
-    'home', 'about', 'contact', 'locations', 'menu', 'order', 'experiences', 'reservations', 'qa', 'reviews', 'posts', 'photos',
-  ]))
-  const blocks = pages.map(page => renderCanonicalSeedPage('site-demo', 'org-demo', page, 'en', sourceRows.filter(entry => entry.page === page)))
-  const translations = compiledDemoSeed.siteContentTranslations.filter(entry => !entry.locationId)
-  for (const locale of Array.from(new Set(translations.map(entry => entry.locale)))) {
-    for (const page of pages) {
-      const translatedRows = sourceRows.filter(entry => entry.page === page).map(source => {
-        const translated = translations.find(entry => entry.locale === locale && entry.page === page && entry.field === source.field)
-        return translated ? { ...source, content: translated.content ?? translated.value, heroTitle: translated.heroTitle, heroSubtitle: translated.heroSubtitle } : source
-      })
-      if (translatedRows.some(row => row.content || row.heroTitle || row.heroSubtitle)) blocks.push(renderCanonicalSeedPage('site-demo', 'org-demo', page, locale, translatedRows))
-    }
-  }
-  for (const location of compiledDemoSeed.locations) {
-    blocks.push(renderCanonicalSeedPage('site-demo', 'org-demo', 'location', 'en', [], 'published', `/locations/${location.slug}`, location.title))
-  }
-  return `-- BEGIN GENERATED: demo_tenant_pages\n${blocks.join('\n')}\n-- END GENERATED: demo_tenant_pages`
+  return renderTenantPagesSeedSql({
+    siteId: 'site-demo',
+    organizationId: 'org-demo',
+    locales: compiledDemoSeed.siteLocales.map(locale => locale.locale),
+    rows: sourceRows,
+    translations: compiledDemoSeed.siteContentTranslations.filter(entry => !entry.locationId),
+    pages: ['locations', 'menu', 'order', 'experiences', 'reservations', 'qa', 'reviews', 'posts', 'photos'],
+    additionalPages: compiledDemoSeed.locations.map(location => ({
+      page: 'location',
+      path: `/locations/${location.slug}`,
+      title: location.title,
+    })),
+    sqlValue,
+    sqlJson,
+  })
 }
 
 export function renderCompiledDemoTranslationsBlock(): string {

@@ -147,10 +147,6 @@ export function finalizeTrackedRequestMetrics(event: H3Event, responseBody: unkn
     node?: { res?: { headersSent?: boolean; writableEnded?: boolean } }
   }).node?.res
   if (response?.headersSent || response?.writableEnded) {
-    console.error('[data-request] response started before metrics headers could be applied', JSON.stringify({
-      requestId: metrics.requestId,
-      resource: [...metrics.resources.keys()].join(',') || event.path,
-    }))
     return
   }
   applyMetricHeaders(
@@ -207,9 +203,8 @@ export function flushRequestMetrics(event: H3Event, responseBody?: unknown) {
   const metrics = metricsByEvent.get(event)
   if (!metrics) return
 
-  // A route that finalized its response already had the diagnostic headers
-  // applied before the response started. The afterResponse hook is logging
-  // only; setting headers here causes ERR_HTTP_HEADERS_SENT in Nitro.
+  // The afterResponse hook is logging only; setting headers here causes
+  // ERR_HTTP_HEADERS_SENT in Nitro.
   if (metrics.resources.size === 0 && responseBody !== undefined) {
     const serialized = typeof responseBody === 'string'
       ? responseBody

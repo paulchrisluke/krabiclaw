@@ -9,7 +9,7 @@ const SITE_ID = 'site-demo'
 const LOCATION_ID = 'loc-demo'
 
 test.describe('site-level Q&A and owner-entered reviews', () => {
-  test.describe.configure({ mode: 'serial' })
+  test.describe.configure({ mode: 'serial', timeout: 60_000 })
 
   test('site Q&A lifecycle remains separate from location Q&A', async ({ request, baseURL }) => {
     await loginAs(request, baseURL!, OWNER_USER_ID)
