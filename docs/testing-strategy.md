@@ -1,5 +1,10 @@
 # Testing Strategy
 
+Release and outage decisions follow the mandatory
+[release and outage prevention contract](operations/release-and-outage-prevention.md).
+This document defines test-layer responsibilities; it does not authorize a
+release when the deployed browser matrix has not been inspected.
+
 ## CI feedback loop
 
 The required PR preview smoke is a focused deployed-runtime contract, not the

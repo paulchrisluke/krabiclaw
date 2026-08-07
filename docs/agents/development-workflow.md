@@ -2,6 +2,11 @@
 
 Use this workflow when running Codex or Claude agents in parallel worktrees.
 
+Before any user-facing change or release decision, read the mandatory
+[release and outage prevention contract](../operations/release-and-outage-prevention.md).
+The workflow below describes development mechanics; it does not replace the
+deployed browser gate or the incident rules in that document.
+
 ## Worktrees And Branches
 
 - Start each issue from current `staging` in its own worktree and focused branch.
@@ -9,6 +14,11 @@ Use this workflow when running Codex or Claude agents in parallel worktrees.
 - Before opening a PR, fetch/rebase onto latest `origin/staging`.
 - Keep one issue per PR unless the user explicitly approves a combined integration branch.
 - Do not merge without explicit user approval.
+- Do not treat a green check run as browser validation. For renderer, migration,
+  CMS, public-route, auth, billing, or other user-visible changes, the exact
+  deployed candidate must pass the full applicable browser matrix before
+  promotion. A missing, timed-out, blank, broken-media, or partially inspected
+  route is unverified and blocks release.
 
 ## Pull Requests
 

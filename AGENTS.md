@@ -1,5 +1,16 @@
 # KrabiClaw — LLM Working Rules
 
+## Release and outage prevention
+
+The mandatory release, incident, migration-safety, and browser-verification
+contract for every new LLM conversation is [docs/operations/release-and-outage-prevention.md](docs/operations/release-and-outage-prevention.md).
+Read it before reviewing or changing user-facing code. In particular, green CI
+is not release approval: the exact deployed staging and production candidates
+must be opened in a real browser, route by route, and any unverified or broken
+route blocks promotion. During an outage, stabilize the known-good renderer or
+Worker before touching data; do not reseed or hand-mutate production to mask a
+renderer regression.
+
 When an internal API returns errors, nulls, or malformed data, fix the API contract/source of truth first. Do not add frontend fallbacks, guards, or workaround logic unless the API behavior is intentionally nullable and documented.
 
 Application-owned fetch clients use `retry: 0` and centralized explicit
