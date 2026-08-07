@@ -72,7 +72,16 @@ const siteId = import.meta.server
 const isTenant = import.meta.server
   ? requestEvent?.context.tenantType === TENANT_TYPES.TENANT || tenantState.isTenant
   : tenantState.isTenant
-if (!isTenant || !siteId) throw createError({ statusCode: 404, statusMessage: 'Links page not found' })
+if (!isTenant || !siteId) {
+  console.error('links_ssr_context', {
+    eventTenantType: requestEvent?.context.tenantType ?? null,
+    eventSiteId: requestEvent?.context.siteId ?? null,
+    stateTenantType: tenantState.tenantType,
+    stateSiteId: tenantState.siteId,
+    hasCloudflareEnv: Boolean(requestEvent?.context.cloudflare?.env),
+  })
+  throw createError({ statusCode: 404, statusMessage: 'Links page not found' })
+}
 
 const { data, error } = await useAsyncData<PublicSiteLinksPayload | null>(
   `public-links-page-${siteId}`,
