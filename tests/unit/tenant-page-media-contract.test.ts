@@ -16,7 +16,7 @@ test('tenant page image blocks only persist canonical asset IDs', () => {
     /image\.asset_id is required/,
   )
   assert.deepEqual(
-    normalizeTenantPageBlocks([{ id: 'story', type: 'image', data: { asset_id: 'media-story', alt: 'Our story' } }]),
+    normalizeTenantPageBlocks([{ id: 'story', type: 'image', data: { asset_id: ' media-story ', alt: 'Our story' } }]),
     [{ id: 'story', type: 'image', position: 0, data: { asset_id: 'media-story', alt: 'Our story' } }],
   )
   assert.throws(
@@ -128,6 +128,11 @@ test('0106 repairs every legacy tenant-page image shape in documents and revisio
       key TEXT NOT NULL,
       value TEXT
     );
+    CREATE TABLE __um_tenant_page_media_map (stale TEXT);
+    CREATE TABLE __um_tenant_page_media_affected_sites (stale TEXT);
+    CREATE TABLE __um_assert_0106 (stale TEXT);
+    CREATE TABLE __um_tenant_page_block_media_repairs (stale TEXT);
+    CREATE TABLE __um_tenant_page_revision_media_repairs (stale TEXT);
   `)
 
   const assets = [

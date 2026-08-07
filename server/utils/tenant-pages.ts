@@ -210,9 +210,11 @@ async function assertTenantPageSupport(db: DbClient, organizationId: string, sit
   }
   const referencedAssetIds = new Set<string>()
   for (const block of blocks) {
-    const assetId = typeof block.data.asset_id === 'string' ? block.data.asset_id.trim() : ''
-    if (assetId) referencedAssetIds.add(assetId)
-    if (Array.isArray(block.data.asset_ids)) {
+    if (block.type === 'image') {
+      const assetId = typeof block.data.asset_id === 'string' ? block.data.asset_id : ''
+      if (assetId) referencedAssetIds.add(assetId)
+    }
+    if (block.type === 'gallery' && Array.isArray(block.data.asset_ids)) {
       for (const value of block.data.asset_ids) {
         if (typeof value === 'string' && value.trim()) referencedAssetIds.add(value.trim())
       }
@@ -223,7 +225,6 @@ async function assertTenantPageSupport(db: DbClient, organizationId: string, sit
     siteId,
     refs: [...referencedAssetIds].map(asset_id => ({ asset_id })),
     allowedKinds: ['image', 'video'],
-    requireCoverPoster: true,
     fieldName: 'tenant page media',
   })
   const mediaById = new Map(media.map(asset => [asset.id, asset]))

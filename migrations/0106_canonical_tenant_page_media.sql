@@ -1,3 +1,5 @@
+DROP TABLE IF EXISTS `__um_tenant_page_media_map`;
+--> statement-breakpoint
 CREATE TABLE `__um_tenant_page_media_map` (
   `site_id` text NOT NULL,
   `legacy_value` text NOT NULL,
@@ -67,6 +69,8 @@ WHERE asset.`kind` = 'image'
 GROUP BY asset.`site_id`, asset.`cloudflare_image_id`
 HAVING count(*) = 1;
 --> statement-breakpoint
+DROP TABLE IF EXISTS `__um_tenant_page_media_affected_sites`;
+--> statement-breakpoint
 CREATE TABLE `__um_tenant_page_media_affected_sites` (
   `site_id` text PRIMARY KEY NOT NULL
 );
@@ -113,6 +117,8 @@ UNION
 SELECT DISTINCT config.`site_id`
 FROM `site_config` config
 WHERE config.`key` IN ('hero_image_url', 'location_hero_image_url');
+--> statement-breakpoint
+DROP TABLE IF EXISTS `__um_assert_0106`;
 --> statement-breakpoint
 CREATE TABLE `__um_assert_0106` (
   `violation` text NOT NULL CHECK (`violation` = '')
@@ -194,6 +200,8 @@ WHERE json_extract(block.`value`, '$.type') = 'image'
       AND asset.`status` = 'active'
   );
 --> statement-breakpoint
+DROP TABLE IF EXISTS `__um_tenant_page_block_media_repairs`;
+--> statement-breakpoint
 CREATE TABLE `__um_tenant_page_block_media_repairs` (
   `block_id` text PRIMARY KEY NOT NULL,
   `data_json` text NOT NULL
@@ -243,6 +251,8 @@ DELETE FROM `content_blocks`
 WHERE `type` = 'image'
   AND trim(COALESCE(json_extract(`data_json`, '$.asset_id'), '')) = ''
   AND trim(COALESCE(json_extract(`data_json`, '$.url'), '')) = '';
+--> statement-breakpoint
+DROP TABLE IF EXISTS `__um_tenant_page_revision_media_repairs`;
 --> statement-breakpoint
 CREATE TABLE `__um_tenant_page_revision_media_repairs` (
   `revision_id` text PRIMARY KEY NOT NULL,
@@ -365,12 +375,12 @@ WHERE NOT EXISTS (
   WHERE existing.`id` = 'migration-0106-tenant-page-media-' || affected.`site_id`
 );
 --> statement-breakpoint
-DROP TABLE `__um_tenant_page_revision_media_repairs`;
+DROP TABLE IF EXISTS `__um_tenant_page_revision_media_repairs`;
 --> statement-breakpoint
-DROP TABLE `__um_tenant_page_block_media_repairs`;
+DROP TABLE IF EXISTS `__um_tenant_page_block_media_repairs`;
 --> statement-breakpoint
-DROP TABLE `__um_assert_0106`;
+DROP TABLE IF EXISTS `__um_assert_0106`;
 --> statement-breakpoint
-DROP TABLE `__um_tenant_page_media_affected_sites`;
+DROP TABLE IF EXISTS `__um_tenant_page_media_affected_sites`;
 --> statement-breakpoint
-DROP TABLE `__um_tenant_page_media_map`;
+DROP TABLE IF EXISTS `__um_tenant_page_media_map`;

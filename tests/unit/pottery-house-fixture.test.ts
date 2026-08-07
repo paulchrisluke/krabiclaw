@@ -228,17 +228,27 @@ test("multi-locale tenant page seeds preserve every locale variant", () => {
     locales: ["en", "th"],
     rows: [{ id: "home-hero", page: "home", field: "hero", content: null, heroTitle: "Home" }],
     translations: [{ locale: "th", page: "home", field: "hero", content: null, heroTitle: "หน้าแรก" }],
+    additionalPages: [
+      { page: "location", path: "/locations/old-town", title: "Old Town" },
+      { page: "location", path: "/locations/riverside", title: "Riverside" },
+    ],
     sqlValue,
     sqlJson,
   }));
 
   const pages = db.prepare("SELECT id FROM tenant_pages ORDER BY id").all() as Array<{ id: string }>;
   const variants = db.prepare("SELECT page_id, locale, title FROM tenant_page_variants ORDER BY page_id, locale").all() as Array<{ page_id: string; locale: string; title: string }>;
-  assert.equal(pages.length, 3);
-  assert.equal(variants.length, 6);
+  const blockCount = (db.prepare("SELECT COUNT(*) AS count FROM content_blocks").get() as { count: number }).count;
+  assert.equal(pages.length, 5);
+  assert.equal(variants.length, 10);
+  assert.equal(blockCount, 10);
   assert.deepEqual(variants.filter(row => row.page_id.endsWith("-home")), [
     { page_id: "tenant-page-site-test-home", locale: "en", title: "Home" },
     { page_id: "tenant-page-site-test-home", locale: "th", title: "หน้าแรก" },
+  ]);
+  assert.deepEqual(variants.filter(row => row.page_id.endsWith("-locations-old-town")), [
+    { page_id: "tenant-page-site-test-locations-old-town", locale: "en", title: "Old Town" },
+    { page_id: "tenant-page-site-test-locations-old-town", locale: "th", title: "Old Town" },
   ]);
   db.close();
 });

@@ -103,7 +103,7 @@ function renderPage(
   const variantId = `${pageId}-${locale}`
   const documentId = `${variantId}-document`
   const revisionId = `${variantId}-revision`
-  const blocks = blockData(page, rows)
+  const blocks = blockData(page, rows).map(block => ({ ...block, id: `${variantId}-${block.id}` }))
   const hero = rows.find(row => row.field === 'hero')
   const title = titleOverride ?? hero?.heroTitle ?? hero?.content ?? (page === 'home' ? 'Home' : page[0]!.toUpperCase() + page.slice(1))
   const metadata = { schemaVersion: 1, metadata: { locale, path, title, summary: null, seoTitle: null, seoDescription: null, canonicalUrl: null, robots: null, pageType: pageTypeForPage(page), recipe: page }, blocks }
@@ -159,19 +159,21 @@ export function renderTenantPagesSeedSql(input: {
       ))
     }
   }
-  for (const page of input.additionalPages ?? []) {
-    chunks.push(renderPage(
-      input.siteId,
-      input.organizationId,
-      page.page,
-      input.locales[0]!,
-      [],
-      input.sqlValue,
-      input.sqlJson,
-      true,
-      page.path,
-      page.title,
-    ))
+  for (const locale of input.locales) {
+    for (const page of input.additionalPages ?? []) {
+      chunks.push(renderPage(
+        input.siteId,
+        input.organizationId,
+        page.page,
+        locale,
+        [],
+        input.sqlValue,
+        input.sqlJson,
+        locale === input.locales[0],
+        page.path,
+        page.title,
+      ))
+    }
   }
   return `-- BEGIN GENERATED: tenant_pages\n${chunks.join('\n')}\n-- END GENERATED: tenant_pages`
 }

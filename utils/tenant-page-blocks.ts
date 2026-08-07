@@ -170,6 +170,7 @@ function validateBlockData(type: TenantPageBlockType, data: Record<string, unkno
   if (type === 'image') {
     if ('url' in data) throw new Error('image.url is not canonical; use image.asset_id.')
     if (typeof data.asset_id !== 'string' || !data.asset_id.trim()) throw new Error('image.asset_id is required.')
+    data = { ...data, asset_id: data.asset_id.trim() }
   }
   return { ...data }
 }
