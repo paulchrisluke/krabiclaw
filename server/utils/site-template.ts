@@ -4,7 +4,7 @@
 
 import type { SiteVertical } from "~/utils/vertical-copy";
 import { executeBatch, queryFirst, type BatchQuery, type DbClient } from "~/server/db";
-import { createTenantPage } from "~/server/utils/tenant-pages";
+import { createTenantPagesBatch } from "~/server/utils/tenant-pages";
 
 function uid(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`;
@@ -386,13 +386,20 @@ export async function seedNewSite(
       ['third-party-notices', '/third-party-notices', 'legal'],
     ] as const) templatePages.set(page, { path, pageType, recipe: page });
   }
+  const pagesToCreate: Array<{
+    data: {
+      locale: string
+      path: string
+      title: string
+      pageType: 'system' | 'recipe' | 'legal'
+      recipe: string
+      blocks: Array<{ id: string; type: string; position: number; data: Record<string, unknown> }>
+      publish: boolean
+    }
+    trustedSystemPage: boolean
+  }> = []
   for (const [page, definition] of templatePages) {
     const rows = pageRows.get(page) ?? [];
-    const existing = await queryFirst<{ id: string }>(db,
-      'SELECT v.id FROM tenant_page_variants v WHERE v.site_id = ? AND v.locale = \'en\' AND v.published_path = ? LIMIT 1',
-      [siteId, definition.path],
-    );
-    if (existing) continue;
     const hero = rows.find(row => row[1] === 'hero.title');
     const subtitle = rows.find(row => row[1] === 'hero.subtitle');
     const blocks: Array<{ id: string; type: string; position: number; data: Record<string, unknown> }> = [{
@@ -406,13 +413,13 @@ export async function seedNewSite(
         data: { field, ...(type === 'richtext' || type === 'textarea' ? { markdown: content } : { text: content, level: 2 }) },
       });
     }
-    await createTenantPage(db, {
-      organizationId, siteId, userId: null,
+    pagesToCreate.push({
       trustedSystemPage: definition.pageType === 'system',
       data: {
         locale: 'en', path: definition.path, title: hero?.[2] ?? page.replaceAll('-', ' '),
         pageType: definition.pageType, recipe: definition.recipe, blocks, publish: true,
       },
-    });
+    })
   }
+  await createTenantPagesBatch(db, { organizationId, siteId, pages: pagesToCreate })
 }

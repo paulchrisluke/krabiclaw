@@ -25,8 +25,19 @@ interface CheckoutRequest {
 }
 
 async function legacyCheckoutResponse(response: Response) {
-  const payload = await response.json().catch(() => null) as { url?: unknown } | null
+  const rawBody = await response.text()
+  let payload: { url?: unknown; error?: unknown; message?: unknown } | null = null
+  try {
+    payload = rawBody ? JSON.parse(rawBody) as { url?: unknown; error?: unknown; message?: unknown } : null
+  } catch {
+    payload = null
+  }
   if (!response.ok) {
+    console.error('billing_checkout_better_auth_error', {
+      status: response.status,
+      contentType: response.headers.get('content-type'),
+      bodyPreview: rawBody.slice(0, 1000),
+    })
     return jsonResponse(payload ?? { error: 'Unable to create checkout session' }, { status: response.status })
   }
   if (!payload || typeof payload.url !== 'string' || payload.url.length === 0) {

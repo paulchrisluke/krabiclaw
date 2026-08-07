@@ -20,6 +20,8 @@ export interface DomainEnv {
 export type DomainStatus = 'pending' | 'verifying' | 'active' | 'blocked' | 'failed' | 'stuck' | 'disabled' | 'deleted'
 export type DomainRole = 'canonical' | 'secondary'
 
+const PAGES_DOMAIN_REQUEST_TIMEOUT_MS = 10_000
+
 export interface DomainRecord {
   id: string
   organization_id: string
@@ -241,7 +243,8 @@ async function addPagesCustomDomain(env: DomainEnv, domain: string): Promise<voi
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ name: domain })
+      body: JSON.stringify({ name: domain }),
+      signal: AbortSignal.timeout(PAGES_DOMAIN_REQUEST_TIMEOUT_MS),
     }
   )
 

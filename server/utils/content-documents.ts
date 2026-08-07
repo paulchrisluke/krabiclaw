@@ -56,6 +56,20 @@ export interface ContentBlockInput {
 
 type ContentBlockWriteInput = Omit<ContentBlockSnapshot, 'id'> & { id?: string; updated_at?: string | null }
 
+interface ContentRevisionWriteOptions {
+  revisionId?: string
+  snapshotMetadata?: Record<string, unknown>
+  bodyMarkdown?: string
+  createdBy?: string | null
+  label?: string | null
+  publish?: boolean
+  expectedBlock?: { id: string; updatedAt: string }
+  expectedDocument?: { id: string; updatedAt: string }
+  publishOnly?: boolean
+  additionalQueriesBefore?: BatchQuery[]
+  additionalQueriesAfter?: BatchQuery[]
+}
+
 const VALID_BLOCK_TYPES: readonly ContentBlockType[] = ['heading', 'markdown', 'image', 'gallery', 'faq', 'how_to', 'divider', 'ai_assistance', 'cta', 'callout', 'hero', 'button_group', 'feature_grid', 'testimonial_grid', 'contact_cta', 'booking_cta', 'donation_choices', 'offering_grid', 'location_grid']
 const HEADING_RE = /^(#{1,6})\s+(.+?)\s*$/
 
@@ -222,23 +236,10 @@ export async function ensureContentDocument(db: DbClient, ownerType: ContentDocu
 // simple (one guarded delete+reinsert instead of per-block diffing). Revisit
 // with per-block writes/diffed revisions if documents grow large enough for
 // this to matter.
-async function writeRevisionFromBlocks(
-  db: DbClient,
+function buildRevisionBatch(
   document: ContentDocumentRow,
   blocks: ContentBlockWriteInput[],
-  opts: {
-    revisionId?: string
-    snapshotMetadata?: Record<string, unknown>
-    bodyMarkdown?: string
-    createdBy?: string | null
-    label?: string | null
-    publish?: boolean
-    expectedBlock?: { id: string; updatedAt: string }
-    expectedDocument?: { id: string; updatedAt: string }
-    publishOnly?: boolean
-    additionalQueriesBefore?: BatchQuery[]
-    additionalQueriesAfter?: BatchQuery[]
-  } = {},
+  opts: ContentRevisionWriteOptions = {},
 ) {
   const now = new Date().toISOString()
   const revisionId = opts.revisionId ?? crypto.randomUUID()
@@ -343,8 +344,18 @@ async function writeRevisionFromBlocks(
     ...(opts.additionalQueriesAfter ?? []).map(query => ({ query: query.query, params: query.params ?? [] })),
   ]
 
+  return { queries, revision_id: revisionId, body_markdown: bodyMarkdown, blocks: snapshots }
+}
+
+async function writeRevisionFromBlocks(
+  db: DbClient,
+  document: ContentDocumentRow,
+  blocks: ContentBlockWriteInput[],
+  opts: ContentRevisionWriteOptions = {},
+) {
+  const prepared = buildRevisionBatch(document, blocks, opts)
   try {
-    await executeBatch(db, queries)
+    await executeBatch(db, prepared.queries)
   } catch (error) {
     if (opts.expectedDocument) {
       const current = await getContentDocumentById(db, opts.expectedDocument.id)
@@ -358,7 +369,11 @@ async function writeRevisionFromBlocks(
     throw error
   }
 
-  return { revision_id: revisionId, body_markdown: bodyMarkdown, blocks: snapshots }
+  return {
+    revision_id: prepared.revision_id,
+    body_markdown: prepared.body_markdown,
+    blocks: prepared.blocks,
+  }
 }
 
 export async function syncContentDocumentFromMarkdown(
@@ -433,17 +448,7 @@ export async function syncContentDocumentFromBlocks(
   return { document: currentDocument, ...revision }
 }
 
-// Unlike syncContentDocumentFromBlocks, this never calls ensureContentDocument
-// (which INSERTs standalone, outside any batch). It folds the content_documents
-// INSERT into the same additionalQueriesBefore array as the caller's own
-// owner-row INSERT (e.g. blog_posts), so writeRevisionFromBlocks's single
-// executeBatch call becomes the entire create operation: document, owner row,
-// blocks, and revision all commit or all fail together. Use this whenever a
-// content document needs to be created atomically alongside the row it belongs
-// to — not for adding a document to an already-existing owner row (use
-// ensureContentDocument/syncContentDocumentFromBlocks for that).
-export async function createContentDocumentWithBlocks(
-  db: DbClient,
+export function prepareContentDocumentWithBlocks(
   ownerType: ContentDocumentOwnerType,
   ownerId: string,
   blocks: ContentBlockInput[],
@@ -474,7 +479,7 @@ export async function createContentDocumentWithBlocks(
     query: 'INSERT INTO content_documents (id, owner_type, owner_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
     params: [documentId, ownerType, ownerId, now, now],
   }
-  const revision = await writeRevisionFromBlocks(db, document, blocks.map((block, index) => ({
+  const revision = buildRevisionBatch(document, blocks.map((block, index) => ({
     id: block.id,
     parent_block_id: block.parent_block_id ?? null,
     type: block.type,
@@ -491,9 +496,45 @@ export async function createContentDocumentWithBlocks(
     additionalQueriesBefore: [documentInsert, ...(opts.additionalQueriesBefore ?? [])],
     additionalQueriesAfter: opts.additionalQueriesAfter,
   })
-  const currentDocument = await getContentDocumentById(db, documentId)
+  return { document, ...revision }
+}
+
+// Unlike syncContentDocumentFromBlocks, this never calls ensureContentDocument
+// (which INSERTs standalone, outside any batch). It folds the content_documents
+// INSERT into the same additionalQueriesBefore array as the caller's own
+// owner-row INSERT (e.g. blog_posts), so writeRevisionFromBlocks's single
+// executeBatch call becomes the entire create operation: document, owner row,
+// blocks, and revision all commit or all fail together. Use this whenever a
+// content document needs to be created atomically alongside the row it belongs
+// to — not for adding a document to an already-existing owner row (use
+// ensureContentDocument/syncContentDocumentFromBlocks for that).
+export async function createContentDocumentWithBlocks(
+  db: DbClient,
+  ownerType: ContentDocumentOwnerType,
+  ownerId: string,
+  blocks: ContentBlockInput[],
+  opts: {
+    documentId?: string
+    revisionId?: string
+    snapshotMetadata?: Record<string, unknown>
+    bodyMarkdown?: string
+    createdBy?: string | null
+    label?: string | null
+    publish?: boolean
+    additionalQueriesBefore?: BatchQuery[]
+    additionalQueriesAfter?: BatchQuery[]
+  } = {},
+) {
+  const prepared = prepareContentDocumentWithBlocks(ownerType, ownerId, blocks, opts)
+  await executeBatch(db, prepared.queries)
+  const currentDocument = await getContentDocumentById(db, prepared.document.id)
   if (!currentDocument) throw createError({ statusCode: 500, statusMessage: 'Content document disappeared after synchronization' })
-  return { document: currentDocument, ...revision }
+  return {
+    document: currentDocument,
+    revision_id: prepared.revision_id,
+    body_markdown: prepared.body_markdown,
+    blocks: prepared.blocks,
+  }
 }
 
 export async function publishCurrentContentRevision(db: DbClient, ownerType: ContentDocumentOwnerType, ownerId: string) {

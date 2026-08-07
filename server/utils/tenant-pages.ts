@@ -5,6 +5,7 @@ import {
   getContentDocumentById,
   getContentDocumentByOwner,
   getContentEditorSnapshot,
+  prepareContentDocumentWithBlocks,
   replaceContentDocumentBlocks,
   type ContentBlockInput,
 } from '~/server/utils/content-documents'
@@ -556,6 +557,104 @@ export async function resolvePublishedTenantPageIdentity(
     if (fallback?.locale && fallback.locale !== resolvedLocale) page = await selectPublished(fallback.locale)
   }
   return page
+}
+
+export async function createTenantPagesBatch(
+  db: DbClient,
+  input: {
+    organizationId: string
+    siteId: string
+    pages: Array<{
+      data: TenantPageEditorInput
+      trustedSystemPage?: boolean
+    }>
+  },
+) {
+  const locale = await resolveLocale(db, input.siteId, 'en')
+  const localeRow = await queryFirst<{ is_source: number } | null>(db, `
+    SELECT is_source FROM site_locales WHERE site_id = ? AND locale = ? LIMIT 1
+  `, [input.siteId, locale])
+  if (!localeRow?.is_source) badRequest('Translated tenant-page variants must reference an existing source page')
+
+  const existingVariants = await queryAll<{ published_path: string; draft_path: string }>(db, `
+    SELECT published_path, draft_path
+      FROM tenant_page_variants
+     WHERE site_id = ? AND locale = ?
+  `, [input.siteId, locale])
+  const existingPaths = new Set<string>()
+  for (const row of existingVariants) {
+    existingPaths.add(normalizeTenantPagePath(row.published_path))
+    existingPaths.add(normalizeTenantPagePath(row.draft_path))
+  }
+  const existingRedirects = await queryAll<{ from_path: string }>(db, `
+    SELECT from_path
+      FROM tenant_redirects
+     WHERE site_id = ? AND organization_id = ? AND locale = ?
+  `, [input.siteId, input.organizationId, locale])
+  const redirectPaths = new Set(existingRedirects.map(row => normalizeTenantPagePath(row.from_path)))
+  const requestedPaths = new Set<string>()
+  const queries: BatchQuery[] = []
+  let created = 0
+
+  for (const pageInput of input.pages) {
+    const data = pageInput.data
+    if (data.pageId) badRequest('Batch tenant-page creation cannot include an existing page parent')
+    const path = normalizeTenantPagePath(data.path)
+    if (existingPaths.has(path)) continue
+    if (requestedPaths.has(path)) conflict('A batch contains duplicate tenant-page paths')
+    requestedPaths.add(path)
+    if (isReservedPath(path) && pageInput.trustedSystemPage !== true) {
+      conflict('This path is reserved by a platform or product route')
+    }
+    if (redirectPaths.has(path)) conflict('A tenant redirect already owns this path')
+
+    const pageType = data.pageType ?? 'custom'
+    if (pageType === 'system' && pageInput.trustedSystemPage !== true) {
+      badRequest('System pages are managed by the site template')
+    }
+    const effectiveData: TenantPageEditorInput = { ...data, locale, path, pageType }
+    const metadata = metadataForInput(effectiveData, locale, path)
+    const blocks = normalizeTenantPageBlocks(effectiveData.blocks)
+    await assertTenantPageSupport(db, input.organizationId, input.siteId, effectiveData, blocks)
+
+    const pageId = crypto.randomUUID()
+    const variantId = effectiveData.id ?? crypto.randomUUID()
+    const documentId = crypto.randomUUID()
+    const revisionId = crypto.randomUUID()
+    const now = new Date().toISOString()
+    const publish = effectiveData.publish === true
+    const pageStatus: TenantPageStatus = publish ? 'published' : 'draft'
+    const pageQuery: BatchQuery = {
+      query: "INSERT INTO tenant_pages (id, organization_id, site_id, path, title, slug, page_type, recipe, summary, status, sort_order, source, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'pages', ?, ?)",
+      params: [pageId, input.organizationId, input.siteId, path, metadata.title, path === '/' ? 'home' : path.slice(1).replaceAll('/', '-'), metadata.pageType, metadata.recipe, metadata.summary, pageStatus, now, null],
+    }
+    const variantQuery: BatchQuery = {
+      query: "INSERT INTO tenant_page_variants (id, organization_id, site_id, page_id, locale, draft_document_id, published_path, draft_path, title, summary, seo_title, seo_description, canonical_url, robots, status, ever_published, created_at, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      params: [variantId, input.organizationId, input.siteId, pageId, locale, documentId, path, path, metadata.title, metadata.summary, metadata.seoTitle, metadata.seoDescription, metadata.canonicalUrl, metadata.robots, pageStatus, publish ? 1 : 0, now, now, null],
+    }
+    const prepared = prepareContentDocumentWithBlocks('tenant_page', variantId, blocksAsInputs(blocks), {
+      documentId,
+      revisionId,
+      snapshotMetadata: metadata as unknown as Record<string, unknown>,
+      createdBy: null,
+      label: 'Tenant page draft',
+      publish,
+      additionalQueriesBefore: [pageQuery, variantQuery],
+      additionalQueriesAfter: [{
+        query: 'UPDATE tenant_page_variants SET published_revision_id = ?, updated_at = ?, updated_by = ? WHERE id = ?',
+        params: [publish ? revisionId : null, now, null, variantId],
+      }],
+    })
+    queries.push(...prepared.queries)
+    existingPaths.add(path)
+    created += 1
+  }
+
+  if (created > 0) {
+    queries.push(publicResourceCacheInvalidationQuery(input.siteId, 'tenant-page-seed'))
+    await executeBatch(db, queries)
+  }
+  return { created }
 }
 
 export async function createTenantPage(db: DbClient, input: { organizationId: string; siteId: string; userId: string | null; data: TenantPageEditorInput; trustedSystemPage?: boolean }) {

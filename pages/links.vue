@@ -37,6 +37,8 @@
 </template>
 
 <script setup lang="ts">
+import { TENANT_TYPES } from '~/utils/tenant-routing'
+
 interface PublicLinksItem {
   id: string
   label: string
@@ -62,7 +64,14 @@ interface PublicSiteLinksPayload {
 
 definePageMeta({ layout: false })
 
-const { siteId, isTenant } = useTenantSite()
+const tenantState = useTenantSite()
+const requestEvent = useRequestEvent()
+const siteId = import.meta.server
+  ? (requestEvent?.context.siteId as string | null | undefined) ?? tenantState.siteId
+  : tenantState.siteId
+const isTenant = import.meta.server
+  ? requestEvent?.context.tenantType === TENANT_TYPES.TENANT || tenantState.isTenant
+  : tenantState.isTenant
 if (!isTenant || !siteId) throw createError({ statusCode: 404, statusMessage: 'Links page not found' })
 
 const { data, error } = await useAsyncData<PublicSiteLinksPayload | null>(
