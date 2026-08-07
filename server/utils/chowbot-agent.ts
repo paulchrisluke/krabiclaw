@@ -181,12 +181,23 @@ async function executeTool(
   if (!normalizedRole) {
     return { error: "Could not verify your permissions for this site." };
   }
+  const dashboardRouteContext = name === "get_dashboard_link"
+    ? await queryFirst<{ organizationSlug: string; siteSlug: string | null }>(db, `
+        SELECT o.slug AS organizationSlug, s.subdomain AS siteSlug
+        FROM organization o
+        JOIN sites s ON s.organization_id = o.id
+        WHERE o.id = ? AND s.id = ?
+        LIMIT 1
+      `, [orgId, siteId])
+    : null;
   const executorSite = {
     db,
     env: env as CloudflareEnv,
     userId,
     memberId: ctx.memberId,
     organizationId: orgId,
+    organizationSlug: dashboardRouteContext?.organizationSlug,
+    subdomain: dashboardRouteContext?.siteSlug ?? null,
     siteId,
     role: normalizedRole,
     sessionId: ctx.sessionId,

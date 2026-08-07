@@ -31,6 +31,7 @@ async function completeManualWizard(
     await expect(page.getByRole('button', { name: 'Skip for now' })).toHaveCount(0)
   }
 
+  await expect(page.locator('[data-onboarding-hydrated="true"]')).toBeVisible()
   await page.getByRole('button', { name: 'Start building' }).click()
   if (!skipVertical) {
     const verticalLabel = vertical === 'professional_service'
