@@ -7,6 +7,10 @@ import { executeBatch, queryFirst, type BatchQuery } from "~/server/db";
 import { getHeader, setHeader, type H3Event } from "h3";
 import { cloudflareEnv } from "~/server/utils/api-response";
 import { calculateMapEmbedUrl } from "~/server/utils/google-business";
+import {
+  buildPublicReviewAggregate,
+  normalizePublicReviewAggregateRows,
+} from "~/server/utils/public-review-aggregate";
 import { getPublicTenantPageForPath, type PublicTenantPage } from "~/server/utils/public-tenant-pages";
 import {
   mapMenu,
@@ -413,6 +417,7 @@ async function loadPublicPageSource(
   const needsGlobalPosts = requestedDatasets.has("posts") && !locationSlug;
   // Pages that display location hero images (cards or detail header)
   const needsLocations =
+    requestedDatasets.has("reviews") ||
     requestedDatasets.has("location") ||
     requestedDatasets.has("menu") ||
     requestedDatasets.has("experiences") ||
@@ -425,6 +430,7 @@ async function loadPublicPageSource(
   let idxReviews = -1,
     idxLocReviews = -1;
   let idxFullReviews = -1,
+    idxReviewAggregate = -1,
     idxPhotos = -1,
     idxQa = -1;
   let idxMenus = -1,
@@ -585,6 +591,13 @@ async function loadPublicPageSource(
       [locationId, siteId],
     );
 
+  if (locationId && requestedDatasets.has("reviews"))
+    idxReviewAggregate = push(
+      `SELECT rating
+       FROM reviews WHERE location_id = ? AND site_id = ? AND status = 'approved'`,
+      [locationId, siteId],
+    );
+
   if (requestedDatasets.has("photos"))
     idxPhotos = push(
       locationId
@@ -677,6 +690,10 @@ async function loadPublicPageSource(
     idxFullReviews >= 0
       ? (batchResults[idxFullReviews] as { results: ReviewRow[] })
       : { results: [] as ReviewRow[] };
+  const reviewAggregateRows =
+    idxReviewAggregate >= 0
+      ? (batchResults[idxReviewAggregate] as { results: Array<{ rating: number | string | null }> })
+      : { results: [] as Array<{ rating: number | string | null }> };
   const photoRows =
     idxPhotos >= 0
       ? (batchResults[idxPhotos] as { results: Record<string, unknown>[] })
@@ -989,10 +1006,19 @@ async function loadPublicPageSource(
         })()
       : [],
   }));
-  const reviewsDist = [1, 2, 3, 4, 5].map((star) => ({
-    star,
-    count: fullReviews.filter((r) => r.rating === star).length,
-  }));
+  const aggregateLocation = locationForAggregate ? {
+    rating: typeof locationForAggregate.rating === 'number' ? locationForAggregate.rating : null,
+    review_count: typeof locationForAggregate.review_count === 'number' ? locationForAggregate.review_count : null,
+    last_synced_at: typeof locationForAggregate.last_synced_at === 'string' ? locationForAggregate.last_synced_at : null,
+  } : {
+    rating: null,
+    review_count: null,
+    last_synced_at: null,
+  };
+  const reviewsAggregate = buildPublicReviewAggregate(
+    normalizePublicReviewAggregateRows(reviewAggregateRows.results),
+    aggregateLocation,
+  );
 
   // Shape photos (type E)
   const photos = (photoRows?.results ?? []).map((asset, index) => ({
@@ -1043,16 +1069,7 @@ async function loadPublicPageSource(
     menu: menuData,
     locationReviews: locationReviewRows?.results ?? [],
     globalReviews: needsGlobalReviews ? reviewRows.results ?? [] : [],
-    reviewsAggregate: requestedDatasets.has("reviews")
-      && locationForAggregate?.last_synced_at
-      && locationForAggregate.rating != null
-      && locationForAggregate.review_count != null
-      ? {
-          rating: locationForAggregate.rating,
-          review_count: locationForAggregate.review_count,
-          distribution: reviewsDist,
-        }
-      : null,
+    reviewsAggregate: requestedDatasets.has("reviews") ? reviewsAggregate : null,
     reviewsList: requestedDatasets.has("reviews") ? fullReviews : [],
     photosList: requestedDatasets.has("photos") ? photos : [],
     qaList: requestedDatasets.has("qa") ? qaRows?.results ?? [] : [],

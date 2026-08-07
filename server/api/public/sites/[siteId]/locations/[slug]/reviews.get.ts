@@ -1,6 +1,10 @@
 // GET /api/public/sites/[siteId]/locations/[slug]/reviews
 import { queryAll, queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import {
+  buildPublicReviewAggregate,
+  normalizePublicReviewAggregateRows,
+} from '~/server/utils/public-review-aggregate'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -19,8 +23,6 @@ export default defineEventHandler(async (event) => {
     [siteId, slug],
   )
   if (!location) return jsonResponse({ error: 'Location not found' }, { status: 404 })
-  const aggregateVerified = Boolean(location.last_synced_at) && location.rating != null && location.review_count != null
-
   const results = await queryAll<ApiValue>(
     db,
     `SELECT id, author_name, reviewer_photo_url, rating, title, content,
@@ -32,26 +34,21 @@ export default defineEventHandler(async (event) => {
     ,
     [location.id],
   )
+  const aggregateResults = await queryAll<{ rating: number | string | null }>(
+    db,
+    `SELECT rating
+     FROM reviews
+     WHERE location_id = ? AND status = 'approved'`,
+    [location.id],
+  )
 
   const reviews = (results ?? []).map((r: ApiValue) => ({
     ...r,
     photo_urls: r.photo_urls ? JSON.parse(r.photo_urls) : [],
   }))
 
-  // Compute star distribution from stored reviews
-  const dist = [1, 2, 3, 4, 5].map(star => ({
-    star,
-    count: reviews.filter((r: ApiValue) => r.rating === star).length,
-  }))
-
   return jsonResponse({
-    aggregate: aggregateVerified
-      ? {
-          rating: location.rating,
-          review_count: location.review_count ?? 0,
-          distribution: dist,
-        }
-      : null,
+    aggregate: buildPublicReviewAggregate(normalizePublicReviewAggregateRows(aggregateResults), location),
     reviews,
   })
 })
