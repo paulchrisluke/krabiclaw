@@ -7,6 +7,7 @@ import { executeBatch, queryFirst, type BatchQuery } from "~/server/db";
 import { getHeader, setHeader, type H3Event } from "h3";
 import { cloudflareEnv } from "~/server/utils/api-response";
 import { calculateMapEmbedUrl } from "~/server/utils/google-business";
+import { buildPublicReviewAggregate } from "~/server/utils/public-review-aggregate";
 import { getPublicTenantPageForPath, type PublicTenantPage } from "~/server/utils/public-tenant-pages";
 import {
   mapMenu,
@@ -989,10 +990,16 @@ async function loadPublicPageSource(
         })()
       : [],
   }));
-  const reviewsDist = [1, 2, 3, 4, 5].map((star) => ({
-    star,
-    count: fullReviews.filter((r) => r.rating === star).length,
-  }));
+  const aggregateLocation = locationForAggregate ? {
+    rating: typeof locationForAggregate.rating === 'number' ? locationForAggregate.rating : null,
+    review_count: typeof locationForAggregate.review_count === 'number' ? locationForAggregate.review_count : null,
+    last_synced_at: typeof locationForAggregate.last_synced_at === 'string' ? locationForAggregate.last_synced_at : null,
+  } : {
+    rating: null,
+    review_count: null,
+    last_synced_at: null,
+  };
+  const reviewsAggregate = buildPublicReviewAggregate(fullReviews, aggregateLocation);
 
   // Shape photos (type E)
   const photos = (photoRows?.results ?? []).map((asset, index) => ({
@@ -1043,16 +1050,7 @@ async function loadPublicPageSource(
     menu: menuData,
     locationReviews: locationReviewRows?.results ?? [],
     globalReviews: needsGlobalReviews ? reviewRows.results ?? [] : [],
-    reviewsAggregate: requestedDatasets.has("reviews")
-      && locationForAggregate?.last_synced_at
-      && locationForAggregate.rating != null
-      && locationForAggregate.review_count != null
-      ? {
-          rating: locationForAggregate.rating,
-          review_count: locationForAggregate.review_count,
-          distribution: reviewsDist,
-        }
-      : null,
+    reviewsAggregate: requestedDatasets.has("reviews") ? reviewsAggregate : null,
     reviewsList: requestedDatasets.has("reviews") ? fullReviews : [],
     photosList: requestedDatasets.has("photos") ? photos : [],
     qaList: requestedDatasets.has("qa") ? qaRows?.results ?? [] : [],
