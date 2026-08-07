@@ -35,7 +35,7 @@ const FORBIDDEN_ACTIVE_PATTERNS = [
   /\bCreditPurchaseModal\b/,
   /\bAutoTopupSettingsModal\b/,
   /STRIPE_PRICE_CREDITS_/,
-  /STRIPE_PRICE_(?:SEASONAL|GBP_SETUP)\b/,
+  /STRIPE_PRICE_(?:SEASONAL|GBP_SETUP|TRANSLATION)\b/,
   /\bcreateOneTimePrice\b/,
   /\bsiteContentTranslations\b/,
   /\bCompiledSeedSiteContentTranslation\b/,
