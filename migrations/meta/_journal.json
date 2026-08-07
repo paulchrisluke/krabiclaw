@@ -638,6 +638,83 @@
       "when": 1785928146633,
       "tag": "0098_tenant_page_translation_and_redirect_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "6",
+      "when": 1786098120000,
+      "tag": "0099_pale_dakota_north",
+      "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "6",
+      "when": 1786098121000,
+      "tag": "0099_repair_canonical_tenant_blocks",
+      "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "6",
+      "when": 1786098122000,
+      "tag": "0100_remove_translation_automation",
+      "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "6",
+      "when": 1786098123000,
+      "tag": "0101_invoice_payment_ledger",
+      "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "6",
+      "when": 1786098124000,
+      "tag": "0102_public_resource_cache_invalidations",
+      "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "6",
+      "when": 1786098125000,
+      "tag": "0103_published_revision_timestamp",
+      "breakpoints": true
+    },
+    {
+      "idx": 104,
+      "version": "6",
+      "when": 1786098126000,
+      "tag": "0104_repair_ncls_canonical_parity",
+      "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "6",
+      "when": 1786098127000,
+      "tag": "0105_stripe_ga4_subscription_analytics",
+      "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "6",
+      "when": 1786098128000,
+      "tag": "0106_canonical_tenant_page_media",
+      "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "6",
+      "when": 1786098129829,
+      "tag": "0107_stripe_ga4_purchase_delivery",
+      "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "6",
+      "when": 1786098130411,
+      "tag": "0108_reconcile_drizzle_migration_history",
+      "breakpoints": true
     }
   ]
 }
