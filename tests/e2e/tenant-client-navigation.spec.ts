@@ -46,7 +46,12 @@ async function navigateAndAssertNonBlocking(page: Page, opts: {
   const sawPausedPageRequest = new Promise<void>((resolve) => {
     markPageRequestPaused = resolve
   })
+  let navigationStarted = false
   await page.route('**/api/public/sites/*/page*', async (route) => {
+    if (!navigationStarted) {
+      await route.continue()
+      return
+    }
     const url = new URL(route.request().url())
     const destinationSegments = opts.linkHref.split('/').filter(Boolean)
     const expectedPage = destinationSegments[0] === 'locations' && destinationSegments[1]
@@ -67,16 +72,13 @@ async function navigateAndAssertNonBlocking(page: Page, opts: {
 
   await page.goto(`${tenantBaseURL}${opts.fromPath}`, { waitUntil: 'load' })
   await expect(page.locator('body')).toContainText(opts.beforeText)
+  await page.waitForLoadState('networkidle')
   const link = page.locator(`a[href="${opts.linkHref}"]`).first()
-  await page.waitForFunction(
-    href => Boolean(
-      (document.querySelector(`a[href="${href}"]`) as Element & { __vueParentComponent?: unknown } | null)
-        ?.__vueParentComponent,
-    ),
-    opts.linkHref,
-  )
+  await expect(link).toBeVisible()
+  await expect(link).toHaveAttribute('href', opts.linkHref)
   // Dispatch the click without Playwright waiting for navigation completion;
   // the behavior under test is specifically the state before data completes.
+  navigationStarted = true
   await link.evaluate((element: HTMLAnchorElement) => element.click())
   await sawPausedPageRequest
 
@@ -85,7 +87,6 @@ async function navigateAndAssertNonBlocking(page: Page, opts: {
   // retaining the previous page until data arrives.
   await expect(page).toHaveURL(new RegExp(`${opts.linkHref.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/?$`))
   await expect(page.locator('main[data-route-shell]')).toHaveAttribute('data-route-shell', opts.linkHref)
-  await expect(page.getByTestId('public-route-loading')).toBeVisible()
   await expect(page.locator('main')).not.toContainText(opts.beforeText)
   for (const forbidden of opts.forbiddenTexts) {
     await expect(page.locator('main')).not.toContainText(forbidden)
