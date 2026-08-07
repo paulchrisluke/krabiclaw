@@ -51,6 +51,7 @@ jobs:
       seed_relevant: ${{ steps.filter.outputs.seed_relevant }}
       auth: ${{ steps.filter.outputs.auth }}
       dashboard: ${{ steps.filter.outputs.dashboard }}
+      browser_smoke: ${{ steps.filter.outputs.browser_smoke }}
       billing: ${{ steps.filter.outputs.billing }}
       notifications: ${{ steps.filter.outputs.notifications }}
       mcp: ${{ steps.filter.outputs.mcp }}
@@ -140,6 +141,25 @@ jobs:
               - 'server/api/dashboard/**'
               - 'server/api/editor/**'
               - 'tests/e2e/dashboard*.spec.ts'
+            browser_smoke:
+              - '.github/workflows/ci.yml'
+              - 'package.json'
+              - 'components/admin/**'
+              - 'components/blawby/**'
+              - 'components/dashboard/**'
+              - 'layouts/blawby.vue'
+              - 'pages/admin/**'
+              - 'pages/dashboard/**'
+              - 'pages/article/**'
+              - 'pages/about.vue'
+              - 'pages/contact/**'
+              - 'server/api/admin/**'
+              - 'server/api/dashboard/**'
+              - 'server/api/editor/**'
+              - 'server/utils/post-login-routing.ts'
+              - 'tests/e2e/admin-impersonation.spec.ts'
+              - 'tests/e2e/blawby-cms.spec.ts'
+              - 'tests/e2e/dashboard.spec.ts'
             billing:
               - 'server/api/billing/**'
               - 'server/utils/billing*'
@@ -483,15 +503,16 @@ jobs:
       - name: Run focused smoke tests
         env:
           DASHBOARD_CHANGED: ${{ needs.changes.outputs.dashboard }}
+          BROWSER_SMOKE_CHANGED: ${{ needs.changes.outputs.browser_smoke }}
           BILLING_CHANGED: ${{ needs.changes.outputs.billing }}
           POTTERY_HOUSE_CHANGED: ${{ needs.changes.outputs.pottery_house }}
           BLAWBY_CHANGED: ${{ needs.changes.outputs.blawby }}
         run: |
           yarn test:e2e:smoke
           yarn test:e2e:public-rendering
-          [ "$DASHBOARD_CHANGED" != "true" ] || yarn test:e2e:dashboard:smoke
-          [ "$DASHBOARD_CHANGED" != "true" ] || yarn test:e2e:admin:smoke
-          [ "$DASHBOARD_CHANGED" != "true" ] || yarn test:e2e:blawby-cms:smoke
+          [ "$BROWSER_SMOKE_CHANGED" != "true" ] || yarn test:e2e:dashboard:smoke
+          [ "$BROWSER_SMOKE_CHANGED" != "true" ] || yarn test:e2e:admin:smoke
+          [ "$BROWSER_SMOKE_CHANGED" != "true" ] || yarn test:e2e:blawby-cms:smoke
           [ "$BILLING_CHANGED" != "true" ] || yarn test:e2e:smoke:billing
           [ "$POTTERY_HOUSE_CHANGED" != "true" ] || PLAYWRIGHT_WORKERS=1 yarn test:e2e:pottery-house
           [ "$BLAWBY_CHANGED" != "true" ] || yarn test:e2e:blawby
