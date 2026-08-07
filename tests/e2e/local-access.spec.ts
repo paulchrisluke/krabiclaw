@@ -21,6 +21,7 @@ function sqlValue(value: string): string {
 
 test('owner can configure a site- or location-scoped editor invitation', async ({ page, baseURL }) => {
   test.setTimeout(60_000)
+  test.skip(new URL(baseURL!).hostname !== 'localhost', 'This smoke test reads invitation scope from local D1.')
   const inviteEmail = 'e2e-scoped-editor@playwright.example'
   localD1Query(`DELETE FROM invitation WHERE organizationId = 'org-pottery-house' AND email = ${sqlValue(inviteEmail)}`)
   const pageErrors = collectPageErrors(page)

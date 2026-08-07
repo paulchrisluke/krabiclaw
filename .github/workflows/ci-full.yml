@@ -66,12 +66,47 @@ jobs:
       - name: Build production
         run: yarn build
 
+  prepare-staging:
+    name: Prepare staging fixtures
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [typecheck-full, test-full, build-production]
+    concurrency:
+      group: shared-staging-deployment
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: staging
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - name: Migrate and reseed staging database
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          yarn migrate:staging
+          node --experimental-strip-types scripts/generate-demo-bundle.ts
+          node --experimental-strip-types scripts/reset-e2e-artifacts.ts --staging
+          node --experimental-strip-types scripts/generate-demo-seed.ts --staging
+          node --experimental-strip-types scripts/generate-pottery-house-seed.ts --staging
+          node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --staging
+          yarn seed:docs:staging
+
   e2e-full:
     name: Full E2E regression
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: [typecheck-full, test-full, build-production]
+    needs: [prepare-staging, performance-benchmark]
+    concurrency:
+      group: shared-staging-deployment
+      cancel-in-progress: false
     env:
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
       STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET_STAGING }}
@@ -110,7 +145,10 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: [build-production]
+    needs: [prepare-staging]
+    concurrency:
+      group: shared-staging-deployment
+      cancel-in-progress: false
     env:
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
       STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET_STAGING }}
