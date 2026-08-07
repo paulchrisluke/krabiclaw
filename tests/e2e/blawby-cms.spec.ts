@@ -50,8 +50,10 @@ test.describe('Blawby professional_service CMS editing', () => {
     const index = await page.goto(`${baseURL}${DASHBOARD_BASE}/pages`, { waitUntil: 'load' })
     expect(index?.status()).toBe(200)
     await expect(page.getByText('Site pages', { exact: true })).toBeVisible()
-    await expect(page.getByText('Home', { exact: true })).toBeVisible()
-    await page.getByRole('button', { name: 'Home', exact: true }).click()
+    const rootPage = page.locator('button').filter({ has: page.locator('span').filter({ hasText: /^\/$/ }) })
+    await expect(rootPage).toHaveCount(1)
+    await rootPage.click()
+    await expect(rootPage).toHaveClass(/border-primary/)
     await expect(page.getByText('Block type', { exact: true })).toBeVisible()
     await expect(page.getByText('Block data JSON', { exact: true })).toHaveCount(0)
 
@@ -60,7 +62,7 @@ test.describe('Blawby professional_service CMS editing', () => {
     await page.getByRole('option', { name: 'Image', exact: true }).click()
     await page.getByRole('button', { name: 'Add block', exact: true }).click()
     await expect(page.getByText('Media asset', { exact: true })).toBeVisible()
-    await expect(page.getByText('Select media', { exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Select media/ })).toBeVisible()
     await expect(page.getByText('Needs attention', { exact: true })).toBeVisible()
     await page.getByRole('button', { name: 'Delete block' }).last().click()
     await expect(page.getByText('Media asset', { exact: true })).toHaveCount(0)
@@ -89,6 +91,13 @@ test.describe('Blawby professional_service CMS editing', () => {
           data: { blocks, expectedDocumentUpdatedAt: detailBody.page.document.updated_at },
         })
         expect(save.status(), `save ${edit.pageId}`).toBe(200)
+        const saveBody = await save.json() as { page: { blocks: Array<{ type: string; data: Record<string, unknown> }>; document: { updated_at: string } } }
+        expect(block(saveBody.page, 'hero').data.title).toBe(updatedTitle)
+
+        const publish = await page.request.post(`${baseURL}/api/editor/sites/${SITE_ID}/pages/${pageSummary!.id}/publish`, {
+          data: { expectedDocumentUpdatedAt: saveBody.page.document.updated_at },
+        })
+        expect(publish.status(), `publish ${edit.pageId}`).toBe(200)
 
         const updatedRoute = await publicRoute(page.request, baseURL!, edit.recipe)
         expect(block(updatedRoute.page, 'hero').data.title).toBe(updatedTitle)
@@ -104,9 +113,15 @@ test.describe('Blawby professional_service CMS editing', () => {
         const detail = await page.request.get(`${baseURL}/api/editor/sites/${SITE_ID}/pages/${pageSummary.id}`)
         const detailBody = await detail.json() as { page: { blocks: Array<{ type: string; data: Record<string, unknown> }>; document: { updated_at: string } } }
         const blocks = detailBody.page.blocks.map(item => item.type === 'hero' ? { ...item, data: { ...item.data, title: originalTitle } } : item)
-        await page.request.patch(`${baseURL}/api/editor/sites/${SITE_ID}/pages/${pageSummary.id}`, {
+        const restore = await page.request.patch(`${baseURL}/api/editor/sites/${SITE_ID}/pages/${pageSummary.id}`, {
           data: { blocks, expectedDocumentUpdatedAt: detailBody.page.document.updated_at },
         })
+        expect(restore.status(), `restore ${edit.pageId}`).toBe(200)
+        const restoreBody = await restore.json() as { page: { document: { updated_at: string } } }
+        const restorePublish = await page.request.post(`${baseURL}/api/editor/sites/${SITE_ID}/pages/${pageSummary.id}/publish`, {
+          data: { expectedDocumentUpdatedAt: restoreBody.page.document.updated_at },
+        })
+        expect(restorePublish.status(), `republish ${edit.pageId}`).toBe(200)
       }
     }
   })

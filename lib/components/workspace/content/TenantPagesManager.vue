@@ -240,6 +240,8 @@ async function selectPage(id: string) {
   if (dirty.value && !window.confirm('Discard unsaved page changes?')) return
   hydrating.value = true
   editorError.value = null
+  selected.value = null
+  selectedBlockIndex.value = -1
   try {
     const response = await dashboardApi<{ page: PageDetailResponse }>(`/api/editor/sites/${siteId}/pages/${id}`, { validate: validatePage })
     selected.value = toEditorPage(response.page)
