@@ -170,16 +170,15 @@ test.describe('billing webhook signed flow', () => {
         object: 'event',
         created: timestamp,
         livemode: false,
-        type: 'checkout.session.completed',
+        type: mode === 'subscription' ? 'checkout.session.async_payment_succeeded' : 'checkout.session.completed',
         data: {
           object: {
             id: `cs_${mode}_e2e_${Date.now()}`,
             object: 'checkout.session',
             mode,
-            payment_status: mode === 'subscription' ? 'unpaid' : 'no_payment_required',
+            payment_status: mode === 'subscription' ? 'paid' : 'no_payment_required',
             metadata: {
               organization_id: organizationId,
-              ...(mode === 'subscription' ? { type: 'site_transfer' } : {}),
             },
           },
         },

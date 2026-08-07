@@ -157,11 +157,20 @@ test.describe('tenant links page', () => {
     const label = `Request help ${suffix}`
 
     try {
-      await saveLinksPage(request, baseURL!, BLAWBY_SITE_ID, {
+      const saved = await saveLinksPage(request, baseURL!, BLAWBY_SITE_ID, {
         title,
         status: 'published',
         items: [{ label, destination: '/contact' }],
       })
+      expect(saved.page.status).toBe('published')
+      expect(saved.items).toEqual(expect.arrayContaining([expect.objectContaining({ label })]))
+      const publicApi = await request.get(`${baseURL}/api/public/sites/${BLAWBY_SITE_ID}/links-page`, {
+        headers: blawbyExtraHeaders,
+      })
+      expect(publicApi.status(), 'published Blawby links API should be readable after save').toBe(200)
+      const publicApiBody = await publicApi.json() as { page: { title: string }; items: Array<{ label: string }> }
+      expect(publicApiBody.page.title).toBe(title)
+      expect(publicApiBody.items).toEqual(expect.arrayContaining([expect.objectContaining({ label })]))
 
       await setupTenantHeaders(page, blawbyBaseURL, blawbyExtraHeaders)
       const response = await page.goto(`${blawbyBaseURL}/links`, { waitUntil: 'load' })

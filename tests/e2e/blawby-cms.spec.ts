@@ -6,6 +6,15 @@ const OWNER_USER_ID = 'user-ncls-blawby'
 const SITE_ID = 'site-ncls-blawby'
 const DASHBOARD_BASE = '/dashboard/north-carolina-legal-services/sites/ncls'
 
+const CURATED_FIXTURE_TITLES = {
+  home: {
+    pageTitle: "Access to Justice for All. North Carolina's affordable legal services.",
+    heroTitle: "Access to Justice for All.\nNorth Carolina's affordable\nlegal services.",
+  },
+  about: { pageTitle: 'About Us', heroTitle: 'About Us' },
+  contact: { pageTitle: 'Contact Us', heroTitle: 'Contact Us' },
+} as const
+
 async function loginAsNclsOwner(page: Page, baseURL: string) {
   await setupTenantHeaders(page, baseURL, devLoginHeaders() ?? {})
   const login = await page.goto(devLoginUrl(baseURL, OWNER_USER_ID), {
@@ -73,12 +82,9 @@ test.describe('Blawby professional_service CMS editing', () => {
       { pageId: 'contact', recipe: 'contact' },
     ] as const
 
-    const originals = new Map<string, { pageTitle: string; heroTitle: string }>()
     try {
       for (const edit of edits) {
-        const route = await publicRoute(page.request, baseURL!, edit.recipe)
-        const originalHeroTitle = String(block(route.page, 'hero').data.title ?? route.page.title)
-        originals.set(edit.pageId, { pageTitle: route.page.title, heroTitle: originalHeroTitle })
+        await publicRoute(page.request, baseURL!, edit.recipe)
 
         const updatedTitle = `E2E ${edit.pageId} title ${Date.now()}`
         const pages = await page.request.get(`${baseURL}/api/editor/sites/${SITE_ID}/pages`)
@@ -106,16 +112,15 @@ test.describe('Blawby professional_service CMS editing', () => {
       }
     } finally {
       for (const edit of edits) {
-        const original = originals.get(edit.pageId)
-        if (!original) continue
+        const canonical = CURATED_FIXTURE_TITLES[edit.pageId]
         const pages = await page.request.get(`${baseURL}/api/editor/sites/${SITE_ID}/pages`)
         const pageSummary = ((await pages.json()) as { pages: Array<{ id: string; path: string }> }).pages.find(item => item.path === `/${edit.pageId === 'home' ? '' : edit.pageId}`.replace('//', '/'))
         if (!pageSummary) continue
         const detail = await page.request.get(`${baseURL}/api/editor/sites/${SITE_ID}/pages/${pageSummary.id}`)
         const detailBody = await detail.json() as { page: { blocks: Array<{ type: string; data: Record<string, unknown> }>; document: { updated_at: string } } }
-        const blocks = detailBody.page.blocks.map(item => item.type === 'hero' ? { ...item, data: { ...item.data, title: original.heroTitle } } : item)
+        const blocks = detailBody.page.blocks.map(item => item.type === 'hero' ? { ...item, data: { ...item.data, title: canonical.heroTitle } } : item)
         const restore = await page.request.patch(`${baseURL}/api/editor/sites/${SITE_ID}/pages/${pageSummary.id}`, {
-          data: { title: original.pageTitle, blocks, expectedDocumentUpdatedAt: detailBody.page.document.updated_at },
+          data: { title: canonical.pageTitle, blocks, expectedDocumentUpdatedAt: detailBody.page.document.updated_at },
         })
         expect(restore.status(), `restore ${edit.pageId}`).toBe(200)
         const restoreBody = await restore.json() as { page: { document: { updated_at: string } } }
