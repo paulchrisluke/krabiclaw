@@ -38,7 +38,9 @@
           </div>
         </section>
 
-        <PublicHelpChatIsland />
+        <ClientOnly>
+          <PublicHelpChatIsland />
+        </ClientOnly>
       </div>
     </main>
 

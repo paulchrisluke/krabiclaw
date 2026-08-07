@@ -422,6 +422,7 @@ jobs:
           node --experimental-strip-types scripts/generate-demo-seed.ts --staging
           node --experimental-strip-types scripts/generate-pottery-house-seed.ts --staging
           node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --staging
+          yarn seed:docs:staging
       - name: Sync staging Stripe secrets
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

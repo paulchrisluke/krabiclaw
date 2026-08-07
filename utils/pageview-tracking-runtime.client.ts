@@ -16,7 +16,8 @@ export function registerPageviewTracking() {
   if (!isTenant && !isPlatform) return
   if (isTenant && !siteId) return
 
-  const identity = isTenant ? { siteId } : { platform: true }
+  const { $i18n } = useNuxtApp()
+  const trackingIdentity = () => isTenant ? { siteId, locale: $i18n.locale.value } : { platform: true }
   const router = useRouter()
   let pageEnteredAt = Date.now()
   let currentPath = router.currentRoute.value.fullPath
@@ -69,7 +70,7 @@ export function registerPageviewTracking() {
     durationSent = true
     trackGa4TimeOnPage?.(currentPath, durationSeconds)
     const payload = JSON.stringify({
-      ...identity,
+      ...trackingIdentity(),
       pagePath: currentPath,
       eventType: 'duration',
       durationSeconds
@@ -78,7 +79,7 @@ export function registerPageviewTracking() {
     if (typeof navigator.sendBeacon === 'function') {
       navigator.sendBeacon('/api/analytics/track', new Blob([payload], { type: 'application/json' }))
     } else {
-      sendTrack({ ...identity, pagePath: currentPath, eventType: 'duration', durationSeconds })
+      sendTrack({ ...trackingIdentity(), pagePath: currentPath, eventType: 'duration', durationSeconds })
     }
   }
 
@@ -94,7 +95,7 @@ export function registerPageviewTracking() {
     durationSent = false
 
     sendTrack({
-      ...identity,
+      ...trackingIdentity(),
       pagePath: currentPath,
       referrer: from.fullPath ? `${window.location.origin}${from.fullPath}` : document.referrer,
       userAgent: navigator.userAgent

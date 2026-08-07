@@ -41,6 +41,7 @@ export const usePublicPageData = async (options: {
   routeOwned?: boolean
 } = {}) => {
   const { isPlatform, siteId, draftId } = useTenantSite();
+  const nuxtApp = useNuxtApp()
   const route = useRoute();
   const params = usePublicPageRequest();
   const routeLoadState = usePublicRouteLoadState();
@@ -65,12 +66,13 @@ export const usePublicPageData = async (options: {
   const url = computed(() => usePublicPageUrl(siteId, requestedParams.value));
 
   const shell = useSiteShellState();
+  const requestEvent = import.meta.server ? useRequestEvent() : undefined
   const deferClientFetch = options.server === false && import.meta.client;
 
   const asyncData =
     isPlatform || (!siteId && !draftId)
       ? { data: ref<PublicPagePayload>(), error: ref<Error | null>(null), pending: ref(false), refresh: async () => {} }
-      : useAsyncData<PublicPagePayload>(
+      : await useAsyncData<PublicPagePayload>(
           key,
           (_nuxtApp, { signal }) => loadPublicResourcePayload<PublicPagePayload>({
               draftId,
@@ -91,6 +93,7 @@ export const usePublicPageData = async (options: {
                 isPublicPagePayload(value, requestedParams.value.page ?? 'home'),
               failureMessage: 'Public page failed',
               signal,
+              requestEvent,
             }),
           {
             server: options.server ?? true,
@@ -128,7 +131,11 @@ export const usePublicPageData = async (options: {
     onScopeDispose(stopKeyWatch)
   }
   if (import.meta.server) {
-    await Promise.all([asyncData, shell.ready])
+    if (options.server !== false && 'execute' in asyncData
+      && (asyncData.pending.value || asyncData.data.value === undefined)) {
+      await nuxtApp.runWithContext(() => asyncData.execute({ cause: 'initial', dedupe: 'defer' }))
+    }
+    await shell.ready
     if (asyncData.error.value) throw asyncData.error.value
     if (options.routeOwned !== false && shell.error.value) throw shell.error.value
   }

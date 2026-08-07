@@ -1,3 +1,5 @@
+import type { H3Event } from 'h3'
+
 interface PublicResourceLoadOptions<T> {
   draftId: string | null
   siteId: string | null
@@ -8,6 +10,7 @@ interface PublicResourceLoadOptions<T> {
   validate: Validator<T>
   failureMessage: string
   signal?: AbortSignal
+  requestEvent?: H3Event
 }
 
 export async function loadPublicResourcePayload<T>(
@@ -22,7 +25,7 @@ export async function loadPublicResourcePayload<T>(
     signal: options.signal,
   }
   const value = import.meta.server
-    ? await (useRequestEvent()?.context.publicResourceProvider as
+    ? await ((options.requestEvent ?? useRequestEvent())?.context.publicResourceProvider as
         | import('~/utils/public-resource-provider').PublicResourceProvider
         | undefined)?.(providerOptions)
     : await publicApiRequest<T>(options.url, {
