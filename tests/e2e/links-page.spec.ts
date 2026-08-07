@@ -172,6 +172,12 @@ test.describe('tenant links page', () => {
       expect(publicApiBody.page.title).toBe(title)
       expect(publicApiBody.items).toEqual(expect.arrayContaining([expect.objectContaining({ label })]))
 
+      const hostBoundPage = await request.get(`${blawbyBaseURL}/links`, {
+        headers: blawbyExtraHeaders,
+        maxRedirects: 0,
+      })
+      expect(hostBoundPage.status(), 'host-bound Blawby links document should resolve after the published API succeeds').toBe(200)
+
       await setupTenantHeaders(page, blawbyBaseURL, blawbyExtraHeaders)
       const response = await page.goto(`${blawbyBaseURL}/links`, { waitUntil: 'load' })
       expect(response?.status()).toBe(200)

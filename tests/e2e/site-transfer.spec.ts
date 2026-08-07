@@ -165,6 +165,8 @@ test.describe('site transfer handoff flow', () => {
         object: {
           id: `cs_transfer_${Date.now()}`,
           object: 'checkout.session',
+          mode: 'subscription',
+          payment_status: 'paid',
           customer: `cus_transfer_${Date.now()}`,
           metadata: {
             type: 'site_transfer',
@@ -195,18 +197,39 @@ test.describe('site transfer handoff flow', () => {
     })
     expect(webhook.status()).toBe(200)
 
-    const completedStateRes = await request.get(
-      `${baseURL}/api/dev/site-transfer-state?transfer_id=${encodeURIComponent(created.id)}`,
-      { headers: devLoginHeaders() },
-    )
-    expect(completedStateRes.status()).toBe(200)
-    const completedState = await completedStateRes.json() as {
-      transfer: { status: string; payment_completed_at: string | null }
-      site: { organization_id: string }
-    }
-    expect(completedState.transfer.status).toBe('accepted')
-    expect(completedState.transfer.payment_completed_at).toEqual(expect.any(String))
-    expect(completedState.site.organization_id).toBe(targetOrgId)
+    await expect.poll(async () => {
+      const billingState = await request.get(
+        `${baseURL}/api/dev/billing-state?organization_id=${encodeURIComponent(targetOrgId!)}&stripe_event_id=${encodeURIComponent(eventId)}`,
+        { headers: devLoginHeaders() },
+      )
+      expect(billingState.status()).toBe(200)
+      const body = await billingState.json() as {
+        webhook_events: Array<{ stripe_event_id: string; status?: string; error?: string | null }>
+      }
+      const eventState = body.webhook_events.find(item => item.stripe_event_id === eventId)
+      return eventState ? { status: eventState.status, error: eventState.error ?? null } : null
+    }, { timeout: 15_000 }).toEqual({ status: 'processed', error: null })
+
+    await expect.poll(async () => {
+      const completedStateRes = await request.get(
+        `${baseURL}/api/dev/site-transfer-state?transfer_id=${encodeURIComponent(created.id)}`,
+        { headers: devLoginHeaders() },
+      )
+      expect(completedStateRes.status()).toBe(200)
+      const completedState = await completedStateRes.json() as {
+        transfer: { status: string; payment_completed_at: string | null }
+        site: { organization_id: string }
+      }
+      return {
+        status: completedState.transfer.status,
+        paymentCompleted: Boolean(completedState.transfer.payment_completed_at),
+        organizationId: completedState.site.organization_id,
+      }
+    }, { timeout: 15_000 }).toEqual({
+      status: 'accepted',
+      paymentCompleted: true,
+      organizationId: targetOrgId,
+    })
   })
 
   test('transfer cancellation keeps site in original org and clears pending state', async ({ request, baseURL }) => {
