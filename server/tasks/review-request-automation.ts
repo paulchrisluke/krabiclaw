@@ -3,6 +3,7 @@ import { queryAll } from '~/server/db'
 import { resolveLocationTimezone } from '~/server/utils/site-config'
 import { markBookingCompleted, type ReviewBookingType } from '~/server/utils/review-requests'
 import { sendReviewRequestForBooking } from '~/server/utils/review-request-delivery'
+import { defineScheduledTask } from '~/server/utils/scheduled-task'
 
 interface ReviewRequestTaskContext {
   cloudflare?: { env?: ApiRecord }
@@ -137,7 +138,7 @@ async function sendDue(db: D1Database, env: ApiRecord, kind: 'first' | 'reminder
   return { sent, failed }
 }
 
-export default defineTask({
+export default defineScheduledTask({
   meta: {
     name: 'review-request-automation',
     description: 'Completes bookings and sends entitled post-booking review requests',

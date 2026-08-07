@@ -7,6 +7,7 @@ import {
 } from '~/server/utils/facebook-pages'
 import { decryptSecret, encryptionEnv } from '~/server/utils/encryption'
 import { execute, queryAll } from '~/server/db'
+import { defineScheduledTask } from '~/server/utils/scheduled-task'
 
 interface SyncTaskContext {
   cloudflare?: { env?: ApiRecord }
@@ -37,7 +38,7 @@ interface TaskResult {
   details: SyncConnectionResult[]
 }
 
-export default defineTask({
+export default defineScheduledTask({
   meta: {
     name: 'social:instagram-sync-process',
     description: 'Hourly sync of Facebook and Instagram posts for managed-service orgs',

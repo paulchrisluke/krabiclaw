@@ -260,8 +260,6 @@ jobs:
           cache: yarn
       - run: yarn install --frozen-lockfile
       - name: Build application
-        env:
-          NODE_OPTIONS: --max-old-space-size=6144
         run: yarn build
       - name: Migrate preview database
         env:
@@ -409,8 +407,6 @@ jobs:
           cache: yarn
       - run: yarn install --frozen-lockfile
       - name: Build application
-        env:
-          NODE_OPTIONS: --max-old-space-size=6144
         run: yarn build
       - name: Migrate + seed staging database
         env:
@@ -528,8 +524,6 @@ jobs:
           cache: yarn
       - run: yarn install --frozen-lockfile
       - name: Build application
-        env:
-          NODE_OPTIONS: --max-old-space-size=6144
         run: yarn build
       - name: Migrate + deploy production Worker
         env:

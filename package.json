@@ -7,7 +7,7 @@
     "node": ">=22.6.0"
   },
   "scripts": {
-    "build": "nuxi build --preset=cloudflare-module",
+    "build": "cross-env NODE_OPTIONS=--max-old-space-size=6144 nuxi build --preset=cloudflare-module",
     "postbuild": "node patch.cjs",
     "build:cf": "nuxt build",
     "ai-search:sync": "node --experimental-strip-types scripts/ai-search-sync.ts",
@@ -27,6 +27,7 @@
     "test": "yarn test:unit && yarn test:e2e",
     "test:unit": "node --experimental-strip-types --experimental-test-module-mocks --import ./tests/unit/support/register-aliases.mjs --test tests/unit/**/*.test.ts",
     "test:unit:file": "node --experimental-strip-types --experimental-test-module-mocks --import ./tests/unit/support/register-aliases.mjs --test",
+    "test:scheduled-tasks": "yarn test:unit:file tests/unit/scheduled-tasks.test.ts",
     "test:e2e": "playwright test",
     "test:browser": "playwright test --project=chromium --workers=1",
     "test:browser:smoke": "playwright test tests/e2e/smoke.spec.ts --project=chromium --workers=1",
@@ -153,6 +154,7 @@
     "autocannon": "^8.0.0",
     "autoprefixer": "^10.5.0",
     "better-sqlite3": "^12.11.1",
+    "cross-env": "^10.1.0",
     "drizzle-kit": "^0.31.10",
     "eslint": "^10.3.0",
     "lighthouse": "^13.4.0",

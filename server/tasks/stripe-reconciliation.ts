@@ -5,6 +5,7 @@ import type Stripe from 'stripe'
 import { processStripeEvent } from '~/server/utils/stripe-event-processing'
 import { createStripeClient } from '~/server/utils/stripe-client'
 import { expireStripeGa4Intents } from '~/server/utils/stripe-ga4-intents'
+import { defineScheduledTask } from '~/server/utils/scheduled-task'
 
 interface StripeTaskContext {
   cloudflare?: { env?: ApiRecord }
@@ -35,7 +36,7 @@ async function clearExpiredStripeEventPayloads(db: DbClient, now = new Date()): 
   `, [cutoff])
 }
 
-export default defineTask({
+export default defineScheduledTask({
   meta: {
     name: 'billing:stripe-reconciliation',
     description: 'Retry leased Stripe events whose Better Auth or app projection did not complete',
