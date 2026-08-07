@@ -1,9 +1,12 @@
 const token = process.env.CLOUDFLARE_API_TOKEN
 const zoneName = process.env.CF_ZONE_NAME || 'krabiclaw.com'
-const previewOrigin = process.env.PREVIEW_CACHE_ORIGIN || 'https://preview.krabiclaw.com'
+const deploymentOrigin = process.env.DEPLOYMENT_CACHE_ORIGIN
 
 if (!token) {
-  throw new Error('CLOUDFLARE_API_TOKEN is required to purge preview cache.')
+  throw new Error('CLOUDFLARE_API_TOKEN is required to purge deployment cache.')
+}
+if (!deploymentOrigin) {
+  throw new Error('DEPLOYMENT_CACHE_ORIGIN is required to purge deployment cache.')
 }
 
 type CloudflareEnvelope<T> = {
@@ -46,23 +49,23 @@ async function resolveZoneId() {
   return zoneId
 }
 
-function previewUrl(pathname: string) {
-  return new URL(pathname, previewOrigin).toString()
+function deploymentUrl(pathname: string) {
+  return new URL(pathname, deploymentOrigin).toString()
 }
 
 const files = [
-  previewUrl('/'),
-  previewUrl('/locations/brooklyn'),
-  previewUrl('/blog'),
-  previewUrl('/experiences'),
-  previewUrl('/experiences/pottery-wheel-class'),
-  previewUrl('/about'),
-  previewUrl('/contact'),
-  previewUrl('/services'),
-  previewUrl('/services/family'),
-  previewUrl('/pricing'),
-  previewUrl('/article/getting-a-divorce-in-north-carolina'),
-  previewUrl('/article/preparing-for-your-consultation-with-north-carolina-legal-services'),
+  deploymentUrl('/'),
+  deploymentUrl('/locations/brooklyn'),
+  deploymentUrl('/blog'),
+  deploymentUrl('/experiences'),
+  deploymentUrl('/experiences/pottery-wheel-class'),
+  deploymentUrl('/about'),
+  deploymentUrl('/contact'),
+  deploymentUrl('/services'),
+  deploymentUrl('/services/family'),
+  deploymentUrl('/pricing'),
+  deploymentUrl('/article/getting-a-divorce-in-north-carolina'),
+  deploymentUrl('/article/preparing-for-your-consultation-with-north-carolina-legal-services'),
 ]
 
 const zoneId = await resolveZoneId()
@@ -79,4 +82,4 @@ if (!response.ok || !envelope.success) {
   throw new Error(errorMessage(envelope, `Cloudflare cache purge failed (${response.status})`))
 }
 
-console.log(`Purged ${files.length} preview HTML cache entries for ${new URL(previewOrigin).hostname}.`)
+console.log(`Purged ${files.length} deployment HTML cache entries for ${new URL(deploymentOrigin).hostname}.`)
