@@ -270,6 +270,8 @@ test.describe('dashboard functional smoke', () => {
     await page.getByRole('button', { name: 'Archive', exact: true }).click()
     await archiveDialog
     await expectStatus('archived')
+    await expect(page.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0)
+    await expect(page.getByText('This page has publication history and cannot be deleted. Archive or replace it instead.', { exact: true })).toBeVisible()
     await page.getByRole('button', { name: 'Restore', exact: true }).click()
     await expectStatus('draft')
 
