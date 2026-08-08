@@ -59,7 +59,10 @@ test('billing readiness passes only when both created sites and payment projecti
 
   assert.equal(readiness.ready, true)
   assert.equal(readiness.siteCount, 2)
+  assert.equal(readiness.betterAuthReferenceId, 'org-e2e-stripe')
+  assert.equal(readiness.billingIdentityMatches, true)
   assert.equal(readiness.invoiceStatus, 'paid')
+  assert.equal(readiness.invoiceOrganizationId, 'org-e2e-stripe')
   assert.equal(readiness.webhookStatus, 'processed')
 })
 
@@ -85,6 +88,22 @@ test('billing readiness rejects partial site projections, extra sites, and misma
   const mismatchedInvoiceEvent = paidGrowthState()
   mismatchedInvoiceEvent.invoice_payments[0]!.last_event_id = 'evt-other'
   assert.equal(readReadiness(mismatchedInvoiceEvent, ['site-a', 'site-b']).ready, false)
+
+  const mismatchedBillingOrganization = paidGrowthState()
+  mismatchedBillingOrganization.billing!.organization_id = 'org-other'
+  assert.equal(readReadiness(mismatchedBillingOrganization, ['site-a', 'site-b']).ready, false)
+
+  const mismatchedBillingCustomer = paidGrowthState()
+  mismatchedBillingCustomer.billing!.stripe_customer_id = 'cus-other'
+  assert.equal(readReadiness(mismatchedBillingCustomer, ['site-a', 'site-b']).ready, false)
+
+  const mismatchedBillingSubscription = paidGrowthState()
+  mismatchedBillingSubscription.billing!.stripe_subscription_id = 'sub-other'
+  assert.equal(readReadiness(mismatchedBillingSubscription, ['site-a', 'site-b']).ready, false)
+
+  const mismatchedInvoiceOrganization = paidGrowthState()
+  mismatchedInvoiceOrganization.invoice_payments[0]!.organization_id = 'org-other'
+  assert.equal(readReadiness(mismatchedInvoiceOrganization, ['site-a', 'site-b']).ready, false)
 })
 
 test('ordinary billing-state reads never enable the provider-dependent Better Auth path', () => {

@@ -62,10 +62,13 @@ export interface BillingState {
 export interface BillingReadiness {
   ready: boolean
   plan: string | null
+  betterAuthReferenceId: string | null
   betterAuthSubscriptionId: string | null
   betterAuthCustomerId: string | null
+  billingIdentityMatches: boolean
   billingStatus: string | null
   invoiceId: string | null
+  invoiceOrganizationId: string | null
   invoiceStatus: string | null
   webhookEventId: string | null
   webhookStatus: string | null
@@ -77,12 +80,20 @@ const WORKER_VERSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9
 const TEST_SECRET_KEY = /^(?:sk|rk)_test_[A-Za-z0-9]+$/
 
 export function readReadiness(state: BillingState, expectedSiteIds: string[]): BillingReadiness {
+  const betterAuthReferenceId = state.better_auth_subscription?.referenceId ?? null
   const betterAuthSubscriptionId = state.better_auth_subscription?.stripeSubscriptionId ?? null
   const betterAuthCustomerId = state.better_auth_subscription?.stripeCustomerId ?? null
   const plan = state.better_auth_subscription?.plan?.trim().toLowerCase() || null
   const billingPlan = state.billing?.plan?.trim().toLowerCase() || null
+  const billingIdentityMatches = Boolean(
+    betterAuthReferenceId
+    && state.billing?.organization_id === betterAuthReferenceId
+    && state.billing?.stripe_customer_id === betterAuthCustomerId
+    && state.billing?.stripe_subscription_id === betterAuthSubscriptionId
+  )
   const invoice = state.invoice_payments.find(row => (
-    row.stripe_subscription_id === betterAuthSubscriptionId
+    row.organization_id === betterAuthReferenceId
+    && row.stripe_subscription_id === betterAuthSubscriptionId
     && row.status === 'paid'
     && typeof row.stripe_invoice_id === 'string'
   )) ?? null
@@ -116,6 +127,7 @@ export function readReadiness(state: BillingState, expectedSiteIds: string[]): B
   const ready = Boolean(
     plan === 'growth'
     && billingPlan === plan
+    && billingIdentityMatches
     && ['active', 'trialing'].includes(state.better_auth_subscription?.status ?? '')
     && ['active', 'trialing'].includes(state.billing?.status ?? '')
     && state.billing?.payment_status === 'paid'
@@ -132,10 +144,13 @@ export function readReadiness(state: BillingState, expectedSiteIds: string[]): B
   return {
     ready,
     plan,
+    betterAuthReferenceId,
     betterAuthSubscriptionId,
     betterAuthCustomerId,
+    billingIdentityMatches,
     billingStatus: state.billing?.status ?? null,
     invoiceId: invoice?.stripe_invoice_id ?? null,
+    invoiceOrganizationId: invoice?.organization_id ?? null,
     invoiceStatus: invoice?.status ?? null,
     webhookEventId: webhook?.stripe_event_id ?? null,
     webhookStatus: webhook?.status ?? null,
