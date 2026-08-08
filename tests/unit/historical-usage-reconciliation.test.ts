@@ -195,6 +195,9 @@ test('apply writes bounded history, residual, audit marker, and reset atomically
   const replay = await applyHistoricalUsageReconciliation(db as never, SECRET, plan.input, 'operator-1', plan.expectedStateSha256, plan.approvalToken, NOW)
   assert.equal(replay.status, 'already_applied')
   assert.equal((db.prepare('SELECT COUNT(*) AS count FROM usage_events').get() as { count: number }).count, 4)
+  const followup = await previewHistoricalUsageReconciliation(db as never, SECRET, input({ idempotencyKey: 'history-op-followup' }), 'operator-1', NOW)
+  assert.equal(followup.backfillCount, 0)
+  assert.equal(followup.matchedCount, 2)
 })
 
 test('one exact current-runtime event is accepted while ambiguous or mismatched history is rejected', async () => {

@@ -644,6 +644,7 @@ async function readLegacyPlans(
       fail('canonical_usage_conflict', 409, `History key ${history} is already used by a different event.`)
     }
     const matches = allEventRows.filter(event => event.unit === CREDIT_UNIT && canonicalEventMatches(normalizedRow, plan, event))
+    if (historyEvent && !matches.some(event => event.id === historyEvent.id)) matches.push(historyEvent)
     if (matches.length > 1) {
       fail('canonical_usage_conflict', 409, `Legacy usage ${id} has ambiguous canonical matches.`)
     }
