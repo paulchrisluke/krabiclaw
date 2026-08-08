@@ -3,18 +3,15 @@ import { createError } from 'h3'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { betterAuthTimestampToIso } from '~/server/utils/better-auth-timestamps'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
-import { getOrgAdapter } from 'better-auth/plugins'
+import { getOrgAdapter, hasPermission } from 'better-auth/plugins'
 import { getPlanEntitlements, type EntitlementsMap } from '~/server/utils/billing-entitlements'
 import { getOrganizationBillingProjection } from '~/server/utils/organization-billing'
 import { createStripeClient } from '~/server/utils/stripe-client'
+import { organizationAccessControl, organizationRoles } from '~/utils/organization-access'
 
 interface EntitlementRow {
   key: string
   value: string
-}
-
-interface MembershipRow {
-  role: string
 }
 
 export interface BillingEnv {
@@ -36,6 +33,11 @@ export interface SiteBillingStatus {
 // Keep the old name as an alias so callers that haven't migrated yet still compile
 export type BillingStatus = SiteBillingStatus
 export type OrganizationEntitlement = { id: string; site_id: string; organization_id: string; key: string; value: string; source: string; created_at: string; updated_at: string }
+
+const billingAuthorizationOptions = {
+  ac: organizationAccessControl,
+  roles: organizationRoles,
+} as const
 
 export function getStripe(env: BillingEnv): Stripe {
   if (!env.STRIPE_SECRET_KEY) throw new Error('Stripe secret key not configured')
@@ -242,17 +244,32 @@ export async function getPlanFromStripePrice(env: BillingEnv, priceId: string): 
 }
 
 export async function requireBillingAccess(
-  env: BillingEnv,
+  env: CloudflareEnv,
   db: D1Database,
   organizationId: string,
   userId: string,
 ): Promise<void> {
-  void env
-  const membership = await queryFirst<MembershipRow>(db, `
-    SELECT role FROM member WHERE organizationId = ? AND userId = ? LIMIT 1
-  `, [organizationId, userId])
+  void db
+  const auth = createAuth(env)
+  const authContext = await auth.$context
+  const organizationAdapter = getOrgAdapter(authContext as Parameters<typeof getOrgAdapter>[0], billingAuthorizationOptions)
+  const membership = await organizationAdapter.findMemberByOrgId({
+    userId,
+    organizationId,
+  })
   if (!membership) throw createError({ statusCode: 403, statusMessage: 'Access denied: Not a member of this organization' })
-  if (membership.role !== 'owner') throw createError({ statusCode: 403, statusMessage: 'Access denied: Only owners can manage billing' })
+  if (!await hasBillingUpdatePermission(organizationId, String(membership.role))) {
+    throw createError({ statusCode: 403, statusMessage: 'Access denied: Only owners can manage billing' })
+  }
+}
+
+export async function hasBillingUpdatePermission(organizationId: string, role: string): Promise<boolean> {
+  return await hasPermission({
+    organizationId,
+    role,
+    options: billingAuthorizationOptions,
+    permissions: { billing: ['update'] },
+  }, undefined as never)
 }
 
 export async function verifyStripeWebhook(

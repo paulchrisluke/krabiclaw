@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { hasPermission } from 'better-auth/plugins'
 import { organizationAccessControl, organizationRoles } from '../../utils/organization-access'
+import { hasBillingUpdatePermission } from '../../server/utils/billing.ts'
 
 test('Better Auth Stripe is the server subscription authority', async () => {
   const source = await readFile('server/utils/auth.ts', 'utf8')
@@ -33,6 +34,14 @@ test('billing update permission is owner-only and requires organization membersh
   assert.equal(await can({ role: 'editor' }), false)
   assert.equal(await can({ role: 'member' }), false)
   assert.equal(await can(null), false)
+})
+
+test('billing access helper preserves the canonical owner-only permission matrix', async () => {
+  assert.equal(await hasBillingUpdatePermission('org-permission-test', 'owner'), true)
+  assert.equal(await hasBillingUpdatePermission('org-permission-test', 'admin'), false)
+  assert.equal(await hasBillingUpdatePermission('org-permission-test', 'member'), false)
+  assert.equal(await hasBillingUpdatePermission('org-permission-test', 'editor'), false)
+  assert.equal(await hasBillingUpdatePermission('org-permission-test', 'missing'), false)
 })
 
 test('the legacy webhook delegates to Better Auth Stripe', async () => {
