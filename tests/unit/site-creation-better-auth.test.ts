@@ -39,7 +39,7 @@ const authApi = {
       name: input.body.name,
       slug: input.body.slug,
       createdAt: new Date(),
-      metadata: input.body.metadata,
+      metadata: { ...input.body.metadata, existing: 'metadata' },
     }
     organizations.push(organization)
     if (failMemberCreate) throw new Error('member creation failed')
@@ -215,7 +215,7 @@ test('an editor-only membership receives a new owned organization instead of reu
     metadata: body.metadata,
   })
   assert.equal(typeof body.metadata.__krabiclaw_site_creation_marker, 'string')
-  assert.deepEqual(organizations.find(organization => organization.id === result.organizationId)?.metadata, {})
+  assert.deepEqual(organizations.find(organization => organization.id === result.organizationId)?.metadata, { existing: 'metadata' })
 })
 
 test('organization creation compensates by deleting an org if member creation fails', async () => {
