@@ -228,6 +228,9 @@ test('one exact current-runtime event is accepted while ambiguous or mismatched 
   const exactPlan = await previewHistoricalUsageReconciliation(exact as never, SECRET, input(), 'operator-1', NOW)
   assert.equal(exactPlan.backfillCount, 0)
   assert.equal(exactPlan.matchedCount, 2)
+  const exactResult = await applyHistoricalUsageReconciliation(exact as never, SECRET, exactPlan.input, 'operator-1', exactPlan.expectedStateSha256, exactPlan.approvalToken, NOW)
+  assert.equal(exactResult.status, 'applied')
+  assert.equal((exact.prepare("SELECT COUNT(*) AS count FROM usage_events WHERE idempotency_key LIKE 'history:ai-usage-log:%'").get() as { count: number }).count, 0)
 
   const ambiguous = createDb()
   seed(ambiguous, '2026-08-10')
