@@ -61,49 +61,259 @@ test.describe('dashboard functional smoke', () => {
     expect(nonHydrationErrors).toEqual([])
   })
 
-  test('Pages manager exposes typed block editing and local block lifecycle controls', async ({ page, baseURL }) => {
-    test.setTimeout(60_000)
+  test('Pages manager runs one typed-block and custom-page lifecycle tracer journey', async ({ page, baseURL }) => {
+    test.setTimeout(120_000)
+    const applicationErrors: string[] = []
+    page.on('pageerror', error => applicationErrors.push(`pageerror: ${error.message}`))
+    page.on('console', message => {
+      if (message.type() === 'error') applicationErrors.push(`console: ${message.text()}`)
+    })
     await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
-    await page.goto(devLoginUrl(baseURL!, 'user-pottery-house'), { waitUntil: 'load' })
+    await page.goto(devLoginUrl(baseURL!, 'user-mcp-growth'), { waitUntil: 'load' })
 
-    const response = await page.goto(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/pages`, { waitUntil: 'networkidle' })
+    const response = await page.goto(`${baseURL}/dashboard/mcp-growth-fixture/sites/mcp-growth-fixture/pages`, { waitUntil: 'domcontentloaded' })
     expect(response?.status()).toBe(200)
     await expect(page.getByText('Site pages', { exact: true })).toBeVisible()
     await expect(page.getByText('Blocks', { exact: true })).toBeVisible()
-    const rootPage = page.locator('button').filter({ has: page.locator('span').filter({ hasText: /^\/$/ }) })
+
+    const localeResponse = await page.request.post(`${baseURL}/api/editor/sites/site-mcp-growth/locales`, {
+      data: { locale: 'th', label: 'Thai', status: 'published', fallback_enabled: true },
+    })
+    expect(localeResponse.status()).toBe(200)
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await expect(page.getByRole('combobox', { name: 'Page locale' })).toContainText('en')
+
+    const blockCards = page.locator('[data-block-index]')
+    const blockLabels = async () => blockCards.evaluateAll(cards => cards.map(card => card.querySelector('p.font-medium')?.textContent?.trim() || ''))
+    const chooseAndAddBlock = async (label: string) => {
+      const blockType = page.getByRole('combobox', { name: 'New block type' })
+      await blockType.click()
+      await page.getByRole('option', { name: label, exact: true }).click()
+      await page.getByRole('button', { name: 'Add block', exact: true }).click()
+    }
+    const saveDraft = async () => {
+      const saveResponse = page.waitForResponse(candidate => (
+        candidate.url().includes('/api/editor/sites/site-mcp-growth/pages')
+        && ['POST', 'PATCH'].includes(candidate.request().method())
+      ))
+      await page.getByRole('button', { name: 'Save', exact: true }).click()
+      const saved = await saveResponse
+      expect([200, 201]).toContain(saved.status())
+      await expect(page.getByText('Saved', { exact: true }).last()).toBeVisible()
+    }
+
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const pageTitle = `E2E Pages ${suffix}`
+    const dirtyTitle = `${pageTitle} dirty`
+    const markdown = `Persisted preview content ${suffix}`
+    const pagePath = `/e2e-pages-${suffix}`
+
+    const rootPage = page.locator('aside button').filter({ has: page.locator('span').filter({ hasText: /^\/$/ }) })
     await expect(rootPage).toHaveCount(1)
     await rootPage.click()
     await expect(rootPage).toHaveClass(/border-primary/)
+    await expect(page.getByRole('heading', { name: 'MCP Growth Fixture', exact: true })).toBeVisible()
     await expect(page.getByText('Block data JSON', { exact: true })).toHaveCount(0)
 
-    const newBlockType = page.getByRole('combobox', { name: 'New block type' })
-    await expect(newBlockType).toBeVisible()
-    await newBlockType.click()
-    await page.getByRole('option', { name: 'Image', exact: true }).click()
-    await page.getByRole('button', { name: 'Add block', exact: true }).click()
-    await expect(page.getByText('Block type', { exact: true })).toBeVisible()
+    // Start a custom page and exercise typed insert/select, duplicate, the
+    // button-bearing block reorder control, and native drag/drop ordering.
+    await page.getByRole('button', { name: 'New page', exact: true }).click()
+    await page.getByRole('textbox', { name: 'Title', exact: true }).fill(pageTitle)
+    await page.getByRole('textbox', { name: 'Path', exact: true }).fill(pagePath)
+
+    await chooseAndAddBlock('Rich text')
+    await page.getByRole('textbox', { name: 'Rich text / Markdown' }).fill(markdown)
+    await chooseAndAddBlock('Heading')
+    await page.getByRole('textbox', { name: 'Heading text' }).fill(`Heading ${suffix}`)
+    await chooseAndAddBlock('Button group')
+    await page.getByRole('textbox', { name: 'Label', exact: true }).fill('Read more')
+    await page.getByRole('textbox', { name: 'URL', exact: true }).fill('/about')
+    await chooseAndAddBlock('Divider')
+    await expect(blockCards).toHaveCount(4)
+
+    await blockCards.nth(1).getByRole('button', { name: 'Edit block' }).click()
+    await expect(page.getByRole('textbox', { name: 'Heading text' })).toBeVisible()
+
+    // Every leave path owns the same dirty-discard decision. Decline each
+    // transition and keep the current editor and dirty state intact.
+    const newPageDialog = page.waitForEvent('dialog').then(dialog => dialog.dismiss())
+    await page.getByRole('button', { name: 'New page', exact: true }).click()
+    await newPageDialog
+    await expect(page.getByRole('heading', { name: pageTitle, exact: true })).toBeVisible()
+    await expect(page.getByText('Unsaved changes', { exact: true })).toBeVisible()
+
+    const rootPageDialog = page.waitForEvent('dialog').then(dialog => dialog.dismiss())
+    await rootPage.click()
+    await rootPageDialog
+    await expect(page.getByRole('heading', { name: pageTitle, exact: true })).toBeVisible()
+    await expect(rootPage).not.toHaveClass(/border-primary/)
+
+    let localePromptCount = 0
+    const localeDialog = page.waitForEvent('dialog').then(async dialog => {
+      localePromptCount += 1
+      await dialog.dismiss()
+    })
+    await page.getByRole('combobox', { name: 'Page locale' }).click()
+    await page.getByRole('option', { name: 'th', exact: true }).click()
+    await localeDialog
+    await expect(page.getByRole('combobox', { name: 'Page locale' })).toContainText('en')
+    await expect(page.getByRole('heading', { name: pageTitle, exact: true })).toBeVisible()
+    await expect(page.getByText('Unsaved changes', { exact: true })).toBeVisible()
+    expect(localePromptCount).toBe(1)
+
+    const currentPagesUrl = page.url()
+    const routeLeaveDialog = page.waitForEvent('dialog').then(dialog => dialog.dismiss())
+    await page.getByRole('link', { name: 'Media library', exact: true }).click()
+    await routeLeaveDialog
+    await expect(page).toHaveURL(currentPagesUrl)
+    await expect(page.getByRole('heading', { name: pageTitle, exact: true })).toBeVisible()
+
+    const headingDuplicate = blockCards.nth(1).getByRole('button', { name: 'Duplicate block' })
+    await expect(headingDuplicate).toBeVisible()
+    await headingDuplicate.click()
+    await expect(blockCards).toHaveCount(5)
+    expect(await blockLabels()).toEqual(['Rich text', 'Heading', 'Heading', 'Button group', 'Divider'])
+
+    await blockCards.nth(3).getByRole('button', { name: 'Move block up' }).click()
+    expect(await blockLabels()).toEqual(['Rich text', 'Heading', 'Button group', 'Heading', 'Divider'])
+
+    const sourceHeader = blockCards.nth(4).locator('[draggable="true"]')
+    const targetHeader = blockCards.nth(0).locator('[draggable="true"]')
+    await sourceHeader.dragTo(targetHeader)
+    expect(await blockLabels()).toEqual(['Divider', 'Rich text', 'Heading', 'Button group', 'Heading'])
+
+    // Image blocks stay in the editor as a typed validation error; Save must
+    // not issue a mutation until the missing asset is resolved.
+    await chooseAndAddBlock('Image')
     await expect(page.getByText('Media asset', { exact: true })).toBeVisible()
     await expect(page.getByRole('button', { name: /Select media/ })).toBeVisible()
     await expect(page.getByText('Needs attention', { exact: true })).toBeVisible()
+    let saveRequests = 0
+    const trackSave = (request: { url(): string; method(): string }) => {
+      if (request.url().includes('/api/editor/sites/site-mcp-growth/pages') && ['POST', 'PATCH'].includes(request.method())) saveRequests += 1
+    }
+    page.on('request', trackSave)
+    await page.getByRole('button', { name: 'Save', exact: true }).click()
+    await expect(page.getByText(/Resolve the highlighted fields in block/)).toBeVisible()
+    expect(saveRequests).toBe(0)
+    page.off('request', trackSave)
 
-    await page.getByRole('button', { name: 'Delete block' }).last().click()
-    await expect(page.getByText('Media asset', { exact: true })).toHaveCount(0)
+    const mediaPicker = page.getByRole('button', { name: /Select media/ })
+    const mediaResponse = page.waitForResponse(candidate => candidate.url().includes('/api/editor/sites/site-mcp-growth/media'))
+    await mediaPicker.click()
+    const mediaList = await mediaResponse
+    expect(mediaList.status()).toBe(200)
+    const mediaPayload = await mediaList.json() as { media?: Array<{ id?: string; alt_text?: string }> }
+    expect(mediaPayload.media).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'media-site-mcp-growth-fixture-image', alt_text: 'Seeded MCP image fixture' }),
+    ]))
+    const mediaDialog = page.getByRole('dialog')
+    await expect(mediaDialog).toBeVisible()
+    const seededAsset = page.locator('button').filter({ hasText: 'site-mcp-growth-fixture.jpg' })
+    await expect(seededAsset).toHaveCount(1)
+    await seededAsset.click()
+    await mediaDialog.getByRole('button', { name: 'Done', exact: true }).click()
+    const mediaAlt = `E2E media alt ${suffix}`
+    await page.getByRole('textbox', { name: 'Alt text', exact: true }).fill(mediaAlt)
+    await expect(page.getByText('Needs attention', { exact: true })).toHaveCount(0)
 
+    await saveDraft()
+    await expect(page.getByRole('link', { name: 'Preview', exact: true })).toBeVisible()
+
+    // A dirty editor disables Preview and each destructive/status transition
+    // must preserve it when its discard dialog is declined.
+    await page.getByRole('textbox', { name: 'Title', exact: true }).fill(dirtyTitle)
+    await expect(page.getByText('Unsaved changes', { exact: true })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Preview', exact: true })).toBeDisabled()
     let discardPrompt = ''
-    const discardDialog = new Promise<void>((resolve) => {
-      page.once('dialog', async (dialog) => {
-        discardPrompt = dialog.message()
-        await dialog.dismiss()
-        resolve()
-      })
+    const dirtyPublishDialog = page.waitForEvent('dialog').then(async dialog => {
+      discardPrompt = dialog.message()
+      await dialog.dismiss()
     })
-    await page.getByRole('button', { name: 'New page', exact: true }).click()
-    await discardDialog
-    expect(discardPrompt).toContain('Discard unsaved page changes?')
-    await expect(rootPage).toHaveClass(/border-primary/)
+    await page.getByRole('button', { name: 'Publish', exact: true }).click()
+    await dirtyPublishDialog
+    expect(discardPrompt).toBe('Discard unsaved page changes?')
+    await expect(page.getByRole('heading', { name: dirtyTitle, exact: true })).toBeVisible()
+
+    await page.getByRole('textbox', { name: 'Title', exact: true }).fill(pageTitle)
+    await saveDraft()
+
+    // Keep the responsive path in the same journey, then return to the
+    // desktop viewport for the status controls and preview assertion.
     await page.setViewportSize({ width: 390, height: 844 })
-    await expect(page.getByRole('button', { name: 'Preview', exact: true })).toBeDisabled()
+    await expect(page.getByText('Blocks', { exact: true })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Preview', exact: true })).toBeVisible()
+    await page.setViewportSize({ width: 1280, height: 800 })
+
+    const pageRow = () => page.locator('aside button').filter({ hasText: pageTitle })
+    const expectStatus = async (status: string) => await expect(pageRow().getByText(status, { exact: true })).toBeVisible()
+    await expectStatus('draft')
+
+    await page.getByRole('button', { name: 'Publish', exact: true }).click()
+    await expectStatus('published')
+    await page.getByRole('button', { name: 'Unpublish', exact: true }).click()
+    await expectStatus('draft')
+
+    await page.getByRole('textbox', { name: 'Title', exact: true }).fill(dirtyTitle)
+    const dirtyArchiveDialog = page.waitForEvent('dialog').then(dialog => dialog.dismiss())
+    await page.getByRole('button', { name: 'Archive', exact: true }).click()
+    await dirtyArchiveDialog
+    await expect(page.getByRole('heading', { name: dirtyTitle, exact: true })).toBeVisible()
+    await expectStatus('draft')
+    await page.getByRole('textbox', { name: 'Title', exact: true }).fill(pageTitle)
+    await saveDraft()
+
+    const archiveDialog = page.waitForEvent('dialog').then(async dialog => {
+      expect(dialog.message()).toBe('Archive this page? It will stop rendering publicly.')
+      await dialog.accept()
+    })
+    await page.getByRole('button', { name: 'Archive', exact: true }).click()
+    await archiveDialog
+    await expectStatus('archived')
+    await page.getByRole('button', { name: 'Restore', exact: true }).click()
+    await expectStatus('draft')
+
+    // The saved draft preview must reflect the canonical title and block body.
+    const previewHref = await page.getByRole('link', { name: 'Preview', exact: true }).getAttribute('href')
+    expect(previewHref).toContain(`/preview/site/site-mcp-growth${pagePath}`)
+    const preview = await page.context().newPage()
+    await preview.goto(new URL(previewHref!, baseURL!).toString(), { waitUntil: 'domcontentloaded' })
+    await expect(preview).toHaveTitle(new RegExp(pageTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+    await expect(preview.locator('body')).toContainText(markdown)
+    await expect(preview.getByRole('img', { name: mediaAlt, exact: true })).toBeVisible()
+    await preview.close()
+
+    // A published page keeps its history and cannot be deleted, even after it
+    // is archived. Duplicate it to obtain a never-published draft whose delete
+    // path can be exercised without weakening that domain invariant.
+    await expect(page.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0)
+    await expect(page.getByText('This page has publication history and cannot be deleted. Archive or replace it instead.', { exact: true })).toBeVisible()
+
+    const copyTitle = `${pageTitle} copy`
+    await page.getByRole('button', { name: 'Duplicate', exact: true }).click()
+    await expect(page.getByRole('heading', { name: copyTitle, exact: true })).toBeVisible()
+    await expect(page.getByText('Saved', { exact: true }).last()).toBeVisible()
+    const copyRow = () => page.locator('aside button').filter({ hasText: copyTitle })
+    await expect(copyRow().getByText('draft', { exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Delete', exact: true })).toBeVisible()
+
+    const dirtyCopyTitle = `${copyTitle} dirty`
+    await page.getByRole('textbox', { name: 'Title', exact: true }).fill(dirtyCopyTitle)
+    const dirtyDeleteDialog = page.waitForEvent('dialog').then(dialog => dialog.dismiss())
+    await page.getByRole('button', { name: 'Delete', exact: true }).click()
+    await dirtyDeleteDialog
+    await expect(page.getByRole('heading', { name: dirtyCopyTitle, exact: true })).toBeVisible()
+    await page.getByRole('textbox', { name: 'Title', exact: true }).fill(copyTitle)
+    await saveDraft()
+
+    const deleteDialog = page.waitForEvent('dialog').then(async dialog => {
+      expect(dialog.message()).toBe('Delete this page and its revisions? This cannot be undone.')
+      await dialog.accept()
+    })
+    await page.getByRole('button', { name: 'Delete', exact: true }).click()
+    await deleteDialog
+    await expect(copyRow()).toHaveCount(0)
+    expect(applicationErrors).toEqual([])
   })
 
   test('canonical account, organization, site, and location routes render with responsive navigation', async ({ page, baseURL }) => {

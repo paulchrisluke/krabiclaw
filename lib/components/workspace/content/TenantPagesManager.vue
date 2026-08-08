@@ -52,12 +52,14 @@
               <UButton v-if="selected.id && selected.status === 'published'" color="warning" variant="soft" :loading="busy === 'unpublish'" :disabled="busy !== null" @click="unpublish">Unpublish</UButton>
               <UButton v-if="selected.id && selected.status !== 'archived'" color="neutral" variant="soft" :loading="busy === 'archive'" :disabled="busy !== null" @click="archive">Archive</UButton>
               <UButton v-if="selected.id && selected.status === 'archived'" color="success" variant="soft" :loading="busy === 'restore'" :disabled="busy !== null" @click="restore">Restore</UButton>
-              <UButton v-if="selected.id" color="error" variant="ghost" :loading="busy === 'delete'" :disabled="busy !== null" @click="removePage">Delete</UButton>
+              <UButton v-if="selected.id && !selected.ever_published" color="error" variant="ghost" :loading="busy === 'delete'" :disabled="busy !== null" @click="removePage">Delete</UButton>
               <UButton v-if="selected.id" color="neutral" variant="outline" :disabled="busy !== null" @click="duplicate">Duplicate</UButton>
               <UButton v-if="selected.id" color="neutral" variant="outline" :href="navigablePreviewUrl" target="_blank" :disabled="busy !== null || !navigablePreviewUrl">Preview</UButton>
               <UButton color="primary" :loading="busy === 'save'" :disabled="busy !== null" @click="save">Save</UButton>
             </div>
           </div>
+
+          <p v-if="selected.id && selected.ever_published" class="text-xs text-muted">This page has publication history and cannot be deleted. Archive or replace it instead.</p>
 
           <UAlert v-if="dirty" color="warning" variant="soft" title="Unsaved changes" description="Save this draft before leaving the page, switching locales, or opening Preview." />
 
@@ -145,13 +147,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { TENANT_PAGE_BLOCK_REGISTRY, createTenantPageBlock, isTenantPageBlockAllowed, type TenantPageBlock, type TenantPageBlockType, type TenantPageType } from '~/utils/tenant-page-blocks'
 import { createTenantPageEditorData, tenantPageBlockSummary, validateTenantPageBlock } from '~/utils/tenant-page-editor'
-import { canProceedWithTenantPageTransition, createTenantPageRequestGate, previewHrefForTenantPage } from '~/utils/tenant-page-editor-safety'
+import { canProceedWithTenantPageTransition, createTenantPageLocaleRevertGuard, createTenantPageRequestGate, previewHrefForTenantPage } from '~/utils/tenant-page-editor-safety'
 
-interface PageSummary { id: string; title: string; path: string; page_type: TenantPageType; recipe: string | null; status: string; locale: string; sort_order: number; updated_at: string; published_revision_id: string | null }
+interface PageSummary { id: string; title: string; path: string; page_type: TenantPageType; recipe: string | null; status: string; locale: string; sort_order: number; updated_at: string; published_revision_id: string | null; ever_published: boolean }
 interface PageDetailResponse extends PageSummary { page_id: string; site_id: string; organization_id: string; summary: string | null; seo_title: string | null; seo_description: string | null; canonical_url: string | null; robots: string | null; blocks: TenantPageBlock[]; document: { updated_at: string; draft_revision_id: string | null; published_revision_id: string | null } }
 interface PageDetail extends Omit<PageDetailResponse, 'recipe' | 'summary' | 'seo_title' | 'seo_description' | 'canonical_url' | 'robots'> { recipe: string; summary: string; seo_title: string; seo_description: string; canonical_url: string; robots: string }
 
@@ -175,6 +177,7 @@ const previewToken = ref('')
 const dirty = ref(false)
 const hydrating = ref(false)
 const requestGate = createTenantPageRequestGate()
+const localeRevertGuard = createTenantPageLocaleRevertGuard()
 const selectedBlockIndex = ref(0)
 const draggedBlockIndex = ref<number | null>(null)
 const newBlockType = ref<TenantPageBlockType>('markdown')
@@ -200,10 +203,16 @@ watch(blockTypeOptions, (options) => {
 }, { immediate: true })
 
 function validateList(value: unknown): value is { pages: PageSummary[] } {
-  return isRecord(value) && Array.isArray(value.pages)
+  return isRecord(value)
+    && Array.isArray(value.pages)
+    && value.pages.every(page => isRecord(page) && typeof page.ever_published === 'boolean')
 }
 function validatePage(value: unknown): value is { page: PageDetailResponse } {
-  return isRecord(value) && isRecord(value.page) && typeof value.page.id === 'string' && Array.isArray(value.page.blocks)
+  return isRecord(value)
+    && isRecord(value.page)
+    && typeof value.page.id === 'string'
+    && typeof value.page.ever_published === 'boolean'
+    && Array.isArray(value.page.blocks)
 }
 function validateContext(value: unknown): value is { context: { previewToken: string } } {
   return isRecord(value) && isRecord(value.context) && typeof value.context.previewToken === 'string'
@@ -295,7 +304,7 @@ function startNewPage() {
   requestGate.invalidate()
   editorError.value = null
   selected.value = {
-    id: '', page_id: '', site_id: resolvedSiteId, organization_id: '', locale: locale.value, path: '/new-page', title: 'New page', page_type: 'custom', recipe: '', status: 'draft', sort_order: pages.value.length, updated_at: '', published_revision_id: null,
+    id: '', page_id: '', site_id: resolvedSiteId, organization_id: '', locale: locale.value, path: '/new-page', title: 'New page', page_type: 'custom', recipe: '', status: 'draft', sort_order: pages.value.length, updated_at: '', published_revision_id: null, ever_published: false,
     summary: '', seo_title: '', seo_description: '', canonical_url: '', robots: '', blocks: [], document: { updated_at: '', draft_revision_id: null, published_revision_id: null },
   }
   selectedBlockIndex.value = -1
@@ -326,7 +335,7 @@ function duplicateBlock(index: number) {
   if (!selected.value) return
   const original = selected.value.blocks[index]
   if (!original) return
-  const copy: TenantPageBlock = { ...original, id: crypto.randomUUID(), data: structuredClone(original.data), position: index + 1 }
+  const copy: TenantPageBlock = { ...original, id: crypto.randomUUID(), data: structuredClone(toRaw(original.data)), position: index + 1 }
   selected.value.blocks.splice(index + 1, 0, copy)
   selected.value.blocks.forEach((block, position) => { block.position = position })
   selectedBlockIndex.value = index + 1
@@ -459,7 +468,7 @@ async function removePage() {
 async function duplicate() {
   if (!selected.value) return
   const original = selected.value
-  selected.value = { ...original, id: '', page_id: '', path: `${original.path}-copy`, title: `${original.title} copy`, status: 'draft', published_revision_id: null, document: { updated_at: '', draft_revision_id: null, published_revision_id: null }, blocks: original.blocks.map((block, index) => ({ ...block, id: crypto.randomUUID(), data: structuredClone(block.data), position: index })) }
+  selected.value = { ...original, id: '', page_id: '', path: `${original.path}-copy`, title: `${original.title} copy`, status: 'draft', ever_published: false, published_revision_id: null, document: { updated_at: '', draft_revision_id: null, published_revision_id: null }, blocks: original.blocks.map((block, index) => ({ ...block, id: crypto.randomUUID(), data: structuredClone(toRaw(block.data)), position: index })) }
   selectedBlockIndex.value = selected.value.blocks.length ? 0 : -1
   dirty.value = true
   await save()
@@ -473,8 +482,10 @@ watch(selected, () => {
 }, { deep: true, flush: 'sync' })
 
 watch(locale, async (nextLocale, previousLocale) => {
+  if (localeRevertGuard.consume(nextLocale)) return
   if (loading.value || nextLocale === previousLocale) return
   if (!canDiscardUnsavedChanges('Discard unsaved page changes and switch locale?')) {
+    localeRevertGuard.arm(previousLocale)
     locale.value = previousLocale
     return
   }

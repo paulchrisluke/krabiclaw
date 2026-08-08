@@ -74,6 +74,7 @@ export interface TenantPageDto {
   recipe: string | null
   sort_order: number
   status: TenantPageStatus
+  ever_published: boolean
   blocks: TenantPageBlock[]
   document: TenantPageDocument
   published_revision_id: string | null
@@ -102,6 +103,20 @@ interface TenantPageVariantRow {
   draft_document_id: string | null
   published_revision_id: string | null
   updated_at: string
+}
+
+export function tenantPageHasPublicationHistory(input: {
+  ever_published?: boolean | number | null
+  status?: string | null
+  published_revision_id?: string | null
+  document_published_revision_id?: string | null
+}): boolean {
+  return Boolean(
+    input.ever_published
+    || input.status === 'published'
+    || input.published_revision_id
+    || input.document_published_revision_id,
+  )
 }
 
 const RESERVED_EXACT_PATHS = new Set([
@@ -421,6 +436,7 @@ function pageDto(row: TenantPageVariantRow, document: TenantPageDocument, blocks
     recipe: row.recipe,
     sort_order: row.sort_order,
     status: row.status,
+    ever_published: Boolean(row.ever_published),
     blocks,
     document,
     published_revision_id: row.published_revision_id,
@@ -449,6 +465,7 @@ export async function listTenantPages(db: DbClient, siteId: string, opts: { loca
     recipe: row.recipe,
     sort_order: row.sort_order,
     status: row.status,
+    ever_published: Boolean(row.ever_published),
     updated_at: row.updated_at,
     published_revision_id: row.published_revision_id,
   }))
@@ -1207,7 +1224,12 @@ export async function deleteTenantPage(db: DbClient, variantId: string, input: {
   const document = await getContentDocumentById(db, row.draft_document_id)
   if (!document) throw createError({ statusCode: 500, statusMessage: 'Tenant page content document not found' })
   if (document.updated_at !== input.expectedDocumentUpdatedAt) conflict('Tenant page draft was updated by another writer')
-  if (row.ever_published || row.status === 'published' || row.published_revision_id || document.published_revision_id) conflict('Pages with publication history must be archived or replaced before deletion')
+  if (tenantPageHasPublicationHistory({
+    ever_published: row.ever_published,
+    status: row.status,
+    published_revision_id: row.published_revision_id,
+    document_published_revision_id: document.published_revision_id,
+  })) conflict('Pages with publication history cannot be deleted; archive or replace the page instead')
   const variantCount = await queryFirst<{ count: number }>(db, 'SELECT COUNT(*) AS count FROM tenant_page_variants WHERE page_id = ? AND site_id = ? AND organization_id = ?', [row.page_id, input.scope.siteId, input.scope.organizationId])
   const reference = await queryFirst<{ count: number }>(db, `
     SELECT (

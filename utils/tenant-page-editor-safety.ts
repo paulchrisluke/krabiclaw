@@ -6,6 +6,20 @@ export function previewHrefForTenantPage(dirty: boolean, href: string): string |
   return dirty ? undefined : href || undefined
 }
 
+export function createTenantPageLocaleRevertGuard() {
+  let pendingLocale: string | undefined
+  return {
+    arm(locale: string) {
+      pendingLocale = locale
+    },
+    consume(locale: string): boolean {
+      const armedLocale = pendingLocale
+      pendingLocale = undefined
+      return armedLocale !== undefined && armedLocale === locale
+    },
+  }
+}
+
 export function createTenantPageRequestGate() {
   let current = 0
   return {
