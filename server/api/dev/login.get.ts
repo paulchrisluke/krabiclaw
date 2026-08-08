@@ -3,10 +3,9 @@
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { createAuth } from '~/server/utils/auth'
 import { assertDevRouteAllowed } from '~/server/utils/dev-route-auth'
-import { hasPlatformAdminPermission } from '~/utils/platform-admin-access'
 import { queryFirst } from '~/server/db'
 import { getOrgAdapter } from 'better-auth/plugins'
-import { setActiveOrganizationForDevSession } from '~/server/utils/site-creation'
+import { selectDevLoginUser } from '~/server/utils/dev-login-selection'
 
 // Mirrors better-call's signCookieValue (HMAC-SHA256, base64(raw signature),
 // `${value}.${signature}`) since better-auth only exposes signed-cookie
@@ -55,6 +54,7 @@ export default defineEventHandler(async (event) => {
 
   const auth = createAuth(env)
   const ctx = await auth.$context
+  const organizationAdapter = getOrgAdapter(ctx as Parameters<typeof getOrgAdapter>[0], {})
 
   const userId = query.userId !== undefined ? validateDevUserId(query.userId) : undefined
 
@@ -103,48 +103,17 @@ export default defineEventHandler(async (event) => {
       }
     }
   } else {
-    const organizationAdapter = getOrgAdapter(ctx as Parameters<typeof getOrgAdapter>[0], {})
-    const users = await ctx.internalAdapter.listUsers(50, 0, { field: 'createdAt', direction: 'asc' })
-    let firstUser: typeof users[number] | null = null
-    let firstOrganizationUser: typeof users[number] | null = null
-    let firstOwnerUser: typeof users[number] | null = null
-    let siteUser: typeof users[number] | null = null
-
-    for (const candidate of users) {
-      const candidateRole = (candidate as typeof candidate & { role?: string | null }).role
-      if (hasPlatformAdminPermission(candidateRole)) continue
-      firstUser ??= candidate
-
-      const organizations = await organizationAdapter.listOrganizations(candidate.id)
-      if (organizations.length > 0) firstOrganizationUser ??= candidate
-
-      let isOwner = false
-      for (const organization of organizations) {
-        const membership = await organizationAdapter.findMemberByOrgId({
-          userId: candidate.id,
-          organizationId: organization.id,
-        })
-        if (membership && String(membership.role) === 'owner') {
-          isOwner = true
-          break
-        }
-      }
-      if (isOwner) firstOwnerUser ??= candidate
-
-      const organizationIds = organizations.map((organization) => organization.id)
-      const hasSite = organizationIds.length > 0
+    const selected = await selectDevLoginUser({
+      internalAdapter: ctx.internalAdapter,
+      organizationAdapter,
+      hasSite: async (organizationIds) => organizationIds.length > 0
         && Boolean(await queryFirst<{ id: string }>(
           db,
           `SELECT id FROM sites WHERE organization_id IN (${organizationIds.map(() => '?').join(', ')}) LIMIT 1`,
           organizationIds,
-        ))
-      if (hasSite) {
-        siteUser = candidate
-        break
-      }
-    }
+        )),
+    })
 
-    const selected = siteUser ?? firstOwnerUser ?? firstOrganizationUser ?? firstUser
     user = selected
       ? {
         id: selected.id,
@@ -158,14 +127,14 @@ export default defineEventHandler(async (event) => {
   }
   if (!user) throw createError({ statusCode: 500, statusMessage: 'No users in database' })
 
-  const session = await ctx.internalAdapter.createSession(user.id)
-  const organizationAdapter = getOrgAdapter(ctx as Parameters<typeof getOrgAdapter>[0], {})
   const organizations = (await organizationAdapter.listOrganizations(user.id))
     .slice()
     .sort((left, right) => timestampValue(left.createdAt) - timestampValue(right.createdAt))
-  if (organizations[0]) {
-    await setActiveOrganizationForDevSession(env, session.token, organizations[0].id)
-  }
+  const session = await ctx.internalAdapter.createSession(
+    user.id,
+    undefined,
+    organizations[0] ? { activeOrganizationId: organizations[0].id } : undefined,
+  )
   const signed = `${session.token}.${await hmacSign(session.token, ctx.secret)}`
 
   const cookieName = ctx.authCookies.sessionToken.name

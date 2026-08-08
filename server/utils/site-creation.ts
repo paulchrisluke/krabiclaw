@@ -305,24 +305,6 @@ export async function findOldestOwnedOrganization(
   return null
 }
 
-// Dev-only helper: the development login route creates a pre-cookie session
-// internally, so it cannot call the request-bound Better Auth endpoint yet.
-export async function setActiveOrganizationForDevSession(
-  env: CloudflareEnv,
-  sessionToken: string,
-  organizationId: string,
-): Promise<void> {
-  const auth = createAuth(env)
-  const context = await auth.$context
-  const adapter = getOrgAdapter(context as Parameters<typeof getOrgAdapter>[0], {})
-  // The installed Better Auth adapter's third argument is the endpoint context
-  // used by HTTP handlers; its setActiveOrganization implementation only calls
-  // internalAdapter.updateSession, so the shared auth context is sufficient for
-  // non-HTTP callers.
-  type AdapterContext = Parameters<OrganizationAdapter['setActiveOrganization']>[2]
-  await adapter.setActiveOrganization(sessionToken, organizationId, context as unknown as AdapterContext)
-}
-
 function slugifyName(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'site'
 }
