@@ -5,6 +5,10 @@ import {
   sha256CanonicalJson,
   verifyOperatorApprovalToken,
 } from '~/server/utils/operator-approval'
+import {
+  assertDirectOperatorSession,
+  OperatorSessionError,
+} from '~/server/utils/operator-session'
 
 const APPROVAL_WINDOW_MS = 10 * 60 * 1000
 const APPROVAL_PURPOSE = 'quota_adjustment' as const
@@ -184,16 +188,20 @@ export function parseQuotaAdjustmentRequest(body: unknown): ParsedQuotaAdjustmen
 }
 
 export function assertQuotaOperatorSession(session: unknown): string {
-  if (!isRecord(session)) fail('authentication_required', 401, 'Authentication required.')
-  const user = isRecord(session.user) ? session.user : null
-  const userId = typeof user?.id === 'string' ? user.id.trim() : ''
-  if (!userId) fail('authentication_required', 401, 'Authenticated operator user is required.')
-  const authSession = isRecord(session.session) ? session.session : null
-  const impersonatedBy = authSession?.impersonatedBy ?? session.impersonatedBy
-  if (typeof impersonatedBy === 'string' && impersonatedBy.trim()) {
-    fail('impersonation_forbidden', 403, 'Quota adjustments cannot run in an impersonation session.')
+  try {
+    return assertDirectOperatorSession(session)
+  } catch (error) {
+    if (error instanceof OperatorSessionError) {
+      fail(
+        error.code,
+        error.statusCode,
+        error.code === 'impersonation_forbidden'
+          ? 'Quota adjustments cannot run in an impersonation session.'
+          : error.message,
+      )
+    }
+    throw error
   }
-  return userId
 }
 
 function currentPeriod(now: Date): QuotaAdjustmentPeriod {
