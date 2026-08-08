@@ -16,7 +16,7 @@ const {
   groupUsageEvents,
   parseUsageEventRow,
 } = await import('../../server/utils/ai-credits.ts')
-const { validateAiCreditsResponse } = await import('../../composables/useAiCredits.ts')
+const { getAiCreditsDisplayState, validateAiCreditsResponse } = await import('../../composables/useAiCredits.ts')
 
 test('canonical usage rows expose only safe metadata and preserve uncharged quantity', () => {
   const row = parseUsageEventRow({
@@ -130,4 +130,22 @@ test('client quota shape requires recurring period fields', () => {
   assert.equal(validateAiCreditsResponse(valid), true)
   assert.equal('total' in valid, false)
   assert.equal(validateAiCreditsResponse({ ...valid, periodRemaining: '1988' }), false)
+})
+
+test('quota display state never treats reconciliation as unlimited or depleted', () => {
+  assert.equal(getAiCreditsDisplayState({
+    unlimited: false,
+    periodRemaining: 0,
+    reconciliationRequired: true,
+  }), 'reconciliation')
+  assert.equal(getAiCreditsDisplayState({
+    unlimited: true,
+    periodRemaining: null,
+    reconciliationRequired: false,
+  }), 'unlimited')
+  assert.equal(getAiCreditsDisplayState({
+    unlimited: false,
+    periodRemaining: 497,
+    reconciliationRequired: false,
+  }), 'finite')
 })

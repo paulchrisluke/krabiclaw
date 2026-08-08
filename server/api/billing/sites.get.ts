@@ -5,8 +5,7 @@ import { cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
 import { getOrganizationBillingStatus } from '~/server/utils/billing'
-import { mapOrganizationSites, type OrganizationSiteRow } from '~/server/utils/billing-site-resource'
-import { queryAll } from '~/server/db'
+import { loadOrganizationSiteSummaries } from '~/server/utils/billing-site-resource'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -24,15 +23,8 @@ export default defineEventHandler(async (event) => {
   const organizationId = organization.id
   const billingStatus = await getOrganizationBillingStatus(env, db, organizationId)
 
-  const rows = await queryAll<OrganizationSiteRow>(db, `
-    SELECT s.id, s.brand_name, s.subdomain
-    FROM sites s
-    WHERE s.organization_id = ?
-    ORDER BY s.created_at ASC
-  `, [organizationId])
-
   return jsonResponse({
     success: true,
-    sites: mapOrganizationSites(rows ?? [], billingStatus),
+    sites: await loadOrganizationSiteSummaries(db, organizationId, billingStatus),
   })
 })

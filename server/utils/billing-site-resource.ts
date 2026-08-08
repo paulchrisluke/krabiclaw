@@ -1,3 +1,5 @@
+import { queryAll, type DbClient } from '~/server/db'
+
 export interface OrganizationSiteRow {
   id: string
   brand_name: string | null
@@ -9,6 +11,20 @@ export interface OrganizationBillingSummary {
   subscriptionStatus?: string
   currentPeriodEnd?: string
   cancelAtPeriodEnd?: boolean
+}
+
+export async function loadOrganizationSiteSummaries(
+  db: DbClient,
+  organizationId: string,
+  billingStatus: OrganizationBillingSummary,
+) {
+  const rows = await queryAll<OrganizationSiteRow>(db, `
+    SELECT s.id, s.brand_name, s.subdomain
+      FROM sites s
+     WHERE s.organization_id = ?
+     ORDER BY s.created_at ASC
+  `, [organizationId])
+  return mapOrganizationSites(rows ?? [], billingStatus)
 }
 
 /**

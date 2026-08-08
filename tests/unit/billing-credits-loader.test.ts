@@ -42,12 +42,15 @@ function createDb(): SqliteDb {
   db.exec(`
     CREATE TABLE organization_billing (
       organization_id TEXT PRIMARY KEY,
+      stripe_customer_id TEXT,
+      stripe_subscription_id TEXT,
       plan TEXT,
       status TEXT,
       payment_status TEXT,
       paid_through TEXT,
       past_due_since TEXT,
       current_period_end TEXT,
+      cancel_at_period_end INTEGER,
       updated_at TEXT
     );
     CREATE TABLE ai_credits (

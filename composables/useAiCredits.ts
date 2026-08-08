@@ -14,6 +14,15 @@ export interface AiCreditsResponse {
   reconciliationRequired: boolean
 }
 
+export type AiCreditsDisplayState = 'reconciliation' | 'unlimited' | 'finite' | 'unknown'
+
+export function getAiCreditsDisplayState(value: Pick<AiCreditsResponse, 'unlimited' | 'periodRemaining' | 'reconciliationRequired'>): AiCreditsDisplayState {
+  if (value.reconciliationRequired) return 'reconciliation'
+  if (value.unlimited) return 'unlimited'
+  if (value.periodRemaining !== null) return 'finite'
+  return 'unknown'
+}
+
 const isCreditsRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
@@ -103,7 +112,7 @@ export const useAiCredits = (siteId: Ref<string | null> | ComputedRef<string | n
 
   /** Update the finite weekly remainder after an SSE AI action. */
   const update = (newRemaining: number | null) => {
-    if (unlimited.value || newRemaining === null) return
+    if (unlimited.value || reconciliationRequired.value || newRemaining === null) return
     const previousRemaining = periodRemaining.value
     const observedUsage = previousRemaining === null
       ? 0
@@ -112,8 +121,9 @@ export const useAiCredits = (siteId: Ref<string | null> | ComputedRef<string | n
     periodUsed.value += observedUsage
   }
 
-  const isLow = computed(() => !unlimited.value && periodRemaining.value !== null && periodRemaining.value < 50)
-  const isDepleted = computed(() => !unlimited.value && periodRemaining.value !== null && periodRemaining.value <= 0)
+  const isLow = computed(() => !reconciliationRequired.value && !unlimited.value && periodRemaining.value !== null && periodRemaining.value < 50)
+  const isDepleted = computed(() => !reconciliationRequired.value && !unlimited.value && periodRemaining.value !== null && periodRemaining.value <= 0)
+  const isBlocked = computed(() => reconciliationRequired.value || isDepleted.value)
 
   return {
     plan,
@@ -132,6 +142,7 @@ export const useAiCredits = (siteId: Ref<string | null> | ComputedRef<string | n
     error,
     isLow,
     isDepleted,
+    isBlocked,
     fetch,
     update,
   }

@@ -4,7 +4,7 @@ import {
   grantQuota,
 } from '~/server/utils/usage-metering'
 import { getPlanEntitlements } from '~/server/utils/billing-entitlements'
-import { getEffectiveAccessPlan } from '~/server/utils/billing-access'
+import { getOrganizationBillingProjection } from '~/server/utils/organization-billing'
 
 // Credit system: 1 credit = 1,000 tokens (input + output combined).
 
@@ -171,101 +171,11 @@ interface OrganizationPlanInfo {
   version: string
 }
 
-interface BillingProjectionRow {
-  plan: string | null
-  status: string | null
-  payment_status: string | null
-  paid_through: string | null
-  past_due_since: string | null
-  current_period_end: string | null
-  updated_at: string | null
-}
-
-const KNOWN_BILLING_PLANS = new Set(['free', 'growth', 'managed', 'seo_accelerator'])
-const KNOWN_SUBSCRIPTION_STATUSES = new Set([
-  'free',
-  'active',
-  'trialing',
-  'past_due',
-  'canceled',
-  'cancelled',
-  'unpaid',
-  'incomplete',
-  'incomplete_expired',
-  'paused',
-  'pending',
-  'processing',
-  'inactive',
-])
-const KNOWN_PAYMENT_STATUSES = new Set(['unknown', 'paid', 'processing', 'failed', 'pending', 'trialing', 'past_due'])
-
-function validateBillingProjection(row: BillingProjectionRow): void {
-  const subscriptionFields = [
-    row.plan,
-    row.status,
-    row.payment_status,
-    row.paid_through,
-    row.past_due_since,
-    row.current_period_end,
-  ]
-  if (subscriptionFields.every(value => value === null || value === undefined || value.trim() === '')) return
-
-  const plan = row.plan?.trim()
-  if (!plan || !KNOWN_BILLING_PLANS.has(plan)) {
-    throw new Error('Invalid organization billing projection: unknown plan.')
-  }
-  const status = row.status?.trim()
-  if (!status || !KNOWN_SUBSCRIPTION_STATUSES.has(status)) {
-    throw new Error('Invalid organization billing projection: unknown subscription status.')
-  }
-  const paymentStatus = row.payment_status?.trim()
-  if (paymentStatus && !KNOWN_PAYMENT_STATUSES.has(paymentStatus)) {
-    throw new Error('Invalid organization billing projection: unknown payment status.')
-  }
-
-  const parseBoundary = (value: string | null, label: string): Date | null => {
-    if (value === null || value.trim() === '') return null
-    const parsed = new Date(value)
-    if (Number.isNaN(parsed.getTime())) {
-      throw new Error(`Invalid organization billing projection: ${label} must be a valid date.`)
-    }
-    return parsed
-  }
-  const paidThrough = parseBoundary(row.paid_through, 'paid_through')
-  parseBoundary(row.past_due_since, 'past_due_since')
-  const periodEnd = parseBoundary(row.current_period_end, 'current_period_end')
-  parseBoundary(row.updated_at, 'updated_at')
-  if (status === 'trialing' && periodEnd === null) {
-    throw new Error('Invalid organization billing projection: trialing subscriptions require current_period_end.')
-  }
-  if (status === 'active' && paymentStatus === 'paid' && paidThrough === null) {
-    throw new Error('Invalid organization billing projection: paid active subscriptions require paid_through.')
-  }
-}
-
 async function getOrganizationPlanInfo(db: DbClient, organizationId: string, now = new Date()): Promise<OrganizationPlanInfo> {
-  const billing = await queryFirst<BillingProjectionRow>(db, `
-    SELECT plan, status, payment_status, paid_through, past_due_since,
-           current_period_end, updated_at
-    FROM organization_billing
-    WHERE organization_id = ?
-    LIMIT 1
-  `, [organizationId])
-  if (!billing) return { plan: 'free', version: 'free' }
-  validateBillingProjection(billing)
-  if (billing.plan === null || billing.status === null) return { plan: 'free', version: 'free' }
-  const trialEnd = billing.status === 'trialing' ? billing.current_period_end : null
+  const billing = await getOrganizationBillingProjection(db, organizationId, now)
   return {
-    plan: getEffectiveAccessPlan({
-      plan: billing.plan,
-      status: billing.status,
-      paymentStatus: billing.payment_status,
-      paidThrough: billing.paid_through,
-      pastDueSince: billing.past_due_since,
-      periodEnd: billing.current_period_end,
-      trialEnd,
-    }, now),
-    version: String(billing.updated_at ?? billing.plan ?? 'free'),
+    plan: billing.effectivePlan,
+    version: String(billing.updatedAt ?? billing.plan ?? 'free'),
   }
 }
 

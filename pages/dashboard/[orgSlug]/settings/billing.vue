@@ -119,8 +119,10 @@
               </div>
               <div class="flex items-center gap-2">
                 <span v-if="credits" class="text-sm text-muted">
-                  <template v-if="credits.unlimited">Unlimited this UTC week</template>
-                  <template v-else>{{ credits.periodRemaining?.toLocaleString() ?? '0' }} remaining this UTC week</template>
+                  <template v-if="credits.reconciliationRequired">Usage unavailable pending approved reconciliation</template>
+                  <template v-else-if="credits.unlimited">Unlimited this UTC week</template>
+                  <template v-else-if="credits.periodRemaining !== null">{{ credits.periodRemaining.toLocaleString() }} remaining this UTC week</template>
+                  <template v-else>Allowance unavailable</template>
                 </span>
                 <UButton v-else size="xs" color="primary" variant="soft" icon="i-lucide-zap" @click="openServiceUpsell('growth', 'billing-credits')">
                   Upgrade for more
@@ -132,16 +134,25 @@
           <USkeleton v-if="creditsLoading" class="h-32 w-full" />
 
           <div v-else-if="credits" class="space-y-4">
-            <div v-if="credits.unlimited" class="rounded-lg bg-elevated px-3 py-3 text-sm">
+            <div v-if="credits.reconciliationRequired" class="rounded-lg border border-warning-200 bg-warning-50 px-3 py-3 text-sm text-warning-800 dark:border-warning-800 dark:bg-warning-950 dark:text-warning-200">
+              <p class="font-medium">Shared usage quota unavailable pending approved reconciliation</p>
+              <p class="mt-1 text-xs">Current allowance and remaining quota are unavailable until the older credit projection receives an approved billing adjustment.</p>
+            </div>
+            <div v-else-if="credits.unlimited" class="rounded-lg bg-elevated px-3 py-3 text-sm">
               <p class="font-medium text-highlighted">Unlimited shared usage credits</p>
               <p class="mt-1 text-xs text-muted">The organization plan has no finite weekly allowance.</p>
             </div>
-            <div v-else>
+            <div v-else-if="credits.periodRemaining !== null">
               <div class="mb-1 flex items-center justify-between text-xs text-muted">
                 <span>{{ credits.periodUsed.toLocaleString() }} used this UTC week</span>
-                <span>{{ credits.periodRemaining?.toLocaleString() ?? 'Unlimited' }} remaining</span>
+                <span>{{ credits.periodRemaining.toLocaleString() }} remaining</span>
               </div>
-              <p class="text-xs text-muted">Effective current allowance: {{ credits.periodAllowance?.toLocaleString() ?? 'Unlimited' }} credits for this period.</p>
+              <p class="text-xs text-muted">
+                Effective current allowance:
+                <span v-if="credits.periodAllowance !== null">{{ credits.periodAllowance.toLocaleString() }} credits</span>
+                <span v-else>unavailable</span>
+                for this period.
+              </p>
             </div>
 
             <div class="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-3">
@@ -149,14 +160,16 @@
                 <p class="text-muted">Plan allowance</p>
                 <p class="mt-0.5 font-semibold tabular-nums">
                   <span v-if="credits.planAllowance !== null">{{ credits.planAllowance.toLocaleString() }} / UTC week</span>
-                  <span v-else>unlimited</span>
+                  <span v-else-if="credits.unlimited">Unlimited</span>
+                  <span v-else>Unavailable</span>
                 </p>
               </div>
               <div class="rounded-lg bg-elevated px-3 py-2">
                 <p class="text-muted">Effective current allowance</p>
                 <p class="mt-0.5 font-semibold tabular-nums">
                   <span v-if="credits.periodAllowance !== null">{{ credits.periodAllowance.toLocaleString() }} credits</span>
-                  <span v-else>unlimited</span>
+                  <span v-else-if="credits.unlimited">Unlimited</span>
+                  <span v-else>Unavailable</span>
                 </p>
               </div>
               <div class="rounded-lg bg-elevated px-3 py-2">
@@ -167,7 +180,8 @@
                 <p class="text-muted">Remaining this UTC week</p>
                 <p class="mt-0.5 font-semibold tabular-nums">
                   <span v-if="credits.periodRemaining !== null">{{ credits.periodRemaining.toLocaleString() }}</span>
-                  <span v-else>unlimited</span>
+                  <span v-else-if="credits.unlimited">Unlimited</span>
+                  <span v-else>Unavailable</span>
                 </p>
               </div>
               <div class="rounded-lg bg-elevated px-3 py-2">
@@ -182,7 +196,8 @@
                 <p class="text-muted">Per-chat cap</p>
                 <p class="mt-0.5 font-semibold tabular-nums">
                   <span v-if="credits.sessionLimit !== null">{{ credits.sessionLimit.toLocaleString() }} credits</span>
-                  <span v-else>unlimited</span>
+                  <span v-else-if="credits.unlimited">Unlimited</span>
+                  <span v-else>Unavailable</span>
                 </p>
               </div>
               <div v-if="credits.reconciliationRequired" class="rounded-lg border border-warning-200 bg-warning-50 px-3 py-2 text-warning-700 dark:border-warning-800 dark:bg-warning-950 dark:text-warning-300 sm:col-span-2 lg:col-span-3">

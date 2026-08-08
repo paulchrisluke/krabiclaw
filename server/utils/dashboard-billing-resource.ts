@@ -1,9 +1,9 @@
 import type { H3Event } from 'h3'
 import type Stripe from 'stripe'
-import { queryAll, queryFirst } from '~/server/db'
+import { queryFirst } from '~/server/db'
 import { getOrganizationCreditsResource } from '~/server/utils/ai-credits'
 import { getOrganizationBillingStatus, getStripe, requireBillingAccess } from '~/server/utils/billing'
-import { mapOrganizationSites, type OrganizationSiteRow } from '~/server/utils/billing-site-resource'
+import { loadOrganizationSiteSummaries } from '~/server/utils/billing-site-resource'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 
 export async function loadDashboardBillingResource(event: H3Event, organizationSlug: string) {
@@ -15,15 +15,9 @@ export async function loadDashboardBillingResource(event: H3Event, organizationS
     organizationSlug,
   })
   await requireBillingAccess(env, db, organization.id, userId)
-  const [billingStatus, credits, siteRows, organizationBilling] = await Promise.all([
+  const [billingStatus, credits, organizationBilling] = await Promise.all([
     getOrganizationBillingStatus(env, db, organization.id),
     getOrganizationCreditsResource(db, organization.id),
-    queryAll<OrganizationSiteRow>(db, `
-      SELECT s.id, s.brand_name, s.subdomain
-        FROM sites s
-       WHERE s.organization_id = ?
-       ORDER BY s.created_at ASC
-    `, [organization.id]),
     queryFirst<{ stripe_customer_id: string | null }>(
       db,
       'SELECT stripe_customer_id FROM organization_billing WHERE organization_id = ? LIMIT 1',
@@ -60,7 +54,7 @@ export async function loadDashboardBillingResource(event: H3Event, organizationS
     paymentMethod: { card },
     sites: {
       success: true as const,
-      sites: mapOrganizationSites(siteRows, billingStatus),
+      sites: await loadOrganizationSiteSummaries(db, organization.id, billingStatus),
     },
   }
 }

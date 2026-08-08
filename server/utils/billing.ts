@@ -5,41 +5,8 @@ import { betterAuthTimestampToIso } from '~/server/utils/better-auth-timestamps'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
 import { getOrgAdapter } from 'better-auth/plugins'
 import { getPlanEntitlements, type EntitlementsMap } from '~/server/utils/billing-entitlements'
-import { getEffectiveAccessPlan } from '~/server/utils/billing-access'
+import { getOrganizationBillingProjection } from '~/server/utils/organization-billing'
 import { createStripeClient } from '~/server/utils/stripe-client'
-
-interface SiteBillingRow {
-  stripe_subscription_id: string | null
-  stripe_subscription_item_id: string | null
-  plan: string | null
-  status: string | null
-  current_period_end: string | null
-  cancel_at_period_end: number | null
-}
-
-interface OrgBillingRow {
-  stripe_customer_id: string | null
-  stripe_subscription_id: string | null
-  plan: string | null
-  status: string | null
-  payment_status: string | null
-  paid_through: string | null
-  past_due_since: string | null
-  current_period_end: string | null
-}
-
-interface BetterAuthSubscriptionRow {
-  plan: string
-  referenceId: string
-  stripeCustomerId: string | null
-  stripeSubscriptionId: string | null
-  status: string
-  paymentStatus: string | null
-  paidThrough: string | null
-  pastDueSince: string | null
-  periodEnd: number | string | null
-  cancelAtPeriodEnd: number | null
-}
 
 interface EntitlementRow {
   key: string
@@ -85,49 +52,15 @@ export async function getSiteBillingStatus(
   const site = await queryFirst<{ organization_id: string }>(db, `
     SELECT organization_id FROM sites WHERE id = ? LIMIT 1
   `, [siteId])
-  const subscription = site ? await getBetterAuthSubscription(db, site.organization_id) : null
-
-  const siteBilling = await queryFirst<SiteBillingRow>(db, `
-    SELECT stripe_subscription_id, stripe_subscription_item_id, plan, status,
-           current_period_end, cancel_at_period_end
-    FROM site_billing WHERE site_id = ? LIMIT 1
-  `, [siteId])
-
-  // Customer and payment projection live at org level.
-  const orgBilling = await queryFirst<OrgBillingRow>(db, `
-    SELECT ob.stripe_customer_id, ob.stripe_subscription_id, ob.payment_status, ob.paid_through, ob.past_due_since
-    FROM sites s
-    JOIN organization_billing ob ON ob.organization_id = s.organization_id
-    WHERE s.id = ? LIMIT 1
-  `, [siteId])
-
-  const accessPlan = subscription
-      ? getEffectiveAccessPlan({
-        plan: subscription.plan,
-        status: subscription.status,
-        paymentStatus: subscription.paymentStatus,
-        paidThrough: subscription.paidThrough ?? orgBilling?.paid_through,
-        pastDueSince: subscription.pastDueSince ?? orgBilling?.past_due_since,
-        periodEnd: subscription.periodEnd,
-      })
-    : null
-
-  const legacyAccessPlan = 'free'
-
-  return {
-    plan: accessPlan ?? legacyAccessPlan,
-    stripeCustomerId: subscription?.stripeCustomerId ?? orgBilling?.stripe_customer_id ?? undefined,
-    stripeSubscriptionId: subscription?.stripeSubscriptionId ?? orgBilling?.stripe_subscription_id ?? siteBilling?.stripe_subscription_id ?? undefined,
-    subscriptionStatus: subscription?.status ?? siteBilling?.status ?? undefined,
-    paymentStatus: subscription?.paymentStatus ?? orgBilling?.payment_status ?? undefined,
-    currentPeriodEnd: subscription?.periodEnd
-      ? betterAuthTimestampToIso(subscription.periodEnd, 'subscription.periodEnd')
-      : siteBilling?.current_period_end ?? undefined,
-    cancelAtPeriodEnd: subscription
-      ? Boolean(subscription.cancelAtPeriodEnd)
-      : siteBilling?.cancel_at_period_end ? Boolean(siteBilling.cancel_at_period_end) : undefined,
-    entitlements: getPlanEntitlements(accessPlan ?? legacyAccessPlan),
+  if (!site) {
+    return {
+      plan: 'free',
+      subscriptionStatus: 'free',
+      paymentStatus: 'unknown',
+      entitlements: getPlanEntitlements('free'),
+    }
   }
+  return getOrganizationBillingStatus(env, db, site.organization_id)
 }
 
 export async function getOrganizationBillingStatus(
@@ -136,35 +69,16 @@ export async function getOrganizationBillingStatus(
   organizationId: string,
 ): Promise<SiteBillingStatus> {
   void env
-  const subscription = await getBetterAuthSubscription(db, organizationId)
-  const orgBilling = await queryFirst<OrgBillingRow>(db, `
-    SELECT stripe_customer_id, stripe_subscription_id, plan, status,
-           payment_status, paid_through, past_due_since, current_period_end
-    FROM organization_billing WHERE organization_id = ? LIMIT 1
-  `, [organizationId])
-
-  const accessPlan = subscription
-      ? getEffectiveAccessPlan({
-        plan: subscription.plan,
-        status: subscription.status,
-        paymentStatus: subscription.paymentStatus,
-        paidThrough: subscription.paidThrough ?? orgBilling?.paid_through,
-        pastDueSince: subscription.pastDueSince ?? orgBilling?.past_due_since,
-        periodEnd: subscription.periodEnd,
-      })
-    : 'free'
-
+  const projection = await getOrganizationBillingProjection(db, organizationId)
   return {
-    plan: accessPlan,
-    stripeCustomerId: subscription?.stripeCustomerId ?? orgBilling?.stripe_customer_id ?? undefined,
-    stripeSubscriptionId: subscription?.stripeSubscriptionId ?? orgBilling?.stripe_subscription_id ?? undefined,
-    subscriptionStatus: subscription?.status ?? orgBilling?.status ?? undefined,
-    paymentStatus: subscription?.paymentStatus ?? orgBilling?.payment_status ?? undefined,
-    currentPeriodEnd: subscription?.periodEnd
-      ? betterAuthTimestampToIso(subscription.periodEnd, 'subscription.periodEnd')
-      : orgBilling?.current_period_end ?? undefined,
-    cancelAtPeriodEnd: subscription ? Boolean(subscription.cancelAtPeriodEnd) : undefined,
-    entitlements: getPlanEntitlements(accessPlan),
+    plan: projection.effectivePlan,
+    stripeCustomerId: projection.stripeCustomerId ?? undefined,
+    stripeSubscriptionId: projection.stripeSubscriptionId ?? undefined,
+    subscriptionStatus: projection.status,
+    paymentStatus: projection.paymentStatus,
+    currentPeriodEnd: projection.currentPeriodEnd ?? undefined,
+    cancelAtPeriodEnd: projection.cancelAtPeriodEnd,
+    entitlements: projection.entitlements,
   }
 }
 
@@ -186,9 +100,9 @@ export async function hasSiteEntitlement(db: DbClient, siteId: string, key: stri
   const site = await queryFirst<{ organization_id: string }>(db, `
     SELECT organization_id FROM sites WHERE id = ? LIMIT 1
   `, [siteId])
-  const subscription = site ? await getBetterAuthSubscription(db, site.organization_id) : null
-  if (!subscription) return false
-  return getPlanEntitlements(getEffectiveAccessPlan(subscription))[key] === true
+  if (!site) return false
+  const projection = await getOrganizationBillingProjection(db, site.organization_id)
+  return projection.entitlements[key] === true
 }
 
 // Backward-compat shim
@@ -199,9 +113,8 @@ export async function hasEntitlement(
   key: string,
 ): Promise<boolean> {
   void env
-  const subscription = await getBetterAuthSubscription(db, organizationId)
-  if (!subscription) return false
-  return getPlanEntitlements(getEffectiveAccessPlan(subscription))[key] === true
+  const projection = await getOrganizationBillingProjection(db, organizationId)
+  return projection.entitlements[key] === true
 }
 
 export async function setSiteEntitlementsFromPlan(
@@ -412,30 +325,6 @@ export async function getUserBillingItems(
       userRole: organization.role,
     }
   }))
-}
-
-// ── Internal helpers ──────────────────────────────────────────────────────────
-
-async function getBetterAuthSubscription(db: DbClient, organizationId: string): Promise<BetterAuthSubscriptionRow | null> {
-  return await queryFirst<BetterAuthSubscriptionRow>(db, `
-    SELECT plan, referenceId, stripeCustomerId, stripeSubscriptionId, status,
-           periodEnd, cancelAtPeriodEnd,
-           (SELECT payment_status FROM organization_billing WHERE organization_id = referenceId LIMIT 1) AS paymentStatus,
-           (SELECT paid_through FROM organization_billing WHERE organization_id = referenceId LIMIT 1) AS paidThrough,
-           (SELECT past_due_since FROM organization_billing WHERE organization_id = referenceId LIMIT 1) AS pastDueSince
-    FROM subscription
-    WHERE referenceId = ?
-      AND status IN ('active', 'trialing', 'past_due')
-    ORDER BY
-      CASE status
-        WHEN 'active' THEN 0
-        WHEN 'trialing' THEN 1
-        WHEN 'past_due' THEN 2
-        ELSE 3
-      END,
-      updatedAt DESC
-    LIMIT 1
-  `, [organizationId])
 }
 
 function parseEntitlementRows(rows: EntitlementRow[]): EntitlementsMap {
