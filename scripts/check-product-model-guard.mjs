@@ -26,6 +26,7 @@ const RETIRED_FILES = [
   'server/api/billing/auto-topup.patch.ts',
   'server/api/billing/credits/add.post.ts',
   'server/api/billing/credits/charge.post.ts',
+  'server/api/billing/checkout.post.ts',
   'server/api/billing/service-addon.post.ts',
   'server/api/admin/fulfillment/[id]/done.post.ts',
   'server/utils/auto-topup.ts',
@@ -33,6 +34,7 @@ const RETIRED_FILES = [
 ]
 const FORBIDDEN_ACTIVE_PATTERNS = [
   /\/api\/billing\/credits\/(?:add|charge)/,
+  /\/api\/billing\/checkout/,
   /\/api\/billing\/auto-topup/,
   /\/api\/billing\/service-addon/,
   /\/api\/admin\/fulfillment\/\$\{[^}]+\}\/done/,
