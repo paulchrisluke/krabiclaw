@@ -7,6 +7,11 @@ const baseURL = previewUrl || testBaseUrl()
 const devRouteSecret = testEnv('E2E_DEV_ROUTE_SECRET') || 'ci-dev-route-secret'
 const emailDeliveryMode = process.env.EMAIL_DELIVERY_MODE || 'log_only'
 const whatsAppDeliveryMode = process.env.WHATSAPP_DELIVERY_MODE || 'log_only'
+const workerVersionOverride = testEnv('WORKER_VERSION_OVERRIDE')
+const workerName = testEnv('WORKER_NAME') || 'krabiclaw'
+const workerVersionHeaders: Record<string, string> = workerVersionOverride
+  ? { 'Cloudflare-Workers-Version-Overrides': `${workerName}="${workerVersionOverride}"` }
+  : {}
 const shellQuote = (value: string) => `'${value.replace(/'/g, "'\\''")}'`
 
 process.env.E2E_DEV_ROUTE_SECRET = devRouteSecret
@@ -31,6 +36,10 @@ export default defineConfig({
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL,
+    // Pin every browser/API request to one immutable Cloudflare Worker version
+    // when a candidate override is supplied. This keeps login, page, and API
+    // requests on the same deployed source during verification.
+    extraHTTPHeaders: workerVersionHeaders,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure'
@@ -50,7 +59,21 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
+      // The release surface gate is opt-in through its named projects below;
+      // the normal full suite must not silently duplicate it or run mobile
+      // coverage for every test file.
+      testIgnore: /public-surfaces-release\.spec\.ts/,
       use: { ...devices['Desktop Chrome'] }
+    },
+    {
+      name: 'public-surfaces-desktop',
+      testMatch: /public-surfaces-release\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] }
+    },
+    {
+      name: 'public-surfaces-mobile',
+      testMatch: /public-surfaces-release\.spec\.ts/,
+      use: { ...devices['Pixel 7'] }
     }
   ]
 })
