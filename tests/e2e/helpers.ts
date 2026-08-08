@@ -42,8 +42,8 @@ const THIRD_PARTY_CONSOLE_PATTERNS = [
 // x-preview-tenant — causing ERR_BLOCKED_BY_ORB and CORS failures.
 export async function setupTenantHeaders(page: Page, baseURL: string, headers: Record<string, string>) {
   if (!Object.keys(headers).length) return
-  const { hostname } = new URL(baseURL)
-  await page.route(`https://${hostname}/**`, async (route) => {
+  const { origin } = new URL(baseURL)
+  await page.route(`${origin}/**`, async (route) => {
     await route.continue({ headers: { ...route.request().headers(), ...headers } })
   })
 }
