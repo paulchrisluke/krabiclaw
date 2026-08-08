@@ -88,6 +88,22 @@ test.describe('dashboard functional smoke', () => {
 
     await page.getByRole('button', { name: 'Delete block' }).last().click()
     await expect(page.getByText('Media asset', { exact: true })).toHaveCount(0)
+
+    await expect(page.getByRole('button', { name: 'Preview', exact: true })).toBeDisabled()
+    let discardPrompt = ''
+    const discardDialog = new Promise<void>((resolve) => {
+      page.once('dialog', async (dialog) => {
+        discardPrompt = dialog.message()
+        await dialog.dismiss()
+        resolve()
+      })
+    })
+    await page.getByRole('button', { name: 'New page', exact: true }).click()
+    await discardDialog
+    expect(discardPrompt).toContain('Discard unsaved page changes?')
+    await expect(rootPage).toHaveClass(/border-primary/)
+    await page.setViewportSize({ width: 390, height: 844 })
+    await expect(page.getByRole('button', { name: 'Preview', exact: true })).toBeDisabled()
   })
 
   test('canonical account, organization, site, and location routes render with responsive navigation', async ({ page, baseURL }) => {
