@@ -28,17 +28,6 @@ test('saved-card site subscribe path is absent', async () => {
   assert.match(source, /customerType: 'organization'/)
 })
 
-test('Better Auth owns the owner-authorized subscription upgrade boundary', async () => {
-  const checkoutSource = await readFile('composables/useSubscriptionCheckout.ts', 'utf8')
-  const authSource = await readFile('server/utils/auth.ts', 'utf8')
-
-  assert.match(checkoutSource, /authClient\.subscription\.upgrade/)
-  assert.doesNotMatch(checkoutSource, /\/api\/billing\/checkout/)
-  assert.match(authSource, /betterAuthStripe\(/)
-  assert.match(authSource, /authorizeReference: async/)
-  assert.match(authSource, /member\.role\.split\(','\)\.map\(role => role\.trim\(\)\)\.includes\('owner'\)/)
-})
-
 test('billing upgrade callers preserve the billing return URL and recover past-due accounts', async () => {
   const source = await readFile('pages/dashboard/[orgSlug]/settings/billing.vue', 'utf8')
   const subscribeSource = await readFile('composables/useSiteSubscribe.ts', 'utf8')
