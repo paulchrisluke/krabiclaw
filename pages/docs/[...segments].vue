@@ -157,6 +157,7 @@ const isPublicDocResponse = (value: unknown): value is { doc: Doc } =>
   && typeof value.doc.body === 'string'
 
 const route = useRoute()
+const requestEvent = useRequestEvent()
 const segments = computed(() => {
   const raw = route.params.segments
   if (Array.isArray(raw)) return raw.filter(Boolean)
@@ -223,7 +224,6 @@ const { data: doc, pending: loading, error } = await useAsyncData(
       const category = slugToCategory(categoryParam.value)
       if (!category) throw createError({ statusCode: 404, statusMessage: 'Documentation not found' })
 
-      const requestEvent = useRequestEvent()
       if (!requestEvent) throw createError({ statusCode: 404, statusMessage: 'Documentation not found' })
 
       const [{ cloudflareEnv }, { getPublishedPlatformDoc }] = await Promise.all([

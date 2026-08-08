@@ -75,6 +75,7 @@
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard', cmsCapabilityKey: 'site.testimonials' })
 useSeoMeta({ title: 'Testimonials | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
+const requestEvent = useRequestEvent()
 
 type CollectionMethod = 'in_person' | 'email' | 'phone' | 'migration' | 'other'
 interface SiteTestimonial {
@@ -124,8 +125,7 @@ const { data, pending, refresh } = await useAsyncData(
   `dashboard-site-testimonials-${siteId}`,
   async () => {
     if (import.meta.server) {
-      const event = useRequestEvent()
-      if (!event) throw createError({ statusCode: 500, statusMessage: 'Dashboard request context unavailable' })
+      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Dashboard request context unavailable' })
       const orgSlug = typeof route.params.orgSlug === 'string' ? route.params.orgSlug : null
       const siteSlug = typeof route.params.siteSlug === 'string' ? route.params.siteSlug : null
       if (!orgSlug || !siteSlug) throw createError({ statusCode: 400, statusMessage: 'Dashboard scope is required' })
@@ -134,9 +134,9 @@ const { data, pending, refresh } = await useAsyncData(
         import('~/server/utils/dashboard-context-service'),
         import('~/server/utils/site-reviews'),
       ])
-      const db = cloudflareEnv(event).DB
+      const db = cloudflareEnv(requestEvent).DB
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-      const context = await loadDashboardContext(event, { orgSlug, siteSlug })
+      const context = await loadDashboardContext(requestEvent, { orgSlug, siteSlug })
       if (context.site?.id !== siteId) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
       return { reviews: await listSiteReviews(db, siteId) as unknown as SiteTestimonial[] }
     }

@@ -7,6 +7,7 @@ import {
   checkLegacyFallbackFlag,
   checkDashboardFetchUsage,
   checkAdminFetchUsage,
+  checkSsrRequestEventCapture,
 } from '../../scripts/lib/data-loading-guardrails.mjs'
 
 test('checkGlobalFetchAndRetry flags globalThis.$fetch mutation', () => {
@@ -95,4 +96,24 @@ test('checkAdminFetchUsage flags both $fetch and dashboardFetch (admin needs app
 
 test('checkAdminFetchUsage passes applicationFetch usage', () => {
   assert.deepEqual(checkAdminFetchUsage('f.vue', 'await applicationFetch("/api/x")'), [])
+})
+
+test('SSR detail loaders capture the request event before the async-data boundary', () => {
+  const unsafe = `
+    const { data } = await useAsyncData('detail', async () => {
+      const requestEvent = useRequestEvent()
+      return await loadFromDb(requestEvent)
+    })
+  `
+  assert.deepEqual(checkSsrRequestEventCapture('pages/detail.vue', unsafe), [
+    'pages/detail.vue: capture useRequestEvent() during page setup before useAsyncData',
+  ])
+
+  const safe = `
+    const requestEvent = useRequestEvent()
+    const { data } = await useAsyncData('detail', async () => {
+      return await loadFromDb(requestEvent)
+    })
+  `
+  assert.deepEqual(checkSsrRequestEventCapture('pages/detail.vue', safe), [])
 })

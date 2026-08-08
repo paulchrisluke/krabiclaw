@@ -60,6 +60,7 @@
 definePageMeta({ layout: 'saya' })
 
 const route = useRoute()
+const requestEvent = useRequestEvent()
 const { siteId } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
@@ -76,7 +77,6 @@ const { data: review, pending, error } = await useAsyncData<ApiRecord>(
     // which caused pages/blog/[category]/[slug].vue and pages/docs/[...segments].vue
     // to 404/500 on records their own API served correctly. Same fix applied here.
     if (import.meta.server) {
-      const requestEvent = useRequestEvent()
       if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request event not available' })
 
       const [{ cloudflareEnv }, { getPublicReview }] = await Promise.all([

@@ -9,6 +9,7 @@ import {
   checkLegacyFallbackFlag,
   checkDashboardFetchUsage,
   checkAdminFetchUsage,
+  checkSsrRequestEventCapture,
 } from './lib/data-loading-guardrails.mjs'
 
 const root = new URL('..', import.meta.url).pathname
@@ -66,6 +67,7 @@ for (const directory of applicationRoots) {
     violations.push(...checkGlobalFetchAndRetry(file, source))
     violations.push(...checkBannedSilentEmptySuccessNames(file, source))
     violations.push(...checkLegacyFallbackFlag(file, source))
+    violations.push(...checkSsrRequestEventCapture(file, source))
   }
 }
 

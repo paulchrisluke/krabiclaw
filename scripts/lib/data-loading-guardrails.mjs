@@ -118,3 +118,18 @@ export function checkAdminFetchUsage(file, source) {
     ? [`${file}: use applicationFetch for unscoped admin API traffic`]
     : []
 }
+
+export function checkSsrRequestEventCapture(file, source) {
+  if (!file.startsWith('pages/') || !file.endsWith('.vue')) return []
+
+  const firstAsyncData = source.indexOf('useAsyncData')
+  if (firstAsyncData === -1) return []
+
+  const requestEventCall = /\buseRequestEvent\s*\(\s*\)/g
+  for (const match of source.matchAll(requestEventCall)) {
+    if ((match.index ?? -1) > firstAsyncData) {
+      return [`${file}: capture useRequestEvent() during page setup before useAsyncData`]
+    }
+  }
+  return []
+}

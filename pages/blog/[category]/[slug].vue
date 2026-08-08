@@ -120,6 +120,7 @@ interface BlogPost {
 }
 
 const route = useRoute()
+const requestEvent = useRequestEvent()
 const postEndpoint = computed(() => `/api/public/blog/${String(route.params.category)}/${String(route.params.slug)}`)
 
 const { data, pending, error } = await useAsyncData(
@@ -136,7 +137,6 @@ const { data, pending, error } = await useAsyncData(
       const category = slugToBlogCategory(String(route.params.category))
       if (!category) throw createError({ statusCode: 404, statusMessage: 'Article not found' })
 
-      const requestEvent = useRequestEvent()
       if (!requestEvent) throw createError({ statusCode: 404, statusMessage: 'Article not found' })
 
       const [{ cloudflareEnv }, { getPublishedPlatformBlogPost }] = await Promise.all([
