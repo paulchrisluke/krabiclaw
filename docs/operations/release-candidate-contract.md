@@ -104,8 +104,11 @@ attests that separate run, SHA, workflow, manifest, migration evidence, and
 build hash before entering the production mutation step. There is no automatic
 edge from preflight to deployment. Migration, version upload, split rollout,
 cache purge, promotion, and browser verification also run in the named
-`production` environment, which must be configured with mandatory required
-reviewers. A green preflight is not deployment approval. The production job holds the old version at **100%** while its
+`production` environment. Before any deploy mutation, the workflow proves
+through the GitHub Environments API that the environment exists, has at least
+one valid required reviewer, and has `prevent_self_review` enabled. A missing,
+inaccessible, or weaker environment fails closed. A green preflight is not
+deployment approval. The production job holds the old version at **100%** while its
 candidate is **0%**, runs one combined desktop/mobile browser gate, promotes
 only after that gate, purges cache, then repeats the deployed custom-domain
 verification and browser gate with no version override, then records the
