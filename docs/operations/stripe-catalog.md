@@ -41,6 +41,17 @@ deactivates all active recurring prices and archives the product, each guarded
 by the reviewed provider snapshot. There is no automatic first-product
 selection, and duplicate overrides are rejected.
 
+For an existing canonical product, monthly and annual base prices are resolved
+with the same contract used by the Better Auth Stripe loader: explicit product
+metadata IDs first, then an unambiguous `lookup_key`, then a single remaining
+candidate. The configured `seat_price_id` is never selected or deactivated as a
+base price. The monthly base must already be the fixed USD amount for its plan;
+an amount mismatch fails closed. Annual pricing is optional: an absent annual
+price remains absent, while an ambiguous annual set fails closed. The plan
+snapshot includes each price's `lookup_key` and normalized metadata, so these
+selection inputs are covered by the review hash. On the selected product only
+non-canonical base-price candidates are deactivated.
+
 Apply is refused unless the key is test mode (`sk_test_` or `rk_test_`), the
 plan hash is intact, the confirmation matches exactly, the plan is test-mode,
 local image files still match their planned hashes, and the provider snapshot

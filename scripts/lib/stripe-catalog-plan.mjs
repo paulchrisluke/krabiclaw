@@ -124,6 +124,8 @@ function normalizePrice(price) {
     type: price.type ?? null,
     currency: price.currency ?? null,
     unit_amount: price.unit_amount ?? null,
+    lookup_key: typeof price.lookup_key === 'string' ? price.lookup_key : null,
+    metadata: normalizeMetadata(price.metadata),
     recurring: price.recurring
       ? {
           interval: price.recurring.interval ?? null,
@@ -180,7 +182,7 @@ export async function createCatalogPlan({
   })
 }
 
-function productPatch(definition, priceRef, imageRef) {
+function productPatch(definition, priceRef, annualPriceRef, imageRef, existingMetadata = {}) {
   const patch = {
     description: definition.description,
     marketing_features: definition.features.map(name => ({ name })),
@@ -189,6 +191,9 @@ function productPatch(definition, priceRef, imageRef) {
       highlighted: definition.highlighted ? 'true' : 'false',
       ...(definition.badge ? { badge: definition.badge } : {}),
       monthly_price_id: priceRef,
+      ...(annualPriceRef ? { annual_price_id: annualPriceRef } : {}),
+      ...(existingMetadata.seat_price_id ? { seat_price_id: String(existingMetadata.seat_price_id) } : {}),
+      currency: 'usd',
     },
     default_price: priceRef,
   }
@@ -196,13 +201,59 @@ function productPatch(definition, priceRef, imageRef) {
   return patch
 }
 
-function matchingMonthlyPrice(prices, amountCents) {
-  return prices.find(price =>
-    price.currency === 'usd'
-    && price.unit_amount === amountCents
-    && price.recurring?.interval === 'month'
-    && price.recurring?.interval_count === 1,
-  ) ?? null
+function canonicalPriceCandidates(prices, interval, seatPriceId) {
+  return prices.filter(price =>
+    price.id !== seatPriceId
+    && price.recurring?.interval === interval
+    && price.recurring.interval_count === 1
+    && typeof price.unit_amount === 'number'
+    && price.unit_amount > 0
+    && typeof price.currency === 'string'
+    && price.currency.length > 0,
+  )
+}
+
+function resolveCanonicalPrice(product, prices, interval, seatPriceId) {
+  const candidates = canonicalPriceCandidates(prices, interval, seatPriceId)
+  if (candidates.length === 0) return null
+  const intervalLabel = interval === 'year' ? 'annual' : interval
+
+  const metadataKey = interval === 'month' ? 'monthly_price_id' : 'annual_price_id'
+  const metadataPriceId = product.metadata?.[metadataKey]?.trim()
+  if (metadataPriceId) {
+    const selected = candidates.find(price => price.id === metadataPriceId)
+    if (!selected) {
+      throw new Error(`Stripe product ${product.id} has an invalid ${metadataKey} canonical price`)
+    }
+    return selected
+  }
+
+  const lookupKeyCandidates = candidates.filter(price => {
+    const lookupKey = price.lookup_key?.toLowerCase() ?? ''
+    return interval === 'month'
+      ? lookupKey.includes('month')
+      : lookupKey.includes('annual') || lookupKey.includes('year')
+  })
+  if (lookupKeyCandidates.length > 1) {
+    throw new Error(`Stripe product ${product.id} has multiple ${intervalLabel} prices marked by lookup_key`)
+  }
+  if (lookupKeyCandidates.length === 1) return lookupKeyCandidates[0]
+  if (candidates.length !== 1) {
+    throw new Error(`Stripe product ${product.id} must have exactly one canonical ${intervalLabel} price`)
+  }
+  return candidates[0]
+}
+
+function assertFixedMonthlyAmount(product, price, amountCents) {
+  if (price && (price.currency?.toLowerCase() !== 'usd' || price.unit_amount !== amountCents)) {
+    throw new Error(`Stripe product ${product.id} canonical monthly price ${price.id} must be usd ${amountCents} cents`)
+  }
+}
+
+function assertAnnualCurrency(product, monthly, annual) {
+  if (annual && monthly && annual.currency?.toLowerCase() !== monthly.currency?.toLowerCase()) {
+    throw new Error(`Stripe product ${product.id} has monthly and annual prices in different currencies`)
+  }
 }
 
 function imageOperation(definition, imageFiles) {
@@ -304,7 +355,8 @@ export function buildCatalogPlan({ snapshot, imageFiles = {}, canonicalProductId
     const productRef = existing ? { id: existing.id } : { ref: { kind: 'product', planId: definition.planId } }
 
     for (const duplicate of products.filter(product => product.id !== existing?.id)) {
-      for (const price of snapshot.recurringPrices[duplicate.id] ?? []) {
+      for (const price of [...(snapshot.recurringPrices[duplicate.id] ?? [])]
+        .sort((a, b) => a.id.localeCompare(b.id))) {
         operations.push({
           type: 'deactivate_price',
           productId: duplicate.id,
@@ -322,8 +374,15 @@ export function buildCatalogPlan({ snapshot, imageFiles = {}, canonicalProductId
     const image = imageOperation(definition, imageFiles)
     if (image) operations.push(image)
 
-    const prices = existing ? (snapshot.recurringPrices[existing.id] ?? []) : []
-    const canonical = matchingMonthlyPrice(prices, definition.amountCents)
+    const prices = existing
+      ? [...(snapshot.recurringPrices[existing.id] ?? [])].sort((a, b) => a.id.localeCompare(b.id))
+      : []
+    const seatPriceId = existing?.metadata?.seat_price_id?.trim()
+    const resolvedMonthly = existing ? resolveCanonicalPrice(existing, prices, 'month', seatPriceId) : null
+    assertFixedMonthlyAmount(existing ?? { id: definition.planId }, resolvedMonthly, definition.amountCents)
+    const canonical = resolvedMonthly
+    const annual = existing ? resolveCanonicalPrice(existing, prices, 'year', seatPriceId) : null
+    assertAnnualCurrency(existing ?? { id: definition.planId }, canonical, annual)
     const priceRef = canonical
       ? canonical.id
       : { ref: { kind: 'price', planId: definition.planId } }
@@ -359,12 +418,15 @@ export function buildCatalogPlan({ snapshot, imageFiles = {}, canonicalProductId
     }
 
     for (const price of prices) {
+      const baseInterval = price.recurring?.interval === 'month' || price.recurring?.interval === 'year'
       if (
-        price.id === canonical?.id
-        || price.recurring?.interval !== 'month'
-        || price.recurring?.interval_count !== 1
+        price.id === seatPriceId
+        || price.id === canonical?.id
+        || price.id === annual?.id
+        || !baseInterval
+        || !canonicalPriceCandidates(prices, price.recurring?.interval, seatPriceId).some(candidate => candidate.id === price.id)
       ) continue
-      operations.push({ type: 'deactivate_price', priceId: price.id, expected: price })
+      operations.push({ type: 'deactivate_price', productId: existing?.id, priceId: price.id, expected: price })
     }
 
     operations.push({
@@ -373,7 +435,9 @@ export function buildCatalogPlan({ snapshot, imageFiles = {}, canonicalProductId
       params: productPatch(
         definition,
         priceRef,
+        annual?.id ?? null,
         image ? { ref: { kind: 'file', planId: definition.planId } } : null,
+        existing?.metadata,
       ),
     })
   }

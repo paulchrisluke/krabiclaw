@@ -9,6 +9,7 @@ import {
   sha256Json,
 } from '../../scripts/lib/stripe-catalog-plan.mjs'
 import { parseCanonicalProductOverrides, parseCli } from '../../scripts/seed-stripe.mjs'
+import { getBetterAuthStripePlans } from '../../server/utils/better-auth-stripe.ts'
 
 const scriptPath = resolve(process.cwd(), 'scripts/seed-stripe.mjs')
 
@@ -70,20 +71,12 @@ function fakeCatalog() {
       name: 'Growth',
       description: 'Old description',
       metadata: { plan_id: 'growth' },
-      default_price: 'price-growth-old',
+      default_price: null,
       images: [],
     },
   ]
   const prices = {
-    'prod-growth': [{
-      id: 'price-growth-old',
-      product: 'prod-growth',
-      active: true,
-      type: 'recurring',
-      currency: 'usd',
-      unit_amount: 3900,
-      recurring: { interval: 'month', interval_count: 1 },
-    }],
+    'prod-growth': [],
   }
   return { products, prices }
 }
@@ -96,7 +89,7 @@ function duplicateGrowthCatalog() {
       active: true,
       name: 'Growth (legacy)',
       description: 'Old description',
-      metadata: { plan_id: 'growth' },
+      metadata: { plan_id: 'growth', seat_price_id: 'price-growth-a-seat' },
       default_price: 'price-growth-a',
       images: [],
     },
@@ -130,6 +123,15 @@ function duplicateGrowthCatalog() {
         unit_amount: 49000,
         recurring: { interval: 'year', interval_count: 1 },
       },
+      {
+        id: 'price-growth-a-seat',
+        product: 'prod-growth-a',
+        active: true,
+        type: 'recurring',
+        currency: 'usd',
+        unit_amount: 9900,
+        recurring: { interval: 'month', interval_count: 1 },
+      },
     ],
     'prod-growth-b': [{
       id: 'price-growth-b',
@@ -141,6 +143,99 @@ function duplicateGrowthCatalog() {
       recurring: { interval: 'month', interval_count: 1 },
     }],
   }
+  return catalog
+}
+
+function canonicalPriceContractCatalog({ annual = true, ambiguousAnnual = false } = {}) {
+  const catalog = fakeCatalog()
+  catalog.products.splice(1, 1, {
+    id: 'prod-growth',
+    active: true,
+    name: 'Growth',
+    description: 'Current description',
+    metadata: {
+      plan_id: 'growth',
+      monthly_price_id: 'price-growth-base',
+      ...(annual && !ambiguousAnnual ? { annual_price_id: 'price-growth-annual' } : {}),
+      seat_price_id: 'price-growth-seat',
+      currency: 'eur',
+    },
+    default_price: 'price-growth-base',
+    images: [],
+  })
+  const growthPrices = [
+    {
+      id: 'price-growth-seat',
+      product: 'prod-growth',
+      active: true,
+      type: 'recurring',
+      currency: 'usd',
+      unit_amount: 9900,
+      lookup_key: 'growth-seat-monthly',
+      metadata: { role: 'seat' },
+      recurring: { interval: 'month', interval_count: 1 },
+    },
+    {
+      id: 'price-growth-base',
+      product: 'prod-growth',
+      active: true,
+      type: 'recurring',
+      currency: 'usd',
+      unit_amount: 4900,
+      lookup_key: 'growth-monthly',
+      metadata: { role: 'base' },
+      recurring: { interval: 'month', interval_count: 1 },
+    },
+    {
+      id: 'price-growth-old',
+      product: 'prod-growth',
+      active: true,
+      type: 'recurring',
+      currency: 'usd',
+      unit_amount: 3900,
+      lookup_key: 'growth-old-monthly',
+      metadata: { role: 'old-base' },
+      recurring: { interval: 'month', interval_count: 1 },
+    },
+    {
+      id: 'price-growth-addon-weekly',
+      product: 'prod-growth',
+      active: true,
+      type: 'recurring',
+      currency: 'usd',
+      unit_amount: 1000,
+      lookup_key: 'growth-addon-weekly',
+      metadata: { role: 'addon' },
+      recurring: { interval: 'week', interval_count: 1 },
+    },
+  ]
+  if (annual) {
+    growthPrices.push({
+      id: 'price-growth-annual',
+      product: 'prod-growth',
+      active: true,
+      type: 'recurring',
+      currency: 'usd',
+      unit_amount: 49000,
+      lookup_key: 'growth-annual',
+      metadata: { role: 'base' },
+      recurring: { interval: 'year', interval_count: 1 },
+    })
+    if (ambiguousAnnual) {
+      growthPrices.push({
+        id: 'price-growth-annual-alt',
+        product: 'prod-growth',
+        active: true,
+        type: 'recurring',
+        currency: 'usd',
+        unit_amount: 49000,
+        lookup_key: 'growth-annual-alt',
+        metadata: { role: 'old-base' },
+        recurring: { interval: 'year', interval_count: 1 },
+      })
+    }
+  }
+  catalog.prices = { 'prod-growth': growthPrices }
   return catalog
 }
 
@@ -244,7 +339,7 @@ test('explicit canonical product selection signs deterministic duplicate cleanup
     planA.operations
       .filter(operation => operation.type === 'deactivate_price' && operation.productId === 'prod-growth-a')
       .map(operation => operation.priceId),
-    ['price-growth-a', 'price-growth-a-year'],
+    ['price-growth-a', 'price-growth-a-seat', 'price-growth-a-year'],
   )
   assert.deepEqual(
     planA.operations
@@ -265,9 +360,10 @@ test('explicit canonical product selection signs deterministic duplicate cleanup
     filesAdapter: {},
   })
   assert.deepEqual(
-    writes.filter(([type, id]) => type === 'prices.update' && ['price-growth-a', 'price-growth-a-year'].includes(id)),
+    writes.filter(([type, id]) => type === 'prices.update' && ['price-growth-a', 'price-growth-a-seat', 'price-growth-a-year'].includes(id)),
     [
       ['prices.update', 'price-growth-a', { active: false }],
+      ['prices.update', 'price-growth-a-seat', { active: false }],
       ['prices.update', 'price-growth-a-year', { active: false }],
     ],
   )
@@ -293,6 +389,128 @@ test('canonical product overrides validate plan IDs, active membership, and dupl
     () => createCatalogPlan({ readAdapter, imageFiles: {}, canonicalProductIds: { growth: 'prod-legacy' } }),
     /growth=prod-legacy.*plan_id=growth/,
   )
+})
+
+test('catalog reconciliation preserves seat prices and resolves base monthly and annual prices', async () => {
+  const catalog = canonicalPriceContractCatalog()
+  const plan = await createCatalogPlan({
+    readAdapter: fakeReadAdapter(catalog),
+    imageFiles: {},
+    accountMode: 'test',
+  })
+  const growthUpdate = plan.operations.find(operation => operation.type === 'update_product' && operation.product?.id === 'prod-growth')
+  assert.equal(growthUpdate?.params?.default_price, 'price-growth-base')
+  assert.equal(growthUpdate?.params?.metadata?.monthly_price_id, 'price-growth-base')
+  assert.equal(growthUpdate?.params?.metadata?.annual_price_id, 'price-growth-annual')
+  assert.equal(growthUpdate?.params?.metadata?.seat_price_id, 'price-growth-seat')
+  assert.equal(growthUpdate?.params?.metadata?.currency, 'usd')
+  assert.deepEqual(
+    plan.operations
+      .filter(operation => operation.type === 'deactivate_price' && operation.productId === 'prod-growth')
+      .map(operation => operation.priceId),
+    ['price-growth-old'],
+  )
+  assert.equal(plan.operations.some(operation => operation.type === 'deactivate_price' && operation.priceId === 'price-growth-seat'), false)
+
+  const baseSnapshotPrice = plan.providerSnapshot.recurringPrices['prod-growth'].find(price => price.id === 'price-growth-base')
+  assert.equal(baseSnapshotPrice?.lookup_key, 'growth-monthly')
+  assert.deepEqual(baseSnapshotPrice?.metadata, { role: 'base' })
+  const changed = canonicalPriceContractCatalog()
+  changed.prices['prod-growth'][1].metadata.role = 'changed'
+  const changedPlan = await createCatalogPlan({ readAdapter: fakeReadAdapter(changed), imageFiles: {}, accountMode: 'test' })
+  assert.notEqual(changedPlan.planSha256, plan.planSha256)
+})
+
+test('catalog reconciliation keeps annual absent and rejects ambiguous annual candidates', async () => {
+  const withoutAnnual = await createCatalogPlan({
+    readAdapter: fakeReadAdapter(canonicalPriceContractCatalog({ annual: false })),
+    imageFiles: {},
+    accountMode: 'test',
+  })
+  const withoutAnnualUpdate = withoutAnnual.operations.find(operation => operation.type === 'update_product' && operation.product?.id === 'prod-growth')
+  assert.equal(Object.hasOwn(withoutAnnualUpdate?.params?.metadata ?? {}, 'annual_price_id'), false)
+  assert.equal(withoutAnnual.operations.some(operation => operation.type === 'create_price' && operation.planId === 'growth' && operation.params?.recurring?.interval === 'year'), false)
+
+  await assert.rejects(
+    () => createCatalogPlan({
+      readAdapter: fakeReadAdapter(canonicalPriceContractCatalog({ ambiguousAnnual: true })),
+      imageFiles: {},
+      accountMode: 'test',
+    }),
+    /multiple annual prices marked by lookup_key/,
+  )
+
+  const mixedCurrency = canonicalPriceContractCatalog()
+  const mixedAnnual = mixedCurrency.prices['prod-growth'].find(price => price.id === 'price-growth-annual')
+  assert.ok(mixedAnnual)
+  mixedAnnual.currency = 'eur'
+  await assert.rejects(
+    () => createCatalogPlan({ readAdapter: fakeReadAdapter(mixedCurrency), imageFiles: {}, accountMode: 'test' }),
+    /monthly and annual prices in different currencies/,
+  )
+})
+
+test('catalog reconciliation rejects a canonical monthly price with the wrong fixed amount', async () => {
+  const catalog = canonicalPriceContractCatalog()
+  catalog.products[1].metadata.monthly_price_id = 'price-growth-old'
+  await assert.rejects(
+    () => createCatalogPlan({ readAdapter: fakeReadAdapter(catalog), imageFiles: {}, accountMode: 'test' }),
+    /canonical monthly price price-growth-old must be usd 4900 cents/,
+  )
+})
+
+test('planned canonical product state loads through the Better Auth Stripe runtime contract', async () => {
+  const plan = await createCatalogPlan({
+    readAdapter: fakeReadAdapter(canonicalPriceContractCatalog()),
+    imageFiles: {},
+    accountMode: 'test',
+  })
+  const sourceProduct = plan.providerSnapshot.products.find(product => product.id === 'prod-growth')
+  const sourcePrices = plan.providerSnapshot.recurringPrices['prod-growth']
+  assert.ok(sourceProduct)
+  assert.ok(sourcePrices)
+
+  const growthUpdate = plan.operations.find(operation => operation.type === 'update_product' && operation.product?.id === 'prod-growth')
+  assert.ok(growthUpdate)
+  const deactivatedPriceIds = new Set(
+    plan.operations
+      .filter(operation => operation.type === 'deactivate_price' && operation.productId === 'prod-growth')
+      .map(operation => operation.priceId),
+  )
+  const materializedProduct = {
+    ...sourceProduct,
+    ...growthUpdate.params,
+    metadata: { ...sourceProduct.metadata, ...growthUpdate.params.metadata },
+  }
+  const materializedPrices = sourcePrices.filter(price => !deactivatedPriceIds.has(price.id))
+  const stripe = {
+    products: {
+      list: async () => ({ data: [materializedProduct], has_more: false }),
+    },
+    prices: {
+      list: async () => ({ data: materializedPrices, has_more: false }),
+    },
+  }
+
+  const plans = await getBetterAuthStripePlans(stripe as never, {})
+  assert.equal(plans.length, 1)
+  assert.deepEqual(
+    {
+      priceId: plans[0]?.priceId,
+      lookupKey: plans[0]?.lookupKey,
+      annualDiscountPriceId: plans[0]?.annualDiscountPriceId,
+      annualDiscountLookupKey: plans[0]?.annualDiscountLookupKey,
+      seatPriceId: plans[0]?.seatPriceId,
+    },
+    {
+      priceId: 'price-growth-base',
+      lookupKey: 'growth-monthly',
+      annualDiscountPriceId: 'price-growth-annual',
+      annualDiscountLookupKey: 'growth-annual',
+      seatPriceId: 'price-growth-seat',
+    },
+  )
+  assert.equal(materializedPrices.some(price => price.id === 'price-growth-seat'), true)
 })
 
 test('apply rejects hash mismatch, snapshot drift, and live keys before any writes', async () => {
