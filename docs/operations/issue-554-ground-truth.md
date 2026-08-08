@@ -2,12 +2,12 @@
 
 Status: active, release blocked
 
-Evidence cut: 2026-08-08 13:35 ICT
+Evidence cut: 2026-08-08 14:13 ICT
 
 Branch: `codex/issue-554-full-e2e-fixes`
 
 Local implementation cut before this ledger update:
-`fe13dd5ee36827b185897a65094a769ee46c3a58`. This is not yet a frozen,
+`4e99fe01c3fa77d9e23209a3fa2aa2a9d300043c`. This is not yet a frozen,
 pushed, deployed, or browser-verified candidate.
 
 This ledger keeps **landed**, **deployed**, and **verified** separate. Landed
@@ -18,7 +18,7 @@ item without complete direct evidence is marked `❌`.
 
 | Surface | Source SHA | Worker version | Cloudflare build | Migrations | Verification |
 | --- | --- | --- | --- | --- | --- |
-| Local issue-554 branch | pre-ledger cut `fe13dd5e` | not deployed | one final build not yet run | no schema, migration, or migration-metadata diff from `c03a142d` | Changed-unit focused lane: 292 passed, 0 failed. Typecheck, full lint, production build, and local browser matrix remain `❌`. |
+| Local issue-554 branch | pre-ledger cut `4e99fe01` | not deployed | diagnostic production build at `2dcc49bb` passed; current cut still needs its final build | no schema, migration, or migration-metadata diff from `c03a142d` | Changed-unit focused lane: 292 passed, 0 failed; typecheck/full lint/guards passed. Narrow browser runs are recorded below, but the current cut is not a complete browser-verified candidate `❌`. |
 | Staging | `c03a142d71e6416c567240117a8e30f526c954a5` | `e37a2d53-e02e-48fb-b24e-230ce9901c62` at 100% | `21882bd0-78d8-4882-b39d-cdbe0f59aac3` | no pending migration | Required run 31227909896 passed with incomplete path coverage; full run 31228552732 failed. This is not a verified candidate `❌`. |
 | Last attributable production release | `4e49e5a37e4a0578bd1b306c4e0822c4fa8bc5c9` | `6254de48-c029-418b-b82f-a4811fb04814` | `cec35b29-4962-4ec9-940b-f3ea63a07038` | migration state at that run only | Run 31142677520 deployed and smoked it; it is no longer the active Worker. |
 | Current production | **unknown `❌`** | `0f4c7155-15df-42f0-8058-9ea531785f90` at 100% | `455d5e33-5755-4c17-b448-6df5a051ddc1` | four pending migrations | No source SHA, workflow run, retained artifact, or route-by-route browser evidence proves this Worker. Production remains quarantined `❌`. |
@@ -102,6 +102,15 @@ The local branch now:
 - verifies rollback by restoring the baseline to 100%, proving the candidate
   absent, purging HTML cache, and only then recording restoration.
 
+The required preview job previously invoked an undefined
+`test:e2e:links-page` package script. `4e99fe01` defines the command and makes
+the release-workflow contract verify that every required named browser command
+actually exists. Local production-artifact browser checks also use a
+preview-shaped `staging.foo.localhost` origin: the platform host remains one
+origin while `x-preview-tenant` selects a tenant, matching deployed preview
+routing. A plain `--local-upstream localhost` rewrites tenant hosts to the
+platform and is not valid tenant-rendering evidence.
+
 Focused workflow/candidate tests pass locally. The workflows are not yet
 pushed or exercised against an exact candidate, so operational proof remains
 `❌`.
@@ -109,6 +118,46 @@ pushed or exercised against an exact candidate, so operational proof remains
 GitHub's Environment API currently returns 404 for `production`. Until an
 authorized repository administrator creates and protects that environment,
 production deployment is deliberately impossible `❌`.
+
+## Local narrow reproductions after the failed full lane
+
+All mutations in this section used the local D1 emulator. Delivery modes were
+`log_only`, and Stripe was overridden with an intentionally unusable
+`sk_test_…` key. No remote provider or environment was called.
+
+| Defect or gate | Narrow local result | Current disposition |
+| --- | --- | --- |
+| Pages unsaved-change/lifecycle tracer | The browser exercised the dirty guards, typed blocks, preview, publication lifecycle, duplication, and reached the final delete. DELETE then returned 500 and Workerd canceled the request as hung. | Nitro's Cloudflare adapter does not forward DELETE bodies; the route alone called `readBody`. `ef71e5af` moves the concurrency token to the query string and adds a repository-wide guard. Rebuilt browser GREEN is pending `❌`. |
+| Saya links lifecycle | Under the valid preview-shaped host, publish rendered `/links` with 200 and returning the page to draft produced the intended 404. | The request-event capture is locally proven for Saya. NCLS/Blawby remains unproven because the sanctioned local fixture is absent `❌`. |
+| Hash navigation from `/links` | The product test passed but the browser emitted first-party `/api/analytics/track` 500 because `route.fullPath` included `#featured-links`. | `d3b81b6c` uses pathname-only tracking and makes the E2E synchronously assert that hash-only navigation emits no analytics request. Rebuilt browser GREEN is pending `❌`. |
+| Canonical blog write | Exact failed-full-lane test passed in 474 ms against local Workerd. | Local GREEN; deployed exact-candidate proof remains `❌`. |
+| Canonical page write | The test failed before its content write because throwaway site creation returned 500. | Blocked by the Better Auth Teams schema drift below `❌`. |
+| Manual onboarding commit | Exact browser journey failed after 1.2 minutes with the visible site-creation error. | Same Better Auth Teams schema drift, not the bounded page-batch implementation `❌`. |
+| Stripe checkout callers | Provider-free canonical caller suite passed 5/5. | Hosted test-mode canary on an exact candidate remains `❌`. |
+| Site creation and ChowBot response | Better Auth unit suite passed 7/7 and ChowBot response suite passed 1/1. | Real Worker site creation still fails at Better Auth `createTeam`; browser proof remains `❌`. |
+
+The local Blawby `/links` test skipped explicitly because `site-ncls-blawby`
+is not present in the current sanctioned seed pipeline. No stale fixture was
+resurrected and no D1 row was hand-created to manufacture a pass.
+
+## Better Auth 1.7 Teams schema blocker
+
+Commit `389f7ac6` upgraded Better Auth to `1.7.0-beta.10`. With Teams enabled,
+that version unconditionally requires an internal persisted
+`team.memberCount` counter. Its organization adapter supplies the field on
+team creation and increments/decrements it for membership changes. The current
+Drizzle `team` model, historical migration `0066_auth_phase_3_teams.sql`, and
+local D1 table do not contain the column, so the Drizzle adapter rejects
+`ensureSiteTeam()` before issuing SQL.
+
+This is not a virtual result field and cannot be corrected by changing the
+site-creation response or bypassing Better Auth. The canonical repair is an
+additive `memberCount` column with a safe generated migration/backfill. That
+cannot be produced while the post-0098 Drizzle journal contradiction is
+unresolved and migration metadata is explicitly frozen for this work. Site
+creation, onboarding, the canonical page test's setup, and ChowBot browser
+proof therefore remain blocked `❌`. No schema, migration, migration metadata,
+or dependency version was changed.
 
 ## Stripe Workbench and catalog ground truth
 
@@ -179,12 +228,12 @@ performed.
 | One recurring subscription/quota model | ADR 0023, runtime semantics, UI/copy, and product-model guard align locally. | Not this branch. | Period/grant/reset/transition/unlimited/legacy tests pass locally. | `❌` until deployed/browser verified |
 | Retire credits, add-ons, auto-top-up, and active fulfillment | Active aliases/writers/UI are removed; historical add-on view is audit-only; guard blocks return. | Not this branch. | Local retirement/guard tests pass; exact candidate not verified. | `❌` release verification |
 | Intentional Stripe prices/catalog | Deterministic test-mode dry-run/apply boundary is landed. | No provider change. | Local tests pass; no approved test-mode provider apply. | `❌` |
-| Better Auth authority plus append-only usage/grants | Billing permission, projection, usage, site/team provisioning, and revocation paths are aligned locally. | Not this branch. | Local invariant tests and boundary guard pass. Three separate legacy writers are documented below. | `❌` |
+| Better Auth authority plus append-only usage/grants | Billing permission, projection, usage, site/team provisioning, and revocation paths are aligned in code. | Not this branch. | Local invariant tests pass, but real Worker site/team provisioning fails because Better Auth 1.7 requires missing persisted `team.memberCount`. Three separate legacy writers are documented below. | `❌` |
 | Billing regression coverage | D1 period, reconciliation, operator, webhook, catalog, canary, and projection tests are landed. | n/a | Changed-unit lane passes; hosted checkout/subscription/invoice canary not run. | `❌` |
-| Typed Pages editors and block lifecycle | Typed fields plus insert/select/duplicate/delete/move/drag/reorder/inline validation are landed. | Older subset on staging. | Unit safety tests pass; exact browser tracer not yet run. | `❌` |
-| Faithful preview and unsaved-change protection | New/select/locale/route/status/delete transitions share the dirty guard; stale responses cannot replace current editor state; Preview uses Nuxt UI's documented `to` prop. | Not this branch. | Local unit tests pass; desktop/mobile browser proof absent. | `❌` |
+| Typed Pages editors and block lifecycle | Typed fields plus insert/select/duplicate/delete/move/drag/reorder/inline validation are landed; DELETE now carries its concurrency token outside the unsupported body. | Older subset on staging. | Local browser tracer exercised the lifecycle through delete and exposed the DELETE-body hang; the fix and guard are unit/lint green but await rebuilt browser proof. | `❌` |
+| Faithful preview and unsaved-change protection | New/select/locale/route/status/delete transitions share the dirty guard; stale responses cannot replace current editor state; Preview uses Nuxt UI's documented `to` prop. | Not this branch. | The local tracer directly exercised and preserved dirty state across leave paths before reaching the separate delete transport failure. Rebuilt desktop/mobile proof remains absent. | `❌` |
 | Registry/canonical revision service and both renderers remain sole truth | Shared service and publication-history deletion guard are landed. | Older subset on staging. | Exact Saya/Blawby editor-to-renderer candidate proof absent. | `❌` |
-| Real browser verification on Saya and Blawby with blocks/media | Browser projects and route matrix are landed. | No new candidate. | Local and deployed desktop/mobile matrix not yet run. | `❌` |
+| Real browser verification on Saya and Blawby with blocks/media | Browser projects and route matrix are landed. | No new candidate. | Saya `/links` is locally proven under preview-shaped routing. The local NCLS test skipped because the fixture is absent; complete local and deployed desktop/mobile matrices remain `❌`. | `❌` |
 | Remove active translation automation while preserving manual locale variants | Explicit source locale prevents source-language fallback from becoming a published non-source variant; localized draft/published behavior remains. | Not this branch. | Focused seed tests pass; staging/browser proof absent. | `❌` |
 | Rename/guard stale fixture, seed, billing, and product names | Active seed naming and recurring-quota copy are corrected; guard owns retired names/signup-wallet phrases. | Not this branch. | Product-model guard passes locally. | `❌` release verification |
 | Attach complete acceptance evidence | This ledger now records known local/environment/provider evidence separately. | n/a | Full lane, benchmark, exact staging, and production evidence remain absent. | `❌` |
@@ -193,12 +242,13 @@ performed.
 
 | Defect | Narrow reproduction and local disposition | Remaining proof |
 | --- | --- | --- |
-| Blawby `/links` returned 404 after API 200 | `97278c15` captures the request event before the async loader boundary; the shared data-loading guard owns the SSR invariant. Temporary `links_ssr_context` and tenant-resolution diagnostics are removed. | Local real browser and exact deployed candidate `❌`. |
+| Blawby `/links` returned 404 after API 200 | `97278c15` captures the request event before the async loader boundary; temporary diagnostics are removed. The Saya publish/200/draft/404 lifecycle passes locally under valid preview-shaped routing. | Local NCLS test skipped because the fixture is absent; exact deployed Blawby candidate proof `❌`. |
 | Owner checkout returned 500 | `d3a9da0f` removes the dead checkout alias and caller tests require the canonical Better Auth subscription path. | Test-mode hosted canary on exact candidate `❌`. |
-| Onboarding commit timed out | `a74d56bd` replaces page writes with constant-count validation/batching; query-count tests cover growth and malformed/empty input. | Local real browser and exact deployed candidate `❌`. |
-| Two canonical content writes timed out | `30153826` bounds canonical blog writes at the owning service/concurrency layer; content contract tests pass. | Local real browser and exact deployed candidate `❌`. |
-| Pages unsaved edits could be discarded | `625891e9`, `b6d54062`, and `eb2550ca` own dirty transitions, request ownership, lifecycle/delete safety, and Preview navigation. | Desktop/mobile browser tracer `❌`. |
-| ChowBot site creation reported failure after a successful route response | `d502c8b8` proves and fixes the response mismatch: UI expected nested `site.id`, route returns `siteId`. | Local browser fixture isolation and exact candidate `❌`. |
+| Onboarding commit timed out | `a74d56bd` replaces page writes with constant-count validation/batching; query-count tests pass 3/3. The exact browser journey now fails earlier at Better Auth team creation because `team.memberCount` is absent. | Safe additive Better Auth schema migration is blocked by the frozen post-0098 metadata contradiction; exact candidate `❌`. |
+| Two canonical content writes timed out | `30153826` bounds canonical writes. The exact blog test passes locally in 474 ms; the page test fails during throwaway site creation before reaching the content write. | Better Auth schema blocker must be resolved before the page test can prove the owning write path; exact candidate `❌`. |
+| Pages unsaved edits could be discarded | `625891e9`, `b6d54062`, and `eb2550ca` own dirty transitions and Preview navigation. The browser tracer exercised them, then exposed the independent Nitro DELETE-body hang. `ef71e5af` moves the concurrency token to the query and guards every DELETE route against `readBody`. | Rebuilt desktop/mobile browser tracer `❌`. |
+| ChowBot site creation reported failure after a successful route response | `d502c8b8` fixes the response mismatch: UI expected nested `site.id`, route returns `siteId`; unit contract passes 1/1. | Real Worker site creation is blocked at Better Auth team creation; exact-candidate ChowBot browser proof `❌`. |
+| Adjacent hash-only navigation emitted analytics 500 | `d3b81b6c` tracks `route.path`, dedupes hash/query-only transitions, and makes the links E2E assert that no analytics POST occurs. | Rebuilt browser proof `❌`. |
 
 ## Adjacent Better Auth debt fully assessed
 
@@ -248,14 +298,19 @@ production reconciliation, grant, reset, migration, or cleanup.
 
 ## Remaining release gates
 
-- Run typecheck, full lint, migration/product/auth guards, and exactly one
-  production build `❌`.
-- Run the required local real-browser desktop/mobile Pages, billing, links,
-  onboarding/content, Saya, Blawby, and ChowBot fixture checks `❌`.
+- Resolve the Better Auth 1.7 `team.memberCount` schema requirement through a
+  safe additive generated migration only after the post-0098 Drizzle journal
+  contradiction is handled under separately authorized migration work `❌`.
+- Run the final production build for the current source cut; the earlier
+  `2dcc49bb` build was diagnostic and predates the DELETE/analytics fixes `❌`.
+- Re-run the rebuilt Pages and links browser cases, then run the remaining
+  local desktop/mobile Pages, billing, onboarding/content, Saya, Blawby, and
+  ChowBot fixture checks. Site-creation-dependent cases and local NCLS proof
+  are currently blocked `❌`.
 - Confirm the persistent Pottery House fixture still has exactly one site
   after ChowBot/site-creation tests `❌`.
-- Freeze and push one source SHA and obtain ordinary PR/CI evidence without
-  mutating shared staging `❌`.
+- Freeze and push one source SHA only after the local blockers clear, then
+  obtain ordinary PR/CI evidence without mutating shared staging `❌`.
 - After an explicit dry-run report and user approval, correct the test-mode
   Workbench contract and dispatch the one locked full staging candidate
   (migrations/reset/seed/deploy/cache/browser/provider mutations) `❌`.
