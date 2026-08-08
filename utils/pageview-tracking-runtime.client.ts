@@ -20,7 +20,7 @@ export function registerPageviewTracking() {
   const trackingIdentity = () => isTenant ? { siteId, locale: $i18n.locale.value } : { platform: true }
   const router = useRouter()
   let pageEnteredAt = Date.now()
-  let currentPath = router.currentRoute.value.fullPath
+  let currentPath = router.currentRoute.value.path
   let lastTrackedPath: string | null = currentPath
   let durationSent = false
   let trackGa4PageView: ((_path: string, _title: string) => void) | null = null
@@ -84,13 +84,13 @@ export function registerPageviewTracking() {
   }
 
   router.afterEach((to, from) => {
-    if (to.fullPath === from.fullPath || to.fullPath === lastTrackedPath) return
+    if (to.path === from.path || to.path === lastTrackedPath) return
     if (isTenant && isPlatformPath(to.path)) return
 
-    trackGa4PageView?.(to.fullPath, document.title)
+    trackGa4PageView?.(to.path, document.title)
     sendDurationBeacon()
     pageEnteredAt = Date.now()
-    currentPath = to.fullPath
+    currentPath = to.path
     lastTrackedPath = currentPath
     durationSent = false
 

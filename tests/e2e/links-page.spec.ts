@@ -119,8 +119,36 @@ test.describe('tenant links page', () => {
       await expect(page.getByRole('link', { name: new RegExp(bookingLabel) })).toBeVisible()
       await expect(page.getByText(hiddenLabel)).toHaveCount(0)
 
+      const postClickAnalyticsRequests: string[] = []
+      const postClickAnalyticsFailures: string[] = []
+      const tenantOrigin = new URL(tenantBaseURL).origin
+      page.on('request', (request) => {
+        const requestUrl = new URL(request.url())
+        if (
+          request.method() === 'POST'
+          && requestUrl.origin === tenantOrigin
+          && requestUrl.pathname === '/api/analytics/track'
+        ) {
+          postClickAnalyticsRequests.push(`${request.method()} ${request.url()}`)
+        }
+      })
+      page.on('response', (response) => {
+        const responseUrl = new URL(response.url())
+        if (
+          response.request().method() === 'POST'
+          && responseUrl.origin === tenantOrigin
+          && responseUrl.pathname === '/api/analytics/track'
+          && response.status() >= 400
+        ) {
+          postClickAnalyticsFailures.push(`${response.request().method()} ${response.url()} (${response.status()})`)
+        }
+      })
+
       await page.getByRole('link', { name: new RegExp(bookingLabel) }).click()
       await expect(page).toHaveURL(`${tenantBaseURL}/links#featured-links`)
+      await expectHealthyPage(page, errors)
+      expect(postClickAnalyticsRequests, 'hash-only navigation must not emit an analytics request').toEqual([])
+      expect(postClickAnalyticsFailures).toEqual([])
 
       const conversionResponse = await request.post(`${tenantBaseURL}/api/public/sites/${DEMO_SITE_ID}/conversion-events`, {
         headers: tenantExtraHeaders,
