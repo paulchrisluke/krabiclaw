@@ -104,10 +104,10 @@ if (isStaging && isPreview) {
   process.exit(1)
 }
 
-// Intentionally no standalone --remote: this script only ever targets throwaway E2E rows
-// (matched by the 'e2e-' subdomain / '@playwright.example' email markers), which is meaningless
-// against production, so it must always be explicitly scoped to --preview or --staging (or
-// default to --local for testing the emitted SQL against a local D1 file).
+// Intentionally no standalone --remote: this script targets non-fixture organizations through
+// the fixed fixture allowlist and age guard, plus guest rows marked '@playwright.example'. That
+// scope is meaningless against production, so it must always be explicitly scoped to --preview
+// or --staging (or default to --local for testing the emitted SQL against a local D1 file).
 const envFlag = isStaging ? '--env staging' : isPreview ? '--env preview' : '--local'
 const remoteFlag = isStaging || isPreview ? '--remote' : ''
 

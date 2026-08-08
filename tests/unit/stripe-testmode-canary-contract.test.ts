@@ -5,10 +5,105 @@ import { resolve } from 'node:path'
 import {
   assertStripeTestCanaryConfig,
   buildStripeCanaryEvidence,
+  readReadiness,
+  type BillingState,
   type StripeTestCanaryEnv,
 } from '../../tests/e2e/helpers/stripe-testmode-canary.ts'
+import { shouldReadStripeTestCanaryBillingState } from '../../server/utils/stripe-testmode-canary.ts'
 
 const repoFile = async (path: string) => readFile(resolve(process.cwd(), path), 'utf8')
+
+function paidGrowthState(): BillingState {
+  return {
+    billing: {
+      organization_id: 'org-e2e-stripe',
+      stripe_customer_id: 'cus_test_123',
+      stripe_subscription_id: 'sub_test_123',
+      status: 'active',
+      plan: 'growth',
+      payment_status: 'paid',
+      current_period_end: '2026-09-08T00:00:00.000Z',
+    },
+    better_auth_subscription: {
+      id: 'ba-sub-123',
+      referenceId: 'org-e2e-stripe',
+      plan: 'growth',
+      status: 'active',
+      stripeCustomerId: 'cus_test_123',
+      stripeSubscriptionId: 'sub_test_123',
+      periodEnd: '2026-09-08T00:00:00.000Z',
+    },
+    entitlements: [
+      { site_id: 'site-a', key: 'plan', value: 'growth' },
+      { site_id: 'site-a', key: 'ai_credits', value: '2000' },
+      { site_id: 'site-b', key: 'plan', value: 'growth' },
+      { site_id: 'site-b', key: 'ai_credits', value: '2000' },
+    ],
+    site_plans: [
+      { site_id: 'site-a', plan: 'growth', status: 'active' },
+      { site_id: 'site-b', plan: 'growth', status: 'active' },
+    ],
+    invoice_payments: [{
+      stripe_invoice_id: 'in_test_123',
+      organization_id: 'org-e2e-stripe',
+      stripe_subscription_id: 'sub_test_123',
+      status: 'paid',
+      last_event_id: 'evt_test_123',
+    }],
+    webhook_events: [{ stripe_event_id: 'evt_test_123', status: 'processed' }],
+  }
+}
+
+test('billing readiness passes only when both created sites and payment projections converge', () => {
+  const readiness = readReadiness(paidGrowthState(), ['site-a', 'site-b'])
+
+  assert.equal(readiness.ready, true)
+  assert.equal(readiness.siteCount, 2)
+  assert.equal(readiness.invoiceStatus, 'paid')
+  assert.equal(readiness.webhookStatus, 'processed')
+})
+
+test('billing readiness rejects partial site projections, extra sites, and mismatched invoice events', () => {
+  const missingEntitlement = paidGrowthState()
+  missingEntitlement.entitlements = missingEntitlement.entitlements.filter(row => (
+    !(row.site_id === 'site-b' && row.key === 'ai_credits')
+  ))
+  assert.equal(readReadiness(missingEntitlement, ['site-a', 'site-b']).ready, false)
+
+  const wrongPlan = paidGrowthState()
+  wrongPlan.site_plans[1]!.plan = 'free'
+  assert.equal(readReadiness(wrongPlan, ['site-a', 'site-b']).ready, false)
+
+  const extraSite = paidGrowthState()
+  extraSite.site_plans.push({ site_id: 'site-extra', plan: 'growth', status: 'active' })
+  extraSite.entitlements.push(
+    { site_id: 'site-extra', key: 'plan', value: 'growth' },
+    { site_id: 'site-extra', key: 'ai_credits', value: '2000' },
+  )
+  assert.equal(readReadiness(extraSite, ['site-a', 'site-b']).ready, false)
+
+  const mismatchedInvoiceEvent = paidGrowthState()
+  mismatchedInvoiceEvent.invoice_payments[0]!.last_event_id = 'evt-other'
+  assert.equal(readReadiness(mismatchedInvoiceEvent, ['site-a', 'site-b']).ready, false)
+})
+
+test('ordinary billing-state reads never enable the provider-dependent Better Auth path', () => {
+  assert.equal(shouldReadStripeTestCanaryBillingState({
+    requested: false,
+    canaryHeader: undefined,
+    secretKey: 'sk_live_never-used',
+  }), false)
+  assert.equal(shouldReadStripeTestCanaryBillingState({
+    requested: true,
+    canaryHeader: '1',
+    secretKey: 'sk_live_never-used',
+  }), false)
+  assert.equal(shouldReadStripeTestCanaryBillingState({
+    requested: true,
+    canaryHeader: '1',
+    secretKey: 'sk_test_canaryonly',
+  }), true)
+})
 
 test('Stripe canary refuses live keys, missing dev route secret, and incomplete candidate identity', () => {
   const base: StripeTestCanaryEnv = {
@@ -66,6 +161,9 @@ test('full lane keeps Stripe provider canary post-promotion and skipped by defau
   assert.match(workflow, /unset WORKER_VERSION_OVERRIDE[\s\S]*RUN_STRIPE_TEST_CANARY=1/)
   assert.match(workflow, /stripe-canary-evidence\.json/)
   assert.match(stateRoute, /listActiveSubscriptions/)
+  assert.match(stateRoute, /include_better_auth/)
+  assert.match(stateRoute, /x-stripe-test-canary/)
+  assert.match(stateRoute, /shouldReadStripeTestCanaryBillingState/)
   assert.match(stateRoute, /referenceId: organizationId/)
   assert.match(stateRoute, /customerType: 'organization'/)
   assert.match(stateRoute, /toWebRequest\(event\)\.headers/)
