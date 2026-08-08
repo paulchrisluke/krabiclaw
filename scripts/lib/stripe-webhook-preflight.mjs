@@ -186,7 +186,7 @@ export async function runStripeWebhookEndpointPreflight({
   // Validate the key and URL before the Stripe client is constructed. This is
   // intentionally the first provider-related operation in the preflight.
   const validatedSecretKey = assertStripeTestSecretKey(secretKey)
-  const normalizedExpectedUrl = normalizeWebhookEndpointUrl(expectedUrl)
+  const normalizedExpectedUrl = assertCanonicalStripeWebhookEndpointUrl(expectedUrl)
   if (typeof stripeFactory !== 'function') throw new TypeError('stripeFactory is required')
 
   const stripe = stripeFactory(validatedSecretKey, {

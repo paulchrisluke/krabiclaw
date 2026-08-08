@@ -142,6 +142,22 @@ test('Stripe webhook preflight refuses the Better Auth internal path as a regist
   )
 })
 
+test('Stripe webhook preflight refuses a wrong destination before provider construction', async () => {
+  let constructed = false
+  await assert.rejects(
+    runStripeWebhookEndpointPreflight({
+      secretKey: 'sk_test_preflight',
+      expectedUrl: 'https://staging.krabiclaw.com/api/auth/stripe/webhook',
+      stripeFactory: () => {
+        constructed = true
+        throw new Error('provider must not be constructed')
+      },
+    }),
+    (error: unknown) => error instanceof StripeWebhookPreflightError && error.code === 'expected_url_path',
+  )
+  assert.equal(constructed, false)
+})
+
 test('Stripe webhook preflight targets the registered application route and shared API contract', async () => {
   const workflow = await readFile(resolve(process.cwd(), '.github/workflows/ci-full.yml'), 'utf8')
   const route = await readFile(resolve(process.cwd(), 'server/api/billing/webhook.post.ts'), 'utf8')
