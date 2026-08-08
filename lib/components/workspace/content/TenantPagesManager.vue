@@ -54,7 +54,7 @@
               <UButton v-if="selected.id && selected.status === 'archived'" color="success" variant="soft" :loading="busy === 'restore'" :disabled="busy !== null" @click="restore">Restore</UButton>
               <UButton v-if="selected.id && !selected.ever_published" color="error" variant="ghost" :loading="busy === 'delete'" :disabled="busy !== null" @click="removePage">Delete</UButton>
               <UButton v-if="selected.id" color="neutral" variant="outline" :disabled="busy !== null" @click="duplicate">Duplicate</UButton>
-              <UButton v-if="selected.id" color="neutral" variant="outline" :href="navigablePreviewUrl" target="_blank" :disabled="busy !== null || !navigablePreviewUrl">Preview</UButton>
+              <UButton v-if="selected.id" color="neutral" variant="outline" :to="navigablePreviewUrl" target="_blank" :disabled="busy !== null || !navigablePreviewUrl">Preview</UButton>
               <UButton color="primary" :loading="busy === 'save'" :disabled="busy !== null" @click="save">Save</UButton>
             </div>
           </div>
