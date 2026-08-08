@@ -269,6 +269,7 @@ test.describe('onboarding wizard UI', () => {
     // again rather than continuing mid-flow from this mobile-only check.
     await page.setViewportSize({ width: 390, height: 844 })
     await page.goto(`${baseURL}/dashboard/onboarding`, { waitUntil: 'load' })
+    await expect(page.locator('[data-onboarding-hydrated="true"]')).toBeVisible()
     await page.getByRole('button', { name: 'Start building' }).click()
     await expect(page.getByRole('button', { name: /Restaurant, café or bar/ })).toBeVisible()
     await expect(page.getByRole('button', { name: /Experience, class or activity/ })).toBeVisible()
