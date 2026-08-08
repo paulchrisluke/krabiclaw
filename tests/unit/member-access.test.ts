@@ -55,6 +55,14 @@ const teamAdapter = {
     teamAdapterCalls.push(`remove:${input.teamId}:${input.userId}`)
     provisionedMemberships.delete(`${input.teamId}:${input.userId}`)
   },
+  listTeamsByUser: async (input: { userId: string }) => {
+    teamAdapterCalls.push(`listTeams:${input.userId}`)
+    return [...provisionedMemberships.values()]
+      .filter(member => member.userId === input.userId)
+      .map(member => provisionedTeams.get(member.teamId))
+      .filter((team): team is { id: string; organizationId: string; name: string } => Boolean(team))
+      .map(team => ({ ...team, createdAt: new Date() }))
+  },
 }
 
 function hasSiteTeam(memberId: unknown, siteId: unknown) {
@@ -146,6 +154,7 @@ const {
   ensureLocationTeam,
   addUserToResourceTeam,
   removeUserFromResourceTeam,
+  removeAllMemberResourceAccess,
 } = await import('../../server/utils/member-access.ts')
 
 test('owner and admin bypass every team check', async () => {
@@ -286,6 +295,30 @@ test('resource team membership add/remove is idempotent through Better Auth Team
   assert.equal(await removeUserFromResourceTeam({} as never, { env, teamId: 'site:site-1', userId: 'user-1' }), true)
   assert.equal(await removeUserFromResourceTeam({} as never, { env, teamId: 'site:site-1', userId: 'user-1' }), false)
   assert.equal(provisionedMemberships.size, 0)
+})
+
+test('bulk resource access removal only revokes matching-organization teams and is idempotent', async () => {
+  provisionedTeams.clear()
+  provisionedMemberships.clear()
+  teamAdapterCalls.length = 0
+  provisionedTeams.set('site:org-one', { id: 'site:org-one', organizationId: 'org-1', name: 'Org one' })
+  provisionedTeams.set('site:org-two', { id: 'site:org-two', organizationId: 'org-2', name: 'Org two' })
+
+  const env = {} as never
+  await addUserToResourceTeam({} as never, { env, teamId: 'site:org-one', userId: 'user-shared' })
+  await addUserToResourceTeam({} as never, { env, teamId: 'site:org-two', userId: 'user-shared' })
+
+  await removeAllMemberResourceAccess({} as never, { env, organizationId: 'org-1', userId: 'user-shared' })
+  assert.equal(provisionedMemberships.has('site:org-one:user-shared'), false)
+  assert.equal(provisionedMemberships.has('site:org-two:user-shared'), true)
+
+  await assert.doesNotReject(() => removeAllMemberResourceAccess({} as never, {
+    env,
+    organizationId: 'org-1',
+    userId: 'user-shared',
+  }))
+  await removeAllMemberResourceAccess({} as never, { env, organizationId: 'org-no-match', userId: 'user-shared' })
+  assert.equal(provisionedMemberships.has('site:org-two:user-shared'), true)
 })
 
 test('resource team provisioning rejects a deterministic id owned by another organization', async () => {

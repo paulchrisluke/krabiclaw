@@ -267,6 +267,7 @@ async function checkMigratedTeamProvisioning() {
   for (const [start, end, label] of [
     ['export async function addUserToResourceTeam', 'export async function removeUserFromResourceTeam', 'addUserToResourceTeam'],
     ['export async function removeUserFromResourceTeam', 'export async function removeMemberResourceAccess', 'removeUserFromResourceTeam'],
+    ['export async function removeAllMemberResourceAccess', 'export async function memberHasTeamAccess', 'removeAllMemberResourceAccess'],
   ]) {
     const startIndex = memberAccess.indexOf(start)
     const endIndex = memberAccess.indexOf(end, startIndex + start.length)

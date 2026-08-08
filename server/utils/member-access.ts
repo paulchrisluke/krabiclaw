@@ -264,12 +264,16 @@ export async function removeMemberResourceAccess(
 // accumulate site/location team memberships over time (each accepted or
 // re-scoped invitation adds one via addMemberResourceAccess), so demoting or
 // promoting them to a non-scoped role has to sweep all of them, not just one.
-export async function removeAllMemberResourceAccess(db: DbClient, input: { organizationId: string; userId: string }): Promise<void> {
-  await execute(db, `
-    DELETE FROM teamMember
-    WHERE userId = ?
-      AND teamId IN (SELECT id FROM team WHERE organizationId = ?)
-  `, [input.userId, input.organizationId])
+export async function removeAllMemberResourceAccess(
+  _db: DbClient,
+  input: { env: CloudflareEnv; organizationId: string; userId: string },
+): Promise<void> {
+  const adapter = await organizationAdapter(input.env)
+  const teams = await adapter.listTeamsByUser({ userId: input.userId })
+  for (const team of teams) {
+    if (team.organizationId !== input.organizationId) continue
+    await adapter.removeTeamMember({ teamId: team.id, userId: input.userId })
+  }
 }
 
 export async function memberHasTeamAccess(db: DbClient, input: { userId: string; teamId: string | null }): Promise<boolean> {

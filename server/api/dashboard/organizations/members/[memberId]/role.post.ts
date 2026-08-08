@@ -116,7 +116,7 @@ export default defineEventHandler(async (event) => {
       locationId,
     })
   } else if (isScopedRole(target.role)) {
-    await removeAllMemberResourceAccess(db, { organizationId: organization.id, userId: target.userId })
+    await removeAllMemberResourceAccess(db, { env, organizationId: organization.id, userId: target.userId })
   }
 
   return jsonResponse({ success: true, memberId: target.id, role })
