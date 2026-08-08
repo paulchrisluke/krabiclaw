@@ -18,13 +18,16 @@ test('admin add-on history view is explicitly read-only and audit-only', () => {
   assert.match(source, /Historical service add-on audit \(read-only\)/)
   assert.match(source, /Retired service add-on records are preserved for audit only/)
   assert.match(source, /No historical service add-on records/)
-  assert.match(source, /Show all historical records/)
+  assert.match(source, /\/api\/admin\/fulfillment\?all=1/)
+  assert.match(source, /v-if="record\.fulfilled_at"/)
+  assert.match(source, /Historical status: fulfilled/)
+  assert.match(source, /Historical status: unfulfilled/)
   assert.match(source, /Failed to load historical service add-on records/)
   assert.doesNotMatch(source, /No pending service add-ons/)
   assert.doesNotMatch(source, /Show fulfilled/)
   assert.doesNotMatch(source, /Refresh queue/)
   assert.doesNotMatch(source, /Failed to load queue/)
-  assert.doesNotMatch(source, /queueLoading|loadQueue|showAllPurchases/)
+  assert.doesNotMatch(source, /queueLoading|loadQueue|showAllPurchases|showAllHistory|UCheckbox/)
 })
 
 test('dashboard navigation names the retired surface as historical and read-only', () => {

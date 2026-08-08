@@ -44,6 +44,10 @@
               <div class="min-w-0">
                 <p class="font-semibold text-default">{{ historicalAddonLabel(record.addon_type) }}</p>
                 <p class="text-sm text-muted truncate">{{ record.org_name }} · {{ formatDate(record.created_at) }}</p>
+                <p v-if="record.fulfilled_at" class="text-xs text-success mt-1">
+                  Historical status: fulfilled · {{ formatDate(record.fulfilled_at) }}
+                </p>
+                <p v-else class="text-xs text-warning mt-1">Historical status: unfulfilled</p>
               </div>
             </div>
             <div class="flex items-center gap-2 shrink-0">
@@ -60,10 +64,6 @@
               </UButton>
             </div>
           </div>
-        </div>
-
-        <div class="flex items-center gap-2">
-          <UCheckbox v-model="showAllHistory" label="Show all historical records" @update:model-value="loadHistory" />
         </div>
       </div>
     </template>
@@ -93,12 +93,13 @@ const isHistoricalRecordsResponse = (value: unknown): value is { purchases: Hist
     isRecord(purchase)
     && typeof purchase.id === 'string'
     && typeof purchase.organization_id === 'string'
-    && typeof purchase.addon_type === 'string',
+    && typeof purchase.addon_type === 'string'
+    && typeof purchase.created_at === 'string'
+    && (purchase.fulfilled_at === null || typeof purchase.fulfilled_at === 'string'),
   )
 
 const records = ref<HistoricalServiceAddonRecord[]>([])
 const historyLoading = ref(false)
-const showAllHistory = ref(false)
 
 const HISTORICAL_ADDON_LABELS: Record<string, string> = {
   seasonal: 'Seasonal Relaunch',
@@ -121,7 +122,7 @@ async function loadHistory() {
   historyLoading.value = true
   try {
     const res = await applicationFetch<{ purchases: HistoricalServiceAddonRecord[] }>(
-      `/api/admin/fulfillment?all=${showAllHistory.value ? '1' : '0'}`,
+      '/api/admin/fulfillment?all=1',
       { validate: isHistoricalRecordsResponse },
     )
     records.value = res.purchases
