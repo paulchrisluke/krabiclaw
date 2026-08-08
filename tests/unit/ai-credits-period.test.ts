@@ -311,6 +311,26 @@ test('trial access fails closed when the projected trial boundary is absent or m
   )
 })
 
+test('historical trialing payment status remains a valid projected subscription', async () => {
+  const db = createDb()
+  seedBillingProjection(db, {
+    organizationId: 'org-historical-trial',
+    plan: 'growth',
+    status: 'trialing',
+    paymentStatus: 'trialing',
+    currentPeriodEnd: '2026-08-31T00:00:00.000Z',
+  })
+
+  const status = await getAiQuotaStatus(
+    db as never,
+    'org-historical-trial',
+    null,
+    new Date('2026-08-10T00:00:00.000Z'),
+  )
+  assert.equal(status.plan, 'growth')
+  assert.equal(status.weeklyLimit, 2000)
+})
+
 test('plan transitions A to B to A materialize a new baseline in one UTC week', async () => {
   const db = createDb()
   seedBillingProjection(db, {
@@ -517,7 +537,7 @@ test('quota grants remain pending and do not mutate a quarantined legacy balance
     }],
   })
 
-  assert.equal(inserted, true)
+  assert.equal(inserted, false)
   const balance = db.prepare('SELECT balance, lifetime_used, balance_period_key FROM ai_credits WHERE organization_id = ?').get('org-legacy-grant') as { balance: number; lifetime_used: number; balance_period_key: string | null }
   assert.deepEqual(balance, { balance: 123, lifetime_used: 42, balance_period_key: null })
   const grants = db.prepare('SELECT grant_type, applied_at FROM usage_quota_grants WHERE organization_id = ? ORDER BY grant_type').all('org-legacy-grant') as Array<{ grant_type: string; applied_at: string | null }>
@@ -525,6 +545,65 @@ test('quota grants remain pending and do not mutate a quarantined legacy balance
     { grant_type: 'manual', applied_at: null },
     { grant_type: 'reset', applied_at: null },
   ])
+})
+
+test('legacy balances still meter nonblocking flat usage without a quota debit', async () => {
+  const db = createDb()
+  db.prepare(`
+    INSERT INTO ai_credits
+      (organization_id, balance, lifetime_used, balance_period_key, updated_at)
+    VALUES (?, ?, 42, NULL, ?)
+  `).run('org-legacy-flat', 123, '2026-08-01T00:00:00.000Z')
+
+  const result = await chargeFlatCredits(db as never, 'org-legacy-flat', {
+    action: 'google_places_details',
+    idempotencyKey: 'legacy-flat-1',
+    now: new Date('2026-08-10T12:00:00.000Z'),
+  })
+
+  assert.equal(result.charged, false)
+  assert.equal(result.creditsCharged, 0)
+  const balance = db.prepare('SELECT balance, lifetime_used, balance_period_key FROM ai_credits WHERE organization_id = ?').get('org-legacy-flat') as { balance: number; lifetime_used: number; balance_period_key: string | null }
+  assert.deepEqual(balance, { balance: 123, lifetime_used: 45, balance_period_key: null })
+  const event = db.prepare('SELECT quantity, metadata_json FROM usage_events WHERE organization_id = ?').get('org-legacy-flat') as { quantity: number; metadata_json: string }
+  assert.equal(event.quantity, 3)
+  assert.equal(JSON.parse(event.metadata_json).charged, false)
+  const log = db.prepare('SELECT credits_charged FROM ai_usage_log WHERE organization_id = ?').get('org-legacy-flat') as { credits_charged: number }
+  assert.equal(log.credits_charged, 0)
+})
+
+test('idempotent replays fail closed when legacy charged metadata is missing or malformed', async () => {
+  const db = createDb()
+  db.prepare(`
+    INSERT INTO usage_events
+      (id, organization_id, resource, source, quantity, unit, metadata_json, idempotency_key, created_at)
+    VALUES (?, ?, 'maps_api', 'places', 3, 'credit', ?, ?, ?),
+           (?, ?, 'maps_api', 'places', 3, 'credit', ?, ?, ?)
+  `).run(
+    'legacy-null-metadata',
+    'org-legacy-replay',
+    null,
+    'legacy-replay-null',
+    '2026-08-10T10:00:00.000Z',
+    'legacy-invalid-metadata',
+    'org-legacy-replay',
+    'not-json',
+    'legacy-replay-invalid',
+    '2026-08-10T10:01:00.000Z',
+  )
+
+  const nullReplay = await chargeFlatCredits(db as never, 'org-legacy-replay', {
+    action: 'google_places_details',
+    idempotencyKey: 'legacy-replay-null',
+  })
+  const malformedReplay = await chargeFlatCredits(db as never, 'org-legacy-replay', {
+    action: 'google_places_details',
+    idempotencyKey: 'legacy-replay-invalid',
+  })
+  assert.equal(nullReplay.charged, false)
+  assert.equal(nullReplay.creditsCharged, 0)
+  assert.equal(malformedReplay.charged, false)
+  assert.equal(malformedReplay.creditsCharged, 0)
 })
 
 test('same-plan subscription updates do not refill the current week', async () => {

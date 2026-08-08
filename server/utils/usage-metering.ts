@@ -341,7 +341,9 @@ export async function grantQuota(db: DbClient, input: QuotaGrantInput): Promise<
   statements.push(markGrantAppliedQuery(input, createdAt))
 
   const results = await executeBatch(db, statements)
-  return Number(results[grantStatementIndex]?.meta.changes ?? 0) > 0
+  const grantInserted = Number(results[grantStatementIndex]?.meta.changes ?? 0) > 0
+  const grantApplied = Number(results[results.length - 1]?.meta.changes ?? 0) > 0
+  return isAiCreditGrant(input) ? grantApplied : grantInserted
 }
 
 /**

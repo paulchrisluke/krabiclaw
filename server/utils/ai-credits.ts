@@ -81,7 +81,7 @@ const KNOWN_SUBSCRIPTION_STATUSES = new Set([
   'processing',
   'inactive',
 ])
-const KNOWN_PAYMENT_STATUSES = new Set(['unknown', 'paid', 'processing', 'failed', 'pending'])
+const KNOWN_PAYMENT_STATUSES = new Set(['unknown', 'paid', 'processing', 'failed', 'pending', 'trialing', 'past_due'])
 
 function validateBillingProjection(row: BillingProjectionRow): void {
   const subscriptionFields = [
@@ -294,11 +294,11 @@ export const ACTION_CREDIT_COSTS = {
 export type FlatCreditAction = keyof typeof ACTION_CREDIT_COSTS
 
 function flatUsageWasCharged(metadataJson: string | null | undefined): boolean {
-  if (!metadataJson) return true
+  if (!metadataJson) return false
   try {
     return JSON.parse(metadataJson).charged === true
   } catch {
-    return true
+    return false
   }
 }
 
@@ -641,10 +641,7 @@ export async function chargeFlatCredits(
     const usage = usageForFlatCreditAction(opts.action)
     await getOrCreateCredits(db, organizationId, nowDate)
     const quota = await getAiQuotaStatus(db, organizationId, null, nowDate)
-    if (quota.reconciliationRequired) {
-      throw new Error('AI quota requires approved reconciliation before use.')
-    }
-    const finiteQuota = quota.weeklyLimit !== null
+    const debitEligible = !quota.reconciliationRequired && quota.weeklyLimit !== null
     const eventId = crypto.randomUUID()
     const logId = crypto.randomUUID()
     const baseMetadata = {
@@ -677,7 +674,7 @@ export async function chargeFlatCredits(
           usage.channel,
           credits,
           usage.unit,
-          finiteQuota ? 1 : 0,
+          debitEligible ? 1 : 0,
           credits,
           chargedMetadata,
           unchargedMetadata,
