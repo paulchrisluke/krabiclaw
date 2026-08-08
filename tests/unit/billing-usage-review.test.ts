@@ -5,6 +5,14 @@ import {
   getEffectiveAccessPlan,
   PAST_DUE_GRACE_PERIOD_MS,
 } from '../../server/utils/billing-access.ts'
+import { getPlanEntitlements } from '../../server/utils/billing-entitlements.ts'
+
+test('custom page entitlement follows the Growth-or-higher plan policy', () => {
+  assert.equal(getPlanEntitlements('free').custom_pages, false)
+  for (const plan of ['growth', 'managed', 'seo_accelerator']) {
+    assert.equal(getPlanEntitlements(plan).custom_pages, true)
+  }
+})
 
 test('effective access is derived from subscription status', () => {
   const now = new Date('2026-08-05T00:00:00.000Z')
@@ -525,6 +533,30 @@ test('past-due projection keeps billing history but projects free entitlements',
   assert.ok(sitePlanUpdate?.params?.includes('free'))
   const billingHistory = queries.find(query => query.query.includes('organization_billing'))
   assert.ok(billingHistory?.params?.includes('growth'))
+})
+
+test('subscription projection publishes custom_pages for Growth and higher', async () => {
+  capturedBatches = []
+  mockPaymentRow = {
+    payment_status: 'paid',
+    paid_through: '2026-09-01T00:00:00.000Z',
+    past_due_since: null,
+    last_paid_invoice_id: null,
+  }
+  await projectOrganizationSubscription({} as never, {
+    organizationId: 'org-1',
+    customerId: 'cus-1',
+    subscriptionId: 'sub-1',
+    plan: 'growth',
+    status: 'active',
+    paymentStatus: 'paid',
+    periodEnd: new Date('2026-09-01T00:00:00.000Z'),
+  })
+  const customPageEntitlement = capturedBatches
+    .flat()
+    .find(query => query.query.includes('INSERT INTO organization_entitlements') && query.params?.[2] === 'custom_pages')
+  assert.ok(customPageEntitlement)
+  assert.equal(customPageEntitlement?.params?.[3], 'true')
 })
 
 test('subscription projection never overwrites payment markers', async () => {

@@ -9,6 +9,7 @@ export type EntitlementsMap = Record<string, EntitlementValue>
 export function getPlanEntitlements(plan: string): EntitlementsMap {
   const base: EntitlementsMap = {
     plan,
+    custom_pages: false,
     custom_domains: false,
     google_business: false,
     remove_branding: false,
@@ -27,6 +28,7 @@ export function getPlanEntitlements(plan: string): EntitlementsMap {
     case 'growth':
       return {
         ...base,
+        custom_pages: true,
         ai_credits: 2000,
         ai_session_credits: 500,
         google_business: true,
@@ -38,6 +40,7 @@ export function getPlanEntitlements(plan: string): EntitlementsMap {
     case 'managed':
       return {
         ...base,
+        custom_pages: true,
         ai_credits: 'unlimited',
         ai_session_credits: 'unlimited',
         managed_service: true,
@@ -50,6 +53,7 @@ export function getPlanEntitlements(plan: string): EntitlementsMap {
     case 'seo_accelerator':
       return {
         ...base,
+        custom_pages: true,
         ai_credits: 'unlimited',
         ai_session_credits: 'unlimited',
         managed_service: true,
