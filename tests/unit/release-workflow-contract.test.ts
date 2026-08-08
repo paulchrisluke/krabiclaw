@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import test from 'node:test'
 import { readFile } from 'node:fs/promises'
 import { parse } from 'yaml'
@@ -163,21 +164,40 @@ test('production release checks the exact protected Environment before every mut
   assert.equal(environmentPreflight.environment, undefined)
   assert.equal(environmentPreflight.permissions?.actions, 'read')
   assert.equal(environmentPreflight.permissions?.contents, 'read')
-  assert.match(environmentPreflight.if ?? '', /inputs\.operation == 'preflight'/)
   assert.match(environmentPreflight.if ?? '', /inputs\.operation == 'deploy'/)
+  assert.doesNotMatch(environmentPreflight.if ?? '', /inputs\.operation == 'preflight'/)
   const protectionScript = runScript(environmentPreflight, 'Require the protected production Environment')
   assert.match(protectionScript, /\/environments\/production/)
   assert.match(protectionScript, /http_status/)
   assert.match(protectionScript, /http_status.*200/)
+  assert.match(protectionScript, /--connect-timeout 10/)
+  assert.match(protectionScript, /--max-time 20/)
+  assert.match(protectionScript, /--retry 0/)
   assert.match(protectionScript, /protection_rules/)
   assert.match(protectionScript, /required_reviewers/)
+  assert.match(protectionScript, /prevent_self_review == true/)
   assert.match(protectionScript, /reviewers/)
   assert.doesNotMatch(protectionScript, /\b(?:POST|PUT|PATCH|DELETE)\b/)
 
-  assert.deepEqual(jobs.preflight?.needs, ['production-environment-preflight'])
+  assert.equal(jobs.preflight?.needs, undefined)
   assert.deepEqual(jobs['deploy-production']?.needs, ['production-environment-preflight'])
   assert.equal((jobs['deploy-production']?.environment as { name?: string })?.name, 'production')
   assert.match(jobs['deploy-production']?.if ?? '', /needs\.production-environment-preflight\.result == 'success'/)
+
+  const jqFilter = protectionScript.match(/if ! jq -e '([\s\S]*?)' "\$response"/)?.[1]
+  assert.ok(jqFilter, 'Environment protection jq filter must be present')
+  const evaluate = (protectionRules: unknown[]) => spawnSync(
+    'jq',
+    ['-e', jqFilter],
+    {
+      input: JSON.stringify({ name: 'production', protection_rules: protectionRules }),
+      encoding: 'utf8',
+    },
+  )
+  const reviewer = { reviewer: { login: 'release-reviewer' } }
+  assert.equal(evaluate([{ type: 'required_reviewers', prevent_self_review: true, reviewers: [reviewer] }]).status, 0)
+  assert.notEqual(evaluate([{ type: 'required_reviewers', prevent_self_review: false, reviewers: [reviewer] }]).status, 0)
+  assert.notEqual(evaluate([{ type: 'required_reviewers', reviewers: [reviewer] }]).status, 0)
 })
 
 test('production rollback verifies baseline traffic and purges cache before claiming restoration', async () => {
