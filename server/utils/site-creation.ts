@@ -19,6 +19,7 @@ interface UserOrganizationSiteRow {
 }
 
 type OrganizationAdapter = ReturnType<typeof getOrgAdapter>
+const SITE_CREATION_MARKER_KEY = '__krabiclaw_site_creation_marker'
 
 interface CreateOrganizationApi {
   createOrganization(_input: {
@@ -27,6 +28,7 @@ interface CreateOrganizationApi {
       slug: string
       userId: string
       keepCurrentActiveOrganization: true
+      metadata: Record<string, string>
     }
   }): Promise<{ id: string }>
 }
@@ -70,7 +72,8 @@ export async function runSiteCreation(
   env: SetupEnv,
   db: D1Database,
   userId: string,
-  params: { name: string; subdomain: string; vertical: SiteVertical }
+  params: { name: string; subdomain: string; vertical: SiteVertical },
+  options?: { beforeSiteMutation?: (_organizationId: string) => Promise<void> },
 ): Promise<SiteCreationResult> {
   const { name, vertical } = params
   const normalizedSubdomain = params.subdomain.toLowerCase()
@@ -88,6 +91,7 @@ export async function runSiteCreation(
     const storedVertical = toStoredVertical(vertical)
 
     const { organizationId, existingRetrySiteId } = await resolveCreationOrganization(env, db, userId, name)
+    await options?.beforeSiteMutation?.(organizationId)
     if (existingRetrySiteId) {
       // A retry (pending/failed site from a previous attempt) may have been created
       // under a stale default (theme_id='saya-theme-v1', vertical='restaurant') —
@@ -198,6 +202,7 @@ export async function createOrganizationForSite(env: CloudflareEnv, userId: stri
   const slug = await uniqueOrganizationSlug(adapter, name)
   const auth = createAuth(env)
   const organizationApi = auth.api as unknown as CreateOrganizationApi
+  const creationMarker = crypto.randomUUID()
   try {
     const organization = await organizationApi.createOrganization({
       body: {
@@ -205,8 +210,24 @@ export async function createOrganizationForSite(env: CloudflareEnv, userId: stri
         slug,
         userId,
         keepCurrentActiveOrganization: true,
+        metadata: { [SITE_CREATION_MARKER_KEY]: creationMarker },
       },
     })
+    const created = await adapter.findOrganizationBySlug(slug)
+    if (created?.id === organization.id) {
+      const metadata = organizationMetadata(created.metadata)
+      if (metadata[SITE_CREATION_MARKER_KEY] === creationMarker) {
+        Reflect.deleteProperty(metadata, SITE_CREATION_MARKER_KEY)
+        await adapter.updateOrganization(organization.id, {
+          metadata,
+        }).catch((cleanupError) => {
+          console.error('Failed to clear site creation marker', {
+            organizationId: organization.id,
+            error: cleanupError instanceof Error ? cleanupError : new Error(String(cleanupError)),
+          })
+        })
+      }
+    }
     return { organizationId: organization.id }
   } catch (error) {
     // Better Auth creates the organization before adding its owner member.
@@ -219,7 +240,9 @@ export async function createOrganizationForSite(env: CloudflareEnv, userId: stri
         userId,
         organizationId: partial.id,
       }).catch(() => null)
-      if (!expectedOwner || String(expectedOwner.role) !== 'owner') {
+      const metadata = organizationMetadata(partial.metadata)
+      if (metadata[SITE_CREATION_MARKER_KEY] === creationMarker
+        && (!expectedOwner || String(expectedOwner.role) !== 'owner')) {
         await adapter.deleteOrganization(partial.id).catch((cleanupError) => {
           console.error('Failed to clean up partially-created organization', {
             organizationId: partial.id,
@@ -230,6 +253,21 @@ export async function createOrganizationForSite(env: CloudflareEnv, userId: stri
     }
     throw error
   }
+}
+
+function organizationMetadata(value: unknown): Record<string, unknown> {
+  if (isMetadataRecord(value)) return { ...value }
+  if (typeof value !== 'string') return {}
+  try {
+    const parsed: unknown = JSON.parse(value)
+    return isMetadataRecord(parsed) ? { ...parsed } : {}
+  } catch {
+    return {}
+  }
+}
+
+function isMetadataRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
 async function uniqueOrganizationSlug(adapter: OrganizationAdapter, name: string) {

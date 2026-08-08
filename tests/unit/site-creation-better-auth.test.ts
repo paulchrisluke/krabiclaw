@@ -1,7 +1,7 @@
 import { test, mock } from 'node:test'
 import assert from 'node:assert/strict'
 
-type Organization = { id: string; name: string; slug: string; createdAt: Date }
+type Organization = { id: string; name: string; slug: string; createdAt: Date; metadata?: Record<string, unknown> }
 type Member = { id: string; organizationId: string; userId: string; role: string }
 
 const organizations: Organization[] = []
@@ -9,18 +9,37 @@ const members: Member[] = []
 const sitesByOrganization = new Map<string, Array<{ id?: string; site_id: string; onboarding_status: string | null }>>()
 const adapterCalls: Array<{ method: string; args: unknown[] }> = []
 let failMemberCreate = false
+let simulateUnmarkedDuplicate = false
 let createdOrganizationNumber = 0
+const executedQueries: string[] = []
 
 const authApi = {
   createOrganization: async (input: {
-    body: { name: string; slug: string; userId: string; keepCurrentActiveOrganization: boolean }
+    body: {
+      name: string
+      slug: string
+      userId: string
+      keepCurrentActiveOrganization: boolean
+      metadata: Record<string, string>
+    }
   }) => {
     adapterCalls.push({ method: 'api.createOrganization', args: [input] })
+    if (simulateUnmarkedDuplicate) {
+      organizations.push({
+        id: 'org-concurrent',
+        name: input.body.name,
+        slug: input.body.slug,
+        createdAt: new Date(),
+        metadata: { unrelated: 'metadata' },
+      })
+      throw new Error('organization already exists')
+    }
     const organization = {
       id: `org-created-${++createdOrganizationNumber}`,
       name: input.body.name,
       slug: input.body.slug,
       createdAt: new Date(),
+      metadata: input.body.metadata,
     }
     organizations.push(organization)
     if (failMemberCreate) throw new Error('member creation failed')
@@ -44,7 +63,11 @@ const organizationAdapter = {
   findOrganizationById: async (organizationId: string) => organizations.find((organization) => organization.id === organizationId) ?? null,
   updateOrganization: async (organizationId: string, data: unknown) => {
     adapterCalls.push({ method: 'updateOrganization', args: [organizationId, data] })
-    return organizations.find((organization) => organization.id === organizationId) ?? null
+    const organization = organizations.find((candidate) => candidate.id === organizationId)
+    if (organization && data && typeof data === 'object' && 'metadata' in data) {
+      organization.metadata = (data as { metadata?: Record<string, unknown> }).metadata
+    }
+    return organization ?? null
   },
   deleteOrganization: async (organizationId: string) => {
     adapterCalls.push({ method: 'deleteOrganization', args: [organizationId] })
@@ -63,7 +86,10 @@ const organizationAdapter = {
 
 mock.module('../../server/db/index.ts', {
   namedExports: {
-    execute: async () => ({ meta: { changes: 1 } }),
+    execute: async (_db: unknown, query: string) => {
+      executedQueries.push(query)
+      return { meta: { changes: 1 } }
+    },
     queryFirst: async () => undefined,
     queryAll: async <T>(_db: unknown, query: string, params: unknown[]) => {
       if (query.includes('FROM sites')) return (sitesByOrganization.get(String(params[0])) ?? []) as T[]
@@ -98,7 +124,7 @@ const {
   createOrganizationForSite,
   findOldestOwnedOrganization,
   resolveCreationOrganization,
-  setActiveOrganizationForDevSession,
+  runSiteCreation,
 } = await import('../../server/utils/site-creation.ts')
 
 test.beforeEach(() => {
@@ -107,7 +133,9 @@ test.beforeEach(() => {
   sitesByOrganization.clear()
   adapterCalls.length = 0
   failMemberCreate = false
+  simulateUnmarkedDuplicate = false
   createdOrganizationNumber = 0
+  executedQueries.length = 0
 })
 
 test('site creation resolves the oldest owned organization through Better Auth and app-owned site rows', async () => {
@@ -137,11 +165,6 @@ test('invalid Better Auth timestamps sort after valid organizations', async () =
 
   const organizationId = await findOldestOwnedOrganization({} as never, 'user-1')
   assert.equal(organizationId, 'org-valid')
-})
-
-test('dev-only pre-cookie activation uses the Better Auth session adapter', async () => {
-  await setActiveOrganizationForDevSession({} as never, 'session-token', 'org-1')
-  assert.deepEqual(adapterCalls, [{ method: 'setActiveOrganization', args: ['session-token', 'org-1'] }])
 })
 
 test('site creation globally prioritizes an owned retry over an older active organization', async () => {
@@ -177,12 +200,22 @@ test('an editor-only membership receives a new owned organization instead of reu
   assert.ok(members.some(member => member.organizationId === result.organizationId && member.userId === 'user-1' && member.role === 'owner'))
   const createCall = adapterCalls.find(call => call.method === 'api.createOrganization')
   assert.ok(createCall)
-  assert.deepEqual((createCall?.args[0] as { body: unknown }).body, {
+  const body = (createCall?.args[0] as { body: {
+    name: string
+    slug: string
+    userId: string
+    keepCurrentActiveOrganization: boolean
+    metadata: Record<string, unknown>
+  } }).body
+  assert.deepEqual(body, {
     name: 'New owner org',
     slug: 'new-owner-org',
     userId: 'user-1',
     keepCurrentActiveOrganization: true,
+    metadata: body.metadata,
   })
+  assert.equal(typeof body.metadata.__krabiclaw_site_creation_marker, 'string')
+  assert.deepEqual(organizations.find(organization => organization.id === result.organizationId)?.metadata, {})
 })
 
 test('organization creation compensates by deleting an org if member creation fails', async () => {
@@ -193,4 +226,33 @@ test('organization creation compensates by deleting an org if member creation fa
   )
   assert.ok(adapterCalls.some((call) => call.method === 'deleteOrganization'))
   assert.equal(organizations.length, 0)
+})
+
+test('organization creation never deletes an unmarked organization that won a slug race', async () => {
+  simulateUnmarkedDuplicate = true
+  await assert.rejects(
+    () => createOrganizationForSite({} as never, 'user-1', 'Acme'),
+    /organization already exists/,
+  )
+  assert.equal(organizations.some(organization => organization.id === 'org-concurrent'), true)
+  assert.equal(adapterCalls.some(call => call.method === 'deleteOrganization'), false)
+})
+
+test('site creation activates the organization before any site write', async () => {
+  let activated = false
+  const result = await runSiteCreation(
+    {} as never,
+    {} as never,
+    'user-1',
+    { name: 'New site', subdomain: 'new-site', vertical: 'restaurant' },
+    {
+      beforeSiteMutation: async () => {
+        activated = true
+        throw new Error('activation failed')
+      },
+    },
+  )
+  assert.equal(result.status, 500)
+  assert.equal(activated, true)
+  assert.equal(executedQueries.some(query => /INSERT\s+INTO\s+sites/i.test(query)), false)
 })

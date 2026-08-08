@@ -34,21 +34,16 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const result = await runSiteCreation(env, db, session.user.id, {
-    name,
-    subdomain,
-    vertical: vertical as SiteVertical
-  })
-  if (result.status === 200 && 'organizationId' in result.data) {
-    const auth = createAuth(env)
-    const activeOrganizationApi = auth.api as unknown as SetActiveOrganizationApi
+  const auth = createAuth(env)
+  const activeOrganizationApi = auth.api as unknown as SetActiveOrganizationApi
+  const activateOrganization = async (organizationId: string) => {
     const response = await activeOrganizationApi.setActiveOrganization({
-      body: { organizationId: String(result.data.organizationId) },
+      body: { organizationId },
       headers: getHeaders(event) as HeadersInit,
       asResponse: true,
     })
     if (!response.ok) {
-      return jsonResponse({ error: 'Failed to activate the new organization' }, { status: response.status || 502 })
+      throw new Error(`Failed to activate the new organization (${response.status || 502})`)
     }
     const headerBag = response.headers as Headers & {
       getSetCookie?: () => string[]
@@ -64,5 +59,13 @@ export default defineEventHandler(async (event) => {
       appendResponseHeader(event, 'set-cookie', cookieValue)
     }
   }
+
+  const result = await runSiteCreation(env, db, session.user.id, {
+    name,
+    subdomain,
+    vertical: vertical as SiteVertical
+  }, {
+    beforeSiteMutation: activateOrganization,
+  })
   return jsonResponse(result.data, { status: result.status })
 })
