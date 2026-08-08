@@ -385,10 +385,13 @@ function periodBalanceKey(period: HistoricalUsageReconciliationPeriod): string {
 
 function assertHistoricalInput(input: HistoricalUsageReconciliationInput, period: HistoricalUsageReconciliationPeriod): void {
   safeKey(input.organizationId, 'organizationId', 128)
+  requiredString(input.reason, 'reason', 1000)
   safeKey(input.idempotencyKey, 'idempotencyKey', 200)
-  const cutoff = Date.parse(input.cutoffAt)
+  const cutoffValue = requiredString(input.cutoffAt, 'cutoffAt', 64)
+  const cutoffDate = new Date(cutoffValue)
+  const cutoff = cutoffDate.getTime()
   const periodStart = Date.parse(period.start)
-  if (!Number.isFinite(cutoff) || !Number.isFinite(periodStart)) {
+  if (!Number.isFinite(cutoff) || cutoffDate.toISOString() !== cutoffValue || !Number.isFinite(periodStart)) {
     fail('invalid_request', 400, 'cutoffAt must be a valid ISO timestamp.')
   }
   if (cutoff >= periodStart) {
@@ -941,8 +944,67 @@ function buildReset(input: HistoricalUsageReconciliationInput, period: Historica
   }
 }
 
-function residualConflict(event: CanonicalUsageEventRow | null, residual: HistoricalUsageResidualPlan | null): void {
-  if (!event || !residual) return
+function invalidResidualEvent(): never {
+  fail('canonical_usage_conflict', 409, 'Historical residual idempotency key is already used by a malformed event.')
+}
+
+function assertResidualEvent(event: CanonicalUsageEventRow, organizationId: string): void {
+  const key = residualKey(organizationId)
+  if (
+    event.id !== key
+    || event.organization_id !== organizationId
+    || event.site_id !== null
+    || event.resource !== CREDIT_RESOURCE
+    || event.source !== 'historical_reconciliation'
+    || event.provider !== 'ai'
+    || event.channel !== 'historical'
+    || event.unit !== CREDIT_UNIT
+    || event.idempotency_key !== key
+    || typeof event.created_at !== 'string'
+    || !event.created_at.trim()
+    || !Number.isFinite(Date.parse(event.created_at))
+    || typeof event.quantity !== 'number'
+    || !Number.isSafeInteger(event.quantity)
+    || event.quantity <= 0
+  ) {
+    invalidResidualEvent()
+  }
+
+  const metadata = parseMetadata(event.metadata_json)
+  if (!metadata) invalidResidualEvent()
+  const keys = Object.keys(metadata).sort()
+  const expectedKeys = ['basis', 'canonicalQuantityAfterBackfill', 'canonicalQuantityBeforeBackfill', 'kind', 'legacyLifetimeUsed', 'organizationId', 'quantity']
+  if (keys.length !== expectedKeys.length || keys.some((keyName, index) => keyName !== expectedKeys[index])) invalidResidualEvent()
+  if (
+    metadata.kind !== 'historical_unattributed_usage'
+    || metadata.basis !== 'lifetime_used_minus_canonical_credit_quantity'
+    || metadata.organizationId !== organizationId
+  ) {
+    invalidResidualEvent()
+  }
+
+  const lifetimeUsed = metadata.legacyLifetimeUsed
+  const canonicalBefore = metadata.canonicalQuantityBeforeBackfill
+  const canonicalAfter = metadata.canonicalQuantityAfterBackfill
+  const quantity = metadata.quantity
+  if (
+    typeof lifetimeUsed !== 'number' || !Number.isSafeInteger(lifetimeUsed) || lifetimeUsed < 0
+    || typeof canonicalBefore !== 'number' || !Number.isSafeInteger(canonicalBefore) || canonicalBefore < 0
+    || typeof canonicalAfter !== 'number' || !Number.isSafeInteger(canonicalAfter) || canonicalAfter < 0
+    || typeof quantity !== 'number' || !Number.isSafeInteger(quantity) || quantity <= 0
+    || quantity !== event.quantity
+    || canonicalAfter < canonicalBefore
+    || !Number.isSafeInteger(canonicalAfter + quantity)
+    || canonicalAfter + quantity !== lifetimeUsed
+  ) {
+    invalidResidualEvent()
+  }
+}
+
+function residualConflict(event: CanonicalUsageEventRow | null, residual: HistoricalUsageResidualPlan | null, organizationId: string): void {
+  if (!event) return
+  assertResidualEvent(event, organizationId)
+  if (!residual) return
   if (!exactResidualEvent(event, residual)) fail('canonical_usage_conflict', 409, 'Historical residual idempotency key is already used by a different event.')
 }
 
@@ -1311,7 +1373,7 @@ function buildPlanData(
   }
   const residualQuantity = context.state.credits.lifetimeUsed - canonicalAfterBackfill
   const residual = buildResidual(input, period, residualQuantity, context.state.canonical.quantity, canonicalAfterBackfill, context.state.credits.lifetimeUsed)
-  residualConflict(context.residualEvent, residual)
+  residualConflict(context.residualEvent, residual, input.organizationId)
   const reset = buildReset(input, period, context.credits)
   resetConflict(context.resetGrant, reset, input.reason, actor)
   return {

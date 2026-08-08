@@ -453,6 +453,37 @@ test('malformed or altered reconciliation markers never replay as a successful r
   }
 })
 
+test('reserved residual events stay validated on later follow-ups', async () => {
+  const db = createDb()
+  seed(db, '2026-08-10')
+  const plan = await previewHistoricalUsageReconciliation(db as never, SECRET, input({ idempotencyKey: 'residual-followup' }), 'operator-1', NOW)
+  await applyHistoricalUsageReconciliation(db as never, SECRET, plan.input, 'operator-1', plan.expectedStateSha256, plan.approvalToken, NOW)
+
+  db.prepare("UPDATE ai_credits SET balance_period_key = '2026-08-17', updated_at = '2026-08-17T09:00:00.000Z' WHERE organization_id = 'org-history'").run()
+  const later = await previewHistoricalUsageReconciliation(
+    db as never,
+    SECRET,
+    input({ idempotencyKey: 'residual-followup-later' }),
+    'operator-1',
+    new Date('2026-08-17T12:00:00.000Z'),
+  )
+  assert.equal(later.residual, null)
+  assert.equal(later.backfillCount, 0)
+  assert.equal(later.matchedCount, 2)
+
+  db.prepare("UPDATE usage_events SET metadata_json = '{}' WHERE idempotency_key = 'history:historical-unattributed:org-history'").run()
+  await assert.rejects(
+    () => previewHistoricalUsageReconciliation(
+      db as never,
+      SECRET,
+      input({ idempotencyKey: 'residual-followup-malformed' }),
+      'operator-1',
+      new Date('2026-08-17T12:00:00.000Z'),
+    ),
+    (error: unknown) => error instanceof HistoricalUsageReconciliationError && error.code === 'canonical_usage_conflict',
+  )
+})
+
 test('legacy numeric mismatches and canonical lifetime overruns fail closed', async () => {
   const malformed = createDb()
   seed(malformed, '2026-08-10')
