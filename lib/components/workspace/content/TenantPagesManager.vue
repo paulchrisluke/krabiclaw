@@ -457,7 +457,7 @@ async function removePage() {
   const pageId = selected.value.id
   busy.value = 'delete'; editorError.value = null
   try {
-    await dashboardApi(`/api/editor/sites/${siteId}/pages/${pageId}`, { method: 'DELETE', body: { expectedDocumentUpdatedAt: selected.value.document.updated_at }, validate: validateDelete })
+    await dashboardApi(`/api/editor/sites/${siteId}/pages/${pageId}`, { method: 'DELETE', query: { expectedDocumentUpdatedAt: selected.value.document.updated_at }, validate: validateDelete })
     if (!requestGate.isCurrent(requestToken)) return
     selected.value = null
     await loadPages()

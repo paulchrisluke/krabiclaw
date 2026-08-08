@@ -133,3 +133,10 @@ export function checkSsrRequestEventCapture(file, source) {
   }
   return []
 }
+
+export function checkDeleteBodyUsage(file, source) {
+  if (!file.startsWith('server/api/') || !file.endsWith('.delete.ts')) return []
+  return /\breadBody\s*\(/.test(source)
+    ? [`${file}: DELETE routes must not read request bodies; use query or headers for mutation inputs`]
+    : []
+}
