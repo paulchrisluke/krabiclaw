@@ -78,10 +78,6 @@ const organizationAdapter = {
     }
     return organizationId
   },
-  setActiveOrganization: async (sessionToken: string, organizationId: string) => {
-    adapterCalls.push({ method: 'setActiveOrganization', args: [sessionToken, organizationId] })
-    return { token: sessionToken, activeOrganizationId: organizationId }
-  },
 }
 
 mock.module('../../server/db/index.ts', {
