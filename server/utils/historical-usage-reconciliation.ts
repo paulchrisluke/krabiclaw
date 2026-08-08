@@ -76,6 +76,11 @@ export interface HistoricalUsageReconciliationState {
     appliedCount: number
     latestCreatedAt: string | null
   }
+  fingerprints: {
+    legacy: string
+    events: string
+    grants: string
+  }
   operationMarker: 'absent'
 }
 
@@ -170,6 +175,7 @@ export type HistoricalUsageReconciliationErrorCode =
   | 'legacy_usage_invalid'
   | 'canonical_usage_conflict'
   | 'lifetime_usage_conflict'
+  | 'cutoff_not_historical'
   | 'quota_reconciliation_required'
   | 'idempotency_conflict'
   | 'stale_state'
@@ -247,10 +253,12 @@ interface CreditRow {
 interface OperationMarker {
   id: string
   organization_id: string
+  site_id: string | null
   resource: string
   source: string
   provider: string | null
   channel: string | null
+  session_id: string | null
   quantity: number
   unit: string
   metadata_json: string | null
@@ -291,6 +299,14 @@ function requiredString(value: unknown, field: string, maxLength: number): strin
   return trimmed
 }
 
+function safeKey(value: unknown, field: string, maxLength: number): string {
+  const key = requiredString(value, field, maxLength)
+  if (!/^[A-Za-z0-9_-]+$/.test(key)) {
+    fail('invalid_request', 400, `${field} must contain only letters, numbers, underscores, and hyphens.`)
+  }
+  return key
+}
+
 function isoDate(value: unknown, field: string): string {
   const raw = requiredString(value, field, 64)
   const date = new Date(raw)
@@ -317,10 +333,10 @@ export function parseHistoricalUsageReconciliationRequest(body: unknown): Parsed
   const parsed: ParsedHistoricalUsageReconciliationRequest = {
     mode,
     input: {
-      organizationId: requiredString(body.organizationId, 'organizationId', 128),
+      organizationId: safeKey(body.organizationId, 'organizationId', 128),
       cutoffAt: isoDate(body.cutoffAt, 'cutoffAt'),
       reason: requiredString(body.reason, 'reason', 1000),
-      idempotencyKey: requiredString(body.idempotencyKey, 'idempotencyKey', 200),
+      idempotencyKey: safeKey(body.idempotencyKey, 'idempotencyKey', 200),
     },
   }
 
@@ -367,6 +383,19 @@ function periodBalanceKey(period: HistoricalUsageReconciliationPeriod): string {
   return period.key.slice('week:'.length)
 }
 
+function assertHistoricalInput(input: HistoricalUsageReconciliationInput, period: HistoricalUsageReconciliationPeriod): void {
+  safeKey(input.organizationId, 'organizationId', 128)
+  safeKey(input.idempotencyKey, 'idempotencyKey', 200)
+  const cutoff = Date.parse(input.cutoffAt)
+  const periodStart = Date.parse(period.start)
+  if (!Number.isFinite(cutoff) || !Number.isFinite(periodStart)) {
+    fail('invalid_request', 400, 'cutoffAt must be a valid ISO timestamp.')
+  }
+  if (cutoff >= periodStart) {
+    fail('cutoff_not_historical', 409, 'cutoffAt must be strictly before the current UTC week.')
+  }
+}
+
 function historyKey(legacyId: string): string {
   return `${HISTORY_PREFIX}${legacyId}`
 }
@@ -405,6 +434,19 @@ function safeSum(values: number[], field: string): number {
     if (!Number.isSafeInteger(total) || total < 0) fail('legacy_usage_invalid', 409, `${field} exceeds safe integer range.`)
   }
   return total
+}
+
+function tokenQuantity(inputTokens: number, outputTokens: number, id: string): number {
+  const weightedOutput = outputTokens * 5
+  const normalizedTokens = inputTokens + weightedOutput
+  if (!Number.isSafeInteger(weightedOutput) || !Number.isSafeInteger(normalizedTokens)) {
+    fail('legacy_usage_invalid', 409, `Legacy usage ${id} has unsafe token normalization.`)
+  }
+  const quantity = tokensToCredits(inputTokens, outputTokens)
+  if (!Number.isSafeInteger(quantity) || quantity < 0) {
+    fail('legacy_usage_invalid', 409, `Legacy usage ${id} has an unsafe derived quantity.`)
+  }
+  return quantity
 }
 
 function parseMetadata(value: string | null): Record<string, unknown> | null {
@@ -460,7 +502,14 @@ function expectedMetadata(row: LegacyUsageLogRow, basis: 'flat' | 'tokens'): Rec
 function canonicalMetadataMatches(row: LegacyUsageLogRow, metadataJson: string | null): boolean {
   const metadata = parseMetadata(metadataJson)
   if (!metadata) return false
-  if (metadata.action !== row.action || metadata.model !== row.model) return false
+  if (metadata.action !== row.action) return false
+  if (flatAction(row.action)) {
+    const charged = row.credits_charged === ACTION_CREDIT_COSTS[row.action]
+    if (metadata.creditsCharged !== ACTION_CREDIT_COSTS[row.action] || metadata.charged !== charged) return false
+    if (!Object.prototype.hasOwnProperty.call(metadata, 'cfGatewayLogId')) return false
+    return metadata.cfGatewayLogId === row.cf_gateway_log_id
+  }
+  if (metadata.model !== row.model) return false
   if (metadata.inputTokens !== row.input_tokens || metadata.outputTokens !== row.output_tokens) return false
   if (row.cf_gateway_log_id !== null && metadata.cfGatewayLogId !== row.cf_gateway_log_id) return false
   return true
@@ -546,10 +595,7 @@ async function readLegacyPlans(
       ? null
       : requiredString(row.cf_gateway_log_id, 'cf_gateway_log_id', 512)
     const mapped = mappingForLegacy(action)
-    const quantity = mapped.basis === 'flat' ? mapped.quantity : tokensToCredits(inputTokens, outputTokens)
-    if (!Number.isSafeInteger(quantity) || quantity < 0) {
-      fail('legacy_usage_invalid', 409, `Legacy usage ${id} has an unsafe derived quantity.`)
-    }
+    const quantity = mapped.basis === 'flat' ? mapped.quantity : tokenQuantity(inputTokens, outputTokens, id)
     if (mapped.basis === 'tokens' && quantity === 0) {
       fail('legacy_usage_invalid', 409, `Legacy usage ${id} has no token-derived quantity.`)
     }
@@ -679,13 +725,48 @@ function markerMetadata(
   }
 }
 
-function markerMatchesRequest(marker: OperationMarker, input: HistoricalUsageReconciliationInput, actor: string, period: HistoricalUsageReconciliationPeriod): boolean {
+interface MarkerAuditResult {
+  backfillCount: number
+  matchedCount: number
+  residualQuantity: number
+  resetApplied: boolean
+}
+
+function markerAuditResult(marker: OperationMarker, actor: string, input: HistoricalUsageReconciliationInput, period: HistoricalUsageReconciliationPeriod): MarkerAuditResult | null {
   const metadata = parseMetadata(marker.metadata_json)
+  if (!metadata) return null
+  const keys = Object.keys(metadata).sort()
+  const expectedKeys = ['actor', 'backfillCount', 'backfillQuantity', 'expectedStateSha256', 'kind', 'matchedCount', 'request', 'resetApplied', 'residualQuantity']
+  if (keys.length !== expectedKeys.length || keys.some((key, index) => key !== expectedKeys[index])) return null
+  if (metadata.kind !== 'historical_usage_reconciliation' || metadata.actor !== actor) return null
+  if (typeof metadata.expectedStateSha256 !== 'string' || !/^[0-9a-f]{64}$/.test(metadata.expectedStateSha256)) return null
+  if (typeof metadata.resetApplied !== 'boolean') return null
+  const numericFields = ['backfillCount', 'matchedCount', 'backfillQuantity', 'residualQuantity'] as const
+  for (const field of numericFields) {
+    if (typeof metadata[field] !== 'number' || !Number.isSafeInteger(metadata[field]) || metadata[field] < 0) return null
+  }
+  if (!metadataEqual(metadata.request, markerRequest(input, actor, period))) return null
+  return {
+    backfillCount: metadata.backfillCount as number,
+    matchedCount: metadata.matchedCount as number,
+    residualQuantity: metadata.residualQuantity as number,
+    resetApplied: metadata.resetApplied as boolean,
+  }
+}
+
+function markerMatchesRequest(marker: OperationMarker, input: HistoricalUsageReconciliationInput, actor: string, period: HistoricalUsageReconciliationPeriod): boolean {
   return marker.resource === AUDIT_RESOURCE
+    && marker.id === markerId(input.organizationId, input.idempotencyKey)
+    && marker.organization_id === input.organizationId
+    && marker.site_id === null
     && marker.unit === AUDIT_UNIT
+    && marker.source === 'historical_reconciliation'
+    && marker.provider === 'internal'
+    && marker.channel === 'operator'
+    && marker.session_id === null
     && marker.quantity === 0
     && marker.idempotency_key === markerKey(input.organizationId, input.idempotencyKey)
-    && metadataEqual(metadata?.request, markerRequest(input, actor, period))
+    && markerAuditResult(marker, actor, input, period) !== null
 }
 
 function approvalFailure(error: unknown): never {
@@ -710,8 +791,7 @@ async function readContext(
   input: HistoricalUsageReconciliationInput,
   period: HistoricalUsageReconciliationPeriod,
 ): Promise<ReadContext> {
-  const organization = await queryFirst<{ id: string }>(db, 'SELECT id FROM organization WHERE id = ? LIMIT 1', [input.organizationId])
-  if (!organization) fail('organization_not_found', 404, 'Organization not found.')
+  assertHistoricalInput(input, period)
   const creditRow = await queryFirst<CreditRow>(db, `
     SELECT balance, lifetime_used, last_topped_up_at, balance_period_key, updated_at
     FROM ai_credits WHERE organization_id = ? LIMIT 1
@@ -731,6 +811,12 @@ async function readContext(
   `, [input.organizationId])
   const canonicalRows = allEventRows.filter(event => event.unit === CREDIT_UNIT)
   const plans = await readLegacyPlans(db, input, allEventRows)
+  const legacyFingerprint = await queryFirst<{ fingerprint: string }>(db, `
+    SELECT ${legacyFingerprintExpression()} AS fingerprint
+  `, [input.organizationId, input.cutoffAt])
+  const eventFingerprint = await queryFirst<{ fingerprint: string }>(db, `
+    SELECT ${eventFingerprintExpression()} AS fingerprint
+  `, [input.organizationId])
   const grants = await queryAll<CurrentGrantRow>(db, `
     SELECT id, resource, quantity, unit, period_key, period_start, period_end,
            grant_type, reason, created_by, applied_at, created_at, idempotency_key
@@ -741,8 +827,8 @@ async function readContext(
     ORDER BY created_at ASC, id ASC
   `, [input.organizationId, CREDIT_RESOURCE, CREDIT_UNIT, period.start, period.end])
   const marker = await queryFirst<OperationMarker>(db, `
-    SELECT id, organization_id, resource, source, provider, channel, quantity,
-           unit, metadata_json, idempotency_key, created_at
+    SELECT id, organization_id, site_id, resource, source, provider, channel,
+           session_id, quantity, unit, metadata_json, idempotency_key, created_at
     FROM usage_events
     WHERE organization_id = ? AND idempotency_key = ?
     LIMIT 1
@@ -761,6 +847,9 @@ async function readContext(
     WHERE organization_id = ? AND idempotency_key = ?
     LIMIT 1
   `, [input.organizationId, resetKey(input.organizationId, input.idempotencyKey)])
+  const grantFingerprint = await queryFirst<{ fingerprint: string }>(db, `
+    SELECT ${grantFingerprintExpression()} AS fingerprint
+  `, [input.organizationId])
 
   const state: HistoricalUsageReconciliationState = {
     credits: {
@@ -773,6 +862,11 @@ async function readContext(
     legacy: aggregateLegacy(plans),
     canonical: aggregateCanonical(canonicalRows),
     grants: aggregateGrants(grants),
+    fingerprints: {
+      legacy: legacyFingerprint?.fingerprint ?? '[]',
+      events: eventFingerprint?.fingerprint ?? '[]',
+      grants: grantFingerprint?.fingerprint ?? '[]',
+    },
     operationMarker: 'absent',
   }
   return { state, credits, legacyRows: plans, canonicalRows, grants, marker, residualEvent, resetGrant }
@@ -876,6 +970,65 @@ function channelCase(column: string): string {
   return `CASE WHEN ${column} IN ('whatsapp_notification', 'whatsapp_free_text') THEN 'whatsapp' WHEN ${column} IN ('google_places_search', 'google_places_details') THEN 'api' ELSE 'legacy' END`
 }
 
+function legacyFingerprintExpression(): string {
+  return `(
+    SELECT COALESCE(json_group_array(json_object(
+      'id', id, 'organization_id', organization_id, 'site_id', site_id,
+      'action', action, 'model', model, 'input_tokens', input_tokens,
+      'output_tokens', output_tokens, 'credits_charged', credits_charged,
+      'cf_gateway_log_id', cf_gateway_log_id, 'created_at', created_at
+    )), '[]')
+    FROM (
+      SELECT id, organization_id, site_id, action, model, input_tokens,
+             output_tokens, credits_charged, cf_gateway_log_id, created_at
+      FROM ai_usage_log
+      WHERE organization_id = ? AND created_at <= ?
+      ORDER BY created_at ASC, id ASC
+    )
+  )`
+}
+
+function eventFingerprintExpression(): string {
+  return `(
+    SELECT COALESCE(json_group_array(json_object(
+      'id', id, 'organization_id', organization_id, 'site_id', site_id,
+      'resource', resource, 'source', source, 'provider', provider,
+      'channel', channel, 'session_id', session_id, 'quantity', quantity,
+      'unit', unit, 'metadata_json', metadata_json,
+      'idempotency_key', idempotency_key, 'created_at', created_at
+    )), '[]')
+    FROM (
+      SELECT id, organization_id, site_id, resource, source, provider,
+             channel, session_id, quantity, unit, metadata_json,
+             idempotency_key, created_at
+      FROM usage_events
+      WHERE organization_id = ?
+      ORDER BY created_at ASC, id ASC
+    )
+  )`
+}
+
+function grantFingerprintExpression(): string {
+  return `(
+    SELECT COALESCE(json_group_array(json_object(
+      'id', id, 'organization_id', organization_id, 'resource', resource,
+      'quantity', quantity, 'unit', unit, 'period_key', period_key,
+      'period_start', period_start, 'period_end', period_end,
+      'grant_type', grant_type, 'reason', reason, 'created_by', created_by,
+      'idempotency_key', idempotency_key, 'applied_at', applied_at,
+      'created_at', created_at
+    )), '[]')
+    FROM (
+      SELECT id, organization_id, resource, quantity, unit, period_key,
+             period_start, period_end, grant_type, reason, created_by,
+             idempotency_key, applied_at, created_at
+      FROM usage_quota_grants
+      WHERE organization_id = ?
+      ORDER BY created_at ASC, id ASC
+    )
+  )`
+}
+
 function sqlStringLiteral(value: string): string {
   return `'${value.replaceAll("'", "''")}'`
 }
@@ -926,6 +1079,9 @@ function statePredicate(input: HistoricalUsageReconciliationInput, period: Histo
       AND (SELECT COALESCE(SUM(quantity), 0) FROM usage_quota_grants WHERE organization_id = ? AND resource = 'ai_inference' AND unit = 'credit' AND period_start = ? AND period_end = ?) = ?
       AND (SELECT COALESCE(SUM(CASE WHEN applied_at IS NOT NULL THEN 1 ELSE 0 END), 0) FROM usage_quota_grants WHERE organization_id = ? AND resource = 'ai_inference' AND unit = 'credit' AND period_start = ? AND period_end = ?) = ?
       AND (SELECT MAX(created_at) FROM usage_quota_grants WHERE organization_id = ? AND resource = 'ai_inference' AND unit = 'credit' AND period_start = ? AND period_end = ?) IS ?
+      AND ${legacyFingerprintExpression()} = ?
+      AND ${eventFingerprintExpression()} = ?
+      AND ${grantFingerprintExpression()} = ?
       AND NOT EXISTS (SELECT 1 FROM usage_events WHERE organization_id = ? AND idempotency_key = ?)
     `,
     params: [
@@ -943,6 +1099,9 @@ function statePredicate(input: HistoricalUsageReconciliationInput, period: Histo
       input.organizationId, period.start, period.end, state.grants.quantity,
       input.organizationId, period.start, period.end, state.grants.appliedCount,
       input.organizationId, period.start, period.end, state.grants.latestCreatedAt,
+      input.organizationId, input.cutoffAt, state.fingerprints.legacy,
+      input.organizationId, state.fingerprints.events,
+      input.organizationId, state.fingerprints.grants,
       input.organizationId, markerKey(input.organizationId, input.idempotencyKey),
     ],
   }
@@ -983,6 +1142,8 @@ function legacyInsertStatement(input: HistoricalUsageReconciliationInput): { que
   const provider = providerCase('l.action')
   const channel = channelCase('l.action')
   const historyPrefix = sqlStringLiteral(HISTORY_PREFIX)
+  const flatActions = Object.keys(ACTION_CREDIT_COSTS).map(action => sqlStringLiteral(action)).join(', ')
+  const flatQuantity = flatCase('l.action')
   return {
     query: `
       INSERT INTO usage_events
@@ -1023,10 +1184,24 @@ function legacyInsertStatement(input: HistoricalUsageReconciliationInput): { que
             AND u.created_at = l.created_at
             AND json_valid(u.metadata_json)
             AND json_extract(u.metadata_json, '$.action') = l.action
-            AND json_extract(u.metadata_json, '$.model') = l.model
-            AND json_extract(u.metadata_json, '$.inputTokens') = l.input_tokens
-            AND json_extract(u.metadata_json, '$.outputTokens') = l.output_tokens
-            AND (l.cf_gateway_log_id IS NULL OR json_extract(u.metadata_json, '$.cfGatewayLogId') = l.cf_gateway_log_id)
+            AND (
+              (
+                l.action IN (${flatActions})
+                AND json_extract(u.metadata_json, '$.creditsCharged') = ${flatQuantity}
+                AND json_extract(u.metadata_json, '$.charged') = CASE WHEN l.credits_charged = ${flatQuantity} THEN 1 ELSE 0 END
+                AND (
+                  (l.cf_gateway_log_id IS NULL AND json_type(u.metadata_json, '$.cfGatewayLogId') = 'null')
+                  OR (l.cf_gateway_log_id IS NOT NULL AND json_extract(u.metadata_json, '$.cfGatewayLogId') = l.cf_gateway_log_id)
+                )
+              )
+              OR (
+                l.action NOT IN (${flatActions})
+                AND json_extract(u.metadata_json, '$.model') = l.model
+                AND json_extract(u.metadata_json, '$.inputTokens') = l.input_tokens
+                AND json_extract(u.metadata_json, '$.outputTokens') = l.output_tokens
+                AND (l.cf_gateway_log_id IS NULL OR json_extract(u.metadata_json, '$.cfGatewayLogId') = l.cf_gateway_log_id)
+              )
+            )
         )
     `,
     params: [input.organizationId, input.cutoffAt],
@@ -1198,17 +1373,19 @@ function markerResult(
   status: 'applied' | 'already_applied',
   input: HistoricalUsageReconciliationInput,
   marker: OperationMarker,
+  actor: string,
+  period: HistoricalUsageReconciliationPeriod,
 ): HistoricalUsageReconciliationResult {
-  const metadata = parseMetadata(marker.metadata_json)
-  const numberValue = (key: string) => typeof metadata?.[key] === 'number' ? metadata[key] as number : 0
+  const audit = markerAuditResult(marker, actor, input, period)
+  if (!audit) fail('idempotency_conflict', 409, 'Reconciliation audit marker is malformed.')
   return {
     status,
     organizationId: input.organizationId,
     cutoffAt: input.cutoffAt,
-    backfillCount: numberValue('backfillCount'),
-    matchedCount: numberValue('matchedCount'),
-    residualQuantity: numberValue('residualQuantity'),
-    resetApplied: metadata?.resetApplied === true,
+    backfillCount: audit.backfillCount,
+    matchedCount: audit.matchedCount,
+    residualQuantity: audit.residualQuantity,
+    resetApplied: audit.resetApplied,
     markerId: marker.id,
   }
 }
@@ -1240,7 +1417,7 @@ export async function applyHistoricalUsageReconciliation(
     if (!markerMatchesRequest(context.marker, input, actor, period)) {
       fail('idempotency_conflict', 409, 'Reconciliation idempotency key is already used by a different operation.')
     }
-    return markerResult('already_applied', input, context.marker)
+    return markerResult('already_applied', input, context.marker, actor, period)
   }
   const actualStateSha256 = await sha256CanonicalJson(context.state)
   if (actualStateSha256 !== expectedStateSha256) fail('stale_state', 409, 'Reviewed reconciliation state is stale; create a new preview.')
@@ -1273,8 +1450,17 @@ export async function applyHistoricalUsageReconciliation(
   try {
     await executeBatch(db, statements)
   } catch (error) {
-    const after = await readContext(db, input, period)
-    if (after.marker && markerMatchesRequest(after.marker, input, actor, period)) return markerResult('already_applied', input, after.marker)
+    let after: ReadContext
+    try {
+      after = await readContext(db, input, period)
+    } catch (readError) {
+      if (readError instanceof HistoricalUsageReconciliationError
+        && (readError.code === 'canonical_usage_conflict' || readError.code === 'legacy_usage_invalid')) {
+        fail('stale_state', 409, 'Reviewed reconciliation state is stale; create a new preview.')
+      }
+      throw readError
+    }
+    if (after.marker && markerMatchesRequest(after.marker, input, actor, period)) return markerResult('already_applied', input, after.marker, actor, period)
     const afterHash = await sha256CanonicalJson(after.state)
     if (afterHash !== expectedStateSha256) fail('stale_state', 409, 'Reviewed reconciliation state is stale; create a new preview.')
     console.error('historical_usage_reconciliation_batch_failed', {

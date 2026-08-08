@@ -1,6 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
+import { createAuth, getAuthSession } from '~/server/utils/auth'
 import { platformPermissionJsonResponse } from '~/server/utils/platform-admin-users'
+import { getOrgAdapter } from 'better-auth/plugins'
 import {
   applyHistoricalUsageReconciliation,
   assertHistoricalUsageReconciliationOperatorSession,
@@ -21,6 +22,13 @@ export default defineEventHandler(async (event) => {
     const session = await getAuthSession(event, env)
     const actor = assertHistoricalUsageReconciliationOperatorSession(session)
     const request = parseHistoricalUsageReconciliationRequest(await readBody<unknown>(event))
+    const auth = createAuth(env)
+    const authContext = await auth.$context
+    const organizationAdapter = getOrgAdapter(authContext as Parameters<typeof getOrgAdapter>[0], {})
+    const organization = await organizationAdapter.findOrganizationById(request.input.organizationId)
+    if (!organization) {
+      throw new HistoricalUsageReconciliationError('organization_not_found', 404, 'Organization not found.')
+    }
     if (request.mode === 'preview') {
       const plan = await previewHistoricalUsageReconciliation(db, env.BETTER_AUTH_SECRET, request.input, actor)
       return jsonResponse({ status: 'preview', plan })
