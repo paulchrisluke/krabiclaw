@@ -1,14 +1,15 @@
 # Issue 554 ground truth and acceptance ledger
 
-Status: active, release blocked
+Status: active, local candidate validation in progress
 
-Evidence cut: 2026-08-08 14:43 ICT
+Evidence cut: 2026-08-08 15:16 ICT
 
 Branch: `codex/issue-554-full-e2e-fixes`
 
-Exact locally built implementation cut before this evidence-only ledger update:
-`85230933f2fd77f6f6e071d3447320a443623d67`. This is not yet a frozen,
-pushed, deployed, or completely browser-verified candidate.
+Latest local source cut before this evidence-only ledger update:
+`955e1cd1`. The Better Auth schema blocker is fixed and focused development
+verification is green, but this cut still needs its one final production build
+and production-artifact browser pass before it can be frozen and pushed.
 
 This ledger keeps **landed**, **deployed**, and **verified** separate. Landed
 means only that code and focused local evidence exist on the branch. Every
@@ -18,21 +19,25 @@ item without complete direct evidence is marked `❌`.
 
 | Surface | Source SHA | Worker version | Cloudflare build | Migrations | Verification |
 | --- | --- | --- | --- | --- | --- |
-| Local issue-554 branch | exact built cut `85230933` | not deployed | production build passed once in 101.12 seconds | no schema, migration, or migration-metadata diff from `c03a142d` | Changed-unit lane: 292 passed, 0 failed. Final focused rerun: 61 passed, 0 failed. Typecheck/full lint/guards passed. Rebuilt Pages, Saya links, canonical blog, and Saya desktop/mobile checks passed; Better Auth-dependent and Blawby checks remain blocked `❌`. |
-| Staging | `c03a142d71e6416c567240117a8e30f526c954a5` | `e37a2d53-e02e-48fb-b24e-230ce9901c62` at 100% | `21882bd0-78d8-4882-b39d-cdbe0f59aac3` | no pending migration | Required run 31227909896 passed with incomplete path coverage; full run 31228552732 failed. This is not a verified candidate `❌`. |
+| Local issue-554 branch | focused cut `955e1cd1` | not deployed | exact final build pending; earlier runtime cut `85230933` passed in 101.12 seconds | generated additive `0110_giant_stick.sql` is local only | Prior changed-unit lane: 292 passed, 0 failed. Current migration checks and 26 focused unit tests pass; real local HTTP/browser paths now pass site creation 4/4, canonical page write 1/1, manual onboarding 1/1, professional-service onboarding 1/1, and ChowBot page tools 1/1. Current typecheck and full lint pass; final build/artifact browser pass remain `❌`. |
+| Staging | `c03a142d71e6416c567240117a8e30f526c954a5` | `e37a2d53-e02e-48fb-b24e-230ce9901c62` at 100% | `21882bd0-78d8-4882-b39d-cdbe0f59aac3` | no pending migration at the last remote observation; candidate `0110` is local only | Required run 31227909896 passed with incomplete path coverage; full run 31228552732 failed. This is not a verified candidate `❌`. |
 | Last attributable production release | `4e49e5a37e4a0578bd1b306c4e0822c4fa8bc5c9` | `6254de48-c029-418b-b82f-a4811fb04814` | `cec35b29-4962-4ec9-940b-f3ea63a07038` | migration state at that run only | Run 31142677520 deployed and smoked it; it is no longer the active Worker. |
-| Last observed current production | **unknown `❌`** | `0f4c7155-15df-42f0-8058-9ea531785f90` at 100% | `455d5e33-5755-4c17-b448-6df5a051ddc1` | four pending migrations | No source SHA, workflow run, retained artifact, or route-by-route browser evidence proves this Worker. A 14:43 refresh was unavailable because this shell has no Cloudflare token, so the prior read-only observation is not presented as current proof. Production remains quarantined `❌`. |
+| Last observed current production | **unknown `❌`** | `0f4c7155-15df-42f0-8058-9ea531785f90` at 100% | `455d5e33-5755-4c17-b448-6df5a051ddc1` | four pending migrations at the last remote observation; candidate `0110` would be a fifth | No source SHA, workflow run, retained artifact, or route-by-route browser evidence proves this Worker. A 14:43 refresh was unavailable because this shell has no Cloudflare token, so the prior read-only observation is not presented as current proof. Production remains quarantined `❌`. |
 
 No staging or production deployment, database write, migration, provider
 mutation, live Stripe call, impersonation, quota grant, or quota reset was
 performed during this reconstruction.
 
-Production has these pending migrations, in Wrangler's reported order:
+Production had these pending migrations in Wrangler's last reported order:
 
 1. `0106_canonical_tenant_page_media.sql`
 2. `0107_stripe_ga4_purchase_delivery.sql`
 3. `0108_reconcile_drizzle_migration_history.sql`
 4. `0109_fix_stale_media_scope_trigger.sql`
+
+Candidate-local `0110_giant_stick.sql` has never been applied remotely and
+would be an additional production migration if a future production release
+were authorized.
 
 The migration history remains contradictory `❌`, but it is more specific than
 the earlier claim that the journal simply stopped at `0098`:
@@ -49,8 +54,9 @@ the earlier claim that the journal simply stopped at `0098`:
   represented by the schema snapshot.
 
 `yarn drizzle:check` and `yarn migrate:check` both pass, but neither validates
-journal-to-D1 filename parity or detached snapshot ancestry. Historical
-migrations and `migrations/meta/*` remain frozen.
+journal-to-D1 filename parity or detached snapshot ancestry. The authorized
+generator appended `0110` from the current `0109` snapshot without changing
+any historical entry. Historical migrations and metadata remain frozen.
 
 ## Reconstructed issue, PR, commit, CI, and deployment history
 
@@ -92,6 +98,7 @@ Migration provenance in the issue window:
 | `0107_stripe_ga4_purchase_delivery.sql` | `25841fb2` | staging applied; production pending `❌` |
 | `0108_reconcile_drizzle_migration_history.sql` | `69b648b2` | staging applied; production pending `❌` |
 | `0109_fix_stale_media_scope_trigger.sql` | `cef8a0a8` | staging applied; production pending `❌` |
+| `0110_giant_stick.sql` | `0f430a81` | fresh local D1 applied and verified; staging/production pending `❌` |
 
 ## Development and release process repair
 
@@ -145,10 +152,10 @@ All mutations in this section used the local D1 emulator. Delivery modes were
 | Saya links lifecycle | Under the valid preview-shaped host, publish rendered `/links` with 200 and returning the page to draft produced the intended 404. | The request-event capture is locally proven for Saya. NCLS/Blawby remains unproven because the sanctioned local fixture is absent `❌`. |
 | Hash navigation from `/links` | The initial product test passed but emitted first-party `/api/analytics/track` 500 because `route.fullPath` included `#featured-links`. The rebuilt production artifact passed the complete Saya links lifecycle 1/1 without the hash-only analytics request. | `d3b81b6c` uses pathname-only tracking and makes the E2E synchronously assert that hash-only navigation emits no analytics request. Local rebuilt browser GREEN; exact deployed-candidate proof remains `❌`. |
 | Canonical blog write | Exact failed-full-lane test passed in 474 ms against local Workerd. | Local GREEN; deployed exact-candidate proof remains `❌`. |
-| Canonical page write | The test failed before its content write because throwaway site creation returned 500. | Blocked by the Better Auth Teams schema drift below `❌`. |
-| Manual onboarding commit | Exact browser journey failed after 1.2 minutes with the visible site-creation error. | Same Better Auth Teams schema drift, not the bounded page-batch implementation `❌`. |
+| Canonical page write | The test originally failed before its content write because throwaway site creation returned 500. After `0110`, the exact write test passed against local HTTP in 2.2 seconds. | Local GREEN; exact production-artifact and deployed-candidate proof remain `❌`. |
+| Manual onboarding commit | The original browser journey failed after 1.2 minutes with the visible site-creation error. After `0110`, the full manual journey passed in 27.6 seconds. | Local dev-browser GREEN; exact production-artifact and deployed-candidate proof remain `❌`. |
 | Stripe checkout callers | Provider-free canonical caller suite passed 5/5. | Hosted test-mode canary on an exact candidate remains `❌`. |
-| Site creation and ChowBot response | Better Auth unit suite passed 7/7 and ChowBot response suite passed 1/1. An isolated copy with the additive column proved real `createAuth`/Drizzle/D1 team creation, site linkage, and idempotency. | The shared branch still lacks the authorized schema migration, so real Worker site creation and browser proof remain `❌`. |
+| Site creation and ChowBot response | Better Auth and site-creation focused unit suites pass 26/26. After `0110`, real local HTTP passed all site-creation cases 4/4, including multiple sites and both Saya/Blawby template selection; the ChowBot canonical page-tool journey passed 1/1. | Local GREEN; exact production-artifact and deployed-candidate proof remain `❌`. |
 
 The local Blawby `/links` test skipped explicitly because `site-ncls-blawby`
 is not present in the current sanctioned seed pipeline. No stale fixture was
@@ -158,15 +165,21 @@ The final local production artifact also rendered Saya `/` and `/about` on
 desktop and mobile 4/4. This is useful local evidence, not a substitute for the
 required deployed Saya and Blawby matrix.
 
-## Better Auth 1.7 Teams schema blocker
+The professional-service onboarding rerun exposed one test-only race: its
+mobile branch clicked `Start building` before the onboarding island's existing
+hydration marker, while the primary helper already waited for that marker.
+`955e1cd1` adds the same wait to the mobile branch; the exact Blawby onboarding
+test then passed in 44.3 seconds. No product fallback or retry was added.
+
+## Better Auth 1.7 Teams schema repair
 
 Commit `389f7ac6` upgraded Better Auth to `1.7.0-beta.10`. With Teams enabled,
 that version unconditionally requires an internal persisted
 `team.memberCount` counter. Its organization adapter supplies the field on
-team creation and increments/decrements it for membership changes. The current
-Drizzle `team` model, historical migration `0066_auth_phase_3_teams.sql`, and
-local D1 table do not contain the column, so the Drizzle adapter rejects
-`ensureSiteTeam()` before issuing SQL.
+team creation and increments/decrements it for membership changes. Before
+`0f430a81`, the Drizzle `team` model, historical migration
+`0066_auth_phase_3_teams.sql`, and local D1 table did not contain the column,
+so the Drizzle adapter rejected `ensureSiteTeam()` before issuing SQL.
 
 This is not a virtual result field and cannot be corrected by changing the
 site-creation response or bypassing Better Auth. An isolated repository copy
@@ -176,22 +189,24 @@ proved the canonical repair:
 ALTER TABLE `team` ADD `memberCount` integer DEFAULT 0 NOT NULL;
 ```
 
-Drizzle generated only that SQL, chained the new snapshot from the current
-`0109` snapshot, and passed `drizzle:check`. Applying the full copied migration
-set through the generated `0110` passed; a pre-existing team row backfilled to
-zero. The actual repository `createAuth`/Drizzle/D1 path then proved
-`ensureSiteTeam()` creates a team with count zero, links `sites.team_id`, and
-is idempotent; adding a member increments the counter to one. No unrelated
-schema churn was generated.
+With explicit approval, `0f430a81` added the field to `schema.ts` and generated
+`0110_giant_stick.sql`, `0110_snapshot.json`, and one appended journal entry.
+The new snapshot's `prevId` exactly equals the `0109` snapshot id; after
+normalizing object-key order, `tables.team.columns.memberCount` is the only
+semantic snapshot change. No historical file was edited.
 
-The history contradiction therefore does not prevent a technically safe
-additive next migration. The remaining blocker is authorization: normal
-`db:generate` must append a new journal entry and snapshot, while the issue's
-explicit safety boundary says not to edit migration metadata during this work.
-The shared schema, migrations, migration metadata, and dependency versions
-remain unchanged. Site creation, onboarding, the canonical page test's setup,
-and ChowBot browser proof remain blocked `❌` until that boundary is explicitly
-lifted.
+The mandated fresh local replay applied all 110 migrations. Direct D1
+inspection returned `memberCount` as `INTEGER NOT NULL DEFAULT 0`, with `0110`
+as the latest applied filename. Demo and Pottery House sanctioned seeds passed;
+Pottery House still had exactly one site after the browser mutations. Migration
+lint, `drizzle:check`, and `migrate:check` passed. Better Auth 1.7 deliberately
+repairs an existing under-count before the next member add, so its documented
+additive default-zero migration requires no separate data backfill.
+
+Real local HTTP/browser verification then passed site creation 4/4, canonical
+page write 1/1, manual onboarding 1/1, professional-service onboarding 1/1,
+and the ChowBot canonical page path 1/1. The schema blocker is resolved locally;
+exact built-candidate and deployed proof remain `❌`.
 
 The isolated integration also found a separate defect in
 `@better-auth/drizzle-adapter` `1.7.0-beta.10`: its standard D1 adapter reads
@@ -203,7 +218,8 @@ not explain today's site-creation failure, but the durable counter invariant is
 wrong `❌`. The current `1.7.0-rc.4` adapter handles D1 `meta.changes`; upgrading
 from the beta also carries unrelated Better Auth/OAuth migration risk and must
 be reviewed as an isolated dependency upgrade rather than patched into this
-schema fix.
+schema fix. Because no per-team maximum is configured, this upgrade is
+explicitly deferred from the issue-554 candidate rather than mixed into it.
 
 ## Stripe Workbench and catalog ground truth
 
@@ -274,7 +290,7 @@ performed.
 | One recurring subscription/quota model | ADR 0023, runtime semantics, UI/copy, and product-model guard align locally. | Not this branch. | Period/grant/reset/transition/unlimited/legacy tests pass locally. | `❌` until deployed/browser verified |
 | Retire credits, add-ons, auto-top-up, and active fulfillment | Active aliases/writers/UI are removed; historical add-on view is audit-only; guard blocks return. | Not this branch. | Local retirement/guard tests pass; exact candidate not verified. | `❌` release verification |
 | Intentional Stripe prices/catalog | Deterministic test-mode dry-run/apply boundary is landed. | No provider change. | Local tests pass; no approved test-mode provider apply. | `❌` |
-| Better Auth authority plus append-only usage/grants | Billing permission, projection, usage, site/team provisioning, and revocation paths are aligned in code. | Not this branch. | Local invariant tests pass, but real Worker site/team provisioning fails because Better Auth 1.7 requires missing persisted `team.memberCount`. Three separate legacy writers are documented below. | `❌` |
+| Better Auth authority plus append-only usage/grants | Billing permission, projection, usage, site/team provisioning, revocation paths, and generated `team.memberCount` storage are aligned in code. | Not this branch. | Fresh-D1 migration/seed checks and real local HTTP site creation pass; three separate legacy writers and exact deployed proof remain documented below. | `❌` |
 | Billing regression coverage | D1 period, reconciliation, operator, webhook, catalog, canary, and projection tests are landed. | n/a | Changed-unit lane passes; hosted checkout/subscription/invoice canary not run. | `❌` |
 | Typed Pages editors and block lifecycle | Typed fields plus insert/select/duplicate/delete/move/drag/reorder/inline validation are landed; DELETE now carries its concurrency token outside the unsupported body. | Older subset on staging. | Rebuilt production-artifact browser tracer passed the complete lifecycle 1/1. Exact deployed desktop/mobile proof is absent. | `❌` |
 | Faithful preview and unsaved-change protection | New/select/locale/route/status/delete transitions share the dirty guard; stale responses cannot replace current editor state; Preview uses Nuxt UI's documented `to` prop. | Not this branch. | The rebuilt local tracer directly exercised and preserved dirty state across leave paths and completed the lifecycle. Exact deployed desktop/mobile proof remains absent. | `❌` |
@@ -290,10 +306,10 @@ performed.
 | --- | --- | --- |
 | Blawby `/links` returned 404 after API 200 | `97278c15` captures the request event before the async loader boundary; temporary diagnostics are removed. The Saya publish/200/draft/404 lifecycle passes locally under valid preview-shaped routing. | Local NCLS test skipped because the fixture is absent; exact deployed Blawby candidate proof `❌`. |
 | Owner checkout returned 500 | `d3a9da0f` removes the dead checkout alias and caller tests require the canonical Better Auth subscription path. | Test-mode hosted canary on exact candidate `❌`. |
-| Onboarding commit timed out | `a74d56bd` replaces page writes with constant-count validation/batching; query-count tests pass 3/3. The exact browser journey now fails earlier at Better Auth team creation because `team.memberCount` is absent. | The additive migration and backfill are proven in isolation, but committing its new journal entry and snapshot needs explicit authority under the metadata freeze; exact candidate `❌`. |
-| Two canonical content writes timed out | `30153826` bounds canonical writes. The exact blog test passes locally in 474 ms; the page test fails during throwaway site creation before reaching the content write. | Better Auth schema blocker must be resolved before the page test can prove the owning write path; exact candidate `❌`. |
+| Onboarding commit timed out | `a74d56bd` replaces page writes with constant-count validation/batching; query-count tests pass 3/3. After generated migration `0110`, the exact full manual journey passes in 27.6 seconds and professional-service Blawby onboarding passes after the isolated hydration-test fix. | Exact production-artifact and deployed candidate `❌`. |
+| Two canonical content writes timed out | `30153826` bounds canonical writes. The exact blog test passes locally in 474 ms; after `0110`, the exact canonical page write passes in 2.2 seconds. | Exact production-artifact and deployed candidate `❌`. |
 | Pages unsaved edits could be discarded | `625891e9`, `b6d54062`, and `eb2550ca` own dirty transitions and Preview navigation. The browser tracer exercised them, then exposed the independent Nitro DELETE-body hang. `ef71e5af` moves the concurrency token to the query and guards every DELETE route against `readBody`. | Rebuilt local production-artifact tracer passed 1/1; exact deployed desktop/mobile proof `❌`. |
-| ChowBot site creation reported failure after a successful route response | `d502c8b8` fixes the response mismatch: UI expected nested `site.id`, route returns `siteId`; unit contract passes 1/1. | Real Worker site creation is blocked at Better Auth team creation; exact-candidate ChowBot browser proof `❌`. |
+| ChowBot site creation reported failure after a successful route response | `d502c8b8` fixes the response mismatch: UI expected nested `site.id`, route returns `siteId`; unit contract passes 1/1. After `0110`, the real local ChowBot canonical page journey passes 1/1. | Exact production-artifact and deployed-candidate proof `❌`. |
 | Adjacent hash-only navigation emitted analytics 500 | `d3b81b6c` tracks `route.path`, dedupes hash/query-only transitions, and makes the links E2E assert that no analytics POST occurs. | Rebuilt local Saya links lifecycle passed 1/1; exact deployed proof `❌`. |
 
 ## Adjacent Better Auth debt fully assessed
@@ -344,25 +360,23 @@ production reconciliation, grant, reset, migration, or cleanup.
 
 ## Remaining release gates
 
-- Obtain explicit authority to append the proven generated `0110`
-  `team.memberCount` migration, journal entry, and snapshot without changing
-  any historical migration or metadata entry; then rerun every
-  site-creation-dependent case `❌`.
-- Decide separately whether the Better Auth D1 affected-row defect is deferred
-  while team capacity is disabled or handled in a dedicated, migration-reviewed
-  Better Auth release-candidate upgrade `❌`.
-- Re-run the remaining local billing, onboarding/content, Blawby, and ChowBot
-  fixture checks. The final production build, rebuilt Pages tracer, Saya links,
-  canonical blog, and Saya `/` plus `/about` desktop/mobile checks already pass
-  for exact local cut `85230933`; site-creation-dependent cases and local NCLS
-  proof remain blocked `❌`.
-- Confirm the persistent Pottery House fixture still has exactly one site
-  after ChowBot/site-creation tests `❌`.
+- Freeze the ledger-inclusive source SHA, run one production
+  build, and rerun the required production-artifact browser matrix including
+  Pages, billing, onboarding/content, ChowBot, and Saya desktop/mobile `❌`.
+- Keep the Better Auth D1 affected-row upgrade deferred while team capacity is
+  disabled; do not mix its OAuth/dependency migration surface into this
+  candidate.
+- Local NCLS proof remains unavailable because no sanctioned NCLS seed/import
+  manifest exists. Do not hand-patch it; verify the existing curated fixture on
+  the exact deployed staging candidate `❌`.
+- Pottery House still has exactly one local site after the focused browser
+  mutations.
 - Freeze and push one source SHA only after the local blockers clear, then
   obtain ordinary PR/CI evidence without mutating shared staging `❌`.
-- After an explicit dry-run report and user approval, correct the test-mode
-  Workbench contract and dispatch the one locked full staging candidate
-  (migrations/reset/seed/deploy/cache/browser/provider mutations) `❌`.
+- Produce the staging dry-run manifest, then use the user's explicit
+  authorization to push one locked staging candidate only. Any test-mode
+  Workbench correction must remain plan-bound and staging-only; production
+  provider state remains untouched `❌`.
 - Run the required full lane and genuine 25-sample-per-side comparative
   benchmark against that exact candidate `❌`.
 - Verify the promoted staging candidate in deployed desktop/mobile browsers
