@@ -353,7 +353,7 @@ export function usageForFlatCreditAction(action: FlatCreditAction): {
   }
 }
 
-/** Returns current balance, creating the row with signup credits if new org */
+/** Returns the current balance, creating the recurring plan allowance row when needed. */
 export async function getOrCreateCredits(
   db: DbClient,
   organizationId: string,
