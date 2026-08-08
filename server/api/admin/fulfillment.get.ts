@@ -1,9 +1,9 @@
-// GET /api/admin/fulfillment — service add-on purchases awaiting fulfillment
+// GET /api/admin/fulfillment — historical service add-on records for read-only audit
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { queryAll } from '~/server/db'
 import { platformPermissionJsonResponse } from '~/server/utils/platform-admin-users'
 
-interface FulfillmentRow {
+interface HistoricalServiceAddonRow {
   id: string
   organization_id: string
   org_name: string
@@ -23,9 +23,9 @@ export default defineEventHandler(async (event) => {
   if (permissionDenied) return permissionDenied
 
   const query = getQuery(event)
-  const showAll = query.all === '1'
+  const includeAllHistory = query.all === '1'
 
-  const purchases = await queryAll<FulfillmentRow>(db, `
+  const historicalRecords = await queryAll<HistoricalServiceAddonRow>(db, `
     SELECT
       sap.id,
       sap.organization_id,
@@ -37,10 +37,10 @@ export default defineEventHandler(async (event) => {
       sap.created_at
     FROM service_addon_purchases sap
     JOIN organization o ON o.id = sap.organization_id
-    ${showAll ? '' : 'WHERE sap.fulfilled_at IS NULL'}
+    ${includeAllHistory ? '' : 'WHERE sap.fulfilled_at IS NULL'}
     ORDER BY sap.created_at DESC
     LIMIT 100
   `)
 
-  return jsonResponse({ purchases })
+  return jsonResponse({ purchases: historicalRecords })
 })
