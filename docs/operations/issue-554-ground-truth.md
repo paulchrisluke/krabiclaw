@@ -101,10 +101,10 @@ Migration provenance in the issue window is:
 | Faithful draft preview and unsaved-change protection | Canonical preview service exists. | Staging | Starting a new page and lifecycle/delete actions can discard dirty edits; preview can show stale persisted content. | `❌` |
 | Registry, canonical service, revision lifecycle, and both renderers remain sole truth | Present and covered by focused service tests. | Staging | Full exact-candidate Saya/Blawby editor-to-renderer verification is absent. | `❌` release verification |
 | Real browser verification on Saya and Blawby with blocks/media | Partial earlier staging smoke only | Not production | No full UI lifecycle, faithful preview, or Pages-manager 390x844 pass exists on one exact candidate. | `❌` |
-| Audit active automated-translation and legacy naming | Active automation was removed. | Staging | Non-historical `siteContent`, `SeedTenantPageTranslation`, and `translations` fixture names remain. | `❌` |
-| Preserve manual locale variants while removing automation | Runtime direction and migration 0100 are landed. | Staging | Seed generation publishes source-language fallback content as explicit non-source variants and ignores variant publication semantics. | `❌` |
-| Rename/clarify stale fixture and seed names | Not complete | Not deployed | Known stale names remain in contracts, compiler, seed renderer, fixtures, and tests. | `❌` |
-| Guard against retired writers/tools returning | Partial product-model guard exists. | CI uses it | Guard scope does not own all current seed naming/publication invariants. | `❌` |
+| Audit active automated-translation and legacy naming | Active automation was removed; seed contracts/compiler/fixtures now use tenant-page locale terminology. | Not deployed | Focused tests and the product-model guard pass locally; staging/browser evidence is still absent. | `❌` |
+| Preserve manual locale variants while removing automation | Runtime direction and migration 0100 are landed; seed renderer now requires an explicit source locale and emits only published localized fields for non-source locales. | Not deployed | Focused tests cover source fallback suppression, missing locale content, draft fields, and disabled locales; staging/browser evidence is still absent. | `❌` |
+| Rename/clarify stale fixture and seed names | Local seed contracts/compiler/renderer/fixtures/tests are renamed. | Not deployed | The exact candidate still needs staging deployment and browser verification. | `❌` |
+| Guard against retired writers/tools returning | Product-model guard now also rejects retired seed locale names in active seed definitions. | Not deployed | `yarn lint:product-model` passes locally; CI/staging evidence is still absent. | `❌` |
 
 ## Additional release blockers discovered by the failed full lane
 

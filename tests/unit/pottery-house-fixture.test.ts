@@ -144,7 +144,7 @@ test("pottery house content block includes home hero and about page content", ()
   assert.match(sql, /journey\.body/);
 });
 
-test("multi-locale tenant page seeds preserve every locale variant", () => {
+test("multi-locale tenant page seeds preserve source and translated variants", () => {
   const db = new Database(":memory:");
   db.pragma("foreign_keys = ON");
   db.exec(`
@@ -225,9 +225,13 @@ test("multi-locale tenant page seeds preserve every locale variant", () => {
   db.exec(renderTenantPagesSeedSql({
     siteId: "site-test",
     organizationId: "org-test",
-    locales: ["en", "th"],
+    sourceLocale: "en",
+    locales: [
+      { locale: "en", status: "published" },
+      { locale: "th", status: "published" },
+    ],
     rows: [{ id: "home-hero", page: "home", field: "hero", content: null, heroTitle: "Home" }],
-    translations: [{ locale: "th", page: "home", field: "hero", content: null, heroTitle: "หน้าแรก" }],
+    localeFields: [{ locale: "th", page: "home", field: "hero", content: null, heroTitle: "หน้าแรก", status: "published" }],
     additionalPages: [
       { page: "location", path: "/locations/old-town", title: "Old Town" },
       { page: "location", path: "/locations/riverside", title: "Riverside" },
@@ -240,20 +244,128 @@ test("multi-locale tenant page seeds preserve every locale variant", () => {
   const variants = db.prepare("SELECT page_id, locale, title FROM tenant_page_variants ORDER BY page_id, locale").all() as Array<{ page_id: string; locale: string; title: string }>;
   const blockCount = (db.prepare("SELECT COUNT(*) AS count FROM content_blocks").get() as { count: number }).count;
   assert.equal(pages.length, 5);
-  assert.equal(variants.length, 10);
-  assert.equal(blockCount, 10);
+  assert.equal(variants.length, 6);
+  assert.equal(blockCount, 6);
   assert.deepEqual(variants.filter(row => row.page_id.endsWith("-home")), [
     { page_id: "tenant-page-site-test-home", locale: "en", title: "Home" },
     { page_id: "tenant-page-site-test-home", locale: "th", title: "หน้าแรก" },
   ]);
   assert.deepEqual(variants.filter(row => row.page_id.endsWith("-locations-old-town")), [
     { page_id: "tenant-page-site-test-locations-old-town", locale: "en", title: "Old Town" },
-    { page_id: "tenant-page-site-test-locations-old-town", locale: "th", title: "Old Town" },
   ]);
   db.close();
 });
 
-test("pottery house translations block includes Thai content and location translations", () => {
+test("non-source page seeds do not publish source-language fallback variants", () => {
+  const sqlValue = (value: string | number | boolean | null) => {
+    if (value === null) return "NULL";
+    if (typeof value === "number") return String(value);
+    if (typeof value === "boolean") return value ? "1" : "0";
+    return `'${value.replaceAll("'", "''")}'`;
+  };
+  const sqlJson = (value: unknown) => sqlValue(JSON.stringify(value));
+
+  const sql = renderTenantPagesSeedSql({
+    siteId: "site-locale-contract",
+    organizationId: "org-locale-contract",
+    sourceLocale: "en",
+    locales: [
+      { locale: "en", status: "published" },
+      { locale: "th", status: "published" },
+    ],
+    rows: [
+      {
+        id: "locale-contract-home-hero",
+        page: "home",
+        field: "hero",
+        content: null,
+        heroTitle: "Source language home",
+      },
+    ],
+    localeFields: [],
+    sqlValue,
+    sqlJson,
+  });
+
+  const variantIds = [...sql.matchAll(/tenant-page-site-locale-contract-home-(en|th)/g)]
+    .map((match) => match[1]);
+  assert.deepEqual([...new Set(variantIds)], ["en"]);
+});
+
+test("page locale rendering keeps only published localized fields and locales", () => {
+  const sqlValue = (value: string | number | boolean | null) => {
+    if (value === null) return "NULL";
+    if (typeof value === "number") return String(value);
+    if (typeof value === "boolean") return value ? "1" : "0";
+    return `'${value.replaceAll("'", "''")}'`;
+  };
+  const sqlJson = (value: unknown) => sqlValue(JSON.stringify(value));
+
+  const sql = renderTenantPagesSeedSql({
+    siteId: "site-locale-status-contract",
+    organizationId: "org-locale-status-contract",
+    sourceLocale: "en",
+    locales: [
+      { locale: "en", status: "published" },
+      { locale: "th", status: "published" },
+      { locale: "ja", status: "disabled" },
+    ],
+    rows: [
+      {
+        id: "locale-status-home-hero",
+        page: "home",
+        field: "hero",
+        content: null,
+        heroTitle: "Source-language hero",
+      },
+      {
+        id: "locale-status-home-body",
+        page: "home",
+        field: "body",
+        content: "Source-only body",
+      },
+    ],
+    localeFields: [
+      {
+        locale: "th",
+        page: "home",
+        field: "hero",
+        content: null,
+        heroTitle: "ภาษาไทย",
+        status: "published",
+      },
+      {
+        locale: "th",
+        page: "home",
+        field: "body",
+        content: "Draft body must not publish",
+        status: "draft",
+      },
+      {
+        locale: "ja",
+        page: "home",
+        field: "hero",
+        content: null,
+        heroTitle: "日本語",
+        status: "published",
+      },
+    ],
+    sqlValue,
+    sqlJson,
+  });
+
+  const variantIds = [...sql.matchAll(/tenant-page-site-locale-status-contract-home-(en|th|ja)/g)]
+    .map((match) => match[1]);
+  assert.deepEqual([...new Set(variantIds)], ["en", "th"]);
+  const thaiSnapshot = sql.match(/VALUES \('[^']+-th-revision', '[^']+-th-document', '(\{"schemaVersion":1,"metadata":\{"locale":"th".*?\})', '', NULL, 'Fixture tenant page'/s)?.[1];
+  assert.ok(thaiSnapshot);
+  assert.doesNotMatch(thaiSnapshot, /Source-only body/);
+  assert.match(sql, /ภาษาไทย/);
+  assert.doesNotMatch(sql, /Draft body must not publish/);
+  assert.doesNotMatch(sql, /日本語/);
+});
+
+test("pottery house locale data block includes Thai content and location fields", () => {
   const sql = renderCompiledPotteryHouseLocaleVariantsBlock();
   const pages = renderCompiledPotteryHouseContentBlock();
 

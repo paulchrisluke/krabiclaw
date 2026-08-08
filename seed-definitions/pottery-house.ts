@@ -432,7 +432,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       category: 'interior',
     },
   ],
-  siteContent: [
+  tenantPageContent: [
     {
       id: 'sc-ph-home-hero',
       locationId: null,
@@ -742,7 +742,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       ],
     },
   ],
-  siteLocaleVariants: [
+  tenantPageLocaleFields: [
     {
       id: 'sct-ph-th-home-hero',
       locationId: null,
@@ -1291,9 +1291,10 @@ export function renderCompiledPotteryHouseContentBlock(): string {
   return renderTenantPagesSeedSql({
     siteId: compiledPotteryHouseSeed.identity.siteId,
     organizationId: compiledPotteryHouseSeed.identity.organizationId,
-    locales: compiledPotteryHouseSeed.siteLocales.map(locale => locale.locale),
-    rows: compiledPotteryHouseSeed.siteContent,
-    translations: compiledPotteryHouseSeed.siteLocaleVariants,
+    sourceLocale: compiledPotteryHouseSeed.siteLocales.find(locale => locale.isSource)!.locale,
+    locales: compiledPotteryHouseSeed.siteLocales.map(locale => ({ locale: locale.locale, status: locale.status })),
+    rows: compiledPotteryHouseSeed.tenantPageContent,
+    localeFields: compiledPotteryHouseSeed.tenantPageLocaleFields,
     sqlValue,
     sqlJson,
   })

@@ -17,6 +17,7 @@ const ACTIVE_ROOTS = [
   'shared',
   'utils',
 ]
+const SEED_NAMING_ROOTS = ['seed-definitions']
 const EXTENSIONS = new Set(['.js', '.mjs', '.ts', '.vue', '.json'])
 const RETIRED_FILES = [
   'components/billing/CreditPurchaseModal.vue',
@@ -44,6 +45,12 @@ const FORBIDDEN_ACTIVE_PATTERNS = [
   /\bCuratedSiteContentTranslationDefinition\b/,
   /\brenderCompiled(?:Demo|PotteryHouse)TranslationsBlock\b/,
   /\b(?:get_translation_inventory|start_translation_job|list_translation_jobs|get_translation_job|run_translation_job_batch|get_translation_review_items|save_translation_review_item|publish_translations)\b/,
+]
+const FORBIDDEN_SEED_NAMING_PATTERNS = [
+  /\bsiteContent\b/,
+  /\bsiteLocaleVariants\b/,
+  /\bSeedTenantPageTranslation\b/,
+  /\b(?:translations|translatedRows)\b/,
 ]
 
 function walk(directory) {
@@ -75,8 +82,20 @@ for (const root of ACTIVE_ROOTS) {
   }
 }
 
+for (const root of SEED_NAMING_ROOTS) {
+  const directory = join(ROOT, root)
+  if (!existsSync(directory)) continue
+  for (const file of walk(directory)) {
+    const relativePath = relative(ROOT, file)
+    const source = readFileSync(file, 'utf8')
+    for (const pattern of FORBIDDEN_SEED_NAMING_PATTERNS) {
+      if (pattern.test(source)) violations.push(`${relativePath}: ${pattern}`)
+    }
+  }
+}
+
 if (violations.length) {
-  console.error('Active retired product-model or translation paths found:')
+  console.error('Active retired product-model or seed locale paths found:')
   for (const violation of violations) console.error(`- ${violation}`)
   process.exit(1)
 }

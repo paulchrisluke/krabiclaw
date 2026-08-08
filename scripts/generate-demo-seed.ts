@@ -44,7 +44,8 @@ function renderMcpFixtureOrg(orgId: string, userId: string, name: string, slug: 
   const tenantPages = renderTenantPagesSeedSql({
     siteId,
     organizationId: orgId,
-    locales: ['en'],
+    sourceLocale: 'en',
+    locales: [{ locale: 'en', status: 'published' }],
     rows: [
       {
         id: `${siteId}-home-hero`,

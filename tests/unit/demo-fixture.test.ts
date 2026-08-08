@@ -18,6 +18,7 @@ import {
   renderCompiledDemoLocaleVariantsBlock,
   renderCompiledDemoBillingBlock,
 } from "../../seed-definitions/demo.ts";
+import { compileCuratedSiteFixture } from "../../seed-definitions/compile.ts";
 import { serializeCompiledSeedBundle } from "../../seed-definitions/serialize.ts";
 
 test("demo fixture experience slugs are unique", () => {
@@ -60,7 +61,7 @@ test("compiled demo seed normalizes org/site ids onto compiled rows", () => {
     ),
   );
   assert.ok(
-    compiledDemoSeed.siteContent.every(
+    compiledDemoSeed.tenantPageContent.every(
       (entry) => entry.organizationId === demoFixture.organizationId,
     ),
   );
@@ -68,6 +69,27 @@ test("compiled demo seed normalizes org/site ids onto compiled rows", () => {
     compiledDemoSeed.experiences.every(
       (experience) => experience.siteId === demoFixture.siteId,
     ),
+  );
+});
+
+test("compiled curated fixtures require an explicit published source locale", () => {
+  const sourceLocaleField = demoFixture.tenantPageLocaleFields![0]!;
+  assert.throws(
+    () => compileCuratedSiteFixture({
+      ...demoFixture,
+      tenantPageLocaleFields: [{ ...sourceLocaleField, locale: "en" }],
+    }),
+    /must target a non-source locale/,
+  );
+
+  assert.throws(
+    () => compileCuratedSiteFixture({
+      ...demoFixture,
+      siteLocales: demoFixture.siteLocales.map((locale) =>
+        locale.isSource ? { ...locale, status: "draft" as const } : locale,
+      ),
+    }),
+    /Source locale "en" must be published/,
   );
 });
 
@@ -167,7 +189,7 @@ test("demo content block delegates page composition to canonical tenant pages", 
   assert.ok(imagePayloads.every(payload => !("url" in payload)));
 });
 
-test("demo translations block includes Thai translations for content, locations, and menus", () => {
+test("demo locale data block includes Thai fields for content, locations, and menus", () => {
   const sql = renderCompiledDemoLocaleVariantsBlock();
   const pages = renderCompiledDemoTenantPagesBlock();
 

@@ -408,7 +408,7 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
     { id: 'media-tkma-food-2', locationId: 'loc-kikuzuki-tkma', ...cfImg('f0b1e4a4-28b3-466b-8947-300100c5e500', 'tkma-food-2'), altText: 'Sashimi at Take Me Away by KIKUZUKI' },
     { id: 'media-tkma-food-3', locationId: 'loc-kikuzuki-tkma', ...cfImg('d299dd02-5b40-4133-cb85-b947259d4500', 'tkma-food-3'), altText: 'Yakiniku skewers at Take Me Away by KIKUZUKI' },
   ],
-  siteContent: [
+  tenantPageContent: [
     {
       id: 'sc-kiku-home-hero',
       locationId: null,
@@ -857,9 +857,10 @@ export function renderKikuzukiContentBlock(): string {
   return renderTenantPagesSeedSql({
     siteId: identity.siteId,
     organizationId: identity.organizationId,
-    locales: compiledKikuzukiSeed.siteLocales.map(locale => locale.locale),
-    rows: compiledKikuzukiSeed.siteContent,
-    translations: compiledKikuzukiSeed.siteLocaleVariants,
+    sourceLocale: compiledKikuzukiSeed.siteLocales.find(locale => locale.isSource)!.locale,
+    locales: compiledKikuzukiSeed.siteLocales.map(locale => ({ locale: locale.locale, status: locale.status })),
+    rows: compiledKikuzukiSeed.tenantPageContent,
+    localeFields: compiledKikuzukiSeed.tenantPageLocaleFields,
     sqlValue,
     sqlJson,
   })

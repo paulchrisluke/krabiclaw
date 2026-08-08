@@ -490,7 +490,7 @@ export const demoFixture: CuratedSiteDefinition = {
       category: 'interior',
     },
   ],
-  siteContent: [
+  tenantPageContent: [
     // Home page
     {
       id: 'sc-demo-home-hero',
@@ -1144,7 +1144,7 @@ export const demoFixture: CuratedSiteDefinition = {
       ],
     },
   ],
-  siteLocaleVariants: [
+  tenantPageLocaleFields: [
     {
       id: 'sct-demo-th-home-hero',
       locationId: null,
@@ -1806,13 +1806,14 @@ export function renderCompiledDemoContentBlock(): string {
 }
 
 export function renderCompiledDemoTenantPagesBlock(): string {
-  const sourceRows = compiledDemoSeed.siteContent.filter(entry => !entry.locationId)
+  const sourceRows = compiledDemoSeed.tenantPageContent.filter(entry => !entry.locationId)
   return renderTenantPagesSeedSql({
     siteId: 'site-demo',
     organizationId: 'org-demo',
-    locales: compiledDemoSeed.siteLocales.map(locale => locale.locale),
+    sourceLocale: compiledDemoSeed.siteLocales.find(locale => locale.isSource)!.locale,
+    locales: compiledDemoSeed.siteLocales.map(locale => ({ locale: locale.locale, status: locale.status })),
     rows: sourceRows,
-    translations: compiledDemoSeed.siteLocaleVariants.filter(entry => !entry.locationId),
+    localeFields: compiledDemoSeed.tenantPageLocaleFields.filter(entry => !entry.locationId),
     pages: ['locations', 'menu', 'order', 'experiences', 'reservations', 'qa', 'reviews', 'posts', 'photos'],
     additionalPages: compiledDemoSeed.locations.map(location => ({
       page: 'location',
