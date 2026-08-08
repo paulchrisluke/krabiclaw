@@ -1,6 +1,37 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { createError, getHeader } from 'h3'
+import { createError, getHeader, toWebRequest } from 'h3'
 import { queryFirst, queryAll } from '~/server/db'
+import { createAuth } from '~/server/utils/auth'
+
+function stableTimestamp(value: Date | number | string | null | undefined): string | null {
+  if (value instanceof Date) return value.toISOString()
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const millis = value < 10_000_000_000 ? value * 1000 : value
+    const date = new Date(millis)
+    return Number.isNaN(date.getTime()) ? null : date.toISOString()
+  }
+  if (typeof value === 'string' && value.trim()) return value
+  return null
+}
+
+interface BetterAuthSubscriptionRead {
+  id?: string
+  referenceId?: string
+  plan?: string
+  status?: string
+  stripeCustomerId?: string | null
+  stripeSubscriptionId?: string | null
+  periodStart?: Date | number | string | null
+  periodEnd?: Date | number | string | null
+  cancelAtPeriodEnd?: boolean | number | null
+}
+
+interface BetterAuthSubscriptionApi {
+  listActiveSubscriptions(_input: {
+    query: { referenceId: string; customerType: 'organization' }
+    headers: Headers
+  }): Promise<BetterAuthSubscriptionRead[]>
+}
 
 const textEncoder = new TextEncoder()
 
@@ -46,21 +77,58 @@ export default defineEventHandler(async (event) => {
 
   const billing = await queryFirst(db, `
     SELECT ob.organization_id, ob.stripe_customer_id,
-           sb.site_id, ob.stripe_subscription_id, sb.stripe_subscription_item_id,
-           sb.status, sb.plan, sb.current_period_end, sb.cancel_at_period_end, sb.updated_at
+           ob.stripe_subscription_id, ob.status, ob.plan,
+           ob.payment_status, ob.current_period_end, ob.cancel_at_period_end, ob.updated_at
     FROM organization_billing ob
-    LEFT JOIN sites s ON s.organization_id = ob.organization_id
-    LEFT JOIN site_billing sb ON sb.site_id = s.id
-    WHERE ob.organization_id = ?
-    ORDER BY s.created_at ASC LIMIT 1
+    WHERE ob.organization_id = ? LIMIT 1
   `, [organizationId])
 
+  // Better Auth owns the canonical subscription row. Use its documented API
+  // with the caller's session headers so the canary proves the same
+  // organization authorization boundary as the owner checkout flow.
+  const betterAuthApi = createAuth(env).api as unknown as BetterAuthSubscriptionApi
+  const betterAuthSubscriptions = await betterAuthApi.listActiveSubscriptions({
+    query: { referenceId: organizationId, customerType: 'organization' },
+    headers: toWebRequest(event).headers,
+  })
+  const betterAuthSubscriptionRow = betterAuthSubscriptions.find(subscription => subscription.referenceId === organizationId) ?? null
+  const betterAuthSubscription = betterAuthSubscriptionRow
+    ? {
+        id: betterAuthSubscriptionRow.id ?? null,
+        referenceId: betterAuthSubscriptionRow.referenceId ?? null,
+        plan: betterAuthSubscriptionRow.plan ?? null,
+        status: betterAuthSubscriptionRow.status ?? null,
+        stripeCustomerId: betterAuthSubscriptionRow.stripeCustomerId ?? null,
+        stripeSubscriptionId: betterAuthSubscriptionRow.stripeSubscriptionId ?? null,
+        periodStart: stableTimestamp(betterAuthSubscriptionRow.periodStart),
+        periodEnd: stableTimestamp(betterAuthSubscriptionRow.periodEnd),
+        cancelAtPeriodEnd: Boolean(betterAuthSubscriptionRow.cancelAtPeriodEnd),
+      }
+    : null
+
   const entitlements = await queryAll(db, `
-    SELECT se.key, se.value, se.source, se.created_at, se.updated_at
+    SELECT se.site_id, se.key, se.value, se.source
     FROM site_entitlements se
     JOIN sites s ON s.id = se.site_id
     WHERE s.organization_id = ?
     ORDER BY se.key ASC
+  `, [organizationId])
+
+  const sitePlans = await queryAll(db, `
+    SELECT id AS site_id, plan, status
+    FROM sites
+    WHERE organization_id = ?
+    ORDER BY id ASC
+  `, [organizationId])
+
+  const invoicePayments = await queryAll(db, `
+    SELECT stripe_invoice_id, organization_id, stripe_subscription_id,
+           base_plan_price_id, status, period_start, period_end,
+           last_event_id
+    FROM stripe_invoice_payments
+    WHERE organization_id = ?
+    ORDER BY period_end DESC, stripe_invoice_id DESC
+    LIMIT 20
   `, [organizationId])
 
   const serviceAddonPurchases = await queryAll(db, `
@@ -72,7 +140,7 @@ export default defineEventHandler(async (event) => {
   `, [organizationId])
 
   let sql = `
-    SELECT id, stripe_event_id, event_type, status, payload, error,
+    SELECT id, stripe_event_id, event_type, status,
            claimed_at, lease_expires_at, attempt_count, created_at
     FROM stripe_webhook_events
     WHERE 1 = 1
@@ -88,7 +156,10 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({
     billing: billing ?? null,
+    better_auth_subscription: betterAuthSubscription ?? null,
     entitlements: entitlements ?? [],
+    site_plans: sitePlans ?? [],
+    invoice_payments: invoicePayments ?? [],
     service_addon_purchases: serviceAddonPurchases ?? [],
     webhook_events: webhookEvents ?? [],
   })

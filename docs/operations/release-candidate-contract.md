@@ -20,6 +20,10 @@ Every candidate run records all of the following in
 - candidate and post-promotion asset/provenance verification;
 - browser evidence, including the URL, desktop/mobile coverage, route matrix,
   and any failure artifacts; and
+- a post-promotion test-mode Stripe organization checkout canary (at 100% of
+  the candidate, using disposable `e2e-` state, hosted Checkout, Better Auth
+  subscription, app billing/entitlement projection, processed webhook, and
+  invoice ledger evidence with redacted provider IDs); and
 - a genuine baseline/candidate comparative benchmark with 25 samples per run,
   the source SHA and Worker version for both runs, deterministic request/query
   metrics, and the comparison result.
@@ -57,6 +61,10 @@ the entire sequence:
    purge the deployment HTML cache, and verify the staging custom domain and
    assets without an override. Run the named Saya/Blawby desktop and mobile
    browser projects once more against that deployed custom-domain version.
+8. Run the explicit test-mode Stripe checkout canary against the promoted
+   custom-domain candidate with no version override. Provider webhooks cannot
+   carry the 0% override, so this gate is post-promotion by design; a failure
+   follows the existing EXIT-trap baseline restoration path.
 
 If any command fails after the candidate is present in a deployment, the job
 detects that deployed candidate and restores the baseline to 100% before
