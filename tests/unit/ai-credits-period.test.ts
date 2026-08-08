@@ -215,6 +215,18 @@ test('quota status lazily records the exact current UTC week grant', async () =>
   assert.equal(credits.last_topped_up_at, null)
 })
 
+test('quota status exposes recurring period fields without a wallet total', async () => {
+  const db = createDb()
+  const status = await getAiQuotaStatus(db as never, 'org-canonical-fields', null, new Date('2026-08-10T12:34:56.000Z'))
+
+  assert.equal(status.planAllowance, 500)
+  assert.equal(status.periodAllowance, 500)
+  assert.equal(status.periodUsed, 0)
+  assert.equal(status.periodRemaining, 500)
+  assert.equal(status.lifetimeUsed, 0)
+  assert.equal('total' in status, false)
+})
+
 test('quota access follows the app billing projection and fails closed after trial expiry', async () => {
   const db = createDb()
   seedSubscription(db, {
@@ -446,6 +458,9 @@ test('reset balance excludes pre-reset usage and a later plan baseline counts th
   assert.equal(afterReset.balance, 50)
   assert.equal(afterReset.weeklyUsed, 100)
   assert.equal(afterReset.weeklyRemaining, 50)
+  assert.equal(afterReset.periodUsed, 100)
+  assert.equal(afterReset.periodAllowance, 50)
+  assert.equal(afterReset.periodRemaining, 50)
 
   await chargeFlatCredits(db as never, 'org-reset-consumption', {
     action: 'google_places_details',
@@ -460,6 +475,9 @@ test('reset balance excludes pre-reset usage and a later plan baseline counts th
   )
   assert.equal(consumedAfterReset.balance, 47)
   assert.equal(consumedAfterReset.weeklyRemaining, 47)
+  assert.equal(consumedAfterReset.periodUsed, 103)
+  assert.equal(consumedAfterReset.periodAllowance, 50)
+  assert.equal(consumedAfterReset.periodRemaining, 47)
 
   db.prepare('UPDATE organization_billing SET plan = ?, updated_at = ? WHERE organization_id = ?').run('growth', '2026-08-10T11:00:00.000Z', 'org-reset-consumption')
   const transitioned = await getAiQuotaStatus(

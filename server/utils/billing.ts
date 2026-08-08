@@ -20,9 +20,12 @@ interface SiteBillingRow {
 interface OrgBillingRow {
   stripe_customer_id: string | null
   stripe_subscription_id: string | null
+  plan: string | null
+  status: string | null
   payment_status: string | null
   paid_through: string | null
   past_due_since: string | null
+  current_period_end: string | null
 }
 
 interface BetterAuthSubscriptionRow {
@@ -127,19 +130,16 @@ export async function getSiteBillingStatus(
   }
 }
 
-// Backward-compat shim — org-level callers still work during transition
 export async function getOrganizationBillingStatus(
   env: BillingEnv,
   db: D1Database,
   organizationId: string,
 ): Promise<SiteBillingStatus> {
-  const site = await queryFirst<{ id: string }>(db, `SELECT id FROM sites WHERE organization_id = ? ORDER BY id LIMIT 1`, [organizationId])
-  if (site) return getSiteBillingStatus(env, db, site.id)
-
+  void env
   const subscription = await getBetterAuthSubscription(db, organizationId)
-  // No site yet — return bare org customer info
   const orgBilling = await queryFirst<OrgBillingRow>(db, `
-    SELECT stripe_customer_id, payment_status, paid_through, past_due_since
+    SELECT stripe_customer_id, stripe_subscription_id, plan, status,
+           payment_status, paid_through, past_due_since, current_period_end
     FROM organization_billing WHERE organization_id = ? LIMIT 1
   `, [organizationId])
 
@@ -157,12 +157,12 @@ export async function getOrganizationBillingStatus(
   return {
     plan: accessPlan,
     stripeCustomerId: subscription?.stripeCustomerId ?? orgBilling?.stripe_customer_id ?? undefined,
-    stripeSubscriptionId: subscription?.stripeSubscriptionId ?? undefined,
-    subscriptionStatus: subscription?.status,
+    stripeSubscriptionId: subscription?.stripeSubscriptionId ?? orgBilling?.stripe_subscription_id ?? undefined,
+    subscriptionStatus: subscription?.status ?? orgBilling?.status ?? undefined,
     paymentStatus: subscription?.paymentStatus ?? orgBilling?.payment_status ?? undefined,
     currentPeriodEnd: subscription?.periodEnd
       ? betterAuthTimestampToIso(subscription.periodEnd, 'subscription.periodEnd')
-      : undefined,
+      : orgBilling?.current_period_end ?? undefined,
     cancelAtPeriodEnd: subscription ? Boolean(subscription.cancelAtPeriodEnd) : undefined,
     entitlements: getPlanEntitlements(accessPlan),
   }

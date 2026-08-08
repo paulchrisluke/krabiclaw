@@ -28,11 +28,11 @@
       </div>
     </div>
 
-    <!-- SEO Accelerator — premium add-on -->
+    <!-- SEO Accelerator — recurring premium plan -->
     <div v-if="seoAcceleratorPlan" class="mt-6 rounded-2xl border border-default bg-elevated/30 p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center gap-6">
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2 mb-1">
-          <span class="text-xs font-bold uppercase tracking-widest text-primary">Premium Add-on</span>
+          <span class="text-xs font-bold uppercase tracking-widest text-primary">Premium Plan</span>
           <PlatformBadge v-if="seoAcceleratorPlan.badge" color="primary">{{ seoAcceleratorPlan.badge }}</PlatformBadge>
         </div>
         <h3 class="text-xl font-bold text-highlighted">{{ seoAcceleratorPlan.name }}</h3>
@@ -60,7 +60,7 @@
           class="font-bold"
           @click="handleUpgrade(seoAcceleratorPlan.id)"
         >
-          Get SEO Accelerator
+          Get SEO Accelerator Plan
         </PlatformButton>
       </div>
     </div>
@@ -174,7 +174,7 @@ const comparisonRows: ComparisonRow[] = [
   { feature: 'AI site builder (live in minutes)', free: true,    growth: true,      managed: true },
   { feature: 'WhatsApp content updates',          free: false,   growth: true,      managed: true },
   { feature: 'Bookings & experiences',            free: true,    growth: true,      managed: true },
-  { feature: 'AI content generation',             free: '500 credits', growth: '2,000 credits', managed: 'Unlimited' },
+  { feature: 'Shared organization usage credits', free: '500 / UTC week', growth: '2,000 / UTC week', managed: 'Unlimited' },
   { feature: 'LLM-ready SEO (get found by AI)',   free: 'Basic', growth: 'Advanced', managed: 'Advanced' },
   { feature: 'Custom domain',                     free: false,   growth: true,      managed: true },
   { feature: 'Facebook auto-sync',                free: false,   growth: true,      managed: true },

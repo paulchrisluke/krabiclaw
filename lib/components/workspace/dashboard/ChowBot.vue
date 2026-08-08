@@ -31,14 +31,24 @@
         <div class="flex items-center gap-2">
           <UIcon name="i-lucide-bot" class="size-4 text-primary" />
           <span class="text-sm font-semibold">ChowBot</span>
-          <UTooltip v-if="balance !== null" :text="`${balance} credits remaining`">
+          <UTooltip v-if="unlimited" text="Unlimited shared usage credits this UTC week">
+            <UBadge
+              color="neutral"
+              variant="subtle"
+              size="sm"
+              class="cursor-default tabular-nums"
+            >
+              Unlimited / week
+            </UBadge>
+          </UTooltip>
+          <UTooltip v-else-if="periodRemaining !== null" :text="`${periodRemaining.toLocaleString()} shared credits remaining this UTC week`">
             <UBadge
               :color="isDepleted ? 'error' : isLow ? 'warning' : 'neutral'"
               variant="subtle"
               size="sm"
               class="cursor-default tabular-nums"
             >
-              {{ (total !== null ? total - balance : 0).toLocaleString() }} / {{ (total ?? balance).toLocaleString() }}
+              {{ periodUsed.toLocaleString() }} / {{ (periodAllowance ?? 0).toLocaleString() }}
             </UBadge>
           </UTooltip>
         </div>
@@ -67,7 +77,7 @@
       <div v-if="isDepleted" class="shrink-0 border-b border-error-200 dark:border-error-800 bg-error-50 dark:bg-error-950 px-4 py-3 flex flex-col gap-2">
         <div class="flex items-center gap-2 text-xs text-error-600 dark:text-error-400">
           <UIcon name="i-lucide-triangle-alert" class="size-3.5 shrink-0" />
-          <span class="font-medium">Subscription AI quota exhausted</span>
+          <span class="font-medium">Shared weekly usage quota exhausted</span>
         </div>
         <NuxtLink v-if="orgSettings.billing.value" :to="orgSettings.billing.value" class="text-xs font-medium text-error-700 underline dark:text-error-300" @click="close">
           Review your subscription plan →
@@ -75,7 +85,7 @@
       </div>
       <div v-else-if="isLow" class="shrink-0 bg-warning-50 dark:bg-warning-950 px-4 py-2 text-xs text-warning-600 dark:text-warning-400 flex items-center gap-2">
         <UIcon name="i-lucide-triangle-alert" class="size-3.5 shrink-0" />
-        Low credits ({{ balance }} remaining).
+        Low shared credits ({{ periodRemaining }} remaining this UTC week).
         <NuxtLink v-if="orgSettings.billing.value" :to="orgSettings.billing.value" class="underline" @click="close">Review plan →</NuxtLink>
       </div>
 
@@ -188,7 +198,7 @@ const { isOpen, messages, isLoading, siteId, close, sendMessage, clearMessages, 
 const { paths: dashboardSiteLinkPaths } = useDashboardSiteLinks(siteId.value ?? '')
 const orgSettings = useOrgSettings()
 const DOMPurify = import.meta.client ? await loadDomPurify() : { sanitize: sanitizeHtmlForSsr }
-const { balance, total, isLow, isDepleted, fetch: fetchCredits } = useAiCredits(siteId)
+const { periodAllowance, periodUsed, periodRemaining, unlimited, isLow, isDepleted, fetch: fetchCredits } = useAiCredits(siteId)
 
 watch(isOpen, (open: boolean) => { if (open && siteId.value) fetchCredits() })
 

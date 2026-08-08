@@ -1,19 +1,10 @@
 import type { H3Event } from 'h3'
 import type Stripe from 'stripe'
 import { queryAll, queryFirst } from '~/server/db'
-import { getAiQuotaStatus, getOrCreateCredits } from '~/server/utils/ai-credits'
+import { getOrganizationCreditsResource } from '~/server/utils/ai-credits'
 import { getOrganizationBillingStatus, getStripe, requireBillingAccess } from '~/server/utils/billing'
+import { mapOrganizationSites, type OrganizationSiteRow } from '~/server/utils/billing-site-resource'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
-
-interface SiteBillingRow {
-  id: string
-  brand_name: string | null
-  subdomain: string | null
-  plan: string
-  status: string | null
-  current_period_end: string | null
-  cancel_at_period_end: number | null
-}
 
 export async function loadDashboardBillingResource(event: H3Event, organizationSlug: string) {
   if (!organizationSlug) {
@@ -24,31 +15,12 @@ export async function loadDashboardBillingResource(event: H3Event, organizationS
     organizationSlug,
   })
   await requireBillingAccess(env, db, organization.id, userId)
-  const [billingStatus, credits, quota, usage, byAction, siteRows, organizationBilling] = await Promise.all([
+  const [billingStatus, credits, siteRows, organizationBilling] = await Promise.all([
     getOrganizationBillingStatus(env, db, organization.id),
-    getOrCreateCredits(db, organization.id),
-    getAiQuotaStatus(db, organization.id),
-    queryAll(db, `
-      SELECT u.action, u.model, u.input_tokens, u.output_tokens, u.credits_charged,
-             u.created_at, s.brand_name AS site_name
-        FROM ai_usage_log u
-        LEFT JOIN sites s ON u.site_id = s.id
-       WHERE u.organization_id = ?
-       ORDER BY u.created_at DESC
-       LIMIT 50
-    `, [organization.id]),
-    queryAll(db, `
-      SELECT action, SUM(credits_charged) AS total_credits, COUNT(*) AS calls
-        FROM ai_usage_log
-       WHERE organization_id = ?
-       GROUP BY action
-       ORDER BY total_credits DESC
-    `, [organization.id]),
-    queryAll<SiteBillingRow>(db, `
-      SELECT s.id, s.brand_name, s.subdomain, COALESCE(sb.plan, 'free') AS plan,
-             sb.status, sb.current_period_end, sb.cancel_at_period_end
+    getOrganizationCreditsResource(db, organization.id),
+    queryAll<OrganizationSiteRow>(db, `
+      SELECT s.id, s.brand_name, s.subdomain
         FROM sites s
-        LEFT JOIN site_billing sb ON sb.site_id = s.id
        WHERE s.organization_id = ?
        ORDER BY s.created_at ASC
     `, [organization.id]),
@@ -83,24 +55,12 @@ export async function loadDashboardBillingResource(event: H3Event, organizationS
       userRole: organization.role,
     },
     credits: {
-      balance: credits.balance,
-      lifetime_used: credits.lifetime_used,
-      quota,
-      usage,
-      by_action: byAction,
+      ...credits,
     },
     paymentMethod: { card },
     sites: {
       success: true as const,
-      sites: siteRows.map(row => ({
-        siteId: row.id,
-        brandName: row.brand_name,
-        subdomain: row.subdomain,
-        plan: row.plan,
-        subscriptionStatus: row.status ?? undefined,
-        currentPeriodEnd: row.current_period_end ?? undefined,
-        cancelAtPeriodEnd: row.cancel_at_period_end ? Boolean(row.cancel_at_period_end) : undefined,
-      })),
+      sites: mapOrganizationSites(siteRows, billingStatus),
     },
   }
 }

@@ -1,4 +1,4 @@
-import { execute, executeBatch, queryFirst, type DbClient } from '~/server/db'
+import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import {
   getCurrentCreditGrantProjection,
   grantQuota,
@@ -12,6 +12,15 @@ const CREDITS_PER_1K_TOKENS = 1
 
 export interface AiQuotaStatus {
   plan: string
+  /** Base allowance from the effective organization subscription plan. */
+  planAllowance: number | null
+  /** Effective allowance for this UTC week after the latest baseline/manual grants. */
+  periodAllowance: number | null
+  /** All canonical credit usage recorded during the current UTC week. */
+  periodUsed: number
+  /** Remaining effective allowance after usage in the active quota window. */
+  periodRemaining: number | null
+  lifetimeUsed: number
   balance: number
   weeklyLimit: number | null
   weeklyUsed: number
@@ -24,6 +33,113 @@ export interface AiQuotaStatus {
   grantQuantity: number | null
   unlimited: boolean
   reconciliationRequired: boolean
+}
+
+export interface CanonicalUsageEventRow {
+  resource: string
+  site_id: string | null
+  site_name: string | null
+  quantity: number
+  metadata_json: string | null
+  created_at: string
+}
+
+export interface CanonicalUsageEvent {
+  resource: string
+  site_id: string | null
+  site_name: string | null
+  action: string | null
+  quantity: number
+  charged: boolean | null
+  created_at: string
+}
+
+export interface CanonicalUsageGroup {
+  resource: string
+  action: string | null
+  charged: boolean | null
+  quantity: number
+  calls: number
+}
+
+/**
+ * Parse the small, explicitly supported metadata surface for usage events.
+ * Provider payloads and token details are intentionally not exposed by the
+ * billing DTO; the canonical quantity column remains the usage measurement.
+ */
+export function parseUsageEventRow(row: CanonicalUsageEventRow): CanonicalUsageEvent {
+  let action: string | null = null
+  let charged: boolean | null = null
+  if (typeof row.metadata_json === 'string' && row.metadata_json.trim()) {
+    try {
+      const parsed: unknown = JSON.parse(row.metadata_json)
+      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+        const metadata = parsed as Record<string, unknown>
+        if (typeof metadata.action === 'string' && metadata.action.trim()) action = metadata.action.trim()
+        if (typeof metadata.charged === 'boolean') charged = metadata.charged
+      }
+    } catch {
+      // Malformed optional metadata does not erase the durable usage event.
+    }
+  }
+  const quantity = row.quantity
+  if (typeof quantity !== 'number' || !Number.isSafeInteger(quantity) || quantity < 0) {
+    throw new Error('Invalid canonical usage quantity.')
+  }
+  return {
+    resource: row.resource,
+    site_id: row.site_id ?? null,
+    site_name: row.site_name ?? null,
+    action,
+    quantity,
+    charged,
+    created_at: row.created_at,
+  }
+}
+
+interface CanonicalUsageGroupRow {
+  resource: string
+  action: string | null
+  charged: number | null
+  quantity: number
+  calls: number
+}
+
+function parseUsageGroupRow(row: CanonicalUsageGroupRow): CanonicalUsageGroup {
+  const quantity = row.quantity
+  const calls = row.calls
+  if (typeof quantity !== 'number' || typeof calls !== 'number'
+    || !Number.isSafeInteger(quantity) || quantity < 0 || !Number.isSafeInteger(calls) || calls < 0) {
+    throw new Error('Invalid canonical usage aggregate.')
+  }
+  return {
+    resource: row.resource,
+    action: typeof row.action === 'string' && row.action.trim() ? row.action.trim() : null,
+    charged: row.charged === 1 ? true : row.charged === 0 ? false : null,
+    quantity,
+    calls,
+  }
+}
+
+export function groupUsageEvents(rows: CanonicalUsageEvent[]): CanonicalUsageGroup[] {
+  const groups = new Map<string, CanonicalUsageGroup>()
+  for (const row of rows) {
+    const key = JSON.stringify([row.resource, row.action, row.charged])
+    const existing = groups.get(key)
+    if (existing) {
+      existing.quantity += row.quantity
+      existing.calls += 1
+      continue
+    }
+    groups.set(key, {
+      resource: row.resource,
+      action: row.action,
+      charged: row.charged,
+      quantity: row.quantity,
+      calls: 1,
+    })
+  }
+  return [...groups.values()].sort((left, right) => right.quantity - left.quantity || left.resource.localeCompare(right.resource))
 }
 
 interface CreditRow {
@@ -366,27 +482,125 @@ export async function getAiQuotaStatus(
   const sessionUsed = Number(session?.total ?? 0)
   const projection = await getCurrentCreditGrantProjection(db, organizationId, now)
   const reconciliationRequired = credits.balance_period_key === null
-  const allowance = reconciliationRequired
-    ? null
-    : weeklyLimit === null ? null : projection.grantQuantity ?? weeklyLimit
   const quotaUsed = reconciliationRequired
     ? 0
     : await currentQuotaUsage(db, organizationId, projection.consumptionStart ?? periodStart, periodEnd)
+  const periodAllowance = reconciliationRequired
+    ? null
+    : weeklyLimit === null ? null : projection.grantQuantity ?? weeklyLimit
+  const periodRemaining = reconciliationRequired
+    ? 0
+    : periodAllowance === null ? null : Math.max(0, periodAllowance - quotaUsed)
 
   return {
     plan,
+    planAllowance: weeklyLimit,
+    periodAllowance,
+    periodUsed: weeklyUsed,
+    periodRemaining,
+    lifetimeUsed: credits.lifetime_used,
     balance: credits.balance,
     weeklyLimit,
     weeklyUsed,
-    weeklyRemaining: reconciliationRequired ? 0 : allowance === null ? null : Math.max(0, allowance - quotaUsed),
+    weeklyRemaining: periodRemaining,
     sessionLimit,
     sessionUsed,
     sessionRemaining: sessionLimit === null ? null : Math.max(0, sessionLimit - sessionUsed),
     periodStart,
     periodEnd,
-    grantQuantity: reconciliationRequired ? null : allowance,
+    grantQuantity: periodAllowance,
     unlimited: !reconciliationRequired && weeklyLimit === null,
     reconciliationRequired,
+  }
+}
+
+export interface OrganizationCreditsResource {
+  plan: string
+  planAllowance: number | null
+  periodAllowance: number | null
+  periodUsed: number
+  periodRemaining: number | null
+  periodStart: string
+  periodEnd: string
+  lifetimeUsed: number
+  sessionLimit: number | null
+  sessionUsed: number
+  sessionRemaining: number | null
+  unlimited: boolean
+  reconciliationRequired: boolean
+  usage: CanonicalUsageEvent[]
+  byAction: CanonicalUsageGroup[]
+}
+
+/**
+ * Build the one organization-level credits payload consumed by both the
+ * billing API and dashboard SSR. Quota status is resolved once; recent usage
+ * and grouping always come from the canonical append-only usage_events ledger.
+ */
+export async function getOrganizationCreditsResource(
+  db: DbClient,
+  organizationId: string,
+  sessionId?: string | null,
+  now = new Date(),
+): Promise<OrganizationCreditsResource> {
+  const quota = await getAiQuotaStatus(db, organizationId, sessionId, now)
+  const [usageRows, usageGroupRows] = await Promise.all([
+    queryAll<CanonicalUsageEventRow>(db, `
+      SELECT u.resource, u.site_id, s.brand_name AS site_name,
+             u.quantity, u.metadata_json, u.created_at
+        FROM usage_events u
+        LEFT JOIN sites s ON s.id = u.site_id
+       WHERE u.organization_id = ?
+         AND u.unit = 'credit'
+         AND u.created_at >= ?
+         AND u.created_at < ?
+       ORDER BY u.created_at DESC
+       LIMIT 50
+    `, [organizationId, quota.periodStart, quota.periodEnd]),
+    queryAll<CanonicalUsageGroupRow>(db, `
+      SELECT u.resource,
+             CASE WHEN json_valid(u.metadata_json) THEN
+               CASE
+                 WHEN json_type(u.metadata_json, '$.action') = 'text'
+                 THEN json_extract(u.metadata_json, '$.action')
+                 ELSE NULL
+               END
+             ELSE NULL END AS action,
+             CASE WHEN json_valid(u.metadata_json) THEN
+               CASE
+                 WHEN json_type(u.metadata_json, '$.charged') = 'true' THEN 1
+                 WHEN json_type(u.metadata_json, '$.charged') = 'false' THEN 0
+                 ELSE NULL
+               END
+             ELSE NULL END AS charged,
+             COALESCE(SUM(u.quantity), 0) AS quantity,
+             COUNT(*) AS calls
+        FROM usage_events u
+       WHERE u.organization_id = ?
+         AND u.unit = 'credit'
+         AND u.created_at >= ?
+         AND u.created_at < ?
+       GROUP BY u.resource, action, charged
+       ORDER BY quantity DESC, u.resource ASC
+    `, [organizationId, quota.periodStart, quota.periodEnd]),
+  ])
+  const usage = usageRows.map(parseUsageEventRow)
+  return {
+    plan: quota.plan,
+    planAllowance: quota.planAllowance,
+    periodAllowance: quota.periodAllowance,
+    periodUsed: quota.periodUsed,
+    periodRemaining: quota.periodRemaining,
+    periodStart: quota.periodStart,
+    periodEnd: quota.periodEnd,
+    lifetimeUsed: quota.lifetimeUsed,
+    sessionLimit: quota.sessionLimit,
+    sessionUsed: quota.sessionUsed,
+    sessionRemaining: quota.sessionRemaining,
+    unlimited: quota.unlimited,
+    reconciliationRequired: quota.reconciliationRequired,
+    usage,
+    byAction: usageGroupRows.map(parseUsageGroupRow),
   }
 }
 

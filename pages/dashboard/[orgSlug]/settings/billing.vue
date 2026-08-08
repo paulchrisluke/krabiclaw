@@ -109,65 +109,93 @@
           <p v-else class="text-sm text-muted">No payment method saved. Add one when you subscribe or upgrade your plan.</p>
         </UCard>
 
-        <!-- AI Credits -->
+        <!-- Shared organization usage quota -->
         <UCard>
           <template #header>
-            <div class="space-y-3">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
                 <UIcon name="i-lucide-bot" class="size-4 text-primary" />
-                <h2 class="font-semibold">AI Credits</h2>
+                <h2 class="font-semibold">Shared usage credits</h2>
               </div>
               <div class="flex items-center gap-2">
                 <span v-if="credits" class="text-sm text-muted">
-                  {{ credits.lifetime_used.toLocaleString() }} used · {{ credits.balance.toLocaleString() }} remaining
+                  <template v-if="credits.unlimited">Unlimited this UTC week</template>
+                  <template v-else>{{ credits.periodRemaining?.toLocaleString() ?? '0' }} remaining this UTC week</template>
                 </span>
                 <UButton v-else size="xs" color="primary" variant="soft" icon="i-lucide-zap" @click="openServiceUpsell('growth', 'billing-credits')">
                   Upgrade for more
                 </UButton>
               </div>
             </div>
-            </div>
           </template>
 
           <USkeleton v-if="creditsLoading" class="h-32 w-full" />
 
           <div v-else-if="credits" class="space-y-4">
-            <div>
+            <div v-if="credits.unlimited" class="rounded-lg bg-elevated px-3 py-3 text-sm">
+              <p class="font-medium text-highlighted">Unlimited shared usage credits</p>
+              <p class="mt-1 text-xs text-muted">The organization plan has no finite weekly allowance.</p>
+            </div>
+            <div v-else>
               <div class="mb-1 flex items-center justify-between text-xs text-muted">
-                <span>{{ credits.lifetime_used.toLocaleString() }} used</span>
-                <span>{{ (credits.balance + credits.lifetime_used).toLocaleString() }} total granted</span>
+                <span>{{ credits.periodUsed.toLocaleString() }} used this UTC week</span>
+                <span>{{ credits.periodRemaining?.toLocaleString() ?? 'Unlimited' }} remaining</span>
               </div>
-              <UProgress
-                :model-value="credits.lifetime_used"
-                :max="credits.balance + credits.lifetime_used || 1"
-                :color="credits.balance < 50 ? 'error' : credits.balance < 200 ? 'warning' : 'primary'"
-              />
+              <p class="text-xs text-muted">Effective current allowance: {{ credits.periodAllowance?.toLocaleString() ?? 'Unlimited' }} credits for this period.</p>
             </div>
 
-            <div v-if="credits.quota" class="grid gap-2 text-xs sm:grid-cols-2">
+            <div class="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-3">
               <div class="rounded-lg bg-elevated px-3 py-2">
-                <p class="text-muted">Weekly AI quota</p>
+                <p class="text-muted">Plan allowance</p>
                 <p class="mt-0.5 font-semibold tabular-nums">
-                  {{ Number(credits.quota.weeklyUsed).toLocaleString() }}
-                  <span v-if="credits.quota.weeklyLimit !== null"> / {{ Number(credits.quota.weeklyLimit).toLocaleString() }}</span>
-                  <span v-else> / unlimited</span>
-                </p>
-              </div>
-              <div class="rounded-lg bg-elevated px-3 py-2">
-                <p class="text-muted">Per-chat session cap</p>
-                <p class="mt-0.5 font-semibold tabular-nums">
-                  <span v-if="credits.quota.sessionLimit !== null">{{ Number(credits.quota.sessionLimit).toLocaleString() }} credits</span>
+                  <span v-if="credits.planAllowance !== null">{{ credits.planAllowance.toLocaleString() }} / UTC week</span>
                   <span v-else>unlimited</span>
                 </p>
               </div>
+              <div class="rounded-lg bg-elevated px-3 py-2">
+                <p class="text-muted">Effective current allowance</p>
+                <p class="mt-0.5 font-semibold tabular-nums">
+                  <span v-if="credits.periodAllowance !== null">{{ credits.periodAllowance.toLocaleString() }} credits</span>
+                  <span v-else>unlimited</span>
+                </p>
+              </div>
+              <div class="rounded-lg bg-elevated px-3 py-2">
+                <p class="text-muted">Used this UTC week</p>
+                <p class="mt-0.5 font-semibold tabular-nums">{{ credits.periodUsed.toLocaleString() }}</p>
+              </div>
+              <div class="rounded-lg bg-elevated px-3 py-2">
+                <p class="text-muted">Remaining this UTC week</p>
+                <p class="mt-0.5 font-semibold tabular-nums">
+                  <span v-if="credits.periodRemaining !== null">{{ credits.periodRemaining.toLocaleString() }}</span>
+                  <span v-else>unlimited</span>
+                </p>
+              </div>
+              <div class="rounded-lg bg-elevated px-3 py-2">
+                <p class="text-muted">Current UTC-week period</p>
+                <p class="mt-0.5 font-semibold">{{ formatDate(credits.periodStart) }} – {{ formatDate(credits.periodEnd) }}</p>
+              </div>
+              <div class="rounded-lg bg-elevated px-3 py-2">
+                <p class="text-muted">Lifetime usage</p>
+                <p class="mt-0.5 font-semibold tabular-nums">{{ credits.lifetimeUsed.toLocaleString() }}</p>
+              </div>
+              <div class="rounded-lg bg-elevated px-3 py-2">
+                <p class="text-muted">Per-chat cap</p>
+                <p class="mt-0.5 font-semibold tabular-nums">
+                  <span v-if="credits.sessionLimit !== null">{{ credits.sessionLimit.toLocaleString() }} credits</span>
+                  <span v-else>unlimited</span>
+                </p>
+              </div>
+              <div v-if="credits.reconciliationRequired" class="rounded-lg border border-warning-200 bg-warning-50 px-3 py-2 text-warning-700 dark:border-warning-800 dark:bg-warning-950 dark:text-warning-300 sm:col-span-2 lg:col-span-3">
+                <p class="font-medium">Quota reconciliation required</p>
+                <p class="mt-0.5">An older credit projection needs an approved billing adjustment before usage can continue.</p>
+              </div>
             </div>
 
-            <div v-if="credits.by_action?.length" class="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <div v-for="row in credits.by_action" :key="row.action" class="rounded-lg bg-elevated px-3 py-2">
-                <p class="text-xs text-muted capitalize">{{ String(row.action).replace(/_/g, ' ') }}</p>
-                <p class="mt-0.5 text-lg font-semibold tabular-nums">{{ Number(row.total_credits).toLocaleString() }}</p>
-                <p class="text-xs text-muted">{{ row.calls }} call{{ Number(row.calls) === 1 ? '' : 's' }}</p>
+            <div v-if="credits.byAction?.length" class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div v-for="row in credits.byAction" :key="`${row.resource}:${row.action}:${row.charged}`" class="rounded-lg bg-elevated px-3 py-2">
+                <p class="text-xs text-muted capitalize">{{ String(row.action || row.resource).replace(/_/g, ' ') }}</p>
+                <p class="mt-0.5 text-lg font-semibold tabular-nums">{{ row.quantity.toLocaleString() }}</p>
+                <p class="text-xs text-muted">{{ row.calls }} call{{ row.calls === 1 ? '' : 's' }} · {{ row.charged === false ? 'not charged' : row.charged === true ? 'charged' : 'charge unknown' }}</p>
               </div>
             </div>
 
@@ -177,28 +205,28 @@
                 <table class="w-full text-sm">
                   <thead class="bg-elevated">
                     <tr>
+                      <th class="px-3 py-2 text-left text-xs font-medium text-muted">Resource</th>
                       <th class="px-3 py-2 text-left text-xs font-medium text-muted">Action</th>
                       <th class="px-3 py-2 text-left text-xs font-medium text-muted">Site</th>
-                      <th class="px-3 py-2 text-right text-xs font-medium text-muted">In</th>
-                      <th class="px-3 py-2 text-right text-xs font-medium text-muted">Out</th>
-                      <th class="px-3 py-2 text-right text-xs font-medium text-muted">Credits</th>
+                      <th class="px-3 py-2 text-right text-xs font-medium text-muted">Quantity</th>
+                      <th class="px-3 py-2 text-right text-xs font-medium text-muted">Charged</th>
                       <th class="px-3 py-2 text-right text-xs font-medium text-muted">When</th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-default">
                     <tr v-for="(row, i) in credits.usage" :key="i" class="hover:bg-elevated/50">
-                      <td class="px-3 py-2 capitalize">{{ String(row.action).replace(/_/g, ' ') }}</td>
-                      <td class="px-3 py-2 text-muted">{{ row.site_name || '—' }}</td>
-                      <td class="px-3 py-2 text-right tabular-nums text-muted">{{ Number(row.input_tokens).toLocaleString() }}</td>
-                      <td class="px-3 py-2 text-right tabular-nums text-muted">{{ Number(row.output_tokens).toLocaleString() }}</td>
-                      <td class="px-3 py-2 text-right font-medium tabular-nums">{{ row.credits_charged }}</td>
+                      <td class="px-3 py-2 capitalize">{{ String(row.resource).replace(/_/g, ' ') }}</td>
+                      <td class="px-3 py-2 capitalize">{{ row.action ? String(row.action).replace(/_/g, ' ') : '—' }}</td>
+                      <td class="px-3 py-2 text-muted">{{ row.site_name || row.site_id || '—' }}</td>
+                      <td class="px-3 py-2 text-right font-medium tabular-nums">{{ row.quantity.toLocaleString() }}</td>
+                      <td class="px-3 py-2 text-right text-muted">{{ row.charged === false ? 'No' : row.charged === true ? 'Yes' : 'Unknown' }}</td>
                       <td class="px-3 py-2 text-right text-muted">{{ formatRelativeTime(String(row.created_at)) }}</td>
                     </tr>
                   </tbody>
                 </table>
               </div>
             </div>
-            <p v-else class="text-sm text-muted">No AI usage yet.</p>
+            <p v-else class="text-sm text-muted">No usage recorded this UTC week.</p>
           </div>
 
           <div v-else class="rounded-lg border border-dashed border-default bg-elevated p-5">
@@ -299,7 +327,7 @@ const { isAuthenticated } = useAuth()
 const { startSubscriptionCheckout } = useSubscriptionCheckout()
 const loading = ref(true)
 const billing = ref<ApiRecord | null>(null)
-const credits = ref<ApiRecord | null>(null)
+const credits = ref<BillingCreditsResource | null>(null)
 
 interface SiteBillingSummary {
   siteId: string
@@ -407,9 +435,45 @@ const openBillingPortal = async () => {
 
 interface BillingResource {
   billing: ApiRecord
-  credits: ApiRecord
+  credits: BillingCreditsResource
   paymentMethod: { card: SavedCard | null }
   sites: { success: true; sites: SiteBillingSummary[] }
+}
+
+interface BillingCreditsUsage {
+  resource: string
+  site_id: string | null
+  site_name: string | null
+  action: string | null
+  quantity: number
+  charged: boolean | null
+  created_at: string
+}
+
+interface BillingCreditsGroup {
+  resource: string
+  action: string | null
+  charged: boolean | null
+  quantity: number
+  calls: number
+}
+
+interface BillingCreditsResource {
+  plan: string
+  planAllowance: number | null
+  periodAllowance: number | null
+  periodUsed: number
+  periodRemaining: number | null
+  periodStart: string
+  periodEnd: string
+  lifetimeUsed: number
+  sessionLimit: number | null
+  sessionUsed: number
+  sessionRemaining: number | null
+  unlimited: boolean
+  reconciliationRequired: boolean
+  usage: BillingCreditsUsage[]
+  byAction: BillingCreditsGroup[]
 }
 
 const isSiteBillingSummary = (value: unknown): value is SiteBillingSummary =>
@@ -431,22 +495,39 @@ const isSavedCard = (value: unknown): value is SavedCard =>
   && typeof value.exp_year === 'number'
 const isPaymentMethodResponse = (value: unknown): value is { card: SavedCard | null } =>
   isRecord(value) && (value.card === null || isSavedCard(value.card))
-const isCreditsResponse = (value: unknown): value is ApiRecord =>
+const isCreditsResponse = (value: unknown): value is BillingCreditsResource =>
   isRecord(value)
-  && typeof value.balance === 'number'
-  && typeof value.lifetime_used === 'number'
+  && typeof value.plan === 'string'
+  && (value.planAllowance === null || typeof value.planAllowance === 'number')
+  && (value.periodAllowance === null || typeof value.periodAllowance === 'number')
+  && typeof value.periodUsed === 'number'
+  && (value.periodRemaining === null || typeof value.periodRemaining === 'number')
+  && typeof value.periodStart === 'string'
+  && typeof value.periodEnd === 'string'
+  && typeof value.lifetimeUsed === 'number'
+  && (value.sessionLimit === null || typeof value.sessionLimit === 'number')
+  && typeof value.sessionUsed === 'number'
+  && (value.sessionRemaining === null || typeof value.sessionRemaining === 'number')
+  && typeof value.unlimited === 'boolean'
+  && typeof value.reconciliationRequired === 'boolean'
   && Array.isArray(value.usage)
   && value.usage.every(row =>
     isRecord(row)
-    && typeof row.action === 'string'
-    && typeof row.credits_charged === 'number'
+    && typeof row.resource === 'string'
+    && (row.site_id === null || typeof row.site_id === 'string')
+    && (row.site_name === null || typeof row.site_name === 'string')
+    && (row.action === null || typeof row.action === 'string')
+    && typeof row.quantity === 'number'
+    && (row.charged === null || typeof row.charged === 'boolean')
     && typeof row.created_at === 'string',
   )
-  && Array.isArray(value.by_action)
-  && value.by_action.every(row =>
+  && Array.isArray(value.byAction)
+  && value.byAction.every(row =>
     isRecord(row)
-    && typeof row.action === 'string'
-    && typeof row.total_credits === 'number'
+    && typeof row.resource === 'string'
+    && (row.action === null || typeof row.action === 'string')
+    && (row.charged === null || typeof row.charged === 'boolean')
+    && typeof row.quantity === 'number'
     && typeof row.calls === 'number',
   )
 const isBillingResponse = (value: unknown): value is ApiRecord =>
@@ -468,7 +549,7 @@ const { data: billingResource, error: billingResourceError, pending: billingReso
     }
     const [billingResponse, creditsResponse, paymentMethodResponse, sitesResponse] = await Promise.all([
       dashboardApi<ApiRecord>('/api/billing/status', { validate: isBillingResponse }),
-      dashboardApi<ApiRecord>('/api/billing/credits', { validate: isCreditsResponse }),
+      dashboardApi<BillingCreditsResource>('/api/billing/credits', { validate: isCreditsResponse }),
       dashboardApi<{ card: SavedCard | null }>('/api/billing/payment-method', { validate: isPaymentMethodResponse }),
       dashboardApi<{ success: true; sites: SiteBillingSummary[] }>('/api/billing/sites', { validate: isSitesResponse }),
     ])
