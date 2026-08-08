@@ -54,16 +54,6 @@
               >
                 View
               </UButton>
-              <UButton
-                size="xs"
-                color="success"
-                variant="soft"
-                icon="i-lucide-check"
-                :loading="fulfillingId === purchase.id"
-                @click="markDone(purchase.id)"
-              >
-                Mark done
-              </UButton>
             </div>
           </div>
         </div>
@@ -104,7 +94,6 @@ const isPurchasesResponse = (value: unknown): value is { purchases: Purchase[] }
 
 const purchases = ref<Purchase[]>([])
 const queueLoading = ref(false)
-const fulfillingId = ref<string | null>(null)
 const showAllPurchases = ref(false)
 
 const ADDON_LABELS: Record<string, string> = {
@@ -136,22 +125,6 @@ async function loadQueue() {
     toast.add({ title: 'Failed to load queue', color: 'error' })
   } finally {
     queueLoading.value = false
-  }
-}
-
-async function markDone(id: string) {
-  fulfillingId.value = id
-  try {
-    await applicationFetch(`/api/admin/fulfillment/${id}/done`, {
-      method: 'POST',
-      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
-    })
-    toast.add({ title: 'Marked as fulfilled', color: 'success' })
-    await loadQueue()
-  } catch {
-    toast.add({ title: 'Failed to mark done', color: 'error' })
-  } finally {
-    fulfillingId.value = null
   }
 }
 
