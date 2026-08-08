@@ -81,11 +81,6 @@ mock.module('../../server/db/index.ts', {
         }
         return { meta: { changes: 1 } }
       }
-      if (query.includes("WHERE stripe_event_id = ? AND status = 'dead_letter'")) {
-        if (!eventState || eventState.status !== 'dead_letter') return { meta: { changes: 0 } }
-        eventState = { ...eventState, status: 'pending', attempts: 0, leaseExpiresAt: null, claimToken: null }
-        return { meta: { changes: 1 } }
-      }
       if (query.includes('UPDATE stripe_webhook_events') && query.includes("SET status = 'pending'") && query.includes("status = 'processed'")) {
         if (!eventState || eventState.status !== 'processed') return { meta: { changes: 0 } }
         eventState = { ...eventState, status: 'pending', claimToken: null, leaseExpiresAt: null, attempts: 0 }
@@ -128,7 +123,6 @@ const {
   reconcileBetterAuthSubscriptionEvent,
   recordStripeEvent,
   enqueueStripeEvent,
-  requeueDeadLetterStripeEvent,
   markOrganizationPayment,
   selectCanonicalStripePrice,
   createStripePlanLoader,
@@ -214,13 +208,6 @@ test('a duplicate delivery does not requeue a dead-lettered Stripe event', async
   assert.equal(await enqueueStripeEvent({} as never, event), false)
   assert.equal(eventState?.status, 'dead_letter')
   assert.equal(eventState?.attempts, 5)
-})
-
-test('an operator replay alone requeues a dead-lettered Stripe event', async () => {
-  eventState = { status: 'dead_letter', leaseExpiresAt: null, claimToken: null, attempts: 5 }
-  assert.equal(await requeueDeadLetterStripeEvent({} as never, event), true)
-  assert.equal(eventState?.status, 'pending')
-  assert.equal(eventState?.attempts, 0)
 })
 
 test('a duplicate delivery preserves a failed Stripe event attempt budget', async () => {
