@@ -57,6 +57,7 @@ function assertRestoreOrdering(script: string, originPattern: RegExp, label: str
 
 test('required CI checks out the immutable event SHA and never mutates shared staging or production', async () => {
   const source = await repoFile('.github/workflows/ci.yml')
+  const packageJson = JSON.parse(await repoFile('package.json')) as { scripts?: Record<string, string> }
   const checkoutCount = (source.match(/uses: actions\/checkout@/g) ?? []).length
   const exactShaCount = (source.match(/ref: \$\{\{ github\.sha \}\}/g) ?? []).length
 
@@ -71,7 +72,10 @@ test('required CI checks out the immutable event SHA and never mutates shared st
     'test:e2e:blawby-cms:smoke',
     'test:e2e:smoke:billing',
     'test:e2e:links-page',
-  ]) assert.ok(source.includes(coverage), `missing required coverage: ${coverage}`)
+  ]) {
+    assert.ok(source.includes(coverage), `missing required coverage: ${coverage}`)
+    assert.ok(packageJson.scripts?.[coverage], `required CI coverage script is undefined: ${coverage}`)
+  }
   assert.match(source, /production-build-\$\{\{ github\.sha \}\}[\s\S]*include-hidden-files:\s*true/)
   assert.match(source, /playwright install --with-deps chromium/)
 })

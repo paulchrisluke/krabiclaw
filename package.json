@@ -41,6 +41,7 @@
     "test:e2e:dashboard:smoke": "playwright test tests/e2e/dashboard.spec.ts --grep \"dev login opens the owner dashboard|location experiences page distinguishes|Pages manager runs one typed-block and custom-page lifecycle tracer journey|canonical account, organization, site, and location routes\"",
     "test:e2e:admin:smoke": "playwright test tests/e2e/admin-impersonation.spec.ts",
     "test:e2e:blawby-cms:smoke": "playwright test tests/e2e/blawby-cms.spec.ts --grep \"NCLS home/about/contact page blocks are editable\"",
+    "test:e2e:links-page": "playwright test tests/e2e/links-page.spec.ts",
     "test:e2e:billing": "playwright test tests/e2e/billing-webhook-signed.spec.ts",
     "test:e2e:notifications": "playwright test tests/e2e/notifications.spec.ts",
     "test:e2e:seo": "playwright test tests/e2e/seo.spec.ts",
