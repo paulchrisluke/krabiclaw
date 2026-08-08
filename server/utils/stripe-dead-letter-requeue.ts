@@ -186,7 +186,14 @@ async function payloadDigest(payload: string | null): Promise<string> {
 }
 
 function validateRowShape(row: StripeDeadLetterRow): void {
-  if (!row.id || !row.stripe_event_id || !row.created_at || !Number.isSafeInteger(Number(row.attempt_count))) {
+  const attemptCount = Number(row.attempt_count)
+  if (
+    !row.id
+    || !row.stripe_event_id
+    || !row.created_at
+    || !Number.isSafeInteger(attemptCount)
+    || attemptCount < 0
+  ) {
     fail('state_invalid', 500, 'Stripe dead-letter state is malformed.')
   }
 }

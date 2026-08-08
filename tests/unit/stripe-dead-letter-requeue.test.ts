@@ -170,21 +170,22 @@ test('preview validates retained payload, signs a bounded plan, and exposes no e
 })
 
 test('preview blocks missing, expired, malformed, and mismatched retained payloads without writes', async () => {
-  const cases: Array<[string, Record<string, unknown>, string]> = [
-    ['missing', { payload: null }, 'payload_missing'],
-    ['expired', { created_at: '2025-01-01T00:00:00.000Z' }, 'payload_expired'],
-    ['malformed', { payload: '{not-json' }, 'payload_malformed'],
-    ['id mismatch', { payload: RETAINED_PAYLOAD.replace('evt_dead_1', 'evt_other') }, 'payload_mismatch'],
-    ['type mismatch', { payload: RETAINED_PAYLOAD.replace('customer.subscription.updated', 'invoice.paid') }, 'payload_mismatch'],
-    ['livemode malformed', { payload: RETAINED_PAYLOAD.replace('false', '"false"') }, 'payload_mismatch'],
+  const cases: Array<[string, Record<string, unknown>, string, number]> = [
+    ['missing', { payload: null }, 'payload_missing', 409],
+    ['expired', { created_at: '2025-01-01T00:00:00.000Z' }, 'payload_expired', 409],
+    ['malformed', { payload: '{not-json' }, 'payload_malformed', 409],
+    ['id mismatch', { payload: RETAINED_PAYLOAD.replace('evt_dead_1', 'evt_other') }, 'payload_mismatch', 409],
+    ['type mismatch', { payload: RETAINED_PAYLOAD.replace('customer.subscription.updated', 'invoice.paid') }, 'payload_mismatch', 409],
+    ['livemode malformed', { payload: RETAINED_PAYLOAD.replace('false', '"false"') }, 'payload_mismatch', 409],
+    ['negative attempts', { attempt_count: -1 }, 'state_invalid', 500],
   ]
-  for (const [label, overrides, code] of cases) {
+  for (const [label, overrides, code, statusCode] of cases) {
     const db = createDb()
     seedDeadLetter(db, overrides)
     const before = JSON.stringify(readRow(db))
     await assert.rejects(
       () => previewStripeDeadLetterRequeue(db as never, SECRET, INPUT, 'operator-1', NOW),
-      expectError(code),
+      expectError(code, statusCode),
       label,
     )
     assert.equal(JSON.stringify(readRow(db)), before, label)
