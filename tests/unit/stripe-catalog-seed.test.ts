@@ -8,17 +8,49 @@ import {
   planSha256,
   sha256Json,
 } from '../../scripts/lib/stripe-catalog-plan.mjs'
+import { parseCanonicalProductOverrides, parseCli } from '../../scripts/seed-stripe.mjs'
 
 const scriptPath = resolve(process.cwd(), 'scripts/seed-stripe.mjs')
 
 test('Stripe catalog seeder requires a reviewed deterministic plan before mutations', () => {
   const source = readFileSync(scriptPath, 'utf8')
+  const docs = readFileSync(resolve(process.cwd(), 'docs/operations/stripe-catalog.md'), 'utf8')
 
   assert.match(source, /--dry-run/)
   assert.match(source, /--apply/)
   assert.match(source, /--plan-file/)
+  assert.match(source, /canonical-product/)
   assert.match(source, /sha-256|sha256/i)
   assert.match(source, /test-mode|sk_test|rk_test/i)
+  assert.match(docs, /canonical-product growth=prod_/)
+  assert.match(docs, /canonicalProductIds/)
+})
+
+test('canonical product CLI overrides are repeatable, normalized, and validated before provider access', () => {
+  assert.deepEqual(
+    parseCanonicalProductOverrides(['managed=prod-managed', 'growth=prod-growth']),
+    { growth: 'prod-growth', managed: 'prod-managed' },
+  )
+  assert.deepEqual(
+    parseCli(['--dry-run', '--canonical-product', 'managed=prod-managed', '--canonical-product', 'growth=prod-growth']).canonicalProductIds,
+    { growth: 'prod-growth', managed: 'prod-managed' },
+  )
+  assert.throws(
+    () => parseCanonicalProductOverrides(['unknown=prod-unknown']),
+    /unsupported plan ID.*unknown/,
+  )
+  assert.throws(
+    () => parseCanonicalProductOverrides(['growth=prod-a', 'growth=prod-b']),
+    /Duplicate --canonical-product override for plan growth/,
+  )
+  assert.throws(
+    () => parseCanonicalProductOverrides(['growth=prod-a=prod-b']),
+    /exact plan_id=prod_id format/,
+  )
+  assert.throws(
+    () => parseCli(['--apply', '--plan-file', '.tmp/plan.json', '--confirm-sha256', 'a'.repeat(64), '--canonical-product', 'growth=prod-growth']),
+    /only valid when generating a catalog plan/,
+  )
 })
 
 function fakeCatalog() {
@@ -54,6 +86,62 @@ function fakeCatalog() {
     }],
   }
   return { products, prices }
+}
+
+function duplicateGrowthCatalog() {
+  const catalog = fakeCatalog()
+  catalog.products.splice(1, 1,
+    {
+      id: 'prod-growth-a',
+      active: true,
+      name: 'Growth (legacy)',
+      description: 'Old description',
+      metadata: { plan_id: 'growth' },
+      default_price: 'price-growth-a',
+      images: [],
+    },
+    {
+      id: 'prod-growth-b',
+      active: true,
+      name: 'Growth (canonical)',
+      description: 'Current description',
+      metadata: { plan_id: 'growth' },
+      default_price: 'price-growth-b',
+      images: [],
+    },
+  )
+  catalog.prices = {
+    'prod-growth-a': [
+      {
+        id: 'price-growth-a',
+        product: 'prod-growth-a',
+        active: true,
+        type: 'recurring',
+        currency: 'usd',
+        unit_amount: 4900,
+        recurring: { interval: 'month', interval_count: 1 },
+      },
+      {
+        id: 'price-growth-a-year',
+        product: 'prod-growth-a',
+        active: true,
+        type: 'recurring',
+        currency: 'usd',
+        unit_amount: 49000,
+        recurring: { interval: 'year', interval_count: 1 },
+      },
+    ],
+    'prod-growth-b': [{
+      id: 'price-growth-b',
+      product: 'prod-growth-b',
+      active: true,
+      type: 'recurring',
+      currency: 'usd',
+      unit_amount: 4900,
+      recurring: { interval: 'month', interval_count: 1 },
+    }],
+  }
+  return catalog
 }
 
 function fakeReadAdapter(catalog, writes = []) {
@@ -121,6 +209,90 @@ test('dry-run uses injected read/files adapters and performs zero writes with a 
     ['growth', 'managed'],
   )
   assert.equal(writes.length, 0)
+})
+
+test('duplicate active products fail closed and identify every product without mutations', async () => {
+  const catalog = duplicateGrowthCatalog()
+  const writes = []
+
+  await assert.rejects(
+    () => createCatalogPlan({
+      readAdapter: fakeReadAdapter(catalog, writes),
+      imageFiles: {},
+      accountMode: 'test',
+    }),
+    /multiple active products for plan growth[\s\S]*prod-growth-a[\s\S]*prod-growth-b[\s\S]*--canonical-product growth=<product-id>/,
+  )
+  assert.equal(writes.length, 0)
+})
+
+test('explicit canonical product selection signs deterministic duplicate cleanup operations', async () => {
+  const catalog = duplicateGrowthCatalog()
+  const options = {
+    readAdapter: fakeReadAdapter(catalog),
+    imageFiles: {},
+    accountMode: 'test',
+    canonicalProductIds: { growth: 'prod-growth-b' },
+  }
+  const planA = await createCatalogPlan(options)
+  const planB = await createCatalogPlan(options)
+
+  assert.deepEqual(planA, planB)
+  assert.equal(planA.planSha256, planSha256(planA))
+  assert.equal(planA.canonicalProductIds.growth, 'prod-growth-b')
+  assert.deepEqual(
+    planA.operations
+      .filter(operation => operation.type === 'deactivate_price' && operation.productId === 'prod-growth-a')
+      .map(operation => operation.priceId),
+    ['price-growth-a', 'price-growth-a-year'],
+  )
+  assert.deepEqual(
+    planA.operations
+      .filter(operation => operation.type === 'archive_product' && operation.productId === 'prod-growth-a')
+      .map(operation => operation.expected.id),
+    ['prod-growth-a'],
+  )
+  const growthUpdates = planA.operations.filter(operation => operation.type === 'update_product' && operation.product?.id === 'prod-growth-b')
+  assert.equal(growthUpdates.length, 1)
+
+  const writes = []
+  await applyCatalogPlan({
+    plan: planA,
+    confirmedSha256: planA.planSha256,
+    key: 'rk_test_fake',
+    readAdapter: fakeReadAdapter(catalog),
+    mutationAdapter: noWriteAdapter(writes),
+    filesAdapter: {},
+  })
+  assert.deepEqual(
+    writes.filter(([type, id]) => type === 'prices.update' && ['price-growth-a', 'price-growth-a-year'].includes(id)),
+    [
+      ['prices.update', 'price-growth-a', { active: false }],
+      ['prices.update', 'price-growth-a-year', { active: false }],
+    ],
+  )
+  assert.deepEqual(
+    writes.filter(([type, id]) => type === 'products.update' && id === 'prod-growth-a'),
+    [['products.update', 'prod-growth-a', { active: false }]],
+  )
+})
+
+test('canonical product overrides validate plan IDs, active membership, and duplicate declarations', async () => {
+  const catalog = duplicateGrowthCatalog()
+  const readAdapter = fakeReadAdapter(catalog)
+
+  await assert.rejects(
+    () => createCatalogPlan({ readAdapter, imageFiles: {}, canonicalProductIds: { unknown: 'prod-growth-b' } }),
+    /unsupported plan ID.*unknown/,
+  )
+  await assert.rejects(
+    () => createCatalogPlan({ readAdapter, imageFiles: {}, canonicalProductIds: { growth: 'prod-missing' } }),
+    /growth=prod-missing.*active product/,
+  )
+  await assert.rejects(
+    () => createCatalogPlan({ readAdapter, imageFiles: {}, canonicalProductIds: { growth: 'prod-legacy' } }),
+    /growth=prod-legacy.*plan_id=growth/,
+  )
 })
 
 test('apply rejects hash mismatch, snapshot drift, and live keys before any writes', async () => {

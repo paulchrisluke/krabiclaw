@@ -23,6 +23,24 @@ STRIPE_SECRET_KEY=rk_test_... yarn stripe:catalog:apply -- \
   --confirm-sha256 <planSha256>
 ```
 
+If the read-only snapshot contains more than one active product with the same
+`plan_id`, plan generation fails closed and prints every conflicting product
+ID. Resolve the ambiguity explicitly when regenerating the plan by repeating
+`--canonical-product` as needed:
+
+```bash
+STRIPE_SECRET_KEY=rk_test_... yarn stripe:catalog:plan -- \
+  --canonical-product growth=prod_... \
+  --canonical-product managed=prod_...
+```
+
+Each override must name a supported plan and an active product whose
+`metadata.plan_id` matches exactly. The signed plan records its resolved
+`canonicalProductIds` selection. For every non-canonical duplicate, the plan
+deactivates all active recurring prices and archives the product, each guarded
+by the reviewed provider snapshot. There is no automatic first-product
+selection, and duplicate overrides are rejected.
+
 Apply is refused unless the key is test mode (`sk_test_` or `rk_test_`), the
 plan hash is intact, the confirmation matches exactly, the plan is test-mode,
 local image files still match their planned hashes, and the provider snapshot

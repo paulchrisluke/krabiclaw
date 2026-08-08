@@ -151,7 +151,7 @@ export async function readCatalogSnapshot(readAdapter, { accountMode = 'unknown'
     .map(normalizeProduct)
     .sort((a, b) => a.id.localeCompare(b.id))
   const planProductIds = new Set(products
-    .filter(product => ACTIVE_PLAN_IDS.includes(product.metadata.plan_id))
+    .filter(product => ACTIVE_PLAN_IDS.includes(productPlanId(product)))
     .map(product => product.id))
   const recurringPrices = {}
   for (const productId of [...planProductIds].sort()) {
@@ -168,10 +168,16 @@ export async function createCatalogPlan({
   filesAdapter,
   imageFiles,
   accountMode = 'unknown',
+  canonicalProductIds,
+  canonicalProducts,
 }) {
   const snapshot = await readCatalogSnapshot(readAdapter, { accountMode })
   const describedImages = imageFiles ?? await filesAdapter?.describeImageFiles?.() ?? {}
-  return buildCatalogPlan({ snapshot, imageFiles: describedImages })
+  return buildCatalogPlan({
+    snapshot,
+    imageFiles: describedImages,
+    canonicalProductIds: canonicalProductIds ?? canonicalProducts,
+  })
 }
 
 function productPatch(definition, priceRef, imageRef) {
@@ -212,10 +218,74 @@ function imageOperation(definition, imageFiles) {
   }
 }
 
-export function buildCatalogPlan({ snapshot, imageFiles = {} }) {
+function productPlanId(product) {
+  return typeof product?.metadata?.plan_id === 'string' ? product.metadata.plan_id.trim() : ''
+}
+
+function normalizeCanonicalProductIds(canonicalProductIds) {
+  if (canonicalProductIds == null) return {}
+  if (typeof canonicalProductIds !== 'object' || Array.isArray(canonicalProductIds)) {
+    throw new Error('Canonical product overrides must be a plan_id to product ID map.')
+  }
+  return Object.fromEntries(Object.entries(canonicalProductIds)
+    .map(([planId, productId]) => [String(planId).trim(), String(productId).trim()])
+    .sort(([a], [b]) => a.localeCompare(b)))
+}
+
+function resolveCanonicalProducts(snapshot, canonicalProductIds) {
+  const overrides = normalizeCanonicalProductIds(canonicalProductIds)
+  const activeProducts = snapshot.products.filter(product => product.active !== false)
+  const productsByPlan = new Map()
+
+  for (const product of activeProducts) {
+    const planId = productPlanId(product)
+    if (!ACTIVE_PLAN_IDS.includes(planId)) continue
+    const products = productsByPlan.get(planId) ?? []
+    products.push(product)
+    productsByPlan.set(planId, products)
+  }
+  for (const products of productsByPlan.values()) products.sort((a, b) => a.id.localeCompare(b.id))
+
+  for (const [planId, productId] of Object.entries(overrides)) {
+    if (!ACTIVE_PLAN_IDS.includes(planId)) {
+      throw new Error(`Canonical product override has unsupported plan ID ${planId}.`)
+    }
+    const product = activeProducts.find(candidate => candidate.id === productId)
+    if (!product || productPlanId(product) !== planId) {
+      throw new Error(`Canonical product override ${planId}=${productId} must reference an active product with metadata.plan_id=${planId}.`)
+    }
+  }
+
+  const canonicalIds = {}
+  for (const [planId, products] of productsByPlan.entries()) {
+    const override = overrides[planId]
+    if (products.length > 1 && !override) {
+      const ids = products.map(product => product.id).join(', ')
+      throw new Error(`Stripe has multiple active products for plan ${planId}: ${ids}. Supply --canonical-product ${planId}=<product-id>.`)
+    }
+    const selected = override
+      ? products.find(product => product.id === override)
+      : products[0]
+    if (!selected) {
+      throw new Error(`Canonical product override ${planId}=${override} is not an active product for plan ${planId}.`)
+    }
+    canonicalIds[planId] = selected.id
+  }
+
+  return {
+    canonicalIds: Object.fromEntries(Object.entries(canonicalIds).sort(([a], [b]) => a.localeCompare(b))),
+    productsByPlan,
+  }
+}
+
+export function buildCatalogPlan({ snapshot, imageFiles = {}, canonicalProductIds, canonicalProducts }) {
+  const { canonicalIds, productsByPlan } = resolveCanonicalProducts(
+    snapshot,
+    canonicalProductIds ?? canonicalProducts,
+  )
   const operations = []
-  for (const product of snapshot.products) {
-    const planId = product.metadata.plan_id
+  for (const product of [...snapshot.products].sort((a, b) => a.id.localeCompare(b.id))) {
+    const planId = productPlanId(product)
     if (planId && !ACTIVE_PLAN_IDS.includes(planId)) {
       operations.push({
         type: 'archive_product',
@@ -226,8 +296,29 @@ export function buildCatalogPlan({ snapshot, imageFiles = {} }) {
   }
 
   for (const definition of PLAN_DEFINITIONS) {
-    const existing = snapshot.products.find(product => product.metadata.plan_id === definition.planId)
+    const products = productsByPlan.get(definition.planId) ?? []
+    const canonicalProductId = canonicalIds[definition.planId]
+    const existing = canonicalProductId
+      ? products.find(product => product.id === canonicalProductId) ?? null
+      : null
     const productRef = existing ? { id: existing.id } : { ref: { kind: 'product', planId: definition.planId } }
+
+    for (const duplicate of products.filter(product => product.id !== existing?.id)) {
+      for (const price of snapshot.recurringPrices[duplicate.id] ?? []) {
+        operations.push({
+          type: 'deactivate_price',
+          productId: duplicate.id,
+          priceId: price.id,
+          expected: price,
+        })
+      }
+      operations.push({
+        type: 'archive_product',
+        productId: duplicate.id,
+        expected: duplicate,
+      })
+    }
+
     const image = imageOperation(definition, imageFiles)
     if (image) operations.push(image)
 
@@ -291,6 +382,7 @@ export function buildCatalogPlan({ snapshot, imageFiles = {} }) {
     schemaVersion: CATALOG_PLAN_SCHEMA_VERSION,
     kind: 'stripe-recurring-catalog-plan',
     accountMode: snapshot.accountMode,
+    canonicalProductIds: canonicalIds,
     providerSnapshot: snapshot,
     providerSnapshotSha256: sha256Json(snapshot),
     operations,

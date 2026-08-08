@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import Stripe from 'stripe'
 import {
+  ACTIVE_PLAN_IDS,
   PLAN_DEFINITIONS,
   applyCatalogPlan,
   createCatalogPlan,
@@ -123,7 +124,30 @@ function stripeFilesAdapter(secretKey) {
   }
 }
 
-function parseCli(argv) {
+export function parseCanonicalProductOverrides(values = []) {
+  const overrides = {}
+  const inputs = Array.isArray(values) ? values : [values]
+  for (const value of inputs.filter(item => item != null)) {
+    const raw = String(value).trim()
+    const separator = raw.indexOf('=')
+    if (separator <= 0 || separator === raw.length - 1 || raw.indexOf('=', separator + 1) !== -1) {
+      throw new Error('--canonical-product must use the exact plan_id=prod_id format.')
+    }
+    const planId = raw.slice(0, separator).trim()
+    const productId = raw.slice(separator + 1).trim()
+    if (!ACTIVE_PLAN_IDS.includes(planId)) {
+      throw new Error(`--canonical-product has unsupported plan ID ${planId}.`)
+    }
+    if (!productId) throw new Error(`--canonical-product ${planId} requires a product ID.`)
+    if (Object.hasOwn(overrides, planId)) {
+      throw new Error(`Duplicate --canonical-product override for plan ${planId}.`)
+    }
+    overrides[planId] = productId
+  }
+  return Object.fromEntries(Object.entries(overrides).sort(([a], [b]) => a.localeCompare(b)))
+}
+
+export function parseCli(argv) {
   const { values } = parseArgs({
     args: argv,
     options: {
@@ -131,6 +155,7 @@ function parseCli(argv) {
       apply: { type: 'boolean' },
       'plan-file': { type: 'string' },
       'confirm-sha256': { type: 'string' },
+      'canonical-product': { type: 'string', multiple: true },
     },
     allowPositionals: false,
   })
@@ -139,10 +164,15 @@ function parseCli(argv) {
   const planFile = values['plan-file'] ? resolve(String(values['plan-file'])) : null
   if (apply && !planFile) throw new Error('--apply requires an explicit --plan-file.')
   if (apply && !values['confirm-sha256']) throw new Error('--apply requires --confirm-sha256 <plan-sha256>.')
+  const canonicalProductIds = parseCanonicalProductOverrides(values['canonical-product'])
+  if (apply && Object.keys(canonicalProductIds).length > 0) {
+    throw new Error('--canonical-product is only valid when generating a catalog plan.')
+  }
   return {
     apply,
     planFile,
     confirmSha256: values['confirm-sha256'] ? String(values['confirm-sha256']) : null,
+    canonicalProductIds,
   }
 }
 
@@ -169,6 +199,7 @@ export async function main(argv = process.argv.slice(2)) {
       readAdapter: stripeReadAdapter(stripe),
       accountMode: mode,
       imageFiles: describeImageFiles(),
+      canonicalProductIds: cli.canonicalProductIds,
     })
     if (cli.planFile) {
       writePlan(cli.planFile, plan)
