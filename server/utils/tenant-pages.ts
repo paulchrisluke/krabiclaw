@@ -752,7 +752,7 @@ export async function applyOnboardingTenantPages(
       ...page,
       locale,
       path: page.path,
-      title: page.title || row.title,
+      title: page.title,
       summary: page.summary === undefined ? row.summary : page.summary,
       seoTitle: page.seoTitle === undefined ? row.seo_title : page.seoTitle,
       seoDescription: page.seoDescription === undefined ? row.seo_description : page.seoDescription,

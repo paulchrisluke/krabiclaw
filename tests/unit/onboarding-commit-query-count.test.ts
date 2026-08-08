@@ -170,3 +170,23 @@ test('onboarding page replacement rejects duplicate normalized paths before D1 r
   assert.equal(queryAllCalls, 0)
   assert.equal(batches.length, 0)
 })
+
+test('onboarding page replacement rejects an explicitly empty title before batching', async () => {
+  existingRows = [row(0)]
+  queryFirstCalls = 0
+  queryAllCalls = 0
+  batches.length = 0
+
+  await assert.rejects(
+    applyOnboardingTenantPages({} as never, {
+      organizationId: 'org-1',
+      siteId: 'site-1',
+      userId: 'user-1',
+      pages: [{ ...page(0), title: '' }],
+    }),
+    (error: unknown) => Boolean(error && typeof error === 'object' && (error as { statusCode?: unknown }).statusCode === 400),
+  )
+  assert.equal(queryFirstCalls, 1)
+  assert.equal(queryAllCalls, 1)
+  assert.equal(batches.length, 0)
+})
