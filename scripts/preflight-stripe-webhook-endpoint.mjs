@@ -7,7 +7,7 @@ import {
   STRIPE_REQUEST_TIMEOUT_MS,
   STRIPE_WEBHOOK_EVENTS,
   StripeWebhookPreflightError,
-  normalizeWebhookEndpointUrl,
+  assertCanonicalStripeWebhookEndpointUrl,
   runStripeWebhookEndpointPreflight,
 } from './lib/stripe-webhook-preflight.mjs'
 
@@ -21,7 +21,7 @@ function failureEvidence(expectedUrl, error, sourceSha) {
   const details = error instanceof StripeWebhookPreflightError ? error.evidence : {}
   let normalizedExpectedUrl = null
   try {
-    normalizedExpectedUrl = normalizeWebhookEndpointUrl(expectedUrl)
+    normalizedExpectedUrl = assertCanonicalStripeWebhookEndpointUrl(expectedUrl)
   } catch {
     // Keep malformed input out of the evidence while preserving the failure code.
   }
@@ -35,6 +35,7 @@ function failureEvidence(expectedUrl, error, sourceSha) {
     endpointId: details.endpointId ?? null,
     endpointStatus: details.endpointStatus ?? null,
     apiVersion: details.apiVersion ?? null,
+    expectedApiVersion: details.expectedApiVersion ?? null,
     enabledEvents: details.enabledEvents ?? [],
     expectedEvents: [...STRIPE_WEBHOOK_EVENTS].sort(),
     missingEvents: details.missingEvents ?? [],

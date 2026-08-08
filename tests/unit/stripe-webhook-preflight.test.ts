@@ -1,14 +1,19 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import {
+  STRIPE_API_VERSION,
   STRIPE_REQUEST_TIMEOUT_MS,
+  STRIPE_WEBHOOK_PATH,
   STRIPE_WEBHOOK_EVENTS,
   StripeWebhookPreflightError,
+  assertCanonicalStripeWebhookEndpointUrl,
   normalizeWebhookEndpointUrl,
   runStripeWebhookEndpointPreflight,
 } from '../../scripts/lib/stripe-webhook-preflight.mjs'
 
-const EXPECTED_URL = 'https://staging.krabiclaw.com/api/auth/stripe/webhook'
+const EXPECTED_URL = 'https://staging.krabiclaw.com/api/billing/webhook'
 const TEST_ENDPOINT_ID = 'we_test_endpoint_123'
 
 function endpoint(overrides: Record<string, unknown> = {}) {
@@ -16,7 +21,7 @@ function endpoint(overrides: Record<string, unknown> = {}) {
     id: TEST_ENDPOINT_ID,
     url: `${EXPECTED_URL}/`,
     status: 'enabled',
-    api_version: '2026-04-22.dahlia',
+    api_version: STRIPE_API_VERSION,
     enabled_events: [...STRIPE_WEBHOOK_EVENTS],
     ...overrides,
   }
@@ -49,7 +54,7 @@ test('Stripe webhook preflight normalizes URL and records a redacted endpoint co
   assert.equal(result.testMode, true)
   assert.equal(result.expectedUrl, EXPECTED_URL)
   assert.equal(result.endpointStatus, 'enabled')
-  assert.equal(result.apiVersion, '2026-04-22.dahlia')
+  assert.equal(result.apiVersion, STRIPE_API_VERSION)
   assert.match(result.endpointId, /^we_test_[a-f0-9]{8}$/)
   assert.deepEqual(result.enabledEvents, [...STRIPE_WEBHOOK_EVENTS].sort())
   assert.deepEqual(calls.constructor, {
@@ -95,6 +100,23 @@ test('Stripe webhook preflight rejects current staging drift instead of acceptin
   )
 })
 
+test('Stripe webhook preflight rejects an API version drift from the application client', async () => {
+  await assert.rejects(
+    runStripeWebhookEndpointPreflight({
+      secretKey: 'sk_test_preflight',
+      expectedUrl: EXPECTED_URL,
+      stripeFactory: fakeStripeFactory([endpoint({ api_version: '2025-04-30.basil' })]),
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof StripeWebhookPreflightError)
+      assert.equal(error.code, 'api_version_mismatch')
+      assert.equal(error.evidence.apiVersion, '2025-04-30.basil')
+      assert.equal(error.evidence.expectedApiVersion, STRIPE_API_VERSION)
+      return true
+    },
+  )
+})
+
 test('Stripe webhook preflight rejects duplicate enabled destinations at the expected URL', async () => {
   await assert.rejects(
     runStripeWebhookEndpointPreflight({
@@ -108,6 +130,25 @@ test('Stripe webhook preflight rejects duplicate enabled destinations at the exp
 
 test('Stripe webhook preflight normalizes only HTTPS URLs without credentials', () => {
   assert.equal(normalizeWebhookEndpointUrl(`${EXPECTED_URL}//?x=1`), EXPECTED_URL)
-  assert.throws(() => normalizeWebhookEndpointUrl('http://staging.krabiclaw.com/api/auth/stripe/webhook'), /HTTPS/)
+  assert.throws(() => normalizeWebhookEndpointUrl('http://staging.krabiclaw.com/api/billing/webhook'), /HTTPS/)
   assert.throws(() => normalizeWebhookEndpointUrl('https://user:pass@staging.krabiclaw.com/webhook'), /credentials/)
+})
+
+test('Stripe webhook preflight refuses the Better Auth internal path as a registered destination', () => {
+  assert.equal(assertCanonicalStripeWebhookEndpointUrl(EXPECTED_URL), EXPECTED_URL)
+  assert.throws(
+    () => assertCanonicalStripeWebhookEndpointUrl('https://staging.krabiclaw.com/api/auth/stripe/webhook'),
+    (error: unknown) => error instanceof StripeWebhookPreflightError && error.code === 'expected_url_path',
+  )
+})
+
+test('Stripe webhook preflight targets the registered application route and shared API contract', async () => {
+  const workflow = await readFile(resolve(process.cwd(), '.github/workflows/ci-full.yml'), 'utf8')
+  const route = await readFile(resolve(process.cwd(), 'server/api/billing/webhook.post.ts'), 'utf8')
+  assert.equal(STRIPE_WEBHOOK_PATH, '/api/billing/webhook')
+  assert.match(route, /defineEventHandler/)
+  assert.match(route, /target\.pathname = '\/api\/auth\/stripe\/webhook'/)
+  assert.match(workflow, /STRIPE_WEBHOOK_PATH/)
+  assert.match(workflow, /STRIPE_WEBHOOK_ENDPOINT_URL="\$\{STAGING_BASE_URL%\/\}\$stripe_webhook_path"/)
+  assert.match(workflow, /node --experimental-strip-types scripts\/preflight-stripe-webhook-endpoint\.mjs/)
 })

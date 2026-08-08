@@ -311,11 +311,13 @@ jobs:
           [[ "$BASELINE_SOURCE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]
           [[ "$GITHUB_SHA" =~ ^[0-9a-fA-F]{40}$ ]]
 
+          stripe_webhook_path="$(node --experimental-strip-types --input-type=module -e "import { STRIPE_WEBHOOK_PATH } from './shared/stripe-contract.ts'; process.stdout.write(STRIPE_WEBHOOK_PATH)")"
+          test "$stripe_webhook_path" = "/api/billing/webhook"
           echo "Running read-only Stripe test-mode webhook endpoint preflight before staging mutation"
           STRIPE_SECRET_KEY="$STRIPE_SECRET_KEY" \
-          STRIPE_WEBHOOK_ENDPOINT_URL="${STAGING_BASE_URL%/}/api/auth/stripe/webhook" \
+          STRIPE_WEBHOOK_ENDPOINT_URL="${STAGING_BASE_URL%/}$stripe_webhook_path" \
           STRIPE_WEBHOOK_PREFLIGHT_EVIDENCE_PATH="$stripe_webhook_preflight" \
-            node scripts/preflight-stripe-webhook-endpoint.mjs
+            node --experimental-strip-types scripts/preflight-stripe-webhook-endpoint.mjs
           test -s "$stripe_webhook_preflight"
 
           echo "Hashing the exact downloaded production build artifact"

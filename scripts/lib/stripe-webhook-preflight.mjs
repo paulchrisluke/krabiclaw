@@ -1,4 +1,9 @@
 import { createHash } from 'node:crypto'
+import {
+  STRIPE_API_VERSION,
+  STRIPE_REQUEST_TIMEOUT_MS,
+  STRIPE_WEBHOOK_PATH,
+} from '../../shared/stripe-contract.ts'
 
 export const STRIPE_WEBHOOK_EVENTS = Object.freeze([
   'checkout.session.completed',
@@ -14,7 +19,7 @@ export const STRIPE_WEBHOOK_EVENTS = Object.freeze([
 ])
 
 export const STRIPE_TEST_SECRET_KEY = /^(?:sk|rk)_test_[A-Za-z0-9]+$/
-export const STRIPE_REQUEST_TIMEOUT_MS = 10_000
+export { STRIPE_API_VERSION, STRIPE_REQUEST_TIMEOUT_MS, STRIPE_WEBHOOK_PATH }
 
 export class StripeWebhookPreflightError extends Error {
   constructor(code, message, evidence = {}) {
@@ -59,6 +64,18 @@ export function normalizeWebhookEndpointUrl(value) {
   return parsed.toString()
 }
 
+export function assertCanonicalStripeWebhookEndpointUrl(value) {
+  const normalized = normalizeWebhookEndpointUrl(value)
+  if (new URL(normalized).pathname !== STRIPE_WEBHOOK_PATH) {
+    throw new StripeWebhookPreflightError(
+      'expected_url_path',
+      'Stripe webhook preflight expected the application webhook route.',
+      { expectedUrl: normalized, expectedPath: STRIPE_WEBHOOK_PATH },
+    )
+  }
+  return normalized
+}
+
 export function redactStripeEndpointId(value) {
   if (!value || typeof value !== 'string' || !value.trim()) return null
   const id = value.trim()
@@ -71,20 +88,25 @@ function sortedUnique(values) {
   return [...new Set(Array.isArray(values) ? values.filter(value => typeof value === 'string') : [])].sort()
 }
 
-function endpointEvidence(endpoint, expectedUrl, matchedCount, enabledCount) {
+function endpointEvidence(endpoint, expectedUrl, expectedApiVersion, matchedCount, enabledCount) {
   return {
     expectedUrl,
     endpointId: redactStripeEndpointId(endpoint?.id),
     endpointStatus: typeof endpoint?.status === 'string' ? endpoint.status : null,
     apiVersion: typeof endpoint?.api_version === 'string' ? endpoint.api_version : null,
+    expectedApiVersion,
     enabledEvents: sortedUnique(endpoint?.enabled_events),
     matchedEndpointCount: matchedCount,
     enabledEndpointCount: enabledCount,
   }
 }
 
-export function validateStripeWebhookEndpointContract({ expectedUrl, endpoints }) {
-  const normalizedExpectedUrl = normalizeWebhookEndpointUrl(expectedUrl)
+export function validateStripeWebhookEndpointContract({
+  expectedUrl,
+  endpoints,
+  expectedApiVersion = STRIPE_API_VERSION,
+}) {
+  const normalizedExpectedUrl = assertCanonicalStripeWebhookEndpointUrl(expectedUrl)
   const candidates = (Array.isArray(endpoints) ? endpoints : []).filter((endpoint) => {
     try {
       return normalizeWebhookEndpointUrl(endpoint?.url) === normalizedExpectedUrl
@@ -94,12 +116,20 @@ export function validateStripeWebhookEndpointContract({ expectedUrl, endpoints }
   })
   const enabled = candidates.filter(endpoint => String(endpoint?.status ?? '').toLowerCase() === 'enabled')
   const endpoint = enabled[0] ?? candidates[0] ?? null
-  const baseEvidence = endpointEvidence(endpoint, normalizedExpectedUrl, candidates.length, enabled.length)
+  const baseEvidence = endpointEvidence(endpoint, normalizedExpectedUrl, expectedApiVersion, candidates.length, enabled.length)
 
   if (enabled.length !== 1) {
     throw new StripeWebhookPreflightError(
       'endpoint_count',
       'Stripe webhook preflight requires exactly one enabled endpoint at the expected URL.',
+      baseEvidence,
+    )
+  }
+
+  if (baseEvidence.apiVersion !== expectedApiVersion) {
+    throw new StripeWebhookPreflightError(
+      'api_version_mismatch',
+      'Stripe webhook endpoint API version does not match the application contract.',
       baseEvidence,
     )
   }
@@ -150,6 +180,7 @@ async function listAllWebhookEndpoints(stripe) {
 export async function runStripeWebhookEndpointPreflight({
   secretKey,
   expectedUrl,
+  expectedApiVersion = STRIPE_API_VERSION,
   stripeFactory,
 }) {
   // Validate the key and URL before the Stripe client is constructed. This is
@@ -169,5 +200,9 @@ export async function runStripeWebhookEndpointPreflight({
     if (error instanceof StripeWebhookPreflightError) throw error
     throw new StripeWebhookPreflightError('provider_request_failed', 'Stripe webhook endpoint read failed.')
   }
-  return validateStripeWebhookEndpointContract({ expectedUrl: normalizedExpectedUrl, endpoints })
+  return validateStripeWebhookEndpointContract({
+    expectedUrl: normalizedExpectedUrl,
+    expectedApiVersion,
+    endpoints,
+  })
 }
