@@ -169,9 +169,9 @@ async function ensurePlanCreditAllowance(db: DbClient, organizationId: string, n
   if (!existing) {
     await execute(db, `
       INSERT OR IGNORE INTO ai_credits
-        (organization_id, balance, lifetime_used, last_topped_up_at, balance_period_key, updated_at)
-      VALUES (?, ?, 0, ?, ?, ?)
-    `, [organizationId, weeklyLimit ?? 0, weeklyLimit === null ? null : nowIso, periodKey, nowIso])
+        (organization_id, balance, lifetime_used, balance_period_key, updated_at)
+      VALUES (?, ?, 0, ?, ?)
+    `, [organizationId, weeklyLimit ?? 0, periodKey, nowIso])
   }
 
   if (existing?.balance_period_key === null) return existing

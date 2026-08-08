@@ -209,12 +209,12 @@ function applyGrantQuery(
     return {
       query: `
         UPDATE ai_credits
-        SET balance = balance + ?, last_topped_up_at = ?, updated_at = ?
+        SET balance = balance + ?, updated_at = ?
         WHERE organization_id = ?
           AND balance_period_key IS NOT NULL
           AND ${grantReference}
       `,
-      params: [input.quantity, appliedAt, appliedAt, input.organizationId, input.organizationId, input.idempotencyKey],
+      params: [input.quantity, appliedAt, input.organizationId, input.organizationId, input.idempotencyKey],
     }
   }
 
@@ -306,8 +306,8 @@ export async function grantQuota(db: DbClient, input: QuotaGrantInput): Promise<
     statements.push({
       query: `
         INSERT OR IGNORE INTO ai_credits
-          (organization_id, balance, lifetime_used, last_topped_up_at, balance_period_key, updated_at)
-        VALUES (?, 0, 0, NULL, ?, ?)
+          (organization_id, balance, lifetime_used, balance_period_key, updated_at)
+        VALUES (?, 0, 0, ?, ?)
       `,
       params: [input.organizationId, utcWeekKey(input.periodStart), createdAt],
     })
@@ -376,8 +376,8 @@ export async function resetOrganizationQuota(
     statements.push({
       query: `
         INSERT OR IGNORE INTO ai_credits
-          (organization_id, balance, lifetime_used, last_topped_up_at, balance_period_key, updated_at)
-        VALUES (?, 0, 0, NULL, ?, ?)
+          (organization_id, balance, lifetime_used, balance_period_key, updated_at)
+        VALUES (?, 0, 0, ?, ?)
       `,
       params: [input.organizationId, utcWeekKey(input.grants[0]?.periodStart ?? new Date().toISOString()), createdAt],
     })

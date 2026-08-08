@@ -211,6 +211,8 @@ test('quota status lazily records the exact current UTC week grant', async () =>
     period_end: '2026-08-17T00:00:00.000Z',
     grant_type: 'plan',
   })
+  const credits = db.prepare('SELECT last_topped_up_at FROM ai_credits WHERE organization_id = ?').get('org-free') as { last_topped_up_at: string | null }
+  assert.equal(credits.last_topped_up_at, null)
 })
 
 test('quota access follows the app billing projection and fails closed after trial expiry', async () => {
@@ -772,6 +774,69 @@ test('manual grants increase the current-period allowance without changing the p
   assert.equal(status.weeklyLimit, 500)
   assert.equal(status.grantQuantity, 600)
   assert.equal(status.weeklyRemaining, 600)
+})
+
+test('manual quota grants preserve the historical top-up timestamp', async () => {
+  const db = createDb()
+  db.prepare(`
+    INSERT INTO ai_credits
+      (organization_id, balance, lifetime_used, last_topped_up_at, balance_period_key, updated_at)
+    VALUES (?, ?, 0, ?, ?, ?)
+  `).run(
+    'org-manual-history',
+    500,
+    '2025-01-01T00:00:00.000Z',
+    '2026-08-10',
+    '2026-08-10T09:00:00.000Z',
+  )
+
+  await grantQuota(db as never, {
+    organizationId: 'org-manual-history',
+    resource: 'ai_inference',
+    quantity: 100,
+    unit: 'credit',
+    periodKey: 'week:2026-08-10:manual',
+    periodStart: '2026-08-10T00:00:00.000Z',
+    periodEnd: '2026-08-17T00:00:00.000Z',
+    grantType: 'manual',
+    reason: 'Support adjustment',
+    idempotencyKey: 'manual:org-manual-history:1',
+    createdAt: '2026-08-10T13:00:00.000Z',
+  })
+
+  const credits = db.prepare('SELECT last_topped_up_at FROM ai_credits WHERE organization_id = ?').get('org-manual-history') as { last_topped_up_at: string | null }
+  assert.equal(credits.last_topped_up_at, '2025-01-01T00:00:00.000Z')
+})
+
+test('quota resets preserve the historical top-up timestamp', async () => {
+  const db = createDb()
+  db.prepare(`
+    INSERT INTO ai_credits
+      (organization_id, balance, lifetime_used, last_topped_up_at, balance_period_key, updated_at)
+    VALUES (?, ?, 0, ?, ?, ?)
+  `).run(
+    'org-reset-history',
+    500,
+    '2025-01-01T00:00:00.000Z',
+    '2026-08-10',
+    '2026-08-10T09:00:00.000Z',
+  )
+
+  await resetOrganizationQuota(db as never, {
+    organizationId: 'org-reset-history',
+    resetId: 'history-reset',
+    reason: 'Approved exact reset',
+    grants: [{
+      resource: 'ai_inference',
+      quantity: 50,
+      unit: 'credit',
+      periodStart: '2026-08-10T00:00:00.000Z',
+      periodEnd: '2026-08-17T00:00:00.000Z',
+    }],
+  })
+
+  const credits = db.prepare('SELECT last_topped_up_at FROM ai_credits WHERE organization_id = ?').get('org-reset-history') as { last_topped_up_at: string | null }
+  assert.equal(credits.last_topped_up_at, '2025-01-01T00:00:00.000Z')
 })
 
 test('flat-credit idempotency preserves a finite insufficient result', async () => {
