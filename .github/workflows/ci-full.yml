@@ -163,6 +163,7 @@ jobs:
           build_identity="$work_dir/build-identity.json"
           candidate_verification="$work_dir/candidate-verification.json"
           deployed_verification="$work_dir/deployed-verification.json"
+          stripe_webhook_preflight="$work_dir/stripe-webhook-preflight.json"
           stripe_canary_evidence="$work_dir/stripe-canary-evidence.json"
 
           BASELINE_VERSION_ID=""
@@ -175,7 +176,7 @@ jobs:
           export MANIFEST_PATH="$manifest" BASELINE_STATUS_PATH="$baseline_status" SPLIT_STATUS_PATH="$split_status" DEPLOYED_STATUS_PATH="$deployed_status" BASELINE_VERSION_LOG="$baseline_version_log" CANDIDATE_VERSION_LOG="$candidate_version_log" BASELINE_ATTESTATION_PATH="$baseline_attestation"
           export MIGRATION_BEFORE_PATH="$migration_before" MIGRATION_AFTER_PATH="$migration_after" MIGRATION_BEFORE_APPLIED_PATH="$migration_before_applied" MIGRATION_AFTER_APPLIED_PATH="$migration_after_applied" MIGRATION_FILES_PATH="$migration_files" STAGING_SECRETS_PATH="$staging_secrets"
           export CANDIDATE_VERIFICATION_PATH="$candidate_verification" DEPLOYED_VERIFICATION_PATH="$deployed_verification"
-          export BROWSER_EVIDENCE_PATH="$browser_evidence" BROWSER_PROJECTS_PATH="$browser_projects" DEPLOYED_BROWSER_PROJECTS_PATH="$deployed_browser_projects" BUILD_IDENTITY_PATH="$build_identity" PERF_DIR="$perf_dir" STRIPE_CANARY_EVIDENCE_PATH="$stripe_canary_evidence"
+          export BROWSER_EVIDENCE_PATH="$browser_evidence" BROWSER_PROJECTS_PATH="$browser_projects" DEPLOYED_BROWSER_PROJECTS_PATH="$deployed_browser_projects" BUILD_IDENTITY_PATH="$build_identity" PERF_DIR="$perf_dir" STRIPE_WEBHOOK_PREFLIGHT_PATH="$stripe_webhook_preflight" STRIPE_CANARY_EVIDENCE_PATH="$stripe_canary_evidence"
 
           write_manifest() {
             local exit_status="${1:-0}"
@@ -236,6 +237,7 @@ jobs:
               after: migrationEvidence(process.env.MIGRATION_AFTER_PATH, process.env.MIGRATION_AFTER_APPLIED_PATH),
             },
             stagingSecrets: readJson(process.env.STAGING_SECRETS_PATH),
+            stripeWebhookPreflight: readJson(process.env.STRIPE_WEBHOOK_PREFLIGHT_PATH),
             assets: {
               candidate: readJson(process.env.CANDIDATE_VERIFICATION_PATH),
               deployed: readJson(process.env.DEPLOYED_VERIFICATION_PATH),
@@ -308,6 +310,13 @@ jobs:
           test -n "$BASELINE_SOURCE_SHA"
           [[ "$BASELINE_SOURCE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]
           [[ "$GITHUB_SHA" =~ ^[0-9a-fA-F]{40}$ ]]
+
+          echo "Running read-only Stripe test-mode webhook endpoint preflight before staging mutation"
+          STRIPE_SECRET_KEY="$STRIPE_SECRET_KEY" \
+          STRIPE_WEBHOOK_ENDPOINT_URL="${STAGING_BASE_URL%/}/api/auth/stripe/webhook" \
+          STRIPE_WEBHOOK_PREFLIGHT_EVIDENCE_PATH="$stripe_webhook_preflight" \
+            node scripts/preflight-stripe-webhook-endpoint.mjs
+          test -s "$stripe_webhook_preflight"
 
           echo "Hashing the exact downloaded production build artifact"
           build_file_count="$(find .output -type f | wc -l | tr -d ' ')"

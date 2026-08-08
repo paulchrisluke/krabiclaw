@@ -18,6 +18,9 @@ Every candidate run records all of the following in
 - the immutable `.output` build artifact used for the upload;
 - applied and pending migrations (with their output) before and after the reset;
 - candidate and post-promotion asset/provenance verification;
+- a read-only test-mode Stripe webhook endpoint preflight captured before any
+  staging mutation, proving exactly one enabled destination at the normalized
+  staging URL, the exact application event set, and redacted endpoint identity;
 - browser evidence, including the URL, desktop/mobile coverage, route matrix,
   and any failure artifacts; and
 - a post-promotion test-mode Stripe organization checkout canary (at 100% of
@@ -40,28 +43,31 @@ quality, test, and one production-build jobs run in parallel without touching
 staging. The candidate job then holds the `shared-staging-candidate` lock for
 the entire sequence:
 
-1. Capture the current staging deployment and baseline Worker version.
-2. Capture migration state, apply the migration check and staging migrations,
+1. Run the read-only test-mode Stripe webhook endpoint preflight before any
+   staging mutation. It must use the existing `STRIPE_SECRET_KEY_TEST` secret,
+   refuse live keys, and fail on endpoint count or event-set drift.
+2. Capture the current staging deployment and baseline Worker version.
+3. Capture migration state, apply the migration check and staging migrations,
    reset/reseed the idempotent fixtures, and capture applied/pending state
    again.
-3. Check that the pre-provisioned test-mode staging secret names exist. The
+4. Check that the pre-provisioned test-mode staging secret names exist. The
    candidate never runs `secret put`: publishing a secret creates a new Worker
    version outside the immutable upload chain.
-4. Upload the candidate Worker Version exactly once, tagged with the full
+5. Upload the candidate Worker Version exactly once, tagged with the full
    source SHA. A normal deploy retry is forbidden because it would create an
    untracked candidate.
-5. Deploy the baseline at **100%** and the candidate at **0%**. The required
+6. Deploy the baseline at **100%** and the candidate at **0%**. The required
    split is baseline 100% and candidate 0%. Pin requests to
    each version with Cloudflare's version-override header for verification and
    the 25-sample baseline/candidate comparison.
-6. Run the complete browser E2E matrix against the candidate override. A
+7. Run the complete browser E2E matrix against the candidate override. A
    timeout, browser error, missing route, or incomplete inspection is
    unverified.
-7. Promote the candidate to **100%** only after every preceding gate passes,
+8. Promote the candidate to **100%** only after every preceding gate passes,
    purge the deployment HTML cache, and verify the staging custom domain and
    assets without an override. Run the named Saya/Blawby desktop and mobile
    browser projects once more against that deployed custom-domain version.
-8. Run the explicit test-mode Stripe checkout canary against the promoted
+9. Run the explicit test-mode Stripe checkout canary against the promoted
    custom-domain candidate with no version override. Provider webhooks cannot
    carry the 0% override, so this gate is post-promotion by design; a failure
    follows the existing EXIT-trap baseline restoration path.
