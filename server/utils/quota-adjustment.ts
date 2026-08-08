@@ -316,7 +316,14 @@ async function readSnapshot(db: DbClient, input: QuotaAdjustmentInput, period: Q
   }
   const balance = Number(credits.balance)
   const lifetimeUsed = Number(credits.lifetime_used)
-  if (!Number.isSafeInteger(balance) || balance < 0 || !Number.isSafeInteger(lifetimeUsed) || lifetimeUsed < 0) {
+  if (
+    typeof credits.balance !== 'number'
+    || typeof credits.lifetime_used !== 'number'
+    || !Number.isSafeInteger(balance)
+    || balance < 0
+    || !Number.isSafeInteger(lifetimeUsed)
+    || lifetimeUsed < 0
+  ) {
     fail('quota_state_invalid', 500, 'AI quota contains invalid numeric state.')
   }
   if (credits.balance_period_key !== balancePeriodKey(period)) {
