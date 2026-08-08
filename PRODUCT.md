@@ -57,7 +57,9 @@ Professional-service tenants render through the Blawby template (see "Public Tem
 
 ## Business Model
 
-Pricing managed entirely in Stripe — never duplicated in code. All pricing UI reads from `GET /api/billing/plans`.
+Recurring amounts and plan IDs are intentionally fixed in the reviewed Stripe
+catalog contract (`scripts/lib/stripe-catalog-plan.mjs`). Customer-facing
+billing surfaces load the canonical plan details from `GET /api/billing/plans`.
 
 | Tier | Price | Key Features |
 |------|-------|-------------|

@@ -67,7 +67,7 @@ const STARTER_PLAN: Plan = {
     'Free KrabiClaw ChatGPT app — build & edit your site by chatting',
     'Bookings & ticketed experiences',
     'Email notifications for reservations & bookings',
-    '500 AI credits to start',
+    '500 shared organization AI credits per UTC week',
     'Basic SEO — get found by search & AI',
   ],
   limits: {
