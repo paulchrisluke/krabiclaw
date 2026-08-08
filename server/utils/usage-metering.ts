@@ -35,11 +35,115 @@ export interface QuotaGrantInput {
   reason: string
   createdBy?: string | null
   idempotencyKey: string
+  createdAt?: string
 }
 
 function assertQuantity(quantity: number): void {
   if (!Number.isSafeInteger(quantity) || quantity < 0) {
     throw new Error('Usage quantity must be a non-negative safe integer.')
+  }
+}
+
+function parseDate(value: string, label: string): Date {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) throw new Error(`${label} must be a valid date.`)
+  return date
+}
+
+function defaultPeriodEnd(periodStart: string): string {
+  return new Date(parseDate(periodStart, 'Quota period start').getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
+}
+
+function normalizedPeriodEnd(periodStart: string, periodEnd?: string | null): string | null {
+  if (!periodEnd) return defaultPeriodEnd(periodStart)
+  const start = parseDate(periodStart, 'Quota period start')
+  const end = parseDate(periodEnd, 'Quota period end')
+  if (end.getTime() <= start.getTime()) throw new Error('Quota period end must be after period start.')
+  return end.toISOString()
+}
+
+function isPeriodActive(row: { period_start: string; period_end: string | null }, now: Date): boolean {
+  const start = parseDate(row.period_start, 'Quota period start')
+  const end = parseDate(row.period_end ?? defaultPeriodEnd(row.period_start), 'Quota period end')
+  return now.getTime() >= start.getTime() && now.getTime() < end.getTime()
+}
+
+function utcWeekStart(now: Date): Date {
+  const start = new Date(now)
+  start.setUTCHours(0, 0, 0, 0)
+  const daysFromMonday = (start.getUTCDay() + 6) % 7
+  start.setUTCDate(start.getUTCDate() - daysFromMonday)
+  return start
+}
+
+function isCurrentWeeklyBaseline(row: { period_start: string; period_end: string | null }, now: Date): boolean {
+  const start = parseDate(row.period_start, 'Quota period start')
+  const end = parseDate(row.period_end ?? defaultPeriodEnd(row.period_start), 'Quota period end')
+  return start.getTime() === utcWeekStart(now).getTime()
+    && end.getTime() === new Date(utcWeekStart(now).getTime() + 7 * 24 * 60 * 60 * 1000).getTime()
+}
+
+export interface CreditGrantProjection {
+  grantQuantity: number | null
+  baselineQuantity: number | null
+  baselineCreatedAt: string | null
+  periodStart: string | null
+  periodEnd: string | null
+}
+
+/**
+ * Resolves the current append-only allowance. Plan/reset rows are baselines;
+ * the newest active baseline wins. Manual rows are additive only when they
+ * were issued after that baseline and are still inside their own period.
+ */
+export async function getCurrentCreditGrantProjection(
+  db: DbClient,
+  organizationId: string,
+  now = new Date(),
+): Promise<CreditGrantProjection> {
+  const nowIso = now.toISOString()
+  const rows = await queryAll<{
+    id: string
+    quantity: number
+    period_start: string
+    period_end: string | null
+    grant_type: 'plan' | 'reset' | 'manual'
+    created_at: string
+  }>(db, `
+    SELECT id, quantity, period_start, period_end, grant_type, created_at
+    FROM usage_quota_grants
+    WHERE organization_id = ?
+      AND resource = 'ai_inference'
+      AND unit = 'credit'
+      AND period_start <= ?
+    ORDER BY created_at DESC, id DESC
+  `, [organizationId, nowIso])
+
+  const active = rows.filter(row => isPeriodActive(row, now))
+  const baseline = active.find(row =>
+    (row.grant_type === 'plan' || row.grant_type === 'reset')
+    && isCurrentWeeklyBaseline(row, now),
+  )
+  const manualQuantity = active
+    .filter(row => row.grant_type === 'manual' && (!baseline || row.created_at >= baseline.created_at))
+    .reduce((total, row) => total + Number(row.quantity), 0)
+
+  if (!baseline) {
+    return {
+      grantQuantity: manualQuantity > 0 ? manualQuantity : null,
+      baselineQuantity: null,
+      baselineCreatedAt: null,
+      periodStart: null,
+      periodEnd: null,
+    }
+  }
+
+  return {
+    grantQuantity: Number(baseline.quantity) + manualQuantity,
+    baselineQuantity: Number(baseline.quantity),
+    baselineCreatedAt: baseline.created_at,
+    periodStart: baseline.period_start,
+    periodEnd: baseline.period_end ?? defaultPeriodEnd(baseline.period_start),
   }
 }
 
@@ -78,7 +182,9 @@ function applyGrantQuery(
     return {
       query: `
         UPDATE ai_credits
-        SET balance = ?, balance_period_key = ?, updated_at = ?
+        SET balance = ?,
+            balance_period_key = CASE WHEN balance_period_key IS NULL THEN NULL ELSE ? END,
+            updated_at = ?
         WHERE organization_id = ? AND ${grantReference}
       `,
       params: [input.quantity, utcWeekKey(input.periodStart), appliedAt, input.organizationId, input.organizationId, input.idempotencyKey],
@@ -99,10 +205,12 @@ function applyGrantQuery(
   return {
     query: `
       UPDATE ai_credits
-      SET balance = MAX(balance, ?), updated_at = ?
+      SET balance = ?,
+          balance_period_key = CASE WHEN balance_period_key IS NULL THEN NULL ELSE ? END,
+          updated_at = ?
       WHERE organization_id = ? AND ${grantReference}
     `,
-    params: [input.quantity, appliedAt, input.organizationId, input.organizationId, input.idempotencyKey],
+    params: [input.quantity, utcWeekKey(input.periodStart), appliedAt, input.organizationId, input.organizationId, input.idempotencyKey],
   }
 }
 
@@ -148,7 +256,8 @@ export async function grantQuota(db: DbClient, input: QuotaGrantInput): Promise<
     throw new Error('Quota grants require a period, start time, reason, and idempotency key.')
   }
 
-  const createdAt = new Date().toISOString()
+  const periodEnd = normalizedPeriodEnd(input.periodStart, input.periodEnd)
+  const createdAt = input.createdAt ?? new Date().toISOString()
   const statements: Array<{ query: string; params: unknown[] }> = []
   if (isAiCreditGrant(input)) {
     statements.push({
@@ -176,7 +285,7 @@ export async function grantQuota(db: DbClient, input: QuotaGrantInput): Promise<
       input.unit,
       input.periodKey,
       input.periodStart,
-      input.periodEnd ?? null,
+      periodEnd,
       input.grantType,
       input.reason,
       input.createdBy ?? null,
@@ -220,6 +329,7 @@ export async function resetOrganizationQuota(
     }
     resources.add(grant.resource)
     assertGrantUnit(grant)
+    normalizedPeriodEnd(grant.periodStart, grant.periodEnd)
   }
   const createdAt = new Date().toISOString()
   const statements: Array<{ query: string; params: unknown[] }> = []
@@ -251,7 +361,7 @@ export async function resetOrganizationQuota(
         grant.unit,
         `reset:${input.resetId}`,
         grant.periodStart,
-        grant.periodEnd ?? null,
+        normalizedPeriodEnd(grant.periodStart, grant.periodEnd),
         input.reason,
         input.createdBy ?? null,
         idempotencyKey,

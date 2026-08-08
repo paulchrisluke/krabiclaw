@@ -19,6 +19,19 @@ test('effective access is derived from subscription status', () => {
   assert.equal(getEffectiveAccessPlan({ plan: 'growth', status: 'canceled', paymentStatus: null }, now), 'free')
 })
 
+test('expired trials fail closed instead of retaining paid access', () => {
+  const now = new Date('2026-08-10T00:00:00.000Z')
+  assert.equal(
+    getEffectiveAccessPlan({
+      plan: 'growth',
+      status: 'trialing',
+      paymentStatus: null,
+      periodEnd: new Date('2026-08-09T23:59:59.000Z'),
+    }, now),
+    'free',
+  )
+})
+
 let eventState: {
   status: string
   leaseExpiresAt: string | null
@@ -106,7 +119,6 @@ const {
   recordStripeEvent,
   enqueueStripeEvent,
   requeueDeadLetterStripeEvent,
-  grantInvoiceQuota,
   markOrganizationPayment,
   selectCanonicalStripePrice,
   createStripePlanLoader,
@@ -588,226 +600,6 @@ test('AI quota grants update the balance and mark the grant applied atomically',
   const queries = capturedBatches.flat().map(query => query.query)
   assert.ok(queries.some(query => query.includes('UPDATE ai_credits')))
   assert.ok(queries.some(query => query.includes('UPDATE usage_quota_grants SET applied_at')))
-})
-
-test('invoice.paid grants the period even when Better Auth subscription.created has not arrived', async () => {
-  capturedBatches = []
-  const stripe = {
-    subscriptions: {
-      retrieve: async () => ({
-        id: 'sub-before-created',
-        status: 'active',
-        customer: 'cus-1',
-        metadata: { referenceId: 'org-1' },
-        items: {
-          data: [{
-            id: 'si-seat',
-            price: { id: 'price_seat' },
-            quantity: 3,
-            current_period_start: 1_785_542_400,
-            current_period_end: 1_788_220_800,
-          }, {
-            id: 'si-add-on',
-            price: { id: 'price_add_on' },
-            current_period_start: 1_785_542_400,
-            current_period_end: 1_788_220_800,
-          }, {
-            id: 'si-invoice-paid',
-            price: { id: 'price_growth_month' },
-            current_period_start: 1_785_542_400,
-            current_period_end: 1_788_220_800,
-          }],
-        },
-      }),
-    },
-    products: {
-      list: async () => ({
-        data: [{ id: 'prod-growth', metadata: { plan_id: 'growth' } }],
-        has_more: false,
-      }),
-    },
-    prices: {
-      retrieve: async (id: string) => ({ id, product: 'prod-growth', type: 'recurring', unit_amount: 4900, currency: 'usd', recurring: { interval: 'month', interval_count: 1 }, metadata: { price_role: 'base' } }),
-      list: async () => ({
-        data: [{
-          id: 'price_growth_month',
-          product: 'prod-growth',
-          type: 'recurring',
-          unit_amount: 4900,
-          currency: 'usd',
-          recurring: { interval: 'month', interval_count: 1 },
-        }],
-        has_more: false,
-      }),
-    },
-  }
-  const paidEvent = {
-    id: 'evt_invoice_paid',
-    type: 'invoice.paid',
-    data: {
-      object: {
-        id: 'in_invoice_paid',
-        billing_reason: 'subscription_create',
-        subscription: 'sub-before-created',
-        lines: {
-          data: [{
-            id: 'il_invoice_paid',
-            type: 'subscription',
-            subscription: 'sub-before-created',
-            parent: {
-              type: 'subscription_item_details',
-              subscription_item_details: {
-                subscription: 'sub-before-created',
-                subscription_item: 'si-invoice-paid',
-                proration: false,
-              },
-            },
-            proration: false,
-            price: {
-              id: 'price_growth_month',
-              recurring: { interval: 'month' },
-            },
-            period: { start: 1_785_542_400, end: 1_788_220_800 },
-          }, {
-            id: 'il_seat',
-            type: 'subscription',
-            subscription: 'sub-before-created',
-            parent: {
-              type: 'subscription_item_details',
-              subscription_item_details: {
-                subscription: 'sub-before-created',
-                subscription_item: 'si-seat',
-                proration: false,
-              },
-            },
-            price: { id: 'price_seat', recurring: { interval: 'month' } },
-            period: { start: 1_785_542_400, end: 1_788_220_800 },
-          }, {
-            id: 'il_add_on',
-            type: 'subscription',
-            subscription: 'sub-before-created',
-            parent: {
-              type: 'subscription_item_details',
-              subscription_item_details: {
-                subscription: 'sub-before-created',
-                subscription_item: 'si-add-on',
-                proration: false,
-              },
-            },
-            price: { id: 'price_add_on', recurring: { interval: 'month' } },
-            period: { start: 1_785_542_400, end: 1_788_220_800 },
-          }],
-          has_more: false,
-        },
-      },
-    },
-  } as never
-
-  await grantInvoiceQuota({} as never, stripe as never, paidEvent, missingSubscriptionAdapter, async () => [{
-    name: 'growth',
-    priceId: 'price_growth_month',
-    seatPriceId: 'price_seat',
-    limits: {},
-    group: 'krabiclaw',
-  }] as never)
-  const queries = capturedBatches.flat()
-  assert.ok(queries.some(query => query.query.includes('UPDATE ai_credits')))
-  const grant = queries.find(query => query.query.includes('INSERT OR IGNORE INTO usage_quota_grants'))
-  assert.ok(grant?.params?.some(value => String(value).includes('sub-before-created')))
-  assert.ok(grant?.params?.some(value => String(value).includes('price_growth_month')))
-  assert.ok(!grant?.params?.some(value => String(value).includes('price_seat')))
-  assert.ok(!grant?.params?.some(value => String(value).includes('price_add_on')))
-})
-
-test('delayed invoice allocation uses the invoice line price and period across pagination', async () => {
-  capturedBatches = []
-  const stripe = {
-    subscriptions: {
-      retrieve: async () => ({
-        id: 'sub-delayed',
-        status: 'active',
-        customer: 'cus-1',
-        items: { data: [{ id: 'si-delayed', price: { id: 'price-growth-current' }, current_period_start: 1_756_627_200, current_period_end: 1_759_219_200 }] },
-      }),
-    },
-    invoices: {
-      listLineItems: (() => {
-        let page = 0
-        return async () => {
-          page += 1
-          if (page === 1) return {
-            data: [{ id: 'il-page-one', parent: { type: 'invoice_item_details', invoice_item_details: { subscription: 'sub-delayed', proration: false } }, period: { start: 1_754_035_200, end: 1_756_627_200 } }],
-            has_more: true,
-          }
-          return {
-            data: [{
-              id: 'il-growth-old',
-              parent: { type: 'subscription_item_details', subscription_item_details: { subscription: 'sub-delayed', subscription_item: 'si-delayed', proration: false } },
-              pricing: { type: 'price_details', price_details: { price: { id: 'price-growth-old', product: 'prod-growth', recurring: { interval: 'month' }, metadata: { price_role: 'base' } } } },
-              period: { start: 1_785_542_400, end: 1_788_220_800 },
-            }],
-            has_more: false,
-          }
-        }
-      })(),
-    },
-    products: {
-      list: async () => ({
-      data: [{ id: 'prod-growth', metadata: { plan_id: 'growth', monthly_price_id: 'price-growth-current' } }],
-      has_more: false,
-      }),
-      retrieve: async () => ({ id: 'prod-growth', metadata: { plan_id: 'growth' } }),
-    },
-    prices: {
-      retrieve: async (id: string) => ({ id, product: 'prod-growth', type: 'recurring', unit_amount: 4900, currency: 'usd', recurring: { interval: 'month', interval_count: 1 }, metadata: { price_role: 'base' } }),
-      list: async () => ({
-        data: [
-          { id: 'price-growth-old', product: 'prod-growth', type: 'recurring', unit_amount: 4900, currency: 'usd', recurring: { interval: 'month', interval_count: 1 }, metadata: { price_role: 'base' } },
-          { id: 'price-growth-current', product: 'prod-growth', type: 'recurring', unit_amount: 5900, currency: 'usd', recurring: { interval: 'month', interval_count: 1 } },
-        ],
-        has_more: false,
-      }),
-    },
-  }
-  const paidEvent = {
-    id: 'evt_invoice_delayed',
-    type: 'invoice.paid',
-    data: {
-      object: {
-        id: 'in_invoice_delayed',
-        billing_reason: 'subscription_cycle',
-        subscription: 'sub-delayed',
-        lines: {
-          data: [{ id: 'il-not-plan', type: 'invoiceitem', subscription: 'sub-delayed', proration: false, price: null }],
-          has_more: true,
-        },
-      },
-    },
-  } as never
-
-  await grantInvoiceQuota({} as never, stripe as never, paidEvent, missingSubscriptionAdapter, planLoader('growth', 'price-growth-current'))
-  const grant = capturedBatches.flat().find(query => query.query.includes('INSERT OR IGNORE INTO usage_quota_grants'))
-  assert.ok(grant?.params?.includes(2000))
-  assert.ok(grant?.params?.includes('2026-08-01T00:00:00.000Z'))
-})
-
-test('only subscription creation and cycle invoices grant plan quota', async () => {
-  capturedBatches = []
-  const ignoredEvent = {
-    id: 'evt_invoice_manual',
-    type: 'invoice.paid',
-    data: { object: { id: 'in_manual', billing_reason: 'manual', subscription: 'sub-1' } },
-  } as never
-  await grantInvoiceQuota({} as never, { subscriptions: { retrieve: async () => { throw new Error('must not retrieve') } } } as never, ignoredEvent, missingSubscriptionAdapter, planLoader('growth', 'price-growth'))
-  assert.equal(capturedBatches.length, 0)
-
-  const legacyEvent = {
-    id: 'evt_invoice_legacy',
-    type: 'invoice.payment_succeeded',
-    data: { object: { id: 'in_legacy', subscription: 'sub-1' } },
-  } as never
-  await grantInvoiceQuota({} as never, { subscriptions: { retrieve: async () => { throw new Error('must not retrieve') } } } as never, legacyEvent, missingSubscriptionAdapter, planLoader('growth', 'price-growth'))
-  assert.equal(capturedBatches.length, 0)
 })
 
 test('ai_inference grants reject non-credit units before writing audit rows', async () => {

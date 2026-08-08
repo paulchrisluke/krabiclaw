@@ -1,7 +1,6 @@
 import type Stripe from 'stripe'
 import type { DbClient } from '~/server/db'
 import {
-  grantInvoiceQuota,
   reconcileBetterAuthSubscriptionEvent,
   recordStripeEvent,
   type BetterAuthSubscriptionAdapter,
@@ -22,7 +21,6 @@ export async function processStripeEvent(
   return recordStripeEvent(db, event, async () => {
     await reconcileBetterAuthSubscriptionEvent(db, event, stripe, adapter, loadStripePlans)
     await handleApplicationStripeEvent(env, db as D1Database, event, adapter)
-    await grantInvoiceQuota(db, stripe, event, adapter, loadStripePlans)
     await handleStripeGa4Event(env, db, stripe, event)
   })
 }

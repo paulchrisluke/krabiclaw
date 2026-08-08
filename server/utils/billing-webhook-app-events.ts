@@ -98,7 +98,8 @@ export async function handleApplicationStripeEvent(
     // Checkout completion is only a UX/payment-processing signal. It does not
     // identify a paid billing period reliably (and may not even have a
     // finalized invoice yet); invoice.paid is the sole source of subscription
-    // coverage and quota grants.
+    // payment coverage. Quota follows the Better Auth subscription-period
+    // projection.
     return
   }
   if (session.payment_status !== 'paid') return

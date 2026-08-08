@@ -2,21 +2,11 @@ import type Stripe from 'stripe'
 import type { StripePlan, Subscription as BetterAuthSubscription } from '@better-auth/stripe'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { getPlanEntitlements, type EntitlementsMap } from '~/server/utils/billing-entitlements'
-import { grantQuota } from '~/server/utils/usage-metering'
 import { getEffectiveAccessPlan } from '~/server/utils/billing-access'
 import { betterAuthTimestampToIso } from '~/server/utils/better-auth-timestamps'
 import { isManagedServiceEnabled } from '~/server/utils/feature-flags'
-import {
-  invoiceLineIsProration,
-  invoiceLineIsSubscription,
-  invoiceLinePrice,
-  invoiceLineSubscriptionId,
-  invoiceLineSubscriptionItemId,
-  loadStripeInvoiceLines,
-} from '~/server/utils/stripe-invoice-lines'
 
 const WEBHOOK_LEASE_MS = 5 * 60 * 1000
-const INVOICE_QUOTA_BILLING_REASONS = new Set(['subscription_create', 'subscription_cycle'])
 export const CONCIERGE_PLAN_IDS = new Set(['managed', 'seo_accelerator'])
 
 export function selectCanonicalStripePrice(
@@ -807,12 +797,6 @@ export async function recordStripeEvent(
   }
 }
 
-interface InvoiceSubscriptionResolution {
-  organizationId: string
-  customerId: string | null
-  stripeSubscription: Stripe.Subscription
-}
-
 export function invoiceSubscriptionId(invoice: {
   subscription?: unknown
   parent?: unknown
@@ -824,37 +808,6 @@ export function invoiceSubscriptionId(invoice: {
     : subscriptionValue && typeof subscriptionValue === 'object' && 'id' in subscriptionValue && typeof subscriptionValue.id === 'string'
       ? subscriptionValue.id
       : null
-}
-
-async function resolveInvoiceSubscription(
-  db: DbClient,
-  stripe: Stripe,
-  stripeSubscriptionId: string,
-  adapter: BetterAuthSubscriptionAdapter,
-): Promise<InvoiceSubscriptionResolution> {
-  const local = await adapter.findOne<{ referenceId: string }>({
-    model: 'subscription',
-    where: [{ field: 'stripeSubscriptionId', value: stripeSubscriptionId }],
-  })
-
-  const stripeSubscription = await stripe.subscriptions.retrieve(stripeSubscriptionId)
-  const stripeCustomerId = stripeCustomerIdValue(stripeSubscription.customer)
-  const metadataReferenceId = stripeSubscription.metadata?.referenceId?.trim()
-  const customerOrganization = stripeCustomerId
-    ? await adapter.findOne<{ id: string }>({
-        model: 'organization',
-        where: [{ field: 'stripeCustomerId', value: stripeCustomerId }],
-      })
-    : null
-  const organizationId = local?.referenceId || metadataReferenceId || customerOrganization?.id
-  if (!organizationId) {
-    throw new Error(`Stripe invoice subscription ${stripeSubscriptionId} has no organization reference; retrying`)
-  }
-  return {
-    organizationId,
-    customerId: stripeCustomerId,
-    stripeSubscription,
-  }
 }
 
 function stripeCustomerIdValue(customer: Stripe.Subscription['customer']): string | null {
@@ -1037,116 +990,6 @@ export async function markOrganizationPayment(
       params: [`sb-${site.id}`, site.id, input.organizationId, now, input.organizationId],
     })),
   ])
-}
-
-export async function grantInvoiceQuota(
-  db: DbClient,
-  stripe: Stripe,
-  event: Stripe.Event,
-  adapter: BetterAuthSubscriptionAdapter,
-  loadPlans: StripePlanLoader,
-): Promise<void> {
-  if (event.type !== 'invoice.paid') return
-  const invoice = event.data.object as Stripe.Invoice & {
-    lines: Stripe.ApiList<Stripe.InvoiceLineItem>
-    subscription?: string | { id: string } | null
-    parent?: {
-      subscription_details?: {
-        subscription?: string | { id: string } | null
-      } | null
-    } | null
-  }
-  if (!INVOICE_QUOTA_BILLING_REASONS.has(String(invoice.billing_reason ?? ''))) return
-  const stripeSubscriptionId = invoiceSubscriptionId(invoice)
-  if (!stripeSubscriptionId) return
-
-  const subscription = await resolveInvoiceSubscription(db, stripe, stripeSubscriptionId, adapter)
-  const invoiceLines = await loadStripeInvoiceLines(stripe, invoice)
-
-  const recurringLines = invoiceLines.filter((line) => {
-    const price = invoiceLinePrice(line)
-    return invoiceLineSubscriptionId(line) === stripeSubscriptionId
-      && invoiceLineIsSubscription(line)
-      && !invoiceLineIsProration(line)
-      && typeof price !== 'string'
-      && Boolean(price?.recurring)
-      && Boolean(line.period?.start && line.period?.end)
-  })
-  if (recurringLines.length === 0) {
-    throw new Error(`Stripe invoice ${invoice.id} has no deterministic recurring subscription line; retrying`)
-  }
-
-  const resolvedSubscriptionPlan = await resolveSubscriptionPlan(stripe, subscription.stripeSubscription, loadPlans)
-  const baseSubscriptionItemId = resolvedSubscriptionPlan.item.id
-  const basePlanPriceIds = new Set([
-    resolvedSubscriptionPlan.item.price.id,
-    resolvedSubscriptionPlan.plan.priceId,
-    resolvedSubscriptionPlan.plan.annualDiscountPriceId,
-  ].filter((priceId): priceId is string => Boolean(priceId)))
-  const basePlanLines = recurringLines.filter((line) => {
-    const subscriptionItemId = invoiceLineSubscriptionItemId(line)
-    if (baseSubscriptionItemId) return subscriptionItemId === baseSubscriptionItemId
-    const price = invoiceLinePrice(line)
-    return typeof price !== 'string' && Boolean(price?.id && basePlanPriceIds.has(price.id))
-  })
-  if (basePlanLines.length !== 1) {
-    throw new Error(`Stripe invoice ${invoice.id} does not identify exactly one base subscription item line; retrying`)
-  }
-  const line = basePlanLines[0]
-  if (!line) throw new Error(`Stripe invoice ${invoice.id} has no base subscription item line; retrying`)
-  const price = invoiceLinePrice(line)
-  if (!price || typeof price === 'string' || !price.id) {
-    throw new Error(`Stripe invoice ${invoice.id} base subscription item line has no price; retrying`)
-  }
-  const plan = resolvedSubscriptionPlan.plan
-  const priceId = price.id
-  const periodStartSeconds = line.period?.start
-  const periodEndSeconds = line.period?.end
-  if (!periodStartSeconds || !periodEndSeconds) {
-    throw new Error(`Stripe invoice ${invoice.id} plan line has no deterministic billing period; retrying`)
-  }
-  const periodStart = new Date(periodStartSeconds * 1000).toISOString()
-  const periodEnd = new Date(periodEndSeconds * 1000).toISOString()
-  const accessPlan = getEffectiveAccessPlan({
-    plan: plan.name,
-    status: subscription.stripeSubscription.status,
-    paymentStatus: 'paid',
-    paidThrough: periodEnd,
-    periodEnd,
-  })
-  await markOrganizationPayment(db, {
-    organizationId: subscription.organizationId,
-    customerId: subscription.customerId,
-    subscriptionId: stripeSubscriptionId,
-    paymentStatus: 'paid',
-    eventCreated: event.created,
-    eventId: event.id,
-    paidThrough: periodEnd,
-    invoiceId: invoice.id,
-    basePlanPriceId: priceId,
-    invoicePeriodStart: periodStart,
-    invoicePeriodEnd: periodEnd,
-  })
-  await projectCurrentStripeSubscription(db, subscription.stripeSubscription, false, stripe, event, adapter, loadPlans)
-  if (accessPlan === 'free') return
-
-  const entitlements = getPlanEntitlements(plan.name)
-  const aiCredits = entitlements.ai_credits
-  if (typeof aiCredits !== 'number' || aiCredits <= 0) return
-
-  const periodKey = `stripe-invoice:${invoice.id}:subscription:${stripeSubscriptionId}:price:${priceId}:${periodStart}:${periodEnd}`
-  await grantQuota(db, {
-    organizationId: subscription.organizationId,
-    resource: 'ai_inference',
-    quantity: aiCredits,
-    unit: 'credit',
-    periodKey,
-    periodStart,
-    periodEnd,
-    grantType: 'plan',
-    reason: `Stripe invoice ${invoice.id} paid for ${plan.name}`,
-    idempotencyKey: periodKey,
-  })
 }
 
 export function entitlementLimits(plan: string): EntitlementsMap {
