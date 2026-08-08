@@ -25,7 +25,7 @@ interface OrgBillingRow {
   past_due_since: string | null
 }
 
-export interface BetterAuthSubscriptionRow {
+interface BetterAuthSubscriptionRow {
   plan: string
   referenceId: string
   stripeCustomerId: string | null
@@ -35,8 +35,6 @@ export interface BetterAuthSubscriptionRow {
   paidThrough: string | null
   pastDueSince: string | null
   periodEnd: number | string | null
-  trialEnd: number | string | null
-  updatedAt: number | string | null
   cancelAtPeriodEnd: number | null
 }
 
@@ -418,10 +416,10 @@ export async function getUserBillingItems(
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
-export async function getBetterAuthSubscription(db: DbClient, organizationId: string): Promise<BetterAuthSubscriptionRow | null> {
+async function getBetterAuthSubscription(db: DbClient, organizationId: string): Promise<BetterAuthSubscriptionRow | null> {
   return await queryFirst<BetterAuthSubscriptionRow>(db, `
     SELECT plan, referenceId, stripeCustomerId, stripeSubscriptionId, status,
-           periodEnd, trialEnd, updatedAt, cancelAtPeriodEnd,
+           periodEnd, cancelAtPeriodEnd,
            (SELECT payment_status FROM organization_billing WHERE organization_id = referenceId LIMIT 1) AS paymentStatus,
            (SELECT paid_through FROM organization_billing WHERE organization_id = referenceId LIMIT 1) AS paidThrough,
            (SELECT past_due_since FROM organization_billing WHERE organization_id = referenceId LIMIT 1) AS pastDueSince

@@ -86,9 +86,17 @@ function isCurrentWeeklyBaseline(row: { period_start: string; period_end: string
 export interface CreditGrantProjection {
   grantQuantity: number | null
   baselineQuantity: number | null
+  baselineGrantType: 'plan' | 'reset' | null
   baselineCreatedAt: string | null
   periodStart: string | null
   periodEnd: string | null
+  /**
+   * Usage starts at the weekly period for plan baselines, but at the reset
+   * timestamp for exact resets. This keeps pre-reset consumption from eating
+   * into a reset allowance while still letting a later plan baseline account
+   * for all usage in the week.
+   */
+  consumptionStart: string | null
 }
 
 /**
@@ -120,7 +128,7 @@ export async function getCurrentCreditGrantProjection(
   `, [organizationId, nowIso])
 
   const active = rows.filter(row => isPeriodActive(row, now))
-  const baseline = active.find(row =>
+  const baseline = active.find((row): row is typeof row & { grant_type: 'plan' | 'reset' } =>
     (row.grant_type === 'plan' || row.grant_type === 'reset')
     && isCurrentWeeklyBaseline(row, now),
   )
@@ -132,18 +140,22 @@ export async function getCurrentCreditGrantProjection(
     return {
       grantQuantity: manualQuantity > 0 ? manualQuantity : null,
       baselineQuantity: null,
+      baselineGrantType: null,
       baselineCreatedAt: null,
       periodStart: null,
       periodEnd: null,
+      consumptionStart: null,
     }
   }
 
   return {
     grantQuantity: Number(baseline.quantity) + manualQuantity,
     baselineQuantity: Number(baseline.quantity),
+    baselineGrantType: baseline.grant_type,
     baselineCreatedAt: baseline.created_at,
     periodStart: baseline.period_start,
     periodEnd: baseline.period_end ?? defaultPeriodEnd(baseline.period_start),
+    consumptionStart: baseline.grant_type === 'reset' ? baseline.created_at : baseline.period_start,
   }
 }
 
@@ -185,7 +197,9 @@ function applyGrantQuery(
         SET balance = ?,
             balance_period_key = CASE WHEN balance_period_key IS NULL THEN NULL ELSE ? END,
             updated_at = ?
-        WHERE organization_id = ? AND ${grantReference}
+        WHERE organization_id = ?
+          AND balance_period_key IS NOT NULL
+          AND ${grantReference}
       `,
       params: [input.quantity, utcWeekKey(input.periodStart), appliedAt, input.organizationId, input.organizationId, input.idempotencyKey],
     }
@@ -196,7 +210,9 @@ function applyGrantQuery(
       query: `
         UPDATE ai_credits
         SET balance = balance + ?, last_topped_up_at = ?, updated_at = ?
-        WHERE organization_id = ? AND ${grantReference}
+        WHERE organization_id = ?
+          AND balance_period_key IS NOT NULL
+          AND ${grantReference}
       `,
       params: [input.quantity, appliedAt, appliedAt, input.organizationId, input.organizationId, input.idempotencyKey],
     }
@@ -208,9 +224,36 @@ function applyGrantQuery(
       SET balance = ?,
           balance_period_key = CASE WHEN balance_period_key IS NULL THEN NULL ELSE ? END,
           updated_at = ?
-      WHERE organization_id = ? AND ${grantReference}
+      WHERE organization_id = ?
+        AND balance_period_key IS NOT NULL
+        AND ${grantReference}
     `,
     params: [input.quantity, utcWeekKey(input.periodStart), appliedAt, input.organizationId, input.organizationId, input.idempotencyKey],
+  }
+}
+
+function markGrantAppliedQuery(
+  input: Pick<QuotaGrantInput, 'organizationId' | 'resource' | 'unit' | 'idempotencyKey'>,
+  appliedAt: string,
+): { query: string; params: unknown[] } {
+  const aiCreditCondition = isAiCreditGrant(input)
+    ? `
+          AND EXISTS (
+            SELECT 1 FROM ai_credits
+            WHERE organization_id = ? AND balance_period_key IS NOT NULL
+          )
+      `
+    : ''
+  const params = isAiCreditGrant(input)
+    ? [appliedAt, input.organizationId, input.idempotencyKey, input.organizationId]
+    : [appliedAt, input.organizationId, input.idempotencyKey]
+  return {
+    query: `
+      UPDATE usage_quota_grants SET applied_at = ?
+      WHERE organization_id = ? AND idempotency_key = ? AND applied_at IS NULL
+      ${aiCreditCondition}
+    `,
+    params,
   }
 }
 
@@ -264,9 +307,9 @@ export async function grantQuota(db: DbClient, input: QuotaGrantInput): Promise<
       query: `
         INSERT OR IGNORE INTO ai_credits
           (organization_id, balance, lifetime_used, last_topped_up_at, balance_period_key, updated_at)
-        VALUES (?, 0, 0, NULL, NULL, ?)
+        VALUES (?, 0, 0, NULL, ?, ?)
       `,
-      params: [input.organizationId, createdAt],
+      params: [input.organizationId, utcWeekKey(input.periodStart), createdAt],
     })
   }
   const grantStatementIndex = statements.length
@@ -295,13 +338,7 @@ export async function grantQuota(db: DbClient, input: QuotaGrantInput): Promise<
   })
   const apply = applyGrantQuery(input, createdAt)
   if (apply) statements.push(apply)
-  statements.push({
-    query: `
-      UPDATE usage_quota_grants SET applied_at = ?
-      WHERE organization_id = ? AND idempotency_key = ? AND applied_at IS NULL
-    `,
-    params: [createdAt, input.organizationId, input.idempotencyKey],
-  })
+  statements.push(markGrantAppliedQuery(input, createdAt))
 
   const results = await executeBatch(db, statements)
   return Number(results[grantStatementIndex]?.meta.changes ?? 0) > 0
@@ -338,9 +375,9 @@ export async function resetOrganizationQuota(
       query: `
         INSERT OR IGNORE INTO ai_credits
           (organization_id, balance, lifetime_used, last_topped_up_at, balance_period_key, updated_at)
-        VALUES (?, 0, 0, NULL, NULL, ?)
+        VALUES (?, 0, 0, NULL, ?, ?)
       `,
-      params: [input.organizationId, createdAt],
+      params: [input.organizationId, utcWeekKey(input.grants[0]?.periodStart ?? new Date().toISOString()), createdAt],
     })
   }
   for (const grant of input.grants) {
@@ -375,13 +412,12 @@ export async function resetOrganizationQuota(
       idempotencyKey,
     }, createdAt)
     if (apply) statements.push(apply)
-    statements.push({
-      query: `
-        UPDATE usage_quota_grants SET applied_at = ?
-        WHERE organization_id = ? AND idempotency_key = ? AND applied_at IS NULL
-      `,
-      params: [createdAt, input.organizationId, idempotencyKey],
-    })
+    statements.push(markGrantAppliedQuery({
+      organizationId: input.organizationId,
+      resource: grant.resource,
+      unit: grant.unit,
+      idempotencyKey,
+    }, createdAt))
   }
 
   await executeBatch(db, statements)

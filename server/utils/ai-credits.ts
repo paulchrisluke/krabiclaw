@@ -5,7 +5,6 @@ import {
 } from '~/server/utils/usage-metering'
 import { getPlanEntitlements } from '~/server/utils/billing-entitlements'
 import { getEffectiveAccessPlan } from '~/server/utils/billing-access'
-import { getBetterAuthSubscription } from '~/server/utils/billing'
 
 // Credit system: 1 credit = 1,000 tokens (input + output combined).
 
@@ -24,6 +23,7 @@ export interface AiQuotaStatus {
   periodEnd: string
   grantQuantity: number | null
   unlimited: boolean
+  reconciliationRequired: boolean
 }
 
 interface CreditRow {
@@ -55,12 +55,101 @@ interface OrganizationPlanInfo {
   version: string
 }
 
+interface BillingProjectionRow {
+  plan: string | null
+  status: string | null
+  payment_status: string | null
+  paid_through: string | null
+  past_due_since: string | null
+  current_period_end: string | null
+  updated_at: string | null
+}
+
+const KNOWN_BILLING_PLANS = new Set(['free', 'growth', 'managed', 'seo_accelerator'])
+const KNOWN_SUBSCRIPTION_STATUSES = new Set([
+  'free',
+  'active',
+  'trialing',
+  'past_due',
+  'canceled',
+  'cancelled',
+  'unpaid',
+  'incomplete',
+  'incomplete_expired',
+  'paused',
+  'pending',
+  'processing',
+  'inactive',
+])
+const KNOWN_PAYMENT_STATUSES = new Set(['unknown', 'paid', 'processing', 'failed', 'pending'])
+
+function validateBillingProjection(row: BillingProjectionRow): void {
+  const subscriptionFields = [
+    row.plan,
+    row.status,
+    row.payment_status,
+    row.paid_through,
+    row.past_due_since,
+    row.current_period_end,
+  ]
+  if (subscriptionFields.every(value => value === null || value === undefined || value.trim() === '')) return
+
+  const plan = row.plan?.trim()
+  if (!plan || !KNOWN_BILLING_PLANS.has(plan)) {
+    throw new Error('Invalid organization billing projection: unknown plan.')
+  }
+  const status = row.status?.trim()
+  if (!status || !KNOWN_SUBSCRIPTION_STATUSES.has(status)) {
+    throw new Error('Invalid organization billing projection: unknown subscription status.')
+  }
+  const paymentStatus = row.payment_status?.trim()
+  if (paymentStatus && !KNOWN_PAYMENT_STATUSES.has(paymentStatus)) {
+    throw new Error('Invalid organization billing projection: unknown payment status.')
+  }
+
+  const parseBoundary = (value: string | null, label: string): Date | null => {
+    if (value === null || value.trim() === '') return null
+    const parsed = new Date(value)
+    if (Number.isNaN(parsed.getTime())) {
+      throw new Error(`Invalid organization billing projection: ${label} must be a valid date.`)
+    }
+    return parsed
+  }
+  const paidThrough = parseBoundary(row.paid_through, 'paid_through')
+  parseBoundary(row.past_due_since, 'past_due_since')
+  const periodEnd = parseBoundary(row.current_period_end, 'current_period_end')
+  parseBoundary(row.updated_at, 'updated_at')
+  if (status === 'trialing' && periodEnd === null) {
+    throw new Error('Invalid organization billing projection: trialing subscriptions require current_period_end.')
+  }
+  if (status === 'active' && paymentStatus === 'paid' && paidThrough === null) {
+    throw new Error('Invalid organization billing projection: paid active subscriptions require paid_through.')
+  }
+}
+
 async function getOrganizationPlanInfo(db: DbClient, organizationId: string, now = new Date()): Promise<OrganizationPlanInfo> {
-  const subscription = await getBetterAuthSubscription(db, organizationId)
-  if (!subscription) return { plan: 'free', version: 'free' }
+  const billing = await queryFirst<BillingProjectionRow>(db, `
+    SELECT plan, status, payment_status, paid_through, past_due_since,
+           current_period_end, updated_at
+    FROM organization_billing
+    WHERE organization_id = ?
+    LIMIT 1
+  `, [organizationId])
+  if (!billing) return { plan: 'free', version: 'free' }
+  validateBillingProjection(billing)
+  if (billing.plan === null || billing.status === null) return { plan: 'free', version: 'free' }
+  const trialEnd = billing.status === 'trialing' ? billing.current_period_end : null
   return {
-    plan: getEffectiveAccessPlan(subscription, now),
-    version: subscription.plan,
+    plan: getEffectiveAccessPlan({
+      plan: billing.plan,
+      status: billing.status,
+      paymentStatus: billing.payment_status,
+      paidThrough: billing.paid_through,
+      pastDueSince: billing.past_due_since,
+      periodEnd: billing.current_period_end,
+      trialEnd,
+    }, now),
+    version: String(billing.updated_at ?? billing.plan ?? 'free'),
   }
 }
 
@@ -85,6 +174,8 @@ async function ensurePlanCreditAllowance(db: DbClient, organizationId: string, n
     `, [organizationId, weeklyLimit ?? 0, weeklyLimit === null ? null : nowIso, periodKey, nowIso])
   }
 
+  if (existing?.balance_period_key === null) return existing
+
   const projection = await getCurrentCreditGrantProjection(db, organizationId, now)
   const latestBaseline = projection.baselineCreatedAt
     ? await queryFirst<{ period_key: string; grant_type: 'plan' | 'reset' }>(db, `
@@ -100,10 +191,35 @@ async function ensurePlanCreditAllowance(db: DbClient, organizationId: string, n
       `, [organizationId, projection.baselineCreatedAt])
     : null
   const desiredPeriodKey = `week:${periodKey}:plan:${plan}:version:${version}`
+  const previousBaselineMarker = projection.baselineCreatedAt ?? 'none'
+  const samePlanBaseline = latestBaseline?.grant_type === 'plan'
+    && latestBaseline.period_key.startsWith(`week:${periodKey}:plan:${plan}:`)
+  const precedingPlan = latestBaseline?.grant_type === 'reset' && projection.baselineCreatedAt
+    ? await queryFirst<{ period_key: string }>(db, `
+        SELECT period_key
+        FROM usage_quota_grants
+        WHERE organization_id = ?
+          AND resource = 'ai_inference'
+          AND unit = 'credit'
+          AND grant_type = 'plan'
+          AND period_start = ?
+          AND created_at < ?
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+      `, [organizationId, projection.periodStart, projection.baselineCreatedAt])
+    : null
+  const resetPlan = precedingPlan?.period_key.match(/:plan:([^:]+)(?::|$)/)?.[1] ?? null
+  const planTransitionAfterReset = latestBaseline?.grant_type === 'reset'
+    && resetPlan !== null
+    && resetPlan !== plan
   const shouldGrant = !latestBaseline
-    ? true
-    : latestBaseline.grant_type !== 'reset' && latestBaseline.period_key !== desiredPeriodKey
+    || (latestBaseline.grant_type === 'plan' && !samePlanBaseline)
+    || (latestBaseline.grant_type === 'reset' && planTransitionAfterReset)
   if (shouldGrant) {
+    const previousBaselineTime = projection.baselineCreatedAt ? Date.parse(projection.baselineCreatedAt) : Number.NaN
+    const grantCreatedAt = Number.isFinite(previousBaselineTime) && previousBaselineTime >= now.getTime()
+      ? new Date(previousBaselineTime + 1).toISOString()
+      : nowIso
     await grantQuota(db, {
       organizationId,
       resource: 'ai_inference',
@@ -114,16 +230,17 @@ async function ensurePlanCreditAllowance(db: DbClient, organizationId: string, n
       periodEnd,
       grantType: 'plan',
       reason: `Weekly ${plan} plan quota`,
-      idempotencyKey: `plan:${organizationId}:${periodKey}:${plan}:${version}`,
-      createdAt: nowIso,
+      idempotencyKey: `plan:${organizationId}:${periodKey}:${plan}:${version}:after:${previousBaselineMarker}`,
+      createdAt: grantCreatedAt,
     })
   }
 
   const projectedAllowance = await getCurrentCreditGrantProjection(db, organizationId, now)
-  const weeklyUsed = await currentWeeklyUsage(db, organizationId, periodStart, periodEnd)
+  const quotaUsageStart = projectedAllowance.consumptionStart ?? periodStart
+  const quotaUsed = await currentQuotaUsage(db, organizationId, quotaUsageStart, periodEnd)
   const derivedBalance = weeklyLimit === null || projectedAllowance.grantQuantity === null
     ? 0
-    : Math.max(0, projectedAllowance.grantQuantity - weeklyUsed)
+    : Math.max(0, projectedAllowance.grantQuantity - quotaUsed)
   await execute(db, `
     UPDATE ai_credits
     SET balance = ?,
@@ -141,6 +258,10 @@ async function ensurePlanCreditAllowance(db: DbClient, organizationId: string, n
 }
 
 async function currentWeeklyUsage(db: DbClient, organizationId: string, periodStart: string, periodEnd: string): Promise<number> {
+  return await currentQuotaUsage(db, organizationId, periodStart, periodEnd)
+}
+
+async function currentQuotaUsage(db: DbClient, organizationId: string, periodStart: string, periodEnd: string): Promise<number> {
   const weekly = await queryFirst<{ total: number | null }>(db, `
     SELECT COALESCE(SUM(quantity), 0) AS total
     FROM usage_events
@@ -244,21 +365,28 @@ export async function getAiQuotaStatus(
     : null
   const sessionUsed = Number(session?.total ?? 0)
   const projection = await getCurrentCreditGrantProjection(db, organizationId, now)
-  const allowance = weeklyLimit === null ? null : projection.grantQuantity ?? weeklyLimit
+  const reconciliationRequired = credits.balance_period_key === null
+  const allowance = reconciliationRequired
+    ? null
+    : weeklyLimit === null ? null : projection.grantQuantity ?? weeklyLimit
+  const quotaUsed = reconciliationRequired
+    ? 0
+    : await currentQuotaUsage(db, organizationId, projection.consumptionStart ?? periodStart, periodEnd)
 
   return {
     plan,
     balance: credits.balance,
     weeklyLimit,
     weeklyUsed,
-    weeklyRemaining: allowance === null ? null : Math.max(0, allowance - weeklyUsed),
+    weeklyRemaining: reconciliationRequired ? 0 : allowance === null ? null : Math.max(0, allowance - quotaUsed),
     sessionLimit,
     sessionUsed,
     sessionRemaining: sessionLimit === null ? null : Math.max(0, sessionLimit - sessionUsed),
     periodStart,
     periodEnd,
-    grantQuantity: allowance,
-    unlimited: weeklyLimit === null,
+    grantQuantity: reconciliationRequired ? null : allowance,
+    unlimited: !reconciliationRequired && weeklyLimit === null,
+    reconciliationRequired,
   }
 }
 
@@ -270,6 +398,9 @@ export async function assertAiQuotaAvailable(
   now = new Date(),
 ): Promise<AiQuotaStatus> {
   const status = await getAiQuotaStatus(db, organizationId, sessionId, now)
+  if (status.reconciliationRequired) {
+    throw new Error('AI quota requires approved reconciliation before use.')
+  }
   if (status.weeklyRemaining !== null && status.weeklyRemaining < quantity) {
     throw new Error('AI weekly quota has been reached.')
   }
@@ -324,13 +455,14 @@ export async function chargeCredits(
     || (opts.cfGatewayLogId ? `ai-usage:${opts.cfGatewayLogId}` : `ai-usage:${crypto.randomUUID()}`)
 
   if (opts.idempotencyKey || opts.cfGatewayLogId) {
-    const existing = await queryFirst<{ quantity: number }>(db, `
-      SELECT quantity FROM usage_events
+    const existing = await queryFirst<{ quantity: number; metadata_json: string | null }>(db, `
+      SELECT quantity, metadata_json FROM usage_events
       WHERE organization_id = ? AND idempotency_key = ? LIMIT 1
     `, [organizationId, usageIdempotencyKey])
     if (existing) {
       const current = await getOrCreateCredits(db, organizationId, nowDate)
-      return { creditsCharged: Number(existing.quantity), newBalance: current.balance }
+      const charged = flatUsageWasCharged(existing.metadata_json)
+      return { creditsCharged: charged ? Number(existing.quantity) : 0, newBalance: current.balance }
     }
   }
 
@@ -348,6 +480,7 @@ export async function chargeCredits(
     inputTokens: opts.inputTokens,
     outputTokens: opts.outputTokens,
     cfGatewayLogId: opts.cfGatewayLogId ?? null,
+    charged: balanceWasDebited,
   })
 
   const results = await executeBatch(db, [
@@ -419,7 +552,7 @@ export async function chargeCredits(
         INSERT INTO ai_usage_log
           (id, organization_id, site_id, action, model, input_tokens, output_tokens,
            credits_charged, cf_gateway_log_id, created_at)
-        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        SELECT ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 1 THEN ? ELSE 0 END, ?, ?
         WHERE EXISTS (
           SELECT 1 FROM usage_events
           WHERE id = ? AND organization_id = ?
@@ -433,6 +566,7 @@ export async function chargeCredits(
         opts.model,
         opts.inputTokens,
         opts.outputTokens,
+        balanceWasDebited ? 1 : 0,
         creditsCharged,
         opts.cfGatewayLogId ?? null,
         now,
@@ -443,13 +577,14 @@ export async function chargeCredits(
   ])
 
   if (Number(results[0]?.meta.changes ?? 0) === 0) {
-    const existing = await queryFirst<{ quantity: number }>(db, `
-      SELECT quantity FROM usage_events
+    const existing = await queryFirst<{ quantity: number; metadata_json: string | null }>(db, `
+      SELECT quantity, metadata_json FROM usage_events
       WHERE organization_id = ? AND idempotency_key = ? LIMIT 1
     `, [organizationId, usageIdempotencyKey])
     if (existing) {
       const current = await getOrCreateCredits(db, organizationId, nowDate)
-      return { creditsCharged: Number(existing.quantity), newBalance: current.balance }
+      const charged = flatUsageWasCharged(existing.metadata_json)
+      return { creditsCharged: charged ? Number(existing.quantity) : 0, newBalance: current.balance }
     }
     const current = await getAiQuotaStatus(db, organizationId, opts.sessionId, nowDate)
     if (current.sessionRemaining !== null && current.sessionRemaining < creditsCharged) {
@@ -462,7 +597,7 @@ export async function chargeCredits(
   }
 
   const updated = await queryFirst<{ balance: number }>(db, 'SELECT balance FROM ai_credits WHERE organization_id = ? LIMIT 1', [organizationId])
-  return { creditsCharged, newBalance: updated?.balance ?? 0 }
+  return { creditsCharged: balanceWasDebited ? creditsCharged : 0, newBalance: updated?.balance ?? 0 }
 }
 
 /**
@@ -500,20 +635,25 @@ export async function chargeFlatCredits(
       if (existing) {
         const current = await getOrCreateCredits(db, organizationId, nowDate)
         const charged = flatUsageWasCharged(existing.metadata_json)
-        return { charged, creditsCharged: charged ? credits : 0, newBalance: current.balance }
+        return { charged, creditsCharged: charged ? Number(existing.quantity) : 0, newBalance: current.balance }
       }
     }
     const usage = usageForFlatCreditAction(opts.action)
     await getOrCreateCredits(db, organizationId, nowDate)
     const quota = await getAiQuotaStatus(db, organizationId, null, nowDate)
-    const balanceWasDebited = quota.weeklyLimit !== null
+    if (quota.reconciliationRequired) {
+      throw new Error('AI quota requires approved reconciliation before use.')
+    }
+    const finiteQuota = quota.weeklyLimit !== null
     const eventId = crypto.randomUUID()
-    const metadata = JSON.stringify({
+    const logId = crypto.randomUUID()
+    const baseMetadata = {
       action: opts.action,
       creditsCharged: credits,
       cfGatewayLogId: opts.cfGatewayLogId ?? null,
-      charged: !balanceWasDebited,
-    })
+    }
+    const chargedMetadata = JSON.stringify({ ...baseMetadata, charged: true })
+    const unchargedMetadata = JSON.stringify({ ...baseMetadata, charged: false })
 
     const results = await executeBatch(db, [
       {
@@ -521,7 +661,11 @@ export async function chargeFlatCredits(
           INSERT OR IGNORE INTO usage_events
             (id, organization_id, site_id, resource, source, provider, channel,
              session_id, quantity, unit, metadata_json, idempotency_key, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)
+          SELECT ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?,
+                 CASE WHEN ? = 1 AND balance >= ? THEN ? ELSE ? END,
+                 ?, ?
+          FROM ai_credits
+          WHERE organization_id = ?
         `,
         params: [
           eventId,
@@ -533,9 +677,13 @@ export async function chargeFlatCredits(
           usage.channel,
           credits,
           usage.unit,
-          metadata,
+          finiteQuota ? 1 : 0,
+          credits,
+          chargedMetadata,
+          unchargedMetadata,
           usageIdempotencyKey,
           now,
+          organizationId,
         ],
       },
       {
@@ -543,13 +691,14 @@ export async function chargeFlatCredits(
           UPDATE ai_credits
           SET balance = balance - ?, updated_at = ?
           WHERE organization_id = ?
-            AND balance >= ?
             AND EXISTS (
               SELECT 1 FROM usage_events
-              WHERE id = ? AND organization_id = ?
+              WHERE id = ?
+                AND organization_id = ?
+                AND instr(COALESCE(metadata_json, ''), '"charged":true') > 0
             )
         `,
-        params: [credits, now, organizationId, credits, eventId, organizationId],
+        params: [credits, now, organizationId, eventId, organizationId],
       },
       {
         query: `
@@ -568,14 +717,14 @@ export async function chargeFlatCredits(
           INSERT INTO ai_usage_log
             (id, organization_id, site_id, action, model, input_tokens, output_tokens,
              credits_charged, cf_gateway_log_id, created_at)
-          SELECT ?, ?, ?, ?, 'flat', 0, 0, ?, ?, ?
-          WHERE EXISTS (
-            SELECT 1 FROM usage_events
-            WHERE id = ? AND organization_id = ?
-          )
+          SELECT ?, ?, ?, ?, 'flat', 0, 0,
+                 CASE WHEN instr(COALESCE(metadata_json, ''), '"charged":true') > 0 THEN ? ELSE 0 END,
+                 ?, ?
+          FROM usage_events
+          WHERE id = ? AND organization_id = ?
         `,
         params: [
-          crypto.randomUUID(),
+          logId,
           organizationId,
           opts.siteId ?? null,
           opts.action,
@@ -596,25 +745,16 @@ export async function chargeFlatCredits(
       if (existing) {
         const current = await getOrCreateCredits(db, organizationId, nowDate)
         const charged = flatUsageWasCharged(existing.metadata_json)
-        return { charged, creditsCharged: charged ? credits : 0, newBalance: current.balance }
+        return { charged, creditsCharged: charged ? Number(existing.quantity) : 0, newBalance: current.balance }
       }
       throw new Error('Flat-credit usage event was not recorded.')
     }
 
-    const charged = !balanceWasDebited || Number(results[1]?.meta.changes ?? 0) === 1
-    const chargedMetadata = JSON.stringify({
-      action: opts.action,
-      creditsCharged: credits,
-      cfGatewayLogId: opts.cfGatewayLogId ?? null,
-      charged,
-    })
-    await execute(db, `
-      UPDATE usage_events SET metadata_json = ?
-      WHERE id = ? AND organization_id = ?
-    `, [chargedMetadata, eventId, organizationId])
+    const charged = Number(results[1]?.meta.changes ?? 0) === 1
     const updated = await queryFirst<{ balance: number }>(db, 'SELECT balance FROM ai_credits WHERE organization_id = ? LIMIT 1', [organizationId])
     return { charged, creditsCharged: charged ? credits : 0, newBalance: updated?.balance ?? 0 }
   } catch (err) {
+    if (err instanceof Error && err.message.startsWith('Invalid organization billing projection:')) throw err
     console.error('chargeFlatCredits failed:', err)
     const row = await queryFirst<{ balance: number }>(db, 'SELECT balance FROM ai_credits WHERE organization_id = ? LIMIT 1', [organizationId]).catch(() => null)
     return { charged: false, creditsCharged: 0, newBalance: row?.balance ?? 0 }

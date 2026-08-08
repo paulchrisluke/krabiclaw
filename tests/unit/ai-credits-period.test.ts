@@ -37,7 +37,7 @@ mock.module('../../server/db/index.ts', {
 })
 
 const { chargeCredits, chargeFlatCredits, getAiQuotaStatus } = await import('../../server/utils/ai-credits.ts')
-const { getCurrentCreditGrantProjection, grantQuota } = await import('../../server/utils/usage-metering.ts')
+const { getCurrentCreditGrantProjection, grantQuota, resetOrganizationQuota } = await import('../../server/utils/usage-metering.ts')
 
 function createDb(): SqliteDb {
   const db = new Database(':memory:')
@@ -49,7 +49,8 @@ function createDb(): SqliteDb {
       payment_status TEXT,
       paid_through TEXT,
       past_due_since TEXT,
-      current_period_end TEXT
+      current_period_end TEXT,
+      updated_at TEXT
     );
     CREATE TABLE subscription (
       id TEXT PRIMARY KEY,
@@ -156,6 +157,30 @@ function seedSubscription(db: SqliteDb, input: {
   )
 }
 
+function seedBillingProjection(db: SqliteDb, input: {
+  organizationId: string
+  plan: string
+  status: string
+  currentPeriodEnd?: string | null
+  paymentStatus?: string | null
+  paidThrough?: string | null
+  updatedAt?: string | null
+}) {
+  db.prepare(`
+    INSERT INTO organization_billing
+      (organization_id, plan, status, payment_status, paid_through, current_period_end, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    input.organizationId,
+    input.plan,
+    input.status,
+    input.paymentStatus ?? null,
+    input.paidThrough ?? null,
+    input.currentPeriodEnd ?? null,
+    input.updatedAt ?? null,
+  )
+}
+
 test('quota status lazily records the exact current UTC week grant', async () => {
   const db = createDb()
   const now = new Date('2026-08-10T12:34:56.000Z')
@@ -188,7 +213,7 @@ test('quota status lazily records the exact current UTC week grant', async () =>
   })
 })
 
-test('quota access follows Better Auth and fails closed after trial expiry', async () => {
+test('quota access follows the app billing projection and fails closed after trial expiry', async () => {
   const db = createDb()
   seedSubscription(db, {
     organizationId: 'org-expired-trial',
@@ -207,6 +232,299 @@ test('quota access follows Better Auth and fails closed after trial expiry', asy
 
   assert.equal(status.plan, 'free')
   assert.equal(status.weeklyLimit, 500)
+})
+
+test('quota resolution uses the app-owned organization billing projection', async () => {
+  const db = createDb()
+  seedBillingProjection(db, {
+    organizationId: 'org-projection-only',
+    plan: 'growth',
+    status: 'active',
+    paymentStatus: 'paid',
+    paidThrough: '2026-08-31T00:00:00.000Z',
+    currentPeriodEnd: '2026-08-31T00:00:00.000Z',
+  })
+
+  const status = await getAiQuotaStatus(
+    db as never,
+    'org-projection-only',
+    null,
+    new Date('2026-08-10T00:00:00.000Z'),
+  )
+  assert.equal(status.plan, 'growth')
+  assert.equal(status.weeklyLimit, 2000)
+})
+
+test('analytics-only billing rows with no subscription fields remain Starter', async () => {
+  const db = createDb()
+  db.prepare(`
+    INSERT INTO organization_billing
+      (organization_id, plan, status, payment_status, paid_through, past_due_since, current_period_end, updated_at)
+    VALUES (?, NULL, NULL, NULL, NULL, NULL, NULL, ?)
+  `).run('org-analytics-only', '2026-08-10T00:00:00.000Z')
+
+  const status = await getAiQuotaStatus(
+    db as never,
+    'org-analytics-only',
+    null,
+    new Date('2026-08-10T00:00:00.000Z'),
+  )
+  assert.equal(status.plan, 'free')
+  assert.equal(status.weeklyLimit, 500)
+})
+
+test('trial access fails closed when the projected trial boundary is absent or malformed', async () => {
+  const db = createDb()
+  seedBillingProjection(db, {
+    organizationId: 'org-trial-missing-boundary',
+    plan: 'growth',
+    status: 'trialing',
+    currentPeriodEnd: null,
+  })
+  seedBillingProjection(db, {
+    organizationId: 'org-trial-malformed-boundary',
+    plan: 'growth',
+    status: 'trialing',
+    currentPeriodEnd: 'not-a-date',
+  })
+  seedBillingProjection(db, {
+    organizationId: 'org-malformed-plan',
+    plan: 'not-a-plan',
+    status: 'active',
+    paymentStatus: 'paid',
+    paidThrough: '2026-08-31T00:00:00.000Z',
+    currentPeriodEnd: '2026-08-31T00:00:00.000Z',
+  })
+
+  const now = new Date('2026-08-10T00:00:00.000Z')
+  await assert.rejects(
+    () => getAiQuotaStatus(db as never, 'org-trial-missing-boundary', null, now),
+    /trialing subscriptions require current_period_end/,
+  )
+  await assert.rejects(
+    () => getAiQuotaStatus(db as never, 'org-trial-malformed-boundary', null, now),
+    /current_period_end must be a valid date/,
+  )
+  await assert.rejects(
+    () => getAiQuotaStatus(db as never, 'org-malformed-plan', null, now),
+    /unknown plan/,
+  )
+})
+
+test('plan transitions A to B to A materialize a new baseline in one UTC week', async () => {
+  const db = createDb()
+  seedBillingProjection(db, {
+    organizationId: 'org-plan-cycle',
+    plan: 'free',
+    status: 'active',
+    paymentStatus: 'paid',
+    paidThrough: '2026-08-31T00:00:00.000Z',
+    currentPeriodEnd: '2026-08-31T00:00:00.000Z',
+    updatedAt: '2026-08-10T09:00:00.000Z',
+  })
+  const now = new Date('2026-08-10T12:00:00.000Z')
+  await getAiQuotaStatus(db as never, 'org-plan-cycle', null, now)
+  db.prepare('UPDATE organization_billing SET plan = ?, updated_at = ? WHERE organization_id = ?').run('growth', '2026-08-10T10:00:00.000Z', 'org-plan-cycle')
+  await getAiQuotaStatus(db as never, 'org-plan-cycle', null, now)
+  db.prepare('UPDATE organization_billing SET plan = ?, updated_at = ? WHERE organization_id = ?').run('free', '2026-08-10T11:00:00.000Z', 'org-plan-cycle')
+  const status = await getAiQuotaStatus(db as never, 'org-plan-cycle', null, now)
+
+  assert.equal(status.grantQuantity, 500)
+  const grants = db.prepare(`
+    SELECT quantity FROM usage_quota_grants
+    WHERE organization_id = ? AND grant_type = 'plan'
+    ORDER BY created_at, id
+  `).all('org-plan-cycle') as Array<{ quantity: number }>
+  assert.deepEqual(grants.map(grant => grant.quantity), [500, 2000, 500])
+})
+
+test('a reset is exact until a later plan transition establishes a new baseline', async () => {
+  const db = createDb()
+  seedBillingProjection(db, {
+    organizationId: 'org-reset-transition',
+    plan: 'free',
+    status: 'active',
+    paymentStatus: 'paid',
+    paidThrough: '2026-08-31T00:00:00.000Z',
+    currentPeriodEnd: '2026-08-31T00:00:00.000Z',
+    updatedAt: '2026-08-10T09:00:00.000Z',
+  })
+  const initial = new Date('2026-08-10T09:00:00.000Z')
+  await getAiQuotaStatus(db as never, 'org-reset-transition', null, initial)
+  await grantQuota(db as never, {
+    organizationId: 'org-reset-transition',
+    resource: 'ai_inference',
+    quantity: 0,
+    unit: 'credit',
+    periodKey: 'reset:org-reset-transition',
+    periodStart: '2026-08-10T00:00:00.000Z',
+    periodEnd: '2026-08-17T00:00:00.000Z',
+    grantType: 'reset',
+    reason: 'Approved exact reset',
+    idempotencyKey: 'reset:org-reset-transition',
+    createdAt: '2026-08-10T10:00:00.000Z',
+  })
+  db.prepare('UPDATE organization_billing SET plan = ?, updated_at = ? WHERE organization_id = ?').run('growth', '2026-08-10T11:00:00.000Z', 'org-reset-transition')
+  const status = await getAiQuotaStatus(db as never, 'org-reset-transition', null, new Date('2026-08-10T12:00:00.000Z'))
+
+  assert.equal(status.grantQuantity, 2000)
+  const grants = db.prepare(`
+    SELECT grant_type, quantity FROM usage_quota_grants
+    WHERE organization_id = ?
+    ORDER BY created_at, id
+  `).all('org-reset-transition') as Array<{ grant_type: string; quantity: number }>
+  assert.deepEqual(grants.map(grant => [grant.grant_type, grant.quantity]), [
+    ['plan', 500],
+    ['reset', 0],
+    ['plan', 2000],
+  ])
+})
+
+test('reset balance excludes pre-reset usage and a later plan baseline counts the whole week', async () => {
+  const db = createDb()
+  seedBillingProjection(db, {
+    organizationId: 'org-reset-consumption',
+    plan: 'free',
+    status: 'active',
+    paymentStatus: 'paid',
+    paidThrough: '2026-08-31T00:00:00.000Z',
+    currentPeriodEnd: '2026-08-31T00:00:00.000Z',
+    updatedAt: '2026-08-10T09:00:00.000Z',
+  })
+
+  await chargeCredits(db as never, 'org-reset-consumption', {
+    action: 'before-reset',
+    model: 'test-model',
+    inputTokens: 100_000,
+    outputTokens: 0,
+    idempotencyKey: 'reset-consumption-before',
+    now: new Date('2026-08-10T09:30:00.000Z'),
+  })
+
+  await grantQuota(db as never, {
+    organizationId: 'org-reset-consumption',
+    resource: 'ai_inference',
+    quantity: 50,
+    unit: 'credit',
+    periodKey: 'reset:org-reset-consumption',
+    periodStart: '2026-08-10T00:00:00.000Z',
+    periodEnd: '2026-08-17T00:00:00.000Z',
+    grantType: 'reset',
+    reason: 'Approved exact reset',
+    idempotencyKey: 'reset:org-reset-consumption',
+    createdAt: '2026-08-10T10:00:00.000Z',
+  })
+
+  const afterReset = await getAiQuotaStatus(
+    db as never,
+    'org-reset-consumption',
+    null,
+    new Date('2026-08-10T10:30:00.000Z'),
+  )
+  assert.equal(afterReset.balance, 50)
+  assert.equal(afterReset.weeklyUsed, 100)
+  assert.equal(afterReset.weeklyRemaining, 50)
+
+  await chargeFlatCredits(db as never, 'org-reset-consumption', {
+    action: 'google_places_details',
+    idempotencyKey: 'reset-consumption-after',
+    now: new Date('2026-08-10T10:30:00.000Z'),
+  })
+  const consumedAfterReset = await getAiQuotaStatus(
+    db as never,
+    'org-reset-consumption',
+    null,
+    new Date('2026-08-10T10:45:00.000Z'),
+  )
+  assert.equal(consumedAfterReset.balance, 47)
+  assert.equal(consumedAfterReset.weeklyRemaining, 47)
+
+  db.prepare('UPDATE organization_billing SET plan = ?, updated_at = ? WHERE organization_id = ?').run('growth', '2026-08-10T11:00:00.000Z', 'org-reset-consumption')
+  const transitioned = await getAiQuotaStatus(
+    db as never,
+    'org-reset-consumption',
+    null,
+    new Date('2026-08-10T11:30:00.000Z'),
+  )
+  assert.equal(transitioned.plan, 'growth')
+  assert.equal(transitioned.grantQuantity, 2000)
+  assert.equal(transitioned.weeklyUsed, 103)
+  assert.equal(transitioned.weeklyRemaining, 1897)
+})
+
+test('legacy null-period balances are quarantined until reconciliation', async () => {
+  const db = createDb()
+  seedBillingProjection(db, {
+    organizationId: 'org-legacy-balance',
+    plan: 'free',
+    status: 'active',
+    paymentStatus: 'paid',
+    paidThrough: '2026-08-31T00:00:00.000Z',
+    currentPeriodEnd: '2026-08-31T00:00:00.000Z',
+  })
+  db.prepare(`
+    INSERT INTO ai_credits
+      (organization_id, balance, lifetime_used, balance_period_key, updated_at)
+    VALUES (?, ?, 42, NULL, ?)
+  `).run('org-legacy-balance', 123, '2026-08-01T00:00:00.000Z')
+
+  const status = await getAiQuotaStatus(
+    db as never,
+    'org-legacy-balance',
+    null,
+    new Date('2026-08-10T12:00:00.000Z'),
+  )
+  assert.equal(status.balance, 123)
+  assert.equal(status.reconciliationRequired, true)
+  assert.equal(status.weeklyRemaining, 0)
+  const grantCount = db.prepare('SELECT COUNT(*) AS count FROM usage_quota_grants WHERE organization_id = ?').get('org-legacy-balance') as { count: number }
+  const balanceKey = db.prepare('SELECT balance_period_key FROM ai_credits WHERE organization_id = ?').get('org-legacy-balance') as { balance_period_key: string | null }
+  assert.equal(grantCount.count, 0)
+  assert.equal(balanceKey.balance_period_key, null)
+})
+
+test('quota grants remain pending and do not mutate a quarantined legacy balance', async () => {
+  const db = createDb()
+  db.prepare(`
+    INSERT INTO ai_credits
+      (organization_id, balance, lifetime_used, balance_period_key, updated_at)
+    VALUES (?, ?, 42, NULL, ?)
+  `).run('org-legacy-grant', 123, '2026-08-01T00:00:00.000Z')
+
+  const inserted = await grantQuota(db as never, {
+    organizationId: 'org-legacy-grant',
+    resource: 'ai_inference',
+    quantity: 100,
+    unit: 'credit',
+    periodKey: 'week:2026-08-10:manual',
+    periodStart: '2026-08-10T00:00:00.000Z',
+    periodEnd: '2026-08-17T00:00:00.000Z',
+    grantType: 'manual',
+    reason: 'Pending legacy reconciliation',
+    idempotencyKey: 'manual:org-legacy-grant:1',
+    createdAt: '2026-08-10T12:00:00.000Z',
+  })
+  await resetOrganizationQuota(db as never, {
+    organizationId: 'org-legacy-grant',
+    resetId: 'legacy-reset',
+    reason: 'Pending legacy reconciliation reset',
+    grants: [{
+      resource: 'ai_inference',
+      quantity: 50,
+      unit: 'credit',
+      periodStart: '2026-08-10T00:00:00.000Z',
+      periodEnd: '2026-08-17T00:00:00.000Z',
+    }],
+  })
+
+  assert.equal(inserted, true)
+  const balance = db.prepare('SELECT balance, lifetime_used, balance_period_key FROM ai_credits WHERE organization_id = ?').get('org-legacy-grant') as { balance: number; lifetime_used: number; balance_period_key: string | null }
+  assert.deepEqual(balance, { balance: 123, lifetime_used: 42, balance_period_key: null })
+  const grants = db.prepare('SELECT grant_type, applied_at FROM usage_quota_grants WHERE organization_id = ? ORDER BY grant_type').all('org-legacy-grant') as Array<{ grant_type: string; applied_at: string | null }>
+  assert.deepEqual(grants, [
+    { grant_type: 'manual', applied_at: null },
+    { grant_type: 'reset', applied_at: null },
+  ])
 })
 
 test('same-plan subscription updates do not refill the current week', async () => {
@@ -277,14 +595,42 @@ test('unlimited flat usage is metered in canonical credits without a debit', asy
     idempotencyKey: 'flat-managed-1',
   })
 
-  assert.equal(result.charged, true)
-  assert.equal(result.creditsCharged, 3)
+  assert.equal(result.charged, false)
+  assert.equal(result.creditsCharged, 0)
   const event = db.prepare(`
     SELECT resource, quantity, unit
     FROM usage_events
     WHERE organization_id = ?
   `).get('org-managed') as { resource: string; quantity: number; unit: string } | undefined
   assert.deepEqual(event, { resource: 'maps_api', quantity: 3, unit: 'credit' })
+  const usage = db.prepare('SELECT lifetime_used FROM ai_credits WHERE organization_id = ?').get('org-managed') as { lifetime_used: number }
+  assert.equal(usage.lifetime_used, 3)
+  const log = db.prepare('SELECT credits_charged FROM ai_usage_log WHERE organization_id = ?').get('org-managed') as { credits_charged: number }
+  assert.equal(log.credits_charged, 0)
+})
+
+test('unlimited flat usage is metered but is not reported as a quota debit', async () => {
+  const db = createDb()
+  seedBillingProjection(db, {
+    organizationId: 'org-unlimited-flat-status',
+    plan: 'managed',
+    status: 'active',
+    paymentStatus: 'paid',
+    paidThrough: '2026-08-31T00:00:00.000Z',
+    currentPeriodEnd: '2026-08-31T00:00:00.000Z',
+  })
+
+  const result = await chargeFlatCredits(db as never, 'org-unlimited-flat-status', {
+    action: 'google_places_details',
+    idempotencyKey: 'unlimited-flat-status-1',
+    now: new Date('2026-08-10T12:00:00.000Z'),
+  })
+  assert.equal(result.charged, false)
+  assert.equal(result.creditsCharged, 0)
+  const event = db.prepare('SELECT quantity, unit, metadata_json FROM usage_events WHERE organization_id = ?').get('org-unlimited-flat-status') as { quantity: number; unit: string; metadata_json: string }
+  assert.equal(event.quantity, 3)
+  assert.equal(event.unit, 'credit')
+  assert.equal(JSON.parse(event.metadata_json).charged, false)
 })
 
 test('finite quota usage includes successful flat credit quantities', async () => {
@@ -301,6 +647,27 @@ test('finite quota usage includes successful flat credit quantities', async () =
   assert.equal(result.charged, true)
   assert.equal(status.weeklyUsed, 3)
   assert.equal(status.weeklyRemaining, 497)
+})
+
+test('flat idempotency replay reports the persisted event quantity', async () => {
+  const db = createDb()
+  const first = await chargeFlatCredits(db as never, 'org-flat-replay', {
+    action: 'google_places_details',
+    idempotencyKey: 'flat-replay-1',
+    now: new Date('2026-08-10T12:00:00.000Z'),
+  })
+  const replay = await chargeFlatCredits(db as never, 'org-flat-replay', {
+    action: 'whatsapp_notification',
+    idempotencyKey: 'flat-replay-1',
+    now: new Date('2026-08-10T12:00:00.000Z'),
+  })
+
+  assert.equal(first.charged, true)
+  assert.equal(first.creditsCharged, 3)
+  assert.equal(replay.charged, true)
+  assert.equal(replay.creditsCharged, 3)
+  const events = db.prepare('SELECT COUNT(*) AS count FROM usage_events WHERE organization_id = ?').get('org-flat-replay') as { count: number }
+  assert.equal(events.count, 1)
 })
 
 test('manual grants increase the current-period allowance without changing the plan limit', async () => {
@@ -359,6 +726,42 @@ test('flat-credit idempotency preserves a finite insufficient result', async () 
   assert.equal(first.charged, false)
   assert.equal(first.creditsCharged, 0)
   assert.deepEqual(second, first)
+  const event = db.prepare('SELECT quantity, metadata_json FROM usage_events WHERE organization_id = ?').get('org-flat-insufficient') as { quantity: number; metadata_json: string }
+  assert.equal(event.quantity, 3)
+  assert.equal(JSON.parse(event.metadata_json).charged, false)
+  const usage = db.prepare('SELECT lifetime_used FROM ai_credits WHERE organization_id = ?').get('org-flat-insufficient') as { lifetime_used: number }
+  assert.equal(usage.lifetime_used, 3)
+  const log = db.prepare('SELECT credits_charged FROM ai_usage_log WHERE organization_id = ?').get('org-flat-insufficient') as { credits_charged: number }
+  assert.equal(log.credits_charged, 0)
+})
+
+test('token usage records unlimited metering metadata without a quota debit', async () => {
+  const db = createDb()
+  seedBillingProjection(db, {
+    organizationId: 'org-unlimited-token',
+    plan: 'managed',
+    status: 'active',
+    paymentStatus: 'paid',
+    paidThrough: '2026-08-31T00:00:00.000Z',
+    currentPeriodEnd: '2026-08-31T00:00:00.000Z',
+  })
+
+  const result = await chargeCredits(db as never, 'org-unlimited-token', {
+    action: 'test',
+    model: 'test-model',
+    inputTokens: 1000,
+    outputTokens: 0,
+    idempotencyKey: 'unlimited-token-1',
+    now: new Date('2026-08-10T12:00:00.000Z'),
+  })
+  assert.equal(result.creditsCharged, 0)
+  const event = db.prepare('SELECT quantity, metadata_json FROM usage_events WHERE organization_id = ?').get('org-unlimited-token') as { quantity: number; metadata_json: string }
+  assert.equal(event.quantity, 1)
+  assert.equal(JSON.parse(event.metadata_json).charged, false)
+  const usage = db.prepare('SELECT lifetime_used FROM ai_credits WHERE organization_id = ?').get('org-unlimited-token') as { lifetime_used: number }
+  assert.equal(usage.lifetime_used, 1)
+  const log = db.prepare('SELECT credits_charged FROM ai_usage_log WHERE organization_id = ?').get('org-unlimited-token') as { credits_charged: number }
+  assert.equal(log.credits_charged, 0)
 })
 
 test('session usage expires with the UTC week boundary', async () => {
@@ -381,6 +784,10 @@ test('session usage expires with the UTC week boundary', async () => {
   })
 
   assert.equal(result.creditsCharged, 1)
+  const event = db.prepare('SELECT metadata_json FROM usage_events WHERE organization_id = ? AND idempotency_key = ?').get('org-session', 'session-current-week') as { metadata_json: string }
+  assert.equal(JSON.parse(event.metadata_json).charged, true)
+  const log = db.prepare('SELECT credits_charged FROM ai_usage_log WHERE organization_id = ?').get('org-session') as { credits_charged: number }
+  assert.equal(log.credits_charged, 1)
   const status = await getAiQuotaStatus(db as never, 'org-session', 'session-1', now)
   assert.equal(status.sessionUsed, 1)
   assert.equal(status.sessionRemaining, 99)

@@ -36,7 +36,7 @@ export function getEffectiveAccessPlan(
   if (!plan) return 'free'
   if (input.status === 'trialing') {
     const trialEnd = periodEndMs(input.trialEnd ?? input.periodEnd)
-    if (trialEnd !== null && now.getTime() > trialEnd) return 'free'
+    if (trialEnd === null || now.getTime() > trialEnd) return 'free'
     return plan
   }
   if (input.status === 'active' && input.paymentStatus === 'paid') {
