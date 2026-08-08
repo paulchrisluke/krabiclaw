@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 
-export const CATALOG_PLAN_SCHEMA_VERSION = 1
+export const CATALOG_PLAN_SCHEMA_VERSION = 2
+export const CATALOG_PLAN_KIND = 'stripe-recurring-catalog-plan'
 export const ACTIVE_PLAN_IDS = Object.freeze(['growth', 'managed', 'seo_accelerator'])
 const SUPPORTED_OPERATION_TYPES = new Set([
   'archive_product',
@@ -444,7 +445,7 @@ export function buildCatalogPlan({ snapshot, imageFiles = {}, canonicalProductId
 
   const plan = {
     schemaVersion: CATALOG_PLAN_SCHEMA_VERSION,
-    kind: 'stripe-recurring-catalog-plan',
+    kind: CATALOG_PLAN_KIND,
     accountMode: snapshot.accountMode,
     canonicalProductIds: canonicalIds,
     providerSnapshot: snapshot,
@@ -464,6 +465,15 @@ export function assertPlanIntegrity(plan, confirmedSha256) {
   if (plan.planSha256 !== computed) throw new Error('Stripe catalog plan file hash is invalid or the file was edited.')
   if (confirmedSha256 !== computed) throw new Error('Stripe catalog plan SHA-256 confirmation does not match the plan file.')
   return computed
+}
+
+function assertCatalogPlanSchema(plan) {
+  if (plan?.schemaVersion !== CATALOG_PLAN_SCHEMA_VERSION) {
+    throw new Error(`Unsupported Stripe catalog plan schema version: ${String(plan?.schemaVersion ?? 'missing')}. Expected ${CATALOG_PLAN_SCHEMA_VERSION}.`)
+  }
+  if (plan?.kind !== CATALOG_PLAN_KIND) {
+    throw new Error(`Unsupported Stripe catalog plan kind: ${String(plan?.kind ?? 'missing')}.`)
+  }
 }
 
 function resolveReference(value, context) {
@@ -497,6 +507,7 @@ export async function applyCatalogPlan({
   mutationAdapter,
   filesAdapter,
 }) {
+  assertCatalogPlanSchema(plan)
   assertTestModeKey(key)
   const hash = assertPlanIntegrity(plan, confirmedSha256)
   if (plan.accountMode !== 'test') throw new Error('Stripe catalog apply only accepts a test-mode plan.')

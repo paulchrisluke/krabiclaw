@@ -513,6 +513,68 @@ test('planned canonical product state loads through the Better Auth Stripe runti
   assert.equal(materializedPrices.some(price => price.id === 'price-growth-seat'), true)
 })
 
+test('apply rejects old or foreign catalog plans before provider or file access', async () => {
+  const catalog = fakeCatalog()
+  const plan = await createCatalogPlan({
+    readAdapter: fakeReadAdapter(catalog),
+    imageFiles: {
+      growth: {
+        path: 'scripts/assets/stripe/growth.png',
+        exists: true,
+        sha256: 'a'.repeat(64),
+        mimeType: 'image/png',
+        fileName: 'growth.png',
+      },
+    },
+    accountMode: 'test',
+  })
+  const reads = []
+  const readAdapter = fakeReadAdapter(catalog)
+  const guardedReadAdapter = {
+    products: {
+      list: async (...args) => {
+        reads.push('products.list')
+        return readAdapter.products.list(...args)
+      },
+    },
+    prices: {
+      list: async (...args) => {
+        reads.push('prices.list')
+        return readAdapter.prices.list(...args)
+      },
+    },
+  }
+  const writes = []
+  const fileCalls = []
+  const filesAdapter = {
+    verifyProductImage: async operation => { fileCalls.push(operation.path) },
+  }
+
+  for (const [label, patch, message] of [
+    ['old schema', { schemaVersion: 1 }, /schema version/],
+    ['foreign kind', { kind: 'foreign-catalog-plan' }, /kind/],
+  ]) {
+    const invalid = { ...plan, ...patch }
+    invalid.planSha256 = planSha256(invalid)
+    await assert.rejects(
+      () => applyCatalogPlan({
+        plan: invalid,
+        confirmedSha256: invalid.planSha256,
+        key: 'rk_test_fake',
+        readAdapter: guardedReadAdapter,
+        mutationAdapter: noWriteAdapter(writes),
+        filesAdapter,
+      }),
+      message,
+      label,
+    )
+  }
+
+  assert.deepEqual(reads, [])
+  assert.deepEqual(fileCalls, [])
+  assert.deepEqual(writes, [])
+})
+
 test('apply rejects hash mismatch, snapshot drift, and live keys before any writes', async () => {
   const catalog = fakeCatalog()
   const plan = await createCatalogPlan({
