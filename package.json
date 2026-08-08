@@ -128,6 +128,8 @@
     "lint:tool-parity": "node scripts/lint-tool-parity.mjs",
     "secret:cron": "yarn wrangler secret put CRON_SECRET",
     "stripe:listen": "stripe listen --forward-to localhost:3000/api/auth/stripe/webhook",
+    "stripe:catalog:plan": "node scripts/seed-stripe.mjs --dry-run",
+    "stripe:catalog:apply": "node scripts/seed-stripe.mjs --apply",
     "benchmark:performance-recovery": "node scripts/benchmark-performance-recovery.mjs",
     "benchmark:performance:recovery": "node scripts/benchmark-performance-recovery.mjs",
     "compare:performance:recovery": "node scripts/compare-performance-recovery.mjs",
