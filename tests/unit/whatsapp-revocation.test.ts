@@ -24,7 +24,9 @@ type Store = {
 }
 
 function createStore(): Store {
-  return { members: [], users: [], resourceTeams: [], locations: [], siteConfig: [] }
+  const store = { members: [], users: [], resourceTeams: [], locations: [], siteConfig: [] }
+  activeStore = store
+  return store
 }
 
 async function queryFirst<T>(db: Store, query: string, params: unknown[] = []): Promise<T | undefined> {
@@ -117,8 +119,38 @@ async function executeBatch(db: Store, statements: Array<{ query: string; params
   return await Promise.all(statements.map(({ query, params }) => execute(db, query, params)))
 }
 
+let activeStore: Store | null = null
+const teamAdapter = {
+  findTeamMember: async (input: { teamId: string; userId: string }) => {
+    return activeStore?.resourceTeams.find((team) => team.teamId === input.teamId && team.userId === input.userId) ?? null
+  },
+  findOrCreateTeamMember: async (input: { teamId: string; userId: string }) => {
+    const existing = activeStore?.resourceTeams.find((team) => team.teamId === input.teamId && team.userId === input.userId)
+    if (existing) return existing
+    const created = { id: `membership-${input.teamId}-${input.userId}`, teamId: input.teamId, userId: input.userId }
+    activeStore?.resourceTeams.push(created)
+    return created
+  },
+  removeTeamMember: async (input: { teamId: string; userId: string }) => {
+    if (!activeStore) return
+    activeStore.resourceTeams = activeStore.resourceTeams.filter((team) => !(team.teamId === input.teamId && team.userId === input.userId))
+  },
+}
+
 mock.module('../../server/db/index.ts', {
   namedExports: { execute, executeBatch, queryAll, queryFirst },
+})
+
+mock.module('../../server/utils/auth.ts', {
+  namedExports: {
+    createAuth: () => ({ $context: Promise.resolve({}) }),
+  },
+})
+
+mock.module('better-auth/plugins', {
+  namedExports: {
+    getOrgAdapter: () => teamAdapter,
+  },
 })
 
 // site-events.ts pulls in dashboard-context.ts -> auth.ts (Better Auth setup,
@@ -143,6 +175,7 @@ const {
 } = await import('../../server/utils/whatsapp-revocation.ts')
 
 const SCOPED_EDITOR_ROLE = 'editor'
+const testEnv = {} as never
 
 function seedManager(db: Store, overrides: { memberId?: string; userId?: string; phone?: string; role?: string } = {}) {
   const memberId = overrides.memberId ?? 'member-1'
@@ -162,6 +195,7 @@ test('recalculateScopesForPhoneChange removes only the scope row for the exact s
   )
 
   const result = await recalculateScopesForPhoneChange(db as never, null, {
+    env: testEnv,
     organizationId: 'org-1',
     siteId: 'site-1',
     locationId: 'loc-1',
@@ -182,9 +216,11 @@ test('recalculateScopesForPhoneChange is idempotent when the phone did not chang
   db.resourceTeams.push({ id: 'team-a', userId, teamId: 'location:loc-1', organizationId: 'org-1', siteId: 'site-1', locationId: 'loc-1' })
 
   const unchanged = await recalculateScopesForPhoneChange(db as never, null, {
+    env: testEnv,
     organizationId: 'org-1', siteId: 'site-1', locationId: 'loc-1', scopeType: 'location', previousPhone: phone, newPhone: phone,
   })
   const noPrevious = await recalculateScopesForPhoneChange(db as never, null, {
+    env: testEnv,
     organizationId: 'org-1', siteId: 'site-1', locationId: 'loc-1', scopeType: 'location', previousPhone: null, newPhone: phone,
   })
 
@@ -199,6 +235,7 @@ test('recalculateScopesForPhoneChange never touches organization-wide roles', as
   db.resourceTeams.push({ id: 'team-a', userId, teamId: 'location:loc-1', organizationId: 'org-1', siteId: 'site-1', locationId: 'loc-1' })
 
   const result = await recalculateScopesForPhoneChange(db as never, null, {
+    env: testEnv,
     organizationId: 'org-1', siteId: 'site-1', locationId: 'loc-1', scopeType: 'location', previousPhone: phone, newPhone: null,
   })
 
@@ -219,6 +256,7 @@ test('recalculateScopesForPhoneChange removes the exact resource team membership
   })
 
   const result = await recalculateScopesForPhoneChange(db as never, null, {
+    env: testEnv,
     organizationId: 'org-1', siteId: 'site-1', locationId: 'loc-1', scopeType: 'location', previousPhone: phone, newPhone: null,
   })
 

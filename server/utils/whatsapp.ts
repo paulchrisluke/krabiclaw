@@ -6,6 +6,7 @@ import { execute, queryFirst, type DbClient } from '~/server/db'
 import { logOnlyWhatsAppMessageId, shouldSendRealWhatsApp } from './whatsapp-delivery'
 import { chargeFlatCredits } from './ai-credits'
 import { parsePhoneOrThrow } from '~/utils/phone'
+import type { CloudflareEnv } from '~/server/utils/auth'
 
 function maskPhone(phone: string): string {
   if (!phone || phone.length < 4) return '***';
@@ -694,7 +695,7 @@ export async function setOrgWhatsAppPhone(
   organizationId: string,
   siteId: string,
   phone: string | null,
-  env?: WhatsAppEnv,
+  env?: CloudflareEnv,
   options?: { actorHeaders?: HeadersInit },
 ): Promise<void> {
   const previous = await queryFirst<{ value: string }>(db, `
@@ -722,11 +723,9 @@ export async function setOrgWhatsAppPhone(
       import('~/server/utils/whatsapp-revocation'),
       import('~/server/utils/auth'),
     ])
-    // `env` here is always the full Cloudflare env (callers pass through
-    // `cloudflareEnv(event)`/`site.env` under a narrower local type) —
-    // createAuth only reads the DB/Better-Auth-config fields it needs.
     try {
-      await recalculateScopesForPhoneChange(db, createAuth(env as unknown as Parameters<typeof createAuth>[0]), {
+      await recalculateScopesForPhoneChange(db, createAuth(env), {
+        env,
         organizationId,
         siteId,
         scopeType: 'site',
@@ -757,7 +756,7 @@ export async function setOrgWhatsAppPhone(
   if (env && normalized) {
     try {
       const { ensureWhatsAppRecipientAccess, sendWhatsAppAccessInvitation } = await import('~/server/utils/whatsapp-access')
-      const access = await ensureWhatsAppRecipientAccess(db, { organizationId, siteId, locationId: null, phone: normalized })
+      const access = await ensureWhatsAppRecipientAccess(env, db, { organizationId, siteId, locationId: null, phone: normalized })
       if (access.status !== 'invitation_pending' || !access.shouldDeliverInvitation || !access.invitationId) return
       await sendWhatsAppAccessInvitation(env, db, { organizationId, siteId, locationId: null, phone: normalized, invitationId: access.invitationId })
     } catch (error) {

@@ -95,7 +95,7 @@ export async function runSiteCreation(
       siteId = existingRetrySiteId
       await execute(db, `UPDATE sites SET theme_id = ?, vertical = ?, updated_at = ? WHERE id = ?`,
         [themeId, storedVertical, new Date().toISOString(), existingRetrySiteId])
-      await ensureSiteTeam(db, { organizationId, siteId: existingRetrySiteId, name })
+      await ensureSiteTeam(db, { env, organizationId, siteId: existingRetrySiteId, name })
       return await performSeeding(env, db, existingRetrySiteId, organizationId, name, vertical, '')
     }
 
@@ -113,7 +113,7 @@ export async function runSiteCreation(
       }
       throw siteError
     }
-    await ensureSiteTeam(db, { organizationId, siteId, name })
+    await ensureSiteTeam(db, { env, organizationId, siteId, name })
 
     return await performSeeding(env, db, siteId, organizationId, name, vertical, normalizedSubdomain)
 

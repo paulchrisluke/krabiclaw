@@ -23,6 +23,40 @@ const userTeams = new Map([
   ['user-multi', new Set(['location:loc-1', 'location:loc-2'])],
 ])
 
+const provisionedTeams = new Map<string, { id: string; organizationId: string; name: string }>()
+const provisionedMemberships = new Map<string, { id: string; teamId: string; userId: string }>()
+const teamAdapterCalls: string[] = []
+const teamAdapter = {
+  findTeamById: async (input: { teamId: string; organizationId?: string }) => {
+    teamAdapterCalls.push(`find:${input.teamId}:${input.organizationId || ''}`)
+    const team = provisionedTeams.get(input.teamId)
+    return team && (!input.organizationId || team.organizationId === input.organizationId) ? team : null
+  },
+  createTeam: async (input: { id: string; organizationId: string; name: string }) => {
+    teamAdapterCalls.push(`create:${input.id}`)
+    const team = { id: input.id, organizationId: input.organizationId, name: input.name }
+    provisionedTeams.set(input.id, team)
+    return team
+  },
+  findOrCreateTeamMember: async (input: { teamId: string; userId: string }) => {
+    teamAdapterCalls.push(`findOrCreate:${input.teamId}:${input.userId}`)
+    const key = `${input.teamId}:${input.userId}`
+    const existing = provisionedMemberships.get(key)
+    if (existing) return existing
+    const member = { id: `membership:${key}`, teamId: input.teamId, userId: input.userId }
+    provisionedMemberships.set(key, member)
+    return member
+  },
+  findTeamMember: async (input: { teamId: string; userId: string }) => {
+    teamAdapterCalls.push(`findMember:${input.teamId}:${input.userId}`)
+    return provisionedMemberships.get(`${input.teamId}:${input.userId}`) ?? null
+  },
+  removeTeamMember: async (input: { teamId: string; userId: string }) => {
+    teamAdapterCalls.push(`remove:${input.teamId}:${input.userId}`)
+    provisionedMemberships.delete(`${input.teamId}:${input.userId}`)
+  },
+}
+
 function hasSiteTeam(memberId: unknown, siteId: unknown) {
   const member = members.get(String(memberId))
   const teamId = siteTeams.get(String(siteId))
@@ -83,6 +117,18 @@ mock.module('../../server/db/index.ts', {
   },
 })
 
+mock.module('../../server/utils/auth.ts', {
+  namedExports: {
+    createAuth: () => ({ $context: Promise.resolve({}) }),
+  },
+})
+
+mock.module('better-auth/plugins', {
+  namedExports: {
+    getOrgAdapter: () => teamAdapter,
+  },
+})
+
 const {
   isOrganizationWideRole,
   isScopedRole,
@@ -96,6 +142,10 @@ const {
   resolveDashboardSiteAccess,
   canScopedRoleUseDashboardPath,
   teamAccessPredicate,
+  ensureSiteTeam,
+  ensureLocationTeam,
+  addUserToResourceTeam,
+  removeUserFromResourceTeam,
 } = await import('../../server/utils/member-access.ts')
 
 test('owner and admin bypass every team check', async () => {
@@ -187,4 +237,69 @@ test('teamAccessPredicate treats an explicit null locationTeamExpr the same as o
     teamAccessPredicate({ userIdExpr: 'm.userId', siteTeamExpr: 's.team_id', locationTeamExpr: null }),
     teamAccessPredicate({ userIdExpr: 'm.userId', siteTeamExpr: 's.team_id' }),
   )
+})
+
+test('resource team provisioning uses Better Auth Teams with deterministic scoped ids and idempotency', async () => {
+  provisionedTeams.clear()
+  provisionedMemberships.clear()
+  teamAdapterCalls.length = 0
+
+  const env = {} as never
+  assert.equal(await ensureSiteTeam({} as never, {
+    env,
+    organizationId: 'org-1',
+    siteId: 'site-1',
+    name: 'Main site',
+  }), 'site:site-1')
+  assert.equal(await ensureSiteTeam({} as never, {
+    env,
+    organizationId: 'org-1',
+    siteId: 'site-1',
+    name: 'Main site',
+  }), 'site:site-1')
+  assert.equal(await ensureLocationTeam({} as never, {
+    env,
+    organizationId: 'org-1',
+    siteId: 'site-1',
+    locationId: 'location-1',
+    name: 'Beach',
+  }), 'location:location-1')
+
+  assert.deepEqual([...provisionedTeams.values()], [
+    { id: 'site:site-1', organizationId: 'org-1', name: 'Main site' },
+    { id: 'location:location-1', organizationId: 'org-1', name: 'Beach' },
+  ])
+  assert.equal(teamAdapterCalls.filter(call => call === 'create:site:site-1').length, 1)
+  assert.equal(teamAdapterCalls.filter(call => call === 'create:location:location-1').length, 1)
+})
+
+test('resource team membership add/remove is idempotent through Better Auth Teams', async () => {
+  provisionedMemberships.clear()
+  teamAdapterCalls.length = 0
+  const env = {} as never
+
+  await addUserToResourceTeam({} as never, { env, teamId: 'site:site-1', userId: 'user-1' })
+  await addUserToResourceTeam({} as never, { env, teamId: 'site:site-1', userId: 'user-1' })
+  assert.equal(provisionedMemberships.size, 1)
+  assert.equal(teamAdapterCalls.filter(call => call === 'findOrCreate:site:site-1:user-1').length, 2)
+
+  assert.equal(await removeUserFromResourceTeam({} as never, { env, teamId: 'site:site-1', userId: 'user-1' }), true)
+  assert.equal(await removeUserFromResourceTeam({} as never, { env, teamId: 'site:site-1', userId: 'user-1' }), false)
+  assert.equal(provisionedMemberships.size, 0)
+})
+
+test('resource team provisioning rejects a deterministic id owned by another organization', async () => {
+  provisionedTeams.clear()
+  teamAdapterCalls.length = 0
+  provisionedTeams.set('site:site-1', { id: 'site:site-1', organizationId: 'org-other', name: 'Other' })
+
+  await assert.rejects(
+    () => ensureSiteTeam({} as never, {
+      env: {} as never,
+      organizationId: 'org-1',
+      siteId: 'site-1',
+    }),
+    /belongs to another organization/,
+  )
+  assert.equal(teamAdapterCalls.some(call => call === 'create:site:site-1'), false)
 })

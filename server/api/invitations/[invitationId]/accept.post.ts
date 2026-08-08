@@ -153,6 +153,7 @@ export default defineEventHandler(async (event) => {
   if (pendingScopes.length > 0) {
     for (const scope of pendingScopes) {
       await addMemberResourceAccess(db, {
+        env,
         userId: session.user.id,
         organizationId: scope.organization_id,
         siteId: scope.site_id,

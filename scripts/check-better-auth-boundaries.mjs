@@ -62,6 +62,22 @@ const MIGRATED_ORGANIZATION_ROUTES = [
   'server/api/dev/login.get.ts',
 ]
 
+// Team rows are Better Auth-owned too. These are the resource-provisioning
+// helpers and their call sites migrated to the Organization/Teams adapter.
+// The member-access module still contains unrelated bulk teamMember SQL, so
+// point-mutation checks below are scoped to the migrated helper bodies.
+const MIGRATED_TEAM_PROVISIONING_FILES = [
+  'server/utils/member-access.ts',
+  'server/utils/site-creation.ts',
+  'server/utils/location-management.ts',
+  'server/utils/whatsapp-access.ts',
+  'server/utils/whatsapp.ts',
+  'server/api/dashboard/invitations/[invitationId]/replace.post.ts',
+  'server/api/dashboard/invitations/[invitationId]/retry.post.ts',
+  'server/api/invitations/[invitationId]/accept.post.ts',
+  'server/api/dashboard/organizations/members/[memberId]/role.post.ts',
+]
+
 const FORBIDDEN_PATTERNS = [
   {
     id: 'member_access_scope',
@@ -236,14 +252,44 @@ async function checkMigratedOrganizationRoutes() {
   return failures
 }
 
-const [forbiddenViolations, mcpBoundaryFailures, migratedAdminFailures, migratedOrganizationFailures] = await Promise.all([
+async function checkMigratedTeamProvisioning() {
+  const failures = []
+  const forbiddenTeamInsert = /\bINSERT(?:\s+OR\s+IGNORE)?\s+INTO\s+team\b/i
+
+  for (const file of MIGRATED_TEAM_PROVISIONING_FILES) {
+    const content = await readFile(file, 'utf8')
+    if (forbiddenTeamInsert.test(content)) {
+      failures.push(`${file}: migrated team-provisioning path still inserts Better Auth team rows directly`)
+    }
+  }
+
+  const memberAccess = await readFile('server/utils/member-access.ts', 'utf8')
+  for (const [start, end, label] of [
+    ['export async function addUserToResourceTeam', 'export async function removeUserFromResourceTeam', 'addUserToResourceTeam'],
+    ['export async function removeUserFromResourceTeam', 'export async function removeMemberResourceAccess', 'removeUserFromResourceTeam'],
+  ]) {
+    const startIndex = memberAccess.indexOf(start)
+    const endIndex = memberAccess.indexOf(end, startIndex + start.length)
+    const body = startIndex >= 0 && endIndex > startIndex
+      ? memberAccess.slice(startIndex, endIndex)
+      : ''
+    if (/\b(?:INSERT(?:\s+OR\s+IGNORE)?\s+INTO|DELETE\s+FROM)\s+teamMember\b/i.test(body)) {
+      failures.push(`server/utils/member-access.ts: ${label} still mutates Better Auth teamMember rows directly`)
+    }
+  }
+
+  return failures
+}
+
+const [forbiddenViolations, mcpBoundaryFailures, migratedAdminFailures, migratedOrganizationFailures, migratedTeamFailures] = await Promise.all([
   checkForbiddenPatterns(),
   checkMcpResourceBoundary(),
   checkMigratedAdminUserSessionRoutes(),
   checkMigratedOrganizationRoutes(),
+  checkMigratedTeamProvisioning(),
 ])
 
-if (forbiddenViolations.length || mcpBoundaryFailures.length || migratedAdminFailures.length || migratedOrganizationFailures.length) {
+if (forbiddenViolations.length || mcpBoundaryFailures.length || migratedAdminFailures.length || migratedOrganizationFailures.length || migratedTeamFailures.length) {
   console.error('Better Auth boundary check failed.')
 
   for (const violation of forbiddenViolations) {
@@ -259,6 +305,10 @@ if (forbiddenViolations.length || mcpBoundaryFailures.length || migratedAdminFai
   }
 
   for (const failure of migratedOrganizationFailures) {
+    console.error(`  ${failure}`)
+  }
+
+  for (const failure of migratedTeamFailures) {
     console.error(`  ${failure}`)
   }
 

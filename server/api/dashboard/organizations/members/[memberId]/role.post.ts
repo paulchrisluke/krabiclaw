@@ -109,6 +109,7 @@ export default defineEventHandler(async (event) => {
   // to match.
   if (role === 'editor') {
     await addMemberResourceAccess(db, {
+      env,
       userId: target.userId,
       organizationId: organization.id,
       siteId,

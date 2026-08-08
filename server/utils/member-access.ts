@@ -120,17 +120,63 @@ export function locationTeamId(locationId: string): string {
   return `location:${locationId}`
 }
 
-function teamMembershipKey(teamId: string, userId: string): string {
-  return `${teamId}:${userId}`
+type OrganizationAdapter = ReturnType<typeof getOrgAdapter>
+
+async function organizationAdapter(env: CloudflareEnv): Promise<OrganizationAdapter> {
+  const { createAuth } = await import('~/server/utils/auth')
+  const auth = createAuth(env)
+  const context = await auth.$context
+  return getOrgAdapter(context as Parameters<typeof getOrgAdapter>[0], {})
 }
 
-export async function ensureSiteTeam(db: DbClient, input: { organizationId: string; siteId: string; name?: string | null }): Promise<string> {
+async function ensureTeam(
+  env: CloudflareEnv,
+  input: { organizationId: string; teamId: string; name: string },
+): Promise<void> {
+  const adapter = await organizationAdapter(env)
+  const existing = await adapter.findTeamById({
+    teamId: input.teamId,
+    organizationId: input.organizationId,
+  })
+  if (existing) return
+
+  // A deterministic team id makes this operation idempotent. Check the
+  // unscoped id before creating so a collision can never attach a resource to
+  // another organization.
+  const conflicting = await adapter.findTeamById({ teamId: input.teamId })
+  if (conflicting && conflicting.organizationId !== input.organizationId) {
+    throw new Error(`Team ${input.teamId} belongs to another organization`)
+  }
+  if (conflicting) return
+
+  try {
+    await adapter.createTeam({
+      id: input.teamId,
+      name: input.name,
+      organizationId: input.organizationId,
+      createdAt: new Date(),
+    })
+  } catch (error) {
+    // Another request may have won the create race. Re-read through Better
+    // Auth before surfacing a real provisioning failure.
+    const raced = await adapter.findTeamById({
+      teamId: input.teamId,
+      organizationId: input.organizationId,
+    })
+    if (!raced) throw error
+  }
+}
+
+export async function ensureSiteTeam(
+  db: DbClient,
+  input: { env: CloudflareEnv; organizationId: string; siteId: string; name?: string | null },
+): Promise<string> {
   const teamId = siteTeamId(input.siteId)
-  const now = Math.floor(Date.now() / 1000)
-  await execute(db, `
-    INSERT OR IGNORE INTO team (id, name, organizationId, createdAt)
-    VALUES (?, ?, ?, ?)
-  `, [teamId, input.name?.trim() || `Site ${input.siteId}`, input.organizationId, now])
+  await ensureTeam(input.env, {
+    teamId,
+    organizationId: input.organizationId,
+    name: input.name?.trim() || `Site ${input.siteId}`,
+  })
   await execute(db, `UPDATE sites SET team_id = ?, updated_at = ? WHERE id = ? AND organization_id = ? AND (team_id IS NULL OR team_id != ?)`, [
     teamId,
     new Date().toISOString(),
@@ -141,14 +187,21 @@ export async function ensureSiteTeam(db: DbClient, input: { organizationId: stri
   return teamId
 }
 
-export async function ensureLocationTeam(db: DbClient, input: { organizationId: string; siteId: string; locationId: string; name?: string | null }): Promise<string> {
+export async function ensureLocationTeam(
+  db: DbClient,
+  input: { env: CloudflareEnv; organizationId: string; siteId: string; locationId: string; name?: string | null },
+): Promise<string> {
   const teamId = locationTeamId(input.locationId)
-  const now = Math.floor(Date.now() / 1000)
-  await ensureSiteTeam(db, { organizationId: input.organizationId, siteId: input.siteId })
-  await execute(db, `
-    INSERT OR IGNORE INTO team (id, name, organizationId, createdAt)
-    VALUES (?, ?, ?, ?)
-  `, [teamId, input.name?.trim() || `Location ${input.locationId}`, input.organizationId, now])
+  await ensureSiteTeam(db, {
+    env: input.env,
+    organizationId: input.organizationId,
+    siteId: input.siteId,
+  })
+  await ensureTeam(input.env, {
+    teamId,
+    organizationId: input.organizationId,
+    name: input.name?.trim() || `Location ${input.locationId}`,
+  })
   await execute(db, `UPDATE business_locations SET team_id = ?, updated_at = ? WHERE id = ? AND site_id = ? AND organization_id = ? AND (team_id IS NULL OR team_id != ?)`, [
     teamId,
     new Date().toISOString(),
@@ -160,35 +213,51 @@ export async function ensureLocationTeam(db: DbClient, input: { organizationId: 
   return teamId
 }
 
-export async function ensureResourceTeams(db: DbClient, input: { organizationId: string; siteId?: string | null; locationId?: string | null }): Promise<void> {
-  if (input.siteId) await ensureSiteTeam(db, { organizationId: input.organizationId, siteId: input.siteId })
+export async function ensureResourceTeams(
+  db: DbClient,
+  input: { env: CloudflareEnv; organizationId: string; siteId?: string | null; locationId?: string | null },
+): Promise<void> {
+  if (input.siteId) await ensureSiteTeam(db, { env: input.env, organizationId: input.organizationId, siteId: input.siteId })
   if (input.siteId && input.locationId) {
-    await ensureLocationTeam(db, { organizationId: input.organizationId, siteId: input.siteId, locationId: input.locationId })
+    await ensureLocationTeam(db, { env: input.env, organizationId: input.organizationId, siteId: input.siteId, locationId: input.locationId })
   }
 }
 
-export async function addUserToResourceTeam(db: DbClient, input: { userId: string; teamId: string }): Promise<void> {
-  await execute(db, `
-    INSERT OR IGNORE INTO teamMember (id, teamId, userId, membershipKey, createdAt)
-    VALUES (?, ?, ?, ?, ?)
-  `, [crypto.randomUUID(), input.teamId, input.userId, teamMembershipKey(input.teamId, input.userId), Math.floor(Date.now() / 1000)])
+export async function addUserToResourceTeam(
+  _db: DbClient,
+  input: { env: CloudflareEnv; userId: string; teamId: string },
+): Promise<void> {
+  const adapter = await organizationAdapter(input.env)
+  await adapter.findOrCreateTeamMember({ teamId: input.teamId, userId: input.userId })
 }
 
-export async function removeUserFromResourceTeam(db: DbClient, input: { userId: string; teamId: string }): Promise<boolean> {
-  const result = await execute(db, `DELETE FROM teamMember WHERE teamId = ? AND userId = ?`, [input.teamId, input.userId])
-  return (result.meta?.changes ?? 0) > 0
+export async function removeUserFromResourceTeam(
+  _db: DbClient,
+  input: { env: CloudflareEnv; userId: string; teamId: string },
+): Promise<boolean> {
+  const adapter = await organizationAdapter(input.env)
+  const existing = await adapter.findTeamMember({ teamId: input.teamId, userId: input.userId })
+  if (!existing) return false
+  await adapter.removeTeamMember({ teamId: input.teamId, userId: input.userId })
+  return true
 }
 
-export async function addMemberResourceAccess(db: DbClient, input: ResourceTeamAccess & { userId: string }): Promise<void> {
+export async function addMemberResourceAccess(
+  db: DbClient,
+  input: ResourceTeamAccess & { env: CloudflareEnv; userId: string },
+): Promise<void> {
   const teamId = input.locationId
-    ? await ensureLocationTeam(db, { organizationId: input.organizationId, siteId: input.siteId, locationId: input.locationId })
-    : await ensureSiteTeam(db, { organizationId: input.organizationId, siteId: input.siteId })
-  await addUserToResourceTeam(db, { userId: input.userId, teamId })
+    ? await ensureLocationTeam(db, { env: input.env, organizationId: input.organizationId, siteId: input.siteId, locationId: input.locationId })
+    : await ensureSiteTeam(db, { env: input.env, organizationId: input.organizationId, siteId: input.siteId })
+  await addUserToResourceTeam(db, { env: input.env, userId: input.userId, teamId })
 }
 
-export async function removeMemberResourceAccess(db: DbClient, input: ResourceTeamAccess & { userId: string }): Promise<boolean> {
+export async function removeMemberResourceAccess(
+  db: DbClient,
+  input: ResourceTeamAccess & { env: CloudflareEnv; userId: string },
+): Promise<boolean> {
   const teamId = input.locationId ? locationTeamId(input.locationId) : siteTeamId(input.siteId)
-  return await removeUserFromResourceTeam(db, { userId: input.userId, teamId })
+  return await removeUserFromResourceTeam(db, { env: input.env, userId: input.userId, teamId })
 }
 
 // Called when a member's role changes away from 'editor' — an editor can
