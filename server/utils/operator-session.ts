@@ -26,8 +26,12 @@ export function assertDirectOperatorSession(session: unknown): string {
   const userId = typeof user?.id === 'string' ? user.id.trim() : ''
   if (!userId) fail('authentication_required', 401, 'Authenticated operator user is required.')
   const authSession = isRecord(session.session) ? session.session : null
-  const impersonatedBy = authSession?.impersonatedBy ?? session.impersonatedBy
-  if (typeof impersonatedBy === 'string' && impersonatedBy.trim()) {
+  const nestedImpersonatedBy = authSession?.impersonatedBy
+  const topLevelImpersonatedBy = session.impersonatedBy
+  if (
+    (typeof nestedImpersonatedBy === 'string' && nestedImpersonatedBy.trim())
+    || (typeof topLevelImpersonatedBy === 'string' && topLevelImpersonatedBy.trim())
+  ) {
     fail('impersonation_forbidden', 403, 'Operator sessions cannot run in an impersonation session.')
   }
   return userId

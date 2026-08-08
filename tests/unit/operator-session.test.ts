@@ -45,6 +45,7 @@ test('assertDirectOperatorSession rejects nested and top-level impersonation', (
   for (const session of [
     { user: { id: 'operator-1' }, session: { impersonatedBy: 'admin-1' } },
     { user: { id: 'operator-1' }, impersonatedBy: 'admin-1' },
+    { user: { id: 'operator-1' }, session: { impersonatedBy: '' }, impersonatedBy: 'admin-1' },
   ]) {
     assert.throws(
       () => assertDirectOperatorSession(session),
