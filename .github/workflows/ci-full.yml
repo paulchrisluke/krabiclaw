@@ -163,6 +163,9 @@ jobs:
           build_identity="$work_dir/build-identity.json"
           candidate_verification="$work_dir/candidate-verification.json"
           deployed_verification="$work_dir/deployed-verification.json"
+          restore_status="$work_dir/restored-baseline-deployment.json"
+          restore_cache="$work_dir/restored-baseline-cache.log"
+          export RESTORE_STATUS_PATH="$restore_status" RESTORE_CACHE_PATH="$restore_cache"
           stripe_webhook_preflight="$work_dir/stripe-webhook-preflight.json"
           stripe_canary_evidence="$work_dir/stripe-canary-evidence.json"
 
@@ -170,9 +173,10 @@ jobs:
           CANDIDATE_VERSION_ID=""
           CANDIDATE_STATUS="running"
           RESTORED_BASELINE="false"
+          RESTORE_INTERVENTION_REQUIRED="false"
           PROMOTED="false"
           SPLIT_ACTIVE="false"
-          export BASELINE_VERSION_ID CANDIDATE_VERSION_ID CANDIDATE_STATUS RESTORED_BASELINE PROMOTED SPLIT_ACTIVE
+          export BASELINE_VERSION_ID CANDIDATE_VERSION_ID CANDIDATE_STATUS RESTORED_BASELINE RESTORE_INTERVENTION_REQUIRED PROMOTED SPLIT_ACTIVE
           export MANIFEST_PATH="$manifest" BASELINE_STATUS_PATH="$baseline_status" SPLIT_STATUS_PATH="$split_status" DEPLOYED_STATUS_PATH="$deployed_status" BASELINE_VERSION_LOG="$baseline_version_log" CANDIDATE_VERSION_LOG="$candidate_version_log" BASELINE_ATTESTATION_PATH="$baseline_attestation"
           export MIGRATION_BEFORE_PATH="$migration_before" MIGRATION_AFTER_PATH="$migration_after" MIGRATION_BEFORE_APPLIED_PATH="$migration_before_applied" MIGRATION_AFTER_APPLIED_PATH="$migration_after_applied" MIGRATION_FILES_PATH="$migration_files" STAGING_SECRETS_PATH="$staging_secrets"
           export CANDIDATE_VERIFICATION_PATH="$candidate_verification" DEPLOYED_VERIFICATION_PATH="$deployed_verification"
@@ -249,7 +253,15 @@ jobs:
               candidate: readJson(`${process.env.PERF_DIR}/performance-recovery-candidate.json`),
               comparison: readJson(`${process.env.PERF_DIR}/performance-comparison.json`),
             },
+            restore: {
+              status: process.env.RESTORE_INTERVENTION_REQUIRED === 'true'
+                ? 'intervention_required'
+                : process.env.RESTORED_BASELINE === 'true' ? 'verified' : 'not_attempted',
+              deployment: readJson(process.env.RESTORE_STATUS_PATH),
+              cache: readText(process.env.RESTORE_CACHE_PATH),
+            },
             restoredBaseline: process.env.RESTORED_BASELINE === 'true',
+            splitActive: process.env.SPLIT_ACTIVE === 'true',
           }
           fs.mkdirSync(require('node:path').dirname(process.env.MANIFEST_PATH), { recursive: true })
           fs.writeFileSync(process.env.MANIFEST_PATH, `${JSON.stringify(manifest, null, 2)}\n`)
@@ -261,13 +273,46 @@ jobs:
               return 0
             fi
             echo "Restoring staging baseline $BASELINE_VERSION_ID to 100%"
-            if npx wrangler versions deploy --env staging --name "$WORKER_NAME" "$BASELINE_VERSION_ID@100" --message "Restore baseline after issue #554 candidate failure" --yes; then
-              RESTORED_BASELINE="true"
-              SPLIT_ACTIVE="false"
-              export RESTORED_BASELINE SPLIT_ACTIVE
-            else
+            if ! npx wrangler versions deploy --env staging --name "$WORKER_NAME" "$BASELINE_VERSION_ID@100" --message "Restore baseline after issue #554 candidate failure" --yes; then
               echo "Baseline restoration failed; operator intervention is required" >&2
+              RESTORE_INTERVENTION_REQUIRED="true"
+              export RESTORE_INTERVENTION_REQUIRED
+              return 1
             fi
+            if ! npx wrangler deployments status --env staging --name "$WORKER_NAME" --json > "$restore_status"; then
+              echo "Baseline restoration status capture failed; operator intervention is required" >&2
+              RESTORE_INTERVENTION_REQUIRED="true"
+              export RESTORE_INTERVENTION_REQUIRED
+              return 1
+            fi
+            if ! node -e '
+              const fs=require("node:fs")
+              const root=JSON.parse(fs.readFileSync(process.argv[1],"utf8"))
+              const deployment=root.latest_deployment??root
+              const versions=Array.isArray(deployment.versions)?deployment.versions:[]
+              const id=v=>v?.version_id??v?.versionId??v?.id
+              const traffic=v=>Number(v?.percentage??v?.traffic??NaN)
+              const baseline=versions.find(v=>id(v)===process.argv[2])
+              const candidate=versions.find(v=>id(v)===process.argv[3])
+              const active=versions.filter(v=>traffic(v)>0)
+              if(active.length!==1||id(active[0])!==process.argv[2]||traffic(active[0])!==100)process.exit(2)
+              if(candidate&&traffic(candidate)!==0)process.exit(3)
+            ' "$restore_status" "$BASELINE_VERSION_ID" "$CANDIDATE_VERSION_ID"; then
+              echo "Baseline restoration deployment verification failed; operator intervention is required" >&2
+              RESTORE_INTERVENTION_REQUIRED="true"
+              export RESTORE_INTERVENTION_REQUIRED
+              return 1
+            fi
+            if ! DEPLOYMENT_CACHE_ORIGIN="$STAGING_BASE_URL" node --experimental-strip-types scripts/purge-deployment-cache.ts > "$restore_cache"; then
+              echo "Baseline restoration cache purge failed; operator intervention is required" >&2
+              RESTORE_INTERVENTION_REQUIRED="true"
+              export RESTORE_INTERVENTION_REQUIRED
+              return 1
+            fi
+            RESTORED_BASELINE="true"
+            SPLIT_ACTIVE="false"
+            RESTORE_INTERVENTION_REQUIRED="false"
+            export RESTORED_BASELINE SPLIT_ACTIVE RESTORE_INTERVENTION_REQUIRED
           }
 
           detect_candidate_deployment() {

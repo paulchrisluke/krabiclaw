@@ -38,9 +38,59 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  production-environment-preflight:
+    name: Verify production Environment protection
+    if: inputs.operation == 'preflight' || inputs.operation == 'deploy'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Require the protected production Environment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          response="$RUNNER_TEMP/production-environment.json"
+          api_url="${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/environments/production"
+          http_status="$(curl -sS \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            -o "$response" \
+            -w '%{http_code}' \
+            "$api_url")"
+          if [[ "$http_status" != "200" ]]; then
+            echo "GitHub production Environment API returned HTTP $http_status; release is blocked" >&2
+            exit 1
+          fi
+          if ! jq -e '
+            .name == "production"
+            and ((.protection_rules | type) == "array")
+            and (
+              [
+                .protection_rules[]?
+                | select(.type == "required_reviewers")
+                | (.reviewers // [])
+                | select(type == "array")
+                | .[]
+                | select(
+                    type == "object"
+                    and (.reviewer | type == "object")
+                    and ((.reviewer.login? // .reviewer.name? // .reviewer.slug?) | type == "string" and length > 0)
+                  )
+              ] | length
+            ) > 0
+          ' "$response" >/dev/null; then
+            echo "GitHub production Environment is missing a valid required_reviewers rule/reviewer list; release is blocked" >&2
+            exit 1
+          fi
+          echo "Verified GitHub production Environment protection with required reviewers."
+
   preflight:
     name: Prove staging manifest and dry-run production
     if: inputs.operation == 'preflight'
+    needs: [production-environment-preflight]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -159,7 +209,8 @@ jobs:
 
   deploy-production:
     name: Deploy verified candidate to production
-    if: inputs.operation == 'deploy'
+    if: inputs.operation == 'deploy' && needs.production-environment-preflight.result == 'success'
+    needs: [production-environment-preflight]
     runs-on: ubuntu-latest
     environment:
       name: production
@@ -241,6 +292,8 @@ jobs:
           production_secrets="$work_dir/production-secrets.json"
           candidate_verification="$work_dir/candidate-verification.json"
           deployed_verification="$work_dir/deployed-verification.json"
+          restore_status="$work_dir/restored-baseline-deployment.json"
+          restore_cache="$work_dir/restored-baseline-cache.log"
           browser_projects="$work_dir/browser-projects.txt"
           deployed_browser_projects="$work_dir/deployed-browser-projects.txt"
           browser_evidence="$work_dir/browser-evidence.json"
@@ -252,8 +305,9 @@ jobs:
           CANDIDATE_VERSION_ID=""
           PROMOTED="false"
           RESTORED_BASELINE="false"
+          RESTORE_INTERVENTION_REQUIRED="false"
           SPLIT_ACTIVE="false"
-          export BASELINE_VERSION_ID CANDIDATE_VERSION_ID PROMOTED RESTORED_BASELINE SPLIT_ACTIVE
+          export BASELINE_VERSION_ID CANDIDATE_VERSION_ID PROMOTED RESTORED_BASELINE RESTORE_INTERVENTION_REQUIRED SPLIT_ACTIVE
 
           write_manifest() {
             local exit_status="${1:-0}"
@@ -274,6 +328,13 @@ jobs:
             assets:{candidate:readJson(process.env.CANDIDATE_VERIFICATION_PATH),deployed:readJson(process.env.DEPLOYED_VERIFICATION_PATH)},
             browser:readJson(process.env.BROWSER_EVIDENCE_PATH),
             searchSync:readJson(process.env.SEARCH_SYNC_EVIDENCE_PATH),
+            restore:{
+              status:process.env.RESTORE_INTERVENTION_REQUIRED==='true'
+                ? 'intervention_required'
+                : process.env.RESTORED_BASELINE==='true' ? 'verified' : 'not_attempted',
+              deployment:readJson(process.env.RESTORE_STATUS_PATH),
+              cache:readText(process.env.RESTORE_CACHE_PATH),
+            },
             restoredBaseline:process.env.RESTORED_BASELINE==='true',
             splitActive:process.env.SPLIT_ACTIVE==='true',
           }
@@ -283,13 +344,46 @@ jobs:
 
           restore_baseline() {
             if [[ -z "$BASELINE_VERSION_ID" || "$SPLIT_ACTIVE" != "true" ]]; then return 0; fi
-            if npx wrangler versions deploy "$BASELINE_VERSION_ID@100" --message "Restore production baseline after candidate failure" --yes; then
-              RESTORED_BASELINE="true"
-              SPLIT_ACTIVE="false"
-              export RESTORED_BASELINE SPLIT_ACTIVE
-            else
+            if ! npx wrangler versions deploy "$BASELINE_VERSION_ID@100" --message "Restore production baseline after candidate failure" --yes; then
               echo "Production baseline restoration failed; operator intervention is required" >&2
+              RESTORE_INTERVENTION_REQUIRED="true"
+              export RESTORE_INTERVENTION_REQUIRED
+              return 1
             fi
+            if ! npx wrangler deployments status --name krabiclaw --json > "$restore_status"; then
+              echo "Production baseline restoration status capture failed; operator intervention is required" >&2
+              RESTORE_INTERVENTION_REQUIRED="true"
+              export RESTORE_INTERVENTION_REQUIRED
+              return 1
+            fi
+            if ! node -e '
+              const fs=require("node:fs")
+              const root=JSON.parse(fs.readFileSync(process.argv[1],"utf8"))
+              const deployment=root.latest_deployment??root
+              const versions=Array.isArray(deployment.versions)?deployment.versions:[]
+              const id=v=>v?.version_id??v?.versionId??v?.id
+              const traffic=v=>Number(v?.percentage??v?.traffic??NaN)
+              const baseline=versions.find(v=>id(v)===process.argv[2])
+              const candidate=versions.find(v=>id(v)===process.argv[3])
+              const active=versions.filter(v=>traffic(v)>0)
+              if(active.length!==1||id(active[0])!==process.argv[2]||traffic(active[0])!==100)process.exit(2)
+              if(candidate&&traffic(candidate)!==0)process.exit(3)
+            ' "$restore_status" "$BASELINE_VERSION_ID" "$CANDIDATE_VERSION_ID"; then
+              echo "Production baseline restoration deployment verification failed; operator intervention is required" >&2
+              RESTORE_INTERVENTION_REQUIRED="true"
+              export RESTORE_INTERVENTION_REQUIRED
+              return 1
+            fi
+            if ! DEPLOYMENT_CACHE_ORIGIN=https://krabiclaw.com node --experimental-strip-types scripts/purge-deployment-cache.ts > "$restore_cache"; then
+              echo "Production baseline restoration cache purge failed; operator intervention is required" >&2
+              RESTORE_INTERVENTION_REQUIRED="true"
+              export RESTORE_INTERVENTION_REQUIRED
+              return 1
+            fi
+            RESTORED_BASELINE="true"
+            SPLIT_ACTIVE="false"
+            RESTORE_INTERVENTION_REQUIRED="false"
+            export RESTORED_BASELINE SPLIT_ACTIVE RESTORE_INTERVENTION_REQUIRED
           }
           detect_candidate_deployment() {
             if [[ -z "$BASELINE_VERSION_ID" || -z "$CANDIDATE_VERSION_ID" || "$SPLIT_ACTIVE" == "true" ]]; then return 0; fi
@@ -315,7 +409,7 @@ jobs:
             fi
             exit "$exit_status"
           }
-          export PREFLIGHT_RUN_PATH="$RUNNER_TEMP/production-preflight-run.json" STAGING_MANIFEST_PATH="$staging_manifest" BASELINE_STATUS_PATH="$baseline_status" SPLIT_STATUS_PATH="$split_status" DEPLOYED_STATUS_PATH="$deployed_status" BASELINE_VERSION_PATH="$baseline_version" CANDIDATE_VERSION_PATH="$candidate_version" MIGRATIONS_BEFORE_PATH="$migrations_before" MIGRATIONS_AFTER_PATH="$migrations_after" MIGRATIONS_BEFORE_APPLIED_PATH="$migrations_before_applied" MIGRATIONS_AFTER_APPLIED_PATH="$migrations_after_applied" CANDIDATE_VERIFICATION_PATH="$candidate_verification" DEPLOYED_VERIFICATION_PATH="$deployed_verification" BROWSER_EVIDENCE_PATH="$browser_evidence" BROWSER_PROJECTS_PATH="$browser_projects" DEPLOYED_BROWSER_PROJECTS_PATH="$deployed_browser_projects" SEARCH_SYNC_EVIDENCE_PATH="$search_sync_evidence" RELEASE_MANIFEST_PATH="$release_manifest"
+          export PREFLIGHT_RUN_PATH="$RUNNER_TEMP/production-preflight-run.json" STAGING_MANIFEST_PATH="$staging_manifest" BASELINE_STATUS_PATH="$baseline_status" SPLIT_STATUS_PATH="$split_status" DEPLOYED_STATUS_PATH="$deployed_status" BASELINE_VERSION_PATH="$baseline_version" CANDIDATE_VERSION_PATH="$candidate_version" MIGRATIONS_BEFORE_PATH="$migrations_before" MIGRATIONS_AFTER_PATH="$migrations_after" MIGRATIONS_BEFORE_APPLIED_PATH="$migrations_before_applied" MIGRATIONS_AFTER_APPLIED_PATH="$migrations_after_applied" CANDIDATE_VERIFICATION_PATH="$candidate_verification" DEPLOYED_VERIFICATION_PATH="$deployed_verification" RESTORE_STATUS_PATH="$restore_status" RESTORE_CACHE_PATH="$restore_cache" BROWSER_EVIDENCE_PATH="$browser_evidence" BROWSER_PROJECTS_PATH="$browser_projects" DEPLOYED_BROWSER_PROJECTS_PATH="$deployed_browser_projects" SEARCH_SYNC_EVIDENCE_PATH="$search_sync_evidence" RELEASE_MANIFEST_PATH="$release_manifest"
           trap on_exit EXIT
 
           echo "Capturing the current production baseline before any mutation"

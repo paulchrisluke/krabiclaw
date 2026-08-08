@@ -1,8 +1,58 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFile } from 'node:fs/promises'
+import { parse } from 'yaml'
 
 const repoFile = async (path: string) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8')
+
+type WorkflowJob = {
+  if?: string
+  needs?: string | string[]
+  environment?: { name?: string } | string
+  permissions?: Record<string, string>
+  steps?: Array<{ name?: string; run?: string }>
+}
+
+async function workflowJobs(path: string): Promise<Record<string, WorkflowJob>> {
+  const document = parse(await repoFile(path)) as { jobs?: Record<string, WorkflowJob> }
+  assert.ok(document.jobs && typeof document.jobs === 'object', `${path} must define jobs`)
+  return document.jobs
+}
+
+function runScript(job: WorkflowJob, label: string): string {
+  const step = job.steps?.find(candidate => candidate.name === label)
+  assert.ok(step?.run, `missing run step: ${label}`)
+  return step.run
+}
+
+function shellFunction(script: string, name: string): string {
+  const start = script.indexOf(`${name}() {`)
+  assert.ok(start >= 0, `missing shell function: ${name}`)
+  const end = script.indexOf('\n}', start)
+  assert.ok(end > start, `unterminated shell function: ${name}`)
+  return script.slice(start, end)
+}
+
+function assertRestoreOrdering(script: string, originPattern: RegExp, label: string): void {
+  const restore = shellFunction(script, 'restore_baseline')
+  const deploy = restore.indexOf('versions deploy')
+  const status = restore.indexOf('wrangler deployments status')
+  const verify = restore.indexOf('active.length!==1')
+  const purge = restore.indexOf('purge-deployment-cache.ts')
+  const markRestored = restore.indexOf('RESTORED_BASELINE="true"')
+  assert.ok(deploy >= 0, `${label}: restore must deploy the baseline first`)
+  assert.ok(status > deploy, `${label}: deployment status must follow baseline deploy`)
+  assert.ok(verify > status, `${label}: baseline/candidate traffic must be verified after status capture`)
+  assert.ok(purge > verify, `${label}: cache purge must follow deployment verification`)
+  assert.ok(markRestored > purge, `${label}: restored state must follow cache purge`)
+  assert.match(restore, /candidate&&traffic\(candidate\)!==0/)
+  assert.match(restore, /if ! npx wrangler versions deploy/)
+  assert.match(restore, /if ! npx wrangler deployments status/)
+  assert.match(restore, /if ! node -e/)
+  assert.match(restore, new RegExp(`if ! DEPLOYMENT_CACHE_ORIGIN=${originPattern.source} node --experimental-strip-types scripts/purge-deployment-cache\\.ts`))
+  assert.match(restore, /RESTORE_INTERVENTION_REQUIRED="true"[\s\S]*return 1/)
+  assert.match(restore, /RESTORED_BASELINE="true"[\s\S]*SPLIT_ACTIVE="false"/)
+}
 
 test('required CI checks out the immutable event SHA and never mutates shared staging or production', async () => {
   const source = await repoFile('.github/workflows/ci.yml')
@@ -54,6 +104,14 @@ test('full lane keeps one uninterrupted staging candidate lock and gates candida
   assert.match(source, /include-hidden-files:\s*true/)
 })
 
+test('staging rollback verifies baseline traffic and purges cache before claiming restoration', async () => {
+  const jobs = await workflowJobs('.github/workflows/ci-full.yml')
+  const source = runScript(jobs.candidate!, 'Prepare, verify, benchmark, and promote candidate')
+  assertRestoreOrdering(source, /"\$STAGING_BASE_URL"/, 'staging')
+  assert.match(source, /restore:\s*\{[\s\S]*status:[\s\S]*intervention_required/)
+  assert.match(source, /splitActive: process\.env\.SPLIT_ACTIVE === 'true'/)
+})
+
 test('direct shared-environment deploys fail closed and comparative validation is explicit', async () => {
   const packageSource = await repoFile('package.json')
 
@@ -96,6 +154,38 @@ test('production release requires a separate attested dispatch after read-only p
   assert.match(source, /include-hidden-files:\s*true/)
   assert.doesNotMatch(source, /E2E_ALLOW_DEV_ROUTES|E2E_DEV_ROUTE_SECRET|STRIPE_SECRET_KEY_TEST|BETTER_AUTH_SECRET/)
   assert.doesNotMatch(source, /wrangler secret put|--no-bundle/)
+})
+
+test('production release checks the exact protected Environment before every mutation', async () => {
+  const jobs = await workflowJobs('.github/workflows/release-production.yml')
+  const environmentPreflight = jobs['production-environment-preflight']
+  assert.ok(environmentPreflight)
+  assert.equal(environmentPreflight.environment, undefined)
+  assert.equal(environmentPreflight.permissions?.actions, 'read')
+  assert.equal(environmentPreflight.permissions?.contents, 'read')
+  assert.match(environmentPreflight.if ?? '', /inputs\.operation == 'preflight'/)
+  assert.match(environmentPreflight.if ?? '', /inputs\.operation == 'deploy'/)
+  const protectionScript = runScript(environmentPreflight, 'Require the protected production Environment')
+  assert.match(protectionScript, /\/environments\/production/)
+  assert.match(protectionScript, /http_status/)
+  assert.match(protectionScript, /http_status.*200/)
+  assert.match(protectionScript, /protection_rules/)
+  assert.match(protectionScript, /required_reviewers/)
+  assert.match(protectionScript, /reviewers/)
+  assert.doesNotMatch(protectionScript, /\b(?:POST|PUT|PATCH|DELETE)\b/)
+
+  assert.deepEqual(jobs.preflight?.needs, ['production-environment-preflight'])
+  assert.deepEqual(jobs['deploy-production']?.needs, ['production-environment-preflight'])
+  assert.equal((jobs['deploy-production']?.environment as { name?: string })?.name, 'production')
+  assert.match(jobs['deploy-production']?.if ?? '', /needs\.production-environment-preflight\.result == 'success'/)
+})
+
+test('production rollback verifies baseline traffic and purges cache before claiming restoration', async () => {
+  const jobs = await workflowJobs('.github/workflows/release-production.yml')
+  const source = runScript(jobs['deploy-production']!, 'Capture baseline, migrate, roll out, verify, and promote')
+  assertRestoreOrdering(source, /https:\/\/krabiclaw\.com/, 'production')
+  assert.match(source, /restore:\{[\s\S]*status:[\s\S]*intervention_required/)
+  assert.match(source, /splitActive:process\.env\.SPLIT_ACTIVE==='true'/)
 })
 
 test('nightly browser telemetry is pinned to one retained build and cannot mutate an environment', async () => {
