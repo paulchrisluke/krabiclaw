@@ -1,19 +1,32 @@
 name: CI (Full Validation Lane)
 
 on:
-  pull_request:
-    branches: [main, staging]
-    types: [ready_for_review]
-  schedule:
-    - cron: "0 4 * * *"
   workflow_dispatch:
+    inputs:
+      baseline_source_sha:
+        description: Full source SHA of the currently deployed staging baseline
+        required: true
+        type: string
+      baseline_run_id:
+        description: Successful Actions run ID attesting an intentionally untagged legacy baseline (optional)
+        required: false
+        type: string
+      staging_base_url:
+        description: Staging custom-domain URL used for candidate verification
+        required: false
+        default: https://staging.krabiclaw.com
+        type: string
 
 permissions:
   contents: read
+  actions: read
 
+# A candidate owns the staging lock for its entire lifecycle.  Quality jobs do
+# not touch staging and can run in parallel; only the explicit dispatch below
+# is allowed to mutate the shared staging Worker/database.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.sha }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   typecheck-full:
@@ -23,6 +36,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
+          ref: ${{ github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
@@ -41,6 +55,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
+          ref: ${{ github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
@@ -57,6 +72,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
+          ref: ${{ github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
@@ -65,31 +81,296 @@ jobs:
       - run: yarn install --frozen-lockfile
       - name: Build production
         run: yarn build
+      - name: Upload immutable build artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: production-build-${{ github.sha }}
+          path: .output
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
 
-  prepare-staging:
-    name: Prepare staging fixtures
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+  candidate:
+    name: Staging candidate (locked)
+    if: github.event_name == 'workflow_dispatch'
     needs: [typecheck-full, test-full, build-production]
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
     concurrency:
-      group: shared-staging-deployment
+      group: shared-staging-candidate
       cancel-in-progress: false
+    env:
+      STAGING_BASE_URL: ${{ inputs.staging_base_url }}
+      BASELINE_SOURCE_SHA: ${{ inputs.baseline_source_sha }}
+      BASELINE_RUN_ID: ${{ inputs.baseline_run_id }}
+      WORKER_NAME: krabiclaw-staging
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET_STAGING }}
+      NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
+      BETTER_AUTH_SECRET: test-secret-for-ci
+      BETTER_AUTH_URL: https://staging.krabiclaw.com
+      E2E_ALLOW_DEV_ROUTES: "true"
+      E2E_DEV_ROUTE_SECRET: ${{ secrets.E2E_DEV_ROUTE_SECRET_STAGING }}
+      PLAYWRIGHT_PREVIEW_URL: ${{ inputs.staging_base_url }}
+      PLAYWRIGHT_WORKERS: "1"
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          ref: staging
+          ref: ${{ github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "22"
           cache: yarn
       - run: yarn install --frozen-lockfile
-      - name: Migrate and reseed staging database
+      - name: Download immutable build artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: production-build-${{ github.sha }}
+          path: .output
+      - run: npx playwright install --with-deps chromium
+      - name: Prepare, verify, benchmark, and promote candidate
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          GH_TOKEN: ${{ github.token }}
         run: |
+          set -Eeuo pipefail
+
+          work_dir="$RUNNER_TEMP/issue-554-candidate"
+          perf_dir="$work_dir/performance"
+          mkdir -p "$perf_dir"
+          manifest="$work_dir/candidate-manifest.json"
+          baseline_status="$work_dir/baseline-deployment.json"
+          split_status="$work_dir/candidate-split-deployment.json"
+          deployed_status="$work_dir/candidate-deployed.json"
+          baseline_version_log="$work_dir/baseline-version.json"
+          baseline_attestation="$work_dir/baseline-attestation.json"
+          baseline_attestation_log="$work_dir/baseline-attestation.log"
+          versions_before="$work_dir/versions-before.json"
+          versions_after="$work_dir/versions-after.json"
+          candidate_version_log="$work_dir/candidate-version.json"
+          upload_log="$work_dir/candidate-upload.log"
+          staging_secrets="$work_dir/staging-secrets.json"
+          migration_before="$work_dir/migrations-before.txt"
+          migration_after="$work_dir/migrations-after.txt"
+          migration_before_applied="$work_dir/migrations-before-applied.json"
+          migration_after_applied="$work_dir/migrations-after-applied.json"
+          migration_files="$work_dir/migration-files.json"
+          browser_evidence="$work_dir/browser-evidence.json"
+          browser_projects="$work_dir/browser-projects.txt"
+          deployed_browser_projects="$work_dir/deployed-browser-projects.txt"
+          build_identity="$work_dir/build-identity.json"
+          candidate_verification="$work_dir/candidate-verification.json"
+          deployed_verification="$work_dir/deployed-verification.json"
+
+          BASELINE_VERSION_ID=""
+          CANDIDATE_VERSION_ID=""
+          CANDIDATE_STATUS="running"
+          RESTORED_BASELINE="false"
+          PROMOTED="false"
+          SPLIT_ACTIVE="false"
+          export BASELINE_VERSION_ID CANDIDATE_VERSION_ID CANDIDATE_STATUS RESTORED_BASELINE PROMOTED SPLIT_ACTIVE
+          export MANIFEST_PATH="$manifest" BASELINE_STATUS_PATH="$baseline_status" SPLIT_STATUS_PATH="$split_status" DEPLOYED_STATUS_PATH="$deployed_status" BASELINE_VERSION_LOG="$baseline_version_log" CANDIDATE_VERSION_LOG="$candidate_version_log" BASELINE_ATTESTATION_PATH="$baseline_attestation"
+          export MIGRATION_BEFORE_PATH="$migration_before" MIGRATION_AFTER_PATH="$migration_after" MIGRATION_BEFORE_APPLIED_PATH="$migration_before_applied" MIGRATION_AFTER_APPLIED_PATH="$migration_after_applied" MIGRATION_FILES_PATH="$migration_files" STAGING_SECRETS_PATH="$staging_secrets"
+          export CANDIDATE_VERIFICATION_PATH="$candidate_verification" DEPLOYED_VERIFICATION_PATH="$deployed_verification"
+          export BROWSER_EVIDENCE_PATH="$browser_evidence" BROWSER_PROJECTS_PATH="$browser_projects" DEPLOYED_BROWSER_PROJECTS_PATH="$deployed_browser_projects" BUILD_IDENTITY_PATH="$build_identity" PERF_DIR="$perf_dir"
+
+          write_manifest() {
+            local exit_status="${1:-0}"
+            export EXIT_STATUS="$exit_status"
+            node <<'NODE'
+          const fs = require('node:fs')
+          const readJson = (path) => {
+            try { return JSON.parse(fs.readFileSync(path, 'utf8')) } catch { return null }
+          }
+          const readText = (path) => {
+            try { return fs.readFileSync(path, 'utf8') } catch { return null }
+          }
+          const migrationEvidence = (pendingPath, appliedPath) => {
+            const raw = readText(pendingPath)
+            if (raw === null) return null
+            const lines = raw.split(/\r?\n/).map(line => line.trim()).filter(Boolean)
+            const hasPending = lines.some(line => /migrations to be applied|pending|unapplied|not applied/i.test(line))
+            const pending = hasPending ? lines : []
+            const files = hasPending
+              ? [...new Set(lines.flatMap(line => line.match(/[0-9]{4}_[A-Za-z0-9_-]+\.sql/g) ?? []))]
+              : []
+            return {
+              raw,
+              files,
+              applied: lines.filter(line => /applied|already applied|completed/i.test(line)),
+              pending,
+              remoteApplied: readJson(appliedPath),
+            }
+          }
+          const manifest = {
+            schemaVersion: 1,
+            issue: 554,
+            sourceSha: process.env.GITHUB_SHA,
+            status: process.env.EXIT_STATUS === '0' ? 'verified' : 'failed',
+            build: readJson(process.env.BUILD_IDENTITY_PATH),
+            baseline: {
+              sourceSha: process.env.BASELINE_SOURCE_SHA,
+              workerName: process.env.WORKER_NAME,
+              versionId: process.env.BASELINE_VERSION_ID || null,
+              versionTag: process.env.BASELINE_SOURCE_TAG || null,
+              versionEvidence: readJson(process.env.BASELINE_VERSION_LOG),
+              attestation: readJson(process.env.BASELINE_ATTESTATION_PATH),
+              deployment: readJson(process.env.BASELINE_STATUS_PATH),
+            },
+            candidate: {
+              sourceSha: process.env.GITHUB_SHA,
+              workerName: process.env.WORKER_NAME,
+              versionId: process.env.CANDIDATE_VERSION_ID || null,
+              versionTag: process.env.CANDIDATE_SOURCE_TAG || null,
+              versionEvidence: readJson(process.env.CANDIDATE_VERSION_LOG),
+              splitDeployment: readJson(process.env.SPLIT_STATUS_PATH),
+              deployedDeployment: readJson(process.env.DEPLOYED_STATUS_PATH),
+              promoted: process.env.PROMOTED === 'true',
+            },
+            migrations: {
+              files: readJson(process.env.MIGRATION_FILES_PATH),
+              before: migrationEvidence(process.env.MIGRATION_BEFORE_PATH, process.env.MIGRATION_BEFORE_APPLIED_PATH),
+              after: migrationEvidence(process.env.MIGRATION_AFTER_PATH, process.env.MIGRATION_AFTER_APPLIED_PATH),
+            },
+            stagingSecrets: readJson(process.env.STAGING_SECRETS_PATH),
+            assets: {
+              candidate: readJson(process.env.CANDIDATE_VERIFICATION_PATH),
+              deployed: readJson(process.env.DEPLOYED_VERIFICATION_PATH),
+            },
+            browser: readJson(process.env.BROWSER_EVIDENCE_PATH),
+            benchmark: {
+              baseline: readJson(`${process.env.PERF_DIR}/performance-recovery-baseline.json`),
+              candidate: readJson(`${process.env.PERF_DIR}/performance-recovery-candidate.json`),
+              comparison: readJson(`${process.env.PERF_DIR}/performance-comparison.json`),
+            },
+            restoredBaseline: process.env.RESTORED_BASELINE === 'true',
+          }
+          fs.mkdirSync(require('node:path').dirname(process.env.MANIFEST_PATH), { recursive: true })
+          fs.writeFileSync(process.env.MANIFEST_PATH, `${JSON.stringify(manifest, null, 2)}\n`)
+          NODE
+          }
+
+          restore_baseline() {
+            if [[ -z "$BASELINE_VERSION_ID" || "$SPLIT_ACTIVE" != "true" ]]; then
+              return 0
+            fi
+            echo "Restoring staging baseline $BASELINE_VERSION_ID to 100%"
+            if npx wrangler versions deploy --env staging --name "$WORKER_NAME" "$BASELINE_VERSION_ID@100" --message "Restore baseline after issue #554 candidate failure" --yes; then
+              RESTORED_BASELINE="true"
+              SPLIT_ACTIVE="false"
+              export RESTORED_BASELINE SPLIT_ACTIVE
+            else
+              echo "Baseline restoration failed; operator intervention is required" >&2
+            fi
+          }
+
+          detect_candidate_deployment() {
+            if [[ -z "$BASELINE_VERSION_ID" || -z "$CANDIDATE_VERSION_ID" || "$SPLIT_ACTIVE" == "true" ]]; then
+              return 0
+            fi
+            local exit_status="$work_dir/exit-deployment-status.json"
+            if npx wrangler deployments status --env staging --name "$WORKER_NAME" --json > "$exit_status"; then
+              if node -e '
+                const fs=require("node:fs")
+                const root=JSON.parse(fs.readFileSync(process.argv[1],"utf8"))
+                const deployment=root.latest_deployment??root
+                const versions=Array.isArray(deployment.versions)?deployment.versions:[]
+                const expected=process.argv[2]
+                const active=versions.some(v=>(v.version_id??v.versionId??v.id)===expected)
+                process.exit(active?0:1)
+              ' "$exit_status" "$CANDIDATE_VERSION_ID"; then
+                SPLIT_ACTIVE="true"
+                export SPLIT_ACTIVE
+              fi
+            fi
+          }
+
+          on_exit() {
+            local exit_status="$?"
+            if [[ "$exit_status" != "0" ]]; then
+              CANDIDATE_STATUS="failed"
+              export CANDIDATE_STATUS
+              detect_candidate_deployment || true
+              restore_baseline || true
+            fi
+            if ! write_manifest "$exit_status"; then
+              echo "Candidate manifest generation failed" >&2
+              exit_status=1
+            fi
+            exit "$exit_status"
+          }
+          trap on_exit EXIT
+
+          test -n "$BASELINE_SOURCE_SHA"
+          [[ "$BASELINE_SOURCE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]
+          [[ "$GITHUB_SHA" =~ ^[0-9a-fA-F]{40}$ ]]
+
+          echo "Hashing the exact downloaded production build artifact"
+          build_file_count="$(find .output -type f | wc -l | tr -d ' ')"
+          build_tree_sha256="$(find .output -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}')"
+          server_entry_sha256="$(sha256sum .output/server/index.mjs | awk '{print $1}')"
+          BUILD_FILE_COUNT="$build_file_count" BUILD_TREE_SHA256="$build_tree_sha256" SERVER_ENTRY_SHA256="$server_entry_sha256" \
+            node -e 'const fs=require("node:fs"); fs.writeFileSync(process.env.BUILD_IDENTITY_PATH, JSON.stringify({artifact:".output", fileCount:Number(process.env.BUILD_FILE_COUNT), treeSha256:process.env.BUILD_TREE_SHA256, serverEntrySha256:process.env.SERVER_ENTRY_SHA256}, null, 2)+"\n")'
+
+          echo "Capturing current staging deployment before any mutation"
+          npx wrangler deployments status --env staging --name "$WORKER_NAME" --json > "$baseline_status"
+          BASELINE_VERSION_ID="$(node -e '
+            const fs=require("node:fs")
+            const root=JSON.parse(fs.readFileSync(process.argv[1],"utf8"))
+            const deployment=root.latest_deployment ?? root
+            const versions=Array.isArray(deployment.versions) ? deployment.versions : []
+            const active=versions.filter(v=>Number(v.percentage ?? v.traffic ?? 0)===100)
+            if(versions.length!==1 || active.length!==1) process.exit(2)
+            const id=active[0].version_id ?? active[0].versionId ?? active[0].id
+            if(typeof id!=="string" || !/^[0-9a-f-]{36}$/i.test(id)) process.exit(3)
+            console.log(id)
+          ' "$baseline_status")"
+          test -n "$BASELINE_VERSION_ID"
+          export BASELINE_VERSION_ID
+          npx wrangler versions view "$BASELINE_VERSION_ID" --env staging --json > "$baseline_version_log"
+          BASELINE_SOURCE_TAG="$(node -e '
+            const fs=require("node:fs")
+            const id=process.argv[2]
+            const root=JSON.parse(fs.readFileSync(process.argv[1],"utf8"))
+            const queue=[root]
+            while(queue.length){const v=queue.shift(); if(!v||typeof v!=="object")continue; if(Array.isArray(v)){queue.push(...v);continue}; if(v.id===id||v.version_id===id||v.versionId===id){const tag=v.tag??v.worker_tag??v.version_tag??v.metadata?.tag??v.annotations?.tag??v.annotations?.["workers/tag"]; if(typeof tag==="string"){console.log(tag);break}} queue.push(...Object.values(v))}
+          ' "$baseline_version_log" "$BASELINE_VERSION_ID")"
+          export BASELINE_SOURCE_TAG
+          if [[ -n "$BASELINE_SOURCE_TAG" && "$BASELINE_SOURCE_TAG" != "$BASELINE_SOURCE_SHA" ]]; then
+            echo "Staging baseline has a nonempty tag that does not match BASELINE_SOURCE_SHA" >&2
+            exit 1
+          elif [[ "$BASELINE_SOURCE_TAG" == "$BASELINE_SOURCE_SHA" ]]; then
+            BASELINE_ATTESTATION_TYPE="version-tag"
+            BASELINE_ATTESTATION_RUN_ID=""
+          else
+            test -n "$BASELINE_RUN_ID"
+            [[ "$BASELINE_RUN_ID" =~ ^[0-9]+$ ]]
+            gh run view "$BASELINE_RUN_ID" --json conclusion,event,headSha,workflowName > "$work_dir/baseline-attestation-run.json"
+            jq -e --arg sha "$BASELINE_SOURCE_SHA" '.conclusion == "success" and .event == "push" and .headSha == $sha and .workflowName == "CI (Required PR Lane)"' "$work_dir/baseline-attestation-run.json" >/dev/null
+            gh run view "$BASELINE_RUN_ID" --log > "$baseline_attestation_log"
+            grep -F "Current Version ID: $BASELINE_VERSION_ID" "$baseline_attestation_log" >/dev/null
+            BASELINE_ATTESTATION_TYPE="actions-run"
+            BASELINE_ATTESTATION_RUN_ID="$BASELINE_RUN_ID"
+            BASELINE_ATTESTATION_RUN_SHA="$(sha256sum "$baseline_attestation_log" | awk '{print $1}')"
+            BASELINE_ATTESTATION_JSON_SHA="$(sha256sum "$work_dir/baseline-attestation-run.json" | awk '{print $1}')"
+            BASELINE_ATTESTATION_RUN_HEAD_SHA="$BASELINE_SOURCE_SHA"
+            export BASELINE_ATTESTATION_RUN_SHA BASELINE_ATTESTATION_JSON_SHA BASELINE_ATTESTATION_RUN_HEAD_SHA
+          fi
+          BASELINE_ATTESTATION_RUN_ID="${BASELINE_ATTESTATION_RUN_ID:-}"
+          BASELINE_ATTESTATION_RUN_SHA="${BASELINE_ATTESTATION_RUN_SHA:-}"
+          BASELINE_ATTESTATION_JSON_SHA="${BASELINE_ATTESTATION_JSON_SHA:-}"
+          BASELINE_ATTESTATION_RUN_HEAD_SHA="${BASELINE_ATTESTATION_RUN_HEAD_SHA:-$BASELINE_SOURCE_SHA}"
+          export BASELINE_ATTESTATION_TYPE BASELINE_ATTESTATION_RUN_ID BASELINE_ATTESTATION_RUN_SHA BASELINE_ATTESTATION_JSON_SHA BASELINE_ATTESTATION_RUN_HEAD_SHA
+          node -e 'const fs=require("node:fs");fs.writeFileSync(process.env.BASELINE_ATTESTATION_PATH, JSON.stringify({type:process.env.BASELINE_ATTESTATION_TYPE, sourceSha:process.env.BASELINE_SOURCE_SHA, versionId:process.env.BASELINE_VERSION_ID, runId:process.env.BASELINE_ATTESTATION_RUN_ID||null, runHeadSha:process.env.BASELINE_ATTESTATION_RUN_HEAD_SHA||null, runLogSha256:process.env.BASELINE_ATTESTATION_RUN_SHA||null, runJsonSha256:process.env.BASELINE_ATTESTATION_JSON_SHA||null}, null, 2)+"\n")'
+
+          echo "Capturing migration state before reset"
+          npx wrangler d1 execute DB --env staging --remote --command 'SELECT id, name, applied_at FROM d1_migrations ORDER BY id' --json > "$migration_before_applied"
+          npx wrangler d1 migrations list DB --env staging --remote | tee "$migration_before"
+          node -e 'const fs=require("node:fs"),crypto=require("node:crypto"),path=require("node:path");const root="migrations";const files=fs.readdirSync(root).filter(f=>f.endsWith(".sql")).sort().map(name=>{const p=path.join(root,name);return {name,sha256:crypto.createHash("sha256").update(fs.readFileSync(p)).digest("hex")}});fs.writeFileSync(process.env.MIGRATION_FILES_PATH, JSON.stringify({root,files},null,2)+"\n")'
+
+          echo "Applying migrations and resetting curated staging fixtures"
           yarn migrate:staging
           node --experimental-strip-types scripts/generate-demo-bundle.ts
           node --experimental-strip-types scripts/reset-e2e-artifacts.ts --staging
@@ -97,85 +378,133 @@ jobs:
           node --experimental-strip-types scripts/generate-pottery-house-seed.ts --staging
           node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --staging
           yarn seed:docs:staging
+          npx wrangler d1 execute DB --env staging --remote --command 'SELECT id, name, applied_at FROM d1_migrations ORDER BY id' --json > "$migration_after_applied"
+          npx wrangler d1 migrations list DB --env staging --remote | tee "$migration_after"
+          if grep -Eiq '(pending|unapplied|not applied|to be applied)' "$migration_after" && grep -Eiq '[0-9]{4}_[A-Za-z0-9_-]+\.sql' "$migration_after"; then
+            echo "Pending staging migrations remain after apply" >&2
+            exit 1
+          fi
 
-  e2e-full:
-    name: Full E2E regression
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    needs: [prepare-staging, performance-benchmark]
-    concurrency:
-      group: shared-staging-deployment
-      cancel-in-progress: false
-    env:
-      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
-      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET_STAGING }}
-      NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
-      BETTER_AUTH_SECRET: test-secret-for-ci
-      BETTER_AUTH_URL: https://staging.krabiclaw.com
-      E2E_ALLOW_DEV_ROUTES: "true"
-      E2E_DEV_ROUTE_SECRET: ${{ secrets.E2E_DEV_ROUTE_SECRET_STAGING }}
-      PLAYWRIGHT_PREVIEW_URL: https://staging.krabiclaw.com
-      PLAYWRIGHT_WORKERS: "1"
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          ref: staging
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: "22"
-          cache: yarn
-      - run: yarn install --frozen-lockfile
-      - run: npx playwright install --with-deps chromium
-      - name: Run full E2E regression
-        run: yarn test:e2e:full
-      - name: Upload Playwright diagnostics
+          echo "Checking pre-provisioned test-only staging secrets without publishing a Worker version"
+          npx wrangler secret list --env staging --json > "$staging_secrets"
+          for secret_name in STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET EMAIL_REPLY_SECRET EMAIL_INBOUND_SECRET PREVIEW_SECRET E2E_DEV_ROUTE_SECRET; do
+            jq -e --arg name "$secret_name" '.. | objects | select((.name? // .key?) == $name)' "$staging_secrets" >/dev/null
+          done
+
+          echo "Uploading exactly one candidate Worker Version tagged with the full source SHA"
+          npx wrangler versions list --env staging --json > "$versions_before"
+          npx wrangler versions upload --env staging --tag "$GITHUB_SHA" --message "Issue #554 staging candidate $GITHUB_SHA" 2>&1 | tee "$upload_log"
+          npx wrangler versions list --env staging --json > "$versions_after"
+          CANDIDATE_VERSION_ID="$(node -e '
+            const fs=require("node:fs")
+            const before=JSON.parse(fs.readFileSync(process.argv[1],"utf8"))
+            const after=JSON.parse(fs.readFileSync(process.argv[2],"utf8"))
+            const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+            if(!Array.isArray(before)||!Array.isArray(after))process.exit(3)
+            const idsOf=(versions)=>versions.map(v=>v?.id).filter(id=>typeof id==="string"&&uuid.test(id))
+            const beforeIds=new Set(idsOf(before))
+            const ids=[...new Set(idsOf(after).filter(id=>!beforeIds.has(id)))]
+            if(ids.length!==1) process.exit(2)
+            console.log(ids[0])
+          ' "$versions_before" "$versions_after")"
+          test -n "$CANDIDATE_VERSION_ID"
+          npx wrangler versions view "$CANDIDATE_VERSION_ID" --env staging --json > "$candidate_version_log"
+          CANDIDATE_SOURCE_TAG="$(node -e '
+            const fs=require("node:fs")
+            const root=JSON.parse(fs.readFileSync(process.argv[1],"utf8"))
+            const id=process.argv[2]
+            const queue=[root]
+            while(queue.length){const v=queue.shift();if(!v||typeof v!=="object")continue;if(Array.isArray(v)){queue.push(...v);continue};if(v.id===id||v.version_id===id||v.versionId===id){const tag=v.tag??v.worker_tag??v.version_tag??v.metadata?.tag??v.annotations?.tag??v.annotations?.["workers/tag"];if(typeof tag==="string"){console.log(tag);break}}queue.push(...Object.values(v))}
+          ' "$candidate_version_log" "$CANDIDATE_VERSION_ID")"
+          test "$CANDIDATE_SOURCE_TAG" = "$GITHUB_SHA"
+          export CANDIDATE_VERSION_ID CANDIDATE_SOURCE_TAG
+
+          echo "Keeping baseline at 100% while the candidate is tested at 0%"
+          npx wrangler versions deploy --env staging --name "$WORKER_NAME" "$BASELINE_VERSION_ID@100" "$CANDIDATE_VERSION_ID@0" --message "Issue #554 baseline/candidate validation" --yes
+          SPLIT_ACTIVE="true"
+          export SPLIT_ACTIVE
+          npx wrangler deployments status --env staging --name "$WORKER_NAME" --json > "$split_status"
+          node -e '
+            const fs=require("node:fs");const root=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const deployment=root.latest_deployment??root;const versions=Array.isArray(deployment.versions)?deployment.versions:[];const percentage=id=>{const row=versions.find(v=>(v.version_id??v.versionId??v.id)===id);return row?Number(row.percentage??row.traffic??NaN):NaN};if(versions.length!==2||percentage(process.argv[2])!==100||percentage(process.argv[3])!==0)process.exit(2)
+          ' "$split_status" "$BASELINE_VERSION_ID" "$CANDIDATE_VERSION_ID"
+
+          node scripts/verify-deployed-candidate.mjs \
+            --base-url "$STAGING_BASE_URL" \
+            --expected-sha "$GITHUB_SHA" \
+            --expected-version-id "$CANDIDATE_VERSION_ID" \
+            --worker-name "$WORKER_NAME" \
+            --version-override "$CANDIDATE_VERSION_ID" \
+            --output "$candidate_verification"
+
+          echo "Running the genuine 25-sample baseline/head comparison"
+          node scripts/benchmark-performance-recovery.mjs \
+            --base-url "$STAGING_BASE_URL" \
+            --samples 25 \
+            --run-label baseline \
+            --source-sha "$BASELINE_SOURCE_SHA" \
+            --worker-version-id "$BASELINE_VERSION_ID" \
+            --worker-version-override "$BASELINE_VERSION_ID" \
+            --cache-state warm-after-1 \
+            --output-dir "$perf_dir"
+          node scripts/benchmark-performance-recovery.mjs \
+            --base-url "$STAGING_BASE_URL" \
+            --samples 25 \
+            --run-label candidate \
+            --source-sha "$GITHUB_SHA" \
+            --worker-version-id "$CANDIDATE_VERSION_ID" \
+            --worker-version-override "$CANDIDATE_VERSION_ID" \
+            --cache-state warm-after-1 \
+            --output-dir "$perf_dir"
+          node scripts/compare-performance-recovery.mjs \
+            --baseline "$perf_dir/performance-recovery-baseline.json" \
+            --head "$perf_dir/performance-recovery-candidate.json" \
+            --output-dir "$perf_dir"
+
+          echo "Opening the complete browser matrix against the 0% candidate override"
+          export WORKER_VERSION_OVERRIDE="$CANDIDATE_VERSION_ID"
+          npx playwright test --list > "$browser_projects"
+          grep -F 'public-surfaces-desktop' "$browser_projects" >/dev/null
+          grep -F 'public-surfaces-mobile' "$browser_projects" >/dev/null
+          yarn test:e2e:full
+          cp -R playwright-report "$work_dir/candidate-playwright-report"
+
+          echo "Promoting candidate to 100% only after every gate passes"
+          npx wrangler versions deploy --env staging --name "$WORKER_NAME" "$CANDIDATE_VERSION_ID@100" --message "Promote verified issue #554 candidate" --yes
+          PROMOTED="true"
+          export PROMOTED
+          npx wrangler deployments status --env staging --name "$WORKER_NAME" --json > "$deployed_status"
+          node -e '
+            const fs=require("node:fs");const root=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const deployment=root.latest_deployment??root;const versions=Array.isArray(deployment.versions)?deployment.versions:[];const row=versions.find(v=>(v.version_id??v.versionId??v.id)===process.argv[2]);if(versions.length!==1||!row||Number(row.percentage??row.traffic??NaN)!==100)process.exit(2)
+          ' "$deployed_status" "$CANDIDATE_VERSION_ID"
+
+          echo "Purging staging HTML cache and verifying the promoted custom domain"
+          DEPLOYMENT_CACHE_ORIGIN="$STAGING_BASE_URL" node --experimental-strip-types scripts/purge-deployment-cache.ts
+          unset WORKER_VERSION_OVERRIDE
+
+          node scripts/verify-deployed-candidate.mjs \
+            --base-url "$STAGING_BASE_URL" \
+            --expected-sha "$GITHUB_SHA" \
+            --expected-version-id "$CANDIDATE_VERSION_ID" \
+            --worker-name "$WORKER_NAME" \
+            --output "$deployed_verification"
+          npx playwright test tests/e2e/public-surfaces-release.spec.ts \
+            --project=public-surfaces-desktop \
+            --project=public-surfaces-mobile \
+            --workers=1
+          cp -R playwright-report "$work_dir/deployed-playwright-report"
+          npx playwright test --list > "$deployed_browser_projects"
+          WORK_DIR="$work_dir" node -e 'const fs=require("node:fs"),path=require("node:path");const projects=fs.readFileSync(process.env.BROWSER_PROJECTS_PATH,"utf8");const deployedProjects=fs.readFileSync(process.env.DEPLOYED_BROWSER_PROJECTS_PATH,"utf8");for(const report of ["candidate-playwright-report/index.html","deployed-playwright-report/index.html"]){if(!fs.existsSync(path.join(process.env.WORK_DIR,report)))process.exit(2)}fs.writeFileSync(process.env.BROWSER_EVIDENCE_PATH,JSON.stringify({status:"passed",baseUrl:process.env.STAGING_BASE_URL,workerName:process.env.WORKER_NAME,versionOverride:null,desktop:deployedProjects.includes("public-surfaces-desktop"),mobile:deployedProjects.includes("public-surfaces-mobile"),saya:{desktop:deployedProjects.includes("public-surfaces-desktop"),mobile:deployedProjects.includes("public-surfaces-mobile")},blawby:{desktop:deployedProjects.includes("public-surfaces-desktop"),mobile:deployedProjects.includes("public-surfaces-mobile")},candidateOverrideFullSuite:{status:"passed",report:"candidate-playwright-report/index.html"},deployed:{status:"passed",projects:["public-surfaces-desktop","public-surfaces-mobile"],report:"deployed-playwright-report/index.html"},projects:["public-surfaces-desktop","public-surfaces-mobile"]},null,2))'
+          CANDIDATE_STATUS="verified"
+          SPLIT_ACTIVE="false"
+          export CANDIDATE_STATUS SPLIT_ACTIVE
+
+      - name: Upload candidate evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: playwright-report-full
+          name: candidate-manifest-${{ github.sha }}
           path: |
-            playwright-report/
-            test-results/
-          retention-days: 14
-
-  performance-benchmark:
-    name: Performance benchmark
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    needs: [prepare-staging]
-    concurrency:
-      group: shared-staging-deployment
-      cancel-in-progress: false
-    env:
-      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
-      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET_STAGING }}
-      NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
-      BETTER_AUTH_SECRET: test-secret-for-ci
-      BETTER_AUTH_URL: https://staging.krabiclaw.com
-      E2E_ALLOW_DEV_ROUTES: "true"
-      E2E_DEV_ROUTE_SECRET: ${{ secrets.E2E_DEV_ROUTE_SECRET_STAGING }}
-      PLAYWRIGHT_PREVIEW_URL: https://staging.krabiclaw.com
-      PLAYWRIGHT_WORKERS: "1"
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          ref: staging
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: "22"
-          cache: yarn
-      - run: yarn install --frozen-lockfile
-      - run: npx playwright install --with-deps chromium
-      - name: Run performance benchmarks
-        run: node scripts/benchmark-performance-recovery.mjs --base-url https://staging.krabiclaw.com --samples 5
-      - name: Upload benchmark results
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: benchmark-results
-          path: test-results/performance-recovery/
-          retention-days: 30
-          if-no-files-found: error
+            ${{ runner.temp }}/issue-554-candidate/candidate-manifest.json
+            ${{ runner.temp }}/issue-554-candidate/**
+          retention-days: 90
+          if-no-files-found: warn

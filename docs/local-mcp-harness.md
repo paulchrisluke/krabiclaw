@@ -355,8 +355,9 @@ or stripping schema metadata from ChatGPT's view.
 ## Known gap: CIMD self-fetch on deployed Cloudflare Workers
 
 `tests/e2e/oauth-discovery.spec.ts`'s "repeat authorize skips consent after
-remembered approval for the same CIMD client" test is skipped in `e2e-smoke`/
-`e2e-staging` (see `isDeployedWorkerTarget` in `tests/e2e/test-env.ts`). The
+remembered approval for the same CIMD client" test is skipped against deployed
+preview and full staging candidates (see `isDeployedWorkerTarget` in
+`tests/e2e/test-env.ts`). The
 CIMD client_id document it exercises (`server/api/auth/oauth2/test-client-metadata.get.ts`)
 is served by this same app/origin, so `@better-auth/cimd`'s server-side fetch
 of it is a same-zone Worker self-fetch. That self-fetch fails deterministically
@@ -370,8 +371,8 @@ a real public quick tunnel (per "Startup" above) — the named tunnel doesn't
 reach the local machine at all yet (see "Tunnel contract"), so it isn't a
 verified path for this either. The self-fetch failure is specific to a
 deployed Worker fetching its own zone/route, not app
-logic. Verify this flow locally via the tunnel harness; do not rely on
-`e2e-smoke`/`e2e-staging` for it until the CIMD test fixture is hosted off-zone
+logic. Verify this flow locally via the tunnel harness; do not rely on the
+deployed preview or full staging candidate for it until the CIMD test fixture is hosted off-zone
 or the platform restriction is otherwise worked around.
 
 ## Human + agent handoff

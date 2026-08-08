@@ -170,9 +170,10 @@ future delivery surfaces and are not required for this in-app center.
 ## Discord production rollout
 
 1. Rotate any webhook URL that has appeared in chat, logs, or another non-secret surface.
-2. Save the rotated URL as the GitHub Actions secret `DISCORD_WEBHOOK_URL`.
-3. The production deploy job syncs that value into the Cloudflare Worker secret with
-   narrowly scoped Cloudflare credentials. Preview and staging stay `log_only` and do
-   not need the secret.
+2. Provision the rotated URL directly as the Cloudflare Worker secret through
+   the approved secret-management procedure. Release workflows only verify
+   required secret names; they never run `secret put`, because that would
+   create an untracked Worker Version outside the candidate chain.
+3. Preview and staging stay `log_only` and do not need the production secret.
 4. Confirm a new signup creates a `platform.user_signup` record and a successful
    `notification_deliveries` row before relying on Discord operationally.

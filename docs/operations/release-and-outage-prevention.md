@@ -23,6 +23,14 @@ error, wrong tenant identity, wrong URL, or incomplete inspection is
 **unverified** and blocks the release. Never report browser validation as passed
 when it was only inferred from CI or a local script.
 
+The concrete immutable-candidate implementation is defined in
+[release-candidate-contract.md](release-candidate-contract.md). Shared staging
+may be changed only by its locked full-candidate workflow, and production may
+be changed only by the manifest-gated workflow's separate deploy dispatch
+after its read-only preflight report has been reviewed; the production job also
+uses the protected environment. Direct convenience deploy commands are not
+release approval.
+
 ## Start every new task or conversation with a state snapshot
 
 Before reasoning from an earlier conversation, fetch and record:

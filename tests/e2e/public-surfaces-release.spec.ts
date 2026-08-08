@@ -74,7 +74,14 @@ function isKrabiClawHost(hostname: string): boolean {
 for (const surface of surfaces) {
   test.describe(`${surface.name} release surfaces`, () => {
     for (const route of surface.routes) {
-      test(`${route.path} renders the ${surface.name} candidate without first-party failures`, async ({ page }) => {
+      test(`${route.path} renders the ${surface.name} candidate without first-party failures`, async ({ page }, testInfo) => {
+        const viewport = page.viewportSize()
+        if (!viewport) throw new Error(`${testInfo.project.name} must use a real configured viewport`)
+        if (testInfo.project.name === 'public-surfaces-mobile') {
+          expect(viewport.width).toBeLessThanOrEqual(500)
+        } else {
+          expect(viewport.width).toBeGreaterThanOrEqual(1000)
+        }
         await setupTenantHeaders(page, surface.baseURL, surface.headers)
         const errors = collectPageErrors(page)
         const requestFailures: string[] = []

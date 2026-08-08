@@ -1,28 +1,29 @@
 #!/usr/bin/env node
 /**
- * Deploy-with-verify wrapper. Fails loudly if post-deploy smoke test fails.
+ * Client data-apply and post-release verification wrapper.
  *
  * Internal flow:
  *   1. Apply seed to remote D1  (--apply --remote)
- *   2. Deploy app               (yarn build && wrangler deploy)
- *   3. Verify against live URL  (client:verify)
- *   4. Exit non-zero if verify fails — Cloudflare still serves the new
- *      Worker, so failures here require a manual rollback or fix+redeploy.
+ *   2. Verify against live URL  (client:verify)
+ *
+ * Worker releases are intentionally excluded. They must use the immutable
+ * staging-candidate and protected production workflows.
  *
  * Usage:
  *   yarn client:deploy \
  *     --slug pottery-house-krabi \
  *     --vertical experience \
- *     --site-id site-pottery-house-krabi
+ *     --site-id site-pottery-house-krabi \
+ *     --skip-deploy
  *
  * Flags:
  *   --skip-seed    Skip the D1 apply step (seed was already applied separately)
- *   --skip-deploy  Skip the yarn deploy step (useful when testing verify against existing deploy)
+ *   --skip-deploy  Required compatibility flag acknowledging that Worker release happens separately
  *   --allow-stock  Passed through to client:import --apply when seeding
  */
 
 import { parseArgs } from 'node:util'
-import { spawnSync, execSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 
 const { values: args } = parseArgs({
   options: {
@@ -39,7 +40,13 @@ const { values: args } = parseArgs({
 
 if (!args.slug) {
   console.error('Error: --slug is required')
-  console.error('Usage: yarn client:deploy --slug <slug> --vertical <vertical> [--site-id <id>]')
+  console.error('Usage: yarn client:deploy --slug <slug> --vertical <vertical> [--site-id <id>] --skip-deploy')
+  process.exit(1)
+}
+
+if (!args['skip-deploy']) {
+  console.error('Direct Worker deployment from client:deploy is disabled; no client data was changed.')
+  console.error('Run the immutable staging and protected production release workflows, then rerun with --skip-deploy for data apply and verification.')
   process.exit(1)
 }
 
@@ -56,16 +63,6 @@ function run(label, nodeArgs) {
   if (result.status !== 0) {
     console.error(`\n✗ ${label} failed — aborting deploy.`)
     process.exit(result.status ?? 1)
-  }
-}
-
-function runShell(label, cmd) {
-  console.log(`\n  $ ${cmd}`)
-  try {
-    execSync(cmd, { stdio: 'inherit', cwd: process.cwd() })
-  } catch {
-    console.error(`\n✗ ${label} failed — aborting deploy.`)
-    process.exit(1)
   }
 }
 
@@ -86,14 +83,9 @@ if (!args['skip-seed']) {
   console.log('\n  Step 1: skipped (--skip-seed)')
 }
 
-// ── Step 2: Deploy app ────────────────────────────────────────────────────────
+// ── Step 2: Worker release boundary ───────────────────────────────────────────
 
-if (!args['skip-deploy']) {
-  console.log(`\n${hr()}\n  Step 2: Build and deploy Cloudflare Worker\n${hr()}`)
-  runShell('yarn deploy', 'yarn deploy')
-} else {
-  console.log('\n  Step 2: skipped (--skip-deploy)')
-}
+console.log('\n  Step 2: Worker release handled by the immutable candidate workflows (--skip-deploy acknowledged)')
 
 // ── Step 3: Verify against live URL ──────────────────────────────────────────
 
@@ -113,16 +105,15 @@ const verifyResult = spawnSync('node', verifyArgs, { stdio: 'inherit', cwd: proc
 
 console.log(`\n${hr('═')}`)
 if (verifyResult.status === 0) {
-  console.log(`  ✓ Deploy + verify passed — ${SLUG} is live`)
+  console.log(`  ✓ Client apply + deployed verification passed — ${SLUG} is live`)
   console.log(`  ${LIVE_URL}`)
   console.log(hr('═'))
   process.exit(0)
 } else {
   console.error(`  ✗ Post-deploy verify FAILED`)
-  console.error(`\n  The Worker is already deployed. Fix the issues reported above, then:`)
+  console.error(`\n  Fix the issues reported above, then verify the already released Worker again:`)
   console.error(`    yarn client:deploy --slug ${SLUG} --vertical ${VERTICAL} --site-id ${SITE_ID} --skip-seed --skip-deploy`)
-  console.error(`  Or redeploy with fixes:`)
-  console.error(`    yarn client:deploy --slug ${SLUG} --vertical ${VERTICAL} --site-id ${SITE_ID} --skip-seed`)
+  console.error('  Worker fixes must go through the immutable staging candidate and protected production release workflows.')
   console.log(hr('═'))
   process.exit(verifyResult.status ?? 1)
 }
