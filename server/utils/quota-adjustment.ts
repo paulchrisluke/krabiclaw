@@ -1,7 +1,13 @@
 import { executeBatch, queryFirst, type DbClient } from '~/server/db'
+import {
+  createOperatorApprovalToken,
+  OperatorApprovalError,
+  sha256CanonicalJson,
+  verifyOperatorApprovalToken,
+} from '~/server/utils/operator-approval'
 
 const APPROVAL_WINDOW_MS = 10 * 60 * 1000
-const APPROVAL_VERSION = 1
+const APPROVAL_PURPOSE = 'quota_adjustment' as const
 const ADJUSTMENT_RESOURCE = 'ai_inference' as const
 const ADJUSTMENT_UNIT = 'credit' as const
 
@@ -109,13 +115,9 @@ interface QuotaAdjustmentSnapshot {
   existingGrant: ExistingGrantRow | null
 }
 
-interface ApprovalClaims {
-  version: number
-  actor: string
+type ApprovalRequest = {
   input: QuotaAdjustmentInput
   period: QuotaAdjustmentPeriod
-  expectedStateSha256: string
-  expiresAt: string
 }
 
 function fail(code: string, statusCode: number, message: string): never {
@@ -213,89 +215,21 @@ function balancePeriodKey(period: QuotaAdjustmentPeriod): string {
   return period.key.slice('week:'.length)
 }
 
-function canonicalJson(value: unknown): string {
-  return JSON.stringify(value)
-}
-
-async function sha256Hex(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
-  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
-}
-
-function bytesToBase64Url(bytes: Uint8Array): string {
-  let binary = ''
-  for (const byte of bytes) binary += String.fromCharCode(byte)
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/u, '')
-}
-
-function base64UrlToBytes(value: string): Uint8Array {
-  if (!/^[A-Za-z0-9_-]+$/.test(value)) fail('approval_token_invalid', 409, 'Approval token is invalid.')
-  const padded = value.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - value.length % 4) % 4)
-  let binary: string
-  try {
-    binary = atob(padded)
-  } catch {
-    fail('approval_token_invalid', 409, 'Approval token is invalid.')
+function mapOperatorApprovalError(error: unknown): never {
+  if (error instanceof OperatorApprovalError) {
+    fail(
+      error.code,
+      error.statusCode,
+      error.code === 'configuration_error'
+        ? 'BETTER_AUTH_SECRET is required for quota approvals.'
+        : error.message,
+    )
   }
-  return Uint8Array.from(binary, character => character.charCodeAt(0))
+  throw error
 }
 
-async function importApprovalKey(secret: string, usage: KeyUsage[]): Promise<CryptoKey> {
-  if (!secret) fail('configuration_error', 500, 'BETTER_AUTH_SECRET is required for quota approvals.')
-  return await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    usage,
-  )
-}
-
-async function createApprovalToken(secret: string, claims: ApprovalClaims): Promise<string> {
-  const payload = bytesToBase64Url(new TextEncoder().encode(canonicalJson(claims)))
-  const key = await importApprovalKey(secret, ['sign'])
-  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload))
-  return `${payload}.${bytesToBase64Url(new Uint8Array(signature))}`
-}
-
-async function verifyApprovalToken(secret: string, token: string): Promise<ApprovalClaims> {
-  const parts = token.split('.')
-  if (parts.length !== 2 || !parts[0] || !parts[1]) fail('approval_token_invalid', 409, 'Approval token is invalid.')
-  const payloadBytes = base64UrlToBytes(parts[0])
-  const signatureBytes = base64UrlToBytes(parts[1])
-  let claims: unknown
-  try {
-    claims = JSON.parse(new TextDecoder().decode(payloadBytes))
-  } catch {
-    fail('approval_token_invalid', 409, 'Approval token is invalid.')
-  }
-  const key = await importApprovalKey(secret, ['verify'])
-  const valid = await crypto.subtle.verify('HMAC', key, signatureBytes as unknown as BufferSource, new TextEncoder().encode(parts[0]))
-  if (!valid || !isRecord(claims)) fail('approval_token_invalid', 409, 'Approval token is invalid.')
-  return claims as unknown as ApprovalClaims
-}
-
-function assertClaimsMatch(
-  claims: ApprovalClaims,
-  actor: string,
-  input: QuotaAdjustmentInput,
-  period: QuotaAdjustmentPeriod,
-  expectedStateSha256: string,
-  now: Date,
-): void {
-  if (claims.version !== APPROVAL_VERSION) fail('approval_token_invalid', 409, 'Approval token version is invalid.')
-  const expiresAt = Date.parse(claims.expiresAt)
-  if (!Number.isFinite(expiresAt) || expiresAt <= now.getTime()) fail('approval_expired', 409, 'Approval token has expired.')
-  if (
-    claims.actor !== actor
-    || canonicalJson(claims.input) !== canonicalJson(input)
-    || canonicalJson(claims.period) !== canonicalJson(period)
-  ) {
-    fail('approval_token_mismatch', 409, 'Approval token does not match this operator request.')
-  }
-  if (claims.expectedStateSha256 !== expectedStateSha256) {
-    fail('approval_state_mismatch', 409, 'Approval state digest does not match the reviewed plan.')
-  }
+function approvalRequest(input: QuotaAdjustmentInput, period: QuotaAdjustmentPeriod): ApprovalRequest {
+  return { input, period }
 }
 
 async function readSnapshot(db: DbClient, input: QuotaAdjustmentInput, period: QuotaAdjustmentPeriod): Promise<QuotaAdjustmentSnapshot> {
@@ -510,15 +444,19 @@ export async function previewQuotaAdjustment(
   if (snapshot.existingGrant && !exactExistingGrant(snapshot.existingGrant, input, actor, period)) {
     fail('idempotency_conflict', 409, 'Idempotency key is already used by a different quota adjustment.')
   }
-  const expectedStateSha256 = await sha256Hex(canonicalJson(snapshot.state))
+  const expectedStateSha256 = await sha256CanonicalJson(snapshot.state)
   const expiresAt = new Date(now.getTime() + APPROVAL_WINDOW_MS).toISOString()
-  const claims: ApprovalClaims = {
-    version: APPROVAL_VERSION,
-    actor,
-    input,
-    period,
-    expectedStateSha256,
-    expiresAt,
+  let approvalToken: string
+  try {
+    approvalToken = await createOperatorApprovalToken(secret, {
+      purpose: APPROVAL_PURPOSE,
+      actor,
+      request: approvalRequest(input, period),
+      expectedStateSha256,
+      expiresAt,
+    })
+  } catch (error) {
+    mapOperatorApprovalError(error)
   }
   return {
     actor,
@@ -527,7 +465,7 @@ export async function previewQuotaAdjustment(
     state: snapshot.state,
     expectedStateSha256,
     expiresAt,
-    approvalToken: await createApprovalToken(secret, claims),
+    approvalToken,
   }
 }
 
@@ -541,8 +479,17 @@ export async function applyQuotaAdjustment(
   now = new Date(),
 ): Promise<QuotaAdjustmentResult> {
   const period = currentPeriod(now)
-  const claims = await verifyApprovalToken(secret, approvalToken)
-  assertClaimsMatch(claims, actor, input, period, expectedStateSha256, now)
+  try {
+    await verifyOperatorApprovalToken<ApprovalRequest>(secret, approvalToken, {
+      purpose: APPROVAL_PURPOSE,
+      actor,
+      request: approvalRequest(input, period),
+      expectedStateSha256,
+      now,
+    })
+  } catch (error) {
+    mapOperatorApprovalError(error)
+  }
   const snapshot = await readSnapshot(db, input, period)
   const id = grantId(input)
 
@@ -560,7 +507,7 @@ export async function applyQuotaAdjustment(
     fail('idempotency_conflict', 409, 'Idempotency key is already used by a different quota adjustment.')
   }
 
-  const actualStateSha256 = await sha256Hex(canonicalJson(snapshot.state))
+  const actualStateSha256 = await sha256CanonicalJson(snapshot.state)
   if (actualStateSha256 !== expectedStateSha256) {
     fail('stale_state', 409, 'Reviewed quota state is stale; create a new preview.')
   }
@@ -634,7 +581,7 @@ export async function applyQuotaAdjustment(
       }
     }
     if (after.existingGrant) fail('idempotency_conflict', 409, 'Idempotency key is already used by a different quota adjustment.')
-    const afterHash = await sha256Hex(canonicalJson(after.state))
+    const afterHash = await sha256CanonicalJson(after.state)
     if (afterHash !== expectedStateSha256) fail('stale_state', 409, 'Reviewed quota state is stale; create a new preview.')
     console.error('quota_adjustment_batch_failed', {
       organizationId: input.organizationId,
