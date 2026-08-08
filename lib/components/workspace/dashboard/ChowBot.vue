@@ -207,6 +207,7 @@ import { getQuickActionPrompts } from '~/composables/useOnboardingPrompts'
 import { sanitizeHtmlForSsr } from '~/utils/markdown'
 import { loadDomPurify } from '~/utils/dom-purify-loader'
 import type { SiteVertical } from '~/utils/vertical-copy'
+import { isSiteCreationResponse } from '~/utils/site-creation-response'
 
 const dashboardApi = useDashboardApi()
 const props = defineProps<{ embedded?: boolean; setupMode?: boolean }>()
@@ -455,10 +456,7 @@ async function handleSetupMessage(text: string) {
         subdomain: requestedSubdomain,
         vertical: setupVertical.value ?? 'restaurant',
       },
-      validate: (value): value is { site: { id: string } } =>
-        isRecord(value)
-        && isRecord(value.site)
-        && typeof value.site.id === 'string',
+      validate: isSiteCreationResponse,
     })
 
     await dashboard.refresh()
