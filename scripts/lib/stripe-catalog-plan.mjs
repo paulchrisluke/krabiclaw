@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 export const CATALOG_PLAN_SCHEMA_VERSION = 2
 export const CATALOG_PLAN_KIND = 'stripe-recurring-catalog-plan'
 export const ACTIVE_PLAN_IDS = Object.freeze(['growth', 'managed', 'seo_accelerator'])
+export const STRIPE_CATALOG_REQUEST_TIMEOUT_MS = 10_000
 const SUPPORTED_OPERATION_TYPES = new Set([
   'archive_product',
   'upload_product_image',
@@ -94,7 +95,7 @@ export function keyMode(key) {
 
 export function assertTestModeKey(key) {
   if (keyMode(key) !== 'test') {
-    throw new Error('Stripe catalog apply requires a test-mode key (sk_test_ or rk_test_).')
+    throw new Error('Stripe catalog operations require a test-mode key (sk_test_ or rk_test_).')
   }
 }
 

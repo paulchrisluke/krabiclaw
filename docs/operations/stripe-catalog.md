@@ -13,6 +13,20 @@ STRIPE_SECRET_KEY=rk_test_... yarn stripe:catalog:plan \
   > .tmp/stripe-catalog-plan.json
 ```
 
+Release preflight runs the same read-only planner with an explicit test-mode
+guard. The guard is checked before the Stripe client is constructed, and all
+provider reads use zero automatic retries and a 10-second timeout:
+
+```bash
+STRIPE_SECRET_KEY=rk_test_... node scripts/seed-stripe.mjs \
+  --dry-run --require-test-mode --plan-file .tmp/stripe-catalog-plan.json
+```
+
+The full-validation candidate workflow runs this preflight before any staging
+mutation. It records only the source SHA, test account mode, provider snapshot
+hash, plan hash, fixed monthly amounts, and an operation summary in the
+candidate manifest; the raw secret is never written to the plan or evidence.
+
 Review the plan and its `providerSnapshotSha256`, `operations`, and fixed
 amounts. Apply only the reviewed file, with the exact hash copied from its
 `planSha256` field:

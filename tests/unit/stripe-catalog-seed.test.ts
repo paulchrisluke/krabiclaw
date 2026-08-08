@@ -8,7 +8,7 @@ import {
   planSha256,
   sha256Json,
 } from '../../scripts/lib/stripe-catalog-plan.mjs'
-import { parseCanonicalProductOverrides, parseCli } from '../../scripts/seed-stripe.mjs'
+import { createStripeClient, main, parseCanonicalProductOverrides, parseCli } from '../../scripts/seed-stripe.mjs'
 import { getBetterAuthStripePlans } from '../../server/utils/better-auth-stripe.ts'
 
 const scriptPath = resolve(process.cwd(), 'scripts/seed-stripe.mjs')
@@ -52,6 +52,34 @@ test('canonical product CLI overrides are repeatable, normalized, and validated 
     () => parseCli(['--apply', '--plan-file', '.tmp/plan.json', '--confirm-sha256', 'a'.repeat(64), '--canonical-product', 'growth=prod-growth']),
     /only valid when generating a catalog plan/,
   )
+})
+
+test('catalog preflight requires test mode before constructing the Stripe client', async () => {
+  assert.equal(parseCli(['--dry-run', '--require-test-mode']).requireTestMode, true)
+  let constructed = false
+  await assert.rejects(
+    () => main(['--dry-run', '--require-test-mode'], {
+      secretKey: 'sk_live_fake',
+      stripeFactory: () => {
+        constructed = true
+        throw new Error('provider construction should not be reached')
+      },
+    }),
+    /test-mode key/,
+  )
+  assert.equal(constructed, false)
+})
+
+test('Stripe catalog provider reads use zero retries and the explicit ten-second timeout', () => {
+  let captured
+  function FakeStripe(secretKey, options) {
+    captured = { secretKey, options }
+  }
+  createStripeClient('rk_test_fake', FakeStripe)
+  assert.deepEqual(captured, {
+    secretKey: 'rk_test_fake',
+    options: { maxNetworkRetries: 0, timeout: 10_000 },
+  })
 })
 
 function fakeCatalog() {

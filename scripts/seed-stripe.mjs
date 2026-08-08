@@ -7,6 +7,7 @@
 // Examples:
 //   yarn stripe:catalog:plan
 //   STRIPE_SECRET_KEY=sk_test_... node scripts/seed-stripe.mjs --dry-run --plan-file .tmp/stripe-catalog-plan.json
+//   STRIPE_SECRET_KEY=sk_test_... node scripts/seed-stripe.mjs --dry-run --require-test-mode --plan-file .tmp/stripe-catalog-plan.json
 //   STRIPE_SECRET_KEY=sk_test_... node scripts/seed-stripe.mjs --apply \
 //     --plan-file .tmp/stripe-catalog-plan.json --confirm-sha256 <sha256>
 
@@ -19,10 +20,12 @@ import {
   ACTIVE_PLAN_IDS,
   PLAN_DEFINITIONS,
   applyCatalogPlan,
+  assertTestModeKey,
   createCatalogPlan,
   imageMimeType,
   keyMode,
   sha256Bytes,
+  STRIPE_CATALOG_REQUEST_TIMEOUT_MS,
 } from './lib/stripe-catalog-plan.mjs'
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
@@ -153,6 +156,7 @@ export function parseCli(argv) {
     options: {
       'dry-run': { type: 'boolean' },
       apply: { type: 'boolean' },
+      'require-test-mode': { type: 'boolean' },
       'plan-file': { type: 'string' },
       'confirm-sha256': { type: 'string' },
       'canonical-product': { type: 'string', multiple: true },
@@ -170,10 +174,18 @@ export function parseCli(argv) {
   }
   return {
     apply,
+    requireTestMode: Boolean(values['require-test-mode']),
     planFile,
     confirmSha256: values['confirm-sha256'] ? String(values['confirm-sha256']) : null,
     canonicalProductIds,
   }
+}
+
+export function createStripeClient(secretKey, StripeConstructor = Stripe) {
+  return new StripeConstructor(secretKey, {
+    maxNetworkRetries: 0,
+    timeout: STRIPE_CATALOG_REQUEST_TIMEOUT_MS,
+  })
 }
 
 function writePlan(path, plan) {
@@ -181,19 +193,18 @@ function writePlan(path, plan) {
   writeFileSync(path, `${JSON.stringify(plan, null, 2)}\n`, 'utf8')
 }
 
-export async function main(argv = process.argv.slice(2)) {
+export async function main(argv = process.argv.slice(2), dependencies = {}) {
   const cli = parseCli(argv)
-  const secretKey = secretKeyFromEnv()
+  const secretKey = dependencies.secretKey ?? secretKeyFromEnv()
   if (!secretKey) throw new Error('STRIPE_SECRET_KEY not found in environment or .env')
 
-  // Apply key validation happens before Stripe construction. A live key can
-  // never reach an object that exposes mutating catalog methods in apply mode.
+  // Test-mode validation happens before Stripe construction. A live key can
+  // never reach a provider client when this preflight requires test mode.
   const mode = keyMode(secretKey)
-  if (cli.apply && mode !== 'test') {
-    throw new Error('Refusing Stripe catalog apply with a live or unrecognised key; use sk_test_ or rk_test_.')
-  }
+  if (cli.apply || cli.requireTestMode) assertTestModeKey(secretKey)
 
-  const stripe = new Stripe(secretKey)
+  const stripeFactory = dependencies.stripeFactory ?? createStripeClient
+  const stripe = stripeFactory(secretKey)
   if (!cli.apply) {
     const plan = await createCatalogPlan({
       readAdapter: stripeReadAdapter(stripe),
