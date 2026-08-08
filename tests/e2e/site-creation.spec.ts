@@ -43,7 +43,7 @@ test.describe('site creation contracts', () => {
     const firstRes = await request.post(`${baseURL}/api/sites`, {
       data: {
         name: `Multi Site One ${suffix}`,
-        subdomain: `multi-site-one-${suffix}`,
+        subdomain: `e2e-multi-site-one-${suffix}`,
         vertical: 'restaurant',
       },
     })
@@ -53,7 +53,7 @@ test.describe('site creation contracts', () => {
     const secondRes = await request.post(`${baseURL}/api/sites`, {
       data: {
         name: `Multi Site Two ${suffix}`,
-        subdomain: `multi-site-two-${suffix}`,
+        subdomain: `e2e-multi-site-two-${suffix}`,
         vertical: 'experience',
       },
     })
@@ -64,7 +64,7 @@ test.describe('site creation contracts', () => {
     expect(second.siteId).toEqual(expect.any(String))
     expect(second.siteId).not.toBe(first.siteId)
     expect(second.organizationId).toBe(first.organizationId)
-    expect(second.subdomain).toBe(`multi-site-two-${suffix}`)
+    expect(second.subdomain).toBe(`e2e-multi-site-two-${suffix}`)
   })
 
   test('professional_service onboarding resolves the Blawby theme through the template registry, not the Saya default', async ({ request, baseURL }) => {
