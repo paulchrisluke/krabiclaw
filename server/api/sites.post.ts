@@ -1,9 +1,16 @@
+import { appendResponseHeader, defineEventHandler, getHeaders, readBody } from 'h3'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
-import { execute } from '~/server/db'
+import { createAuth, getAuthSession } from '~/server/utils/auth'
 import { runSiteCreation, VALID_VERTICALS } from '~/server/utils/site-creation'
 import type { SiteVertical } from '~/utils/vertical-copy'
-import { defineEventHandler, readBody } from 'h3'
+
+interface SetActiveOrganizationApi {
+  setActiveOrganization(_input: {
+    body: { organizationId: string }
+    headers: HeadersInit
+    asResponse: true
+  }): Promise<Response>
+}
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ name?: string; subdomain?: string; vertical?: string }>(event)
@@ -33,7 +40,29 @@ export default defineEventHandler(async (event) => {
     vertical: vertical as SiteVertical
   })
   if (result.status === 200 && 'organizationId' in result.data) {
-    await execute(db, 'UPDATE session SET activeOrganizationId = ? WHERE id = ?', [result.data.organizationId, session.session.id])
+    const auth = createAuth(env)
+    const activeOrganizationApi = auth.api as unknown as SetActiveOrganizationApi
+    const response = await activeOrganizationApi.setActiveOrganization({
+      body: { organizationId: String(result.data.organizationId) },
+      headers: getHeaders(event) as HeadersInit,
+      asResponse: true,
+    })
+    if (!response.ok) {
+      return jsonResponse({ error: 'Failed to activate the new organization' }, { status: response.status || 502 })
+    }
+    const headerBag = response.headers as Headers & {
+      getSetCookie?: () => string[]
+      getAll?: (_name: string) => string[]
+      raw?: () => Record<string, string[]>
+    }
+    const setCookies = typeof headerBag.getSetCookie === 'function'
+      ? headerBag.getSetCookie()
+      : typeof headerBag.getAll === 'function'
+        ? headerBag.getAll('set-cookie')
+        : (headerBag.raw?.()['set-cookie'] || [])
+    for (const cookieValue of setCookies) {
+      appendResponseHeader(event, 'set-cookie', cookieValue)
+    }
   }
   return jsonResponse(result.data, { status: result.status })
 })

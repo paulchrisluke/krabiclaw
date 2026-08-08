@@ -52,6 +52,16 @@ const EXISTING_DEBT_ALLOWLIST = {
   ]),
 }
 
+// These site-creation/transfer/dev-login paths are migrated to the Better Auth
+// Organization/session adapter. Keep their SQL surface limited to app-owned
+// tables so a direct Better Auth table mutation cannot quietly return.
+const MIGRATED_ORGANIZATION_ROUTES = [
+  'server/utils/site-creation.ts',
+  'server/api/sites.post.ts',
+  'server/api/site-transfer/[token]/accept.post.ts',
+  'server/api/dev/login.get.ts',
+]
+
 const FORBIDDEN_PATTERNS = [
   {
     id: 'member_access_scope',
@@ -212,13 +222,28 @@ async function checkMigratedAdminUserSessionRoutes() {
   return failures
 }
 
-const [forbiddenViolations, mcpBoundaryFailures, migratedAdminFailures] = await Promise.all([
+async function checkMigratedOrganizationRoutes() {
+  const failures = []
+  const forbidden = /\b(?:FROM|JOIN|UPDATE|INSERT\s+INTO|DELETE\s+FROM)\s+(?:user|organization|member|session)\b/i
+
+  for (const file of MIGRATED_ORGANIZATION_ROUTES) {
+    const content = await readFile(file, 'utf8')
+    if (forbidden.test(content)) {
+      failures.push(`${file}: migrated site-creation/session route still queries Better Auth user/organization/member/session tables directly`)
+    }
+  }
+
+  return failures
+}
+
+const [forbiddenViolations, mcpBoundaryFailures, migratedAdminFailures, migratedOrganizationFailures] = await Promise.all([
   checkForbiddenPatterns(),
   checkMcpResourceBoundary(),
   checkMigratedAdminUserSessionRoutes(),
+  checkMigratedOrganizationRoutes(),
 ])
 
-if (forbiddenViolations.length || mcpBoundaryFailures.length || migratedAdminFailures.length) {
+if (forbiddenViolations.length || mcpBoundaryFailures.length || migratedAdminFailures.length || migratedOrganizationFailures.length) {
   console.error('Better Auth boundary check failed.')
 
   for (const violation of forbiddenViolations) {
@@ -230,6 +255,10 @@ if (forbiddenViolations.length || mcpBoundaryFailures.length || migratedAdminFai
   }
 
   for (const failure of migratedAdminFailures) {
+    console.error(`  ${failure}`)
+  }
+
+  for (const failure of migratedOrganizationFailures) {
     console.error(`  ${failure}`)
   }
 

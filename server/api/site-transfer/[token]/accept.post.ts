@@ -1,11 +1,12 @@
 // POST /api/site-transfer/[token]/accept — authenticated: accept and execute a site transfer
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
+import { createAuth, getAuthSession } from '~/server/utils/auth'
 import { execute, queryFirst } from '~/server/db'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 import { executeSiteTransfer } from '~/server/utils/site-transfer'
-import { createOrganizationForSite } from '~/server/utils/site-creation'
+import { createOrganizationForSite, findOldestOwnedOrganization } from '~/server/utils/site-creation'
 import { getStripe, getPriceIdForPlan } from '~/server/utils/billing'
+import { getOrgAdapter } from 'better-auth/plugins'
 import type Stripe from 'stripe'
 
 function checkoutSessionIsReusable(
@@ -78,14 +79,9 @@ export default defineEventHandler(async (event) => {
   // organization is only created when the user actually needs one, so a brand-new
   // user accepting their first transfer legitimately has none yet. Create it here,
   // on demand, the same way a first site-creation would (see site-creation.ts).
-  const ownerMember = await queryFirst<{ organizationId: string }>(
-    db,
-    `SELECT organizationId FROM member WHERE userId = ? AND role = 'owner' LIMIT 1`,
-    [userId],
-  )
-
-  const toOrgId = ownerMember?.organizationId
-    ?? (await createOrganizationForSite(db, userId, session.user.name || session.user.email || 'My Business')).organizationId
+  const existingOwnerOrganizationId = await findOldestOwnedOrganization(env, userId)
+  const toOrgId = existingOwnerOrganizationId
+    ?? (await createOrganizationForSite(env, userId, session.user.name || session.user.email || 'My Business')).organizationId
 
   if (toOrgId === transfer.from_organization_id) {
     return jsonResponse({ error: 'You already own this site' }, { status: 422 })
@@ -110,12 +106,21 @@ export default defineEventHandler(async (event) => {
       const stripe = getStripe(env)
 
       // Get or create Stripe customer for the new org
-      const orgRow = await queryFirst<{ name: string; slug: string; stripe_customer_id: string | null }>(
+      const auth = createAuth(env)
+      const authContext = await auth.$context
+      const organizationAdapter = getOrgAdapter(authContext as Parameters<typeof getOrgAdapter>[0], {})
+      const organization = await organizationAdapter.findOrganizationById(toOrgId)
+      const billingRow = await queryFirst<{ stripe_customer_id: string | null }>(
         db,
-        `SELECT o.name, o.slug, b.stripe_customer_id FROM organization o LEFT JOIN organization_billing b ON o.id = b.organization_id WHERE o.id = ? LIMIT 1`,
+        `SELECT stripe_customer_id FROM organization_billing WHERE organization_id = ? LIMIT 1`,
         [toOrgId],
       )
-      if (!orgRow) throw createError({ statusCode: 404, statusMessage: 'Organization not found' })
+      if (!organization) throw createError({ statusCode: 404, statusMessage: 'Organization not found' })
+      const orgRow = {
+        name: organization.name,
+        slug: organization.slug,
+        stripe_customer_id: billingRow?.stripe_customer_id ?? null,
+      }
 
       let customerId = orgRow.stripe_customer_id
       if (customerId) {
