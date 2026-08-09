@@ -7,7 +7,7 @@
 //
 // Usage (in a page):
 //   const { getField, getHero, photosList, qaList, ... } = await usePublicPageData()
-import { onMounted, onBeforeUnmount, toValue, type MaybeRefOrGetter } from "vue";
+import { onMounted, onBeforeUnmount } from "vue";
 import {
   usePublicPageRequest,
   usePublicPageKey,
@@ -33,41 +33,46 @@ interface ContentRow {
   [key: string]: unknown;
 }
 
+const throwPublicPageError = (error: unknown): never => {
+  const record = typeof error === 'object' && error !== null
+    ? error as Record<string, unknown>
+    : {}
+  const statusCode = typeof record.statusCode === 'number'
+    ? record.statusCode
+    : typeof record.status === 'number'
+      ? record.status
+      : 500
+  const statusMessage = typeof record.statusMessage === 'string'
+    ? record.statusMessage
+    : error instanceof Error
+      ? error.message
+      : 'Public page failed'
+
+  throw createError({ statusCode, statusMessage, fatal: import.meta.client, cause: error })
+}
+
 export const usePublicPageData = async (options: {
-  enabled?: MaybeRefOrGetter<boolean>
   datasets?: readonly PublicPageDataset[]
   server?: boolean
   lazy?: boolean
   routeOwned?: boolean
 } = {}) => {
   const { isPlatform, siteId, draftId } = useTenantSite();
-  const nuxtApp = useNuxtApp()
   const route = useRoute();
   const params = usePublicPageRequest();
-  const routeLoadState = usePublicRouteLoadState();
-  const routeLoadOwner = options.routeOwned === false
-    ? { ownsState: () => false, release: () => {} }
-    : claimPublicRouteLoadOwner();
-  onScopeDispose(routeLoadOwner.release)
-  const ownedPath = route.path;
-  const entityId = computed(() => siteId || draftId || null);
-  const requestedParams = computed(() => options.datasets
+  const entityId = siteId || draftId || null;
+  const requestedParams = options.datasets
     ? { ...params.value, datasets: [...options.datasets] }
-    : params.value)
-  const key = computed(() => usePublicPageKey(entityId.value, requestedParams.value));
-  // options.enabled may be a plain boolean, a Ref/ComputedRef, or a getter —
-  // toValue() unwraps all three. Comparing a Ref object directly to `false`
-  // (the previous `options.enabled !== false`) is always true regardless of
-  // the ref's actual value, since an object is never === the primitive false —
-  // that silently made every `enabled: someComputedRef` caller behave as
-  // always-enabled.
-  const enabled = computed(() => toValue(options.enabled) !== false);
+    : { ...params.value, datasets: [...params.value.datasets] }
+  const key = usePublicPageKey(entityId, requestedParams);
 
-  const url = computed(() => usePublicPageUrl(siteId, requestedParams.value));
+  const url = usePublicPageUrl(siteId, requestedParams);
 
   const shell = useSiteShellState();
   const requestEvent = import.meta.server ? useRequestEvent() : undefined
-  const deferClientFetch = options.server === false && import.meta.client;
+  const deferredSupplement = options.routeOwned === false
+    && options.server === false
+    && options.lazy === true;
 
   const asyncData =
     isPlatform || (!siteId && !draftId)
@@ -78,80 +83,35 @@ export const usePublicPageData = async (options: {
               draftId,
               siteId,
               resourceKind: 'page',
-              url: url.value,
-              key: key.value,
+              url,
+              key,
               query: {
-                page: requestedParams.value.page ?? undefined,
-                location: requestedParams.value.location ?? undefined,
-                experience: requestedParams.value.experience ?? undefined,
-                datasets: [...requestedParams.value.datasets].sort().join(',') || undefined,
-                blogSlug: requestedParams.value.blogSlug ?? undefined,
-                locale: requestedParams.value.locale ?? undefined,
-                token: requestedParams.value.token ?? undefined,
+                page: requestedParams.page ?? undefined,
+                location: requestedParams.location ?? undefined,
+                experience: requestedParams.experience ?? undefined,
+                datasets: [...requestedParams.datasets].sort().join(',') || undefined,
+                blogSlug: requestedParams.blogSlug ?? undefined,
+                locale: requestedParams.locale ?? undefined,
+                token: requestedParams.token ?? undefined,
               },
               validate: (value): value is PublicPagePayload =>
-                isPublicPagePayload(value, requestedParams.value.page ?? 'home'),
+                isPublicPagePayload(value, requestedParams.page ?? 'home'),
               failureMessage: 'Public page failed',
               signal,
               requestEvent,
             }),
           {
             server: options.server ?? true,
-            lazy: options.lazy ?? import.meta.client,
-            // The layout and route composable share this canonical key. Defer
-            // duplicate consumers to the existing request instead of cancelling
-            // it and starting a second SSR load.
+            lazy: deferredSupplement,
             dedupe: 'defer',
-            // `enabled` starting false must not permanently stub this resource —
-            // immediate mirrors its current value, and the watcher below fires
-            // the one fetch a later false -> true transition requires. Calling
-            // execute() again while already enabled would just re-trigger the
-            // same request, so the watcher only acts on that specific edge.
-            immediate: enabled.value && !deferClientFetch,
-            // Disable automatic key watching — manual watchers below gate execution
-            // on enabled.value to prevent key changes from triggering when disabled.
+            immediate: !deferredSupplement,
             watch: [],
           },
         );
-  if (import.meta.client && 'execute' in asyncData) {
-    let clientFetchStarted = !deferClientFetch;
-    if (deferClientFetch) {
-      onMounted(() => {
-        clientFetchStarted = true;
-        if (enabled.value) void asyncData.execute();
-      });
-    }
-    const stopEnabledWatch = watch(enabled, (isEnabled, wasEnabled) => {
-      if (isEnabled && !wasEnabled && clientFetchStarted) asyncData.execute()
-    })
-    const stopKeyWatch = watch(key, () => {
-      if (enabled.value && clientFetchStarted) asyncData.execute()
-    }, { immediate: false })
-    onScopeDispose(stopEnabledWatch)
-    onScopeDispose(stopKeyWatch)
-  }
-  if (import.meta.server) {
-    if (options.server !== false && 'execute' in asyncData
-      && (asyncData.pending.value || asyncData.data.value === undefined)) {
-      await nuxtApp.runWithContext(() => asyncData.execute({ cause: 'initial', dedupe: 'defer' }))
-    }
-    await shell.ready
-    if (asyncData.error.value) throw asyncData.error.value
-    if (options.routeOwned !== false && shell.error.value) throw shell.error.value
+  if (import.meta.client && deferredSupplement && 'execute' in asyncData) {
+    onMounted(() => void asyncData.execute());
   }
   const { data, error, pending, refresh } = asyncData
-  if (options.routeOwned !== false) {
-    watchEffect(() => {
-      if (!routeLoadOwner.ownsState()) return
-      routeLoadState.value = {
-        path: ownedPath,
-        key: key.value,
-        pending: pending.value,
-        error: normalizePublicRouteLoadError(error.value),
-        hasData: data.value !== undefined,
-      }
-    })
-  }
 
   // Persistent chrome comes from the stable shell. Route-owned collections
   // come from the keyed page response and change with navigation.
@@ -174,8 +134,8 @@ export const usePublicPageData = async (options: {
 
   // ── Single location (for /locations/[slug]/* pages) ───────
   const location = computed(() => {
-    if (!params.value.location) return null;
-    return locations.value.find((l) => l.slug === params.value.location) ?? null;
+    if (!requestedParams.location) return null;
+    return locations.value.find((l) => l.slug === requestedParams.location) ?? null;
   });
 
   // ── Location reviews preview (3 items) ───────────────────
@@ -305,9 +265,15 @@ export const usePublicPageData = async (options: {
     }));
   });
 
-  if (import.meta.client && options.lazy === false && 'then' in asyncData) {
+  // Register every lifecycle hook above before suspending setup. Route-owned
+  // data is authoritative: navigation completes only after this single request
+  // succeeds, and failures propagate to Nuxt's error boundary.
+  if (!deferredSupplement && 'then' in asyncData) {
     await asyncData
+    if (asyncData.error.value) throwPublicPageError(asyncData.error.value)
   }
+  await shell.ready
+  if (options.routeOwned !== false && shell.error.value) throwPublicPageError(shell.error.value)
 
   return {
     data,
