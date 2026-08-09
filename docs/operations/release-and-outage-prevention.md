@@ -25,11 +25,15 @@ when it was only inferred from CI or a local script.
 
 The concrete immutable-candidate implementation is defined in
 [release-candidate-contract.md](release-candidate-contract.md). Shared staging
-may be changed only by its locked full-candidate workflow, and production may
-be changed only by the manifest-gated workflow's separate deploy dispatch
-after its read-only preflight report has been reviewed; the production job also
-uses the protected environment. Direct convenience deploy commands are not
-release approval.
+may be changed only by its locked full-candidate workflow, and normal
+production releases may be changed only by the manifest-gated workflow's
+separate deploy dispatch after its read-only preflight report has been
+reviewed; the production mutation job also uses the protected environment.
+During an incident, the separate **Production rollback (exact-target,
+manifest-gated)** workflow is the only rollback entrypoint: its read-only
+preflight proves the declared current and target Worker identities, and only
+its protected mutation job may route the exact target. Direct convenience
+deploy or rollback commands are not release approval.
 
 ## Start every new task or conversation with a state snapshot
 

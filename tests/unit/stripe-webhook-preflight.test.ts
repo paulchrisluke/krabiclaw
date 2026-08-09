@@ -3,15 +3,18 @@ import test from 'node:test'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import {
-  STRIPE_API_VERSION,
+  STRIPE_WEBHOOK_API_VERSION,
   STRIPE_REQUEST_TIMEOUT_MS,
   STRIPE_WEBHOOK_PATH,
   STRIPE_WEBHOOK_EVENTS,
   StripeWebhookPreflightError,
+  assertStripeLiveSecretKey,
   assertCanonicalStripeWebhookEndpointUrl,
+  normalizeStripeWebhookExpectedMode,
   normalizeWebhookEndpointUrl,
   runStripeWebhookEndpointPreflight,
 } from '../../scripts/lib/stripe-webhook-preflight.mjs'
+import { STRIPE_API_VERSION } from '../../shared/stripe-contract.ts'
 
 const EXPECTED_URL = 'https://staging.krabiclaw.com/api/billing/webhook'
 const TEST_ENDPOINT_ID = 'we_test_endpoint_123'
@@ -21,7 +24,7 @@ function endpoint(overrides: Record<string, unknown> = {}) {
     id: TEST_ENDPOINT_ID,
     url: `${EXPECTED_URL}/`,
     status: 'enabled',
-    api_version: STRIPE_API_VERSION,
+    api_version: STRIPE_WEBHOOK_API_VERSION,
     enabled_events: [...STRIPE_WEBHOOK_EVENTS],
     ...overrides,
   }
@@ -51,10 +54,11 @@ test('Stripe webhook preflight normalizes URL and records a redacted endpoint co
   })
 
   assert.equal(result.status, 'passed')
+  assert.equal(result.accountMode, 'test')
   assert.equal(result.testMode, true)
   assert.equal(result.expectedUrl, EXPECTED_URL)
   assert.equal(result.endpointStatus, 'enabled')
-  assert.equal(result.apiVersion, STRIPE_API_VERSION)
+  assert.equal(result.apiVersion, STRIPE_WEBHOOK_API_VERSION)
   assert.match(result.endpointId, /^we_test_[a-f0-9]{8}$/)
   assert.deepEqual(result.enabledEvents, [...STRIPE_WEBHOOK_EVENTS].sort())
   assert.deepEqual(calls.constructor, {
@@ -63,6 +67,53 @@ test('Stripe webhook preflight normalizes URL and records a redacted endpoint co
   })
   assert.deepEqual(calls.list, [{ limit: 100 }])
   assert.doesNotMatch(JSON.stringify(result), /sk_test_preflight|endpoint_123/)
+})
+
+test('explicit live webhook preflight accepts only a live key and reports live account mode', async () => {
+  const calls: { constructor?: unknown; list?: unknown[] } = {}
+  const result = await runStripeWebhookEndpointPreflight({
+    secretKey: 'rk_live_preflight',
+    expectedMode: 'live',
+    expectedUrl: EXPECTED_URL.replace('staging.', ''),
+    stripeFactory: fakeStripeFactory([endpoint({ url: 'https://krabiclaw.com/api/billing/webhook', id: 'we_live_endpoint_123' })], calls),
+  })
+
+  assert.equal(result.status, 'passed')
+  assert.equal(result.accountMode, 'live')
+  assert.equal(result.testMode, false)
+  assert.equal(result.expectedUrl, 'https://krabiclaw.com/api/billing/webhook')
+  assert.deepEqual(calls.constructor, {
+    secretKey: 'rk_live_preflight',
+    options: { maxNetworkRetries: 0, timeout: STRIPE_REQUEST_TIMEOUT_MS },
+  })
+  assert.doesNotMatch(JSON.stringify(result), /rk_live_preflight|endpoint_123/)
+})
+
+test('live mode refuses a test key before provider construction', async () => {
+  let constructed = false
+  await assert.rejects(
+    runStripeWebhookEndpointPreflight({
+      secretKey: 'sk_test_not_live',
+      expectedMode: 'live',
+      expectedUrl: 'https://krabiclaw.com/api/billing/webhook',
+      stripeFactory: () => {
+        constructed = true
+        throw new Error('provider must not be constructed')
+      },
+    }),
+    (error: unknown) => error instanceof StripeWebhookPreflightError && error.code === 'live_key_required',
+  )
+  assert.equal(constructed, false)
+})
+
+test('webhook preflight mode validation remains explicit and fail-closed', () => {
+  assert.equal(normalizeStripeWebhookExpectedMode(), 'test')
+  assert.equal(normalizeStripeWebhookExpectedMode('LIVE'), 'live')
+  assert.equal(assertStripeLiveSecretKey('rk_live_mode'), 'rk_live_mode')
+  assert.throws(
+    () => normalizeStripeWebhookExpectedMode('production'),
+    (error: unknown) => error instanceof StripeWebhookPreflightError && error.code === 'expected_mode_invalid',
+  )
 })
 
 test('Stripe webhook preflight hard-refuses a live key before constructing the provider', async () => {
@@ -100,7 +151,7 @@ test('Stripe webhook preflight rejects current staging drift instead of acceptin
   )
 })
 
-test('Stripe webhook preflight rejects an API version drift from the application client', async () => {
+test('Stripe webhook preflight rejects an API version drift from the inbound webhook contract', async () => {
   await assert.rejects(
     runStripeWebhookEndpointPreflight({
       secretKey: 'sk_test_preflight',
@@ -111,10 +162,16 @@ test('Stripe webhook preflight rejects an API version drift from the application
       assert.ok(error instanceof StripeWebhookPreflightError)
       assert.equal(error.code, 'api_version_mismatch')
       assert.equal(error.evidence.apiVersion, '2025-04-30.basil')
-      assert.equal(error.evidence.expectedApiVersion, STRIPE_API_VERSION)
+      assert.equal(error.evidence.expectedApiVersion, STRIPE_WEBHOOK_API_VERSION)
       return true
     },
   )
+})
+
+test('Stripe client and webhook event-rendering versions remain explicit and independent', () => {
+  assert.equal(STRIPE_API_VERSION, '2026-04-22.dahlia')
+  assert.equal(STRIPE_WEBHOOK_API_VERSION, '2025-11-17.clover')
+  assert.notEqual(STRIPE_API_VERSION, STRIPE_WEBHOOK_API_VERSION)
 })
 
 test('Stripe webhook preflight rejects duplicate enabled destinations at the expected URL', async () => {

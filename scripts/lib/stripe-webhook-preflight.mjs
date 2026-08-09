@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import {
-  STRIPE_API_VERSION,
+  STRIPE_WEBHOOK_API_VERSION,
   STRIPE_REQUEST_TIMEOUT_MS,
   STRIPE_WEBHOOK_PATH,
 } from '../../shared/stripe-contract.ts'
@@ -19,7 +19,9 @@ export const STRIPE_WEBHOOK_EVENTS = Object.freeze([
 ])
 
 export const STRIPE_TEST_SECRET_KEY = /^(?:sk|rk)_test_[A-Za-z0-9]+$/
-export { STRIPE_API_VERSION, STRIPE_REQUEST_TIMEOUT_MS, STRIPE_WEBHOOK_PATH }
+export const STRIPE_LIVE_SECRET_KEY = /^(?:sk|rk)_live_[A-Za-z0-9]+$/
+export const STRIPE_WEBHOOK_EXPECTED_MODES = Object.freeze(['test', 'live'])
+export { STRIPE_WEBHOOK_API_VERSION, STRIPE_REQUEST_TIMEOUT_MS, STRIPE_WEBHOOK_PATH }
 
 export class StripeWebhookPreflightError extends Error {
   constructor(code, message, evidence = {}) {
@@ -30,15 +32,38 @@ export class StripeWebhookPreflightError extends Error {
   }
 }
 
-export function assertStripeTestSecretKey(value) {
-  const secretKey = String(value ?? '').trim()
-  if (!STRIPE_TEST_SECRET_KEY.test(secretKey)) {
+export function normalizeStripeWebhookExpectedMode(value = 'test') {
+  const mode = String(value ?? '').trim().toLowerCase() || 'test'
+  if (!STRIPE_WEBHOOK_EXPECTED_MODES.includes(mode)) {
     throw new StripeWebhookPreflightError(
-      'test_key_required',
-      'Stripe webhook preflight requires a test-mode secret key.',
+      'expected_mode_invalid',
+      'Stripe webhook preflight expected mode must be test or live.',
+      { expectedMode: mode },
+    )
+  }
+  return mode
+}
+
+export function assertStripeSecretKey(value, expectedMode = 'test') {
+  const mode = normalizeStripeWebhookExpectedMode(expectedMode)
+  const secretKey = String(value ?? '').trim()
+  const pattern = mode === 'live' ? STRIPE_LIVE_SECRET_KEY : STRIPE_TEST_SECRET_KEY
+  if (!pattern.test(secretKey)) {
+    throw new StripeWebhookPreflightError(
+      mode === 'live' ? 'live_key_required' : 'test_key_required',
+      `Stripe webhook preflight requires a ${mode}-mode secret key.`,
+      { expectedMode: mode },
     )
   }
   return secretKey
+}
+
+export function assertStripeTestSecretKey(value) {
+  return assertStripeSecretKey(value, 'test')
+}
+
+export function assertStripeLiveSecretKey(value) {
+  return assertStripeSecretKey(value, 'live')
 }
 
 export function normalizeWebhookEndpointUrl(value) {
@@ -104,8 +129,10 @@ function endpointEvidence(endpoint, expectedUrl, expectedApiVersion, matchedCoun
 export function validateStripeWebhookEndpointContract({
   expectedUrl,
   endpoints,
-  expectedApiVersion = STRIPE_API_VERSION,
+  expectedApiVersion = STRIPE_WEBHOOK_API_VERSION,
+  accountMode = 'test',
 }) {
+  const normalizedAccountMode = normalizeStripeWebhookExpectedMode(accountMode)
   const normalizedExpectedUrl = assertCanonicalStripeWebhookEndpointUrl(expectedUrl)
   const candidates = (Array.isArray(endpoints) ? endpoints : []).filter((endpoint) => {
     try {
@@ -150,7 +177,8 @@ export function validateStripeWebhookEndpointContract({
 
   return {
     status: 'passed',
-    testMode: true,
+    accountMode: normalizedAccountMode,
+    testMode: normalizedAccountMode === 'test',
     ...baseEvidence,
     enabledEvents: observedEvents,
     missingEvents: [],
@@ -180,12 +208,15 @@ async function listAllWebhookEndpoints(stripe) {
 export async function runStripeWebhookEndpointPreflight({
   secretKey,
   expectedUrl,
-  expectedApiVersion = STRIPE_API_VERSION,
+  expectedApiVersion = STRIPE_WEBHOOK_API_VERSION,
+  expectedMode = 'test',
+  accountMode,
   stripeFactory,
 }) {
   // Validate the key and URL before the Stripe client is constructed. This is
   // intentionally the first provider-related operation in the preflight.
-  const validatedSecretKey = assertStripeTestSecretKey(secretKey)
+  const normalizedExpectedMode = normalizeStripeWebhookExpectedMode(accountMode ?? expectedMode)
+  const validatedSecretKey = assertStripeSecretKey(secretKey, normalizedExpectedMode)
   const normalizedExpectedUrl = assertCanonicalStripeWebhookEndpointUrl(expectedUrl)
   if (typeof stripeFactory !== 'function') throw new TypeError('stripeFactory is required')
 
@@ -203,6 +234,7 @@ export async function runStripeWebhookEndpointPreflight({
   return validateStripeWebhookEndpointContract({
     expectedUrl: normalizedExpectedUrl,
     expectedApiVersion,
+    accountMode: normalizedExpectedMode,
     endpoints,
   })
 }

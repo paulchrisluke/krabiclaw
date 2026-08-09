@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process'
 import test from 'node:test'
 import { readFile } from 'node:fs/promises'
 import { parse } from 'yaml'
+import { NCLS_ARTICLE_SLUGS } from '../../scripts/blawby-parity-config.mjs'
 
 const repoFile = async (path: string) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8')
 
@@ -11,7 +12,7 @@ type WorkflowJob = {
   needs?: string | string[]
   environment?: { name?: string } | string
   permissions?: Record<string, string>
-  steps?: Array<{ name?: string; run?: string }>
+  steps?: Array<{ name?: string; id?: string; if?: string; run?: string; with?: Record<string, unknown> }>
 }
 
 async function workflowJobs(path: string): Promise<Record<string, WorkflowJob>> {
@@ -46,13 +47,41 @@ function assertRestoreOrdering(script: string, originPattern: RegExp, label: str
   assert.ok(verify > status, `${label}: baseline/candidate traffic must be verified after status capture`)
   assert.ok(purge > verify, `${label}: cache purge must follow deployment verification`)
   assert.ok(markRestored > purge, `${label}: restored state must follow cache purge`)
-  assert.match(restore, /candidate&&traffic\(candidate\)!==0/)
+  assert.match(restore, /candidate&&candidate\.traffic!==0/)
+  assert.match(restore, /uuid=\/\^\[0-9a-f\]/)
+  assert.match(restore, /Math\.abs\(total-100\)>0\.001/)
   assert.match(restore, /if ! npx wrangler versions deploy/)
   assert.match(restore, /if ! npx wrangler deployments status/)
   assert.match(restore, /if ! node -e/)
   assert.match(restore, new RegExp(`if ! DEPLOYMENT_CACHE_ORIGIN=${originPattern.source} node --experimental-strip-types scripts/purge-deployment-cache\\.ts`))
   assert.match(restore, /RESTORE_INTERVENTION_REQUIRED="true"[\s\S]*return 1/)
   assert.match(restore, /RESTORED_BASELINE="true"[\s\S]*SPLIT_ACTIVE="false"/)
+}
+
+function assertFailClosedStatusDetection(script: string, label: string): void {
+  const detect = shellFunction(script, 'detect_candidate_deployment')
+  assert.match(detect, /if ! npx wrangler deployments status/)
+  assert.match(detect, /rows\.filter\(v=>v\.traffic>0\)\.length!==1/)
+  assert.match(detect, /SPLIT_ACTIVE="true"[\s\S]*RESTORE_INTERVENTION_REQUIRED="true"/)
+  assert.match(detect, /status did not prove the candidate state[\s\S]*SPLIT_ACTIVE="true"/)
+  assert.match(detect, /if \[\[ -z "\$BASELINE_VERSION_ID" \]\][\s\S]*RESTORE_INTERVENTION_REQUIRED="true"/)
+  assert.match(script, /detect_candidate_deployment \|\| true[\s\S]*restore_baseline \|\| true/)
+  assert.match(script, /traffic state is unknown; forcing baseline restoration|traffic state is unknown; forcing baseline restoration/i, label)
+}
+
+function assertManifestFailureRestoresAfterTrafficMutation(script: string, label: string): void {
+  const onExit = shellFunction(script, 'on_exit')
+  const manifestFailure = onExit.indexOf('manifest generation failed')
+  const restoreGate = onExit.indexOf('TRAFFIC_MUTATION_ATTEMPTED" == "true" && "$ROLLBACK_HANDLED" != "true"')
+  const detect = onExit.indexOf('detect_candidate_deployment || true', restoreGate)
+  const restore = onExit.indexOf('restore_baseline || true', detect)
+  const rewrite = onExit.indexOf('if ! write_manifest "$exit_status"', restore)
+  assert.ok(manifestFailure >= 0, `${label}: manifest serialization failure must be explicit`)
+  assert.ok(restoreGate > manifestFailure, `${label}: manifest failure must gate restoration on traffic mutation`)
+  assert.ok(detect > restoreGate, `${label}: manifest failure must detect traffic before restoring`)
+  assert.ok(restore > detect, `${label}: manifest failure must restore exact baseline after detection`)
+  assert.ok(rewrite > restore, `${label}: failed manifest must be rewritten after restoration`)
+  assert.match(onExit, /ROLLBACK_HANDLED="true"/)
 }
 
 test('required CI checks out the immutable event SHA and never mutates shared staging or production', async () => {
@@ -95,10 +124,14 @@ test('full lane keeps one uninterrupted staging candidate lock and gates candida
   assert.equal((source.match(/wrangler versions upload/g) ?? []).length, 1)
   assert.doesNotMatch(source, /wrangler secret put|--no-bundle/)
   assert.match(source, /--version-override \"\$CANDIDATE_VERSION_ID\"/)
+  assert.match(source, /RELEASE_ROUTE_INVENTORY_PATH=\"\$route_inventory\"/)
   assert.match(source, /--samples 25[\s\S]*--run-label baseline/)
   assert.match(source, /--samples 25[\s\S]*--run-label candidate/)
   assert.match(source, /compare-performance-recovery\.mjs/)
   assert.match(source, /test:e2e:full/)
+  assert.match(source, /status: operationCount === 0 \? 'passed' : 'blocked_drift'/)
+  assert.match(source, /if \(operationCount !== 0\) throw new Error\([\s\S]*separate reviewed test-mode apply approval/)
+  assert.ok(source.indexOf('if (operationCount !== 0) throw') < source.indexOf('Capturing current staging deployment before any mutation'))
   assert.match(source, /detect_candidate_deployment/)
   assert.match(source, /restore_baseline/)
   assert.match(source, /DEPLOYMENT_CACHE_ORIGIN=\"\$STAGING_BASE_URL\"/)
@@ -107,13 +140,56 @@ test('full lane keeps one uninterrupted staging candidate lock and gates candida
   assert.match(source, /if:\s*always\(\)/)
   assert.match(source, /upload-artifact@[\w-]+[\s\S]*candidate-manifest\.json/)
   assert.match(source, /include-hidden-files:\s*true/)
+
+  const restoreStart = source.indexOf('restore: {')
+  const restoreEnd = source.indexOf('\n            },', restoreStart)
+  assert.ok(restoreStart >= 0 && restoreEnd > restoreStart, 'full-lane manifest restore object must be present')
+  const restoreObject = source.slice(restoreStart, restoreEnd)
+  assert.equal((restoreObject.match(/^\s*status:/gm) ?? []).length, 1, 'full-lane restore manifest must define status exactly once')
+})
+
+test('candidate evidence upload failure restores only the manifest-declared staging baseline', async () => {
+  const jobs = await workflowJobs('.github/workflows/ci-full.yml')
+  const steps = jobs.candidate?.steps ?? []
+  const upload = steps.find(step => step.name === 'Upload candidate evidence')
+  const recovery = steps.find(step => step.name === 'Restore exact staging baseline after evidence upload failure')
+  assert.equal(upload?.id, 'upload-candidate-evidence')
+  assert.equal(upload?.with?.['if-no-files-found'], 'error')
+  assert.equal(upload?.if, 'always()')
+  assert.equal(recovery?.if, "always() && steps.upload-candidate-evidence.outcome != 'success'")
+  assert.ok(upload && recovery, 'candidate evidence upload recovery gate must be present')
+  const uploadIndex = steps.indexOf(upload!)
+  const recoveryIndex = steps.indexOf(recovery!)
+  assert.ok(recoveryIndex > uploadIndex, 'baseline recovery must follow the evidence upload')
+
+  const script = recovery?.run ?? ''
+  const manifest = script.indexOf('candidate-manifest.json')
+  const noMutation = script.indexOf('traffic_mutation_attempted')
+  const alreadyRestored = script.indexOf('restored_baseline')
+  const deploy = script.indexOf('wrangler versions deploy')
+  const status = script.indexOf('wrangler deployments status')
+  const verify = script.indexOf('staging traffic does not prove the exact baseline at 100%')
+  const purge = script.indexOf('purge-deployment-cache.ts')
+  assert.ok(manifest >= 0, 'recovery must read the local candidate manifest')
+  assert.ok(noMutation > manifest, 'recovery must inspect the traffic mutation marker before deployment')
+  assert.ok(alreadyRestored > noMutation, 'recovery must skip deployment when the manifest proves baseline restoration')
+  assert.ok(deploy > alreadyRestored, 'recovery must deploy only after manifest no-op guards')
+  assert.ok(status > deploy && verify > status && purge > verify, 'recovery must verify traffic and purge cache after baseline deployment')
+  assert.match(script, /candidate-upload-failure-recovery\.json/)
+  assert.match(script, /\$baseline_version@100/)
+  assert.match(script, /candidate version remains active after baseline restoration/)
+  assert.match(script, /operator intervention is required/)
+  assert.match(script, /exit 1/)
 })
 
 test('staging rollback verifies baseline traffic and purges cache before claiming restoration', async () => {
   const jobs = await workflowJobs('.github/workflows/ci-full.yml')
   const source = runScript(jobs.candidate!, 'Prepare, verify, benchmark, and promote candidate')
   assertRestoreOrdering(source, /"\$STAGING_BASE_URL"/, 'staging')
-  assert.match(source, /restore:\s*\{[\s\S]*status:[\s\S]*intervention_required/)
+  assertFailClosedStatusDetection(source, 'staging')
+  assertManifestFailureRestoresAfterTrafficMutation(source, 'staging')
+  assert.match(source, /const restoreStatus = [\s\S]*intervention_required/)
+  assert.match(source, /restore:\s*\{[\s\S]*status: restoreStatus/)
   assert.match(source, /splitActive: process\.env\.SPLIT_ACTIVE === 'true'/)
 })
 
@@ -128,6 +204,57 @@ test('direct shared-environment deploys fail closed and comparative validation i
   }
   assert.match(packageSource, /"benchmark:performance:recovery":\s*"node scripts\/benchmark-performance-recovery\.mjs/)
   assert.match(packageSource, /"compare:performance:recovery":\s*"node scripts\/compare-performance-recovery\.mjs/)
+})
+
+test('immutable route inventory enumerates every reviewed fixture target and browser gate checks full first-party content', async () => {
+  const inventorySource = await repoFile('scripts/release-route-inventory.mjs')
+  const verifierSource = await repoFile('scripts/verify-deployed-candidate.mjs')
+  const browserSource = await repoFile('tests/e2e/public-surfaces-release.spec.ts')
+  const legacySource = await repoFile('scripts/legacy-rollback-route-inventory-4e49e5a37e4a0578bd1b306c4e0822c4fa8bc5c9.mjs')
+  const generated = spawnSync('node', ['scripts/release-route-inventory.mjs', '--base-url', 'https://krabiclaw.com'], { encoding: 'utf8' })
+  assert.equal(generated.status, 0, generated.stderr)
+  const inventory = JSON.parse(generated.stdout) as {
+    surfaces: Array<{ name: string; routes: Array<{ path: string }>; variants?: Array<{ name: string; routes: Array<{ path: string }> }> }>
+  }
+  const surface = (name: string) => {
+    const value = inventory.surfaces.find(item => item.name === name)
+    assert.ok(value, `missing ${name} surface`)
+    return value
+  }
+  const paths = (value: { routes: Array<{ path: string }> }) => new Set(value.routes.map(route => route.path))
+  const saya = surface('saya')
+  const pottery = saya.variants?.find(item => item.name === 'pottery-house')
+  const kikuzuki = saya.variants?.find(item => item.name === 'kikuzuki')
+  assert.ok(pottery && kikuzuki)
+  for (const target of [saya, pottery, kikuzuki]) {
+    const targetPaths = paths(target)
+    for (const suffix of ['/locations', '/locations/kikuzuki-japanese-robatayaki-izakaya/menu', '/locations/take-me-away-by-kikuzuki/reservations']) {
+      if (target === kikuzuki || suffix === '/locations') assert.ok(targetPaths.has(suffix), `${target === kikuzuki ? 'Kikuzuki' : 'Saya'} missing ${suffix}`)
+    }
+  }
+  assert.ok(paths(pottery).has('/experiences/pottery-wheel-class'))
+  assert.ok(paths(pottery).has('/posts/post-ph-1'))
+  assert.ok(paths(pottery).has('/locations/krabi/reviews/gplaces-ph-1772088302'))
+  assert.ok(paths(kikuzuki).has('/menu/tuna-sushi'))
+  assert.ok(paths(kikuzuki).has('/experiences/teppanyaki-experience'))
+  assert.ok(paths(kikuzuki).has('/locations/kikuzuki-japanese-robatayaki-izakaya/reviews/review-kiku-1'))
+  const ncls = paths(surface('blawby'))
+  for (const service of ['family', 'small-business-and-nonprofits', 'employment', 'tenant-rights', 'probate-and-estate', 'special-education-and-iep-advocacy']) {
+    assert.ok(ncls.has(`/services/${service}`), `NCLS missing service ${service}`)
+  }
+  for (const slug of NCLS_ARTICLE_SLUGS) assert.ok(ncls.has(`/article/${slug}`), `NCLS missing article ${slug}`)
+  assert.match(inventorySource, /variants:/)
+  assert.match(inventorySource, /PLATFORM_DOC_ROUTES/)
+  assert.match(verifierSource, /surface\.variants/)
+  assert.match(verifierSource, /location\.search === ''[\s\S]*location\.hash === ''/)
+  assert.match(browserSource, /status >= 400/)
+  assert.match(browserSource, /expectedMediaType/)
+  assert.match(browserSource, /media\.krabiclaw\.com/)
+  assert.match(browserSource, /imagedelivery\.net/)
+  assert.match(browserSource, /window\.scrollTo\(0, y\)/)
+  assert.match(browserSource, /blankSections/)
+  assert.match(legacySource, /expectedOrigin/)
+  assert.match(legacySource, /targetSourceSha/)
 })
 
 test('production release requires a separate attested dispatch after read-only preflight', async () => {
@@ -148,10 +275,29 @@ test('production release requires a separate attested dispatch after read-only p
   assert.match(source, /gh run download[\s\S]*approved-staging-evidence-\$SOURCE_SHA/)
   assert.match(source, /GITHUB_STEP_SUMMARY/)
   assert.match(source, /production-migrations-before/)
+  assert.match(source, /verify-production-baseline-provenance\.mjs/)
+  assert.match(source, /production-baseline-provenance\.json/)
+  assert.match(source, /production-baseline-deployment\.json/)
+  assert.match(source, /api\.workerVersionId == \.versionId/)
   assert.match(source, /treeSha256/)
   assert.match(source, /\.migrations\.after\.files \| length/)
-  assert.match(source, /migrate:prod/)
+  assert.match(source, /wrangler d1 migrations apply DB --remote/)
+  assert.doesNotMatch(source, /inputs\.staging_base_url/)
+  assert.match(source, /STAGING_BASE_URL: https:\/\/staging\.krabiclaw\.com/)
+  assert.match(source, /stripeWebhookPreflight\.status == \"passed\"/)
+  assert.match(source, /production-stripe-webhook-preflight-\$\{\{ github\.sha \}\}/)
+  assert.match(source, /STRIPE_SECRET_KEY_LIVE/)
+  assert.match(source, /STRIPE_WEBHOOK_EXPECTED_MODE: live/)
+  assert.match(source, /\.accountMode == \"live\"/)
+  assert.match(source, /gh run download[\s\S]*production-stripe-webhook-preflight-\$SOURCE_SHA/)
+  assert.match(source, /stripeCatalogPreflight\.status == \"passed\"/)
+  assert.match(source, /stripeCatalogPreflight\.accountId \| test/)
+  assert.match(source, /stripeCatalogPreflight\.providerSnapshotSha256 \| test/)
+  assert.match(source, /stripeCanary\.status == \"passed\"/)
+  assert.match(source, /routeInventory\.requiredSurfaces/)
+  assert.match(source, /pottery-house.*kikuzuki|kikuzuki.*pottery-house/)
   assert.match(source, /wrangler versions upload --tag \"\$SOURCE_SHA\"/)
+  assert.match(source, /RELEASE_ROUTE_INVENTORY_PATH=\"\$route_inventory\"/)
   assert.equal((source.match(/wrangler versions upload/g) ?? []).length, 1)
   assert.match(source, /detect_candidate_deployment/)
   assert.match(source, /DEPLOYMENT_CACHE_ORIGIN=https:\/\/krabiclaw\.com/)
@@ -159,6 +305,7 @@ test('production release requires a separate attested dispatch after read-only p
   assert.match(source, /include-hidden-files:\s*true/)
   assert.doesNotMatch(source, /E2E_ALLOW_DEV_ROUTES|E2E_DEV_ROUTE_SECRET|STRIPE_SECRET_KEY_TEST|BETTER_AUTH_SECRET/)
   assert.doesNotMatch(source, /wrangler secret put|--no-bundle/)
+  assert.ok(source.indexOf('verify-production-baseline-provenance.mjs') < source.indexOf('npx wrangler d1 migrations apply DB --remote'))
 })
 
 test('production release checks the exact protected Environment before every mutation', async () => {
@@ -184,6 +331,13 @@ test('production release checks the exact protected Environment before every mut
   assert.doesNotMatch(protectionScript, /\b(?:POST|PUT|PATCH|DELETE)\b/)
 
   assert.equal(jobs.preflight?.needs, undefined)
+  const productionWebhookPreflight = jobs['production-stripe-webhook-preflight']
+  assert.ok(productionWebhookPreflight)
+  assert.match(productionWebhookPreflight.if ?? '', /inputs\.operation == 'preflight'/)
+  assert.equal((productionWebhookPreflight.environment as { name?: string })?.name, 'production')
+  const webhookRead = runScript(productionWebhookPreflight, 'Read production webhook endpoint with the live Stripe key')
+  assert.match(webhookRead, /scripts\/preflight-stripe-webhook-endpoint\.mjs/)
+  assert.doesNotMatch(webhookRead, /wrangler (?:deploy|versions|d1)|curl .* -X (?:POST|PUT|PATCH|DELETE)/)
   assert.deepEqual(jobs['deploy-production']?.needs, ['production-environment-preflight'])
   assert.equal((jobs['deploy-production']?.environment as { name?: string })?.name, 'production')
   assert.match(jobs['deploy-production']?.if ?? '', /needs\.production-environment-preflight\.result == 'success'/)
@@ -207,9 +361,154 @@ test('production release checks the exact protected Environment before every mut
 test('production rollback verifies baseline traffic and purges cache before claiming restoration', async () => {
   const jobs = await workflowJobs('.github/workflows/release-production.yml')
   const source = runScript(jobs['deploy-production']!, 'Capture baseline, migrate, roll out, verify, and promote')
+  assert.match(source, /verify-production-baseline-provenance\.mjs/)
+  assert.match(source, /approved_baseline_provenance="\$\{APPROVED_BASELINE_PROVENANCE_PATH:\?/)
+  assert.doesNotMatch(source, /approved_baseline_provenance="\$BASELINE_PROVENANCE_PATH"/)
+  assert.ok(source.indexOf('approved_baseline_provenance="${APPROVED_BASELINE_PROVENANCE_PATH:?') < source.indexOf('BASELINE_PROVENANCE_PATH="$baseline_provenance"'))
+  assert.ok(source.indexOf('verify-production-baseline-provenance.mjs') < source.indexOf('npx wrangler d1 migrations apply DB --remote'))
   assertRestoreOrdering(source, /https:\/\/krabiclaw\.com/, 'production')
+  assertFailClosedStatusDetection(source, 'production')
+  assertManifestFailureRestoresAfterTrafficMutation(source, 'production')
   assert.match(source, /restore:\{[\s\S]*status:[\s\S]*intervention_required/)
   assert.match(source, /splitActive:process\.env\.SPLIT_ACTIVE==='true'/)
+})
+
+test('production evidence upload failure restores only the manifest-declared baseline', async () => {
+  const jobs = await workflowJobs('.github/workflows/release-production.yml')
+  const steps = jobs['deploy-production']?.steps ?? []
+  const upload = steps.find(step => step.name === 'Upload production release evidence')
+  const recovery = steps.find(step => step.name === 'Restore exact production baseline after evidence upload failure')
+  assert.equal(upload?.id, 'upload-production-evidence')
+  assert.equal(upload?.with?.['if-no-files-found'], 'error')
+  assert.equal(upload?.if, 'always()')
+  assert.equal(recovery?.if, "always() && steps.upload-production-evidence.outcome != 'success'")
+  assert.ok(upload && recovery, 'production evidence upload recovery gate must be present')
+  assert.ok(steps.indexOf(recovery!) > steps.indexOf(upload!), 'production baseline recovery must follow evidence upload')
+
+  const script = recovery?.run ?? ''
+  const manifest = script.indexOf('production-release-manifest.json')
+  const noMutation = script.indexOf('traffic_mutation_attempted')
+  const alreadyRestored = script.indexOf('restored_baseline')
+  const deploy = script.indexOf('wrangler versions deploy')
+  const status = script.indexOf('wrangler deployments status')
+  const verify = script.indexOf('production traffic does not prove the exact baseline at 100%')
+  const purge = script.indexOf('purge-deployment-cache.ts')
+  assert.ok(manifest >= 0, 'recovery must read the local production release manifest')
+  assert.ok(noMutation > manifest, 'recovery must inspect the production traffic mutation marker before deployment')
+  assert.ok(alreadyRestored > noMutation, 'recovery must skip deployment when the manifest proves baseline restoration')
+  assert.ok(deploy > alreadyRestored, 'recovery must deploy only after manifest no-op guards')
+  assert.ok(status > deploy && verify > status && purge > verify, 'recovery must verify production traffic and purge cache after baseline deployment')
+  assert.match(script, /production-upload-failure-recovery\.json/)
+  assert.match(script, /\$baseline_version@100/)
+  assert.match(script, /candidate version remains active after production baseline restoration/)
+  assert.match(script, /operator intervention is required/)
+  assert.match(script, /exit 1/)
+})
+
+test('candidate and production restoration are gated by an attempted traffic mutation', async () => {
+  const stagingJobs = await workflowJobs('.github/workflows/ci-full.yml')
+  const productionJobs = await workflowJobs('.github/workflows/release-production.yml')
+  const staging = runScript(stagingJobs.candidate!, 'Prepare, verify, benchmark, and promote candidate')
+  const production = runScript(productionJobs['deploy-production']!, 'Capture baseline, migrate, roll out, verify, and promote')
+
+  for (const [label, source, splitMarker] of [
+    ['staging', staging, 'BASELINE_VERSION_ID@100" "$CANDIDATE_VERSION_ID@0'],
+    ['production', production, 'BASELINE_VERSION_ID@100" "$CANDIDATE_VERSION_ID@0'],
+  ] as const) {
+    assert.match(source, /TRAFFIC_MUTATION_ATTEMPTED="false"/)
+    assert.match(source, /traffic_mutation_flag=/)
+    assert.match(source, /printf '%s\\n' "true" > "\$traffic_mutation_flag"/)
+    assert.match(source, /TRAFFIC_MUTATION_ATTEMPTED="true"[\s\S]*printf '%s\\n' "true" > "\$traffic_mutation_flag"[\s\S]*versions deploy/)
+    const restore = shellFunction(source, 'restore_baseline')
+    assert.match(restore, /TRAFFIC_MUTATION_ATTEMPTED.*!=.*true/)
+    assert.match(restore, /no compensating deployment will be created/)
+    const onExit = shellFunction(source, 'on_exit')
+    assert.match(onExit, /TRAFFIC_MUTATION_ATTEMPTED.*==.*true/)
+    assert.match(onExit, /detect_candidate_deployment \|\| true[\s\S]*restore_baseline \|\| true/)
+    const split = source.indexOf(splitMarker)
+    const marker = source.lastIndexOf('TRAFFIC_MUTATION_ATTEMPTED="true"', split)
+    assert.ok(marker >= 0 && marker < split, `${label}: traffic mutation marker must precede split deploy`)
+  }
+})
+
+test('exact-target production rollback is read-only until protected mutation and cannot guess a previous version', async () => {
+  const source = await repoFile('.github/workflows/rollback-production.yml')
+  const jobs = await workflowJobs('.github/workflows/rollback-production.yml')
+  const document = parse(source) as { concurrency?: { group?: string; 'cancel-in-progress'?: boolean } }
+
+  for (const input of [
+    'expected_current_worker_version_id',
+    'target_worker_version_id',
+    'target_source_sha',
+    'incident_reason',
+  ]) {
+    assert.match(source, new RegExp(`${input}:[\\s\\S]*required:\\s*true`), `${input} must be required`)
+  }
+  assert.equal(document.concurrency?.group, 'production-release')
+  assert.equal(document.concurrency?.['cancel-in-progress'], false)
+  assert.equal(jobs.preflight?.environment, undefined)
+  assert.equal((jobs['rollback-production']?.environment as { name?: string })?.name, 'production')
+  assert.equal(jobs.preflight?.needs, undefined)
+  assert.equal(jobs.preflight?.if, undefined)
+  assert.deepEqual(jobs['rollback-production']?.needs, ['production-environment-preflight', 'preflight'])
+
+  assert.match(source, /production-rollback-preflight-/)
+  assert.match(source, /ref: \$\{\{ github\.sha \}\}/)
+  assert.match(source, /path: target-source/)
+  assert.match(source, /working-directory: target-source/)
+  assert.match(source, /sourceIdentities/)
+  assert.match(source, /cd target-source\/\.output && find \. -type f/)
+  assert.match(source, /cd \.output && find \. -type f/)
+  assert.match(source, /versions view "\$TARGET_WORKER_VERSION_ID"/)
+  assert.match(source, /release-route-inventory\.mjs/)
+  assert.match(source, /verify-deployed-candidate\.mjs[\s\S]*--version-override "\$TARGET_WORKER_VERSION_ID"/)
+  assert.match(source, /--build-dir target-source\/\.output\/public/)
+  assert.match(source, /WORKER_VERSION_OVERRIDE: \$\{\{ inputs\.target_worker_version_id \}\}/)
+  assert.match(source, /TRAFFIC_MUTATION_ATTEMPTED|rollback-traffic-mutation-attempted/)
+  assert.match(source, /printf '%s\\n' "true" > "\$flag"[\s\S]*versions deploy "\$TARGET_WORKER_VERSION_ID@100"/)
+  assert.match(source, /uuid_pattern='\^\[0-9a-f\]\{8\}/)
+  assert.match(source, /EXPECTED_CURRENT_WORKER_VERSION_ID" != "\$TARGET_WORKER_VERSION_ID/)
+  assert.match(source, /if: failure\(\)/)
+  assert.match(source, /versions deploy "\$EXPECTED_CURRENT_WORKER_VERSION_ID@100"/)
+  assert.match(source, /rollback-intervention-required\.json/)
+  assert.match(source, /public-surfaces-desktop[\s\S]*public-surfaces-mobile/)
+  const rollbackSteps = jobs['rollback-production']?.steps ?? []
+  const resultStep = rollbackSteps.find(step => step.name === 'Write rollback result evidence')
+  assert.equal(resultStep?.id, 'write-result')
+  const resultRestoreStep = rollbackSteps.find(step => step.name === 'Restore exact baseline after rollback result serialization failure')
+  assert.equal(resultRestoreStep?.if, "always() && steps.write-result.outcome == 'failure'")
+  assert.ok(resultStep && resultRestoreStep, 'rollback result serialization failure gate must be present')
+  const resultIndex = rollbackSteps.indexOf(resultStep!)
+  const resultRestoreIndex = rollbackSteps.indexOf(resultRestoreStep!)
+  const uploadStep = rollbackSteps.find(step => step.name === 'Upload rollback result evidence')
+  const uploadFailureStep = rollbackSteps.find(step => step.name === 'Stop and re-prove rollback target after evidence upload failure')
+  const uploadIndex = rollbackSteps.indexOf(uploadStep!)
+  assert.ok(resultRestoreIndex > resultIndex && uploadIndex > resultRestoreIndex, 'result restoration must follow serialization and precede evidence upload')
+  assert.equal(uploadStep?.id, 'upload-rollback-result')
+  assert.equal(uploadStep?.with?.['if-no-files-found'], 'error')
+  assert.equal(uploadFailureStep?.if, "always() && steps.upload-rollback-result.outcome != 'success'")
+  assert.ok(rollbackSteps.indexOf(uploadFailureStep!) > uploadIndex, 'upload failure proof must follow the rollback evidence upload')
+  assert.match(uploadFailureStep?.run ?? '', /exact rollback target is no longer proven at 100%/)
+  assert.doesNotMatch(uploadFailureStep?.run ?? '', /wrangler versions deploy/)
+  assert.match(uploadFailureStep?.run ?? '', /Traffic was not restored to the incident baseline/)
+  assert.match(resultRestoreStep?.run ?? '', /rollback-traffic-mutation-attempted/)
+  assert.match(resultRestoreStep?.run ?? '', /versions deploy "\$EXPECTED_CURRENT_WORKER_VERSION_ID@100"/)
+  assert.match(resultRestoreStep?.run ?? '', /rollback-baseline-restored\.json/)
+  assert.match(resultRestoreStep?.run ?? '', /wrangler deployments status/)
+  assert.match(resultRestoreStep?.run ?? '', /purge-deployment-cache\.ts/)
+  const resultRestoreRun = resultRestoreStep?.run ?? ''
+  const restoreDeploy = resultRestoreRun.indexOf('versions deploy "$EXPECTED_CURRENT_WORKER_VERSION_ID@100"')
+  const restoreStatus = resultRestoreRun.indexOf('wrangler deployments status')
+  const restoreVerify = resultRestoreRun.indexOf('Exact baseline restoration traffic is unknown or ambiguous')
+  const restorePurge = resultRestoreRun.indexOf('purge-deployment-cache.ts')
+  const restoredEvidence = resultRestoreRun.indexOf('restored:true')
+  assert.ok(restoreDeploy >= 0 && restoreStatus > restoreDeploy && restoreVerify > restoreStatus && restorePurge > restoreVerify && restoredEvidence > restorePurge, 'result serialization failure restoration must verify traffic and purge cache before marking restored')
+  assert.doesNotMatch(source, /wrangler d1|seed:|migrate:/)
+  assert.doesNotMatch(source, /previous|latest deployment|last deployment/i)
+
+  const cloudflareJobEnv = Object.values(jobs).flatMap(job => Object.keys((job as WorkflowJob & { env?: Record<string, string> }).env ?? {}))
+  assert.ok(!cloudflareJobEnv.includes('CLOUDFLARE_API_TOKEN'))
+  assert.ok(!cloudflareJobEnv.includes('CLOUDFLARE_ACCOUNT_ID'))
 })
 
 test('nightly browser telemetry is pinned to one retained build and cannot mutate an environment', async () => {
@@ -217,11 +516,69 @@ test('nightly browser telemetry is pinned to one retained build and cannot mutat
 
   assert.match(source, /ref: \$\{\{ inputs\.source_sha \|\| vars\.NIGHTLY_SOURCE_SHA \}\}/)
   assert.match(source, /NIGHTLY_ARTIFACT_RUN_ID/)
-  assert.match(source, /gh run view[\s\S]*\.headSha == \$sha/)
+  assert.match(source, /gh run view[\s\S]*conclusion,event,headSha,workflowName/)
+  assert.match(source, /\.event == "workflow_dispatch"/)
+  assert.match(source, /\.workflowName == "CI \(Full Validation Lane\)"/)
+  assert.match(source, /\.headSha == \$sha/)
   assert.match(source, /gh run download[\s\S]*production-build-\$NIGHTLY_SOURCE_SHA/)
   assert.match(source, /verify-deployed-candidate\.mjs[\s\S]*--version-override \"\$NIGHTLY_WORKER_VERSION_ID\"/)
+  assert.match(source, /release-route-inventory\.mjs/)
+  assert.match(source, /--route-inventory/)
   assert.match(source, /public-surfaces-desktop[\s\S]*public-surfaces-mobile/)
   assert.doesNotMatch(source, /canary:status|migrate:(?:prod|staging)|wrangler d1|wrangler (?:deploy|versions)|yarn seed/)
+})
+
+test('release workflows hard-bind route and origin evidence and block direct remote writes', async () => {
+  const full = await repoFile('.github/workflows/ci-full.yml')
+  const production = await repoFile('.github/workflows/release-production.yml')
+  const nightly = await repoFile('.github/workflows/e2e-full.yml')
+  const zaraz = await repoFile('.github/workflows/zaraz-ga-backfill.yml')
+  const packageSource = await repoFile('package.json')
+  const rollback = await repoFile('scripts/rollback-prod.mjs')
+  const zarazScript = await repoFile('scripts/zaraz-ga-backfill.mjs')
+  const commandBlocker = await repoFile('scripts/release-command-blocked.mjs')
+
+  assert.doesNotMatch(full, /inputs\.staging_base_url/)
+  assert.match(full, /STAGING_BASE_URL: https:\/\/staging\.krabiclaw\.com/)
+  assert.match(full, /release-route-inventory\.mjs[\s\S]*--route-inventory/)
+  assert.match(production, /STAGING_BASE_URL: https:\/\/staging\.krabiclaw\.com/)
+  assert.match(production, /\.browser\.baseUrl == \"https:\/\/staging\.krabiclaw\.com\"/)
+  assert.match(production, /stripeWebhookPreflight\.status == \"passed\"/)
+  assert.match(production, /stripeCatalogPreflight\.status == \"passed\"/)
+  assert.match(production, /stripeCatalogPreflight\.accountId \| test/)
+  assert.match(production, /stripeCatalogPreflight\.providerSnapshotSha256 \| test/)
+  assert.match(production, /stripeCanary\.status == \"passed\"/)
+  assert.match(nightly, /--route-inventory/)
+  assert.match(nightly, /RELEASE_ROUTE_INVENTORY_PATH=\$RUNNER_TEMP\/nightly-route-inventory\.json/)
+  assert.match(zaraz, /name: Zaraz GA4 Backfill Plan/)
+  assert.match(zaraz, /default: staging/)
+  assert.match(zaraz, /- staging[\s\S]*- preview/)
+  assert.doesNotMatch(zaraz, /dry_run:/)
+  assert.match(zaraz, /Production Zaraz configuration has no operator apply or plan path/)
+  assert.match(zaraz, /node scripts\/zaraz-ga-backfill\.mjs "\$target_flag" --dry-run/)
+  assert.doesNotMatch(zaraz, /yarn zaraz:ga:backfill/)
+  assert.match(zarazScript, /targets = \['--preview', '--staging'\]/)
+  assert.match(zarazScript, /const dryRun = process\.argv\.includes\('--dry-run'\)/)
+  assert.match(zarazScript, /status: 'plan_only'/)
+  assert.match(zarazScript, /writes: \{ d1: false, zaraz: false \}/)
+  assert.doesNotMatch(zarazScript, /method:\s*['"]PUT['"]|putResponse|Zaraz PUT/)
+  assert.match(packageSource, /"zaraz:ga:backfill":\s*"node scripts\/release-command-blocked\.mjs production zaraz-ga4-backfill"/)
+  assert.match(commandBlocker, /operation === 'rollback'[\s\S]*Production rollback \(exact-target, manifest-gated\)/)
+  assert.match(commandBlocker, /operation === 'zaraz-ga4-backfill'/)
+  assert.match(commandBlocker, /Direct Zaraz GA4 backfill apply is disabled/)
+  assert.match(commandBlocker, /Zaraz GA4 Backfill Plan/)
+  for (const command of [
+    'migrate:staging', 'migrate:prod', 'schema:remote', 'schema:staging',
+    'seed:staging', 'seed:demo:staging', 'seed:pottery-staging', 'seed:kikuzuki:staging',
+    'seed:docs:staging', 'seed:remote', 'seed:pottery-remote', 'seed:kikuzuki:remote',
+  ]) {
+    const escaped = command.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    assert.match(packageSource, new RegExp(`"${escaped}":\\s*"node scripts/release-command-blocked\\.mjs`), `${command} must be blocked`)
+  }
+  assert.match(packageSource, /"rollback:prod":\s*"node scripts\/release-command-blocked\.mjs production/)
+  assert.match(rollback, /Direct production rollback is disabled/)
+  assert.match(rollback, /Production rollback \(exact-target, manifest-gated\)/)
+  assert.doesNotMatch(rollback, /Production release \(manifest-gated\)/)
 })
 
 test('candidate contract documents separate landed, deployed, and verified states', async () => {
@@ -235,6 +592,7 @@ test('candidate contract documents separate landed, deployed, and verified state
     'browser evidence',
     'baseline 100%',
     'candidate 0%',
+    'durable traffic',
     'restore baseline',
     'landed',
     'deployed',

@@ -2,13 +2,17 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 
-const targets = ['--preview', '--staging', '--remote'].filter(flag => process.argv.includes(flag))
+const targets = ['--preview', '--staging'].filter(flag => process.argv.includes(flag))
 if (targets.length !== 1) {
-  console.error('Choose exactly one target: --preview, --staging, or --remote (production).')
+  console.error('Choose exactly one non-production target: --preview or --staging.')
   process.exit(1)
 }
 
 const dryRun = process.argv.includes('--dry-run')
+if (!dryRun) {
+  console.error('Zaraz GA4 backfill is plan-only; pass --dry-run to generate a read-only staging/preview plan.')
+  process.exit(1)
+}
 const target = targets[0]
 const wranglerToml = readFileSync('wrangler.toml', 'utf8')
 const readWranglerVar = (name) => wranglerToml.match(new RegExp(`^${name}\\s*=\\s*"([^"]+)"`, 'm'))?.[1] ?? ''
@@ -69,7 +73,11 @@ if (!response.ok || !envelope.success) {
   throw new Error(envelope.errors?.map(error => error.message).filter(Boolean).join('; ') || `Zaraz GET failed (${response.status})`)
 }
 
-const config = envelope.result
+if (!envelope.result || typeof envelope.result !== 'object') {
+  throw new Error('Zaraz GET returned no configuration object.')
+}
+const currentConfig = structuredClone(envelope.result)
+const config = structuredClone(currentConfig)
 config.tools ||= {}
 config.triggers ||= {}
 
@@ -159,14 +167,16 @@ for (const row of rows) {
   })
 }
 
-if (dryRun) {
-  console.log(JSON.stringify({ target, platformMeasurementId, platformHostnames, sites: rows.map(row => row.site_id), tools: rows.length }, null, 2))
-  process.exit(0)
-}
-
-const putResponse = await fetch(endpoint, { method: 'PUT', headers, body: JSON.stringify(config) })
-const putEnvelope = await putResponse.json()
-if (!putResponse.ok || !putEnvelope.success) {
-  throw new Error(putEnvelope.errors?.map(error => error.message).filter(Boolean).join('; ') || `Zaraz PUT failed (${putResponse.status})`)
-}
-console.log(`Synced ${rows.length} tenant GA4 connection(s) to Zaraz (${target.slice(2)}).`)
+console.log(JSON.stringify({
+  schemaVersion: 1,
+  kind: 'zaraz-ga4-backfill-plan',
+  status: 'plan_only',
+  target: target.slice(2),
+  writes: { d1: false, zaraz: false },
+  configChanged: JSON.stringify(currentConfig) !== JSON.stringify(config),
+  platformMeasurementId,
+  platformHostnames,
+  sites: rows.map(row => row.site_id),
+  tools: Object.keys(config.tools).sort(),
+  triggers: Object.keys(config.triggers).sort(),
+}, null, 2))

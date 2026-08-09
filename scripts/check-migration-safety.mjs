@@ -14,6 +14,19 @@ const IMMUTABLE_ALLOWLIST = new Set(['0047_free_molecule_man.sql'])
 const FIRST_ENFORCED_MIGRATION = 72
 const NOT_FOUND = -1
 
+// A release keeps the currently serving Worker at 100% while the candidate's
+// database migrations run.  Pending migrations therefore must be additive (or
+// data-repair-only) until the new Worker is serving.  This guard is separate
+// from the D1 relationship-preservation checks below: it catches schema
+// removal/renames that can make the old Worker fail even when the migration is
+// otherwise internally safe.
+const BACKWARD_INCOMPATIBLE_PATTERNS = Object.freeze([
+  { pattern: /\bDROP\s+(?:TABLE|COLUMN|INDEX|TRIGGER)\b/i, reason: 'schema removal can break the currently serving Worker' },
+  { pattern: /\bALTER\s+TABLE\b[\s\S]*\bRENAME\b/i, reason: 'table/column renames can break the currently serving Worker' },
+  { pattern: /\bALTER\s+TABLE\b[\s\S]*\bALTER\s+COLUMN\b/i, reason: 'column type/constraint changes can break the currently serving Worker' },
+  { pattern: /\bADD\s+COLUMN\b[\s\S]*\bNOT\s+NULL\b(?![\s\S]*\bDEFAULT\b)/i, reason: 'a new NOT NULL column without a default is not additive for existing rows' },
+])
+
 function migrationNumber(fileName) {
   const match = fileName.match(/^(\d{4})_/)
   return match ? Number(match[1]) : null
@@ -69,6 +82,16 @@ export function findUnsafeMigrationStatements(fileName, sql, migrationContext = 
   return findings
 }
 
+export function findBackwardIncompatibleMigrationStatements(fileName, sql) {
+  const number = migrationNumber(fileName)
+  if (number !== null && number < FIRST_ENFORCED_MIGRATION) return []
+  const findings = []
+  for (const { pattern, reason } of BACKWARD_INCOMPATIBLE_PATTERNS) {
+    if (pattern.test(sql)) findings.push(reason)
+  }
+  return findings
+}
+
 function findIndex(text, pattern, startIndex = 0) {
   const match = pattern.exec(text.slice(Math.max(0, startIndex)))
   return match ? match.index + Math.max(0, startIndex) : NOT_FOUND
@@ -87,8 +110,49 @@ export async function checkMigrationDirectory(migrationsDir) {
   return violations
 }
 
-async function main() {
+function pendingMigrationNamesFromText(text) {
+  return [...new Set(String(text ?? '').match(/\b\d{4}_[A-Za-z0-9_-]+\.sql\b/g) ?? [])]
+}
+
+export async function checkPendingMigrationCompatibility(migrationsDir, pendingListText) {
+  const pendingNames = pendingMigrationNamesFromText(pendingListText)
+  const violations = []
+  for (const fileName of pendingNames) {
+    let sql
+    try {
+      sql = await readFile(path.join(migrationsDir, fileName), 'utf8')
+    } catch {
+      violations.push(`${fileName}: pending migration file is missing from the checkout`)
+      continue
+    }
+    for (const reason of findBackwardIncompatibleMigrationStatements(fileName, sql)) violations.push(`${fileName}: ${reason}`)
+  }
+  return { pendingNames, violations }
+}
+
+async function main(argv = process.argv.slice(2)) {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+  const backwardCompatibleIndex = argv.indexOf('--backward-compatible')
+  if (backwardCompatibleIndex >= 0) {
+    const listIndex = argv.indexOf('--pending-from')
+    const listPath = listIndex >= 0 ? argv[listIndex + 1] : null
+    if (!listPath) {
+      console.error('--backward-compatible requires --pending-from <wrangler migration list output>')
+      process.exitCode = 1
+      return
+    }
+    const pendingText = await readFile(path.resolve(listPath), 'utf8')
+    const { pendingNames, violations } = await checkPendingMigrationCompatibility(path.join(root, 'migrations'), pendingText)
+    if (violations.length) {
+      console.error('Pending migration is not additive/backward-compatible while the old Worker is serving:')
+      for (const violation of violations) console.error(`- ${violation}`)
+      process.exitCode = 1
+      return
+    }
+    console.log(`Pending migration compatibility guard passed (${pendingNames.length} migration file${pendingNames.length === 1 ? '' : 's'} checked).`)
+    return
+  }
+
   const violations = await checkMigrationDirectory(path.join(root, 'migrations'))
   if (violations.length) {
     console.error('Unsafe D1 migration blocked:')

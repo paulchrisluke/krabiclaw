@@ -8,6 +8,7 @@ import {
   STRIPE_WEBHOOK_EVENTS,
   StripeWebhookPreflightError,
   assertCanonicalStripeWebhookEndpointUrl,
+  normalizeStripeWebhookExpectedMode,
   runStripeWebhookEndpointPreflight,
 } from './lib/stripe-webhook-preflight.mjs'
 
@@ -17,8 +18,14 @@ function requiredEnv(name) {
   return value
 }
 
-function failureEvidence(expectedUrl, error, sourceSha) {
+function failureEvidence(expectedUrl, error, sourceSha, expectedMode) {
   const details = error instanceof StripeWebhookPreflightError ? error.evidence : {}
+  let normalizedExpectedMode = null
+  try {
+    normalizedExpectedMode = normalizeStripeWebhookExpectedMode(expectedMode)
+  } catch {
+    // Keep malformed mode input out of the evidence while preserving the failure code.
+  }
   let normalizedExpectedUrl = null
   try {
     normalizedExpectedUrl = assertCanonicalStripeWebhookEndpointUrl(expectedUrl)
@@ -29,7 +36,8 @@ function failureEvidence(expectedUrl, error, sourceSha) {
     schemaVersion: 1,
     kind: 'stripe-webhook-endpoint-preflight',
     status: 'failed',
-    testMode: true,
+    accountMode: normalizedExpectedMode,
+    testMode: normalizedExpectedMode === 'test',
     sourceSha: sourceSha || null,
     expectedUrl: details.expectedUrl ?? normalizedExpectedUrl,
     endpointId: details.endpointId ?? null,
@@ -55,6 +63,7 @@ async function writeEvidence(path, evidence) {
 async function main() {
   const evidencePath = requiredEnv('STRIPE_WEBHOOK_PREFLIGHT_EVIDENCE_PATH')
   const expectedUrl = requiredEnv('STRIPE_WEBHOOK_ENDPOINT_URL')
+  const expectedMode = process.env.STRIPE_WEBHOOK_EXPECTED_MODE?.trim() || 'test'
   const sourceSha = process.env.GITHUB_SHA?.trim() || null
   let evidence
 
@@ -62,6 +71,7 @@ async function main() {
     const result = await runStripeWebhookEndpointPreflight({
       secretKey: process.env.STRIPE_SECRET_KEY,
       expectedUrl,
+      expectedMode,
       stripeFactory: (secretKey, options) => new Stripe(secretKey, {
         ...options,
         timeout: STRIPE_REQUEST_TIMEOUT_MS,
@@ -78,7 +88,7 @@ async function main() {
     await writeEvidence(evidencePath, evidence)
     process.stdout.write(`${JSON.stringify(evidence, null, 2)}\n`)
   } catch (error) {
-    evidence = failureEvidence(expectedUrl, error, sourceSha)
+    evidence = failureEvidence(expectedUrl, error, sourceSha, expectedMode)
     await writeEvidence(evidencePath, evidence)
     console.error(`Stripe webhook endpoint preflight failed: ${evidence.errorCode}`)
     process.exitCode = 1

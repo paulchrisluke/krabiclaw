@@ -74,8 +74,8 @@ jobs:
           set -euo pipefail
           [[ "$NIGHTLY_SOURCE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]
           [[ "$NIGHTLY_ARTIFACT_RUN_ID" =~ ^[0-9]+$ ]]
-          gh run view "$NIGHTLY_ARTIFACT_RUN_ID" --json conclusion,headSha > "$RUNNER_TEMP/nightly-build-run.json"
-          jq -e --arg sha "$NIGHTLY_SOURCE_SHA" '.conclusion == "success" and .headSha == $sha' "$RUNNER_TEMP/nightly-build-run.json" >/dev/null
+          gh run view "$NIGHTLY_ARTIFACT_RUN_ID" --json conclusion,event,headSha,workflowName > "$RUNNER_TEMP/nightly-build-run.json"
+          jq -e --arg sha "$NIGHTLY_SOURCE_SHA" '.conclusion == "success" and .event == "workflow_dispatch" and .headSha == $sha and .workflowName == "CI (Full Validation Lane)"' "$RUNNER_TEMP/nightly-build-run.json" >/dev/null
           mkdir -p "$RUNNER_TEMP/nightly-build"
           gh run download "$NIGHTLY_ARTIFACT_RUN_ID" \
             --name "production-build-$NIGHTLY_SOURCE_SHA" \
@@ -92,12 +92,17 @@ jobs:
           test -n "$NIGHTLY_BASE_URL"
           test -n "$NIGHTLY_SOURCE_SHA"
           test -n "$NIGHTLY_WORKER_VERSION_ID"
+          node scripts/release-route-inventory.mjs \
+            --base-url "$NIGHTLY_BASE_URL" \
+            --output "$RUNNER_TEMP/nightly-route-inventory.json" >/dev/null
+          echo "RELEASE_ROUTE_INVENTORY_PATH=$RUNNER_TEMP/nightly-route-inventory.json" >> "$GITHUB_ENV"
           node scripts/verify-deployed-candidate.mjs \
             --base-url "$NIGHTLY_BASE_URL" \
             --expected-sha "$NIGHTLY_SOURCE_SHA" \
             --expected-version-id "$NIGHTLY_WORKER_VERSION_ID" \
             --worker-name "$NIGHTLY_WORKER_NAME" \
             --version-override "$NIGHTLY_WORKER_VERSION_ID" \
+            --route-inventory "$RUNNER_TEMP/nightly-route-inventory.json" \
             --output "$RUNNER_TEMP/nightly-deployment-verification.json"
       - name: Run read-only desktop and mobile public surface checks
         run: |
@@ -125,6 +130,7 @@ jobs:
           name: playwright-report-nightly
           path: |
             ${{ runner.temp }}/nightly-deployment-verification.json
+            ${{ runner.temp }}/nightly-route-inventory.json
             playwright-report/
             test-results/
           retention-days: 14

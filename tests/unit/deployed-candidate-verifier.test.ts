@@ -9,12 +9,17 @@ import {
   runVerifierCli,
   verifyDeployedCandidate,
 } from '../../scripts/verify-deployed-candidate.mjs'
+import { buildReleaseRouteInventory } from '../../scripts/release-route-inventory.mjs'
+import {
+  buildLegacyRollbackRouteInventory,
+  LEGACY_ROLLBACK_TARGET_SHA,
+} from '../../scripts/legacy-rollback-route-inventory-4e49e5a37e4a0578bd1b306c4e0822c4fa8bc5c9.mjs'
 
 const sourceSha = '0123456789abcdef0123456789abcdef01234567'
 const workerVersionId = '01234567-89ab-cdef-0123-456789abcdef'
 const buildId = '01234567-89ab-cdef-0123-456789abcdef'
 
-async function startCandidateFixture({ versionId = workerVersionId, buildIdForRoutes = buildId } = {}) {
+async function startCandidateFixture({ versionId = workerVersionId, buildIdForRoutes = buildId, sourceShaForEndpoint = sourceSha } = {}) {
   const buildDir = await mkdtemp(join(tmpdir(), 'krabiclaw-build-'))
   await mkdir(join(buildDir, '_nuxt', 'builds', 'meta'), { recursive: true })
   await mkdir(join(buildDir, '_nuxt'), { recursive: true })
@@ -26,15 +31,21 @@ async function startCandidateFixture({ versionId = workerVersionId, buildIdForRo
   await writeFile(join(buildDir, '_nuxt', 'app.js'), localAssets['/_nuxt/app.js'])
   await writeFile(join(buildDir, '_nuxt', 'surface.css'), localAssets['/_nuxt/surface.css'])
 
-  const html = `<html><head><link rel="stylesheet" href="/_nuxt/surface.css"></head><body><script>buildId:"${buildIdForRoutes}"</script><script src="/_nuxt/app.js"></script></body></html>`
+  const html = `<html><head><link rel="stylesheet" href="/_nuxt/surface.css"></head><body><main>Your local business Features About Plugin Templates Saya Blawby How can we help Documentation Local AI Growth Notes Privacy Terms Sign in Create your account Forgot password Authorize Third-party notices Ember &amp; Slice Pottery House Kikuzuki Menu Experiences Locations Reviews Questions Photos Contact North Carolina Access to Justice for All About Us Our Services Family law Small business Employment Tenant rights Probate and estate Special education Affordable, for everyone Contact Us Message received Request a Legal Consultation Our Blog Support Equal Access to Justice Privacy Policy Terms of Use Third-Party Notices Getting a Divorce in North Carolina Preparing for Your Consultation Property Division Writing Your Own Will Shape something beautiful Friday nights Throw on the wheel creative base Getting started with KrabiClaw Deploy your first KrabiClaw site Set a brand color Invite team members Choose how KrabiClaw alerts you Connect KrabiClaw to ChatGPT</main><script>buildId:"${buildIdForRoutes}"</script><script src="/_nuxt/app.js"></script></body></html>`
+  const redirects = new Map([
+    ['/article/divorce-and-children-in-north-carolina-what-to-expect-and-how-to-prepare', '/article/divorce-and-children-in-north-carolina'],
+    ['/article/preparing-for-your-consultation', '/article/preparing-for-your-consultation-with-north-carolina-legal-services'],
+    ['/article/property-division-in-north-carolina-divorce', '/article/property-division-in-north-carolina-divorce-protecting-whats-yours'],
+    ['/article/writing-your-own-will-how-it-works-in-north-carolina', '/article/writing-your-own-will-how-it-works'],
+  ])
   const seenVersionOverrideHeaders = []
   const server = createServer((request, response) => {
     seenVersionOverrideHeaders.push(request.headers['cloudflare-workers-version-overrides'] ?? null)
     if (request.url === '/api/deployment') {
       response.writeHead(200, { 'content-type': 'application/json' })
       response.end(JSON.stringify({
-        sourceSha,
-        worker: { id: versionId, tag: sourceSha, timestamp: '2026-08-08T00:00:00.000Z' },
+        sourceSha: sourceShaForEndpoint,
+        worker: { id: versionId, tag: sourceShaForEndpoint, timestamp: '2026-08-08T00:00:00.000Z' },
       }))
       return
     }
@@ -46,6 +57,11 @@ async function startCandidateFixture({ versionId = workerVersionId, buildIdForRo
     if (request.url === '/_nuxt/app.js' || request.url === '/_nuxt/surface.css') {
       response.writeHead(200)
       response.end(localAssets[request.url])
+      return
+    }
+    if (redirects.has(request.url)) {
+      response.writeHead(301, { location: redirects.get(request.url)! })
+      response.end()
       return
     }
     response.writeHead(200, { 'content-type': 'text/html' })
@@ -103,6 +119,150 @@ test('verifyDeployedCandidate applies the Cloudflare version override header and
 
     assert.ok(fixture.seenVersionOverrideHeaders.length > 0)
     assert.ok(fixture.seenVersionOverrideHeaders.every((value) => value === `krabiclaw="${workerVersionId}"`))
+  } finally {
+    await fixture.close()
+  }
+})
+
+test('verifyDeployedCandidate requires and verifies the platform, Saya, and Blawby route inventory', async () => {
+  const fixture = await startCandidateFixture()
+
+  try {
+    const inventory = buildReleaseRouteInventory(fixture.baseUrl)
+    const evidence = await verifyDeployedCandidate({
+      baseUrl: fixture.baseUrl,
+      expectedSha: sourceSha,
+      expectedWorkerVersionId: workerVersionId,
+      routeInventory: inventory,
+      buildDir: fixture.buildDir,
+    })
+
+    assert.deepEqual(evidence.routeInventory.requiredSurfaces, ['platform', 'saya', 'blawby'])
+    assert.deepEqual(
+      [...new Set(evidence.routeEvidence.map((route) => route.surface))].sort(),
+      ['blawby', 'platform', 'saya', 'saya/kikuzuki', 'saya/pottery-house'],
+    )
+    assert.equal(evidence.routeEvidence.length, inventory.surfaces.reduce((sum, surface) => sum + surface.routes.length + (surface.variants ?? []).reduce((variantSum, variant) => variantSum + variant.routes.length, 0), 0))
+    assert.ok(evidence.routeEvidence.some((route) => route.redirects.length === 1))
+    assert.ok(fixture.seenVersionOverrideHeaders.every((value) => value === null))
+  } finally {
+    await fixture.close()
+  }
+})
+
+test('verifyDeployedCandidate rejects an incomplete release route inventory', async () => {
+  const fixture = await startCandidateFixture()
+
+  try {
+    await assert.rejects(
+      () => verifyDeployedCandidate({
+        baseUrl: fixture.baseUrl,
+        expectedSha: sourceSha,
+        routeInventory: {
+          schemaVersion: 1,
+          surfaces: [{ name: 'platform', baseUrl: fixture.baseUrl, routes: ['/'] }],
+        },
+        buildDir: fixture.buildDir,
+      }),
+      /missing required saya surface/,
+    )
+  } finally {
+    await fixture.close()
+  }
+})
+
+test('verifyDeployedCandidate accepts the one-time legacy rollback inventory with normalized origin contracts', async () => {
+  const fixture = await startCandidateFixture({ sourceShaForEndpoint: LEGACY_ROLLBACK_TARGET_SHA })
+
+  try {
+    const inventory = buildLegacyRollbackRouteInventory(fixture.baseUrl)
+    const evidence = await verifyDeployedCandidate({
+      baseUrl: fixture.baseUrl,
+      expectedSha: LEGACY_ROLLBACK_TARGET_SHA,
+      expectedWorkerVersionId: workerVersionId,
+      routeInventory: inventory,
+      buildDir: fixture.buildDir,
+    })
+    assert.equal(evidence.routeInventory?.inventoryKind, 'legacy-rollback-reviewed')
+    assert.ok(inventory.surfaces.every(surface => surface.routes.every(route => route.expectedOrigin === new URL(surface.baseUrl).origin)))
+    assert.ok(evidence.routeEvidence.every(route => route.expectedOrigin === new URL(route.baseUrl).origin))
+  } finally {
+    await fixture.close()
+  }
+})
+
+test('verifyDeployedCandidate rejects a route inventory for another origin or a weakened route set', async () => {
+  const fixture = await startCandidateFixture()
+
+  try {
+    const wrongOrigin = buildReleaseRouteInventory('https://staging.example.com')
+    await assert.rejects(
+      () => verifyDeployedCandidate({
+        baseUrl: fixture.baseUrl,
+        expectedSha: sourceSha,
+        routeInventory: wrongOrigin,
+        buildDir: fixture.buildDir,
+      }),
+      /does not match the exact release route and origin contract/,
+    )
+
+    const weakened = buildReleaseRouteInventory(fixture.baseUrl)
+    weakened.surfaces.find((surface) => surface.name === 'blawby')?.routes.pop()
+    await assert.rejects(
+      () => verifyDeployedCandidate({
+        baseUrl: fixture.baseUrl,
+        expectedSha: sourceSha,
+        routeInventory: weakened,
+        buildDir: fixture.buildDir,
+      }),
+      /does not match the exact release route and origin contract/,
+    )
+  } finally {
+    await fixture.close()
+  }
+})
+
+test('verifyDeployedCandidate rejects route and redirect contracts containing query/hash components', async () => {
+  const fixture = await startCandidateFixture()
+
+  try {
+    await assert.rejects(
+      () => verifyDeployedCandidate({
+        baseUrl: fixture.baseUrl,
+        expectedSha: sourceSha,
+        routes: ['/dashboard?session=1'],
+        buildDir: fixture.buildDir,
+      }),
+      /may not contain a query or hash/,
+    )
+
+    const inventory = buildReleaseRouteInventory(fixture.baseUrl)
+    const route = inventory.surfaces.find(surface => surface.name === 'blawby')?.routes.find(route => route.path === '/article/preparing-for-your-consultation')
+    assert.ok(route)
+    route.expectedPath = '/article/preparing-for-your-consultation?utm=1'
+    await assert.rejects(
+      () => verifyDeployedCandidate({
+        baseUrl: fixture.baseUrl,
+        expectedSha: sourceSha,
+        routeInventory: inventory,
+        buildDir: fixture.buildDir,
+      }),
+      /may not contain a query or hash|does not match the exact release route and origin contract/,
+    )
+
+    const redirectInventory = JSON.parse(JSON.stringify(buildReleaseRouteInventory(fixture.baseUrl))) as ReturnType<typeof buildReleaseRouteInventory>
+    const redirectRoute = redirectInventory.surfaces.find(surface => surface.name === 'blawby')?.routes.find(route => route.allowRedirects.length > 0)
+    assert.ok(redirectRoute)
+    redirectRoute.allowRedirects[0].path = `${redirectRoute.allowRedirects[0].path}?utm=1`
+    await assert.rejects(
+      () => verifyDeployedCandidate({
+        baseUrl: fixture.baseUrl,
+        expectedSha: sourceSha,
+        routeInventory: redirectInventory,
+        buildDir: fixture.buildDir,
+      }),
+      /may not contain a query or hash|does not match the exact release route and origin contract/,
+    )
   } finally {
     await fixture.close()
   }

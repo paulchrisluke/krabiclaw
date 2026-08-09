@@ -1,0 +1,677 @@
+name: Production rollback (exact-target, manifest-gated)
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_current_worker_version_id:
+        description: Exact currently active production Worker version ID. The workflow fails if production differs.
+        required: true
+        type: string
+      target_worker_version_id:
+        description: Exact immutable Worker version ID to route to after approval.
+        required: true
+        type: string
+      target_source_sha:
+        description: Exact 40-character source SHA tagged on the target Worker version.
+        required: true
+        type: string
+      incident_reason:
+        description: Incident identifier and reason for this rollback; retained in the evidence artifact.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+# Emergency rollback shares the normal production release lock so a release and
+# a rollback can never race. The protected production Environment is the
+# approval boundary for the mutation job only.
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+
+jobs:
+  production-environment-preflight:
+    name: Verify protected production Environment
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Require mandatory production reviewers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          response="$RUNNER_TEMP/production-environment.json"
+          api_url="${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/environments/production"
+          http_status="$(curl -sS --connect-timeout 10 --max-time 20 --retry 0 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            -o "$response" \
+            -w '%{http_code}' \
+            "$api_url")"
+          if [[ "$http_status" != "200" ]]; then
+            echo "GitHub production Environment API returned HTTP $http_status; rollback is blocked" >&2
+            exit 1
+          fi
+          if ! jq -e '
+            .name == "production"
+            and ((.protection_rules | type) == "array")
+            and (
+              [
+                .protection_rules[]?
+                | select(.type == "required_reviewers" and .prevent_self_review == true)
+                | (.reviewers // [])
+                | select(type == "array")
+                | .[]
+                | select(
+                    type == "object"
+                    and (.reviewer | type == "object")
+                    and ((.reviewer.login? // .reviewer.name? // .reviewer.slug?) | type == "string" and length > 0)
+                  )
+              ] | length
+            ) > 0
+          ' "$response" >/dev/null; then
+            echo "Production Environment lacks a non-self required reviewer; rollback is blocked" >&2
+            exit 1
+          fi
+          echo "Verified protected production Environment. No deployment was attempted."
+
+  preflight:
+    name: Read-only exact-target rollback preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      EXPECTED_CURRENT_WORKER_VERSION_ID: ${{ inputs.expected_current_worker_version_id }}
+      TARGET_WORKER_VERSION_ID: ${{ inputs.target_worker_version_id }}
+      TARGET_SOURCE_SHA: ${{ inputs.target_source_sha }}
+      INCIDENT_REASON: ${{ inputs.incident_reason }}
+      WORKER_NAME: krabiclaw
+      PRODUCTION_BASE_URL: https://krabiclaw.com
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ inputs.target_source_sha }}
+          path: target-source
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - name: Install target-source dependencies
+        working-directory: target-source
+        run: yarn install --frozen-lockfile
+      - name: Validate exact target checkout
+        run: |
+          set -euo pipefail
+          uuid_pattern='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+          [[ "$EXPECTED_CURRENT_WORKER_VERSION_ID" =~ $uuid_pattern ]]
+          [[ "$TARGET_WORKER_VERSION_ID" =~ $uuid_pattern ]]
+          [[ "$EXPECTED_CURRENT_WORKER_VERSION_ID" != "$TARGET_WORKER_VERSION_ID" ]]
+          [[ "$TARGET_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test -n "$INCIDENT_REASON"
+          control_plane_sha="$(git rev-parse HEAD)"
+          target_source_sha="$(git -C target-source rev-parse HEAD)"
+          test "${control_plane_sha,,}" = "${GITHUB_SHA,,}"
+          test "${target_source_sha,,}" = "${TARGET_SOURCE_SHA,,}"
+          CONTROL_PLANE_SOURCE_SHA="$control_plane_sha" TARGET_SOURCE_SHA="$target_source_sha" \
+            node -e 'const fs=require("node:fs");fs.writeFileSync(process.env.RUNNER_TEMP+"/rollback-source-identities.json",JSON.stringify({controlPlaneSourceSha:process.env.CONTROL_PLANE_SOURCE_SHA,targetSourceSha:process.env.TARGET_SOURCE_SHA},null,2)+"\n")'
+      - name: Build exact target once
+        working-directory: target-source
+        run: yarn build
+      - name: Hash immutable target build
+        run: |
+          set -euo pipefail
+          test -f target-source/.output/server/index.mjs
+          file_count="$(find target-source/.output -type f | wc -l | tr -d ' ')"
+          tree_sha256="$(cd target-source/.output && find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}')"
+          server_entry_sha256="$(sha256sum target-source/.output/server/index.mjs | awk '{print $1}')"
+          BUILD_FILE_COUNT="$file_count" BUILD_TREE_SHA256="$tree_sha256" SERVER_ENTRY_SHA256="$server_entry_sha256" \
+            node -e 'const fs=require("node:fs");fs.writeFileSync(process.env.RUNNER_TEMP+"/rollback-build-identity.json",JSON.stringify({sourceSha:process.env.TARGET_SOURCE_SHA,artifact:"target-source/.output",fileCount:Number(process.env.BUILD_FILE_COUNT),treeSha256:process.env.BUILD_TREE_SHA256,serverEntrySha256:process.env.SERVER_ENTRY_SHA256},null,2)+"\n")'
+      - name: Generate immutable release route inventory from target source
+        working-directory: target-source
+        run: |
+          set -euo pipefail
+          if [[ "$TARGET_SOURCE_SHA" == "4e49e5a37e4a0578bd1b306c4e0822c4fa8bc5c9" ]]; then
+            # One-time bridge for the attributable target whose checkout
+            # predates the release verifier/spec. There is intentionally no
+            # generic missing-file fallback.
+            test ! -e scripts/release-route-inventory.mjs
+            test ! -e tests/e2e/public-surfaces-release.spec.ts
+            node ../scripts/legacy-rollback-route-inventory-4e49e5a37e4a0578bd1b306c4e0822c4fa8bc5c9.mjs \
+              --base-url "$PRODUCTION_BASE_URL" --output "$RUNNER_TEMP/release-route-inventory.json"
+          else
+            test -f scripts/release-route-inventory.mjs
+            test -f tests/e2e/public-surfaces-release.spec.ts
+            node scripts/release-route-inventory.mjs --base-url "$PRODUCTION_BASE_URL" --output "$RUNNER_TEMP/release-route-inventory.json"
+          fi
+      - name: Prove current traffic and target provenance (read-only)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          current_status="$RUNNER_TEMP/current-production-deployment.json"
+          target_version="$RUNNER_TEMP/target-worker-version.json"
+          npx wrangler deployments status --name "$WORKER_NAME" --json > "$current_status"
+          npx wrangler versions view "$TARGET_WORKER_VERSION_ID" --json > "$target_version"
+          CURRENT_STATUS_PATH="$current_status" TARGET_VERSION_PATH="$target_version" \
+          EXPECTED_CURRENT_WORKER_VERSION_ID="$EXPECTED_CURRENT_WORKER_VERSION_ID" TARGET_WORKER_VERSION_ID="$TARGET_WORKER_VERSION_ID" TARGET_SOURCE_SHA="$TARGET_SOURCE_SHA" \
+            node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs'
+
+          const readJson = (path) => { try { return JSON.parse(readFileSync(path, 'utf8')) } catch { return null } }
+          const idOf = (version) => version?.version_id ?? version?.versionId ?? version?.id
+          const trafficOf = (version) => Number(version?.percentage ?? version?.traffic ?? NaN)
+          const rowsOf = (value, label) => {
+            const deployment = value?.latest_deployment ?? value
+            const versions = Array.isArray(deployment?.versions) ? deployment.versions : []
+            if (versions.length === 0) throw new Error(`${label} deployment state is missing versions`)
+            const rows = versions.map((version) => ({ id: idOf(version), traffic: trafficOf(version) }))
+            if (rows.some((row) => typeof row.id !== 'string' || !Number.isFinite(row.traffic) || row.traffic < 0 || row.traffic > 100)) {
+              throw new Error(`${label} deployment state contains an unknown version or traffic value`)
+            }
+            const total = rows.reduce((sum, row) => sum + row.traffic, 0)
+            if (Math.abs(total - 100) > 0.001) throw new Error(`${label} deployment traffic does not total 100%`)
+            return rows
+          }
+          const findVersion = (root, expectedId) => {
+            const queue = [root]
+            while (queue.length) {
+              const value = queue.shift()
+              if (!value || typeof value !== 'object') continue
+              if (Array.isArray(value)) {
+                queue.push(...value)
+                continue
+              }
+              if (idOf(value) === expectedId) return value
+              queue.push(...Object.values(value))
+            }
+            return null
+          }
+          const expectedCurrent = process.env.EXPECTED_CURRENT_WORKER_VERSION_ID
+          const targetId = process.env.TARGET_WORKER_VERSION_ID
+          const sourceSha = process.env.TARGET_SOURCE_SHA.toLowerCase()
+          const currentRows = rowsOf(readJson(process.env.CURRENT_STATUS_PATH), 'Current production')
+          const currentActive = currentRows.filter((row) => row.traffic > 0)
+          if (currentActive.length !== 1 || currentActive[0].id !== expectedCurrent || currentActive[0].traffic !== 100) {
+            throw new Error(`Expected current Worker ${expectedCurrent} at 100%; production traffic is different or ambiguous`)
+          }
+          const targetMetadata = findVersion(readJson(process.env.TARGET_VERSION_PATH), targetId)
+          if (!targetMetadata) throw new Error(`Target Worker version ${targetId} was not found in versions view output`)
+          const targetTag = targetMetadata.tag ?? targetMetadata.worker_tag ?? targetMetadata.version_tag ?? targetMetadata.metadata?.tag ?? targetMetadata.annotations?.tag ?? targetMetadata.annotations?.['workers/tag']
+          if (typeof targetTag !== 'string' || targetTag.toLowerCase() !== sourceSha) {
+            throw new Error(`Target Worker version ${targetId} is not tagged with source SHA ${sourceSha}`)
+          }
+          writeFileSync(process.env.RUNNER_TEMP + '/rollback-worker-state.json', `${JSON.stringify({
+            schemaVersion: 1,
+            current: { expectedVersionId: expectedCurrent, active: currentActive[0], versions: currentRows },
+            target: { versionId: targetId, sourceSha, tag: targetTag, metadata: targetMetadata },
+            status: 'verified',
+          }, null, 2)}\n`)
+          NODE
+      - name: Verify target assets and browser route inventory (read-only)
+        run: |
+          set -euo pipefail
+          verifier="target-source/scripts/verify-deployed-candidate.mjs"
+          if [[ "$TARGET_SOURCE_SHA" == "4e49e5a37e4a0578bd1b306c4e0822c4fa8bc5c9" ]]; then
+            # The old target has no verifier. Use the current control-plane
+            # verifier only with the exact reviewed legacy inventory and the
+            # build produced from target-source above.
+            verifier="scripts/verify-deployed-candidate.mjs"
+          else
+            test -f "$verifier"
+          fi
+          node "$verifier" \
+            --base-url "$PRODUCTION_BASE_URL" \
+            --expected-sha "$TARGET_SOURCE_SHA" \
+            --expected-version-id "$TARGET_WORKER_VERSION_ID" \
+            --worker-name "$WORKER_NAME" \
+            --version-override "$TARGET_WORKER_VERSION_ID" \
+            --route-inventory "$RUNNER_TEMP/release-route-inventory.json" \
+            --build-dir target-source/.output/public \
+            --output "$RUNNER_TEMP/rollback-target-verification.json"
+      - name: Install browser runtime for candidate proof
+        if: always()
+        run: npx playwright install --with-deps chromium
+      - name: Verify target Saya and Blawby on desktop and mobile browsers (read-only)
+        if: always()
+        env:
+          PLAYWRIGHT_PREVIEW_URL: https://krabiclaw.com
+          PLAYWRIGHT_WORKERS: "1"
+          WORKER_NAME: krabiclaw
+          WORKER_VERSION_OVERRIDE: ${{ inputs.target_worker_version_id }}
+          RELEASE_ROUTE_INVENTORY_PATH: ${{ runner.temp }}/release-route-inventory.json
+        run: |
+          set -Eeuo pipefail
+          result="$RUNNER_TEMP/rollback-candidate-browser-result.json"
+          browser_spec="target-source/tests/e2e/public-surfaces-release.spec.ts"
+          if [[ "$TARGET_SOURCE_SHA" == "4e49e5a37e4a0578bd1b306c4e0822c4fa8bc5c9" ]]; then
+            # Exercise the current browser harness with the same immutable
+            # legacy inventory used by the current control-plane verifier.
+            browser_spec="tests/e2e/public-surfaces-release.spec.ts"
+          else
+            test -f "$browser_spec"
+          fi
+          if npx playwright test "$browser_spec" --project=public-surfaces-desktop --project=public-surfaces-mobile --workers=1; then
+            printf '%s\n' '{"status":"passed","projects":["public-surfaces-desktop","public-surfaces-mobile"],"surfaces":["Saya","Blawby"],"routeInventory":"release-route-inventory.json","interactiveEvidence":{"publicRoutes":"tests/e2e/public-surfaces-release.spec.ts","linksPage":"tests/e2e/links-page.spec.ts","pagesEditor":"tests/e2e/universal-cms.spec.ts"},"versionOverride":"'"$TARGET_WORKER_VERSION_ID"'"}' > "$result"
+          else
+            printf '%s\n' '{"status":"failed","projects":["public-surfaces-desktop","public-surfaces-mobile"],"surfaces":["Saya","Blawby"],"routeInventory":"release-route-inventory.json","interactiveEvidence":{"publicRoutes":"tests/e2e/public-surfaces-release.spec.ts","linksPage":"tests/e2e/links-page.spec.ts","pagesEditor":"tests/e2e/universal-cms.spec.ts"},"versionOverride":"'"$TARGET_WORKER_VERSION_ID"'"}' > "$result"
+            exit 1
+          fi
+      - name: Write read-only rollback preflight manifest
+        if: always()
+        run: |
+          set -euo pipefail
+          BUILD_IDENTITY_PATH="$RUNNER_TEMP/rollback-build-identity.json" \
+          SOURCE_IDENTITIES_PATH="$RUNNER_TEMP/rollback-source-identities.json" \
+          WORKER_STATE_PATH="$RUNNER_TEMP/rollback-worker-state.json" \
+          ROUTE_INVENTORY_PATH="$RUNNER_TEMP/release-route-inventory.json" \
+          TARGET_VERIFICATION_PATH="$RUNNER_TEMP/rollback-target-verification.json" \
+          CANDIDATE_BROWSER_PATH="$RUNNER_TEMP/rollback-candidate-browser-result.json" \
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs'
+          const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'))
+          const manifest = {
+            schemaVersion: 1,
+            kind: 'production-exact-target-rollback-preflight',
+            status: readJson(process.env.CANDIDATE_BROWSER_PATH)?.status === 'passed' && readJson(process.env.TARGET_VERIFICATION_PATH)?.sourceSha === process.env.TARGET_SOURCE_SHA.toLowerCase() ? 'verified' : 'failed',
+            incidentReason: process.env.INCIDENT_REASON,
+            expectedCurrentWorkerVersionId: process.env.EXPECTED_CURRENT_WORKER_VERSION_ID,
+            targetWorkerVersionId: process.env.TARGET_WORKER_VERSION_ID,
+            targetSourceSha: process.env.TARGET_SOURCE_SHA.toLowerCase(),
+            sourceIdentities: readJson(process.env.SOURCE_IDENTITIES_PATH),
+            build: readJson(process.env.BUILD_IDENTITY_PATH),
+            routeInventory: readJson(process.env.ROUTE_INVENTORY_PATH),
+            workerState: readJson(process.env.WORKER_STATE_PATH),
+            targetVerification: readJson(process.env.TARGET_VERIFICATION_PATH),
+            candidateBrowser: readJson(process.env.CANDIDATE_BROWSER_PATH),
+            mutationAttempted: false,
+            dataWrites: false,
+          }
+          writeFileSync(process.env.RUNNER_TEMP + '/production-rollback-preflight.json', `${JSON.stringify(manifest, null, 2)}\n`)
+          NODE
+          {
+            echo "## Production exact-target rollback preflight"
+            echo "- Incident: $INCIDENT_REASON"
+            echo "- Expected current Worker: `$EXPECTED_CURRENT_WORKER_VERSION_ID`"
+            echo "- Exact target Worker: `$TARGET_WORKER_VERSION_ID`"
+            echo "- Target source SHA: `$TARGET_SOURCE_SHA`"
+            echo "- Route inventory: platform, Saya, and Blawby surfaces"
+            jq -r '"- Status: "+.status+"; protected approval is still required before routing traffic"' "$RUNNER_TEMP/production-rollback-preflight.json"
+            echo "- No production data, fixture, or provider writes were performed"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload immutable rollback preflight evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: production-rollback-preflight-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/production-rollback-preflight.json
+            ${{ runner.temp }}/rollback-build-identity.json
+            ${{ runner.temp }}/rollback-source-identities.json
+            ${{ runner.temp }}/rollback-worker-state.json
+            ${{ runner.temp }}/rollback-target-verification.json
+            ${{ runner.temp }}/rollback-candidate-browser-result.json
+            ${{ runner.temp }}/release-route-inventory.json
+            target-source/.output
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
+
+  rollback-production:
+    name: Route exact target after protected approval
+    needs: [production-environment-preflight, preflight]
+    if: needs.production-environment-preflight.result == 'success' && needs.preflight.result == 'success'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    timeout-minutes: 90
+    env:
+      EXPECTED_CURRENT_WORKER_VERSION_ID: ${{ inputs.expected_current_worker_version_id }}
+      TARGET_WORKER_VERSION_ID: ${{ inputs.target_worker_version_id }}
+      TARGET_SOURCE_SHA: ${{ inputs.target_source_sha }}
+      INCIDENT_REASON: ${{ inputs.incident_reason }}
+      WORKER_NAME: krabiclaw
+      PRODUCTION_BASE_URL: https://krabiclaw.com
+      PREFLIGHT_ARTIFACT_NAME: production-rollback-preflight-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ inputs.target_source_sha }}
+          path: target-source
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - name: Install target-source dependencies
+        working-directory: target-source
+        run: yarn install --frozen-lockfile
+      - name: Download and attest exact preflight artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: ${{ env.PREFLIGHT_ARTIFACT_NAME }}
+          path: ${{ runner.temp }}/rollback-preflight
+      - name: Validate preflight artifact and reuse its build
+        run: |
+          set -euo pipefail
+          uuid_pattern='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+          [[ "$EXPECTED_CURRENT_WORKER_VERSION_ID" =~ $uuid_pattern ]]
+          [[ "$TARGET_WORKER_VERSION_ID" =~ $uuid_pattern ]]
+          [[ "$EXPECTED_CURRENT_WORKER_VERSION_ID" != "$TARGET_WORKER_VERSION_ID" ]]
+          [[ "$TARGET_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "${GITHUB_SHA,,}" = "$(git rev-parse HEAD | tr '[:upper:]' '[:lower:]')"
+          manifest="$RUNNER_TEMP/rollback-preflight/production-rollback-preflight.json"
+          test -f "$manifest"
+          jq -e --arg current "$EXPECTED_CURRENT_WORKER_VERSION_ID" --arg target "$TARGET_WORKER_VERSION_ID" --arg sha "${TARGET_SOURCE_SHA,,}" --arg control "${GITHUB_SHA,,}" \
+            '.status == "verified" and .dataWrites == false and .mutationAttempted == false and .expectedCurrentWorkerVersionId == $current and .targetWorkerVersionId == $target and .targetSourceSha == $sha and .sourceIdentities.controlPlaneSourceSha == $control and .sourceIdentities.targetSourceSha == $sha and .build.sourceSha == $sha and .routeInventory.requiredSurfaces == ["platform", "saya", "blawby"] and .targetVerification.sourceSha == $sha and .targetVerification.workerVersionId == $target and .candidateBrowser.status == "passed"' \
+            "$manifest" >/dev/null
+          build_root="$(find "$RUNNER_TEMP/rollback-preflight" -type f -path '*/server/index.mjs' -print -quit)"
+          test -n "$build_root"
+          build_root="${build_root%/server/index.mjs}"
+          test ! -e .output
+          cp -R "$build_root" .output
+          expected_count="$(jq -r '.build.fileCount' "$manifest")"
+          expected_tree="$(jq -r '.build.treeSha256' "$manifest")"
+          expected_server="$(jq -r '.build.serverEntrySha256' "$manifest")"
+          actual_count="$(find .output -type f | wc -l | tr -d ' ')"
+          actual_tree="$(cd .output && find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}')"
+          actual_server="$(sha256sum .output/server/index.mjs | awk '{print $1}')"
+          test "$actual_count" = "$expected_count"
+          test "$actual_tree" = "$expected_tree"
+          test "$actual_server" = "$expected_server"
+          cp "$RUNNER_TEMP/rollback-preflight/release-route-inventory.json" "$RUNNER_TEMP/rollback-route-inventory.json"
+      - name: Install browser runtime for post-deploy proof
+        run: npx playwright install --with-deps chromium
+      - name: Route exact Worker target and prove traffic state
+        id: deploy-target
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -Eeuo pipefail
+          flag="$RUNNER_TEMP/rollback-traffic-mutation-attempted"
+          target_status="$RUNNER_TEMP/rollback-target-deployment.json"
+          current_status="$RUNNER_TEMP/rollback-current-before-mutation.json"
+          npx wrangler deployments status --name "$WORKER_NAME" --json > "$current_status"
+          EXPECTED="$EXPECTED_CURRENT_WORKER_VERSION_ID" STATUS_PATH="$current_status" node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs'
+          const value = JSON.parse(readFileSync(process.env.STATUS_PATH, 'utf8'))
+          const deployment = value?.latest_deployment ?? value
+          const versions = Array.isArray(deployment?.versions) ? deployment.versions : []
+          const rows = versions.map((version) => ({ id: version?.version_id ?? version?.versionId ?? version?.id, traffic: Number(version?.percentage ?? version?.traffic ?? NaN) }))
+          const active = rows.filter((row) => row.traffic > 0)
+          const total = rows.reduce((sum, row) => sum + row.traffic, 0)
+          if (!rows.length || rows.some((row) => typeof row.id !== 'string' || !Number.isFinite(row.traffic) || row.traffic < 0 || row.traffic > 100) || Math.abs(total - 100) > 0.001 || active.length !== 1 || active[0].id !== process.env.EXPECTED || active[0].traffic !== 100) throw new Error('Production current traffic is unknown or differs from the expected exact baseline')
+          NODE
+          # This durable marker is written immediately before the first traffic mutation.
+          printf '%s\n' "true" > "$flag"
+          npx wrangler versions deploy "$TARGET_WORKER_VERSION_ID@100" --name "$WORKER_NAME" --message "Incident rollback: $INCIDENT_REASON" --yes
+          npx wrangler deployments status --name "$WORKER_NAME" --json > "$target_status"
+          EXPECTED="$TARGET_WORKER_VERSION_ID" STATUS_PATH="$target_status" node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs'
+          const value = JSON.parse(readFileSync(process.env.STATUS_PATH, 'utf8'))
+          const deployment = value?.latest_deployment ?? value
+          const versions = Array.isArray(deployment?.versions) ? deployment.versions : []
+          const rows = versions.map((version) => ({ id: version?.version_id ?? version?.versionId ?? version?.id, traffic: Number(version?.percentage ?? version?.traffic ?? NaN) }))
+          const active = rows.filter((row) => row.traffic > 0)
+          const total = rows.reduce((sum, row) => sum + row.traffic, 0)
+          if (!rows.length || rows.some((row) => typeof row.id !== 'string' || !Number.isFinite(row.traffic) || row.traffic < 0 || row.traffic > 100) || Math.abs(total - 100) > 0.001 || active.length !== 1 || active[0].id !== process.env.EXPECTED || active[0].traffic !== 100) throw new Error('Target traffic status is unknown or ambiguous')
+          writeFileSync(process.env.RUNNER_TEMP + '/rollback-target-deployment-verified.json', `${JSON.stringify({ status: 'verified', active: active[0], versions: rows }, null, 2)}\n`)
+          NODE
+          DEPLOYMENT_CACHE_ORIGIN="$PRODUCTION_BASE_URL" node --experimental-strip-types scripts/purge-deployment-cache.ts
+      - name: Verify deployed target assets and source provenance
+        id: verify-target
+        run: |
+          set -euo pipefail
+          verifier="target-source/scripts/verify-deployed-candidate.mjs"
+          if [[ "$TARGET_SOURCE_SHA" == "4e49e5a37e4a0578bd1b306c4e0822c4fa8bc5c9" ]]; then
+            verifier="scripts/verify-deployed-candidate.mjs"
+          else
+            test -f "$verifier"
+          fi
+          node "$verifier" \
+            --base-url "$PRODUCTION_BASE_URL" \
+            --expected-sha "$TARGET_SOURCE_SHA" \
+            --expected-version-id "$TARGET_WORKER_VERSION_ID" \
+            --worker-name "$WORKER_NAME" \
+            --route-inventory "$RUNNER_TEMP/rollback-route-inventory.json" \
+            --output "$RUNNER_TEMP/rollback-deployed-verification.json"
+      - name: Verify Saya and Blawby on desktop and mobile browsers
+        id: browser-target
+        env:
+          PLAYWRIGHT_PREVIEW_URL: https://krabiclaw.com
+          PLAYWRIGHT_WORKERS: "1"
+          WORKER_NAME: krabiclaw
+          RELEASE_ROUTE_INVENTORY_PATH: ${{ runner.temp }}/rollback-route-inventory.json
+        run: |
+          set -Eeuo pipefail
+          result="$RUNNER_TEMP/rollback-browser-result.json"
+          browser_spec="target-source/tests/e2e/public-surfaces-release.spec.ts"
+          if [[ "$TARGET_SOURCE_SHA" == "4e49e5a37e4a0578bd1b306c4e0822c4fa8bc5c9" ]]; then
+            browser_spec="tests/e2e/public-surfaces-release.spec.ts"
+          else
+            test -f "$browser_spec"
+          fi
+          if npx playwright test "$browser_spec" --project=public-surfaces-desktop --project=public-surfaces-mobile --workers=1; then
+            printf '%s\n' '{"status":"passed","projects":["public-surfaces-desktop","public-surfaces-mobile"],"surfaces":["Saya","Blawby"],"routeInventory":"rollback-route-inventory.json","interactiveEvidence":{"publicRoutes":"tests/e2e/public-surfaces-release.spec.ts","linksPage":"tests/e2e/links-page.spec.ts","pagesEditor":"tests/e2e/universal-cms.spec.ts"}}' > "$result"
+          else
+            printf '%s\n' '{"status":"failed","projects":["public-surfaces-desktop","public-surfaces-mobile"],"surfaces":["Saya","Blawby"],"routeInventory":"rollback-route-inventory.json","interactiveEvidence":{"publicRoutes":"tests/e2e/public-surfaces-release.spec.ts","linksPage":"tests/e2e/links-page.spec.ts","pagesEditor":"tests/e2e/universal-cms.spec.ts"}}' > "$result"
+            exit 1
+          fi
+      - name: Restore exact baseline after post-mutation failure
+        if: failure()
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -Eeuo pipefail
+          flag="$RUNNER_TEMP/rollback-traffic-mutation-attempted"
+          evidence="$RUNNER_TEMP/rollback-intervention-required.json"
+          if [[ ! -s "$flag" ]]; then
+            echo "No Worker traffic mutation was attempted; no compensating deployment will be created"
+            exit 0
+          fi
+          EVIDENCE="$evidence" node -e 'const fs=require("node:fs");fs.writeFileSync(process.env.EVIDENCE,JSON.stringify({status:"intervention_required",reason:"A post-mutation status, asset, or browser gate failed; restoring the exact declared baseline.",expectedCurrentWorkerVersionId:process.env.EXPECTED_CURRENT_WORKER_VERSION_ID,targetWorkerVersionId:process.env.TARGET_WORKER_VERSION_ID,restored:false},null,2)+"\n")'
+          restore_status="$RUNNER_TEMP/rollback-baseline-restored.json"
+          if ! npx wrangler versions deploy "$EXPECTED_CURRENT_WORKER_VERSION_ID@100" --name "$WORKER_NAME" --message "Restore exact declared baseline after incident rollback ambiguity" --yes; then
+            echo "Exact baseline restoration failed; operator intervention is required" >&2
+            exit 1
+          fi
+          if ! npx wrangler deployments status --name "$WORKER_NAME" --json > "$restore_status"; then
+            echo "Exact baseline restoration status lookup failed; operator intervention is required" >&2
+            exit 1
+          fi
+          EXPECTED="$EXPECTED_CURRENT_WORKER_VERSION_ID" STATUS_PATH="$restore_status" node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs'
+          const value = JSON.parse(readFileSync(process.env.STATUS_PATH, 'utf8'))
+          const deployment = value?.latest_deployment ?? value
+          const versions = Array.isArray(deployment?.versions) ? deployment.versions : []
+          const rows = versions.map((version) => ({ id: version?.version_id ?? version?.versionId ?? version?.id, traffic: Number(version?.percentage ?? version?.traffic ?? NaN) }))
+          const active = rows.filter((row) => row.traffic > 0)
+          const total = rows.reduce((sum, row) => sum + row.traffic, 0)
+          if (!rows.length || rows.some((row) => typeof row.id !== 'string' || !Number.isFinite(row.traffic) || row.traffic < 0 || row.traffic > 100) || Math.abs(total - 100) > 0.001 || active.length !== 1 || active[0].id !== process.env.EXPECTED || active[0].traffic !== 100) throw new Error('Exact baseline restoration traffic is unknown or ambiguous')
+          writeFileSync(process.env.RUNNER_TEMP + '/rollback-intervention-required.json', `${JSON.stringify({ status: 'intervention_required', reason: 'A post-mutation gate failed; exact declared baseline restoration was verified.', expectedCurrentWorkerVersionId: process.env.EXPECTED, targetWorkerVersionId: process.env.TARGET_WORKER_VERSION_ID, restored: true, active: active[0] }, null, 2)}\n`)
+          NODE
+          DEPLOYMENT_CACHE_ORIGIN="$PRODUCTION_BASE_URL" node --experimental-strip-types scripts/purge-deployment-cache.ts
+      - name: Write rollback result evidence
+        id: write-result
+        if: always()
+        run: |
+          set -euo pipefail
+          manifest="$RUNNER_TEMP/rollback-preflight/production-rollback-preflight.json"
+          node --input-type=module <<'NODE'
+          import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+          const readJson = (path) => { try { return JSON.parse(readFileSync(path, 'utf8')) } catch { return null } }
+          const intervention = readJson(process.env.RUNNER_TEMP + '/rollback-intervention-required.json')
+          const deployed = readJson(process.env.RUNNER_TEMP + '/rollback-target-deployment-verified.json')
+          const verification = readJson(process.env.RUNNER_TEMP + '/rollback-deployed-verification.json')
+          const browser = readJson(process.env.RUNNER_TEMP + '/rollback-browser-result.json')
+          const status = intervention ? 'failed_intervention_required' : deployed && verification?.sourceSha === process.env.TARGET_SOURCE_SHA.toLowerCase() && browser?.status === 'passed' ? 'verified' : 'failed'
+          writeFileSync(process.env.RUNNER_TEMP + '/production-rollback-result.json', `${JSON.stringify({
+            schemaVersion: 1,
+            kind: 'production-exact-target-rollback-result',
+            status,
+            incidentReason: process.env.INCIDENT_REASON,
+            expectedCurrentWorkerVersionId: process.env.EXPECTED_CURRENT_WORKER_VERSION_ID,
+            targetWorkerVersionId: process.env.TARGET_WORKER_VERSION_ID,
+            targetSourceSha: process.env.TARGET_SOURCE_SHA.toLowerCase(),
+            preflight: readJson(process.env.RUNNER_TEMP + '/rollback-preflight/production-rollback-preflight.json'),
+            trafficMutationAttempted: existsSync(process.env.RUNNER_TEMP + '/rollback-traffic-mutation-attempted'),
+            deployed,
+            verification,
+            browser,
+            intervention,
+          }, null, 2)}\n`)
+          NODE
+          {
+            echo "## Production exact-target rollback result"
+            echo "- Incident: $INCIDENT_REASON"
+            echo "- Declared current Worker: `$EXPECTED_CURRENT_WORKER_VERSION_ID`"
+            echo "- Declared target Worker: `$TARGET_WORKER_VERSION_ID`"
+            echo "- Target source SHA: `$TARGET_SOURCE_SHA`"
+            jq -r '"- Result: "+.status' "$RUNNER_TEMP/production-rollback-result.json"
+            echo "- Evidence distinguishes mutation, deployed, and browser-verified states"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Restore exact baseline after rollback result serialization failure
+        if: always() && steps.write-result.outcome == 'failure'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -Eeuo pipefail
+          flag="$RUNNER_TEMP/rollback-traffic-mutation-attempted"
+          evidence="$RUNNER_TEMP/rollback-intervention-required.json"
+          if [[ ! -s "$flag" ]]; then
+            echo "Rollback result serialization failed before any Worker traffic mutation; no compensating deployment will be created"
+            exit 0
+          fi
+          if [[ -s "$evidence" ]] && jq -e '.restored == true' "$evidence" >/dev/null 2>&1; then
+            echo "Exact baseline was already restored and verified by the earlier post-mutation failure gate"
+            exit 0
+          fi
+          EVIDENCE="$evidence" node -e 'const fs=require("node:fs");try{fs.writeFileSync(process.env.EVIDENCE,JSON.stringify({status:"intervention_required",reason:"Rollback result evidence serialization failed after traffic mutation; restoring the exact declared baseline.",expectedCurrentWorkerVersionId:process.env.EXPECTED_CURRENT_WORKER_VERSION_ID,targetWorkerVersionId:process.env.TARGET_WORKER_VERSION_ID,restored:false},null,2)+"\\n")}catch(error){console.error("Unable to write initial intervention evidence:",error.message)}'
+          restore_status="$RUNNER_TEMP/rollback-baseline-restored.json"
+          if ! npx wrangler versions deploy "$EXPECTED_CURRENT_WORKER_VERSION_ID@100" --name "$WORKER_NAME" --message "Restore exact declared baseline after rollback result serialization failure" --yes; then
+            echo "Exact baseline restoration failed; operator intervention is required" >&2
+            exit 1
+          fi
+          if ! npx wrangler deployments status --name "$WORKER_NAME" --json > "$restore_status"; then
+            echo "Exact baseline restoration status lookup failed; operator intervention is required" >&2
+            exit 1
+          fi
+          EXPECTED="$EXPECTED_CURRENT_WORKER_VERSION_ID" STATUS_PATH="$restore_status" node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs'
+          const value = JSON.parse(readFileSync(process.env.STATUS_PATH, 'utf8'))
+          const deployment = value?.latest_deployment ?? value
+          const versions = Array.isArray(deployment?.versions) ? deployment.versions : []
+          const rows = versions.map((version) => ({ id: version?.version_id ?? version?.versionId ?? version?.id, traffic: Number(version?.percentage ?? version?.traffic ?? NaN) }))
+          const active = rows.filter((row) => row.traffic > 0)
+          const total = rows.reduce((sum, row) => sum + row.traffic, 0)
+          if (!rows.length || rows.some((row) => typeof row.id !== 'string' || !Number.isFinite(row.traffic) || row.traffic < 0 || row.traffic > 100) || Math.abs(total - 100) > 0.001 || active.length !== 1 || active[0].id !== process.env.EXPECTED || active[0].traffic !== 100) throw new Error('Exact baseline restoration traffic is unknown or ambiguous')
+          writeFileSync(process.env.RUNNER_TEMP + '/rollback-baseline-restored.json', `${JSON.stringify({ status: 'verified', active: active[0], versions: rows }, null, 2)}\n`)
+          NODE
+          DEPLOYMENT_CACHE_ORIGIN="$PRODUCTION_BASE_URL" node --experimental-strip-types scripts/purge-deployment-cache.ts
+          EVIDENCE="$evidence" node -e 'const fs=require("node:fs");fs.writeFileSync(process.env.EVIDENCE,JSON.stringify({status:"intervention_required",reason:"Rollback result evidence serialization failed after mutation; exact declared baseline restoration and cache purge were verified.",expectedCurrentWorkerVersionId:process.env.EXPECTED_CURRENT_WORKER_VERSION_ID,targetWorkerVersionId:process.env.TARGET_WORKER_VERSION_ID,restored:true},null,2)+"\\n")'
+      - name: Upload rollback result evidence
+        id: upload-rollback-result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: production-rollback-result-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/production-rollback-result.json
+            ${{ runner.temp }}/rollback-intervention-required.json
+            ${{ runner.temp }}/rollback-target-deployment-verified.json
+            ${{ runner.temp }}/rollback-deployed-verification.json
+            ${{ runner.temp }}/rollback-browser-result.json
+            ${{ runner.temp }}/rollback-baseline-restored.json
+            ${{ runner.temp }}/rollback-preflight/**
+            playwright-report/
+            test-results/
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
+      - name: Stop and re-prove rollback target after evidence upload failure
+        if: always() && steps.upload-rollback-result.outcome != 'success'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -Eeuo pipefail
+          status="$RUNNER_TEMP/rollback-upload-failure-current-deployment.json"
+          npx wrangler deployments status --name "$WORKER_NAME" --json > "$status"
+          EXPECTED_TARGET="$TARGET_WORKER_VERSION_ID" STATUS_PATH="$status" node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs'
+          const value = JSON.parse(readFileSync(process.env.STATUS_PATH, 'utf8'))
+          const deployment = value?.latest_deployment ?? value
+          const versions = Array.isArray(deployment?.versions) ? deployment.versions : []
+          const rows = versions.map(version => ({
+            id: version?.version_id ?? version?.versionId ?? version?.id,
+            traffic: Number(version?.percentage ?? version?.traffic ?? NaN),
+          }))
+          const active = rows.filter(row => row.traffic > 0)
+          const total = rows.reduce((sum, row) => sum + row.traffic, 0)
+          if (!rows.length || rows.some(row => typeof row.id !== 'string' || !Number.isFinite(row.traffic) || row.traffic < 0 || row.traffic > 100)) throw new Error('production rollback traffic contains an invalid version or percentage')
+          if (Math.abs(total - 100) > 0.001) throw new Error('production rollback traffic does not total 100%')
+          if (active.length !== 1 || active[0].id !== process.env.EXPECTED_TARGET || active[0].traffic !== 100) throw new Error('exact rollback target is no longer proven at 100%')
+          NODE
+          {
+            echo "## Rollback evidence upload failed"
+            echo "- Exact rollback target remains proven at 100%: \`$TARGET_WORKER_VERSION_ID\`"
+            echo "- The workflow remains failed because durable artifact upload did not succeed."
+            echo "- Traffic was not restored to the incident baseline solely because evidence transport failed."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+      - name: Prepare durable rollback recovery evidence
+        if: always()
+        run: |
+          set -Eeuo pipefail
+          recovery="$RUNNER_TEMP/production-rollback-recovery-evidence.json"
+          result="$RUNNER_TEMP/production-rollback-result.json"
+          intervention="$RUNNER_TEMP/rollback-intervention-required.json"
+          current="$RUNNER_TEMP/rollback-upload-failure-current-deployment.json"
+          RESULT_PATH="$result" INTERVENTION_PATH="$intervention" CURRENT_PATH="$current" RECOVERY_PATH="$recovery" node --input-type=module <<'NODE'
+          import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+          const readJson = path => { try { return JSON.parse(readFileSync(path, 'utf8')) } catch { return null } }
+          writeFileSync(process.env.RECOVERY_PATH, `${JSON.stringify({
+            schemaVersion: 1,
+            kind: 'production-rollback-recovery-evidence',
+            result: readJson(process.env.RESULT_PATH),
+            intervention: readJson(process.env.INTERVENTION_PATH),
+            currentDeploymentAfterUploadFailure: readJson(process.env.CURRENT_PATH),
+            trafficMutationAttempted: existsSync(process.env.RUNNER_TEMP + '/rollback-traffic-mutation-attempted'),
+          }, null, 2)}\n`)
+          NODE
+          test -s "$recovery"
+      - name: Upload separate rollback recovery evidence
+        id: upload-rollback-recovery-evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: production-rollback-recovery-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/production-rollback-recovery-evidence.json
+          retention-days: 90
+          if-no-files-found: error
+      - name: Report rollback recovery evidence transport
+        if: always()
+        run: |
+          if [[ "${{ steps.upload-rollback-recovery-evidence.outcome }}" != "success" ]]; then
+            echo "Rollback recovery evidence upload also failed; operator intervention is required." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Rollback recovery evidence upload: succeeded." >> "$GITHUB_STEP_SUMMARY"
+          fi
