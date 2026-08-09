@@ -649,6 +649,9 @@ jobs:
             const fs=require("node:fs");const root=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const deployment=root.latest_deployment??root;const versions=Array.isArray(deployment.versions)?deployment.versions:[];const percentage=id=>{const row=versions.find(v=>(v.version_id??v.versionId??v.id)===id);return row?Number(row.percentage??row.traffic??NaN):NaN};if(versions.length!==2||percentage(process.argv[2])!==100||percentage(process.argv[3])!==0)process.exit(2)
           ' "$split_status" "$BASELINE_VERSION_ID" "$CANDIDATE_VERSION_ID"
 
+          export WORKER_VERSION_OVERRIDE="$CANDIDATE_VERSION_ID"
+          node scripts/wait-for-deployed-assets.mjs
+
           node scripts/verify-deployed-candidate.mjs \
             --base-url "$STAGING_BASE_URL" \
             --expected-sha "$GITHUB_SHA" \
@@ -683,7 +686,6 @@ jobs:
             --output-dir "$perf_dir"
 
           echo "Opening the complete browser matrix against the 0% candidate override"
-          export WORKER_VERSION_OVERRIDE="$CANDIDATE_VERSION_ID"
           npx playwright test --list > "$browser_projects"
           grep -F 'public-surfaces-desktop' "$browser_projects" >/dev/null
           grep -F 'public-surfaces-mobile' "$browser_projects" >/dev/null

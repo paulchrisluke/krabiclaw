@@ -84,6 +84,22 @@ function assertManifestFailureRestoresAfterTrafficMutation(script: string, label
   assert.match(onExit, /ROLLBACK_HANDLED="true"/)
 }
 
+function assertCandidateOverrideReadiness(script: string, label: string): void {
+  const split = script.indexOf('BASELINE_VERSION_ID@100" "$CANDIDATE_VERSION_ID@0')
+  const splitStatus = script.indexOf('"$split_status" "$BASELINE_VERSION_ID" "$CANDIDATE_VERSION_ID"', split)
+  const override = script.indexOf('export WORKER_VERSION_OVERRIDE="$CANDIDATE_VERSION_ID"', splitStatus)
+  const readiness = script.indexOf('node scripts/wait-for-deployed-assets.mjs', override)
+  const verifier = script.indexOf('node scripts/verify-deployed-candidate.mjs', readiness)
+  const promotion = script.indexOf('"$CANDIDATE_VERSION_ID@100"', verifier)
+
+  assert.ok(split >= 0, `${label}: candidate split deployment must be present`)
+  assert.ok(splitStatus > split, `${label}: split traffic must be proven before readiness checks`)
+  assert.ok(override > splitStatus, `${label}: candidate override must be exported after split proof`)
+  assert.ok(readiness > override, `${label}: bounded candidate readiness must use the version override`)
+  assert.ok(verifier > readiness, `${label}: strict candidate verification must follow readiness`)
+  assert.ok(promotion > verifier, `${label}: candidate promotion must follow strict verification`)
+}
+
 test('required CI checks out the immutable event SHA and never mutates shared staging or production', async () => {
   const source = await repoFile('.github/workflows/ci.yml')
   const deployedAssetWait = await repoFile('scripts/wait-for-deployed-assets.mjs')
@@ -152,6 +168,7 @@ test('full lane keeps one uninterrupted staging candidate lock and gates candida
   assert.match(source, /if:\s*always\(\)/)
   assert.match(source, /upload-artifact@[\w-]+[\s\S]*candidate-manifest\.json/)
   assert.match(source, /include-hidden-files:\s*true/)
+  assertCandidateOverrideReadiness(source, 'staging')
 
   const restoreStart = source.indexOf('restore: {')
   const restoreEnd = source.indexOf('\n            },', restoreStart)
@@ -448,6 +465,7 @@ test('production rollback verifies baseline traffic and purges cache before clai
   assertManifestFailureRestoresAfterTrafficMutation(source, 'production')
   assert.match(source, /restore:\{[\s\S]*status:[\s\S]*intervention_required/)
   assert.match(source, /splitActive:process\.env\.SPLIT_ACTIVE==='true'/)
+  assertCandidateOverrideReadiness(source, 'production')
 })
 
 test('production evidence upload failure restores only the manifest-declared baseline', async () => {
