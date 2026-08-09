@@ -1,6 +1,7 @@
 import { queryAll, type DbClient } from '~/server/db'
 import { isOrganizationWideRole, teamAccessPredicate } from '~/server/utils/member-access'
 import { getGuestThreadOperationSummary } from '~/server/domain/guest-threads/repository'
+import { calculateMapEmbedUrl } from '~/server/utils/google-business'
 
 export interface DashboardHomeLocation {
   id: string
@@ -13,6 +14,10 @@ export interface DashboardHomeLocation {
   status: string
   updated_at: string
   hero_url: string | null
+  address: { addressLines?: string[] } | null
+  latitude: number | null
+  longitude: number | null
+  map_embed_url: string | null
 }
 
 export interface DashboardHomeEvent {
@@ -45,6 +50,21 @@ function safeJsonParse(value: string): unknown {
   } catch {
     return null
   }
+}
+
+function parseLocationAddress(value: string | null): { addressLines?: string[] } | null {
+  if (!value) return null
+  const parsed = safeJsonParse(value)
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+  const address = parsed as { addressLines?: unknown; streetAddress?: unknown }
+  if (Array.isArray(address.addressLines) && address.addressLines.every(line => typeof line === 'string')) {
+    return { addressLines: address.addressLines }
+  }
+  if (address.addressLines !== undefined) return null
+  if (typeof address.streetAddress === 'string' && address.streetAddress.trim()) {
+    return { addressLines: [address.streetAddress.trim()] }
+  }
+  return {}
 }
 
 // Shared by server/api/dashboard/home.get.ts and the dashboard home page's SSR
@@ -86,8 +106,11 @@ export async function getDashboardHomeData(
       rating: number | null; review_count: number | null
       is_primary: number; status: string; updated_at: string
       hero_url: string | null
+      address: string | null; maps_url: string | null
+      latitude: number | null; longitude: number | null
     }>(db, `
       SELECT bl.id, bl.slug, bl.title, bl.city, bl.rating, bl.review_count,
+             bl.address, bl.maps_url, bl.latitude, bl.longitude,
              bl.is_primary, bl.status, bl.updated_at,
              COALESCE(ma_hero.thumbnail_url, ma_hero.public_url) as hero_url
       FROM business_locations bl
@@ -129,10 +152,15 @@ export async function getDashboardHomeData(
   const operationCounts = operations ?? { openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 }
 
   return {
-    locations: locations.map(l => ({
-      ...l,
-      is_primary: Boolean(l.is_primary),
-    })),
+    locations: locations.map((l) => {
+      const address = parseLocationAddress(l.address)
+      return {
+        ...l,
+        is_primary: Boolean(l.is_primary),
+        address,
+        map_embed_url: calculateMapEmbedUrl({ ...l, address: address?.addressLines?.[0] ?? null }),
+      }
+    }),
     events: events.map(e => ({
       ...e,
       metadata: e.metadata ? safeJsonParse(e.metadata) : null,

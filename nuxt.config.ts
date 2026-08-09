@@ -163,6 +163,12 @@ export default defineNuxtConfig({
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
         { name: 'theme-color', content: '#1F2547' }
       ],
+      script: [
+        {
+          key: 'platform-theme-init',
+          innerHTML: "try{const p=localStorage.getItem('krabiclaw-theme')||'system';const d=p==='dark'||(p==='system'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d)}catch{}",
+        },
+      ],
       link: [
         // Every Saya hero/content image is served from Cloudflare Images
         // (imagedelivery.net) — a third-party origin the browser otherwise

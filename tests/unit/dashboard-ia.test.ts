@@ -154,6 +154,22 @@ test('responsive dashboard navigation keeps one canonical desktop sidebar with m
   assert.match(layout, /navigationItems\.value/)
 })
 
+test('organization sidebar and mobile navigation share the requested item order', () => {
+  const layout = source('layouts/dashboard.vue')
+  const labels = ['Today', 'Calendar', 'Sites', 'Inbox', 'Menu']
+  let previousIndex = -1
+
+  for (const label of labels) {
+    const index = layout.indexOf(`label: '${label}'`)
+    assert.ok(index > previousIndex, `${label} appears in organization navigation order`)
+    previousIndex = index
+  }
+
+  assert.match(layout, /overviewGroup[\s\S]*organizationNavigationItems\.value/)
+  assert.match(layout, /scope\.value === 'organization'[\s\S]*organizationNavigationItems\.value\.map/)
+  assert.match(layout, /icon: 'i-lucide-(sun|calendar-days|globe|inbox|menu)'/)
+})
+
 test('organization switcher routes directly to canonical org slugs', () => {
   const layout = source('layouts/dashboard.vue')
   assert.match(layout, /`\/dashboard\/\$\{encodeURIComponent\(org\.slug\)\}`/)

@@ -1,6 +1,7 @@
 <template>
-  <div class="flex w-full" :class="collapsed ? 'items-center justify-center' : ''">
+  <div class="flex w-full items-center gap-1" :class="collapsed ? 'justify-center' : ''">
     <UDropdownMenu
+      v-if="!collapsed"
       :items="menuItems"
       :content="{ align: 'start', collisionPadding: 12 }"
       :ui="{ content: 'w-(--reka-dropdown-menu-trigger-width) min-w-64' }"
@@ -8,15 +9,14 @@
       <UButton
         :avatar="currentAvatar"
         :icon="currentIcon"
-        :label="collapsed ? undefined : model.current.label"
-        trailing-icon="i-lucide-chevrons-up-down"
+        :label="model.current.label"
         color="neutral"
         variant="ghost"
-        class="w-full data-[state=open]:bg-elevated"
-        :block="collapsed"
-        :ui="{ label: 'truncate text-left', trailingIcon: 'text-dimmed ms-auto' }"
+        class="min-w-0 flex-1 data-[state=open]:bg-elevated"
+        :ui="{ label: 'truncate text-left' }"
       />
     </UDropdownMenu>
+    <DashboardSidebarCollapseButton sidebar />
   </div>
 </template>
 
