@@ -318,9 +318,23 @@ test.describe('dashboard functional smoke', () => {
     await expect(page.getByText('This page has publication history and cannot be deleted. Archive or replace it instead.', { exact: true })).toBeVisible()
 
     const copyTitle = `${pageTitle} copy`
+    const duplicateResponse = page.waitForResponse(candidate => (
+      candidate.url().endsWith('/api/editor/sites/site-mcp-growth/pages')
+      && candidate.request().method() === 'POST'
+    ), { timeout: 30_000 })
+    const duplicateRefreshResponse = page.waitForResponse(candidate => {
+      const url = new URL(candidate.url())
+      return url.pathname.endsWith('/api/editor/sites/site-mcp-growth/pages')
+        && url.searchParams.get('locale') === 'en'
+        && candidate.request().method() === 'GET'
+    }, { timeout: 30_000 })
     await page.getByRole('button', { name: 'Duplicate', exact: true }).click()
     await expect(page.getByRole('heading', { name: copyTitle, exact: true })).toBeVisible()
-    await expect(page.getByText('Saved', { exact: true }).last()).toBeVisible()
+    const duplicated = await duplicateResponse
+    expect(duplicated.status()).toBe(201)
+    const duplicateRefresh = await duplicateRefreshResponse
+    expect(duplicateRefresh.status()).toBe(200)
+    await expect(page.getByText('Saved', { exact: true }).last()).toBeVisible({ timeout: 30_000 })
     const copyRow = () => page.locator('aside button').filter({ hasText: copyTitle })
     await expect(copyRow().getByText('draft', { exact: true })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Delete', exact: true })).toBeVisible()
