@@ -22,13 +22,21 @@
             <h2 class="text-lg font-semibold text-highlighted">Organization performance</h2>
             <p class="text-sm text-muted">Last 30 days, ranked by page views and compared with the preceding 30 days.</p>
           </div>
-          <UTable :data="analytics.organizations" :columns="organizationColumns" :loading="loading" empty="No organization analytics yet.">
-            <template #name-cell="{ row }"><div><p class="font-semibold text-highlighted">{{ row.original.name }}</p><p class="text-xs text-muted">{{ row.original.siteCount }} sites · {{ row.original.locationCount }} locations</p></div></template>
-            <template #pageViews30d-cell="{ row }">{{ formatNumber(row.original.pageViews30d) }}</template>
-            <template #sessions30d-cell="{ row }">{{ formatNumber(row.original.sessions30d) }}</template>
-            <template #trend-cell="{ row }"><span class="font-semibold" :class="trendClass(row.original)">{{ trendLabel(row.original) }}</span></template>
-            <template #actions-cell="{ row }"><UButton :to="`/admin/organizations/${row.original.id}`" label="View" icon="i-lucide-chevron-right" trailing color="neutral" variant="ghost" size="xs" /></template>
-          </UTable>
+          <div class="overflow-hidden rounded-xl border border-default">
+            <NuxtLink
+              v-for="(organization, index) in analytics.organizations"
+              :key="organization.id"
+              :to="`/admin/organizations/${organization.id}`"
+              class="grid gap-3 border-b border-default bg-default px-5 py-4 transition-colors last:border-b-0 hover:bg-elevated/50 md:grid-cols-[40px_minmax(0,2fr)_repeat(3,minmax(100px,1fr))_auto] md:items-center"
+            >
+              <p class="hidden text-sm font-semibold text-muted md:block">{{ index + 1 }}</p>
+              <div><p class="font-semibold text-highlighted">{{ organization.name }}</p><p class="text-xs text-muted">{{ organization.siteCount }} sites · {{ organization.locationCount }} locations</p></div>
+              <div><p class="text-xs text-muted">Page views</p><p class="font-semibold">{{ formatNumber(organization.pageViews30d) }}</p></div>
+              <div><p class="text-xs text-muted">Sessions</p><p class="font-semibold">{{ formatNumber(organization.sessions30d) }}</p></div>
+              <div><p class="text-xs text-muted">Trend</p><p class="font-semibold" :class="trendClass(organization)">{{ trendLabel(organization) }}</p></div>
+              <UIcon name="i-lucide-chevron-right" class="hidden size-4 text-muted md:block" />
+            </NuxtLink>
+          </div>
         </template>
       </div>
     </template>
@@ -43,13 +51,6 @@ interface Analytics { totals: { organizations: number; sites: number; locations:
 const toast = useToast()
 const analytics = ref<Analytics | null>(null)
 const loading = ref(true)
-const organizationColumns = [
-  { accessorKey: 'name', header: 'Organization' },
-  { accessorKey: 'pageViews30d', header: 'Page views' },
-  { accessorKey: 'sessions30d', header: 'Sessions' },
-  { id: 'trend', header: 'Trend' },
-  { id: 'actions', header: '' },
-]
 function formatNumber(value: number) { return new Intl.NumberFormat().format(value) }
 function trend(current: number, previous: number) { return previous === 0 ? (current > 0 ? null : 0) : Math.round(((current - previous) / previous) * 100) }
 function trendLabel(org: Organization) { const value = trend(org.pageViews30d, org.previousPageViews30d); return value === null ? 'New traffic' : `${value > 0 ? '+' : ''}${value}%` }
