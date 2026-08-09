@@ -3,12 +3,7 @@
     <template #header>
       <UDashboardNavbar :title="data?.organization.name || 'Organization'">
         <template #leading><DashboardSidebarCollapseButton /></template>
-        <template #trailing>
-          <div class="flex gap-1">
-            <UButton label="Enter workspace" icon="i-lucide-log-in" color="neutral" variant="soft" size="xs" :disabled="!data?.organization.impersonationUserId" :loading="impersonating" @click="openWorkspace" />
-            <UButton to="/admin" label="Organizations" color="neutral" variant="ghost" size="xs" icon="i-lucide-arrow-left" />
-          </div>
-        </template>
+        <template #trailing><UButton to="/admin" color="neutral" variant="ghost" size="xs" icon="i-lucide-arrow-left">Organizations</UButton></template>
       </UDashboardNavbar>
     </template>
     <template #body>
@@ -39,11 +34,9 @@ const route = useRoute()
 const toast = useToast()
 const orgId = computed(() => String(route.params.orgId || ''))
 interface Site { id: string; slug: string; brandName: string | null; subdomain: string | null; customDomain: string | null; plan: string | null; locationCount: number; pageViews30d: number; sessions30d: number }
-interface Response { organization: { id: string; name: string; slug: string | null; impersonationUserId: string | null }; sites: Site[] }
+interface Response { organization: { id: string; name: string; slug: string | null }; sites: Site[] }
 const data = ref<Response | null>(null)
 const loading = ref(true)
-const impersonating = ref(false)
-const { refreshSession } = useAuth()
 const siteColumns = [
   { accessorKey: 'brandName', header: 'Site' },
   { accessorKey: 'plan', header: 'Plan' },
@@ -53,19 +46,6 @@ const siteColumns = [
   { id: 'actions', header: '' },
 ]
 function formatNumber(value: number) { return new Intl.NumberFormat().format(value) }
-async function openWorkspace() {
-  const organization = data.value?.organization
-  if (!organization?.slug || !organization.impersonationUserId || impersonating.value) return
-  impersonating.value = true
-  try {
-    const { authClient } = await import('~/lib/auth-client')
-    const result = await authClient.admin.impersonateUser({ userId: organization.impersonationUserId })
-    if (result.error) throw new Error(result.error.message)
-    await refreshSession()
-    await navigateTo(`/dashboard/${organization.slug}`)
-  } catch { toast.add({ title: 'Failed to enter organization workspace', color: 'error' }) }
-  finally { impersonating.value = false }
-}
 onMounted(async () => {
   try {
     data.value = await applicationFetch<Response>(`/api/admin/portfolio/${orgId.value}`, { validate: (value): value is Response => isRecord(value) && isRecord(value.organization) && Array.isArray(value.sites) })

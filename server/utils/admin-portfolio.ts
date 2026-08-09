@@ -9,7 +9,6 @@ export interface AdminPortfolioOrganization {
   siteCount: number
   locationCount: number
   memberCount: number
-  impersonationUserId: string | null
   pageViews30d: number
   sessions30d: number
   previousPageViews30d: number
@@ -54,7 +53,6 @@ interface OrganizationRow {
   page_views_30d: number
   sessions_30d: number
   previous_page_views_30d: number
-  impersonation_user_id: string | null
 }
 
 interface SiteRow {
@@ -114,7 +112,6 @@ function mapOrganization(row: OrganizationRow): AdminPortfolioOrganization {
     siteCount: Number(row.site_count || 0),
     locationCount: Number(row.location_count || 0),
     memberCount: Number(row.member_count || 0),
-    impersonationUserId: row.impersonation_user_id,
     pageViews30d: Number(row.page_views_30d || 0),
     sessions30d: Number(row.sessions_30d || 0),
     previousPageViews30d: Number(row.previous_page_views_30d || 0),
@@ -160,15 +157,6 @@ export async function listAdminPortfolioOrganizations(db: DbClient): Promise<Adm
       SELECT organizationId, COUNT(*) AS member_count
       FROM member
       GROUP BY organizationId
-    ),
-    workspace_members AS (
-      SELECT organizationId, userId,
-        ROW_NUMBER() OVER (
-          PARTITION BY organizationId
-          ORDER BY CASE role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, createdAt ASC
-        ) AS rn
-      FROM member
-      WHERE role IN ('owner', 'admin')
     )
     SELECT
       o.id,
@@ -178,31 +166,22 @@ export async function listAdminPortfolioOrganizations(db: DbClient): Promise<Adm
       COALESCE(sr.site_count, 0) AS site_count,
       COALESCE(sr.location_count, 0) AS location_count,
       COALESCE(mc.member_count, 0) AS member_count,
-      wm.userId AS impersonation_user_id,
       COALESCE(sr.page_views_30d, 0) AS page_views_30d,
       COALESCE(sr.sessions_30d, 0) AS sessions_30d,
       COALESCE(sr.previous_page_views_30d, 0) AS previous_page_views_30d
     FROM organization o
     LEFT JOIN site_rollup sr ON sr.organization_id = o.id
     LEFT JOIN member_counts mc ON mc.organizationId = o.id
-    LEFT JOIN workspace_members wm ON wm.organizationId = o.id AND wm.rn = 1
     ORDER BY page_views_30d DESC, o.name ASC
   `)
   return rows.map(mapOrganization)
 }
 
 export async function getAdminPortfolioOrganization(db: DbClient, organizationId: string) {
-  const organization = await queryFirst<{ id: string; name: string; slug: string | null; created_at: string; impersonation_user_id: string | null }>(db, `
-    SELECT o.id, o.name, o.slug, o.createdAt AS created_at,
-      (
-        SELECT m.userId
-        FROM member m
-        WHERE m.organizationId = o.id AND m.role IN ('owner', 'admin')
-        ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, m.createdAt ASC
-        LIMIT 1
-      ) AS impersonation_user_id
-    FROM organization o
-    WHERE o.id = ?
+  const organization = await queryFirst<{ id: string; name: string; slug: string | null; created_at: string }>(db, `
+    SELECT id, name, slug, createdAt AS created_at
+    FROM organization
+    WHERE id = ?
     LIMIT 1
   `, [organizationId])
   if (!organization) return null
@@ -238,7 +217,6 @@ export async function getAdminPortfolioOrganization(db: DbClient, organizationId
       name: organization.name,
       slug: organization.slug,
       createdAt: organization.created_at,
-      impersonationUserId: organization.impersonation_user_id,
     },
     sites: rows.map(mapSite),
   }
