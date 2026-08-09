@@ -51,6 +51,15 @@ async function queryFirst<T>(db: Store, query: string, params: unknown[] = []): 
     const user = db.users.find((u) => u.id === id)
     return (user ? { phoneNumber: user.phoneNumber ?? null, phoneNumberVerified: user.phoneNumberVerified ?? 0 } : undefined) as T | undefined
   }
+  if (query.includes('SELECT team_id') && query.includes('FROM business_locations')) {
+    const [locationId, siteId, organizationId] = params
+    const location = db.locations.find((candidate) => (
+      candidate.id === locationId
+      && candidate.site_id === siteId
+      && candidate.organization_id === organizationId
+    ))
+    return (location ? { team_id: location.team_id ?? null } : undefined) as T | undefined
+  }
   throw new Error(`Unexpected queryFirst query: ${query}`)
 }
 
@@ -189,6 +198,7 @@ function seedManager(db: Store, overrides: { memberId?: string; userId?: string;
 test('recalculateScopesForPhoneChange removes only the scope row for the exact site/location', async () => {
   const db = createStore()
   const { userId, phone } = seedManager(db)
+  db.locations.push({ id: 'loc-1', organization_id: 'org-1', site_id: 'site-1', team_id: 'location:loc-1' })
   db.resourceTeams.push(
     { id: 'team-a', userId, teamId: 'location:loc-1', organizationId: 'org-1', siteId: 'site-1', locationId: 'loc-1' },
     { id: 'team-b', userId, teamId: 'site:site-2', organizationId: 'org-1', siteId: 'site-2', locationId: null },
@@ -246,6 +256,7 @@ test('recalculateScopesForPhoneChange never touches organization-wide roles', as
 test('recalculateScopesForPhoneChange removes the exact resource team membership', async () => {
   const db = createStore()
   const { userId, phone } = seedManager(db)
+  db.locations.push({ id: 'loc-1', organization_id: 'org-1', site_id: 'site-1', team_id: 'location:loc-1' })
   db.resourceTeams.push({
     id: 'team-location',
     userId,
