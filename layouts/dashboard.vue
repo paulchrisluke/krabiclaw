@@ -962,7 +962,7 @@ async function stopImpersonating() {
     const result = await authClient.admin.stopImpersonating()
     if (result.error) throw new Error(result.error.message)
     await refreshSession()
-    await navigateTo('/admin/users')
+    await navigateTo('/admin')
   } catch (error) {
     console.error('Failed to stop impersonation:', error)
     toast.add({

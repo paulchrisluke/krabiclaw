@@ -28,7 +28,12 @@
           <template #trend-cell="{ row }">
             <span class="font-semibold" :class="trendTone(row.original.pageViews30d, row.original.previousPageViews30d) === 'positive' ? 'text-success' : trendTone(row.original.pageViews30d, row.original.previousPageViews30d) === 'negative' ? 'text-error' : 'text-default'">{{ trendLabel(row.original.pageViews30d, row.original.previousPageViews30d) }}</span>
           </template>
-          <template #actions-cell="{ row }"><UButton :to="`/admin/organizations/${row.original.id}`" label="View" icon="i-lucide-chevron-right" trailing color="neutral" variant="ghost" size="xs" /></template>
+          <template #actions-cell="{ row }">
+            <div class="flex justify-end gap-1">
+              <UButton label="Enter" icon="i-lucide-log-in" color="neutral" variant="ghost" size="xs" :disabled="!row.original.impersonationUserId" :loading="impersonatingOrganizationId === row.original.id" @click="openWorkspace(row.original)" />
+              <UButton :to="`/admin/organizations/${row.original.id}`" label="View" icon="i-lucide-chevron-right" trailing color="neutral" variant="ghost" size="xs" />
+            </div>
+          </template>
         </UTable>
       </div>
     </template>
@@ -47,6 +52,7 @@ interface Organization {
   siteCount: number
   locationCount: number
   memberCount: number
+  impersonationUserId: string | null
   pageViews30d: number
   sessions30d: number
   previousPageViews30d: number
@@ -56,6 +62,8 @@ const toast = useToast()
 const organizations = ref<Organization[]>([])
 const loading = ref(true)
 const search = ref('')
+const impersonatingOrganizationId = ref<string | null>(null)
+const { refreshSession } = useAuth()
 const organizationColumns = [
   { accessorKey: 'name', header: 'Organization' },
   { accessorKey: 'siteCount', header: 'Sites' },
@@ -92,6 +100,22 @@ function trendTone(current: number, previous: number) {
   if (trend === null || trend > 0) return 'positive'
   if (trend < 0) return 'negative'
   return 'neutral'
+}
+
+async function openWorkspace(organization: Organization) {
+  if (!organization.slug || !organization.impersonationUserId || impersonatingOrganizationId.value) return
+  impersonatingOrganizationId.value = organization.id
+  try {
+    const { authClient } = await import('~/lib/auth-client')
+    const result = await authClient.admin.impersonateUser({ userId: organization.impersonationUserId })
+    if (result.error) throw new Error(result.error.message)
+    await refreshSession()
+    await navigateTo(`/dashboard/${organization.slug}`)
+  } catch {
+    toast.add({ title: 'Failed to enter organization workspace', color: 'error' })
+  } finally {
+    impersonatingOrganizationId.value = null
+  }
 }
 
 async function loadOrganizations() {

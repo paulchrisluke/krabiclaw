@@ -3,7 +3,12 @@
     <template #header>
       <UDashboardNavbar :title="data?.site.brandName || data?.site.slug || 'Site'">
         <template #leading><DashboardSidebarCollapseButton /></template>
-        <template #trailing><UButton :to="`/admin/organizations/${orgId}`" color="neutral" variant="ghost" size="xs" icon="i-lucide-arrow-left">Sites</UButton></template>
+        <template #trailing>
+          <div class="flex gap-1">
+            <UButton label="Enter workspace" icon="i-lucide-log-in" color="neutral" variant="soft" size="xs" :disabled="!data?.organization.impersonationUserId" :loading="impersonating" @click="openWorkspace" />
+            <UButton :to="`/admin/organizations/${orgId}`" label="Sites" color="neutral" variant="ghost" size="xs" icon="i-lucide-arrow-left" />
+          </div>
+        </template>
       </UDashboardNavbar>
     </template>
     <template #body>
@@ -38,9 +43,11 @@ const route = useRoute()
 const toast = useToast()
 const orgId = computed(() => String(route.params.orgId || ''))
 const siteId = computed(() => String(route.params.siteId || ''))
-interface Response { organization: { name: string }; site: { slug: string; brandName: string | null; pageViews30d: number; sessions30d: number }; locations: { id: string; slug: string; title: string; city: string | null; isPrimary: boolean; rating: number | null; reviewCount: number }[] }
+interface Response { organization: { name: string; slug: string | null; impersonationUserId: string | null }; site: { slug: string; brandName: string | null; pageViews30d: number; sessions30d: number }; locations: { id: string; slug: string; title: string; city: string | null; isPrimary: boolean; rating: number | null; reviewCount: number }[] }
 const data = ref<Response | null>(null)
 const loading = ref(true)
+const impersonating = ref(false)
+const { refreshSession } = useAuth()
 const locationColumns = [
   { accessorKey: 'title', header: 'Location' },
   { accessorKey: 'rating', header: 'Google rating' },
@@ -48,6 +55,19 @@ const locationColumns = [
   { accessorKey: 'isPrimary', header: '' },
 ]
 function formatNumber(value: number) { return new Intl.NumberFormat().format(value) }
+async function openWorkspace() {
+  const organization = data.value?.organization
+  if (!organization?.slug || !organization.impersonationUserId || impersonating.value) return
+  impersonating.value = true
+  try {
+    const { authClient } = await import('~/lib/auth-client')
+    const result = await authClient.admin.impersonateUser({ userId: organization.impersonationUserId })
+    if (result.error) throw new Error(result.error.message)
+    await refreshSession()
+    await navigateTo(`/dashboard/${organization.slug}`)
+  } catch { toast.add({ title: 'Failed to enter organization workspace', color: 'error' }) }
+  finally { impersonating.value = false }
+}
 onMounted(async () => {
   try {
     data.value = await applicationFetch<Response>(`/api/admin/portfolio/${orgId.value}/sites/${siteId.value}`, { validate: (value): value is Response => isRecord(value) && isRecord(value.organization) && isRecord(value.site) && Array.isArray(value.locations) })
