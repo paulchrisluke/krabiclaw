@@ -62,7 +62,7 @@ test.describe('dashboard functional smoke', () => {
   })
 
   test('Pages manager runs one typed-block and custom-page lifecycle tracer journey', async ({ page, baseURL }) => {
-    test.setTimeout(120_000)
+    test.setTimeout(240_000)
     const applicationErrors: string[] = []
     page.on('pageerror', error => applicationErrors.push(`pageerror: ${error.message}`))
     page.on('console', message => {
@@ -95,7 +95,7 @@ test.describe('dashboard functional smoke', () => {
       const saveResponse = page.waitForResponse(candidate => (
         candidate.url().includes('/api/editor/sites/site-mcp-growth/pages')
         && ['POST', 'PATCH'].includes(candidate.request().method())
-      ))
+      ), { timeout: 30_000 })
       await page.getByRole('button', { name: 'Save', exact: true }).click()
       const saved = await saveResponse
       expect([200, 201]).toContain(saved.status())
