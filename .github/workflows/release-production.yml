@@ -611,7 +611,7 @@ jobs:
             --worker-name krabiclaw \
             --output "$baseline_provenance"
           jq -e --arg version "$BASELINE_VERSION_ID" --arg tag "$(jq -r '.versionTag' "$approved_baseline_provenance")" '.status == "verified" and .versionId == $version and .versionTag == $tag and .api.workerVersionId == $version and .api.sourceSha == .versionTag and .api.workerVersionTag == .versionTag' "$baseline_provenance" >/dev/null
-          npx wrangler secret list --json > "$production_secrets"
+          npx wrangler secret list --format json > "$production_secrets"
           for secret_name in STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET PLATFORM_SEARCH_REINDEX_SECRET; do jq -e --arg name "$secret_name" '.. | objects | select((.name? // .key?) == $name)' "$production_secrets" >/dev/null; done
 
           echo "Uploading exactly one production candidate Worker Version before any remote database mutation"

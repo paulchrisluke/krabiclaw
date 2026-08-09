@@ -596,7 +596,7 @@ jobs:
           node -e 'const fs=require("node:fs");fs.writeFileSync(process.env.BASELINE_ATTESTATION_PATH, JSON.stringify({type:process.env.BASELINE_ATTESTATION_TYPE, sourceSha:process.env.BASELINE_SOURCE_SHA, versionId:process.env.BASELINE_VERSION_ID, runId:process.env.BASELINE_ATTESTATION_RUN_ID||null, runHeadSha:process.env.BASELINE_ATTESTATION_RUN_HEAD_SHA||null, runLogSha256:process.env.BASELINE_ATTESTATION_RUN_SHA||null, runJsonSha256:process.env.BASELINE_ATTESTATION_JSON_SHA||null}, null, 2)+"\n")'
 
           echo "Checking pre-provisioned test-only staging secrets without publishing a Worker version"
-          npx wrangler secret list --env staging --json > "$staging_secrets"
+          npx wrangler secret list --env staging --format json > "$staging_secrets"
           for secret_name in STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET EMAIL_REPLY_SECRET EMAIL_INBOUND_SECRET PREVIEW_SECRET E2E_DEV_ROUTE_SECRET; do
             jq -e --arg name "$secret_name" '.. | objects | select((.name? // .key?) == $name)' "$staging_secrets" >/dev/null
           done

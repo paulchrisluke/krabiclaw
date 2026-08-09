@@ -529,6 +529,7 @@ test('nightly browser telemetry is pinned to one retained build and cannot mutat
 })
 
 test('release workflows hard-bind route and origin evidence and block direct remote writes', async () => {
+  const required = await repoFile('.github/workflows/ci.yml')
   const full = await repoFile('.github/workflows/ci-full.yml')
   const production = await repoFile('.github/workflows/release-production.yml')
   const nightly = await repoFile('.github/workflows/e2e-full.yml')
@@ -537,6 +538,11 @@ test('release workflows hard-bind route and origin evidence and block direct rem
   const rollback = await repoFile('scripts/rollback-prod.mjs')
   const zarazScript = await repoFile('scripts/zaraz-ga-backfill.mjs')
   const commandBlocker = await repoFile('scripts/release-command-blocked.mjs')
+
+  for (const source of [required, full, production]) {
+    assert.match(source, /wrangler secret list[^\n]*--format json/)
+    assert.doesNotMatch(source, /wrangler secret list[^\n]*--json/)
+  }
 
   assert.doesNotMatch(full, /inputs\.staging_base_url/)
   assert.match(full, /STAGING_BASE_URL: https:\/\/staging\.krabiclaw\.com/)
