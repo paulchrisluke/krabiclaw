@@ -374,7 +374,7 @@ export async function listOrganizationSites(db: DbClient, organizationId: string
      AND bl.site_id = s.id
      AND bl.organization_id = s.organization_id
     LEFT JOIN media_assets ma_hero
-      ON ma_hero.id = bl.hero_image_asset_id
+      ON ma_hero.id = bl.hero_media_asset_id
      AND ma_hero.site_id = s.id
      AND ma_hero.organization_id = s.organization_id
     WHERE s.organization_id = ?
