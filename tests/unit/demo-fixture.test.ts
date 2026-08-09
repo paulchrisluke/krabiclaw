@@ -93,6 +93,48 @@ test("compiled curated fixtures require an explicit published source locale", ()
   );
 });
 
+test("compiled curated fixtures reject source-locale manual translation rows", () => {
+  assert.throws(
+    () => compileCuratedSiteFixture({
+      ...demoFixture,
+      businessLocationTranslations: [{
+        ...demoFixture.businessLocationTranslations![0]!,
+        id: "source-location-translation",
+        locale: "en",
+      }],
+    }),
+    /Business location translation .*must target a non-source locale/,
+  );
+
+  assert.throws(
+    () => compileCuratedSiteFixture({
+      ...demoFixture,
+      menuTranslations: [{
+        ...demoFixture.menuTranslations![0]!,
+        id: "source-menu-translation",
+        locale: "en",
+      }],
+    }),
+    /Menu translation .*must target a non-source locale/,
+  );
+
+  assert.throws(
+    () => compileCuratedSiteFixture({
+      ...demoFixture,
+      menuItemTranslations: [{
+        ...demoFixture.menuItemTranslations![0]!,
+        id: "source-menu-item-translation",
+        locale: "en",
+      }],
+    }),
+    /Menu item translation .*must target a non-source locale/,
+  );
+
+  assert.ok(compiledDemoSeed.businessLocationTranslations.every((entry) => entry.locale !== "en"));
+  assert.ok(compiledDemoSeed.menuTranslations.every((entry) => entry.locale !== "en"));
+  assert.ok(compiledDemoSeed.menuItemTranslations.every((entry) => entry.locale !== "en"));
+});
+
 test("compiled demo seed can be serialized into a deterministic artifact bundle", () => {
   const serialized = serializeCompiledSeedBundle(compiledDemoSeed);
 
@@ -204,7 +246,22 @@ test("demo locale data block includes Thai fields for content, locations, and me
 test("demo billing block includes ai credits and site billing state", () => {
   const sql = renderCompiledDemoBillingBlock();
 
+  assert.equal(compiledDemoSeed.aiCredits?.balance, 500);
+  assert.equal(compiledDemoSeed.organizationBilling?.plan, "free");
   assert.match(sql, /INSERT OR REPLACE INTO ai_credits/);
+  assert.match(sql, /balance_period_key/);
+  assert.match(sql, /INSERT OR IGNORE INTO usage_quota_grants/);
+  assert.match(sql, /'ai_inference', 500, 'credit'/);
+  assert.match(sql, /:version:seed/);
+  assert.match(sql, /'seed-plan-' \|\| 'org-demo' \|\| ':' \|\| date\('now'/);
+  assert.match(sql, /applied_at, created_at/);
+  assert.match(sql, /DELETE FROM subscription/);
+  assert.match(sql, /DELETE FROM stripe_invoice_payments WHERE organization_id = 'org-demo';/);
+  assert.match(sql, /INSERT OR REPLACE INTO organization_billing/);
+  assert.match(sql, /'ob-org-demo'/);
+  assert.match(sql, /'free', 'unknown'/);
+  assert.match(sql, /UPDATE organization\s+SET stripeCustomerId = NULL\s+WHERE id = 'org-demo';/);
+  assert.match(sql, /INSERT OR REPLACE INTO organization_entitlements/);
   assert.match(sql, /INSERT OR REPLACE INTO site_billing/);
   assert.match(sql, /INSERT OR REPLACE INTO site_entitlements/);
   assert.match(sql, /127/);

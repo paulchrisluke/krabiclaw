@@ -21,7 +21,6 @@ const COMPONENT_REGISTRY: Record<string, string> = {
   'SayaFilterTabs': 'LazySayaFilterTabs',
   'SayaSubNav': 'LazySayaSubNav',
   'SayaFooter': 'LazySayaFooter',
-  'SayaUpgradeModal': 'LazySayaUpgradeModal',
   'SayaFeaturedContent': 'LazySayaFeaturedContent',
   'SayaBrandStory': 'LazySayaBrandStory',
 

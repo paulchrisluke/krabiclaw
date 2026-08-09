@@ -1,6 +1,7 @@
 import { queryFirst, type DbClient } from '~/server/db'
 import { getEffectiveAccessPlan } from '~/server/utils/billing-access'
 import { getPlanEntitlements, type EntitlementsMap } from '~/server/utils/billing-entitlements'
+import { KNOWN_RECURRING_PLAN_IDS, STARTER_PLAN_ID } from '~/shared/billing-model'
 
 /**
  * The app-owned billing projection.  Better Auth/Stripe rows are inputs to
@@ -36,7 +37,7 @@ export interface OrganizationBillingProjection {
   entitlements: EntitlementsMap
 }
 
-const KNOWN_BILLING_PLANS = new Set(['free', 'growth', 'managed', 'seo_accelerator'])
+const KNOWN_BILLING_PLANS = new Set<string>([STARTER_PLAN_ID, ...KNOWN_RECURRING_PLAN_IDS])
 const KNOWN_SUBSCRIPTION_STATUSES = new Set([
   'free',
   'active',
@@ -149,6 +150,12 @@ export function validateOrganizationBillingProjection(
   const paymentStatus = parseRequiredEnum(row.payment_status, 'payment_status', KNOWN_PAYMENT_STATUSES)
   if (status === 'active' && paymentStatus === 'paid' && paidThrough === null) {
     invalidProjection('paid active subscriptions require paid_through')
+  }
+  if (plan !== 'free' && stripeSubscriptionId === null) {
+    invalidProjection('paid plan requires stripe_subscription_id')
+  }
+  if (plan !== 'free' && stripeCustomerId === null) {
+    invalidProjection('paid plan requires stripe_customer_id')
   }
 
   const effectivePlan = getEffectiveAccessPlan({

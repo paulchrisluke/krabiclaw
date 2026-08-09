@@ -183,7 +183,6 @@ interface Location {
   is_primary: boolean; status: string; updated_at: string
   hero_url: string | null
 }
-interface Credits { balance: number; lifetime_used: number; last_topped_up_at: string | null }
 interface SiteEvent {
   id: string; event_type: string; location_id: string | null
   metadata: Record<string, unknown> | null; created_at: string
@@ -198,7 +197,6 @@ interface OperationsSummary {
 
 type DashboardHomeResponse = {
   locations: Location[]
-  credits: Credits | null
   events: SiteEvent[]
   operations: OperationsSummary
 }
@@ -212,11 +210,6 @@ const isDashboardHomeResponse = (value: unknown): value is DashboardHomeResponse
     && typeof location.slug === 'string'
     && typeof location.title === 'string',
   )
-  && (value.credits === null || (
-    isRecord(value.credits)
-    && typeof value.credits.balance === 'number'
-    && typeof value.credits.lifetime_used === 'number'
-  ))
   && Array.isArray(value.events)
   && value.events.every(event =>
     isRecord(event) && typeof event.id === 'string' && typeof event.event_type === 'string',
@@ -263,7 +256,6 @@ const { data, pending } = await useAsyncData(
       if (!context.site) {
         return {
           locations: [],
-          credits: null,
           events: [],
           operations: { openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 },
         }

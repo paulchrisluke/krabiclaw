@@ -19,7 +19,7 @@ import {
   renderCompiledDemoBillingBlock,
   renderDemoExperienceSeedBlock,
 } from '../seed-definitions/demo.ts'
-import { renderSiteBillingSql, renderSiteEntitlementsSql } from '../seed-definitions/billing-sql.ts'
+import { renderCanonicalBillingSql } from '../seed-definitions/billing-sql.ts'
 import { renderTenantPagesSeedSql } from '../seed-definitions/tenant-pages.ts'
 
 function escapeSql(value: string) {
@@ -37,42 +37,14 @@ function sqlJson(value: unknown) {
   return sqlValue(JSON.stringify(value))
 }
 
-function renderMcpFixtureBillingSql(
-  orgId: string,
-  plan: 'free' | 'growth' | 'managed',
-) {
-  if (plan === 'free') return ''
-
-  const subscriptionId = `sub-${orgId}`
-  const customerId = `cus-${orgId}`
-  const stripeSubscriptionId = `stripe-${orgId}`
-
-  return `INSERT OR REPLACE INTO subscription
-  (id, plan, referenceId, stripeCustomerId, stripeSubscriptionId, status,
-   periodStart, periodEnd, cancelAtPeriodEnd, seats, billingInterval, createdAt, updatedAt)
-VALUES
-  (${sqlValue(subscriptionId)}, ${sqlValue(plan)}, ${sqlValue(orgId)},
-   ${sqlValue(customerId)}, ${sqlValue(stripeSubscriptionId)}, 'active',
-   CAST(strftime('%s', 'now', '-1 day') AS INTEGER),
-   CAST(strftime('%s', 'now', '+30 days') AS INTEGER),
-   0, 1, 'month', unixepoch(), unixepoch());
-
-INSERT OR REPLACE INTO organization_billing
-  (id, organization_id, stripe_customer_id, stripe_subscription_id,
-   status, plan, payment_status, paid_through, current_period_end,
-   cancel_at_period_end, updated_at)
-VALUES
-  (${sqlValue(`ob-${orgId}`)}, ${sqlValue(orgId)}, ${sqlValue(customerId)},
-   ${sqlValue(stripeSubscriptionId)}, 'active', ${sqlValue(plan)}, 'paid',
-   strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+30 days'),
-   strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+30 days'),
-   0, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));`
-}
-
-function renderMcpFixtureOrg(orgId: string, userId: string, name: string, slug: string, plan: 'free' | 'growth' | 'managed') {
+function renderMcpFixtureOrg(orgId: string, userId: string, name: string, slug: string, plan: 'free' | 'growth') {
   const siteId = `site-${orgId.replace(/^org-/, '')}`
   const locationId = `loc-${orgId.replace(/^org-/, '')}`
   const status = plan === 'free' ? 'free' : 'active'
+  const aiCredits = {
+    balance: plan === 'growth' ? 2000 : 500,
+    lifetimeUsed: 0,
+  }
   const tenantPages = renderTenantPagesSeedSql({
     siteId,
     organizationId: orgId,
@@ -136,11 +108,7 @@ VALUES
    'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/0762ea49-0bd2-4cc8-1044-d6c9b1f00100/public',
    'image/jpeg', ${sqlValue(`${siteId}-fixture.jpg`)}, 'Seeded MCP image fixture', 'other', 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
-${renderSiteBillingSql(siteId, orgId, { status, plan }, sqlValue)}
-
-${renderSiteEntitlementsSql(siteId, orgId, plan, sqlValue)}
-
-${renderMcpFixtureBillingSql(orgId, plan)}
+${renderCanonicalBillingSql(siteId, orgId, { status, plan }, sqlValue, aiCredits)}
 
 ${tenantPages}`
 }
@@ -149,6 +117,15 @@ const isStdout = process.argv.includes('--stdout')
 const isRemote = process.argv.includes('--remote')
 const isStaging = process.argv.includes('--staging')
 const isPreview = process.argv.includes('--preview')
+
+if (isStaging && process.env.KRABICLAW_RELEASE_CONTEXT !== 'ci-full-staging') {
+  console.error('Direct staging seeding is disabled; use the locked CI (Full Validation Lane).')
+  process.exit(1)
+}
+if (isRemote) {
+  console.error('Direct production seeding is disabled; production release workflows never run fixture seeds.')
+  process.exit(1)
+}
 
 if ([isRemote, isStaging, isPreview].filter(Boolean).length > 1) {
   console.error('Only one of --remote, --staging, or --preview may be provided.')
@@ -177,15 +154,15 @@ VALUES ('saya-theme-v1', 'Saya', 'saya', '1.0.0', 'Restaurant website theme', 'a
 -- experience_bookings without a constraint error). So deleting the org row
 -- is sufficient; there is no need to hand-maintain a child-table delete list
 -- that has to be kept in sync with every new table added to the schema.
-DELETE FROM organization WHERE id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-managed', 'org-transfer-recipient');
+DELETE FROM organization WHERE id IN ('org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-growth-service', 'org-mcp-managed', 'org-transfer-recipient');
 
 -- Better Auth subscriptions do not reference organization with a foreign key.
 -- Remove the ephemeral fixture rows explicitly so a free fixture cannot retain
 -- stale paid access across a re-seed.
-DELETE FROM subscription WHERE referenceId IN ('org-mcp-free', 'org-mcp-growth', 'org-mcp-managed');
+DELETE FROM subscription WHERE referenceId IN ('org-transfer-recipient', 'org-demo', 'org_demo', 'org-mcp-free', 'org-mcp-growth', 'org-mcp-growth-service', 'org-mcp-managed');
 
 -- Delete users (after member rows are deleted)
-DELETE FROM user WHERE id IN ('user-demo', 'user_demo', 'Nfqw39lwLZ1vejIfYJv24xvD4UKJh8re', 'user-mcp-free', 'user-mcp-growth', 'user-mcp-managed');
+DELETE FROM user WHERE id IN ('user-demo', 'user_demo', 'Nfqw39lwLZ1vejIfYJv24xvD4UKJh8re', 'user-mcp-free', 'user-mcp-growth', 'user-mcp-growth-service', 'user-mcp-managed');
 
 -- Guard against legacy demo scripts that may have claimed the demo domains
 DELETE FROM site_domains WHERE domain IN ('demo.localhost', 'demo.krabiclaw.com');
@@ -210,7 +187,7 @@ ${renderMcpFixtureOrg('org-mcp-free', 'user-mcp-free', 'MCP Free Fixture', 'mcp-
 
 ${renderMcpFixtureOrg('org-mcp-growth', 'user-mcp-growth', 'MCP Growth Fixture', 'mcp-growth-fixture', 'growth')}
 
-${renderMcpFixtureOrg('org-mcp-managed', 'user-mcp-managed', 'MCP Managed Fixture', 'mcp-managed-fixture', 'managed')}
+${renderMcpFixtureOrg('org-mcp-growth-service', 'user-mcp-growth-service', 'MCP Growth Service Fixture', 'mcp-growth-service-fixture', 'growth')}
 
 -- Organization
 INSERT INTO organization (id, name, slug, createdAt)

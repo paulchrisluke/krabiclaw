@@ -8,7 +8,9 @@ Two sources of truth, one ephemeral execution format:
 2. **Approved import manifests** (`client-imports/<slug>/`) — real client onboarding data
 3. **Generated SQL** — ephemeral apply artifact, never hand-maintained
 
-Schema DDL lives in `migrations/` and is applied by wrangler on every deploy. Seed data is entirely separate and never belongs in migration files.
+Schema DDL lives in `migrations/` and is applied by the environment's locked
+release workflow before candidate promotion. Seed data is entirely separate
+and never belongs in migration files.
 
 ---
 
@@ -113,20 +115,23 @@ Historical backfill tooling:
 
 ## CI seeding
 
-Seeds run on every PR (preview) and every push to `staging`. They are not conditional on file changes. The generate scripts run first, so the `.ts` fixture is the actual source of truth in CI — not the committed SQL.
+Seeds run on every PR (preview) and once inside an explicitly dispatched,
+locked staging-candidate workflow. They are not conditional on file changes.
+The generate scripts run first, so the `.ts` fixture is the actual source of
+truth in CI — not committed SQL or a push-triggered shared-staging loop.
 
 | Trigger           | Environment  | What runs                                                                      |
 | ----------------- | ------------ | ------------------------------------------------------------------------------ |
 | PR opened/updated | `preview`    | generate demo + pottery house → apply SQL; generate kikuzuki → apply ephemeral |
-| Push to `staging` | `staging`    | same as above against staging D1                                               |
+| Locked full-candidate workflow | `staging` | same as above against staging D1, while holding `shared-staging-candidate` |
 | Push to `main`    | `production` | migrations only, no seed                                                       |
 
 Scripts:
 
 - `yarn seed:kikuzuki` — local D1
 - `yarn seed:kikuzuki:preview` — preview D1 (CI)
-- `yarn seed:kikuzuki:staging` — staging D1
-- `yarn seed:kikuzuki:remote` — production D1
+- `yarn seed:kikuzuki:staging` — blocked outside the locked full-candidate workflow
+- `yarn seed:kikuzuki:remote` — blocked; production seeding is not a release operation
 
 ---
 
@@ -154,7 +159,12 @@ Kikuzuki and Pottery House currently live on the curated-fixture path (typed `se
 
 ### Why this matters
 
-`yarn seed:<tenant>:remote` is the only path that can overwrite a live tenant's production data, and the manifest-gated production workflow never calls it. So a transferred tenant's production data is safe from release CI by construction. The risk is entirely human: someone runs `seed:kikuzuki:remote` again out of habit after the tenant has gone live and started taking real edits through the dashboard/MCP. `business_locations`, `media_assets`, `menus`, `sites`, and `site_domains` use `INSERT OR REPLACE` in the generated SQL — a rerun silently reverts those rows to whatever is hardcoded in the fixture file, clobbering anything the client changed directly (hours, phone, hero image, location title, menu name).
+Remote tenant seed aliases are blocked. The manifest-gated production workflow never
+calls a seed, and the locked full-candidate workflow is the only path that may
+run curated staging fixtures. `business_locations`, `media_assets`, `menus`,
+`sites`, and `site_domains` use `INSERT OR REPLACE` in the generated SQL, so a
+manual rerun would silently clobber client edits; the command guard prevents
+that accidental production path.
 
 Preview and staging seeding (`generate-kikuzuki-seed.ts --preview` / `--staging` in CI) target `krabiclaw-db-preview` / `krabiclaw-db-staging` — separate databases from production — so they do not put a transferred tenant's real data at risk. Don't use `staging.krabiclaw.com` as a sandbox for the actual business owner once transferred, though: every explicitly dispatched full candidate resets its fixtures, so anything done there outside of E2E assertions is disposable.
 

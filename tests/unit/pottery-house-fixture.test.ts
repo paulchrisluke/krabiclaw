@@ -378,7 +378,26 @@ test("pottery house locale data block includes Thai content and location fields"
 test("pottery house billing block includes ai credits and site billing state", () => {
   const sql = renderCompiledPotteryHouseBillingBlock();
 
+  assert.equal(compiledPotteryHouseSeed.aiCredits?.balance, 2000);
+  assert.equal(compiledPotteryHouseSeed.organizationBilling?.plan, "growth");
   assert.match(sql, /INSERT OR REPLACE INTO ai_credits/);
+  assert.match(sql, /balance_period_key/);
+  assert.match(sql, /INSERT OR IGNORE INTO usage_quota_grants/);
+  assert.match(sql, /'ai_inference', 2000, 'credit'/);
+  assert.match(sql, /'seed-plan-' \|\| 'org-pottery-house' \|\| ':' \|\| date\('now'/);
+  assert.match(sql, /INSERT OR REPLACE INTO subscription/);
+  assert.match(sql, /'sub-org-pottery-house'/);
+  assert.match(sql, /'cus-org-pottery-house'/);
+  assert.match(sql, /'stripe-org-pottery-house'/);
+  assert.match(sql, /INSERT OR REPLACE INTO organization_billing/);
+  assert.match(sql, /'ob-org-pottery-house'/);
+  assert.match(sql, /'paid'/);
+  assert.match(sql, /INSERT OR REPLACE INTO stripe_invoice_payments/);
+  assert.match(sql, /'in-org-pottery-house'/);
+  assert.match(sql, /'price_growth_month'/);
+  assert.match(sql, /last_payment_event_id/);
+  assert.match(sql, /UPDATE organization\s+SET stripeCustomerId = 'cus-org-pottery-house'\s+WHERE id = 'org-pottery-house';/);
+  assert.match(sql, /INSERT OR REPLACE INTO organization_entitlements/);
   assert.match(sql, /INSERT OR REPLACE INTO site_billing/);
   assert.match(sql, /INSERT OR REPLACE INTO site_entitlements/);
   assert.match(sql, /sb-site-pottery-house/);

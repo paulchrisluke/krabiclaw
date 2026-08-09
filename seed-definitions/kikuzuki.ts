@@ -1,6 +1,6 @@
 import { compileCuratedSiteFixture } from './compile.ts'
 import type { CuratedMenuItemDefinition, CuratedSiteDefinition } from './contracts.ts'
-import { renderSiteBillingSql, renderSiteEntitlementsSql } from './billing-sql.ts'
+import { renderCanonicalBillingSql } from './billing-sql.ts'
 import { renderTenantPagesSeedSql } from './tenant-pages.ts'
 
 function escapeSql(value: string): string {
@@ -596,7 +596,7 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
     },
   ],
   aiCredits: {
-    balance: 302,
+    balance: 2000,
     lifetimeUsed: 198,
   },
   organizationBilling: {
@@ -970,13 +970,11 @@ export function renderKikuzukiBillingBlock(): string {
   const parts: string[] = []
 
   if (aiCredits) {
-    parts.push(`INSERT OR REPLACE INTO ai_credits (organization_id, balance, lifetime_used)
-VALUES (${sqlValue(identity.organizationId)}, ${aiCredits.balance}, ${aiCredits.lifetimeUsed});`)
-  }
-
-  if (organizationBilling) {
-    parts.push(renderSiteBillingSql(identity.siteId, identity.organizationId, organizationBilling, sqlValue))
-    parts.push(renderSiteEntitlementsSql(identity.siteId, identity.organizationId, organizationBilling.plan, sqlValue))
+    if (organizationBilling) {
+      parts.push(renderCanonicalBillingSql(identity.siteId, identity.organizationId, organizationBilling, sqlValue, aiCredits))
+    }
+  } else if (organizationBilling) {
+    parts.push(renderCanonicalBillingSql(identity.siteId, identity.organizationId, organizationBilling, sqlValue))
   }
 
   return `-- BEGIN GENERATED: kikuzuki_billing

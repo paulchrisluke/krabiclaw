@@ -20,7 +20,7 @@ export interface CuratedSiteDefinition extends CuratedSiteIdentity {
     theme: string
     brandDescription: string
     status: 'active' | 'inactive'
-    plan: 'free' | 'growth' | 'managed' | 'seo_accelerator'
+    plan: 'free' | 'growth'
     onboardingStatus: 'pending' | 'active' | 'failed'
     urlStructure: 'location_subdirectories' | 'flat'
     primaryLocationId: string
@@ -53,7 +53,7 @@ export interface CuratedSiteDefinition extends CuratedSiteIdentity {
   }
   organizationBilling?: {
     status: string
-    plan: string
+    plan: 'free' | 'growth'
   }
 }
 
@@ -558,7 +558,7 @@ export interface CompiledCuratedSiteBundle {
   }
   organizationBilling?: {
     status: string
-    plan: string
+    plan: 'free' | 'growth'
   }
 }
 

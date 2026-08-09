@@ -297,6 +297,9 @@ export function compileCuratedSiteFixture(
   })
 
   const businessLocationTranslations: CompiledSeedBusinessLocationTranslation[] = (fixture.businessLocationTranslations ?? []).map((entry) => {
+    if (entry.locale === sourceLocale) {
+      throw new Error(`Business location translation "${entry.id}" must target a non-source locale`)
+    }
     if (!siteLocaleIds.has(entry.locale)) {
       throw new Error(`Business location translation "${entry.id}" references unknown locale "${entry.locale}"`)
     }
@@ -322,6 +325,9 @@ export function compileCuratedSiteFixture(
   })
 
   const menuTranslations: CompiledSeedMenuTranslation[] = (fixture.menuTranslations ?? []).map((entry) => {
+    if (entry.locale === sourceLocale) {
+      throw new Error(`Menu translation "${entry.id}" must target a non-source locale`)
+    }
     if (!siteLocaleIds.has(entry.locale)) {
       throw new Error(`Menu translation "${entry.id}" references unknown locale "${entry.locale}"`)
     }
@@ -345,6 +351,9 @@ export function compileCuratedSiteFixture(
   })
 
   const menuItemTranslations: CompiledSeedMenuItemTranslation[] = (fixture.menuItemTranslations ?? []).map((entry) => {
+    if (entry.locale === sourceLocale) {
+      throw new Error(`Menu item translation "${entry.id}" must target a non-source locale`)
+    }
     if (!siteLocaleIds.has(entry.locale)) {
       throw new Error(`Menu item translation "${entry.id}" references unknown locale "${entry.locale}"`)
     }

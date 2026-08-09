@@ -37,7 +37,7 @@ export async function handleIntegrationsTools(ctx: McpExecutorContext): Promise<
         throw createError({
           statusCode: 403,
           statusMessage:
-            "Facebook publishing is included in the Managed plan and above.",
+            "Facebook publishing requires Growth.",
         });
       }
       const connection = await getFacebookPagesConnection(
@@ -84,7 +84,7 @@ export async function handleIntegrationsTools(ctx: McpExecutorContext): Promise<
         throw createError({
           statusCode: 403,
           statusMessage:
-            "Facebook sync is included in the Managed plan and above.",
+            "Facebook sync requires Growth.",
         });
       }
       const connection = await getFacebookPagesConnection(

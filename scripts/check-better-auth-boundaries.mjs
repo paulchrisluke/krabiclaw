@@ -52,13 +52,18 @@ const EXISTING_DEBT_ALLOWLIST = {
   ]),
 }
 
-// These site-creation/transfer/dev-login paths are migrated to the Better Auth
-// Organization/session adapter. Keep their SQL surface limited to app-owned
-// tables so a direct Better Auth table mutation cannot quietly return.
+// These site-creation/transfer/admin billing/dev-login paths are migrated to
+// the Better Auth Organization/session adapter. Keep their SQL surface limited
+// to app-owned tables so a direct Better Auth table mutation cannot quietly
+// return.
 const MIGRATED_ORGANIZATION_ROUTES = [
   'server/utils/site-creation.ts',
+  'server/utils/quota-adjustment.ts',
   'server/api/sites.post.ts',
   'server/api/site-transfer/[token]/accept.post.ts',
+  'server/api/admin/clients.get.ts',
+  'server/api/admin/sites/[siteId]/transfer.post.ts',
+  'server/api/admin/sites/[siteId]/transfer.delete.ts',
   'server/api/dev/login.get.ts',
 ]
 
@@ -245,7 +250,10 @@ async function checkMigratedOrganizationRoutes() {
   for (const file of MIGRATED_ORGANIZATION_ROUTES) {
     const content = await readFile(file, 'utf8')
     if (forbidden.test(content)) {
-      failures.push(`${file}: migrated site-creation/session route still queries Better Auth user/organization/member/session tables directly`)
+      failures.push(`${file}: migrated organization route still queries Better Auth user/organization/member/session tables directly`)
+    }
+    if (file === 'server/api/site-transfer/[token]/accept.post.ts' && /\bhasPlatformEventPermission\b/.test(content)) {
+      failures.push(`${file}: platform control-plane permission must not bypass exact tenant transfer acceptance`)
     }
   }
 

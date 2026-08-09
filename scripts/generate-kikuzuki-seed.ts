@@ -32,6 +32,15 @@ const isRemote = process.argv.includes('--remote')
 const isStaging = process.argv.includes('--staging')
 const isPreview = process.argv.includes('--preview')
 
+if (isStaging && process.env.KRABICLAW_RELEASE_CONTEXT !== 'ci-full-staging') {
+  console.error('Direct staging seeding is disabled; use the locked CI (Full Validation Lane).')
+  process.exit(1)
+}
+if (isRemote) {
+  console.error('Direct production seeding is disabled; production release workflows never run fixture seeds.')
+  process.exit(1)
+}
+
 const wranglerArgs = [
   'wrangler',
   'd1',

@@ -4,11 +4,13 @@ Status: Accepted
 
 ## Context
 
-KrabiClaw historically contained one-time AI credit purchases, manually
-fulfilled service add-ons, and automatic card top-ups alongside the recurring
-Better Auth Stripe subscription integration. Those paths created a second
-product model and allowed a payment event to mutate customer capacity outside
-the subscription entitlement projection.
+KrabiClaw historically contained code and schema for one-time AI credit
+purchases, manually fulfilled service add-ons, and automatic card top-ups
+alongside the recurring Better Auth Stripe subscription integration. The
+2026-08-09 production/provider census found no customer purchase, fulfillment,
+or outstanding-obligation history for those products. Even unused, those paths
+created a second product model and allowed a payment event to mutate customer
+capacity outside the subscription entitlement projection.
 
 ## Decision
 
@@ -25,20 +27,30 @@ the subscription entitlement projection.
   append-only `usage_quota_grants` ledger.
 - `ai_credits` remains a derived enforcement balance and historical usage
   summary, not a customer-purchasable wallet.
-- New one-time credit checkout, service-addon checkout, and auto-top-up writers
-  are removed. Historical tables, rows, and read-only fulfillment views are
-  retained for auditability.
+- One-time credit checkout, service-addon checkout, and auto-top-up writers are
+  removed. Their unused legacy schema remains frozen as migration history;
+  there are no customer fulfillment obligations to preserve.
+- Growth includes priority-support work requests and Facebook integration. The
+  internal `managed_service` capability remains true for Growth. It is a
+  capability key, not a saleable plan identity.
+- Starter and Growth are the complete runtime plan model. Managed and SEO
+  Accelerator existed only as unused Stripe catalog products. They must be
+  archived and rejected by every runtime checkout, reconciliation, transfer,
+  upsell, and entitlement path.
 - Historical one-time checkout metadata is acknowledged by the webhook worker
   and ignored; it cannot create new capacity or fulfillment rows.
+- A pending site handoff does not pause or delete the source owner's custom
+  domains. Reminders are informational; acceptance and cancellation own the
+  compare-and-set domain restoration/cleanup saga. This prevents an unpaid,
+  abandoned invite from taking an already-owned website offline while keeping
+  legacy paused-domain markers recoverable.
 
 ### Organization quota policy
 
 - One organization subscription covers every site in the organization.
 - Starter has 500 shared usage credits per UTC week. Growth has 2,000 shared
   usage credits per UTC week. A week starts Monday at 00:00:00 UTC and ends at
-  the following Monday. Managed and SEO Accelerator remain feature-disabled;
-  an existing entitled organization is unlimited and receives no finite plan
-  grant.
+  the following Monday. There is no unlimited runtime plan.
 - A finite plan materializes one idempotent `plan` grant for the effective plan
   and UTC week. The grant is the exact base allowance, not an additive top-up,
   and unused allowance never carries into the next week.
@@ -61,10 +73,10 @@ the subscription entitlement projection.
 ### Consumption, manual grants, and resets
 
 - AI inference, customer-triggered Google Places calls, and chargeable WhatsApp
-  sends consume the same organization balance. A successful finite debit and
-  every unlimited-plan use record the canonical credit quantity in
-  `usage_events`; provider/resource details remain explicit event dimensions or
-  metadata. A non-blocking provider action that proceeds after finite quota is
+  sends consume the same finite organization balance. Every successful debit
+  records the canonical credit quantity in `usage_events`; provider/resource
+  details remain explicit event dimensions or metadata. A non-blocking provider
+  action that proceeds after quota is
   exhausted is recorded as an uncharged over-limit event and cannot silently
   mint capacity.
 - Per-chat session limits apply to AI inference within the current UTC week.
@@ -95,9 +107,11 @@ the subscription entitlement projection.
   must not silently refill or overwrite it. The reconciliation plan preserves
   its remaining balance with an auditable current-period reset, then normal
   weekly grants begin at the next period boundary.
-- Historical credit top-up, service add-on, and auto-top-up schema remains for
-  audit. With no historical fulfillment obligations, active fulfillment writes
-  are removed; historical records remain read-only.
+- Legacy credit top-up, service add-on, and auto-top-up schema remains frozen as
+  migration history. Active fulfillment writes are removed. The production
+  census found no recorded or still-open customer obligation; a future census
+  must still fail closed and report any unexpected row rather than fulfilling
+  or replacing it automatically.
 
 ## Consequences
 

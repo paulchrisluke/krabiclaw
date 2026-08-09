@@ -47,7 +47,7 @@ command. Do not use a Playwright-launched browser for ChatGPT or Google login;
 those hosts detect and block the automated browser. The terminal prints each
 golden prompt and independently polls KrabiClaw telemetry after you send it.
 
-The dedicated default fixture is `site-mcp-managed`; override it with
+The dedicated default fixture is `site-mcp-growth-service`; override it with
 `MCP_CHATGPT_SITE_ID` and `MCP_CHATGPT_USER_ID` together when intentionally
 testing another local fixture. This gate fails on a user-reported ChatGPT
 connection error, missing/errored telemetry, wrong site arguments, wrong
@@ -331,7 +331,7 @@ Add dedicated test credentials to your local `.env` as
 `LOCAL_MCP_TEST_EMAIL` / `LOCAL_MCP_TEST_PASSWORD` (see
 [.env.mcp.local.example](../.env.mcp.local.example)).
 `yarn test:mcp:chatgpt` hashes the password and provisions a credential account
-for the freshly seeded `user-mcp-managed` fixture in local D1. The OAuth login
+for the freshly seeded `user-mcp-growth-service` fixture in local D1. The OAuth login
 page then accepts those credentials through Better Auth's real email/password
 sign-in flow. The generated SQL file is mode `0600`, is always deleted, and the
 command never prints the email, password, or password hash. Never commit the

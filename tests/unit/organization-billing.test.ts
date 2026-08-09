@@ -57,6 +57,12 @@ test('organization billing projection rejects partial, malformed, and contradict
     () => validateOrganizationBillingProjection(row({ plan: 'not-a-plan', status: 'active', payment_status: 'paid', paid_through: '2026-08-31T00:00:00.000Z' }), 'org-test'),
     /unknown plan/,
   )
+  for (const retiredPlan of ['managed', 'seo_accelerator']) {
+    assert.throws(
+      () => validateOrganizationBillingProjection(row({ plan: retiredPlan, status: 'active', payment_status: 'paid', paid_through: '2026-08-31T00:00:00.000Z' }), 'org-test'),
+      /unknown plan/,
+    )
+  }
   assert.throws(
     () => validateOrganizationBillingProjection(row({ plan: 'growth', status: 'active', payment_status: 'paid' }), 'org-test'),
     /paid active subscriptions require paid_through/,
@@ -72,5 +78,25 @@ test('organization billing projection rejects partial, malformed, and contradict
   assert.throws(
     () => validateOrganizationBillingProjection(row({ organization_id: 'org-other' }), 'org-test'),
     /organization_id does not match/,
+  )
+})
+
+test('organization billing projection rejects paid plans without Stripe authority IDs', () => {
+  assert.throws(
+    () => validateOrganizationBillingProjection(row({
+      plan: 'growth',
+      status: 'canceled',
+      payment_status: 'unknown',
+    }), 'org-test'),
+    /paid plan requires stripe_subscription_id/,
+  )
+  assert.throws(
+    () => validateOrganizationBillingProjection(row({
+      stripe_subscription_id: 'sub_123',
+      plan: 'growth',
+      status: 'canceled',
+      payment_status: 'unknown',
+    }), 'org-test'),
+    /stripe_subscription_id requires stripe_customer_id/,
   )
 })

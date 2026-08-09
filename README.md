@@ -15,13 +15,14 @@ Multi-tenant restaurant SaaS. Nuxt 4 + Cloudflare Pages + D1.
 | `yarn deploy` | Intentionally blocked; production releases use the manifest-gated GitHub Actions workflow. |
 | `yarn db:generate` | Generate a new `migrations/*.sql` file from `server/db/schema.ts` |
 | `yarn schema:local` | Apply pending `migrations/*.sql` to local D1 |
-| `yarn schema:remote` | Apply pending `migrations/*.sql` to production D1 |
+| `yarn schema:remote` | Blocked; production migrations run only inside the protected manifest-gated release workflow. |
 | `yarn drizzle:check` | Verify `server/db/schema.ts` hasn't drifted from the live D1 schema |
 | `yarn seed:local` | Seed demo data locally |
 | `yarn stripe:listen` | Forward Stripe webhooks to localhost (local dev only) |
 | `yarn canary:prod` | Production-safe authenticated browser canary (read-only checks). |
 | `yarn canary:notifications` | Production provider-level email/WhatsApp notification canary. |
-| `yarn rollback:prod` | Roll back Worker to previous version, then run smoke + auth canary checks. |
+| `yarn zaraz:ga:backfill` | Blocked legacy apply alias; use **Zaraz GA4 Backfill Plan** for read-only staging/preview planning. |
+| `yarn rollback:prod` | Blocked; use **Production rollback (exact-target, manifest-gated)** with the declared current/target Worker IDs, target SHA, incident reason, and protected approval. |
 | `yarn test:mcp:local` | Local ChatGPT MCP harness preflight against the public tunnel target. |
 
 ---
@@ -152,6 +153,29 @@ closed so they cannot bypass the immutable-candidate evidence chain. Preview
 remains an isolated PR environment. See
 [docs/operations/release-candidate-contract.md](docs/operations/release-candidate-contract.md)
 for the exact contract.
+
+Remote staging and production migration/seed aliases (`migrate:staging`,
+`migrate:prod`, `schema:remote`, `schema:staging`, `seed:*:staging`, and
+`seed:*:remote`) also fail closed. The full candidate and production release
+workflows invoke their remote operations only while holding their protected
+workflow lock and recording the exact source/build evidence.
+
+The **Zaraz GA4 Backfill Plan** workflow is read-only and accepts only preview or
+staging targets. It reads the target D1 connections and the current zone-level
+Zaraz configuration, then emits a plan; it never applies a Zaraz `PUT` and has
+no production operator path. The legacy `yarn zaraz:ga:backfill` alias is
+blocked so it cannot bypass that boundary.
+
+Emergency production rollback is a separate manual workflow named
+**Production rollback (exact-target, manifest-gated)**. Its read-only preflight
+requires the exact current Worker version, exact target Worker version, exact
+40-character target source SHA, and incident reason; it proves target
+provenance, build/assets, and the Saya/Blawby route inventory before any
+approval. Only its protected `production` mutation job may route the exact
+target at 100%, and it proves the deployed desktop/mobile browser surfaces.
+The workflow never chooses an inferred “previous” version or writes customer
+data; if post-mutation state is unknown it restores only the explicitly
+declared current version and records intervention evidence.
 
 Production secrets live in the Cloudflare dashboard → Workers & Pages → krabiclaw → Settings → Variables.
 

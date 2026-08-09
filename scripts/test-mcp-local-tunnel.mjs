@@ -198,7 +198,7 @@ async function main() {
       ...process.env,
       LOCAL_MCP_TEST_EMAIL: localEmail,
       LOCAL_MCP_TEST_PASSWORD: localPassword,
-      MCP_CHATGPT_USER_ID: process.env.MCP_CHATGPT_USER_ID || 'user-mcp-managed',
+      MCP_CHATGPT_USER_ID: process.env.MCP_CHATGPT_USER_ID || 'user-mcp-growth-service',
     })
     localCredentials.set('LOCAL_MCP_TEST_EMAIL', localEmail)
     localCredentials.set('LOCAL_MCP_TEST_PASSWORD', localPassword)
@@ -239,8 +239,8 @@ async function main() {
     PLAYWRIGHT_PREVIEW_URL: origin,
     PLAYWRIGHT_WORKERS: '1',
     PORT: String(port),
-    MCP_CHATGPT_SITE_ID: process.env.MCP_CHATGPT_SITE_ID || 'site-mcp-managed',
-    MCP_CHATGPT_USER_ID: process.env.MCP_CHATGPT_USER_ID || 'user-mcp-managed',
+    MCP_CHATGPT_SITE_ID: process.env.MCP_CHATGPT_SITE_ID || 'site-mcp-growth-service',
+    MCP_CHATGPT_USER_ID: process.env.MCP_CHATGPT_USER_ID || 'user-mcp-growth-service',
     LOCAL_MCP_TEST_EMAIL: localCredentials.get('LOCAL_MCP_TEST_EMAIL') || '',
     LOCAL_MCP_TEST_PASSWORD: localCredentials.get('LOCAL_MCP_TEST_PASSWORD') || '',
   }

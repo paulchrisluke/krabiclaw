@@ -1,4 +1,5 @@
 import { authClient } from '~/lib/auth-client'
+import { isKnownBillingPlan } from '~/shared/billing-model'
 
 function checkoutReturnUrls(): { successUrl: string; cancelUrl: string; returnUrl: string } {
   const current = new URL(window.location.href)
@@ -14,19 +15,37 @@ function checkoutReturnUrls(): { successUrl: string; cancelUrl: string; returnUr
 async function organizationSubscriptionId(
   dashboardApi: ReturnType<typeof useDashboardApi>,
   organizationId: string,
-): Promise<{ id?: string; status?: string; plan?: string }> {
-  const response = await dashboardApi<{ billing?: { stripeSubscriptionId?: unknown; subscriptionStatus?: unknown; plan?: unknown } }>('/api/billing/status', {
+): Promise<{ id?: string; status: string; plan: string }> {
+  type BillingStatusResponse = {
+    success: true
+    billing: {
+      stripeSubscriptionId?: string
+      subscriptionStatus: string
+      plan: string
+    }
+  }
+  const response = await dashboardApi<BillingStatusResponse>('/api/billing/status', {
     query: { organizationId },
-    validate: value => typeof value === 'object' && value !== null,
+    validate: (value): value is BillingStatusResponse => {
+      if (typeof value !== 'object' || value === null || !('success' in value) || value.success !== true || !('billing' in value)) return false
+      const billing = value.billing
+      return typeof billing === 'object'
+        && billing !== null
+        && (!('stripeSubscriptionId' in billing) || billing.stripeSubscriptionId === undefined || typeof billing.stripeSubscriptionId === 'string')
+        && 'subscriptionStatus' in billing
+        && typeof billing.subscriptionStatus === 'string'
+        && 'plan' in billing
+        && isKnownBillingPlan(billing.plan)
+    },
   })
   return {
-    id: typeof response.billing?.stripeSubscriptionId === 'string' ? response.billing.stripeSubscriptionId : undefined,
-    status: typeof response.billing?.subscriptionStatus === 'string' ? response.billing.subscriptionStatus : undefined,
-    plan: typeof response.billing?.plan === 'string' ? response.billing.plan : undefined,
+    id: response.billing.stripeSubscriptionId,
+    status: response.billing.subscriptionStatus,
+    plan: response.billing.plan,
   }
 }
 
-export const useSiteSubscribe = () => {
+export const useOrganizationSubscription = () => {
   const toast = useToast()
   const dashboard = useDashboardSite()
   const dashboardApi = useDashboardApi()
@@ -36,7 +55,7 @@ export const useSiteSubscribe = () => {
   // The organization owns one recurring subscription. A site is only
   // metadata on the upgrade request and receives derived entitlements after
   // Better Auth confirms the subscription through Stripe.
-  async function offerSubscribe(siteId: string, plan: string) {
+  async function startOrganizationCheckout(siteId: string, plan: string) {
     try {
       const organizationId = dashboard.organization.value?.id
       if (!organizationId) throw new Error('Organization context is unavailable')
@@ -55,7 +74,7 @@ export const useSiteSubscribe = () => {
         await navigateTo(portalUrl, { external: true })
         return
       }
-      const currentPlan = subscription.plan ?? 'free'
+      const currentPlan = subscription.plan
       await startSubscriptionCheckout({
         organizationId,
         siteId,
@@ -73,5 +92,5 @@ export const useSiteSubscribe = () => {
     }
   }
 
-  return { offerSubscribe }
+  return { startOrganizationCheckout }
 }

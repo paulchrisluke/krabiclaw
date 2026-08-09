@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
-import { MCP_GROWTH_USER_ID, MCP_MANAGED_USER_ID } from './helpers/plan-fixtures'
-import { MCP_GROWTH_SITE_ID, MCP_MANAGED_SITE_ID, mcpRequest, mcpData, createScratchLocation } from './helpers/mcp'
+import { MCP_GROWTH_USER_ID, MCP_GROWTH_SERVICE_USER_ID } from './helpers/plan-fixtures'
+import { MCP_GROWTH_SITE_ID, MCP_GROWTH_SERVICE_SITE_ID, mcpRequest, mcpData, createScratchLocation } from './helpers/mcp'
 
 // Split out of mcp.spec.ts (owner tool-coverage tests) — see helpers/mcp.ts
 // for why. This group covers the bulk of an owner's MCP tool surface: site
@@ -364,12 +364,12 @@ test.describe('stateless MCP server', () => {
   // that's easy to misdiagnose as "the environment is flaky" when it's
   // buried inside a 31-step test — splitting makes the actual failing step
   // and its response immediately visible instead of one failure among 31.
-  // All four tests mutate the shared MCP_MANAGED_SITE_ID, so they run serially
+  // All four tests mutate the shared Growth service fixture, so they run serially.
   // to avoid concurrent state mutations.
   test.describe.serial('owner management workflows', () => {
     test('owner can manage a scratch location', async ({ request, baseURL }) => {
-      await loginAs(request, baseURL!, MCP_MANAGED_USER_ID)
-      const siteId = MCP_MANAGED_SITE_ID
+      await loginAs(request, baseURL!, MCP_GROWTH_SERVICE_USER_ID)
+      const siteId = MCP_GROWTH_SERVICE_SITE_ID
       const locationId = await createScratchLocation(request, baseURL!, siteId)
 
       const deleteLocationRes = await mcpRequest(request, baseURL!, {
@@ -382,8 +382,8 @@ test.describe('stateless MCP server', () => {
 
     test('owner can manage menu and menu-item tools', async ({ request, baseURL }) => {
       test.setTimeout(120_000)
-      await loginAs(request, baseURL!, MCP_MANAGED_USER_ID)
-      const siteId = MCP_MANAGED_SITE_ID
+      await loginAs(request, baseURL!, MCP_GROWTH_SERVICE_USER_ID)
+      const siteId = MCP_GROWTH_SERVICE_SITE_ID
 
       const menu = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
@@ -497,8 +497,8 @@ test.describe('stateless MCP server', () => {
 
     test('owner can manage post tools', async ({ request, baseURL }) => {
       test.setTimeout(90_000)
-      await loginAs(request, baseURL!, MCP_MANAGED_USER_ID)
-      const siteId = MCP_MANAGED_SITE_ID
+      await loginAs(request, baseURL!, MCP_GROWTH_SERVICE_USER_ID)
+      const siteId = MCP_GROWTH_SERVICE_SITE_ID
 
       const post = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
@@ -558,8 +558,8 @@ test.describe('stateless MCP server', () => {
 
     test('owner can manage media and experience tools including public booking', async ({ request, baseURL }) => {
       test.setTimeout(120_000)
-      await loginAs(request, baseURL!, MCP_MANAGED_USER_ID)
-      const siteId = MCP_MANAGED_SITE_ID
+      await loginAs(request, baseURL!, MCP_GROWTH_SERVICE_USER_ID)
+      const siteId = MCP_GROWTH_SERVICE_SITE_ID
 
       const mediaList = await mcpRequest(request, baseURL!, {
         method: 'tools/call',

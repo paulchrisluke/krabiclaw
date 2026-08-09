@@ -2,8 +2,7 @@
   <div>
     <!-- Primary plans -->
     <div
-      class="grid grid-cols-1 gap-6 items-stretch mx-auto"
-      :class="mainPlans.length >= 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2 max-w-3xl'"
+      class="grid grid-cols-1 gap-6 items-stretch mx-auto lg:grid-cols-2 max-w-3xl"
     >
       <div
         v-for="plan in mainPlans"
@@ -25,43 +24,6 @@
             </PlatformButton>
           </template>
         </BillingPlanCard>
-      </div>
-    </div>
-
-    <!-- SEO Accelerator — recurring premium plan -->
-    <div v-if="seoAcceleratorPlan" class="mt-6 rounded-2xl border border-default bg-elevated/30 p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center gap-6">
-      <div class="flex-1 min-w-0">
-        <div class="flex items-center gap-2 mb-1">
-          <span class="text-xs font-bold uppercase tracking-widest text-primary">Premium Plan</span>
-          <PlatformBadge v-if="seoAcceleratorPlan.badge" color="primary">{{ seoAcceleratorPlan.badge }}</PlatformBadge>
-        </div>
-        <h3 class="text-xl font-bold text-highlighted">{{ seoAcceleratorPlan.name }}</h3>
-        <p class="mt-1 text-sm text-muted">{{ seoAcceleratorPlan.tagline }}</p>
-        <ul class="mt-3 grid sm:grid-cols-2 gap-x-6 gap-y-1.5">
-          <li v-for="f in seoAcceleratorPlan.features" :key="f" class="flex items-start gap-2 text-sm text-default">
-            <PlatformIcon name="check-circle" class="mt-0.5 size-4 shrink-0 text-primary" />
-            <span>{{ f }}</span>
-          </li>
-        </ul>
-      </div>
-      <div class="shrink-0 flex flex-col items-start sm:items-end gap-3">
-        <p class="text-3xl font-bold text-highlighted">
-          <template v-if="seoAcceleratorMonthlyPrice">
-            ${{ seoAcceleratorMonthlyPrice.amount / 100 }}
-            <span class="text-base font-normal text-muted">/mo</span>
-          </template>
-          <template v-else>
-            <span class="text-error">No monthly price configured</span>
-          </template>
-        </p>
-        <PlatformButton
-          size="lg"
-          :loading="upgrading === seoAcceleratorPlan.id"
-          class="font-bold"
-          @click="handleUpgrade(seoAcceleratorPlan.id)"
-        >
-          Get SEO Accelerator Plan
-        </PlatformButton>
       </div>
     </div>
 
@@ -125,6 +87,7 @@
 
 <script setup lang="ts">
 import type { Plan } from '~/server/api/billing/plans.get'
+import { NEW_SALE_PLAN_ID, STARTER_PLAN_ID } from '~/shared/billing-model'
 
 const props = defineProps<{
   plans: Plan[]
@@ -132,14 +95,8 @@ const props = defineProps<{
 
 const planList = computed(() => props.plans)
 
-const MAIN_PLAN_IDS = ['free', 'growth', 'managed']
-const mainPlans = computed(() => planList.value.filter(p => MAIN_PLAN_IDS.includes(p.id)))
-const seoAcceleratorPlan = computed(() => planList.value.find(p => p.id === 'seo_accelerator') ?? null)
-const seoAcceleratorMonthlyPrice = computed(() => {
-  const plan = seoAcceleratorPlan.value
-  if (!plan) return null
-  return plan.prices.find(p => p.interval === 'month') || null
-})
+const MAIN_PLAN_IDS: ReadonlySet<string> = new Set([STARTER_PLAN_ID, NEW_SALE_PLAN_ID])
+const mainPlans = computed(() => planList.value.filter(p => MAIN_PLAN_IDS.has(p.id)))
 const upgrading = ref<string | null>(null)
 const checkoutError = ref<string>('')
 
@@ -171,17 +128,16 @@ type CellValue = boolean | string
 type ComparisonRow = { feature: string } & Record<string, CellValue>
 
 const comparisonRows: ComparisonRow[] = [
-  { feature: 'AI site builder (live in minutes)', free: true,    growth: true,      managed: true },
-  { feature: 'WhatsApp content updates',          free: false,   growth: true,      managed: true },
-  { feature: 'Bookings & experiences',            free: true,    growth: true,      managed: true },
-  { feature: 'Shared organization usage credits', free: '500 / UTC week', growth: '2,000 / UTC week', managed: 'Unlimited' },
-  { feature: 'LLM-ready SEO (get found by AI)',   free: 'Basic', growth: 'Advanced', managed: 'Advanced' },
-  { feature: 'Custom domain',                     free: false,   growth: true,      managed: true },
-  { feature: 'Facebook auto-sync',                free: false,   growth: true,      managed: true },
-  { feature: 'Google Business sync',              free: false,   growth: true,  managed: true },
-  { feature: 'Post-booking review requests',      free: true,   growth: true,      managed: true },
-  { feature: 'Messaging notifications',           free: false,   growth: true,      managed: true },
-  { feature: 'Support',                           free: 'Community', growth: 'Priority', managed: 'Priority' },
+  { feature: 'AI site builder (live in minutes)', free: true, growth: true },
+  { feature: 'WhatsApp content updates', free: false, growth: true },
+  { feature: 'Bookings & experiences', free: true, growth: true },
+  { feature: 'Shared organization usage credits', free: '500 / UTC week', growth: '2,000 / UTC week' },
+  { feature: 'Custom domain', free: false, growth: true },
+  { feature: 'Facebook auto-sync', free: false, growth: true },
+  { feature: 'Google Business sync', free: false, growth: true },
+  { feature: 'Post-booking review requests', free: false, growth: true },
+  { feature: 'Messaging notifications', free: false, growth: true },
+  { feature: 'Support', free: 'Community', growth: 'Priority' },
 ]
 
 function cellValue(row: ComparisonRow, planId: string): CellValue {

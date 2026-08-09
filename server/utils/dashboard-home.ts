@@ -1,4 +1,4 @@
-import { queryAll, queryFirst, type DbClient } from '~/server/db'
+import { queryAll, type DbClient } from '~/server/db'
 import { isOrganizationWideRole, teamAccessPredicate } from '~/server/utils/member-access'
 import { getGuestThreadOperationSummary } from '~/server/domain/guest-threads/repository'
 
@@ -13,12 +13,6 @@ export interface DashboardHomeLocation {
   status: string
   updated_at: string
   hero_url: string | null
-}
-
-export interface DashboardHomeCredits {
-  balance: number
-  lifetime_used: number
-  last_topped_up_at: string | null
 }
 
 export interface DashboardHomeEvent {
@@ -36,7 +30,6 @@ export interface DashboardHomeEvent {
 
 export interface DashboardHomeData {
   locations: DashboardHomeLocation[]
-  credits: DashboardHomeCredits | null
   events: DashboardHomeEvent[]
   operations: {
     openThreads: number
@@ -87,7 +80,7 @@ export async function getDashboardHomeData(
           AND ${teamAccessPredicate({ userIdExpr: 'm.userId', siteTeamExpr: 's.team_id', locationTeamExpr: 'bl.team_id' })}
       )`
     : ''
-  const [locations, credits, events, operations] = await Promise.all([
+  const [locations, events, operations] = await Promise.all([
     queryAll<{
       id: string; slug: string; title: string; city: string | null
       rating: number | null; review_count: number | null
@@ -104,13 +97,6 @@ export async function getDashboardHomeData(
       ${locationScopeClause}
       ORDER BY bl.is_primary DESC, bl.title ASC
     `, scoped && principal ? [organizationId, siteId, principal.memberId] : [organizationId, siteId]),
-
-    scoped ? Promise.resolve(null) : queryFirst<{
-      balance: number; lifetime_used: number; last_topped_up_at: string | null
-    }>(db, `
-      SELECT balance, lifetime_used, last_topped_up_at
-      FROM ai_credits WHERE organization_id = ?
-    `, [organizationId]),
 
     queryAll<{
       id: string; event_type: string; entity_type: string | null
@@ -147,7 +133,6 @@ export async function getDashboardHomeData(
       ...l,
       is_primary: Boolean(l.is_primary),
     })),
-    credits,
     events: events.map(e => ({
       ...e,
       metadata: e.metadata ? safeJsonParse(e.metadata) : null,

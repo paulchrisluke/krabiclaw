@@ -42,3 +42,22 @@ test('product-model guard accepts explicit shared UTC-week organization copy', (
     [],
   )
 })
+
+test('product-model guard scans locale copy and keeps retired upsell files deleted', () => {
+  const root = mkdtempSync(join(tmpdir(), 'krabiclaw-product-copy-'))
+  try {
+    mkdirSync(join(root, 'i18n', 'locales'), { recursive: true })
+    mkdirSync(join(root, 'utils'), { recursive: true })
+    mkdirSync(join(root, 'composables'), { recursive: true })
+    writeFileSync(join(root, 'i18n', 'locales', 'en.json'), '{"description":"Included in Managed"}\n')
+    writeFileSync(join(root, 'utils', 'template-registry.ts'), 'const locations = "1 free / unlimited Growth"\n')
+    writeFileSync(join(root, 'composables', 'useUpgradeModal.ts'), 'export const enabled = false\n')
+
+    const violations = collectProductModelViolations(root)
+    assert.equal(violations.some(violation => violation.includes('i18n/locales/en.json')), true)
+    assert.equal(violations.some(violation => violation.includes('utils/template-registry.ts')), true)
+    assert.equal(violations.some(violation => violation.includes('composables/useUpgradeModal.ts')), true)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})

@@ -270,7 +270,7 @@ export const publicTemplateMarketing: Record<PublicTemplateSlug, TemplateMarketi
     ],
     specs: [
       { label: 'Price', value: 'Free' },
-      { label: 'Locations', value: '1 free / unlimited Growth' },
+      { label: 'Locations', value: '1 on Starter / multiple on Growth' },
       { label: 'Mobile', value: 'Fully responsive' },
       { label: 'Languages', value: 'EN / TH' },
     ],

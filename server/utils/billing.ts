@@ -1,6 +1,6 @@
 import type Stripe from 'stripe'
 import { createError } from 'h3'
-import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { betterAuthTimestampToIso } from '~/server/utils/better-auth-timestamps'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
 import { getOrgAdapter, hasPermission } from 'better-auth/plugins'
@@ -8,6 +8,12 @@ import { getPlanEntitlements, type EntitlementsMap } from '~/server/utils/billin
 import { getOrganizationBillingProjection } from '~/server/utils/organization-billing'
 import { createStripeClient } from '~/server/utils/stripe-client'
 import { organizationAccessControl, organizationRoles } from '~/utils/organization-access'
+import { assertNewSalePlan } from '~/shared/billing-model'
+import {
+  assertGrowthStripeCatalogPrices,
+  resolveStripeCatalogPrice,
+  selectStripeCatalogPrice,
+} from '~/server/utils/stripe-catalog'
 
 interface EntitlementRow {
   key: string
@@ -139,10 +145,9 @@ export async function setSiteEntitlementsFromPlan(
     })
   }
   // sites.plan is a denormalized cache read directly by mcp-workflows, the
-  // transfer onboarding wizard, and Google Business sync gating — it must
-  // stay in sync with the site_billing.plan that triggered this entitlement
-  // refresh, or those call sites keep showing whatever plan existed at
-  // site-creation time.
+  // transfer onboarding wizard, and Google Business sync gating. Keep it in
+  // sync with the organization subscription projection used for this site's
+  // entitlements.
   //
   // executeBatch runs these as a single atomic D1Database.batch() call — do
   // not swap this for batchStatements()/sequential execute(), which provide
@@ -155,50 +160,10 @@ export async function setSiteEntitlementsFromPlan(
   await executeBatch(db, queries)
 }
 
-export async function applySiteSubscription(
-  db: D1Database,
-  siteId: string,
-  organizationId: string,
-  customerId: string,
-  subscriptionId: string,
-  subscriptionItemId: string | null,
-  plan: string,
-  periodEnd: string | null,
-): Promise<void> {
-  const now = new Date().toISOString()
-
-  // Ensure org has a Stripe customer record
-  await execute(db, `
-    INSERT INTO organization_billing (id, organization_id, stripe_customer_id, updated_at)
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT(organization_id) DO UPDATE SET
-      id = excluded.id,
-      stripe_customer_id = excluded.stripe_customer_id,
-      updated_at = excluded.updated_at
-  `, [`billing-${organizationId}`, organizationId, customerId, now])
-
-  // ON CONFLICT(site_id) DO UPDATE, not INSERT OR REPLACE — REPLACE deletes and
-  // recreates the row, wiping any column (e.g. payment_method) not in this list.
-  await execute(db, `
-    INSERT INTO site_billing
-      (id, site_id, organization_id, stripe_subscription_id, stripe_subscription_item_id,
-       plan, status, current_period_end, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)
-    ON CONFLICT(site_id) DO UPDATE SET
-      stripe_subscription_id = excluded.stripe_subscription_id,
-      stripe_subscription_item_id = excluded.stripe_subscription_item_id,
-      plan = excluded.plan,
-      status = excluded.status,
-      current_period_end = excluded.current_period_end,
-      updated_at = excluded.updated_at
-  `, [`sb-${siteId}`, siteId, organizationId, subscriptionId, subscriptionItemId, plan, periodEnd, now])
-
-  await setSiteEntitlementsFromPlan(db, siteId, organizationId, plan)
-}
-
 // ── Stripe helpers ────────────────────────────────────────────────────────────
 
 export async function getPriceIdForPlan(env: BillingEnv, plan: string, interval: 'month' | 'year' = 'month'): Promise<string> {
+  const validatedPlan = assertNewSalePlan(plan)
   const stripe = getStripe(env)
   const products: Stripe.Product[] = []
   let productsStartingAfter: string | undefined
@@ -212,15 +177,11 @@ export async function getPriceIdForPlan(env: BillingEnv, plan: string, interval:
     productsStartingAfter = page.has_more ? page.data.at(-1)?.id : undefined
   } while (productsStartingAfter)
 
-  const product = products.find(p => p.metadata?.plan_id === plan)
-  if (!product) throw new Error(`No active Stripe product found for plan ${plan}`)
-
   const prices: Stripe.Price[] = []
   let pricesStartingAfter: string | undefined
   do {
     const page = await stripe.prices.list({
       active: true,
-      product: product.id,
       type: 'recurring',
       limit: 100,
       ...(pricesStartingAfter ? { starting_after: pricesStartingAfter } : {}),
@@ -229,18 +190,14 @@ export async function getPriceIdForPlan(env: BillingEnv, plan: string, interval:
     pricesStartingAfter = page.has_more ? page.data.at(-1)?.id : undefined
   } while (pricesStartingAfter)
 
-  const price = prices.find(p => p.recurring?.interval === interval && p.recurring.interval_count === 1)
-  if (!price) throw new Error(`No active Stripe ${interval} price found for plan ${plan}`)
-  return price.id
-}
-
-export async function getPlanFromStripePrice(env: BillingEnv, priceId: string): Promise<string | null> {
-  const stripe = getStripe(env)
-  const price = await stripe.prices.retrieve(priceId, { expand: ['product'] })
-  const product = typeof price.product === 'string' ? null : price.product
-  if (!product || product.deleted) return null
-  const plan = product?.metadata?.plan_id
-  return typeof plan === 'string' && plan.length > 0 ? plan : null
+  const monthly = resolveStripeCatalogPrice(products, prices, validatedPlan, 'month')
+  const annual = selectStripeCatalogPrice(monthly.product, prices, 'year')
+  assertGrowthStripeCatalogPrices(monthly.price, annual)
+  if (interval === 'year') {
+    if (!annual) throw new Error('No active Stripe year price found for plan growth')
+    return annual.id
+  }
+  return monthly.price.id
 }
 
 export async function requireBillingAccess(

@@ -27,7 +27,7 @@
           <div class="text-center py-4">
             <UIcon name="i-lucide-list-todo" class="mx-auto size-10 text-muted mb-3" />
             <p class="font-semibold text-highlighted">No work requests</p>
-            <p class="text-sm text-muted mt-1">Managed clients submit requests from their dashboard or via ChowBot.</p>
+            <p class="text-sm text-muted mt-1">Growth clients submit priority-support requests from their dashboard or via ChowBot.</p>
           </div>
         </UCard>
 

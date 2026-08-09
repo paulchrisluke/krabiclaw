@@ -155,14 +155,6 @@ export default defineEventHandler(async (event) => {
     LIMIT 20
   `, [organizationId])
 
-  const serviceAddonPurchases = await queryAll(db, `
-    SELECT checkout_session_id, addon_type, stripe_payment_intent_id, created_at
-    FROM service_addon_purchases
-    WHERE organization_id = ?
-    ORDER BY created_at DESC
-    LIMIT 20
-  `, [organizationId])
-
   let sql = `
     SELECT id, stripe_event_id, event_type, status,
            claimed_at, lease_expires_at, attempt_count, created_at
@@ -184,7 +176,6 @@ export default defineEventHandler(async (event) => {
     entitlements: entitlements ?? [],
     site_plans: sitePlans ?? [],
     invoice_payments: invoicePayments ?? [],
-    service_addon_purchases: serviceAddonPurchases ?? [],
     webhook_events: webhookEvents ?? [],
   })
 })

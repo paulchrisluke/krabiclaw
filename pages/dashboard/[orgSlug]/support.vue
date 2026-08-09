@@ -12,14 +12,9 @@
       <div class="max-w-2xl space-y-6">
 
         <!--
-          managedServiceEnabled is a global marketing/checkout flag (whether
-          Managed/SEO Accelerator plans are being sold right now) — it must
-          never hide the request form from a site that already has the
-          managed_service entitlement (e.g. existing Growth customers).
-          Entitlement (non-free plan) always wins; the flag only controls
-          what free-plan users are shown.
+          Growth entitlement always wins. The flag controls whether Starter
+          customers see the Growth support upsell while support intake is open.
         -->
-        <!-- Managed service not currently offered to new customers -->
         <template v-if="isFree && !managedServiceEnabled">
           <UCard>
             <div class="flex flex-col items-center text-center gap-4 py-4">
@@ -27,9 +22,9 @@
                 <UIcon name="i-lucide-life-buoy" class="size-7" />
               </div>
               <div>
-                <h2 class="text-lg font-bold text-highlighted">Managed support isn't available yet</h2>
+                <h2 class="text-lg font-bold text-highlighted">Priority support isn't available yet</h2>
                 <p class="mt-1 text-sm text-muted max-w-md">
-                  We're not taking managed-service requests right now. For anything urgent, visit our help page.
+                  We're not taking priority support requests right now. For anything urgent, visit our help page.
                 </p>
               </div>
               <UButton color="neutral" variant="soft" size="lg" :to="config.public.helpUrl" target="_blank" rel="noopener noreferrer">
@@ -47,9 +42,9 @@
                 <UIcon name="i-lucide-life-buoy" class="size-7" />
               </div>
               <div>
-                <h2 class="text-lg font-bold text-highlighted">Managed support is included in Growth</h2>
+                <h2 class="text-lg font-bold text-highlighted">Priority support is included in Growth</h2>
                 <p class="mt-1 text-sm text-muted max-w-md">
-                  Upgrade and Paul & Julia handle your updates and Google presence.
+                  Upgrade for hands-on update requests and Google Business support.
                   Visit our help page for more information.
                 </p>
               </div>
@@ -65,8 +60,8 @@
           </UCard>
         </template>
 
-        <!-- Managed plans — request form + history -->
-        <template v-if="!isFree">
+        <!-- Growth customers — request form + history -->
+        <template v-if="isGrowth">
           <!-- New request form -->
           <UCard>
             <template #header>
@@ -172,10 +167,8 @@ definePageMeta({ layout: 'dashboard' })
 
 const config = useRuntimeConfig()
 const dashboard = useDashboardSite()
-const isFree = computed(() => {
-  const state = dashboard.state.value
-  return !!state && (!state.site?.plan || state.site.plan === 'free')
-})
+const isGrowth = computed(() => dashboard.state.value?.site?.plan === 'growth')
+const isFree = computed(() => !isGrowth.value)
 const managedServiceEnabled = dashboard.managedServiceEnabled
 const { open: openUpsell } = useServiceUpsell()
 

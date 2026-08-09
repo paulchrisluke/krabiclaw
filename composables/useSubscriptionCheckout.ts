@@ -1,5 +1,6 @@
 import { authClient } from '~/lib/auth-client'
 import { buildStripeSubscriptionMetadata, classifyStripePlanChange, type StripeGa4IntentAction } from '~/shared/stripe-ga4'
+import { assertNewSalePlan, normalizeBillingPlanId, STARTER_PLAN_ID } from '~/shared/billing-model'
 
 interface SubscriptionCheckoutInput {
   organizationId: string
@@ -30,8 +31,15 @@ export function useSubscriptionCheckout() {
   const { getBillingAnalyticsContext } = useAnalytics()
 
   async function startSubscriptionCheckout(input: SubscriptionCheckoutInput): Promise<StripeGa4IntentAction> {
+    // Validate the requested plan before touching analytics, browser state, or
+    // Better Auth. Retired historical plans remain valid for reconciliation but
+    // must never be sent to a new checkout provider call.
+    const normalizedPlan = normalizeBillingPlanId(input.plan)
+    const plan = normalizedPlan === STARTER_PLAN_ID
+      ? STARTER_PLAN_ID
+      : assertNewSalePlan(normalizedPlan)
     const { successUrl, cancelUrl, returnUrl } = checkoutReturnUrls()
-    const action = classifyStripePlanChange(input.currentPlan, input.plan, Boolean(input.subscriptionId))
+    const action = classifyStripePlanChange(input.currentPlan, plan, Boolean(input.subscriptionId))
     if (!action) throw new Error('The selected plan is already active')
     input.onAction?.(action)
 
@@ -62,7 +70,7 @@ export function useSubscriptionCheckout() {
       ),
     }
 
-    if (action === 'downgrade' && input.plan === 'free') {
+    if (action === 'downgrade' && plan === STARTER_PLAN_ID) {
       if (!input.subscriptionId) throw new Error('No active subscription to cancel')
       const cancelResponse = await authClient.subscription.cancel({
         referenceId: input.organizationId,
@@ -79,7 +87,7 @@ export function useSubscriptionCheckout() {
     }
 
     const response = await authClient.subscription.upgrade({
-      plan: input.plan,
+      plan,
       annual: input.annual ?? false,
       referenceId: input.organizationId,
       ...(input.subscriptionId ? { subscriptionId: input.subscriptionId } : {}),

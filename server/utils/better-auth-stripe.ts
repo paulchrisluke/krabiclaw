@@ -4,57 +4,38 @@ import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/se
 import { getPlanEntitlements, type EntitlementsMap } from '~/server/utils/billing-entitlements'
 import { getEffectiveAccessPlan } from '~/server/utils/billing-access'
 import { betterAuthTimestampToIso } from '~/server/utils/better-auth-timestamps'
-import { isManagedServiceEnabled } from '~/server/utils/feature-flags'
+import {
+  isKnownRecurringPlan,
+  isNewSalePlan,
+} from '~/shared/billing-model'
+import {
+  assertGrowthStripeCatalogPrices,
+  resolveStripeCatalogPrice,
+  selectStripeCatalogPrice,
+  type StripeCatalogPriceResolution,
+} from '~/server/utils/stripe-catalog'
 
 const WEBHOOK_LEASE_MS = 5 * 60 * 1000
-export const CONCIERGE_PLAN_IDS = new Set(['managed', 'seo_accelerator'])
-
 export function selectCanonicalStripePrice(
   product: Stripe.Product,
   prices: Stripe.Price[],
   interval: 'month' | 'year',
 ): Stripe.Price | null {
-  const candidates = prices.filter(price =>
-    price.recurring?.interval === interval
-    && price.recurring.interval_count === 1
-    && typeof price.unit_amount === 'number'
-    && price.unit_amount > 0
-    && typeof price.currency === 'string'
-    && price.currency.length > 0,
-  )
-  if (candidates.length === 0) return null
+  return selectStripeCatalogPrice(product, prices, interval)
+}
 
-  const metadataKey = interval === 'month' ? 'monthly_price_id' : 'annual_price_id'
-  const metadataPriceId = product.metadata?.[metadataKey]?.trim()
-  if (metadataPriceId) {
-    const selected = candidates.find(price => price.id === metadataPriceId)
-    if (!selected) {
-      throw new Error(`Stripe product ${product.id} has an invalid ${metadataKey} canonical price`)
-    }
-    return selected
-  }
-
-  const lookupKeyCandidates = candidates.filter(price => {
-    const lookupKey = price.lookup_key?.toLowerCase() ?? ''
-    return interval === 'month'
-      ? lookupKey.includes('month')
-      : lookupKey.includes('annual') || lookupKey.includes('year')
-  })
-  if (lookupKeyCandidates.length > 1) {
-    throw new Error(`Stripe product ${product.id} has multiple ${interval} prices marked by lookup_key`)
-  }
-  if (lookupKeyCandidates.length === 1) {
-    return lookupKeyCandidates[0] ?? null
-  }
-  if (candidates.length !== 1) {
-    throw new Error(`Stripe product ${product.id} must have exactly one canonical ${interval} price`)
-  }
-  return candidates[0] ?? null
+export function resolveCanonicalStripePrice(
+  products: Stripe.Product[],
+  prices: Stripe.Price[],
+  planId: string,
+  interval: 'month' | 'year',
+): StripeCatalogPriceResolution {
+  return resolveStripeCatalogPrice(products, prices, planId, interval)
 }
 
 export async function getBetterAuthStripePlans(
   stripe: Stripe,
-  env?: ApiRecord,
+  _env?: ApiRecord,
   options: { includeFeatureDisabled?: boolean } = {},
 ): Promise<StripePlan[]> {
   const products: Stripe.Product[] = []
@@ -96,12 +77,12 @@ export async function getBetterAuthStripePlans(
   for (const product of products) {
     const planId = product.metadata?.plan_id?.trim()
     if (!planId) continue
-    if (planId === 'free') continue
-    if (
-      !options.includeFeatureDisabled
-      && CONCIERGE_PLAN_IDS.has(planId)
-      && !isManagedServiceEnabled(env)
-    ) continue
+    // Stripe may contain old or unrelated products. Only the canonical
+    // recurring plans are meaningful to Better Auth billing. Runtime plan
+    // identity is intentionally Starter/Growth only; retired catalog products
+    // remain an operator cleanup concern, not an entitlement source.
+    if (!isKnownRecurringPlan(planId)) continue
+    if (!options.includeFeatureDisabled && !isNewSalePlan(planId)) continue
     if (planIds.has(planId)) throw new Error(`Stripe has multiple active products for plan ${planId}`)
 
     const billablePrices = (pricesByProduct.get(product.id) ?? []).filter(
@@ -112,6 +93,9 @@ export async function getBetterAuthStripePlans(
       throw new Error(`Stripe product ${product.id} for plan ${planId} is missing a canonical monthly price`)
     }
     const yearly = selectCanonicalStripePrice(product, billablePrices, 'year')
+    if (isNewSalePlan(planId)) {
+      assertGrowthStripeCatalogPrices(monthly, yearly)
+    }
     if (yearly && yearly.currency !== monthly.currency) {
       throw new Error(`Stripe product ${product.id} has monthly and annual prices in different currencies`)
     }
@@ -151,15 +135,18 @@ function stripePlanCacheScope(env?: ApiRecord): string {
     ? env.STRIPE_ACCOUNT_ID.trim()
     : 'platform'
   const secretKey = typeof env?.STRIPE_SECRET_KEY === 'string' ? env.STRIPE_SECRET_KEY : ''
-  const mode = secretKey.startsWith('sk_live') ? 'live' : 'test'
-  const managedServices = isManagedServiceEnabled(env) ? 'on' : 'off'
-  return `${account}:${mode}:managed-services:${managedServices}`
+  const mode = /^(?:sk|rk)_live_/.test(secretKey)
+    ? 'live'
+    : /^(?:sk|rk)_test_/.test(secretKey)
+      ? 'test'
+      : 'unknown'
+  return `${account}:${mode}`
 }
 
 /**
  * Keeps one validated Stripe catalog snapshot per option set and coalesces
- * concurrent refreshes. A transient refresh failure serves the last known-good
- * snapshot so checkout and reconciliation do not multiply catalog requests.
+ * concurrent refreshes. A refresh failure remains an error; callers must not
+ * turn an unavailable or invalid catalog into an apparently valid checkout.
  */
 export function createStripePlanLoader(
   stripe: Stripe,
@@ -180,10 +167,6 @@ export function createStripePlanLoader(
       .then((plans) => {
         stripePlanSnapshots.set(key, { plans, expiresAt: Date.now() + ttlMs })
         return plans
-      })
-      .catch((error) => {
-        if (snapshot) return snapshot.plans
-        throw error
       })
       .finally(() => stripePlanPending.delete(key))
     stripePlanPending.set(key, refresh)
@@ -217,6 +200,9 @@ export async function projectOrganizationSubscription(
   db: DbClient,
   input: SubscriptionProjectionInput,
 ): Promise<void> {
+  if (!isKnownRecurringPlan(input.plan)) {
+    throw new Error(`Unsupported runtime billing plan "${input.plan}"`)
+  }
   const now = new Date().toISOString()
   const paymentRow = await queryFirst<{
     payment_status: string | null
@@ -290,8 +276,7 @@ export async function projectOrganizationSubscription(
       AND key NOT IN (${entitlementKeys.map(() => '?').join(', ')})`,
     params: [input.organizationId, ...entitlementKeys],
   })
-  await executeBatch(db, organizationQueries)
-
+  const allQueries = [...organizationQueries]
   for (const site of sites) {
     const siteQueries: Array<{ query: string; params: unknown[] }> = []
     for (const [key, value] of entitlementEntries) {
@@ -347,8 +332,9 @@ export async function projectOrganizationSubscription(
       query: `UPDATE sites SET plan = ?, updated_at = ? WHERE id = ? AND organization_id = ?`,
       params: [accessPlan, now, site.id, input.organizationId],
     })
-    await executeBatch(db, siteQueries)
+    allQueries.push(...siteQueries)
   }
+  await executeBatch(db, allQueries)
 }
 
 function stripeCustomerId(customer: Stripe.Subscription['customer']): string | null {
@@ -423,10 +409,14 @@ async function resolveHistoricalSubscriptionPlan(
     ? await stripe.products.retrieve(resolvedPrice.product)
     : resolvedPrice.product
   if (!product || 'deleted' in product) return null
-  if (resolvedPrice.metadata?.price_role?.trim().toLowerCase() !== 'base') return null
+  // Early catalog prices predate price_role metadata. Treat a missing role as
+  // the historical base price, while rejecting any explicit non-base role.
+  // Product seat metadata remains a second guard for rotated seat prices.
+  const priceRole = resolvedPrice.metadata?.price_role?.trim().toLowerCase()
+  if (priceRole && priceRole !== 'base') return null
   if (product.metadata?.seat_price_id?.trim() === resolvedPrice.id) return null
-  const planId = product.metadata?.plan_id?.trim()
-  if (!planId || planId === 'free') return null
+  const planId = product.metadata?.plan_id?.trim().toLowerCase()
+  if (!planId || !isKnownRecurringPlan(planId)) return null
   return {
     name: planId,
     priceId: resolvedPrice.id,
@@ -462,7 +452,12 @@ function stripeSubscriptionPeriod(subscription: Stripe.Subscription, item: Strip
   }
 }
 
-async function resolveSubscriptionPlan(
+/**
+ * Resolves the single configured or historical recurring base item for a
+ * subscription. Invoice processing uses the same resolver as lifecycle
+ * reconciliation so a seat/add-on item can never become plan authority.
+ */
+export async function resolveCanonicalSubscriptionPlan(
   stripe: Stripe,
   subscription: Stripe.Subscription,
   loadPlans: StripePlanLoader,
@@ -485,7 +480,12 @@ async function resolveSubscriptionPlan(
     throw new Error(`Stripe subscription ${subscription.id} has multiple configured recurring plan items; retrying`)
   }
   const configuredBase = configuredBaseMatches[0]
-  if (configuredBase) return configuredBase
+  if (configuredBase) {
+    if (!isKnownRecurringPlan(configuredBase.plan.name)) {
+      throw new Error(`Stripe subscription ${subscription.id} resolved an unsupported runtime billing plan; retrying`)
+    }
+    return configuredBase
+  }
 
   const historicalBaseMatches: ResolvedSubscriptionPlan[] = []
   for (const item of subscription.items.data) {
@@ -508,7 +508,7 @@ async function findExistingSubscription(
 ): Promise<ReconciledSubscriptionRow | null> {
   const metadata = { ...metadataFallback, ...stripeSubscription.metadata }
   const metadataSubscriptionId = metadata.subscriptionId?.trim()
-  const metadataReferenceId = metadata.referenceId?.trim()
+  const metadataReferenceId = organizationReferenceFromMetadata(metadata)
   const customerId = stripeCustomerIdValue(stripeSubscription.customer)
   let existing: ReconciledSubscriptionRow | null = null
   if (metadataSubscriptionId) {
@@ -535,6 +535,20 @@ async function findExistingSubscription(
   return existing
 }
 
+/**
+ * Better Auth's Stripe plugin uses `referenceId` as the subscription owner.
+ * Transfer checkouts historically also emitted `organization_id`; accept that
+ * key only as a compatibility fallback and fail closed when the two disagree.
+ */
+function organizationReferenceFromMetadata(metadata: Record<string, string>): string | null {
+  const referenceId = metadata.referenceId?.trim() || null
+  const legacyOrganizationId = metadata.organization_id?.trim() || null
+  if (referenceId && legacyOrganizationId && referenceId !== legacyOrganizationId) {
+    throw new Error('Stripe subscription metadata has conflicting organization references; retrying')
+  }
+  return referenceId ?? legacyOrganizationId
+}
+
 async function repairBetterAuthSubscriptionRow(
   db: DbClient,
   stripe: Stripe,
@@ -555,22 +569,22 @@ async function repairBetterAuthSubscriptionRow(
 
   let resolved: ResolvedSubscriptionPlan
   try {
-    resolved = await resolveSubscriptionPlan(stripe, stripeSubscription, loadPlans)
+    resolved = await resolveCanonicalSubscriptionPlan(stripe, stripeSubscription, loadPlans)
   } catch (error) {
-    if (!deleted || !existing?.plan) throw error
+    if (!deleted || !existing?.plan || !isKnownRecurringPlan(existing.plan)) throw error
     const item = stripeSubscription.items.data[0]
     if (!item) throw error
     resolved = { item, plan: { name: existing.plan } }
   }
   const customerId = stripeCustomerIdValue(stripeSubscription.customer) ?? existing?.stripeCustomerId ?? null
   const metadata = { ...metadataFallback, ...stripeSubscription.metadata }
-  let referenceId = existing?.referenceId ?? metadata.referenceId?.trim()
+  let referenceId: string | null = existing?.referenceId ?? organizationReferenceFromMetadata(metadata)
   if (!referenceId && customerId) {
     const organization = await adapter.findOne<{ id: string }>({
       model: 'organization',
       where: [{ field: 'stripeCustomerId', value: customerId }],
     })
-    referenceId = organization?.id
+    referenceId = organization?.id ?? null
   }
   if (!referenceId) throw new Error(`Stripe subscription ${stripeSubscription.id} has no organization reference; retrying`)
 
@@ -651,9 +665,9 @@ export async function reconcileBetterAuthSubscriptionEvent(
   adapter: BetterAuthSubscriptionAdapter,
   loadPlans: StripePlanLoader,
 ): Promise<void> {
-  if (event.type === 'checkout.session.completed') {
+  if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
     const session = event.data.object as Stripe.Checkout.Session
-    if (session.mode !== 'subscription' || session.metadata?.type === 'site_transfer') return
+    if (session.mode !== 'subscription') return
     const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id
     if (!subscriptionId) throw new Error(`Subscription checkout ${session.id} has no subscription; retrying`)
     await projectCurrentStripeSubscription(db, await stripe.subscriptions.retrieve(subscriptionId), false, stripe, event, adapter, loadPlans, session.metadata)

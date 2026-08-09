@@ -72,7 +72,7 @@ export interface AnalyticsEventProperties {
   domain?: string
 
   // Billing
-  plan?: string // 'free', 'growth', 'managed', 'seo_accelerator'
+  plan?: string // 'free' or 'growth'
   value?: number // monetary value in cents
   currency?: string
 

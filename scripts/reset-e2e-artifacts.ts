@@ -56,6 +56,8 @@ const FIXTURE_ORG_IDS = [
   'org_demo',
   'org-mcp-free',
   'org-mcp-growth',
+  'org-mcp-growth-service',
+  // Removed by the next demo seed; protect an old fixture until that cleanup runs.
   'org-mcp-managed',
   'org-transfer-recipient',
   'org-pottery-house',
@@ -71,11 +73,37 @@ const FIXTURE_ORG_IDS = [
 const GUEST_BOOKING_SITE_IDS = ['site-pottery-house', 'site-demo']
 const GUEST_BOOKING_ORGANIZATION_IDS = ['org-pottery-house', 'org-demo']
 
+// Site-transfer E2E creates throwaway `e2e-*` sites in the protected fixture
+// organizations, then moves them between those organizations. They must be
+// swept by site ID rather than by deleting the fixture organizations/users.
+// Retained/audit tables are explicit because their site foreign keys are often
+// SET NULL (or intentionally polymorphic), so deleting the site alone would
+// leave rows behind in the shared preview/staging database.
+const E2E_FIXTURE_SITE_RETAINED_TABLES = [
+  'ai_usage_log',
+  'usage_events',
+  'stripe_ga4_subscription_intents',
+  'canary_runs',
+  'mcp_tool_call_events',
+  'notification_events',
+  'notifications',
+  'google_business_events',
+  'client_import_artifacts',
+  'chowbot_messages',
+  'chowbot_conversations',
+  'site_events',
+  'site_domain_events',
+  'site_conversion_events',
+  'site_pageview_events',
+  'site_analytics_daily',
+  'work_requests',
+] as const
+
 // Every fixture user a seed script creates under a fixed ID or that also happens to use
 // '@example.test' (server/api/dev/login.get.ts's auto-create path uses exactly this domain for
 // every dev-login test user, so several fixtures collide with it and must be excluded by ID, not
-// just by domain): user-mcp-free/growth/managed (scripts/generate-demo-seed.ts's
-// renderMcpFixtureOrg) and the site-transfer recipient both use @example.test. user-ncls-blawby
+// just by domain): user-mcp-free/growth/growth-service (scripts/generate-demo-seed.ts's
+// Growth service fixture) and the site-transfer recipient both use @example.test. user-ncls-blawby
 // The curated Blawby fixture uses 'ncls-blawby@example.test' and does match the domain — it
 // must stay excluded by ID: it's entered_by_user_id on NCLS's owner-entered reviews, and deleting
 // it cascades entered_by_user_id to NULL (ON DELETE SET NULL), which violates
@@ -88,6 +116,8 @@ const FIXTURE_USER_IDS = [
   'user_demo',
   'user-mcp-free',
   'user-mcp-growth',
+  'user-mcp-growth-service',
+  // Removed by the next demo seed; protect an old fixture until that cleanup runs.
   'user-mcp-managed',
   'Nfqw39lwLZ1vejIfYJv24xvD4UKJh8re',
   'user-pottery-house',
@@ -139,6 +169,20 @@ if (!Number.isInteger(batchSize) || batchSize <= 0) {
   console.error('--batch-size must be a positive integer.')
   process.exit(1)
 }
+
+const eligibleE2eFixtureSiteIds = `
+  SELECT id FROM sites
+  WHERE organization_id IN (${fixtureOrgIdList})
+    AND subdomain LIKE 'e2e-%'
+    AND created_at < '${cutoff}'
+  ORDER BY id
+  LIMIT ${batchSize}
+`
+
+const e2eFixtureSiteRetainedDeletes = E2E_FIXTURE_SITE_RETAINED_TABLES.map(table => `
+DELETE FROM ${table}
+WHERE site_id IN (${eligibleE2eFixtureSiteIds});
+`).join('\n')
 
 // Category 1's "is this org eligible" check, capped with LIMIT so a single run can never be
 // asked to filter the entire backlog in one CPU-budgeted call - it makes bounded incremental
@@ -205,6 +249,34 @@ DELETE FROM notification_events WHERE organization_id IN (${eligibleOrgIds});
 -- (and, via guest_threads' own cascading FKs, guest_thread_entries/guest_thread_member_state/
 -- guest_thread_deliveries), etc. via organization_id -> organization(id) ON DELETE CASCADE.
 DELETE FROM organization WHERE id IN (${eligibleOrgIds});
+
+-- Category 1b: throwaway E2E sites created under protected fixture organizations.
+-- Site-transfer E2E deliberately moves these sites between allowlisted fixture orgs, so the
+-- organization sweep above must not delete either the fixture org or its users. The same
+-- age/prefix/batch guard is applied to every statement; retained/audit rows are deleted first,
+-- then the site row removes the remaining cascade-owned content.
+${e2eFixtureSiteRetainedDeletes}
+
+-- chowbot_channel_state and mcp_workspace_preferences are user/org-scoped preferences rather
+-- than disposable rows; clear only their references to the throwaway sites before deletion.
+UPDATE chowbot_channel_state
+SET selected_site_id = NULL,
+    active_conversation_id = NULL,
+    pending_media = NULL,
+    pending_confirmation = NULL
+WHERE selected_site_id IN (${eligibleE2eFixtureSiteIds});
+
+UPDATE mcp_workspace_preferences
+SET site_id = NULL,
+    location_id = NULL,
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE site_id IN (${eligibleE2eFixtureSiteIds});
+
+DELETE FROM site_transfer_requests
+WHERE site_id IN (${eligibleE2eFixtureSiteIds});
+
+DELETE FROM sites
+WHERE id IN (${eligibleE2eFixtureSiteIds});
 
 -- Category 2: guest-submitted rows on the persistent Pottery House/demo fixtures, marked by
 -- email. Every query below filters by the known fixture site_id/organization_id FIRST - via

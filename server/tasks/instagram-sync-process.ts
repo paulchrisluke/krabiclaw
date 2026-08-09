@@ -41,7 +41,7 @@ interface TaskResult {
 export default defineScheduledTask({
   meta: {
     name: 'social:instagram-sync-process',
-    description: 'Hourly sync of Facebook and Instagram posts for managed-service orgs',
+    description: 'Hourly sync of Facebook and Instagram posts for eligible Growth organizations',
   },
   async run({ context }): Promise<{ result: TaskResult }> {
     const taskContext = context as SyncTaskContext | undefined
@@ -53,7 +53,7 @@ export default defineScheduledTask({
     }
     if (!db) throw new Error('DB is required')
 
-    // Only sync orgs with managed_service entitlement (Managed + SEO Accelerator plans)
+    // Only sync organizations with the Growth managed_service capability.
     const connections = await queryAll<ConnectionRow>(db, `
       SELECT fpc.id, fpc.organization_id, fpc.site_id,
              fpc.facebook_page_id, fpc.encrypted_user_token, fpc.encrypted_page_token
