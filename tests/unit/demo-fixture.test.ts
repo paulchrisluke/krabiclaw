@@ -201,7 +201,7 @@ test("demo core seed block includes generated site, locale, domain, and location
   assert.match(sql, /Ember & Slice/);
 });
 
-test("demo compiled media assets preserve hosted media contracts", () => {
+test("demo compiled media assets preserve the Cloudflare media split", () => {
   const imageAssets = compiledDemoSeed.mediaAssets.filter((asset) =>
     asset.mimeType.startsWith("image/"),
   );
@@ -211,11 +211,10 @@ test("demo compiled media assets preserve hosted media contracts", () => {
 
   assert.ok(imageAssets.length > 0);
   assert.ok(fileAssets.length > 0);
-  const hostedImages = imageAssets.filter((asset) => asset.provider === "cloudflare_images");
-  const bundledImages = imageAssets.filter((asset) => asset.provider === "external_url");
-  assert.ok(hostedImages.length > 0);
-  assert.ok(hostedImages.every((asset) => asset.cloudflareImageId !== null));
-  assert.ok(bundledImages.every((asset) => asset.publicUrl.startsWith("/demo/")));
+  assert.ok(
+    imageAssets.every((asset) => asset.provider === "cloudflare_images"),
+  );
+  assert.ok(imageAssets.every((asset) => asset.cloudflareImageId !== null));
   assert.ok(imageAssets.every((asset) => asset.r2Key === null));
   assert.ok(fileAssets.every((asset) => asset.provider === "cloudflare_r2"));
   assert.ok(fileAssets.every((asset) => asset.r2Key !== null));

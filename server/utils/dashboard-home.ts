@@ -63,10 +63,15 @@ function parseLocationAddress(value: string | null): { addressLines?: string[] }
   if (!value) return null
   const parsed = safeJsonParse(value)
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
-  const addressLines = (parsed as { addressLines?: unknown }).addressLines
-  return addressLines === undefined || (Array.isArray(addressLines) && addressLines.every(line => typeof line === 'string'))
-    ? parsed as { addressLines?: string[] }
-    : null
+  const address = parsed as { addressLines?: unknown; streetAddress?: unknown }
+  if (Array.isArray(address.addressLines) && address.addressLines.every(line => typeof line === 'string')) {
+    return { addressLines: address.addressLines }
+  }
+  if (address.addressLines !== undefined) return null
+  if (typeof address.streetAddress === 'string' && address.streetAddress.trim()) {
+    return { addressLines: [address.streetAddress.trim()] }
+  }
+  return {}
 }
 
 // Shared by server/api/dashboard/home.get.ts and the dashboard home page's SSR
@@ -161,12 +166,15 @@ export async function getDashboardHomeData(
   const operationCounts = operations ?? { openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 }
 
   return {
-    locations: locations.map(l => ({
-      ...l,
-      is_primary: Boolean(l.is_primary),
-      address: parseLocationAddress(l.address),
-      map_embed_url: calculateMapEmbedUrl(l),
-    })),
+    locations: locations.map((l) => {
+      const address = parseLocationAddress(l.address)
+      return {
+        ...l,
+        is_primary: Boolean(l.is_primary),
+        address,
+        map_embed_url: calculateMapEmbedUrl({ ...l, address: address?.addressLines?.[0] ?? null }),
+      }
+    }),
     credits,
     events: events.map(e => ({
       ...e,

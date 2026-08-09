@@ -30,12 +30,30 @@
           class="group block"
         >
           <UCard variant="soft" class="h-full cursor-pointer">
-            <div class="flex items-start justify-between gap-2">
-              <div class="min-w-0">
-                <p class="text-sm font-semibold text-highlighted truncate">{{ s.brand_name ?? s.subdomain ?? 'Untitled site' }}</p>
-                <p class="text-xs text-muted">{{ s.subdomain ? `${s.subdomain}.krabiclaw.com` : 'Setup in progress' }}</p>
+            <div class="flex gap-3">
+              <div class="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
+                <img
+                  v-if="s.preview_image_url"
+                  :src="s.preview_image_url"
+                  :alt="`${s.brand_name ?? s.subdomain ?? 'Site'} preview`"
+                  class="size-full object-cover"
+                >
+                <span v-else class="text-lg font-semibold text-muted">{{ (s.brand_name ?? s.subdomain ?? 'S').charAt(0).toUpperCase() }}</span>
               </div>
-              <UBadge :label="s.plan ?? 'free'" color="neutral" variant="soft" size="xs" />
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-semibold text-highlighted">{{ s.brand_name ?? s.subdomain ?? 'Untitled site' }}</p>
+                <p class="truncate text-xs text-muted">{{ s.subdomain ? `${s.subdomain}.krabiclaw.com` : 'Setup in progress' }}</p>
+                <div class="mt-2 flex flex-wrap gap-2">
+                  <UBadge :label="formatSiteVertical(s.vertical)" color="neutral" variant="soft" size="xs" />
+                  <UBadge
+                    :label="getDashboardSiteStatus(s).label"
+                    :color="getDashboardSiteStatus(s).color"
+                    :icon="getDashboardSiteStatus(s).icon"
+                    variant="soft"
+                    size="xs"
+                  />
+                </div>
+              </div>
             </div>
           </UCard>
         </NuxtLink>
@@ -45,6 +63,8 @@
 </template>
 
 <script setup lang="ts">
+import { getDashboardSiteStatus } from '~/utils/dashboard-site-presentation'
+
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Sites | KrabiClaw', robots: 'noindex, nofollow' })
 
@@ -55,6 +75,11 @@ const pending = dashboard.pending
 
 const sites = computed(() => dashboard.sites.value)
 const canManageOrganization = computed(() => ['owner', 'admin'].includes(dashboard.organization.value?.role ?? ''))
+function formatSiteVertical(vertical: string | null) {
+  if (!vertical) return 'Site'
+  return vertical.replaceAll('_', ' ').replace(/\b\w/g, letter => letter.toUpperCase())
+}
+
 function siteDashboardPath(site: (typeof sites.value)[number]) {
   return site.subdomain
     ? `/dashboard/${orgSlug}/sites/${site.subdomain}`
