@@ -1,6 +1,25 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
+import { resolveBlawbyRouteTarget } from '../../composables/useBlawbyDocument.ts'
+import { hasPublicBlawbyRouteContent } from '../../server/utils/professional-services.ts'
+import { isBlawbyShellOnlyRouteRecipe } from '../../types/blawby.ts'
+
+test('Blawby links uses the combined document shell recipe without tenant-page content', () => {
+  assert.deepEqual(resolveBlawbyRouteTarget('/links'), { recipe: 'links', slug: null })
+  assert.deepEqual(resolveBlawbyRouteTarget('/preview/site/site-ncls-blawby/links'), { recipe: 'links', slug: null })
+  assert.equal(isBlawbyShellOnlyRouteRecipe('links'), true)
+  assert.equal(hasPublicBlawbyRouteContent({
+    recipe: 'links',
+    page: null,
+    offerings: [],
+    offering: null,
+    qa: [],
+    reviews: [],
+    posts: [],
+    post: null,
+  }), true)
+})
 
 test('Blawby shell query selects minimal offering links and excludes route bodies', () => {
   const source = readFileSync('server/utils/professional-services.ts', 'utf8')

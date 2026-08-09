@@ -6,6 +6,7 @@ import { getPublishedSiteBlogPost } from '~/server/utils/platform-content'
 import type { SiteConversionEventName } from '~/utils/site-conversion-events'
 import { siteSupportsBlawbyTemplate } from '~/utils/template-registry'
 import { getPublicTenantPageForPath, listCanonicalTenantPages } from '~/server/utils/public-tenant-pages'
+import { isBlawbyShellOnlyRouteRecipe } from '~/types/blawby'
 import type {
   PublicBlawbyData,
   PublicBlawbyCriticalHomeData,
@@ -527,6 +528,7 @@ export async function resolvePublicBlawbyDocumentOrThrow(
 
 const ROUTE_PAGE_PATHS: Record<PublicBlawbyRouteData['recipe'], string | null> = {
   home: '/',
+  links: null,
   services: '/services',
   offering: '/services',
   about: '/about',
@@ -653,7 +655,7 @@ export async function getPublicBlawbyRouteData(
 }
 
 export function hasPublicBlawbyRouteContent(route: PublicBlawbyRouteData): boolean {
-  if (route.recipe === 'confirmation') return true
+  if (route.recipe === 'confirmation' || isBlawbyShellOnlyRouteRecipe(route.recipe)) return true
   if (route.recipe === 'offering') return Boolean(route.offering)
   if (route.recipe === 'article') return Boolean(route.post)
   return Boolean(route.page)
