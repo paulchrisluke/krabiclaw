@@ -91,15 +91,40 @@ test.describe('dashboard functional smoke', () => {
       await page.getByRole('option', { name: label, exact: true }).click()
       await page.getByRole('button', { name: 'Add block', exact: true }).click()
     }
+    const pagesCollectionPath = '/api/editor/sites/site-mcp-growth/pages'
+    const waitForPagesRefresh = () => page.waitForResponse(candidate => {
+      const url = new URL(candidate.url())
+      return candidate.request().method() === 'GET'
+        && url.pathname === pagesCollectionPath
+        && url.searchParams.get('locale') === 'en'
+    }, { timeout: 30_000 })
     const saveDraft = async () => {
-      const saveResponse = page.waitForResponse(candidate => (
-        candidate.url().includes('/api/editor/sites/site-mcp-growth/pages')
-        && ['POST', 'PATCH'].includes(candidate.request().method())
-      ), { timeout: 30_000 })
+      const saveResponse = page.waitForResponse(candidate => {
+        const url = new URL(candidate.url())
+        return (url.pathname === pagesCollectionPath || url.pathname.startsWith(`${pagesCollectionPath}/`))
+          && ['POST', 'PATCH'].includes(candidate.request().method())
+      }, { timeout: 30_000 })
+      const refreshResponse = waitForPagesRefresh()
       await page.getByRole('button', { name: 'Save', exact: true }).click()
       const saved = await saveResponse
       expect([200, 201]).toContain(saved.status())
-      await expect(page.getByText('Saved', { exact: true }).last()).toBeVisible()
+      const refreshed = await refreshResponse
+      expect(refreshed.status()).toBe(200)
+      await expect(page.getByText('Saved', { exact: true }).last()).toBeVisible({ timeout: 30_000 })
+    }
+    const runPageAction = async (action: 'publish' | 'unpublish' | 'archive' | 'restore') => {
+      const actionResponse = page.waitForResponse(candidate => {
+        const url = new URL(candidate.url())
+        return candidate.request().method() === 'POST'
+          && url.pathname.startsWith(`${pagesCollectionPath}/`)
+          && url.pathname.endsWith(`/${action}`)
+      }, { timeout: 30_000 })
+      const refreshResponse = waitForPagesRefresh()
+      await page.getByRole('button', { name: action[0]!.toUpperCase() + action.slice(1), exact: true }).click()
+      const acted = await actionResponse
+      expect(acted.status()).toBe(200)
+      const refreshed = await refreshResponse
+      expect(refreshed.status()).toBe(200)
     }
 
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -275,9 +300,9 @@ test.describe('dashboard functional smoke', () => {
     const expectStatus = async (status: string) => await expect(pageRow().getByText(status, { exact: true })).toBeVisible()
     await expectStatus('draft')
 
-    await page.getByRole('button', { name: 'Publish', exact: true }).click()
+    await runPageAction('publish')
     await expectStatus('published')
-    await page.getByRole('button', { name: 'Unpublish', exact: true }).click()
+    await runPageAction('unpublish')
     await expectStatus('draft')
 
     await page.getByRole('textbox', { name: 'Title', exact: true }).fill(dirtyTitle)
@@ -293,12 +318,12 @@ test.describe('dashboard functional smoke', () => {
       expect(dialog.message()).toBe('Archive this page? It will stop rendering publicly.')
       await dialog.accept()
     })
-    await page.getByRole('button', { name: 'Archive', exact: true }).click()
+    await runPageAction('archive')
     await archiveDialog
     await expectStatus('archived')
     await expect(page.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0)
     await expect(page.getByText('This page has publication history and cannot be deleted. Archive or replace it instead.', { exact: true })).toBeVisible()
-    await page.getByRole('button', { name: 'Restore', exact: true }).click()
+    await runPageAction('restore')
     await expectStatus('draft')
 
     // The saved draft preview must reflect the canonical title and block body.
@@ -319,15 +344,10 @@ test.describe('dashboard functional smoke', () => {
 
     const copyTitle = `${pageTitle} copy`
     const duplicateResponse = page.waitForResponse(candidate => (
-      candidate.url().endsWith('/api/editor/sites/site-mcp-growth/pages')
+      new URL(candidate.url()).pathname === pagesCollectionPath
       && candidate.request().method() === 'POST'
     ), { timeout: 30_000 })
-    const duplicateRefreshResponse = page.waitForResponse(candidate => {
-      const url = new URL(candidate.url())
-      return url.pathname.endsWith('/api/editor/sites/site-mcp-growth/pages')
-        && url.searchParams.get('locale') === 'en'
-        && candidate.request().method() === 'GET'
-    }, { timeout: 30_000 })
+    const duplicateRefreshResponse = waitForPagesRefresh()
     await page.getByRole('button', { name: 'Duplicate', exact: true }).click()
     await expect(page.getByRole('heading', { name: copyTitle, exact: true })).toBeVisible()
     const duplicated = await duplicateResponse
@@ -352,8 +372,18 @@ test.describe('dashboard functional smoke', () => {
       expect(dialog.message()).toBe('Delete this page and its revisions? This cannot be undone.')
       await dialog.accept()
     })
+    const deleteResponse = page.waitForResponse(candidate => {
+      const url = new URL(candidate.url())
+      return candidate.request().method() === 'DELETE'
+        && url.pathname.startsWith(`${pagesCollectionPath}/`)
+    }, { timeout: 30_000 })
+    const deleteRefreshResponse = waitForPagesRefresh()
     await page.getByRole('button', { name: 'Delete', exact: true }).click()
     await deleteDialog
+    const deleted = await deleteResponse
+    expect(deleted.status()).toBe(200)
+    const deleteRefresh = await deleteRefreshResponse
+    expect(deleteRefresh.status()).toBe(200)
     await expect(copyRow()).toHaveCount(0)
     expect(applicationErrors).toEqual([])
   })
