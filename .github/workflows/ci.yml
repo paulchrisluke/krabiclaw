@@ -125,6 +125,8 @@ jobs:
       E2E_DEV_ROUTE_SECRET: ${{ secrets.E2E_DEV_ROUTE_SECRET_PREVIEW }}
       PLAYWRIGHT_PREVIEW_URL: https://krabiclaw-preview.paulchrisluke.workers.dev
       PLAYWRIGHT_WORKERS: "1"
+      WORKER_NAME: krabiclaw-preview
+      DEPLOYMENT_IDENTITY_ORIGIN: https://preview.krabiclaw.com
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -183,6 +185,7 @@ jobs:
           ' "$RUNNER_TEMP/preview-deployment.json")"
           test -n "$PREVIEW_VERSION_ID"
           echo "PREVIEW_VERSION_ID=$PREVIEW_VERSION_ID" >> "$GITHUB_ENV"
+          echo "WORKER_VERSION_OVERRIDE=$PREVIEW_VERSION_ID" >> "$GITHUB_ENV"
       - name: Purge preview HTML cache
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -200,6 +203,7 @@ jobs:
             --expected-sha "$GITHUB_SHA" \
             --expected-version-id "$PREVIEW_VERSION_ID" \
             --worker-name krabiclaw-preview \
+            --version-override "$PREVIEW_VERSION_ID" \
             --output "$RUNNER_TEMP/preview-verification.json"
       - name: Run required representative browser coverage
         run: |

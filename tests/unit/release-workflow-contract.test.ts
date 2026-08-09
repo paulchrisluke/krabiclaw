@@ -86,6 +86,7 @@ function assertManifestFailureRestoresAfterTrafficMutation(script: string, label
 
 test('required CI checks out the immutable event SHA and never mutates shared staging or production', async () => {
   const source = await repoFile('.github/workflows/ci.yml')
+  const deployedAssetWait = await repoFile('scripts/wait-for-deployed-assets.mjs')
   const packageJson = JSON.parse(await repoFile('package.json')) as { scripts?: Record<string, string> }
   const checkoutCount = (source.match(/uses: actions\/checkout@/g) ?? []).length
   const exactShaCount = (source.match(/ref: \$\{\{ github\.sha \}\}/g) ?? []).length
@@ -107,6 +108,17 @@ test('required CI checks out the immutable event SHA and never mutates shared st
   }
   assert.match(source, /production-build-\$\{\{ github\.sha \}\}[\s\S]*include-hidden-files:\s*true/)
   assert.match(source, /playwright install --with-deps chromium/)
+  assert.match(source, /WORKER_NAME:\s*krabiclaw-preview/)
+  assert.match(source, /DEPLOYMENT_IDENTITY_ORIGIN:\s*https:\/\/preview\.krabiclaw\.com/)
+  assert.match(source, /WORKER_VERSION_OVERRIDE=\$PREVIEW_VERSION_ID/)
+  assert.match(source, /--version-override "\$PREVIEW_VERSION_ID"/)
+  assert.match(deployedAssetWait, /createWorkerVersionOverrideHeaders/)
+  assert.match(deployedAssetWait, /WORKER_VERSION_OVERRIDE/)
+  assert.match(deployedAssetWait, /WORKER_NAME/)
+  assert.match(deployedAssetWait, /DEPLOYMENT_IDENTITY_ORIGIN/)
+  assert.match(deployedAssetWait, /GITHUB_SHA/)
+  assert.match(deployedAssetWait, /\/api\/deployment/)
+  assert.match(deployedAssetWait, /MAX_WAIT_MS = 180_000/)
 })
 
 test('full lane keeps one uninterrupted staging candidate lock and gates candidate promotion', async () => {
