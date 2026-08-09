@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { cloudflareSslSettings, mapCloudflareStatus, type DomainRecord } from '../../server/utils/domains.ts'
+import { cloudflareSslSettings, domainRecordsPointToSaas, mapCloudflareStatus, type DomainRecord } from '../../server/utils/domains.ts'
 import { domainInstructions, groupCustomDomains } from '../../server/utils/domain-read-model.ts'
 
 function domain(overrides: Partial<DomainRecord>): DomainRecord {
@@ -21,8 +21,27 @@ function domain(overrides: Partial<DomainRecord>): DomainRecord {
   }
 }
 
-test('Cloudflare moved hostnames map to stuck so PATCH recovery remains available', () => {
-  assert.equal(mapCloudflareStatus('moved', 'pending_validation', 'valid'), 'stuck')
+test('Cloudflare moved hostnames map to a persisted failure so PATCH recovery remains available', () => {
+  assert.equal(mapCloudflareStatus('moved', 'pending_validation', 'valid'), 'failed')
+})
+
+test('flattened apex records match the SaaS target addresses', () => {
+  assert.equal(domainRecordsPointToSaas(
+    [],
+    ['104.21.79.204', '172.67.147.214'],
+    [],
+    'customers.krabiclaw.com',
+    ['172.67.147.214', '104.21.79.204'],
+    [],
+  ), true)
+  assert.equal(domainRecordsPointToSaas(
+    [],
+    ['198.49.23.144'],
+    [],
+    'customers.krabiclaw.com',
+    ['172.67.147.214', '104.21.79.204'],
+    [],
+  ), false)
 })
 
 test('standard custom hostnames use HTTP DCV by default', () => {

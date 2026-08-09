@@ -72,7 +72,7 @@ export const usePublicPageData = async (options: {
   const asyncData =
     isPlatform || (!siteId && !draftId)
       ? { data: ref<PublicPagePayload>(), error: ref<Error | null>(null), pending: ref(false), refresh: async () => {} }
-      : await useAsyncData<PublicPagePayload>(
+      : useAsyncData<PublicPagePayload>(
           key,
           (_nuxtApp, { signal }) => loadPublicResourcePayload<PublicPagePayload>({
               draftId,
@@ -304,6 +304,10 @@ export const usePublicPageData = async (options: {
       component: row.component || null,
     }));
   });
+
+  if (import.meta.client && options.lazy === false && 'then' in asyncData) {
+    await asyncData
+  }
 
   return {
     data,

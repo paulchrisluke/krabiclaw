@@ -9,7 +9,21 @@
 // wouldn't reliably show up otherwise.
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
-import { tenantBaseURL, tenantExtraHeaders, setupTenantHeaders } from './helpers'
+import {
+  collectPageErrors,
+  tenantBaseURL,
+  tenantExtraHeaders,
+  setupTenantHeaders,
+} from './helpers'
+
+const expectNoHydrationOrScopeErrors = (errors: string[]) => {
+  expect(errors.filter(error =>
+    error.includes('Hydration')
+    || error.includes('onScopeDispose()')
+    || error.includes('onMounted is called')
+    || error.includes('onBeforeUnmount is called'),
+  )).toEqual([])
+}
 
 async function setupNavigationTest(page: Page) {
   // This suite validates live loader transitions. Persistent Miniflare HTML
@@ -38,6 +52,7 @@ async function navigateAndAssertNonBlocking(page: Page, opts: {
   afterText: string
   forbiddenTexts: string[]
 }) {
+  const errors = collectPageErrors(page)
   let releasePageRequest!: () => void
   const pageRequestPaused = new Promise<void>((resolve) => {
     releasePageRequest = resolve
@@ -93,6 +108,7 @@ async function navigateAndAssertNonBlocking(page: Page, opts: {
 
   releasePageRequest()
   await expect(page.locator('body')).toContainText(opts.afterText)
+  expectNoHydrationOrScopeErrors(errors)
 }
 
 test.describe('tenant client-side navigation does not show stale/fallback content', () => {
@@ -139,6 +155,34 @@ test.describe('tenant client-side navigation does not show stale/fallback conten
       afterText: 'Ember & Slice Brooklyn',
       forbiddenTexts: ['No location details.'],
     })
+  })
+
+  test('Location detail -> Location reviews', async ({ page }) => {
+    const errors = collectPageErrors(page)
+    await page.goto(`${tenantBaseURL}/locations/brooklyn`, { waitUntil: 'load' })
+    await expect(page.locator('main')).toContainText('Weekend lunch now starts')
+
+    await page.locator('main a[href="/locations/brooklyn/reviews"]').evaluate(
+      (element: HTMLAnchorElement) => element.click(),
+    )
+
+    await expect(page).toHaveURL(/\/locations\/brooklyn\/reviews\/?$/)
+    await expect(page.locator('main')).toContainText('What guests are saying')
+    expectNoHydrationOrScopeErrors(errors)
+  })
+
+  test('Menu -> Menu item detail', async ({ page }) => {
+    const errors = collectPageErrors(page)
+    await page.goto(`${tenantBaseURL}/menu`, { waitUntil: 'load' })
+    await expect(page.locator('body')).toContainText('Margherita')
+
+    const link = page.locator('a[href="/menu/margherita"]').first()
+    await link.evaluate((element: HTMLAnchorElement) => element.click())
+
+    await expect(page).toHaveURL(/\/menu\/margherita\/?$/)
+    await expect(page.locator('main')).toContainText('Margherita')
+    await expect(page.locator('[data-testid="error-page"]')).toHaveCount(0)
+    expectNoHydrationOrScopeErrors(errors)
   })
 
 })

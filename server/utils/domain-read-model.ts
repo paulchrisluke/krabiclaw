@@ -101,7 +101,7 @@ export function domainInstructions(domain: DomainRecord) {
 
 function groupedStatus(records: DomainRecord[]): DomainStatus {
   const statuses = records.map((record) => record.status)
-  for (const status of ['stuck', 'failed', 'blocked', 'verifying', 'pending'] as const) {
+  for (const status of ['failed', 'blocked', 'verifying', 'pending'] as const) {
     if (statuses.includes(status)) return status
   }
   return statuses.every((status) => status === 'active') ? 'active' : 'pending'
@@ -171,7 +171,7 @@ export function groupCustomDomains(domains: DomainRecord[]): DomainGroup[] {
       www_domain_id: www?.id ?? null,
       domains: records,
       records: dnsRecords,
-      warning: status === 'stuck' ? 'This domain needs a manual resync.' : null,
+      warning: null,
       error: status === 'failed' || status === 'blocked'
         ? records.find((record) => record.error_message)?.error_message ?? null
         : null,

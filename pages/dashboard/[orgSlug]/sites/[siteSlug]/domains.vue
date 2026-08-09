@@ -163,7 +163,7 @@
 const dashboardApi = useDashboardApi()
 definePageMeta({ layout: 'dashboard' })
 
-type DomainStatus = 'pending' | 'verifying' | 'active' | 'blocked' | 'failed' | 'stuck' | 'disabled' | 'deleted'
+type DomainStatus = 'pending' | 'verifying' | 'active' | 'blocked' | 'failed' | 'disabled' | 'deleted'
 
 interface DnsRecord {
   type: string
@@ -397,7 +397,6 @@ function statusColor(status: DomainStatus) {
     active: 'success',
     pending: 'warning',
     verifying: 'info',
-    stuck: 'warning',
     failed: 'error',
     blocked: 'error',
     disabled: 'neutral',
@@ -410,7 +409,6 @@ function primaryAction(group: DomainGroup) {
   if (group.status === 'active') return { label: 'Make primary', icon: 'i-lucide-star', color: 'primary' as const, variant: 'soft' as const }
   if (group.status === 'pending') return { label: 'Configure', icon: 'i-lucide-list-checks', color: 'neutral' as const, variant: 'soft' as const }
   if (group.status === 'verifying') return { label: 'Check now', icon: 'i-lucide-refresh-cw', color: 'neutral' as const, variant: 'soft' as const }
-  if (group.status === 'stuck') return { label: 'Resync', icon: 'i-lucide-refresh-cw', color: 'warning' as const, variant: 'soft' as const }
   if (group.status === 'failed') return { label: 'Retry', icon: 'i-lucide-rotate-cw', color: 'error' as const, variant: 'soft' as const }
   return { label: 'Resolve', icon: 'i-lucide-circle-alert', color: 'error' as const, variant: 'soft' as const }
 }
