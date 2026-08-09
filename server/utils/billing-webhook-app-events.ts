@@ -14,6 +14,9 @@ import {
   type StripePlanLoader,
 } from '~/server/utils/better-auth-stripe'
 import {
+  invoiceLineExactQuantity,
+  invoiceLineIsProration,
+  invoiceLineIsSubscription,
   invoiceLinePrice,
   invoiceLineSubscriptionId,
   invoiceLineSubscriptionItemId,
@@ -32,6 +35,7 @@ async function markSubscriptionPayment(
   invoicePeriodStart?: string | null,
   invoicePeriodEnd?: string | null,
   pastDueSince?: string | null,
+  canonicalPaidEvidence = false,
 ): Promise<{
   organizationId: string
   customerId: string | null
@@ -61,21 +65,12 @@ async function markSubscriptionPayment(
     invoicePeriodStart,
     invoicePeriodEnd,
     pastDueSince,
+    canonicalPaidEvidence,
   })
   return {
     organizationId,
     customerId,
   }
-}
-
-function invoicePeriodEndIso(invoice: Stripe.Invoice & { period_end?: number; lines?: { data?: Array<{ period?: { end?: number } | null }> } }): string | null {
-  const seconds = invoice.period_end ?? invoice.lines?.data?.map(line => line.period?.end).find((value): value is number => typeof value === 'number')
-  return typeof seconds === 'number' && Number.isFinite(seconds) ? new Date(seconds * 1000).toISOString() : null
-}
-
-function invoicePeriodStartIso(invoice: Stripe.Invoice & { period_start?: number; lines?: { data?: Array<{ period?: { start?: number } | null }> } }): string | null {
-  const seconds = invoice.period_start ?? invoice.lines?.data?.map(line => line.period?.start).find((value): value is number => typeof value === 'number')
-  return typeof seconds === 'number' && Number.isFinite(seconds) ? new Date(seconds * 1000).toISOString() : null
 }
 
 function priceId(value: string | Stripe.Price | null | undefined): string | null {
@@ -300,22 +295,30 @@ export async function handleApplicationStripeEvent(
     })
     const resolved = await resolveCanonicalSubscriptionPlan(stripe, subscription, loadStripePlans)
     const lines = await loadStripeInvoiceLines(stripe, invoice)
-    const baseLine = lines.find((line) => {
+    const baseLines = lines.filter((line) => {
       if (invoiceLineSubscriptionId(line) !== subscriptionId) return false
       if (invoiceLineSubscriptionItemId(line) !== resolved.item.id) return false
+      if (!invoiceLineIsSubscription(line) || invoiceLineIsProration(line)) return false
+      if (resolved.item.quantity !== 1 || invoiceLineExactQuantity(line) !== 1) return false
       return priceId(invoiceLinePrice(line)) === resolved.item.price.id
     })
+    if (baseLines.length > 1) {
+      throw new Error(`Stripe invoice ${invoice.id} has ambiguous canonical base plan lines; retrying`)
+    }
+    const baseLine = baseLines[0]
     if (!baseLine) return
 
-    const periodStart = periodIso(baseLine.period?.start)
-      ?? periodIso(resolved.item.current_period_start)
-      ?? invoicePeriodStartIso(invoice)
-    const periodEnd = periodIso(baseLine.period?.end)
-      ?? periodIso(resolved.item.current_period_end)
-      ?? invoicePeriodEndIso(invoice)
-    if (!periodStart || !periodEnd) {
-      throw new Error(`Stripe invoice ${invoice.id} has no deterministic base plan period; retrying`)
+    const canonicalPeriodStart = periodIso(baseLine.period?.start)
+    const canonicalPeriodEnd = periodIso(baseLine.period?.end)
+    if (
+      !canonicalPeriodStart
+      || !canonicalPeriodEnd
+      || Date.parse(canonicalPeriodStart) >= Date.parse(canonicalPeriodEnd)
+    ) {
+      throw new Error(`Stripe invoice ${invoice.id} has malformed canonical base plan period; retrying`)
     }
+    const periodStart = canonicalPeriodStart
+    const periodEnd = canonicalPeriodEnd
     const payment = await markSubscriptionPayment(
       db,
       subscriptionId,
@@ -330,6 +333,7 @@ export async function handleApplicationStripeEvent(
       event.type === 'invoice.paid'
         ? null
         : typeof invoice.created === 'number' ? new Date(invoice.created * 1000).toISOString() : null,
+      event.type === 'invoice.paid',
     )
 
     // Checkout reconciliation can run before invoice.paid. Re-project after

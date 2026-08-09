@@ -51,6 +51,7 @@ mock.module('../../server/utils/better-auth-stripe.ts', {
       : {
           item: {
             id: 'si_growth',
+            quantity: 1,
             price: { id: 'price_growth_month' },
             current_period_start: 1_788_220_800,
             current_period_end: 1_790_899_200,
@@ -62,6 +63,9 @@ mock.module('../../server/utils/better-auth-stripe.ts', {
 
 mock.module('../../server/utils/stripe-invoice-lines.ts', {
   namedExports: {
+    invoiceLineExactQuantity: (line: { quantity?: number | null }) => line.quantity ?? 1,
+    invoiceLineIsProration: (line: { proration?: boolean }) => Boolean(line.proration),
+    invoiceLineIsSubscription: (line: { type?: string }) => line.type === 'subscription',
     invoiceLinePrice: (line: { price?: string | { id: string } | null }) => line.price ?? null,
     invoiceLineSubscriptionId: (line: { subscription?: string | null }) => line.subscription ?? null,
     invoiceLineSubscriptionItemId: (line: { subscription_item?: string | null }) => line.subscription_item ?? null,
@@ -101,9 +105,11 @@ function invoiceEvent(type: string) {
 function baseInvoiceLine() {
   return {
     id: 'il_base',
+    type: 'subscription',
     subscription: 'sub_paid_projection',
     subscription_item: 'si_growth',
     price: 'price_growth_month',
+    quantity: 1,
     period: { start: 1_788_220_800, end: 1_790_899_200 },
   }
 }
@@ -136,6 +142,7 @@ test('invoice.paid writes the exact base price/period and reprojects Growth acce
     invoicePeriodStart: '2026-09-01T00:00:00.000Z',
     invoicePeriodEnd: '2026-10-02T00:00:00.000Z',
     pastDueSince: null,
+    canonicalPaidEvidence: true,
   })
   assert.deepEqual(projection, {
     organizationId: 'org-paid',
@@ -158,6 +165,35 @@ test('base invoice failure reprojects access after payment ledger update', async
   assert.equal(payment?.basePlanPriceId, 'price_growth_month')
   assert.equal(projection?.plan, 'growth')
   assert.equal(projection?.status, 'active')
+})
+
+test('invoice.paid rejects proration and malformed base-line periods as canonical coverage', async () => {
+  payment = null
+  projection = null
+  invoiceLines = [{ ...baseInvoiceLine(), proration: true }]
+  await handleApplicationStripeEvent({}, {} as never, invoiceEvent('invoice.paid'), paidAdapter(), stripeDouble(), loadPlans())
+  assert.equal(payment, null)
+  assert.equal(projection, null)
+
+  invoiceLines = [{ ...baseInvoiceLine(), period: null }]
+  await assert.rejects(
+    () => handleApplicationStripeEvent({}, {} as never, invoiceEvent('invoice.paid'), paidAdapter(), stripeDouble(), loadPlans()),
+    /malformed canonical base plan period/,
+  )
+  assert.equal(payment, null)
+  assert.equal(projection, null)
+})
+
+test('invoice.paid rejects ambiguous canonical base lines', async () => {
+  payment = null
+  projection = null
+  invoiceLines = [baseInvoiceLine(), { ...baseInvoiceLine(), id: 'il_base_duplicate' }]
+  await assert.rejects(
+    () => handleApplicationStripeEvent({}, {} as never, invoiceEvent('invoice.paid'), paidAdapter(), stripeDouble(), loadPlans()),
+    /ambiguous canonical base plan lines/,
+  )
+  assert.equal(payment, null)
+  assert.equal(projection, null)
 })
 
 for (const eventType of ['invoice.paid', 'invoice.payment_failed']) {

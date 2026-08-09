@@ -320,7 +320,7 @@ export async function projectOrganizationSubscription(
         site.id,
         input.organizationId,
         null,
-        input.plan,
+        accessPlan,
         input.status,
         isoDate(input.periodEnd),
         input.cancelAtPeriodEnd ? 1 : 0,
@@ -833,8 +833,22 @@ export async function markOrganizationPayment(
     invoicePeriodStart?: string | null
     invoicePeriodEnd?: string | null
     pastDueSince?: string | null
+    canonicalPaidEvidence?: boolean
   },
 ): Promise<void> {
+  if (input.canonicalPaidEvidence) {
+    const periodStart = input.invoicePeriodStart ? Date.parse(input.invoicePeriodStart) : Number.NaN
+    const periodEnd = input.invoicePeriodEnd ? Date.parse(input.invoicePeriodEnd) : Number.NaN
+    if (
+      input.paymentStatus !== 'paid'
+      || !input.basePlanPriceId
+      || !Number.isFinite(periodStart)
+      || !Number.isFinite(periodEnd)
+      || periodStart >= periodEnd
+    ) {
+      throw new Error('Canonical paid invoice evidence requires a paid base price and ordered line period')
+    }
+  }
   const now = new Date().toISOString()
   if (!input.invoiceId) {
     if (input.paymentStatus === 'paid') {
@@ -866,6 +880,22 @@ export async function markOrganizationPayment(
             WHEN excluded.last_event_created > stripe_invoice_payments.last_event_created
               OR (excluded.last_event_created = stripe_invoice_payments.last_event_created AND excluded.last_event_id > stripe_invoice_payments.last_event_id)
               THEN COALESCE(excluded.base_plan_price_id, stripe_invoice_payments.base_plan_price_id)
+            WHEN ? = 1
+              AND stripe_invoice_payments.organization_id = excluded.organization_id
+              AND stripe_invoice_payments.stripe_subscription_id = excluded.stripe_subscription_id
+              AND excluded.status = 'paid'
+              AND stripe_invoice_payments.base_plan_price_id IS NULL
+              AND excluded.base_plan_price_id IS NOT NULL
+              AND julianday(excluded.period_start) IS NOT NULL
+              AND julianday(excluded.period_end) > julianday(excluded.period_start)
+              AND (
+                stripe_invoice_payments.period_end IS NULL
+                OR (
+                  julianday(stripe_invoice_payments.period_end) IS NOT NULL
+                  AND julianday(excluded.period_end) >= julianday(stripe_invoice_payments.period_end)
+                )
+              )
+              THEN excluded.base_plan_price_id
               ELSE stripe_invoice_payments.base_plan_price_id END,
           status = CASE
             WHEN excluded.last_event_created > stripe_invoice_payments.last_event_created
@@ -875,11 +905,43 @@ export async function markOrganizationPayment(
             WHEN excluded.last_event_created > stripe_invoice_payments.last_event_created
               OR (excluded.last_event_created = stripe_invoice_payments.last_event_created AND excluded.last_event_id > stripe_invoice_payments.last_event_id)
               THEN COALESCE(excluded.period_start, stripe_invoice_payments.period_start)
+            WHEN ? = 1
+              AND stripe_invoice_payments.organization_id = excluded.organization_id
+              AND stripe_invoice_payments.stripe_subscription_id = excluded.stripe_subscription_id
+              AND excluded.status = 'paid'
+              AND stripe_invoice_payments.base_plan_price_id IS NULL
+              AND excluded.base_plan_price_id IS NOT NULL
+              AND julianday(excluded.period_start) IS NOT NULL
+              AND julianday(excluded.period_end) > julianday(excluded.period_start)
+              AND (
+                stripe_invoice_payments.period_end IS NULL
+                OR (
+                  julianday(stripe_invoice_payments.period_end) IS NOT NULL
+                  AND julianday(excluded.period_end) >= julianday(stripe_invoice_payments.period_end)
+                )
+              )
+              THEN excluded.period_start
               ELSE stripe_invoice_payments.period_start END,
           period_end = CASE
             WHEN excluded.last_event_created > stripe_invoice_payments.last_event_created
               OR (excluded.last_event_created = stripe_invoice_payments.last_event_created AND excluded.last_event_id > stripe_invoice_payments.last_event_id)
               THEN COALESCE(excluded.period_end, stripe_invoice_payments.period_end)
+            WHEN ? = 1
+              AND stripe_invoice_payments.organization_id = excluded.organization_id
+              AND stripe_invoice_payments.stripe_subscription_id = excluded.stripe_subscription_id
+              AND excluded.status = 'paid'
+              AND stripe_invoice_payments.base_plan_price_id IS NULL
+              AND excluded.base_plan_price_id IS NOT NULL
+              AND julianday(excluded.period_start) IS NOT NULL
+              AND julianday(excluded.period_end) > julianday(excluded.period_start)
+              AND (
+                stripe_invoice_payments.period_end IS NULL
+                OR (
+                  julianday(stripe_invoice_payments.period_end) IS NOT NULL
+                  AND julianday(excluded.period_end) >= julianday(stripe_invoice_payments.period_end)
+                )
+              )
+              THEN excluded.period_end
               ELSE stripe_invoice_payments.period_end END,
           past_due_since = CASE
             WHEN excluded.last_event_created > stripe_invoice_payments.last_event_created
@@ -916,6 +978,9 @@ export async function markOrganizationPayment(
         input.eventCreated,
         input.eventId,
         now,
+        input.canonicalPaidEvidence ? 1 : 0,
+        input.canonicalPaidEvidence ? 1 : 0,
+        input.canonicalPaidEvidence ? 1 : 0,
       ],
     },
     {
