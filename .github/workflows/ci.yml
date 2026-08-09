@@ -156,6 +156,7 @@ jobs:
             --json > "$applied"
           node scripts/verify-migration-state.mjs \
             --pre-apply \
+            --lineage-marker 0108_reconcile_drizzle_migration_history.sql \
             --migrations-dir migrations \
             --remote-json "$applied"
           npx wrangler d1 migrations list DB --env preview --remote | tee "$pending"

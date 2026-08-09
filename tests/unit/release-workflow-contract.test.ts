@@ -153,6 +153,7 @@ test('required CI checks out the immutable event SHA and never mutates shared st
   assert.ok(previewMigrationStep >= 0, 'required CI must define a preview migration step')
   assert.ok(migrationHistoryRead > previewMigrationStep, 'preview migration history must be captured before mutation')
   assert.ok(migrationPrefixCheck > migrationHistoryRead, 'preview migration history must be an exact local prefix')
+  assert.match(source.slice(migrationPrefixCheck, pendingMigrationRead), /--lineage-marker 0108_reconcile_drizzle_migration_history\.sql/)
   assert.ok(pendingMigrationRead > migrationPrefixCheck, 'pending preview migrations must be listed after history validation')
   assert.ok(compatibilityCheck > pendingMigrationRead, 'pending preview migrations must be checked for backward compatibility')
   assert.ok(migrationApply > compatibilityCheck, 'preview migration apply must follow every read-only migration guard')

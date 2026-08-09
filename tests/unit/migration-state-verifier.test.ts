@@ -139,3 +139,46 @@ test('migration state verifier proves a pre-apply remote history is an ordered l
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('migration state verifier confines a historical exception before an explicit lineage marker', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'krabiclaw-migrations-lineage-'))
+  try {
+    await mkdir(join(root, 'migrations'))
+    await writeFile(join(root, 'migrations', '0048_current.sql'), 'current history')
+    await writeFile(join(root, 'migrations', '0108_reconcile.sql'), 'lineage marker')
+    await writeFile(join(root, 'migrations', '0109_current.sql'), 'current lineage')
+    await writeFile(join(root, 'migrations', '0110_current.sql'), 'current tip')
+
+    const remoteJson = { result: [{ results: [
+      { id: 48, name: '0048_legacy.sql' },
+      { id: 57, name: '0108_reconcile.sql' },
+      { id: 58, name: '0109_current.sql' },
+      { id: 59, name: '0110_current.sql' },
+    ] }] }
+    const evidence = await verifyMigrationPrefix({
+      migrationsDir: join(root, 'migrations'),
+      remoteJson,
+      lineageMarker: '0108_reconcile.sql',
+    })
+
+    assert.equal(evidence.kind, 'pre-apply-lineage-prefix')
+    assert.equal(evidence.lineage.marker, '0108_reconcile.sql')
+    assert.deepEqual(evidence.pending.files, [])
+
+    await assert.rejects(
+      () => verifyMigrationPrefix({
+        migrationsDir: join(root, 'migrations'),
+        remoteJson: { result: [{ results: [
+          { id: 48, name: '0048_legacy.sql' },
+          { id: 57, name: '0108_reconcile.sql' },
+          { id: 58, name: '0109_current.sql' },
+          { id: 59, name: '0110_foreign.sql' },
+        ] }] },
+        lineageMarker: '0108_reconcile.sql',
+      }),
+      /lineage is not an ordered local prefix/,
+    )
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
