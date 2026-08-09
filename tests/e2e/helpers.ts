@@ -55,6 +55,9 @@ export function collectPageErrors(page: Page) {
     'Hydration class mismatch',
     'Hydration text content mismatch',
     'Hydration attribute mismatch',
+    'onScopeDispose() is called when there is no active effect scope',
+    'onMounted is called when there is no active component instance',
+    'onBeforeUnmount is called when there is no active component instance',
     'Invalid prop: custom validator check failed',
     'Component is missing template or render function',
   ]

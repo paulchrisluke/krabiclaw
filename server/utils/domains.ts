@@ -17,7 +17,7 @@ export interface DomainEnv {
   NUXT_PUBLIC_PLATFORM_DOMAIN?: string
 }
 
-export type DomainStatus = 'pending' | 'verifying' | 'active' | 'blocked' | 'failed' | 'stuck' | 'disabled' | 'deleted'
+export type DomainStatus = 'pending' | 'verifying' | 'active' | 'blocked' | 'failed' | 'disabled' | 'deleted'
 export type DomainRole = 'canonical' | 'secondary'
 
 export interface DomainRecord {
@@ -368,7 +368,7 @@ function secondSslValidation(hostname: CloudflareCustomHostname) {
 export function mapCloudflareStatus(hostnameStatus?: string, sslStatus?: string, dnsStatus: string = 'pending'): DomainStatus {
   if (hostnameStatus === 'active' && sslStatus === 'active' && dnsStatus === 'valid') return 'active'
   if (hostnameStatus === 'blocked') return 'blocked'
-  if (hostnameStatus === 'moved') return 'stuck'
+  if (hostnameStatus === 'moved') return 'failed'
   if (hostnameStatus === 'deleted') return 'failed'
   if (hostnameStatus === 'pending' || hostnameStatus === 'pending_validation' || sslStatus === 'pending_validation') return 'verifying'
   if (hostnameStatus === 'active' || sslStatus === 'active') return 'verifying'
@@ -469,20 +469,44 @@ export interface DomainResolutionInspection {
   resolves_elsewhere: boolean
 }
 
+export function domainRecordsPointToSaas(
+  cnameRecords: string[],
+  aRecords: string[],
+  aaaaRecords: string[],
+  cnameTarget: string,
+  targetARecords: string[],
+  targetAaaaRecords: string[],
+): boolean {
+  if (cnameTarget && cnameRecords.some((value) => value === cnameTarget || value.endsWith(`.${cnameTarget}`))) {
+    return true
+  }
+  return aRecords.some((value) => targetARecords.includes(value))
+    || aaaaRecords.some((value) => targetAaaaRecords.includes(value))
+}
+
 export async function inspectDomainResolution(env: DomainEnv, hostname: string, signal?: AbortSignal): Promise<DomainResolutionInspection> {
   const normalizedHostname = normalizeDomain(hostname)
   const cnameTarget = normalizeDnsValue(env.CF_SAAS_CNAME_TARGET)
-  const [cnameRecords, aRecords, aaaaRecords] = await Promise.all([
+  const [cnameRecords, aRecords, aaaaRecords, targetARecords, targetAaaaRecords] = await Promise.all([
     queryDnsJson(normalizedHostname, 'CNAME', signal),
     queryDnsJson(normalizedHostname, 'A', signal),
     queryDnsJson(normalizedHostname, 'AAAA', signal),
+    cnameTarget ? queryDnsJson(cnameTarget, 'A', signal) : Promise.resolve([]),
+    cnameTarget ? queryDnsJson(cnameTarget, 'AAAA', signal) : Promise.resolve([]),
   ])
   const records = [
     ...cnameRecords.map((value) => ({ type: 'CNAME' as const, value })),
     ...aRecords.map((value) => ({ type: 'A' as const, value })),
     ...aaaaRecords.map((value) => ({ type: 'AAAA' as const, value })),
   ]
-  const pointsToSaas = Boolean(cnameTarget && cnameRecords.some((value) => value === cnameTarget || value.endsWith(`.${cnameTarget}`)))
+  const pointsToSaas = domainRecordsPointToSaas(
+    cnameRecords,
+    aRecords,
+    aaaaRecords,
+    cnameTarget,
+    targetARecords,
+    targetAaaaRecords,
+  )
   return {
     hostname: normalizedHostname,
     checked_at: new Date().toISOString(),
@@ -528,7 +552,7 @@ async function persistCloudflareState(
         : (before.dns_status || 'pending')
   const mappedStatus = mapCloudflareStatus(hostname.status, hostname.ssl?.status, dnsStatus)
   const now = new Date().toISOString()
-  const status = isPendingTooLong(before, mappedStatus, Date.parse(now)) ? 'stuck' : mappedStatus
+  const status = isPendingTooLong(before, mappedStatus, Date.parse(now)) ? 'failed' : mappedStatus
   const activatedAt = status === 'active' ? (before.activated_at || now) : before.activated_at
   const certificateLastActiveAt = hostname.ssl?.status === 'active'
     ? now
@@ -838,7 +862,7 @@ export async function syncDomainWithCloudflare(
     signal?.throwIfAborted()
     const shouldPatch = options.forceRevalidation
       || hostname.status === 'moved'
-      || domain.status === 'stuck'
+      || domain.status === 'failed'
       || (Boolean(dnsInspection?.points_to_saas) && hostname.status !== 'active')
     let triggeredRevalidation = false
     if (shouldPatch) {
@@ -1079,7 +1103,7 @@ export async function reconcileDueDomains(env: DomainEnv, db: D1Database, limit 
     FROM site_domains sd
     LEFT JOIN domain_reconciliation_jobs j ON j.domain_id = sd.id
     WHERE sd.type = 'custom'
-      AND sd.status IN ('pending', 'verifying', 'stuck', 'failed', 'blocked')
+      AND sd.status IN ('pending', 'verifying', 'failed', 'blocked')
       AND (sd.next_check_at IS NULL OR sd.next_check_at <= ? OR j.run_after <= ?)
     ORDER BY COALESCE(j.run_after, sd.next_check_at, sd.created_at) ASC
     LIMIT ?
