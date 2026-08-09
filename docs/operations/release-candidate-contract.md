@@ -31,8 +31,13 @@ Every candidate run records all of the following in
 - a read-only test-mode Stripe webhook endpoint preflight captured before any
   staging mutation, proving exactly one enabled destination at the normalized
   staging URL, the exact application event set, the pinned inbound event
-  rendering version (`STRIPE_WEBHOOK_API_VERSION`), and redacted endpoint
-  identity. The outbound Stripe client remains pinned independently to
+  rendering version (`STRIPE_WEBHOOK_API_VERSION`) either explicitly on the
+  endpoint or via a direct endpoint response's exact `Stripe-Version` header
+  from a request without a version override when the endpoint inherits the
+  account default (with the returned endpoint
+  identity, URL, status, and null `api_version` bound to the inventory), and
+  redacted endpoint identity. Evidence records the version source and effective
+  version. The outbound Stripe client remains pinned independently to
   `STRIPE_API_VERSION`; these versions must not be conflated;
 - browser evidence, including the URL, desktop/mobile coverage, route matrix,
   final URL query/hash checks, full-page traversal, first-party HTTP/media

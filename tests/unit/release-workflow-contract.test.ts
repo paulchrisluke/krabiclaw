@@ -301,6 +301,11 @@ test('production release requires a separate attested dispatch after read-only p
   assert.match(source, /STRIPE_SECRET_KEY_LIVE/)
   assert.match(source, /STRIPE_WEBHOOK_EXPECTED_MODE: live/)
   assert.match(source, /\.accountMode == \"live\"/)
+  assert.match(source, /\.effectiveApiVersion == \$expected_api_version/)
+  assert.match(source, /\.apiVersionSource == \"endpoint\"/)
+  assert.match(source, /\.apiVersionSource == \"account_default\"/)
+  assert.match(source, /\.accountDefaultApiVersions == \[\$expected_api_version\]/)
+  assert.match(source, /\.accountDefaultMissingResponseCount == 0/)
   assert.match(source, /gh run download[\s\S]*production-stripe-webhook-preflight-\$SOURCE_SHA/)
   assert.match(source, /stripeCatalogPreflight\.status == \"passed\"/)
   assert.match(source, /stripeCatalogPreflight\.accountId \| test/)
@@ -318,6 +323,66 @@ test('production release requires a separate attested dispatch after read-only p
   assert.doesNotMatch(source, /E2E_ALLOW_DEV_ROUTES|E2E_DEV_ROUTE_SECRET|STRIPE_SECRET_KEY_TEST|BETTER_AUTH_SECRET/)
   assert.doesNotMatch(source, /wrangler secret put|--no-bundle/)
   assert.ok(source.indexOf('verify-production-baseline-provenance.mjs') < source.indexOf('npx wrangler d1 migrations apply DB --remote'))
+})
+
+test('production deploy attests explicit and inherited webhook versions without accepting loose evidence', async () => {
+  const jobs = await workflowJobs('.github/workflows/release-production.yml')
+  const deploy = jobs['deploy-production']
+  assert.ok(deploy)
+  const attestation = runScript(deploy, 'Attest and download the separately reviewed preflight')
+  const filter = attestation.match(/\n\s+'(\.status == "passed"[\s\S]*?)' \\\n\s+"\$PRODUCTION_WEBHOOK_PREFLIGHT_PATH"/)?.[1]
+  assert.ok(filter, 'production webhook evidence jq filter must be present')
+
+  const sourceSha = 'a'.repeat(40)
+  const expectedUrl = 'https://krabiclaw.com/api/billing/webhook'
+  const expectedApiVersion = '2025-11-17.clover'
+  const expectedEvents = ['invoice.paid']
+  const evaluate = (evidence: Record<string, unknown>) => spawnSync(
+    'jq',
+    [
+      '-e',
+      '--arg', 'sha', sourceSha,
+      '--arg', 'expected_url', expectedUrl,
+      '--arg', 'expected_api_version', expectedApiVersion,
+      '--argjson', 'expected_events', JSON.stringify(expectedEvents),
+      filter,
+    ],
+    { input: JSON.stringify(evidence), encoding: 'utf8' },
+  ).status
+  const base = {
+    status: 'passed',
+    accountMode: 'live',
+    testMode: false,
+    sourceSha,
+    expectedUrl,
+    expectedApiVersion,
+    effectiveApiVersion: expectedApiVersion,
+    enabledEvents: expectedEvents,
+    expectedEvents,
+    endpointId: 'we_deadbeef',
+  }
+  const explicit = {
+    ...base,
+    apiVersionSource: 'endpoint',
+    apiVersion: expectedApiVersion,
+  }
+  const inherited = {
+    ...base,
+    apiVersionSource: 'account_default',
+    apiVersion: null,
+    accountDefaultApiVersions: [expectedApiVersion],
+    accountDefaultApiVersionsTruncated: false,
+    accountDefaultResponseCount: 1,
+    accountDefaultMissingResponseCount: 0,
+  }
+
+  assert.equal(evaluate(explicit), 0)
+  assert.equal(evaluate(inherited), 0)
+  assert.notEqual(evaluate({ ...inherited, apiVersion: undefined }), 0)
+  assert.notEqual(evaluate({ ...inherited, accountDefaultResponseCount: '1' }), 0)
+  assert.notEqual(evaluate({ ...inherited, accountDefaultResponseCount: {} }), 0)
+  assert.notEqual(evaluate({ ...inherited, endpointId: 'we_1TiXCPEm0pkzLQDbSYMeElNc_deadbeef' }), 0)
+  assert.notEqual(evaluate({ ...inherited, effectiveApiVersion: '2026-04-22.dahlia' }), 0)
 })
 
 test('production release checks the exact protected Environment before every mutation', async () => {
