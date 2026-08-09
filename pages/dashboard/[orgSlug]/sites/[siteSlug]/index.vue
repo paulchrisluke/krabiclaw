@@ -50,38 +50,35 @@
         </div>
 
         <!-- Locations overview -->
-        <UCard v-if="locations.length > 0">
+        <section v-if="locations.length > 0">
           <div class="flex items-center justify-between mb-3">
             <div>
               <h2 class="text-lg font-semibold text-highlighted">{{ locationsNavLabel }}</h2>
               <p class="mt-1 text-sm text-muted">{{ locations.length }} {{ locations.length === 1 ? 'location' : 'locations' }}</p>
             </div>
           </div>
-          <div v-if="mapMarkers.length" class="location-map relative h-56 overflow-hidden rounded-xl border border-default bg-muted sm:h-64">
-            <button
-              v-for="marker in mapMarkers"
-              :key="marker.id"
-              type="button"
-              class="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-sm transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-              :class="selectedLocationId === marker.id ? 'size-5 bg-primary ring-4 ring-primary/25' : 'size-3.5 bg-accented'"
-              :style="{ left: `${marker.x}%`, top: `${marker.y}%` }"
-              :aria-label="`Select ${marker.title}`"
-              @click="selectedLocationId = marker.id"
-            />
-          </div>
+          <iframe
+            v-if="selectedLocation?.map_embed_url"
+            :key="selectedLocation.id"
+            :src="selectedLocation.map_embed_url"
+            :title="`${selectedLocation.title} on Google Maps`"
+            class="h-64 w-full rounded-xl border border-default sm:h-80"
+            loading="lazy"
+            allowfullscreen
+            referrerpolicy="no-referrer-when-downgrade"
+          />
           <div v-else class="flex h-48 items-center justify-center rounded-xl border border-default bg-muted text-sm text-muted">
             <UIcon name="i-lucide-map-pin-off" class="mr-2 size-5" />
             Map coordinates have not been added yet
           </div>
           <div class="mt-5 divide-y divide-default">
-            <NuxtLink
+            <button
               v-for="location in locations"
               :key="location.id"
-              :to="`${locationsBase}/${location.slug}`"
-              class="group flex items-center gap-4 rounded-lg px-2 py-3 transition-colors hover:bg-elevated focus-visible:outline-2 focus-visible:outline-primary"
+              type="button"
+              class="group flex w-full items-center gap-4 rounded-lg px-2 py-3 text-left transition-colors hover:bg-elevated focus-visible:outline-2 focus-visible:outline-primary"
               :class="selectedLocationId === location.id ? 'bg-elevated' : ''"
-              @mouseenter="selectedLocationId = location.id"
-              @focus="selectedLocationId = location.id"
+              @click="selectedLocationId = location.id"
             >
                 <div class="size-14 shrink-0 overflow-hidden rounded-lg bg-muted sm:size-16">
                   <img
@@ -103,9 +100,9 @@
                   <p class="mt-1 truncate text-sm text-muted">{{ locationAddress(location) }}</p>
                 </div>
                 <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0 text-muted transition-transform group-hover:translate-x-0.5" />
-            </NuxtLink>
+            </button>
           </div>
-        </UCard>
+        </section>
 
         <UCard v-if="events.length > 0" title="Recent Activity">
           <ul class="-mx-4 -mb-4">
@@ -145,6 +142,7 @@ interface Location {
   hero_url: string | null
   address: { addressLines?: string[] } | null
   latitude: number | null; longitude: number | null
+  map_embed_url: string | null
 }
 interface Credits { balance: number; lifetime_used: number; last_topped_up_at: string | null }
 interface SiteEvent {
@@ -182,7 +180,8 @@ const isDashboardHomeResponse = (value: unknown): value is DashboardHomeResponse
       ))
     ))
     && (location.latitude === null || typeof location.latitude === 'number')
-    && (location.longitude === null || typeof location.longitude === 'number'),
+    && (location.longitude === null || typeof location.longitude === 'number')
+    && (location.map_embed_url === null || typeof location.map_embed_url === 'string'),
   )
   && (value.credits === null || (
     isRecord(value.credits)
@@ -281,7 +280,6 @@ const siteCapabilities = computed(() => {
 })
 const hasSiteServicesManager = computed(() => Boolean(siteCapabilities.value?.managers.some(manager => manager.key === 'site.services')))
 const siteDashboardPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}`)
-const locationsBase = computed(() => `${siteDashboardPath.value}/locations`)
 const events = computed(() => data.value?.events ?? [])
 const locationsNavLabel = computed(() => siteCapabilities.value?.locationVocabulary === 'office/service area' ? 'Offices / Service Areas' : 'Locations')
 const selectedLocationId = ref<string | null>(null)
@@ -290,25 +288,9 @@ watch(locations, (value) => {
     selectedLocationId.value = value.find(location => location.is_primary)?.id ?? value[0]?.id ?? null
   }
 }, { immediate: true })
-
-const mapMarkers = computed(() => {
-  const positioned = locations.value.filter((location): location is Location & { latitude: number; longitude: number } =>
-    Number.isFinite(location.latitude) && Number.isFinite(location.longitude),
-  )
-  if (!positioned.length) return []
-  const latitudes = positioned.map(location => location.latitude)
-  const longitudes = positioned.map(location => location.longitude)
-  const minLat = Math.min(...latitudes)
-  const maxLat = Math.max(...latitudes)
-  const minLng = Math.min(...longitudes)
-  const maxLng = Math.max(...longitudes)
-  return positioned.map(location => ({
-    id: location.id,
-    title: location.title,
-    x: minLng === maxLng ? 50 : 12 + ((location.longitude - minLng) / (maxLng - minLng)) * 76,
-    y: minLat === maxLat ? 50 : 88 - ((location.latitude - minLat) / (maxLat - minLat)) * 76,
-  }))
-})
+const selectedLocation = computed(() =>
+  locations.value.find(location => location.id === selectedLocationId.value) ?? locations.value[0] ?? null,
+)
 
 function locationAddress(location: Location) {
   return location.address?.addressLines?.filter(Boolean).join(', ') || location.city || 'Address not set'
@@ -327,13 +309,3 @@ async function submitHomeInput() {
 const { eventLabel } = useSiteEventLabels()
 const { formatRelativeTime: timeAgo } = useHumanTime()
 </script>
-
-<style scoped>
-.location-map {
-  background-image:
-    linear-gradient(170deg, transparent 0 55%, color-mix(in srgb, var(--ui-primary) 8%, transparent) 55% 65%, transparent 65%),
-    linear-gradient(to right, color-mix(in srgb, var(--ui-text-muted) 10%, transparent) 1px, transparent 1px),
-    linear-gradient(to bottom, color-mix(in srgb, var(--ui-text-muted) 10%, transparent) 1px, transparent 1px);
-  background-size: 100% 100%, 7% 100%, 100% 34%;
-}
-</style>

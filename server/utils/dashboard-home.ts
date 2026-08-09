@@ -1,6 +1,7 @@
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { isOrganizationWideRole, teamAccessPredicate } from '~/server/utils/member-access'
 import { getGuestThreadOperationSummary } from '~/server/domain/guest-threads/repository'
+import { calculateMapEmbedUrl } from '~/server/utils/google-business'
 
 export interface DashboardHomeLocation {
   id: string
@@ -16,6 +17,7 @@ export interface DashboardHomeLocation {
   address: { addressLines?: string[] } | null
   latitude: number | null
   longitude: number | null
+  map_embed_url: string | null
 }
 
 export interface DashboardHomeCredits {
@@ -106,10 +108,11 @@ export async function getDashboardHomeData(
       rating: number | null; review_count: number | null
       is_primary: number; status: string; updated_at: string
       hero_url: string | null
-      address: string | null; latitude: number | null; longitude: number | null
+      address: string | null; maps_url: string | null
+      latitude: number | null; longitude: number | null
     }>(db, `
       SELECT bl.id, bl.slug, bl.title, bl.city, bl.rating, bl.review_count,
-             bl.address, bl.latitude, bl.longitude,
+             bl.address, bl.maps_url, bl.latitude, bl.longitude,
              bl.is_primary, bl.status, bl.updated_at,
              COALESCE(ma_hero.thumbnail_url, ma_hero.public_url) as hero_url
       FROM business_locations bl
@@ -162,6 +165,7 @@ export async function getDashboardHomeData(
       ...l,
       is_primary: Boolean(l.is_primary),
       address: parseLocationAddress(l.address),
+      map_embed_url: calculateMapEmbedUrl(l),
     })),
     credits,
     events: events.map(e => ({
