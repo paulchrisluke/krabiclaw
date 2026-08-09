@@ -469,44 +469,20 @@ export interface DomainResolutionInspection {
   resolves_elsewhere: boolean
 }
 
-export function domainRecordsPointToSaas(
-  cnameRecords: string[],
-  aRecords: string[],
-  aaaaRecords: string[],
-  cnameTarget: string,
-  targetARecords: string[],
-  targetAaaaRecords: string[],
-): boolean {
-  if (cnameTarget && cnameRecords.some((value) => value === cnameTarget || value.endsWith(`.${cnameTarget}`))) {
-    return true
-  }
-  return aRecords.some((value) => targetARecords.includes(value))
-    || aaaaRecords.some((value) => targetAaaaRecords.includes(value))
-}
-
 export async function inspectDomainResolution(env: DomainEnv, hostname: string, signal?: AbortSignal): Promise<DomainResolutionInspection> {
   const normalizedHostname = normalizeDomain(hostname)
   const cnameTarget = normalizeDnsValue(env.CF_SAAS_CNAME_TARGET)
-  const [cnameRecords, aRecords, aaaaRecords, targetARecords, targetAaaaRecords] = await Promise.all([
+  const [cnameRecords, aRecords, aaaaRecords] = await Promise.all([
     queryDnsJson(normalizedHostname, 'CNAME', signal),
     queryDnsJson(normalizedHostname, 'A', signal),
     queryDnsJson(normalizedHostname, 'AAAA', signal),
-    cnameTarget ? queryDnsJson(cnameTarget, 'A', signal) : Promise.resolve([]),
-    cnameTarget ? queryDnsJson(cnameTarget, 'AAAA', signal) : Promise.resolve([]),
   ])
   const records = [
     ...cnameRecords.map((value) => ({ type: 'CNAME' as const, value })),
     ...aRecords.map((value) => ({ type: 'A' as const, value })),
     ...aaaaRecords.map((value) => ({ type: 'AAAA' as const, value })),
   ]
-  const pointsToSaas = domainRecordsPointToSaas(
-    cnameRecords,
-    aRecords,
-    aaaaRecords,
-    cnameTarget,
-    targetARecords,
-    targetAaaaRecords,
-  )
+  const pointsToSaas = Boolean(cnameTarget && cnameRecords.some((value) => value === cnameTarget || value.endsWith(`.${cnameTarget}`)))
   return {
     hostname: normalizedHostname,
     checked_at: new Date().toISOString(),
