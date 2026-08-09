@@ -19,15 +19,12 @@
             <p class="text-sm text-muted">{{ data.organization.name }}</p>
             <h2 class="mt-1 text-xl font-semibold text-highlighted">Locations</h2>
           </div>
-          <UCard v-if="data.locations.length === 0"><p class="text-sm text-muted">This site has no locations.</p></UCard>
-          <div v-else class="overflow-hidden rounded-xl border border-default">
-            <div v-for="location in data.locations" :key="location.id" class="grid gap-3 border-b border-default bg-default px-5 py-4 last:border-b-0 sm:grid-cols-[minmax(0,2fr)_1fr_1fr_auto] sm:items-center">
-              <div><p class="font-semibold text-highlighted">{{ location.title }}</p><p class="text-xs text-muted">{{ location.city || location.slug }}</p></div>
-              <div><p class="text-xs text-muted">Google rating</p><p class="font-semibold">{{ location.rating ?? 'Not connected' }}</p></div>
-              <div><p class="text-xs text-muted">Reviews</p><p class="font-semibold">{{ formatNumber(location.reviewCount) }}</p></div>
-              <UBadge v-if="location.isPrimary" color="primary" variant="soft">Primary</UBadge><span v-else />
-            </div>
-          </div>
+          <UTable :data="data.locations" :columns="locationColumns" :loading="loading" empty="This site has no locations.">
+            <template #title-cell="{ row }"><div><p class="font-semibold text-highlighted">{{ row.original.title }}</p><p class="text-xs text-muted">{{ row.original.city || row.original.slug }}</p></div></template>
+            <template #rating-cell="{ row }">{{ row.original.rating ?? 'Not connected' }}</template>
+            <template #reviewCount-cell="{ row }">{{ formatNumber(row.original.reviewCount) }}</template>
+            <template #isPrimary-cell="{ row }"><UBadge v-if="row.original.isPrimary" label="Primary" color="primary" variant="soft" size="xs" /></template>
+          </UTable>
         </template>
       </div>
     </template>
@@ -44,6 +41,12 @@ const siteId = computed(() => String(route.params.siteId || ''))
 interface Response { organization: { name: string }; site: { slug: string; brandName: string | null; pageViews30d: number; sessions30d: number }; locations: { id: string; slug: string; title: string; city: string | null; isPrimary: boolean; rating: number | null; reviewCount: number }[] }
 const data = ref<Response | null>(null)
 const loading = ref(true)
+const locationColumns = [
+  { accessorKey: 'title', header: 'Location' },
+  { accessorKey: 'rating', header: 'Google rating' },
+  { accessorKey: 'reviewCount', header: 'Reviews' },
+  { accessorKey: 'isPrimary', header: '' },
+]
 function formatNumber(value: number) { return new Intl.NumberFormat().format(value) }
 onMounted(async () => {
   try {

@@ -20,30 +20,16 @@
 
         <UInput v-model="search" icon="i-lucide-search" placeholder="Search organizations" class="w-full max-w-md" />
 
-        <UCard v-if="loading">
-          <div class="space-y-3"><USkeleton v-for="i in 5" :key="i" class="h-16 rounded-lg" /></div>
-        </UCard>
-        <UCard v-else-if="filteredOrganizations.length === 0">
-          <div class="py-8 text-center text-sm text-muted">No organizations match your search.</div>
-        </UCard>
-        <div v-else class="overflow-hidden rounded-xl border border-default">
-          <NuxtLink
-            v-for="organization in filteredOrganizations"
-            :key="organization.id"
-            :to="`/admin/organizations/${organization.id}`"
-            class="grid gap-3 border-b border-default bg-default px-5 py-4 transition-colors last:border-b-0 hover:bg-elevated/50 md:grid-cols-[minmax(0,2fr)_repeat(4,minmax(90px,1fr))_auto] md:items-center"
-          >
-            <div class="min-w-0">
-              <p class="truncate font-semibold text-highlighted">{{ organization.name }}</p>
-              <p class="truncate text-xs text-muted">{{ organization.slug || organization.id }}</p>
-            </div>
-            <div><p class="text-[11px] uppercase tracking-wide text-muted">Sites</p><p class="font-semibold text-default">{{ organization.siteCount }}</p></div>
-            <div><p class="text-[11px] uppercase tracking-wide text-muted">Locations</p><p class="font-semibold text-default">{{ organization.locationCount }}</p></div>
-            <div><p class="text-[11px] uppercase tracking-wide text-muted">30d views</p><p class="font-semibold text-default">{{ formatNumber(organization.pageViews30d) }}</p></div>
-            <div><p class="text-[11px] uppercase tracking-wide text-muted">Trend</p><p class="font-semibold" :class="trendTone(organization.pageViews30d, organization.previousPageViews30d) === 'positive' ? 'text-success' : trendTone(organization.pageViews30d, organization.previousPageViews30d) === 'negative' ? 'text-error' : 'text-default'">{{ trendLabel(organization.pageViews30d, organization.previousPageViews30d) }}</p></div>
-            <UIcon name="i-lucide-chevron-right" class="hidden size-4 text-muted md:block" />
-          </NuxtLink>
-        </div>
+        <UTable :data="filteredOrganizations" :columns="organizationColumns" :loading="loading" empty="No organizations match your search.">
+          <template #name-cell="{ row }">
+            <div class="min-w-0"><p class="font-semibold text-highlighted">{{ row.original.name }}</p><p class="text-xs text-muted">{{ row.original.slug || row.original.id }}</p></div>
+          </template>
+          <template #pageViews30d-cell="{ row }">{{ formatNumber(row.original.pageViews30d) }}</template>
+          <template #trend-cell="{ row }">
+            <span class="font-semibold" :class="trendTone(row.original.pageViews30d, row.original.previousPageViews30d) === 'positive' ? 'text-success' : trendTone(row.original.pageViews30d, row.original.previousPageViews30d) === 'negative' ? 'text-error' : 'text-default'">{{ trendLabel(row.original.pageViews30d, row.original.previousPageViews30d) }}</span>
+          </template>
+          <template #actions-cell="{ row }"><UButton :to="`/admin/organizations/${row.original.id}`" label="View" icon="i-lucide-chevron-right" trailing color="neutral" variant="ghost" size="xs" /></template>
+        </UTable>
       </div>
     </template>
   </UDashboardPanel>
@@ -70,6 +56,14 @@ const toast = useToast()
 const organizations = ref<Organization[]>([])
 const loading = ref(true)
 const search = ref('')
+const organizationColumns = [
+  { accessorKey: 'name', header: 'Organization' },
+  { accessorKey: 'siteCount', header: 'Sites' },
+  { accessorKey: 'locationCount', header: 'Locations' },
+  { accessorKey: 'pageViews30d', header: '30d views' },
+  { id: 'trend', header: 'Trend' },
+  { id: 'actions', header: '' },
+]
 
 const filteredOrganizations = computed(() => {
   const query = search.value.trim().toLowerCase()

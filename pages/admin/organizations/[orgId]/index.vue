@@ -14,23 +14,13 @@
             <p class="text-sm text-muted">{{ data.organization.slug || data.organization.id }}</p>
             <h2 class="mt-1 text-xl font-semibold text-highlighted">Sites</h2>
           </div>
-          <UCard v-if="data.sites.length === 0"><p class="text-sm text-muted">This organization has no sites.</p></UCard>
-          <div v-else class="grid gap-4 lg:grid-cols-2">
-            <NuxtLink v-for="site in data.sites" :key="site.id" :to="`/admin/organizations/${orgId}/sites/${site.id}`" class="rounded-xl border border-default bg-default p-5 transition-colors hover:bg-elevated/50">
-              <div class="flex items-start justify-between gap-3">
-                <div>
-                  <p class="font-semibold text-highlighted">{{ site.brandName || site.slug }}</p>
-                  <p class="text-xs text-muted">{{ site.customDomain || (site.subdomain ? `${site.subdomain}.krabiclaw.com` : site.slug) }}</p>
-                </div>
-                <UBadge color="neutral" variant="soft">{{ site.plan || 'free' }}</UBadge>
-              </div>
-              <div class="mt-5 grid grid-cols-3 gap-3 text-sm">
-                <div><p class="text-xs text-muted">Locations</p><p class="font-semibold">{{ site.locationCount }}</p></div>
-                <div><p class="text-xs text-muted">30d views</p><p class="font-semibold">{{ formatNumber(site.pageViews30d) }}</p></div>
-                <div><p class="text-xs text-muted">Sessions</p><p class="font-semibold">{{ formatNumber(site.sessions30d) }}</p></div>
-              </div>
-            </NuxtLink>
-          </div>
+          <UTable :data="data.sites" :columns="siteColumns" :loading="loading" empty="This organization has no sites.">
+            <template #brandName-cell="{ row }"><div><p class="font-semibold text-highlighted">{{ row.original.brandName || row.original.slug }}</p><p class="text-xs text-muted">{{ row.original.customDomain || (row.original.subdomain ? `${row.original.subdomain}.krabiclaw.com` : row.original.slug) }}</p></div></template>
+            <template #plan-cell="{ row }"><UBadge :label="row.original.plan || 'free'" color="neutral" variant="soft" size="xs" /></template>
+            <template #pageViews30d-cell="{ row }">{{ formatNumber(row.original.pageViews30d) }}</template>
+            <template #sessions30d-cell="{ row }">{{ formatNumber(row.original.sessions30d) }}</template>
+            <template #actions-cell="{ row }"><UButton :to="`/admin/organizations/${orgId}/sites/${row.original.id}`" label="View" icon="i-lucide-chevron-right" trailing color="neutral" variant="ghost" size="xs" /></template>
+          </UTable>
         </template>
       </div>
     </template>
@@ -47,6 +37,14 @@ interface Site { id: string; slug: string; brandName: string | null; subdomain: 
 interface Response { organization: { id: string; name: string; slug: string | null }; sites: Site[] }
 const data = ref<Response | null>(null)
 const loading = ref(true)
+const siteColumns = [
+  { accessorKey: 'brandName', header: 'Site' },
+  { accessorKey: 'plan', header: 'Plan' },
+  { accessorKey: 'locationCount', header: 'Locations' },
+  { accessorKey: 'pageViews30d', header: '30d views' },
+  { accessorKey: 'sessions30d', header: 'Sessions' },
+  { id: 'actions', header: '' },
+]
 function formatNumber(value: number) { return new Intl.NumberFormat().format(value) }
 onMounted(async () => {
   try {
