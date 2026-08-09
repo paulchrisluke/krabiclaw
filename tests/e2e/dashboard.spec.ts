@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Dialog } from '@playwright/test'
 import { collectPageErrors, setupTenantHeaders } from './helpers'
 import { dashboardOrgHeaders, devLoginHeaders, devLoginUrl } from './test-env'
 
@@ -365,13 +365,24 @@ test.describe('dashboard functional smoke', () => {
     await page.getByRole('button', { name: 'Delete', exact: true }).click()
     await dirtyDeleteDialog
     await expect(page.getByRole('heading', { name: dirtyCopyTitle, exact: true })).toBeVisible()
-    await page.getByRole('textbox', { name: 'Title', exact: true }).fill(copyTitle)
-    await saveDraft()
 
-    const deleteDialog = page.waitForEvent('dialog').then(async dialog => {
-      expect(dialog.message()).toBe('Delete this page and its revisions? This cannot be undone.')
-      await dialog.accept()
+    const deletePrompts: string[] = []
+    let resolveDeleteDialogs!: () => void
+    let rejectDeleteDialogs!: (_error: unknown) => void
+    const deleteDialogs = new Promise<void>((resolve, reject) => {
+      resolveDeleteDialogs = resolve
+      rejectDeleteDialogs = reject
     })
+    const acceptDeleteDialogs = async (dialog: Dialog) => {
+      try {
+        deletePrompts.push(dialog.message())
+        await dialog.accept()
+        if (deletePrompts.length === 2) resolveDeleteDialogs()
+      } catch (error) {
+        rejectDeleteDialogs(error)
+      }
+    }
+    page.on('dialog', acceptDeleteDialogs)
     const deleteResponse = page.waitForResponse(candidate => {
       const url = new URL(candidate.url())
       return candidate.request().method() === 'DELETE'
@@ -379,7 +390,12 @@ test.describe('dashboard functional smoke', () => {
     }, { timeout: 30_000 })
     const deleteRefreshResponse = waitForPagesRefresh()
     await page.getByRole('button', { name: 'Delete', exact: true }).click()
-    await deleteDialog
+    await deleteDialogs
+    page.off('dialog', acceptDeleteDialogs)
+    expect(deletePrompts).toEqual([
+      'Discard unsaved page changes?',
+      'Delete this page and its revisions? This cannot be undone.',
+    ])
     const deleted = await deleteResponse
     expect(deleted.status()).toBe(200)
     const deleteRefresh = await deleteRefreshResponse
