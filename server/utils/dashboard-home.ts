@@ -13,6 +13,9 @@ export interface DashboardHomeLocation {
   status: string
   updated_at: string
   hero_url: string | null
+  address: { addressLines?: string[] } | null
+  latitude: number | null
+  longitude: number | null
 }
 
 export interface DashboardHomeCredits {
@@ -54,6 +57,16 @@ function safeJsonParse(value: string): unknown {
   }
 }
 
+function parseLocationAddress(value: string | null): { addressLines?: string[] } | null {
+  if (!value) return null
+  const parsed = safeJsonParse(value)
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+  const addressLines = (parsed as { addressLines?: unknown }).addressLines
+  return addressLines === undefined || (Array.isArray(addressLines) && addressLines.every(line => typeof line === 'string'))
+    ? parsed as { addressLines?: string[] }
+    : null
+}
+
 // Shared by server/api/dashboard/home.get.ts and the dashboard home page's SSR
 // branch — see the "Nested SSR self-fetch loses Cloudflare bindings" rule in
 // the SSR boundary rule for why the page can't just $fetch its own API route.
@@ -93,8 +106,10 @@ export async function getDashboardHomeData(
       rating: number | null; review_count: number | null
       is_primary: number; status: string; updated_at: string
       hero_url: string | null
+      address: string | null; latitude: number | null; longitude: number | null
     }>(db, `
       SELECT bl.id, bl.slug, bl.title, bl.city, bl.rating, bl.review_count,
+             bl.address, bl.latitude, bl.longitude,
              bl.is_primary, bl.status, bl.updated_at,
              COALESCE(ma_hero.thumbnail_url, ma_hero.public_url) as hero_url
       FROM business_locations bl
@@ -146,6 +161,7 @@ export async function getDashboardHomeData(
     locations: locations.map(l => ({
       ...l,
       is_primary: Boolean(l.is_primary),
+      address: parseLocationAddress(l.address),
     })),
     credits,
     events: events.map(e => ({
