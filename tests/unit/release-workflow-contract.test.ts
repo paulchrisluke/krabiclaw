@@ -300,6 +300,11 @@ test('immutable route inventory enumerates every reviewed fixture target and bro
   assert.ok(paths(kikuzuki).has('/experiences/teppanyaki-experience'))
   assert.ok(paths(kikuzuki).has('/locations/kikuzuki-japanese-robatayaki-izakaya/reviews/review-kiku-1'))
   const ncls = paths(surface('blawby'))
+  const platform = paths(surface('platform'))
+  for (const legalPath of ['/policies/privacy', '/policies/terms', '/third-party-notices']) {
+    assert.ok(!platform.has(legalPath), `platform must not claim Blawby-only route ${legalPath}`)
+    assert.ok(ncls.has(legalPath), `NCLS missing legal route ${legalPath}`)
+  }
   for (const service of ['family', 'small-business-and-nonprofits', 'employment', 'tenant-rights', 'probate-and-estate', 'special-education-and-iep-advocacy']) {
     assert.ok(ncls.has(`/services/${service}`), `NCLS missing service ${service}`)
   }
