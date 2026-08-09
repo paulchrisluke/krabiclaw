@@ -144,15 +144,7 @@ function wildcardOrigin(origin: string | null): string | null {
   return `${url.protocol}//*.${url.host}`
 }
 
-export function localDevelopmentOrigin(value: string | undefined): string | null {
-  const origin = normalizeOrigin(value)
-  if (!origin) return null
-  const url = new URL(origin)
-  if (url.protocol !== 'http:' || !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) return null
-  return origin
-}
-
-export function trustedOriginsForAuth(env: CloudflareEnv): string[] | ((_request?: Request) => string[]) {
+function trustedOriginsForAuth(env: CloudflareEnv): string[] {
   const origins = new Set<string>()
   const authOrigin = normalizeOrigin(env.BETTER_AUTH_URL)
   const platformOrigin = normalizeOrigin(env.NUXT_PUBLIC_PLATFORM_DOMAIN)
@@ -165,11 +157,6 @@ export function trustedOriginsForAuth(env: CloudflareEnv): string[] | ((_request
     origins.add(`http://localhost:${port}`)
     origins.add(`http://127.0.0.1:${port}`)
     origins.add(`http://*.localhost:${port}`)
-
-    return (request?: Request) => {
-      const requestOrigin = localDevelopmentOrigin(request?.headers.get('origin') ?? undefined)
-      return requestOrigin ? [...origins, requestOrigin] : [...origins]
-    }
   }
   return [...origins]
 }
