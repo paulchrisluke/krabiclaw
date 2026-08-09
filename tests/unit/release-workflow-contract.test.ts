@@ -12,7 +12,7 @@ type WorkflowJob = {
   needs?: string | string[]
   environment?: { name?: string } | string
   permissions?: Record<string, string>
-  steps?: Array<{ name?: string; id?: string; if?: string; run?: string; with?: Record<string, unknown> }>
+  steps?: Array<{ name?: string; id?: string; if?: string; run?: string; env?: Record<string, string>; with?: Record<string, unknown> }>
 }
 
 async function workflowJobs(path: string): Promise<Record<string, WorkflowJob>> {
@@ -576,11 +576,23 @@ test('exact-target production rollback is read-only until protected mutation and
   assert.match(source, /cd \.output && find \. -type f/)
   assert.match(source, /versions view "\$TARGET_WORKER_VERSION_ID"/)
   assert.match(source, /release-route-inventory\.mjs/)
-  assert.match(source, /verify-deployed-candidate\.mjs[\s\S]*--version-override "\$TARGET_WORKER_VERSION_ID"/)
-  assert.match(source, /--build-dir target-source\/\.output\/public/)
-  assert.match(source, /WORKER_VERSION_OVERRIDE: \$\{\{ inputs\.target_worker_version_id \}\}/)
+  const preflightScript = (jobs.preflight?.steps ?? []).map(step => step.run ?? '').join('\n')
+  assert.doesNotMatch(preflightScript, /verify-deployed-candidate\.mjs|playwright test|WORKER_VERSION_OVERRIDE|--version-override/)
+  assert.doesNotMatch(preflightScript, /versions view "\$EXPECTED_CURRENT_WORKER_VERSION_ID"|Current Worker version .* tagged/)
+  assert.match(preflightScript, /status:\s*'attested'/)
+  assert.doesNotMatch(preflightScript, /targetVerification|candidateBrowser/)
+  assert.match(source, /LEGACY_TARGET_SOURCE_SHA:\s*4e49e5a37e4a0578bd1b306c4e0822c4fa8bc5c9/)
+  assert.match(source, /LEGACY_TARGET_WORKER_VERSION_ID:\s*6254de48-c029-418b-b82f-a4811fb04814/)
+  assert.match(source, /LEGACY_TARGET_RELEASE_RUN_ID:\s*"31142677520"/)
+  assert.match(preflightScript, /gh run view "\$LEGACY_TARGET_RELEASE_RUN_ID" --json conclusion,event,headSha,workflowName,jobs/)
+  assert.match(preflightScript, /workflowName !== 'CI \(Required PR Lane\)'/)
+  assert.match(preflightScript, /job\.startedAt !== '2026-08-07T02:54:23Z'/)
+  assert.match(preflightScript, /job\.completedAt !== '2026-08-07T03:01:44Z'/)
+  assert.match(preflightScript, /createdOn !== '2026-08-07T02:59:37\.401932Z'/)
+  assert.match(preflightScript, /targetCreatedOn !== '2026-08-07T02:59:37\.401Z'/)
+  assert.match(preflightScript, /historical-actions-run-window-and-provider-created-on/)
+  assert.match(preflightScript, /Modern target Worker version .* is not tagged with source SHA/)
   assert.match(source, /TRAFFIC_MUTATION_ATTEMPTED|rollback-traffic-mutation-attempted/)
-  assert.match(source, /printf '%s\\n' "true" > "\$flag"[\s\S]*versions deploy "\$TARGET_WORKER_VERSION_ID@100"/)
   assert.match(source, /uuid_pattern='\^\[0-9a-f\]\{8\}/)
   assert.match(source, /EXPECTED_CURRENT_WORKER_VERSION_ID" != "\$TARGET_WORKER_VERSION_ID/)
   assert.match(source, /if: failure\(\)/)
@@ -588,6 +600,69 @@ test('exact-target production rollback is read-only until protected mutation and
   assert.match(source, /rollback-intervention-required\.json/)
   assert.match(source, /public-surfaces-desktop[\s\S]*public-surfaces-mobile/)
   const rollbackSteps = jobs['rollback-production']?.steps ?? []
+  assert.equal(jobs['rollback-production']?.env?.PLAYWRIGHT_PREVIEW_URL, 'https://krabiclaw.com')
+  const splitStep = rollbackSteps.find(step => step.name === 'Place exact target at zero traffic and prove split')
+  const overrideVerifyStep = rollbackSteps.find(step => step.name === 'Wait for and strictly verify zero-traffic target with override')
+  const overrideBrowserStep = rollbackSteps.find(step => step.name === 'Verify zero-traffic target Saya and Blawby with override')
+  const promotionStep = rollbackSteps.find(step => step.name === 'Promote exact target and wait for unoverridden readiness')
+  const finalVerifyStep = rollbackSteps.find(step => step.name === 'Verify deployed target assets and source provenance')
+  const finalBrowserStep = rollbackSteps.find(step => step.name === 'Verify Saya and Blawby on desktop and mobile browsers')
+  for (const [label, step] of [
+    ['split', splitStep],
+    ['override verifier', overrideVerifyStep],
+    ['override browser', overrideBrowserStep],
+    ['promotion', promotionStep],
+    ['final verifier', finalVerifyStep],
+    ['final browser', finalBrowserStep],
+  ] as const) assert.ok(step, `missing protected rollback ${label} step`)
+  assert.ok(
+    rollbackSteps.indexOf(splitStep!) < rollbackSteps.indexOf(overrideVerifyStep!)
+    && rollbackSteps.indexOf(overrideVerifyStep!) < rollbackSteps.indexOf(overrideBrowserStep!)
+    && rollbackSteps.indexOf(overrideBrowserStep!) < rollbackSteps.indexOf(promotionStep!)
+    && rollbackSteps.indexOf(promotionStep!) < rollbackSteps.indexOf(finalVerifyStep!)
+    && rollbackSteps.indexOf(finalVerifyStep!) < rollbackSteps.indexOf(finalBrowserStep!),
+    'target must be placed at 0%, override-verified, promoted, and then verified unoverridden in order',
+  )
+  const splitRun = splitStep?.run ?? ''
+  const marker = splitRun.indexOf("printf '%s\\n' \"true\" > \"$flag\"")
+  const splitDeploy = splitRun.indexOf('versions deploy "$EXPECTED_CURRENT_WORKER_VERSION_ID@100" "$TARGET_WORKER_VERSION_ID@0"')
+  assert.ok(marker >= 0 && splitDeploy > marker, 'durable traffic marker must precede the current@100 + target@0 deployment')
+  assert.match(splitRun, /current\.traffic !== 100 \|\| target\.traffic !== 0/)
+  const overrideVerifyRun = overrideVerifyStep?.run ?? ''
+  assert.match(overrideVerifyRun, /export WORKER_VERSION_OVERRIDE="\$TARGET_WORKER_VERSION_ID"/)
+  assert.match(overrideVerifyRun, /DEPLOYMENT_EXPECTED_SOURCE_SHA="\$TARGET_SOURCE_SHA"/)
+  assert.match(overrideVerifyRun, /DEPLOYMENT_EXPECTED_WORKER_VERSION="\$TARGET_WORKER_VERSION_ID"/)
+  assert.ok(overrideVerifyRun.indexOf('wait-for-deployed-assets.mjs') < overrideVerifyRun.indexOf('verify-deployed-candidate.mjs'))
+  assert.match(overrideVerifyRun, /--version-override "\$TARGET_WORKER_VERSION_ID"/)
+  assert.match(overrideVerifyRun, /TARGET_SOURCE_SHA" == "\$LEGACY_TARGET_SOURCE_SHA" && "\$TARGET_WORKER_VERSION_ID" == "\$LEGACY_TARGET_WORKER_VERSION_ID"/)
+  assert.match(overrideVerifyRun, /DEPLOYMENT_EXPECTED_SOURCE_SHA=""[\s\S]*DEPLOYMENT_EXPECTED_WORKER_VERSION=""[\s\S]*wait-for-deployed-assets\.mjs/)
+  assert.match(overrideVerifyRun, /manifest\.workerState\?\.target\?\.attestation\?\.type !== 'historical-actions-run-window-and-provider-created-on'/)
+  assert.match(overrideVerifyRun, /manifest\.workerState\?\.target\?\.attestation\?\.runId !== 31142677520/)
+  assert.match(overrideVerifyRun, /provenanceKind: 'legacy-release-window-and-exact-assets'/)
+  assert.match(overrideVerifyRun, /differs from the attested target build/)
+  assert.equal(overrideBrowserStep?.env?.WORKER_VERSION_OVERRIDE, '${{ inputs.target_worker_version_id }}')
+  const overrideBrowserRun = overrideBrowserStep?.run ?? ''
+  assert.match(overrideBrowserRun, /else\s+cd target-source\s+test -f "\$browser_spec"/)
+  assert.match(overrideBrowserRun, /npx playwright test "\$browser_spec"/)
+  assert.equal(overrideBrowserStep?.env?.PLAYWRIGHT_HTML_OUTPUT_DIR, '${{ runner.temp }}/rollback-target-override-playwright-report')
+  assert.match(overrideBrowserRun, /--output "\$RUNNER_TEMP\/rollback-target-override-test-results"/)
+  const promotionRun = promotionStep?.run ?? ''
+  assert.match(promotionRun, /versions deploy "\$TARGET_WORKER_VERSION_ID@100"/)
+  assert.match(promotionRun, /unset WORKER_VERSION_OVERRIDE/)
+  assert.match(promotionRun, /DEPLOYMENT_EXPECTED_SOURCE_SHA="\$TARGET_SOURCE_SHA"/)
+  assert.match(promotionRun, /DEPLOYMENT_EXPECTED_WORKER_VERSION="\$TARGET_WORKER_VERSION_ID"/)
+  assert.ok(promotionRun.indexOf('unset WORKER_VERSION_OVERRIDE') < promotionRun.indexOf('wait-for-deployed-assets.mjs'))
+  const finalVerifyRun = finalVerifyStep?.run ?? ''
+  assert.doesNotMatch(finalVerifyRun, /--version-override/)
+  assert.match(finalVerifyRun, /phase: 'promoted-unoverridden'/)
+  assert.match(finalVerifyRun, /Promoted legacy asset \$\{pathname\} differs from the attested target build/)
+  assert.equal(finalBrowserStep?.env?.WORKER_VERSION_OVERRIDE, undefined)
+  const finalBrowserRun = finalBrowserStep?.run ?? ''
+  assert.match(finalBrowserRun, /else\s+cd target-source\s+test -f "\$browser_spec"/)
+  assert.match(finalBrowserRun, /npx playwright test "\$browser_spec"/)
+  assert.equal(finalBrowserStep?.env?.PLAYWRIGHT_HTML_OUTPUT_DIR, '${{ runner.temp }}/rollback-promoted-playwright-report')
+  assert.match(finalBrowserRun, /--output "\$RUNNER_TEMP\/rollback-promoted-test-results"/)
+  assert.match(source, /rollback-target-override-playwright-report\/[\s\S]*rollback-target-override-test-results\/[\s\S]*rollback-promoted-playwright-report\/[\s\S]*rollback-promoted-test-results\//)
   const resultStep = rollbackSteps.find(step => step.name === 'Write rollback result evidence')
   assert.equal(resultStep?.id, 'write-result')
   const resultRestoreStep = rollbackSteps.find(step => step.name === 'Restore exact baseline after rollback result serialization failure')
@@ -603,9 +678,13 @@ test('exact-target production rollback is read-only until protected mutation and
   assert.equal(uploadStep?.with?.['if-no-files-found'], 'error')
   assert.equal(uploadFailureStep?.if, "always() && steps.upload-rollback-result.outcome != 'success'")
   assert.ok(rollbackSteps.indexOf(uploadFailureStep!) > uploadIndex, 'upload failure proof must follow the rollback evidence upload')
+  assert.match(uploadFailureStep?.run ?? '', /\.status == "verified"[\s\S]*\.trafficMutationAttempted == true[\s\S]*\.intervention == null/)
+  assert.match(uploadFailureStep?.run ?? '', /\.overrideBrowser\.status == "passed"[\s\S]*\.browser\.status == "passed"/)
+  assert.match(uploadFailureStep?.run ?? '', /keep-target transport exception is unavailable/)
   assert.match(uploadFailureStep?.run ?? '', /exact rollback target is no longer proven at 100%/)
   assert.doesNotMatch(uploadFailureStep?.run ?? '', /wrangler versions deploy/)
-  assert.match(uploadFailureStep?.run ?? '', /Traffic was not restored to the incident baseline/)
+  assert.match(uploadFailureStep?.run ?? '', /exactTargetStillServing:true/)
+  assert.match(uploadFailureStep?.run ?? '', /Traffic was not restored to the incident baseline[\s\S]*reintroduce the incident/)
   assert.match(resultRestoreStep?.run ?? '', /rollback-traffic-mutation-attempted/)
   assert.match(resultRestoreStep?.run ?? '', /versions deploy "\$EXPECTED_CURRENT_WORKER_VERSION_ID@100"/)
   assert.match(resultRestoreStep?.run ?? '', /rollback-baseline-restored\.json/)
@@ -626,7 +705,7 @@ test('exact-target production rollback is read-only until protected mutation and
   assert.ok(!cloudflareJobEnv.includes('CLOUDFLARE_ACCOUNT_ID'))
 })
 
-test('nightly browser telemetry is pinned to one retained build and cannot mutate an environment', async () => {
+test('nightly browser telemetry proves the configured version is serving without an override and cannot mutate an environment', async () => {
   const source = await repoFile('.github/workflows/e2e-full.yml')
 
   assert.match(source, /ref: \$\{\{ inputs\.source_sha \|\| vars\.NIGHTLY_SOURCE_SHA \}\}/)
@@ -636,7 +715,20 @@ test('nightly browser telemetry is pinned to one retained build and cannot mutat
   assert.match(source, /\.workflowName == "CI \(Full Validation Lane\)"/)
   assert.match(source, /\.headSha == \$sha/)
   assert.match(source, /gh run download[\s\S]*production-build-\$NIGHTLY_SOURCE_SHA/)
-  assert.match(source, /verify-deployed-candidate\.mjs[\s\S]*--version-override \"\$NIGHTLY_WORKER_VERSION_ID\"/)
+  assert.match(source, /DEPLOYMENT_EXPECTED_SOURCE_SHA:\s*\$\{\{ inputs\.source_sha \|\| vars\.NIGHTLY_SOURCE_SHA \}\}/)
+  assert.match(source, /DEPLOYMENT_EXPECTED_WORKER_VERSION:\s*\$\{\{ inputs\.worker_version_id \|\| vars\.NIGHTLY_WORKER_VERSION_ID \}\}/)
+  const readiness = source.indexOf('node scripts/wait-for-deployed-assets.mjs')
+  const verifier = source.indexOf('node scripts/verify-deployed-candidate.mjs', readiness)
+  const browser = source.indexOf('npx playwright test tests/e2e/public-surfaces-release.spec.ts', verifier)
+  const postBrowserReadiness = source.indexOf('node scripts/wait-for-deployed-assets.mjs', browser)
+  const postBrowserVerifier = source.indexOf('node scripts/verify-deployed-candidate.mjs', postBrowserReadiness)
+  assert.ok(readiness >= 0, 'nightly must wait for the configured unoverridden deployment identity')
+  assert.ok(verifier > readiness, 'strict unoverridden verification must follow bounded readiness')
+  assert.ok(browser > verifier, 'the unoverridden browser matrix must follow strict verification')
+  assert.ok(postBrowserReadiness > browser, 'nightly must re-check unoverridden readiness after browser coverage')
+  assert.ok(postBrowserVerifier > postBrowserReadiness, 'nightly must strictly re-prove the configured identity after browser coverage')
+  assert.match(source, /nightly-post-browser-deployment-verification\.json/)
+  assert.doesNotMatch(source, /WORKER_VERSION_OVERRIDE|--version-override/)
   assert.match(source, /release-route-inventory\.mjs/)
   assert.match(source, /--route-inventory/)
   assert.match(source, /public-surfaces-desktop[\s\S]*public-surfaces-mobile/)

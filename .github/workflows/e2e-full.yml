@@ -14,11 +14,11 @@ on:
         required: false
         type: string
       worker_version_id:
-        description: Immutable Worker version ID to pin browser requests (scheduled runs use NIGHTLY_WORKER_VERSION_ID)
+        description: Immutable Worker version ID that must be serving normally (scheduled runs use NIGHTLY_WORKER_VERSION_ID)
         required: false
         type: string
       worker_name:
-        description: Worker name used by the version override header
+        description: Worker name whose deployed provenance is verified
         required: false
         default: krabiclaw
         type: string
@@ -35,16 +35,17 @@ concurrency:
   group: e2e-nightly-read-only
   cancel-in-progress: true
 
-# This is telemetry against an already-deployed, immutable version. It does
+# This is telemetry against the already-deployed, normally serving version. It does
 # not check out or mutate shared staging, seed a database, call a provider,
 # deploy a Worker, or write production data. Scheduled runs require the three
 # NIGHTLY_* repository variables to be configured; dispatch runs may provide
-# the same identities explicitly. The immutable build artifact is required so
+# the same identities explicitly. A stale configured identity fails rather than
+# silently testing a different serving version. The immutable build is required so
 # deployed assets are compared byte-for-byte with the candidate that produced
 # them rather than with an unrelated rebuild.
 jobs:
   read-only-release-surfaces:
-    name: Pinned Saya and Blawby browser verification
+    name: Serving Saya and Blawby browser verification
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -56,7 +57,8 @@ jobs:
       PLAYWRIGHT_PREVIEW_URL: ${{ inputs.base_url || vars.NIGHTLY_BASE_URL }}
       PLAYWRIGHT_WORKERS: "1"
       WORKER_NAME: ${{ inputs.worker_name || vars.NIGHTLY_WORKER_NAME || 'krabiclaw' }}
-      WORKER_VERSION_OVERRIDE: ${{ inputs.worker_version_id || vars.NIGHTLY_WORKER_VERSION_ID }}
+      DEPLOYMENT_EXPECTED_SOURCE_SHA: ${{ inputs.source_sha || vars.NIGHTLY_SOURCE_SHA }}
+      DEPLOYMENT_EXPECTED_WORKER_VERSION: ${{ inputs.worker_version_id || vars.NIGHTLY_WORKER_VERSION_ID }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -86,7 +88,7 @@ jobs:
           test ! -e .output
           cp -R "$BUILD_ROOT" .output
       - run: npx playwright install --with-deps chromium
-      - name: Verify the pinned Worker provenance (read-only)
+      - name: Verify the configured Worker is serving unoverridden (read-only)
         run: |
           set -euo pipefail
           test -n "$NIGHTLY_BASE_URL"
@@ -96,12 +98,12 @@ jobs:
             --base-url "$NIGHTLY_BASE_URL" \
             --output "$RUNNER_TEMP/nightly-route-inventory.json" >/dev/null
           echo "RELEASE_ROUTE_INVENTORY_PATH=$RUNNER_TEMP/nightly-route-inventory.json" >> "$GITHUB_ENV"
+          node scripts/wait-for-deployed-assets.mjs
           node scripts/verify-deployed-candidate.mjs \
             --base-url "$NIGHTLY_BASE_URL" \
             --expected-sha "$NIGHTLY_SOURCE_SHA" \
             --expected-version-id "$NIGHTLY_WORKER_VERSION_ID" \
             --worker-name "$NIGHTLY_WORKER_NAME" \
-            --version-override "$NIGHTLY_WORKER_VERSION_ID" \
             --route-inventory "$RUNNER_TEMP/nightly-route-inventory.json" \
             --output "$RUNNER_TEMP/nightly-deployment-verification.json"
       - name: Run read-only desktop and mobile public surface checks
@@ -111,6 +113,17 @@ jobs:
             --project=public-surfaces-desktop \
             --project=public-surfaces-mobile \
             --workers=1
+      - name: Re-prove the configured Worker after browser coverage (read-only)
+        run: |
+          set -euo pipefail
+          node scripts/wait-for-deployed-assets.mjs
+          node scripts/verify-deployed-candidate.mjs \
+            --base-url "$NIGHTLY_BASE_URL" \
+            --expected-sha "$NIGHTLY_SOURCE_SHA" \
+            --expected-version-id "$NIGHTLY_WORKER_VERSION_ID" \
+            --worker-name "$NIGHTLY_WORKER_NAME" \
+            --route-inventory "$RUNNER_TEMP/nightly-route-inventory.json" \
+            --output "$RUNNER_TEMP/nightly-post-browser-deployment-verification.json"
       - name: Write nightly evidence summary
         if: always()
         run: |
@@ -120,6 +133,7 @@ jobs:
             echo "- Worker: \`$NIGHTLY_WORKER_NAME/$NIGHTLY_WORKER_VERSION_ID\`"
             echo "- Immutable build run: \`$NIGHTLY_ARTIFACT_RUN_ID\`"
             echo "- Base URL: $NIGHTLY_BASE_URL"
+            echo "- Verification and browsers used normal unoverridden traffic; stale identity fails closed."
             echo "- No staging or production writes were performed."
             echo "- Result: ${{ job.status }}"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -130,6 +144,7 @@ jobs:
           name: playwright-report-nightly
           path: |
             ${{ runner.temp }}/nightly-deployment-verification.json
+            ${{ runner.temp }}/nightly-post-browser-deployment-verification.json
             ${{ runner.temp }}/nightly-route-inventory.json
             playwright-report/
             test-results/

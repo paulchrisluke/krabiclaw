@@ -195,11 +195,16 @@ baselines must carry their full source-SHA Worker tag.
 The scheduled nightly E2E workflow is read-only telemetry only. It checks out
 the configured deployed source SHA and requires a successful full-lane run ID
 containing that SHA's immutable `.output` artifact, plus the base URL and
-Worker version ID. It pins all browser requests to that version, compares
-deployed assets byte-for-byte with the retained candidate artifact, and runs
-only Saya/Blawby public surface checks. It does not mutate shared staging, seed
-or migrate a database, deploy, purge, call a provider, or write production
-data.
+Worker version ID. It requires that exact source and Worker version to be the
+normally serving, unoverridden deployment, compares deployed assets
+byte-for-byte with the retained candidate artifact, and then runs only
+Saya/Blawby public surface checks without a version override. It repeats the
+identity and asset proof after browser coverage so a mid-run deployment change
+fails closed instead of silently attributing mixed traffic to the configured
+nightly identity. A stale nightly identity also fails closed instead of testing
+an inactive retained version.
+The workflow does not mutate shared staging, seed or migrate a database,
+deploy, purge, call a provider, or write production data.
 
 ## Reporting states
 
@@ -223,16 +228,26 @@ workflow that records the exact source SHA and evidence chain.
 Emergency rollback uses the separate **Production rollback
 (exact-target, manifest-gated)** workflow. Dispatch it with the exact current
 Worker version ID, exact target Worker version ID, exact 40-character source
-SHA tagged on that target, and an incident reason. Its unprotected preflight
-checks the current traffic assignment, target version provenance, one build,
-route inventory, assets, and browser candidate evidence without changing
-production. Only the protected `production` mutation job may route that exact
-target to 100%, then it repeats source/version/asset verification and opens the
-Saya and Blawby desktop/mobile surfaces. It never guesses a previous version or
-writes database/fixture/provider state. If a status lookup or later gate is
-ambiguous after traffic mutation, it restores only the explicitly declared
-current version and emits intervention evidence; the run remains failed until
-an operator reviews it.
+SHA for that target, and an incident reason. Modern targets require an exact
+source-SHA Worker tag. The one reviewed legacy target that predates tags and
+`/api/deployment` is hard-bound to its exact source SHA, Worker version,
+historical successful release run and deploy window, and provider creation
+timestamp; there is no generic untagged fallback. The unprotected preflight
+checks the current traffic assignment, target provenance, one build, and route
+inventory without trying to route or HTTP-test an inactive version.
+
+Only the protected `production` mutation job may place the declared current
+version at 100% and target at 0%. It waits for the override to become available,
+proves the target's exact source/build/assets and Saya/Blawby desktop/mobile
+routes, and only then promotes the target to 100%. It purges the HTML cache and
+repeats readiness, source/build/asset, and browser proof over normal
+unoverridden traffic. The legacy target uses its hard-bound release evidence
+plus byte-for-byte target-build assets in place of a nonexistent provenance
+endpoint. The workflow never guesses a previous version or writes
+database/fixture/provider state. If a status lookup or later gate is ambiguous
+after traffic mutation, it restores only the explicitly declared current
+version and emits intervention evidence; the run remains failed until an
+operator reviews it.
 
 An artifact-upload failure after a successfully verified emergency rollback is
 not itself a reason to route traffic back to the incident version. The workflow
