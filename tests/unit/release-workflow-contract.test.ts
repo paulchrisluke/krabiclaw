@@ -100,6 +100,22 @@ function assertCandidateOverrideReadiness(script: string, label: string): void {
   assert.ok(promotion > verifier, `${label}: candidate promotion must follow strict verification`)
 }
 
+function assertPromotedCandidateReadiness(script: string, label: string): void {
+  const promotion = script.indexOf('"$CANDIDATE_VERSION_ID@100"')
+  const promotedStatus = script.indexOf('"$deployed_status" "$CANDIDATE_VERSION_ID"', promotion)
+  const unpin = script.indexOf('unset WORKER_VERSION_OVERRIDE', promotedStatus)
+  const expectedVersion = script.indexOf('DEPLOYMENT_EXPECTED_WORKER_VERSION="$CANDIDATE_VERSION_ID"', unpin)
+  const readiness = script.indexOf('node scripts/wait-for-deployed-assets.mjs', expectedVersion)
+  const verifier = script.indexOf('node scripts/verify-deployed-candidate.mjs', readiness)
+
+  assert.ok(promotion >= 0, `${label}: candidate promotion must be present`)
+  assert.ok(promotedStatus > promotion, `${label}: promoted traffic must be proven before readiness checks`)
+  assert.ok(unpin > promotedStatus, `${label}: promoted readiness must not use a version override`)
+  assert.ok(expectedVersion > unpin, `${label}: promoted readiness must require the candidate version`)
+  assert.ok(readiness > expectedVersion, `${label}: promoted route propagation must be bounded`)
+  assert.ok(verifier > readiness, `${label}: deployed verification must follow promoted readiness`)
+}
+
 test('required CI checks out the immutable event SHA and never mutates shared staging or production', async () => {
   const source = await repoFile('.github/workflows/ci.yml')
   const deployedAssetWait = await repoFile('scripts/wait-for-deployed-assets.mjs')
@@ -130,6 +146,8 @@ test('required CI checks out the immutable event SHA and never mutates shared st
   assert.match(source, /--version-override "\$PREVIEW_VERSION_ID"/)
   assert.match(deployedAssetWait, /createWorkerVersionOverrideHeaders/)
   assert.match(deployedAssetWait, /WORKER_VERSION_OVERRIDE/)
+  assert.match(deployedAssetWait, /DEPLOYMENT_EXPECTED_SOURCE_SHA/)
+  assert.match(deployedAssetWait, /DEPLOYMENT_EXPECTED_WORKER_VERSION/)
   assert.match(deployedAssetWait, /WORKER_NAME/)
   assert.match(deployedAssetWait, /DEPLOYMENT_IDENTITY_ORIGIN/)
   assert.match(deployedAssetWait, /GITHUB_SHA/)
@@ -169,6 +187,7 @@ test('full lane keeps one uninterrupted staging candidate lock and gates candida
   assert.match(source, /upload-artifact@[\w-]+[\s\S]*candidate-manifest\.json/)
   assert.match(source, /include-hidden-files:\s*true/)
   assertCandidateOverrideReadiness(source, 'staging')
+  assertPromotedCandidateReadiness(source, 'staging')
 
   const restoreStart = source.indexOf('restore: {')
   const restoreEnd = source.indexOf('\n            },', restoreStart)
@@ -466,6 +485,7 @@ test('production rollback verifies baseline traffic and purges cache before clai
   assert.match(source, /restore:\{[\s\S]*status:[\s\S]*intervention_required/)
   assert.match(source, /splitActive:process\.env\.SPLIT_ACTIVE==='true'/)
   assertCandidateOverrideReadiness(source, 'production')
+  assertPromotedCandidateReadiness(source, 'production')
 })
 
 test('production evidence upload failure restores only the manifest-declared baseline', async () => {

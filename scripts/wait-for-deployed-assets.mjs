@@ -36,13 +36,16 @@ if (rawIdentityOrigin) {
   }
 }
 
-const expectedSourceSha = process.env.GITHUB_SHA?.trim().toLowerCase() || null
-const expectedWorkerVersion = process.env.WORKER_VERSION_OVERRIDE?.trim().toLowerCase() || null
-if (rawIdentityOrigin && (!expectedSourceSha || !expectedWorkerVersion)) {
-  throw new Error('GITHUB_SHA and WORKER_VERSION_OVERRIDE are required when DEPLOYMENT_IDENTITY_ORIGIN is set.')
+const expectedSourceSha = (process.env.DEPLOYMENT_EXPECTED_SOURCE_SHA ?? process.env.GITHUB_SHA)?.trim().toLowerCase() || null
+const expectedWorkerVersion = (process.env.DEPLOYMENT_EXPECTED_WORKER_VERSION ?? process.env.WORKER_VERSION_OVERRIDE)?.trim().toLowerCase() || null
+if ((rawIdentityOrigin || expectedSourceSha || expectedWorkerVersion) && (!expectedSourceSha || !expectedWorkerVersion)) {
+  throw new Error('Expected source SHA and Worker version must be provided together for deployment identity checks.')
 }
 if (expectedSourceSha && !/^[0-9a-f]{40}$/.test(expectedSourceSha)) {
-  throw new Error('GITHUB_SHA must be a full 40-character hexadecimal source SHA.')
+  throw new Error('Expected source SHA must be a full 40-character hexadecimal value.')
+}
+if (expectedWorkerVersion && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(expectedWorkerVersion)) {
+  throw new Error('Expected Worker version must be a UUID-like version id.')
 }
 
 const workerVersionHeaders = createWorkerVersionOverrideHeaders(

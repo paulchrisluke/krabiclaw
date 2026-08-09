@@ -689,6 +689,7 @@ jobs:
           ' "$deployed_status" "$CANDIDATE_VERSION_ID"
           DEPLOYMENT_CACHE_ORIGIN=https://krabiclaw.com node --experimental-strip-types scripts/purge-deployment-cache.ts
           unset WORKER_VERSION_OVERRIDE
+          DEPLOYMENT_EXPECTED_SOURCE_SHA="$SOURCE_SHA" DEPLOYMENT_EXPECTED_WORKER_VERSION="$CANDIDATE_VERSION_ID" node scripts/wait-for-deployed-assets.mjs
           node scripts/verify-deployed-candidate.mjs --base-url https://krabiclaw.com --expected-sha "$SOURCE_SHA" --expected-version-id "$CANDIDATE_VERSION_ID" --worker-name krabiclaw --route-inventory "$route_inventory" --output "$deployed_verification"
           npx playwright test tests/e2e/public-surfaces-release.spec.ts --project=public-surfaces-desktop --project=public-surfaces-mobile --workers=1
           cp -R playwright-report "$work_dir/deployed-playwright-report"

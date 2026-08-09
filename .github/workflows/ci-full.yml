@@ -715,6 +715,9 @@ jobs:
           echo "Purging staging HTML cache and verifying the promoted custom domain"
           DEPLOYMENT_CACHE_ORIGIN="$STAGING_BASE_URL" node --experimental-strip-types scripts/purge-deployment-cache.ts
           unset WORKER_VERSION_OVERRIDE
+          DEPLOYMENT_EXPECTED_SOURCE_SHA="$GITHUB_SHA" \
+            DEPLOYMENT_EXPECTED_WORKER_VERSION="$CANDIDATE_VERSION_ID" \
+            node scripts/wait-for-deployed-assets.mjs
 
           node scripts/verify-deployed-candidate.mjs \
             --base-url "$STAGING_BASE_URL" \
