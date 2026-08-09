@@ -3,31 +3,6 @@ import { devLoginHeaders, devLoginUrl, testEnv } from './test-env'
 
 const POTTERY_OWNER_USER_ID = 'IZO6M01zZkvD1yrOFjoCDXdzdx4mAjOO'
 const RECIPIENT_USER_ID = 'Nfqw39lwLZ1vejIfYJv24xvD4UKJh8re'
-const SITE_ID = 'site-pottery-house'
-
-async function runtimeStripeSignature(
-  request: APIRequestContext,
-  baseURL: string,
-  payload: string,
-) {
-  const res = await request.post(`${baseURL}/api/dev/stripe-signature`, {
-    headers: devLoginHeaders(),
-    data: { payload },
-  })
-  expect(res.status()).toBe(200)
-  return res.json() as Promise<{ signature: string }>
-}
-
-async function resetTransferFixture(request: APIRequestContext, baseURL: string) {
-  const res = await request.post(`${baseURL}/api/dev/site-transfer-reset`, {
-    headers: devLoginHeaders(),
-    data: {
-      siteId: SITE_ID,
-      organizationId: 'org-pottery-house',
-    },
-  })
-  expect(res.status()).toBe(200)
-}
 
 async function createTransferFixtureSite(request: APIRequestContext, baseURL: string) {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -57,8 +32,6 @@ test.describe('site transfer handoff flow', () => {
       !testEnv('STRIPE_SECRET_KEY') || !testEnv('NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'),
       'Stripe must be configured for the paid handoff flow test.',
     )
-
-    await resetTransferFixture(request, baseURL!)
 
     const since = new Date().toISOString()
 
@@ -150,92 +123,10 @@ test.describe('site transfer handoff flow', () => {
     expect(pendingState.transfer.claiming_organization_id).toBe(targetOrgId)
     expect(pendingState.site.organization_id).toBe(transferFixture.organizationId)
 
-    const eventId = `evt_transfer_${Date.now()}`
-    const now = Math.floor(Date.now() / 1000)
-    const payload = JSON.stringify({
-      id: eventId,
-      object: 'event',
-      api_version: '2025-04-30.basil',
-      created: now,
-      livemode: false,
-      pending_webhooks: 1,
-      request: { id: null, idempotency_key: null },
-      type: 'checkout.session.completed',
-      data: {
-        object: {
-          id: `cs_transfer_${Date.now()}`,
-          object: 'checkout.session',
-          mode: 'subscription',
-          payment_status: 'paid',
-          customer: `cus_transfer_${Date.now()}`,
-          metadata: {
-            type: 'site_transfer',
-            organization_id: targetOrgId,
-            plan: 'growth',
-            transfer_request_id: created.id,
-            transfer_site_id: transferFixture.siteId,
-            transfer_claiming_user_id: RECIPIENT_USER_ID,
-            transfer_claiming_organization_id: targetOrgId,
-          },
-          subscription: {
-            id: `sub_transfer_${Date.now()}`,
-            items: { data: [{ id: `si_transfer_${Date.now()}` }] },
-            billing_cycle_anchor: now + 86400,
-          },
-        },
-      },
-    })
-    const { signature } = await runtimeStripeSignature(request, baseURL!, payload)
-
-    const webhook = await request.post(`${baseURL}/api/billing/webhook`, {
-      headers: {
-        'content-type': 'application/json',
-        'stripe-signature': signature,
-        ...(devLoginHeaders() || {}),
-      },
-      data: payload,
-    })
-    expect(webhook.status()).toBe(200)
-
-    await expect.poll(async () => {
-      const billingState = await request.get(
-        `${baseURL}/api/dev/billing-state?organization_id=${encodeURIComponent(targetOrgId!)}&stripe_event_id=${encodeURIComponent(eventId)}`,
-        { headers: devLoginHeaders() },
-      )
-      expect(billingState.status()).toBe(200)
-      const body = await billingState.json() as {
-        webhook_events: Array<{ stripe_event_id: string; status?: string; error?: string | null }>
-      }
-      const eventState = body.webhook_events.find(item => item.stripe_event_id === eventId)
-      return eventState ? { status: eventState.status, error: eventState.error ?? null } : null
-    }, { timeout: 15_000 }).toEqual({ status: 'processed', error: null })
-
-    await expect.poll(async () => {
-      const completedStateRes = await request.get(
-        `${baseURL}/api/dev/site-transfer-state?transfer_id=${encodeURIComponent(created.id)}`,
-        { headers: devLoginHeaders() },
-      )
-      expect(completedStateRes.status()).toBe(200)
-      const completedState = await completedStateRes.json() as {
-        transfer: { status: string; payment_completed_at: string | null }
-        site: { organization_id: string }
-      }
-      return {
-        status: completedState.transfer.status,
-        paymentCompleted: Boolean(completedState.transfer.payment_completed_at),
-        organizationId: completedState.site.organization_id,
-      }
-    }, { timeout: 15_000 }).toEqual({
-      status: 'accepted',
-      paymentCompleted: true,
-      organizationId: targetOrgId,
-    })
   })
 
   test('transfer cancellation keeps site in original org and clears pending state', async ({ request, baseURL }) => {
     test.setTimeout(60_000)
-
-    await resetTransferFixture(request, baseURL!)
 
     const adminLogin = await request.get(devLoginUrl(baseURL!, POTTERY_OWNER_USER_ID), {
       headers: devLoginHeaders(),

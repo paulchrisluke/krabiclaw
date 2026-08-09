@@ -11,6 +11,7 @@ const adapterCalls: Array<{ method: string; args: unknown[] }> = []
 let failMemberCreate = false
 let simulateUnmarkedDuplicate = false
 let createdOrganizationNumber = 0
+let organizationPlan = 'free'
 const executedQueries: string[] = []
 
 const authApi = {
@@ -110,7 +111,7 @@ mock.module('../../server/utils/site-template.ts', { namedExports: { seedNewSite
 mock.module('../../server/utils/domains.ts', { namedExports: { createSystemSubdomain: async () => ({}) } })
 mock.module('../../server/utils/billing.ts', {
   namedExports: {
-    getOrganizationBillingStatus: async () => ({ plan: 'free' }),
+    getOrganizationBillingStatus: async () => ({ plan: organizationPlan }),
     setSiteEntitlementsFromPlan: async () => {},
   },
 })
@@ -131,6 +132,7 @@ test.beforeEach(() => {
   failMemberCreate = false
   simulateUnmarkedDuplicate = false
   createdOrganizationNumber = 0
+  organizationPlan = 'free'
   executedQueries.length = 0
 })
 
@@ -251,4 +253,31 @@ test('site creation activates the organization before any site write', async () 
   assert.equal(result.status, 500)
   assert.equal(activated, true)
   assert.equal(executedQueries.some(query => /INSERT\s+INTO\s+sites/i.test(query)), false)
+})
+
+test('a new site inherits the organization plan without offering a second subscription', async () => {
+  organizations.push({
+    id: 'org-paid',
+    name: 'Paid organization',
+    slug: 'paid-organization',
+    createdAt: new Date('2026-01-01T00:00:00Z'),
+  })
+  members.push({ id: 'member-paid', organizationId: 'org-paid', userId: 'user-1', role: 'owner' })
+  sitesByOrganization.set('org-paid', [{
+    id: 'site-existing',
+    site_id: 'site-existing',
+    onboarding_status: 'active',
+  }])
+  organizationPlan = 'growth'
+
+  const result = await runSiteCreation(
+    {} as never,
+    {} as never,
+    'user-1',
+    { name: 'Second site', subdomain: 'e2e-second-site', vertical: 'restaurant' },
+  )
+
+  assert.equal(result.status, 200)
+  assert.equal('offerSubscribePlan' in result.data, false)
+  assert.equal(executedQueries.some(query => /\bsite_billing\b/i.test(query)), false)
 })

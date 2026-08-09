@@ -1,5 +1,8 @@
 <template>
-  <div class="flex h-screen flex-col overflow-hidden bg-muted text-highlighted">
+  <div
+    class="flex h-screen flex-col overflow-hidden bg-muted text-highlighted"
+    :data-transfer-onboarding-hydrated="hydrated ? 'true' : 'false'"
+  >
 
     <!-- Body: wizard left, preview right. Single column with vertical scroll
          below sm so the wizard pane (min 24rem) never gets hard-clipped by
@@ -34,6 +37,14 @@
       />
     </div>
 
+    <div v-else-if="paymentPending && !loadError" class="flex min-h-0 flex-1 items-center justify-center">
+      <div class="flex max-w-sm flex-col items-center gap-3 px-6 text-center">
+        <UIcon name="i-lucide-loader-circle" class="size-6 animate-spin text-primary" />
+        <p class="text-sm font-medium text-highlighted">Finishing your handoff…</p>
+        <p class="text-sm text-muted">Your payment is being confirmed. This page will continue automatically.</p>
+      </div>
+    </div>
+
     <div v-else-if="loadError" class="flex min-h-0 flex-1 items-center justify-center">
       <div class="flex flex-col items-center gap-3 text-center">
         <UIcon name="i-lucide-triangle-alert" class="size-6 text-error" />
@@ -56,6 +67,7 @@
 <script setup lang="ts">
 const dashboardApi = useDashboardApi()
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
+import { parseTransferOnboardingQuery } from '~/shared/transfer-onboarding-query'
 
 // Manages its own site-transfer context via loadTransferContext() below and
 // never calls useDashboardSite — must not be gated on that unrelated
@@ -67,6 +79,11 @@ const router = useRouter()
 const config = useRuntimeConfig()
 
 const orgSlug = computed(() => route.params.orgSlug as string)
+const transferQueryScope = parseTransferOnboardingQuery(route.query)
+if (transferQueryScope.kind === 'invalid') {
+  throw createError({ statusCode: 400, statusMessage: transferQueryScope.message })
+}
+const transferId = computed(() => transferQueryScope.kind === 'exact' ? transferQueryScope.transferId : null)
 
 interface LocationRow {
   id: string
@@ -76,8 +93,20 @@ interface LocationRow {
   notification_phone: string | null
 }
 
+interface TransferOnboardingContext {
+  success: true
+  state: 'payment_pending' | 'accepted'
+  transfer_id?: string
+  organization?: { id: string; slug: string } | null
+  site?: { id: string; brand_name: string | null; vertical?: string | null; subdomain: string | null; plan: string | null } | null
+  locations?: LocationRow[]
+  notifications?: { whatsapp_phone: string | null; channels: string[] }
+}
+
 const loaded = ref(false)
 const loadError = ref(false)
+const paymentPending = ref(false)
+const hydrated = ref(false)
 const siteId = ref('')
 const siteName = ref('Your Site')
 const siteVertical = ref<SiteVertical>('restaurant')
@@ -125,9 +154,10 @@ const iframeSrc = computed(() => {
   return url.toString()
 })
 
-async function loadTransferContext() {
+function resetTransferContextState() {
   loaded.value = false
   loadError.value = false
+  paymentPending.value = false
   siteId.value = ''
   siteName.value = 'Your Site'
   siteVertical.value = 'restaurant'
@@ -137,75 +167,175 @@ async function loadTransferContext() {
   locations.value = []
   selectedLocationId.value = null
   selectedPage.value = 'home'
-  try {
-    const ctx = import.meta.server
-      ? await (async () => {
-          const event = useRequestEvent()
-          if (!event) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
-          const { loadTransferOnboardingContext } = await import('~/server/utils/transfer-onboarding-context')
-          return await loadTransferOnboardingContext(event)
-        })()
-      : await dashboardApi<{
-      success: true
-      organization?: { id: string; slug: string } | null
-      // vertical is the raw sites.vertical storage value (may be 'service',
-      // the DB alias for professional_service — see
-      // server/utils/dashboard-context.ts's DashboardSiteRow) — normalize it
-      // below rather than narrowing the type here, which previously caused
-      // every transferred professional_service/service site to silently
-      // display as 'restaurant'.
-      site?: { id: string; brand_name: string; vertical?: string | null; subdomain: string; plan: string } | null
-      locations: LocationRow[]
-      notifications: { whatsapp_phone: string | null; channels: string[] }
-    }>('/api/dashboard/transfer-onboarding-context', {
-      validate: (value): value is {
-        success: true
-        organization?: { id: string; slug: string } | null
-        site?: { id: string; brand_name: string; vertical?: string | null; subdomain: string; plan: string } | null
-        locations: LocationRow[]
-        notifications: { whatsapp_phone: string | null; channels: string[] }
-      } => isRecord(value)
-        && value.success === true
-        && isRecord(value.site)
-        && Array.isArray(value.locations)
-        && isRecord(value.notifications),
+}
+
+function applyTransferContext(ctx: TransferOnboardingContext) {
+  resetTransferContextState()
+  if (ctx.state === 'payment_pending') {
+    paymentPending.value = true
+    return
+  }
+  if (ctx.site) {
+    siteId.value = ctx.site.id
+    siteName.value = ctx.site.brand_name ?? 'Your Site'
+    siteVertical.value = normalizeVertical(ctx.site.vertical) as SiteVertical
+    subdomain.value = ctx.site.subdomain ?? ''
+    plan.value = ctx.site.plan ?? 'free'
+  }
+
+  // A missing site is a genuine load failure, not "nothing to show yet" —
+  // render the retry/error state rather than a wizard with an empty siteId.
+  if (!siteId.value) {
+    loadError.value = true
+    return
+  }
+
+  locations.value = ctx.locations ?? []
+  const primary = locations.value.find(l => l.is_primary) ?? locations.value[0]
+  if (primary) selectedLocationId.value = primary.id
+
+  if (ctx.notifications?.whatsapp_phone) {
+    ownerPhone.value = ctx.notifications.whatsapp_phone
+  }
+  loaded.value = true
+}
+
+const isTransferOnboardingContext = (value: unknown): value is TransferOnboardingContext =>
+  isRecord(value)
+  && value.success === true
+  && (
+    (value.state === 'payment_pending' && typeof value.transfer_id === 'string' && value.transfer_id.length > 0)
+    || (value.state === 'accepted' && isRecord(value.site) && Array.isArray(value.locations) && isRecord(value.notifications))
+  )
+
+const requestEvent = useRequestEvent()
+const loadTransferContextResource = async (): Promise<TransferOnboardingContext> => {
+  if (import.meta.server) {
+    if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+    const { loadTransferOnboardingContext } = await import('~/server/utils/transfer-onboarding-context')
+    return await loadTransferOnboardingContext(requestEvent, {
+      orgSlug: orgSlug.value,
+      ...(transferId.value ? { transferId: transferId.value } : {}),
     })
+  }
+  return await dashboardApi<TransferOnboardingContext>('/api/dashboard/transfer-onboarding-context', {
+    query: transferId.value ? { transfer: transferId.value } : undefined,
+    validate: isTransferOnboardingContext,
+  })
+}
 
-    if (ctx.site) {
-      siteId.value = ctx.site.id
-      siteName.value = ctx.site.brand_name ?? 'Your Site'
-      siteVertical.value = normalizeVertical(ctx.site.vertical) as SiteVertical
-      subdomain.value = ctx.site.subdomain ?? ''
-      plan.value = ctx.site.plan ?? 'free'
+const { data: transferContext, error: initialTransferContextError, refresh: refreshTransferContext } =
+  await useAsyncData(`transfer-onboarding-context-${orgSlug.value}-${transferId.value ?? 'legacy'}`, loadTransferContextResource)
+
+onMounted(() => {
+  hydrated.value = true
+  if (paymentPending.value) void pollUntilAccepted()
+})
+
+onUnmounted(() => {
+  disposed = true
+  resolvePollWait?.()
+})
+
+if (transferContext.value && !initialTransferContextError.value) {
+  applyTransferContext(transferContext.value)
+} else {
+  loadError.value = true
+}
+
+const POLL_INTERVAL_MS = 1_500
+const POLL_TIMEOUT_MS = 60_000
+let pollTimer: ReturnType<typeof setTimeout> | null = null
+let resolvePollWait: (() => void) | null = null
+let pollLoop: Promise<void> | null = null
+let disposed = false
+
+function waitForPollInterval() {
+  return new Promise<boolean>((resolve) => {
+    const timer = setTimeout(() => {
+      if (pollTimer === timer) {
+        pollTimer = null
+        resolvePollWait = null
+      }
+      resolve(true)
+    }, POLL_INTERVAL_MS)
+    pollTimer = timer
+    resolvePollWait = () => {
+      if (pollTimer === timer) {
+        clearTimeout(timer)
+        pollTimer = null
+        resolvePollWait = null
+      }
+      resolve(false)
     }
+  })
+}
 
-    // A missing site is a genuine load failure, not "nothing to show yet" —
-    // render the retry/error state rather than a wizard with an empty siteId.
-    if (!siteId.value) {
-      loadError.value = true
-      return
+async function runPollUntilAccepted() {
+  if (disposed || !transferId.value || !paymentPending.value) return
+  const deadline = Date.now() + POLL_TIMEOUT_MS
+  while (Date.now() < deadline && !disposed && !loaded.value && !loadError.value) {
+    if (!await waitForPollInterval() || disposed) return
+    if (Date.now() >= deadline || disposed || loaded.value || loadError.value) break
+    try {
+      await refreshTransferContext()
+      if (disposed) return
+      if (initialTransferContextError.value) throw initialTransferContextError.value
+      if (!transferContext.value || !isTransferOnboardingContext(transferContext.value)) {
+        throw createError({ statusCode: 502, statusMessage: 'Transfer context unavailable' })
+      }
+      applyTransferContext(transferContext.value)
+      if (loaded.value) return
+    } catch (error) {
+      console.error('transfer_onboarding_poll_failed', error)
+      // Keep the finishing state for transient API failures until the bounded
+      // deadline. A malformed response is never treated as an empty wizard.
     }
+  }
+  if (!disposed && paymentPending.value && !loaded.value) {
+    paymentPending.value = false
+    loadError.value = true
+  }
+}
 
-    // /api/sites/:siteId/locations is keyed purely by siteId + session
-    // membership — unlike /api/dashboard/locations, it needs no site-slug
-    // header, so it works for a transferred site with no subdomain yet
-    // (custom-domain-only) instead of silently losing that site's locations.
-    locations.value = ctx.locations
-    const primary = locations.value.find(l => l.is_primary) ?? locations.value[0]
-    if (primary) selectedLocationId.value = primary.id
+function pollUntilAccepted() {
+  if (pollLoop) return pollLoop
+  const loopPromise = runPollUntilAccepted()
+    .catch(error => {
+      if (disposed) return
+      console.error('transfer_onboarding_poll_failed', error)
+      if (paymentPending.value) {
+        paymentPending.value = false
+        loadError.value = true
+      }
+    })
+    .finally(() => {
+      if (pollLoop === loopPromise) pollLoop = null
+    })
+  pollLoop = loopPromise
+  return loopPromise
+}
 
-    if (ctx.notifications.whatsapp_phone) {
-      ownerPhone.value = ctx.notifications.whatsapp_phone
+async function loadTransferContext() {
+  resetTransferContextState()
+  try {
+    await refreshTransferContext()
+    if (disposed) return
+    // Nuxt retains the previous successful data value when refresh fails. Do
+    // not reapply it: a failed retry must remain an explicit error state.
+    if (initialTransferContextError.value) throw initialTransferContextError.value
+    if (!transferContext.value) throw createError({ statusCode: 502, statusMessage: 'Transfer context unavailable' })
+    applyTransferContext(transferContext.value)
+    if (paymentPending.value) {
+      void pollUntilAccepted()
     }
   } catch (e) {
     console.error('transfer_onboarding_load_failed', e)
     loadError.value = true
   } finally {
-    loaded.value = true
+    if (!paymentPending.value && !loadError.value) loaded.value = true
   }
 }
-
-await loadTransferContext()
 
 function finish() {
   router.push(subdomain.value

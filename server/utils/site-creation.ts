@@ -337,14 +337,6 @@ async function performSeeding(
 
     await execute(db, `UPDATE sites SET onboarding_status = 'active', updated_at = ? WHERE id = ?`, [now, siteId])
 
-    // Surface whether another site in this org is already on a paid plan so the
-    // caller can offer the organization owner the Better Auth Stripe upgrade flow.
-    const existingPaidSite = await queryFirst<{ plan: string }>(db, `
-      SELECT sb.plan FROM site_billing sb
-      WHERE sb.organization_id = ? AND sb.site_id != ? AND sb.status = 'active' AND sb.plan != 'free'
-      ORDER BY sb.updated_at DESC LIMIT 1
-    `, [organizationId, siteId])
-
     return {
       status: 200,
       data: {
@@ -352,7 +344,6 @@ async function performSeeding(
         organizationId,
         subdomain: resolvedSubdomain,
         message: 'Site created successfully',
-        offerSubscribePlan: existingPaidSite?.plan ?? null,
       }
     }
 

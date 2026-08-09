@@ -487,12 +487,34 @@ export async function sendWhatsAppNotification(
   }
 
   if (result.success) {
-    // Soft-fail: a real send already went out, so an exhausted balance never
-    // blocks the notification — it just skips the charge.
-    await chargeFlatCredits(db, opts.organizationId, {
-      siteId: opts.siteId ?? undefined,
-      action: 'whatsapp_notification',
-    }).catch(() => {})
+    // An exhausted balance is intentionally recorded as `charged: false` and
+    // does not block a notification that already left Meta. Accounting or
+    // query failures are different: preserve the sent/provider evidence on
+    // the durable notification row, mark the accounting failure there, then
+    // throw so callers cannot report an unqualified success.
+    try {
+      await chargeFlatCredits(db, opts.organizationId, {
+        siteId: opts.siteId ?? undefined,
+        action: 'whatsapp_notification',
+        idempotencyKey: result.messageId
+          ? `whatsapp-provider:${result.messageId}`
+          : `whatsapp-notification:${notificationId}`,
+      })
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      const accountingError = `WhatsApp delivery sent but credit accounting failed: ${reason}`
+      try {
+        await execute(
+          db,
+          `UPDATE notifications SET error = ? WHERE id = ?`,
+          [accountingError, notificationId],
+        )
+      } catch (recordError) {
+        const recordReason = recordError instanceof Error ? recordError.message : String(recordError)
+        throw new Error(`${accountingError}; durable notification update failed: ${recordReason}`)
+      }
+      throw new Error(accountingError)
+    }
   }
 
   return result
