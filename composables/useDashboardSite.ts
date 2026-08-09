@@ -31,6 +31,7 @@ interface DashboardSiteSummary {
   status: string | null
   onboarding_status: string | null
   plan: string | null
+  preview_image_url: string | null
 }
 
 interface DashboardLocation {
