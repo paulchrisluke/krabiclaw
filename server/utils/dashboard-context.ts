@@ -367,8 +367,13 @@ export async function listOrganizationSites(db: DbClient, organizationId: string
   return await queryAll<DashboardSiteSummaryRow>(db, `
     SELECT s.id, s.brand_name, s.subdomain, s.vertical, s.status,
            s.onboarding_status, s.plan,
-           COALESCE(ma_hero.thumbnail_url, ma_hero.public_url) AS preview_image_url
+           COALESCE(ma_site_og.public_url, ma_hero.thumbnail_url, ma_hero.public_url) AS preview_image_url
     FROM sites s
+    LEFT JOIN media_assets ma_site_og
+      ON ma_site_og.id = s.og_image_asset_id
+     AND ma_site_og.site_id = s.id
+     AND ma_site_og.organization_id = s.organization_id
+     AND ma_site_og.status = 'active'
     LEFT JOIN business_locations bl
       ON bl.id = s.primary_location_id
      AND bl.site_id = s.id
