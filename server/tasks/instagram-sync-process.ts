@@ -8,6 +8,7 @@ import {
 import { decryptSecret, encryptionEnv } from '~/server/utils/encryption'
 import { execute, queryAll } from '~/server/db'
 import { defineScheduledTask } from '~/server/utils/scheduled-task'
+import { hasScheduledPaidEntitlement } from '~/server/utils/scheduled-billing-access'
 
 interface SyncTaskContext {
   cloudflare?: { env?: ApiRecord }
@@ -20,6 +21,16 @@ interface ConnectionRow {
   facebook_page_id: string | null
   encrypted_user_token: string
   encrypted_page_token: string | null
+  stripe_customer_id: string | null
+  stripe_subscription_id: string | null
+  plan: string | null
+  status: string | null
+  payment_status: string | null
+  paid_through: string | null
+  past_due_since: string | null
+  current_period_end: string | null
+  cancel_at_period_end: unknown
+  updated_at: string | null
 }
 
 interface SyncConnectionResult {
@@ -53,19 +64,24 @@ export default defineScheduledTask({
     }
     if (!db) throw new Error('DB is required')
 
-    // Only sync organizations with the Growth managed_service capability.
-    const connections = await queryAll<ConnectionRow>(db, `
+    // The organization billing projection is the authority for paid scheduled
+    // integrations; legacy entitlement caches are not access grants here.
+    const billingRows = await queryAll<ConnectionRow>(db, `
       SELECT fpc.id, fpc.organization_id, fpc.site_id,
-             fpc.facebook_page_id, fpc.encrypted_user_token, fpc.encrypted_page_token
+             fpc.facebook_page_id, fpc.encrypted_user_token, fpc.encrypted_page_token,
+             ob.stripe_customer_id, ob.stripe_subscription_id, ob.plan,
+             ob.status, ob.payment_status, ob.paid_through, ob.past_due_since,
+             ob.current_period_end, ob.cancel_at_period_end, ob.updated_at
       FROM facebook_pages_connections fpc
-      INNER JOIN site_entitlements oe
-        ON oe.site_id = fpc.site_id
-        AND oe.key = 'managed_service'
-        AND oe.value = 'true'
+      INNER JOIN organization_billing ob
+        ON ob.organization_id = fpc.organization_id
+       AND ob.plan = 'growth'
+       AND ob.status IN ('active', 'trialing', 'past_due')
       WHERE fpc.status = 'active'
         OR (fpc.status = 'error' AND fpc.updated_at < datetime('now', '-1 hour'))
       ORDER BY fpc.organization_id
     `)
+    const connections = billingRows.filter((row) => hasScheduledPaidEntitlement(row, 'managed_service'))
 
     if (connections.length === 0) {
       return { result: { connections: 0, passed: 0, failed: 0, details: [] } }
