@@ -21,8 +21,8 @@ function domain(overrides: Partial<DomainRecord>): DomainRecord {
   }
 }
 
-test('Cloudflare moved hostnames map to stuck so PATCH recovery remains available', () => {
-  assert.equal(mapCloudflareStatus('moved', 'pending_validation', 'valid'), 'stuck')
+test('Cloudflare moved hostnames map to a persisted failure so PATCH recovery remains available', () => {
+  assert.equal(mapCloudflareStatus('moved', 'pending_validation', 'valid'), 'failed')
 })
 
 test('standard custom hostnames use HTTP DCV by default', () => {
