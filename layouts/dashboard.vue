@@ -252,11 +252,26 @@ const stoppingImpersonation = ref(false)
 const { searchTerm: dashboardSearchTerm, loading: dashboardSearchLoading, groups: dashboardSearchGroups } = useDashboardSearch()
 const dashboard = useDashboardSite()
 const chowBot = useChowBot()
+const platformTheme = usePlatformTheme()
 const organizationsState = authClient.useListOrganizations()
 const mobileMoreOpen = ref(false)
 const mobileMoreButtonElement = ref<HTMLElement | null>(null)
 const mobileMoreSheetRef = ref<HTMLElement | null>(null)
 const mobileMoreFocusReturn = ref<HTMLElement | null>(null)
+
+if (import.meta.client) {
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)')
+  const onSystemThemeChange = () => platformTheme.sync()
+
+  onMounted(() => platformTheme.restore())
+  prefersDark.addEventListener('change', onSystemThemeChange)
+  const stopThemeWatch = watch(platformTheme.preference, platformTheme.sync)
+
+  onBeforeUnmount(() => {
+    prefersDark.removeEventListener('change', onSystemThemeChange)
+    stopThemeWatch()
+  })
+}
 
 watch(
   () => sessionData.value?.user?.id ?? null,

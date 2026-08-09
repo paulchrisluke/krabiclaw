@@ -27,7 +27,7 @@
         </div>
       </div>
 
-      <div v-else class="space-y-8">
+      <div v-else class="site-picker-layout space-y-8">
         <div v-if="sitesWithSubdomain.length === 0" class="rounded-2xl border border-default bg-elevated px-6 py-20 text-center">
           <div class="mx-auto flex size-14 items-center justify-center rounded-full bg-muted">
             <UIcon name="i-lucide-globe" class="size-6 text-muted" />
@@ -43,7 +43,7 @@
           />
         </div>
 
-        <div v-else class="grid grid-cols-1 gap-x-6 gap-y-9 md:grid-cols-2 xl:grid-cols-3">
+        <div v-else class="site-picker-grid">
           <NuxtLink
             v-for="site in sitesWithSubdomain"
             :key="site.id"
@@ -128,3 +128,28 @@ function verticalLabel(vertical: string | null) {
 
 pending.value = false
 </script>
+
+<style scoped>
+.site-picker-layout {
+  container-type: inline-size;
+}
+
+.site-picker-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: 1.5rem;
+  row-gap: 2.25rem;
+}
+
+@container (min-width: 36rem) {
+  .site-picker-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (min-width: 64rem) {
+  .site-picker-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+</style>
