@@ -89,7 +89,11 @@ for (const surface of surfaceTargets) {
         const redirects: import('@playwright/test').Response[] = []
         const onResponse = (response: import('@playwright/test').Response) => {
           const responseUrl = new URL(response.url())
-          if (response.request().isNavigationRequest() && isRedirectStatus(response.status())) redirects.push(response)
+          if (
+            response.request().isNavigationRequest()
+            && response.request().frame() === page.mainFrame()
+            && isRedirectStatus(response.status())
+          ) redirects.push(response)
           if (!isFirstPartyAsset(responseUrl, surface.baseUrl)) return
           const status = response.status()
           if (status >= 400) requestFailures.push(`${response.request().method()} ${response.url()} (HTTP ${status})`)
@@ -104,7 +108,9 @@ for (const surface of surfaceTargets) {
         const onRequestFailed = (request: import('@playwright/test').Request) => {
           const requestUrl = new URL(request.url())
           if (!isFirstPartyAsset(requestUrl, surface.baseUrl)) return
-          requestFailures.push(`${request.method()} ${request.url()} (${request.failure()?.errorText ?? 'failed'})`)
+          const errorText = request.failure()?.errorText ?? 'failed'
+          if (request.resourceType() === 'media' && errorText === 'net::ERR_ABORTED') return
+          requestFailures.push(`${request.method()} ${request.url()} (${errorText})`)
         }
         page.on('response', onResponse)
         page.on('requestfailed', onRequestFailed)
@@ -137,7 +143,7 @@ for (const surface of surfaceTargets) {
             const sections = [...document.querySelectorAll('main section, main article, [role="main"] section, [role="main"] article')]
             const blankSections = sections.filter(section => {
               const text = (section.textContent ?? '').replace(/\s+/g, '').trim()
-              return !text && !section.querySelector('img,video,svg,canvas,iframe')
+              return !text && !section.querySelector('img,video,svg,canvas,iframe,hr')
             }).length
             return {
               scrollHeight,

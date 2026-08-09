@@ -143,10 +143,10 @@ const NCLS_SERVICE_ROUTES = [
 
 const PLATFORM_DOC_ROUTES = [
   ['/docs/getting-started/getting-started-with-krabiclaw', 'Getting started with KrabiClaw'],
-  ['/docs/getting-started/deploy-your-site', 'Deploy your first KrabiClaw site'],
+  ['/docs/getting-started/deploy-your-site', 'Deploy your site'],
   ['/docs/getting-started/customize-brand-theme', 'Set a brand color'],
-  ['/docs/getting-started/invite-your-team', 'Invite team members'],
-  ['/docs/getting-started/set-up-notifications', 'Choose how KrabiClaw alerts you'],
+  ['/docs/getting-started/invite-your-team', 'Invite your team'],
+  ['/docs/getting-started/set-up-notifications', 'Set up notifications'],
   ['/docs/integrations/mcp-setup', 'Connect KrabiClaw to ChatGPT'],
 ]
 
@@ -196,7 +196,7 @@ const SURFACE_DEFINITIONS = Object.freeze([
       route('/', 'Your local business'), route('/features', 'Features'), route('/pricing', 'Pricing'),
       route('/about', 'About'), route('/templates', 'Templates'), route('/templates/saya', 'Saya'), route('/templates/blawby', 'Blawby'),
       route('/plugin', 'KrabiClaw for ChatGPT'),
-      route('/help', 'How can we help'), route('/docs', 'Documentation'), route('/blog', 'Local AI Growth Notes'),
+      route('/help', 'How can we help'), route('/docs', 'KrabiClaw Docs'), route('/blog', 'Local AI Growth Notes'),
       route('/privacy', 'Privacy'), route('/terms', 'Terms'), route('/login', 'Sign in'), route('/signup', 'Create your account'),
       route('/forgot-password', 'Reset your password'), route('/reset-password', 'Choose a new password'), route('/oauth/login', 'Sign in'),
       route('/oauth/consent', 'This app wants to access your KrabiClaw Account.'),
