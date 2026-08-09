@@ -16,7 +16,7 @@
         <USkeleton v-for="i in 3" :key="i" class="h-24 rounded-xl" />
       </div>
 
-      <div v-else-if="sitesWithSubdomain.length === 0" class="py-16 text-center">
+      <div v-else-if="sites.length === 0" class="py-16 text-center">
         <UIcon name="i-lucide-globe" class="size-8 text-muted mx-auto mb-3" />
         <p class="text-sm text-muted">No sites available.</p>
         <UButton v-if="canManageOrganization" label="Add your first site" size="sm" color="primary" class="mt-4" :to="`/dashboard/${orgSlug}/sites/new`" />
@@ -24,16 +24,16 @@
 
       <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <NuxtLink
-          v-for="s in sitesWithSubdomain"
+          v-for="s in sites"
           :key="s.id"
-          :to="`/dashboard/${orgSlug}/sites/${s.subdomain}`"
+          :to="siteDashboardPath(s)"
           class="group block"
         >
           <UCard variant="soft" class="h-full cursor-pointer">
             <div class="flex items-start justify-between gap-2">
               <div class="min-w-0">
-                <p class="text-sm font-semibold text-highlighted truncate">{{ s.brand_name ?? s.subdomain }}</p>
-                <p class="text-xs text-muted">{{ s.subdomain }}.krabiclaw.com</p>
+                <p class="text-sm font-semibold text-highlighted truncate">{{ s.brand_name ?? s.subdomain ?? 'Untitled site' }}</p>
+                <p class="text-xs text-muted">{{ s.subdomain ? `${s.subdomain}.krabiclaw.com` : 'Setup in progress' }}</p>
               </div>
               <UBadge :label="s.plan ?? 'free'" color="neutral" variant="soft" size="xs" />
             </div>
@@ -51,11 +51,13 @@ useSeoMeta({ title: 'Sites | KrabiClaw', robots: 'noindex, nofollow' })
 const route = useRoute()
 const orgSlug = route.params.orgSlug as string
 const dashboard = useDashboardSite()
-const pending = ref(true)
+const pending = dashboard.pending
 
 const sites = computed(() => dashboard.sites.value)
 const canManageOrganization = computed(() => ['owner', 'admin'].includes(dashboard.organization.value?.role ?? ''))
-const sitesWithSubdomain = computed(() => sites.value.filter((site): site is (typeof sites.value)[number] & { subdomain: string } => Boolean(site.subdomain)))
-
-pending.value = false
+function siteDashboardPath(site: (typeof sites.value)[number]) {
+  return site.subdomain
+    ? `/dashboard/${orgSlug}/sites/${site.subdomain}`
+    : `/dashboard/${orgSlug}/onboarding`
+}
 </script>

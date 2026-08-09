@@ -15,6 +15,7 @@ test('presents every other site state as setup incomplete', () => {
     { status: 'draft', onboarding_status: 'active' },
     { status: 'active', onboarding_status: 'pending' },
     { status: 'disabled', onboarding_status: 'incomplete' },
+    { status: null, onboarding_status: null },
   ]) {
     assert.deepEqual(getDashboardSiteStatus(site), {
       label: 'Setup incomplete',

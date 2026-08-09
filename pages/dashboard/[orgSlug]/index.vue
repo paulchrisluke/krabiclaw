@@ -2,9 +2,6 @@
   <UDashboardPanel id="org-overview">
     <template #header>
       <UDashboardNavbar title="Your sites">
-        <template #leading>
-          <DashboardSidebarCollapseButton />
-        </template>
         <template #right>
           <UButton
             v-if="canManageOrganization"
@@ -28,7 +25,7 @@
       </div>
 
       <div v-else class="site-picker-layout space-y-8">
-        <div v-if="sitesWithSubdomain.length === 0" class="rounded-2xl border border-default bg-elevated px-6 py-20 text-center">
+        <div v-if="sites.length === 0" class="rounded-2xl border border-default bg-elevated px-6 py-20 text-center">
           <div class="mx-auto flex size-14 items-center justify-center rounded-full bg-muted">
             <UIcon name="i-lucide-globe" class="size-6 text-muted" />
           </div>
@@ -45,17 +42,17 @@
 
         <div v-else class="site-picker-grid">
           <NuxtLink
-            v-for="site in sitesWithSubdomain"
+            v-for="site in sites"
             :key="site.id"
-            :to="`/dashboard/${orgSlug}/sites/${site.subdomain}`"
+            :to="siteDashboardPath(site)"
             class="group min-w-0"
           >
-            <article>
+            <UCard :ui="{ body: 'p-0 sm:p-0' }" class="bg-transparent shadow-none ring-0">
               <div class="relative aspect-[4/3] overflow-hidden rounded-2xl border border-default bg-elevated shadow-sm transition group-hover:-translate-y-0.5 group-hover:shadow-lg">
                 <NuxtImg
                   v-if="site.preview_image_url"
                   :src="site.preview_image_url"
-                  :alt="`${site.brand_name ?? site.subdomain} preview`"
+                  :alt="`${site.brand_name ?? site.subdomain ?? 'Site'} preview`"
                   class="size-full object-cover transition duration-300 group-hover:scale-[1.02]"
                   loading="lazy"
                 />
@@ -73,12 +70,12 @@
               </div>
 
               <div class="mt-4 min-w-0">
-                <h2 class="truncate text-base font-semibold text-highlighted">{{ site.brand_name ?? site.subdomain }}</h2>
+                <h2 class="truncate text-base font-semibold text-highlighted">{{ site.brand_name ?? site.subdomain ?? 'Untitled site' }}</h2>
                 <p class="mt-1 truncate text-sm text-muted">
-                  {{ verticalLabel(site.vertical) }} · {{ site.subdomain }}.krabiclaw.com
+                  {{ verticalLabel(site.vertical) }} · {{ site.subdomain ? `${site.subdomain}.krabiclaw.com` : 'Setup in progress' }}
                 </p>
               </div>
-            </article>
+            </UCard>
           </NuxtLink>
 
           <NuxtLink
@@ -86,7 +83,7 @@
             :to="`/dashboard/${orgSlug}/sites/new`"
             class="group min-w-0"
           >
-            <article>
+            <UCard :ui="{ body: 'p-0 sm:p-0' }" class="bg-transparent shadow-none ring-0">
               <div class="flex aspect-[4/3] items-center justify-center rounded-2xl border border-dashed border-default bg-elevated transition group-hover:-translate-y-0.5 group-hover:border-primary group-hover:bg-muted">
                 <div class="flex size-14 items-center justify-center rounded-full border border-default bg-default shadow-sm">
                   <UIcon name="i-lucide-plus" class="size-6 text-muted transition group-hover:text-primary" />
@@ -94,7 +91,7 @@
               </div>
               <h2 class="mt-4 text-base font-semibold text-highlighted">Add a site</h2>
               <p class="mt-1 text-sm text-muted">Create another site for this organization</p>
-            </article>
+            </UCard>
           </NuxtLink>
         </div>
       </div>
@@ -112,11 +109,10 @@ useSeoMeta({ title: 'Your sites | KrabiClaw', robots: 'noindex, nofollow' })
 const route = useRoute()
 const orgSlug = route.params.orgSlug as string
 const dashboard = useDashboardSite()
-const pending = ref(true)
+const pending = dashboard.pending
 
 const sites = computed(() => dashboard.sites.value)
 const canManageOrganization = computed(() => ['owner', 'admin'].includes(dashboard.organization.value?.role ?? ''))
-const sitesWithSubdomain = computed(() => sites.value.filter((site): site is (typeof sites.value)[number] & { subdomain: string } => Boolean(site.subdomain)))
 
 function siteInitial(site: (typeof sites.value)[number]) {
   return (site.brand_name ?? site.subdomain ?? 'S').trim().charAt(0).toUpperCase()
@@ -126,7 +122,11 @@ function verticalLabel(vertical: string | null) {
   return getVerticalLabel(vertical)
 }
 
-pending.value = false
+function siteDashboardPath(site: (typeof sites.value)[number]) {
+  return site.subdomain
+    ? `/dashboard/${orgSlug}/sites/${site.subdomain}`
+    : `/dashboard/${orgSlug}/onboarding`
+}
 </script>
 
 <style scoped>
