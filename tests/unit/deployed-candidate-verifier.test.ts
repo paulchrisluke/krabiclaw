@@ -61,6 +61,11 @@ async function startCandidateFixture({ versionId = workerVersionId, buildIdForRo
       response.end(localAssets[request.url])
       return
     }
+    if (request.url === '/reservations' && request.headers['x-preview-tenant'] === 'pottery-house') {
+      response.writeHead(302, { location: '/experiences' })
+      response.end()
+      return
+    }
     if (redirects.has(request.url)) {
       response.writeHead(301, { location: redirects.get(request.url)! })
       response.end()

@@ -275,7 +275,11 @@ test('immutable route inventory enumerates every reviewed fixture target and bro
   const generated = spawnSync('node', ['scripts/release-route-inventory.mjs', '--base-url', 'https://krabiclaw.com'], { encoding: 'utf8' })
   assert.equal(generated.status, 0, generated.stderr)
   const inventory = JSON.parse(generated.stdout) as {
-    surfaces: Array<{ name: string; routes: Array<{ path: string }>; variants?: Array<{ name: string; routes: Array<{ path: string }> }> }>
+    surfaces: Array<{
+      name: string
+      routes: Array<{ path: string; content: string; expectedPath: string; allowRedirects: Array<{ status: number; path: string }> }>
+      variants?: Array<{ name: string; routes: Array<{ path: string; content: string; expectedPath: string; allowRedirects: Array<{ status: number; path: string }> }> }>
+    }>
   }
   const surface = (name: string) => {
     const value = inventory.surfaces.find(item => item.name === name)
@@ -289,22 +293,33 @@ test('immutable route inventory enumerates every reviewed fixture target and bro
   assert.ok(pottery && kikuzuki)
   for (const target of [saya, pottery, kikuzuki]) {
     const targetPaths = paths(target)
-    for (const suffix of ['/locations', '/locations/kikuzuki-japanese-robatayaki-izakaya/menu', '/locations/take-me-away-by-kikuzuki/reservations']) {
+    for (const suffix of ['/locations', '/locations/kikuzuki-japanese-robatayaki-izakaya/menu']) {
       if (target === kikuzuki || suffix === '/locations') assert.ok(targetPaths.has(suffix), `${target === kikuzuki ? 'Kikuzuki' : 'Saya'} missing ${suffix}`)
     }
+    assert.ok(targetPaths.has('/reservations'), 'Saya fixture missing canonical site-wide reservations route')
+    assert.ok([...targetPaths].every(path => !/^\/locations\/[^/]+\/reservations$/.test(path)), 'Saya fixture must not claim a location-level reservations route')
   }
   assert.ok(paths(pottery).has('/experiences/pottery-wheel-class'))
   assert.ok(paths(pottery).has('/posts/post-ph-1'))
+  assert.ok(!paths(pottery).has('/blog/post-ph-1'))
   assert.ok(paths(pottery).has('/locations/krabi/reviews/gplaces-ph-1772088302'))
   assert.ok(paths(kikuzuki).has('/menu/tuna-sushi'))
   assert.ok(paths(kikuzuki).has('/experiences/teppanyaki-experience'))
   assert.ok(paths(kikuzuki).has('/locations/kikuzuki-japanese-robatayaki-izakaya/reviews/review-kiku-1'))
   const ncls = paths(surface('blawby'))
-  const platform = paths(surface('platform'))
+  const platformSurface = surface('platform')
+  const platform = paths(platformSurface)
   for (const legalPath of ['/policies/privacy', '/policies/terms', '/third-party-notices']) {
     assert.ok(!platform.has(legalPath), `platform must not claim Blawby-only route ${legalPath}`)
     assert.ok(ncls.has(legalPath), `NCLS missing legal route ${legalPath}`)
   }
+  const platformRoute = (path: string) => platformSurface.routes.find(route => route.path === path)
+  assert.equal(platformRoute('/forgot-password')?.content, 'Reset your password')
+  assert.equal(platformRoute('/reset-password')?.content, 'Choose a new password')
+  assert.equal(platformRoute('/oauth/consent')?.content, 'This app wants to access your KrabiClaw Account.')
+  const potteryReservations = pottery.routes.find(route => route.path === '/reservations')
+  assert.equal(potteryReservations?.expectedPath, '/experiences')
+  assert.deepEqual(potteryReservations?.allowRedirects, [{ status: 302, origin: 'https://pottery-house.krabiclaw.com', path: '/experiences' }])
   for (const service of ['family', 'small-business-and-nonprofits', 'employment', 'tenant-rights', 'probate-and-estate', 'special-education-and-iep-advocacy']) {
     assert.ok(ncls.has(`/services/${service}`), `NCLS missing service ${service}`)
   }

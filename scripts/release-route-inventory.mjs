@@ -46,6 +46,13 @@ function fixtureLocationSlugs(fileName) {
   return fixtureSectionSlugs(fileName, 'locations:', 'experiences:')
 }
 
+function fixtureVertical(fileName) {
+  const source = readFileSync(resolve(REPO_ROOT, 'seed-definitions', fileName), 'utf8')
+  const match = source.match(/\bvertical:\s*['"]([^'"]+)['"]/)
+  if (!match) throw new Error(`Unable to derive vertical route source from ${fileName}`)
+  return match[1]
+}
+
 function fixtureMenuItemSlugs(fileName) {
   const menuSlugs = fixtureSectionSlugs(fileName, 'menus:', 'locationQa:')
   if (menuSlugs.length > 0) return menuSlugs
@@ -98,6 +105,7 @@ function contentForSayaPath(path, brandName) {
 }
 
 function sayaFixtureRoutes(fileName, brandName, locationSlugs = fixtureLocationSlugs(fileName), identity = 'body') {
+  const vertical = fixtureVertical(fileName)
   const experienceSlugs = fixtureSectionSlugs(fileName, 'experiences:', 'reviews:')
   const menuItemSlugs = fixtureMenuItemSlugs(fileName)
   const postIds = fixtureSectionIds(fileName, 'posts:', ['tenantPageLocaleFields:', 'publicRoutes:', 'aiCredits:'], 'post-')
@@ -107,16 +115,18 @@ function sayaFixtureRoutes(fileName, brandName, locationSlugs = fixtureLocationS
     if (!paths.has(path)) paths.set(path, route(path, contentForSayaPath(path, brandName), identity, extra))
   }
 
-  for (const path of ['/', '/about', '/menu', '/order', '/reviews', '/qa', '/photos', '/posts', '/blog', '/experiences', '/reservations', '/contact', '/locations']) add(path)
+  for (const path of ['/', '/about', '/menu', '/order', '/reviews', '/qa', '/photos', '/posts', '/blog', '/experiences', '/contact', '/locations']) add(path)
+  add('/reservations', vertical === 'experience'
+    ? { expectedPath: '/experiences', allowRedirects: [{ status: 302, path: '/experiences' }] }
+    : {})
   for (const location of locationSlugs) {
     add(`/locations/${location}`)
-    for (const subpage of ['photos', 'menu', 'reviews', 'qa', 'contact', 'experiences', 'posts', 'reservations', 'review-submit']) add(`/locations/${location}/${subpage}`)
+    for (const subpage of ['photos', 'menu', 'reviews', 'qa', 'contact', 'experiences', 'posts', 'review-submit']) add(`/locations/${location}/${subpage}`)
   }
   for (const { reviewId, locationSlug } of reviewRoutes) add(`/locations/${locationSlug}/reviews/${reviewId}`)
   for (const slug of experienceSlugs) add(`/experiences/${slug}`)
   for (const slug of menuItemSlugs) add(`/menu/${slug}`)
   for (const slug of postIds) {
-    add(`/blog/${slug}`)
     add(`/posts/${slug}`)
   }
   return [...paths.values()]
@@ -188,8 +198,8 @@ const SURFACE_DEFINITIONS = Object.freeze([
       route('/plugin', 'KrabiClaw for ChatGPT'),
       route('/help', 'How can we help'), route('/docs', 'Documentation'), route('/blog', 'Local AI Growth Notes'),
       route('/privacy', 'Privacy'), route('/terms', 'Terms'), route('/login', 'Sign in'), route('/signup', 'Create your account'),
-      route('/forgot-password', 'Forgot password'), route('/reset-password', 'Reset password'), route('/oauth/login', 'Sign in'),
-      route('/oauth/consent', 'Authorize'),
+      route('/forgot-password', 'Reset your password'), route('/reset-password', 'Choose a new password'), route('/oauth/login', 'Sign in'),
+      route('/oauth/consent', 'This app wants to access your KrabiClaw Account.'),
       ...PLATFORM_DOC_ROUTES.map(([path, content]) => route(path, content)),
     ],
   },
