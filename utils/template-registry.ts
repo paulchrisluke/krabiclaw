@@ -217,8 +217,8 @@ export const publicTemplateMarketing: Record<PublicTemplateSlug, TemplateMarketi
     slug: 'saya',
     displayName: 'Saya',
     tagline: 'Elegant & minimal, built for local businesses',
-    summary: 'Editorial restaurant and experience websites with deep Google Business integration.',
-    description: 'The flagship KrabiClaw theme. Editorial typography, location-centric navigation, and deep Google Business integration — designed for local businesses that want to look as good online as they do in person.',
+    summary: 'Editorial restaurant and experience websites with Google Places imports.',
+    description: 'The flagship KrabiClaw theme. Editorial typography, location-centric navigation, and Google Places imports — designed for local businesses that want to look as good online as they do in person.',
     supportedVerticals: ['Restaurants', 'Experiences'],
     status: 'available',
     published: true,
@@ -257,7 +257,7 @@ export const publicTemplateMarketing: Record<PublicTemplateSlug, TemplateMarketi
       'Homepage with hero, location grid, and review highlights',
       'Location sub-pages: offerings, reviews, photos, Q&A, contact',
       'Unified Inbox for reservations and inquiries',
-      'Google Business data sync (Growth plan)',
+      'Google Places imports (Growth plan)',
       'ChatGPT Plugin for content management',
       'Reservation form',
       'Brand story / about page',
@@ -277,7 +277,7 @@ export const publicTemplateMarketing: Record<PublicTemplateSlug, TemplateMarketi
     sortOrder: 1,
     seo: {
       title: 'Saya Theme',
-      description: 'The Saya theme — editorial design, Google Business integration, AI content management. Free on all plans.',
+      description: 'The Saya theme — editorial design, Google Places imports, AI content management. Free on all plans.',
     },
   },
   blawby: {

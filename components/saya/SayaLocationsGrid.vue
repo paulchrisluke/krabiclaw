@@ -133,5 +133,5 @@ onMounted(() => {
 const isAuthenticated = computed(() => props.data?.isAuthenticated || false)
 const findUsKicker = computed(() => props.data?.findUsKicker || 'Find us')
 const visitLocationCta = computed(() => props.data?.visitLocationCta || 'Visit this location →')
-const connectGoogleCta = computed(() => props.data?.connectGoogleCta || 'Connect Google Business →')
+const connectGoogleCta = computed(() => props.data?.connectGoogleCta || 'Import from Google Maps →')
 </script>

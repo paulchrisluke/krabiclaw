@@ -238,7 +238,7 @@ async function buildOwnerInboxUrl(
   const submissionType = opts.tab === 'contact' ? 'contact' : opts.tab === 'reservations' ? 'reservation' : 'experience_booking'
   try {
     // Deferred import: the reservation/experience-booking adapters pull in mcp-workflows.ts
-    // and experiences.ts, whose own dependency graphs (google-business.ts) import this file —
+    // and experiences.ts, whose own dependency graphs import this file —
     // a static top-level import here would be a circular import.
     const [{ ensureGuestThread }, { getAdapter }] = await Promise.all([
       import('~/server/domain/guest-threads/repository'),

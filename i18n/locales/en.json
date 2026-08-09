@@ -101,7 +101,7 @@
       "features": {
         "qa-writeback": {
           "title": "Ask a question",
-          "description": "Let guests submit questions directly from your site, synced back to Google Business Q&A. Included in Growth."
+          "description": "Let guests submit questions directly from your site. Included in Growth."
         },
         "custom-domain": {
           "title": "Custom domain",
@@ -111,13 +111,13 @@
           "title": "Add a second location",
           "description": "Manage multiple locations under one brand site, each with their own menu, reviews, and hours. Included in Managed."
         },
-        "connect-gmb": {
-          "title": "Connect Google Business",
-          "description": "Sync hours, reviews, photos, and posts automatically from your Google Business Profile. Included in Growth."
+        "google-places-import": {
+          "title": "Import from Google Places",
+          "description": "Import hours, address, ratings, and reviews from Google Places. Included in Growth."
         },
-        "google-business-sync": {
-          "title": "Google Business sync",
-          "description": "Auto-sync Google Business fields while keeping manual edits available in the site editor. Included in Growth."
+        "google-places-sync": {
+          "title": "Google Places import",
+          "description": "Refresh supported location details from Google Places while keeping manual edits available in the site editor. Included in Growth."
         },
         "remove-branding": {
           "title": "Remove KrabiClaw branding",
@@ -125,9 +125,9 @@
         }
       },
       "bullets": {
-        "gmb_1": "Auto-fill Google Business fields when connected",
-        "gmb_2": "Keep manual edits available in the content editor",
-        "gmb_3": "Sync business details, hours, photos, reviews, and posts",
+        "places_1": "Import supported location details from Google Places",
+        "places_2": "Keep manual edits available in the content editor",
+        "places_3": "Refresh hours, ratings, address, and reviews",
         "domain_1": "Connect your own domain",
         "domain_2": "Use managed HTTPS certificates",
         "domain_3": "Keep your krabiclaw.com subdomain available",
@@ -147,12 +147,12 @@
     "qa": {
       "title": "Questions & Answers",
       "subtitle": "Common Inquiries",
-      "google_guest": "Google Guest",
+      "guest": "Guest",
       "asked_by": "Asked by {author} • {date}",
       "response_from_owner": "Response from the owner • {date}",
       "no_answer": "No answer yet.",
       "empty_title": "No questions yet.",
-      "empty_prompt": "Got a question? Ask us anything and we'll be happy to help.",
+      "empty_prompt": "Questions and answers from the team will appear here.",
       "view_all": "View All Q&A"
     },
     "location": {
@@ -167,7 +167,7 @@
       "find_us": "Find us",
       "map_for": "Map for {title}",
       "location_map": "Location map",
-      "map_synced": "Map synced from Google Business",
+      "map_synced": "Map synced from Google Places",
       "get_directions": "Get directions",
       "apple_maps": "Apple Maps",
       "address": "Address",
@@ -196,7 +196,7 @@
       "back_to": "Back to {title}",
       "title": "What guests are saying",
       "based_on": "Based on {count} reviews",
-      "synced_live": "Synced live from Google Business",
+      "synced_live": "Synced from Google Places",
       "no_reviews_title": "No reviews yet.",
       "no_reviews_desc": "Be the first to share your experience with us on Google.",
       "aggregate_only_title": "Rated {rating} on Google from {count} reviews",
@@ -219,12 +219,8 @@
       "back_to": "Back to {title}",
       "title": "Frequently asked",
       "subtitle": "Q&A · {location}",
-      "dont_see": "Don't see your question?",
-      "ask_us": "Ask us, it'll show up here.",
-      "ask_question_pro": "Ask a question · Pro",
-      "ask_question": "Ask a question →",
       "no_questions_title": "No questions yet.",
-      "no_questions_desc": "Be the first to ask, our team usually responds within a few hours.",
+      "no_questions_desc": "Questions and answers will appear here when the team adds them.",
       "helpful": "found this helpful",
       "awaiting_answer": "Awaiting answer from the team.",
       "asked_by": "Asked by {author}",

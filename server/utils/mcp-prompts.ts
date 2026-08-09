@@ -52,7 +52,7 @@ export const MCP_PROMPTS: McpPromptDefinition[] = [
     arguments: [
       { name: "body", description: "The post body text.", required: true },
       { name: "post_type", description: "standard, offer, event, or update. Defaults to standard.", required: false },
-      { name: "channels", description: "Comma-separated channels: site, facebook, instagram, gmb. Defaults to site.", required: false },
+      { name: "channels", description: "Comma-separated channels: site, facebook, instagram. Defaults to site.", required: false },
     ],
   },
   {

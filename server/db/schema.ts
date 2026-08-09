@@ -143,8 +143,6 @@ export const business_locations = sqliteTable("business_locations", {
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
 	slug: text().notNull(),
-	google_location_id: text(),
-	google_connection_id: text().references((): AnySQLiteColumn => google_business_connections.id, { onDelete: "set null" } ),
 	title: text().notNull(),
 	address: text(),
 	city: text(),
@@ -561,38 +559,6 @@ export const facebook_pages_connections = sqliteTable("facebook_pages_connection
 	unique("facebook_pages_connections_organization_id_site_id_unique").on(table.organization_id, table.site_id),
 ]);
 
-export const google_business_connections = sqliteTable("google_business_connections", {
-	id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	location_id: text().references((): AnySQLiteColumn => business_locations.id, { onDelete: "set null" } ),
-	connected_by_user_id: text().references(() => user.id, { onDelete: "set null" } ),
-	provider_account_email: text().notNull(),
-	encrypted_access_token: text().notNull(),
-	encrypted_refresh_token: text().notNull(),
-	scopes: text().notNull(),
-	expires_at: text(),
-	status: text().default("active").notNull(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	unique("google_business_connections_organization_id_site_id_location_id_unique").on(table.organization_id, table.site_id, table.location_id),
-	uniqueIndex("idx_google_business_connections_site_level_unique").on(table.organization_id, table.site_id).where(sql`location_id IS NULL`),
-]);
-
-export const google_business_events = sqliteTable("google_business_events", {
-	id: text().primaryKey(),
-	organization_id: text().references(() => organization.id, { onDelete: "cascade" } ),
-	site_id: text().references(() => sites.id, { onDelete: "cascade" } ),
-	google_location_id: text(),
-	event_type: text(),
-	payload: text(),
-	status: text().default("pending").notNull(),
-	error: text(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-});
-
 export const google_place_snapshots = sqliteTable("google_place_snapshots", {
 	id: text().primaryKey(),
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
@@ -649,7 +615,6 @@ export const location_qa = sqliteTable("location_qa", {
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
 	location_id: text().references(() => business_locations.id, { onDelete: "cascade" } ),
 	page_path: text(),
-	google_question_id: text(),
 	question: text().notNull(),
 	question_author: text(),
 	question_date: text(),
@@ -664,13 +629,12 @@ export const location_qa = sqliteTable("location_qa", {
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
-	uniqueIndex("idx_location_qa_google_id").on(table.google_question_id).where(sql`google_question_id IS NOT NULL`),
 	index("idx_location_qa_location").on(table.location_id, table.status, table.sort_order),
 	index("idx_location_qa_site").on(table.site_id, table.status, table.sort_order).where(sql`location_id IS NULL`),
 	index("idx_location_qa_page").on(table.site_id, table.page_path, table.status, table.sort_order).where(sql`location_id IS NULL AND page_path IS NOT NULL`),
 	check("location_qa_scope_check", sql`location_id IS NULL OR page_path IS NULL`),
 	check("location_qa_page_path_check", sql`page_path IS NULL OR page_path LIKE '/%'`),
-	check("location_qa_source_check", sql`source IN ('gmb','google_maps','manual','llm_generated','manual_override','template','import')`),
+	check("location_qa_source_check", sql`source IN ('manual','import','template')`),
 	check("location_qa_status_check", sql`status IN ('published','hidden')`),
 	index("location_qa_organization_id_idx").on(table.organization_id),
 ]);

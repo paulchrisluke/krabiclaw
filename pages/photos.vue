@@ -27,7 +27,7 @@
       <!-- Empty state -->
       <div v-if="photos.length === 0" class="mx-auto max-w-xl px-4 py-24 text-center sm:px-6">
         <h1 class="saya-display-md text-muted">No photos yet.</h1>
-        <p class="mt-4 text-sm text-muted">Add a location and connect Google Business to sync photos.</p>
+        <p class="mt-4 text-sm text-muted">Add photos from the dashboard after creating a location.</p>
       </div>
 
       <template v-else>

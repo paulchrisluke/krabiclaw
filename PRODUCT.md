@@ -17,7 +17,7 @@ Customer-facing ChatGPT app for tenant site management.
 - OAuth2 authorization at `/api/auth/oauth2/` — ChatGPT handles auth before any tool call
 - MCP endpoint at `/api/mcp` (`server/api/mcp.post.ts`)
 - Scope: `tenant`
-- 90+ MCP tools covering: site setup, locations, menus, experiences, posts, media, locale management, Google Business, Facebook, analytics, work requests
+- 60+ MCP tools covering: site setup, locations, menus, experiences, posts, media, locale management, Google Places, Facebook, analytics, work requests
 - Widget system is legacy/deprecated for client photo uploads; Client MCP should ask users to attach photos directly in ChatGPT and then use `upload_user_photo`. `list_sites`, `import_from_maps`, `show_site_preview`, `show_generated_images`, and onboarding return plain text.
 - Image generation via ChatGPT's native `image_generation` Responses API tool (`gpt-image-1` / `gpt-image-2`) — not DALL-E
 - Plugin landing page at `/plugin`
@@ -62,7 +62,7 @@ Pricing managed entirely in Stripe — never duplicated in code. All pricing UI 
 | Tier | Price | Key Features |
 |------|-------|-------------|
 | Free (Starter) | $0 | Subdomain, Saya theme, manual editor, weekly AI quota, 1 locale, Post-booking review requests |
-| Growth | $49/mo | Custom domain + SSL, Google Business sync, 2,000 AI credits/week, manual locale editing, Priority Support |
+| Growth | $49/mo | Custom domain + SSL, Google Places imports, 2,000 AI credits/week, manual locale editing, Priority Support |
 
 One Better Auth organization subscription covers every site in the organization. AI
 usage is measured in the append-only `usage_events` ledger and provisioned by
@@ -71,7 +71,7 @@ balance, not a purchasable wallet. One-time credit purchases, service add-ons,
 and automatic top-ups are retired. Their historical tables and fulfillment rows
 remain read-only for audit history.
 
-**Upgrade modal** triggers on: connecting Google Business, custom domain setup, removing KrabiClaw branding.
+**Upgrade modal** triggers on: Google Places import, custom domain setup, removing KrabiClaw branding.
 
 **Managed / Concierge Services Deprecated.** The "Managed by Paul & Julia" service (including Managed and SEO Accelerator tiers) is no longer offered. The `MANAGED_SERVICE_ENABLED` feature flag remains off to hide these from the dashboard and marketing sites.
 
@@ -80,7 +80,7 @@ remain read-only for audit history.
 WhatsApp Business API sends and Google Places API calls cost real per-use money with no dedicated billing surface — rather than build new metered Stripe billing pre-launch, they draw from the existing `ai_credits` balance (`server/utils/ai-credits.ts`) via `chargeFlatCredits()`, alongside the token-based charging already enforced on `/api/ai/*`.
 
 - Charged: WhatsApp notifications (`sendWhatsAppNotification`), ChowBot free-text WhatsApp replies, and on-demand Google Places search/details calls (dashboard autocomplete, onboarding maps import, manual re-sync, the MCP `import_from_maps` tool).
-- Never charged: WhatsApp OTP (`sendWhatsAppOtp`) — auth-critical, must always send — and the background `google-business-sync` cron task, which is infrastructure upkeep a customer didn't explicitly trigger.
+- Never charged: WhatsApp OTP (`sendWhatsAppOtp`) — auth-critical, must always send — and the background `google-places-sync` cron task, which is infrastructure upkeep a customer didn't explicitly trigger.
 - Exhaustion is a **soft-fail** for both: the action still goes through at zero balance (losing a reservation confirmation is worse than the unpaid cost), unlike the hard 402 block on `/api/ai/*`.
 - Flat per-action quota costs (`ACTION_CREDIT_COSTS` in `ai-credits.ts`) are launch-time estimates against list Meta/Google pricing — revisit once real invoiced volume exists.
 
@@ -167,7 +167,6 @@ Both Saya and Blawby support a blog: Saya's is the shared `posts` primitive rend
 | WhatsApp Business API | ✅ Built — blocked on real number |
 | Facebook / Instagram Graph API | ✅ OAuth + Pages sync + publish built |
 | Google Places API sync | ✅ Live — hours, address, rating, reviews (up to 5) |
-| Google Business Profile API | ⏳ API approval pending — RPM quota locked at 0 |
 | Google Places API | ✅ Live — location autocomplete + `import_from_maps` MCP tool |
 | Cloudflare R2 media host | ✅ Built — video upload/playback |
 | ChatGPT Client MCP | ✅ Live — primary customer creation surface |
@@ -181,7 +180,7 @@ Both Saya and Blawby support a blog: Saya's is the shared `posts` primitive rend
 - All backend-originated AI calls route through Cloudflare AI Gateway — never call model APIs directly from server code (exception: ChatGPT native `image_generation` is initiated by the OpenAI runtime, not by KrabiClaw server code, and bypasses the gateway by design)
 - MCP server is the canonical creation surface; dashboard CMS and ChowBot are secondary
 - Posts are the content primitive — channels are adapters on top of `post_channel_jobs`
-- All location data is CRUD-available in D1 regardless of GMB connection — GMB sync is additive
+- All location data is CRUD-available in D1; Google Places import is additive and read-only with respect to Google
 - Notification delivery is channel-agnostic — `notifications.channel` column means email/push can be added with no schema change
 - WhatsApp and Instagram both go through the same Facebook app — single OAuth covers both
 - ChowBot is the owner of AI conversations; dashboard and WhatsApp are interfaces over the same D1-backed backend

@@ -6,7 +6,7 @@
 import { executeBatch, queryFirst, type BatchQuery } from "~/server/db";
 import { getHeader, setHeader, type H3Event } from "h3";
 import { cloudflareEnv } from "~/server/utils/api-response";
-import { calculateMapEmbedUrl } from "~/server/utils/google-business";
+import { calculateMapEmbedUrl } from "~/server/utils/google-places";
 import {
   buildPublicReviewAggregate,
   normalizePublicReviewAggregateRows,

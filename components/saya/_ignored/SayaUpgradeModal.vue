@@ -52,8 +52,8 @@ const knownFeatures = [
   'qa-writeback',
   'custom-domain',
   'add-location',
-  'connect-gmb',
-  'google-business-sync',
+  'google-places-import',
+  'google-places-sync',
   'remove-branding'
 ]
 
@@ -68,11 +68,11 @@ const featureDescription = computed(() =>
     : t('saya.upgrade.default_description')
 )
 const featureBullets = computed(() => {
-  if (feature.value === 'google-business-sync' || feature.value === 'connect-gmb') {
+  if (feature.value === 'google-places-sync' || feature.value === 'google-places-import') {
     return [
-      t('saya.upgrade.bullets.gmb_1'),
-      t('saya.upgrade.bullets.gmb_2'),
-      t('saya.upgrade.bullets.gmb_3')
+      t('saya.upgrade.bullets.places_1'),
+      t('saya.upgrade.bullets.places_2'),
+      t('saya.upgrade.bullets.places_3')
     ]
   }
   if (feature.value === 'custom-domain') {

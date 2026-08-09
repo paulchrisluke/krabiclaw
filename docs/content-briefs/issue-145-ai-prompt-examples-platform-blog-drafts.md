@@ -21,9 +21,9 @@ Publish: false
 
 Excerpt: Copy-paste AI prompt examples for restaurant owners using KrabiClaw through ChatGPT to manage menus, photos, reviews, analytics, posts, localized content, locations, and launch tasks.
 
-SEO description: Practical AI prompt examples for restaurant owners using ChatGPT and KrabiClaw to manage menus, photos, reviews, website copy, analytics, Google Business, localized content, posts, and launch settings.
+SEO description: Practical AI prompt examples for restaurant owners using ChatGPT and KrabiClaw to manage menus, photos, reviews, website copy, analytics, Google Places imports, localized content, posts, and launch settings.
 
-SEO keywords: AI prompts for restaurant owners, ChatGPT restaurant website, AI restaurant website builder, AI menu builder, AI menu import, restaurant website analytics AI, AI restaurant review management, sync Google Business restaurant, localized restaurant menu, AI restaurant social media posts
+SEO keywords: AI prompts for restaurant owners, ChatGPT restaurant website, AI restaurant website builder, AI menu builder, AI menu import, restaurant website analytics AI, AI restaurant review management, import Google Places restaurant details, localized restaurant menu, AI restaurant social media posts
 
 ## Draft 1 Body
 
@@ -213,17 +213,17 @@ Copy-paste prompts:
 - "Which branch or menu should we promote right now based on site activity?"
 - "I do not know what to do next. Review our site and inbox, then give me the highest-impact task."
 
-## Connect Google Business and Keep Local Details Aligned
+## Import Google Places Details and Keep Local Content Aligned
 
-Google Business prompts should focus on connection, account selection, location sync, and review visibility. Do not ask ChatGPT to edit arbitrary Google listing fields unless your setup supports that specific action.
+Google Places prompts should focus on importing supported location details and reviewing the result. The integration is read-only; do not ask ChatGPT to edit arbitrary Google listing fields.
 
 Copy-paste prompts:
 
-- "Check whether our Google Business Profile is connected."
-- "Help me connect our Google Business Profile to this restaurant site."
-- "Sync our Google Business location into the website."
-- "Show me which Google Business locations are available to connect."
-- "Pull in the latest location details where the integration supports it."
+- "Import the latest Google Places details for our restaurant."
+- "Help me add the right Google Place ID to this restaurant site."
+- "Refresh our hours, address, ratings, and reviews from Google Places."
+- "Show me which location details were imported from Google Places."
+- "Review the imported location details and tell me what still needs manual editing."
 
 ## Publish to Facebook and Connected Social Channels
 
@@ -293,9 +293,9 @@ Publish: false
 
 Excerpt: Copy-paste AI prompt examples for tour, workshop, class, and experience operators using KrabiClaw through ChatGPT to manage listings, bookings, photos, reviews, analytics, localized content, posts, and launch tasks.
 
-SEO description: 60 practical AI prompt examples for tour, workshop, class, and experience operators using ChatGPT and KrabiClaw to manage booking pages, experience listings, photos, reviews, analytics, Google Business, localized content, posts, and launch settings.
+SEO description: 60 practical AI prompt examples for tour, workshop, class, and experience operators using ChatGPT and KrabiClaw to manage booking pages, experience listings, photos, reviews, analytics, Google Places imports, localized content, posts, and launch settings.
 
-SEO keywords: AI booking website, ChatGPT for tour operators, AI tour website builder, AI prompts for experience businesses, tour business website analytics AI, AI review management for tours, sync Google Business tour company, localized tour listing, AI booking page optimization, AI prompts for workshop owners
+SEO keywords: AI booking website, ChatGPT for tour operators, AI tour website builder, AI prompts for experience businesses, tour business website analytics AI, AI review management for tours, import Google Places tour details, localized tour listing, AI booking page optimization, AI prompts for workshop owners
 
 ## Draft 2 Body
 
@@ -488,17 +488,17 @@ Copy-paste prompts:
 - "Add an SEO description for this article before I publish it."
 - "Set this uploaded activity photo as the featured image for the blog post."
 
-## Connect Google Business and Sync Local Presence
+## Import Google Places Details and Sync Local Content
 
-Google Business prompts should focus on connection, account selection, and syncing supported location data. Avoid asking for unsupported edits to arbitrary listing fields.
+Google Places prompts should focus on importing supported location data. The integration is read-only, so avoid asking for unsupported edits to arbitrary listing fields.
 
 Copy-paste prompts:
 
-- "Check whether our Google Business Profile is connected."
-- "Help me connect our Google Business Profile to this tour website."
-- "Show me which Google Business locations are available to connect."
-- "Sync our Google Business location into the website."
-- "Pull in the latest location details where the integration supports it."
+- "Import the latest Google Places details for our tour company."
+- "Help me add the right Google Place ID to this tour website."
+- "Show me which Google Places details are available to import."
+- "Refresh our hours, address, ratings, and reviews from Google Places."
+- "Review the imported location details and tell me what still needs manual editing."
 
 ## Publish to Facebook and Connected Channels
 
@@ -572,7 +572,7 @@ Restaurant draft coverage:
 - Reviews and Q&A: `list_location_reviews`, `reply_to_review`, `list_location_qa`, `create_location_qa`, `update_location_qa`, `reorder_location_qa`
 - Inbox/reservations: `triage_inbox`, reservation/contact listing behavior described in issue 145
 - Analytics and growth: `get_site_analytics`, `grow_my_bookings`, `make_site_more_bookable`
-- Google Business: `get_google_business_connection`, `get_google_business_auth_url`, `list_google_business_accounts`, `sync_google_business_locations`
+- Google Places: `import_from_maps`; Google Place IDs and imported details remain editable in the dashboard
 - Localized content: `list_locales`, `upsert_locale`, `delete_locale`; owners enter localized page, menu, and location fields themselves
 - Domains and dashboard links: `get_site_domains`, `create_domain`, `sync_domain`, `set_canonical_domain`, `get_dashboard_link`
 - Managed service: `list_work_requests`, `create_work_request`
@@ -590,7 +590,7 @@ Experience draft coverage:
 - Analytics and growth: `get_site_analytics`, `grow_my_bookings`, `make_site_more_bookable`
 - Posts/social: `create_post`, `update_post`, `set_media`, `publish_post`, Facebook connection tools
 - Tenant blog: `create_blog_post`, `update_blog_post`, `set_media`
-- Google Business: `get_google_business_connection`, `get_google_business_auth_url`, `list_google_business_accounts`, `sync_google_business_locations`
+- Google Places: `import_from_maps`; Google Place IDs and imported details remain editable in the dashboard
 - Localized content: `list_locales`, `upsert_locale`, `delete_locale`; owners enter localized page, menu, and location fields themselves
 - Domains and dashboard links: `get_site_domains`, `create_domain`, `sync_domain`, `set_canonical_domain`, `get_dashboard_link`
 - Managed service: `list_work_requests`, `create_work_request`
@@ -601,6 +601,6 @@ Claims intentionally avoided:
 - No direct replies to contact or reservation submissions; prompts say triage, summarize, list, or identify attention needed.
 - No `preview_booking_policy` claim.
 - No paid ads, ad budgets, or media buying.
-- No arbitrary Google Business field editing.
+- No arbitrary Google listing field editing or publishing.
 - No automatic pricing optimization, campaign generator, or availability rebalancing.
 - No claim that `make_site_more_bookable` touches analytics, pricing, or availability.

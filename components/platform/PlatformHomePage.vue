@@ -150,7 +150,7 @@ const avatars = [
 const features = [
   { icon: 'message-circle', title: 'Edit through ChatGPT', body: 'Update menus, content, and photos by talking to ChatGPT. No CMS to learn.' },
   { icon: 'sparkles', title: 'Beautiful themes', body: 'Conversion-optimized themes for local businesses. Pick one, swap a color, you\'re live.' },
-  { icon: 'globe', title: 'Google Business sync', body: 'Hours, photos, offerings — pushed to Google so guests find the right info every time.' },
+  { icon: 'globe', title: 'Google Places imports', body: 'Import hours, address, ratings, and reviews so your website reflects the place guests already know.' },
   { icon: 'calendar', title: 'Bookings + waitlist', body: 'Take bookings 24/7 with WhatsApp confirmations. Walk-ins go on the waitlist automatically.' },
   { icon: 'inbox', title: 'Full Inbox', body: 'Manage all your reservations, bookings, and contact inquiries from a single, unified inbox.' },
   { icon: 'bar-chart', title: 'Real-time insights', body: 'See visits, top pages, and busy hours — ask ChatGPT or check the analytics tab.' },
@@ -159,7 +159,7 @@ const features = [
 usePlatformPageSeo({
   path: '/',
   title: 'Local SEO Websites Managed Through ChatGPT',
-  description: 'Beautiful local business websites edited through ChatGPT. Google Business sync, bookings, and real-time analytics included.',
+  description: 'Beautiful local business websites edited through ChatGPT. Google Places imports, bookings, and real-time analytics included.',
   isHomepage: true,
   breadcrumbs: [
     { name: 'Home', url: '/' },

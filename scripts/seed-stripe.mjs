@@ -236,7 +236,7 @@ async function main() {
       'Bookings & ticketed experiences',
       'Messaging booking & reservation notifications',
       'Auto-sync from Facebook & Instagram',
-      'Google Business profile sync',
+      'Google Places imports',
     ],
   })
 
@@ -251,7 +251,7 @@ async function main() {
     features: [
       'Everything in Growth, plus:',
       'We manage your site for you — just WhatsApp us',
-      'Full Google Business profile management',
+      'Google Places import support',
       'Monthly content updates & photo refreshes',
       'Priority WhatsApp support from Paul & Julia',
     ],

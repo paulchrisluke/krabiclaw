@@ -7,7 +7,7 @@ export type WorkRequestType =
   | 'content_update'
   | 'menu_update'
   | 'seo'
-  | 'google_business'
+  | 'google_places'
   | 'seasonal'
   | 'photo_update'
   | 'social_media'
@@ -21,7 +21,7 @@ export const VALID_WORK_REQUEST_TYPES: WorkRequestType[] = [
   'content_update',
   'menu_update',
   'seo',
-  'google_business',
+  'google_places',
   'seasonal',
   'photo_update',
   'social_media',

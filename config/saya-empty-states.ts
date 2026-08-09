@@ -37,7 +37,7 @@ export const sayaEmptyStates: Record<SayaEmptyStateKey, SayaEmptyStateConfig> = 
   },
   locations: {
     examples: [
-      { title: 'Main location', subtitle: 'Connect Google Business to sync your address, hours, photos and reviews.' },
+      { title: 'Main location', subtitle: 'Import your address, hours, ratings, and reviews from Google Places.' },
       { title: 'Second location', subtitle: 'Add a second location once your first is connected.' }
     ],
     hint: 'Add my second location'

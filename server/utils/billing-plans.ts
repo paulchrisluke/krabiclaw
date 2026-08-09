@@ -15,7 +15,7 @@ export interface PlanPrice {
 export interface PlanLimits {
   aiCredits: number | 'unlimited'
   customDomain: boolean
-  googleBusiness: boolean
+  googlePlaces: boolean
   advancedSeo: boolean
   whiteLabel: boolean
   apiAccess: boolean
@@ -73,7 +73,7 @@ const STARTER_PLAN: Plan = {
   limits: {
     aiCredits: 500,
     customDomain: false,
-    googleBusiness: false,
+    googlePlaces: false,
     advancedSeo: false,
     whiteLabel: false,
     apiAccess: false,
@@ -96,7 +96,7 @@ const PLAN_CTA: Record<string, { label: string; href: string }> = {
 const DEFAULT_PLAN_LIMITS: PlanLimits = {
   aiCredits: 0,
   customDomain: false,
-  googleBusiness: false,
+  googlePlaces: false,
   advancedSeo: false,
   whiteLabel: false,
   apiAccess: false,
@@ -130,8 +130,8 @@ function parseLimits(metadata: Record<string, string>): Partial<PlanLimits> {
     result.customDomain =
       metadata.custom_domain === 'true' || metadata.custom_domains === 'true'
   }
-  if ('google_business' in metadata) {
-    result.googleBusiness = metadata.google_business === 'true'
+  if ('google_places' in metadata) {
+    result.googlePlaces = metadata.google_places === 'true'
   }
   if ('advanced_seo' in metadata) {
     result.advancedSeo = metadata.advanced_seo === 'true'

@@ -29,7 +29,6 @@ export type SiteEventType =
   // Locations
   | 'location.created'
   | 'location.updated'
-  | 'location.gmb_connected'
   // Experiences
   | 'experience.created'
   | 'experience.booking_received'

@@ -536,7 +536,7 @@ export const postObject = {
       items: {
         type: 'object',
         properties: {
-          channel: { type: 'string', enum: ['site', 'gmb', 'instagram', 'facebook'] },
+          channel: { type: 'string', enum: ['site', 'instagram', 'facebook'] },
           status: { type: 'string', enum: ['pending', 'published', 'failed', 'skipped'] },
           error: { type: ['string', 'null'] },
           published_at: { type: ['string', 'null'] },
@@ -1126,9 +1126,6 @@ export const READ_ONLY_TOOL_NAMES = [
   'get_contact_inquiries',
   'get_reservation_inquiries',
   'get_notification_settings',
-  'get_google_business_connection',
-  'get_google_business_auth_url',
-  'list_google_business_accounts',
   'list_work_requests',
   'get_site_domains',
   'get_site_analytics',
@@ -1202,7 +1199,6 @@ export const OPEN_WORLD_WRITE_TOOL_NAMES = [
   'reply_to_review',
   'create_experience',
   'update_experience',
-  'sync_google_business_locations',
   'create_domain',
   'set_canonical_domain',
   'sync_domain',

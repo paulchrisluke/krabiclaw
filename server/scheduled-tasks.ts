@@ -13,7 +13,7 @@ export type ScheduledTaskName =
   | 'domain-reconciliation-daily'
   | 'analytics-aggregate-daily'
   | 'site-transfer-reminders'
-  | 'google-business-sync'
+  | 'google-places-sync'
   | 'instagram-sync-process'
   | 'review-request-automation'
   | 'stripe-reconciliation'
@@ -27,7 +27,7 @@ export const SCHEDULED_TASKS: Readonly<Record<string, readonly ScheduledTaskName
   '*/10 * * * *': ['domain-reconciliation'],
   '0 3 * * *': ['domain-reconciliation-daily', 'analytics-aggregate-daily'],
   '0 4 * * *': ['site-transfer-reminders'],
-  '0 0 * * 0': ['google-business-sync'],
+  '0 0 * * 0': ['google-places-sync'],
   '0 * * * *': ['instagram-sync-process', 'review-request-automation', 'stripe-reconciliation'],
 }
 
@@ -38,7 +38,7 @@ const TASK_LOADERS: Readonly<Record<ScheduledTaskName, TaskLoader>> = {
   'domain-reconciliation-daily': async () => import('./tasks/domain-reconciliation-daily'),
   'analytics-aggregate-daily': async () => import('./tasks/analytics-aggregate-daily'),
   'site-transfer-reminders': async () => import('./tasks/site-transfer-reminders'),
-  'google-business-sync': async () => import('./tasks/google-business-sync'),
+  'google-places-sync': async () => import('./tasks/google-places-sync'),
   'instagram-sync-process': async () => import('./tasks/instagram-sync-process'),
   'review-request-automation': async () => import('./tasks/review-request-automation'),
   'stripe-reconciliation': async () => import('./tasks/stripe-reconciliation'),

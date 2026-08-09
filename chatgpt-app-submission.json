@@ -63,7 +63,7 @@
     ]
   },
   "capabilities": {
-    "tool_count": 68,
+    "tool_count": 64,
     "tool_domains": {
       "sites": 5,
       "locations": 5,
@@ -77,7 +77,6 @@
       "locales": 3,
       "submissions": 4,
       "notifications": 2,
-      "google_business": 4,
       "managed_service": 2
     },
     "core_use_cases": [
@@ -90,7 +89,7 @@
       "Manage locale-specific content for sites with multiple language versions.",
       "Triage contact and reservation submissions.",
       "View and update notification settings.",
-      "Connect and sync eligible Google Business data.",
+      "Import supported Google Places details and review the imported location data.",
       "Create and review managed-service work requests."
     ],
     "user_value_summary": "KrabiClaw helps business owners and their staff operate their KrabiClaw-hosted website content and location data conversationally from ChatGPT without leaving the workspace context."
@@ -104,7 +103,7 @@
       "The tool surface is tenant-safe and excludes admin-global, platform-content, and internal-only operations.",
       "Site-scoped tools require a visible site context and are filtered by role and active entitlements.",
       "Some tools require elevated roles such as admin or owner.",
-      "Entitlement-gated domains include Google Business and managed service features."
+      "Entitlement-gated domains include Google Places imports and managed service features."
     ]
   },
   "data_handling": {
@@ -114,7 +113,7 @@
       "Payment Data (Processed securely via Stripe)",
       "Usage Data (IP addresses, browser types, interaction metrics)",
       "Cookies (Essential cookies for authentication and platform functionality)",
-      "Workspace operational data returned by tools, such as site content, submissions, reviews, bookings, media metadata, and business profile connection state"
+      "Workspace operational data returned by tools, such as site content, submissions, reviews, bookings, media metadata, and imported location details"
     ],
     "privacy_summary": "KrabiClaw states that it does not sell personal information and uses collected data solely to provide, maintain, and improve the services, process payments, and communicate with users. Data is shared only with essential third-party service providers or when required by law.",
     "retention_summary": "Data is retained as long as necessary to provide the service and comply with legal obligations (e.g., GDPR, CCPA). Users can request to access, update, or delete their personal information at any time.",
@@ -130,7 +129,7 @@
     ],
     "known_review_risks": [
       "Because the app has a large write-capable tool surface, metadata and confirmation behavior must stay tightly aligned with actual tool behavior.",
-      "Reviewers may test destructive flows, publish flows, and Google Business flows, so only submit if these are stable in production.",
+      "Reviewers may test destructive flows, publish flows, and Google Places import flows, so only submit if these are stable in production.",
       "Screenshots and test prompts still need human curation and should reflect the current production UI and outputs."
     ]
   },

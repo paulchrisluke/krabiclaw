@@ -109,7 +109,7 @@ const showAllPurchases = ref(false)
 
 const ADDON_LABELS: Record<string, string> = {
   seasonal: 'Seasonal Relaunch',
-  gbp_setup: 'Google Business Optimization',
+  gbp_setup: 'Google Places Setup',
 }
 const ADDON_ICONS: Record<string, string> = {
   seasonal: 'i-lucide-sparkles',

@@ -18,7 +18,6 @@ const SITE_EVENT_LABELS: Record<string, string> = {
   'reservation.cancelled': 'Cancelled a reservation',
   'location.created': 'Added a location',
   'location.updated': 'Updated a location',
-  'location.gmb_connected': 'Connected Google Business',
   'experience.created': 'Created an experience',
   'experience.booking_received': 'New experience booking',
   'work_request.created': 'Submitted a work request',

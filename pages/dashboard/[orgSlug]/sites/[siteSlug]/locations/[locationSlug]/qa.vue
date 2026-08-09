@@ -34,7 +34,6 @@
               <div class="min-w-0">
                 <div class="flex flex-wrap items-center gap-2">
                   <UBadge :color="item.status === 'published' ? 'success' : 'neutral'" variant="soft">{{ item.status }}</UBadge>
-                  <UBadge v-if="item.source === 'gmb'" color="neutral" variant="subtle">Google</UBadge>
                   <span class="text-xs text-muted">{{ item.upvote_count }} upvotes</span>
                 </div>
                 <p class="mt-3 text-sm font-semibold text-highlighted">{{ item.question }}</p>

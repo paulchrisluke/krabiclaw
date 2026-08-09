@@ -1,6 +1,6 @@
 import type { BatchQuery } from '~/server/db'
 import type { PublicBase } from '~/server/utils/public-base'
-import { calculateMapEmbedUrl } from '~/server/utils/google-business'
+import { calculateMapEmbedUrl } from '~/server/utils/google-places'
 import type { PublicShellPayload } from '~/utils/public-resource-contracts'
 
 type BatchResult = { results?: unknown[] }

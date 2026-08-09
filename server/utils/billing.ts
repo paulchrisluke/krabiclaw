@@ -224,7 +224,7 @@ export async function setSiteEntitlementsFromPlan(
     })
   }
   // sites.plan is a denormalized cache read directly by mcp-workflows, the
-  // transfer onboarding wizard, and Google Business sync gating — it must
+  // transfer onboarding wizard, and Google Places sync gating — it must
   // stay in sync with the site_billing.plan that triggered this entitlement
   // refresh, or those call sites keep showing whatever plan existed at
   // site-creation time.

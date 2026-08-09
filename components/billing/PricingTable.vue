@@ -178,7 +178,7 @@ const comparisonRows: ComparisonRow[] = [
   { feature: 'LLM-ready SEO (get found by AI)',   free: 'Basic', growth: 'Advanced', managed: 'Advanced' },
   { feature: 'Custom domain',                     free: false,   growth: true,      managed: true },
   { feature: 'Facebook auto-sync',                free: false,   growth: true,      managed: true },
-  { feature: 'Google Business sync',              free: false,   growth: true,  managed: true },
+  { feature: 'Google Places imports',             free: false,   growth: true,  managed: true },
   { feature: 'Post-booking review requests',      free: true,   growth: true,      managed: true },
   { feature: 'Messaging notifications',           free: false,   growth: true,      managed: true },
   { feature: 'Support',                           free: 'Community', growth: 'Priority', managed: 'Priority' },

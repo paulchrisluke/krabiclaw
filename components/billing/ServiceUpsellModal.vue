@@ -121,7 +121,7 @@ function buildContentMap(experience: boolean): Record<UpsellType, UpsellContent>
         `${menuCapitalized} updates via ChatGPT — just send us a message`,
         'WhatsApp booking & reservation notifications',
         'Auto-sync from Facebook & Instagram',
-        'Google Business profile sync',
+        'Google Places imports',
         'Post-booking review requests',
       ],
       price: '$49',
@@ -133,7 +133,7 @@ function buildContentMap(experience: boolean): Record<UpsellType, UpsellContent>
       subheading: `Send us a voice note on WhatsApp. We handle ${menuWord} updates, posts, and your Google presence.`,
       bullets: [
         `${menuCapitalized}, posts & seasonal content managed for you`,
-        'Full Google Business profile management',
+        'Google Places imports and location updates',
         'Post-booking review requests and reminders',
         'Custom domain + free SSL',
         'Priority WhatsApp support — we respond fast',

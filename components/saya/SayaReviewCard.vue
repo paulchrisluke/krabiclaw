@@ -33,7 +33,7 @@
         <div class="flex flex-wrap items-center gap-2">
           <span class="font-medium text-default">{{ review.author }}</span>
           <span
-            v-if="review.source === 'gmb'"
+            v-if="review.source === 'google_places'"
             class="inline-flex items-center rounded-full border border-default px-2 py-0.5 text-xs font-medium text-muted"
           >
             {{ $t('saya.reviews_page.via_google') }}

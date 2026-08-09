@@ -156,7 +156,6 @@ test('dashboard site access distinguishes organization, site-team, and location-
 test('the audited /api/dashboard/** boundary is deny-by-default for scoped roles', () => {
   assert.equal(canScopedRoleUseDashboardPath('/api/dashboard/context'), true)
   assert.equal(canScopedRoleUseDashboardPath('/api/dashboard/locations/loc-1'), true)
-  assert.equal(canScopedRoleUseDashboardPath('/api/dashboard/locations/loc-1/integrations/google-business'), false)
   assert.equal(canScopedRoleUseDashboardPath('/api/dashboard/editor/media'), false)
   assert.equal(canScopedRoleUseDashboardPath('/api/dashboard/sites/site-1/guest-threads'), true)
   assert.equal(canScopedRoleUseDashboardPath('/api/dashboard/sites/site-1/guest-threads/thread-1/reply'), true)

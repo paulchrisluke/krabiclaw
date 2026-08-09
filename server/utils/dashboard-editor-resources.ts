@@ -21,7 +21,6 @@ import { getFacebookPagesConnection } from '~/server/utils/facebook-pages'
 import { resolveLocationCapabilitySummary } from '~/server/utils/location-management'
 import { parseLocationPayload } from '~/server/utils/location-payload'
 import { getMenus, getMenuWithItems } from '~/server/utils/menu-management'
-import { getGoogleBusinessConnection } from '~/server/utils/google-business'
 import { loadDashboardGuestThreads } from '~/server/utils/dashboard-guest-threads'
 import { requireBlogAccess } from '~/server/utils/blog-access'
 import { getPlatformBlogPost, listPlatformBlogPosts } from '~/server/utils/platform-content'
@@ -264,7 +263,7 @@ export async function loadDashboardLocationOverview(
   locationId: string,
   options: { includeMenus: boolean },
 ) {
-  const { env, db, organization, location } = await getDashboardLocationContext(event, locationId)
+  const { db, organization, location } = await getDashboardLocationContext(event, locationId)
   if (location.site_id !== siteId) {
     throw createError({ statusCode: 404, statusMessage: 'Location not found' })
   }
@@ -275,7 +274,7 @@ export async function loadDashboardLocationOverview(
     siteId,
     locationId,
   })
-  const [capabilities, menus, connection, threads] = await Promise.all([
+  const [capabilities, menus, threads] = await Promise.all([
     resolveLocationCapabilitySummary(
       db,
       organization.id,
@@ -285,7 +284,6 @@ export async function loadDashboardLocationOverview(
     options.includeMenus
       ? getMenus(db, organization.id, siteId, locationId)
       : Promise.resolve([]),
-    getGoogleBusinessConnection(env, organization.id, siteId, locationId),
     loadDashboardGuestThreads(event, siteId, { locationId }),
   ])
   return {
@@ -295,19 +293,6 @@ export async function loadDashboardLocationOverview(
       ...capabilities,
     },
     menus: { success: true as const, menus },
-    connection: {
-      success: true as const,
-      connection: connection
-        ? {
-            id: connection.id,
-            provider_account_email: connection.provider_account_email,
-            status: connection.status,
-            expires_at: connection.expires_at,
-            created_at: connection.created_at,
-            updated_at: connection.updated_at,
-          }
-        : null,
-    },
     threads: { summary: threads.summary },
   }
 }
@@ -317,7 +302,7 @@ export async function loadDashboardLocationSettings(
   siteId: string,
   locationId: string,
 ) {
-  const { env, db, organization, location } = await getDashboardLocationContext(event, locationId)
+  const { db, organization, location } = await getDashboardLocationContext(event, locationId)
   if (location.site_id !== siteId) {
     throw createError({ statusCode: 404, statusMessage: 'Location not found' })
   }
@@ -328,33 +313,17 @@ export async function loadDashboardLocationSettings(
     siteId,
     locationId,
   })
-  const [capabilities, connection] = await Promise.all([
-    resolveLocationCapabilitySummary(
-      db,
-      organization.id,
-      siteId,
-      location.feature_overrides as string | null ?? null,
-    ),
-    getGoogleBusinessConnection(env, organization.id, siteId, locationId),
-  ])
+  const capabilities = await resolveLocationCapabilitySummary(
+    db,
+    organization.id,
+    siteId,
+    location.feature_overrides as string | null ?? null,
+  )
   return {
     location: {
       success: true as const,
       location: parseLocationPayload(location)!,
       ...capabilities,
-    },
-    connection: {
-      success: true as const,
-      connection: connection
-        ? {
-            id: connection.id,
-            provider_account_email: connection.provider_account_email,
-            status: connection.status,
-            expires_at: connection.expires_at,
-            created_at: connection.created_at,
-            updated_at: connection.updated_at,
-          }
-        : null,
     },
   }
 }

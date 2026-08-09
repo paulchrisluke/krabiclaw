@@ -2,7 +2,7 @@ import { expect, test, request as playwrightRequest, type APIRequestContext } fr
 import { devLoginHeaders } from './test-env'
 import { loginAs } from './helpers/auth'
 import { MCP_FREE_USER_ID } from './helpers/plan-fixtures'
-import { mcpRequest, ensureSite, getSiteOrg, ensureLocation, loginAsFreshMcpUser } from './helpers/mcp'
+import { mcpRequest, ensureSite, getSiteOrg, loginAsFreshMcpUser } from './helpers/mcp'
 
 // Split out of mcp.spec.ts (authorization/isolation tests) — see
 // helpers/mcp.ts for why. This group covers role-based tool visibility,
@@ -33,7 +33,6 @@ test.describe('stateless MCP server', () => {
     const toolNames = toolsBody.result.tools.map(tool => tool.name)
     expect(toolNames).toContain('update_page_content')
     expect(toolNames).not.toContain('update_notification_settings')
-    expect(toolNames).not.toContain('get_google_business_auth_url')
   })
 
   test('site-scoped tools/list fails closed for inaccessible site ids', async ({ request, baseURL }) => {
@@ -80,19 +79,9 @@ test.describe('stateless MCP server', () => {
     const toolsBody = await toolsList.json() as { result: { tools: Array<{ name: string }> } }
     const toolNames = toolsBody.result.tools.map(t => t.name)
     expect(toolNames).toContain('list_locales')
-    expect(toolNames).not.toContain('list_google_business_accounts')
-    expect(toolNames).not.toContain('sync_google_business_locations')
     expect(toolNames).not.toContain('list_work_requests')
     expect(toolNames).not.toContain('create_work_request')
 
-    const locationId = await ensureLocation(request, baseURL!, siteId)
-    const gbConnectionCall = await mcpRequest(request, baseURL!, {
-      method: 'tools/call',
-      toolName: 'get_google_business_connection',
-      args: { site_id: siteId, location_id: locationId },
-    })
-    expect(gbConnectionCall.status()).toBe(200)
-    expect((await gbConnectionCall.json()).error?.code).toBe(-32601)
   })
 
   // Grouped so siteA/siteB and the logged-in-as-site-B-owner session are

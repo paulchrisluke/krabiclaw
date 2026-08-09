@@ -93,8 +93,8 @@ export const POSTS_TOOLS: McpToolDefinition[] = [
       confirmRequired: true,
       inputSchema: {
         post_id: { type: 'string' },
-        channels: { type: 'array', items: { type: 'string', enum: ['site', 'facebook', 'instagram', 'gmb'] }, description: 'Channels to publish to. Defaults to ["site"].' },
-        targets: { type: 'array', items: { type: 'string', enum: ['site', 'facebook', 'instagram', 'gmb'] }, description: 'Deprecated alias for channels. Prefer channels.' },
+        channels: { type: 'array', items: { type: 'string', enum: ['site', 'facebook', 'instagram'] }, description: 'Channels to publish to. Defaults to ["site"].' },
+        targets: { type: 'array', items: { type: 'string', enum: ['site', 'facebook', 'instagram'] }, description: 'Deprecated alias for channels. Prefer channels.' },
       },
       required: ['post_id'],
       outputSchema: postPublishResultObject,

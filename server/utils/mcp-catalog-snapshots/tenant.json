@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:53ad3c70f8cdc036ccf57fc0f8fa083090ad096c246992485c387d4c3d549ba4",
+  "fingerprint": "sha256:266b5508de84322dfcba6577c7b478a7c8c835400062fa9f8fd8f07802d790cb",
   "tools": [
     {
       "name": "add_menu_items_batch",
@@ -2378,7 +2378,7 @@
               "content_update",
               "menu_update",
               "seo",
-              "google_business",
+              "google_places",
               "seasonal",
               "photo_update",
               "social_media",
@@ -3924,99 +3924,6 @@
       }
     },
     {
-      "name": "get_google_business_auth_url",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "location_id": {
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "location_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "authUrl": {
-            "description": "Google OAuth URL — direct the user to open this in a browser.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "authUrl"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "get_google_business_connection",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "location_id": {
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "location_id"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "connection": {
-            "properties": {
-              "account_id": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "connected": {
-                "type": "boolean"
-              },
-              "gmb_location_id": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "last_synced_at": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "location_name": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              }
-            },
-            "required": [
-              "connected"
-            ],
-            "type": "object"
-          }
-        },
-        "required": [
-          "connection"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "get_location",
       "inputSchema": {
         "additionalProperties": true,
@@ -4692,7 +4599,6 @@
                     "channel": {
                       "enum": [
                         "site",
-                        "gmb",
                         "instagram",
                         "facebook"
                       ],
@@ -7019,67 +6925,6 @@
       }
     },
     {
-      "name": "list_google_business_accounts",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "accounts": {
-            "items": {
-              "properties": {
-                "id": {
-                  "type": "string"
-                },
-                "locations": {
-                  "items": {
-                    "properties": {
-                      "address": {
-                        "type": "string"
-                      },
-                      "id": {
-                        "type": "string"
-                      },
-                      "name": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "id",
-                      "name"
-                    ],
-                    "type": "object"
-                  },
-                  "type": "array"
-                },
-                "name": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "id",
-                "name"
-              ],
-              "type": "object"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "accounts"
-        ],
-        "type": "object"
-      }
-    },
-    {
       "name": "list_locales",
       "inputSchema": {
         "additionalProperties": true,
@@ -7444,7 +7289,6 @@
                       "channel": {
                         "enum": [
                           "site",
-                          "gmb",
                           "instagram",
                           "facebook"
                         ],
@@ -8768,8 +8612,7 @@
               "enum": [
                 "site",
                 "facebook",
-                "instagram",
-                "gmb"
+                "instagram"
               ],
               "type": "string"
             },
@@ -8788,8 +8631,7 @@
               "enum": [
                 "site",
                 "facebook",
-                "instagram",
-                "gmb"
+                "instagram"
               ],
               "type": "string"
             },
@@ -11624,241 +11466,6 @@
           "success",
           "synced_to_location",
           "page"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "sync_google_business_locations",
-      "inputSchema": {
-        "additionalProperties": true,
-        "properties": {
-          "account_id": {
-            "type": "string"
-          },
-          "location_ids": {
-            "type": "array"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "account_id",
-          "location_ids"
-        ],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "locations": {
-            "items": {
-              "properties": {
-                "address": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "canonical_url": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "city": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "created_at": {
-                  "type": "string"
-                },
-                "description": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "email": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "facebook_url": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "foodpanda_url": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "grab_url": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "hero_media_asset_id": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "id": {
-                  "type": "string"
-                },
-                "instagram_url": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "is_primary": {
-                  "type": "number"
-                },
-                "maps_url": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "max_capacity": {
-                  "description": "Maximum total guests this location can seat per reservation time slot. Null means no cap is enforced (slots remain bookable).",
-                  "type": [
-                    "number",
-                    "null"
-                  ]
-                },
-                "neighborhood": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "notification_phone": {
-                  "description": "WhatsApp number for internal booking/reservation alerts to this location's manager. Not shown to guests. Falls back to the site-level whatsapp_phone if null.",
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "og_image_asset_id": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "opening_hours": {
-                  "type": [
-                    "object",
-                    "null"
-                  ]
-                },
-                "phone": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "rating": {
-                  "type": [
-                    "number",
-                    "null"
-                  ]
-                },
-                "review_count": {
-                  "type": [
-                    "number",
-                    "null"
-                  ]
-                },
-                "robots": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "seo_description": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "seo_title": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "short_description": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "slug": {
-                  "type": "string"
-                },
-                "special_hours": {
-                  "type": [
-                    "object",
-                    "null"
-                  ]
-                },
-                "status": {
-                  "type": "string"
-                },
-                "tiktok_url": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "timezone": {
-                  "description": "IANA time zone identifier for this location, e.g. Asia/Bangkok. Used to interpret opening hours and booking slots.",
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "title": {
-                  "type": "string"
-                },
-                "uber_eats_url": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "updated_at": {
-                  "type": "string"
-                },
-                "website_url": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                }
-              },
-              "type": "object"
-            },
-            "type": "array"
-          },
-          "synced": {
-            "description": "Number of locations synced.",
-            "type": "number"
-          }
-        },
-        "required": [
-          "synced"
         ],
         "type": "object"
       }

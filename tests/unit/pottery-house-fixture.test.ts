@@ -272,7 +272,7 @@ test("pottery house billing block includes ai credits and site billing state", (
   assert.match(sql, /sb-site-pottery-house/);
   assert.match(sql, /managed/);
   assert.match(sql, /managed_service/);
-  assert.match(sql, /google_business/);
+  assert.match(sql, /google_places/);
 });
 
 test("pottery house blog block includes the canonical published content snapshot", () => {

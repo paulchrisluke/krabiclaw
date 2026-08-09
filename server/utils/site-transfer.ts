@@ -14,10 +14,8 @@ import { normalizeHost } from '~/server/utils/tenant-hosts'
 const SITE_SCOPED_TABLES = [
   'site_domains',
   'site_domain_events',
-  'google_business_connections',
   'google_analytics_connections',
   'business_locations',
-  'google_business_events',
   'facebook_pages_connections',
   'site_config',
   'site_locales',

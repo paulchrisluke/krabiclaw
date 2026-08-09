@@ -4,7 +4,6 @@ import { queryAll } from '~/server/db'
 import { recordUsageEvent } from '~/server/utils/usage-metering'
 import { defineScheduledTask } from '~/server/utils/scheduled-task'
 
-// NOTE: Google Business Profile API access was never provisioned.
 // All Google data for every location comes from the Places API (New, v1)
 // using GOOGLE_PLACES_API_KEY. This task syncs hours, ratings, and reviews
 // for every business_locations row that has google_place_id set.
@@ -56,17 +55,17 @@ export default defineScheduledTask({
 
     const apiKey = env.GOOGLE_PLACES_API_KEY as string | undefined
     if (!apiKey) {
-      console.warn('[google-business-sync] GOOGLE_PLACES_API_KEY not configured — skipping')
+      console.warn('[google-places-sync] GOOGLE_PLACES_API_KEY not configured — skipping')
       return { result: emptyResult }
     }
 
-    // Sync locations for orgs with google_business entitlement that have a Place ID
+    // Sync locations for orgs with google_places entitlement that have a Place ID
     const locations = await queryAll<PlaceLocationRow>(db, `
       SELECT bl.id, bl.organization_id, bl.site_id, bl.title, bl.google_place_id
       FROM business_locations bl
       INNER JOIN site_entitlements oe
         ON oe.site_id = bl.site_id
-        AND oe.key = 'google_business'
+        AND oe.key = 'google_places'
         AND oe.value = 'true'
       WHERE bl.google_place_id IS NOT NULL
         AND bl.status = 'active'
@@ -93,7 +92,7 @@ export default defineScheduledTask({
         organizationId: loc.organization_id,
         siteId: loc.site_id,
         resource: 'scheduled_task',
-        source: 'google_business_sync',
+        source: 'google_places_sync',
         provider: 'krabiclaw',
         channel: 'google_places',
         quantity: 1,
@@ -114,7 +113,7 @@ export default defineScheduledTask({
         locResult.reviews_upserted = reviewsUpserted
       } catch (err) {
         locResult.error = err instanceof Error ? err.message : String(err)
-        console.error(`[google-business-sync] Places sync failed for location ${loc.id} (${loc.title}):`, locResult.error)
+        console.error(`[google-places-sync] Places sync failed for location ${loc.id} (${loc.title}):`, locResult.error)
       }
 
       if (!locResult.error) {

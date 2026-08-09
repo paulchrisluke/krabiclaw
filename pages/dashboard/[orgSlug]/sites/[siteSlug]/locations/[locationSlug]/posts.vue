@@ -332,7 +332,6 @@ const selectedChannels = ref<string[]>(['site'])
 
 const channelOptions = computed(() => [
   { value: 'site', label: 'This website', disabled: false },
-  { value: 'gmb', label: 'Google Business Profile', disabled: true },
   { value: 'facebook', label: 'Facebook Page', disabled: !facebookConnected.value, hint: facebookConnected.value ? undefined : 'Connect in Integrations' },
   { value: 'instagram', label: 'Instagram', disabled: !facebookConnected.value, hint: facebookConnected.value ? 'Requires image' : 'Connect in Integrations' },
 ])

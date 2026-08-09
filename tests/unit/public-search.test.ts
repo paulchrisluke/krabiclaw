@@ -6,10 +6,10 @@ import { mock, test } from 'node:test'
 const PLATFORM_DOCS = [
   {
     id: 'doc-1',
-    title: 'Connecting Google Business',
-    slug: 'connecting-google-business',
-    body: 'Step by step instructions for linking your Google Business profile.',
-    excerpt: 'Link Google Business to sync hours and reviews.',
+    title: 'Importing Google Places',
+    slug: 'importing-google-places',
+    body: 'Step by step instructions for importing Google Places details.',
+    excerpt: 'Import Google Places details such as hours and reviews.',
     category: 'Integrations',
     seo_description: null,
     seo_keywords: 'google, business, sync',

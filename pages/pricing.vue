@@ -137,7 +137,7 @@ if (!isBlawby.value) {
 // get advertised to crawlers/AI even though the visual table already hides them.
 const OFFER_DESCRIPTIONS: Record<string, string> = {
   free: 'Free business website with offerings and basic SEO',
-  growth: 'Custom domain, messaging notifications, and Google Business sync',
+  growth: 'Custom domain, messaging notifications, and Google Places imports',
   managed: 'Full managed service — Paul & Julia handle everything',
   seo_accelerator: "Julia's 1M impressions/day SEO playbook applied to your business",
 }
@@ -147,7 +147,7 @@ const OFFER_DESCRIPTIONS: Record<string, string> = {
 usePlatformPageSeo(() => ({
   path: '/pricing',
   title: 'Pricing',
-  description: 'Business websites from $49/month, built and edited through the free KrabiClaw ChatGPT app. Custom domain, messaging notifications, and Google Business sync on Growth — or start free. No contracts.',
+  description: 'Business websites from $49/month, built and edited through the free KrabiClaw ChatGPT app. Custom domain, messaging notifications, and Google Places imports on Growth — or start free. No contracts.',
   breadcrumbs: [
     { name: 'Home', url: '/' },
     { name: 'Pricing', url: '/pricing' },
