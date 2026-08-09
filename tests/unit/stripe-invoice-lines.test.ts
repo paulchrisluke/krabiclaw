@@ -1,6 +1,17 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { loadStripeInvoiceLines } from '../../server/utils/stripe-invoice-lines.ts'
+import {
+  invoiceLineExactQuantity,
+  loadStripeInvoiceLines,
+} from '../../server/utils/stripe-invoice-lines.ts'
+
+test('canonical invoice quantity defaults only when absent and rejects malformed values', () => {
+  assert.equal(invoiceLineExactQuantity({} as never), 1)
+  assert.equal(invoiceLineExactQuantity({ quantity: 1, quantity_decimal: '1' } as never), 1)
+  assert.equal(invoiceLineExactQuantity({ quantity: 0 } as never), null)
+  assert.equal(invoiceLineExactQuantity({ quantity_decimal: 'not-a-number' } as never), null)
+  assert.equal(invoiceLineExactQuantity({ quantity: 1, quantity_decimal: '2' } as never), null)
+})
 
 test('missing embedded invoice lines loads the complete first page', async () => {
   const calls: Array<{ invoiceId: string; params: Record<string, unknown> }> = []

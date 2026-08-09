@@ -2,6 +2,7 @@ import type Stripe from 'stripe'
 import type { StripePlan } from '@better-auth/stripe'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import {
+  invoiceSubscriptionId as resolveInvoiceSubscriptionId,
   resolveCanonicalSubscriptionPlan,
   selectCanonicalStripePrice,
   type StripePlanLoader,
@@ -17,6 +18,15 @@ import { assertDirectOperatorSession } from '~/server/utils/operator-session'
 import { getPlanEntitlements, type EntitlementsMap } from '~/server/utils/billing-entitlements'
 import { isKnownRecurringPlan, isNewSalePlan } from '~/shared/billing-model'
 import { assertGrowthStripeCatalogPrices } from '~/server/utils/stripe-catalog'
+import {
+  invoiceLineIsProration,
+  invoiceLineIsSubscription,
+  invoiceLineExactQuantity,
+  invoiceLinePrice,
+  invoiceLineSubscriptionId,
+  invoiceLineSubscriptionItemId,
+  type StripeInvoiceLine,
+} from '~/server/utils/stripe-invoice-lines'
 
 export type OrganizationReconciliationProviderMode = 'test' | 'live'
 
@@ -87,7 +97,30 @@ export interface OrganizationReconciliationProviderSubscription {
   periodEnd: string | null
   cancelAtPeriodEnd: boolean | null
   latestInvoiceId: string | null
+  latestInvoice: OrganizationReconciliationProviderInvoice | null
   resolutionError?: string
+}
+
+export interface OrganizationReconciliationProviderInvoiceLine {
+  id: string
+  subscriptionId: string | null
+  subscriptionItemId: string | null
+  priceId: string | null
+  quantity: number | null
+  periodStart: string | null
+  periodEnd: string | null
+  proration: boolean
+  subscriptionLine: boolean
+}
+
+export interface OrganizationReconciliationProviderInvoice {
+  id: string
+  subscriptionId: string | null
+  status: string | null
+  linesRetrieved: number
+  linesComplete: boolean
+  lines: OrganizationReconciliationProviderInvoiceLine[]
+  baseLine: OrganizationReconciliationProviderInvoiceLine | null
 }
 
 export interface OrganizationReconciliationLocalEvidence {
@@ -579,6 +612,165 @@ function invoiceId(value: Stripe.Subscription['latest_invoice']): string | null 
   return null
 }
 
+function invoiceLinePriceId(line: StripeInvoiceLine): string | null {
+  const price = invoiceLinePrice(line)
+  if (typeof price === 'string' && price.trim()) return price.trim()
+  if (price && typeof price === 'object' && typeof price.id === 'string' && price.id.trim()) return price.id.trim()
+  return null
+}
+
+function invoiceLinePeriod(value: unknown): { start: string | null; end: string | null } {
+  if (!value || typeof value !== 'object') return { start: null, end: null }
+  const period = value as { start?: unknown; end?: unknown }
+  return {
+    start: isoFromUnix(period.start),
+    end: isoFromUnix(period.end),
+  }
+}
+
+function normalizeProviderInvoiceLine(line: StripeInvoiceLine): OrganizationReconciliationProviderInvoiceLine {
+  const lineId = (line as { id?: unknown }).id
+  if (typeof lineId !== 'string' || !lineId.trim()) {
+    throw new ReconciliationProviderReadBoundError('provider_invoice_malformed', 'Stripe invoice line omitted an id.')
+  }
+  const period = invoiceLinePeriod(line.period)
+  return {
+    id: lineId,
+    subscriptionId: invoiceLineSubscriptionId(line),
+    subscriptionItemId: invoiceLineSubscriptionItemId(line),
+    priceId: invoiceLinePriceId(line),
+    quantity: invoiceLineExactQuantity(line),
+    periodStart: period.start,
+    periodEnd: period.end,
+    proration: invoiceLineIsProration(line),
+    subscriptionLine: invoiceLineIsSubscription(line),
+  }
+}
+
+async function readBoundedProviderInvoice(
+  stripe: Stripe,
+  invoiceId: string,
+  subscriptionId: string,
+  canonicalBasePriceId: string | null,
+  canonicalBaseItemId: string | null,
+  canonicalQuantity: number | null,
+): Promise<OrganizationReconciliationProviderInvoice> {
+  if (!stripe.invoices || typeof stripe.invoices.retrieve !== 'function') {
+    throw new ReconciliationProviderReadBoundError('provider_invoice_malformed', 'Stripe invoice retrieval is unavailable.')
+  }
+  const invoice = await stripe.invoices.retrieve(invoiceId, {
+    expand: ['lines.data.pricing.price_details.price'],
+  }) as unknown as Stripe.Invoice & { lines?: Stripe.ApiList<StripeInvoiceLine> | null }
+  if (!invoice || invoice.id !== invoiceId) {
+    throw new ReconciliationProviderReadBoundError('provider_invoice_malformed', 'Stripe invoice retrieval returned the wrong invoice identity.')
+  }
+
+  let rawLines: StripeInvoiceLine[]
+  const embeddedLines = invoice.lines?.data
+  if (Array.isArray(embeddedLines) && invoice.lines && invoice.lines.has_more === false) {
+    if (embeddedLines.length > MAX_PROVIDER_INVOICE_LINES) {
+      throw new ReconciliationProviderReadBoundError('provider_invoice_lines_unbounded', 'Stripe invoice lines exceeded the bounded reconciliation window.')
+    }
+    rawLines = embeddedLines
+  } else {
+    if (!stripe.invoices.listLineItems || typeof stripe.invoices.listLineItems !== 'function') {
+      throw new ReconciliationProviderReadBoundError('provider_invoice_malformed', 'Stripe invoice line retrieval is unavailable.')
+    }
+    const page = await stripe.invoices.listLineItems(invoiceId, {
+      limit: MAX_PROVIDER_INVOICE_LINES,
+      expand: ['data.pricing.price_details.price'],
+    }) as unknown as { data?: StripeInvoiceLine[]; has_more?: unknown }
+    if (!Array.isArray(page.data) || page.data.length > MAX_PROVIDER_INVOICE_LINES || typeof page.has_more !== 'boolean') {
+      throw new ReconciliationProviderReadBoundError('provider_invoice_malformed', 'Stripe invoice line retrieval returned malformed pagination evidence.')
+    }
+    if (page.has_more) {
+      throw new ReconciliationProviderReadBoundError('provider_invoice_lines_unbounded', 'Stripe invoice lines exceeded the bounded reconciliation window.')
+    }
+    rawLines = page.data
+  }
+  const lines = rawLines.map(normalizeProviderInvoiceLine)
+  const matchingLines = lines.filter(line =>
+    line.subscriptionLine
+    && !line.proration
+    && line.subscriptionId === subscriptionId,
+  )
+  const canonicalLines = canonicalBasePriceId && canonicalBaseItemId && canonicalQuantity
+    ? matchingLines.filter(line =>
+        line.priceId === canonicalBasePriceId
+        && line.subscriptionItemId === canonicalBaseItemId
+        && line.quantity === canonicalQuantity,
+      )
+    : []
+  return {
+    id: invoiceId,
+    subscriptionId: resolveInvoiceSubscriptionId(invoice),
+    status: nullableString(invoice.status),
+    linesRetrieved: lines.length,
+    linesComplete: true,
+    lines,
+    baseLine: canonicalLines.length === 1 ? (canonicalLines[0] ?? null) : null,
+  }
+}
+
+function compareProviderInvoiceCoverage(
+  drifts: OrganizationReconciliationDrift[],
+  provider: OrganizationReconciliationProviderSubscription,
+): void {
+  if (provider.status !== 'active') return
+  const invoice = provider.latestInvoice
+  if (!invoice) {
+    addDrift(drifts, 'provider_invoice_missing', 'blocked', provider.id, 'Active provider subscription has no retrievable latest invoice evidence.')
+    return
+  }
+  if (invoice.subscriptionId !== provider.id) {
+    addDrift(drifts, 'provider_invoice_subscription_mismatch', 'blocked', invoice.id, 'Latest provider invoice points at a different subscription.')
+  }
+  if (invoice.status !== 'paid') {
+    addDrift(drifts, 'provider_invoice_payment_unconfirmed', 'blocked', invoice.id, 'Active provider subscription lacks an invoice with paid status.')
+  }
+  const subscriptionLines = invoice.lines.filter(line =>
+    line.subscriptionLine
+    && !line.proration
+    && line.subscriptionId === provider.id,
+  )
+  const canonicalLines = provider.canonicalBasePriceId && provider.canonicalBaseItemId && provider.quantity
+    ? subscriptionLines.filter(line =>
+        line.priceId === provider.canonicalBasePriceId
+        && line.subscriptionItemId === provider.canonicalBaseItemId
+        && line.quantity === provider.quantity,
+      )
+    : []
+  if (!provider.canonicalBasePriceId) {
+    addDrift(drifts, 'provider_invoice_base_price_unresolved', 'blocked', invoice.id, 'Active provider subscription has no canonical recurring base price.')
+  } else if (!provider.canonicalBaseItemId) {
+    addDrift(drifts, 'provider_invoice_base_item_unresolved', 'blocked', invoice.id, 'Active provider subscription has no canonical recurring base item.')
+  } else if (provider.quantity !== 1) {
+    addDrift(drifts, 'provider_invoice_base_quantity_invalid', 'blocked', invoice.id, 'Active provider subscription canonical base quantity is not exactly one.')
+  } else if (canonicalLines.length === 0) {
+    if (subscriptionLines.length === 0) {
+      addDrift(drifts, 'provider_invoice_base_line_missing', 'blocked', invoice.id, 'Latest paid invoice has no non-proration subscription base line for the active subscription.')
+    } else {
+      addDrift(drifts, 'provider_invoice_base_price_mismatch', 'blocked', invoice.id, 'Latest paid invoice subscription lines do not match the canonical recurring base price, item, and quantity.')
+    }
+  } else if (canonicalLines.length > 1) {
+    addDrift(drifts, 'provider_invoice_base_line_ambiguous', 'blocked', invoice.id, 'Latest paid invoice has multiple canonical recurring base lines for the active subscription.')
+  }
+  const baseLine = invoice.baseLine
+  if (!baseLine || !provider.periodEnd) return
+  const baseLineStart = baseLine.periodStart ? Date.parse(baseLine.periodStart) : Number.NaN
+  const baseLineEnd = baseLine.periodEnd ? Date.parse(baseLine.periodEnd) : Number.NaN
+  const providerEnd = Date.parse(provider.periodEnd)
+  if (
+    !Number.isFinite(baseLineStart)
+    || !Number.isFinite(baseLineEnd)
+    || !Number.isFinite(providerEnd)
+    || baseLineStart >= baseLineEnd
+    || baseLineEnd < providerEnd
+  ) {
+    addDrift(drifts, 'provider_invoice_base_line_period_insufficient', 'blocked', invoice.id, 'Canonical paid invoice base-line period does not cover the provider subscription period end.')
+  }
+}
+
 function currentSubscriptionStatus(status: string | null): boolean {
   return Boolean(status && !['canceled', 'cancelled', 'incomplete_expired'].includes(status))
 }
@@ -599,6 +791,8 @@ const MAX_PROVIDER_SEARCH_PAGES = 10
 const MAX_PROVIDER_SUBSCRIPTION_PAGES = 10
 const MAX_PROVIDER_CATALOG_PAGES = 10
 const MAX_PROVIDER_HISTORICAL_LOOKUPS = 100
+const MAX_PROVIDER_CURRENT_INVOICE_READS = 10
+const MAX_PROVIDER_INVOICE_LINES = 100
 const MAX_LOCAL_EVIDENCE_ROWS = 1_000
 const MAX_LOCAL_INVOICE_ROWS = 100
 const MAX_D1_BOUND_PARAMETERS = 100
@@ -611,13 +805,17 @@ class ReconciliationProviderReadBoundError extends Error {
     | 'provider_search_malformed'
     | 'provider_search_unbounded'
     | 'provider_historical_unbounded'
+    | 'provider_invoice_malformed'
+    | 'provider_invoice_lines_unbounded'
 
   constructor(
     code: 'provider_catalog_unbounded'
       | 'provider_catalog_malformed'
       | 'provider_search_malformed'
       | 'provider_search_unbounded'
-      | 'provider_historical_unbounded',
+      | 'provider_historical_unbounded'
+      | 'provider_invoice_malformed'
+      | 'provider_invoice_lines_unbounded',
     message: string,
   ) {
     super(message)
@@ -735,6 +933,7 @@ function normalizeProviderSubscription(
     periodEnd: isoFromUnix(item?.current_period_end),
     cancelAtPeriodEnd: nullableBoolean(subscription.cancel_at_period_end),
     latestInvoiceId: invoiceId(subscription.latest_invoice),
+    latestInvoice: null,
     ...(resolutionError ? { resolutionError } : {}),
   }
 }
@@ -1091,9 +1290,29 @@ function comparePaymentEvidence(
   if (latestInvoiceId && !local.invoices.some(invoice => invoice.stripeInvoiceId === latestInvoiceId)) {
     addDrift(drifts, 'invoice_evidence_missing', 'drift', latestInvoiceId, 'Latest provider invoice is not present in the local payment evidence.')
   }
-  const latestLocalInvoice = local.invoices[0]
+  const latestLocalInvoice = latestInvoiceId
+    ? local.invoices.find(invoice => invoice.stripeInvoiceId === latestInvoiceId)
+    : local.invoices[0]
   if (latestLocalInvoice && latestLocalInvoice.stripeSubscriptionId !== provider.id) {
     addDrift(drifts, 'invoice_subscription_mismatch', 'drift', latestLocalInvoice.stripeInvoiceId, 'Latest local invoice points at a different subscription.')
+  }
+  if (latestLocalInvoice && provider.latestInvoice) {
+    compareValue(drifts, 'invoice_status_mismatch', `invoice:${latestLocalInvoice.stripeInvoiceId}.status`, latestLocalInvoice.status, provider.latestInvoice.status)
+    compareValue(drifts, 'invoice_base_price_mismatch', `invoice:${latestLocalInvoice.stripeInvoiceId}.basePlanPriceId`, latestLocalInvoice.basePlanPriceId, provider.canonicalBasePriceId)
+    compareValue(
+      drifts,
+      'invoice_period_start_mismatch',
+      `invoice:${latestLocalInvoice.stripeInvoiceId}.periodStart`,
+      latestLocalInvoice.periodStart,
+      provider.latestInvoice.baseLine?.periodStart ?? null,
+    )
+    compareValue(
+      drifts,
+      'invoice_period_end_mismatch',
+      `invoice:${latestLocalInvoice.stripeInvoiceId}.periodEnd`,
+      latestLocalInvoice.periodEnd,
+      provider.latestInvoice.baseLine?.periodEnd ?? null,
+    )
   }
   for (const webhook of local.webhookEvents) {
     if (webhook.status !== 'processed' || webhook.deadLetteredAt) {
@@ -1434,11 +1653,13 @@ export async function reconcileOrganizationSubscription(
               || !normalized.status
               || !KNOWN_PROVIDER_SUBSCRIPTION_STATUSES.has(normalized.status)
               || !normalized.customerId
-              || !isPositiveSafeInteger(normalized.quantity)
+              || normalized.quantity !== 1
               || normalized.cancelAtPeriodEnd === null
               || !hasOrderedPeriod(normalized.periodStart, normalized.periodEnd)
               || !normalized.billingInterval
               || !normalized.canonicalPlan
+              || !normalized.canonicalBasePriceId
+              || !normalized.canonicalBaseItemId
             ) {
               addDrift(drifts, 'provider_subscription_malformed', 'blocked', providerSubscription.id, 'Provider subscription has incomplete billing period or plan state.')
             }
@@ -1454,6 +1675,42 @@ export async function reconcileOrganizationSubscription(
           }
         }
         providerSubscriptions = providerSubscriptions.sort((a, b) => a.id.localeCompare(b.id))
+        const activeProviderSubscriptions = providerSubscriptions.filter(subscription => subscription.status === 'active')
+        if (activeProviderSubscriptions.length > MAX_PROVIDER_CURRENT_INVOICE_READS) {
+          addDrift(
+            drifts,
+            'provider_invoice_reads_unbounded',
+            'blocked',
+            customerId,
+            'Active provider subscriptions exceeded the bounded invoice-evidence window.',
+          )
+        }
+        for (const providerSubscription of activeProviderSubscriptions.slice(0, MAX_PROVIDER_CURRENT_INVOICE_READS)) {
+          if (!providerSubscription.latestInvoiceId) {
+            compareProviderInvoiceCoverage(drifts, providerSubscription)
+            continue
+          }
+          try {
+            providerSubscription.latestInvoice = await readBoundedProviderInvoice(
+              options.stripe,
+              providerSubscription.latestInvoiceId,
+              providerSubscription.id,
+              providerSubscription.canonicalBasePriceId,
+              providerSubscription.canonicalBaseItemId,
+              providerSubscription.quantity,
+            )
+            compareProviderInvoiceCoverage(drifts, providerSubscription)
+          } catch (error) {
+            addDrift(
+              drifts,
+              error instanceof ReconciliationProviderReadBoundError ? error.code : 'provider_invoice_read_failed',
+              providerSubscription.status === 'active' ? 'blocked' : 'drift',
+              providerSubscription.latestInvoiceId,
+              error instanceof Error ? error.message : 'Latest provider invoice could not be read.',
+            )
+            providerSubscription.latestInvoice = null
+          }
+        }
         const listedProviderSubscriptionIds = new Set(providerSubscriptions.map(subscription => subscription.id))
         for (const searchedSubscriptionId of metadataSearchSubscriptionIds) {
           if (!listedProviderSubscriptionIds.has(searchedSubscriptionId)) {

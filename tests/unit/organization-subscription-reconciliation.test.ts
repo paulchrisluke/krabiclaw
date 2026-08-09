@@ -96,7 +96,15 @@ function resetRows() {
     value: String(value),
     source: 'better-auth-stripe',
   }))
-  invoiceRows = []
+  invoiceRows = [{
+    stripe_invoice_id: 'in_test',
+    stripe_subscription_id: 'sub_test',
+    base_plan_price_id: 'price_growth',
+    status: 'paid',
+    period_start: PERIOD_START,
+    period_end: PERIOD_END,
+    last_event_id: null,
+  }]
   versionRows = []
   webhookRows = []
 }
@@ -111,7 +119,7 @@ function provider(overrides: {
     customer: 'cus_test',
     status: 'active',
     cancel_at_period_end: false,
-    latest_invoice: null,
+    latest_invoice: 'in_test',
     metadata: {
       organizationId: REQUEST.organizationId,
       referenceId: REQUEST.organizationId,
@@ -160,6 +168,40 @@ function provider(overrides: {
     subscriptions: {
       list: async () => ({ data: allSubscriptions, has_more: false }),
       search: async () => ({ data: [], has_more: false, next_page: null }),
+    },
+    invoices: {
+      retrieve: async (id: string) => ({
+        id,
+        status: 'paid',
+        parent: {
+          type: 'subscription_details',
+          subscription_details: { subscription: 'sub_test' },
+        },
+        lines: {
+          data: [{
+            id: 'il_base',
+            quantity: 1,
+            parent: {
+              type: 'subscription_item_details',
+              subscription_item_details: {
+                subscription: 'sub_test',
+                subscription_item: 'si_test',
+                proration: false,
+              },
+            },
+            pricing: {
+              type: 'price_details',
+              price_details: { price: { id: 'price_growth' } },
+            },
+            period: {
+              start: Math.floor(Date.parse(PERIOD_START) / 1000),
+              end: Math.floor(Date.parse(PERIOD_END) / 1000),
+            },
+          }],
+          has_more: false,
+        },
+      }),
+      listLineItems: async () => ({ data: [], has_more: false }),
     },
   } as unknown as Stripe
 }
@@ -284,6 +326,234 @@ test('clean match report includes canonical projection, evidence, and determinis
   assert.equal(first.reportSha256, second.reportSha256)
   assert.equal(first.operator.actor, 'operator-1')
   assert.notEqual(first.capturedAt, second.capturedAt)
+})
+
+test('active paid subscription without invoice-backed canonical base coverage is blocked', async () => {
+  resetRows()
+  const stripe = provider({ subscription: { latest_invoice: 'in_paid' } })
+  ;(stripe as unknown as {
+    invoices: {
+      retrieve: (_id: string, _params?: unknown) => Promise<unknown>
+      listLineItems: (_id: string, _params?: unknown) => Promise<unknown>
+    }
+  }).invoices = {
+    retrieve: async () => ({
+      id: 'in_paid',
+      status: 'paid',
+      parent: { subscription_details: { subscription: 'sub_test' } },
+    }),
+    listLineItems: async () => ({ data: [], has_more: false }),
+  }
+  const result = await report({ stripe })
+  assert.equal(result.status, 'blocked')
+  assert.ok(result.drifts.some(drift => drift.code === 'provider_invoice_base_line_missing'))
+})
+
+test('invoice evidence records paid state and the exact canonical base line', async () => {
+  resetRows()
+  const result = await report()
+  const invoice = result.provider.subscriptions[0]?.latestInvoice
+  assert.equal(result.status, 'match')
+  assert.deepEqual(invoice && {
+    id: invoice.id,
+    subscriptionId: invoice.subscriptionId,
+    status: invoice.status,
+    linesRetrieved: invoice.linesRetrieved,
+    linesComplete: invoice.linesComplete,
+    baseLine: invoice.baseLine,
+  }, {
+    id: 'in_test',
+    subscriptionId: 'sub_test',
+    status: 'paid',
+    linesRetrieved: 1,
+    linesComplete: true,
+    baseLine: {
+      id: 'il_base',
+      subscriptionId: 'sub_test',
+      subscriptionItemId: 'si_test',
+      priceId: 'price_growth',
+      quantity: 1,
+      periodStart: PERIOD_START,
+      periodEnd: PERIOD_END,
+      proration: false,
+      subscriptionLine: true,
+    },
+  })
+})
+
+test('wrong invoice base price blocks an otherwise active paid subscription', async () => {
+  resetRows()
+  const stripe = provider()
+  ;(stripe as unknown as { invoices: { retrieve: () => Promise<unknown> } }).invoices.retrieve = async () => ({
+    id: 'in_test',
+    status: 'paid',
+    parent: { subscription_details: { subscription: 'sub_test' } },
+    lines: {
+      data: [{
+        id: 'il_wrong_price',
+        quantity: 1,
+        parent: {
+          type: 'subscription_item_details',
+          subscription_item_details: {
+            subscription: 'sub_test',
+            subscription_item: 'si_test',
+            proration: false,
+          },
+        },
+        pricing: { price_details: { price: { id: 'price_other' } } },
+        period: {
+          start: Math.floor(Date.parse(PERIOD_START) / 1000),
+          end: Math.floor(Date.parse(PERIOD_END) / 1000),
+        },
+      }],
+      has_more: false,
+    },
+  })
+  const result = await report({ stripe })
+  assert.equal(result.status, 'blocked')
+  assert.ok(result.drifts.some(drift => drift.code === 'provider_invoice_base_price_mismatch'))
+  assert.equal(result.provider.subscriptions[0]?.latestInvoice?.lines[0]?.priceId, 'price_other')
+})
+
+test('invoice coverage requires the exact canonical subscription item and quantity', async () => {
+  for (const [label, itemId, quantity] of [
+    ['wrong item', 'si_other', 1],
+    ['wrong quantity', 'si_test', 2],
+  ] as const) {
+    resetRows()
+    const stripe = provider()
+    ;(stripe as unknown as { invoices: { retrieve: () => Promise<unknown> } }).invoices.retrieve = async () => ({
+      id: 'in_test',
+      status: 'paid',
+      parent: { subscription_details: { subscription: 'sub_test' } },
+      lines: {
+        data: [{
+          id: `il_${label.replace(' ', '_')}`,
+          quantity,
+          parent: {
+            type: 'subscription_item_details',
+            subscription_item_details: {
+              subscription: 'sub_test',
+              subscription_item: itemId,
+              proration: false,
+            },
+          },
+          pricing: { price_details: { price: { id: 'price_growth' } } },
+          period: {
+            start: Math.floor(Date.parse(PERIOD_START) / 1000),
+            end: Math.floor(Date.parse(PERIOD_END) / 1000),
+          },
+        }],
+        has_more: false,
+      },
+    })
+    const result = await report({ stripe })
+    assert.equal(result.status, 'blocked', label)
+    assert.ok(result.drifts.some(drift => drift.code === 'provider_invoice_base_price_mismatch'), label)
+  }
+})
+
+test('invoice base-line period that ends before the provider period blocks coverage', async () => {
+  resetRows()
+  const stripe = provider()
+  ;(stripe as unknown as { invoices: { retrieve: () => Promise<unknown> } }).invoices.retrieve = async () => ({
+    id: 'in_test',
+    status: 'paid',
+    parent: { subscription_details: { subscription: 'sub_test' } },
+    lines: {
+      data: [{
+        id: 'il_short_period',
+        quantity: 1,
+        parent: {
+          type: 'subscription_item_details',
+          subscription_item_details: {
+            subscription: 'sub_test',
+            subscription_item: 'si_test',
+            proration: false,
+          },
+        },
+        pricing: { price_details: { price: { id: 'price_growth' } } },
+        period: {
+          start: Math.floor(Date.parse(PERIOD_START) / 1000),
+          end: Math.floor(Date.parse('2026-08-15T00:00:00.000Z') / 1000),
+        },
+      }],
+      has_more: false,
+    },
+  })
+  const result = await report({ stripe })
+  assert.equal(result.status, 'blocked')
+  assert.ok(result.drifts.some(drift => drift.code === 'provider_invoice_base_line_period_insufficient'))
+})
+
+test('invoice base-line coverage requires an ordered start and end', async () => {
+  resetRows()
+  const stripe = provider()
+  ;(stripe as unknown as { invoices: { retrieve: () => Promise<unknown> } }).invoices.retrieve = async () => ({
+    id: 'in_test',
+    status: 'paid',
+    parent: { subscription_details: { subscription: 'sub_test' } },
+    lines: {
+      data: [{
+        id: 'il_missing_start',
+        quantity: 1,
+        parent: {
+          type: 'subscription_item_details',
+          subscription_item_details: {
+            subscription: 'sub_test',
+            subscription_item: 'si_test',
+            proration: false,
+          },
+        },
+        pricing: { price_details: { price: { id: 'price_growth' } } },
+        period: { end: Math.floor(Date.parse(PERIOD_END) / 1000) },
+      }],
+      has_more: false,
+    },
+  })
+  const result = await report({ stripe })
+  assert.equal(result.status, 'blocked')
+  assert.ok(result.drifts.some(drift => drift.code === 'provider_invoice_base_line_period_insufficient'))
+})
+
+test('invoice line pagination ambiguity blocks instead of accepting a partial base-line page', async () => {
+  resetRows()
+  const stripe = provider()
+  ;(stripe as unknown as { invoices: { retrieve: () => Promise<unknown>; listLineItems: () => Promise<unknown> } }).invoices = {
+    retrieve: async () => ({
+      id: 'in_test',
+      status: 'paid',
+      parent: { subscription_details: { subscription: 'sub_test' } },
+    }),
+    listLineItems: async () => ({
+      data: [{
+        id: 'il_base',
+        quantity: 1,
+        parent: {
+          type: 'subscription_item_details',
+          subscription_item_details: { subscription: 'sub_test', proration: false },
+        },
+        pricing: { price_details: { price: { id: 'price_growth' } } },
+      }],
+      has_more: true,
+    }),
+  }
+  const result = await report({ stripe })
+  assert.equal(result.status, 'blocked')
+  assert.ok(result.drifts.some(drift => drift.code === 'provider_invoice_lines_unbounded'))
+})
+
+test('local invoice ledger price and period drift stays visible beside provider evidence', async () => {
+  resetRows()
+  invoiceRows[0] = {
+    ...invoiceRows[0],
+    base_plan_price_id: null,
+    period_end: '2026-07-23T00:00:00.000Z',
+  }
+  const result = await report()
+  assert.equal(result.status, 'drift')
+  assert.ok(result.drifts.some(drift => drift.code === 'invoice_base_price_mismatch'))
+  assert.ok(result.drifts.some(drift => drift.code === 'invoice_period_end_mismatch'))
 })
 
 test('clean Starter state remains matchable without a provider customer', async () => {
