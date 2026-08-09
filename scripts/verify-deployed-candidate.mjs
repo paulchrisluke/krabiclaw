@@ -300,6 +300,10 @@ function isRecord(value) {
 
 async function verifyEndpoint(baseUrl, options, extraHeaders = {}) {
   const url = new URL('/api/deployment', baseUrl)
+  url.searchParams.set(
+    'deployment-verification',
+    `${options.expectedSha}-${options.expectedWorkerVersionId ?? 'source-only'}`,
+  )
   const response = await fetchWithTimeout(url, {
     headers: requestHeaders(options.versionOverrideHeader, extraHeaders),
     timeoutMs: options.timeoutMs,

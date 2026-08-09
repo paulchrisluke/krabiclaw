@@ -39,9 +39,11 @@ async function startCandidateFixture({ versionId = workerVersionId, buildIdForRo
     ['/article/writing-your-own-will-how-it-works-in-north-carolina', '/article/writing-your-own-will-how-it-works'],
   ])
   const seenVersionOverrideHeaders = []
+  const seenRequestUrls = []
   const server = createServer((request, response) => {
+    seenRequestUrls.push(request.url ?? '')
     seenVersionOverrideHeaders.push(request.headers['cloudflare-workers-version-overrides'] ?? null)
-    if (request.url === '/api/deployment') {
+    if (new URL(request.url ?? '/', 'http://fixture.invalid').pathname === '/api/deployment') {
       response.writeHead(200, { 'content-type': 'application/json' })
       response.end(JSON.stringify({
         sourceSha: sourceShaForEndpoint,
@@ -76,6 +78,7 @@ async function startCandidateFixture({ versionId = workerVersionId, buildIdForRo
     buildDir,
     baseUrl: `http://127.0.0.1:${address.port}`,
     seenVersionOverrideHeaders,
+    seenRequestUrls,
     close: () => new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())),
   }
 }
@@ -96,6 +99,7 @@ test('verifyDeployedCandidate proves endpoint provenance, one Nuxt build, metada
     assert.equal(evidence.workerVersionId, workerVersionId)
     assert.equal(evidence.nuxtBuildId, buildId)
     assert.deepEqual(evidence.routes, ['/', '/dashboard'])
+    assert.ok(fixture.seenRequestUrls.some(url => url.startsWith('/api/deployment?deployment-verification=')))
     assert.match(evidence.buildMetaSha256, /^[0-9a-f]{64}$/)
     assert.deepEqual(evidence.referencedAssetSha256.map((asset) => asset.path), ['/_nuxt/surface.css', '/_nuxt/app.js'])
     assert.ok(evidence.referencedAssetSha256.every((asset) => /^[0-9a-f]{64}$/.test(asset.sha256)))
