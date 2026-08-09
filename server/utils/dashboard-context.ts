@@ -360,15 +360,31 @@ export interface DashboardSiteSummaryRow {
   status: string | null
   onboarding_status: string | null
   plan: string | null
+  preview_image_url: string | null
 }
 
 export async function listOrganizationSites(db: DbClient, organizationId: string, principal?: { memberId: string; role: string }) {
   return await queryAll<DashboardSiteSummaryRow>(db, `
-    SELECT id, brand_name, subdomain, vertical, status, onboarding_status, plan
-    FROM sites
-    WHERE organization_id = ?
-      ${principal && !isOrganizationWideRole(principal.role) ? 'AND EXISTS (SELECT 1 FROM member m JOIN teamMember tm ON tm.userId = m.userId AND tm.teamId = sites.team_id WHERE m.id = ? AND m.organizationId = sites.organization_id)' : ''}
-    ORDER BY created_at ASC, id ASC
+    SELECT s.id, s.brand_name, s.subdomain, s.vertical, s.status,
+           s.onboarding_status, s.plan,
+           COALESCE(ma_site_og.public_url, ma_hero.thumbnail_url, ma_hero.public_url) AS preview_image_url
+    FROM sites s
+    LEFT JOIN media_assets ma_site_og
+      ON ma_site_og.id = s.og_image_asset_id
+     AND ma_site_og.site_id = s.id
+     AND ma_site_og.organization_id = s.organization_id
+     AND ma_site_og.status = 'active'
+    LEFT JOIN business_locations bl
+      ON bl.id = s.primary_location_id
+     AND bl.site_id = s.id
+     AND bl.organization_id = s.organization_id
+    LEFT JOIN media_assets ma_hero
+      ON ma_hero.id = bl.hero_media_asset_id
+     AND ma_hero.site_id = s.id
+     AND ma_hero.organization_id = s.organization_id
+    WHERE s.organization_id = ?
+      ${principal && !isOrganizationWideRole(principal.role) ? 'AND EXISTS (SELECT 1 FROM member m JOIN teamMember tm ON tm.userId = m.userId AND tm.teamId = s.team_id WHERE m.id = ? AND m.organizationId = s.organization_id)' : ''}
+    ORDER BY s.created_at ASC, s.id ASC
   `, principal && !isOrganizationWideRole(principal.role) ? [organizationId, principal.memberId] : [organizationId])
 }
 

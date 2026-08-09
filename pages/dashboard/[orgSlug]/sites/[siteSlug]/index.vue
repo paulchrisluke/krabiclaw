@@ -37,47 +37,6 @@
           </template>
         </UChatPrompt>
 
-        <UCard>
-          <div class="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div class="min-w-0">
-              <p class="text-xs font-semibold uppercase tracking-wider text-primary">Today</p>
-              <h2 class="mt-1 text-xl font-semibold text-highlighted">{{ siteName }}</h2>
-              <p class="mt-1 text-sm text-muted">
-                {{ operations.unreadThreads }} unread {{ operations.unreadThreads === 1 ? 'message' : 'messages' }} ·
-                {{ operations.openThreads }} open guest {{ operations.openThreads === 1 ? 'request' : 'requests' }}
-              </p>
-            </div>
-            <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:min-w-[520px]">
-              <div class="rounded-lg border border-default bg-muted px-3 py-2">
-                <p class="text-xs text-muted">Status</p>
-                <UBadge :color="dashboardState.site.value?.status === 'active' ? 'success' : 'neutral'" variant="soft" class="mt-1 capitalize">
-                  {{ dashboardState.site.value?.status || 'Unknown' }}
-                </UBadge>
-              </div>
-              <div class="rounded-lg border border-default bg-muted px-3 py-2">
-                <p class="text-xs text-muted">{{ locationsNavLabel }}</p>
-                <p class="mt-1 text-2xl font-semibold text-highlighted">{{ locations.length }}</p>
-              </div>
-              <div class="rounded-lg border border-default bg-muted px-3 py-2">
-                <p class="text-xs text-muted">Inbox</p>
-                <p class="mt-1 text-2xl font-semibold text-highlighted">{{ operations.unreadThreads }}</p>
-              </div>
-              <div class="rounded-lg border border-default bg-muted px-3 py-2">
-                <p class="text-xs text-muted">Guest work</p>
-                <p class="mt-1 text-2xl font-semibold text-highlighted">{{ operations.openThreads }}</p>
-              </div>
-            </div>
-          </div>
-          <div class="mt-4 flex flex-wrap gap-2">
-            <UButton size="sm" color="neutral" variant="soft" :to="`${siteDashboardPath}/inbox`">Open inbox</UButton>
-            <UButton size="sm" color="neutral" variant="soft" :to="locationsBase">Open {{ locationsNavLabel.toLowerCase() }}</UButton>
-            <UButton v-if="revenueAction" size="sm" color="primary" variant="soft" :icon="revenueAction.icon" :to="revenueAction.to">
-              {{ revenueAction.label }}
-            </UButton>
-          </div>
-          <p class="mt-3 text-xs text-muted">{{ operationBreakdown }}</p>
-        </UCard>
-
         <div v-if="canManageSite && isProfessionalService" class="flex flex-wrap items-center justify-between gap-3 border-y border-default py-4">
           <div>
             <h2 class="text-sm font-semibold text-highlighted">Firm-wide content</h2>
@@ -90,61 +49,60 @@
           </div>
         </div>
 
-        <!-- Locations preview -->
-        <div v-if="locations.length > 0">
+        <!-- Locations overview -->
+        <section v-if="locations.length > 0">
           <div class="flex items-center justify-between mb-3">
-            <h2 class="text-sm font-semibold text-highlighted">Locations</h2>
-            <UButton
-              v-if="locations.length > 3"
-              :to="locationsBase ?? `${siteDashboardPath}/locations`"
-              size="sm"
-              color="neutral"
-              variant="ghost"
-            >
-              See all
-            </UButton>
+            <div>
+              <h2 class="text-lg font-semibold text-highlighted">{{ locationsNavLabel }}</h2>
+              <p class="mt-1 text-sm text-muted">{{ locations.length }} {{ locations.length === 1 ? 'location' : 'locations' }}</p>
+            </div>
           </div>
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <NuxtLink
-              v-for="location in previewLocations"
+          <iframe
+            v-if="selectedLocation?.map_embed_url"
+            :key="selectedLocation.id"
+            :src="selectedLocation.map_embed_url"
+            :title="`${selectedLocation.title} on Google Maps`"
+            class="h-64 w-full rounded-xl border border-default sm:h-80"
+            loading="lazy"
+            allowfullscreen
+            referrerpolicy="no-referrer-when-downgrade"
+          />
+          <div v-else class="flex h-48 items-center justify-center rounded-xl border border-default bg-muted text-sm text-muted">
+            <UIcon name="i-lucide-map-pin-off" class="mr-2 size-5" />
+            Map coordinates have not been added yet
+          </div>
+          <div class="mt-5 divide-y divide-default">
+            <button
+              v-for="location in locations"
               :key="location.id"
-              :to="`${locationsBase}/${location.slug}`"
-              class="group block"
+              type="button"
+              class="group flex w-full items-center gap-4 rounded-lg px-2 py-3 text-left transition-colors hover:bg-elevated focus-visible:outline-2 focus-visible:outline-primary"
+              :class="selectedLocationId === location.id ? 'bg-elevated' : ''"
+              @click="selectedLocationId = location.id"
             >
-              <UCard variant="soft" class="h-full cursor-pointer">
-                <div class="aspect-video w-full overflow-hidden rounded-t-xl bg-muted">
+                <div class="size-14 shrink-0 overflow-hidden rounded-lg bg-muted sm:size-16">
                   <img
                     v-if="location.hero_url"
-                    :src="cfImageVariant(location.hero_url, { width: 640 }) ?? undefined"
+                    :src="cfImageVariant(location.hero_url, { width: 160 }) ?? undefined"
                     :alt="location.title"
-                    class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    class="size-full object-cover"
                     loading="lazy"
                   />
-                  <div v-else class="flex h-full items-center justify-center">
-                    <UIcon name="i-lucide-map-pin" class="size-8 text-muted" />
+                  <div v-else class="flex size-full items-center justify-center">
+                    <UIcon name="i-lucide-map-pin" class="size-5 text-muted" />
                   </div>
                 </div>
-                <div class="p-4 space-y-2">
-                  <div class="flex items-start justify-between gap-2">
-                    <div class="min-w-0">
-                      <p class="text-sm font-semibold text-highlighted truncate">{{ location.title }}</p>
-                      <p v-if="location.city" class="text-xs text-muted">{{ location.city }}</p>
-                    </div>
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-center gap-2">
+                      <p class="font-semibold text-highlighted">{{ location.title }}</p>
                     <UBadge v-if="location.is_primary" color="primary" variant="soft" size="xs">Primary</UBadge>
                   </div>
-                  <div v-if="location.rating || location.review_count" class="flex items-center gap-3 text-xs text-muted">
-                    <span v-if="location.rating" class="flex items-center gap-1">
-                      <UIcon name="i-lucide-star" class="size-3 text-warning-400 fill-warning-400" />
-                      {{ location.rating.toFixed(1) }}
-                    </span>
-                    <span v-if="location.review_count">{{ location.review_count.toLocaleString() }} reviews</span>
-                  </div>
-                  <p class="text-xs text-muted">Updated {{ timeAgo(location.updated_at) }}</p>
+                  <p class="mt-1 truncate text-sm text-muted">{{ locationAddress(location) }}</p>
                 </div>
-              </UCard>
-            </NuxtLink>
+                <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0 text-muted transition-transform group-hover:translate-x-0.5" />
+            </button>
           </div>
-        </div>
+        </section>
 
         <UCard v-if="events.length > 0" title="Recent Activity">
           <ul class="-mx-4 -mb-4">
@@ -182,6 +140,9 @@ interface Location {
   rating: number | null; review_count: number | null
   is_primary: boolean; status: string; updated_at: string
   hero_url: string | null
+  address: { addressLines?: string[] } | null
+  latitude: number | null; longitude: number | null
+  map_embed_url: string | null
 }
 interface Credits { balance: number; lifetime_used: number; last_topped_up_at: string | null }
 interface SiteEvent {
@@ -210,7 +171,17 @@ const isDashboardHomeResponse = (value: unknown): value is DashboardHomeResponse
     isRecord(location)
     && typeof location.id === 'string'
     && typeof location.slug === 'string'
-    && typeof location.title === 'string',
+    && typeof location.title === 'string'
+    && (location.address === null || (
+      isRecord(location.address)
+      && (location.address.addressLines === undefined || (
+        Array.isArray(location.address.addressLines)
+        && location.address.addressLines.every(line => typeof line === 'string')
+      ))
+    ))
+    && (location.latitude === null || typeof location.latitude === 'number')
+    && (location.longitude === null || typeof location.longitude === 'number')
+    && (location.map_embed_url === null || typeof location.map_embed_url === 'string'),
   )
   && (value.credits === null || (
     isRecord(value.credits)
@@ -291,7 +262,6 @@ const { data, pending } = await useAsyncData(
 )
 
 const locations = computed(() => data.value?.locations ?? [])
-const previewLocations = computed(() => locations.value.slice(0, 3))
 const siteName = computed(() => dashboardState.site.value?.brand_name ?? 'Overview')
 const canManageSite = computed(() => dashboardState.siteAccess.value === 'organization' || dashboardState.siteAccess.value === 'site')
 const isProfessionalService = computed(() => ['service', 'professional_service'].includes(dashboardState.site.value?.vertical ?? ''))
@@ -310,41 +280,21 @@ const siteCapabilities = computed(() => {
 })
 const hasSiteServicesManager = computed(() => Boolean(siteCapabilities.value?.managers.some(manager => manager.key === 'site.services')))
 const siteDashboardPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}`)
-const locationsBase = computed(() => `${siteDashboardPath.value}/locations`)
 const events = computed(() => data.value?.events ?? [])
-const operations = computed<OperationsSummary>(() => data.value?.operations ?? {
-  openThreads: 0,
-  unreadThreads: 0,
-  reservations: 0,
-  experienceBookings: 0,
-})
-const hasReservations = computed(() => Boolean(siteCapabilities.value?.managers.some(manager => manager.id === 'reservations')))
-const hasExperiences = computed(() => Boolean(siteCapabilities.value?.managers.some(manager => manager.id === 'experiences')))
 const locationsNavLabel = computed(() => siteCapabilities.value?.locationVocabulary === 'office/service area' ? 'Offices / Service Areas' : 'Locations')
-const primaryLocation = computed(() => locations.value.find(location => location.is_primary) ?? locations.value[0] ?? null)
-const revenueAction = computed(() => {
-  const managers = siteCapabilities.value?.managers ?? []
-  const ordering = managers.find(manager => manager.key === 'site.ordering')
-  if (ordering) return { label: ordering.label, icon: 'i-lucide-shopping-bag', to: `${siteDashboardPath.value}/${ordering.route}` }
+const selectedLocationId = ref<string | null>(null)
+watch(locations, (value) => {
+  if (!value.some(location => location.id === selectedLocationId.value)) {
+    selectedLocationId.value = value.find(location => location.is_primary)?.id ?? value[0]?.id ?? null
+  }
+}, { immediate: true })
+const selectedLocation = computed(() =>
+  locations.value.find(location => location.id === selectedLocationId.value) ?? locations.value[0] ?? null,
+)
 
-  const services = managers.find(manager => manager.key === 'site.services')
-  if (services) return { label: 'Schedule', icon: 'i-lucide-calendar-days', to: `${siteDashboardPath.value}/${services.route}` }
-
-  const location = primaryLocation.value
-  const reservations = managers.find(manager => manager.key === 'location.reservations')
-  if (location && reservations) return { label: reservations.label === 'Reservation policies' ? 'Bookings' : reservations.label, icon: 'i-lucide-calendar-check', to: `${locationsBase.value}/${location.slug}/reservations` }
-
-  const experiences = managers.find(manager => manager.key === 'location.experiences')
-  if (location && experiences) return { label: experiences.label, icon: 'i-lucide-ticket', to: `${locationsBase.value}/${location.slug}/experiences` }
-
-  return null
-})
-const operationBreakdown = computed(() => {
-  const parts: string[] = []
-  if (hasReservations.value) parts.push(`${operations.value.reservations} reservations`)
-  if (hasExperiences.value) parts.push(`${operations.value.experienceBookings} bookings`)
-  return parts.length ? parts.join(' · ') : 'Contact messages'
-})
+function locationAddress(location: Location) {
+  return location.address?.addressLines?.filter(Boolean).join(', ') || location.city || 'Address not set'
+}
 
 const chowBot = useChowBot()
 const homeInput = ref('')

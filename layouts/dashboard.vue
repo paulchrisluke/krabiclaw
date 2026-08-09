@@ -92,6 +92,7 @@
     >
       <nav class="flex h-[52px] w-full max-w-[420px] items-center justify-around rounded-full border border-default bg-elevated px-2 shadow-[0_10px_24px_rgba(20,23,46,0.2)]">
         <UDashboardSearchButton
+          v-if="scope !== 'organization'"
           label="Search dashboard"
           class="flex size-9 items-center justify-center rounded-full text-dimmed"
           :ui="{ base: 'size-9 justify-center rounded-full px-0', label: 'sr-only' }"
@@ -110,6 +111,7 @@
           :class="item.active ? 'bg-primary/10 text-primary' : 'text-dimmed'"
         />
         <UButton
+          v-if="scope !== 'organization'"
           icon="i-lucide-ellipsis"
           color="neutral"
           variant="ghost"
@@ -121,6 +123,7 @@
           @click="toggleMobileMore"
         />
         <UButton
+          v-if="scope !== 'organization'"
           icon="i-lucide-bot"
           color="neutral"
           variant="ghost"
@@ -252,11 +255,26 @@ const stoppingImpersonation = ref(false)
 const { searchTerm: dashboardSearchTerm, loading: dashboardSearchLoading, groups: dashboardSearchGroups } = useDashboardSearch()
 const dashboard = useDashboardSite()
 const chowBot = useChowBot()
+const platformTheme = usePlatformTheme()
 const organizationsState = authClient.useListOrganizations()
 const mobileMoreOpen = ref(false)
 const mobileMoreButtonElement = ref<HTMLElement | null>(null)
 const mobileMoreSheetRef = ref<HTMLElement | null>(null)
 const mobileMoreFocusReturn = ref<HTMLElement | null>(null)
+
+if (import.meta.client) {
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)')
+  const onSystemThemeChange = () => platformTheme.sync()
+
+  onMounted(() => platformTheme.restore())
+  prefersDark.addEventListener('change', onSystemThemeChange)
+  const stopThemeWatch = watch(platformTheme.preference, platformTheme.sync)
+
+  onBeforeUnmount(() => {
+    prefersDark.removeEventListener('change', onSystemThemeChange)
+    stopThemeWatch()
+  })
+}
 
 watch(
   () => sessionData.value?.user?.id ?? null,
@@ -352,8 +370,6 @@ const siteBase = computed(() => orgBase.value && activeSiteSlug.value ? `${orgBa
 const locationsBase = computed(() => siteBase.value ? `${siteBase.value}/locations` : null)
 const currentLocationSlug = dashboardLocation.routeLocationSlug
 const locationBase = computed(() => locationsBase.value && currentLocationSlug.value ? `${locationsBase.value}/${currentLocationSlug.value}` : null)
-const settingsBase = computed(() => orgBase.value ? `${orgBase.value}/settings` : null)
-
 const routeName = computed(() => typeof route.name === 'string' ? route.name : '')
 const isAdminRoute = computed(() => routeName.value.startsWith('admin'))
 const isConversationsRoute = computed(() => routeName.value.includes('conversations'))
@@ -534,20 +550,20 @@ function revenueLabel(item: ReturnType<typeof managerAction>) {
   return item.label
 }
 
+const organizationNavigationItems = computed(() => {
+  if (!orgBase.value) return []
+  return [
+    { key: 'today', label: 'Today', icon: 'i-lucide-sun', to: `${orgBase.value}/today` },
+    { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${orgBase.value}/calendar` },
+    { key: 'sites', label: 'Sites', icon: 'i-lucide-globe', to: `${orgBase.value}/sites` },
+    { key: 'inbox', label: 'Inbox', icon: 'i-lucide-inbox', to: `${orgBase.value}/inbox` },
+    { key: 'menu', label: 'Menu', icon: 'i-lucide-menu', to: `${orgBase.value}/menu` },
+  ]
+})
+
 const overviewGroup = computed(() => {
   if (scope.value !== 'organization' || !orgBase.value) return []
-  return [
-    { label: 'Dashboard', icon: 'i-lucide-layout-dashboard', to: orgBase.value },
-    { label: 'Sites', icon: 'i-lucide-globe', to: `${orgBase.value}/sites` },
-    ...(canManageOrganization.value ? [
-      { label: 'Activity', icon: 'i-lucide-activity', to: `${orgBase.value}/activity` },
-    // Org settings (general/members/billing) are organization-level,
-    // not site-level, so they belong here regardless of the CMS registry's
-    // per-site 'settings' manager (a distinct, site-scoped branding/SEO
-    // concern handled by managerNavItems('Settings') at site scope instead).
-      { label: 'Settings', icon: 'i-lucide-settings', to: settingsBase.value ?? `${orgBase.value}/settings` },
-    ] : []),
-  ]
+  return organizationNavigationItems.value.map(({ key: _key, ...item }) => item)
 })
 
 // The parent row renders as a plain UNavigationMenu item (same size/padding as
@@ -779,10 +795,11 @@ const mobileInboxItem = computed<DashboardMobileNavItem | null>(() => {
 })
 
 const mobileNavItems = computed<DashboardMobileNavItem[]>(() => [
-  mobileHomeItem.value,
-  mobileInboxItem.value,
-  mobileRevenueItem.value,
-].filter((item): item is DashboardMobileNavItem => Boolean(item)))
+  ...(scope.value === 'organization'
+    ? organizationNavigationItems.value.map(item => ({ ...item, active: isActivePath(item.to) }))
+    : [mobileHomeItem.value, mobileInboxItem.value, mobileRevenueItem.value]
+      .filter((item): item is DashboardMobileNavItem => Boolean(item))),
+])
 
 const mobileMoreItems = computed(() => {
   const seen = new Set<string>()
