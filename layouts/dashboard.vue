@@ -640,11 +640,13 @@ const settingsGroup = computed(() => {
 })
 
 const adminGroup = computed(() => [
-  { label: 'Organizations', icon: 'i-lucide-building-2', to: '/admin' },
+  { label: 'Add-ons', icon: 'i-lucide-inbox', to: '/admin' },
   ...(dashboard.managedServiceEnabled.value ? [{ label: 'Work Queue', icon: 'i-lucide-list-todo', to: '/admin/work' }] : []),
-  { label: 'People & invites', icon: 'i-lucide-users', to: '/admin/members' },
+  { label: 'Clients', icon: 'i-lucide-building-2', to: '/admin/clients' },
+  { label: 'Members', icon: 'i-lucide-user-plus', to: '/admin/members' },
   { label: 'Analytics', icon: 'i-lucide-chart-bar', to: '/admin/analytics' },
   { label: 'Domains', icon: 'i-lucide-globe', to: '/admin/domains' },
+  { label: 'Users', icon: 'i-lucide-users', to: '/admin/users' },
   { label: 'Content', icon: 'i-lucide-file-text', to: '/admin/content' },
   { label: 'Blog', icon: 'i-lucide-pencil', to: '/admin/blog' },
   { label: 'Docs', icon: 'i-lucide-book-open', to: '/admin/docs' },

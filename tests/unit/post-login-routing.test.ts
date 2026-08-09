@@ -35,10 +35,10 @@ test('post-login sends organization members to their canonical dashboard', async
   assert.equal(destination, '/dashboard/pottery-house-krabi')
 })
 
-test('post-login sends platform admins with an organization to its dashboard', async () => {
+test('post-login sends platform admins to the admin console', async () => {
   membershipSlug = 'pottery-house-krabi'
   const destination = await resolvePostLoginDestination(db, { id: 'admin-1', role: 'admin' })
-  assert.equal(destination, '/dashboard/pottery-house-krabi')
+  assert.equal(destination, '/admin')
 })
 
 test('post-login distinguishes guest accounts from new users', async () => {

@@ -1,48 +1,75 @@
 <template>
-  <UDashboardPanel id="admin-organizations">
+  <UDashboardPanel id="admin-addons">
     <template #header>
-      <UDashboardNavbar title="Organizations">
-        <template #leading><DashboardSidebarCollapseButton /></template>
+      <UDashboardNavbar title="Add-ons">
+        <template #leading>
+          <DashboardSidebarCollapseButton />
+        </template>
         <template #trailing>
-          <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-refresh-cw" aria-label="Refresh organizations" :loading="loading" @click="loadOrganizations" />
+          <UButton color="neutral" variant="ghost" size="xs" icon="i-lucide-refresh-cw" aria-label="Refresh queue" :loading="queueLoading" @click="loadQueue" />
         </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
-      <div class="space-y-6">
-        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <UCard v-for="stat in summary" :key="stat.label">
-            <p class="text-xs font-semibold uppercase tracking-wide text-muted">{{ stat.label }}</p>
-            <p class="mt-1 text-2xl font-bold text-highlighted">{{ stat.value }}</p>
-          </UCard>
+      <div class="space-y-4">
+        <UCard v-if="queueLoading">
+          <div class="space-y-3">
+            <USkeleton v-for="i in 3" :key="i" class="h-16 rounded-lg" />
+          </div>
+        </UCard>
+
+        <UCard v-else-if="purchases.length === 0">
+          <div class="text-center">
+            <UIcon name="i-lucide-badge-check" class="mx-auto size-10 text-success mb-3" />
+            <p class="font-semibold text-highlighted">All caught up</p>
+            <p class="text-sm text-muted mt-1">No pending service add-ons.</p>
+          </div>
+        </UCard>
+
+        <div v-else class="divide-y divide-default rounded-xl border border-default overflow-hidden">
+          <div
+            v-for="purchase in purchases"
+            :key="purchase.id"
+            class="flex items-center justify-between gap-4 px-5 py-4 bg-default hover:bg-elevated/50 transition-colors"
+          >
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" :class="addonColor(purchase.addon_type)">
+                <UIcon :name="addonIcon(purchase.addon_type)" class="size-4" />
+              </div>
+              <div class="min-w-0">
+                <p class="font-semibold text-default">{{ addonLabel(purchase.addon_type) }}</p>
+                <p class="text-sm text-muted truncate">{{ purchase.org_name }} · {{ formatDate(purchase.created_at) }}</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <UButton
+                v-if="purchase.org_slug"
+                size="xs"
+                color="neutral"
+                variant="ghost"
+                icon="i-lucide-external-link"
+                :to="`/dashboard/${purchase.org_slug}`"
+                target="_blank"
+              >
+                View
+              </UButton>
+              <UButton
+                size="xs"
+                color="success"
+                variant="soft"
+                icon="i-lucide-check"
+                :loading="fulfillingId === purchase.id"
+                @click="markDone(purchase.id)"
+              >
+                Mark done
+              </UButton>
+            </div>
+          </div>
         </div>
 
-        <UInput v-model="search" icon="i-lucide-search" placeholder="Search organizations" class="w-full max-w-md" />
-
-        <UCard v-if="loading">
-          <div class="space-y-3"><USkeleton v-for="i in 5" :key="i" class="h-16 rounded-lg" /></div>
-        </UCard>
-        <UCard v-else-if="filteredOrganizations.length === 0">
-          <div class="py-8 text-center text-sm text-muted">No organizations match your search.</div>
-        </UCard>
-        <div v-else class="overflow-hidden rounded-xl border border-default">
-          <NuxtLink
-            v-for="organization in filteredOrganizations"
-            :key="organization.id"
-            :to="`/admin/organizations/${organization.id}`"
-            class="grid gap-3 border-b border-default bg-default px-5 py-4 transition-colors last:border-b-0 hover:bg-elevated/50 md:grid-cols-[minmax(0,2fr)_repeat(4,minmax(90px,1fr))_auto] md:items-center"
-          >
-            <div class="min-w-0">
-              <p class="truncate font-semibold text-highlighted">{{ organization.name }}</p>
-              <p class="truncate text-xs text-muted">{{ organization.slug || organization.id }}</p>
-            </div>
-            <div><p class="text-[11px] uppercase tracking-wide text-muted">Sites</p><p class="font-semibold text-default">{{ organization.siteCount }}</p></div>
-            <div><p class="text-[11px] uppercase tracking-wide text-muted">Locations</p><p class="font-semibold text-default">{{ organization.locationCount }}</p></div>
-            <div><p class="text-[11px] uppercase tracking-wide text-muted">30d views</p><p class="font-semibold text-default">{{ formatNumber(organization.pageViews30d) }}</p></div>
-            <div><p class="text-[11px] uppercase tracking-wide text-muted">Trend</p><p class="font-semibold" :class="trendTone(organization.pageViews30d, organization.previousPageViews30d) === 'positive' ? 'text-success' : trendTone(organization.pageViews30d, organization.previousPageViews30d) === 'negative' ? 'text-error' : 'text-default'">{{ trendLabel(organization.pageViews30d, organization.previousPageViews30d) }}</p></div>
-            <UIcon name="i-lucide-chevron-right" class="hidden size-4 text-muted md:block" />
-          </NuxtLink>
+        <div class="flex items-center gap-2">
+          <UCheckbox v-model="showAllPurchases" label="Show fulfilled" @update:model-value="loadQueue" />
         </div>
       </div>
     </template>
@@ -51,68 +78,82 @@
 
 <script setup lang="ts">
 definePageMeta({ layout: 'dashboard' })
-useSeoMeta({ title: 'Organizations | KrabiClaw Admin', robots: 'noindex, nofollow' })
-
-interface Organization {
-  id: string
-  name: string
-  slug: string | null
-  createdAt: string
-  siteCount: number
-  locationCount: number
-  memberCount: number
-  pageViews30d: number
-  sessions30d: number
-  previousPageViews30d: number
-}
+useSeoMeta({ title: 'Platform Admin | KrabiClaw', robots: 'noindex, nofollow' })
 
 const toast = useToast()
-const organizations = ref<Organization[]>([])
-const loading = ref(true)
-const search = ref('')
 
-const filteredOrganizations = computed(() => {
-  const query = search.value.trim().toLowerCase()
-  if (!query) return organizations.value
-  return organizations.value.filter(org => `${org.name} ${org.slug || ''}`.toLowerCase().includes(query))
-})
-
-const summary = computed(() => [
-  { label: 'Organizations', value: formatNumber(organizations.value.length) },
-  { label: 'Sites', value: formatNumber(organizations.value.reduce((sum, org) => sum + org.siteCount, 0)) },
-  { label: 'Locations', value: formatNumber(organizations.value.reduce((sum, org) => sum + org.locationCount, 0)) },
-  { label: '30d page views', value: formatNumber(organizations.value.reduce((sum, org) => sum + org.pageViews30d, 0)) },
-])
-
-function formatNumber(value: number) { return new Intl.NumberFormat().format(value) }
-function trendPercent(current: number, previous: number) {
-  if (previous === 0) return current > 0 ? null : 0
-  return Math.round(((current - previous) / previous) * 100)
-}
-function trendLabel(current: number, previous: number) {
-  const trend = trendPercent(current, previous)
-  return trend === null ? 'New' : `${trend > 0 ? '+' : ''}${trend}%`
-}
-function trendTone(current: number, previous: number) {
-  const trend = trendPercent(current, previous)
-  if (trend === null || trend > 0) return 'positive'
-  if (trend < 0) return 'negative'
-  return 'neutral'
+interface Purchase {
+  id: string
+  organization_id: string
+  org_name: string
+  org_slug: string | null
+  addon_type: string
+  fulfilled_at: string | null
+  created_at: string
 }
 
-async function loadOrganizations() {
-  loading.value = true
+const isPurchasesResponse = (value: unknown): value is { purchases: Purchase[] } =>
+  isRecord(value)
+  && Array.isArray(value.purchases)
+  && value.purchases.every(purchase =>
+    isRecord(purchase)
+    && typeof purchase.id === 'string'
+    && typeof purchase.organization_id === 'string'
+    && typeof purchase.addon_type === 'string',
+  )
+
+const purchases = ref<Purchase[]>([])
+const queueLoading = ref(false)
+const fulfillingId = ref<string | null>(null)
+const showAllPurchases = ref(false)
+
+const ADDON_LABELS: Record<string, string> = {
+  seasonal: 'Seasonal Relaunch',
+  gbp_setup: 'Google Business Optimization',
+}
+const ADDON_ICONS: Record<string, string> = {
+  seasonal: 'i-lucide-sparkles',
+  gbp_setup: 'i-lucide-map-pin',
+}
+const ADDON_COLORS: Record<string, string> = {
+  seasonal: 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400',
+  gbp_setup: 'bg-green-50 dark:bg-green-950/40 text-green-600 dark:text-green-400',
+}
+
+function addonLabel(type: string) { return ADDON_LABELS[type] ?? type }
+function addonIcon(type: string) { return ADDON_ICONS[type] ?? 'i-lucide-shopping-bag' }
+function addonColor(type: string) { return ADDON_COLORS[type] ?? 'bg-muted text-muted' }
+
+async function loadQueue() {
+  queueLoading.value = true
   try {
-    const response = await applicationFetch<{ organizations: Organization[] }>('/api/admin/portfolio', {
-      validate: (value): value is { organizations: Organization[] } => isRecord(value) && Array.isArray(value.organizations),
-    })
-    organizations.value = response.organizations
+    const res = await applicationFetch<{ purchases: Purchase[] }>(
+      `/api/admin/fulfillment?all=${showAllPurchases.value ? '1' : '0'}`,
+      { validate: isPurchasesResponse },
+    )
+    purchases.value = res.purchases
   } catch {
-    toast.add({ title: 'Failed to load organizations', color: 'error' })
+    toast.add({ title: 'Failed to load queue', color: 'error' })
   } finally {
-    loading.value = false
+    queueLoading.value = false
   }
 }
 
-onMounted(loadOrganizations)
+async function markDone(id: string) {
+  fulfillingId.value = id
+  try {
+    await applicationFetch(`/api/admin/fulfillment/${id}/done`, {
+      method: 'POST',
+      validate: (value): value is { success: true } => isRecord(value) && value.success === true,
+    })
+    toast.add({ title: 'Marked as fulfilled', color: 'success' })
+    await loadQueue()
+  } catch {
+    toast.add({ title: 'Failed to mark done', color: 'error' })
+  } finally {
+    fulfillingId.value = null
+  }
+}
+
+onMounted(loadQueue)
 </script>
