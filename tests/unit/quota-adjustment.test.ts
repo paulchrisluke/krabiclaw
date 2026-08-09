@@ -43,7 +43,6 @@ const routeSource = readFileSync(
 function createDb(): SqliteDb {
   const db = new Database(':memory:')
   db.exec(`
-    CREATE TABLE organization (id TEXT PRIMARY KEY);
     CREATE TABLE ai_credits (
       organization_id TEXT PRIMARY KEY,
       balance INTEGER NOT NULL DEFAULT 0,
@@ -84,7 +83,6 @@ function createDb(): SqliteDb {
 }
 
 function seedCanonical(db: SqliteDb, organizationId = 'org-adjustment') {
-  db.prepare('INSERT INTO organization (id) VALUES (?)').run(organizationId)
   db.prepare(`
     INSERT INTO ai_credits
       (organization_id, balance, lifetime_used, last_topped_up_at, balance_period_key, updated_at)
@@ -101,6 +99,11 @@ function seedCanonical(db: SqliteDb, organizationId = 'org-adjustment') {
 
 const NOW = new Date('2026-08-10T12:00:00.000Z')
 const SECRET = 'quota-adjustment-test-secret'
+const organizationLookup = {
+  findOrganizationById: async (organizationId: string) => organizationId === 'org-adjustment'
+    ? { id: organizationId, name: 'Adjustment Organization', slug: 'adjustment' }
+    : null,
+}
 
 function input(overrides: Record<string, unknown> = {}) {
   return {
@@ -148,10 +151,32 @@ test('only a direct, non-impersonated platform session supplies the actor', () =
   )
 })
 
+test('quota identity comes from the explicit Better Auth lookup and fails closed when missing', async () => {
+  const db = createDb()
+  seedCanonical(db)
+  const calls: string[] = []
+  const lookup = {
+    findOrganizationById: async (organizationId: string) => {
+      calls.push(organizationId)
+      return organizationId === 'org-adjustment' ? { id: organizationId } : null
+    },
+  }
+
+  await previewQuotaAdjustment(db as never, SECRET, input(), 'operator-1', lookup, NOW)
+  assert.deepEqual(calls, ['org-adjustment'])
+
+  await assert.rejects(
+    () => previewQuotaAdjustment(db as never, SECRET, input({ organizationId: 'org-missing' }), 'operator-1', lookup, NOW),
+    (error: unknown) => error instanceof QuotaAdjustmentError && error.code === 'organization_not_found',
+  )
+})
+
 test('admin billing route delegates only the signed adjustment boundary', () => {
   assert.match(routeSource, /platformPermissionJsonResponse\(event, env, \{ platform: \['billing'\] \}\)/)
   assert.match(routeSource, /getAuthSession\(event, env\)/)
   assert.match(routeSource, /assertQuotaOperatorSession\(session\)/)
+  assert.match(routeSource, /getOrgAdapter/)
+  assert.match(routeSource, /organizationLookup/)
   assert.match(routeSource, /parseQuotaAdjustmentRequest\(await readBody<unknown>\(event\)\)/)
   assert.doesNotMatch(routeSource, /resetOrganizationQuota|grantQuota/)
   assert.doesNotMatch(routeSource, /resource\?|periodStart\?|periodEnd\?|createdAt\?|createdBy\?/)
@@ -163,7 +188,7 @@ test('preview is read-only and returns a signed, state-bound plan', async () => 
   seedCanonical(db)
   const before = counts(db)
 
-  const plan = await previewQuotaAdjustment(db as never, SECRET, input(), 'operator-1', NOW)
+  const plan = await previewQuotaAdjustment(db as never, SECRET, input(), 'operator-1', organizationLookup, NOW)
 
   assert.equal(plan.actor, 'operator-1')
   assert.deepEqual(plan.input, input())
@@ -185,23 +210,21 @@ test('preview is read-only and returns a signed, state-bound plan', async () => 
 
 test('preview rejects missing and legacy credit rows without writing', async () => {
   const missing = createDb()
-  missing.prepare('INSERT INTO organization (id) VALUES (?)').run('org-adjustment')
   const missingBefore = counts(missing)
   await assert.rejects(
-    () => previewQuotaAdjustment(missing as never, SECRET, input(), 'operator-1', NOW),
+    () => previewQuotaAdjustment(missing as never, SECRET, input(), 'operator-1', organizationLookup, NOW),
     (error: unknown) => error instanceof QuotaAdjustmentError && error.code === 'quota_initialization_required',
   )
   assert.deepEqual(counts(missing), missingBefore)
 
   const legacy = createDb()
-  legacy.prepare('INSERT INTO organization (id) VALUES (?)').run('org-adjustment')
   legacy.prepare(`
     INSERT INTO ai_credits (organization_id, balance, lifetime_used, balance_period_key, updated_at)
     VALUES (?, 100, 4, NULL, ?)
   `).run('org-adjustment', '2026-08-10T09:00:00.000Z')
   const legacyBefore = counts(legacy)
   await assert.rejects(
-    () => previewQuotaAdjustment(legacy as never, SECRET, input(), 'operator-1', NOW),
+    () => previewQuotaAdjustment(legacy as never, SECRET, input(), 'operator-1', organizationLookup, NOW),
     (error: unknown) => error instanceof QuotaAdjustmentError && error.code === 'quota_reconciliation_required',
   )
   assert.deepEqual(counts(legacy), legacyBefore)
@@ -209,14 +232,13 @@ test('preview rejects missing and legacy credit rows without writing', async () 
 
 test('preview rejects a non-null credit row from an older UTC week without writing', async () => {
   const db = createDb()
-  db.prepare('INSERT INTO organization (id) VALUES (?)').run('org-adjustment')
   db.prepare(`
     INSERT INTO ai_credits (organization_id, balance, lifetime_used, balance_period_key, updated_at)
     VALUES (?, 100, 4, ?, ?)
   `).run('org-adjustment', '2026-08-03', '2026-08-10T09:00:00.000Z')
   const before = counts(db)
   await assert.rejects(
-    () => previewQuotaAdjustment(db as never, SECRET, input(), 'operator-1', NOW),
+    () => previewQuotaAdjustment(db as never, SECRET, input(), 'operator-1', organizationLookup, NOW),
     (error: unknown) => error instanceof QuotaAdjustmentError && error.code === 'quota_reconciliation_required',
   )
   assert.deepEqual(counts(db), before)
@@ -224,25 +246,76 @@ test('preview rejects a non-null credit row from an older UTC week without writi
 
 test('preview fails closed on malformed numeric credit state without writing', async () => {
   const db = createDb()
-  db.prepare('INSERT INTO organization (id) VALUES (?)').run('org-adjustment')
   db.prepare(`
     INSERT INTO ai_credits (organization_id, balance, lifetime_used, balance_period_key, updated_at)
     VALUES (?, ?, 4, ?, ?)
   `).run('org-adjustment', 'not-a-number', '2026-08-10', '2026-08-10T09:00:00.000Z')
   const before = counts(db)
   await assert.rejects(
-    () => previewQuotaAdjustment(db as never, SECRET, input(), 'operator-1', NOW),
+    () => previewQuotaAdjustment(db as never, SECRET, input(), 'operator-1', organizationLookup, NOW),
     (error: unknown) => error instanceof QuotaAdjustmentError && error.code === 'quota_state_invalid',
   )
   assert.deepEqual(counts(db), before)
 })
 
+test('preview fails closed on malformed ledger aggregates and timestamps without writing', async () => {
+  const cases: Array<{
+    name: string
+    seed: (_db: SqliteDb) => void
+  }> = [
+    {
+      name: 'grant quantity',
+      seed: (db) => db.prepare(`
+        INSERT INTO usage_quota_grants
+          (id, organization_id, resource, quantity, unit, period_key, period_start, period_end,
+           grant_type, reason, created_by, idempotency_key, applied_at, created_at)
+        VALUES ('bad-grant', 'org-adjustment', 'ai_inference', ?, 'credit', 'week:2026-08-10',
+                '2026-08-10T00:00:00.000Z', '2026-08-17T00:00:00.000Z', 'manual',
+                'bad fixture', 'operator-2', 'bad-grant', NULL, '2026-08-10T10:00:00.000Z')
+      `).run('not-a-number'),
+    },
+    {
+      name: 'usage quantity',
+      seed: (db) => db.prepare(`
+        INSERT INTO usage_events
+          (id, organization_id, resource, quantity, unit, idempotency_key, created_at)
+        VALUES ('bad-usage', 'org-adjustment', 'ai_inference', ?, 'credit',
+                'bad-usage', '2026-08-10T10:00:00.000Z')
+      `).run('not-a-number'),
+    },
+    {
+      name: 'grant timestamp',
+      seed: (db) => db.prepare(`
+        INSERT INTO usage_quota_grants
+          (id, organization_id, resource, quantity, unit, period_key, period_start, period_end,
+           grant_type, reason, created_by, idempotency_key, applied_at, created_at)
+        VALUES ('bad-time', 'org-adjustment', 'ai_inference', 1, 'credit', 'week:2026-08-10',
+                '2026-08-10T00:00:00.000Z', '2026-08-17T00:00:00.000Z', 'manual',
+                'bad fixture', 'operator-2', 'bad-time', NULL, 'not-a-timestamp')
+      `).run(),
+    },
+  ]
+
+  for (const fixture of cases) {
+    const db = createDb()
+    seedCanonical(db)
+    fixture.seed(db)
+    const before = counts(db)
+    await assert.rejects(
+      () => previewQuotaAdjustment(db as never, SECRET, input({ idempotencyKey: `preview-${fixture.name}` }), 'operator-1', organizationLookup, NOW),
+      (error: unknown) => error instanceof QuotaAdjustmentError && error.code === 'quota_state_invalid',
+      fixture.name,
+    )
+    assert.deepEqual(counts(db), before, fixture.name)
+  }
+})
+
 test('manual apply adds credits and preserves historical top-up data', async () => {
   const db = createDb()
   seedCanonical(db)
-  const plan = await previewQuotaAdjustment(db as never, SECRET, input(), 'operator-1', NOW)
+  const plan = await previewQuotaAdjustment(db as never, SECRET, input(), 'operator-1', organizationLookup, NOW)
 
-  const result = await applyQuotaAdjustment(db as never, SECRET, plan.input, 'operator-1', plan.expectedStateSha256, plan.approvalToken, NOW)
+  const result = await applyQuotaAdjustment(db as never, SECRET, plan.input, 'operator-1', plan.expectedStateSha256, plan.approvalToken, organizationLookup, NOW)
 
   assert.equal(result.status, 'applied')
   const credits = db.prepare('SELECT balance, lifetime_used, last_topped_up_at, balance_period_key FROM ai_credits WHERE organization_id = ?').get('org-adjustment') as { balance: number; lifetime_used: number; last_topped_up_at: string; balance_period_key: string }
@@ -268,9 +341,9 @@ test('reset apply establishes an exact balance and preserves historical top-up d
   const db = createDb()
   seedCanonical(db)
   const resetInput = input({ action: 'reset', quantity: 7, idempotencyKey: 'operator-reset-1' })
-  const plan = await previewQuotaAdjustment(db as never, SECRET, resetInput, 'operator-1', NOW)
+  const plan = await previewQuotaAdjustment(db as never, SECRET, resetInput, 'operator-1', organizationLookup, NOW)
 
-  const result = await applyQuotaAdjustment(db as never, SECRET, plan.input, 'operator-1', plan.expectedStateSha256, plan.approvalToken, NOW)
+  const result = await applyQuotaAdjustment(db as never, SECRET, plan.input, 'operator-1', plan.expectedStateSha256, plan.approvalToken, organizationLookup, NOW)
 
   assert.equal(result.status, 'applied')
   const credits = db.prepare('SELECT balance, lifetime_used, last_topped_up_at FROM ai_credits WHERE organization_id = ?').get('org-adjustment') as { balance: number; lifetime_used: number; last_topped_up_at: string }
@@ -281,19 +354,19 @@ test('reset apply establishes an exact balance and preserves historical top-up d
 test('apply rejects tampered and expired approvals without writes', async () => {
   const db = createDb()
   seedCanonical(db)
-  const plan = await previewQuotaAdjustment(db as never, SECRET, input(), 'operator-1', NOW)
+  const plan = await previewQuotaAdjustment(db as never, SECRET, input(), 'operator-1', organizationLookup, NOW)
   const before = counts(db)
 
   await assert.rejects(
-    () => applyQuotaAdjustment(db as never, SECRET, plan.input, 'operator-1', plan.expectedStateSha256, `${plan.approvalToken.slice(0, -1)}x`, NOW),
+    () => applyQuotaAdjustment(db as never, SECRET, plan.input, 'operator-1', plan.expectedStateSha256, `${plan.approvalToken.slice(0, -1)}x`, organizationLookup, NOW),
     (error: unknown) => error instanceof QuotaAdjustmentError && error.code === 'approval_token_invalid',
   )
   await assert.rejects(
-    () => applyQuotaAdjustment(db as never, SECRET, plan.input, 'operator-1', '0'.repeat(64), plan.approvalToken, NOW),
+    () => applyQuotaAdjustment(db as never, SECRET, plan.input, 'operator-1', '0'.repeat(64), plan.approvalToken, organizationLookup, NOW),
     (error: unknown) => error instanceof QuotaAdjustmentError && error.code === 'approval_state_mismatch',
   )
   await assert.rejects(
-    () => applyQuotaAdjustment(db as never, SECRET, plan.input, 'operator-1', plan.expectedStateSha256, plan.approvalToken, new Date('2026-08-10T22:01:00.000Z')),
+    () => applyQuotaAdjustment(db as never, SECRET, plan.input, 'operator-1', plan.expectedStateSha256, plan.approvalToken, organizationLookup, new Date('2026-08-10T22:01:00.000Z')),
     (error: unknown) => error instanceof QuotaAdjustmentError && error.code === 'approval_expired',
   )
   assert.deepEqual(counts(db), before)
@@ -303,16 +376,16 @@ test('exact idempotency replays without a second balance change and conflicting 
   const db = createDb()
   seedCanonical(db)
   const firstInput = input()
-  const firstPlan = await previewQuotaAdjustment(db as never, SECRET, firstInput, 'operator-1', NOW)
+  const firstPlan = await previewQuotaAdjustment(db as never, SECRET, firstInput, 'operator-1', organizationLookup, NOW)
   const conflictingInput = input({ quantity: 26 })
-  const conflictingPlan = await previewQuotaAdjustment(db as never, SECRET, conflictingInput, 'operator-1', NOW)
-  const first = await applyQuotaAdjustment(db as never, SECRET, firstInput, 'operator-1', firstPlan.expectedStateSha256, firstPlan.approvalToken, NOW)
+  const conflictingPlan = await previewQuotaAdjustment(db as never, SECRET, conflictingInput, 'operator-1', organizationLookup, NOW)
+  const first = await applyQuotaAdjustment(db as never, SECRET, firstInput, 'operator-1', firstPlan.expectedStateSha256, firstPlan.approvalToken, organizationLookup, NOW)
   assert.equal(first.status, 'applied')
   await assert.rejects(
-    () => applyQuotaAdjustment(db as never, SECRET, conflictingInput, 'operator-1', conflictingPlan.expectedStateSha256, conflictingPlan.approvalToken, NOW),
+    () => applyQuotaAdjustment(db as never, SECRET, conflictingInput, 'operator-1', conflictingPlan.expectedStateSha256, conflictingPlan.approvalToken, organizationLookup, NOW),
     (error: unknown) => error instanceof QuotaAdjustmentError && error.code === 'idempotency_conflict',
   )
-  const replay = await applyQuotaAdjustment(db as never, SECRET, firstInput, 'operator-1', firstPlan.expectedStateSha256, firstPlan.approvalToken, NOW)
+  const replay = await applyQuotaAdjustment(db as never, SECRET, firstInput, 'operator-1', firstPlan.expectedStateSha256, firstPlan.approvalToken, organizationLookup, NOW)
   assert.equal(replay.status, 'already_applied')
   assert.equal((db.prepare('SELECT balance FROM ai_credits WHERE organization_id = ?').get('org-adjustment') as { balance: number }).balance, 125)
   assert.equal((db.prepare('SELECT COUNT(*) AS count FROM usage_quota_grants WHERE organization_id = ?').get('org-adjustment') as { count: number }).count, 1)
@@ -321,23 +394,23 @@ test('exact idempotency replays without a second balance change and conflicting 
 test('stale ai credit and usage-ledger state rejects with zero adjustment writes', async () => {
   const db = createDb()
   seedCanonical(db)
-  const plan = await previewQuotaAdjustment(db as never, SECRET, input(), 'operator-1', NOW)
+  const plan = await previewQuotaAdjustment(db as never, SECRET, input(), 'operator-1', organizationLookup, NOW)
   db.prepare('UPDATE ai_credits SET balance = balance + 1 WHERE organization_id = ?').run('org-adjustment')
   const before = counts(db)
   await assert.rejects(
-    () => applyQuotaAdjustment(db as never, SECRET, plan.input, 'operator-1', plan.expectedStateSha256, plan.approvalToken, NOW),
+    () => applyQuotaAdjustment(db as never, SECRET, plan.input, 'operator-1', plan.expectedStateSha256, plan.approvalToken, organizationLookup, NOW),
     (error: unknown) => error instanceof QuotaAdjustmentError && error.code === 'stale_state',
   )
   assert.deepEqual(counts(db), before)
 
-  const usagePlan = await previewQuotaAdjustment(db as never, SECRET, input({ idempotencyKey: 'operator-adjustment-usage' }), 'operator-1', NOW)
+  const usagePlan = await previewQuotaAdjustment(db as never, SECRET, input({ idempotencyKey: 'operator-adjustment-usage' }), 'operator-1', organizationLookup, NOW)
   db.prepare(`
     INSERT INTO usage_events (id, organization_id, resource, quantity, unit, idempotency_key, created_at)
     VALUES (?, ?, 'ai_inference', 3, 'credit', ?, ?)
   `).run('usage-1', 'org-adjustment', 'usage-1', '2026-08-10T11:00:00.000Z')
   const usageBefore = counts(db)
   await assert.rejects(
-    () => applyQuotaAdjustment(db as never, SECRET, usagePlan.input, 'operator-1', usagePlan.expectedStateSha256, usagePlan.approvalToken, NOW),
+    () => applyQuotaAdjustment(db as never, SECRET, usagePlan.input, 'operator-1', usagePlan.expectedStateSha256, usagePlan.approvalToken, organizationLookup, NOW),
     (error: unknown) => error instanceof QuotaAdjustmentError && error.code === 'stale_state',
   )
   assert.deepEqual(counts(db), usageBefore)
@@ -346,7 +419,7 @@ test('stale ai credit and usage-ledger state rejects with zero adjustment writes
 test('a grant inserted between preview and apply is detected with zero adjustment writes', async () => {
   const db = createDb()
   seedCanonical(db)
-  const plan = await previewQuotaAdjustment(db as never, SECRET, input(), 'operator-1', NOW)
+  const plan = await previewQuotaAdjustment(db as never, SECRET, input(), 'operator-1', organizationLookup, NOW)
   db.prepare(`
     INSERT INTO usage_quota_grants
       (id, organization_id, resource, quantity, unit, period_key, period_start, period_end,
@@ -367,7 +440,7 @@ test('a grant inserted between preview and apply is detected with zero adjustmen
   const before = counts(db)
 
   await assert.rejects(
-    () => applyQuotaAdjustment(db as never, SECRET, plan.input, 'operator-1', plan.expectedStateSha256, plan.approvalToken, NOW),
+    () => applyQuotaAdjustment(db as never, SECRET, plan.input, 'operator-1', plan.expectedStateSha256, plan.approvalToken, organizationLookup, NOW),
     (error: unknown) => error instanceof QuotaAdjustmentError && error.code === 'stale_state',
   )
   assert.deepEqual(counts(db), before)
@@ -377,7 +450,7 @@ test('a grant inserted between preview and apply is detected with zero adjustmen
 test('in-batch compare-and-swap rolls back when usage is appended after review', async () => {
   const db = createDb()
   seedCanonical(db)
-  const plan = await previewQuotaAdjustment(db as never, SECRET, input(), 'operator-1', NOW)
+  const plan = await previewQuotaAdjustment(db as never, SECRET, input(), 'operator-1', organizationLookup, NOW)
   beforeBatch = () => {
     db.prepare(`
       INSERT INTO usage_events (id, organization_id, resource, quantity, unit, idempotency_key, created_at)
@@ -386,7 +459,7 @@ test('in-batch compare-and-swap rolls back when usage is appended after review',
   }
 
   await assert.rejects(
-    () => applyQuotaAdjustment(db as never, SECRET, plan.input, 'operator-1', plan.expectedStateSha256, plan.approvalToken, NOW),
+    () => applyQuotaAdjustment(db as never, SECRET, plan.input, 'operator-1', plan.expectedStateSha256, plan.approvalToken, organizationLookup, NOW),
     (error: unknown) => error instanceof QuotaAdjustmentError && error.code === 'stale_state',
   )
   assert.equal((db.prepare('SELECT COUNT(*) AS count FROM usage_quota_grants WHERE organization_id = ?').get('org-adjustment') as { count: number }).count, 0)
@@ -396,7 +469,7 @@ test('in-batch compare-and-swap rolls back when usage is appended after review',
 test('in-batch compare-and-swap rolls back when a grant is appended after review', async () => {
   const db = createDb()
   seedCanonical(db)
-  const plan = await previewQuotaAdjustment(db as never, SECRET, input({ idempotencyKey: 'operator-adjustment-grant-race' }), 'operator-1', NOW)
+  const plan = await previewQuotaAdjustment(db as never, SECRET, input({ idempotencyKey: 'operator-adjustment-grant-race' }), 'operator-1', organizationLookup, NOW)
   beforeBatch = () => {
     db.prepare(`
       INSERT INTO usage_quota_grants
@@ -418,7 +491,7 @@ test('in-batch compare-and-swap rolls back when a grant is appended after review
   }
 
   await assert.rejects(
-    () => applyQuotaAdjustment(db as never, SECRET, plan.input, 'operator-1', plan.expectedStateSha256, plan.approvalToken, NOW),
+    () => applyQuotaAdjustment(db as never, SECRET, plan.input, 'operator-1', plan.expectedStateSha256, plan.approvalToken, organizationLookup, NOW),
     (error: unknown) => error instanceof QuotaAdjustmentError && error.code === 'stale_state',
   )
   assert.equal((db.prepare('SELECT COUNT(*) AS count FROM usage_quota_grants WHERE organization_id = ? AND idempotency_key = ?').get('org-adjustment', 'operator-adjustment-grant-race') as { count: number }).count, 0)

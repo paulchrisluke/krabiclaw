@@ -69,6 +69,15 @@ export interface QuotaAdjustmentPlan {
   approvalToken: string
 }
 
+/**
+ * Better Auth is the source of truth for organization identity. Quota ledger
+ * rows remain app-owned, so callers pass the canonical Organization adapter
+ * lookup explicitly instead of letting this utility query Better Auth tables.
+ */
+export interface QuotaAdjustmentOrganizationLookup {
+  findOrganizationById(_organizationId: string): Promise<unknown>
+}
+
 export type QuotaAdjustmentResult =
   | { status: 'applied'; organizationId: string; action: QuotaAdjustmentAction; quantity: number; grantId: string; period: QuotaAdjustmentPeriod }
   | { status: 'already_applied'; organizationId: string; action: QuotaAdjustmentAction; quantity: number; grantId: string; period: QuotaAdjustmentPeriod }
@@ -86,23 +95,24 @@ export class QuotaAdjustmentError extends Error {
 }
 
 interface CreditRow {
-  balance: number
-  lifetime_used: number
+  balance: unknown
+  lifetime_used: unknown
   balance_period_key: string | null
-  updated_at: string
+  updated_at: unknown
 }
 
 interface AggregateRow {
-  count: number | null
-  quantity: number | null
-  applied_count?: number | null
-  latest_created_at: string | null
+  count: unknown
+  quantity: unknown
+  invalid_count: unknown
+  applied_count?: unknown
+  latest_created_at: unknown
 }
 
 interface ExistingGrantRow {
   id: string
   resource: string
-  quantity: number
+  quantity: unknown
   unit: string
   period_key: string
   period_start: string
@@ -111,7 +121,7 @@ interface ExistingGrantRow {
   reason: string
   created_by: string | null
   idempotency_key: string
-  applied_at: string | null
+  applied_at: unknown
 }
 
 interface QuotaAdjustmentSnapshot {
@@ -124,8 +134,41 @@ type ApprovalRequest = {
   period: QuotaAdjustmentPeriod
 }
 
+async function assertQuotaOrganization(
+  organizationLookup: QuotaAdjustmentOrganizationLookup,
+  organizationId: string,
+): Promise<void> {
+  if (!organizationLookup || typeof organizationLookup.findOrganizationById !== 'function') {
+    fail('organization_lookup_unavailable', 500, 'Organization identity could not be verified.')
+  }
+
+  const organization = await organizationLookup.findOrganizationById(organizationId)
+  if (!organization || typeof organization !== 'object' || Array.isArray(organization)) {
+    fail('organization_not_found', 404, 'Organization not found.')
+  }
+  const id = (organization as { id?: unknown }).id
+  if (id !== organizationId) {
+    fail('organization_not_found', 404, 'Organization not found.')
+  }
+}
+
 function fail(code: string, statusCode: number, message: string): never {
   throw new QuotaAdjustmentError(code, statusCode, message)
+}
+
+function quotaStateInteger(value: unknown, label: string): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+    fail('quota_state_invalid', 500, `${label} must be a non-negative safe integer.`)
+  }
+  return value
+}
+
+function quotaStateTimestamp(value: unknown, label: string, nullable = false): string | null {
+  if (nullable && value === null) return null
+  if (typeof value !== 'string' || !value.trim() || Number.isNaN(Date.parse(value))) {
+    fail('quota_state_invalid', 500, `${label} must be a valid timestamp.`)
+  }
+  return value
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -240,12 +283,13 @@ function approvalRequest(input: QuotaAdjustmentInput, period: QuotaAdjustmentPer
   return { input, period }
 }
 
-async function readSnapshot(db: DbClient, input: QuotaAdjustmentInput, period: QuotaAdjustmentPeriod): Promise<QuotaAdjustmentSnapshot> {
-  const organization = await queryFirst<{ id: string }>(db, `
-    SELECT id FROM organization WHERE id = ? LIMIT 1
-  `, [input.organizationId])
-  if (!organization) fail('organization_not_found', 404, 'Organization not found.')
-
+async function readSnapshot(
+  db: DbClient,
+  input: QuotaAdjustmentInput,
+  period: QuotaAdjustmentPeriod,
+  organizationLookup: QuotaAdjustmentOrganizationLookup,
+): Promise<QuotaAdjustmentSnapshot> {
+  await assertQuotaOrganization(organizationLookup, input.organizationId)
   const credits = await queryFirst<CreditRow>(db, `
     SELECT balance, lifetime_used, balance_period_key, updated_at
     FROM ai_credits WHERE organization_id = ? LIMIT 1
@@ -256,18 +300,9 @@ async function readSnapshot(db: DbClient, input: QuotaAdjustmentInput, period: Q
   if (!credits.balance_period_key || !credits.balance_period_key.trim()) {
     fail('quota_reconciliation_required', 409, 'AI quota requires legacy reconciliation before an operator adjustment.')
   }
-  const balance = Number(credits.balance)
-  const lifetimeUsed = Number(credits.lifetime_used)
-  if (
-    typeof credits.balance !== 'number'
-    || typeof credits.lifetime_used !== 'number'
-    || !Number.isSafeInteger(balance)
-    || balance < 0
-    || !Number.isSafeInteger(lifetimeUsed)
-    || lifetimeUsed < 0
-  ) {
-    fail('quota_state_invalid', 500, 'AI quota contains invalid numeric state.')
-  }
+  const balance = quotaStateInteger(credits.balance, 'AI quota balance')
+  const lifetimeUsed = quotaStateInteger(credits.lifetime_used, 'AI quota lifetime usage')
+  const creditsUpdatedAt = quotaStateTimestamp(credits.updated_at, 'AI quota updated_at')!
   if (credits.balance_period_key !== balancePeriodKey(period)) {
     fail('quota_reconciliation_required', 409, 'AI quota is not initialized for the current UTC week.')
   }
@@ -275,6 +310,11 @@ async function readSnapshot(db: DbClient, input: QuotaAdjustmentInput, period: Q
   const grants = await queryFirst<AggregateRow>(db, `
     SELECT COUNT(*) AS count,
            COALESCE(SUM(quantity), 0) AS quantity,
+           COALESCE(SUM(CASE
+             WHEN typeof(quantity) != 'integer'
+               OR quantity < 0
+               OR quantity > 9007199254740991
+             THEN 1 ELSE 0 END), 0) AS invalid_count,
            COALESCE(SUM(CASE WHEN applied_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS applied_count,
            MAX(created_at) AS latest_created_at
     FROM usage_quota_grants
@@ -287,6 +327,11 @@ async function readSnapshot(db: DbClient, input: QuotaAdjustmentInput, period: Q
   const usage = await queryFirst<AggregateRow>(db, `
     SELECT COUNT(*) AS count,
            COALESCE(SUM(quantity), 0) AS quantity,
+           COALESCE(SUM(CASE
+             WHEN typeof(quantity) != 'integer'
+               OR quantity < 0
+               OR quantity > 9007199254740991
+             THEN 1 ELSE 0 END), 0) AS invalid_count,
            MAX(created_at) AS latest_created_at
     FROM usage_events
     WHERE organization_id = ?
@@ -303,24 +348,47 @@ async function readSnapshot(db: DbClient, input: QuotaAdjustmentInput, period: Q
     LIMIT 1
   `, [input.organizationId, input.idempotencyKey])
 
+  const grantCount = quotaStateInteger(grants?.count ?? 0, 'Quota grant count')
+  const invalidGrantCount = quotaStateInteger(grants?.invalid_count ?? 0, 'Invalid quota grant count')
+  if (invalidGrantCount !== 0) {
+    fail('quota_state_invalid', 500, 'Quota grants contain invalid quantity state.')
+  }
+  const grantQuantity = quotaStateInteger(grants?.quantity ?? 0, 'Quota grant quantity total')
+  const appliedGrantCount = quotaStateInteger(grants?.applied_count ?? 0, 'Applied quota grant count')
+  if (appliedGrantCount > grantCount) {
+    fail('quota_state_invalid', 500, 'Applied quota grant count cannot exceed the grant count.')
+  }
+  const usageCount = quotaStateInteger(usage?.count ?? 0, 'Usage event count')
+  const invalidUsageCount = quotaStateInteger(usage?.invalid_count ?? 0, 'Invalid usage event count')
+  if (invalidUsageCount !== 0) {
+    fail('quota_state_invalid', 500, 'Usage events contain invalid quantity state.')
+  }
+  const usageQuantity = quotaStateInteger(usage?.quantity ?? 0, 'Usage event quantity total')
+  const latestGrantCreatedAt = quotaStateTimestamp(grants?.latest_created_at ?? null, 'Latest quota grant created_at', true)
+  const latestUsageCreatedAt = quotaStateTimestamp(usage?.latest_created_at ?? null, 'Latest usage event created_at', true)
+  if (existingGrant) {
+    quotaStateInteger(existingGrant.quantity, 'Existing quota adjustment quantity')
+    quotaStateTimestamp(existingGrant.applied_at, 'Existing quota adjustment applied_at', true)
+  }
+
   return {
     state: {
       credits: {
         balance,
         lifetimeUsed,
         balancePeriodKey: credits.balance_period_key,
-        updatedAt: credits.updated_at,
+        updatedAt: creditsUpdatedAt,
       },
       grants: {
-        count: Number(grants?.count ?? 0),
-        quantity: Number(grants?.quantity ?? 0),
-        appliedCount: Number(grants?.applied_count ?? 0),
-        latestCreatedAt: grants?.latest_created_at ?? null,
+        count: grantCount,
+        quantity: grantQuantity,
+        appliedCount: appliedGrantCount,
+        latestCreatedAt: latestGrantCreatedAt,
       },
       usage: {
-        count: Number(usage?.count ?? 0),
-        quantity: Number(usage?.quantity ?? 0),
-        latestCreatedAt: usage?.latest_created_at ?? null,
+        count: usageCount,
+        quantity: usageQuantity,
+        latestCreatedAt: latestUsageCreatedAt,
       },
     },
     existingGrant: existingGrant ?? null,
@@ -335,7 +403,10 @@ function exactExistingGrant(
 ): boolean {
   return grant.resource === ADJUSTMENT_RESOURCE
     && grant.unit === ADJUSTMENT_UNIT
-    && Number(grant.quantity) === input.quantity
+    && typeof grant.quantity === 'number'
+    && Number.isSafeInteger(grant.quantity)
+    && grant.quantity >= 0
+    && grant.quantity === input.quantity
     && grant.period_key === period.key
     && grant.period_start === period.start
     && grant.period_end === period.end
@@ -445,10 +516,11 @@ export async function previewQuotaAdjustment(
   secret: string,
   input: QuotaAdjustmentInput,
   actor: string,
+  organizationLookup: QuotaAdjustmentOrganizationLookup,
   now = new Date(),
 ): Promise<QuotaAdjustmentPlan> {
   const period = currentPeriod(now)
-  const snapshot = await readSnapshot(db, input, period)
+  const snapshot = await readSnapshot(db, input, period, organizationLookup)
   if (snapshot.existingGrant && !exactExistingGrant(snapshot.existingGrant, input, actor, period)) {
     fail('idempotency_conflict', 409, 'Idempotency key is already used by a different quota adjustment.')
   }
@@ -484,6 +556,7 @@ export async function applyQuotaAdjustment(
   actor: string,
   expectedStateSha256: string,
   approvalToken: string,
+  organizationLookup: QuotaAdjustmentOrganizationLookup,
   now = new Date(),
 ): Promise<QuotaAdjustmentResult> {
   const period = currentPeriod(now)
@@ -498,7 +571,7 @@ export async function applyQuotaAdjustment(
   } catch (error) {
     mapOperatorApprovalError(error)
   }
-  const snapshot = await readSnapshot(db, input, period)
+  const snapshot = await readSnapshot(db, input, period, organizationLookup)
   const id = grantId(input)
 
   if (snapshot.existingGrant) {
@@ -577,7 +650,7 @@ export async function applyQuotaAdjustment(
   try {
     await executeBatch(db, statements)
   } catch (error) {
-    const after = await readSnapshot(db, input, period)
+    const after = await readSnapshot(db, input, period, organizationLookup)
     if (after.existingGrant?.applied_at && exactExistingGrant(after.existingGrant, input, actor, period)) {
       return {
         status: 'already_applied',

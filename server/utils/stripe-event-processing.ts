@@ -20,7 +20,7 @@ export async function processStripeEvent(
 ): Promise<boolean> {
   return recordStripeEvent(db, event, async () => {
     await reconcileBetterAuthSubscriptionEvent(db, event, stripe, adapter, loadStripePlans)
-    await handleApplicationStripeEvent(env, db as D1Database, event, adapter)
+    await handleApplicationStripeEvent(env, db as D1Database, event, adapter, stripe, loadStripePlans)
     await handleStripeGa4Event(env, db, stripe, event)
   })
 }

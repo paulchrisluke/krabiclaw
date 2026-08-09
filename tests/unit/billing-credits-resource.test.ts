@@ -70,6 +70,32 @@ test('usage grouping is sourced from canonical rows and keeps charged state dist
   ])
 })
 
+test('usage grouping fails closed when a canonical group total exceeds the safe integer range', () => {
+  assert.throws(
+    () => groupUsageEvents([
+      {
+        resource: 'ai_inference',
+        site_id: null,
+        site_name: null,
+        action: 'chowbot',
+        quantity: Number.MAX_SAFE_INTEGER,
+        charged: true,
+        created_at: '2026-08-10T12:00:00.000Z',
+      },
+      {
+        resource: 'ai_inference',
+        site_id: null,
+        site_name: null,
+        action: 'chowbot',
+        quantity: 1,
+        charged: true,
+        created_at: '2026-08-10T13:00:00.000Z',
+      },
+    ]),
+    /safe integer/,
+  )
+})
+
 test('malformed canonical quantities fail closed instead of becoming zero usage', () => {
   assert.throws(
     () => parseUsageEventRow({

@@ -1,6 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { platformPermissionJsonResponse } from '~/server/utils/platform-admin-users'
-import { getAuthSession } from '~/server/utils/auth'
+import { createAuth, getAuthSession } from '~/server/utils/auth'
+import { getOrgAdapter } from 'better-auth/plugins'
 import {
   applyQuotaAdjustment,
   assertQuotaOperatorSession,
@@ -21,8 +22,11 @@ export default defineEventHandler(async (event) => {
     const session = await getAuthSession(event, env)
     const actor = assertQuotaOperatorSession(session)
     const request = parseQuotaAdjustmentRequest(await readBody<unknown>(event))
+    const auth = createAuth(env)
+    const authContext = await auth.$context
+    const organizationLookup = getOrgAdapter(authContext as Parameters<typeof getOrgAdapter>[0], {})
     if (request.mode === 'preview') {
-      const plan = await previewQuotaAdjustment(db, env.BETTER_AUTH_SECRET, request.input, actor)
+      const plan = await previewQuotaAdjustment(db, env.BETTER_AUTH_SECRET, request.input, actor, organizationLookup)
       return jsonResponse({ status: 'preview', plan })
     }
     if (!request.expectedStateSha256 || !request.approvalToken) {
@@ -35,6 +39,7 @@ export default defineEventHandler(async (event) => {
       actor,
       request.expectedStateSha256,
       request.approvalToken,
+      organizationLookup,
     )
     return jsonResponse(result)
   } catch (error) {

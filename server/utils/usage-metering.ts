@@ -38,10 +38,61 @@ export interface QuotaGrantInput {
   createdAt?: string
 }
 
-function assertQuantity(quantity: number): void {
-  if (!Number.isSafeInteger(quantity) || quantity < 0) {
-    throw new Error('Usage quantity must be a non-negative safe integer.')
+const MAX_SAFE_INTEGER_SQL = String(Number.MAX_SAFE_INTEGER)
+
+/**
+ * Keep derived credit writes inside the numeric domain that the application
+ * can represent exactly. Legacy rows may still be quarantined with a NULL
+ * period key; active grant application requires a canonical current-period
+ * key separately.
+ */
+const safeCreditProjectionCondition = `
+  typeof(balance) = 'integer'
+  AND balance >= 0
+  AND balance <= ${MAX_SAFE_INTEGER_SQL}
+  AND typeof(lifetime_used) = 'integer'
+  AND lifetime_used >= 0
+  AND lifetime_used <= ${MAX_SAFE_INTEGER_SQL}
+  AND (
+    balance_period_key IS NULL
+    OR (
+      typeof(balance_period_key) = 'text'
+      AND length(balance_period_key) = 10
+      AND balance_period_key GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+      AND date(balance_period_key, '+0 days') = balance_period_key
+      AND strftime('%Y-%m-%d', balance_period_key) = balance_period_key
+      AND strftime('%w', balance_period_key) = '1'
+    )
+  )
+  AND typeof(updated_at) = 'text'
+  AND length(trim(updated_at)) > 0
+  AND julianday(updated_at) IS NOT NULL
+`
+
+/**
+ * Validate a quantity read from an append-only ledger before it participates
+ * in allowance or balance arithmetic. Database column affinity does not
+ * prevent malformed values from being stored, so runtime reads must not rely
+ * on the TypeScript row shape or implicit Number coercion.
+ */
+export function parseLedgerQuantity(value: unknown, label = 'Ledger quantity'): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`${label} must be a non-negative safe integer.`)
   }
+  return value
+}
+
+/** Sum ledger quantities while preserving the safe-integer invariant. */
+export function sumLedgerQuantities(values: Iterable<unknown>, label = 'Ledger quantity total'): number {
+  let total = 0
+  for (const value of values) {
+    total = parseLedgerQuantity(total + parseLedgerQuantity(value, label), label)
+  }
+  return total
+}
+
+function assertQuantity(quantity: number): void {
+  parseLedgerQuantity(quantity, 'Usage quantity')
 }
 
 function parseDate(value: string, label: string): Date {
@@ -123,18 +174,26 @@ export async function getCurrentCreditGrantProjection(
     WHERE organization_id = ?
       AND resource = 'ai_inference'
       AND unit = 'credit'
+      AND applied_at IS NOT NULL
       AND period_start <= ?
     ORDER BY created_at DESC, id DESC
   `, [organizationId, nowIso])
 
-  const active = rows.filter(row => isPeriodActive(row, now))
+  const normalizedRows = rows.map(row => ({
+    ...row,
+    quantity: parseLedgerQuantity(row.quantity, 'Quota grant quantity'),
+  }))
+  const active = normalizedRows.filter(row => isPeriodActive(row, now))
   const baseline = active.find((row): row is typeof row & { grant_type: 'plan' | 'reset' } =>
     (row.grant_type === 'plan' || row.grant_type === 'reset')
     && isCurrentWeeklyBaseline(row, now),
   )
-  const manualQuantity = active
-    .filter(row => row.grant_type === 'manual' && (!baseline || row.created_at >= baseline.created_at))
-    .reduce((total, row) => total + Number(row.quantity), 0)
+  const manualQuantity = sumLedgerQuantities(
+    active
+      .filter(row => row.grant_type === 'manual' && (!baseline || row.created_at >= baseline.created_at))
+      .map(row => row.quantity),
+    'Manual quota grant total',
+  )
 
   if (!baseline) {
     return {
@@ -148,9 +207,10 @@ export async function getCurrentCreditGrantProjection(
     }
   }
 
+  const baselineQuantity = parseLedgerQuantity(baseline.quantity, 'Quota baseline quantity')
   return {
-    grantQuantity: Number(baseline.quantity) + manualQuantity,
-    baselineQuantity: Number(baseline.quantity),
+    grantQuantity: sumLedgerQuantities([baselineQuantity, manualQuantity], 'Quota grant total'),
+    baselineQuantity,
     baselineGrantType: baseline.grant_type,
     baselineCreatedAt: baseline.created_at,
     periodStart: baseline.period_start,
@@ -179,7 +239,7 @@ function assertGrantUnit(input: Pick<QuotaGrantInput, 'resource' | 'unit'>): voi
 }
 
 function applyGrantQuery(
-  input: Pick<QuotaGrantInput, 'organizationId' | 'resource' | 'unit' | 'quantity' | 'grantType' | 'periodStart' | 'idempotencyKey'>,
+  input: Pick<QuotaGrantInput, 'organizationId' | 'resource' | 'unit' | 'quantity' | 'grantType' | 'periodStart' | 'periodEnd' | 'idempotencyKey'>,
   appliedAt: string,
 ): { query: string; params: unknown[] } | null {
   if (!isAiCreditGrant(input)) return null
@@ -199,6 +259,7 @@ function applyGrantQuery(
             updated_at = ?
         WHERE organization_id = ?
           AND balance_period_key IS NOT NULL
+          AND ${safeCreditProjectionCondition}
           AND ${grantReference}
       `,
       params: [input.quantity, utcWeekKey(input.periodStart), appliedAt, input.organizationId, input.organizationId, input.idempotencyKey],
@@ -212,46 +273,113 @@ function applyGrantQuery(
         SET balance = balance + ?, updated_at = ?
         WHERE organization_id = ?
           AND balance_period_key IS NOT NULL
+          AND ${safeCreditProjectionCondition}
+          AND balance <= ${MAX_SAFE_INTEGER_SQL} - ?
           AND ${grantReference}
       `,
-      params: [input.quantity, appliedAt, input.organizationId, input.organizationId, input.idempotencyKey],
+      params: [input.quantity, appliedAt, input.organizationId, input.quantity, input.organizationId, input.idempotencyKey],
     }
   }
 
+  const periodEnd = normalizedPeriodEnd(input.periodStart, input.periodEnd)
   return {
     query: `
       UPDATE ai_credits
-      SET balance = ?,
+      SET balance = MAX(0, ? - CAST(COALESCE((
+            SELECT TOTAL(quantity)
+            FROM usage_events
+            WHERE organization_id = ?
+              AND unit = 'credit'
+              AND created_at >= ?
+              AND created_at < ?
+          ), 0) AS INTEGER)),
           balance_period_key = CASE WHEN balance_period_key IS NULL THEN NULL ELSE ? END,
           updated_at = ?
       WHERE organization_id = ?
         AND balance_period_key IS NOT NULL
+        AND ${safeCreditProjectionCondition}
         AND ${grantReference}
+        AND NOT EXISTS (
+          SELECT 1 FROM usage_events
+          WHERE organization_id = ?
+            AND unit = 'credit'
+            AND created_at >= ?
+            AND created_at < ?
+            AND (
+              typeof(quantity) != 'integer'
+              OR quantity < 0
+              OR quantity > 9007199254740991
+            )
+        )
     `,
-    params: [input.quantity, utcWeekKey(input.periodStart), appliedAt, input.organizationId, input.organizationId, input.idempotencyKey],
+    params: [
+      input.quantity,
+      input.organizationId,
+      input.periodStart,
+      periodEnd,
+      utcWeekKey(input.periodStart),
+      appliedAt,
+      input.organizationId,
+      input.organizationId,
+      input.idempotencyKey,
+      input.organizationId,
+      input.periodStart,
+      periodEnd,
+    ],
   }
 }
 
 function markGrantAppliedQuery(
-  input: Pick<QuotaGrantInput, 'organizationId' | 'resource' | 'unit' | 'idempotencyKey'>,
+  input: Pick<QuotaGrantInput, 'organizationId' | 'resource' | 'unit' | 'grantType' | 'periodStart' | 'periodEnd' | 'idempotencyKey'>,
   appliedAt: string,
 ): { query: string; params: unknown[] } {
+  // D1 batch statements execute in order on one SQLite transaction. For an
+  // AI grant this mark immediately follows the guarded projection UPDATE, so
+  // changes() is the operation correlation rather than a mutable row value.
   const aiCreditCondition = isAiCreditGrant(input)
     ? `
+          AND changes() = 1
           AND EXISTS (
             SELECT 1 FROM ai_credits
-            WHERE organization_id = ? AND balance_period_key IS NOT NULL
+            WHERE organization_id = ?
+              AND balance_period_key IS NOT NULL
+              AND ${safeCreditProjectionCondition}
+          )
+      `
+    : ''
+  const planUsageCondition = isAiCreditGrant(input) && input.grantType === 'plan'
+    ? `
+          AND NOT EXISTS (
+            SELECT 1 FROM usage_events
+            WHERE organization_id = ?
+              AND unit = 'credit'
+              AND created_at >= ?
+              AND created_at < ?
+              AND (
+                typeof(quantity) != 'integer'
+                OR quantity < 0
+                OR quantity > 9007199254740991
+              )
           )
       `
     : ''
   const params = isAiCreditGrant(input)
-    ? [appliedAt, input.organizationId, input.idempotencyKey, input.organizationId]
+    ? [
+        appliedAt,
+        input.organizationId,
+        input.idempotencyKey,
+        input.organizationId,
+        ...(input.grantType === 'plan'
+          ? [input.organizationId, input.periodStart, normalizedPeriodEnd(input.periodStart, input.periodEnd)]
+          : []),
+      ]
     : [appliedAt, input.organizationId, input.idempotencyKey]
   return {
     query: `
       UPDATE usage_quota_grants SET applied_at = ?
       WHERE organization_id = ? AND idempotency_key = ? AND applied_at IS NULL
       ${aiCreditCondition}
+      ${planUsageCondition}
     `,
     params,
   }
@@ -336,9 +464,10 @@ export async function grantQuota(db: DbClient, input: QuotaGrantInput): Promise<
       createdAt,
     ],
   })
-  const apply = applyGrantQuery(input, createdAt)
+  const normalizedInput = { ...input, periodEnd }
+  const apply = applyGrantQuery(normalizedInput, createdAt)
   if (apply) statements.push(apply)
-  statements.push(markGrantAppliedQuery(input, createdAt))
+  statements.push(markGrantAppliedQuery(normalizedInput, createdAt))
 
   const results = await executeBatch(db, statements)
   const grantInserted = Number(results[grantStatementIndex]?.meta.changes ?? 0) > 0
@@ -418,6 +547,9 @@ export async function resetOrganizationQuota(
       organizationId: input.organizationId,
       resource: grant.resource,
       unit: grant.unit,
+      grantType: 'reset',
+      periodStart: grant.periodStart,
+      periodEnd: grant.periodEnd,
       idempotencyKey,
     }, createdAt))
   }
@@ -435,17 +567,42 @@ export interface UsageSummaryRow {
   events: number
 }
 
+interface UsageSummaryAggregateRow extends UsageSummaryRow {
+  invalid_count: number
+}
+
 export async function getUsageSummary(
   db: DbClient,
   organizationId: string,
   since?: string,
 ): Promise<UsageSummaryRow[]> {
-  return await queryAll<UsageSummaryRow>(db, `
+  const rows = await queryAll<UsageSummaryAggregateRow>(db, `
     SELECT resource, source, provider, channel,
-           SUM(quantity) AS quantity, unit, COUNT(*) AS events
+           TOTAL(CASE
+             WHEN typeof(quantity) = 'integer'
+               AND quantity >= 0
+               AND quantity <= ${MAX_SAFE_INTEGER_SQL}
+             THEN quantity ELSE 0 END) AS quantity,
+           SUM(CASE
+             WHEN typeof(quantity) = 'integer'
+               AND quantity >= 0
+               AND quantity <= ${MAX_SAFE_INTEGER_SQL}
+             THEN 0 ELSE 1 END) AS invalid_count,
+           unit, COUNT(*) AS events
     FROM usage_events
     WHERE organization_id = ? ${since ? 'AND created_at >= ?' : ''}
     GROUP BY resource, source, provider, channel, unit
     ORDER BY quantity DESC, resource ASC
   `, since ? [organizationId, since] : [organizationId])
+  return rows.map(({ invalid_count: invalidCountValue, ...row }) => {
+    const invalidCount = parseLedgerQuantity(invalidCountValue, 'Usage summary invalid row count')
+    if (invalidCount > 0) {
+      throw new Error('Usage summary contains malformed ledger quantities.')
+    }
+    return {
+      ...row,
+      quantity: parseLedgerQuantity(row.quantity, 'Usage summary quantity'),
+      events: parseLedgerQuantity(row.events, 'Usage summary event count'),
+    }
+  })
 }

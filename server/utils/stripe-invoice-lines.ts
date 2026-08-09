@@ -75,9 +75,11 @@ export async function loadStripeInvoiceLines(
   },
 ): Promise<StripeInvoiceLine[]> {
   if (!invoice.id) throw new Error('Stripe invoice id is required to load invoice lines')
-  let invoiceLines: StripeInvoiceLine[] = [...(invoice.lines?.data ?? []) as StripeInvoiceLine[]]
+  const embeddedLines = invoice.lines?.data
+  let invoiceLines: StripeInvoiceLine[] = [...(embeddedLines ?? []) as StripeInvoiceLine[]]
   let startingAfter = invoiceLines.at(-1)?.id
-  const mustReloadFirstPage = invoiceLines.some(line => typeof invoiceLinePrice(line) === 'string')
+  const mustReloadFirstPage = !Array.isArray(embeddedLines)
+    || invoiceLines.some(line => typeof invoiceLinePrice(line) === 'string')
 
   if (mustReloadFirstPage) {
     invoiceLines = []
