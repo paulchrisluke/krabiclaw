@@ -1,4 +1,4 @@
-// Stripe recurring-catalog operator plan.
+// Stripe catalog operator plan.
 //
 // Default mode is read-only: provider reads produce a deterministic plan JSON
 // and SHA-256. Applying requires that reviewed plan, an exact SHA confirmation,
@@ -8,16 +8,18 @@
 //   yarn stripe:catalog:plan
 //   STRIPE_SECRET_KEY=sk_test_... node scripts/seed-stripe.mjs --dry-run --plan-file .tmp/stripe-catalog-plan.json
 //   STRIPE_SECRET_KEY=sk_test_... node scripts/seed-stripe.mjs --dry-run --require-test-mode --plan-file .tmp/stripe-catalog-plan.json
+//   STRIPE_SECRET_KEY=sk_test_... node scripts/seed-stripe.mjs --dry-run --retirement-only --plan-file .tmp/stripe-retirement-plan.json
 //   STRIPE_SECRET_KEY=sk_test_... node scripts/seed-stripe.mjs --apply \
-//     --plan-file .tmp/stripe-catalog-plan.json --confirm-sha256 <sha256>
+//     --plan-file .tmp/stripe-catalog-plan.json --confirm-sha256 <sha256> \
+//     --journal-file .tmp/stripe-catalog-apply.json
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { basename, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import Stripe from 'stripe'
 import {
-  ACTIVE_PLAN_IDS,
+  OFFERED_PLAN_IDS,
   PLAN_DEFINITIONS,
   applyCatalogPlan,
   assertTestModeKey,
@@ -56,7 +58,11 @@ function secretKeyFromEnv() {
 }
 
 function stripeReadAdapter(stripe) {
-  return { products: stripe.products, prices: stripe.prices }
+  return {
+    account: { retrieve: () => stripe.accounts.retrieve(null) },
+    products: stripe.products,
+    prices: stripe.prices,
+  }
 }
 
 function stripeMutationAdapter(stripe) {
@@ -96,8 +102,11 @@ function stripeFilesAdapter(secretKey) {
         throw new Error(`Stripe catalog image changed since plan generation: ${operation.path}`)
       }
     },
-    async uploadProductImage(operation) {
+    async uploadProductImage(operation, { idempotencyKey } = {}) {
       await this.verifyProductImage(operation)
+      if (typeof idempotencyKey !== 'string' || idempotencyKey.length === 0) {
+        throw new Error('Stripe catalog image upload requires an idempotency key.')
+      }
       const path = localImagePath(operation.path)
       const bytes = readFileSync(path)
       const form = new FormData()
@@ -106,8 +115,12 @@ function stripeFilesAdapter(secretKey) {
 
       const response = await fetch('https://files.stripe.com/v1/files', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${secretKey}` },
+        headers: {
+          Authorization: `Bearer ${secretKey}`,
+          'Idempotency-Key': `${idempotencyKey}-file`,
+        },
         body: form,
+        signal: AbortSignal.timeout(STRIPE_CATALOG_REQUEST_TIMEOUT_MS),
       })
       const result = await response.json()
       if (!response.ok) throw new Error(result?.error?.message ?? 'Stripe product image upload failed')
@@ -117,8 +130,10 @@ function stripeFilesAdapter(secretKey) {
         headers: {
           Authorization: `Bearer ${secretKey}`,
           'Content-Type': 'application/x-www-form-urlencoded',
+          'Idempotency-Key': `${idempotencyKey}-link`,
         },
         body: `file=${encodeURIComponent(result.id)}`,
+        signal: AbortSignal.timeout(STRIPE_CATALOG_REQUEST_TIMEOUT_MS),
       })
       const link = await linkResponse.json()
       if (!linkResponse.ok) throw new Error(link?.error?.message ?? 'Stripe product image link creation failed')
@@ -138,7 +153,7 @@ export function parseCanonicalProductOverrides(values = []) {
     }
     const planId = raw.slice(0, separator).trim()
     const productId = raw.slice(separator + 1).trim()
-    if (!ACTIVE_PLAN_IDS.includes(planId)) {
+    if (!OFFERED_PLAN_IDS.includes(planId)) {
       throw new Error(`--canonical-product has unsupported plan ID ${planId}.`)
     }
     if (!productId) throw new Error(`--canonical-product ${planId} requires a product ID.`)
@@ -150,6 +165,14 @@ export function parseCanonicalProductOverrides(values = []) {
   return Object.fromEntries(Object.entries(overrides).sort(([a], [b]) => a.localeCompare(b)))
 }
 
+function sameExistingFile(left, right) {
+  if (left === right) return true
+  if (!existsSync(left) || !existsSync(right)) return false
+  const leftStat = statSync(left)
+  const rightStat = statSync(right)
+  return leftStat.dev === rightStat.dev && leftStat.ino === rightStat.ino
+}
+
 export function parseCli(argv) {
   const { values } = parseArgs({
     args: argv,
@@ -157,7 +180,10 @@ export function parseCli(argv) {
       'dry-run': { type: 'boolean' },
       apply: { type: 'boolean' },
       'require-test-mode': { type: 'boolean' },
+      'retirement-only': { type: 'boolean' },
       'plan-file': { type: 'string' },
+      'journal-file': { type: 'string' },
+      'journal-path': { type: 'string' },
       'confirm-sha256': { type: 'string' },
       'canonical-product': { type: 'string', multiple: true },
     },
@@ -166,16 +192,32 @@ export function parseCli(argv) {
   if (values['dry-run'] && values.apply) throw new Error('Choose either --dry-run or --apply, not both.')
   const apply = Boolean(values.apply)
   const planFile = values['plan-file'] ? resolve(String(values['plan-file'])) : null
+  const journalValue = values['journal-file'] ?? values['journal-path']
+  if (values['journal-file'] && values['journal-path'] && String(values['journal-file']) !== String(values['journal-path'])) {
+    throw new Error('--journal-file and --journal-path must name the same file when both are provided.')
+  }
+  const journalFile = journalValue ? resolve(String(journalValue)) : null
   if (apply && !planFile) throw new Error('--apply requires an explicit --plan-file.')
   if (apply && !values['confirm-sha256']) throw new Error('--apply requires --confirm-sha256 <plan-sha256>.')
   const canonicalProductIds = parseCanonicalProductOverrides(values['canonical-product'])
   if (apply && Object.keys(canonicalProductIds).length > 0) {
     throw new Error('--canonical-product is only valid when generating a catalog plan.')
   }
+  if (apply && values['retirement-only']) {
+    throw new Error('--retirement-only is only valid when generating a catalog plan.')
+  }
+  if (apply && !journalFile) throw new Error('--apply requires an explicit --journal-file.')
+  if (apply && planFile && journalFile && sameExistingFile(planFile, journalFile)) {
+    throw new Error('--plan-file and --journal-file must be different files.')
+  }
+  if (!apply && journalFile) throw new Error('--journal-file is only valid with --apply.')
   return {
     apply,
     requireTestMode: Boolean(values['require-test-mode']),
+    retirementOnly: Boolean(values['retirement-only']),
     planFile,
+    journalFile,
+    journalPath: journalFile,
     confirmSha256: values['confirm-sha256'] ? String(values['confirm-sha256']) : null,
     canonicalProductIds,
   }
@@ -211,6 +253,7 @@ export async function main(argv = process.argv.slice(2), dependencies = {}) {
       accountMode: mode,
       imageFiles: describeImageFiles(),
       canonicalProductIds: cli.canonicalProductIds,
+      retirementOnly: cli.retirementOnly,
     })
     if (cli.planFile) {
       writePlan(cli.planFile, plan)
@@ -230,8 +273,9 @@ export async function main(argv = process.argv.slice(2), dependencies = {}) {
     readAdapter: stripeReadAdapter(stripe),
     mutationAdapter: stripeMutationAdapter(stripe),
     filesAdapter: stripeFilesAdapter(secretKey),
+    journalPath: cli.journalFile,
   })
-  console.log(`Applied ${result.appliedOperations} enumerated Stripe catalog operations.`)
+  console.log(`Stripe catalog apply status=${result.status}; applied ${result.appliedOperations} enumerated operations.`)
   console.log(`Plan SHA-256: ${result.planSha256}`)
   return result
 }
@@ -239,7 +283,12 @@ export async function main(argv = process.argv.slice(2), dependencies = {}) {
 const isDirectRun = process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))
 if (isDirectRun) {
   main().catch(error => {
-    console.error(error instanceof Error ? error.message : String(error))
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(message)
+    if (error?.status === 'incomplete') {
+      console.error(`Stripe catalog apply status=incomplete; journal=${error.journalPath ?? 'unknown'}`)
+      console.error(`Next safe action: ${error.nextSafeAction ?? 'review the journal before any retry.'}`)
+    }
     process.exitCode = 1
   })
 }
