@@ -63,6 +63,7 @@
 
           <UAlert v-if="dirty" color="warning" variant="soft" title="Unsaved changes" description="Save this draft before leaving the page, switching locales, or opening Preview." />
 
+          <UAlert v-if="pageLoadError" color="error" variant="soft" title="Page could not be loaded" :description="pageLoadError" />
           <UAlert v-if="editorError" color="error" variant="soft" title="Page could not be saved" :description="editorError" />
 
           <UCard>
@@ -171,6 +172,7 @@ const locale = ref(String(dashboard.site.value?.source_locale || 'en'))
 const locales = ref<string[]>([locale.value])
 const loading = ref(true)
 const loadError = ref<string | null>(null)
+const pageLoadError = ref<string | null>(null)
 const editorError = ref<string | null>(null)
 const busy = ref<string | null>(null)
 const previewToken = ref('')
@@ -252,6 +254,7 @@ async function loadPages() {
   hydrating.value = true
   loading.value = true
   loadError.value = null
+  pageLoadError.value = null
   try {
     const [response, context, localeResponse] = await Promise.all([
       dashboardApi<{ pages: PageSummary[] }>(`/api/editor/sites/${siteId}/pages?locale=${encodeURIComponent(locale.value)}`, { validate: validateList }),
@@ -280,9 +283,9 @@ async function selectPage(id: string) {
   const requestToken = requestGate.begin()
   hydrating.value = true
   loading.value = true
+  busy.value = 'load'
+  pageLoadError.value = null
   editorError.value = null
-  selected.value = null
-  selectedBlockIndex.value = -1
   try {
     const response = await dashboardApi<{ page: PageDetailResponse }>(`/api/editor/sites/${siteId}/pages/${id}`, { validate: validatePage })
     if (!requestGate.isCurrent(requestToken)) return
@@ -290,11 +293,12 @@ async function selectPage(id: string) {
     selectedBlockIndex.value = selected.value.blocks.length ? 0 : -1
     dirty.value = false
   } catch (error) {
-    if (requestGate.isCurrent(requestToken)) editorError.value = error instanceof Error ? error.message : 'Unable to load page'
+    if (requestGate.isCurrent(requestToken)) pageLoadError.value = error instanceof Error ? error.message : 'Unable to load page'
   } finally {
     if (requestGate.isCurrent(requestToken)) {
       hydrating.value = false
       if (loading.value) loading.value = false
+      if (busy.value === 'load') busy.value = null
     }
   }
 }
@@ -302,6 +306,7 @@ async function selectPage(id: string) {
 function startNewPage() {
   if (!canDiscardUnsavedChanges()) return
   requestGate.invalidate()
+  pageLoadError.value = null
   editorError.value = null
   selected.value = {
     id: '', page_id: '', site_id: resolvedSiteId, organization_id: '', locale: locale.value, path: '/new-page', title: 'New page', page_type: 'custom', recipe: '', status: 'draft', sort_order: pages.value.length, updated_at: '', published_revision_id: null, ever_published: false,
@@ -466,7 +471,7 @@ async function removePage() {
 }
 
 async function duplicate() {
-  if (!selected.value) return
+  if (!selected.value || !canDiscardUnsavedChanges()) return
   const original = selected.value
   selected.value = { ...original, id: '', page_id: '', path: `${original.path}-copy`, title: `${original.title} copy`, status: 'draft', ever_published: false, published_revision_id: null, document: { updated_at: '', draft_revision_id: null, published_revision_id: null }, blocks: original.blocks.map((block, index) => ({ ...block, id: crypto.randomUUID(), data: structuredClone(toRaw(block.data)), position: index })) }
   selectedBlockIndex.value = selected.value.blocks.length ? 0 : -1

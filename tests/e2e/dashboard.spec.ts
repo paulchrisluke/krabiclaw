@@ -115,6 +115,23 @@ test.describe('dashboard functional smoke', () => {
     await expect(page.getByRole('heading', { name: 'MCP Growth Fixture', exact: true })).toBeVisible()
     await expect(page.getByText('Block data JSON', { exact: true })).toHaveCount(0)
 
+    const pagesListResponse = await page.request.get(`${baseURL}/api/editor/sites/site-mcp-growth/pages?locale=en`)
+    expect(pagesListResponse.status()).toBe(200)
+    const pagesList = await pagesListResponse.json() as { pages?: Array<{ id?: string; path?: string }> }
+    const aboutPage = pagesList.pages?.find(item => item.path === '/about')
+    expect(aboutPage?.id).toBeTruthy()
+    const aboutButton = page.locator('aside button').filter({ hasText: '/about' })
+    await expect(aboutButton).toHaveCount(1)
+    await page.route(`${baseURL}/api/editor/sites/site-mcp-growth/pages/${aboutPage!.id}`, async route => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ malformed: true }) })
+    })
+    await aboutButton.click()
+    await expect(page.getByText('API response did not match its contract', { exact: true })).toBeVisible()
+    await expect(page.getByText('Page could not be loaded', { exact: true })).toBeVisible()
+    await expect(page.getByText('Page could not be saved', { exact: true })).toHaveCount(0)
+    await expect(page.getByRole('heading', { name: 'MCP Growth Fixture', exact: true })).toBeVisible()
+    await page.unroute(`${baseURL}/api/editor/sites/site-mcp-growth/pages/${aboutPage!.id}`)
+
     // Start a custom page and exercise typed insert/select, duplicate, the
     // button-bearing block reorder control, and native drag/drop ordering.
     await page.getByRole('button', { name: 'New page', exact: true }).click()
@@ -235,6 +252,15 @@ test.describe('dashboard functional smoke', () => {
     expect(discardPrompt).toBe('Discard unsaved page changes?')
     await expect(page.getByRole('heading', { name: dirtyTitle, exact: true })).toBeVisible()
 
+    const dirtyDuplicateDialog = page.waitForEvent('dialog').then(async dialog => {
+      expect(dialog.message()).toBe('Discard unsaved page changes?')
+      await dialog.dismiss()
+    })
+    await page.getByRole('button', { name: 'Duplicate', exact: true }).click()
+    await dirtyDuplicateDialog
+    await expect(page.getByRole('heading', { name: dirtyTitle, exact: true })).toBeVisible()
+    await expect(page.getByText('Unsaved changes', { exact: true })).toBeVisible()
+
     await page.getByRole('textbox', { name: 'Title', exact: true }).fill(pageTitle)
     await saveDraft()
 
@@ -316,6 +342,59 @@ test.describe('dashboard functional smoke', () => {
     await deleteDialog
     await expect(copyRow()).toHaveCount(0)
     expect(applicationErrors).toEqual([])
+  })
+
+  test('Pages manager keeps the newest selection when page responses finish out of order', async ({ page, baseURL }) => {
+    test.setTimeout(90_000)
+    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
+    await page.goto(devLoginUrl(baseURL!, 'user-mcp-growth'), { waitUntil: 'load' })
+
+    const response = await page.goto(`${baseURL}/dashboard/mcp-growth-fixture/sites/mcp-growth-fixture/pages`, { waitUntil: 'domcontentloaded' })
+    expect(response?.status()).toBe(200)
+    await expect(page.getByText('Site pages', { exact: true })).toBeVisible()
+
+    const pagesResponse = await page.request.get(`${baseURL}/api/editor/sites/site-mcp-growth/pages?locale=en`)
+    expect(pagesResponse.status()).toBe(200)
+    const pageSummaries = (await pagesResponse.json()) as { pages?: Array<{ id: string; path: string; title: string }> }
+    const about = pageSummaries.pages?.find(item => item.path === '/about')
+    const contact = pageSummaries.pages?.find(item => item.path === '/contact')
+    expect(about?.id).toBeTruthy()
+    expect(contact?.id).toBeTruthy()
+
+    const aboutButton = page.locator('aside button').filter({ hasText: '/about' })
+    const contactButton = page.locator('aside button').filter({ hasText: '/contact' })
+    await expect(aboutButton).toHaveCount(1)
+    await expect(contactButton).toHaveCount(1)
+
+    let releaseAbout!: () => void
+    const aboutRelease = new Promise<void>(resolve => { releaseAbout = resolve })
+    await page.route(`${baseURL}/api/editor/sites/site-mcp-growth/pages/${about!.id}`, async route => {
+      await aboutRelease
+      await route.continue()
+    })
+
+    try {
+      // Dispatch the same DOM click events in one browser task so both valid
+      // selections are in flight before Vue reflects the first request's busy
+      // state. The first response is held until the newer page is visible,
+      // proving the request gate rather than a timing accident.
+      await page.evaluate(({ firstPath, secondPath }) => {
+        const buttons = [...document.querySelectorAll('aside button')]
+        for (const path of [firstPath, secondPath]) {
+          const button = buttons.find(candidate => candidate.textContent?.includes(path))
+          if (!button) throw new Error(`Missing page selection button for ${path}`)
+          button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+        }
+      }, { firstPath: '/about', secondPath: '/contact' })
+
+      await expect(page.getByRole('heading', { name: contact!.title, exact: true })).toBeVisible()
+      releaseAbout()
+      await expect(page.getByRole('heading', { name: contact!.title, exact: true })).toBeVisible()
+      await expect(page.getByRole('heading', { name: about!.title, exact: true })).toHaveCount(0)
+    } finally {
+      releaseAbout()
+      await page.unroute(`${baseURL}/api/editor/sites/site-mcp-growth/pages/${about!.id}`)
+    }
   })
 
   test('canonical account, organization, site, and location routes render with responsive navigation', async ({ page, baseURL }) => {

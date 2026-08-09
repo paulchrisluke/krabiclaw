@@ -8,7 +8,7 @@ import {
 } from '../../utils/tenant-page-editor-safety.ts'
 
 test('dirty page transitions require explicit discard confirmation', () => {
-  const transitions = ['new', 'select', 'locale', 'route', 'delete', 'publish', 'unpublish', 'archive', 'restore'] as const
+  const transitions = ['new', 'select', 'locale', 'route', 'duplicate', 'delete', 'publish', 'unpublish', 'archive', 'restore'] as const
 
   for (const transition of transitions) {
     assert.equal(

@@ -31,6 +31,30 @@ test.describe('public tenant site', () => {
     await setupTenantHeaders(page, tenantBaseURL, tenantExtraHeaders)
   })
 
+  test('renders the explicit Thai home variant without a seeded source-locale pseudo-variant', async ({ page }) => {
+    const response = await page.goto(`${tenantBaseURL}/`, { waitUntil: 'load' })
+    expect(response?.status()).toBeLessThan(400)
+    await expect(page.locator('[data-field="hero.title"]')).toContainText('Wood fire. Brooklyn nights.')
+
+    const rejectConsent = page.locator('[data-consent-action="rejected"]')
+    await expect(rejectConsent).toBeVisible()
+    await rejectConsent.click()
+
+    const thaiPageResponse = page.waitForResponse(candidate => {
+      const url = new URL(candidate.url())
+      return candidate.request().method() === 'GET'
+        && url.pathname === `/api/public/sites/${demoSiteId}/page`
+        && url.searchParams.get('locale') === 'th'
+    })
+    await page.locator('footer [aria-haspopup="menu"]').click()
+    await page.getByRole('menuitem', { name: /ไทย/ }).click()
+    expect((await thaiPageResponse).status()).toBe(200)
+
+    const heroTitle = page.locator('[data-field="hero.title"]')
+    await expect(heroTitle).toContainText('ไฟฟืนและค่ำคืนในบรูคลิน')
+    await expect(heroTitle).not.toContainText('Wood fire. Brooklyn nights.')
+  })
+
   for (const route of tenantRoutes) {
     test(`${route.path} renders without runtime errors`, async ({ page }) => {
       const errors = collectPageErrors(page)
