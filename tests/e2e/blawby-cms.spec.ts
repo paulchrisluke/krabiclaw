@@ -69,7 +69,10 @@ test.describe('Blawby professional_service CMS editing', () => {
     // Exercise the Pages editor's own save path before the API-level block
     // matrix below.  The read only API assertion confirms the UI mutation was
     // persisted; the second UI save restores the fixture before the matrix.
-    const rootTitleInput = page.getByRole('textbox', { name: 'Title', exact: true })
+    const pageSettingsCard = page.getByRole('heading', { name: 'Page settings', exact: true })
+      .locator('xpath=ancestor::*[@data-slot="root"][1]')
+    await expect(pageSettingsCard).toHaveCount(1)
+    const rootTitleInput = pageSettingsCard.getByRole('textbox', { name: 'Title', exact: true })
     const originalRootTitle = await rootTitleInput.inputValue()
     const uiTitle = `${originalRootTitle} UI ${Date.now()}`
     const uiSaveResponse = page.waitForResponse(candidate => (
