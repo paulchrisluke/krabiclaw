@@ -13,8 +13,8 @@ const redirects: Record<string, string> = {
   '/terms-and-conditions': '/terms',
   // Preserve older guessed/short docs URLs while keeping the published article
   // slug as the canonical destination.
-  '/docs/getting-started/getting-started-with-krabiclaw-in-chatgpt': '/docs/getting-started/getting-started-with-krabiclaw',
-  '/docs/getting-started/getting-started': '/docs/getting-started/getting-started-with-krabiclaw',
+  '/docs/getting-started/getting-started-with-krabiclaw-in-chatgpt': '/docs/getting-started/getting-started',
+  '/docs/getting-started/getting-started-with-krabiclaw': '/docs/getting-started/getting-started',
   '/docs/getting-started/connect-krabiclaw-to-chatgpt': '/docs/integrations/mcp-setup',
 }
 
