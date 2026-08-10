@@ -17,6 +17,7 @@
 @source "../../components/booking";
 @source "../../components/content";
 @source "../../components/menu";
+@source "../../components/tenant-pages";
 @source "../../components/platform/PlatformButton.vue";
 @source "../../components/platform/PlatformIcon.vue";
 @source "../../components/ui/AppBreadcrumb.vue";

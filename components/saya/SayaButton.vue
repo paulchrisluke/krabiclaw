@@ -9,6 +9,11 @@
     <slot v-else name="leading" />
     <slot />
   </a>
+  <label v-else-if="controlId" :for="controlId" role="button" :tabindex="disabled || loading ? -1 : 0" :class="[classes, { 'pointer-events-none opacity-60': disabled || loading }]" @click="handleClick">
+    <SayaIcon v-if="loading" name="arrow-path" class="size-4 animate-spin" />
+    <slot v-else name="leading" />
+    <slot />
+  </label>
   <button v-else :type="type" :disabled="disabled || loading" :class="classes" @click="handleClick">
     <SayaIcon v-if="loading" name="arrow-path" class="size-4 animate-spin" />
     <slot v-else name="leading" />
@@ -33,6 +38,7 @@ const props = withDefaults(defineProps<{
   type?: 'button' | 'submit'
   to?: string
   href?: string
+  controlId?: string
 }>(), {
   variant: 'solid',
   color: 'primary',

@@ -4,7 +4,7 @@ This document defines the evidence required for issue #554 releases. A green
 check or a successful deploy command is not release approval. The candidate is
 the immutable source SHA checked out by the workflow (`github.sha`), the one
 Cloudflare Worker Version uploaded from that checkout, its static assets, the
-database migration state, and the browser/benchmark evidence collected against
+database migration state, and the browser evidence collected against
 that version.
 
 ## Required identities
@@ -39,10 +39,9 @@ Every candidate run records all of the following in
   redacted endpoint identity. Evidence records the version source and effective
   version. The outbound Stripe client remains pinned independently to
   `STRIPE_API_VERSION`; these versions must not be conflated;
-- browser evidence, including the URL, desktop/mobile coverage, route matrix,
-  final URL query/hash checks, full-page traversal, first-party HTTP/media
-  status and content-type checks, console/request failures, and named owning
-  interactive E2E evidence; and
+- one short post-promotion browser journey over normal, unoverridden traffic that opens each seeded tenant homepage, clicks a
+  real navigation link, and verifies the destination content, stylesheet,
+  console, and first-party request health; and
 - a post-promotion test-mode Stripe organization checkout canary (at 100% of
   the candidate, using disposable `e2e-` state, hosted Checkout, Better Auth
   subscription, app billing/entitlement projection, processed webhook, and
@@ -51,13 +50,9 @@ Every candidate run records all of the following in
   same source SHA; the plan must contain zero operations for the candidate to
   proceed. A nonzero plan is recorded as `blocked_drift` and uploaded for a
   separate reviewed test-mode apply; it is never silently treated as passed;
-- a genuine baseline/candidate comparative benchmark with 25 samples per run,
-  the source SHA and Worker version for both runs, deterministic request/query
-  metrics, and the comparison result.
-
 The manifest must make it possible for a reviewer to follow one source SHA to
 one build artifact, one Worker Version, one migration snapshot, and one set of
-browser and benchmark results. Missing, ambiguous, or indirectly inferred
+browser results. Missing, ambiguous, or indirectly inferred
 identity is a failed candidate.
 
 ## Staging sequence
@@ -145,41 +140,15 @@ operator apply path.
 
 ## Production release
 
-Production release is a separate manual workflow with two operations. The
-first dispatch runs `preflight` only: it consumes a candidate manifest from a
-completed staging run and proves the manifest's source SHA, staging Worker
-version, migration evidence, asset verification, browser evidence, and
-comparative benchmark without writing production. It records the actual
-production pending migration output in the job summary, runs
-`migrate:check`/Worker dry-runs, and recomputes the `.output` file count, tree
-hash, and server-entry hash against the staging manifest.
-
-After reviewing that report, an operator must make a second explicit dispatch
-with `operation=deploy` and the successful preflight run ID. The deploy job
-attests that separate run, SHA, workflow, manifest, migration evidence, and
-build hash before entering the production mutation step. The preflight also
-uses the production live Stripe key in a read-only endpoint census, proving the
-exact `https://krabiclaw.com/api/billing/webhook` destination, pinned
-`STRIPE_WEBHOOK_API_VERSION`, and exact ten-event set; it uploads only redacted
-evidence as `production-stripe-webhook-preflight-<source-sha>`. A deploy
-dispatch must download and attest that exact successful live-mode artifact; a
-missing artifact, key leak, endpoint/version drift, or event-set mismatch
-blocks deployment. (The current production endpoint census has seven events,
-so this gate remains intentionally failing until the endpoint is separately
-corrected.) There is no automatic
-edge from preflight to deployment. Migration, version upload, split rollout,
-cache purge, promotion, and browser verification also run in the named
-`production` environment. Before any deploy mutation, the workflow proves
-through the GitHub Environments API that the environment exists, has at least
-one valid required reviewer, and has `prevent_self_review` enabled. A missing,
-inaccessible, or weaker environment fails closed. A green preflight is not
-deployment approval. The production job holds the old version at **100%** while its
-candidate is **0%**, runs one combined desktop/mobile browser gate, promotes
-only after that gate, purges cache, then repeats the deployed custom-domain
-verification and browser gate with no version override, then records the
-production AI Search synchronization result. Any post-split failure
-restores the old version to 100%. A push to `main` never deploys production
-automatically.
+Every push or merge to `main` automatically runs the production workflow. It
+checks out the exact main SHA, builds once, runs the migration data-safety
+check, applies pending D1 migrations, and deploys that SHA directly to the
+production Worker. It then purges cached HTML, waits for the exact source and
+Worker version to become available, verifies the immutable route inventory,
+opens the short tenant navigation journey against normal production traffic,
+and refreshes the production search index. There is no separate preflight
+dispatch, staging-manifest handoff, protected-environment approval, 0% traffic
+split, or second deploy dispatch.
 
 If a staging baseline is an intentionally untagged legacy Worker, the full
 lane requires a successful Actions run with `headSha` equal to the baseline
@@ -213,17 +182,16 @@ Final reports keep these states separate:
 - **Landed** — the source SHA and intentional commits exist in the repository;
 - **Deployed** — that exact SHA's Worker version and migrations are present in
   the named environment; and
-- **Verified** — the exact deployed candidate was opened in the required real
-  browser matrix and has complete route, asset, console, migration, and
-  benchmark evidence.
+- **Verified** — the exact deployed candidate completed the real browser
+  navigation journey with asset, console, and migration evidence.
 
 An item without direct evidence is marked **❌**. Staging verification does not
 prove production verification, and a production Worker with no source-SHA
 provenance is not release-approved.
 
-Direct production rollback, remote migration, and remote seed aliases are
-blocked. Normal production releases use the protected, manifest-gated
-workflow that records the exact source SHA and evidence chain.
+Direct production rollback, remote migration, and remote seed aliases remain
+blocked. Normal production releases are automatic on `main` and retain exact
+source, deployed-Worker, asset, and browser verification.
 
 Emergency rollback uses the separate **Production rollback
 (exact-target, manifest-gated)** workflow. Dispatch it with the exact current

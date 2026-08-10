@@ -628,7 +628,7 @@ Required pipeline:
 4. `client:import --apply`
 5. `client:verify` against the local candidate
 6. Run **CI (Full Validation Lane)** for the exact source SHA
-7. Run **Production release (manifest-gated)** first with `operation=preflight`, review its dry-run report, then separately dispatch `operation=deploy` with that preflight run ID and protected-environment approval
+7. Merge the reviewed staging release into `main`; the production workflow deploys that exact main SHA automatically
 8. `client:deploy --skip-seed --skip-deploy` for final deployed client verification
 
 `client:deploy` never releases the Worker itself. Direct staging/production

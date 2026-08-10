@@ -128,6 +128,10 @@ button {
   color: #fff;
 }
 
+[data-blawby-critical-hero][data-has-background="true"] {
+  background: var(--blawby-bg, #fbfaf7);
+}
+
 [data-blawby-critical-hero] > img {
   position: absolute;
   inset: 0;
