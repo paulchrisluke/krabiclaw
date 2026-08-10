@@ -1,5 +1,5 @@
 import { readdirSync } from 'node:fs'
-import { createWorkerVersionOverrideHeaders } from './lib/performance-comparison.mjs'
+import { createWorkerVersionOverrideHeaders } from './lib/worker-version-override.mjs'
 
 const rawBaseUrl = process.env.PLAYWRIGHT_PREVIEW_URL
 

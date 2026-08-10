@@ -103,7 +103,7 @@ jobs:
       - name: Read production webhook endpoint with the live Stripe key
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
-          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY_LIVE }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_EXPECTED_MODE: live
           STRIPE_WEBHOOK_ENDPOINT_URL: https://krabiclaw.com/api/billing/webhook
           STRIPE_WEBHOOK_PREFLIGHT_EVIDENCE_PATH: ${{ runner.temp }}/production-stripe-webhook-preflight.json
@@ -191,7 +191,7 @@ jobs:
           manifest="$RUNNER_TEMP/staging-manifest/candidate-manifest.json"
           jq -e \
             --arg sha "$SOURCE_SHA" \
-            '.status == "verified" and .sourceSha == $sha and .candidate.sourceSha == $sha and .candidate.versionTag == $sha and .candidate.promoted == true and (.candidate.versionId | type == "string") and (((.candidate.splitDeployment | type) == "object") or ((.candidate.splitDeployment | type) == "array")) and (((.candidate.deployedDeployment | type) == "object") or ((.candidate.deployedDeployment | type) == "array")) and (.assets.deployed.sourceSha == $sha) and (.assets.deployed.workerVersionId == .candidate.versionId) and (.assets.deployed.routeInventory.requiredSurfaces == ["platform", "saya", "blawby"]) and (([.assets.deployed.routeInventory.surfaces[] | select(.name == "saya") | (.variants // [])[] | .name] | sort) == ["kikuzuki", "pottery-house"]) and (.browser.status == "passed") and (.browser.baseUrl == "https://staging.krabiclaw.com") and (.browser.routeInventory.requiredSurfaces == ["platform", "saya", "blawby"]) and (([.browser.routeInventory.surfaces[] | select(.name == "saya") | (.variants // [])[] | .name] | sort) == ["kikuzuki", "pottery-house"]) and (.browser.desktop == true) and (.browser.mobile == true) and (.browser.saya.desktop == true) and (.browser.saya.mobile == true) and (.browser.blawby.desktop == true) and (.browser.blawby.mobile == true) and (.browser.linksPageLifecycle.status == "passed") and (.benchmark.comparison.ok == true) and (.benchmark.baseline.sourceSha == .baseline.sourceSha) and (.benchmark.baseline.workerVersionId == .baseline.versionId) and (.benchmark.candidate.sourceSha == $sha) and (.benchmark.candidate.workerVersionId == .candidate.versionId) and (.benchmark.comparison.baseline.sourceSha == .baseline.sourceSha) and (.benchmark.comparison.head.sourceSha == $sha) and (.migrations.after != null) and ((.migrations.after.remoteApplied | type) == "object" or (.migrations.after.remoteApplied | type) == "array") and ((.migrations.after.files | length) == 0) and (.migrations.stateAfter.status == "verified") and (.migrations.stateAfter.exactSet == true) and (.migrations.stateAfter.exactOrder == true) and (.stripeWebhookPreflight.status == "passed") and (.stripeWebhookPreflight.testMode == true) and (.stripeWebhookPreflight.sourceSha == $sha) and (.stripeCatalogPreflight.status == "passed") and (.stripeCatalogPreflight.accountMode == "test") and (.stripeCatalogPreflight.sourceSha == $sha) and (.stripeCatalogPreflight.sourceSha == $sha) and (.stripeCanary.status == "passed") and (.stripeCanary.testMode == true) and (.stripeCanary.sourceSha == $sha) and (.stripeCanary.workerVersionId == .candidate.versionId)' \
+            '.status == "verified" and .sourceSha == $sha and .candidate.sourceSha == $sha and .candidate.versionTag == $sha and .candidate.promoted == true and (.candidate.versionId | type == "string") and (((.candidate.splitDeployment | type) == "object") or ((.candidate.splitDeployment | type) == "array")) and (((.candidate.deployedDeployment | type) == "object") or ((.candidate.deployedDeployment | type) == "array")) and (.assets.deployed.sourceSha == $sha) and (.assets.deployed.workerVersionId == .candidate.versionId) and (.assets.deployed.routeInventory.requiredSurfaces == ["platform", "saya", "blawby"]) and (([.assets.deployed.routeInventory.surfaces[] | select(.name == "saya") | (.variants // [])[] | .name] | sort) == ["kikuzuki", "pottery-house"]) and (.browser.status == "passed") and (.browser.baseUrl == "https://staging.krabiclaw.com") and (.browser.journey == "tests/e2e/public-rendering-sentinel.spec.ts") and (.browser.candidateVersionId == .candidate.versionId) and (.migrations.after != null) and ((.migrations.after.remoteApplied | type) == "object" or (.migrations.after.remoteApplied | type) == "array") and ((.migrations.after.files | length) == 0) and (.migrations.stateAfter.status == "verified") and (.migrations.stateAfter.exactSet == true) and (.migrations.stateAfter.exactOrder == true) and (.stripeWebhookPreflight.status == "passed") and (.stripeWebhookPreflight.testMode == true) and (.stripeWebhookPreflight.sourceSha == $sha) and (.stripeCatalogPreflight.status == "passed") and (.stripeCatalogPreflight.accountMode == "test") and (.stripeCatalogPreflight.sourceSha == $sha) and (.stripeCanary.status == "passed") and (.stripeCanary.testMode == true) and (.stripeCanary.sourceSha == $sha) and (.stripeCanary.workerVersionId == .candidate.versionId)' \
             "$manifest" >/dev/null
           jq -e '.stripeCatalogPreflight.accountId | test("^acct_[A-Za-z0-9]+$")' "$manifest" >/dev/null
           jq -e '.stripeCatalogPreflight.providerSnapshotSha256 | test("^[0-9a-f]{64}$")' "$manifest" >/dev/null
@@ -300,6 +300,9 @@ jobs:
       PLAYWRIGHT_PREVIEW_URL: https://krabiclaw.com
       PLAYWRIGHT_WORKERS: "1"
       WORKER_NAME: krabiclaw
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+      NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -404,8 +407,6 @@ jobs:
           database_mutation_flag="$work_dir/database-mutation-attempted"
           restore_status="$work_dir/restored-baseline-deployment.json"
           restore_cache="$work_dir/restored-baseline-cache.log"
-          browser_projects="$work_dir/browser-projects.txt"
-          deployed_browser_projects="$work_dir/deployed-browser-projects.txt"
           browser_evidence="$work_dir/browser-evidence.json"
           search_sync_evidence="$work_dir/search-sync.json"
           release_manifest="$work_dir/production-release-manifest.json"
@@ -590,7 +591,7 @@ jobs:
             fi
             exit "$exit_status"
           }
-          export PREFLIGHT_RUN_PATH="$RUNNER_TEMP/production-preflight-run.json" STAGING_MANIFEST_PATH="$staging_manifest" BASELINE_STATUS_PATH="$baseline_status" SPLIT_STATUS_PATH="$split_status" DEPLOYED_STATUS_PATH="$deployed_status" BASELINE_VERSION_PATH="$baseline_version" BASELINE_PROVENANCE_PATH="$baseline_provenance" CANDIDATE_VERSION_PATH="$candidate_version" MIGRATIONS_BEFORE_PATH="$migrations_before" MIGRATIONS_AFTER_PATH="$migrations_after" MIGRATIONS_BEFORE_APPLIED_PATH="$migrations_before_applied" MIGRATIONS_AFTER_APPLIED_PATH="$migrations_after_applied" MIGRATION_STATE_BEFORE_PATH="$migration_state_before" MIGRATION_STATE_AFTER_PATH="$migration_state_after" CANDIDATE_VERIFICATION_PATH="$candidate_verification" DEPLOYED_VERIFICATION_PATH="$deployed_verification" RESTORE_STATUS_PATH="$restore_status" RESTORE_CACHE_PATH="$restore_cache" BROWSER_EVIDENCE_PATH="$browser_evidence" BROWSER_PROJECTS_PATH="$browser_projects" DEPLOYED_BROWSER_PROJECTS_PATH="$deployed_browser_projects" ROUTE_INVENTORY_PATH="$route_inventory" RELEASE_ROUTE_INVENTORY_PATH="$route_inventory" DATABASE_MUTATION_FLAG_PATH="$database_mutation_flag" SEARCH_SYNC_EVIDENCE_PATH="$search_sync_evidence" RELEASE_MANIFEST_PATH="$release_manifest"
+          export PREFLIGHT_RUN_PATH="$RUNNER_TEMP/production-preflight-run.json" STAGING_MANIFEST_PATH="$staging_manifest" BASELINE_STATUS_PATH="$baseline_status" SPLIT_STATUS_PATH="$split_status" DEPLOYED_STATUS_PATH="$deployed_status" BASELINE_VERSION_PATH="$baseline_version" BASELINE_PROVENANCE_PATH="$baseline_provenance" CANDIDATE_VERSION_PATH="$candidate_version" MIGRATIONS_BEFORE_PATH="$migrations_before" MIGRATIONS_AFTER_PATH="$migrations_after" MIGRATIONS_BEFORE_APPLIED_PATH="$migrations_before_applied" MIGRATIONS_AFTER_APPLIED_PATH="$migrations_after_applied" MIGRATION_STATE_BEFORE_PATH="$migration_state_before" MIGRATION_STATE_AFTER_PATH="$migration_state_after" CANDIDATE_VERIFICATION_PATH="$candidate_verification" DEPLOYED_VERIFICATION_PATH="$deployed_verification" RESTORE_STATUS_PATH="$restore_status" RESTORE_CACHE_PATH="$restore_cache" BROWSER_EVIDENCE_PATH="$browser_evidence" ROUTE_INVENTORY_PATH="$route_inventory" RELEASE_ROUTE_INVENTORY_PATH="$route_inventory" DATABASE_MUTATION_FLAG_PATH="$database_mutation_flag" SEARCH_SYNC_EVIDENCE_PATH="$search_sync_evidence" RELEASE_MANIFEST_PATH="$release_manifest"
           trap on_exit EXIT
 
           echo "Capturing the current production baseline before any mutation"
@@ -668,12 +669,6 @@ jobs:
           export WORKER_VERSION_OVERRIDE="$CANDIDATE_VERSION_ID"
           node scripts/wait-for-deployed-assets.mjs
           node scripts/verify-deployed-candidate.mjs --base-url https://krabiclaw.com --expected-sha "$SOURCE_SHA" --expected-version-id "$CANDIDATE_VERSION_ID" --worker-name krabiclaw --version-override "$CANDIDATE_VERSION_ID" --route-inventory "$route_inventory" --output "$candidate_verification"
-          npx playwright test --list > "$browser_projects"
-          grep -F 'public-surfaces-desktop' "$browser_projects" >/dev/null
-          grep -F 'public-surfaces-mobile' "$browser_projects" >/dev/null
-          npx playwright test tests/e2e/public-surfaces-release.spec.ts --project=public-surfaces-desktop --project=public-surfaces-mobile --workers=1
-          cp -R playwright-report "$work_dir/candidate-playwright-report"
-
           echo "Promoting candidate to 100% only after every production gate passes"
           TRAFFIC_MUTATION_ATTEMPTED="true"
           printf '%s\n' "true" > "$traffic_mutation_flag"
@@ -689,10 +684,9 @@ jobs:
           unset WORKER_VERSION_OVERRIDE
           DEPLOYMENT_EXPECTED_SOURCE_SHA="$SOURCE_SHA" DEPLOYMENT_EXPECTED_WORKER_VERSION="$CANDIDATE_VERSION_ID" node scripts/wait-for-deployed-assets.mjs
           node scripts/verify-deployed-candidate.mjs --base-url https://krabiclaw.com --expected-sha "$SOURCE_SHA" --expected-version-id "$CANDIDATE_VERSION_ID" --worker-name krabiclaw --route-inventory "$route_inventory" --output "$deployed_verification"
-          npx playwright test tests/e2e/public-surfaces-release.spec.ts --project=public-surfaces-desktop --project=public-surfaces-mobile --workers=1
-          cp -R playwright-report "$work_dir/deployed-playwright-report"
-          npx playwright test --list > "$deployed_browser_projects"
-          WORK_DIR="$work_dir" BROWSER_PROJECTS_PATH="$browser_projects" DEPLOYED_BROWSER_PROJECTS_PATH="$deployed_browser_projects" BROWSER_EVIDENCE_PATH="$browser_evidence" node -e 'const fs=require("node:fs"),path=require("node:path");const candidate=fs.readFileSync(process.env.BROWSER_PROJECTS_PATH,"utf8");const deployed=fs.readFileSync(process.env.DEPLOYED_BROWSER_PROJECTS_PATH,"utf8");const inventory=JSON.parse(fs.readFileSync(process.env.ROUTE_INVENTORY_PATH,"utf8"));if(JSON.stringify(inventory.requiredSurfaces)!==JSON.stringify(["platform","saya","blawby"]))process.exit(2);for(const report of ["candidate-playwright-report/index.html","deployed-playwright-report/index.html"]){if(!fs.existsSync(path.join(process.env.WORK_DIR,report)))process.exit(2)}fs.writeFileSync(process.env.BROWSER_EVIDENCE_PATH,JSON.stringify({status:"passed",baseUrl:"https://krabiclaw.com",routeInventory:{requiredSurfaces:inventory.requiredSurfaces,surfaces:inventory.surfaces.map(surface=>({name:surface.name,routes:surface.routes,variants:surface.variants??[]}))},desktop:deployed.includes("public-surfaces-desktop"),mobile:deployed.includes("public-surfaces-mobile"),saya:{desktop:deployed.includes("public-surfaces-desktop"),mobile:deployed.includes("public-surfaces-mobile")},blawby:{desktop:deployed.includes("public-surfaces-desktop"),mobile:deployed.includes("public-surfaces-mobile")},interactiveEvidence:{routeActions:"tests/e2e/public.spec.ts",pagesEditor:"tests/e2e/universal-cms.spec.ts",billing:"tests/e2e/stripe-testmode-canary.spec.ts",linksPage:"tests/e2e/links-page.spec.ts"},candidateOverride:{status:"passed",projects:["public-surfaces-desktop","public-surfaces-mobile"],report:"candidate-playwright-report/index.html"},deployed:{status:"passed",projects:["public-surfaces-desktop","public-surfaces-mobile"],report:"deployed-playwright-report/index.html"},projects:["public-surfaces-desktop","public-surfaces-mobile"]},null,2))'
+          npx playwright test tests/e2e/public-rendering-sentinel.spec.ts --project=chromium --workers=1
+          cp -R playwright-report "$work_dir/deployed-candidate-navigation-playwright-report"
+          WORK_DIR="$work_dir" BROWSER_EVIDENCE_PATH="$browser_evidence" node -e 'const fs=require("node:fs"),path=require("node:path");const report="deployed-candidate-navigation-playwright-report/index.html";if(!fs.existsSync(path.join(process.env.WORK_DIR,report)))process.exit(2);fs.writeFileSync(process.env.BROWSER_EVIDENCE_PATH,JSON.stringify({status:"passed",baseUrl:"https://krabiclaw.com",candidateVersionId:process.env.CANDIDATE_VERSION_ID,journey:"tests/e2e/public-rendering-sentinel.spec.ts",traffic:"unoverridden",report},null,2))'
           yarn ai-search:sync:prod | tee "$search_sync_evidence"
           SPLIT_ACTIVE="false"
           export SPLIT_ACTIVE

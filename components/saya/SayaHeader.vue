@@ -3,7 +3,7 @@
     <header ref="headerRef" data-saya-critical-header class="sticky top-0 z-50 border-b border-default bg-default/80 backdrop-blur-md">
       <div data-saya-critical-header-inner class="mx-auto grid h-16 max-w-7xl grid-cols-[1fr_auto_1fr] items-center px-4 sm:px-6 lg:px-8">
         <!-- Brand logo / name -->
-          <NuxtLink to="/" data-saya-critical-logo-link class="shrink-0 no-underline">
+          <NuxtLink to="/" data-saya-critical-logo-link class="w-fit shrink-0 justify-self-start no-underline">
           <div v-if="logoUrl" class="size-10 shrink-0 rounded-full overflow-hidden">
             <img :src="logoUrl" :alt="restaurantName" loading="eager" decoding="async" class="h-full w-full object-cover" />
           </div>

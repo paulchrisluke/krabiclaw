@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { cloudflareSslSettings, mapCloudflareStatus, type DomainRecord } from '../../server/utils/domains.ts'
+import { cloudflareSslSettings, domainRecordsPointToSaas, mapCloudflareStatus, type DomainRecord } from '../../server/utils/domains.ts'
 import { domainInstructions, groupCustomDomains } from '../../server/utils/domain-read-model.ts'
 
 function domain(overrides: Partial<DomainRecord>): DomainRecord {
@@ -23,6 +23,25 @@ function domain(overrides: Partial<DomainRecord>): DomainRecord {
 
 test('Cloudflare moved hostnames map to a persisted failure so PATCH recovery remains available', () => {
   assert.equal(mapCloudflareStatus('moved', 'pending_validation', 'valid'), 'failed')
+})
+
+test('only account-specific CNAMEs prove that DNS points to SaaS', () => {
+  const cases = [
+    { name: 'exact CNAME', cname: ['customers.krabiclaw.com'], a: [], aaaa: [], expected: true },
+    { name: 'managed descendant CNAME', cname: ['tenant.customers.krabiclaw.com'], a: [], aaaa: [], expected: true },
+    { name: 'unrelated CNAME', cname: ['proxy.example.net'], a: [], aaaa: [], expected: false },
+    { name: 'shared IPv4 only', cname: [], a: ['104.21.79.204'], aaaa: [], expected: null },
+    { name: 'shared IPv6 only', cname: [], a: [], aaaa: ['2606:4700:3030::6815:4fcc'], expected: null },
+    { name: 'valid NODATA', cname: [], a: [], aaaa: [], expected: false },
+  ] as const
+
+  for (const entry of cases) {
+    assert.equal(
+      domainRecordsPointToSaas([...entry.cname], [...entry.a], [...entry.aaaa], 'customers.krabiclaw.com'),
+      entry.expected,
+      entry.name,
+    )
+  }
 })
 
 test('standard custom hostnames use HTTP DCV by default', () => {

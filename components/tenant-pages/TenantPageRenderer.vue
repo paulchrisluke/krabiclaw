@@ -1,5 +1,7 @@
 <template>
+  <BlawbyCanonicalPage v-if="template === 'blawby' && isCanonicalBlawbyPage(page.path)" :page="page" />
   <article
+    v-else
     data-tenant-page
     :data-parity-root="template === 'blawby' ? '' : undefined"
     :data-template="template"
@@ -18,13 +20,7 @@
         </div>
       </template>
 
-      <template v-else-if="block.type === 'heading'">
-        <component :is="headingTag(block.data.level)" class="mt-12 text-3xl font-semibold tracking-tight">{{ text(block.data.text) || page.title }}</component>
-      </template>
-
-      <template v-else-if="block.type === 'markdown'">
-        <div v-if="text(block.data.markdown) || text(block.data.content)" class="prose prose-lg mt-8 max-w-none whitespace-pre-wrap text-muted">{{ sanitize(text(block.data.markdown) || text(block.data.content)) }}</div>
-      </template>
+      <TenantPageRichTextBlock v-else-if="block.type === 'heading' || block.type === 'markdown'" :block="block" :page-title="page.title" />
 
       <template v-else-if="block.type === 'image'">
         <figure v-if="text(block.data.url)" class="my-12">
@@ -129,9 +125,13 @@
 <script setup lang="ts">
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import BlawbyCanonicalPage from './BlawbyCanonicalPage.vue'
 
 defineProps<{ page: PublicTenantPage; template: 'saya' | 'blawby' }>()
 const sanitizer = useHtmlSanitizer()
+
+const canonicalBlawbyPaths = new Set(['/about', '/pricing', '/donate', '/policies/privacy', '/policies/terms', '/third-party-notices'])
+const isCanonicalBlawbyPage = (path: string) => canonicalBlawbyPaths.has(path)
 
 type GridItem = { id?: string; title?: string; description?: string; value?: string; image_url?: string; label?: string; url?: string; amount?: string }
 
@@ -141,11 +141,6 @@ function text(value: unknown): string {
 
 function sanitize(value: string): string {
   return sanitizer.sanitize(value)
-}
-
-function headingTag(value: unknown): string {
-  const level = Number(value)
-  return `h${Number.isInteger(level) && level >= 1 && level <= 6 ? level : 2}`
 }
 
 function sectionKey(block: TenantPageBlock): string | undefined {
@@ -173,6 +168,9 @@ function asItems(value: unknown): GridItem[] {
 }
 
 function gridItems(block: TenantPageBlock): GridItem[] {
+  if (block.type === 'feature_grid') {
+    return asItems(block.data.items ?? block.data.features ?? block.data.statistics ?? block.data.people)
+  }
   return asItems(block.data.items)
 }
 

@@ -437,7 +437,11 @@ function normalizeDnsValue(value: string | null | undefined): string {
   return String(value || '').trim().toLowerCase().replace(/\.$/, '')
 }
 
-async function queryDnsJson(hostname: string, type: 'CNAME' | 'A' | 'AAAA', signal?: AbortSignal): Promise<string[]> {
+type DnsQueryResult = { ok: true; values: string[] } | { ok: false; values: [] }
+
+const DNS_RECORD_TYPES = { A: 1, CNAME: 5, AAAA: 28 } as const
+
+async function queryDnsJson(hostname: string, type: 'CNAME' | 'A' | 'AAAA', signal?: AbortSignal): Promise<DnsQueryResult> {
   const url = new URL('https://cloudflare-dns.com/dns-query')
   url.searchParams.set('name', hostname)
   url.searchParams.set('type', type)
@@ -453,11 +457,16 @@ async function queryDnsJson(hostname: string, type: 'CNAME' | 'A' | 'AAAA', sign
       headers: { accept: 'application/dns-json' },
       signal: timeoutController.signal,
     })
-    if (!response.ok) return []
-    const body = await response.json().catch(() => null) as { Answer?: Array<{ data?: string }> } | null
-    return (body?.Answer ?? [])
+    if (!response.ok) return { ok: false, values: [] }
+    const body = await response.json().catch(() => null) as { Answer?: Array<{ type?: number; data?: string }> } | null
+    if (!body) return { ok: false, values: [] }
+    return { ok: true, values: (body.Answer ?? [])
+      .filter(answer => answer.type === DNS_RECORD_TYPES[type])
       .map((answer) => normalizeDnsValue(answer.data))
-      .filter(Boolean)
+      .filter(Boolean) }
+  } catch (error) {
+    if (signal?.aborted) throw error
+    return { ok: false, values: [] }
   } finally {
     clearTimeout(timeout)
     signal?.removeEventListener('abort', abort)
@@ -468,30 +477,50 @@ export interface DomainResolutionInspection {
   hostname: string
   checked_at: string
   records: Array<{ type: 'CNAME' | 'A' | 'AAAA'; value: string }>
-  points_to_saas: boolean
+  points_to_saas: boolean | null
   resolves_elsewhere: boolean
+}
+
+export function domainRecordsPointToSaas(
+  cnameRecords: string[],
+  aRecords: string[],
+  aaaaRecords: string[],
+  cnameTarget: string,
+): boolean | null {
+  if (cnameTarget && cnameRecords.some((value) => value === cnameTarget || value.endsWith(`.${cnameTarget}`))) {
+    return true
+  }
+  if (cnameRecords.length > 0) return false
+  if (aRecords.length > 0 || aaaaRecords.length > 0) return null
+  return false
 }
 
 export async function inspectDomainResolution(env: DomainEnv, hostname: string, signal?: AbortSignal): Promise<DomainResolutionInspection> {
   const normalizedHostname = normalizeDomain(hostname)
   const cnameTarget = normalizeDnsValue(env.CF_SAAS_CNAME_TARGET)
-  const [cnameRecords, aRecords, aaaaRecords] = await Promise.all([
+  const [cnameResult, aResult, aaaaResult] = await Promise.all([
     queryDnsJson(normalizedHostname, 'CNAME', signal),
     queryDnsJson(normalizedHostname, 'A', signal),
     queryDnsJson(normalizedHostname, 'AAAA', signal),
   ])
+  const cnameRecords = cnameResult.values
+  const aRecords = aResult.values
+  const aaaaRecords = aaaaResult.values
   const records = [
     ...cnameRecords.map((value) => ({ type: 'CNAME' as const, value })),
     ...aRecords.map((value) => ({ type: 'A' as const, value })),
     ...aaaaRecords.map((value) => ({ type: 'AAAA' as const, value })),
   ]
-  const pointsToSaas = Boolean(cnameTarget && cnameRecords.some((value) => value === cnameTarget || value.endsWith(`.${cnameTarget}`)))
+  const lookupsSucceeded = cnameResult.ok && aResult.ok && aaaaResult.ok
+  const pointsToSaas = lookupsSucceeded
+    ? domainRecordsPointToSaas(cnameRecords, aRecords, aaaaRecords, cnameTarget)
+    : null
   return {
     hostname: normalizedHostname,
     checked_at: new Date().toISOString(),
     records,
     points_to_saas: pointsToSaas,
-    resolves_elsewhere: records.length > 0 && !pointsToSaas,
+    resolves_elsewhere: pointsToSaas === false && records.length > 0,
   }
 }
 

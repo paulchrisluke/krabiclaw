@@ -61,7 +61,7 @@
             <p v-if="loc.short_description" class="mt-3 max-w-md text-sm leading-relaxed text-muted">{{ loc.short_description }}</p>
 
             <div class="mt-6 flex flex-wrap items-center gap-3">
-              <SayaButton @click="openBookingModal(loc)">{{ resCopy.reservationRequestButton }}</SayaButton>
+              <SayaButton control-id="reservation-booking-toggle" @click="openBookingModal(loc)">{{ resCopy.reservationRequestButton }}</SayaButton>
               <SayaButton v-if="loc.phone" :href="`tel:${loc.phone.replace(/\s/g, '')}`" variant="outline">
                 {{ loc.phone }}
               </SayaButton>
@@ -95,6 +95,7 @@
     <!-- Booking Modal Flow -->
     <BookingModal
       v-model="isBookingModalOpen"
+      target-id="reservation-booking"
       :title="modalTitle"
       :can-go-back="bookingStep > startStep && !submitting"
       @back="prevStep"
@@ -117,7 +118,7 @@
         <BookingTimeStep
           v-model="timeSelection"
           :dates="availabilityDates"
-          :loading="availabilityLoading"
+          :loading="availabilityLoading || !isHydrated"
           :guests="guests"
           :guests-label="resCopy.guestsLabel"
           :guest-singular="resCopy.guestLabel"
@@ -289,6 +290,8 @@ const contactEmail = computed(() =>
 
 // ── Modal State ───────────────────────────────────────────────────────────
 const isBookingModalOpen = ref(false)
+const isHydrated = ref(false)
+onMounted(() => { isHydrated.value = true })
 // Skipped when opened from a location card (location is already pre-selected)
 // or when the site only has one location to begin with.
 const skipLocationStep = ref(false)
@@ -304,7 +307,6 @@ function openBookingModal(loc?: ApiRecord) {
   skipLocationStep.value = Boolean(loc)
   if (loc) reservationForm.value.location_id = String(loc.id ?? '')
   bookingStep.value = startStep.value
-  isBookingModalOpen.value = true
 }
 
 function nextStep() {

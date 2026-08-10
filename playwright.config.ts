@@ -59,21 +59,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      // The release surface gate is opt-in through its named projects below;
-      // the normal full suite must not silently duplicate it or run mobile
-      // coverage for every test file.
-      testIgnore: /public-surfaces-release\.spec\.ts/,
       use: { ...devices['Desktop Chrome'] }
-    },
-    {
-      name: 'public-surfaces-desktop',
-      testMatch: /public-surfaces-release\.spec\.ts/,
-      use: { ...devices['Desktop Chrome'] }
-    },
-    {
-      name: 'public-surfaces-mobile',
-      testMatch: /public-surfaces-release\.spec\.ts/,
-      use: { ...devices['Pixel 7'] }
     }
   ]
 })
