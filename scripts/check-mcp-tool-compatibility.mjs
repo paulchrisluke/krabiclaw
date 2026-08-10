@@ -2,10 +2,11 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import path from 'node:path'
 import { register } from 'node:module'
+import { fileURLToPath } from 'node:url'
 
 register('../tests/unit/support/alias-hooks.mjs', import.meta.url)
 
-const root = path.resolve(new URL('..', import.meta.url).pathname)
+const root = fileURLToPath(new URL('..', import.meta.url))
 const write = process.argv.includes('--write')
 const snapshotsDir = path.join(root, 'server/utils/mcp-catalog-snapshots')
 

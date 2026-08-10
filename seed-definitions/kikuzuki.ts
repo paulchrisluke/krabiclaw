@@ -133,7 +133,6 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
     status: 'active',
     plan: 'growth',
     onboardingStatus: 'active',
-    urlStructure: 'location_subdirectories',
     primaryLocationId: 'loc-kikuzuki',
     contactEmail: null,
     defaultCurrency: 'THB',
@@ -649,7 +648,7 @@ export function renderKikuzukiCoreSeedBlock(): string {
 INSERT OR REPLACE INTO sites (
   id, organization_id, theme_id, theme, slug, subdomain,
   brand_name, brand_description,
-  status, plan, onboarding_status, url_structure, primary_location_id,
+  status, plan, onboarding_status, primary_location_id,
   contact_email, contact_phone, default_currency, vertical, content_source, media_source,
   logo_asset_id, og_image_asset_id
 ) VALUES (
@@ -664,7 +663,6 @@ INSERT OR REPLACE INTO sites (
   ${sqlValue(site.status)},
   ${sqlValue(site.plan)},
   ${sqlValue(site.onboardingStatus)},
-  ${sqlValue(site.urlStructure)},
   NULL,
   ${sqlValue(site.contactEmail)},
   NULL,

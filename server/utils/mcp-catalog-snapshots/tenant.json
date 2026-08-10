@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:aa7e2066d0d417bc50e57fb1f09eb3ba1a0b135de8b5607c8fa4d2dc163457f5",
+  "fingerprint": "sha256:6e3a6c8149575eb3560b3adb6a00e37bd5b445271e0a6597cd4de498ca4152a3",
   "tools": [
     {
       "name": "add_menu_items_batch",
@@ -5476,12 +5476,6 @@
                   "null"
                 ]
               },
-              "footer_tagline": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
               "google_analytics_measurement_id": {
                 "type": [
                   "string",
@@ -5566,24 +5560,6 @@
                   "null"
                 ]
               },
-              "social_facebook": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "social_instagram": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "social_tiktok": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
               "status": {
                 "type": "string"
               },
@@ -5594,9 +5570,6 @@
                 "type": "string"
               },
               "updated_at": {
-                "type": "string"
-              },
-              "url_structure": {
                 "type": "string"
               }
             },
@@ -15155,9 +15128,6 @@
             ],
             "type": "string"
           },
-          "footer_tagline": {
-            "type": "string"
-          },
           "google_analytics_measurement_id": {
             "type": "string"
           },
@@ -15203,21 +15173,6 @@
           },
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          },
-          "social_facebook": {
-            "description": "Full Facebook page URL, e.g. https://facebook.com/yourpage. Must include the https:// scheme — bare domains or handles are rejected.",
-            "type": "string"
-          },
-          "social_instagram": {
-            "description": "Full Instagram profile URL, e.g. https://instagram.com/yourhandle. Must include the https:// scheme — bare domains or handles are rejected.",
-            "type": "string"
-          },
-          "social_tiktok": {
-            "description": "Full TikTok profile URL, e.g. https://tiktok.com/@yourhandle. Must include the https:// scheme — bare domains or handles are rejected.",
-            "type": "string"
-          },
-          "url_structure": {
             "type": "string"
           }
         },

@@ -90,15 +90,6 @@ export async function loadSettingsPayload(
     throw new SiteSettingsNotFoundError()
   }
 
-  let siteSettings: Record<string, unknown> = {}
-  if (updatedSite.settings) {
-    try {
-      siteSettings = JSON.parse(String(updatedSite.settings))
-    } catch {
-      siteSettings = {}
-    }
-  }
-
   const siteConfig = await getConfig(db, organizationId, siteId)
 
   let toggleableFeatures: readonly ProductFeature[] = []
@@ -142,13 +133,6 @@ export async function loadSettingsPayload(
     default_features: defaultFeatures,
     brand_color: siteConfig.brand_color || '',
     default_currency: updatedSite.default_currency || 'THB',
-    url_structure: siteSettings.url_structure === 'brand_pages'
-      ? 'brand_pages' as const
-      : 'location_subdirectories' as const,
-    social_facebook: siteConfig.social_facebook || '',
-    social_instagram: siteConfig.social_instagram || '',
-    social_tiktok: siteConfig.social_tiktok || '',
-    footer_tagline: siteConfig.footer_tagline || '',
     press_email: siteConfig.press_email || '',
     partnerships_email: siteConfig.partnerships_email || '',
     catering_email: siteConfig.catering_email || '',
@@ -188,28 +172,10 @@ async function updateNonSiteConfigFields(
     }
   }
 
-  const socialUrlKeys = new Set(['social_facebook', 'social_instagram', 'social_tiktok'])
-  for (const key of ['social_facebook', 'social_instagram', 'social_tiktok', 'footer_tagline', 'press_email', 'partnerships_email', 'catering_email', 'careers_email', 'google_analytics_measurement_id', 'google_site_verification'] as const) {
+  for (const key of ['press_email', 'partnerships_email', 'catering_email', 'careers_email', 'google_analytics_measurement_id', 'google_site_verification'] as const) {
     if (updates[key] !== undefined) {
       const value = updates[key]
       if (value) {
-        if (socialUrlKeys.has(key)) {
-          const valueString = String(value)
-          try {
-            const url = new URL(valueString)
-            if (!['http:', 'https:'].includes(url.protocol) || !url.hostname) {
-              return {
-                status: 400,
-                data: { error: `Invalid URL for ${key}: ${valueString}` },
-              }
-            }
-          } catch {
-            return {
-              status: 400,
-              data: { error: `Invalid URL for ${key}: ${valueString}` },
-            }
-          }
-        }
         await setConfig(db, organizationId, siteId, key, value)
       } else {
         await deleteConfig(db, organizationId, siteId, key)
@@ -334,26 +300,6 @@ async function attemptSiteUpdate(
     }
     setParts.push('primary_location_id = ?')
     params.push(updates.primary_location_id || null)
-  }
-  if (updates.url_structure !== undefined) {
-    if (!['location_subdirectories', 'brand_pages'].includes(updates.url_structure)) {
-      return {
-        status: 400,
-        data: { error: 'Invalid URL structure' },
-      }
-    }
-
-    let settings: Record<string, unknown> = {}
-    if (site.settings) {
-      try {
-        settings = JSON.parse(String(site.settings))
-      } catch {
-        settings = {}
-      }
-    }
-    settings.url_structure = updates.url_structure
-    setParts.push('settings = ?')
-    params.push(JSON.stringify(settings))
   }
   if (updates.last_published_at !== undefined) {
     setParts.push('last_published_at = ?')

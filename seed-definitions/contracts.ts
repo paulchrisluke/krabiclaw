@@ -22,7 +22,6 @@ export interface CuratedSiteDefinition extends CuratedSiteIdentity {
     status: 'active' | 'inactive'
     plan: 'free' | 'growth'
     onboardingStatus: 'pending' | 'active' | 'failed'
-    urlStructure: 'location_subdirectories' | 'flat'
     primaryLocationId: string
     contactEmail: string | null
     contactPhone?: string | null

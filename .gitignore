@@ -67,3 +67,5 @@ seeds/*.sql
 .wrangler/state/v3
 
 .scratch/
+.tmp/
+.valo/

@@ -164,6 +164,7 @@ import { getVerticalCopy } from '~/utils/vertical-copy'
 
 interface Site {
   brand_name?: string | null
+  brand_description?: string | null
   logo_url?: string | null
   plan?: string | null
   vertical?: string | null
@@ -251,7 +252,7 @@ const hasMenu = computed(() => props.hasMenu ?? (props.menu?.items?.length ?? 0)
 const year = new Date().getFullYear()
 const logoUrl = computed(() => props.site?.logo_url || null)
 const restaurantName = computed(() => props.site?.brand_name?.trim() || DEFAULT_BUSINESS_NAME)
-const tagline = computed(() => props.config?.footer_tagline || '')
+const tagline = computed(() => props.site?.brand_description?.trim() || '')
 const sitePlan = computed(() => props.site?.plan)
 const showBrandingCredit = computed(() => !props.isPlatform && sitePlan.value === 'free')
 

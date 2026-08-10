@@ -33,7 +33,6 @@ export const demoFixture: CuratedSiteDefinition = {
     status: 'active',
     plan: 'free',
     onboardingStatus: 'active',
-    urlStructure: 'location_subdirectories',
     primaryLocationId: 'loc-demo',
     contactEmail: 'hello@emberandslice.example',
     defaultCurrency: 'USD',
@@ -1371,7 +1370,7 @@ export function renderCompiledDemoCoreSeedBlock(): string {
 INSERT OR REPLACE INTO sites (
   id, organization_id, theme_id, theme, slug, subdomain,
   brand_name, brand_description,
-  status, plan, onboarding_status, url_structure, primary_location_id,
+  status, plan, onboarding_status, primary_location_id,
   contact_email, default_currency, vertical, content_source, media_source,
   og_image_asset_id
 ) VALUES (
@@ -1386,7 +1385,6 @@ INSERT OR REPLACE INTO sites (
   ${sqlValue(compiledDemoSeed.site.status)},
   ${sqlValue(compiledDemoSeed.site.plan)},
   ${sqlValue(compiledDemoSeed.site.onboardingStatus)},
-  ${sqlValue(compiledDemoSeed.site.urlStructure)},
   NULL,
   ${sqlValue(compiledDemoSeed.site.contactEmail)},
   ${sqlValue(compiledDemoSeed.site.defaultCurrency)},

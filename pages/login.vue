@@ -10,12 +10,12 @@
 
     <div v-else class="space-y-3">
       <AuthGoogleAuthButton :loading="googleLoading" @activate="signInWithGoogle(postLoginUrl)" />
+      <WhatsAppAuthButton @activate="showPhone = !showPhone" />
+      <AuthPhoneOtpForm v-if="showPhone" default-country="TH" @verified="finishPhoneSignIn" />
       <div class="flex items-center gap-3 py-1">
         <div class="h-px flex-1 bg-default" /><span class="text-xs uppercase tracking-widest text-dimmed">or</span><div class="h-px flex-1 bg-default" />
       </div>
       <AuthEmailSignInForm :callback-url="postLoginUrl" :initial-email="queryEmail" @verification-required="showVerification" />
-      <PlatformButton variant="outline" size="lg" block @click="showPhone = !showPhone">Continue with WhatsApp</PlatformButton>
-      <AuthPhoneOtpForm v-if="showPhone" default-country="TH" @verified="finishPhoneSignIn" />
 
       <div v-if="verificationEmail" class="rounded-xl border border-default p-3 space-y-2">
         <p class="text-sm text-muted">Verify your email before signing in.</p>
@@ -28,6 +28,7 @@
 </template>
 
 <script setup lang="ts">
+import WhatsAppAuthButton from '~/components/auth/WhatsAppAuthButton.vue'
 import { authClient } from '~/lib/auth-client'
 import { buildPostLoginUrl, validatedInternalPath } from '~/shared/auth/return-target'
 

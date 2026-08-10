@@ -62,15 +62,6 @@ export default defineEventHandler(async (event) => {
       }, { status: 404 })
     }
 
-    const siteSettings = (() => {
-      if (!site.settings) return {}
-      try {
-        return JSON.parse(String(site.settings))
-      } catch {
-        return {}
-      }
-    })()
-
     const siteConfig = await getConfig(db, site.organization_id as string, site.id as string)
 
     const settings = {
@@ -90,17 +81,12 @@ export default defineEventHandler(async (event) => {
       contact_email: site.contact_email,
       brand_color: siteConfig.brand_color || '',
       default_currency: site.default_currency || 'THB',
-      social_facebook: siteConfig.social_facebook || '',
-      social_instagram: siteConfig.social_instagram || '',
-      social_tiktok: siteConfig.social_tiktok || '',
-      footer_tagline: siteConfig.footer_tagline || '',
       press_email: siteConfig.press_email || '',
       partnerships_email: siteConfig.partnerships_email || '',
       catering_email: siteConfig.catering_email || '',
       careers_email: siteConfig.careers_email || '',
       google_analytics_measurement_id: siteConfig.google_analytics_measurement_id || '',
       google_site_verification: siteConfig.google_site_verification || '',
-      url_structure: siteSettings.url_structure || 'location_subdirectories',
       last_published_at: site.last_published_at,
       created_at: site.created_at,
       updated_at: site.updated_at

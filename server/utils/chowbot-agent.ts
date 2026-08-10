@@ -102,15 +102,6 @@ function toSqlText(value: ApiValue): string | null | undefined {
   return null;
 }
 
-function isValidHttpUrl(value: string): boolean {
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
 function getToolString(
   record: Record<string, unknown>,
   key: string,
@@ -719,24 +710,11 @@ async function executeTool(
 
     case "update_site_social": {
       type SocialKey =
-        | "social_facebook"
-        | "social_instagram"
-        | "social_tiktok"
-        | "footer_tagline"
         | "press_email"
         | "partnerships_email"
         | "catering_email"
         | "careers_email";
-      const urlKeys = new Set<SocialKey>([
-        "social_facebook",
-        "social_instagram",
-        "social_tiktok",
-      ]);
       const map: Array<[SocialKey, string | undefined]> = [
-        ["social_facebook", toSqlText(input.facebook_url) ?? undefined],
-        ["social_instagram", toSqlText(input.instagram_url) ?? undefined],
-        ["social_tiktok", toSqlText(input.tiktok_url) ?? undefined],
-        ["footer_tagline", toSqlText(input.footer_tagline) ?? undefined],
         ["press_email", toSqlText(input.press_email) ?? undefined],
         [
           "partnerships_email",
@@ -746,21 +724,12 @@ async function executeTool(
         ["careers_email", toSqlText(input.careers_email) ?? undefined],
       ];
       const updated: Record<string, string> = {};
-      const invalidFields: string[] = [];
       const normalizedEntries: Array<[SocialKey, string]> = [];
       for (const [key, value] of map) {
         if (value === undefined) continue;
         const trimmed = value.trim();
-        if (urlKeys.has(key) && trimmed && !isValidHttpUrl(trimmed)) {
-          invalidFields.push(key);
-          continue;
-        }
         normalizedEntries.push([key, trimmed]);
       }
-      if (invalidFields.length)
-        return {
-          error: `Invalid URL scheme for: ${invalidFields.join(", ")}. Only http/https are allowed.`,
-        };
       for (const [key, value] of normalizedEntries) {
         await setConfig(db, orgId, siteId, key, value);
         updated[key] = value;

@@ -7,7 +7,7 @@
     <UButton
       color="neutral"
       variant="ghost"
-      class="w-full min-w-0"
+      class="dashboard-account-menu-button w-full min-w-0 cursor-pointer hover:text-highlighted"
       :class="collapsed ? 'justify-center' : 'justify-between'"
       :ui="{ base: 'min-w-0 w-full items-center px-2 py-1.5', trailingIcon: 'text-dimmed ms-auto' }"
       :avatar="{ src: sessionData?.user?.image ?? undefined, alt: sessionData?.user?.name || 'User avatar', size: 'sm' }"
@@ -127,3 +127,10 @@ const items = computed<DropdownMenuItem[][]>(() => [
   [{ label: 'Log Out', icon: 'i-lucide-log-out', color: 'error', onSelect: handleSignOut }],
 ])
 </script>
+
+<style scoped>
+.dashboard-account-menu-button:hover,
+.dashboard-account-menu-button:focus-visible {
+  background-color: var(--ui-bg-accented) !important;
+}
+</style>

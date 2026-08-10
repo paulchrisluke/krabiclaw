@@ -9,7 +9,6 @@ export interface SiteConfig {
   social_facebook?: string
   social_instagram?: string
   social_tiktok?: string
-  footer_tagline?: string
   press_email?: string
   partnerships_email?: string
   catering_email?: string
@@ -32,7 +31,33 @@ export const getConfig = async (
      WHERE organization_id = ? AND site_id = ?`,
     [organizationId, siteId],
   )
-  return Object.fromEntries((results ?? []).map(r => [r.key, r.value]))
+  const config = Object.fromEntries((results ?? []).map(r => [r.key, r.value])) as SiteConfig
+  // Social profiles are derived from the ordered Links manager. Legacy site_config
+  // values are deliberately ignored so there is only one writable source.
+  delete config.social_facebook
+  delete config.social_instagram
+  delete config.social_tiktok
+  const links = await queryAll<{ destination: string }>(
+    db,
+    `SELECT li.destination
+       FROM site_link_items li
+       JOIN site_link_pages lp ON lp.id = li.link_page_id AND lp.site_id = li.site_id
+      WHERE li.site_id = ? AND li.status = 'active'
+      ORDER BY li.sort_order ASC, li.created_at ASC`,
+    [siteId],
+  )
+  for (const link of links) {
+    try {
+      const url = new URL(link.destination)
+      const host = url.hostname.replace(/^www\./, '')
+      if (!config.social_facebook && host.endsWith('facebook.com')) config.social_facebook = url.toString()
+      if (!config.social_instagram && host.endsWith('instagram.com')) config.social_instagram = url.toString()
+      if (!config.social_tiktok && host.endsWith('tiktok.com')) config.social_tiktok = url.toString()
+    } catch {
+      // Relative and non-http links are valid link items but are not social profiles.
+    }
+  }
+  return config
 }
 
 /**

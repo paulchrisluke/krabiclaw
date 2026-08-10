@@ -615,12 +615,12 @@ ON CONFLICT(id) DO UPDATE SET name = excluded.name;
 INSERT INTO sites (
   id, organization_id, theme_id, theme, slug, subdomain,
   brand_name, brand_description,
-  status, plan, onboarding_status, url_structure,
+  status, plan, onboarding_status,
   default_currency, vertical, content_source, media_source
 ) VALUES (
   '${siteId}', '${orgId}', 'saya-theme-v1', 'saya', '${SLUG}', '${SLUG}',
   '${brandName.replace(/'/g, "''")}', NULL,
-  'active', 'free', 'active', 'location_subdirectories',
+  'active', 'free', 'active',
   'THB', '${VERTICAL}', 'google_maps', 'client_photos'
 ) ON CONFLICT(id) DO UPDATE SET
   brand_name = excluded.brand_name,

@@ -21,7 +21,6 @@ export interface SiteSettings {
   contact_email: string | null
   brand_color: string
   default_currency: CurrencyCode
-  url_structure: 'location_subdirectories' | 'brand_pages'
   google_analytics_measurement_id?: string
   google_site_verification?: string
   last_published_at: string | null
@@ -39,12 +38,7 @@ export interface UpdateSiteSettingsRequest {
   brand_color?: string
   default_currency?: CurrencyCode
   primary_location_id?: string
-  url_structure?: 'location_subdirectories' | 'brand_pages'
   last_published_at?: string
-  social_facebook?: string
-  social_instagram?: string
-  social_tiktok?: string
-  footer_tagline?: string
   press_email?: string
   partnerships_email?: string
   catering_email?: string
