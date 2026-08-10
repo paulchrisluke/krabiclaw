@@ -72,7 +72,8 @@ append-only `usage_quota_grants`; the `ai_credits` row is a derived enforcement
 balance, not a purchasable wallet. One-time credit purchases, service add-ons,
 and automatic top-ups are retired. The 2026-08-09 production/provider census
 found no customer purchase, fulfillment, or outstanding-obligation history for
-those products. Their legacy schema remains frozen as migration history only.
+those products. The active schema removes their unused tables and columns;
+immutable applied migrations retain the historical definitions only.
 
 **Upgrade modal** triggers on: Google Places import, custom domain setup, removing KrabiClaw branding.
 
