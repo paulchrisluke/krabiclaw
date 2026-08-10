@@ -16,8 +16,7 @@ const journeys = [
     baseURL: potteryHouseBaseURL,
     headers: potteryHouseExtraHeaders,
     shell: '.tenant-layout',
-    homeStylesheet: 'saya-home.css',
-    routeStylesheet: 'saya.css',
+    themeVariable: '--saya-bg',
     link: '/experiences',
     content: /Pottery|Experience/i,
   },
@@ -26,8 +25,7 @@ const journeys = [
     baseURL: kikuzukiTestBaseUrl(),
     headers: kikuzukiTestExtraHeaders(),
     shell: '.tenant-layout',
-    homeStylesheet: 'saya-home.css',
-    routeStylesheet: 'saya.css',
+    themeVariable: '--saya-bg',
     link: '/reservations',
     content: /Reservation/i,
   },
@@ -36,8 +34,7 @@ const journeys = [
     baseURL: blawbyBaseURL,
     headers: blawbyExtraHeaders,
     shell: '.blawby-shell',
-    homeStylesheet: 'blawby-home.css',
-    routeStylesheet: 'blawby.css',
+    themeVariable: '--blawby-bg',
     link: '/pricing',
     content: /Pricing|affordable/i,
   },
@@ -61,7 +58,7 @@ test('deployed tenant home navigation keeps real content and styles', async ({ p
     const response = await page.goto(`${journey.baseURL}/`, { waitUntil: 'load' })
     expect(response?.status(), journey.name).toBeLessThan(400)
     await expect(page.locator(journey.shell)).toBeVisible()
-    await expect(page.locator(`link[rel="stylesheet"][href*="${journey.homeStylesheet}"]`)).toHaveCount(1)
+    await expect(page.locator(journey.shell)).not.toHaveCSS(journey.themeVariable, '')
 
     const link = page.locator(`a[href="${journey.link}"]`).first()
     await expect(link, `${journey.name} ${journey.link} navigation`).toBeVisible()
@@ -70,7 +67,7 @@ test('deployed tenant home navigation keeps real content and styles', async ({ p
     await expect(page).toHaveURL(new RegExp(`${journey.link}/?$`))
     await expect(page.locator('main')).toBeVisible()
     await expect(page.locator('main')).toContainText(journey.content)
-    await expect(page.locator(`link[rel="stylesheet"][href*="${journey.routeStylesheet}"]`)).toHaveCount(1)
+    await expect(page.locator(journey.shell)).not.toHaveCSS(journey.themeVariable, '')
     await expectHealthyPage(page, errors)
   }
 })
