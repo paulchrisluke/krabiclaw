@@ -64,6 +64,20 @@ test('retired billing migration fails before deletion on unexpected obligations'
       `).run('org-auto-topup'),
       error: /auto_topup_configuration_not_default/,
     },
+    {
+      seed: (db: Database.Database) => db.prepare(`
+        INSERT INTO organization_billing (organization_id, auto_topup_bundle)
+        VALUES (?, 1000)
+      `).run('org-auto-topup-bundle'),
+      error: /auto_topup_configuration_not_default/,
+    },
+    {
+      seed: (db: Database.Database) => db.prepare(`
+        INSERT INTO organization_billing (organization_id, auto_topup_threshold)
+        VALUES (?, 200)
+      `).run('org-auto-topup-threshold'),
+      error: /auto_topup_configuration_not_default/,
+    },
   ]
 
   for (const scenario of cases) {

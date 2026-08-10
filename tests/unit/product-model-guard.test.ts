@@ -48,6 +48,8 @@ test('product-model guard rejects retired billing schema and writers', () => {
     'export const stripe_credit_topups = sqliteTable("stripe_credit_topups", {})',
     'await db.prepare("INSERT INTO service_addon_purchases (id) VALUES (?)")',
     'const auto_topup_enabled = true',
+    'const auto_topup_bundle = 1000',
+    'const auto_topup_threshold = 200',
   ]) {
     assert.equal(findProductModelViolations('server/db/schema.ts', source).length, 1)
   }
