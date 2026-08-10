@@ -138,6 +138,8 @@ test('required CI pins the event SHA and deploys production only from main pushe
   assert.match(deploy, /wrangler deploy --tag "\$GITHUB_SHA"/)
   assert.match(migrate, /wrangler d1 migrations apply DB --remote/)
   assert.match(source, /Verify exact production Worker and routes[\s\S]*--expected-sha "\$GITHUB_SHA"/)
+  assert.match(source, /for route in \/ \/about \/privacy \/api\/deployment/)
+  assert.doesNotMatch(source, /for route in[^\n]*\/policies\/privacy/)
   for (const coverage of [
     'test:e2e:dashboard:smoke',
     'test:e2e:blawby-cms:smoke',

@@ -173,7 +173,7 @@ jobs:
             --expected-version-id "$PRODUCTION_VERSION_ID" \
             --worker-name krabiclaw \
             --output "$RUNNER_TEMP/production-verification.json"
-          for route in / /about /policies/privacy /api/deployment; do
+          for route in / /about /privacy /api/deployment; do
             curl -fsS --connect-timeout 10 --max-time 30 "https://krabiclaw.com${route}" >/dev/null
           done
 
