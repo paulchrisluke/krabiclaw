@@ -37,6 +37,7 @@
         </div>
         <SayaButton
           class="shrink-0"
+          :control-id="experienceCta.action === 'book' ? 'experience-booking-toggle' : undefined"
           :to="experienceCta.to"
           @click="handleExperienceCtaClick"
         >
@@ -263,6 +264,7 @@
               <div v-else-if="experienceCta" data-experience-cta="desktop" class="pt-2">
                 <SayaButton
                   block
+                  :control-id="experienceCta.action === 'book' ? 'experience-booking-toggle' : undefined"
                   :to="experienceCta.to"
                   @click="handleExperienceCtaClick"
                 >
@@ -285,6 +287,7 @@
         <!-- One shared booking modal is mounted outside responsive card visibility. -->
         <BookingModal
           v-model="isBookingModalOpen"
+          target-id="experience-booking"
           :title="modalTitle"
           :can-go-back="bookingStep > 1 && !submitting"
           @back="prevStep"
@@ -294,7 +297,7 @@
             <BookingTimeStep
               v-model="timeSelection"
               :dates="availabilityDates"
-              :loading="availabilityLoading"
+              :loading="availabilityLoading || !isHydrated"
               :guests="form.party_size_num"
               :guests-max="experience.max_capacity ?? 8"
               guests-label="Guests"
@@ -461,13 +464,14 @@ import { fmt12Hour } from '~/shared/reservation-hours'
 import BookingContactForm, { type ContactFormState } from '@/components/booking/BookingContactForm.vue'
 
 const isBookingModalOpen = ref(false)
+const isHydrated = ref(false)
+onMounted(() => { isHydrated.value = true })
 const bookingStep = ref(1)
 const timeSelection = ref<TimeSlotSelection | null>(null)
 
 function openBookingModal() {
   bookingStep.value = 1
   bookingError.value = null
-  isBookingModalOpen.value = true
 }
 
 function handleExperienceCtaClick() {
