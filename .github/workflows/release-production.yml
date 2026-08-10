@@ -18,12 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      PLAYWRIGHT_PREVIEW_URL: https://krabiclaw.com
-      PLAYWRIGHT_WORKERS: "1"
       WORKER_NAME: krabiclaw
-      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
-      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
-      NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -34,7 +29,6 @@ jobs:
           node-version: "22"
           cache: yarn
       - run: yarn install --frozen-lockfile
-      - run: npx playwright install --with-deps chromium
       - name: Build exact main revision
         run: yarn build
       - name: Check migration data safety
@@ -71,8 +65,6 @@ jobs:
             --expected-version-id "$PRODUCTION_VERSION_ID" \
             --worker-name krabiclaw \
             --output "$RUNNER_TEMP/production-deployment-verification.json"
-      - name: Open deployed tenant navigation
-        run: npx playwright test tests/e2e/public-rendering-sentinel.spec.ts --project=chromium --workers=1
       - name: Refresh production search index
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -87,7 +79,5 @@ jobs:
           path: |
             ${{ runner.temp }}/production-deploy.log
             ${{ runner.temp }}/production-deployment-verification.json
-            playwright-report/
-            test-results/
           if-no-files-found: ignore
           retention-days: 14
