@@ -75,7 +75,13 @@ export default defineEventHandler(async (event) => {
     const expiresAt = new Date(Date.now() + 90_000).toISOString()
 
     // Prune expired entries (best-effort, non-blocking on failure).
-    void execute(cfEnv.DB, 'DELETE FROM token_exchange_cache WHERE expires_at < ?', [now]).catch(() => null)
+    const prunePromise = execute(
+      cfEnv.DB,
+      'DELETE FROM token_exchange_cache WHERE expires_at < ?',
+      [now],
+    ).catch(() => null)
+    if (waitUntil) waitUntil(prunePromise)
+    else void prunePromise
 
     // Atomic claim via INSERT OR IGNORE. First concurrent request wins (changes = 1).
     failedPhase = 'idempotency_claim'
@@ -101,7 +107,7 @@ export default defineEventHandler(async (event) => {
       // A concurrent request already claimed this code. Poll for its result.
       try {
         for (let i = 0; i < 12; i++) {
-          await new Promise(r => setTimeout(r, 250))
+          if (i > 0) await new Promise(r => setTimeout(r, 250))
           const cached = await queryFirst<{ response_body: string; http_status: number }>(
             cfEnv.DB,
             `SELECT response_body, http_status FROM token_exchange_cache WHERE code = ? AND state = 'done'`,
@@ -111,7 +117,7 @@ export default defineEventHandler(async (event) => {
             logTokenExchange(tokenLogLevel(cached.http_status), {
               ...requestFields,
               status: cached.http_status,
-              failed_phase: cached.http_status >= 500 ? failedPhase : null,
+              failed_phase: null,
               duration_ms: Date.now() - startedAt,
               idempotency_cache: 'hit',
               ...requestMetricSummary(requestMetrics),
@@ -128,7 +134,7 @@ export default defineEventHandler(async (event) => {
         recordRequestPhase(event, 'oauth_idempotency_wait', waitStartedAt)
       }
       if (cachedResponse) return cachedResponse
-      // Timed out (3s) — fall through and try directly (primary may have failed).
+      // Timed out waiting — fall through and try directly (primary may have failed).
       console.error('[Token] idempotency wait timed out, attempting direct exchange')
     }
 
@@ -163,15 +169,19 @@ export default defineEventHandler(async (event) => {
 
     return new Response(responseBody, { status: res.status, headers: res.headers })
   } catch (error) {
-    console.error('[OAUTH_TOKEN]', JSON.stringify({
-      event: 'token_exchange_failed',
-      ...requestFields,
-      status: 500,
-      duration_ms: Date.now() - startedAt,
-      failed_phase: failedPhase,
-      ...requestMetricSummary(requestMetrics),
-      error_chain: errorChainForTelemetry(error),
-    }))
+    try {
+      console.error('[OAUTH_TOKEN]', JSON.stringify({
+        event: 'token_exchange_failed',
+        ...requestFields,
+        status: 500,
+        duration_ms: Date.now() - startedAt,
+        failed_phase: failedPhase,
+        ...requestMetricSummary(requestMetrics),
+        error_chain: errorChainForTelemetry(error),
+      }))
+    } catch {
+      // Telemetry must never replace the token exchange error.
+    }
     throw error
   }
 })

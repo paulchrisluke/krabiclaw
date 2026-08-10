@@ -50,6 +50,16 @@ export function getRequestDataMetrics(event: H3Event): RequestDataMetrics {
   return metrics
 }
 
+export function safeRoute(event: H3Event): string {
+  const route = event.path || event.node.req.url || '/'
+
+  try {
+    return new URL(route, 'http://internal').pathname
+  } catch {
+    return route.split(/[?#]/, 1)[0] || '/'
+  }
+}
+
 export function recordRequestPhase(event: H3Event, phase: string, startedAt: number) {
   const metrics = getRequestDataMetrics(event)
   metrics.phases[phase] = (metrics.phases[phase] ?? 0) + performance.now() - startedAt
@@ -96,33 +106,37 @@ async function logD1Query(
   error?: unknown,
   meta: D1MetaSummary[] = [],
 ) {
-  const metrics = getRequestDataMetrics(event)
-  const identity = queryIdentity(query)
-  const firstMeta = meta[0]
-  console[level]('[d1-query]', JSON.stringify({
-    event: error ? 'd1_query_failed' : 'd1_query_slow',
-    request_id: metrics.requestId,
-    ray_id: getHeader(event, 'cf-ray') ?? null,
-    route: event.path,
-    statement_method: statementMethod,
-    operation: identity.operation,
-    table: identity.table,
-    query_fingerprint: await queryFingerprint(identity.normalized),
-    duration_ms: Number(durationMs.toFixed(2)),
-    d1_meta: firstMeta
-      ? {
-          duration_ms: firstMeta.duration ?? null,
-          sql_duration_ms: firstMeta.timings?.sql_duration_ms ?? null,
-          rows_read: firstMeta.rows_read ?? null,
-          rows_written: firstMeta.rows_written ?? null,
-          served_by_region: firstMeta.served_by_region ?? null,
-          served_by_colo: firstMeta.served_by_colo ?? null,
-          served_by_primary: firstMeta.served_by_primary ?? null,
-          total_attempts: firstMeta.total_attempts ?? null,
-        }
-      : null,
-    error_chain: error ? errorChainForTelemetry(error) : null,
-  }))
+  try {
+    const metrics = getRequestDataMetrics(event)
+    const identity = queryIdentity(query)
+    const firstMeta = meta[0]
+    console[level]('[d1-query]', JSON.stringify({
+      event: error ? 'd1_query_failed' : 'd1_query_slow',
+      request_id: metrics.requestId,
+      ray_id: getHeader(event, 'cf-ray') ?? null,
+      route: safeRoute(event),
+      statement_method: statementMethod,
+      operation: identity.operation,
+      table: identity.table,
+      query_fingerprint: await queryFingerprint(identity.normalized),
+      duration_ms: Number(durationMs.toFixed(2)),
+      d1_meta: firstMeta
+        ? {
+            duration_ms: firstMeta.duration ?? null,
+            sql_duration_ms: firstMeta.timings?.sql_duration_ms ?? null,
+            rows_read: firstMeta.rows_read ?? null,
+            rows_written: firstMeta.rows_written ?? null,
+            served_by_region: firstMeta.served_by_region ?? null,
+            served_by_colo: firstMeta.served_by_colo ?? null,
+            served_by_primary: firstMeta.served_by_primary ?? null,
+            total_attempts: firstMeta.total_attempts ?? null,
+          }
+        : null,
+      error_chain: error ? errorChainForTelemetry(error) : null,
+    }))
+  } catch {
+    // Telemetry must never replace the query outcome.
+  }
 }
 
 function wrapStatement(statement: object, metrics: RequestDataMetrics, event: H3Event, query: string): object {
@@ -150,7 +164,7 @@ function wrapStatement(statement: object, metrics: RequestDataMetrics, event: H3
             await logD1Query('error', event, query, String(property), queryDurationMs, error)
             throw error
           } finally {
-            metrics.d1DurationMs += queryDurationMs || performance.now() - startedAt
+            metrics.d1DurationMs += queryDurationMs
           }
         }
       }
@@ -190,18 +204,27 @@ export function instrumentD1(event: H3Event, database: D1Database): D1Database {
             return result
           } catch (error) {
             batchDurationMs = performance.now() - startedAt
-            console.error('[d1-query]', JSON.stringify({
-              event: 'd1_batch_failed',
-              request_id: metrics.requestId,
-              ray_id: getHeader(event, 'cf-ray') ?? null,
-              route: event.path,
-              statement_count: statements.length,
-              duration_ms: Number(batchDurationMs.toFixed(2)),
-              error_chain: errorChainForTelemetry(error),
-            }))
+            try {
+              console.error('[d1-query]', JSON.stringify({
+                event: 'd1_batch_failed',
+                request_id: metrics.requestId,
+                ray_id: getHeader(event, 'cf-ray') ?? null,
+                route: safeRoute(event),
+                statement_count: statements.length,
+                statements: statements.map((statement) => {
+                  const query = statementTargets.get(statement)?.query ?? 'unknown'
+                  const { operation, table } = queryIdentity(query)
+                  return { operation, table }
+                }),
+                duration_ms: Number(batchDurationMs.toFixed(2)),
+                error_chain: errorChainForTelemetry(error),
+              }))
+            } catch {
+              // Telemetry must never replace the batch error.
+            }
             throw error
           } finally {
-            metrics.d1DurationMs += batchDurationMs || performance.now() - startedAt
+            metrics.d1DurationMs += batchDurationMs
           }
         }
       }

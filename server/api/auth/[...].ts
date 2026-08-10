@@ -5,7 +5,7 @@ import { parsePhoneOrThrow } from '~/utils/phone'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { getHeader, type H3Event } from 'h3'
 import { errorChainForTelemetry } from '~/server/utils/error-telemetry'
-import { getRequestDataMetrics } from '~/server/utils/request-metrics'
+import { getRequestDataMetrics, safeRoute } from '~/server/utils/request-metrics'
 
 async function normalizedAuthRequest(event: H3Event): Promise<Request> {
   const request = toWebRequest(event)
@@ -74,20 +74,24 @@ export default defineEventHandler(async (event) => {
     const errorMessage = error instanceof Error ? error.message : String(error)
     const metrics = getRequestDataMetrics(event)
     
-    console.error('[AUTH_HANDLER]', JSON.stringify({
-      event: 'auth_handler_failed',
-      request_id: metrics.requestId,
-      ray_id: getHeader(event, 'cf-ray') ?? null,
-      deployment_version: String(
-        env.DEPLOYMENT_VERSION ?? env.CF_PAGES_COMMIT_SHA ?? env.GITHUB_SHA ?? 'unknown',
-      ),
-      route: event.path,
-      method: event.node.req.method,
-      duration_ms: Number((performance.now() - metrics.startedAt).toFixed(2)),
-      statement_count: metrics.statementCount,
-      d1_duration_ms: Number(metrics.d1DurationMs.toFixed(2)),
-      error_chain: errorChainForTelemetry(error),
-    }))
+    try {
+      console.error('[AUTH_HANDLER]', JSON.stringify({
+        event: 'auth_handler_failed',
+        request_id: metrics.requestId,
+        ray_id: getHeader(event, 'cf-ray') ?? null,
+        deployment_version: String(
+          env.DEPLOYMENT_VERSION ?? env.CF_PAGES_COMMIT_SHA ?? env.GITHUB_SHA ?? 'unknown',
+        ),
+        route: safeRoute(event),
+        method: event.node.req.method,
+        duration_ms: Number((performance.now() - metrics.startedAt).toFixed(2)),
+        statement_count: metrics.statementCount,
+        d1_duration_ms: Number(metrics.d1DurationMs.toFixed(2)),
+        error_chain: errorChainForTelemetry(error),
+      }))
+    } catch {
+      // Telemetry must never replace the auth response.
+    }
     
     throw createError({
       statusCode: 500,
