@@ -54,7 +54,7 @@ export async function createWorkRequest(
     ? await hasSiteEntitlement(db, siteId, 'managed_service')
     : await hasEntitlement(env, db, organizationId, 'managed_service')
   if (!entitled) {
-    return { status: 403, data: { error: 'Work requests require a managed-service plan.' } }
+    return { status: 403, data: { error: 'Work requests require Growth.' } }
   }
   if (!VALID_WORK_REQUEST_TYPES.includes(type)) {
     return {

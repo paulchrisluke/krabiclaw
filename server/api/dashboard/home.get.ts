@@ -10,7 +10,6 @@ export default defineEventHandler(async (event) => {
       organization,
       site: null,
       locations: [],
-      credits: null,
       events: [],
       operations: { openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 },
     })

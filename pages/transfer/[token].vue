@@ -63,7 +63,7 @@
 
           <!-- Site name + builder -->
           <h1 class="text-[clamp(32px,4vw,48px)] font-extrabold leading-[1.02] tracking-tight text-default text-balance m-0">{{ transfer.site_name }}</h1>
-          <p class="mt-4 text-base text-muted">Created by <strong class="text-default">{{ transfer.initiated_by_name }}</strong> • This handoff stays active until it is completed or cancelled.</p>
+          <p class="mt-4 text-base text-muted">Prepared for you by the current site owner • This handoff stays active until it is completed or cancelled.</p>
 
           <!-- Personal note -->
           <p v-if="transfer.message" class="mt-5 text-sm italic text-muted border-l-2 border-default pl-3">
@@ -92,7 +92,9 @@
                   @click="selectedInterval = 'year'"
                 >
                   Annual
-                  <span class="ml-1 text-[10px] font-bold text-primary uppercase tracking-wide">Save 10%</span>
+                  <span v-if="annualSavingsPercent" class="ml-1 text-[10px] font-bold text-primary uppercase tracking-wide">
+                    Save {{ annualSavingsPercent }}%
+                  </span>
                 </button>
               </div>
 
@@ -218,24 +220,15 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import { buildLoginUrl } from '~/shared/auth/return-target'
-
-definePageMeta({ layout: 'standalone' })
-
-const route = useRoute()
-const token = route.params.token as string
-
-const { isAuthenticated, sessionLoading, user } = await useAuthSession()
-
-interface PricingInfo {
+<script lang="ts">
+export interface PricingInfo {
   base_cents: number
   discounted_cents: number | null
   coupon_duration: string | null
   coupon_duration_months: number | null
 }
 
-interface TransferInfo {
+export interface TransferInfo {
   id: string
   site_id: string
   site_name: string
@@ -251,9 +244,118 @@ interface TransferInfo {
   domain_active: boolean
   requires_payment: boolean
   never_expires: boolean
-  initiated_by_name: string
-  initiated_by_domain: string
 }
+
+export interface AcceptTransferResponse {
+  success: true
+  site_id: string
+  checkout_url?: string | null
+}
+
+const isRecordValue = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0
+
+const isNullableString = (value: unknown): value is string | null =>
+  value === null || typeof value === 'string'
+
+const isNullableNonEmptyString = (value: unknown): value is string | null =>
+  value === null || isNonEmptyString(value)
+
+const isSafeNonNegativeInteger = (value: unknown): value is number =>
+  typeof value === 'number'
+  && Number.isSafeInteger(value)
+  && value >= 0
+
+const isSafeCheckoutUrl = (value: unknown): value is string => {
+  if (!isNonEmptyString(value)) return false
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:'
+      && Boolean(url.hostname)
+      && !url.username
+      && !url.password
+  } catch {
+    return false
+  }
+}
+
+const isPricingInfo = (value: unknown): value is PricingInfo =>
+  isRecordValue(value)
+  && isSafeNonNegativeInteger(value.base_cents)
+  && (value.discounted_cents === null || isSafeNonNegativeInteger(value.discounted_cents))
+  && (value.coupon_duration === null || isNonEmptyString(value.coupon_duration))
+  && (value.coupon_duration_months === null || isSafeNonNegativeInteger(value.coupon_duration_months))
+
+export const isTransferInfoResponse = (value: unknown): value is TransferInfo =>
+  isRecordValue(value)
+  && isNonEmptyString(value.id)
+  && isNonEmptyString(value.site_id)
+  && isNonEmptyString(value.site_name)
+  && isNullableString(value.site_subdomain)
+  && isNonEmptyString(value.to_email)
+  && isNullableString(value.message)
+  && isNullableNonEmptyString(value.invited_plan)
+  && isNullableNonEmptyString(value.invited_coupon)
+  && (value.invited_interval === 'month' || value.invited_interval === 'year')
+  && (value.pricing_month === null || isPricingInfo(value.pricing_month))
+  && (value.pricing_year === null || isPricingInfo(value.pricing_year))
+  && isNullableNonEmptyString(value.invited_domain)
+  && typeof value.domain_active === 'boolean'
+  && typeof value.requires_payment === 'boolean'
+  && typeof value.never_expires === 'boolean'
+
+export const isAcceptTransferResponse = (value: unknown): value is AcceptTransferResponse =>
+  isRecordValue(value)
+  && value.success === true
+  && isNonEmptyString(value.site_id)
+  && (value.checkout_url === undefined || value.checkout_url === null || isSafeCheckoutUrl(value.checkout_url))
+
+export function buildTransferPreviewUrl(
+  siteId: string | null | undefined,
+  publicConfig: { freeSiteDomain?: unknown; platformDomain?: unknown },
+): string {
+  if (!isNonEmptyString(siteId)) return ''
+
+  const configuredDomain = isNonEmptyString(publicConfig.platformDomain)
+    ? publicConfig.platformDomain
+    : isNonEmptyString(publicConfig.freeSiteDomain)
+      ? publicConfig.freeSiteDomain
+      : null
+  if (!configuredDomain) return ''
+
+  const rawDomain = configuredDomain.trim().replace(/\/+$/, '')
+  const origin = /^[a-z][a-z\d+.-]*:\/\//i.test(rawDomain)
+    ? rawDomain
+    : `https://${rawDomain}`
+  try {
+    const parsed = new URL(origin)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return ''
+    if (!parsed.hostname) return ''
+    if (parsed.username || parsed.password || parsed.pathname !== '/' || parsed.search || parsed.hash) return ''
+    return `${parsed.origin}/preview/site/${encodeURIComponent(siteId.trim())}`
+  } catch {
+    return ''
+  }
+}
+</script>
+
+<script setup lang="ts">
+import { buildLoginUrl } from '~/shared/auth/return-target'
+import {
+  normalizeApiError,
+  publicApiMutation,
+  publicApiRequest,
+} from '~/utils/api-clients'
+
+definePageMeta({ layout: 'standalone' })
+
+const route = useRoute()
+const token = route.params.token as string
+
+const { isAuthenticated, sessionLoading, user } = await useAuthSession()
 
 const loading = ref(true)
 const loadError = ref<string | null>(null)
@@ -264,6 +366,7 @@ const accepted = ref(false)
 const redirectingToCheckout = ref(false)
 const transferPath = computed(() => `/transfer/${encodeURIComponent(token)}`)
 const emailLoginUrl = computed(() => buildLoginUrl({ redirect: transferPath.value }))
+const runtimeConfig = useRuntimeConfig()
 const authOperation = useAuthOperation()
 const authLoading = authOperation.loading
 const selectedInterval = ref<'month' | 'year'>('month')
@@ -273,14 +376,22 @@ const activePricing = computed(() => {
   return selectedInterval.value === 'year' ? transfer.value.pricing_year : transfer.value.pricing_month
 })
 
+const annualSavingsPercent = computed(() => {
+  const monthlyCents = transfer.value?.pricing_month?.base_cents
+  const annualCents = transfer.value?.pricing_year?.base_cents
+  if (!monthlyCents || !annualCents) return null
+
+  const savings = Math.round((1 - annualCents / (monthlyCents * 12)) * 100)
+  return savings > 0 ? savings : null
+})
+
 const emailMatches = computed(() => {
   if (!transfer.value || !user.value) return false
   return user.value.email?.toLowerCase() === transfer.value.to_email.toLowerCase()
 })
 
 const iframeUrl = computed(() => {
-  if (!transfer.value?.site_subdomain) return ''
-  return `https://${transfer.value.site_subdomain}.krabiclaw.com`
+  return buildTransferPreviewUrl(transfer.value?.site_id, runtimeConfig.public)
 })
 
 const { plans } = usePlans()
@@ -291,13 +402,13 @@ const matchedPlan = computed(() => {
 
 onMounted(async () => {
   try {
-    const data = await $fetch<TransferInfo>(`/api/site-transfer/${token}`)
+    const data = await publicApiRequest<TransferInfo>(`/api/site-transfer/${encodeURIComponent(token)}`, {
+      validate: isTransferInfoResponse,
+    })
     transfer.value = data
     selectedInterval.value = data.invited_interval ?? 'month'
   } catch (err: unknown) {
-    const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
-    const errorMessage = err && typeof err === 'object' && 'message' in err ? (err as Record<string, string>).message : null
-    loadError.value = errorData?.error ?? errorMessage ?? 'This transfer link is invalid or unavailable.'
+    loadError.value = normalizeApiError(err, 'This transfer link is invalid or unavailable.').message
   } finally {
     loading.value = false
   }
@@ -307,9 +418,10 @@ async function acceptTransfer() {
   accepting.value = true
   acceptError.value = null
   try {
-    const result = await $fetch<{ success: boolean; site_id: string; checkout_url?: string | null }>(`/api/site-transfer/${token}/accept`, {
+    const result = await publicApiMutation<AcceptTransferResponse>(`/api/site-transfer/${encodeURIComponent(token)}/accept`, {
       method: 'POST',
       body: { interval: selectedInterval.value },
+      validate: isAcceptTransferResponse,
     })
     if (result.checkout_url) {
       redirectingToCheckout.value = true
@@ -318,8 +430,7 @@ async function acceptTransfer() {
       accepted.value = true
     }
   } catch (err: unknown) {
-    const errorData = err && typeof err === 'object' && 'data' in err ? (err as Record<string, { error?: string }>).data : null
-    acceptError.value = errorData?.error ?? 'Failed to accept the transfer. Please try again.'
+    acceptError.value = normalizeApiError(err, 'Failed to accept the transfer. Please try again.').message
   } finally {
     accepting.value = false
   }

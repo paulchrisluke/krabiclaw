@@ -139,7 +139,7 @@ async function reply(
 ) {
   const result = await sendWhatsAppText(env, toPhone, text)
   if (db && opts?.conversation) {
-    await createMessage(db, {
+    const message = await createMessage(db, {
       conversationId: opts.conversation.id,
       organizationId: opts.conversation.organization_id,
       siteId: opts.conversation.site_id,
@@ -154,12 +154,33 @@ async function reply(
     }, opts.userId ?? opts.conversation.user_id)
 
     if (result.success) {
-      // Soft-fail: the reply already went out, so an exhausted balance never
-      // blocks the conversation — it just skips the charge.
-      await chargeFlatCredits(db, opts.conversation.organization_id, {
-        siteId: opts.conversation.site_id ?? undefined,
-        action: 'whatsapp_free_text',
-      }).catch(() => {})
+      // An exhausted balance is intentionally recorded as `charged: false`
+      // and does not block a reply that already left Meta. Accounting or
+      // query failures must remain visible on the durable sent message and
+      // propagate so the webhook cannot claim an unqualified success.
+      try {
+        await chargeFlatCredits(db, opts.conversation.organization_id, {
+          siteId: opts.conversation.site_id ?? undefined,
+          action: 'whatsapp_free_text',
+          idempotencyKey: result.messageId
+            ? `whatsapp-provider:${result.messageId}`
+            : `whatsapp-message:${message.id}`,
+        })
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error)
+        const accountingError = `WhatsApp reply sent but credit accounting failed: ${reason}`
+        try {
+          await execute(
+            db,
+            `UPDATE chowbot_messages SET error = ? WHERE id = ?`,
+            [accountingError, message.id],
+          )
+        } catch (recordError) {
+          const recordReason = recordError instanceof Error ? recordError.message : String(recordError)
+          throw new Error(`${accountingError}; durable message update failed: ${recordReason}`)
+        }
+        throw new Error(accountingError)
+      }
     }
   }
 }

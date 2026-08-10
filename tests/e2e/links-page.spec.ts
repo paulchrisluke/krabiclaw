@@ -10,6 +10,7 @@ const DEMO_SITE_SLUG = 'demo'
 
 const BLAWBY_OWNER_USER_ID = 'user-ncls-blawby'
 const BLAWBY_SITE_ID = 'site-ncls-blawby'
+const REQUIRE_RELEASE_BLAWBY_LINKS = process.env.KRABICLAW_RELEASE_CONTEXT === 'ci-full-staging'
 
 type LinkItemInput = {
   id?: string
@@ -114,21 +115,68 @@ test.describe('tenant links page', () => {
       await page.setViewportSize({ width: 390, height: 844 })
       const publicResponse = await page.goto(`${tenantBaseURL}/links`, { waitUntil: 'load' })
       expect(publicResponse?.status()).toBe(200)
+      // The server-rendered link is immediately visible, but its Vue click
+      // handler is not attached until hydration completes. Wait for the
+      // route's initial requests to settle before proving the page-owned POST.
+      await page.waitForLoadState('networkidle')
       await expectHealthyPage(page, errors)
       await expect(page.getByRole('heading', { name: publicTitle })).toBeVisible()
       await expect(page.getByRole('link', { name: new RegExp(bookingLabel) })).toBeVisible()
       await expect(page.getByText(hiddenLabel)).toHaveCount(0)
 
+      const postClickAnalyticsRequests: string[] = []
+      const postClickAnalyticsFailures: string[] = []
+      const tenantOrigin = new URL(tenantBaseURL).origin
+      page.on('request', (request) => {
+        const requestUrl = new URL(request.url())
+        if (
+          request.method() === 'POST'
+          && requestUrl.origin === tenantOrigin
+          && requestUrl.pathname === '/api/analytics/track'
+        ) {
+          postClickAnalyticsRequests.push(`${request.method()} ${request.url()}`)
+        }
+      })
+      page.on('response', (response) => {
+        const responseUrl = new URL(response.url())
+        if (
+          response.request().method() === 'POST'
+          && responseUrl.origin === tenantOrigin
+          && responseUrl.pathname === '/api/analytics/track'
+          && response.status() >= 400
+        ) {
+          postClickAnalyticsFailures.push(`${response.request().method()} ${response.url()} (${response.status()})`)
+        }
+      })
+
+      const conversionRequestPromise = page.waitForRequest(request => {
+        const requestUrl = new URL(request.url())
+        return request.method() === 'POST'
+          && requestUrl.origin === tenantOrigin
+          && requestUrl.pathname === `/api/public/sites/${DEMO_SITE_ID}/conversion-events`
+      })
+      const conversionResponsePromise = page.waitForResponse(response => {
+        const responseUrl = new URL(response.url())
+        return response.request().method() === 'POST'
+          && responseUrl.origin === tenantOrigin
+          && responseUrl.pathname === `/api/public/sites/${DEMO_SITE_ID}/conversion-events`
+      })
+
       await page.getByRole('link', { name: new RegExp(bookingLabel) }).click()
       await expect(page).toHaveURL(`${tenantBaseURL}/links#featured-links`)
+      await expectHealthyPage(page, errors)
+      expect(postClickAnalyticsRequests, 'hash-only navigation must not emit an analytics request').toEqual([])
+      expect(postClickAnalyticsFailures).toEqual([])
 
-      const conversionResponse = await request.post(`${tenantBaseURL}/api/public/sites/${DEMO_SITE_ID}/conversion-events`, {
-        headers: tenantExtraHeaders,
-        data: {
-          event_name: 'link_click',
-          metadata: { link_item_id: clickedItem!.id },
-        },
-      })
+      const conversionRequest = await conversionRequestPromise
+      expect(conversionRequest.postDataJSON()).toEqual(expect.objectContaining({
+        event_name: 'link_click',
+        page_type: 'links',
+        page_path: '/links',
+        cta_destination: '/links#featured-links',
+        metadata: { link_item_id: clickedItem!.id },
+      }))
+      const conversionResponse = await conversionResponsePromise
       expect(conversionResponse.status()).toBe(201)
 
       await saveLinksPage(request, baseURL!, DEMO_SITE_ID, {
@@ -149,7 +197,9 @@ test.describe('tenant links page', () => {
     const errors = collectPageErrors(page)
     await loginAs(request, baseURL!, BLAWBY_OWNER_USER_ID)
     const existing = await request.get(`${baseURL}/api/editor/sites/${BLAWBY_SITE_ID}/links-page`)
-    test.skip(existing.status() === 404, 'NCLS Blawby fixture is not seeded in this environment')
+    if (existing.status() === 404 && !REQUIRE_RELEASE_BLAWBY_LINKS) {
+      test.skip(true, 'NCLS Blawby fixture is not seeded in this environment')
+    }
     expect(existing.status()).toBe(200)
 
     const suffix = alphabeticSuffix()

@@ -110,9 +110,9 @@ test('invoice reasons distinguish renewals from interactive changes', () => {
   assert.equal(classifyStripeInvoicePurchase('subscription_update'), null)
 })
 
-test('scheduled downgrade is lifecycle-only while plan rank changes classify correctly', () => {
-  assert.equal(classifyStripePlanChange('growth', 'managed', true), 'upgrade')
-  assert.equal(classifyStripePlanChange('managed', 'growth', true), 'downgrade')
+test('scheduled downgrade is lifecycle-only while Starter/Growth changes classify correctly', () => {
+  assert.equal(classifyStripePlanChange('growth', 'managed', true), null)
+  assert.equal(classifyStripePlanChange('managed', 'growth', true), null)
   assert.equal(classifyStripePlanChange('growth', 'free', true), 'downgrade')
   assert.equal(classifyStripePlanChange('free', 'growth', false), 'initial_subscription')
   assert.equal(classifyStripePlanChange('free', 'free', false), null)

@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-(--ui-bg) px-6 py-12">
+  <main class="min-h-screen flex items-center justify-center bg-(--ui-bg) px-6 py-12">
     <div class="w-full max-w-xs">
 
       <!-- Header -->
@@ -101,7 +101,7 @@
       </div>
 
     </div>
-  </div>
+  </main>
 </template>
 
 <script setup>

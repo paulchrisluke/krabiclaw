@@ -51,6 +51,7 @@ const isPublicPostResponse = (value: unknown): value is { post: PublicPost } =>
   && typeof value.post.body === 'string'
 
 const route = useRoute()
+const requestEvent = useRequestEvent()
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
@@ -66,7 +67,6 @@ const { data, error } = await useAsyncData(
   async () => {
     let post: PublicPost | null | undefined
     if (import.meta.server) {
-      const requestEvent = useRequestEvent()
       if (!requestEvent) throw createError({ statusCode: 404, statusMessage: 'Post not found' })
       const [{ cloudflareEnv }, { getPublishedPostBySlug }] = await Promise.all([
         import('~/server/utils/api-response'),

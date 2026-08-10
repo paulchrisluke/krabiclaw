@@ -210,7 +210,7 @@ export const PLATFORM_KNOWLEDGE_PAGE_ENTRIES: PlatformKnowledgePageEntry[] = [
     title: 'Pricing Plans',
     path: '/pricing',
     snippet: 'Compare tiers, billing, AI credits, and what each plan unlocks.',
-    body: 'Pricing explains the differences between free and paid plans, billing expectations, managed support, and which features are available at each tier.',
+    body: 'Pricing explains the differences between free and paid plans, billing expectations, Growth priority support, and which features are available at each tier.',
     icon: 'credit-card',
     section: 'Platform',
     keywords: ['pricing', 'plan', 'billing', 'upgrade', 'credits'],

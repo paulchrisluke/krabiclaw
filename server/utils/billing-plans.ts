@@ -1,7 +1,17 @@
 import type Stripe from 'stripe'
 import { createStripeClient } from '~/server/utils/stripe-client'
-import { isManagedServiceEnabled } from './feature-flags.ts'
-import { selectCanonicalStripePrice } from './better-auth-stripe'
+import { getPlanEntitlements } from './billing-entitlements'
+import {
+  assertGrowthStripeCatalogPrices,
+  GROWTH_MONTHLY_AMOUNT_CENTS,
+  selectStripeCatalogPrice,
+} from './stripe-catalog'
+import {
+  isNewSalePlan,
+  isKnownRecurringPlan,
+  NEW_SALE_PLAN_ID,
+  STARTER_PLAN_ID,
+} from '~/shared/billing-model'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -58,7 +68,7 @@ interface MarketingFeature {
 
 // Starter has no Stripe product — it is genuinely free with no subscription.
 const STARTER_PLAN: Plan = {
-  id: 'free',
+  id: STARTER_PLAN_ID,
   name: 'Starter',
   tagline: 'Get your business online for free',
   highlighted: false,
@@ -67,85 +77,37 @@ const STARTER_PLAN: Plan = {
     'Free KrabiClaw ChatGPT app — build & edit your site by chatting',
     'Bookings & ticketed experiences',
     'Email notifications for reservations & bookings',
-    '500 AI credits to start',
+    '500 shared organization AI credits per UTC week',
     'Basic SEO — get found by search & AI',
   ],
-  limits: {
-    aiCredits: 500,
-    customDomain: false,
-    googlePlaces: false,
-    advancedSeo: false,
-    whiteLabel: false,
-    apiAccess: false,
-    support: 'Community',
-  },
+  limits: publicPlanLimits(STARTER_PLAN_ID),
   image: '/krabi-claw-free.png',
   cta: { label: 'Start Free', href: '/signup' },
 }
 
 // CTA labels and hrefs are app config — not Stripe data.
 const PLAN_CTA: Record<string, { label: string; href: string }> = {
-  growth: { label: 'Get Growth', href: '/signup?plan=growth' },
-  managed: { label: 'Get Managed', href: '/signup?plan=managed' },
-  seo_accelerator: {
-    label: 'Get SEO Accelerator',
-    href: '/signup?plan=seo_accelerator',
-  },
-}
-
-const DEFAULT_PLAN_LIMITS: PlanLimits = {
-  aiCredits: 0,
-  customDomain: false,
-  googlePlaces: false,
-  advancedSeo: false,
-  whiteLabel: false,
-  apiAccess: false,
-  support: 'Community',
+  [NEW_SALE_PLAN_ID]: { label: 'Get Growth', href: `/signup?plan=${NEW_SALE_PLAN_ID}` },
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function parseOptionalInt(value?: string): number | undefined {
-  if (!value) return undefined
-  const parsed = parseInt(value, 10)
-  return Number.isFinite(parsed) ? parsed : undefined
-}
-
-function parseLimits(metadata: Record<string, string>): Partial<PlanLimits> {
-  const result: Partial<PlanLimits> = {}
-  if ('ai_credits' in metadata) {
-    if (metadata.ai_credits === 'unlimited' || metadata.ai_credits === '-1') {
-      result.aiCredits = 'unlimited'
-    } else {
-      const parsed = parseOptionalInt(metadata.ai_credits)
-      // Only assign on a successful parse — an explicit `aiCredits: undefined`
-      // here would still override DEFAULT_PLAN_LIMITS.aiCredits in the
-      // `{ ...DEFAULT_PLAN_LIMITS, ...parseLimits(meta) }` spread.
-      if (parsed !== undefined) {
-        result.aiCredits = parsed
-      }
-    }
+function publicPlanLimits(planId: string): PlanLimits {
+  const entitlements = getPlanEntitlements(planId)
+  const aiCredits = entitlements.ai_credits
+  if (aiCredits !== 'unlimited' && typeof aiCredits !== 'number') {
+    throw new Error(`Missing canonical AI-credit entitlement for plan ${planId}`)
   }
-  if ('custom_domain' in metadata || 'custom_domains' in metadata) {
-    result.customDomain =
-      metadata.custom_domain === 'true' || metadata.custom_domains === 'true'
+  return {
+    aiCredits,
+    customDomain: entitlements.custom_domains === true,
+    googlePlaces: entitlements.google_places === true,
+    advancedSeo: entitlements.advanced_seo === true,
+    whiteLabel: entitlements.white_label === true,
+    apiAccess: entitlements.api_access === true,
+    // Support copy is presentation policy, not Stripe metadata.
+    support: planId === NEW_SALE_PLAN_ID ? 'Priority' : 'Community',
   }
-  if ('google_places' in metadata) {
-    result.googlePlaces = metadata.google_places === 'true'
-  }
-  if ('advanced_seo' in metadata) {
-    result.advancedSeo = metadata.advanced_seo === 'true'
-  }
-  if ('white_label' in metadata) {
-    result.whiteLabel = metadata.white_label === 'true'
-  }
-  if ('api_access' in metadata) {
-    result.apiAccess = metadata.api_access === 'true'
-  }
-  if ('support' in metadata) {
-    result.support = metadata.support
-  }
-  return result
 }
 
 function isMarketingFeatureArray(value: ApiValue): value is MarketingFeature[] {
@@ -158,6 +120,132 @@ function isMarketingFeatureArray(value: ApiValue): value is MarketingFeature[] {
         typeof (item as MarketingFeature).name === 'string',
     )
   )
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isPlanPrice(value: unknown): value is PlanPrice {
+  if (!isRecord(value)) return false
+  return (
+    typeof value.id === 'string'
+    && value.id.length > 0
+    && typeof value.amount === 'number'
+    && Number.isFinite(value.amount)
+    && Number.isInteger(value.amount)
+    && value.amount > 0
+    && typeof value.currency === 'string'
+    && value.currency.length > 0
+    && (value.interval === 'month' || value.interval === 'year')
+  )
+}
+
+function isPlanLimits(value: unknown, planId: string): value is PlanLimits {
+  if (!isRecord(value)) return false
+  const validAiCredits = value.aiCredits === 'unlimited'
+    || (typeof value.aiCredits === 'number'
+      && Number.isFinite(value.aiCredits)
+      && Number.isInteger(value.aiCredits)
+      && value.aiCredits >= 0)
+  const expected = publicPlanLimits(planId)
+  return (
+    validAiCredits
+    && typeof value.customDomain === 'boolean'
+    && typeof value.googlePlaces === 'boolean'
+    && typeof value.advancedSeo === 'boolean'
+    && typeof value.whiteLabel === 'boolean'
+    && typeof value.apiAccess === 'boolean'
+    && typeof value.support === 'string'
+    && value.aiCredits === expected.aiCredits
+    && value.customDomain === expected.customDomain
+    && value.googlePlaces === expected.googlePlaces
+    && value.advancedSeo === expected.advancedSeo
+    && value.whiteLabel === expected.whiteLabel
+    && value.apiAccess === expected.apiAccess
+    && value.support === expected.support
+  )
+}
+
+function isPlan(value: unknown): value is Plan {
+  if (!isRecord(value)) return false
+  const id = value.id
+  const hasPublicId = id === STARTER_PLAN_ID || isNewSalePlan(id)
+  const optionalString = (key: 'badge' | 'image') =>
+    !(key in value) || typeof value[key] === 'string'
+
+  return (
+    hasPublicId
+    && typeof value.name === 'string'
+    && typeof value.tagline === 'string'
+    && typeof value.highlighted === 'boolean'
+    && optionalString('badge')
+    && optionalString('image')
+    && Array.isArray(value.prices)
+    && value.prices.every(isPlanPrice)
+    && Array.isArray(value.features)
+    && value.features.every((feature) => typeof feature === 'string')
+    && isPlanLimits(value.limits, id as string)
+    && isRecord(value.cta)
+    && typeof value.cta.label === 'string'
+    && typeof value.cta.href === 'string'
+  )
+}
+
+function parseCachedPlans(value: unknown): Plan[] {
+  if (!Array.isArray(value) || !value.every(isPlan)) {
+    throw new BillingPlansError(
+      'BILLING_PLANS_CACHE_INVALID',
+      'Billing plans cache contains an invalid response',
+    )
+  }
+
+  const ids = value.map((plan) => plan.id)
+  if (new Set(ids).size !== ids.length) {
+    throw new BillingPlansError(
+      'BILLING_PLANS_CACHE_INVALID',
+      'Billing plans cache contains duplicate plan IDs',
+    )
+  }
+
+  const expectedIds: readonly string[] = [STARTER_PLAN_ID, NEW_SALE_PLAN_ID]
+  if (ids.length !== expectedIds.length || ids.some((id) => !expectedIds.includes(id))) {
+    throw new BillingPlansError(
+      'BILLING_PLANS_CACHE_INVALID',
+      'Billing plans cache must contain exactly Starter and Growth',
+    )
+  }
+
+  const starter = value.find((plan) => plan.id === STARTER_PLAN_ID)
+  const growth = value.find((plan) => plan.id === NEW_SALE_PLAN_ID)
+  if (!starter || !growth || starter.prices.length !== 0) {
+    throw new BillingPlansError(
+      'BILLING_PLANS_CACHE_INVALID',
+      'Billing plans cache contains an invalid Starter price set',
+    )
+  }
+  const monthlyPrices = growth.prices.filter((price) => price.interval === 'month')
+  const annualPrices = growth.prices.filter((price) => price.interval === 'year')
+  const monthly = monthlyPrices[0]
+  const annual = annualPrices[0]
+  if (
+    monthlyPrices.length !== 1
+    || annualPrices.length > 1
+    || growth.prices.length !== monthlyPrices.length + annualPrices.length
+    || monthly === undefined
+    || monthly.amount !== GROWTH_MONTHLY_AMOUNT_CENTS
+    || monthly.currency.toLowerCase() !== 'usd'
+    || (annual !== undefined && (annual.amount <= 0 || annual.currency.toLowerCase() !== 'usd'))
+  ) {
+    throw new BillingPlansError(
+      'BILLING_PLANS_CACHE_INVALID',
+      'Billing plans cache contains an invalid Growth price set',
+    )
+  }
+
+  // Keep the public response order stable even if a valid cache was written
+  // by an older worker that serialized plans in a different order.
+  return [starter, growth]
 }
 
 // ── Stripe fetch ─────────────────────────────────────────────────────────────
@@ -206,16 +294,28 @@ export async function fetchStripeProducts(
     startingAfter = prices.data[prices.data.length - 1]?.id
   }
 
-  const managedServiceEnabled = isManagedServiceEnabled(env)
-  const CONCIERGE_PLAN_IDS = new Set(['managed', 'seo_accelerator'])
-
   const plans: Plan[] = []
+
+  const productsByNewSalePlan = new Map<string, Stripe.Product[]>()
+  for (const product of products) {
+    const planId = product.metadata?.plan_id
+    if (!isNewSalePlan(planId)) continue
+    const matching = productsByNewSalePlan.get(planId) ?? []
+    matching.push(product)
+    productsByNewSalePlan.set(planId, matching)
+  }
+  for (const [planId, matching] of productsByNewSalePlan) {
+    if (matching.length <= 1) continue
+    throw new BillingPlansError(
+      'BILLING_PLANS_INVALID_CATALOG',
+      `Stripe has multiple active products for plan ${planId}: ${matching.map(product => product.id).sort().join(', ')}`,
+    )
+  }
 
   for (const product of products) {
     const meta = (product.metadata ?? {}) as Record<string, string>
     const planId = meta.plan_id
-    if (!planId || planId === 'free') continue
-    if (CONCIERGE_PLAN_IDS.has(planId) && !managedServiceEnabled) continue
+    if (!planId || !isKnownRecurringPlan(planId) || !isNewSalePlan(planId)) continue
 
     const productWithMarketing = product as Stripe.Product & {
       marketing_features?: ApiValue
@@ -229,8 +329,9 @@ export async function fetchStripeProducts(
     let monthly: Stripe.Price | null
     let yearly: Stripe.Price | null
     try {
-      monthly = selectCanonicalStripePrice(product, priceLookup[product.id] ?? [], 'month')
-      yearly = selectCanonicalStripePrice(product, priceLookup[product.id] ?? [], 'year')
+      monthly = selectStripeCatalogPrice(product, priceLookup[product.id] ?? [], 'month')
+      yearly = selectStripeCatalogPrice(product, priceLookup[product.id] ?? [], 'year')
+      assertGrowthStripeCatalogPrices(monthly, yearly)
     } catch (error) {
       throw new BillingPlansError(
         'BILLING_PLANS_INVALID_CATALOG',
@@ -242,12 +343,6 @@ export async function fetchStripeProducts(
       throw new BillingPlansError(
         'BILLING_PLANS_INVALID_CATALOG',
         `Stripe product ${product.id} for plan ${planId} is missing a canonical monthly price`,
-      )
-    }
-    if (yearly && yearly.currency !== monthly.currency) {
-      throw new BillingPlansError(
-        'BILLING_PLANS_INVALID_CATALOG',
-        `Stripe product ${product.id} has monthly and annual prices in different currencies`,
       )
     }
     const prices: PlanPrice[] = [monthly, yearly]
@@ -271,7 +366,7 @@ export async function fetchStripeProducts(
         return (rank[a.interval] ?? 0) - (rank[b.interval] ?? 0)
       }),
       features,
-      limits: { ...DEFAULT_PLAN_LIMITS, ...parseLimits(meta) },
+      limits: publicPlanLimits(planId),
       cta: PLAN_CTA[planId] ?? { label: 'Get started', href: '/signup' },
     })
   }
@@ -282,6 +377,13 @@ export async function fetchStripeProducts(
     return aPrice - bPrice
   })
 
+  if (plans.length !== 1 || plans[0]?.id !== NEW_SALE_PLAN_ID) {
+    throw new BillingPlansError(
+      'BILLING_PLANS_INVALID_CATALOG',
+      'Stripe public catalog must contain exactly one active Growth product',
+    )
+  }
+
   return [STARTER_PLAN, ...plans]
 }
 
@@ -289,10 +391,10 @@ export async function fetchStripeProducts(
 
 const PLANS_CACHE_TTL_SECONDS = 3600
 
-// Cache key includes the managed-service flag state so toggling it doesn't
-// require waiting out the TTL to see hidden/restored concierge plans.
-function plansCacheKey(env: EnvWithSiteCache): string {
-  return `stripe-plans:v2:${isManagedServiceEnabled(env) ? 'ms1' : 'ms0'}`
+// The customer-facing catalog has one sales model. A versioned key prevents
+// stale flag-specific snapshots from the retired toggle from being served.
+function plansCacheKey(_env: EnvWithSiteCache): string {
+  return 'stripe-plans:v4'
 }
 
 // Single-instance in-flight guard — prevents a cache stampede where multiple
@@ -318,10 +420,7 @@ export async function getCachedPlans(env: EnvWithSiteCache): Promise<Plan[]> {
         } catch (error) {
           throw new BillingPlansError('BILLING_PLANS_CACHE_INVALID', 'Billing plans cache contains invalid data', error)
         }
-        if (!Array.isArray(parsed)) {
-          throw new BillingPlansError('BILLING_PLANS_CACHE_INVALID', 'Billing plans cache contains an invalid response')
-        }
-        return parsed as Plan[]
+        return parseCachedPlans(parsed)
       }
     }
 

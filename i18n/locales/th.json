@@ -93,49 +93,6 @@
       "order_now": "สั่งเลย",
       "reserve": "จองเลย"
     },
-    "upgrade": {
-      "pro_feature": "ฟีเจอร์พิเศษ",
-      "default_description": "ฟีเจอร์นี้ต้องการแผนแบบชำระเงิน",
-      "close_modal": "ปิด",
-      "get_pro": "อัปเกรด",
-      "features": {
-        "qa-writeback": {
-          "title": "ส่งคำถาม",
-          "description": "ให้แขกส่งคำถามโดยตรงจากเว็บไซต์ของคุณ รวมอยู่ในแผน Growth"
-        },
-        "custom-domain": {
-          "title": "โดเมนของคุณเอง",
-          "description": "เชื่อมต่อโดเมนของคุณเอง (yourdomain.com) แทนโดเมน krabiclaw.com รวมอยู่ในแผน Growth"
-        },
-        "add-location": {
-          "title": "เพิ่มสาขาที่สอง",
-          "description": "จัดการหลายสาขาภายใต้แบรนด์เดียว แต่ละสาขามีเมนู รีวิว และเวลาทำการของตนเอง รวมอยู่ในแผน Managed"
-        },
-        "google-places-import": {
-          "title": "นำเข้าจาก Google Places",
-          "description": "นำเข้าเวลาทำการ ที่อยู่ คะแนน และรีวิวจาก Google Places รวมอยู่ในแผน Growth"
-        },
-        "google-places-sync": {
-          "title": "นำเข้าข้อมูลจาก Google Places",
-          "description": "รีเฟรชข้อมูลสถานที่ที่รองรับจาก Google Places พร้อมแก้ไขข้อมูลด้วยตัวเองในตัวแก้ไขได้ รวมอยู่ในแผน Growth"
-        },
-        "remove-branding": {
-          "title": "ลบโลโก้ KrabiClaw",
-          "description": "ลบแถบ \"ขับเคลื่อนโดย krabiclaw.com\" ออกจากเว็บไซต์ของคุณ รวมอยู่ในแผน Managed"
-        }
-      },
-      "bullets": {
-        "places_1": "นำเข้าข้อมูลสถานที่ที่รองรับจาก Google Places",
-        "places_2": "ยังคงสามารถแก้ไขด้วยตัวเองได้ในตัวแก้ไขเนื้อหา",
-        "places_3": "รีเฟรชเวลาทำการ คะแนน ที่อยู่ และรีวิว",
-        "domain_1": "เชื่อมต่อโดเมนของคุณเอง",
-        "domain_2": "ใช้ใบรับรอง HTTPS ที่จัดการให้",
-        "domain_3": "คง krabiclaw.com subdomain ของคุณไว้",
-        "default_1": "ปลดล็อกฟีเจอร์นี้",
-        "default_2": "จัดการได้จากแดชบอร์ด",
-        "default_3": "คงการตั้งค่าเว็บไซต์ปัจจุบันของคุณ"
-      }
-    },
     "about": {
       "our_story": "เรื่องราวของเรา",
       "placeholder": "ประสบการณ์แท้จริง",
@@ -147,12 +104,12 @@
     "qa": {
       "title": "ถาม-ตอบ",
       "subtitle": "คำถามที่พบบ่อย",
-      "guest": "ผู้เข้าชม",
+      "guest": "แขก",
       "asked_by": "ถามโดย {author} • {date}",
       "response_from_owner": "การตอบกลับจากเจ้าของ • {date}",
       "no_answer": "ยังไม่มีคำตอบ",
       "empty_title": "ยังไม่มีคำถาม",
-      "empty_prompt": "คำถามและคำตอบจากทีมงานจะแสดงที่นี่",
+      "empty_prompt": "มีคำถามไหม? ถามเราได้เลย เรายินดีช่วยเสมอ",
       "view_all": "ดูคำถามทั้งหมด"
     },
     "location": {
@@ -219,8 +176,12 @@
       "back_to": "กลับไปยัง {title}",
       "title": "คำถามที่พบบ่อย",
       "subtitle": "ถาม-ตอบ · {location}",
+      "dont_see": "ไม่เห็นคำถามของคุณใช่ไหม?",
+      "ask_us": "ถามเราได้เลย เดี๋ยวคำถามจะขึ้นที่นี่",
+      "ask_question_pro": "ถามคำถาม · Pro",
+      "ask_question": "ถามคำถาม →",
       "no_questions_title": "ยังไม่มีคำถาม",
-      "no_questions_desc": "คำถามและคำตอบจะแสดงที่นี่เมื่อทีมงานเพิ่มข้อมูล",
+      "no_questions_desc": "เป็นคนแรกที่ถาม ทีมงานของเรามักตอบกลับภายในไม่กี่ชั่วโมง",
       "helpful": "คนที่พบว่ามีประโยชน์",
       "awaiting_answer": "รอคำตอบจากทีมงาน",
       "asked_by": "ถามโดย {author}",

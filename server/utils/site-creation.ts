@@ -3,19 +3,40 @@
 import { seedNewSite } from '~/server/utils/site-template'
 import { createSystemSubdomain } from '~/server/utils/domains'
 import { getOrganizationBillingStatus, setSiteEntitlementsFromPlan, type BillingEnv } from '~/server/utils/billing'
-import { execute, executeBatch, queryAll, queryFirst } from '~/server/db'
+import { execute, queryAll, queryFirst } from '~/server/db'
 import { ALL_VERTICALS, type SiteVertical } from '~/utils/vertical-copy'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { ensureSiteTeam } from '~/server/utils/member-access'
+import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
+import { getOrgAdapter } from 'better-auth/plugins'
 
-type SetupEnv = Parameters<typeof createSystemSubdomain>[0]
+type SetupEnv = CloudflareEnv
 
 interface SubdomainRow { subdomain: string }
 interface UserOrganizationSiteRow {
-  organization_id: string
-  member_role: string
   site_id: string | null
   onboarding_status: string | null
+}
+
+type OrganizationAdapter = ReturnType<typeof getOrgAdapter>
+const SITE_CREATION_MARKER_KEY = '__krabiclaw_site_creation_marker'
+
+interface CreateOrganizationApi {
+  createOrganization(_input: {
+    body: {
+      name: string
+      slug: string
+      userId: string
+      keepCurrentActiveOrganization: true
+      metadata: Record<string, string>
+    }
+  }): Promise<{ id: string }>
+}
+
+async function organizationAdapter(env: CloudflareEnv): Promise<OrganizationAdapter> {
+  const auth = createAuth(env)
+  const context = await auth.$context
+  return getOrgAdapter(context as Parameters<typeof getOrgAdapter>[0], {})
 }
 
 // Re-exported for existing callers (endpoint validation, tests) — the
@@ -51,7 +72,8 @@ export async function runSiteCreation(
   env: SetupEnv,
   db: D1Database,
   userId: string,
-  params: { name: string; subdomain: string; vertical: SiteVertical }
+  params: { name: string; subdomain: string; vertical: SiteVertical },
+  options?: { beforeSiteMutation?: (_organizationId: string) => Promise<void> },
 ): Promise<SiteCreationResult> {
   const { name, vertical } = params
   const normalizedSubdomain = params.subdomain.toLowerCase()
@@ -68,7 +90,8 @@ export async function runSiteCreation(
     const themeId = resolveThemeId(vertical)
     const storedVertical = toStoredVertical(vertical)
 
-    const { organizationId, existingRetrySiteId } = await resolveCreationOrganization(db, userId, name)
+    const { organizationId, existingRetrySiteId } = await resolveCreationOrganization(env, db, userId, name)
+    await options?.beforeSiteMutation?.(organizationId)
     if (existingRetrySiteId) {
       // A retry (pending/failed site from a previous attempt) may have been created
       // under a stale default (theme_id='saya-theme-v1', vertical='restaurant') —
@@ -76,7 +99,7 @@ export async function runSiteCreation(
       siteId = existingRetrySiteId
       await execute(db, `UPDATE sites SET theme_id = ?, vertical = ?, updated_at = ? WHERE id = ?`,
         [themeId, storedVertical, new Date().toISOString(), existingRetrySiteId])
-      await ensureSiteTeam(db, { organizationId, siteId: existingRetrySiteId, name })
+      await ensureSiteTeam(db, { env, organizationId, siteId: existingRetrySiteId, name })
       return await performSeeding(env, db, existingRetrySiteId, organizationId, name, vertical, '')
     }
 
@@ -94,7 +117,7 @@ export async function runSiteCreation(
       }
       throw siteError
     }
-    await ensureSiteTeam(db, { organizationId, siteId, name })
+    await ensureSiteTeam(db, { env, organizationId, siteId, name })
 
     return await performSeeding(env, db, siteId, organizationId, name, vertical, normalizedSubdomain)
 
@@ -108,74 +131,178 @@ export async function runSiteCreation(
   }
 }
 
-async function resolveCreationOrganization(
+export async function resolveCreationOrganization(
+  env: CloudflareEnv,
   db: D1Database,
   userId: string,
   name: string
 ): Promise<{ organizationId: string; existingRetrySiteId?: string }> {
-  const rows = await queryAll<UserOrganizationSiteRow>(db, `
-    SELECT
-      o.id AS organization_id,
-      m.role AS member_role,
-      s.id AS site_id,
-      s.onboarding_status
-    FROM organization o
-    JOIN member m ON o.id = m.organizationId
-    LEFT JOIN sites s ON s.organization_id = o.id
-      WHERE m.userId = ?
-    ORDER BY o.createdAt ASC
-  `, [userId])
+  const adapter = await organizationAdapter(env)
+  const organizations = (await adapter.listOrganizations(userId))
+    .slice()
+    .sort((left, right) => timestampValue(left.createdAt) - timestampValue(right.createdAt))
 
-  const orgs = rows ?? []
-  const retryOrg = orgs.find(row =>
-    row.site_id && (row.onboarding_status === 'pending' || row.onboarding_status === 'failed')
-  )
-  if (retryOrg?.site_id) {
-    return { organizationId: retryOrg.organization_id, existingRetrySiteId: retryOrg.site_id }
+  const snapshots: Array<{
+    organizationId: string
+    role: string
+    sites: UserOrganizationSiteRow[]
+  }> = []
+
+  for (const organization of organizations) {
+    const member = await adapter.findMemberByOrgId({ userId, organizationId: organization.id })
+    if (!member) continue
+
+    const sites = await queryAll<UserOrganizationSiteRow>(db, `
+      SELECT id AS site_id, onboarding_status
+      FROM sites
+      WHERE organization_id = ?
+      ORDER BY created_at ASC
+    `, [organization.id])
+    snapshots.push({
+      organizationId: organization.id,
+      role: String(member.role),
+      sites: sites ?? [],
+    })
   }
 
-  const emptyOwnerOrg = orgs.find(row => !row.site_id && row.member_role === 'owner')
+  // Keep the original global priority: any owned pending/failed site is the
+  // retry target before an empty-org rename or active-org multi-site reuse.
+  const retrySnapshot = snapshots.find(snapshot => snapshot.role === 'owner'
+    && snapshot.sites.some(site => site.site_id
+      && (site.onboarding_status === 'pending' || site.onboarding_status === 'failed')))
+  const retrySite = retrySnapshot?.sites.find(site =>
+    site.site_id && (site.onboarding_status === 'pending' || site.onboarding_status === 'failed')
+  )
+  if (retrySnapshot && retrySite?.site_id) {
+    return { organizationId: retrySnapshot.organizationId, existingRetrySiteId: retrySite.site_id }
+  }
+
+  const emptyOwnerOrg = snapshots.find(snapshot => snapshot.role === 'owner' && snapshot.sites.length === 0)
   if (emptyOwnerOrg) {
-    await execute(db, `UPDATE organization SET name = ?, slug = ? WHERE id = ?`,
-      [name, await uniqueOrganizationSlug(db, name), emptyOwnerOrg.organization_id])
-    return { organizationId: emptyOwnerOrg.organization_id }
+    await adapter.updateOrganization(emptyOwnerOrg.organizationId, {
+      name,
+      slug: await uniqueOrganizationSlug(adapter, name),
+    })
+    return { organizationId: emptyOwnerOrg.organizationId }
   }
 
   // Multi-site: if the user already owns an org with active sites, add the new site there.
   // The unique-per-org constraint was removed pre-squash (was migration 0017); now part of the 0001_initial.sql baseline.
-  const existingOwnerOrg = orgs.find(row => row.member_role === 'owner' && row.site_id && row.onboarding_status === 'active')
+  const existingOwnerOrg = snapshots.find(snapshot => snapshot.role === 'owner'
+    && snapshot.sites.some(site => site.onboarding_status === 'active'))
   if (existingOwnerOrg) {
-    return { organizationId: existingOwnerOrg.organization_id }
+    return { organizationId: existingOwnerOrg.organizationId }
   }
 
-  return await createOrganizationForSite(db, userId, name)
+  return await createOrganizationForSite(env, userId, name)
 }
 
-export async function createOrganizationForSite(db: D1Database, userId: string, name: string) {
-  const now = Math.floor(Date.now() / 1000)
-  const organizationId = `org-${crypto.randomUUID()}`
-  const slug = await uniqueOrganizationSlug(db, name)
-  await executeBatch(db, [
-    {
-      query: `INSERT INTO organization (id, name, slug, createdAt) VALUES (?, ?, ?, ?)`,
-      params: [organizationId, name, slug, now],
-    },
-    {
-      query: `INSERT INTO member (id, organizationId, userId, role, createdAt) VALUES (?, ?, ?, 'owner', ?)`,
-      params: [`member-${crypto.randomUUID()}`, organizationId, userId, now],
-    },
-  ])
-  return { organizationId }
+export async function createOrganizationForSite(env: CloudflareEnv, userId: string, name: string) {
+  const adapter = await organizationAdapter(env)
+  const slug = await uniqueOrganizationSlug(adapter, name)
+  const auth = createAuth(env)
+  const organizationApi = auth.api as unknown as CreateOrganizationApi
+  const creationMarker = crypto.randomUUID()
+  try {
+    const organization = await organizationApi.createOrganization({
+      body: {
+        name,
+        slug,
+        userId,
+        keepCurrentActiveOrganization: true,
+        metadata: { [SITE_CREATION_MARKER_KEY]: creationMarker },
+      },
+    })
+    const created = await adapter.findOrganizationBySlug(slug)
+    if (created?.id === organization.id) {
+      const metadata = organizationMetadata(created.metadata)
+      if (metadata[SITE_CREATION_MARKER_KEY] === creationMarker) {
+        Reflect.deleteProperty(metadata, SITE_CREATION_MARKER_KEY)
+        await adapter.updateOrganization(organization.id, {
+          metadata,
+        }).catch((cleanupError) => {
+          console.error('Failed to clear site creation marker', {
+            organizationId: organization.id,
+            error: cleanupError instanceof Error ? cleanupError : new Error(String(cleanupError)),
+          })
+        })
+      }
+    }
+    return { organizationId: organization.id }
+  } catch (error) {
+    // Better Auth creates the organization before adding its owner member.
+    // If that second step fails, locate the just-created unique slug and
+    // remove it only when the expected owner member is absent. Never delete an
+    // organization that already has this user as its owner.
+    const partial = await adapter.findOrganizationBySlug(slug).catch(() => null)
+    if (partial) {
+      const expectedOwner = await adapter.findMemberByOrgId({
+        userId,
+        organizationId: partial.id,
+      }).catch(() => null)
+      const metadata = organizationMetadata(partial.metadata)
+      if (metadata[SITE_CREATION_MARKER_KEY] === creationMarker
+        && (!expectedOwner || String(expectedOwner.role) !== 'owner')) {
+        await adapter.deleteOrganization(partial.id).catch((cleanupError) => {
+          console.error('Failed to clean up partially-created organization', {
+            organizationId: partial.id,
+            error: cleanupError instanceof Error ? cleanupError : new Error(String(cleanupError)),
+          })
+        })
+      }
+    }
+    throw error
+  }
 }
 
-async function uniqueOrganizationSlug(db: D1Database, name: string) {
+function organizationMetadata(value: unknown): Record<string, unknown> {
+  if (isMetadataRecord(value)) return { ...value }
+  if (typeof value !== 'string') return {}
+  try {
+    const parsed: unknown = JSON.parse(value)
+    return isMetadataRecord(parsed) ? { ...parsed } : {}
+  } catch {
+    return {}
+  }
+}
+
+function isMetadataRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+async function uniqueOrganizationSlug(adapter: OrganizationAdapter, name: string) {
   const base = slugifyName(name)
   for (let i = 0; i < 20; i++) {
     const slug = i === 0 ? base : `${base}-${i + 1}`
-    const existing = await queryFirst<{ id: string }>(db, `SELECT id FROM organization WHERE slug = ? LIMIT 1`, [slug])
+    const existing = await adapter.findOrganizationBySlug(slug)
     if (!existing) return slug
   }
   return `${base}-${crypto.randomUUID().slice(0, 8)}`
+}
+
+function timestampValue(value: Date | string | number): number {
+  if (value instanceof Date) {
+    const timestamp = value.getTime()
+    return Number.isNaN(timestamp) ? Number.POSITIVE_INFINITY : timestamp
+  }
+  if (typeof value === 'number') return Number.isFinite(value) ? value : Number.POSITIVE_INFINITY
+  const parsed = Date.parse(value)
+  return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed
+}
+
+export async function findOldestOwnedOrganization(
+  env: CloudflareEnv,
+  userId: string,
+): Promise<string | null> {
+  const adapter = await organizationAdapter(env)
+  const organizations = (await adapter.listOrganizations(userId))
+    .slice()
+    .sort((left, right) => timestampValue(left.createdAt) - timestampValue(right.createdAt))
+  for (const organization of organizations) {
+    const member = await adapter.findMemberByOrgId({ userId, organizationId: organization.id })
+    if (member && String(member.role) === 'owner') return organization.id
+  }
+  return null
 }
 
 function slugifyName(name: string) {
@@ -210,14 +337,6 @@ async function performSeeding(
 
     await execute(db, `UPDATE sites SET onboarding_status = 'active', updated_at = ? WHERE id = ?`, [now, siteId])
 
-    // Surface whether another site in this org is already on a paid plan so the
-    // caller can offer the organization owner the Better Auth Stripe upgrade flow.
-    const existingPaidSite = await queryFirst<{ plan: string }>(db, `
-      SELECT sb.plan FROM site_billing sb
-      WHERE sb.organization_id = ? AND sb.site_id != ? AND sb.status = 'active' AND sb.plan != 'free'
-      ORDER BY sb.updated_at DESC LIMIT 1
-    `, [organizationId, siteId])
-
     return {
       status: 200,
       data: {
@@ -225,7 +344,6 @@ async function performSeeding(
         organizationId,
         subdomain: resolvedSubdomain,
         message: 'Site created successfully',
-        offerSubscribePlan: existingPaidSite?.plan ?? null,
       }
     }
 

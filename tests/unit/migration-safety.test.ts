@@ -105,6 +105,44 @@ describe('migration safety', () => {
     ])
   })
 
+  it('does not let a later rebuild borrow assertions from an earlier identical drop', () => {
+    const validatedRebuild = `
+      CREATE TABLE __um_backup_business_locations AS SELECT * FROM business_locations;
+      CREATE TABLE __new_business_locations (id text primary key);
+      INSERT INTO __new_business_locations SELECT * FROM __um_backup_business_locations;
+      DROP TABLE business_locations;
+      ALTER TABLE __new_business_locations RENAME TO business_locations;
+      CREATE TABLE __um_assert_0078 (violation text not null check (violation = ''));
+      INSERT INTO __um_assert_0078 (violation)
+      SELECT 'business_locations_backup_count_mismatch'
+      WHERE (SELECT COUNT(*) FROM __um_backup_business_locations) != (SELECT COUNT(*) FROM business_locations);
+      INSERT INTO __um_assert_0078 (violation)
+      SELECT 'fk failed'
+      WHERE EXISTS (SELECT 1 FROM pragma_foreign_key_check);
+      DROP TABLE __um_assert_0078;
+      DROP TABLE __um_backup_business_locations;
+    `
+    const unvalidatedRebuild = `
+      CREATE TABLE __um_backup_business_locations AS SELECT * FROM business_locations;
+      CREATE TABLE __new_business_locations (id text primary key);
+      INSERT INTO __new_business_locations SELECT * FROM __um_backup_business_locations;
+      DROP TABLE business_locations;
+      ALTER TABLE __new_business_locations RENAME TO business_locations;
+      DROP TABLE __um_backup_business_locations;
+    `
+
+    assert.deepEqual(
+      findUnsafeMigrationStatements(
+        '0110_unvalidated.sql',
+        unvalidatedRebuild,
+        `${validatedRebuild}\n${unvalidatedRebuild}`,
+      ),
+      [
+        'DROP TABLE business_locations must be a bounded rebuild with backup, restore, count assertion, foreign_key_check, and post-assert backup cleanup',
+      ],
+    )
+  })
+
   it('allows non-destructive trigger migrations', () => {
     assert.deepEqual(findUnsafeMigrationStatements('0072_safe.sql', 'CREATE TRIGGER media_guard BEFORE INSERT ON media_assets BEGIN SELECT 1; END;'), [])
   })

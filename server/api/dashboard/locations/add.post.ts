@@ -217,9 +217,9 @@ export default defineEventHandler(async (event) => {
   }
 
   if (chargeSearch) {
-    await chargeFlatCredits(db, organizationId, { siteId, action: 'google_places_search' }).catch(() => {})
+    await chargeFlatCredits(db, organizationId, { siteId, action: 'google_places_search' })
   }
-  await chargeFlatCredits(db, organizationId, { siteId, action: 'google_places_details' }).catch(() => {})
+  await chargeFlatCredits(db, organizationId, { siteId, action: 'google_places_details' })
 
   const baseSlug = slugify(place.name).slice(0, 50)
   const slug = await uniqueLocationSlug(db, siteId, baseSlug)

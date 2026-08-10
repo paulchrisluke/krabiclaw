@@ -1,50 +1,23 @@
 import type Stripe from 'stripe'
 import { createError } from 'h3'
-import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { betterAuthTimestampToIso } from '~/server/utils/better-auth-timestamps'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
-import { getOrgAdapter } from 'better-auth/plugins'
+import { getOrgAdapter, hasPermission } from 'better-auth/plugins'
 import { getPlanEntitlements, type EntitlementsMap } from '~/server/utils/billing-entitlements'
-import { getEffectiveAccessPlan } from '~/server/utils/billing-access'
+import { getOrganizationBillingProjection } from '~/server/utils/organization-billing'
 import { createStripeClient } from '~/server/utils/stripe-client'
-
-interface SiteBillingRow {
-  stripe_subscription_id: string | null
-  stripe_subscription_item_id: string | null
-  plan: string | null
-  status: string | null
-  current_period_end: string | null
-  cancel_at_period_end: number | null
-}
-
-interface OrgBillingRow {
-  stripe_customer_id: string | null
-  stripe_subscription_id: string | null
-  payment_status: string | null
-  paid_through: string | null
-  past_due_since: string | null
-}
-
-interface BetterAuthSubscriptionRow {
-  plan: string
-  referenceId: string
-  stripeCustomerId: string | null
-  stripeSubscriptionId: string | null
-  status: string
-  paymentStatus: string | null
-  paidThrough: string | null
-  pastDueSince: string | null
-  periodEnd: number | string | null
-  cancelAtPeriodEnd: number | null
-}
+import { organizationAccessControl, organizationRoles } from '~/utils/organization-access'
+import { assertNewSalePlan } from '~/shared/billing-model'
+import {
+  assertGrowthStripeCatalogPrices,
+  resolveStripeCatalogPrice,
+  selectStripeCatalogPrice,
+} from '~/server/utils/stripe-catalog'
 
 interface EntitlementRow {
   key: string
   value: string
-}
-
-interface MembershipRow {
-  role: string
 }
 
 export interface BillingEnv {
@@ -67,6 +40,11 @@ export interface SiteBillingStatus {
 export type BillingStatus = SiteBillingStatus
 export type OrganizationEntitlement = { id: string; site_id: string; organization_id: string; key: string; value: string; source: string; created_at: string; updated_at: string }
 
+const billingAuthorizationOptions = {
+  ac: organizationAccessControl,
+  roles: organizationRoles,
+} as const
+
 export function getStripe(env: BillingEnv): Stripe {
   if (!env.STRIPE_SECRET_KEY) throw new Error('Stripe secret key not configured')
   return createStripeClient(env.STRIPE_SECRET_KEY)
@@ -82,89 +60,33 @@ export async function getSiteBillingStatus(
   const site = await queryFirst<{ organization_id: string }>(db, `
     SELECT organization_id FROM sites WHERE id = ? LIMIT 1
   `, [siteId])
-  const subscription = site ? await getBetterAuthSubscription(db, site.organization_id) : null
-
-  const siteBilling = await queryFirst<SiteBillingRow>(db, `
-    SELECT stripe_subscription_id, stripe_subscription_item_id, plan, status,
-           current_period_end, cancel_at_period_end
-    FROM site_billing WHERE site_id = ? LIMIT 1
-  `, [siteId])
-
-  // Customer and payment projection live at org level.
-  const orgBilling = await queryFirst<OrgBillingRow>(db, `
-    SELECT ob.stripe_customer_id, ob.stripe_subscription_id, ob.payment_status, ob.paid_through, ob.past_due_since
-    FROM sites s
-    JOIN organization_billing ob ON ob.organization_id = s.organization_id
-    WHERE s.id = ? LIMIT 1
-  `, [siteId])
-
-  const accessPlan = subscription
-      ? getEffectiveAccessPlan({
-        plan: subscription.plan,
-        status: subscription.status,
-        paymentStatus: subscription.paymentStatus,
-        paidThrough: subscription.paidThrough ?? orgBilling?.paid_through,
-        pastDueSince: subscription.pastDueSince ?? orgBilling?.past_due_since,
-        periodEnd: subscription.periodEnd,
-      })
-    : null
-
-  const legacyAccessPlan = 'free'
-
-  return {
-    plan: accessPlan ?? legacyAccessPlan,
-    stripeCustomerId: subscription?.stripeCustomerId ?? orgBilling?.stripe_customer_id ?? undefined,
-    stripeSubscriptionId: subscription?.stripeSubscriptionId ?? orgBilling?.stripe_subscription_id ?? siteBilling?.stripe_subscription_id ?? undefined,
-    subscriptionStatus: subscription?.status ?? siteBilling?.status ?? undefined,
-    paymentStatus: subscription?.paymentStatus ?? orgBilling?.payment_status ?? undefined,
-    currentPeriodEnd: subscription?.periodEnd
-      ? betterAuthTimestampToIso(subscription.periodEnd, 'subscription.periodEnd')
-      : siteBilling?.current_period_end ?? undefined,
-    cancelAtPeriodEnd: subscription
-      ? Boolean(subscription.cancelAtPeriodEnd)
-      : siteBilling?.cancel_at_period_end ? Boolean(siteBilling.cancel_at_period_end) : undefined,
-    entitlements: getPlanEntitlements(accessPlan ?? legacyAccessPlan),
+  if (!site) {
+    return {
+      plan: 'free',
+      subscriptionStatus: 'free',
+      paymentStatus: 'unknown',
+      entitlements: getPlanEntitlements('free'),
+    }
   }
+  return getOrganizationBillingStatus(env, db, site.organization_id)
 }
 
-// Backward-compat shim — org-level callers still work during transition
 export async function getOrganizationBillingStatus(
   env: BillingEnv,
   db: D1Database,
   organizationId: string,
 ): Promise<SiteBillingStatus> {
-  const site = await queryFirst<{ id: string }>(db, `SELECT id FROM sites WHERE organization_id = ? ORDER BY id LIMIT 1`, [organizationId])
-  if (site) return getSiteBillingStatus(env, db, site.id)
-
-  const subscription = await getBetterAuthSubscription(db, organizationId)
-  // No site yet — return bare org customer info
-  const orgBilling = await queryFirst<OrgBillingRow>(db, `
-    SELECT stripe_customer_id, payment_status, paid_through, past_due_since
-    FROM organization_billing WHERE organization_id = ? LIMIT 1
-  `, [organizationId])
-
-  const accessPlan = subscription
-      ? getEffectiveAccessPlan({
-        plan: subscription.plan,
-        status: subscription.status,
-        paymentStatus: subscription.paymentStatus,
-        paidThrough: subscription.paidThrough ?? orgBilling?.paid_through,
-        pastDueSince: subscription.pastDueSince ?? orgBilling?.past_due_since,
-        periodEnd: subscription.periodEnd,
-      })
-    : 'free'
-
+  void env
+  const projection = await getOrganizationBillingProjection(db, organizationId)
   return {
-    plan: accessPlan,
-    stripeCustomerId: subscription?.stripeCustomerId ?? orgBilling?.stripe_customer_id ?? undefined,
-    stripeSubscriptionId: subscription?.stripeSubscriptionId ?? undefined,
-    subscriptionStatus: subscription?.status,
-    paymentStatus: subscription?.paymentStatus ?? orgBilling?.payment_status ?? undefined,
-    currentPeriodEnd: subscription?.periodEnd
-      ? betterAuthTimestampToIso(subscription.periodEnd, 'subscription.periodEnd')
-      : undefined,
-    cancelAtPeriodEnd: subscription ? Boolean(subscription.cancelAtPeriodEnd) : undefined,
-    entitlements: getPlanEntitlements(accessPlan),
+    plan: projection.effectivePlan,
+    stripeCustomerId: projection.stripeCustomerId ?? undefined,
+    stripeSubscriptionId: projection.stripeSubscriptionId ?? undefined,
+    subscriptionStatus: projection.status,
+    paymentStatus: projection.paymentStatus,
+    currentPeriodEnd: projection.currentPeriodEnd ?? undefined,
+    cancelAtPeriodEnd: projection.cancelAtPeriodEnd,
+    entitlements: projection.entitlements,
   }
 }
 
@@ -186,9 +108,9 @@ export async function hasSiteEntitlement(db: DbClient, siteId: string, key: stri
   const site = await queryFirst<{ organization_id: string }>(db, `
     SELECT organization_id FROM sites WHERE id = ? LIMIT 1
   `, [siteId])
-  const subscription = site ? await getBetterAuthSubscription(db, site.organization_id) : null
-  if (!subscription) return false
-  return getPlanEntitlements(getEffectiveAccessPlan(subscription))[key] === true
+  if (!site) return false
+  const projection = await getOrganizationBillingProjection(db, site.organization_id)
+  return projection.entitlements[key] === true
 }
 
 // Backward-compat shim
@@ -199,9 +121,8 @@ export async function hasEntitlement(
   key: string,
 ): Promise<boolean> {
   void env
-  const subscription = await getBetterAuthSubscription(db, organizationId)
-  if (!subscription) return false
-  return getPlanEntitlements(getEffectiveAccessPlan(subscription))[key] === true
+  const projection = await getOrganizationBillingProjection(db, organizationId)
+  return projection.entitlements[key] === true
 }
 
 export async function setSiteEntitlementsFromPlan(
@@ -224,10 +145,9 @@ export async function setSiteEntitlementsFromPlan(
     })
   }
   // sites.plan is a denormalized cache read directly by mcp-workflows, the
-  // transfer onboarding wizard, and Google Places sync gating — it must
-  // stay in sync with the site_billing.plan that triggered this entitlement
-  // refresh, or those call sites keep showing whatever plan existed at
-  // site-creation time.
+  // transfer onboarding wizard, and Google Places sync gating. Keep it in
+  // sync with the organization subscription projection used for this site's
+  // entitlements.
   //
   // executeBatch runs these as a single atomic D1Database.batch() call — do
   // not swap this for batchStatements()/sequential execute(), which provide
@@ -240,50 +160,10 @@ export async function setSiteEntitlementsFromPlan(
   await executeBatch(db, queries)
 }
 
-export async function applySiteSubscription(
-  db: D1Database,
-  siteId: string,
-  organizationId: string,
-  customerId: string,
-  subscriptionId: string,
-  subscriptionItemId: string | null,
-  plan: string,
-  periodEnd: string | null,
-): Promise<void> {
-  const now = new Date().toISOString()
-
-  // Ensure org has a Stripe customer record
-  await execute(db, `
-    INSERT INTO organization_billing (id, organization_id, stripe_customer_id, updated_at)
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT(organization_id) DO UPDATE SET
-      id = excluded.id,
-      stripe_customer_id = excluded.stripe_customer_id,
-      updated_at = excluded.updated_at
-  `, [`billing-${organizationId}`, organizationId, customerId, now])
-
-  // ON CONFLICT(site_id) DO UPDATE, not INSERT OR REPLACE — REPLACE deletes and
-  // recreates the row, wiping any column (e.g. payment_method) not in this list.
-  await execute(db, `
-    INSERT INTO site_billing
-      (id, site_id, organization_id, stripe_subscription_id, stripe_subscription_item_id,
-       plan, status, current_period_end, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?)
-    ON CONFLICT(site_id) DO UPDATE SET
-      stripe_subscription_id = excluded.stripe_subscription_id,
-      stripe_subscription_item_id = excluded.stripe_subscription_item_id,
-      plan = excluded.plan,
-      status = excluded.status,
-      current_period_end = excluded.current_period_end,
-      updated_at = excluded.updated_at
-  `, [`sb-${siteId}`, siteId, organizationId, subscriptionId, subscriptionItemId, plan, periodEnd, now])
-
-  await setSiteEntitlementsFromPlan(db, siteId, organizationId, plan)
-}
-
 // ── Stripe helpers ────────────────────────────────────────────────────────────
 
 export async function getPriceIdForPlan(env: BillingEnv, plan: string, interval: 'month' | 'year' = 'month'): Promise<string> {
+  const validatedPlan = assertNewSalePlan(plan)
   const stripe = getStripe(env)
   const products: Stripe.Product[] = []
   let productsStartingAfter: string | undefined
@@ -297,15 +177,11 @@ export async function getPriceIdForPlan(env: BillingEnv, plan: string, interval:
     productsStartingAfter = page.has_more ? page.data.at(-1)?.id : undefined
   } while (productsStartingAfter)
 
-  const product = products.find(p => p.metadata?.plan_id === plan)
-  if (!product) throw new Error(`No active Stripe product found for plan ${plan}`)
-
   const prices: Stripe.Price[] = []
   let pricesStartingAfter: string | undefined
   do {
     const page = await stripe.prices.list({
       active: true,
-      product: product.id,
       type: 'recurring',
       limit: 100,
       ...(pricesStartingAfter ? { starting_after: pricesStartingAfter } : {}),
@@ -314,32 +190,43 @@ export async function getPriceIdForPlan(env: BillingEnv, plan: string, interval:
     pricesStartingAfter = page.has_more ? page.data.at(-1)?.id : undefined
   } while (pricesStartingAfter)
 
-  const price = prices.find(p => p.recurring?.interval === interval && p.recurring.interval_count === 1)
-  if (!price) throw new Error(`No active Stripe ${interval} price found for plan ${plan}`)
-  return price.id
-}
-
-export async function getPlanFromStripePrice(env: BillingEnv, priceId: string): Promise<string | null> {
-  const stripe = getStripe(env)
-  const price = await stripe.prices.retrieve(priceId, { expand: ['product'] })
-  const product = typeof price.product === 'string' ? null : price.product
-  if (!product || product.deleted) return null
-  const plan = product?.metadata?.plan_id
-  return typeof plan === 'string' && plan.length > 0 ? plan : null
+  const monthly = resolveStripeCatalogPrice(products, prices, validatedPlan, 'month')
+  const annual = selectStripeCatalogPrice(monthly.product, prices, 'year')
+  assertGrowthStripeCatalogPrices(monthly.price, annual)
+  if (interval === 'year') {
+    if (!annual) throw new Error('No active Stripe year price found for plan growth')
+    return annual.id
+  }
+  return monthly.price.id
 }
 
 export async function requireBillingAccess(
-  env: BillingEnv,
+  env: CloudflareEnv,
   db: D1Database,
   organizationId: string,
   userId: string,
 ): Promise<void> {
-  void env
-  const membership = await queryFirst<MembershipRow>(db, `
-    SELECT role FROM member WHERE organizationId = ? AND userId = ? LIMIT 1
-  `, [organizationId, userId])
+  void db
+  const auth = createAuth(env)
+  const authContext = await auth.$context
+  const organizationAdapter = getOrgAdapter(authContext as Parameters<typeof getOrgAdapter>[0], billingAuthorizationOptions)
+  const membership = await organizationAdapter.findMemberByOrgId({
+    userId,
+    organizationId,
+  })
   if (!membership) throw createError({ statusCode: 403, statusMessage: 'Access denied: Not a member of this organization' })
-  if (membership.role !== 'owner') throw createError({ statusCode: 403, statusMessage: 'Access denied: Only owners can manage billing' })
+  if (!await hasBillingUpdatePermission(organizationId, String(membership.role))) {
+    throw createError({ statusCode: 403, statusMessage: 'Access denied: Only owners can manage billing' })
+  }
+}
+
+export async function hasBillingUpdatePermission(organizationId: string, role: string): Promise<boolean> {
+  return await hasPermission({
+    organizationId,
+    role,
+    options: billingAuthorizationOptions,
+    permissions: { billing: ['update'] },
+  }, undefined as never)
 }
 
 export async function verifyStripeWebhook(
@@ -412,30 +299,6 @@ export async function getUserBillingItems(
       userRole: organization.role,
     }
   }))
-}
-
-// ── Internal helpers ──────────────────────────────────────────────────────────
-
-async function getBetterAuthSubscription(db: DbClient, organizationId: string): Promise<BetterAuthSubscriptionRow | null> {
-  return await queryFirst<BetterAuthSubscriptionRow>(db, `
-    SELECT plan, referenceId, stripeCustomerId, stripeSubscriptionId, status,
-           periodEnd, cancelAtPeriodEnd,
-           (SELECT payment_status FROM organization_billing WHERE organization_id = referenceId LIMIT 1) AS paymentStatus,
-           (SELECT paid_through FROM organization_billing WHERE organization_id = referenceId LIMIT 1) AS paidThrough,
-           (SELECT past_due_since FROM organization_billing WHERE organization_id = referenceId LIMIT 1) AS pastDueSince
-    FROM subscription
-    WHERE referenceId = ?
-      AND status IN ('active', 'trialing', 'past_due')
-    ORDER BY
-      CASE status
-        WHEN 'active' THEN 0
-        WHEN 'trialing' THEN 1
-        WHEN 'past_due' THEN 2
-        ELSE 3
-      END,
-      updatedAt DESC
-    LIMIT 1
-  `, [organizationId])
 }
 
 function parseEntitlementRows(rows: EntitlementRow[]): EntitlementsMap {

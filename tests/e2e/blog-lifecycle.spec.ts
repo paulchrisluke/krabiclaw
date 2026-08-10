@@ -3,10 +3,22 @@ import { loginAs } from './helpers/auth'
 
 const USER_ID = 'user-mcp-free'
 const SITE_ID = 'site-mcp-free'
+const BLOG_WRITE_STATEMENT_BUDGET = 35
+
+function expectWriteBudget(response: { headers(): Record<string, string> }, maxStatements = BLOG_WRITE_STATEMENT_BUDGET) {
+  const headers = response.headers()
+  const statementCount = Number(headers['x-d1-query-count'])
+  const batchCount = Number(headers['x-d1-batch-count'])
+  expect(Number.isInteger(statementCount)).toBe(true)
+  expect(Number.isInteger(batchCount)).toBe(true)
+  expect(statementCount).toBeLessThanOrEqual(maxStatements)
+  expect(batchCount).toBe(1)
+}
 
 test.describe('canonical tenant blog lifecycle', () => {
   test.describe.configure({ mode: 'serial' })
   test('dashboard API and public rendering share one guarded block document', async ({ request, baseURL }) => {
+    test.setTimeout(60_000)
     await loginAs(request, baseURL!, USER_ID)
     const suffix = Date.now()
     let postId = ''
@@ -31,6 +43,7 @@ test.describe('canonical tenant blog lifecycle', () => {
           ],
         },
       })
+      expectWriteBudget(created)
       expect(created.status()).toBe(200)
       const createdBody = await created.json() as { id: string; slug: string; post: { content_document: { document: { updated_at: string }; blocks: Array<{ type: string }> } } }
       postId = createdBody.id
@@ -47,6 +60,7 @@ test.describe('canonical tenant blog lifecycle', () => {
       const updated = await request.patch(`${baseURL}/api/editor/sites/${SITE_ID}/blog/${postId}`, {
         data: { content_blocks: updatedBlocks, expected_document_updated_at: initialToken },
       })
+      expectWriteBudget(updated)
       expect(updated.status()).toBe(200)
       const updatedBody = await updated.json() as { post: { content_document: { document: { updated_at: string }; blocks: Array<{ type: string }> } } }
       expect(updatedBody.post.content_document.blocks.map(block => block.type)).toEqual(['heading', 'markdown', 'divider', 'how_to'])
@@ -60,6 +74,7 @@ test.describe('canonical tenant blog lifecycle', () => {
       const published = await request.patch(`${baseURL}/api/editor/sites/${SITE_ID}/blog/${postId}`, {
         data: { publish: true, expected_updated_at: (updatedBody.post as { updated_at?: string }).updated_at },
       })
+      expectWriteBudget(published)
       expect(published.status()).toBe(200)
 
       const publicPost = await request.get(`${baseURL}/api/public/sites/${SITE_ID}/blog/${slug}`)
@@ -76,18 +91,21 @@ test.describe('canonical tenant blog lifecycle', () => {
       const draftUpdate = await request.patch(`${baseURL}/api/editor/sites/${SITE_ID}/blog/${postId}`, {
         data: { content_blocks: unpublishedDraftBlocks, expected_document_updated_at: editorAfterPublishBody.post.content_document.document.updated_at },
       })
+      expectWriteBudget(draftUpdate)
       expect(draftUpdate.status()).toBe(200)
       const stillPublished = await request.get(`${baseURL}/api/public/sites/${SITE_ID}/blog/${slug}`)
       const stillPublishedBody = await stillPublished.json() as { post: { content_blocks: Array<{ type: string; data: Record<string, unknown> }> } }
       expect(stillPublishedBody.post.content_blocks[1]?.data.markdown).toBe('Updated **visual** prose.')
 
       const republished = await request.patch(`${baseURL}/api/editor/sites/${SITE_ID}/blog/${postId}`, { data: { publish: true } })
+      expectWriteBudget(republished)
       expect(republished.status()).toBe(200)
       const republishedPublic = await request.get(`${baseURL}/api/public/sites/${SITE_ID}/blog/${slug}`)
       const republishedBody = await republishedPublic.json() as { post: { content_blocks: Array<{ type: string; data: Record<string, unknown> }> } }
       expect(republishedBody.post.content_blocks[1]?.data.markdown).toBe('Unpublished draft prose.')
 
       const unpublished = await request.post(`${baseURL}/api/editor/sites/${SITE_ID}/blog/${postId}/unpublish`)
+      expectWriteBudget(unpublished)
       expect(unpublished.status()).toBe(200)
       const hidden = await request.get(`${baseURL}/api/public/sites/${SITE_ID}/blog/${slug}`)
       expect(hidden.status()).toBe(404)

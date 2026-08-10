@@ -109,6 +109,7 @@ export interface PublicBlogPost extends PublicBlogSummary {
 
 export const BLAWBY_ROUTE_RECIPES = [
   'home',
+  'links',
   'services',
   'offering',
   'about',
@@ -125,6 +126,14 @@ export const BLAWBY_ROUTE_RECIPES = [
 ] as const
 
 export type BlawbyRouteRecipe = typeof BLAWBY_ROUTE_RECIPES[number]
+
+export const BLAWBY_SHELL_ONLY_ROUTE_RECIPES = ['links'] as const
+
+export type BlawbyShellOnlyRouteRecipe = typeof BLAWBY_SHELL_ONLY_ROUTE_RECIPES[number]
+
+export function isBlawbyShellOnlyRouteRecipe(recipe: BlawbyRouteRecipe): recipe is BlawbyShellOnlyRouteRecipe {
+  return (BLAWBY_SHELL_ONLY_ROUTE_RECIPES as readonly string[]).includes(recipe)
+}
 
 export interface PublicBlawbyRouteData {
   recipe: BlawbyRouteRecipe

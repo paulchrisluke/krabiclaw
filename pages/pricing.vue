@@ -45,7 +45,7 @@
 
         <div class="space-y-4">
           <div
-            v-for="faq in visibleFaqs"
+            v-for="faq in faqs"
             :key="faq.q"
             class="group rounded-2xl border transition-all duration-300 bg-elevated/40 backdrop-blur-sm"
             :class="openFaq === faq.q ? 'border-primary/45 bg-elevated/70 shadow-lg shadow-primary/5' : 'border-default hover:border-primary/25 hover:bg-elevated/60'"
@@ -90,22 +90,12 @@ definePageMeta({ layout: false })
 
 const openFaq = ref<string | null>(null)
 
-const { plans, managedPlan, seoAcceleratorPlan } = usePlans()
+const { plans } = usePlans()
 
 const faqs = [
   {
-    q: 'What does "Managed" actually mean?',
-    a: "On the Managed plan, our experts handle your business's online presence entirely.",
-    requires: 'managed' as const,
-  },
-  {
     q: 'Do I need a credit card to start?',
     a: 'No. The Starter plan is free forever — no credit card required. You only need a card when you upgrade to a paid plan.',
-  },
-  {
-    q: 'What is the SEO Accelerator?',
-    a: 'Julia grew tiffycooks.com to over 1 million daily impressions. The SEO Accelerator applies that same local & travel SEO playbook to your business — keyword targeting, Google Maps authority, and a monthly content cadence.',
-    requires: 'seo_accelerator' as const,
   },
   {
     q: 'Do you offer refunds?',
@@ -117,29 +107,16 @@ const faqs = [
   },
 ]
 
-// Drop FAQ entries about tiers that aren't currently purchasable
-// (MANAGED_SERVICE_ENABLED off) rather than advertising something a visitor
-// can't actually buy.
-const visibleFaqs = computed(() => faqs.filter((faq) => {
-  if (faq.requires === 'managed') return Boolean(managedPlan.value)
-  if (faq.requires === 'seo_accelerator') return Boolean(seoAcceleratorPlan.value)
-  return true
-}))
-
 const seoConfig = useRuntimeConfig()
 const seoRequestURL = useRequestURL()
 const pricingPageUrl = resolveSeoUrl('/pricing', seoConfig.public.siteUrl || seoRequestURL.origin)
 
 if (!isBlawby.value) {
 
-// Structured-data descriptions per plan — only plans usePlans() actually
-// returns (i.e. currently purchasable) get an Offer, so hidden tiers never
-// get advertised to crawlers/AI even though the visual table already hides them.
+// Structured-data descriptions for the public Starter and Growth catalog.
 const OFFER_DESCRIPTIONS: Record<string, string> = {
   free: 'Free business website with offerings and basic SEO',
   growth: 'Custom domain, messaging notifications, and Google Places imports',
-  managed: 'Full managed service — Paul & Julia handle everything',
-  seo_accelerator: "Julia's 1M impressions/day SEO playbook applied to your business",
 }
 
 // Reactive getter so this stays correct if plans finish loading after this

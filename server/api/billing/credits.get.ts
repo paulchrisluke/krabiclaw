@@ -1,9 +1,8 @@
-// GET /api/billing/credits — org AI credit balance + recent usage log
+// GET /api/billing/credits — organization recurring usage quota and ledger
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { getAiQuotaStatus, getOrCreateCredits } from '~/server/utils/ai-credits'
+import { getOrganizationCreditsResource } from '~/server/utils/ai-credits'
 import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
-import { queryAll } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
@@ -17,32 +16,5 @@ export default defineEventHandler(async (event) => {
   if (!organization) return jsonResponse({ error: 'No Organization found' }, { status: 404 })
 
   const orgId = organization.id
-  const credits = await getOrCreateCredits(db, orgId)
-  const quota = await getAiQuotaStatus(db, orgId)
-
-  const usageRows = await queryAll(db, `
-    SELECT u.action, u.model, u.input_tokens, u.output_tokens, u.credits_charged,
-           u.created_at, s.brand_name as site_name
-    FROM ai_usage_log u
-    LEFT JOIN sites s ON u.site_id = s.id
-    WHERE u.organization_id = ?
-    ORDER BY u.created_at DESC
-    LIMIT 50
-  `, [orgId])
-
-  const byAction = await queryAll(db, `
-    SELECT action, SUM(credits_charged) as total_credits, COUNT(*) as calls
-    FROM ai_usage_log
-    WHERE organization_id = ?
-    GROUP BY action
-    ORDER BY total_credits DESC
-  `, [orgId])
-
-  return jsonResponse({
-    balance: credits.balance,
-    lifetime_used: credits.lifetime_used,
-    quota,
-    usage: usageRows ?? [],
-    by_action: byAction ?? [],
-  })
+  return jsonResponse(await getOrganizationCreditsResource(db, orgId))
 })

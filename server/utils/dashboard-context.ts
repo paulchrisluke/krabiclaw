@@ -122,6 +122,11 @@ export interface DashboardContextOptions {
   // throw to represent that state instead of erroring.
   requireOrganization?: boolean
   organizationSlug?: string | null
+  // Explicit site scope used by transfer onboarding when a transferred site
+  // has no generated subdomain (for example a custom-domain-only site).
+  // Membership and organization ownership are still enforced by the same
+  // canonical site query and assertMemberSiteAccess call below.
+  siteId?: string | null
   siteSlug?: string | null
   // The scoped-role path allowlist (SCOPED_ROLE_DASHBOARD_ROUTES) only lists
   // /api/dashboard/* patterns. event.path is correct when a real API route
@@ -310,23 +315,32 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
   // before a site is known/selected, so a missing header there means "no site
   // selected yet" rather than a client error — only callers that need a site
   // get the hard 400.
+  const siteId = options.siteId ?? null
   const siteSlug = options.siteSlug ?? getHeader(event, 'x-dashboard-site-slug')
 
-  if (!siteSlug && options.requireSite !== false) {
+  if (!siteId && !siteSlug && options.requireSite !== false) {
     throw createError({ statusCode: 400, message: 'Site slug is required. Use /dashboard/{orgSlug}/sites/{siteSlug} routes.' })
   }
 
-  const site = siteSlug
+  const site = siteId
     ? await queryFirst<DashboardSiteRow>(db, `
+        SELECT id, organization_id, brand_name, vertical, subdomain, custom_domain, public_url,
+               status, onboarding_status, plan, primary_location_id, default_currency, source_locale, feature_overrides
+        FROM sites
+        WHERE organization_id = ? AND id = ?
+        LIMIT 1
+      `, [organization.id, siteId])
+    : siteSlug
+      ? await queryFirst<DashboardSiteRow>(db, `
         SELECT id, organization_id, brand_name, vertical, subdomain, custom_domain, public_url,
                status, onboarding_status, plan, primary_location_id, default_currency, source_locale, feature_overrides
         FROM sites
         WHERE organization_id = ? AND subdomain = ?
         LIMIT 1
-      `, [organization.id, siteSlug])
-    : options.allowTransferFallback
-      ? await resolveRecentlyTransferredSite(db, organization.id, session.user.id)
-      : null
+        `, [organization.id, siteSlug])
+      : options.allowTransferFallback
+        ? await resolveRecentlyTransferredSite(db, organization.id, session.user.id)
+        : null
 
   if (!site && options.requireSite !== false) {
     throw createError({ statusCode: 404, message: 'Site not found' })

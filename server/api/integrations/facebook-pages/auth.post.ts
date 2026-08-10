@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
 
   const allowed = await hasSiteEntitlement(db, site.id, 'managed_service')
   if (!allowed) {
-    return jsonResponse({ error: 'Facebook sync is included in the Managed plan and above.' }, { status: 403 })
+    return jsonResponse({ error: 'Facebook sync requires Growth.' }, { status: 403 })
   }
 
   if (!env.CONNECTOR_TOKEN_ENCRYPTION_KEY) {

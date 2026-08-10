@@ -1,4 +1,5 @@
 import { readdirSync } from 'node:fs'
+import { createWorkerVersionOverrideHeaders } from './lib/performance-comparison.mjs'
 
 const rawBaseUrl = process.env.PLAYWRIGHT_PREVIEW_URL
 
@@ -22,9 +23,39 @@ if (localHosts.has(baseUrl.hostname)) {
   process.exit(0)
 }
 
+const rawIdentityOrigin = process.env.DEPLOYMENT_IDENTITY_ORIGIN
+let identityOrigin
+if (rawIdentityOrigin) {
+  try {
+    const parsedIdentityOrigin = new URL(rawIdentityOrigin)
+    if (!/^https?:$/.test(parsedIdentityOrigin.protocol)) throw new Error('unsupported protocol')
+    identityOrigin = parsedIdentityOrigin.origin
+  } catch {
+    console.error(`DEPLOYMENT_IDENTITY_ORIGIN is not a valid HTTP(S) URL: ${rawIdentityOrigin}`)
+    process.exit(1)
+  }
+}
+
+const expectedSourceSha = (process.env.DEPLOYMENT_EXPECTED_SOURCE_SHA ?? process.env.GITHUB_SHA)?.trim().toLowerCase() || null
+const expectedWorkerVersion = (process.env.DEPLOYMENT_EXPECTED_WORKER_VERSION ?? process.env.WORKER_VERSION_OVERRIDE)?.trim().toLowerCase() || null
+if ((rawIdentityOrigin || expectedSourceSha || expectedWorkerVersion) && (!expectedSourceSha || !expectedWorkerVersion)) {
+  throw new Error('Expected source SHA and Worker version must be provided together for deployment identity checks.')
+}
+if (expectedSourceSha && !/^[0-9a-f]{40}$/.test(expectedSourceSha)) {
+  throw new Error('Expected source SHA must be a full 40-character hexadecimal value.')
+}
+if (expectedWorkerVersion && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(expectedWorkerVersion)) {
+  throw new Error('Expected Worker version must be a UUID-like version id.')
+}
+
+const workerVersionHeaders = createWorkerVersionOverrideHeaders(
+  process.env.WORKER_VERSION_OVERRIDE,
+  process.env.WORKER_NAME,
+)
+
 const REQUEST_TIMEOUT_MS = 15_000
 const RETRY_DELAY_MS = 2_000
-const MAX_ATTEMPTS = 20
+const MAX_WAIT_MS = 180_000
 const NUXT_BUILD_ID_PATTERN = /buildId:\"([0-9a-f-]{36})\"/
 const NUXT_ASSET_PATTERN = /(?:src|href)="(\/_nuxt\/[^"?]+(?:\?[^"]*)?)"/g
 const expectedSurfaceCss = [
@@ -43,6 +74,7 @@ if (missingSurfaceCss.length) {
 }
 
 const expectedSurfacePaths = new Set(expectedSurfaceCss.map(filename => '/_nuxt/surfaces/' + filename))
+const identityOrigins = [...new Set([baseUrl.origin, identityOrigin].filter(Boolean))]
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
@@ -57,6 +89,7 @@ async function fetchWithTimeout(url, headers = {}) {
       headers: {
         'cache-control': 'no-cache',
         pragma: 'no-cache',
+        ...workerVersionHeaders,
         ...headers,
       },
       redirect: 'follow',
@@ -107,9 +140,43 @@ async function verifyHtmlAndAssets(url, headers = {}) {
   }))
 }
 
-let consecutiveReadyChecks = 0
-for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+async function verifyDeploymentIdentity(origin, attempt) {
+  if (!expectedSourceSha || !expectedWorkerVersion) return
+
+  const identityUrl = new URL('/api/deployment', origin)
+  identityUrl.searchParams.set('asset-propagation-check', `${Date.now()}-${attempt}`)
+  const response = await fetchWithTimeout(identityUrl, {
+    'cache-control': 'no-store',
+  })
+  if (!response.ok) {
+    throw new Error(`${origin} /api/deployment returned HTTP ${response.status}`)
+  }
+
+  let payload
   try {
+    payload = await response.json()
+  } catch {
+    throw new Error(`${origin} /api/deployment returned malformed JSON`)
+  }
+
+  const actualSourceSha = typeof payload?.sourceSha === 'string' ? payload.sourceSha.trim().toLowerCase() : null
+  const actualWorkerVersion = typeof payload?.worker?.id === 'string' ? payload.worker.id.trim().toLowerCase() : null
+  if (actualSourceSha !== expectedSourceSha || actualWorkerVersion !== expectedWorkerVersion) {
+    throw new Error(`${origin} /api/deployment identity mismatch (expected ${expectedSourceSha}/${expectedWorkerVersion}, got ${actualSourceSha ?? '<missing>'}/${actualWorkerVersion ?? '<missing>'})`)
+  }
+}
+
+let consecutiveReadyChecks = 0
+const startedAt = Date.now()
+let attempt = 0
+let lastError = 'no readiness attempt completed'
+while (Date.now() - startedAt < MAX_WAIT_MS) {
+  attempt += 1
+  try {
+    for (const origin of identityOrigins) {
+      await verifyDeploymentIdentity(origin, attempt)
+    }
+
     const homepageUrl = new URL(baseUrl)
     homepageUrl.searchParams.set('asset-propagation-check', `${Date.now()}-${attempt}`)
 
@@ -135,12 +202,16 @@ for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
   } catch (error) {
     consecutiveReadyChecks = 0
     const message = error instanceof Error ? error.message : String(error)
-    console.log(`Deployed assets are not ready (attempt ${attempt}/${MAX_ATTEMPTS}): ${message}`)
+    lastError = message
+    const elapsedMs = Date.now() - startedAt
+    console.log(`Deployed assets are not ready (attempt ${attempt}, ${elapsedMs}ms/${MAX_WAIT_MS}ms elapsed): ${message}`)
 
-    if (attempt < MAX_ATTEMPTS) {
-      await sleep(RETRY_DELAY_MS)
+    const remainingMs = MAX_WAIT_MS - elapsedMs
+    if (remainingMs > 0) {
+      await sleep(Math.min(RETRY_DELAY_MS, remainingMs))
     }
   }
 }
 
-throw new Error(`Deployed assets for ${baseUrl.origin} did not become ready after ${MAX_ATTEMPTS} attempts.`)
+const elapsedMs = Date.now() - startedAt
+throw new Error(`Deployed assets for ${baseUrl.origin} did not become ready after ${elapsedMs}ms (${attempt} attempts). Last error: ${lastError}`)

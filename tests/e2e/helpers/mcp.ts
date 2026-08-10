@@ -13,7 +13,7 @@ export const MCP_VERSION = '2025-06-18'
 // call needs the org's actual paid site, not a brand-new site from ensureSite() (which
 // always starts on `free` per the second-site billing rule).
 export const MCP_GROWTH_SITE_ID = 'site-mcp-growth'
-export const MCP_MANAGED_SITE_ID = 'site-mcp-managed'
+export const MCP_GROWTH_SERVICE_SITE_ID = 'site-mcp-growth-service'
 
 export async function mcpRequest(
   request: APIRequestContext,

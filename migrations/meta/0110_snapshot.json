@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "679adc93-599b-4eb8-8d87-85d22a3fb50a",
+  "id": "d958e1a1-a5d5-41b8-9776-ab237a0483cb",
   "prevId": "c27d7f2a-38dd-4e01-b7a1-ccb1f294644b",
   "tables": {
     "account": {
@@ -1288,6 +1288,20 @@
           "notNull": true,
           "autoincrement": false
         },
+        "google_location_id": {
+          "name": "google_location_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "google_connection_id": {
+          "name": "google_connection_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "title": {
           "name": "title",
           "type": "text",
@@ -1651,6 +1665,19 @@
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "business_locations_google_connection_id_google_business_connections_id_fk": {
+          "name": "business_locations_google_connection_id_google_business_connections_id_fk",
+          "tableFrom": "business_locations",
+          "tableTo": "google_business_connections",
+          "columnsFrom": [
+            "google_connection_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         },
         "business_locations_facebook_connection_id_facebook_pages_connections_id_fk": {
@@ -4811,6 +4838,292 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
+    "google_business_connections": {
+      "name": "google_business_connections",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "location_id": {
+          "name": "location_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "connected_by_user_id": {
+          "name": "connected_by_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "provider_account_email": {
+          "name": "provider_account_email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "encrypted_access_token": {
+          "name": "encrypted_access_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "encrypted_refresh_token": {
+          "name": "encrypted_refresh_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "scopes": {
+          "name": "scopes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'active'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        }
+      },
+      "indexes": {
+        "idx_google_business_connections_site_level_unique": {
+          "name": "idx_google_business_connections_site_level_unique",
+          "columns": [
+            "organization_id",
+            "site_id"
+          ],
+          "isUnique": true,
+          "where": "location_id IS NULL"
+        },
+        "google_business_connections_organization_id_site_id_location_id_unique": {
+          "name": "google_business_connections_organization_id_site_id_location_id_unique",
+          "columns": [
+            "organization_id",
+            "site_id",
+            "location_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "google_business_connections_organization_id_organization_id_fk": {
+          "name": "google_business_connections_organization_id_organization_id_fk",
+          "tableFrom": "google_business_connections",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "google_business_connections_site_id_sites_id_fk": {
+          "name": "google_business_connections_site_id_sites_id_fk",
+          "tableFrom": "google_business_connections",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "google_business_connections_location_id_business_locations_id_fk": {
+          "name": "google_business_connections_location_id_business_locations_id_fk",
+          "tableFrom": "google_business_connections",
+          "tableTo": "business_locations",
+          "columnsFrom": [
+            "location_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "google_business_connections_connected_by_user_id_user_id_fk": {
+          "name": "google_business_connections_connected_by_user_id_user_id_fk",
+          "tableFrom": "google_business_connections",
+          "tableTo": "user",
+          "columnsFrom": [
+            "connected_by_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "google_business_events": {
+      "name": "google_business_events",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "site_id": {
+          "name": "site_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "google_location_id": {
+          "name": "google_location_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "payload": {
+          "name": "payload",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "google_business_events_organization_id_organization_id_fk": {
+          "name": "google_business_events_organization_id_organization_id_fk",
+          "tableFrom": "google_business_events",
+          "tableTo": "organization",
+          "columnsFrom": [
+            "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "google_business_events_site_id_sites_id_fk": {
+          "name": "google_business_events_site_id_sites_id_fk",
+          "tableFrom": "google_business_events",
+          "tableTo": "sites",
+          "columnsFrom": [
+            "site_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
     "google_place_snapshots": {
       "name": "google_place_snapshots",
       "columns": {
@@ -6514,6 +6827,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "google_question_id": {
+          "name": "google_question_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "question": {
           "name": "question",
           "type": "text",
@@ -6614,6 +6934,14 @@
         }
       },
       "indexes": {
+        "idx_location_qa_google_id": {
+          "name": "idx_location_qa_google_id",
+          "columns": [
+            "google_question_id"
+          ],
+          "isUnique": true,
+          "where": "google_question_id IS NOT NULL"
+        },
         "idx_location_qa_location": {
           "name": "idx_location_qa_location",
           "columns": [
@@ -6706,7 +7034,7 @@
         },
         "location_qa_source_check": {
           "name": "location_qa_source_check",
-          "value": "source IN ('manual','import','template')"
+          "value": "source IN ('gmb','google_maps','manual','llm_generated','manual_override','template','import')"
         },
         "location_qa_status_check": {
           "name": "location_qa_status_check",
@@ -17857,6 +18185,14 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
+        },
+        "memberCount": {
+          "name": "memberCount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
         },
         "organizationId": {
           "name": "organizationId",

@@ -4,8 +4,9 @@ import type { JSONWebKeySet, JWTPayload } from 'jose'
 import { createAuth, getAuthSession, type CloudflareEnv } from '~/server/utils/auth'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 import { hasPlatformAdminPermission } from '~/utils/platform-admin-access'
-import { queryAll, queryFirst } from '~/server/db'
+import { queryFirst } from '~/server/db'
 import { assertSiteWideAccess, isOrganizationWideRole } from '~/server/utils/member-access'
+import { getOrganizationBillingProjection } from '~/server/utils/organization-billing'
 
 export type McpToolRole = 'owner' | 'admin' | 'editor'
 
@@ -432,21 +433,19 @@ export async function getVisibleSiteContext(
   }
 }
 
-export async function getActiveEntitlements(db: D1Database, organizationId: string, keys: string[], siteId?: string): Promise<Set<string>> {
+export async function getActiveEntitlements(db: D1Database, organizationId: string, keys: string[], _siteId?: string): Promise<Set<string>> {
   if (!keys.length) return new Set()
-  const placeholders = keys.map(() => '?').join(', ')
-  const siteFilter = siteId ? 'AND se.site_id = ?' : ''
-  const bindings = siteId ? [organizationId, ...keys, siteId] : [organizationId, ...keys]
-  const siteResults = await queryAll<{ key: string }>(db, `
-    SELECT se.key FROM site_entitlements se
-    JOIN sites s ON s.id = se.site_id
-    WHERE s.organization_id = ? AND se.key IN (${placeholders}) AND se.value = 'true' ${siteFilter}
-  `, bindings)
-  const organizationResults = await queryAll<{ key: string }>(db, `
-    SELECT key FROM organization_entitlements
-    WHERE organization_id = ? AND key IN (${placeholders}) AND value = 'true'
-  `, [organizationId, ...keys])
-  return new Set([...siteResults, ...organizationResults].map(r => r.key))
+  const projection = await getOrganizationBillingProjection(db, organizationId)
+  if (
+    !projection
+    || typeof projection !== 'object'
+    || !projection.entitlements
+    || typeof projection.entitlements !== 'object'
+    || Array.isArray(projection.entitlements)
+  ) {
+    throw new Error('Invalid organization billing projection entitlements.')
+  }
+  return new Set(keys.filter(key => projection.entitlements[key] === true))
 }
 
 export function roleSatisfies(actual: McpToolRole, minimum: McpToolRole) {

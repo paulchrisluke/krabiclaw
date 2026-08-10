@@ -93,49 +93,6 @@
       "order_now": "Order Now",
       "reserve": "Reserve"
     },
-    "upgrade": {
-      "pro_feature": "Paid feature",
-      "default_description": "This feature requires a paid plan.",
-      "close_modal": "Close modal",
-      "get_pro": "Upgrade",
-      "features": {
-        "qa-writeback": {
-          "title": "Ask a question",
-          "description": "Let guests submit questions directly from your site. Included in Growth."
-        },
-        "custom-domain": {
-          "title": "Custom domain",
-          "description": "Connect your own domain (yourdomain.com) instead of a krabiclaw.com subdomain. Included in Growth."
-        },
-        "add-location": {
-          "title": "Add a second location",
-          "description": "Manage multiple locations under one brand site, each with their own menu, reviews, and hours. Included in Managed."
-        },
-        "google-places-import": {
-          "title": "Import from Google Places",
-          "description": "Import hours, address, ratings, and reviews from Google Places. Included in Growth."
-        },
-        "google-places-sync": {
-          "title": "Google Places import",
-          "description": "Refresh supported location details from Google Places while keeping manual edits available in the site editor. Included in Growth."
-        },
-        "remove-branding": {
-          "title": "Remove KrabiClaw branding",
-          "description": "Remove the \"Powered by krabiclaw.com\" footer strip from your tenant site. Included in Managed."
-        }
-      },
-      "bullets": {
-        "places_1": "Import supported location details from Google Places",
-        "places_2": "Keep manual edits available in the content editor",
-        "places_3": "Refresh hours, ratings, address, and reviews",
-        "domain_1": "Connect your own domain",
-        "domain_2": "Use managed HTTPS certificates",
-        "domain_3": "Keep your krabiclaw.com subdomain available",
-        "default_1": "Unlock this feature",
-        "default_2": "Manage it from the dashboard",
-        "default_3": "Keep the rest of your current site setup"
-      }
-    },
     "about": {
       "our_story": "Our Story",
       "placeholder": "Authentic Experience",
@@ -152,7 +109,7 @@
       "response_from_owner": "Response from the owner • {date}",
       "no_answer": "No answer yet.",
       "empty_title": "No questions yet.",
-      "empty_prompt": "Questions and answers from the team will appear here.",
+      "empty_prompt": "Got a question? Ask us anything and we'll be happy to help.",
       "view_all": "View All Q&A"
     },
     "location": {
@@ -219,8 +176,12 @@
       "back_to": "Back to {title}",
       "title": "Frequently asked",
       "subtitle": "Q&A · {location}",
+      "dont_see": "Don't see your question?",
+      "ask_us": "Ask us, it'll show up here.",
+      "ask_question_pro": "Ask a question · Pro",
+      "ask_question": "Ask a question →",
       "no_questions_title": "No questions yet.",
-      "no_questions_desc": "Questions and answers will appear here when the team adds them.",
+      "no_questions_desc": "Be the first to ask, our team usually responds within a few hours.",
       "helpful": "found this helpful",
       "awaiting_answer": "Awaiting answer from the team.",
       "asked_by": "Asked by {author}",

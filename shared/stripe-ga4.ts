@@ -51,8 +51,6 @@ export function buildStripeSubscriptionMetadata(
 const PLAN_RANK: Record<string, number> = {
   free: 0,
   growth: 1,
-  managed: 2,
-  seo_accelerator: 3,
 }
 
 export function classifyStripePlanChange(

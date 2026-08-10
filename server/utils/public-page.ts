@@ -652,15 +652,17 @@ async function loadPublicPageSource(
   if (requestedDatasets.has("qa"))
     idxQa = push(
       locationId
-        ? `SELECT id, question, question_author, question_date,
-                  answer, answer_author, answer_date, is_owner_answer, upvote_count
+        ? `SELECT id, location_id, question, question_author, question_date,
+                  answer, answer_author, answer_date, is_owner_answer, upvote_count,
+                  created_at, updated_at
            FROM location_qa
            WHERE location_id = ? AND site_id = ? AND status = 'published'
            ORDER BY is_owner_answer DESC, upvote_count DESC, sort_order, created_at`
-        : `SELECT id, question, question_author, question_date,
-                  answer, answer_author, answer_date, is_owner_answer, upvote_count
+        : `SELECT id, location_id, question, question_author, question_date,
+                  answer, answer_author, answer_date, is_owner_answer, upvote_count,
+                  created_at, updated_at
            FROM location_qa
-           WHERE site_id = ? AND location_id IS NULL AND page_path IS NULL AND status = 'published'
+           WHERE site_id = ? AND page_path IS NULL AND status = 'published'
            ORDER BY is_owner_answer DESC, upvote_count DESC, sort_order, created_at`,
       locationId ? [locationId, siteId] : [siteId],
     );

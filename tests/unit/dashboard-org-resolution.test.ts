@@ -31,6 +31,7 @@ function createStore(): Store {
     sites: [
       { id: 'site-a', organization_id: 'org-a', subdomain: 'site-a', brand_name: 'Site A', vertical: 'restaurant', custom_domain: null, public_url: null, status: 'active', onboarding_status: 'complete', plan: 'free', primary_location_id: null, default_currency: 'usd', source_locale: 'en' },
       { id: 'site-b', organization_id: 'org-b', subdomain: 'site-b', brand_name: 'Site B', vertical: 'restaurant', custom_domain: null, public_url: null, status: 'active', onboarding_status: 'complete', plan: 'free', primary_location_id: null, default_currency: 'usd', source_locale: 'en' },
+      { id: 'site-custom', organization_id: 'org-a', subdomain: null, brand_name: 'Custom Domain Site', vertical: 'restaurant', custom_domain: 'custom.example', public_url: 'https://custom.example', status: 'active', onboarding_status: 'complete', plan: 'growth', primary_location_id: null, default_currency: 'usd', source_locale: 'en' },
     ],
   }
 }
@@ -50,6 +51,10 @@ async function queryFirst<T>(_db: unknown, query: string, params: unknown[] = []
   if (query.includes('FROM sites') && query.includes('subdomain = ?')) {
     const [organizationId, subdomain] = params as [string, string]
     return store.sites.find((s) => s.organization_id === organizationId && s.subdomain === subdomain) as T | undefined
+  }
+  if (query.includes('FROM sites') && query.includes('AND id = ?')) {
+    const [organizationId, siteId] = params as [string, string]
+    return store.sites.find((s) => s.organization_id === organizationId && s.id === siteId) as T | undefined
   }
   throw new Error(`Unexpected queryFirst query: ${query}`)
 }
@@ -169,6 +174,16 @@ test('getDashboardContext: header overrides a stale active org — this is the e
   )
   assert.equal(context.organization?.id, 'org-b')
   assert.equal(context.site?.id, 'site-b')
+})
+
+test('getDashboardContext: explicit siteId selects a custom-domain-only site within the URL organization', async () => {
+  const context = await getDashboardContext(
+    fakeEvent({ 'x-dashboard-org-slug': 'org-a' }),
+    { requireSite: false, siteId: 'site-custom' },
+  )
+  assert.equal(context.organization?.id, 'org-a')
+  assert.equal(context.site?.id, 'site-custom')
+  assert.equal(context.site?.subdomain, null)
 })
 
 test('getDashboardContext: requireOrganization:false with no header falls back to active org (boot-discovery/notifications shape)', async () => {

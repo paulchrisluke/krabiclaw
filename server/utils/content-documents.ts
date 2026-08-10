@@ -878,6 +878,54 @@ export async function replaceContentDocumentBlocks(
   })
 }
 
+/**
+ * Prepare a published document replacement without doing any reads or writes.
+ *
+ * Bulk domain services use this to prefetch their documents once and compose
+ * one atomic D1 batch for several owners. The expected timestamp is preserved
+ * in the document guard so a concurrent writer still turns the batch into a
+ * conflict instead of silently overwriting a newer draft.
+ */
+export function prepareContentDocumentBlocksReplacement(
+  document: ContentDocumentRow,
+  blocks: ContentBlockInput[],
+  opts: {
+    expected_document_updated_at: string
+    createdBy?: string | null
+    label?: string | null
+    publish?: boolean
+    revisionId?: string
+    snapshotMetadata?: Record<string, unknown>
+    additionalQueriesBefore?: BatchQuery[]
+    additionalQueriesAfter?: BatchQuery[]
+  },
+) {
+  if (document.updated_at !== opts.expected_document_updated_at) {
+    throw createError({ statusCode: 409, statusMessage: 'Content document was updated by another writer' })
+  }
+  const snapshots = blocks.map((block, index) => ({
+    id: typeof (block as ContentBlockInput & { id?: unknown }).id === 'string'
+      ? (block as ContentBlockInput & { id: string }).id
+      : undefined,
+    parent_block_id: block.parent_block_id ?? null,
+    type: assertBlockType(block.type),
+    position: index,
+    level: block.level ?? null,
+    data: asObject(block.data, `content block ${index} data`),
+    updated_at: null,
+  }))
+  return buildRevisionBatch(document, snapshots, {
+    revisionId: opts.revisionId,
+    snapshotMetadata: opts.snapshotMetadata,
+    createdBy: opts.createdBy,
+    label: opts.label ?? 'Editor autosave',
+    publish: opts.publish,
+    expectedDocument: { id: document.id, updatedAt: opts.expected_document_updated_at },
+    additionalQueriesBefore: opts.additionalQueriesBefore,
+    additionalQueriesAfter: opts.additionalQueriesAfter,
+  })
+}
+
 /** Writes a new published snapshot without replacing the live draft blocks or
  * draft revision. Used when migrating an already-published revision while a
  * newer, intentionally unpublished draft exists. */

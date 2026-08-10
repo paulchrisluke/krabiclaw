@@ -48,7 +48,7 @@ test.describe('Blawby professional_service CMS editing', () => {
   test.describe.configure({ mode: 'serial' })
 
   test('NCLS home/about/contact page blocks are editable from the Pages manager', async ({ page, baseURL }) => {
-    test.setTimeout(180_000)
+    test.setTimeout(300_000)
     const fixture = await page.request.get(`${baseURL}/api/public/sites/${SITE_ID}/blawby/document`, {
       headers: blawbyExtraHeaders,
       params: { recipe: 'home' },
@@ -65,6 +65,46 @@ test.describe('Blawby professional_service CMS editing', () => {
     await expect(rootPage).toHaveClass(/border-primary/)
     await expect(page.getByText('Block type', { exact: true })).toBeVisible()
     await expect(page.getByText('Block data JSON', { exact: true })).toHaveCount(0)
+
+    // Exercise the Pages editor's own save path before the API-level block
+    // matrix below.  The read only API assertion confirms the UI mutation was
+    // persisted; the second UI save restores the fixture before the matrix.
+    const pageSettingsCard = page.getByRole('heading', { name: 'Page settings', exact: true })
+      .locator('xpath=ancestor::*[@data-slot="root"][1]')
+    await expect(pageSettingsCard).toHaveCount(1)
+    const rootTitleInput = pageSettingsCard.getByRole('textbox', { name: 'Title', exact: true })
+    const originalRootTitle = await rootTitleInput.inputValue()
+    const uiTitle = `${originalRootTitle} UI ${Date.now()}`
+    const pagesCollectionUrl = `${baseURL}/api/editor/sites/${SITE_ID}/pages?locale=en`
+    const rootPagesResponse = await page.request.get(pagesCollectionUrl)
+    expect(rootPagesResponse.status()).toBe(200)
+    const rootPageSummary = ((await rootPagesResponse.json()) as { pages: Array<{ id: string; path: string; title: string }> }).pages.find(item => item.path === '/')
+    expect(rootPageSummary?.id).toBeTruthy()
+    const rootPagePatchUrl = `${baseURL}/api/editor/sites/${SITE_ID}/pages/${rootPageSummary!.id}`
+    const saveRootTitle = async (title: string) => {
+      const patchResponse = page.waitForResponse(candidate => (
+        candidate.url() === rootPagePatchUrl
+        && candidate.request().method() === 'PATCH'
+      ), { timeout: 30_000 })
+      const pagesResponse = page.waitForResponse(candidate => (
+        candidate.url() === pagesCollectionUrl
+        && candidate.request().method() === 'GET'
+      ), { timeout: 30_000 })
+      await rootTitleInput.fill(title)
+      await page.getByRole('button', { name: 'Save', exact: true }).click()
+      expect((await patchResponse).status()).toBe(200)
+      expect((await pagesResponse).status()).toBe(200)
+      await expect(page.getByText('Saved', { exact: true }).last()).toBeVisible({ timeout: 30_000 })
+    }
+    await saveRootTitle(uiTitle)
+
+    const uiPages = await page.request.get(`${baseURL}/api/editor/sites/${SITE_ID}/pages`)
+    expect(uiPages.status()).toBe(200)
+    const uiPageSummary = ((await uiPages.json()) as { pages: Array<{ id: string; path: string; title: string }> }).pages.find(item => item.path === '/')
+    expect(uiPageSummary?.title).toBe(uiTitle)
+
+    await saveRootTitle(originalRootTitle)
+    await expect(rootTitleInput).toHaveValue(originalRootTitle)
 
     const newBlockType = page.getByRole('combobox', { name: 'New block type' })
     await newBlockType.click()

@@ -78,11 +78,12 @@ test('editor autosave requires canonical documents and serializes draft creation
 test('settings panel behaves as an accessible modal', async () => {
   const source = await readFile(new URL('../../lib/components/workspace/blog/BlogPostEditor.vue', import.meta.url), 'utf8')
   assert.match(source, /<USlideover v-model:open="settingsOpen" title="Post settings" side="right" modal/)
-  assert.match(source, /@after:enter="focusSettingsPanel" @after:leave="restoreSettingsFocus"/)
+  assert.match(source, /:content="\{ onOpenAutoFocus: focusCategory \}"/)
+  assert.match(source, /<UInput ref="categoryInput" v-model="form\.category" \/>/)
+  assert.match(source, /function focusCategory\(event: Event\) \{[\s\S]*event\.preventDefault\(\)[\s\S]*categoryInput\.value\?\.inputRef\?\.focus\(\)/)
   assert.match(source, /@keydown="onSettingsKeydown"/)
   assert.match(source, /event\.key === 'Escape'/)
   assert.match(source, /event\.key !== 'Tab'/)
-  assert.match(source, /const first = settingsFocusableElements\(\)\[0\][\s\S]*if \(first\) first\.focus\(\)[\s\S]*else settingsPanel\.value\?\.focus\(\)/)
   assert.match(source, /settingsButton\.value\?\.\$el\?\.focus\(\)/)
 })
 

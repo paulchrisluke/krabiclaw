@@ -3,7 +3,9 @@ import { syncPlaceToLocation } from '~/server/utils/google-places'
 import { queryAll } from '~/server/db'
 import { recordUsageEvent } from '~/server/utils/usage-metering'
 import { defineScheduledTask } from '~/server/utils/scheduled-task'
+import { hasScheduledPaidEntitlement } from '~/server/utils/scheduled-billing-access'
 
+// NOTE: Google Business Profile API access was never provisioned.
 // All Google data for every location comes from the Places API (New, v1)
 // using GOOGLE_PLACES_API_KEY. This task syncs hours, ratings, and reviews
 // for every business_locations row that has google_place_id set.
@@ -18,6 +20,16 @@ interface PlaceLocationRow {
   site_id: string
   title: string
   google_place_id: string
+  stripe_customer_id: string | null
+  stripe_subscription_id: string | null
+  plan: string | null
+  status: string | null
+  payment_status: string | null
+  paid_through: string | null
+  past_due_since: string | null
+  current_period_end: string | null
+  cancel_at_period_end: unknown
+  updated_at: string | null
 }
 
 interface PlacesSyncResult {
@@ -59,18 +71,23 @@ export default defineScheduledTask({
       return { result: emptyResult }
     }
 
-    // Sync locations for orgs with google_places entitlement that have a Place ID
-    const locations = await queryAll<PlaceLocationRow>(db, `
-      SELECT bl.id, bl.organization_id, bl.site_id, bl.title, bl.google_place_id
+    // The organization billing projection is the authority for paid scheduled
+    // integrations; legacy entitlement caches are not access grants here.
+    const billingRows = await queryAll<PlaceLocationRow>(db, `
+      SELECT bl.id, bl.organization_id, bl.site_id, bl.title, bl.google_place_id,
+             ob.stripe_customer_id, ob.stripe_subscription_id, ob.plan,
+             ob.status, ob.payment_status, ob.paid_through, ob.past_due_since,
+             ob.current_period_end, ob.cancel_at_period_end, ob.updated_at
       FROM business_locations bl
-      INNER JOIN site_entitlements oe
-        ON oe.site_id = bl.site_id
-        AND oe.key = 'google_places'
-        AND oe.value = 'true'
+      INNER JOIN organization_billing ob
+        ON ob.organization_id = bl.organization_id
+       AND ob.plan = 'growth'
+       AND ob.status IN ('active', 'trialing', 'past_due')
       WHERE bl.google_place_id IS NOT NULL
         AND bl.status = 'active'
       ORDER BY bl.organization_id, bl.site_id
     `)
+    const locations = billingRows.filter((row) => hasScheduledPaidEntitlement(row, 'google_places'))
 
     if (locations.length === 0) {
       return { result: emptyResult }

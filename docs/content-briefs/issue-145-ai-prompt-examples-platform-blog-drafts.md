@@ -567,7 +567,7 @@ Restaurant draft coverage:
 - Media placement: `upload_user_photo`, `get_site_media_assets`, `set_media`
 - Menu workflows: `list_menus`, `get_menu`, `create_menu`, `update_menu`, `create_menu_item`, `add_menu_items_batch`, `update_menu_item`, `rename_menu_section`, `delete_menu_section`, `reorder_menu_items`, `import_menu_from_media`
 - Locations: `list_locations`, `create_location`, `update_location`, `copy_location_batch`
-- Posts and social: `create_post`, `update_post`, `set_media`, `publish_post`, Facebook connection tools
+- Posts and social: `create_post`, `update_post`, `set_media`, `publish_post`; Facebook connection tools require Growth
 - Tenant blog: `create_blog_post`, `update_blog_post`, `set_media`
 - Reviews and Q&A: `list_location_reviews`, `reply_to_review`, `list_location_qa`, `create_location_qa`, `update_location_qa`, `reorder_location_qa`
 - Inbox/reservations: `triage_inbox`, reservation/contact listing behavior described in issue 145
@@ -575,7 +575,7 @@ Restaurant draft coverage:
 - Google Places: `import_from_maps`; Google Place IDs and imported details remain editable in the dashboard
 - Localized content: `list_locales`, `upsert_locale`, `delete_locale`; owners enter localized page, menu, and location fields themselves
 - Domains and dashboard links: `get_site_domains`, `create_domain`, `sync_domain`, `set_canonical_domain`, `get_dashboard_link`
-- Managed service: `list_work_requests`, `create_work_request`
+- Priority support: `list_work_requests`, `create_work_request` for Growth
 
 Experience draft coverage:
 
@@ -588,12 +588,12 @@ Experience draft coverage:
 - Locations/meeting points: `list_locations`, `create_location`, `update_location`, `copy_location_batch`
 - Reviews and Q&A: `list_location_reviews`, `reply_to_review`, `list_location_qa`, `create_location_qa`, `update_location_qa`, `reorder_location_qa`
 - Analytics and growth: `get_site_analytics`, `grow_my_bookings`, `make_site_more_bookable`
-- Posts/social: `create_post`, `update_post`, `set_media`, `publish_post`, Facebook connection tools
+- Posts/social: `create_post`, `update_post`, `set_media`, `publish_post`; Facebook connection tools require Growth
 - Tenant blog: `create_blog_post`, `update_blog_post`, `set_media`
 - Google Places: `import_from_maps`; Google Place IDs and imported details remain editable in the dashboard
 - Localized content: `list_locales`, `upsert_locale`, `delete_locale`; owners enter localized page, menu, and location fields themselves
 - Domains and dashboard links: `get_site_domains`, `create_domain`, `sync_domain`, `set_canonical_domain`, `get_dashboard_link`
-- Managed service: `list_work_requests`, `create_work_request`
+- Priority support: `list_work_requests`, `create_work_request` for Growth
 
 Claims intentionally avoided:
 

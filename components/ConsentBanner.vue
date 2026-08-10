@@ -1,6 +1,6 @@
 <template>
   <div
-    v-if="consent === null"
+    v-if="mounted && consent === null"
     data-consent-banner
     class="fixed inset-x-0 bottom-0 z-[200] border-t px-4 py-4 shadow-[0_-4px_24px_rgba(0,0,0,0.25)] sm:px-6"
     :class="variant === 'blawby' ? 'border-[var(--blawby-border)] bg-[var(--blawby-primary-800)]' : 'border-default bg-elevated'"
@@ -53,4 +53,9 @@ withDefaults(defineProps<{
 })
 
 const { consent, accept, reject } = useCookieConsent()
+const mounted = ref(false)
+
+onMounted(() => {
+  mounted.value = true
+})
 </script>

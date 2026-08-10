@@ -1,6 +1,6 @@
 import { compileCuratedSiteFixture } from './compile.ts'
 import type { CuratedSiteDefinition } from './contracts.ts'
-import { renderSiteBillingSql, renderSiteEntitlementsSql } from './billing-sql.ts'
+import { renderCanonicalBillingSql } from './billing-sql.ts'
 import { renderTenantPagesSeedSql } from './tenant-pages.ts'
 
 function escapeSql(value: string): string {
@@ -432,7 +432,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       category: 'interior',
     },
   ],
-  siteContent: [
+  tenantPageContent: [
     {
       id: 'sc-ph-home-hero',
       locationId: null,
@@ -742,7 +742,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       ],
     },
   ],
-  siteLocaleVariants: [
+  tenantPageLocaleFields: [
     {
       id: 'sct-ph-th-home-hero',
       locationId: null,
@@ -839,7 +839,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     },
   ],
   aiCredits: {
-    balance: 500,
+    balance: 2000,
     lifetimeUsed: 0,
   },
   organizationBilling: {
@@ -1291,9 +1291,10 @@ export function renderCompiledPotteryHouseContentBlock(): string {
   return renderTenantPagesSeedSql({
     siteId: compiledPotteryHouseSeed.identity.siteId,
     organizationId: compiledPotteryHouseSeed.identity.organizationId,
-    locales: compiledPotteryHouseSeed.siteLocales.map(locale => locale.locale),
-    rows: compiledPotteryHouseSeed.siteContent,
-    translations: compiledPotteryHouseSeed.siteLocaleVariants,
+    sourceLocale: compiledPotteryHouseSeed.siteLocales.find(locale => locale.isSource)!.locale,
+    locales: compiledPotteryHouseSeed.siteLocales.map(locale => ({ locale: locale.locale, status: locale.status })),
+    rows: compiledPotteryHouseSeed.tenantPageContent,
+    localeFields: compiledPotteryHouseSeed.tenantPageLocaleFields,
     sqlValue,
     sqlJson,
   })
@@ -1332,13 +1333,11 @@ export function renderCompiledPotteryHouseBillingBlock(): string {
   const parts: string[] = []
 
   if (aiCredits) {
-    parts.push(`INSERT OR REPLACE INTO ai_credits (organization_id, balance, lifetime_used)
-VALUES (${sqlValue(identity.organizationId)}, ${aiCredits.balance}, ${aiCredits.lifetimeUsed});`)
-  }
-
-  if (organizationBilling) {
-    parts.push(renderSiteBillingSql(identity.siteId, identity.organizationId, organizationBilling, sqlValue))
-    parts.push(renderSiteEntitlementsSql(identity.siteId, identity.organizationId, organizationBilling.plan, sqlValue))
+    if (organizationBilling) {
+      parts.push(renderCanonicalBillingSql(identity.siteId, identity.organizationId, organizationBilling, sqlValue, aiCredits))
+    }
+  } else if (organizationBilling) {
+    parts.push(renderCanonicalBillingSql(identity.siteId, identity.organizationId, organizationBilling, sqlValue))
   }
 
   return `-- BEGIN GENERATED: pottery_billing

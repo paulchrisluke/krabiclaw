@@ -4,6 +4,7 @@ import { resolveLocationTimezone } from '~/server/utils/site-config'
 import { markBookingCompleted, type ReviewBookingType } from '~/server/utils/review-requests'
 import { sendReviewRequestForBooking } from '~/server/utils/review-request-delivery'
 import { defineScheduledTask } from '~/server/utils/scheduled-task'
+import { collectScheduledPaidRows } from '~/server/utils/scheduled-billing-access'
 
 interface ReviewRequestTaskContext {
   cloudflare?: { env?: ApiRecord }
@@ -17,11 +18,33 @@ interface AutoCompleteRow {
   booking_date: string
   time_slot: string
   duration_minutes: number | null
+  stripe_customer_id: string | null
+  stripe_subscription_id: string | null
+  plan: string | null
+  status: string | null
+  payment_status: string | null
+  paid_through: string | null
+  past_due_since: string | null
+  current_period_end: string | null
+  cancel_at_period_end: unknown
+  updated_at: string | null
 }
 
 interface SendDueRow {
   id: string
+  organization_id: string
+  site_id: string
   booking_type: ReviewBookingType
+  stripe_customer_id: string | null
+  stripe_subscription_id: string | null
+  plan: string | null
+  status: string | null
+  payment_status: string | null
+  paid_through: string | null
+  past_due_since: string | null
+  current_period_end: string | null
+  cancel_at_period_end: unknown
+  updated_at: string | null
 }
 
 interface TaskResult {
@@ -55,14 +78,22 @@ function nowComparableMs(timezone: string): number {
 }
 
 async function autoCompleteReservations(db: D1Database): Promise<number> {
-  const rows = await queryAll<AutoCompleteRow>(db, `
-    SELECT rs.id, rs.organization_id, rs.site_id, rs.location_id, rs.date AS booking_date, rs.time AS time_slot, NULL AS duration_minutes
-    FROM reservation_submissions rs
-    JOIN site_entitlements se ON se.site_id = rs.site_id AND se.key = 'review_requests' AND se.value = 'true'
-    WHERE rs.status = 'confirmed'
-      AND rs.completed_at IS NULL
-    LIMIT 200
-  `)
+  const rows = await collectScheduledPaidRows((limit, offset) => queryAll<AutoCompleteRow>(db, `
+      SELECT rs.id, rs.organization_id, rs.site_id, rs.location_id,
+             rs.date AS booking_date, rs.time AS time_slot, NULL AS duration_minutes,
+             ob.stripe_customer_id, ob.stripe_subscription_id, ob.plan,
+             ob.status, ob.payment_status, ob.paid_through, ob.past_due_since,
+             ob.current_period_end, ob.cancel_at_period_end, ob.updated_at
+        FROM reservation_submissions rs
+        INNER JOIN organization_billing ob
+          ON ob.organization_id = rs.organization_id
+         AND ob.plan = 'growth'
+         AND ob.status IN ('active', 'trialing', 'past_due')
+       WHERE rs.status = 'confirmed'
+         AND rs.completed_at IS NULL
+       ORDER BY rs.id
+       LIMIT ? OFFSET ?
+    `, [limit, offset]), 'review_requests')
 
   let completed = 0
   for (const row of rows) {
@@ -76,15 +107,23 @@ async function autoCompleteReservations(db: D1Database): Promise<number> {
 }
 
 async function autoCompleteExperienceBookings(db: D1Database): Promise<number> {
-  const rows = await queryAll<AutoCompleteRow>(db, `
-    SELECT eb.id, eb.organization_id, eb.site_id, eb.location_id, eb.booking_date, eb.time_slot, e.duration_minutes
-    FROM experience_bookings eb
-    JOIN experiences e ON e.id = eb.experience_id
-    JOIN site_entitlements se ON se.site_id = eb.site_id AND se.key = 'review_requests' AND se.value = 'true'
-    WHERE eb.status = 'confirmed'
-      AND eb.completed_at IS NULL
-    LIMIT 200
-  `)
+  const rows = await collectScheduledPaidRows((limit, offset) => queryAll<AutoCompleteRow>(db, `
+      SELECT eb.id, eb.organization_id, eb.site_id, eb.location_id,
+             eb.booking_date, eb.time_slot, e.duration_minutes,
+             ob.stripe_customer_id, ob.stripe_subscription_id, ob.plan,
+             ob.status, ob.payment_status, ob.paid_through, ob.past_due_since,
+             ob.current_period_end, ob.cancel_at_period_end, ob.updated_at
+        FROM experience_bookings eb
+        JOIN experiences e ON e.id = eb.experience_id
+        INNER JOIN organization_billing ob
+          ON ob.organization_id = eb.organization_id
+         AND ob.plan = 'growth'
+         AND ob.status IN ('active', 'trialing', 'past_due')
+       WHERE eb.status = 'confirmed'
+         AND eb.completed_at IS NULL
+       ORDER BY eb.id
+       LIMIT ? OFFSET ?
+    `, [limit, offset]), 'review_requests')
 
   let completed = 0
   for (const row of rows) {
@@ -101,28 +140,43 @@ async function autoCompleteExperienceBookings(db: D1Database): Promise<number> {
 async function sendDue(db: D1Database, env: ApiRecord, kind: 'first' | 'reminder'): Promise<{ sent: number; failed: number }> {
   const reservationDelay = kind === 'first' ? '-2 hours' : '-5 days'
   const experienceDelay = kind === 'first' ? '-24 hours' : '-5 days'
-  const rows = await queryAll<SendDueRow>(db, `
-    SELECT rs.id, 'reservation' AS booking_type
-    FROM reservation_submissions rs
-    JOIN customers c ON c.id = rs.customer_id
-    JOIN site_entitlements se ON se.site_id = rs.site_id AND se.key = 'review_requests' AND se.value = 'true'
-    WHERE rs.status = 'completed'
-      AND rs.completed_at IS NOT NULL
-      AND rs.review_submitted_at IS NULL
-      AND c.review_request_opted_out_at IS NULL
-      AND ${kind === 'first' ? "rs.review_request_sent_at IS NULL AND rs.completed_at <= datetime('now', ?)" : "rs.review_request_sent_at IS NOT NULL AND rs.review_reminder_sent_at IS NULL AND rs.review_request_sent_at <= datetime('now', ?)"}
-    UNION ALL
-    SELECT eb.id, 'experience_booking' AS booking_type
-    FROM experience_bookings eb
-    JOIN customers c ON c.id = eb.customer_id
-    JOIN site_entitlements se ON se.site_id = eb.site_id AND se.key = 'review_requests' AND se.value = 'true'
-    WHERE eb.status = 'confirmed'
-      AND eb.completed_at IS NOT NULL
-      AND eb.review_submitted_at IS NULL
-      AND c.review_request_opted_out_at IS NULL
-      AND ${kind === 'first' ? "eb.review_request_sent_at IS NULL AND eb.completed_at <= datetime('now', ?)" : "eb.review_request_sent_at IS NOT NULL AND eb.review_reminder_sent_at IS NULL AND eb.review_request_sent_at <= datetime('now', ?)"}
-    LIMIT 200
-  `, [reservationDelay, experienceDelay])
+  const rows = await collectScheduledPaidRows((limit, offset) => queryAll<SendDueRow>(db, `
+      SELECT * FROM (
+        SELECT rs.id, rs.organization_id, rs.site_id, 'reservation' AS booking_type,
+               ob.stripe_customer_id, ob.stripe_subscription_id, ob.plan,
+               ob.status, ob.payment_status, ob.paid_through, ob.past_due_since,
+               ob.current_period_end, ob.cancel_at_period_end, ob.updated_at
+          FROM reservation_submissions rs
+          JOIN customers c ON c.id = rs.customer_id
+          INNER JOIN organization_billing ob
+            ON ob.organization_id = rs.organization_id
+           AND ob.plan = 'growth'
+           AND ob.status IN ('active', 'trialing', 'past_due')
+         WHERE rs.status = 'completed'
+           AND rs.completed_at IS NOT NULL
+           AND rs.review_submitted_at IS NULL
+           AND c.review_request_opted_out_at IS NULL
+           AND ${kind === 'first' ? "rs.review_request_sent_at IS NULL AND rs.completed_at <= datetime('now', ?)" : "rs.review_request_sent_at IS NOT NULL AND rs.review_reminder_sent_at IS NULL AND rs.review_request_sent_at <= datetime('now', ?)"}
+        UNION ALL
+        SELECT eb.id, eb.organization_id, eb.site_id, 'experience_booking' AS booking_type,
+               ob.stripe_customer_id, ob.stripe_subscription_id, ob.plan,
+               ob.status, ob.payment_status, ob.paid_through, ob.past_due_since,
+               ob.current_period_end, ob.cancel_at_period_end, ob.updated_at
+          FROM experience_bookings eb
+          JOIN customers c ON c.id = eb.customer_id
+          INNER JOIN organization_billing ob
+            ON ob.organization_id = eb.organization_id
+           AND ob.plan = 'growth'
+           AND ob.status IN ('active', 'trialing', 'past_due')
+         WHERE eb.status = 'confirmed'
+           AND eb.completed_at IS NOT NULL
+           AND eb.review_submitted_at IS NULL
+           AND c.review_request_opted_out_at IS NULL
+           AND ${kind === 'first' ? "eb.review_request_sent_at IS NULL AND eb.completed_at <= datetime('now', ?)" : "eb.review_request_sent_at IS NOT NULL AND eb.review_reminder_sent_at IS NULL AND eb.review_request_sent_at <= datetime('now', ?)"}
+      ) AS candidates
+      ORDER BY booking_type, id
+      LIMIT ? OFFSET ?
+    `, [reservationDelay, experienceDelay, limit, offset]), 'review_requests')
 
   let sent = 0
   let failed = 0
