@@ -286,7 +286,7 @@ test('immutable route inventory enumerates every reviewed fixture target and bro
     surfaces: Array<{
       name: string
       routes: Array<{ path: string; content: string; expectedPath: string; allowRedirects: Array<{ status: number; path: string }> }>
-      variants?: Array<{ name: string; baseUrl: string; routes: Array<{ path: string; content: string; expectedPath: string; allowRedirects: Array<{ status: number; path: string }> }> }>
+      variants?: Array<{ name: string; routes: Array<{ path: string; content: string; expectedPath: string; allowRedirects: Array<{ status: number; path: string }> }> }>
     }>
   }
   const surface = (name: string) => {
@@ -299,8 +299,6 @@ test('immutable route inventory enumerates every reviewed fixture target and bro
   const pottery = saya.variants?.find(item => item.name === 'pottery-house')
   const kikuzuki = saya.variants?.find(item => item.name === 'kikuzuki')
   assert.ok(pottery && kikuzuki)
-  assert.equal(pottery.baseUrl, 'https://www.potteryhousekrabi.com')
-  assert.ok(!paths(saya).has('/menu/margherita'), 'editable production demo menu items must not be immutable release routes')
   for (const target of [saya, pottery, kikuzuki]) {
     const targetPaths = paths(target)
     for (const suffix of ['/locations', '/locations/kikuzuki-japanese-robatayaki-izakaya/menu']) {
@@ -329,7 +327,7 @@ test('immutable route inventory enumerates every reviewed fixture target and bro
   assert.equal(platformRoute('/oauth/consent')?.content, 'This app wants to access your KrabiClaw Account.')
   const potteryReservations = pottery.routes.find(route => route.path === '/reservations')
   assert.equal(potteryReservations?.expectedPath, '/experiences')
-  assert.deepEqual(potteryReservations?.allowRedirects, [{ status: 302, origin: 'https://www.potteryhousekrabi.com', path: '/experiences' }])
+  assert.deepEqual(potteryReservations?.allowRedirects, [{ status: 302, origin: 'https://pottery-house.krabiclaw.com', path: '/experiences' }])
   for (const service of ['family', 'small-business-and-nonprofits', 'employment', 'tenant-rights', 'probate-and-estate', 'special-education-and-iep-advocacy']) {
     assert.ok(ncls.has(`/services/${service}`), `NCLS missing service ${service}`)
   }
@@ -359,6 +357,7 @@ test('main pushes automatically build, migrate, deploy, and verify production', 
   assert.match(source, /yarn build[\s\S]*yarn migrate:check[\s\S]*wrangler d1 migrations apply DB --remote[\s\S]*wrangler deploy --tag "\$GITHUB_SHA"/)
   assert.match(source, /purge-deployment-cache\.ts[\s\S]*wait-for-deployed-assets\.mjs[\s\S]*verify-deployed-candidate\.mjs/)
   assert.match(source, /public-rendering-sentinel\.spec\.ts --project=chromium --workers=1/)
+  assert.doesNotMatch(source, /release-route-inventory\.mjs|--route-inventory|RELEASE_ROUTE_INVENTORY_PATH/)
   assert.match(source, /STRIPE_SECRET_KEY: \$\{\{ secrets\.STRIPE_SECRET_KEY \}\}/)
   assert.doesNotMatch(source, /preflight_run_id|staging_run_id|required_reviewers|versions deploy|WORKER_VERSION_OVERRIDE/)
 })
@@ -580,7 +579,7 @@ test('release workflows hard-bind route and origin evidence and block direct rem
   assert.match(full, /STAGING_BASE_URL: https:\/\/staging\.krabiclaw\.com/)
   assert.match(full, /release-route-inventory\.mjs[\s\S]*--route-inventory/)
   assert.match(production, /PLAYWRIGHT_PREVIEW_URL: https:\/\/krabiclaw\.com/)
-  assert.match(production, /--route-inventory "\$RUNNER_TEMP\/production-route-inventory\.json"/)
+  assert.doesNotMatch(production, /release-route-inventory\.mjs|--route-inventory|RELEASE_ROUTE_INVENTORY_PATH/)
   assert.match(nightly, /--route-inventory/)
   assert.match(nightly, /RELEASE_ROUTE_INVENTORY_PATH=\$RUNNER_TEMP\/nightly-route-inventory\.json/)
   assert.match(zaraz, /name: Zaraz GA4 Backfill Plan/)

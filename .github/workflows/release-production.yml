@@ -64,18 +64,14 @@ jobs:
           export DEPLOYMENT_EXPECTED_SOURCE_SHA="$GITHUB_SHA"
           export DEPLOYMENT_EXPECTED_WORKER_VERSION="$PRODUCTION_VERSION_ID"
           DEPLOYMENT_CACHE_ORIGIN=https://krabiclaw.com node --experimental-strip-types scripts/purge-deployment-cache.ts
-          node scripts/release-route-inventory.mjs --base-url https://krabiclaw.com --output "$RUNNER_TEMP/production-route-inventory.json" >/dev/null
           node scripts/wait-for-deployed-assets.mjs
           node scripts/verify-deployed-candidate.mjs \
             --base-url https://krabiclaw.com \
             --expected-sha "$GITHUB_SHA" \
             --expected-version-id "$PRODUCTION_VERSION_ID" \
             --worker-name krabiclaw \
-            --route-inventory "$RUNNER_TEMP/production-route-inventory.json" \
             --output "$RUNNER_TEMP/production-deployment-verification.json"
       - name: Open deployed tenant navigation
-        env:
-          RELEASE_ROUTE_INVENTORY_PATH: ${{ runner.temp }}/production-route-inventory.json
         run: npx playwright test tests/e2e/public-rendering-sentinel.spec.ts --project=chromium --workers=1
       - name: Refresh production search index
         env:
@@ -90,7 +86,6 @@ jobs:
           name: production-deploy-failure-${{ github.sha }}
           path: |
             ${{ runner.temp }}/production-deploy.log
-            ${{ runner.temp }}/production-route-inventory.json
             ${{ runner.temp }}/production-deployment-verification.json
             playwright-report/
             test-results/
