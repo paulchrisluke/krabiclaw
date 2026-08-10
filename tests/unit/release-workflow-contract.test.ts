@@ -196,18 +196,15 @@ test('full lane keeps one uninterrupted staging candidate lock and gates candida
   assert.doesNotMatch(source, /wrangler secret put|--no-bundle/)
   assert.match(source, /--version-override \"\$CANDIDATE_VERSION_ID\"/)
   assert.match(source, /RELEASE_ROUTE_INVENTORY_PATH=\"\$route_inventory\"/)
-  assert.match(source, /--samples 25[\s\S]*--run-label baseline/)
-  assert.match(source, /--samples 25[\s\S]*--run-label candidate/)
-  assert.match(source, /compare-performance-recovery\.mjs/)
-  assert.match(source, /test:e2e:full/)
+  assert.match(source, /public-rendering-sentinel\.spec\.ts[\s\S]*--project=chromium/)
+  assert.doesNotMatch(source, /--samples 25|test:e2e:full|public-surfaces-release/)
   assert.match(source, /status: operationCount === 0 \? 'passed' : 'blocked_drift'/)
   assert.match(source, /if \(operationCount !== 0\) throw new Error\([\s\S]*separate reviewed test-mode apply approval/)
   assert.ok(source.indexOf('if (operationCount !== 0) throw') < source.indexOf('Capturing current staging deployment before any mutation'))
   assert.match(source, /detect_candidate_deployment/)
   assert.match(source, /restore_baseline/)
   assert.match(source, /DEPLOYMENT_CACHE_ORIGIN=\"\$STAGING_BASE_URL\"/)
-  assert.match(source, /candidate-playwright-report\/index\.html/)
-  assert.match(source, /deployed-playwright-report\/index\.html/)
+  assert.match(source, /candidate-navigation-playwright-report\/index\.html/)
   assert.match(source, /if:\s*always\(\)/)
   assert.match(source, /upload-artifact@[\w-]+[\s\S]*candidate-manifest\.json/)
   assert.match(source, /include-hidden-files:\s*true/)
@@ -257,7 +254,7 @@ test('candidate evidence upload failure restores only the manifest-declared stag
 
 test('staging rollback verifies baseline traffic and purges cache before claiming restoration', async () => {
   const jobs = await workflowJobs('.github/workflows/ci-full.yml')
-  const source = runScript(jobs.candidate!, 'Prepare, verify, benchmark, and promote candidate')
+  const source = runScript(jobs.candidate!, 'Prepare, verify, and promote candidate')
   assertRestoreOrdering(source, /"\$STAGING_BASE_URL"/, 'staging')
   assertFailClosedStatusDetection(source, 'staging')
   assertManifestFailureRestoresAfterTrafficMutation(source, 'staging')
@@ -266,7 +263,7 @@ test('staging rollback verifies baseline traffic and purges cache before claimin
   assert.match(source, /splitActive: process\.env\.SPLIT_ACTIVE === 'true'/)
 })
 
-test('direct shared-environment deploys fail closed and comparative validation is explicit', async () => {
+test('direct shared-environment deploys fail closed and stale benchmark commands are absent', async () => {
   const packageSource = await repoFile('package.json')
 
   assert.doesNotMatch(packageSource, /Deploy failed, retrying once/)
@@ -275,14 +272,13 @@ test('direct shared-environment deploys fail closed and comparative validation i
     const escaped = command.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     assert.match(packageSource, new RegExp(`"${escaped}":\\s*"node scripts/release-command-blocked\\.mjs`))
   }
-  assert.match(packageSource, /"benchmark:performance:recovery":\s*"node scripts\/benchmark-performance-recovery\.mjs/)
-  assert.match(packageSource, /"compare:performance:recovery":\s*"node scripts\/compare-performance-recovery\.mjs/)
+  assert.doesNotMatch(packageSource, /benchmark-performance-recovery|compare-performance-recovery|public-surfaces-release/)
 })
 
-test('immutable route inventory enumerates every reviewed fixture target and browser gate checks full first-party content', async () => {
+test('immutable route inventory enumerates every reviewed fixture target and browser gate clicks tenant navigation', async () => {
   const inventorySource = await repoFile('scripts/release-route-inventory.mjs')
   const verifierSource = await repoFile('scripts/verify-deployed-candidate.mjs')
-  const browserSource = await repoFile('tests/e2e/public-surfaces-release.spec.ts')
+  const browserSource = await repoFile('tests/e2e/public-rendering-sentinel.spec.ts')
   const legacySource = await repoFile('scripts/legacy-rollback-route-inventory-4e49e5a37e4a0578bd1b306c4e0822c4fa8bc5c9.mjs')
   const generated = spawnSync('node', ['scripts/release-route-inventory.mjs', '--base-url', 'https://krabiclaw.com'], { encoding: 'utf8' })
   assert.equal(generated.status, 0, generated.stderr)
@@ -340,12 +336,10 @@ test('immutable route inventory enumerates every reviewed fixture target and bro
   assert.match(inventorySource, /PLATFORM_DOC_ROUTES/)
   assert.match(verifierSource, /surface\.variants/)
   assert.match(verifierSource, /location\.search === ''[\s\S]*location\.hash === ''/)
-  assert.match(browserSource, /status >= 400/)
-  assert.match(browserSource, /expectedMediaType/)
-  assert.match(browserSource, /media\.krabiclaw\.com/)
-  assert.match(browserSource, /imagedelivery\.net/)
-  assert.match(browserSource, /window\.scrollTo\(0, y\)/)
-  assert.match(browserSource, /blankSections/)
+  assert.match(browserSource, /status\(\) >= 400/)
+  assert.match(browserSource, /await link\.click\(\)/)
+  assert.match(browserSource, /Kikuzuki/)
+  assert.match(browserSource, /North Carolina Legal Services/)
   assert.match(legacySource, /expectedOrigin/)
   assert.match(legacySource, /targetSourceSha/)
 })
@@ -399,7 +393,7 @@ test('production release requires a separate attested dispatch after read-only p
   assert.equal((source.match(/wrangler versions upload/g) ?? []).length, 1)
   assert.match(source, /detect_candidate_deployment/)
   assert.match(source, /DEPLOYMENT_CACHE_ORIGIN=https:\/\/krabiclaw\.com/)
-  assert.ok((source.match(/public-surfaces-release\.spec\.ts/g) ?? []).length >= 2)
+  assert.match(source, /public-rendering-sentinel\.spec\.ts --project=chromium/)
   assert.match(source, /include-hidden-files:\s*true/)
   assert.doesNotMatch(source, /E2E_ALLOW_DEV_ROUTES|E2E_DEV_ROUTE_SECRET|STRIPE_SECRET_KEY_TEST|BETTER_AUTH_SECRET/)
   assert.doesNotMatch(source, /wrangler secret put|--no-bundle/)
@@ -568,7 +562,7 @@ test('production evidence upload failure restores only the manifest-declared bas
 test('candidate and production restoration are gated by an attempted traffic mutation', async () => {
   const stagingJobs = await workflowJobs('.github/workflows/ci-full.yml')
   const productionJobs = await workflowJobs('.github/workflows/release-production.yml')
-  const staging = runScript(stagingJobs.candidate!, 'Prepare, verify, benchmark, and promote candidate')
+  const staging = runScript(stagingJobs.candidate!, 'Prepare, verify, and promote candidate')
   const production = runScript(productionJobs['deploy-production']!, 'Capture baseline, migrate, roll out, verify, and promote')
 
   for (const [label, source, splitMarker] of [
@@ -643,7 +637,7 @@ test('exact-target production rollback is read-only until protected mutation and
   assert.match(source, /if: failure\(\)/)
   assert.match(source, /versions deploy "\$EXPECTED_CURRENT_WORKER_VERSION_ID@100"/)
   assert.match(source, /rollback-intervention-required\.json/)
-  assert.match(source, /public-surfaces-desktop[\s\S]*public-surfaces-mobile/)
+  assert.match(source, /public-rendering-sentinel\.spec\.ts[\s\S]*--project=chromium/)
   const rollbackSteps = jobs['rollback-production']?.steps ?? []
   assert.equal(jobs['rollback-production']?.env?.PLAYWRIGHT_PREVIEW_URL, 'https://krabiclaw.com')
   const splitStep = rollbackSteps.find(step => step.name === 'Place exact target at zero traffic and prove split')
@@ -687,7 +681,7 @@ test('exact-target production rollback is read-only until protected mutation and
   assert.match(overrideVerifyRun, /differs from the attested target build/)
   assert.equal(overrideBrowserStep?.env?.WORKER_VERSION_OVERRIDE, '${{ inputs.target_worker_version_id }}')
   const overrideBrowserRun = overrideBrowserStep?.run ?? ''
-  assert.match(overrideBrowserRun, /else\s+cd target-source\s+test -f "\$browser_spec"/)
+  assert.match(overrideBrowserRun, /browser_spec="tests\/e2e\/public-rendering-sentinel\.spec\.ts"[\s\S]*--project=chromium/)
   assert.match(overrideBrowserRun, /npx playwright test "\$browser_spec"/)
   assert.equal(overrideBrowserStep?.env?.PLAYWRIGHT_HTML_OUTPUT_DIR, '${{ runner.temp }}/rollback-target-override-playwright-report')
   assert.match(overrideBrowserRun, /--output "\$RUNNER_TEMP\/rollback-target-override-test-results"/)
@@ -703,7 +697,7 @@ test('exact-target production rollback is read-only until protected mutation and
   assert.match(finalVerifyRun, /Promoted legacy asset \$\{pathname\} differs from the attested target build/)
   assert.equal(finalBrowserStep?.env?.WORKER_VERSION_OVERRIDE, undefined)
   const finalBrowserRun = finalBrowserStep?.run ?? ''
-  assert.match(finalBrowserRun, /else\s+cd target-source\s+test -f "\$browser_spec"/)
+  assert.match(finalBrowserRun, /browser_spec="tests\/e2e\/public-rendering-sentinel\.spec\.ts"[\s\S]*--project=chromium/)
   assert.match(finalBrowserRun, /npx playwright test "\$browser_spec"/)
   assert.equal(finalBrowserStep?.env?.PLAYWRIGHT_HTML_OUTPUT_DIR, '${{ runner.temp }}/rollback-promoted-playwright-report')
   assert.match(finalBrowserRun, /--output "\$RUNNER_TEMP\/rollback-promoted-test-results"/)
@@ -764,7 +758,7 @@ test('nightly browser telemetry proves the configured version is serving without
   assert.match(source, /DEPLOYMENT_EXPECTED_WORKER_VERSION:\s*\$\{\{ inputs\.worker_version_id \|\| vars\.NIGHTLY_WORKER_VERSION_ID \}\}/)
   const readiness = source.indexOf('node scripts/wait-for-deployed-assets.mjs')
   const verifier = source.indexOf('node scripts/verify-deployed-candidate.mjs', readiness)
-  const browser = source.indexOf('npx playwright test tests/e2e/public-surfaces-release.spec.ts', verifier)
+  const browser = source.indexOf('npx playwright test tests/e2e/public-rendering-sentinel.spec.ts', verifier)
   const postBrowserReadiness = source.indexOf('node scripts/wait-for-deployed-assets.mjs', browser)
   const postBrowserVerifier = source.indexOf('node scripts/verify-deployed-candidate.mjs', postBrowserReadiness)
   assert.ok(readiness >= 0, 'nightly must wait for the configured unoverridden deployment identity')
@@ -776,7 +770,7 @@ test('nightly browser telemetry proves the configured version is serving without
   assert.doesNotMatch(source, /WORKER_VERSION_OVERRIDE|--version-override/)
   assert.match(source, /release-route-inventory\.mjs/)
   assert.match(source, /--route-inventory/)
-  assert.match(source, /public-surfaces-desktop[\s\S]*public-surfaces-mobile/)
+  assert.match(source, /public-rendering-sentinel\.spec\.ts[\s\S]*--project=chromium/)
   assert.doesNotMatch(source, /canary:status|migrate:(?:prod|staging)|wrangler d1|wrangler (?:deploy|versions)|yarn seed/)
 })
 

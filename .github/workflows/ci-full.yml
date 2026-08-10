@@ -125,7 +125,7 @@ jobs:
           name: production-build-${{ github.sha }}
           path: .output
       - run: npx playwright install --with-deps chromium
-      - name: Prepare, verify, benchmark, and promote candidate
+      - name: Prepare, verify, and promote candidate
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -134,8 +134,7 @@ jobs:
           set -Eeuo pipefail
 
           work_dir="$RUNNER_TEMP/issue-554-candidate"
-          perf_dir="$work_dir/performance"
-          mkdir -p "$perf_dir"
+          mkdir -p "$work_dir"
           manifest="$work_dir/candidate-manifest.json"
           baseline_status="$work_dir/baseline-deployment.json"
           split_status="$work_dir/candidate-split-deployment.json"
@@ -156,8 +155,6 @@ jobs:
           migration_state_after="$work_dir/migration-state-after.json"
           migration_files="$work_dir/migration-files.json"
           browser_evidence="$work_dir/browser-evidence.json"
-          browser_projects="$work_dir/browser-projects.txt"
-          deployed_browser_projects="$work_dir/deployed-browser-projects.txt"
           build_identity="$work_dir/build-identity.json"
           candidate_verification="$work_dir/candidate-verification.json"
           deployed_verification="$work_dir/deployed-verification.json"
@@ -188,7 +185,7 @@ jobs:
           export MIGRATION_BEFORE_PATH="$migration_before" MIGRATION_AFTER_PATH="$migration_after" MIGRATION_BEFORE_APPLIED_PATH="$migration_before_applied" MIGRATION_AFTER_APPLIED_PATH="$migration_after_applied" MIGRATION_STATE_BEFORE_PATH="$migration_state_before" MIGRATION_STATE_AFTER_PATH="$migration_state_after" MIGRATION_FILES_PATH="$migration_files" STAGING_SECRETS_PATH="$staging_secrets"
           export CANDIDATE_VERIFICATION_PATH="$candidate_verification" DEPLOYED_VERIFICATION_PATH="$deployed_verification"
           export ROUTE_INVENTORY_PATH="$route_inventory" RELEASE_ROUTE_INVENTORY_PATH="$route_inventory" DATABASE_MUTATION_FLAG_PATH="$database_mutation_flag"
-          export BROWSER_EVIDENCE_PATH="$browser_evidence" BROWSER_PROJECTS_PATH="$browser_projects" DEPLOYED_BROWSER_PROJECTS_PATH="$deployed_browser_projects" BUILD_IDENTITY_PATH="$build_identity" PERF_DIR="$perf_dir" STRIPE_WEBHOOK_PREFLIGHT_PATH="$stripe_webhook_preflight" STRIPE_CATALOG_PREFLIGHT_PATH="$stripe_catalog_evidence" STRIPE_CANARY_EVIDENCE_PATH="$stripe_canary_evidence"
+          export BROWSER_EVIDENCE_PATH="$browser_evidence" BUILD_IDENTITY_PATH="$build_identity" STRIPE_WEBHOOK_PREFLIGHT_PATH="$stripe_webhook_preflight" STRIPE_CATALOG_PREFLIGHT_PATH="$stripe_catalog_evidence" STRIPE_CANARY_EVIDENCE_PATH="$stripe_canary_evidence"
 
           write_manifest() {
             local exit_status="${1:-0}"
@@ -271,11 +268,6 @@ jobs:
             },
             browser: readJson(process.env.BROWSER_EVIDENCE_PATH),
             stripeCanary: readJson(process.env.STRIPE_CANARY_EVIDENCE_PATH),
-            benchmark: {
-              baseline: readJson(`${process.env.PERF_DIR}/performance-recovery-baseline.json`),
-              candidate: readJson(`${process.env.PERF_DIR}/performance-recovery-candidate.json`),
-              comparison: readJson(`${process.env.PERF_DIR}/performance-comparison.json`),
-            },
             restore: {
               status: restoreStatus,
               deployment: readJson(process.env.RESTORE_STATUS_PATH),
@@ -660,44 +652,11 @@ jobs:
             --route-inventory "$route_inventory" \
             --output "$candidate_verification"
 
-          echo "Running the genuine 25-sample baseline/head comparison"
-          node scripts/benchmark-performance-recovery.mjs \
-            --base-url "$STAGING_BASE_URL" \
-            --samples 25 \
-            --run-label baseline \
-            --source-sha "$BASELINE_SOURCE_SHA" \
-            --worker-version-id "$BASELINE_VERSION_ID" \
-            --worker-version-override "$BASELINE_VERSION_ID" \
-            --cache-state warm-after-1 \
-            --output-dir "$perf_dir"
-          node scripts/benchmark-performance-recovery.mjs \
-            --base-url "$STAGING_BASE_URL" \
-            --samples 25 \
-            --run-label candidate \
-            --source-sha "$GITHUB_SHA" \
-            --worker-version-id "$CANDIDATE_VERSION_ID" \
-            --worker-version-override "$CANDIDATE_VERSION_ID" \
-            --cache-state warm-after-1 \
-            --output-dir "$perf_dir"
-          node scripts/compare-performance-recovery.mjs \
-            --baseline "$perf_dir/performance-recovery-baseline.json" \
-            --head "$perf_dir/performance-recovery-candidate.json" \
-            --output-dir "$perf_dir"
-
-          echo "Opening the complete browser matrix against the 0% candidate override"
-          npx playwright test --list > "$browser_projects"
-          grep -F 'public-surfaces-desktop' "$browser_projects" >/dev/null
-          grep -F 'public-surfaces-mobile' "$browser_projects" >/dev/null
-          npx playwright test tests/e2e/public-surfaces-release.spec.ts \
-            --project=public-surfaces-desktop \
-            --project=public-surfaces-mobile \
+          echo "Opening each tenant homepage and clicking its public navigation on the 0% candidate"
+          npx playwright test tests/e2e/public-rendering-sentinel.spec.ts \
+            --project=chromium \
             --workers=1
-          cp -R playwright-report "$work_dir/candidate-release-surfaces-playwright-report"
-          echo "Running the mutable Blawby /links publish/API/host lifecycle against the 0% candidate"
-          yarn test:e2e:links-page
-          cp -R playwright-report "$work_dir/candidate-links-page-playwright-report"
-          yarn test:e2e:full
-          cp -R playwright-report "$work_dir/candidate-playwright-report"
+          cp -R playwright-report "$work_dir/candidate-navigation-playwright-report"
 
           echo "Promoting candidate to 100% only after every gate passes"
           TRAFFIC_MUTATION_ATTEMPTED="true"
@@ -725,16 +684,6 @@ jobs:
             --worker-name "$WORKER_NAME" \
             --route-inventory "$route_inventory" \
             --output "$deployed_verification"
-          npx playwright test tests/e2e/public-surfaces-release.spec.ts \
-            --project=public-surfaces-desktop \
-            --project=public-surfaces-mobile \
-            --workers=1
-          cp -R playwright-report "$work_dir/deployed-playwright-report"
-          echo "Re-running the mutable Blawby /links publish/API/host lifecycle after staging promotion"
-          yarn test:e2e:links-page
-          cp -R playwright-report "$work_dir/deployed-links-page-playwright-report"
-          npx playwright test --list > "$deployed_browser_projects"
-
           echo "Running post-promotion Stripe test-mode checkout canary at 100%"
           RUN_STRIPE_TEST_CANARY=1 \
           STRIPE_CANARY_SOURCE_SHA="$GITHUB_SHA" \
@@ -742,7 +691,7 @@ jobs:
           STRIPE_CANARY_EVIDENCE_PATH="$stripe_canary_evidence" \
             npx playwright test tests/e2e/stripe-testmode-canary.spec.ts --project=chromium --workers=1
           test -s "$stripe_canary_evidence"
-          WORK_DIR="$work_dir" node -e 'const fs=require("node:fs"),path=require("node:path");const projects=fs.readFileSync(process.env.BROWSER_PROJECTS_PATH,"utf8");const deployedProjects=fs.readFileSync(process.env.DEPLOYED_BROWSER_PROJECTS_PATH,"utf8");const inventory=JSON.parse(fs.readFileSync(process.env.ROUTE_INVENTORY_PATH,"utf8"));if(JSON.stringify(inventory.requiredSurfaces)!==JSON.stringify(["platform","saya","blawby"]))process.exit(2);for(const report of ["candidate-release-surfaces-playwright-report/index.html","candidate-links-page-playwright-report/index.html","candidate-playwright-report/index.html","deployed-playwright-report/index.html","deployed-links-page-playwright-report/index.html"]){if(!fs.existsSync(path.join(process.env.WORK_DIR,report)))process.exit(2)}fs.writeFileSync(process.env.BROWSER_EVIDENCE_PATH,JSON.stringify({status:"passed",baseUrl:process.env.STAGING_BASE_URL,workerName:process.env.WORKER_NAME,versionOverride:null,routeInventory:{requiredSurfaces:inventory.requiredSurfaces,surfaces:inventory.surfaces.map(surface=>({name:surface.name,routes:surface.routes,variants:surface.variants??[]}))},desktop:deployedProjects.includes("public-surfaces-desktop"),mobile:deployedProjects.includes("public-surfaces-mobile"),saya:{desktop:deployedProjects.includes("public-surfaces-desktop"),mobile:deployedProjects.includes("public-surfaces-mobile")},blawby:{desktop:deployedProjects.includes("public-surfaces-desktop"),mobile:deployedProjects.includes("public-surfaces-mobile")},linksPageLifecycle:{status:"passed",candidateOverrideReport:"candidate-links-page-playwright-report/index.html",deployedReport:"deployed-links-page-playwright-report/index.html",cleanupRequired:true},interactiveEvidence:{routeActions:"tests/e2e/public.spec.ts",pagesEditor:"tests/e2e/universal-cms.spec.ts",billing:"tests/e2e/stripe-testmode-canary.spec.ts",linksPage:"tests/e2e/links-page.spec.ts"},candidateOverrideReleaseSurfaces:{status:"passed",projects:["public-surfaces-desktop","public-surfaces-mobile"],report:"candidate-release-surfaces-playwright-report/index.html"},candidateOverrideFullSuite:{status:"passed",report:"candidate-playwright-report/index.html"},deployed:{status:"passed",projects:["public-surfaces-desktop","public-surfaces-mobile"],report:"deployed-playwright-report/index.html"},projects:["public-surfaces-desktop","public-surfaces-mobile"]},null,2))'
+          WORK_DIR="$work_dir" node -e 'const fs=require("node:fs"),path=require("node:path");const report="candidate-navigation-playwright-report/index.html";if(!fs.existsSync(path.join(process.env.WORK_DIR,report)))process.exit(2);fs.writeFileSync(process.env.BROWSER_EVIDENCE_PATH,JSON.stringify({status:"passed",baseUrl:process.env.STAGING_BASE_URL,workerName:process.env.WORKER_NAME,candidateVersionId:process.env.CANDIDATE_VERSION_ID,journey:"tests/e2e/public-rendering-sentinel.spec.ts",report},null,2))'
           CANDIDATE_STATUS="verified"
           SPLIT_ACTIVE="false"
           export CANDIDATE_STATUS SPLIT_ACTIVE

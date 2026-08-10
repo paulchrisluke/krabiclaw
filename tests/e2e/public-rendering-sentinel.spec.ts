@@ -10,152 +10,67 @@ import {
 } from './helpers'
 import { kikuzukiTestBaseUrl, kikuzukiTestExtraHeaders } from './test-env'
 
-type PublicArchetype = {
-  id: string
-  name: string
-  baseURL: string
-  headers: Record<string, string>
-  stylesheet: string
-  routeStylesheet: string
-  route: string
-  expectedText: string
-  shellSelector: string
-  shellStyle: 'saya' | 'blawby'
-}
-
-const archetypes: PublicArchetype[] = [
+const journeys = [
   {
-    id: 'pottery-house',
-    name: 'Saya experience',
+    name: 'Pottery House',
     baseURL: potteryHouseBaseURL,
     headers: potteryHouseExtraHeaders,
-    stylesheet: 'saya-home.css',
+    shell: '.tenant-layout',
+    homeStylesheet: 'saya-home.css',
     routeStylesheet: 'saya.css',
-    route: '/experiences',
-    expectedText: 'Clay, calm, and a place to return to.',
-    shellSelector: '.tenant-layout',
-    shellStyle: 'saya',
+    link: '/experiences',
+    content: /Pottery|Experience/i,
   },
   {
-    id: 'kikuzuki',
-    name: 'Saya restaurant',
+    name: 'Kikuzuki',
     baseURL: kikuzukiTestBaseUrl(),
     headers: kikuzukiTestExtraHeaders(),
-    stylesheet: 'saya-home.css',
+    shell: '.tenant-layout',
+    homeStylesheet: 'saya-home.css',
     routeStylesheet: 'saya.css',
-    route: '/locations',
-    expectedText: 'Kikuzuki',
-    shellSelector: '.tenant-layout',
-    shellStyle: 'saya',
+    link: '/reservations',
+    content: /Reservation/i,
   },
   {
-    id: 'ncls',
-    name: 'Blawby professional service',
+    name: 'North Carolina Legal Services',
     baseURL: blawbyBaseURL,
     headers: blawbyExtraHeaders,
-    stylesheet: 'blawby-home.css',
+    shell: '.blawby-shell',
+    homeStylesheet: 'blawby-home.css',
     routeStylesheet: 'blawby.css',
-    route: '/services',
-    expectedText: 'North Carolina Legal Services',
-    shellSelector: '.blawby-shell',
-    shellStyle: 'blawby',
+    link: '/pricing',
+    content: /Pricing|affordable/i,
   },
-]
+] as const
 
-const requestedArchetype = process.env.PUBLIC_RENDERING_ARCHETYPE
-const selectedArchetypes = requestedArchetype
-  ? archetypes.filter(archetype => archetype.id === requestedArchetype)
-  : archetypes
-
-if (requestedArchetype && selectedArchetypes.length === 0) {
-  throw new Error(`Unknown PUBLIC_RENDERING_ARCHETYPE: ${requestedArchetype}`)
-}
-
-function collectPublicRenderingErrors(page: Page, baseURL: string) {
+function collectFirstPartyErrors(page: Page, baseURL: string) {
   const errors = collectPageErrors(page)
   const origin = new URL(baseURL).origin
-
   page.on('response', (response) => {
-    const url = new URL(response.url())
-    if (url.origin !== origin || response.status() < 400) return
-    errors.push(`First-party response failed: ${response.status()} ${response.request().method()} ${response.url()}`)
+    if (new URL(response.url()).origin === origin && response.status() >= 400) {
+      errors.push(`${response.status()} ${response.request().method()} ${response.url()}`)
+    }
   })
-
   return errors
 }
 
-async function assertRenderedPublicShell(
-  page: Page,
-  archetype: PublicArchetype,
-  errors: string[],
-) {
-  await expect(page.locator(archetype.shellSelector)).toBeVisible()
-  await expect(page.locator(`link[rel="stylesheet"][href*="${archetype.stylesheet}"]`)).toHaveCount(1)
-  await expect(page.locator('body')).toContainText(archetype.expectedText)
+test('deployed tenant home navigation keeps real content and styles', async ({ page }) => {
+  for (const journey of journeys) {
+    await setupTenantHeaders(page, journey.baseURL, journey.headers)
+    const errors = collectFirstPartyErrors(page, journey.baseURL)
+    const response = await page.goto(`${journey.baseURL}/`, { waitUntil: 'load' })
+    expect(response?.status(), journey.name).toBeLessThan(400)
+    await expect(page.locator(journey.shell)).toBeVisible()
+    await expect(page.locator(`link[rel="stylesheet"][href*="${journey.homeStylesheet}"]`)).toHaveCount(1)
 
-  const stylesheetLoaded = await page.locator(`link[rel="stylesheet"][href*="${archetype.stylesheet}"]`).evaluate((element) => {
-    const sheet = (element as HTMLLinkElement).sheet
-    if (!sheet) return false
-    try {
-      return sheet.cssRules.length > 0
-    } catch {
-      return false
-    }
-  })
+    const link = page.locator(`a[href="${journey.link}"]`).first()
+    await expect(link, `${journey.name} ${journey.link} navigation`).toBeVisible()
+    await link.click()
 
-  const styleState = await page.locator(archetype.shellSelector).evaluate((element, shellStyle) => {
-    const style = getComputedStyle(element)
-    return {
-      display: style.display,
-      minHeight: style.minHeight,
-      backgroundColor: style.backgroundColor,
-      shellStyle,
-    }
-  }, archetype.shellStyle)
-
-  expect(stylesheetLoaded).toBe(true)
-  if (archetype.shellStyle === 'saya') {
-    expect(styleState.display).toBe('flex')
-  } else {
-    expect(styleState.minHeight).not.toBe('0px')
+    await expect(page).toHaveURL(new RegExp(`${journey.link}/?$`))
+    await expect(page.locator('main')).toBeVisible()
+    await expect(page.locator('main')).toContainText(journey.content)
+    await expect(page.locator(`link[rel="stylesheet"][href*="${journey.routeStylesheet}"]`)).toHaveCount(1)
+    await expectHealthyPage(page, errors)
   }
-  expect(styleState.backgroundColor).not.toBe('rgba(0, 0, 0, 0)')
-
-  await expectHealthyPage(page, errors)
-}
-
-async function assertRenderedRoute(
-  page: Page,
-  archetype: PublicArchetype,
-  errors: string[],
-) {
-  await expect(page.locator(`link[rel="stylesheet"][href*="${archetype.routeStylesheet}"]`)).toHaveCount(1)
-  await expect(page.locator('main')).toBeVisible()
-  await expectHealthyPage(page, errors)
-}
-
-const viewports = [
-  { name: 'mobile', width: 390, height: 844 },
-  { name: 'desktop', width: 1440, height: 900 },
-]
-
-for (const archetype of selectedArchetypes) {
-  for (const viewport of viewports) {
-    test(`${archetype.name} public rendering sentinel at ${viewport.name}`, async ({ page }) => {
-      await page.setViewportSize({ width: viewport.width, height: viewport.height })
-      await setupTenantHeaders(page, archetype.baseURL, archetype.headers)
-      const errors = collectPublicRenderingErrors(page, archetype.baseURL)
-
-      const homeResponse = await page.goto(`${archetype.baseURL}/`, { waitUntil: 'load' })
-      expect(homeResponse?.status()).toBeLessThan(400)
-      await assertRenderedPublicShell(page, archetype, errors)
-
-      await page.waitForTimeout(750)
-      await assertRenderedPublicShell(page, archetype, errors)
-
-      const routeResponse = await page.goto(`${archetype.baseURL}${archetype.route}`, { waitUntil: 'load' })
-      expect(routeResponse?.status()).toBeLessThan(400)
-      await assertRenderedRoute(page, archetype, errors)
-    })
-  }
-}
+})

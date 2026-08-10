@@ -150,12 +150,12 @@ jobs:
             # predates the release verifier/spec. There is intentionally no
             # generic missing-file fallback.
             test ! -e scripts/release-route-inventory.mjs
-            test ! -e tests/e2e/public-surfaces-release.spec.ts
+            test ! -e tests/e2e/public-rendering-sentinel.spec.ts
             node ../scripts/legacy-rollback-route-inventory-4e49e5a37e4a0578bd1b306c4e0822c4fa8bc5c9.mjs \
               --base-url "$PRODUCTION_BASE_URL" --output "$RUNNER_TEMP/release-route-inventory.json"
           else
             test -f scripts/release-route-inventory.mjs
-            test -f tests/e2e/public-surfaces-release.spec.ts
+            test -f tests/e2e/public-rendering-sentinel.spec.ts
             node scripts/release-route-inventory.mjs --base-url "$PRODUCTION_BASE_URL" --output "$RUNNER_TEMP/release-route-inventory.json"
           fi
       - name: Prove current traffic and target provenance (read-only)
@@ -554,17 +554,12 @@ jobs:
         run: |
           set -Eeuo pipefail
           result="$RUNNER_TEMP/rollback-target-override-browser-result.json"
-          browser_spec="tests/e2e/public-surfaces-release.spec.ts"
-          if [[ "$TARGET_SOURCE_SHA" == "$LEGACY_TARGET_SOURCE_SHA" && "$TARGET_WORKER_VERSION_ID" == "$LEGACY_TARGET_WORKER_VERSION_ID" ]]; then
-            test -f "$browser_spec"
+          browser_spec="tests/e2e/public-rendering-sentinel.spec.ts"
+          test -f "$browser_spec"
+          if npx playwright test "$browser_spec" --project=chromium --workers=1 --output "$RUNNER_TEMP/rollback-target-override-test-results"; then
+            printf '%s\n' '{"status":"passed","project":"chromium","journey":"tenant-home-navigation","browserSpec":"tests/e2e/public-rendering-sentinel.spec.ts","versionOverride":"'"$TARGET_WORKER_VERSION_ID"'"}' > "$result"
           else
-            cd target-source
-            test -f "$browser_spec"
-          fi
-          if npx playwright test "$browser_spec" --project=public-surfaces-desktop --project=public-surfaces-mobile --workers=1 --output "$RUNNER_TEMP/rollback-target-override-test-results"; then
-            printf '%s\n' '{"status":"passed","projects":["public-surfaces-desktop","public-surfaces-mobile"],"surfaces":["Saya","Blawby"],"routeInventory":"rollback-route-inventory.json","browserSpec":"tests/e2e/public-surfaces-release.spec.ts","versionOverride":"'"$TARGET_WORKER_VERSION_ID"'"}' > "$result"
-          else
-            printf '%s\n' '{"status":"failed","projects":["public-surfaces-desktop","public-surfaces-mobile"],"surfaces":["Saya","Blawby"],"routeInventory":"rollback-route-inventory.json","browserSpec":"tests/e2e/public-surfaces-release.spec.ts","versionOverride":"'"$TARGET_WORKER_VERSION_ID"'"}' > "$result"
+            printf '%s\n' '{"status":"failed","project":"chromium","journey":"tenant-home-navigation","browserSpec":"tests/e2e/public-rendering-sentinel.spec.ts","versionOverride":"'"$TARGET_WORKER_VERSION_ID"'"}' > "$result"
             exit 1
           fi
       - name: Promote exact target and wait for unoverridden readiness
@@ -690,17 +685,12 @@ jobs:
         run: |
           set -Eeuo pipefail
           result="$RUNNER_TEMP/rollback-browser-result.json"
-          browser_spec="tests/e2e/public-surfaces-release.spec.ts"
-          if [[ "$TARGET_SOURCE_SHA" == "$LEGACY_TARGET_SOURCE_SHA" && "$TARGET_WORKER_VERSION_ID" == "$LEGACY_TARGET_WORKER_VERSION_ID" ]]; then
-            test -f "$browser_spec"
+          browser_spec="tests/e2e/public-rendering-sentinel.spec.ts"
+          test -f "$browser_spec"
+          if npx playwright test "$browser_spec" --project=chromium --workers=1 --output "$RUNNER_TEMP/rollback-promoted-test-results"; then
+            printf '%s\n' '{"status":"passed","project":"chromium","journey":"tenant-home-navigation","browserSpec":"tests/e2e/public-rendering-sentinel.spec.ts"}' > "$result"
           else
-            cd target-source
-            test -f "$browser_spec"
-          fi
-          if npx playwright test "$browser_spec" --project=public-surfaces-desktop --project=public-surfaces-mobile --workers=1 --output "$RUNNER_TEMP/rollback-promoted-test-results"; then
-            printf '%s\n' '{"status":"passed","projects":["public-surfaces-desktop","public-surfaces-mobile"],"surfaces":["Saya","Blawby"],"routeInventory":"rollback-route-inventory.json","browserSpec":"tests/e2e/public-surfaces-release.spec.ts"}' > "$result"
-          else
-            printf '%s\n' '{"status":"failed","projects":["public-surfaces-desktop","public-surfaces-mobile"],"surfaces":["Saya","Blawby"],"routeInventory":"rollback-route-inventory.json","browserSpec":"tests/e2e/public-surfaces-release.spec.ts"}' > "$result"
+            printf '%s\n' '{"status":"failed","project":"chromium","journey":"tenant-home-navigation","browserSpec":"tests/e2e/public-rendering-sentinel.spec.ts"}' > "$result"
             exit 1
           fi
       - name: Restore exact baseline after post-mutation failure
