@@ -173,6 +173,9 @@ function asItems(value: unknown): GridItem[] {
 }
 
 function gridItems(block: TenantPageBlock): GridItem[] {
+  if (block.type === 'feature_grid') {
+    return asItems(block.data.items ?? block.data.features ?? block.data.statistics ?? block.data.people)
+  }
   return asItems(block.data.items)
 }
 
