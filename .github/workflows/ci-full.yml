@@ -652,12 +652,6 @@ jobs:
             --route-inventory "$route_inventory" \
             --output "$candidate_verification"
 
-          echo "Opening each tenant homepage and clicking its public navigation on the 0% candidate"
-          npx playwright test tests/e2e/public-rendering-sentinel.spec.ts \
-            --project=chromium \
-            --workers=1
-          cp -R playwright-report "$work_dir/candidate-navigation-playwright-report"
-
           echo "Promoting candidate to 100% only after every gate passes"
           TRAFFIC_MUTATION_ATTEMPTED="true"
           printf '%s\n' "true" > "$traffic_mutation_flag"
@@ -684,6 +678,11 @@ jobs:
             --worker-name "$WORKER_NAME" \
             --route-inventory "$route_inventory" \
             --output "$deployed_verification"
+          echo "Opening each tenant homepage and clicking its public navigation on the promoted candidate"
+          npx playwright test tests/e2e/public-rendering-sentinel.spec.ts \
+            --project=chromium \
+            --workers=1
+          cp -R playwright-report "$work_dir/deployed-candidate-navigation-playwright-report"
           echo "Running post-promotion Stripe test-mode checkout canary at 100%"
           RUN_STRIPE_TEST_CANARY=1 \
           STRIPE_CANARY_SOURCE_SHA="$GITHUB_SHA" \
@@ -691,7 +690,7 @@ jobs:
           STRIPE_CANARY_EVIDENCE_PATH="$stripe_canary_evidence" \
             npx playwright test tests/e2e/stripe-testmode-canary.spec.ts --project=chromium --workers=1
           test -s "$stripe_canary_evidence"
-          WORK_DIR="$work_dir" node -e 'const fs=require("node:fs"),path=require("node:path");const report="candidate-navigation-playwright-report/index.html";if(!fs.existsSync(path.join(process.env.WORK_DIR,report)))process.exit(2);fs.writeFileSync(process.env.BROWSER_EVIDENCE_PATH,JSON.stringify({status:"passed",baseUrl:process.env.STAGING_BASE_URL,workerName:process.env.WORKER_NAME,candidateVersionId:process.env.CANDIDATE_VERSION_ID,journey:"tests/e2e/public-rendering-sentinel.spec.ts",report},null,2))'
+          WORK_DIR="$work_dir" node -e 'const fs=require("node:fs"),path=require("node:path");const report="deployed-candidate-navigation-playwright-report/index.html";if(!fs.existsSync(path.join(process.env.WORK_DIR,report)))process.exit(2);fs.writeFileSync(process.env.BROWSER_EVIDENCE_PATH,JSON.stringify({status:"passed",baseUrl:process.env.STAGING_BASE_URL,workerName:process.env.WORKER_NAME,candidateVersionId:process.env.CANDIDATE_VERSION_ID,journey:"tests/e2e/public-rendering-sentinel.spec.ts",traffic:"unoverridden",report},null,2))'
           CANDIDATE_STATUS="verified"
           SPLIT_ACTIVE="false"
           export CANDIDATE_STATUS SPLIT_ACTIVE

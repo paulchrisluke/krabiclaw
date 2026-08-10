@@ -344,6 +344,9 @@ jobs:
       PRODUCTION_BASE_URL: https://krabiclaw.com
       PLAYWRIGHT_PREVIEW_URL: https://krabiclaw.com
       PREFLIGHT_ARTIFACT_NAME: production-rollback-preflight-${{ github.run_id }}
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+      NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:

@@ -159,7 +159,11 @@ watch(() => props.modelValue, async (isOpen) => {
 }, { immediate: true })
 
 onMounted(() => {
-  if (toggleRef.value?.checked && !props.modelValue) {
+  const toggle = toggleRef.value
+  if (!toggle) return
+  if (props.modelValue) {
+    toggle.checked = true
+  } else if (toggle.checked) {
     emit('update:modelValue', true)
   }
 })

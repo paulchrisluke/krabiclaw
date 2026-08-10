@@ -25,23 +25,23 @@ test('Cloudflare moved hostnames map to a persisted failure so PATCH recovery re
   assert.equal(mapCloudflareStatus('moved', 'pending_validation', 'valid'), 'failed')
 })
 
-test('flattened apex records match the SaaS target addresses', () => {
-  assert.equal(domainRecordsPointToSaas(
-    [],
-    ['104.21.79.204', '172.67.147.214'],
-    [],
-    'customers.krabiclaw.com',
-    ['172.67.147.214', '104.21.79.204'],
-    [],
-  ), true)
-  assert.equal(domainRecordsPointToSaas(
-    [],
-    ['198.49.23.144'],
-    [],
-    'customers.krabiclaw.com',
-    ['172.67.147.214', '104.21.79.204'],
-    [],
-  ), false)
+test('only account-specific CNAMEs prove that DNS points to SaaS', () => {
+  const cases = [
+    { name: 'exact CNAME', cname: ['customers.krabiclaw.com'], a: [], aaaa: [], expected: true },
+    { name: 'managed descendant CNAME', cname: ['tenant.customers.krabiclaw.com'], a: [], aaaa: [], expected: true },
+    { name: 'unrelated CNAME', cname: ['proxy.example.net'], a: [], aaaa: [], expected: false },
+    { name: 'shared IPv4 only', cname: [], a: ['104.21.79.204'], aaaa: [], expected: null },
+    { name: 'shared IPv6 only', cname: [], a: [], aaaa: ['2606:4700:3030::6815:4fcc'], expected: null },
+    { name: 'valid NODATA', cname: [], a: [], aaaa: [], expected: false },
+  ] as const
+
+  for (const entry of cases) {
+    assert.equal(
+      domainRecordsPointToSaas([...entry.cname], [...entry.a], [...entry.aaaa], 'customers.krabiclaw.com'),
+      entry.expected,
+      entry.name,
+    )
+  }
 })
 
 test('standard custom hostnames use HTTP DCV by default', () => {

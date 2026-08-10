@@ -20,13 +20,7 @@
         </div>
       </template>
 
-      <template v-else-if="block.type === 'heading'">
-        <component :is="headingTag(block.data.level)" class="mt-12 text-3xl font-semibold tracking-tight">{{ text(block.data.text) || page.title }}</component>
-      </template>
-
-      <template v-else-if="block.type === 'markdown'">
-        <div v-if="text(block.data.markdown) || text(block.data.content)" class="prose prose-lg mt-8 max-w-none whitespace-pre-wrap text-muted">{{ sanitize(text(block.data.markdown) || text(block.data.content)) }}</div>
-      </template>
+      <TenantPageRichTextBlock v-else-if="block.type === 'heading' || block.type === 'markdown'" :block="block" :page-title="page.title" />
 
       <template v-else-if="block.type === 'image'">
         <figure v-if="text(block.data.url)" class="my-12">
@@ -147,11 +141,6 @@ function text(value: unknown): string {
 
 function sanitize(value: string): string {
   return sanitizer.sanitize(value)
-}
-
-function headingTag(value: unknown): string {
-  const level = Number(value)
-  return `h${Number.isInteger(level) && level >= 1 && level <= 6 ? level : 2}`
 }
 
 function sectionKey(block: TenantPageBlock): string | undefined {

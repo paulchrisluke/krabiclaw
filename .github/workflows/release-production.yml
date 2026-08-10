@@ -103,7 +103,7 @@ jobs:
       - name: Read production webhook endpoint with the live Stripe key
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
-          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY_LIVE }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_EXPECTED_MODE: live
           STRIPE_WEBHOOK_ENDPOINT_URL: https://krabiclaw.com/api/billing/webhook
           STRIPE_WEBHOOK_PREFLIGHT_EVIDENCE_PATH: ${{ runner.temp }}/production-stripe-webhook-preflight.json
@@ -300,6 +300,9 @@ jobs:
       PLAYWRIGHT_PREVIEW_URL: https://krabiclaw.com
       PLAYWRIGHT_WORKERS: "1"
       WORKER_NAME: krabiclaw
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+      NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -666,9 +669,6 @@ jobs:
           export WORKER_VERSION_OVERRIDE="$CANDIDATE_VERSION_ID"
           node scripts/wait-for-deployed-assets.mjs
           node scripts/verify-deployed-candidate.mjs --base-url https://krabiclaw.com --expected-sha "$SOURCE_SHA" --expected-version-id "$CANDIDATE_VERSION_ID" --worker-name krabiclaw --version-override "$CANDIDATE_VERSION_ID" --route-inventory "$route_inventory" --output "$candidate_verification"
-          npx playwright test tests/e2e/public-rendering-sentinel.spec.ts --project=chromium --workers=1
-          cp -R playwright-report "$work_dir/candidate-navigation-playwright-report"
-
           echo "Promoting candidate to 100% only after every production gate passes"
           TRAFFIC_MUTATION_ATTEMPTED="true"
           printf '%s\n' "true" > "$traffic_mutation_flag"
@@ -684,7 +684,9 @@ jobs:
           unset WORKER_VERSION_OVERRIDE
           DEPLOYMENT_EXPECTED_SOURCE_SHA="$SOURCE_SHA" DEPLOYMENT_EXPECTED_WORKER_VERSION="$CANDIDATE_VERSION_ID" node scripts/wait-for-deployed-assets.mjs
           node scripts/verify-deployed-candidate.mjs --base-url https://krabiclaw.com --expected-sha "$SOURCE_SHA" --expected-version-id "$CANDIDATE_VERSION_ID" --worker-name krabiclaw --route-inventory "$route_inventory" --output "$deployed_verification"
-          WORK_DIR="$work_dir" BROWSER_EVIDENCE_PATH="$browser_evidence" node -e 'const fs=require("node:fs"),path=require("node:path");const report="candidate-navigation-playwright-report/index.html";if(!fs.existsSync(path.join(process.env.WORK_DIR,report)))process.exit(2);fs.writeFileSync(process.env.BROWSER_EVIDENCE_PATH,JSON.stringify({status:"passed",baseUrl:"https://krabiclaw.com",candidateVersionId:process.env.CANDIDATE_VERSION_ID,journey:"tests/e2e/public-rendering-sentinel.spec.ts",report},null,2))'
+          npx playwright test tests/e2e/public-rendering-sentinel.spec.ts --project=chromium --workers=1
+          cp -R playwright-report "$work_dir/deployed-candidate-navigation-playwright-report"
+          WORK_DIR="$work_dir" BROWSER_EVIDENCE_PATH="$browser_evidence" node -e 'const fs=require("node:fs"),path=require("node:path");const report="deployed-candidate-navigation-playwright-report/index.html";if(!fs.existsSync(path.join(process.env.WORK_DIR,report)))process.exit(2);fs.writeFileSync(process.env.BROWSER_EVIDENCE_PATH,JSON.stringify({status:"passed",baseUrl:"https://krabiclaw.com",candidateVersionId:process.env.CANDIDATE_VERSION_ID,journey:"tests/e2e/public-rendering-sentinel.spec.ts",traffic:"unoverridden",report},null,2))'
           yarn ai-search:sync:prod | tee "$search_sync_evidence"
           SPLIT_ACTIVE="false"
           export SPLIT_ACTIVE

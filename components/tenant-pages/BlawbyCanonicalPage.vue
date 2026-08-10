@@ -41,6 +41,9 @@
     <template v-else>
       <BlawbyPageHero :title="heroTitle" :description="heroDescription" :variant="legalVariant" />
       <BlawbyShieldDivider :variant="legalVariant" />
+      <section v-if="legalBodyBlocks.length" class="blawby-container mx-auto max-w-4xl bg-white py-8 text-gray-900" data-parity-section="legal-body">
+        <TenantPageRichTextBlock v-for="bodyBlock in legalBodyBlocks" :key="bodyBlock.id" :block="bodyBlock" :page-title="page.title" />
+      </section>
       <BlawbyConsultationCta v-if="ctaBlock" v-bind="ctaProps" />
     </template>
   </div>
@@ -76,6 +79,7 @@ function assetUrl(value: unknown): string | null {
 }
 
 const heroBlock = computed(() => block('hero'))
+const legalBodyBlocks = computed(() => props.page.blocks.filter(candidate => candidate.type === 'heading' || candidate.type === 'markdown'))
 const heroTitle = computed(() => stringValue(heroBlock.value?.data.title) || props.page.title)
 const heroDescription = computed(() => stringValue(heroBlock.value?.data.description) || props.page.summary || '')
 

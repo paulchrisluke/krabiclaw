@@ -39,7 +39,7 @@ Every candidate run records all of the following in
   redacted endpoint identity. Evidence records the version source and effective
   version. The outbound Stripe client remains pinned independently to
   `STRIPE_API_VERSION`; these versions must not be conflated;
-- one short browser journey that opens each seeded tenant homepage, clicks a
+- one short post-promotion browser journey over normal, unoverridden traffic that opens each seeded tenant homepage, clicks a
   real navigation link, and verifies the destination content, stylesheet,
   console, and first-party request health; and
 - a post-promotion test-mode Stripe organization checkout canary (at 100% of
