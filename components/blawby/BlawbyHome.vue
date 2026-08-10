@@ -1,6 +1,11 @@
 <template>
   <div data-parity-root>
-    <section data-blawby-critical-hero class="relative overflow-hidden" data-parity-section="hero">
+    <section
+      data-blawby-critical-hero
+      :data-has-background="heroBackgroundSrc ? 'true' : undefined"
+      class="relative overflow-hidden"
+      data-parity-section="hero"
+    >
       <img
         v-if="heroBackgroundSrc"
         :src="heroBackgroundSrc"
