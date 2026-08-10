@@ -299,6 +299,7 @@ test('immutable route inventory enumerates every reviewed fixture target and bro
   const pottery = saya.variants?.find(item => item.name === 'pottery-house')
   const kikuzuki = saya.variants?.find(item => item.name === 'kikuzuki')
   assert.ok(pottery && kikuzuki)
+  assert.ok(!paths(saya).has('/menu/margherita'), 'editable production demo menu items must not be immutable release routes')
   for (const target of [saya, pottery, kikuzuki]) {
     const targetPaths = paths(target)
     for (const suffix of ['/locations', '/locations/kikuzuki-japanese-robatayaki-izakaya/menu']) {
