@@ -61,20 +61,12 @@ export interface ResolveBookingPolicyInput {
 }
 
 export interface ResolvedBookingPolicy extends Omit<BookingPolicy,
-  'id' | 'organization_id' | 'created_at' | 'updated_at' |
-  'reschedule_allowed' | 'deposit_required' | 'special_requests_allowed' | 'accessibility_contact_required'
+  'id' | 'organization_id' | 'created_at' | 'updated_at'
 > {
   id: string | null
   organization_id: string | null
   created_at: string | null
   updated_at: string | null
-  // Unlike BookingPolicy (a raw stored row, which may leave these unset at
-  // location/experience scope to inherit from its parent — see seedDefaultsForScope),
-  // a resolved policy has always had baseDefaults applied, so these are never null here.
-  reschedule_allowed: boolean
-  deposit_required: boolean
-  special_requests_allowed: boolean
-  accessibility_contact_required: boolean
   source_scope: BookingPolicyScopeType | 'default'
 }
 
@@ -149,7 +141,7 @@ const BOOKING_POLICY_SELECT = `
   FROM booking_policies
 `
 
-const RESERVATION_DEFAULTS: Omit<ResolvedBookingPolicy, 'id' | 'organization_id' | 'created_at' | 'updated_at' | 'source_scope'> = {
+const EMPTY_RESERVATION_POLICY: Omit<ResolvedBookingPolicy, 'id' | 'organization_id' | 'created_at' | 'updated_at' | 'source_scope'> = {
   site_id: '',
   policy_type: 'reservation',
   scope_type: 'site',
@@ -157,17 +149,17 @@ const RESERVATION_DEFAULTS: Omit<ResolvedBookingPolicy, 'id' | 'organization_id'
   experience_id: null,
   booking_window_days: null,
   advance_notice_minutes: null,
-  free_cancellation_until_minutes: 120,
-  late_arrival_grace_minutes: 15,
-  host_confirmation_sla_minutes: 60,
-  reschedule_allowed: true,
-  reschedule_cutoff_minutes: 120,
-  deposit_required: false,
-  deposit_trigger_party_size: 6,
-  special_requests_allowed: true,
+  free_cancellation_until_minutes: null,
+  late_arrival_grace_minutes: null,
+  host_confirmation_sla_minutes: null,
+  reschedule_allowed: null,
+  reschedule_cutoff_minutes: null,
+  deposit_required: null,
+  deposit_trigger_party_size: null,
+  special_requests_allowed: null,
   weather_policy: null,
   minimum_guest_age: null,
-  accessibility_contact_required: false,
+  accessibility_contact_required: null,
   additional_notes_html: null,
 }
 
@@ -204,7 +196,7 @@ function rowToPolicy(row: BookingPolicyRow): BookingPolicy {
 }
 
 function baseDefaults(siteId: string, policyType: BookingPolicyType): ResolvedBookingPolicy {
-  const defaults = policyType === 'experience' ? EXPERIENCE_DEFAULTS : RESERVATION_DEFAULTS
+  const defaults = policyType === 'experience' ? EXPERIENCE_DEFAULTS : EMPTY_RESERVATION_POLICY
   return {
     ...defaults,
     site_id: siteId,
@@ -217,14 +209,11 @@ function baseDefaults(siteId: string, policyType: BookingPolicyType): ResolvedBo
   }
 }
 
-// Row seed for a newly-created policy, before the caller's patch is applied. Site-scope rows
-// are the ultimate fallback and should hold real default values. Location/experience-scope rows
+// Row seed for a newly-created policy, before the caller's patch is applied. Experience site-scope
+// rows hold the established experience defaults. Location/experience-scope rows
 // must start with every overlay field null — seeding them with baseDefaults would persist a
 // concrete value for every unset field, which applyPolicy's overlay then treats as an explicit
 // override and applies to every guest, silently breaking inheritance from the site-level policy.
-// The four boolean fields can't be nulled here because ResolvedBookingPolicy always holds a
-// concrete boolean (see its definition) — upsertBookingPolicy's insertableBoolean() nulls them
-// out at the SQL layer instead, based on whether the caller's patch explicitly set each one.
 function seedDefaultsForScope(
   siteId: string,
   policyType: BookingPolicyType,
@@ -332,7 +321,10 @@ function applyPolicy(base: ResolvedBookingPolicy, next: BookingPolicy): Resolved
   return merged
 }
 
-function assertScope(input: GetDirectBookingPolicyInput) {
+export function validateBookingPolicyScope(input: Pick<GetDirectBookingPolicyInput, 'policyType' | 'scopeType' | 'locationId' | 'experienceId'>) {
+  if (input.policyType === 'reservation' && input.scopeType !== 'location') {
+    throw createError({ statusCode: 400, statusMessage: 'reservation policies must use location scope' })
+  }
   if (input.scopeType === 'site') {
     if (input.locationId || input.experienceId) {
       throw createError({ statusCode: 400, statusMessage: 'site scope cannot include location_id or experience_id' })
@@ -470,7 +462,7 @@ export async function getDirectBookingPolicy(
   db: DbClient,
   input: GetDirectBookingPolicyInput,
 ): Promise<BookingPolicy | null> {
-  assertScope(input)
+  validateBookingPolicyScope(input)
   if (input.scopeType === 'site') {
     const row = await queryFirst<BookingPolicyRow>(
       db,
@@ -505,6 +497,22 @@ export async function resolveBookingPolicy(
   db: DbClient,
   input: ResolveBookingPolicyInput,
 ): Promise<ResolvedBookingPolicy> {
+  if (input.policyType === 'reservation') {
+    if (!input.locationId) {
+      throw createError({ statusCode: 400, statusMessage: 'reservation policies require location_id' })
+    }
+    const direct = await getDirectBookingPolicy(db, {
+      siteId: input.siteId,
+      policyType: 'reservation',
+      scopeType: 'location',
+      locationId: input.locationId,
+    })
+    const empty = baseDefaults(input.siteId, 'reservation')
+    empty.location_id = input.locationId
+    empty.scope_type = 'location'
+    return direct ? applyPolicy(empty, direct) : empty
+  }
+
   let resolved = baseDefaults(input.siteId, input.policyType)
 
   const sitePolicy = await getDirectBookingPolicy(db, {
@@ -543,7 +551,7 @@ export interface BookingPolicyTarget {
 }
 
 export interface BookingPolicyIndex {
-  site: ResolvedBookingPolicy
+  site: ResolvedBookingPolicy | null
   byLocation: Map<string, ResolvedBookingPolicy>
   byExperience: Map<string, ResolvedBookingPolicy>
 }
@@ -580,13 +588,22 @@ export async function resolveBookingPolicyIndex(
       .map(policy => [policy.experience_id!, policy]),
   )
 
-  let site = baseDefaults(input.siteId, input.policyType)
-  if (sitePolicy) site = applyPolicy(site, sitePolicy)
+  let site: ResolvedBookingPolicy | null = input.policyType === 'experience'
+    ? baseDefaults(input.siteId, input.policyType)
+    : null
+  if (sitePolicy && site) site = applyPolicy(site, sitePolicy)
 
   const byLocation = new Map<string, ResolvedBookingPolicy>()
   for (const locationId of new Set(input.locations ?? [])) {
     const direct = locationPolicies.get(locationId)
-    byLocation.set(locationId, direct ? applyPolicy(site, direct) : site)
+    if (input.policyType === 'reservation') {
+      const empty = baseDefaults(input.siteId, 'reservation')
+      empty.location_id = locationId
+      empty.scope_type = 'location'
+      byLocation.set(locationId, direct ? applyPolicy(empty, direct) : empty)
+    } else {
+      byLocation.set(locationId, direct && site ? applyPolicy(site, direct) : site!)
+    }
   }
 
   const byExperience = new Map<string, ResolvedBookingPolicy>()
@@ -594,9 +611,9 @@ export async function resolveBookingPolicyIndex(
     let resolved = target.locationId
       ? (byLocation.get(target.locationId)
         ?? (locationPolicies.get(target.locationId)
-          ? applyPolicy(site, locationPolicies.get(target.locationId)!)
-          : site))
-      : site
+          ? applyPolicy(site!, locationPolicies.get(target.locationId)!)
+          : site!))
+      : site!
     const direct = experiencePolicies.get(experienceId)
     if (direct) resolved = applyPolicy(resolved, direct)
     byExperience.set(experienceId, resolved)
@@ -660,7 +677,7 @@ export async function upsertBookingPolicy(
   db: DbClient,
   input: UpsertBookingPolicyInput,
 ): Promise<BookingPolicy> {
-  assertScope(input)
+  validateBookingPolicyScope(input)
   const existing = await getDirectBookingPolicy(db, input)
   const patch = input.patch
   const now = new Date().toISOString()
@@ -686,13 +703,13 @@ export async function upsertBookingPolicy(
 
   const id = crypto.randomUUID()
   const seeded = applyBookingPolicyPatch(seedDefaultsForScope(input.siteId, input.policyType, input.scopeType), patch)
-  // Site-scope rows are the ultimate fallback and must always store a concrete value.
-  // Location/experience-scope rows only store a concrete value for a boolean field when
+  // Experience site-scope rows store their established defaults. Location/experience-scope rows
+  // only store a concrete value for a boolean field when
   // the caller's patch explicitly set it — otherwise it's persisted as NULL so applyPolicy's
   // overlay leaves it inherited from the parent scope instead of silently resetting it to
   // seedDefaultsForScope's placeholder default (see seedDefaultsForScope's own comment).
   function insertableBoolean(field: BooleanBookingPolicyField): number | null {
-    if (input.scopeType === 'site') {
+    if (input.policyType === 'experience' && input.scopeType === 'site') {
       return seeded[field] ? 1 : 0
     }
     const value = patch[field]

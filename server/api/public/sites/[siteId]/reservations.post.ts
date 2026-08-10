@@ -279,6 +279,6 @@ export default defineEventHandler(async (event) => {
     id,
     cancellationToken: cancellation.token,
     message: 'Your reservation request has been received. We will confirm shortly.',
-    policy_summary: renderBookingPolicySummary(policy, locale),
+    policy_summary: policy.id ? renderBookingPolicySummary(policy, locale) : null,
   }, { status: 201 })
 })

@@ -1,5 +1,5 @@
 import type { McpExecutorContext } from './shared'
-import { applyBookingPolicyPatch, getDirectBookingPolicy, renderBookingPolicySummary, resolveBookingPolicy, upsertBookingPolicy, validateBookingPolicyPatch, type BookingPolicyScopeType, type BookingPolicyType } from '~/server/utils/booking-policies'
+import { applyBookingPolicyPatch, getDirectBookingPolicy, renderBookingPolicySummary, resolveBookingPolicy, upsertBookingPolicy, validateBookingPolicyPatch, validateBookingPolicyScope, type BookingPolicyScopeType, type BookingPolicyType } from '~/server/utils/booking-policies'
 import { buildTenantPageReplacementConfirmationToken, getEditorContent, updateHomeHero, updatePageContent } from '~/server/utils/mcp-workflows'
 import {
   archiveTenantPage,
@@ -44,6 +44,14 @@ function tenantPageDraftData(args: Record<string, unknown>, page: Awaited<Return
 
 function tenantPageLifecycleResponse(action: string, result: unknown) {
   return renderStructuredResponse(result, `${action} tenant page.`, { tenant_page: result })
+}
+
+function bookingPolicyTarget(args: Record<string, unknown>, policyType: BookingPolicyType) {
+  const locationId = optionalString(args, 'location_id')
+  const experienceId = optionalString(args, 'experience_id')
+  const scopeType = (optionalString(args, 'scope_type') ?? (policyType === 'reservation' ? 'location' : 'site')) as BookingPolicyScopeType
+  validateBookingPolicyScope({ policyType, scopeType, locationId, experienceId })
+  return { locationId, experienceId, scopeType }
 }
 
 function tenantPageReplacementConfirmation(page: Awaited<ReturnType<typeof getTenantPageById>>) {
@@ -297,9 +305,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
       }
     case "get_booking_policy": {
       const policyType = requiredString(args, "policy_type") as BookingPolicyType;
-      const scopeType = (optionalString(args, "scope_type") ?? "site") as BookingPolicyScopeType;
-      const locationId = optionalString(args, "location_id");
-      const experienceId = optionalString(args, "experience_id");
+      const { locationId, experienceId, scopeType } = bookingPolicyTarget(args, policyType);
       const locale = optionalString(args, "locale") ?? "en";
       const policy = await getDirectBookingPolicy(site.db, {
         siteId: site.siteId,
@@ -317,13 +323,12 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
       return {
         policy,
         resolved_policy: resolvedPolicy,
-        summary: renderBookingPolicySummary(resolvedPolicy, locale),
+        summary: resolvedPolicy.id ? renderBookingPolicySummary(resolvedPolicy, locale) : null,
       };
     }
     case "preview_booking_policy": {
       const policyType = requiredString(args, "policy_type") as BookingPolicyType;
-      const locationId = optionalString(args, "location_id");
-      const experienceId = optionalString(args, "experience_id");
+      const { locationId, experienceId } = bookingPolicyTarget(args, policyType);
       const locale = optionalString(args, "locale") ?? "en";
       const resolvedPolicy = await resolveBookingPolicy(site.db, {
         siteId: site.siteId,
@@ -342,9 +347,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
     }
     case "update_booking_policy": {
       const policyType = requiredString(args, "policy_type") as BookingPolicyType;
-      const scopeType = (optionalString(args, "scope_type") ?? "site") as BookingPolicyScopeType;
-      const locationId = optionalString(args, "location_id");
-      const experienceId = optionalString(args, "experience_id");
+      const { locationId, experienceId, scopeType } = bookingPolicyTarget(args, policyType);
       const locale = optionalString(args, "locale") ?? "en";
       const patch = await validateBookingPolicyPatch(args as Record<string, unknown>, policyType);
       const policy = await upsertBookingPolicy(site.db, {

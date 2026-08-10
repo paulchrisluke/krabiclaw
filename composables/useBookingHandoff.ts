@@ -7,7 +7,7 @@ export interface BookingConfirmation {
   type: 'reservation' | 'experience'
   siteId: string
   siteName: string
-  sitePolicySummary?: ApiRecord | null
+  policySummary?: ApiRecord | null
   guestName: string
   date: string
   time: string

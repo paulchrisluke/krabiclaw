@@ -6,6 +6,7 @@ import {
   resolveBookingPolicy,
   upsertBookingPolicy,
   validateBookingPolicyPatch,
+  validateBookingPolicyScope,
   type BookingPolicyScopeType,
   type BookingPolicyType,
 } from '~/server/utils/booking-policies'
@@ -36,10 +37,16 @@ export default defineEventHandler(async (event) => {
 
   const body = await readBody(event) as Record<string, unknown>
   const policyType = body.policy_type === 'experience' ? 'experience' : 'reservation'
-  const scopeType = body.scope_type === 'location' || body.scope_type === 'experience' ? body.scope_type : 'site'
   const locationId = typeof body.location_id === 'string' ? body.location_id : null
   const experienceId = typeof body.experience_id === 'string' ? body.experience_id : null
   const locale = typeof body.locale === 'string' ? body.locale : 'en'
+  const scopeType: BookingPolicyScopeType = body.scope_type === 'location' || body.scope_type === 'experience' ? body.scope_type : 'site'
+  validateBookingPolicyScope({
+    policyType: policyType as BookingPolicyType,
+    scopeType,
+    locationId,
+    experienceId,
+  })
 
   let experienceLocationId: string | null = null
   if (locationId) {
@@ -74,7 +81,7 @@ export default defineEventHandler(async (event) => {
       organizationId: site.organization_id,
       siteId,
       policyType: policyType as BookingPolicyType,
-      scopeType: scopeType as BookingPolicyScopeType,
+      scopeType,
       locationId,
       experienceId,
       patch,

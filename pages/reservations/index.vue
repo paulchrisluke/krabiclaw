@@ -175,7 +175,7 @@ definePageMeta({ layout: 'saya' })
 const { site, siteId } = useTenantSite()
 const { locale } = useI18n()
 const resCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
-const { locations, config, getField, reservationPolicySiteDefault, reservationPolicyByLocation } = await usePublicPageData()
+const { locations, config, getField, reservationPolicyByLocation } = await usePublicPageData()
 const isExperienceSite = computed(() => (site as { vertical?: string | null } | null)?.vertical === 'experience')
 
 // Pure experience-vertical sites book per-experience on /experiences/[slug].
@@ -198,10 +198,11 @@ useSeoMeta({
 
 const activeReservationPolicySummary = computed(() => {
   const locationId = selectedLocation.value?.id ? String(selectedLocation.value.id) : null
-  if (locationId && reservationPolicyByLocation.value[locationId]) {
-    return reservationPolicyByLocation.value[locationId]
+  if (!locationId) return null
+  if (!Object.prototype.hasOwnProperty.call(reservationPolicyByLocation.value, locationId)) {
+    throw createError({ statusCode: 500, statusMessage: 'Reservation policy contract is missing the selected location' })
   }
-  return reservationPolicySiteDefault.value
+  return reservationPolicyByLocation.value[locationId]
 })
 
 // ── Form state ────────────────────────────────────────────────────────────
@@ -400,7 +401,7 @@ async function handleReservation() {
       cancelUrl: res?.id && res?.cancellationToken ? `/reservations/cancel?id=${res.id}#${res.cancellationToken}` : null,
       contactPhone: contactPhone.value || null,
       contactEmail: contactEmail.value || null,
-      sitePolicySummary: res.policy_summary ?? null,
+      policySummary: res.policy_summary ?? null,
       locationId: selectedLocation.value?.id ? String(selectedLocation.value.id) : null,
       locationName: selectedLocation.value?.title ?? null,
       locationAddress: formatLocationAddress(selectedLocation.value?.address),

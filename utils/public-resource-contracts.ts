@@ -70,8 +70,7 @@ export interface PublicPagePayload {
   globalPosts: ApiRecord[]
   blogList: ApiRecord[]
   blogPost: ApiRecord | null
-  reservationPolicySiteDefault: RenderedBookingPolicySummary | null
-  reservationPolicyByLocation: Record<string, RenderedBookingPolicySummary>
+  reservationPolicyByLocation: Record<string, RenderedBookingPolicySummary | null>
   experiencePolicySiteDefault: RenderedBookingPolicySummary | null
   experiencePolicyById: Record<string, RenderedBookingPolicySummary>
   experienceDetail: Experience | null
@@ -101,9 +100,8 @@ export const isPublicPagePayload = (
   && value.globalPosts.every(item => isRecord(item) && typeof item.id === 'string')
   && Array.isArray(value.blogList)
   && (value.blogPost === null || isRecord(value.blogPost))
-  && (value.reservationPolicySiteDefault === null || isRecord(value.reservationPolicySiteDefault))
   && isRecord(value.reservationPolicyByLocation)
-  && Object.values(value.reservationPolicyByLocation).every(isRecord)
+  && Object.values(value.reservationPolicyByLocation).every(item => item === null || isRecord(item))
   && (value.experiencePolicySiteDefault === null || isRecord(value.experiencePolicySiteDefault))
   && isRecord(value.experiencePolicyById)
   && Object.values(value.experiencePolicyById).every(isRecord)

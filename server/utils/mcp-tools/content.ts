@@ -279,7 +279,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'get_booking_policy',
-      description: 'Get the canonical structured booking policy for reservations or experiences. Use scope_type=site for the site default, scope_type=location for a location override, or scope_type=experience for an experience-specific override.',
+      description: 'Get the canonical structured booking policy for reservations or experiences. Reservation policies belong to a location and require location_id. Experience policies may use site, location, or experience scope.',
       domain: 'content',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -294,16 +294,16 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       outputSchema: {
         type: 'object',
         properties: {
-          policy: bookingPolicyObject,
+          policy: { ...bookingPolicyObject, type: ['object', 'null'] },
           resolved_policy: bookingPolicyObject,
-          summary: renderedBookingPolicySummaryObject,
+          summary: { ...renderedBookingPolicySummaryObject, type: ['object', 'null'] },
         },
-        required: ['resolved_policy', 'summary'],
+        required: ['policy', 'resolved_policy', 'summary'],
       },
     }),
   siteTool({
       name: 'preview_booking_policy',
-      description: 'Preview how structured booking policy changes will render without saving them.',
+      description: 'Preview how structured booking policy changes will render without saving them. Reservation policy previews require location_id.',
       domain: 'content',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -320,7 +320,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'update_booking_policy',
-      description: 'Create or update the canonical structured booking policy for reservations or experiences. Use this instead of editing reservation policy prose or experience cancellation text directly.',
+      description: 'Create or update the canonical structured booking policy for reservations or experiences. Reservation policies belong to a location and require location_id; experience policies may use site, location, or experience scope. Use this instead of editing policy prose directly.',
       domain: 'content',
       minimumRole: 'editor',
       confirmRequired: false,

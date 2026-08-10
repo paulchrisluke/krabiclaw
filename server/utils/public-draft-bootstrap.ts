@@ -171,8 +171,9 @@ export async function loadPublicDraftPage(
     globalPosts: page === 'home' || page === 'posts' ? payload.preview.posts : [],
     blogList: [],
     blogPost: null,
-    reservationPolicySiteDefault: null,
-    reservationPolicyByLocation: {},
+    reservationPolicyByLocation: Object.fromEntries(
+      payload.preview.locations.map(location => [String(location.id), null]),
+    ),
     experiencePolicySiteDefault: null,
     experiencePolicyById: {},
     experiencesList: [],

@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:266b5508de84322dfcba6577c7b478a7c8c835400062fa9f8fd8f07802d790cb",
+  "fingerprint": "sha256:aa7e2066d0d417bc50e57fb1f09eb3ba1a0b135de8b5607c8fa4d2dc163457f5",
   "tools": [
     {
       "name": "add_menu_items_batch",
@@ -3298,7 +3298,7 @@
             "type": "string"
           },
           "location_id": {
-            "description": "Optional location id when editing a location-scoped reservation or experience default policy.",
+            "description": "Required for reservation policies and location-scoped experience policies.",
             "type": "string"
           },
           "policy_type": {
@@ -3309,6 +3309,7 @@
             "type": "string"
           },
           "scope_type": {
+            "description": "Reservation policies must use location scope. Experience policies may use site, location, or experience scope.",
             "enum": [
               "site",
               "location",
@@ -3331,7 +3332,10 @@
           "policy": {
             "properties": {
               "accessibility_contact_required": {
-                "type": "boolean"
+                "type": [
+                  "boolean",
+                  "null"
+                ]
               },
               "additional_notes_html": {
                 "type": [
@@ -3358,7 +3362,10 @@
                 ]
               },
               "deposit_required": {
-                "type": "boolean"
+                "type": [
+                  "boolean",
+                  "null"
+                ]
               },
               "deposit_trigger_party_size": {
                 "type": [
@@ -3422,7 +3429,10 @@
                 "type": "string"
               },
               "reschedule_allowed": {
-                "type": "boolean"
+                "type": [
+                  "boolean",
+                  "null"
+                ]
               },
               "reschedule_cutoff_minutes": {
                 "type": [
@@ -3448,7 +3458,10 @@
                 ]
               },
               "special_requests_allowed": {
-                "type": "boolean"
+                "type": [
+                  "boolean",
+                  "null"
+                ]
               },
               "updated_at": {
                 "type": [
@@ -3463,12 +3476,18 @@
                 ]
               }
             },
-            "type": "object"
+            "type": [
+              "object",
+              "null"
+            ]
           },
           "resolved_policy": {
             "properties": {
               "accessibility_contact_required": {
-                "type": "boolean"
+                "type": [
+                  "boolean",
+                  "null"
+                ]
               },
               "additional_notes_html": {
                 "type": [
@@ -3495,7 +3514,10 @@
                 ]
               },
               "deposit_required": {
-                "type": "boolean"
+                "type": [
+                  "boolean",
+                  "null"
+                ]
               },
               "deposit_trigger_party_size": {
                 "type": [
@@ -3559,7 +3581,10 @@
                 "type": "string"
               },
               "reschedule_allowed": {
-                "type": "boolean"
+                "type": [
+                  "boolean",
+                  "null"
+                ]
               },
               "reschedule_cutoff_minutes": {
                 "type": [
@@ -3585,7 +3610,10 @@
                 ]
               },
               "special_requests_allowed": {
-                "type": "boolean"
+                "type": [
+                  "boolean",
+                  "null"
+                ]
               },
               "updated_at": {
                 "type": [
@@ -3637,10 +3665,14 @@
               "items",
               "additional_notes_html"
             ],
-            "type": "object"
+            "type": [
+              "object",
+              "null"
+            ]
           }
         },
         "required": [
+          "policy",
           "resolved_policy",
           "summary"
         ],
@@ -8009,7 +8041,7 @@
             "type": "string"
           },
           "location_id": {
-            "description": "Optional location id when editing a location-scoped reservation or experience default policy.",
+            "description": "Required for reservation policies and location-scoped experience policies.",
             "type": "string"
           },
           "minimum_guest_age": {
@@ -8035,6 +8067,7 @@
             ]
           },
           "scope_type": {
+            "description": "Reservation policies must use location scope. Experience policies may use site, location, or experience scope.",
             "enum": [
               "site",
               "location",
@@ -8066,7 +8099,10 @@
           "resolved_policy": {
             "properties": {
               "accessibility_contact_required": {
-                "type": "boolean"
+                "type": [
+                  "boolean",
+                  "null"
+                ]
               },
               "additional_notes_html": {
                 "type": [
@@ -8093,7 +8129,10 @@
                 ]
               },
               "deposit_required": {
-                "type": "boolean"
+                "type": [
+                  "boolean",
+                  "null"
+                ]
               },
               "deposit_trigger_party_size": {
                 "type": [
@@ -8157,7 +8196,10 @@
                 "type": "string"
               },
               "reschedule_allowed": {
-                "type": "boolean"
+                "type": [
+                  "boolean",
+                  "null"
+                ]
               },
               "reschedule_cutoff_minutes": {
                 "type": [
@@ -8183,7 +8225,10 @@
                 ]
               },
               "special_requests_allowed": {
-                "type": "boolean"
+                "type": [
+                  "boolean",
+                  "null"
+                ]
               },
               "updated_at": {
                 "type": [
@@ -13223,7 +13268,7 @@
             "type": "string"
           },
           "location_id": {
-            "description": "Optional location id when editing a location-scoped reservation or experience default policy.",
+            "description": "Required for reservation policies and location-scoped experience policies.",
             "type": "string"
           },
           "minimum_guest_age": {
@@ -13249,6 +13294,7 @@
             ]
           },
           "scope_type": {
+            "description": "Reservation policies must use location scope. Experience policies may use site, location, or experience scope.",
             "enum": [
               "site",
               "location",
