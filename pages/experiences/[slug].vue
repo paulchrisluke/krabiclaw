@@ -567,7 +567,7 @@ async function submitBooking() {
       siteId,
       siteName: siteName.value,
       guestName: form.guest_name.trim(),
-      sitePolicySummary: res.policy_summary ?? null,
+      policySummary: res.policy_summary ?? null,
       experienceId: experience.value?.id ?? null,
       title: experience.value?.title,
       date: timeSelection.value.day,

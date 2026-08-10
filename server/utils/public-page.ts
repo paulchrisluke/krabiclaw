@@ -971,16 +971,13 @@ async function loadPublicPageSource(
   ]);
   options.signal?.throwIfAborted();
   const policyLocale = locale ?? sourceLocale!;
-  const reservationPolicySiteDefault = reservationPolicies
-    ? renderBookingPolicySummary(reservationPolicies.site, policyLocale)
-    : null;
   const reservationPolicyByLocation = Object.fromEntries(
     Array.from(reservationPolicies?.byLocation ?? [], ([locationId, policy]) => [
       locationId,
-      renderBookingPolicySummary(policy, policyLocale),
+      policy.id ? renderBookingPolicySummary(policy, policyLocale) : null,
     ]),
   );
-  const experiencePolicySiteDefault = experiencePolicies
+  const experiencePolicySiteDefault = experiencePolicies?.site
     ? renderBookingPolicySummary(experiencePolicies.site, policyLocale)
     : null;
   const experiencePolicyById = Object.fromEntries(
@@ -1077,7 +1074,6 @@ async function loadPublicPageSource(
     blogPost: requestedDatasets.has("blogPost") ? blogPost : null,
     postsList: requestedDatasets.has("posts") ? locationPublishedPosts : [],
     globalPosts: needsGlobalPosts ? globalPublishedPosts : [],
-    reservationPolicySiteDefault,
     reservationPolicyByLocation,
     experiencePolicySiteDefault,
     experiencePolicyById,

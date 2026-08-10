@@ -38,6 +38,9 @@ export default defineEventHandler(async (event) => {
   const locationId = typeof body.location_id === 'string' ? body.location_id : null
   const experienceId = typeof body.experience_id === 'string' ? body.experience_id : null
   const locale = typeof body.locale === 'string' ? body.locale : 'en'
+  if (policyType === 'reservation' && !locationId) {
+    return jsonResponse({ error: 'reservation policy previews require location_id' }, { status: 400 })
+  }
 
   if (locationId) {
     const location = await queryFirst<{ id: string }>(db, `SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1`, [locationId, siteId])

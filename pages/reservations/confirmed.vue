@@ -61,7 +61,7 @@ import type { RenderedBookingPolicySummaryItem } from '~/server/utils/booking-po
 definePageMeta({ layout: 'saya' })
 
 const { site, siteId } = useTenantSite()
-const { reservationPolicySiteDefault, reservationPolicyByLocation } = await usePublicPageData()
+const { reservationPolicyByLocation } = await usePublicPageData()
 const { locale } = useI18n()
 const resCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
 const { formatDate } = useLocaleDate()
@@ -92,10 +92,13 @@ const receiptRows = computed(() => {
 })
 
 const resolvedPolicySummary = computed(() => {
-  if (confirmation.value?.sitePolicySummary) return confirmation.value.sitePolicySummary as ApiRecord
+  if (confirmation.value?.policySummary) return confirmation.value.policySummary as ApiRecord
   const locationId = confirmation.value?.locationId
-  if (locationId && reservationPolicyByLocation.value[locationId]) return reservationPolicyByLocation.value[locationId]
-  return reservationPolicySiteDefault.value
+  if (!locationId) return null
+  if (!Object.prototype.hasOwnProperty.call(reservationPolicyByLocation.value, locationId)) {
+    throw createError({ statusCode: 500, statusMessage: 'Reservation policy contract is missing the booked location' })
+  }
+  return reservationPolicyByLocation.value[locationId]
 })
 
 const policyLines = computed(() => (resolvedPolicySummary.value?.items ?? []).map((item: RenderedBookingPolicySummaryItem) => String(item.text ?? '')))

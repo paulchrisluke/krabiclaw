@@ -297,9 +297,9 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
       }
     case "get_booking_policy": {
       const policyType = requiredString(args, "policy_type") as BookingPolicyType;
-      const scopeType = (optionalString(args, "scope_type") ?? "site") as BookingPolicyScopeType;
       const locationId = optionalString(args, "location_id");
       const experienceId = optionalString(args, "experience_id");
+      const scopeType = (optionalString(args, "scope_type") ?? (policyType === "reservation" ? "location" : "site")) as BookingPolicyScopeType;
       const locale = optionalString(args, "locale") ?? "en";
       const policy = await getDirectBookingPolicy(site.db, {
         siteId: site.siteId,
@@ -317,7 +317,7 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
       return {
         policy,
         resolved_policy: resolvedPolicy,
-        summary: renderBookingPolicySummary(resolvedPolicy, locale),
+        summary: resolvedPolicy.id ? renderBookingPolicySummary(resolvedPolicy, locale) : null,
       };
     }
     case "preview_booking_policy": {
@@ -342,9 +342,9 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
     }
     case "update_booking_policy": {
       const policyType = requiredString(args, "policy_type") as BookingPolicyType;
-      const scopeType = (optionalString(args, "scope_type") ?? "site") as BookingPolicyScopeType;
       const locationId = optionalString(args, "location_id");
       const experienceId = optionalString(args, "experience_id");
+      const scopeType = (optionalString(args, "scope_type") ?? (policyType === "reservation" ? "location" : "site")) as BookingPolicyScopeType;
       const locale = optionalString(args, "locale") ?? "en";
       const patch = await validateBookingPolicyPatch(args as Record<string, unknown>, policyType);
       const policy = await upsertBookingPolicy(site.db, {

@@ -36,10 +36,16 @@ export default defineEventHandler(async (event) => {
 
   const body = await readBody(event) as Record<string, unknown>
   const policyType = body.policy_type === 'experience' ? 'experience' : 'reservation'
-  const scopeType = body.scope_type === 'location' || body.scope_type === 'experience' ? body.scope_type : 'site'
   const locationId = typeof body.location_id === 'string' ? body.location_id : null
   const experienceId = typeof body.experience_id === 'string' ? body.experience_id : null
   const locale = typeof body.locale === 'string' ? body.locale : 'en'
+  if (policyType === 'reservation' && body.scope_type !== 'location') {
+    return jsonResponse({ error: 'reservation policies require scope_type=location' }, { status: 400 })
+  }
+  if (policyType === 'reservation' && !locationId) {
+    return jsonResponse({ error: 'reservation policies require location_id' }, { status: 400 })
+  }
+  const scopeType = body.scope_type === 'location' || body.scope_type === 'experience' ? body.scope_type : 'site'
 
   let experienceLocationId: string | null = null
   if (locationId) {

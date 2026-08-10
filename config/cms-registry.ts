@@ -7,12 +7,9 @@ export type CmsSectionId = 'pages' | 'collections' | 'locations' | 'media' | 'si
 // 'consultations' and 'appointments' are declared (not yet wired to any catalog entry below) because
 // no distinct manager/route exists for them yet — today's single 'reservations' feature covers both
 // table-reservation and experience-booking policy management, and blawby's practice management lives
-// entirely on the single 'services' page. A `booking_policies` table (server/db/schema.ts) already
-// models a real reservation/experience policy_type split at site/location/experience scope, so the
-// backing data model exists — building the distinct location.reservation_policies/
-// location.booking_policies managers on top of it is manager-page UX (issue #342's own "Do not
-// implement manager page UX in this issue; that is issue 3/5" boundary), not a capability-model
-// change. Wire real catalog entries when that page work happens instead of aliasing fake ones now.
+// entirely on the single 'services' page. Reservation policies belong to locations because every
+// reservation is location-owned. Experience policies may vary at site, location, or experience
+// scope. Wire distinct manager entries only when their routes provide distinct customer-facing UX.
 export type ProductFeature =
   | 'contact' | 'locations' | 'settings'
   | 'menu' | 'reservations' | 'ordering'
@@ -115,7 +112,7 @@ const sayaTemplateCatalog: CmsTemplateCatalog = {
     { key: 'location.menu', id: 'menu', label: 'Menus', section: 'collections', route: ':location/menu', scope: 'location' },
     { key: 'site.ordering', id: 'ordering', label: 'Orders', section: 'collections', route: 'orders', scope: 'site' },
     { key: 'location.experiences', id: 'experiences', label: 'Experiences', section: 'collections', route: ':location/experiences', scope: 'location' },
-    { key: 'location.reservations', id: 'reservations', label: 'Reservation policies', section: 'collections', route: ':location/reservations', scope: 'location' },
+    { key: 'location.reservations', id: 'reservations', label: 'Reservations', section: 'collections', route: ':location/reservations', scope: 'location' },
   ],
   locationVocabularyDefault: 'location',
 }

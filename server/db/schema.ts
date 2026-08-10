@@ -1500,13 +1500,13 @@ export const booking_policies = sqliteTable("booking_policies", {
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
 	index("booking_policies_site_type_idx").on(table.site_id, table.policy_type),
-	uniqueIndex("booking_policies_reservation_site_unique").on(table.site_id).where(sql`policy_type = 'reservation' AND scope_type = 'site'`),
 	uniqueIndex("booking_policies_reservation_location_unique").on(table.location_id).where(sql`policy_type = 'reservation' AND scope_type = 'location' AND location_id IS NOT NULL`),
 	uniqueIndex("booking_policies_experience_site_unique").on(table.site_id).where(sql`policy_type = 'experience' AND scope_type = 'site'`),
 	uniqueIndex("booking_policies_experience_location_unique").on(table.location_id).where(sql`policy_type = 'experience' AND scope_type = 'location' AND location_id IS NOT NULL`),
 	uniqueIndex("booking_policies_experience_scope_unique").on(table.experience_id).where(sql`policy_type = 'experience' AND scope_type = 'experience' AND experience_id IS NOT NULL`),
 	check("booking_policies_policy_type_check", sql`policy_type IN ('reservation', 'experience')`),
 	check("booking_policies_scope_type_check", sql`scope_type IN ('site', 'location', 'experience')`),
+	check("booking_policies_reservation_location_scope_check", sql`policy_type != 'reservation' OR (scope_type = 'location' AND location_id IS NOT NULL AND experience_id IS NULL)`),
 	index("booking_policies_organization_id_idx").on(table.organization_id),
 ]);
 

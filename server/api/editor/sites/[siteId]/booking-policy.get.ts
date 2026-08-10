@@ -29,10 +29,16 @@ export default defineEventHandler(async (event) => {
 
   const query = getQuery(event)
   const policyType: BookingPolicyType = query.policy_type === 'experience' ? 'experience' : 'reservation'
-  const scopeType: BookingPolicyScopeType = query.scope_type === 'location' || query.scope_type === 'experience' ? query.scope_type : 'site'
   const locationId = typeof query.location_id === 'string' ? query.location_id : null
   const experienceId = typeof query.experience_id === 'string' ? query.experience_id : null
   const locale = typeof query.locale === 'string' ? query.locale : 'en'
+  if (policyType === 'reservation' && query.scope_type !== 'location') {
+    return jsonResponse({ error: 'reservation policies require scope_type=location' }, { status: 400 })
+  }
+  if (policyType === 'reservation' && !locationId) {
+    return jsonResponse({ error: 'reservation policies require location_id' }, { status: 400 })
+  }
+  const scopeType: BookingPolicyScopeType = query.scope_type === 'location' || query.scope_type === 'experience' ? query.scope_type : 'site'
 
   const principal = { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId }
   if (locationId) {
@@ -54,7 +60,7 @@ export default defineEventHandler(async (event) => {
       success: true,
       policy: direct,
       resolved_policy: resolved,
-      summary: renderBookingPolicySummary(resolved, locale),
+      summary: resolved.id ? renderBookingPolicySummary(resolved, locale) : null,
     })
   } catch (error) {
     return jsonResponse({ error: error instanceof Error ? error.message : 'Failed to load booking policy' }, { status: 400 })
