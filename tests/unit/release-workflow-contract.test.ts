@@ -344,247 +344,21 @@ test('immutable route inventory enumerates every reviewed fixture target and bro
   assert.match(legacySource, /targetSourceSha/)
 })
 
-test('production release requires a separate attested dispatch after read-only preflight', async () => {
+test('main pushes automatically build, migrate, deploy, and verify production', async () => {
   const source = await repoFile('.github/workflows/release-production.yml')
-
-  assert.match(source, /^on:\n {2}workflow_dispatch:/m)
-  assert.doesNotMatch(source, /^ {2}push:/m)
-  assert.match(source, /candidate-manifest/)
-  assert.match(source, /verify-deployed-candidate\.mjs/)
-  assert.match(source, /wrangler deploy --dry-run|migrate:check/)
-  assert.match(source, /environment:\s*\n\s+name:\s*production/)
-  assert.match(source, /operation:[\s\S]*preflight[\s\S]*deploy/)
-  assert.match(source, /preflight:[\s\S]*if:\s*inputs\.operation == 'preflight'/)
-  assert.match(source, /deploy-production:[\s\S]*if:\s*inputs\.operation == 'deploy'/)
-  assert.doesNotMatch(source, /deploy-production:[\s\S]{0,200}needs:\s*\[preflight\]/)
-  assert.match(source, /PREFLIGHT_RUN_ID/)
-  assert.match(source, /gh run view[\s\S]*\.workflowName == "Production release \(manifest-gated\)"/)
-  assert.match(source, /gh run download[\s\S]*approved-staging-evidence-\$SOURCE_SHA/)
-  assert.match(source, /GITHUB_STEP_SUMMARY/)
-  assert.match(source, /production-migrations-before/)
-  assert.match(source, /verify-production-baseline-provenance\.mjs/)
-  assert.match(source, /production-baseline-provenance\.json/)
-  assert.match(source, /production-baseline-deployment\.json/)
-  assert.match(source, /api\.workerVersionId == \.versionId/)
-  assert.match(source, /treeSha256/)
-  assert.match(source, /\.migrations\.after\.files \| length/)
-  assert.match(source, /wrangler d1 migrations apply DB --remote/)
-  assert.doesNotMatch(source, /inputs\.staging_base_url/)
-  assert.match(source, /STAGING_BASE_URL: https:\/\/staging\.krabiclaw\.com/)
-  assert.match(source, /stripeWebhookPreflight\.status == \"passed\"/)
-  assert.match(source, /production-stripe-webhook-preflight-\$\{\{ github\.sha \}\}/)
-  assert.match(source, /STRIPE_SECRET_KEY: \$\{\{ secrets\.STRIPE_SECRET_KEY \}\}/)
-  assert.match(source, /STRIPE_WEBHOOK_SECRET: \$\{\{ secrets\.STRIPE_WEBHOOK_SECRET \}\}/)
-  assert.match(source, /NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: \$\{\{ secrets\.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY \}\}/)
-  assert.match(source, /STRIPE_WEBHOOK_EXPECTED_MODE: live/)
-  assert.match(source, /\.accountMode == \"live\"/)
-  assert.match(source, /\.effectiveApiVersion == \$expected_api_version/)
-  assert.match(source, /\.apiVersionSource == \"endpoint\"/)
-  assert.match(source, /\.apiVersionSource == \"account_default\"/)
-  assert.match(source, /\.accountDefaultApiVersions == \[\$expected_api_version\]/)
-  assert.match(source, /\.accountDefaultMissingResponseCount == 0/)
-  assert.match(source, /gh run download[\s\S]*production-stripe-webhook-preflight-\$SOURCE_SHA/)
-  assert.match(source, /stripeCatalogPreflight\.status == \"passed\"/)
-  assert.match(source, /stripeCatalogPreflight\.accountId \| test/)
-  assert.match(source, /stripeCatalogPreflight\.providerSnapshotSha256 \| test/)
-  assert.match(source, /stripeCanary\.status == \"passed\"/)
-  assert.match(source, /routeInventory\.requiredSurfaces/)
-  assert.match(source, /pottery-house.*kikuzuki|kikuzuki.*pottery-house/)
-  assert.match(source, /wrangler versions upload --tag \"\$SOURCE_SHA\"/)
-  assert.match(source, /RELEASE_ROUTE_INVENTORY_PATH=\"\$route_inventory\"/)
-  assert.equal((source.match(/wrangler versions upload/g) ?? []).length, 1)
-  assert.match(source, /detect_candidate_deployment/)
-  assert.match(source, /DEPLOYMENT_CACHE_ORIGIN=https:\/\/krabiclaw\.com/)
-  assert.match(source, /public-rendering-sentinel\.spec\.ts --project=chromium/)
-  assert.match(source, /include-hidden-files:\s*true/)
-  assert.doesNotMatch(source, /E2E_ALLOW_DEV_ROUTES|E2E_DEV_ROUTE_SECRET|STRIPE_SECRET_KEY_TEST|BETTER_AUTH_SECRET/)
-  assert.doesNotMatch(source, /wrangler secret put|--no-bundle/)
-  assert.ok(source.indexOf('verify-production-baseline-provenance.mjs') < source.indexOf('npx wrangler d1 migrations apply DB --remote'))
-})
-
-test('production deploy attests explicit and inherited webhook versions without accepting loose evidence', async () => {
   const jobs = await workflowJobs('.github/workflows/release-production.yml')
   const deploy = jobs['deploy-production']
   assert.ok(deploy)
-  const attestation = runScript(deploy, 'Attest and download the separately reviewed preflight')
-  const filter = attestation.match(/\n\s+'(\.status == "passed"[\s\S]*?)' \\\n\s+"\$PRODUCTION_WEBHOOK_PREFLIGHT_PATH"/)?.[1]
-  assert.ok(filter, 'production webhook evidence jq filter must be present')
 
-  const sourceSha = 'a'.repeat(40)
-  const expectedUrl = 'https://krabiclaw.com/api/billing/webhook'
-  const expectedApiVersion = '2025-11-17.clover'
-  const expectedEvents = ['invoice.paid']
-  const evaluate = (evidence: Record<string, unknown>) => spawnSync(
-    'jq',
-    [
-      '-e',
-      '--arg', 'sha', sourceSha,
-      '--arg', 'expected_url', expectedUrl,
-      '--arg', 'expected_api_version', expectedApiVersion,
-      '--argjson', 'expected_events', JSON.stringify(expectedEvents),
-      filter,
-    ],
-    { input: JSON.stringify(evidence), encoding: 'utf8' },
-  ).status
-  const base = {
-    status: 'passed',
-    accountMode: 'live',
-    testMode: false,
-    sourceSha,
-    expectedUrl,
-    expectedApiVersion,
-    effectiveApiVersion: expectedApiVersion,
-    enabledEvents: expectedEvents,
-    expectedEvents,
-    endpointId: 'we_deadbeef',
-  }
-  const explicit = {
-    ...base,
-    apiVersionSource: 'endpoint',
-    apiVersion: expectedApiVersion,
-  }
-  const inherited = {
-    ...base,
-    apiVersionSource: 'account_default',
-    apiVersion: null,
-    accountDefaultApiVersions: [expectedApiVersion],
-    accountDefaultApiVersionsTruncated: false,
-    accountDefaultResponseCount: 1,
-    accountDefaultMissingResponseCount: 0,
-  }
-
-  assert.equal(evaluate(explicit), 0)
-  assert.equal(evaluate(inherited), 0)
-  assert.notEqual(evaluate({ ...inherited, apiVersion: undefined }), 0)
-  assert.notEqual(evaluate({ ...inherited, accountDefaultResponseCount: '1' }), 0)
-  assert.notEqual(evaluate({ ...inherited, accountDefaultResponseCount: {} }), 0)
-  assert.notEqual(evaluate({ ...inherited, endpointId: 'we_1TiXCPEm0pkzLQDbSYMeElNc_deadbeef' }), 0)
-  assert.notEqual(evaluate({ ...inherited, effectiveApiVersion: '2026-04-22.dahlia' }), 0)
-})
-
-test('production release checks the exact protected Environment before every mutation', async () => {
-  const jobs = await workflowJobs('.github/workflows/release-production.yml')
-  const environmentPreflight = jobs['production-environment-preflight']
-  assert.ok(environmentPreflight)
-  assert.equal(environmentPreflight.environment, undefined)
-  assert.equal(environmentPreflight.permissions?.actions, 'read')
-  assert.equal(environmentPreflight.permissions?.contents, 'read')
-  assert.match(environmentPreflight.if ?? '', /inputs\.operation == 'deploy'/)
-  assert.doesNotMatch(environmentPreflight.if ?? '', /inputs\.operation == 'preflight'/)
-  const protectionScript = runScript(environmentPreflight, 'Require the protected production Environment')
-  assert.match(protectionScript, /\/environments\/production/)
-  assert.match(protectionScript, /http_status/)
-  assert.match(protectionScript, /http_status.*200/)
-  assert.match(protectionScript, /--connect-timeout 10/)
-  assert.match(protectionScript, /--max-time 20/)
-  assert.match(protectionScript, /--retry 0/)
-  assert.match(protectionScript, /protection_rules/)
-  assert.match(protectionScript, /required_reviewers/)
-  assert.match(protectionScript, /prevent_self_review == true/)
-  assert.match(protectionScript, /reviewers/)
-  assert.doesNotMatch(protectionScript, /\b(?:POST|PUT|PATCH|DELETE)\b/)
-
-  assert.equal(jobs.preflight?.needs, undefined)
-  const productionWebhookPreflight = jobs['production-stripe-webhook-preflight']
-  assert.ok(productionWebhookPreflight)
-  assert.match(productionWebhookPreflight.if ?? '', /inputs\.operation == 'preflight'/)
-  assert.equal((productionWebhookPreflight.environment as { name?: string })?.name, 'production')
-  const webhookRead = runScript(productionWebhookPreflight, 'Read production webhook endpoint with the live Stripe key')
-  assert.match(webhookRead, /scripts\/preflight-stripe-webhook-endpoint\.mjs/)
-  assert.doesNotMatch(webhookRead, /wrangler (?:deploy|versions|d1)|curl .* -X (?:POST|PUT|PATCH|DELETE)/)
-  assert.deepEqual(jobs['deploy-production']?.needs, ['production-environment-preflight'])
-  assert.equal((jobs['deploy-production']?.environment as { name?: string })?.name, 'production')
-  assert.match(jobs['deploy-production']?.if ?? '', /needs\.production-environment-preflight\.result == 'success'/)
-
-  const jqFilter = protectionScript.match(/if ! jq -e '([\s\S]*?)' "\$response"/)?.[1]
-  assert.ok(jqFilter, 'Environment protection jq filter must be present')
-  const evaluate = (protectionRules: unknown[]) => spawnSync(
-    'jq',
-    ['-e', jqFilter],
-    {
-      input: JSON.stringify({ name: 'production', protection_rules: protectionRules }),
-      encoding: 'utf8',
-    },
-  )
-  const reviewer = { reviewer: { login: 'release-reviewer' } }
-  assert.equal(evaluate([{ type: 'required_reviewers', prevent_self_review: true, reviewers: [reviewer] }]).status, 0)
-  assert.notEqual(evaluate([{ type: 'required_reviewers', prevent_self_review: false, reviewers: [reviewer] }]).status, 0)
-  assert.notEqual(evaluate([{ type: 'required_reviewers', reviewers: [reviewer] }]).status, 0)
-})
-
-test('production rollback verifies baseline traffic and purges cache before claiming restoration', async () => {
-  const jobs = await workflowJobs('.github/workflows/release-production.yml')
-  const source = runScript(jobs['deploy-production']!, 'Capture baseline, migrate, roll out, verify, and promote')
-  assert.match(source, /verify-production-baseline-provenance\.mjs/)
-  assert.match(source, /approved_baseline_provenance="\$\{APPROVED_BASELINE_PROVENANCE_PATH:\?/)
-  assert.doesNotMatch(source, /approved_baseline_provenance="\$BASELINE_PROVENANCE_PATH"/)
-  assert.ok(source.indexOf('approved_baseline_provenance="${APPROVED_BASELINE_PROVENANCE_PATH:?') < source.indexOf('BASELINE_PROVENANCE_PATH="$baseline_provenance"'))
-  assert.ok(source.indexOf('verify-production-baseline-provenance.mjs') < source.indexOf('npx wrangler d1 migrations apply DB --remote'))
-  assertRestoreOrdering(source, /https:\/\/krabiclaw\.com/, 'production')
-  assertFailClosedStatusDetection(source, 'production')
-  assertManifestFailureRestoresAfterTrafficMutation(source, 'production')
-  assert.match(source, /restore:\{[\s\S]*status:[\s\S]*intervention_required/)
-  assert.match(source, /splitActive:process\.env\.SPLIT_ACTIVE==='true'/)
-  assertCandidateOverrideReadiness(source, 'production')
-  assertPromotedCandidateReadiness(source, 'production')
-})
-
-test('production evidence upload failure restores only the manifest-declared baseline', async () => {
-  const jobs = await workflowJobs('.github/workflows/release-production.yml')
-  const steps = jobs['deploy-production']?.steps ?? []
-  const upload = steps.find(step => step.name === 'Upload production release evidence')
-  const recovery = steps.find(step => step.name === 'Restore exact production baseline after evidence upload failure')
-  assert.equal(upload?.id, 'upload-production-evidence')
-  assert.equal(upload?.with?.['if-no-files-found'], 'error')
-  assert.equal(upload?.if, 'always()')
-  assert.equal(recovery?.if, "always() && steps.upload-production-evidence.outcome != 'success'")
-  assert.ok(upload && recovery, 'production evidence upload recovery gate must be present')
-  assert.ok(steps.indexOf(recovery!) > steps.indexOf(upload!), 'production baseline recovery must follow evidence upload')
-
-  const script = recovery?.run ?? ''
-  const manifest = script.indexOf('production-release-manifest.json')
-  const noMutation = script.indexOf('traffic_mutation_attempted')
-  const alreadyRestored = script.indexOf('restored_baseline')
-  const deploy = script.indexOf('wrangler versions deploy')
-  const status = script.indexOf('wrangler deployments status')
-  const verify = script.indexOf('production traffic does not prove the exact baseline at 100%')
-  const purge = script.indexOf('purge-deployment-cache.ts')
-  assert.ok(manifest >= 0, 'recovery must read the local production release manifest')
-  assert.ok(noMutation > manifest, 'recovery must inspect the production traffic mutation marker before deployment')
-  assert.ok(alreadyRestored > noMutation, 'recovery must skip deployment when the manifest proves baseline restoration')
-  assert.ok(deploy > alreadyRestored, 'recovery must deploy only after manifest no-op guards')
-  assert.ok(status > deploy && verify > status && purge > verify, 'recovery must verify production traffic and purge cache after baseline deployment')
-  assert.match(script, /production-upload-failure-recovery\.json/)
-  assert.match(script, /\$baseline_version@100/)
-  assert.match(script, /candidate version remains active after production baseline restoration/)
-  assert.match(script, /operator intervention is required/)
-  assert.match(script, /exit 1/)
-})
-
-test('candidate and production restoration are gated by an attempted traffic mutation', async () => {
-  const stagingJobs = await workflowJobs('.github/workflows/ci-full.yml')
-  const productionJobs = await workflowJobs('.github/workflows/release-production.yml')
-  const staging = runScript(stagingJobs.candidate!, 'Prepare, verify, and promote candidate')
-  const production = runScript(productionJobs['deploy-production']!, 'Capture baseline, migrate, roll out, verify, and promote')
-
-  for (const [label, source, splitMarker] of [
-    ['staging', staging, 'BASELINE_VERSION_ID@100" "$CANDIDATE_VERSION_ID@0'],
-    ['production', production, 'BASELINE_VERSION_ID@100" "$CANDIDATE_VERSION_ID@0'],
-  ] as const) {
-    assert.match(source, /TRAFFIC_MUTATION_ATTEMPTED="false"/)
-    assert.match(source, /traffic_mutation_flag=/)
-    assert.match(source, /printf '%s\\n' "true" > "\$traffic_mutation_flag"/)
-    assert.match(source, /TRAFFIC_MUTATION_ATTEMPTED="true"[\s\S]*printf '%s\\n' "true" > "\$traffic_mutation_flag"[\s\S]*versions deploy/)
-    const restore = shellFunction(source, 'restore_baseline')
-    assert.match(restore, /TRAFFIC_MUTATION_ATTEMPTED.*!=.*true/)
-    assert.match(restore, /no compensating deployment will be created/)
-    const onExit = shellFunction(source, 'on_exit')
-    assert.match(onExit, /TRAFFIC_MUTATION_ATTEMPTED.*==.*true/)
-    assert.match(onExit, /detect_candidate_deployment \|\| true[\s\S]*restore_baseline \|\| true/)
-    const split = source.indexOf(splitMarker)
-    const marker = source.lastIndexOf('TRAFFIC_MUTATION_ATTEMPTED="true"', split)
-    assert.ok(marker >= 0 && marker < split, `${label}: traffic mutation marker must precede split deploy`)
-  }
+  assert.match(source, /push:\s*\n\s+branches: \[main\]/)
+  assert.equal(deploy.environment, undefined)
+  assert.equal(deploy.needs, undefined)
+  assert.match(source, /ref: \$\{\{ github\.sha \}\}/)
+  assert.match(source, /yarn build[\s\S]*yarn migrate:check[\s\S]*wrangler d1 migrations apply DB --remote[\s\S]*wrangler deploy --tag "\$GITHUB_SHA"/)
+  assert.match(source, /purge-deployment-cache\.ts[\s\S]*wait-for-deployed-assets\.mjs[\s\S]*verify-deployed-candidate\.mjs/)
+  assert.match(source, /public-rendering-sentinel\.spec\.ts --project=chromium --workers=1/)
+  assert.match(source, /STRIPE_SECRET_KEY: \$\{\{ secrets\.STRIPE_SECRET_KEY \}\}/)
+  assert.doesNotMatch(source, /preflight_run_id|staging_run_id|required_reviewers|versions deploy|WORKER_VERSION_OVERRIDE/)
 })
 
 test('exact-target production rollback is read-only until protected mutation and cannot guess a previous version', async () => {
@@ -795,7 +569,7 @@ test('release workflows hard-bind route and origin evidence and block direct rem
   const zarazScript = await repoFile('scripts/zaraz-ga-backfill.mjs')
   const commandBlocker = await repoFile('scripts/release-command-blocked.mjs')
 
-  for (const source of [required, full, production]) {
+  for (const source of [required, full]) {
     assert.match(source, /wrangler secret list[^\n]*--format json/)
     assert.doesNotMatch(source, /wrangler secret list[^\n]*--json/)
   }
@@ -803,13 +577,8 @@ test('release workflows hard-bind route and origin evidence and block direct rem
   assert.doesNotMatch(full, /inputs\.staging_base_url/)
   assert.match(full, /STAGING_BASE_URL: https:\/\/staging\.krabiclaw\.com/)
   assert.match(full, /release-route-inventory\.mjs[\s\S]*--route-inventory/)
-  assert.match(production, /STAGING_BASE_URL: https:\/\/staging\.krabiclaw\.com/)
-  assert.match(production, /\.browser\.baseUrl == \"https:\/\/staging\.krabiclaw\.com\"/)
-  assert.match(production, /stripeWebhookPreflight\.status == \"passed\"/)
-  assert.match(production, /stripeCatalogPreflight\.status == \"passed\"/)
-  assert.match(production, /stripeCatalogPreflight\.accountId \| test/)
-  assert.match(production, /stripeCatalogPreflight\.providerSnapshotSha256 \| test/)
-  assert.match(production, /stripeCanary\.status == \"passed\"/)
+  assert.match(production, /PLAYWRIGHT_PREVIEW_URL: https:\/\/krabiclaw\.com/)
+  assert.match(production, /--route-inventory "\$RUNNER_TEMP\/production-route-inventory\.json"/)
   assert.match(nightly, /--route-inventory/)
   assert.match(nightly, /RELEASE_ROUTE_INVENTORY_PATH=\$RUNNER_TEMP\/nightly-route-inventory\.json/)
   assert.match(zaraz, /name: Zaraz GA4 Backfill Plan/)
