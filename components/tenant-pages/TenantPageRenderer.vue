@@ -1,5 +1,7 @@
 <template>
+  <BlawbyCanonicalPage v-if="template === 'blawby' && isCanonicalBlawbyPage(page.path)" :page="page" />
   <article
+    v-else
     data-tenant-page
     :data-parity-root="template === 'blawby' ? '' : undefined"
     :data-template="template"
@@ -129,9 +131,13 @@
 <script setup lang="ts">
 import type { PublicTenantPage } from '~/server/utils/public-tenant-pages'
 import type { TenantPageBlock } from '~/utils/tenant-page-blocks'
+import BlawbyCanonicalPage from './BlawbyCanonicalPage.vue'
 
 defineProps<{ page: PublicTenantPage; template: 'saya' | 'blawby' }>()
 const sanitizer = useHtmlSanitizer()
+
+const canonicalBlawbyPaths = new Set(['/about', '/pricing', '/donate', '/policies/privacy', '/policies/terms', '/third-party-notices'])
+const isCanonicalBlawbyPage = (path: string) => canonicalBlawbyPaths.has(path)
 
 type GridItem = { id?: string; title?: string; description?: string; value?: string; image_url?: string; label?: string; url?: string; amount?: string }
 
