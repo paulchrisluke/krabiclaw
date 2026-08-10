@@ -110,6 +110,7 @@ interface TenantBlogPost {
 }
 
 const route = useRoute()
+const requestEvent = useRequestEvent()
 const postEndpoint = computed(() => `/api/public/sites/${siteId}/blog/${String(route.params.slug)}`)
 
 interface PublicBlogResponse {
@@ -131,7 +132,6 @@ const { data, pending, error } = await useAsyncData(
     let post: TenantBlogPost | null | undefined
 
     if (import.meta.server) {
-      const requestEvent = useRequestEvent()
       if (!requestEvent) throw createError({ statusCode: 404, statusMessage: 'Post not found' })
 
       const [{ cloudflareEnv }, { getPublishedSiteBlogPost }] = await Promise.all([

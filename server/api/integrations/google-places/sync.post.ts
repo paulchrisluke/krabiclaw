@@ -40,7 +40,7 @@ export default defineEventHandler(async (event) => {
       locationId,
       location.google_place_id
     )
-    await chargeFlatCredits(db, site.organization_id, { siteId: site.id, action: 'google_places_details' }).catch(() => {})
+    await chargeFlatCredits(db, site.organization_id, { siteId: site.id, action: 'google_places_details' })
     await purgePublicResourceCacheSafe(env, site.id)
 
     return jsonResponse({

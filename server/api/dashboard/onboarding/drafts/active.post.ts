@@ -168,7 +168,7 @@ export default defineEventHandler(async (event) => {
     dashboard = null
   }
   if (sourceType === 'google_places' && fetchedPlaceDetails && dashboard?.organization?.id) {
-    await chargeFlatCredits(db, dashboard.organization.id, { action: 'google_places_details' }).catch(() => {})
+    await chargeFlatCredits(db, dashboard.organization.id, { action: 'google_places_details' })
   }
 
   const rawDetails = body.details && typeof body.details === 'object' ? body.details : null

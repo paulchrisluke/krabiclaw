@@ -1,5 +1,6 @@
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { addMemberResourceAccess, isOperationalRole, isOrganizationWideRole } from '~/server/utils/member-access'
+import type { CloudflareEnv } from '~/server/utils/auth'
 import { sendWhatsAppNotification } from '~/server/utils/whatsapp'
 import { isPhoneInvitationEmail, phoneDigitsFromInvitationEmail, phoneTemporaryEmail } from '~/server/utils/phone-invitations'
 import { parsePhoneOrThrow } from '~/utils/phone'
@@ -44,7 +45,11 @@ export async function sendWhatsAppAccessInvitation(
   if (!result.success) throw new Error(result.error || 'Failed to send WhatsApp access invitation')
 }
 
-export async function ensureWhatsAppRecipientAccess(db: DbClient, target: WhatsAppAccessTarget): Promise<WhatsAppAccessResult> {
+export async function ensureWhatsAppRecipientAccess(
+  env: CloudflareEnv,
+  db: DbClient,
+  target: WhatsAppAccessTarget,
+): Promise<WhatsAppAccessResult> {
   const normalizedPhone = parsePhoneOrThrow(target.phone, { defaultCountry: 'TH' })
   const existing = await queryFirst<{ userId: string; email: string; memberId: string | null; role: string | null }>(db, `
     SELECT u.id AS userId, u.email, m.id AS memberId, m.role
@@ -60,6 +65,7 @@ export async function ensureWhatsAppRecipientAccess(db: DbClient, target: WhatsA
     }
     if (!isOrganizationWideRole(existing.role)) {
       await addMemberResourceAccess(db, {
+        env,
         userId: existing.userId,
         organizationId: target.organizationId,
         siteId: target.siteId,

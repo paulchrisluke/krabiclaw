@@ -8,10 +8,10 @@ export default defineEventHandler(async (event) => {
   if (!siteId || !variantId) return jsonResponse({ error: 'Site and page IDs are required' }, { status: 400 })
   const { db, site } = await requireTenantPageWriteAccess(event, siteId)
   try {
-    const body = await readBody(event)
+    const query = getQuery(event)
     return jsonResponse(await deleteTenantPage(db, variantId, {
       scope: { siteId, organizationId: site.organization_id },
-      expectedDocumentUpdatedAt: String(body?.expectedDocumentUpdatedAt || ''),
+      expectedDocumentUpdatedAt: String(query.expectedDocumentUpdatedAt || ''),
     }))
   } catch (error) {
     rethrowHttpError(error)

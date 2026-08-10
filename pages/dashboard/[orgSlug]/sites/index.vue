@@ -64,6 +64,7 @@
 
 <script setup lang="ts">
 import { getDashboardSiteStatus } from '~/utils/dashboard-site-presentation'
+import { getVerticalLabel } from '~/utils/vertical-copy'
 
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Sites | KrabiClaw', robots: 'noindex, nofollow' })
@@ -77,7 +78,7 @@ const sites = computed(() => dashboard.sites.value)
 const canManageOrganization = computed(() => ['owner', 'admin'].includes(dashboard.organization.value?.role ?? ''))
 function formatSiteVertical(vertical: string | null) {
   if (!vertical) return 'Site'
-  return vertical.replaceAll('_', ' ').replace(/\b\w/g, letter => letter.toUpperCase())
+  return getVerticalLabel(vertical)
 }
 
 function siteDashboardPath(site: (typeof sites.value)[number]) {

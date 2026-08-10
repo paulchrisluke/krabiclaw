@@ -2,6 +2,10 @@ import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { getOrgAdapter } from 'better-auth/plugins'
 import { parsePhoneOrThrow } from '~/utils/phone'
 import type { CloudflareEnv } from '~/server/utils/auth'
+import {
+  parseResourceTeamGeneration,
+  RESOURCE_TEAM_GENERATION_CONFIG_KEY,
+} from '~/shared/site-transfer-policy'
 
 // Tenant-scoped authorization is Better Auth organization role plus Better
 // Auth Teams membership. Owner/admin are organization-wide. Editors are scoped
@@ -112,25 +116,105 @@ export function assertOrganizationAccess(role: string): void {
   }
 }
 
-export function siteTeamId(siteId: string): string {
-  return `site:${siteId}`
+export function siteTeamId(siteId: string, generation?: string): string {
+  return generation
+    ? `site:${siteId}:generation:${generation}`
+    : `site:${siteId}`
 }
 
-export function locationTeamId(locationId: string): string {
-  return `location:${locationId}`
+export function locationTeamId(locationId: string, generation?: string): string {
+  return generation
+    ? `location:${locationId}:generation:${generation}`
+    : `location:${locationId}`
 }
 
-function teamMembershipKey(teamId: string, userId: string): string {
-  return `${teamId}:${userId}`
+type OrganizationAdapter = ReturnType<typeof getOrgAdapter>
+
+async function organizationAdapter(env: CloudflareEnv): Promise<OrganizationAdapter> {
+  const { createAuth } = await import('~/server/utils/auth')
+  const auth = createAuth(env)
+  const context = await auth.$context
+  return getOrgAdapter(context as Parameters<typeof getOrgAdapter>[0], {})
 }
 
-export async function ensureSiteTeam(db: DbClient, input: { organizationId: string; siteId: string; name?: string | null }): Promise<string> {
-  const teamId = siteTeamId(input.siteId)
-  const now = Math.floor(Date.now() / 1000)
-  await execute(db, `
-    INSERT OR IGNORE INTO team (id, name, organizationId, createdAt)
-    VALUES (?, ?, ?, ?)
-  `, [teamId, input.name?.trim() || `Site ${input.siteId}`, input.organizationId, now])
+async function ensureTeam(
+  env: CloudflareEnv,
+  input: { organizationId: string; teamId: string; name: string },
+): Promise<void> {
+  const adapter = await organizationAdapter(env)
+  const existing = await adapter.findTeamById({
+    teamId: input.teamId,
+    organizationId: input.organizationId,
+  })
+  if (existing) return
+
+  // A deterministic team id makes this operation idempotent. Check the
+  // unscoped id before creating so a collision can never attach a resource to
+  // another organization.
+  const conflicting = await adapter.findTeamById({ teamId: input.teamId })
+  if (conflicting && conflicting.organizationId !== input.organizationId) {
+    throw new Error(`Team ${input.teamId} belongs to another organization`)
+  }
+  if (conflicting) return
+
+  try {
+    await adapter.createTeam({
+      id: input.teamId,
+      name: input.name,
+      organizationId: input.organizationId,
+      createdAt: new Date(),
+    })
+  } catch (error) {
+    // Another request may have won the create race. Re-read through Better
+    // Auth before surfacing a real provisioning failure.
+    const raced = await adapter.findTeamById({
+      teamId: input.teamId,
+      organizationId: input.organizationId,
+    })
+    if (!raced) throw error
+  }
+}
+
+async function resourceTeamGeneration(
+  db: DbClient,
+  input: { organizationId: string; siteId: string },
+): Promise<string | null> {
+  const row = await queryFirst<{ value: string | null }>(db, `
+    SELECT value
+    FROM site_config
+    WHERE organization_id = ? AND site_id = ? AND key = ?
+    LIMIT 1
+  `, [input.organizationId, input.siteId, RESOURCE_TEAM_GENERATION_CONFIG_KEY])
+
+  // Absence of the transfer marker is the legacy path. Presence with a null,
+  // non-string, or malformed value fails closed rather than silently falling
+  // back to a pre-transfer deterministic id.
+  if (!row) return null
+  if (typeof row.value !== 'string') {
+    throw new Error(`Invalid ${RESOURCE_TEAM_GENERATION_CONFIG_KEY}`)
+  }
+  return parseResourceTeamGeneration(row.value).generation
+}
+
+export async function ensureSiteTeam(
+  db: DbClient,
+  input: { env: CloudflareEnv; organizationId: string; siteId: string; name?: string | null },
+): Promise<string> {
+  const generation = await resourceTeamGeneration(db, input)
+  return await ensureSiteTeamForGeneration(db, input, generation)
+}
+
+async function ensureSiteTeamForGeneration(
+  db: DbClient,
+  input: { env: CloudflareEnv; organizationId: string; siteId: string; name?: string | null },
+  generation: string | null,
+): Promise<string> {
+  const teamId = siteTeamId(input.siteId, generation ?? undefined)
+  await ensureTeam(input.env, {
+    teamId,
+    organizationId: input.organizationId,
+    name: input.name?.trim() || `Site ${input.siteId}`,
+  })
   await execute(db, `UPDATE sites SET team_id = ?, updated_at = ? WHERE id = ? AND organization_id = ? AND (team_id IS NULL OR team_id != ?)`, [
     teamId,
     new Date().toISOString(),
@@ -141,14 +225,48 @@ export async function ensureSiteTeam(db: DbClient, input: { organizationId: stri
   return teamId
 }
 
-export async function ensureLocationTeam(db: DbClient, input: { organizationId: string; siteId: string; locationId: string; name?: string | null }): Promise<string> {
-  const teamId = locationTeamId(input.locationId)
-  const now = Math.floor(Date.now() / 1000)
-  await ensureSiteTeam(db, { organizationId: input.organizationId, siteId: input.siteId })
-  await execute(db, `
-    INSERT OR IGNORE INTO team (id, name, organizationId, createdAt)
-    VALUES (?, ?, ?, ?)
-  `, [teamId, input.name?.trim() || `Location ${input.locationId}`, input.organizationId, now])
+export async function ensureLocationTeam(
+  db: DbClient,
+  input: { env: CloudflareEnv; organizationId: string; siteId: string; locationId: string; name?: string | null },
+): Promise<string> {
+  const generation = await resourceTeamGeneration(db, input)
+  return await ensureLocationTeamForGeneration(db, input, generation)
+}
+
+export async function ensureResourceTeams(
+  db: DbClient,
+  input: { env: CloudflareEnv; organizationId: string; siteId?: string | null; locationId?: string | null },
+): Promise<void> {
+  const generation = input.siteId
+    ? await resourceTeamGeneration(db, { organizationId: input.organizationId, siteId: input.siteId })
+    : null
+  if (input.siteId) await ensureSiteTeamForGeneration(db, { env: input.env, organizationId: input.organizationId, siteId: input.siteId }, generation)
+  if (input.siteId && input.locationId) {
+    await ensureLocationTeamForGeneration(db, {
+      env: input.env,
+      organizationId: input.organizationId,
+      siteId: input.siteId,
+      locationId: input.locationId,
+    }, generation)
+  }
+}
+
+async function ensureLocationTeamForGeneration(
+  db: DbClient,
+  input: { env: CloudflareEnv; organizationId: string; siteId: string; locationId: string; name?: string | null },
+  generation: string | null,
+): Promise<string> {
+  const teamId = locationTeamId(input.locationId, generation ?? undefined)
+  await ensureSiteTeamForGeneration(db, {
+    env: input.env,
+    organizationId: input.organizationId,
+    siteId: input.siteId,
+  }, generation)
+  await ensureTeam(input.env, {
+    teamId,
+    organizationId: input.organizationId,
+    name: input.name?.trim() || `Location ${input.locationId}`,
+  })
   await execute(db, `UPDATE business_locations SET team_id = ?, updated_at = ? WHERE id = ? AND site_id = ? AND organization_id = ? AND (team_id IS NULL OR team_id != ?)`, [
     teamId,
     new Date().toISOString(),
@@ -160,47 +278,70 @@ export async function ensureLocationTeam(db: DbClient, input: { organizationId: 
   return teamId
 }
 
-export async function ensureResourceTeams(db: DbClient, input: { organizationId: string; siteId?: string | null; locationId?: string | null }): Promise<void> {
-  if (input.siteId) await ensureSiteTeam(db, { organizationId: input.organizationId, siteId: input.siteId })
-  if (input.siteId && input.locationId) {
-    await ensureLocationTeam(db, { organizationId: input.organizationId, siteId: input.siteId, locationId: input.locationId })
-  }
+export async function addUserToResourceTeam(
+  _db: DbClient,
+  input: { env: CloudflareEnv; userId: string; teamId: string },
+): Promise<void> {
+  const adapter = await organizationAdapter(input.env)
+  await adapter.findOrCreateTeamMember({ teamId: input.teamId, userId: input.userId })
 }
 
-export async function addUserToResourceTeam(db: DbClient, input: { userId: string; teamId: string }): Promise<void> {
-  await execute(db, `
-    INSERT OR IGNORE INTO teamMember (id, teamId, userId, membershipKey, createdAt)
-    VALUES (?, ?, ?, ?, ?)
-  `, [crypto.randomUUID(), input.teamId, input.userId, teamMembershipKey(input.teamId, input.userId), Math.floor(Date.now() / 1000)])
+export async function removeUserFromResourceTeam(
+  _db: DbClient,
+  input: { env: CloudflareEnv; userId: string; teamId: string },
+): Promise<boolean> {
+  const adapter = await organizationAdapter(input.env)
+  const existing = await adapter.findTeamMember({ teamId: input.teamId, userId: input.userId })
+  if (!existing) return false
+  await adapter.removeTeamMember({ teamId: input.teamId, userId: input.userId })
+  return true
 }
 
-export async function removeUserFromResourceTeam(db: DbClient, input: { userId: string; teamId: string }): Promise<boolean> {
-  const result = await execute(db, `DELETE FROM teamMember WHERE teamId = ? AND userId = ?`, [input.teamId, input.userId])
-  return (result.meta?.changes ?? 0) > 0
-}
-
-export async function addMemberResourceAccess(db: DbClient, input: ResourceTeamAccess & { userId: string }): Promise<void> {
+export async function addMemberResourceAccess(
+  db: DbClient,
+  input: ResourceTeamAccess & { env: CloudflareEnv; userId: string },
+): Promise<void> {
   const teamId = input.locationId
-    ? await ensureLocationTeam(db, { organizationId: input.organizationId, siteId: input.siteId, locationId: input.locationId })
-    : await ensureSiteTeam(db, { organizationId: input.organizationId, siteId: input.siteId })
-  await addUserToResourceTeam(db, { userId: input.userId, teamId })
+    ? await ensureLocationTeam(db, { env: input.env, organizationId: input.organizationId, siteId: input.siteId, locationId: input.locationId })
+    : await ensureSiteTeam(db, { env: input.env, organizationId: input.organizationId, siteId: input.siteId })
+  await addUserToResourceTeam(db, { env: input.env, userId: input.userId, teamId })
 }
 
-export async function removeMemberResourceAccess(db: DbClient, input: ResourceTeamAccess & { userId: string }): Promise<boolean> {
-  const teamId = input.locationId ? locationTeamId(input.locationId) : siteTeamId(input.siteId)
-  return await removeUserFromResourceTeam(db, { userId: input.userId, teamId })
+export async function removeMemberResourceAccess(
+  db: DbClient,
+  input: ResourceTeamAccess & { env: CloudflareEnv; userId: string },
+): Promise<boolean> {
+  const row = input.locationId
+    ? await queryFirst<{ team_id: string | null }>(db, `
+        SELECT team_id
+        FROM business_locations
+        WHERE id = ? AND site_id = ? AND organization_id = ?
+        LIMIT 1
+      `, [input.locationId, input.siteId, input.organizationId])
+    : await queryFirst<{ team_id: string | null }>(db, `
+        SELECT team_id
+        FROM sites
+        WHERE id = ? AND organization_id = ?
+        LIMIT 1
+      `, [input.siteId, input.organizationId])
+  if (!row?.team_id) return false
+  return await removeUserFromResourceTeam(db, { env: input.env, userId: input.userId, teamId: row.team_id })
 }
 
 // Called when a member's role changes away from 'editor' — an editor can
 // accumulate site/location team memberships over time (each accepted or
 // re-scoped invitation adds one via addMemberResourceAccess), so demoting or
 // promoting them to a non-scoped role has to sweep all of them, not just one.
-export async function removeAllMemberResourceAccess(db: DbClient, input: { organizationId: string; userId: string }): Promise<void> {
-  await execute(db, `
-    DELETE FROM teamMember
-    WHERE userId = ?
-      AND teamId IN (SELECT id FROM team WHERE organizationId = ?)
-  `, [input.userId, input.organizationId])
+export async function removeAllMemberResourceAccess(
+  _db: DbClient,
+  input: { env: CloudflareEnv; organizationId: string; userId: string },
+): Promise<void> {
+  const adapter = await organizationAdapter(input.env)
+  const teams = await adapter.listTeamsByUser({ userId: input.userId })
+  for (const team of teams) {
+    if (team.organizationId !== input.organizationId) continue
+    await adapter.removeTeamMember({ teamId: team.id, userId: input.userId })
+  }
 }
 
 export async function memberHasTeamAccess(db: DbClient, input: { userId: string; teamId: string | null }): Promise<boolean> {

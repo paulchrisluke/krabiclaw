@@ -1,4 +1,4 @@
-// POST /api/dashboard/work-requests — managed client submits a work request
+// POST /api/dashboard/work-requests — Growth client submits a priority-support request
 import { cloudflareEnv, jsonResponse } from "~/server/utils/api-response";
 import { getDashboardContext } from "~/server/utils/dashboard-context";
 import { createWorkRequest } from "~/server/utils/work-request-management";

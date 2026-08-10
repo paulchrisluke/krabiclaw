@@ -5,6 +5,14 @@ import {
   getEffectiveAccessPlan,
   PAST_DUE_GRACE_PERIOD_MS,
 } from '../../server/utils/billing-access.ts'
+import { getPlanEntitlements } from '../../server/utils/billing-entitlements.ts'
+
+test('custom page entitlement follows the Growth-only plan policy', () => {
+  assert.equal(getPlanEntitlements('free').custom_pages, false)
+  assert.equal(getPlanEntitlements('growth').custom_pages, true)
+  assert.throws(() => getPlanEntitlements('managed'), /Unsupported runtime billing plan/)
+  assert.throws(() => getPlanEntitlements('seo_accelerator'), /Unsupported runtime billing plan/)
+})
 
 test('effective access is derived from subscription status', () => {
   const now = new Date('2026-08-05T00:00:00.000Z')
@@ -12,11 +20,26 @@ test('effective access is derived from subscription status', () => {
   assert.equal(getEffectiveAccessPlan({ plan: 'growth', status: 'active', paymentStatus: 'paid', paidThrough: new Date('2026-08-06T00:00:00.000Z') }, now), 'growth')
   assert.equal(getEffectiveAccessPlan({ plan: 'growth', status: 'active', paymentStatus: 'paid', paidThrough: new Date('2026-08-04T23:59:59.000Z') }, now), 'free')
   assert.equal(getEffectiveAccessPlan({ plan: 'growth', status: 'active', paymentStatus: 'processing' }, now), 'free')
-  assert.equal(getEffectiveAccessPlan({ plan: 'growth', status: 'trialing', paymentStatus: null }, now), 'growth')
+  assert.equal(getEffectiveAccessPlan({ plan: 'growth', status: 'trialing', paymentStatus: null }, now), 'free')
+  assert.equal(getEffectiveAccessPlan({ plan: 'growth', status: 'trialing', paymentStatus: null, periodEnd: new Date('2026-08-06T00:00:00.000Z') }, now), 'growth')
+  assert.equal(getEffectiveAccessPlan({ plan: 'growth', status: 'trialing', paymentStatus: null, trialEnd: new Date('2026-08-06T00:00:00.000Z') }, now), 'growth')
   assert.equal(getEffectiveAccessPlan({ plan: 'growth', status: 'past_due', paymentStatus: 'failed', paidThrough: new Date(now.getTime() - PAST_DUE_GRACE_PERIOD_MS + 1) }, now), 'growth')
   assert.equal(getEffectiveAccessPlan({ plan: 'growth', status: 'past_due', paymentStatus: null, pastDueSince: new Date(now.getTime() - PAST_DUE_GRACE_PERIOD_MS - 1) }, now), 'free')
   assert.equal(getEffectiveAccessPlan({ plan: 'growth', status: 'unpaid', paymentStatus: null }, now), 'free')
   assert.equal(getEffectiveAccessPlan({ plan: 'growth', status: 'canceled', paymentStatus: null }, now), 'free')
+})
+
+test('expired trials fail closed instead of retaining paid access', () => {
+  const now = new Date('2026-08-10T00:00:00.000Z')
+  assert.equal(
+    getEffectiveAccessPlan({
+      plan: 'growth',
+      status: 'trialing',
+      paymentStatus: null,
+      periodEnd: new Date('2026-08-09T23:59:59.000Z'),
+    }, now),
+    'free',
+  )
 })
 
 let eventState: {
@@ -56,11 +79,6 @@ mock.module('../../server/db/index.ts', {
           claimToken: null,
           attempts: 0,
         }
-        return { meta: { changes: 1 } }
-      }
-      if (query.includes("WHERE stripe_event_id = ? AND status = 'dead_letter'")) {
-        if (!eventState || eventState.status !== 'dead_letter') return { meta: { changes: 0 } }
-        eventState = { ...eventState, status: 'pending', attempts: 0, leaseExpiresAt: null, claimToken: null }
         return { meta: { changes: 1 } }
       }
       if (query.includes('UPDATE stripe_webhook_events') && query.includes("SET status = 'pending'") && query.includes("status = 'processed'")) {
@@ -105,10 +123,9 @@ const {
   reconcileBetterAuthSubscriptionEvent,
   recordStripeEvent,
   enqueueStripeEvent,
-  requeueDeadLetterStripeEvent,
-  grantInvoiceQuota,
   markOrganizationPayment,
   selectCanonicalStripePrice,
+  resolveCanonicalStripePrice,
   createStripePlanLoader,
   getBetterAuthStripePlans,
 } = await import('../../server/utils/better-auth-stripe.ts')
@@ -194,13 +211,6 @@ test('a duplicate delivery does not requeue a dead-lettered Stripe event', async
   assert.equal(eventState?.attempts, 5)
 })
 
-test('an operator replay alone requeues a dead-lettered Stripe event', async () => {
-  eventState = { status: 'dead_letter', leaseExpiresAt: null, claimToken: null, attempts: 5 }
-  assert.equal(await requeueDeadLetterStripeEvent({} as never, event), true)
-  assert.equal(eventState?.status, 'pending')
-  assert.equal(eventState?.attempts, 0)
-})
-
 test('a duplicate delivery preserves a failed Stripe event attempt budget', async () => {
   eventState = { status: 'failed', leaseExpiresAt: null, claimToken: null, attempts: 1 }
   assert.equal(await enqueueStripeEvent({} as never, event), false)
@@ -222,7 +232,7 @@ test('failed Stripe events eventually become dead-lettered', async () => {
   }), false)
 })
 
-test('Stripe plan loading coalesces refreshes and serves the last good snapshot', async () => {
+test('Stripe plan loading coalesces refreshes and rejects an expired refresh failure', async () => {
   let productCalls = 0
   let priceCalls = 0
   let failRefresh = false
@@ -248,8 +258,7 @@ test('Stripe plan loading coalesces refreshes and serves the last good snapshot'
   assert.equal(priceCalls, 1)
 
   failRefresh = true
-  const stale = await loadPlans()
-  assert.equal(stale[0]?.name, 'growth')
+  await assert.rejects(() => loadPlans(), /catalog unavailable/)
   assert.equal(productCalls, 2)
 })
 
@@ -277,6 +286,63 @@ test('separate Stripe plan loaders share the isolate catalog snapshot', async ()
   assert.equal(priceCalls, 1)
 })
 
+test('Stripe plan cache keeps restricted live and test keys in separate snapshots', async () => {
+  let productCalls = 0
+  const stripe = {
+    products: {
+      list: async () => {
+        productCalls += 1
+        return { data: [{ id: 'prod-mode-scope', metadata: { plan_id: 'growth' } }], has_more: false }
+      },
+    },
+    prices: {
+      list: async () => ({
+        data: [{ id: 'price-mode-scope', product: 'prod-mode-scope', unit_amount: 4900, currency: 'usd', recurring: { interval: 'month', interval_count: 1 } }],
+        has_more: false,
+      }),
+    },
+  }
+  const liveLoader = createStripePlanLoader(stripe as never, { STRIPE_ACCOUNT_ID: 'mode-scope', STRIPE_SECRET_KEY: 'rk_live_scope' }, 60_000)
+  const testLoader = createStripePlanLoader(stripe as never, { STRIPE_ACCOUNT_ID: 'mode-scope', STRIPE_SECRET_KEY: 'rk_test_scope' }, 60_000)
+  await Promise.all([liveLoader(), testLoader()])
+  assert.equal(productCalls, 2)
+})
+
+test('Better Auth customer-facing plan cache is independent of the retired sales flag', async () => {
+  let productCalls = 0
+  const stripe = {
+    products: {
+      list: async () => {
+        productCalls += 1
+        return { data: [{ id: 'prod-cache-flag', metadata: { plan_id: 'growth' } }], has_more: false }
+      },
+    },
+    prices: {
+      list: async () => ({
+        data: [{ id: 'price-cache-flag', product: 'prod-cache-flag', unit_amount: 4900, currency: 'usd', recurring: { interval: 'month', interval_count: 1 } }],
+        has_more: false,
+      }),
+    },
+  }
+  const env = {
+    STRIPE_ACCOUNT_ID: 'cache-flag-test',
+    STRIPE_SECRET_KEY: 'sk_test_cache_flag',
+  }
+  const enabledLoader = createStripePlanLoader(
+    stripe as never,
+    { ...env, MANAGED_SERVICE_ENABLED: 'true' },
+    60_000,
+  )
+  const disabledLoader = createStripePlanLoader(
+    stripe as never,
+    { ...env, MANAGED_SERVICE_ENABLED: 'false' },
+    60_000,
+  )
+  await enabledLoader()
+  await disabledLoader()
+  assert.equal(productCalls, 1)
+})
+
 test('subscription projection failures remain retryable when Better Auth did not persist the row', async () => {
   const lifecycleEvent = {
     id: 'evt_missing_ba_subscription',
@@ -294,7 +360,80 @@ test('subscription projection failures remain retryable when Better Auth did not
   )
 })
 
-test('subscription reconciliation uses current Stripe state after an older event arrives', async () => {
+test('site-transfer checkout and async success create and project Better Auth before application fulfillment', async () => {
+  const adapter = {
+    findOne: async <T>(input: { model: string }) => input.model === 'organization'
+      ? { id: 'org-transfer' } as T
+      : null,
+    update: async () => { throw new Error('update should not run for a new transfer subscription') },
+    create: async (input: { data: Record<string, unknown> }) => ({ id: 'ba-transfer', ...input.data }),
+  }
+  const stripe = {
+    subscriptions: {
+      retrieve: async () => ({
+        id: 'sub-transfer',
+        status: 'active',
+        customer: 'cus-transfer',
+        metadata: {
+          referenceId: 'org-transfer',
+          organization_id: 'org-transfer',
+          transfer_request_id: 'transfer-1',
+        },
+        cancel_at_period_end: false,
+        items: {
+          data: [{
+            quantity: 1,
+            current_period_start: 1_754_035_200,
+            current_period_end: 1_756_627_200,
+            price: { id: 'price-growth', recurring: { interval: 'month' } },
+          }],
+        },
+      }),
+    },
+  }
+
+  for (const [index, eventType] of ['checkout.session.completed', 'checkout.session.async_payment_succeeded'].entries()) {
+    capturedBatches = []
+    mockPaymentRow = null
+    mockSites = [{ id: 'site-transfer' }]
+    let created: Record<string, unknown> | null = null
+    const eventAdapter = {
+      ...adapter,
+      create: async (input: { data: Record<string, unknown> }) => {
+        created = { id: `ba-transfer-${index}`, ...input.data }
+        return created
+      },
+    }
+    await reconcileBetterAuthSubscriptionEvent({} as never, {
+      id: `evt-transfer-checkout-${index}`,
+      created: 1_786_000_000 + index,
+      type: eventType,
+      data: {
+        object: {
+          id: 'cs-transfer',
+          mode: 'subscription',
+          subscription: 'sub-transfer',
+          payment_status: 'paid',
+          metadata: {
+            type: 'site_transfer',
+            referenceId: 'org-transfer',
+            organization_id: 'org-transfer',
+            transfer_request_id: 'transfer-1',
+          },
+        },
+      },
+    } as never, stripe as never, eventAdapter as never, planLoader('growth', 'price-growth'))
+
+    assert.equal(created?.referenceId, 'org-transfer')
+    assert.equal(created?.stripeCustomerId, 'cus-transfer')
+    assert.equal(created?.stripeSubscriptionId, 'sub-transfer')
+    const projectionQueries = capturedBatches.flat()
+    assert.ok(projectionQueries.some(statement => statement.query.includes('organization_billing')))
+    assert.ok(projectionQueries.some(statement => statement.query.includes('site_entitlements')))
+  }
+})
+
+test('subscription reconciliation rejects unsupported configured runtime plans', async () => {
   let updatedPlan = ''
   const adapter = {
     findOne: async () => ({
@@ -327,13 +466,16 @@ test('subscription reconciliation uses current Stripe state after an older event
     products: { list: async () => ({ data: [{ id: 'prod-managed', metadata: { plan_id: 'managed' } }], has_more: false }) },
     prices: { list: async () => ({ data: [{ id: 'price-managed', product: 'prod-managed', type: 'recurring', unit_amount: 14900, currency: 'usd', recurring: { interval: 'month', interval_count: 1 } }], has_more: false }) },
   }
-  await reconcileBetterAuthSubscriptionEvent({} as never, {
-    id: 'evt_older_update',
-    created: 100,
-    type: 'customer.subscription.updated',
-    data: { object: { id: 'sub-current', items: { data: [{ price: { id: 'price-growth-old' } }] }, status: 'active' } },
-  } as never, stripe as never, adapter as never, planLoader('managed', 'price-managed'))
-  assert.equal(updatedPlan, 'managed')
+  await assert.rejects(
+    () => reconcileBetterAuthSubscriptionEvent({} as never, {
+      id: 'evt_older_update',
+      created: 100,
+      type: 'customer.subscription.updated',
+      data: { object: { id: 'sub-current', items: { data: [{ price: { id: 'price-growth-old' } }] }, status: 'active' } },
+    } as never, stripe as never, adapter as never, planLoader('managed', 'price-managed')),
+    /unsupported runtime billing plan/,
+  )
+  assert.equal(updatedPlan, '')
 })
 
 test('subscription reconciliation repairs a missing Better Auth row from current Stripe state', async () => {
@@ -480,7 +622,7 @@ test('subscription reconciliation resolves an archived recurring price from prod
       list: async () => ({ data: [], has_more: false }),
       retrieve: async (id: string) => id === 'price-seat-archived'
         ? ({ id, product: 'prod-growth-archived', metadata: { price_role: 'seat' }, recurring: { interval: 'month' } })
-        : ({ id, product: 'prod-growth-archived', metadata: { price_role: 'base' }, recurring: { interval: 'month' } }),
+        : ({ id, product: 'prod-growth-archived', metadata: {}, recurring: { interval: 'month' } }),
     },
   }
   await reconcileBetterAuthSubscriptionEvent({} as never, {
@@ -491,6 +633,49 @@ test('subscription reconciliation resolves an archived recurring price from prod
   } as never, stripe as never, adapter as never, planLoader('growth', 'price-current'))
   assert.equal(createdPlan, 'growth')
   assert.equal(createdSeats, 4)
+})
+
+test('historical Managed and SEO prices are not runtime plan identities', async () => {
+  for (const plan of ['managed', 'seo_accelerator']) {
+    let createdPlan = ''
+    const adapter = {
+      findOne: async <T>(input: { model: string }) => input.model === 'organization' ? { id: 'org-legacy' } as T : null,
+      update: async () => { throw new Error('update should not run') },
+      create: async (input: { data: { plan: string } }) => {
+        createdPlan = input.data.plan
+        return { id: `ba-${plan}`, ...input.data }
+      },
+    }
+    const stripe = {
+      subscriptions: {
+        retrieve: async () => ({
+          id: `sub-${plan}`,
+          status: 'active',
+          customer: 'cus-legacy',
+          metadata: { referenceId: 'org-legacy' },
+          items: { data: [{ quantity: 1, current_period_start: 1_754_035_200, current_period_end: 1_756_627_200, price: { id: `price-${plan}`, product: `prod-${plan}`, recurring: { interval: 'month' } } }] },
+        }),
+      },
+      products: {
+        list: async () => ({ data: [], has_more: false }),
+        retrieve: async () => ({ id: `prod-${plan}`, active: false, metadata: { plan_id: plan } }),
+      },
+      prices: {
+        list: async () => ({ data: [], has_more: false }),
+        retrieve: async (id: string) => ({ id, product: `prod-${plan}`, active: false, metadata: {}, recurring: { interval: 'month', interval_count: 1 } }),
+      },
+    }
+    await assert.rejects(
+      () => reconcileBetterAuthSubscriptionEvent({} as never, {
+        id: `evt-${plan}`,
+        created: 302,
+        type: 'customer.subscription.updated',
+        data: { object: { id: `sub-${plan}` } },
+      } as never, stripe as never, adapter as never, planLoader('growth', 'price-current')),
+      /no items matching a configured plan/,
+    )
+    assert.equal(createdPlan, '')
+  }
 })
 
 test('past-due projection keeps billing history but projects free entitlements', async () => {
@@ -507,10 +692,36 @@ test('past-due projection keeps billing history but projects free entitlements',
   const queries = capturedBatches.flat()
   const planEntitlement = queries.find(query => query.query.includes('organization_entitlements') && query.params?.includes('plan'))
   const sitePlanUpdate = queries.find(query => query.query.includes('UPDATE sites SET plan'))
+  const siteBilling = queries.find(query => query.query.includes('INSERT INTO site_billing'))
   assert.ok(planEntitlement?.params?.includes('free'))
   assert.ok(sitePlanUpdate?.params?.includes('free'))
+  assert.equal(siteBilling?.params?.[4], 'free')
   const billingHistory = queries.find(query => query.query.includes('organization_billing'))
   assert.ok(billingHistory?.params?.includes('growth'))
+})
+
+test('subscription projection publishes custom_pages for Growth and higher', async () => {
+  capturedBatches = []
+  mockPaymentRow = {
+    payment_status: 'paid',
+    paid_through: '2026-09-01T00:00:00.000Z',
+    past_due_since: null,
+    last_paid_invoice_id: null,
+  }
+  await projectOrganizationSubscription({} as never, {
+    organizationId: 'org-1',
+    customerId: 'cus-1',
+    subscriptionId: 'sub-1',
+    plan: 'growth',
+    status: 'active',
+    paymentStatus: 'paid',
+    periodEnd: new Date('2026-09-01T00:00:00.000Z'),
+  })
+  const customPageEntitlement = capturedBatches
+    .flat()
+    .find(query => query.query.includes('INSERT INTO organization_entitlements') && query.params?.[2] === 'custom_pages')
+  assert.ok(customPageEntitlement)
+  assert.equal(customPageEntitlement?.params?.[3], 'true')
 })
 
 test('subscription projection never overwrites payment markers', async () => {
@@ -529,7 +740,7 @@ test('subscription projection never overwrites payment markers', async () => {
     status: 'active',
     paymentStatus: 'paid',
   })
-  const siteBilling = capturedBatches[1]?.find(query => query.query.includes('INSERT INTO site_billing'))
+  const siteBilling = capturedBatches.flat().find(query => query.query.includes('INSERT INTO site_billing'))
   assert.ok(siteBilling)
   assert.doesNotMatch(siteBilling?.query ?? '', /payment_status|paid_through|last_paid_invoice_id/)
 
@@ -560,15 +771,14 @@ test('entitlement replacement stays atomic per site when an organization has man
     status: 'active',
     paymentStatus: 'paid',
   })
-  assert.equal(capturedBatches.length, 52)
-  for (const batch of capturedBatches.slice(1)) {
-    const queries = batch.map(statement => statement.query)
-    assert.ok(queries.some(query => query.includes('INSERT INTO site_entitlements')))
-    assert.ok(queries.some(query => query.includes('DELETE FROM site_entitlements')))
-    assert.ok(queries.some(query => query.includes('UPDATE sites SET plan')))
-    const siteBilling = batch.find(statement => statement.query.includes('INSERT INTO site_billing'))
-    assert.equal(siteBilling?.params?.[3], null)
-  }
+  assert.equal(capturedBatches.length, 1)
+  const queries = capturedBatches[0]!.map(statement => statement.query)
+  assert.equal(queries.filter(query => query.includes('INSERT INTO site_entitlements')).length, 51 * Object.keys(getPlanEntitlements('growth')).length)
+  assert.equal(queries.filter(query => query.includes('DELETE FROM site_entitlements')).length, 51)
+  assert.equal(queries.filter(query => query.includes('UPDATE sites SET plan')).length, 51)
+  assert.equal(queries.filter(query => query.includes('INSERT INTO site_billing')).length, 51)
+  assert.equal(queries.filter(query => query.includes('INSERT INTO organization_billing')).length, 1)
+  assert.equal(capturedBatches[0]!.filter(statement => statement.query.includes('INSERT INTO site_billing')).every(statement => statement.params?.[3] === null), true)
   mockSites = [{ id: 'site-1' }]
 })
 
@@ -588,226 +798,6 @@ test('AI quota grants update the balance and mark the grant applied atomically',
   const queries = capturedBatches.flat().map(query => query.query)
   assert.ok(queries.some(query => query.includes('UPDATE ai_credits')))
   assert.ok(queries.some(query => query.includes('UPDATE usage_quota_grants SET applied_at')))
-})
-
-test('invoice.paid grants the period even when Better Auth subscription.created has not arrived', async () => {
-  capturedBatches = []
-  const stripe = {
-    subscriptions: {
-      retrieve: async () => ({
-        id: 'sub-before-created',
-        status: 'active',
-        customer: 'cus-1',
-        metadata: { referenceId: 'org-1' },
-        items: {
-          data: [{
-            id: 'si-seat',
-            price: { id: 'price_seat' },
-            quantity: 3,
-            current_period_start: 1_785_542_400,
-            current_period_end: 1_788_220_800,
-          }, {
-            id: 'si-add-on',
-            price: { id: 'price_add_on' },
-            current_period_start: 1_785_542_400,
-            current_period_end: 1_788_220_800,
-          }, {
-            id: 'si-invoice-paid',
-            price: { id: 'price_growth_month' },
-            current_period_start: 1_785_542_400,
-            current_period_end: 1_788_220_800,
-          }],
-        },
-      }),
-    },
-    products: {
-      list: async () => ({
-        data: [{ id: 'prod-growth', metadata: { plan_id: 'growth' } }],
-        has_more: false,
-      }),
-    },
-    prices: {
-      retrieve: async (id: string) => ({ id, product: 'prod-growth', type: 'recurring', unit_amount: 4900, currency: 'usd', recurring: { interval: 'month', interval_count: 1 }, metadata: { price_role: 'base' } }),
-      list: async () => ({
-        data: [{
-          id: 'price_growth_month',
-          product: 'prod-growth',
-          type: 'recurring',
-          unit_amount: 4900,
-          currency: 'usd',
-          recurring: { interval: 'month', interval_count: 1 },
-        }],
-        has_more: false,
-      }),
-    },
-  }
-  const paidEvent = {
-    id: 'evt_invoice_paid',
-    type: 'invoice.paid',
-    data: {
-      object: {
-        id: 'in_invoice_paid',
-        billing_reason: 'subscription_create',
-        subscription: 'sub-before-created',
-        lines: {
-          data: [{
-            id: 'il_invoice_paid',
-            type: 'subscription',
-            subscription: 'sub-before-created',
-            parent: {
-              type: 'subscription_item_details',
-              subscription_item_details: {
-                subscription: 'sub-before-created',
-                subscription_item: 'si-invoice-paid',
-                proration: false,
-              },
-            },
-            proration: false,
-            price: {
-              id: 'price_growth_month',
-              recurring: { interval: 'month' },
-            },
-            period: { start: 1_785_542_400, end: 1_788_220_800 },
-          }, {
-            id: 'il_seat',
-            type: 'subscription',
-            subscription: 'sub-before-created',
-            parent: {
-              type: 'subscription_item_details',
-              subscription_item_details: {
-                subscription: 'sub-before-created',
-                subscription_item: 'si-seat',
-                proration: false,
-              },
-            },
-            price: { id: 'price_seat', recurring: { interval: 'month' } },
-            period: { start: 1_785_542_400, end: 1_788_220_800 },
-          }, {
-            id: 'il_add_on',
-            type: 'subscription',
-            subscription: 'sub-before-created',
-            parent: {
-              type: 'subscription_item_details',
-              subscription_item_details: {
-                subscription: 'sub-before-created',
-                subscription_item: 'si-add-on',
-                proration: false,
-              },
-            },
-            price: { id: 'price_add_on', recurring: { interval: 'month' } },
-            period: { start: 1_785_542_400, end: 1_788_220_800 },
-          }],
-          has_more: false,
-        },
-      },
-    },
-  } as never
-
-  await grantInvoiceQuota({} as never, stripe as never, paidEvent, missingSubscriptionAdapter, async () => [{
-    name: 'growth',
-    priceId: 'price_growth_month',
-    seatPriceId: 'price_seat',
-    limits: {},
-    group: 'krabiclaw',
-  }] as never)
-  const queries = capturedBatches.flat()
-  assert.ok(queries.some(query => query.query.includes('UPDATE ai_credits')))
-  const grant = queries.find(query => query.query.includes('INSERT OR IGNORE INTO usage_quota_grants'))
-  assert.ok(grant?.params?.some(value => String(value).includes('sub-before-created')))
-  assert.ok(grant?.params?.some(value => String(value).includes('price_growth_month')))
-  assert.ok(!grant?.params?.some(value => String(value).includes('price_seat')))
-  assert.ok(!grant?.params?.some(value => String(value).includes('price_add_on')))
-})
-
-test('delayed invoice allocation uses the invoice line price and period across pagination', async () => {
-  capturedBatches = []
-  const stripe = {
-    subscriptions: {
-      retrieve: async () => ({
-        id: 'sub-delayed',
-        status: 'active',
-        customer: 'cus-1',
-        items: { data: [{ id: 'si-delayed', price: { id: 'price-growth-current' }, current_period_start: 1_756_627_200, current_period_end: 1_759_219_200 }] },
-      }),
-    },
-    invoices: {
-      listLineItems: (() => {
-        let page = 0
-        return async () => {
-          page += 1
-          if (page === 1) return {
-            data: [{ id: 'il-page-one', parent: { type: 'invoice_item_details', invoice_item_details: { subscription: 'sub-delayed', proration: false } }, period: { start: 1_754_035_200, end: 1_756_627_200 } }],
-            has_more: true,
-          }
-          return {
-            data: [{
-              id: 'il-growth-old',
-              parent: { type: 'subscription_item_details', subscription_item_details: { subscription: 'sub-delayed', subscription_item: 'si-delayed', proration: false } },
-              pricing: { type: 'price_details', price_details: { price: { id: 'price-growth-old', product: 'prod-growth', recurring: { interval: 'month' }, metadata: { price_role: 'base' } } } },
-              period: { start: 1_785_542_400, end: 1_788_220_800 },
-            }],
-            has_more: false,
-          }
-        }
-      })(),
-    },
-    products: {
-      list: async () => ({
-      data: [{ id: 'prod-growth', metadata: { plan_id: 'growth', monthly_price_id: 'price-growth-current' } }],
-      has_more: false,
-      }),
-      retrieve: async () => ({ id: 'prod-growth', metadata: { plan_id: 'growth' } }),
-    },
-    prices: {
-      retrieve: async (id: string) => ({ id, product: 'prod-growth', type: 'recurring', unit_amount: 4900, currency: 'usd', recurring: { interval: 'month', interval_count: 1 }, metadata: { price_role: 'base' } }),
-      list: async () => ({
-        data: [
-          { id: 'price-growth-old', product: 'prod-growth', type: 'recurring', unit_amount: 4900, currency: 'usd', recurring: { interval: 'month', interval_count: 1 }, metadata: { price_role: 'base' } },
-          { id: 'price-growth-current', product: 'prod-growth', type: 'recurring', unit_amount: 5900, currency: 'usd', recurring: { interval: 'month', interval_count: 1 } },
-        ],
-        has_more: false,
-      }),
-    },
-  }
-  const paidEvent = {
-    id: 'evt_invoice_delayed',
-    type: 'invoice.paid',
-    data: {
-      object: {
-        id: 'in_invoice_delayed',
-        billing_reason: 'subscription_cycle',
-        subscription: 'sub-delayed',
-        lines: {
-          data: [{ id: 'il-not-plan', type: 'invoiceitem', subscription: 'sub-delayed', proration: false, price: null }],
-          has_more: true,
-        },
-      },
-    },
-  } as never
-
-  await grantInvoiceQuota({} as never, stripe as never, paidEvent, missingSubscriptionAdapter, planLoader('growth', 'price-growth-current'))
-  const grant = capturedBatches.flat().find(query => query.query.includes('INSERT OR IGNORE INTO usage_quota_grants'))
-  assert.ok(grant?.params?.includes(2000))
-  assert.ok(grant?.params?.includes('2026-08-01T00:00:00.000Z'))
-})
-
-test('only subscription creation and cycle invoices grant plan quota', async () => {
-  capturedBatches = []
-  const ignoredEvent = {
-    id: 'evt_invoice_manual',
-    type: 'invoice.paid',
-    data: { object: { id: 'in_manual', billing_reason: 'manual', subscription: 'sub-1' } },
-  } as never
-  await grantInvoiceQuota({} as never, { subscriptions: { retrieve: async () => { throw new Error('must not retrieve') } } } as never, ignoredEvent, missingSubscriptionAdapter, planLoader('growth', 'price-growth'))
-  assert.equal(capturedBatches.length, 0)
-
-  const legacyEvent = {
-    id: 'evt_invoice_legacy',
-    type: 'invoice.payment_succeeded',
-    data: { object: { id: 'in_legacy', subscription: 'sub-1' } },
-  } as never
-  await grantInvoiceQuota({} as never, { subscriptions: { retrieve: async () => { throw new Error('must not retrieve') } } } as never, legacyEvent, missingSubscriptionAdapter, planLoader('growth', 'price-growth'))
-  assert.equal(capturedBatches.length, 0)
 })
 
 test('ai_inference grants reject non-credit units before writing audit rows', async () => {
@@ -847,8 +837,8 @@ test('canonical metadata and lookup keys select among rotated active prices', ()
   const selectedByMetadata = selectCanonicalStripePrice(
     { id: 'prod-growth', metadata: { monthly_price_id: 'price-2' } } as never,
     [
-      { id: 'price-1', recurring: { interval: 'month', interval_count: 1 }, unit_amount: 4900, currency: 'usd' },
-      { id: 'price-2', recurring: { interval: 'month', interval_count: 1 }, unit_amount: 5900, currency: 'usd' },
+      { id: 'price-1', product: 'prod-growth', recurring: { interval: 'month', interval_count: 1 }, unit_amount: 4900, currency: 'usd' },
+      { id: 'price-2', product: 'prod-growth', recurring: { interval: 'month', interval_count: 1 }, unit_amount: 5900, currency: 'usd' },
     ] as never,
     'month',
   )
@@ -857,21 +847,63 @@ test('canonical metadata and lookup keys select among rotated active prices', ()
   const selectedByLookupKey = selectCanonicalStripePrice(
     { id: 'prod-growth', metadata: {} } as never,
     [
-      { id: 'price-1', lookup_key: 'growth-legacy', recurring: { interval: 'month', interval_count: 1 }, unit_amount: 4900, currency: 'usd' },
-      { id: 'price-2', lookup_key: 'growth-monthly', recurring: { interval: 'month', interval_count: 1 }, unit_amount: 5900, currency: 'usd' },
+      { id: 'price-1', product: 'prod-growth', lookup_key: 'growth-legacy', recurring: { interval: 'month', interval_count: 1 }, unit_amount: 4900, currency: 'usd' },
+      { id: 'price-2', product: 'prod-growth', lookup_key: 'growth-monthly', recurring: { interval: 'month', interval_count: 1 }, unit_amount: 5900, currency: 'usd' },
     ] as never,
     'month',
   )
   assert.equal(selectedByLookupKey?.id, 'price-2')
 })
 
-test('Better Auth plan loader omits app-only free and feature-disabled plans', async () => {
+test('canonical plan resolver fails closed on duplicate active products', () => {
+  assert.throws(
+    () => resolveCanonicalStripePrice(
+      [
+        { id: 'prod-growth-a', active: true, metadata: { plan_id: 'growth' } },
+        { id: 'prod-growth-b', active: true, metadata: { plan_id: 'growth' } },
+      ] as never,
+      [{ id: 'price-growth', product: 'prod-growth-a', type: 'recurring', unit_amount: 4900, currency: 'usd', recurring: { interval: 'month', interval_count: 1 } }] as never,
+      'growth',
+      'month',
+    ),
+    /multiple active products.*prod-growth-a.*prod-growth-b/i,
+  )
+})
+
+test('canonical plan resolver follows the selected product metadata price', () => {
+  const resolved = resolveCanonicalStripePrice(
+    [{ id: 'prod-growth', active: true, metadata: { plan_id: 'growth', monthly_price_id: 'price-rotated' } }] as never,
+    [
+      { id: 'price-old', product: 'prod-growth', type: 'recurring', unit_amount: 4900, currency: 'usd', recurring: { interval: 'month', interval_count: 1 } },
+      { id: 'price-rotated', product: 'prod-growth', type: 'recurring', unit_amount: 5900, currency: 'usd', recurring: { interval: 'month', interval_count: 1 } },
+    ] as never,
+    'growth',
+    'month',
+  )
+  assert.equal(resolved.product.id, 'prod-growth')
+  assert.equal(resolved.price.id, 'price-rotated')
+})
+
+test('canonical price selection never considers another product', () => {
+  const selected = selectCanonicalStripePrice(
+    { id: 'prod-growth', metadata: {} } as never,
+    [
+      { id: 'price-growth-month', product: 'prod-growth', type: 'recurring', unit_amount: 4900, currency: 'usd', recurring: { interval: 'month', interval_count: 1 } },
+      { id: 'price-other-year', product: 'prod-other', type: 'recurring', unit_amount: 9900, currency: 'usd', recurring: { interval: 'year', interval_count: 1 } },
+    ] as never,
+    'year',
+  )
+  assert.equal(selected, null)
+})
+
+test('Better Auth customer-facing plan loader omits app-only and concierge plans even when enabled', async () => {
   const stripe = {
     products: { list: async () => ({
       data: [
         { id: 'prod-free', metadata: { plan_id: 'free' } },
         { id: 'prod-growth', metadata: { plan_id: 'growth' } },
         { id: 'prod-managed', metadata: { plan_id: 'managed' } },
+        { id: 'prod-seo', metadata: { plan_id: 'seo_accelerator' } },
       ],
       has_more: false,
     }) },
@@ -879,11 +911,67 @@ test('Better Auth plan loader omits app-only free and feature-disabled plans', a
       data: [
         { id: 'price-growth', product: 'prod-growth', lookup_key: 'growth-monthly', type: 'recurring', unit_amount: 4900, currency: 'usd', recurring: { interval: 'month', interval_count: 1 } },
         { id: 'price-managed', product: 'prod-managed', type: 'recurring', unit_amount: 14900, currency: 'usd', recurring: { interval: 'month', interval_count: 1 } },
+        { id: 'price-seo', product: 'prod-seo', type: 'recurring', unit_amount: 34900, currency: 'usd', recurring: { interval: 'month', interval_count: 1 } },
       ],
       has_more: false,
     }) },
   }
-  const plans = await getBetterAuthStripePlans(stripe as never, {})
+  const plans = await getBetterAuthStripePlans(stripe as never, { MANAGED_SERVICE_ENABLED: 'true' })
   assert.deepEqual(plans.map(plan => plan.name), ['growth'])
   assert.equal(plans[0]?.lookupKey, 'growth-monthly')
+})
+
+test('Better Auth new-sale Growth loader rejects fixed-price amount or currency drift', async () => {
+  for (const pricePatch of [{ unit_amount: 3900 }, { currency: 'eur' }]) {
+    const stripe = {
+      products: { list: async () => ({
+        data: [{ id: 'prod-growth', metadata: { plan_id: 'growth' } }],
+        has_more: false,
+      }) },
+      prices: { list: async () => ({
+        data: [{
+          id: 'price-growth',
+          product: 'prod-growth',
+          type: 'recurring',
+          unit_amount: 4900,
+          currency: 'usd',
+          recurring: { interval: 'month', interval_count: 1 },
+          ...pricePatch,
+        }],
+        has_more: false,
+      }) },
+    }
+
+    await assert.rejects(
+      () => getBetterAuthStripePlans(stripe as never),
+      /Growth monthly price must be exactly USD 4900 cents/,
+    )
+  }
+})
+
+test('Better Auth reconciliation plan loader exposes only Growth at runtime', async () => {
+  const stripe = {
+    products: { list: async () => ({
+      data: [
+        { id: 'prod-growth', metadata: { plan_id: 'growth' } },
+        { id: 'prod-managed', metadata: { plan_id: 'managed' } },
+        { id: 'prod-seo', metadata: { plan_id: 'seo_accelerator' } },
+      ],
+      has_more: false,
+    }) },
+    prices: { list: async () => ({
+      data: [
+        { id: 'price-growth', product: 'prod-growth', type: 'recurring', unit_amount: 4900, currency: 'usd', recurring: { interval: 'month', interval_count: 1 } },
+        { id: 'price-managed', product: 'prod-managed', type: 'recurring', unit_amount: 14900, currency: 'usd', recurring: { interval: 'month', interval_count: 1 } },
+        { id: 'price-seo', product: 'prod-seo', type: 'recurring', unit_amount: 34900, currency: 'usd', recurring: { interval: 'month', interval_count: 1 } },
+      ],
+      has_more: false,
+    }) },
+  }
+  const plans = await getBetterAuthStripePlans(
+    stripe as never,
+    { MANAGED_SERVICE_ENABLED: 'true' },
+    { includeFeatureDisabled: true },
+  )
+  assert.deepEqual(plans.map(plan => plan.name), ['growth'])
 })

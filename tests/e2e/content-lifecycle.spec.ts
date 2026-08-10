@@ -4,6 +4,17 @@ import { loginAs } from './helpers/auth'
 
 const DEMO_USER_ID = 'user-demo'
 const FIRST_USER_ID = 'user-demo-growth'
+const TENANT_PAGE_WRITE_STATEMENT_BUDGET = 30
+
+function expectWriteBudget(response: { headers(): Record<string, string> }, maxStatements = TENANT_PAGE_WRITE_STATEMENT_BUDGET) {
+  const headers = response.headers()
+  const statementCount = Number(headers['x-d1-query-count'])
+  const batchCount = Number(headers['x-d1-batch-count'])
+  expect(Number.isInteger(statementCount)).toBe(true)
+  expect(Number.isInteger(batchCount)).toBe(true)
+  expect(statementCount).toBeLessThanOrEqual(maxStatements)
+  expect(batchCount).toBe(1)
+}
 
 test.describe('content write lifecycle', () => {
   test.describe.configure({ mode: 'serial' })
@@ -24,6 +35,7 @@ test.describe('content write lifecycle', () => {
     const firstSave = await request.patch(`${baseURL}/api/editor/sites/${firstSiteId}/pages/${firstHome!.id}`, {
       data: { blocks: firstBlocks, expectedDocumentUpdatedAt: firstBody.page.document.updated_at },
     })
+    expectWriteBudget(firstSave)
     expect(firstSave.status()).toBe(200)
 
     await loginAs(request, baseURL!, DEMO_USER_ID)
@@ -39,6 +51,7 @@ test.describe('content write lifecycle', () => {
     const demoSave = await request.patch(`${baseURL}/api/editor/sites/${demoSiteId}/pages/${demoHome!.id}`, {
       data: { blocks: demoBlocks, expectedDocumentUpdatedAt: demoBody.page.document.updated_at },
     })
+    expectWriteBudget(demoSave)
     expect(demoSave.status()).toBe(200)
 
     await loginAs(request, baseURL!, FIRST_USER_ID)
@@ -68,6 +81,7 @@ test.describe('content write lifecycle', () => {
     const saveRes = await request.patch(`${baseURL}/api/editor/sites/${siteId}/pages/${home!.id}`, {
       data: { blocks: [...detail.page.blocks, addedBlock], expectedDocumentUpdatedAt: detail.page.document.updated_at },
     })
+    expectWriteBudget(saveRes)
     expect(saveRes.status()).toBe(200)
 
     const beforeRes = await request.get(`${baseURL}/api/editor/sites/${siteId}/pages/${home!.id}`)
@@ -84,6 +98,7 @@ test.describe('content write lifecycle', () => {
     const afterRes = await request.patch(`${baseURL}/api/editor/sites/${siteId}/pages/${home!.id}`, {
       data: { blocks: afterBlocks, expectedDocumentUpdatedAt: afterBody.page.document.updated_at },
     })
+    expectWriteBudget(afterRes)
     expect(afterRes.status()).toBe(200)
     const finalRes = await request.get(`${baseURL}/api/editor/sites/${siteId}/pages/${home!.id}`)
     const finalBody = await finalRes.json() as { page: { blocks: Array<{ id: string }> } }

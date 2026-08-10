@@ -2,6 +2,9 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { platformPermissionJsonResponse } from '~/server/utils/platform-admin-users'
 import { queryAll, queryFirst } from '~/server/db'
+import { resolveTransferRecipientOrganizationsForEvent } from '~/server/utils/site-transfer-recipient'
+import { createAuth } from '~/server/utils/auth'
+import { getOrgAdapter } from 'better-auth/plugins'
 
 export default defineEventHandler(async (event) => {
   const orgId = getRouterParam(event, 'orgId')
@@ -31,19 +34,27 @@ export default defineEventHandler(async (event) => {
     WHERE s.organization_id = ?
   `, [orgId])
 
-  const org = await queryFirst<{
-    org_name: string
-    org_slug: string | null
+  const auth = createAuth(env)
+  const authContext = await auth.$context
+  const organizationAdapter = getOrgAdapter(authContext as Parameters<typeof getOrgAdapter>[0], {})
+  const organization = await organizationAdapter.findOrganizationById(orgId)
+
+  if (!organization) return jsonResponse({ error: 'Organization not found' }, { status: 404 })
+
+  const billing = await queryFirst<{
     stripe_customer_id: string | null
+    stripe_subscription_id: string | null
+    plan: string | null
+    status: string | null
+    current_period_end: string | null
+    cancel_at_period_end: number | null
   }>(db, `
-    SELECT o.name AS org_name, o.slug AS org_slug, ob.stripe_customer_id
-    FROM organization o
-    LEFT JOIN organization_billing ob ON ob.organization_id = o.id
-    WHERE o.id = ?
+    SELECT stripe_customer_id, stripe_subscription_id, plan, status,
+           current_period_end, cancel_at_period_end
+    FROM organization_billing
+    WHERE organization_id = ?
     LIMIT 1
   `, [orgId])
-
-  if (!org) return jsonResponse({ error: 'Organization not found' }, { status: 404 })
 
   // Pending transfer for any site owned by this org
   const transfer = await queryFirst<{
@@ -62,27 +73,28 @@ export default defineEventHandler(async (event) => {
            s.brand_name
     FROM site_transfer_requests r
     JOIN sites s ON s.id = r.site_id
-    WHERE r.from_organization_id = ? AND r.status = 'pending'
+    WHERE r.from_organization_id = ?
+      AND (
+        r.status = 'pending'
+        OR (r.status = 'accepted' AND r.requires_payment = 1 AND r.payment_completed_at IS NULL)
+      )
     ORDER BY r.created_at DESC
     LIMIT 1
   `, [orgId])
 
-  // Check if the transfer recipient has already created an account
-  let recipientReady = false
-  if (transfer?.to_email) {
-    const recipientUser = await queryFirst<{ id: string }>(db, `
-      SELECT u.id FROM user u
-      JOIN member m ON m.userId = u.id
-      WHERE lower(u.email) = ? AND m.role = 'owner'
-      LIMIT 1
-    `, [transfer.to_email.toLowerCase()])
-    recipientReady = Boolean(recipientUser)
-  }
+  const recipientResolution = transfer
+    ? await resolveTransferRecipientOrganizationsForEvent(event, env, transfer.to_email)
+    : null
 
   return jsonResponse({
-    org_name: org.org_name,
-    org_slug: org.org_slug,
-    stripe_customer_id: org.stripe_customer_id,
+    org_name: organization.name,
+    org_slug: organization.slug,
+    stripe_customer_id: billing?.stripe_customer_id ?? null,
+    stripe_subscription_id: billing?.stripe_subscription_id ?? null,
+    plan: billing?.plan ?? null,
+    status: billing?.status ?? null,
+    current_period_end: billing?.current_period_end ?? null,
+    cancel_at_period_end: Boolean(billing?.cancel_at_period_end),
     sites_billing: (sitesBilling ?? []).map(sb => ({
       site_id: sb.site_id,
       brand_name: sb.brand_name,
@@ -103,7 +115,9 @@ export default defineEventHandler(async (event) => {
           requires_payment: Boolean(transfer.requires_payment),
           created_at: transfer.created_at,
           brand_name: transfer.brand_name,
-          recipient_ready: recipientReady,
+          recipient_ready: recipientResolution?.status === 'ready',
+          recipient_resolution: recipientResolution?.status ?? 'missing',
+          recipient_organizations: recipientResolution?.organizations ?? [],
         }
       : null,
   })

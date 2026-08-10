@@ -28,7 +28,7 @@ async function syncLocationWhatsAppPhone(
   `, [locationId, site.organizationId, site.siteId])
   const newPhone = current?.notification_phone ?? null
 
-  return await syncLocationWhatsAppAccess(site.env as unknown as Parameters<typeof syncLocationWhatsAppAccess>[0], site.db, {
+  return await syncLocationWhatsAppAccess(site.env, site.db, {
     organizationId: site.organizationId,
     siteId: site.siteId,
     locationId,
@@ -185,7 +185,7 @@ export async function handleLocationsTools(ctx: McpExecutorContext): Promise<unk
       const includeTranslations = args.include_translations !== false;
 
       const result = await copyLocationBatch(
-        site.env as unknown as Record<string, string | undefined>,
+        site.env,
         site.db,
         site.organizationId,
         site.siteId,

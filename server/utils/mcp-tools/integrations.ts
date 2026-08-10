@@ -21,7 +21,7 @@ export const INTEGRATIONS_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'publish_to_facebook',
-      description: 'Publish a post to the connected Facebook Page. Requires the Managed plan. Call get_facebook_connection first to confirm a page is connected.',
+      description: 'Publish a post to the connected Facebook Page. Available with Growth. Call get_facebook_connection first to confirm a page is connected.',
       domain: 'integrations',
       minimumRole: 'editor',
       confirmRequired: true,
@@ -44,7 +44,7 @@ export const INTEGRATIONS_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'sync_facebook_page',
-      description: 'Pull business info (phone, hours, website, city, description, cover photo) from the connected Facebook Page and write it into the business location record, updating the tenant site. Requires the Managed plan. Optionally pass location_id to target a specific location, and page_id to switch which Facebook Page is connected.',
+      description: 'Pull business info (phone, hours, website, city, description, cover photo) from the connected Facebook Page and write it into the business location record, updating the tenant site. Available with Growth. Optionally pass location_id to target a specific location, and page_id to switch which Facebook Page is connected.',
       domain: 'integrations',
       minimumRole: 'editor',
       confirmRequired: false,

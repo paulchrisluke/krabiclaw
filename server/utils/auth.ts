@@ -1,7 +1,7 @@
 import { APIError, betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { hashPassword } from 'better-auth/crypto'
-import { admin, anonymous, jwt, organization, phoneNumber } from 'better-auth/plugins'
+import { admin, anonymous, getOrgAdapter, hasPermission, jwt, organization, phoneNumber } from 'better-auth/plugins'
 import { stripe as betterAuthStripe } from '@better-auth/stripe'
 import { oauthProvider } from '@better-auth/oauth-provider'
 import type { SchemaClient, Scope } from '@better-auth/oauth-provider'
@@ -20,6 +20,7 @@ import { scheduleOtpDelivery } from '~/server/utils/auth-otp-delivery'
 import { validatePassword } from '~/utils/password-validation'
 import { fireSiteEventSafe, resolvePrimarySiteForEvent } from '~/server/utils/site-events'
 import type { InferSelectModel } from 'drizzle-orm'
+import type { WorkerVersionMetadata } from '@cloudflare/workers-types'
 import { organizationAccessControl, organizationRoles } from '~/utils/organization-access'
 import { platformAdminAccessControl, platformAdminRoles } from '~/utils/platform-admin-access'
 import {
@@ -33,6 +34,15 @@ type MemberRow = InferSelectModel<typeof schema.member>
 type InvitationRow = InferSelectModel<typeof schema.invitation>
 
 const CIMD_TENANT_SCOPES = ['openid', 'offline_access', 'tenant'] as const
+
+const organizationOptions = {
+  ac: organizationAccessControl,
+  roles: organizationRoles,
+  teams: {
+    enabled: true,
+    defaultTeam: { enabled: false },
+  },
+} as const
 
 async function normalizeCimdClientAuthentication(data: {
   client: SchemaClient<Scope[]>
@@ -95,6 +105,7 @@ export interface CloudflareEnv {
   CLOUDFLARE_IMAGES_ACCOUNT_ID?: string
   CLOUDFLARE_IMAGES_API_TOKEN?: string
   CF_ZONE_ID?: string
+  CF_VERSION_METADATA?: WorkerVersionMetadata
   CF_CUSTOM_HOSTNAMES_API_TOKEN?: string
   CF_ZARAZ_API_TOKEN?: string
   CF_SAAS_CNAME_TARGET?: string
@@ -413,14 +424,7 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
         onClientCreated: normalizeCimdClientAuthentication,
         onClientRefreshed: normalizeCimdClientAuthentication,
       }),
-      organization({
-        ac: organizationAccessControl,
-        roles: organizationRoles,
-        teams: {
-          enabled: true,
-          defaultTeam: { enabled: false },
-        },
-      }),
+      organization(organizationOptions),
       betterAuthStripe({
         stripeClient,
         stripeWebhookSecret: env.STRIPE_WEBHOOK_SECRET ?? '',
@@ -430,15 +434,17 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
           plans: () => loadStripePlans(),
           requireEmailVerification: true,
           authorizeReference: async ({ user, referenceId }, ctx) => {
-            const member = await ctx.context.adapter.findOne({
-              model: 'member',
-              where: [
-                { field: 'organizationId', value: referenceId },
-                { field: 'userId', value: user.id },
-              ],
-            }) as { role?: string } | null
-            return typeof member?.role === 'string'
-              && member.role.split(',').map(role => role.trim()).includes('owner')
+            const member = await getOrgAdapter(ctx.context, organizationOptions).findMemberByOrgId({
+              userId: user.id,
+              organizationId: referenceId,
+            })
+            if (!member) return false
+            return await hasPermission({
+              organizationId: referenceId,
+              role: member.role,
+              options: organizationOptions,
+              permissions: { billing: ['update'] },
+            }, ctx)
           },
         },
         schema: {

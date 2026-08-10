@@ -31,14 +31,34 @@
         <div class="flex items-center gap-2">
           <UIcon name="i-lucide-bot" class="size-4 text-primary" />
           <span class="text-sm font-semibold">ChowBot</span>
-          <UTooltip v-if="balance !== null" :text="`${balance} credits remaining`">
+          <UTooltip v-if="reconciliationRequired" text="Shared usage quota is unavailable pending approved reconciliation">
+            <UBadge
+              color="warning"
+              variant="subtle"
+              size="sm"
+              class="cursor-default"
+            >
+              Usage unavailable
+            </UBadge>
+          </UTooltip>
+          <UTooltip v-else-if="unlimited" text="Unlimited shared usage credits this UTC week">
+            <UBadge
+              color="neutral"
+              variant="subtle"
+              size="sm"
+              class="cursor-default tabular-nums"
+            >
+              Unlimited / week
+            </UBadge>
+          </UTooltip>
+          <UTooltip v-else-if="periodRemaining !== null" :text="`${periodRemaining.toLocaleString()} shared credits remaining this UTC week`">
             <UBadge
               :color="isDepleted ? 'error' : isLow ? 'warning' : 'neutral'"
               variant="subtle"
               size="sm"
               class="cursor-default tabular-nums"
             >
-              {{ (total !== null ? total - balance : 0).toLocaleString() }} / {{ (total ?? balance).toLocaleString() }}
+              {{ periodRemaining.toLocaleString() }} remaining
             </UBadge>
           </UTooltip>
         </div>
@@ -64,10 +84,19 @@
         </div>
       </div>
 
-      <div v-if="isDepleted" class="shrink-0 border-b border-error-200 dark:border-error-800 bg-error-50 dark:bg-error-950 px-4 py-3 flex flex-col gap-2">
+      <div v-if="reconciliationRequired" class="shrink-0 border-b border-warning-200 dark:border-warning-800 bg-warning-50 dark:bg-warning-950 px-4 py-3 flex flex-col gap-2">
+        <div class="flex items-center gap-2 text-xs text-warning-700 dark:text-warning-300">
+          <UIcon name="i-lucide-triangle-alert" class="size-3.5 shrink-0" />
+          <span class="font-medium">Shared usage quota unavailable pending approved reconciliation</span>
+        </div>
+        <NuxtLink v-if="orgSettings.billing.value" :to="orgSettings.billing.value" class="text-xs font-medium text-warning-800 underline dark:text-warning-200" @click="close">
+          Review billing status →
+        </NuxtLink>
+      </div>
+      <div v-else-if="isDepleted" class="shrink-0 border-b border-error-200 dark:border-error-800 bg-error-50 dark:bg-error-950 px-4 py-3 flex flex-col gap-2">
         <div class="flex items-center gap-2 text-xs text-error-600 dark:text-error-400">
           <UIcon name="i-lucide-triangle-alert" class="size-3.5 shrink-0" />
-          <span class="font-medium">Subscription AI quota exhausted</span>
+          <span class="font-medium">Shared weekly usage quota exhausted</span>
         </div>
         <NuxtLink v-if="orgSettings.billing.value" :to="orgSettings.billing.value" class="text-xs font-medium text-error-700 underline dark:text-error-300" @click="close">
           Review your subscription plan →
@@ -75,7 +104,7 @@
       </div>
       <div v-else-if="isLow" class="shrink-0 bg-warning-50 dark:bg-warning-950 px-4 py-2 text-xs text-warning-600 dark:text-warning-400 flex items-center gap-2">
         <UIcon name="i-lucide-triangle-alert" class="size-3.5 shrink-0" />
-        Low credits ({{ balance }} remaining).
+        Low shared credits ({{ periodRemaining }} remaining this UTC week).
         <NuxtLink v-if="orgSettings.billing.value" :to="orgSettings.billing.value" class="underline" @click="close">Review plan →</NuxtLink>
       </div>
 
@@ -83,7 +112,7 @@
         v-model:input="input"
         :messages="messages"
         :placeholder="promptPlaceholder"
-        :disabled="isLoading || isUploading || creatingRestaurant || (!siteId && !setupMode) || isDepleted"
+        :disabled="isLoading || isUploading || creatingRestaurant || (!siteId && !setupMode) || isBlocked"
         :loading="isLoading || isUploading || creatingRestaurant"
         :messages-status="isLoading ? 'streaming' : isUploading ? 'submitted' : undefined"
         :empty-title="emptyTitle"
@@ -146,7 +175,7 @@
               color="neutral"
               variant="ghost"
               size="xs"
-              :disabled="isLoading || isUploading || !siteId || isDepleted || setupMode"
+              :disabled="isLoading || isUploading || !siteId || isBlocked || setupMode"
               @click="fileInputRef?.click()"
             />
           </UTooltip>
@@ -178,6 +207,7 @@ import { getQuickActionPrompts } from '~/composables/useOnboardingPrompts'
 import { sanitizeHtmlForSsr } from '~/utils/markdown'
 import { loadDomPurify } from '~/utils/dom-purify-loader'
 import type { SiteVertical } from '~/utils/vertical-copy'
+import { isSiteCreationResponse } from '~/utils/site-creation-response'
 
 const dashboardApi = useDashboardApi()
 const props = defineProps<{ embedded?: boolean; setupMode?: boolean }>()
@@ -188,7 +218,7 @@ const { isOpen, messages, isLoading, siteId, close, sendMessage, clearMessages, 
 const { paths: dashboardSiteLinkPaths } = useDashboardSiteLinks(siteId.value ?? '')
 const orgSettings = useOrgSettings()
 const DOMPurify = import.meta.client ? await loadDomPurify() : { sanitize: sanitizeHtmlForSsr }
-const { balance, total, isLow, isDepleted, fetch: fetchCredits } = useAiCredits(siteId)
+const { periodRemaining, unlimited, reconciliationRequired, isLow, isDepleted, isBlocked, fetch: fetchCredits } = useAiCredits(siteId)
 
 watch(isOpen, (open: boolean) => { if (open && siteId.value) fetchCredits() })
 
@@ -231,6 +261,7 @@ const emptyDescription = computed(() => setupMode.value && !siteId.value
 )
 const promptPlaceholder = computed(() => {
   if (setupMode.value && !siteId.value) return setupStep.value === 'source' ? 'Tell ChowBot where to start...' : 'Reply to ChowBot...'
+  if (reconciliationRequired.value) return 'Usage quota unavailable pending reconciliation...'
   if (isDepleted.value) return 'Review your subscription plan to continue...'
   if (pendingFile.value) return 'Add a caption (optional) then press send...'
   if (pendingText.value) return 'Add a note (optional) then press send...'
@@ -425,10 +456,7 @@ async function handleSetupMessage(text: string) {
         subdomain: requestedSubdomain,
         vertical: setupVertical.value ?? 'restaurant',
       },
-      validate: (value): value is { site: { id: string } } =>
-        isRecord(value)
-        && isRecord(value.site)
-        && typeof value.site.id === 'string',
+      validate: isSiteCreationResponse,
     })
 
     await dashboard.refresh()

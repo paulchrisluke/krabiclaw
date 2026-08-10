@@ -47,7 +47,7 @@ command. Do not use a Playwright-launched browser for ChatGPT or Google login;
 those hosts detect and block the automated browser. The terminal prints each
 golden prompt and independently polls KrabiClaw telemetry after you send it.
 
-The dedicated default fixture is `site-mcp-managed`; override it with
+The dedicated default fixture is `site-mcp-growth-service`; override it with
 `MCP_CHATGPT_SITE_ID` and `MCP_CHATGPT_USER_ID` together when intentionally
 testing another local fixture. This gate fails on a user-reported ChatGPT
 connection error, missing/errored telemetry, wrong site arguments, wrong
@@ -331,7 +331,7 @@ Add dedicated test credentials to your local `.env` as
 `LOCAL_MCP_TEST_EMAIL` / `LOCAL_MCP_TEST_PASSWORD` (see
 [.env.mcp.local.example](../.env.mcp.local.example)).
 `yarn test:mcp:chatgpt` hashes the password and provisions a credential account
-for the freshly seeded `user-mcp-managed` fixture in local D1. The OAuth login
+for the freshly seeded `user-mcp-growth-service` fixture in local D1. The OAuth login
 page then accepts those credentials through Better Auth's real email/password
 sign-in flow. The generated SQL file is mode `0600`, is always deleted, and the
 command never prints the email, password, or password hash. Never commit the
@@ -355,8 +355,9 @@ or stripping schema metadata from ChatGPT's view.
 ## Known gap: CIMD self-fetch on deployed Cloudflare Workers
 
 `tests/e2e/oauth-discovery.spec.ts`'s "repeat authorize skips consent after
-remembered approval for the same CIMD client" test is skipped in `e2e-smoke`/
-`e2e-staging` (see `isDeployedWorkerTarget` in `tests/e2e/test-env.ts`). The
+remembered approval for the same CIMD client" test is skipped against deployed
+preview and full staging candidates (see `isDeployedWorkerTarget` in
+`tests/e2e/test-env.ts`). The
 CIMD client_id document it exercises (`server/api/auth/oauth2/test-client-metadata.get.ts`)
 is served by this same app/origin, so `@better-auth/cimd`'s server-side fetch
 of it is a same-zone Worker self-fetch. That self-fetch fails deterministically
@@ -370,8 +371,8 @@ a real public quick tunnel (per "Startup" above) — the named tunnel doesn't
 reach the local machine at all yet (see "Tunnel contract"), so it isn't a
 verified path for this either. The self-fetch failure is specific to a
 deployed Worker fetching its own zone/route, not app
-logic. Verify this flow locally via the tunnel harness; do not rely on
-`e2e-smoke`/`e2e-staging` for it until the CIMD test fixture is hosted off-zone
+logic. Verify this flow locally via the tunnel harness; do not rely on the
+deployed preview or full staging candidate for it until the CIMD test fixture is hosted off-zone
 or the platform restriction is otherwise worked around.
 
 ## Human + agent handoff

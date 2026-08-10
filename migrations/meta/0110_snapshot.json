@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "8785dde1-2a41-4945-bf86-8d931fe68a8a",
+  "id": "d958e1a1-a5d5-41b8-9776-ab237a0483cb",
   "prevId": "c27d7f2a-38dd-4e01-b7a1-ccb1f294644b",
   "tables": {
     "account": {
@@ -967,6 +967,14 @@
           ],
           "isUnique": false
         },
+        "booking_policies_reservation_site_unique": {
+          "name": "booking_policies_reservation_site_unique",
+          "columns": [
+            "site_id"
+          ],
+          "isUnique": true,
+          "where": "policy_type = 'reservation' AND scope_type = 'site'"
+        },
         "booking_policies_reservation_location_unique": {
           "name": "booking_policies_reservation_location_unique",
           "columns": [
@@ -1071,10 +1079,6 @@
         "booking_policies_scope_type_check": {
           "name": "booking_policies_scope_type_check",
           "value": "scope_type IN ('site', 'location', 'experience')"
-        },
-        "booking_policies_reservation_location_scope_check": {
-          "name": "booking_policies_reservation_location_scope_check",
-          "value": "policy_type != 'reservation' OR (scope_type = 'location' AND location_id IS NOT NULL AND experience_id IS NULL)"
         }
       }
     },
@@ -18181,6 +18185,14 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
+        },
+        "memberCount": {
+          "name": "memberCount",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
         },
         "organizationId": {
           "name": "organizationId",

@@ -9,6 +9,8 @@ import {
   checkLegacyFallbackFlag,
   checkDashboardFetchUsage,
   checkAdminFetchUsage,
+  checkSsrRequestEventCapture,
+  checkDeleteBodyUsage,
 } from './lib/data-loading-guardrails.mjs'
 
 const root = new URL('..', import.meta.url).pathname
@@ -66,6 +68,7 @@ for (const directory of applicationRoots) {
     violations.push(...checkGlobalFetchAndRetry(file, source))
     violations.push(...checkBannedSilentEmptySuccessNames(file, source))
     violations.push(...checkLegacyFallbackFlag(file, source))
+    violations.push(...checkSsrRequestEventCapture(file, source))
   }
 }
 
@@ -80,6 +83,12 @@ for (const path of CANONICAL_LOADER_PATHS) {
   })
   if (source === null) continue
   violations.push(...checkLegacyFallbackFlag(path, source))
+}
+
+for (const file of await filesUnder('server/api')) {
+  if (!file.endsWith('.delete.ts')) continue
+  const source = await readFile(join(root, file), 'utf8')
+  violations.push(...checkDeleteBodyUsage(file, source))
 }
 
 for (const path of PROHIBITED_LEGACY_PATHS) {

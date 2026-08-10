@@ -8,7 +8,7 @@ import { hashPassword } from 'better-auth/crypto'
 
 const email = (process.env.LOCAL_MCP_TEST_EMAIL || '').trim().toLowerCase()
 const password = process.env.LOCAL_MCP_TEST_PASSWORD || ''
-const userId = process.env.MCP_CHATGPT_USER_ID || 'user-mcp-managed'
+const userId = process.env.MCP_CHATGPT_USER_ID || 'user-mcp-growth-service'
 
 if (!email || !password) {
   throw new Error('LOCAL_MCP_TEST_EMAIL and LOCAL_MCP_TEST_PASSWORD are required for the manual ChatGPT gate.')
@@ -26,7 +26,7 @@ const directory = mkdtempSync(join(tmpdir(), 'krabiclaw-mcp-user-'))
 const sqlPath = join(directory, 'provision.sql')
 
 // This is deliberately local-only fixture provisioning. The demo seed recreates
-// user-mcp-managed on every run; adding its real credential account lets a human
+// user-mcp-growth-service on every run; adding its real credential account lets a human
 // complete OAuth in a normal browser without weakening the production login flow.
 const sql = `DELETE FROM user
 WHERE email = ${sqlString(email)} AND id <> ${sqlString(userId)};

@@ -94,6 +94,7 @@ useSeoMeta({ title: 'Billing Items | KrabiClaw Dashboard', robots: 'noindex, nof
 const orgSettings = useOrgSettings()
 const { data: sessionData } = useAuth()
 const router = useRouter()
+const requestEvent = useRequestEvent()
 
 interface BillingItem {
   organization: {
@@ -125,7 +126,6 @@ const { data: billingItems, status, error, refresh } = await useAsyncData(
   'user-billing-items',
   async () => {
     if (import.meta.server) {
-      const requestEvent = useRequestEvent()
       if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
       const [{ cloudflareEnv }, { getUserBillingItems }] = await Promise.all([
         import('~/server/utils/api-response'),

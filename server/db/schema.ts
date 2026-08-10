@@ -732,6 +732,7 @@ export const member = sqliteTable("member", {
 export const team = sqliteTable("team", {
 	id: text().primaryKey(),
 	name: text().notNull(),
+	memberCount: integer().default(0).notNull(),
 	organizationId: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 	updatedAt: integer({ mode: "timestamp" }),

@@ -55,10 +55,10 @@
       </div>
     </main>
 
-    <USlideover v-model:open="settingsOpen" title="Post settings" side="right" modal @after:enter="focusSettingsPanel" @after:leave="restoreSettingsFocus">
+    <USlideover v-model:open="settingsOpen" title="Post settings" side="right" modal :content="{ onOpenAutoFocus: focusCategory }" @after:leave="restoreSettingsFocus">
       <template #body>
         <div ref="settingsPanel" class="space-y-7 py-5 pb-[env(safe-area-inset-bottom)]" tabindex="-1" @keydown="onSettingsKeydown">
-          <UFormField label="Category"><UInput v-model="form.category" /></UFormField>
+          <UFormField label="Category"><UInput ref="categoryInput" v-model="form.category" /></UFormField>
           <UFormField v-if="siteId" label="Author">
             <div class="flex items-center gap-2">
               <USelect
@@ -139,6 +139,7 @@ const unpublishing = ref(false)
 const settingsOpen = ref(false)
 const settingsButton = ref<{ $el?: HTMLElement } | null>(null)
 const settingsPanel = ref<HTMLElement | null>(null)
+const categoryInput = ref<{ inputRef?: HTMLInputElement | null } | null>(null)
 let saveTimer: ReturnType<typeof setTimeout> | undefined
 let dirty = false
 let applyingServerSnapshot = false
@@ -465,11 +466,7 @@ function settingsFocusableElements() {
   if (!settingsPanel.value) return []
   return Array.from(settingsPanel.value.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'))
 }
-function focusSettingsPanel() {
-  const first = settingsFocusableElements()[0]
-  if (first) first.focus()
-  else settingsPanel.value?.focus()
-}
+function focusCategory(event: Event) { event.preventDefault(); categoryInput.value?.inputRef?.focus() }
 function restoreSettingsFocus() { settingsButton.value?.$el?.focus() }
 function onSettingsKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape') { event.preventDefault(); closeSettings(); return }

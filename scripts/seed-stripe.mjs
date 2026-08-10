@@ -1,20 +1,38 @@
-// Stripe product/price seeder for managed service plans.
-// Run: node scripts/seed-stripe.mjs
-// Requires STRIPE_SECRET_KEY in .env (reads via dotenv-style manual parse).
+// Stripe catalog operator plan.
 //
-// Launch note: Managed and SEO Accelerator remain recurring Stripe products,
-// but are not marketed while MANAGED_SERVICE_ENABLED is off. One-time credit,
-// add-on, and auto-top-up products are retired from the application; this
-// script never creates or updates those catalog entries.
-import { readFileSync, existsSync } from 'node:fs'
-import { resolve, extname, basename, dirname } from 'node:path'
+// Default mode is read-only: provider reads produce a deterministic plan JSON
+// and SHA-256. Applying requires that reviewed plan, an exact SHA confirmation,
+// an unchanged provider snapshot, and a Stripe test-mode key.
+//
+// Examples:
+//   yarn stripe:catalog:plan
+//   STRIPE_SECRET_KEY=sk_test_... node scripts/seed-stripe.mjs --dry-run --plan-file .tmp/stripe-catalog-plan.json
+//   STRIPE_SECRET_KEY=sk_test_... node scripts/seed-stripe.mjs --dry-run --require-test-mode --plan-file .tmp/stripe-catalog-plan.json
+//   STRIPE_SECRET_KEY=sk_test_... node scripts/seed-stripe.mjs --dry-run --retirement-only --plan-file .tmp/stripe-retirement-plan.json
+//   STRIPE_SECRET_KEY=sk_test_... node scripts/seed-stripe.mjs --apply \
+//     --plan-file .tmp/stripe-catalog-plan.json --confirm-sha256 <sha256> \
+//     --journal-file .tmp/stripe-catalog-apply.json
+
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { basename, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { parseArgs } from 'node:util'
 import Stripe from 'stripe'
+import {
+  OFFERED_PLAN_IDS,
+  PLAN_DEFINITIONS,
+  applyCatalogPlan,
+  assertTestModeKey,
+  createCatalogPlan,
+  imageMimeType,
+  keyMode,
+  sha256Bytes,
+  STRIPE_CATALOG_REQUEST_TIMEOUT_MS,
+} from './lib/stripe-catalog-plan.mjs'
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
-const STRIPE_ASSETS_DIR = resolve(__dirname, 'assets/stripe')
+const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
+const REPO_ROOT = resolve(SCRIPT_DIR, '..')
 
-// --- Parse .env manually (no dotenv dependency needed) ---
 function loadEnv() {
   try {
     const raw = readFileSync(resolve(process.cwd(), '.env'), 'utf-8')
@@ -34,250 +52,243 @@ function loadEnv() {
   }
 }
 
-const env = loadEnv()
-const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || env.STRIPE_SECRET_KEY
-
-if (!STRIPE_SECRET_KEY) {
-  console.error('STRIPE_SECRET_KEY not found in environment or .env')
-  process.exit(1)
+function secretKeyFromEnv() {
+  const env = loadEnv()
+  return process.env.STRIPE_SECRET_KEY || env.STRIPE_SECRET_KEY || ''
 }
 
-const stripe = new Stripe(STRIPE_SECRET_KEY)
+function stripeReadAdapter(stripe) {
+  return {
+    account: { retrieve: () => stripe.accounts.retrieve(null) },
+    products: stripe.products,
+    prices: stripe.prices,
+  }
+}
 
-const ACTIVE_PLAN_IDS = new Set(['growth', 'managed', 'seo_accelerator'])
+function stripeMutationAdapter(stripe) {
+  return { products: stripe.products, prices: stripe.prices }
+}
 
-// --- Archive old non-canonical paid plan products ---
-async function archiveOldPlans() {
-  console.log('\nArchiving non-canonical Stripe plan products...')
-  let startingAfter;
-  while (true) {
-    const products = await stripe.products.list({
-      active: true,
-      limit: 100,
-      ...(startingAfter ? { starting_after: startingAfter } : {})
-    })
-    for (const product of products.data) {
-      const planId = product.metadata?.plan_id
-      if (planId && !ACTIVE_PLAN_IDS.has(planId)) {
-        await stripe.products.update(product.id, { active: false })
-        console.log(`  Archived: ${product.name} (${product.id})`)
+function describeImageFiles() {
+  return Object.fromEntries(PLAN_DEFINITIONS
+    .filter(definition => definition.imagePath)
+    .map(definition => {
+      const path = definition.imagePath
+      const absolutePath = resolve(REPO_ROOT, path)
+      if (!existsSync(absolutePath)) return [definition.planId, { path, exists: false }]
+      const bytes = readFileSync(absolutePath)
+      return [definition.planId, {
+        path,
+        exists: true,
+        sha256: sha256Bytes(bytes),
+        mimeType: imageMimeType(path),
+        fileName: basename(path),
+      }]
+    }))
+}
+
+function localImagePath(path) {
+  return resolve(REPO_ROOT, path)
+}
+
+function stripeFilesAdapter(secretKey) {
+  return {
+    async verifyProductImage(operation) {
+      const path = localImagePath(operation.path)
+      if (!existsSync(path)) throw new Error(`Stripe catalog image is missing: ${operation.path}`)
+      const bytes = readFileSync(path)
+      const actualHash = sha256Bytes(bytes)
+      if (actualHash !== operation.sha256) {
+        throw new Error(`Stripe catalog image changed since plan generation: ${operation.path}`)
       }
-    }
-    if (!products.has_more || products.data.length === 0) break
-    startingAfter = products.data[products.data.length - 1]?.id
-  }
-}
+    },
+    async uploadProductImage(operation, { idempotencyKey } = {}) {
+      await this.verifyProductImage(operation)
+      if (typeof idempotencyKey !== 'string' || idempotencyKey.length === 0) {
+        throw new Error('Stripe catalog image upload requires an idempotency key.')
+      }
+      const path = localImagePath(operation.path)
+      const bytes = readFileSync(path)
+      const form = new FormData()
+      form.append('purpose', 'product_image')
+      form.append('file', new Blob([bytes], { type: operation.mimeType }), operation.fileName)
 
-// --- Upload local image to Stripe ---
-async function uploadProductImage(localPath) {
-  if (!localPath || !existsSync(localPath)) {
-    if (localPath) console.warn(`  Image not found at path: ${localPath}`)
-    return null
-  }
-  console.log(`  Uploading image: ${localPath}`)
-  try {
-    const ext = extname(localPath).toLowerCase()
-    const mimeTypes = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' }
-    const mimeType = mimeTypes[ext] ?? 'image/png'
-    const fileData = readFileSync(localPath)
-    const filename = basename(localPath)
+      const response = await fetch('https://files.stripe.com/v1/files', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${secretKey}`,
+          'Idempotency-Key': `${idempotencyKey}-file`,
+        },
+        body: form,
+        signal: AbortSignal.timeout(STRIPE_CATALOG_REQUEST_TIMEOUT_MS),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result?.error?.message ?? 'Stripe product image upload failed')
 
-    const form = new FormData()
-    form.append('purpose', 'product_image')
-    form.append('file', new Blob([fileData], { type: mimeType }), filename)
-
-    const response = await fetch('https://files.stripe.com/v1/files', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${STRIPE_SECRET_KEY}` },
-      body: form,
-    })
-    const result = await response.json()
-    if (!response.ok) {
-      console.error('  Failed to upload image:', result?.error?.message ?? JSON.stringify(result))
-      return null
-    }
-    // Create a public file link
-    const linkResponse = await fetch('https://api.stripe.com/v1/file_links', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: `file=${result.id}`,
-    })
-    const link = await linkResponse.json()
-    if (!linkResponse.ok) {
-      console.error('  Failed to create file link:', link?.error?.message ?? JSON.stringify(link))
-      return null
-    }
-    console.log(`  Uploaded image: ${link.url}`)
-    return link.url
-  } catch (err) {
-    console.error('  Failed to upload image:', err.message)
-    return null
-  }
-}
-
-async function ensureMonthlyPrice(productId, amountCents) {
-  const prices = []
-  let startingAfter
-  while (true) {
-    const page = await stripe.prices.list({
-      product: productId,
-      active: true,
-      type: 'recurring',
-      limit: 100,
-      ...(startingAfter ? { starting_after: startingAfter } : {}),
-    })
-    prices.push(...page.data)
-    if (!page.has_more || page.data.length === 0) break
-    startingAfter = page.data[page.data.length - 1].id
-  }
-  const matchingPrices = prices.filter(price =>
-    price.currency === 'usd'
-    && price.unit_amount === amountCents
-    && price.recurring?.interval === 'month'
-    && price.recurring?.interval_count === 1,
-  )
-  const canonicalPrice = matchingPrices[0] ?? await stripe.prices.create({
-    product: productId,
-    currency: 'usd',
-    unit_amount: amountCents,
-    recurring: { interval: 'month', interval_count: 1 },
-  })
-
-  for (const price of prices) {
-    if (
-      price.id === canonicalPrice.id
-      || price.recurring?.interval !== 'month'
-      || price.recurring?.interval_count !== 1
-    ) continue
-    await stripe.prices.update(price.id, { active: false })
-    console.log(`  Deactivated duplicate monthly price: ${price.id}`)
-  }
-
-  return canonicalPrice
-}
-
-// --- Create or update recurring subscription plans ---
-async function createSubscriptionPlan({ name, description, planId, amountCents, highlighted, badge, features, imagePath }) {
-  console.log(`\nUpserting plan: ${name} ($${amountCents / 100}/mo)`)
-
-  // Always upload the image so products get updated images even if they already exist.
-  let imageUrl = null
-  if (imagePath) {
-    imageUrl = await uploadProductImage(imagePath)
-  }
-
-  const updateData = {
-    description,
-    marketing_features: features.map(f => ({ name: f })),
-    metadata: {
-      plan_id: planId,
-      highlighted: highlighted ? 'true' : 'false',
-      ...(badge ? { badge } : {}),
+      const linkResponse = await fetch('https://api.stripe.com/v1/file_links', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${secretKey}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Idempotency-Key': `${idempotencyKey}-link`,
+        },
+        body: `file=${encodeURIComponent(result.id)}`,
+        signal: AbortSignal.timeout(STRIPE_CATALOG_REQUEST_TIMEOUT_MS),
+      })
+      const link = await linkResponse.json()
+      if (!linkResponse.ok) throw new Error(link?.error?.message ?? 'Stripe product image link creation failed')
+      return link.url
     },
   }
-  if (imageUrl) {
-    updateData.images = [imageUrl]
+}
+
+export function parseCanonicalProductOverrides(values = []) {
+  const overrides = {}
+  const inputs = Array.isArray(values) ? values : [values]
+  for (const value of inputs.filter(item => item != null)) {
+    const raw = String(value).trim()
+    const separator = raw.indexOf('=')
+    if (separator <= 0 || separator === raw.length - 1 || raw.indexOf('=', separator + 1) !== -1) {
+      throw new Error('--canonical-product must use the exact plan_id=prod_id format.')
+    }
+    const planId = raw.slice(0, separator).trim()
+    const productId = raw.slice(separator + 1).trim()
+    if (!OFFERED_PLAN_IDS.includes(planId)) {
+      throw new Error(`--canonical-product has unsupported plan ID ${planId}.`)
+    }
+    if (!productId) throw new Error(`--canonical-product ${planId} requires a product ID.`)
+    if (Object.hasOwn(overrides, planId)) {
+      throw new Error(`Duplicate --canonical-product override for plan ${planId}.`)
+    }
+    overrides[planId] = productId
   }
+  return Object.fromEntries(Object.entries(overrides).sort(([a], [b]) => a.localeCompare(b)))
+}
 
-  const existing = await stripe.products.list({ active: true, limit: 100 })
-  const match = existing.data.find(p => p.metadata?.plan_id === planId)
+function sameExistingFile(left, right) {
+  if (left === right) return true
+  if (!existsSync(left) || !existsSync(right)) return false
+  const leftStat = statSync(left)
+  const rightStat = statSync(right)
+  return leftStat.dev === rightStat.dev && leftStat.ino === rightStat.ino
+}
 
-  if (match) {
-    const price = await ensureMonthlyPrice(match.id, amountCents)
-    await stripe.products.update(match.id, {
-      ...updateData,
-      metadata: { ...updateData.metadata, monthly_price_id: price.id },
-      default_price: price.id,
+export function parseCli(argv) {
+  const { values } = parseArgs({
+    args: argv,
+    options: {
+      'dry-run': { type: 'boolean' },
+      apply: { type: 'boolean' },
+      'require-test-mode': { type: 'boolean' },
+      'retirement-only': { type: 'boolean' },
+      'plan-file': { type: 'string' },
+      'journal-file': { type: 'string' },
+      'journal-path': { type: 'string' },
+      'confirm-sha256': { type: 'string' },
+      'canonical-product': { type: 'string', multiple: true },
+    },
+    allowPositionals: false,
+  })
+  if (values['dry-run'] && values.apply) throw new Error('Choose either --dry-run or --apply, not both.')
+  const apply = Boolean(values.apply)
+  const planFile = values['plan-file'] ? resolve(String(values['plan-file'])) : null
+  const journalValue = values['journal-file'] ?? values['journal-path']
+  if (values['journal-file'] && values['journal-path'] && String(values['journal-file']) !== String(values['journal-path'])) {
+    throw new Error('--journal-file and --journal-path must name the same file when both are provided.')
+  }
+  const journalFile = journalValue ? resolve(String(journalValue)) : null
+  if (apply && !planFile) throw new Error('--apply requires an explicit --plan-file.')
+  if (apply && !values['confirm-sha256']) throw new Error('--apply requires --confirm-sha256 <plan-sha256>.')
+  const canonicalProductIds = parseCanonicalProductOverrides(values['canonical-product'])
+  if (apply && Object.keys(canonicalProductIds).length > 0) {
+    throw new Error('--canonical-product is only valid when generating a catalog plan.')
+  }
+  if (apply && values['retirement-only']) {
+    throw new Error('--retirement-only is only valid when generating a catalog plan.')
+  }
+  if (apply && !journalFile) throw new Error('--apply requires an explicit --journal-file.')
+  if (apply && planFile && journalFile && sameExistingFile(planFile, journalFile)) {
+    throw new Error('--plan-file and --journal-file must be different files.')
+  }
+  if (!apply && journalFile) throw new Error('--journal-file is only valid with --apply.')
+  return {
+    apply,
+    requireTestMode: Boolean(values['require-test-mode']),
+    retirementOnly: Boolean(values['retirement-only']),
+    planFile,
+    journalFile,
+    journalPath: journalFile,
+    confirmSha256: values['confirm-sha256'] ? String(values['confirm-sha256']) : null,
+    canonicalProductIds,
+  }
+}
+
+export function createStripeClient(secretKey, StripeConstructor = Stripe) {
+  return new StripeConstructor(secretKey, {
+    maxNetworkRetries: 0,
+    timeout: STRIPE_CATALOG_REQUEST_TIMEOUT_MS,
+  })
+}
+
+function writePlan(path, plan) {
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, `${JSON.stringify(plan, null, 2)}\n`, 'utf8')
+}
+
+export async function main(argv = process.argv.slice(2), dependencies = {}) {
+  const cli = parseCli(argv)
+  const secretKey = dependencies.secretKey ?? secretKeyFromEnv()
+  if (!secretKey) throw new Error('STRIPE_SECRET_KEY not found in environment or .env')
+
+  // Test-mode validation happens before Stripe construction. A live key can
+  // never reach a provider client when this preflight requires test mode.
+  const mode = keyMode(secretKey)
+  if (cli.apply || cli.requireTestMode) assertTestModeKey(secretKey)
+
+  const stripeFactory = dependencies.stripeFactory ?? createStripeClient
+  const stripe = stripeFactory(secretKey)
+  if (!cli.apply) {
+    const plan = await createCatalogPlan({
+      readAdapter: stripeReadAdapter(stripe),
+      accountMode: mode,
+      imageFiles: describeImageFiles(),
+      canonicalProductIds: cli.canonicalProductIds,
+      retirementOnly: cli.retirementOnly,
     })
-    console.log(`  Updated: ${match.id}`)
-    return match
+    if (cli.planFile) {
+      writePlan(cli.planFile, plan)
+      console.log(`Wrote read-only Stripe catalog plan: ${cli.planFile}`)
+      console.log(`Plan SHA-256: ${plan.planSha256}`)
+    } else {
+      process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`)
+    }
+    return { mode, planSha256: plan.planSha256, operationCount: plan.operations.length }
   }
 
-  const product = await stripe.products.create({
-    name,
-    ...updateData
+  const plan = JSON.parse(readFileSync(cli.planFile, 'utf8'))
+  const result = await applyCatalogPlan({
+    plan,
+    confirmedSha256: cli.confirmSha256,
+    key: secretKey,
+    readAdapter: stripeReadAdapter(stripe),
+    mutationAdapter: stripeMutationAdapter(stripe),
+    filesAdapter: stripeFilesAdapter(secretKey),
+    journalPath: cli.journalFile,
   })
-
-  const price = await ensureMonthlyPrice(product.id, amountCents)
-  await stripe.products.update(product.id, {
-    metadata: { ...updateData.metadata, monthly_price_id: price.id },
-    default_price: price.id,
-  })
-
-  console.log(`  Created: ${product.id}`)
-  return product
+  console.log(`Stripe catalog apply status=${result.status}; applied ${result.appliedOperations} enumerated operations.`)
+  console.log(`Plan SHA-256: ${result.planSha256}`)
+  return result
 }
 
-async function main() {
-  console.log('=== KrabiClaw Stripe Seeder ===')
-  console.log(`Mode: ${STRIPE_SECRET_KEY.startsWith('sk_test') ? 'TEST' : 'LIVE'}`)
-
-  await archiveOldPlans()
-
-  // Recurring plans
-  await createSubscriptionPlan({
-    name: 'Growth',
-    description: 'Your site, your domain — go live in minutes and edit everything through ChatGPT.',
-    planId: 'growth',
-    amountCents: 4900,
-    // Flagship purchasable plan while Managed/SEO Accelerator are hidden
-    // (MANAGED_SERVICE_ENABLED off) — see launch note at top of file. Revisit
-    // whether Managed should reclaim "highlighted" once it's re-enabled.
-    highlighted: true,
-    badge: 'Most Popular',
-    imagePath: resolve(STRIPE_ASSETS_DIR, 'growth.png'),
-    features: [
-      'Restaurant or experience site live in minutes',
-      'Your own domain (yourbusiness.com)',
-      'Edit menus, content & photos through ChatGPT',
-      'Bookings & ticketed experiences',
-      'Messaging booking & reservation notifications',
-      'Auto-sync from Facebook & Instagram',
-      'Google Business profile sync',
-    ],
+const isDirectRun = process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))
+if (isDirectRun) {
+  main().catch(error => {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(message)
+    if (error?.status === 'incomplete') {
+      console.error(`Stripe catalog apply status=incomplete; journal=${error.journalPath ?? 'unknown'}`)
+      console.error(`Next safe action: ${error.nextSafeAction ?? 'review the journal before any retry.'}`)
+    }
+    process.exitCode = 1
   })
-
-  await createSubscriptionPlan({
-    name: 'Managed',
-    description: 'Send us a WhatsApp. We run your online presence — no login needed.',
-    planId: 'managed',
-    amountCents: 14900,
-    highlighted: true,
-    badge: 'Best Value',
-    imagePath: resolve(STRIPE_ASSETS_DIR, 'managed.png'),
-    features: [
-      'Everything in Growth, plus:',
-      'We manage your site for you — just WhatsApp us',
-      'Full Google Business profile management',
-      'Monthly content updates & photo refreshes',
-      'Priority WhatsApp support from Paul & Julia',
-    ],
-  })
-
-  await createSubscriptionPlan({
-    name: 'SEO Accelerator',
-    description: 'Active SEO & AEO strategy from Julia — get found by tourists and recommended by AI.',
-    planId: 'seo_accelerator',
-    amountCents: 34900,
-    highlighted: false,
-    features: [
-      'Everything in Managed, plus:',
-      'Active keyword strategy for local & travel searches',
-      'Monthly content cadence — blog, photos, seasonal',
-      'Google Maps authority building',
-      'Get recommended by ChatGPT, Claude & Perplexity',
-      "Julia's playbook — tiffycooks.com 1M+ daily impressions",
-    ],
-  })
-
-  console.log('\nRecurring subscription plans reconciled. No one-time products or prices are created.')
-  console.log('Verify the catalog at https://dashboard.stripe.com/test/products')
 }
-
-main().catch(err => {
-  console.error(err)
-  process.exit(1)
-})

@@ -10,10 +10,9 @@ function flagEnabled(env: ApiRecord | undefined, key: string): boolean {
 }
 
 /**
- * Gates the concierge "Managed"/"SEO Accelerator" plans as a purchasable,
- * marketed option. Off by default at launch — the underlying managed_service
- * DB entitlement, Stripe products, Facebook sync gating, and MCP tool
- * authorization are unaffected; this only controls marketing/UI visibility.
+ * Controls whether managed-service operations are accepting new Growth
+ * support requests. It never defines a plan or entitlement. The Growth
+ * entitlement remains authoritative when the flag is off.
  */
 export function isManagedServiceEnabled(env: ApiRecord | undefined): boolean {
   return flagEnabled(env, 'MANAGED_SERVICE_ENABLED')

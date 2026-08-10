@@ -656,7 +656,6 @@ const settingsGroup = computed(() => {
 })
 
 const adminGroup = computed(() => [
-  { label: 'Add-ons', icon: 'i-lucide-inbox', to: '/admin' },
   ...(dashboard.managedServiceEnabled.value ? [{ label: 'Work Queue', icon: 'i-lucide-list-todo', to: '/admin/work' }] : []),
   { label: 'Clients', icon: 'i-lucide-building-2', to: '/admin/clients' },
   { label: 'Members', icon: 'i-lucide-user-plus', to: '/admin/members' },

@@ -4,7 +4,7 @@ import { defineScheduledTask } from '~/server/utils/scheduled-task'
 export default defineScheduledTask({
   meta: {
     name: 'site-transfer-reminders',
-    description: 'Send pending handoff reminders and pause unpaid custom domains when needed'
+    description: 'Send pending handoff reminders without mutating custom domains'
   },
   async run({ context }) {
     const taskContext = context as { cloudflare?: { env?: ApiRecord } } | undefined

@@ -20,7 +20,7 @@
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { isScopedRole, listResourceTeamAccess, removeMemberResourceAccess } from '~/server/utils/member-access'
 import { fireSiteEventSafe, resolvePrimarySiteForEvent } from '~/server/utils/site-events'
-import type { createAuth } from '~/server/utils/auth'
+import type { CloudflareEnv, createAuth } from '~/server/utils/auth'
 
 type AuthInstance = ReturnType<typeof createAuth>
 
@@ -114,6 +114,7 @@ export async function removeOrgMembershipIfNoScopesRemain(
 }
 
 export interface PhoneChangeParams {
+  env: CloudflareEnv
   organizationId: string
   siteId: string
   /** Required when `scopeType === 'location'`; ignored for `'site'`. */
@@ -166,6 +167,7 @@ export async function recalculateScopesForPhoneChange(
   if (!isScopedRole(holder.role)) return { scopeRemoved: false, memberRemoved: false }
 
   const scopeRemoved = await removeMemberResourceAccess(db, {
+    env: params.env,
     userId: holder.userId,
     organizationId,
     siteId,
