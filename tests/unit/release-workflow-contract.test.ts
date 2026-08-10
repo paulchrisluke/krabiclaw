@@ -116,8 +116,9 @@ function assertPromotedCandidateReadiness(script: string, label: string): void {
   assert.ok(verifier > readiness, `${label}: deployed verification must follow promoted readiness`)
 }
 
-test('required CI checks out the immutable event SHA and never mutates shared staging or production', async () => {
+test('required CI pins the event SHA and deploys production only from main pushes', async () => {
   const source = await repoFile('.github/workflows/ci.yml')
+  const jobs = await workflowJobs('.github/workflows/ci.yml')
   const deployedAssetWait = await repoFile('scripts/wait-for-deployed-assets.mjs')
   const packageJson = JSON.parse(await repoFile('package.json')) as { scripts?: Record<string, string> }
   const checkoutCount = (source.match(/uses: actions\/checkout@/g) ?? []).length
@@ -128,7 +129,15 @@ test('required CI checks out the immutable event SHA and never mutates shared st
   assert.doesNotMatch(source, /ref:\s*staging/)
   assert.doesNotMatch(source, /shared-staging-deployment/)
   assert.doesNotMatch(source, /migrate:staging|deploy:staging:worker/)
-  assert.doesNotMatch(source, /prod-deploy|migrate:prod|deploy:prod:worker/)
+  const production = jobs['deploy-production']
+  assert.ok(production, 'required CI must deploy production from main')
+  assert.equal(production.if, "github.event_name == 'push' && github.ref == 'refs/heads/main'")
+  assert.deepEqual(production.needs, ['typecheck', 'build-production', 'guardrails'])
+  const deploy = runScript(production, 'Deploy exact main Worker')
+  const migrate = runScript(production, 'Apply production migrations')
+  assert.match(deploy, /wrangler deploy --tag "\$GITHUB_SHA"/)
+  assert.match(migrate, /wrangler d1 migrations apply DB --remote/)
+  assert.match(source, /Verify exact production Worker and routes[\s\S]*--expected-sha "\$GITHUB_SHA"/)
   for (const coverage of [
     'test:e2e:dashboard:smoke',
     'test:e2e:blawby-cms:smoke',
