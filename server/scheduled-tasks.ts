@@ -27,7 +27,7 @@ export const SCHEDULED_TASKS: Readonly<Record<string, readonly ScheduledTaskName
   '*/10 * * * *': ['domain-reconciliation'],
   '0 3 * * *': ['domain-reconciliation-daily', 'analytics-aggregate-daily'],
   '0 4 * * *': ['site-transfer-reminders'],
-  '0 0 * * 0': ['google-places-sync'],
+  '0 0 * * SUN': ['google-places-sync'],
   '0 * * * *': ['instagram-sync-process', 'review-request-automation', 'stripe-reconciliation'],
 }
 
