@@ -22,15 +22,20 @@ export interface PublicTenantPage {
   updated_at: string
 }
 
+export function selectPublicTenantPageBlocks(blocks: TenantPageBlock[]): TenantPageBlock[] {
+  return blocks.filter(block => !(block.type === 'callout' && block.data.type === 'legal_meta'))
+}
+
 async function hydrateBlocks(db: DbClient, siteId: string, pagePath: string, blocks: TenantPageBlock[]): Promise<TenantPageBlock[]> {
+  const publicBlocks = selectPublicTenantPageBlocks(blocks)
   const assetIds = new Set<string>()
   const offeringIds = new Set<string>()
   const locationIds = new Set<string>()
-  const hasOfferingSource = blocks.some(block => block.type === 'offering_grid' && block.data.source === 'site_offerings')
-  const hasQaSource = blocks.some(block => block.type === 'faq' && block.data.source === 'page_qa')
-  const hasReviewSource = blocks.some(block => block.type === 'testimonial_grid' && block.data.source === 'site_reviews')
-  const hasPostSource = blocks.some(block => block.type === 'feature_grid' && block.data.source === 'site_posts')
-  for (const block of blocks) {
+  const hasOfferingSource = publicBlocks.some(block => block.type === 'offering_grid' && block.data.source === 'site_offerings')
+  const hasQaSource = publicBlocks.some(block => block.type === 'faq' && block.data.source === 'page_qa')
+  const hasReviewSource = publicBlocks.some(block => block.type === 'testimonial_grid' && block.data.source === 'site_reviews')
+  const hasPostSource = publicBlocks.some(block => block.type === 'feature_grid' && block.data.source === 'site_posts')
+  for (const block of publicBlocks) {
     const assetId = block.data.asset_id
     if (typeof assetId === 'string' && assetId.trim()) assetIds.add(assetId)
     const assetIdsValue = block.data.asset_ids
@@ -116,7 +121,7 @@ async function hydrateBlocks(db: DbClient, siteId: string, pagePath: string, blo
     label: 'Read more',
     image_url: post.featured_image_asset_id ? (media.get(post.featured_image_asset_id)?.public_url ?? undefined) : undefined,
   }))
-  return blocks.map(block => {
+  return publicBlocks.map(block => {
     const data = { ...block.data }
     const assetId = typeof data.asset_id === 'string' ? data.asset_id : null
     if (assetId) {
