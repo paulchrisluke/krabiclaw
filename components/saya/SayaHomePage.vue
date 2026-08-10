@@ -314,7 +314,7 @@ const {
   menuItemsBySection,
   experiencesList,
   contentBlocks,
-} = await usePublicPageData({ enabled: true, server: true, lazy: false })
+} = await usePublicPageData({ server: true, lazy: false })
 
 const {
   data: supplementalData,

@@ -95,6 +95,15 @@ test('admin clients uses the organization billing projection for plan state', ()
   assert.doesNotMatch(clientsRoute, /LEFT JOIN site_billing sb/)
 })
 
+test('admin overview lists the full hierarchy without drill-down routes', () => {
+  const overviewPage = source('pages/admin/index.vue')
+  assert.match(overviewPage, /organization\.sites/)
+  assert.match(overviewPage, /site\.locations/)
+  assert.doesNotMatch(overviewPage, /\/admin\/organizations\//)
+  assert.equal(existsSync(resolve(root, 'pages/admin/organizations')), false)
+  assert.equal(existsSync(resolve(root, 'server/api/admin/portfolio')), false)
+})
+
 test('dashboard context and location navigation never infer residual selections', () => {
   const context = source('server/utils/dashboard-context.ts')
   const contextRoute = source('server/api/dashboard/context.get.ts')

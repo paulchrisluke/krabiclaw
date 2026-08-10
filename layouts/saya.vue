@@ -22,45 +22,8 @@
       :has-experiences="showExperiences"
       :experience-cta-path="locationExperienceCtaPath"
     />
-    <main class="grow" :data-route-shell="routeLoadState.path || route.path">
-      <div
-        v-if="publicPending"
-        class="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8"
-        data-testid="public-route-loading"
-      >
-        <div class="h-7 w-44 animate-pulse rounded bg-elevated" />
-        <div class="mt-5 h-12 max-w-2xl animate-pulse rounded bg-elevated" />
-        <div class="mt-10 grid gap-6 md:grid-cols-2">
-          <div v-for="index in 2" :key="index" class="h-56 animate-pulse rounded bg-elevated" />
-        </div>
-      </div>
-      <div
-        v-else-if="publicError"
-        class="mx-auto max-w-xl px-4 py-24 text-center sm:px-6"
-        data-testid="public-route-error"
-      >
-        <h1 class="saya-display-md text-default">{{ $t('error.page_not_loaded') }}</h1>
-        <p class="mt-4 text-sm text-muted">{{ $t('error.generic_message') }}</p>
-        <div class="mt-8 flex justify-center gap-3">
-          <button
-            v-if="shell.error.value"
-            type="button"
-            class="border border-default px-5 py-3 text-sm"
-            @click="retryShell"
-          >
-            {{ $t('action.try_again') }}
-          </button>
-          <button
-            v-if="routeLoadState.error && routeLoadState.key"
-            type="button"
-            class="border border-default px-5 py-3 text-sm"
-            @click="retryPage"
-          >
-            {{ $t('action.try_again') }}
-          </button>
-        </div>
-      </div>
-      <slot v-else />
+    <main class="grow" :data-route-shell="route.path">
+      <slot />
     </main>
     <LazySayaFooter
       :site="resolvedSite"
@@ -123,14 +86,9 @@ if (import.meta.dev) useDebugLCP()
 const shell = useSiteShellState()
 if (import.meta.server && isHome.value) await shell.ready
 const { config, locations, hasExperiences, locales, error: bootstrapError, site: shellSite } = shell
-const routeLoadState = usePublicRouteLoadState()
-const publicPending = computed(() => shell.pending.value || (!isHome.value && routeLoadState.value.pending))
-const publicError = computed(() => shell.error.value || (!isHome.value && routeLoadState.value.error))
-const retryShell = async () => await shell.refresh()
-const retryPage = async () => {
-  if (routeLoadState.value.key) await refreshNuxtData(routeLoadState.value.key)
-}
-const activePageKey = computed(() => routeLoadState.value.key)
+const { isPlatform, siteId, draftId, site } = useTenantSite()
+const pageParams = usePublicPageRequest()
+const activePageKey = computed(() => usePublicPageKey(siteId || draftId || null, pageParams.value))
 const nuxtApp = useNuxtApp()
 const pagePayload = computed(() =>
   (nuxtApp.payload.data[activePageKey.value] as ApiRecord | undefined)
@@ -144,7 +102,6 @@ const experiencesList = computed(() =>
     : [],
 )
 const showExperiences = computed(() => hasExperiences.value || experiencesList.value.length > 0)
-const { isPlatform, site } = useTenantSite()
 const resolvedSite = computed(() => shellSite.value || site)
 // Called for its side effect: keeps the consent ref in sync and lets the
 // head markup emit the default signal ahead of any analytics config.

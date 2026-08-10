@@ -17,7 +17,7 @@ export interface DomainEnv {
   NUXT_PUBLIC_PLATFORM_DOMAIN?: string
 }
 
-export type DomainStatus = 'pending' | 'verifying' | 'active' | 'blocked' | 'failed' | 'stuck' | 'disabled' | 'deleted'
+export type DomainStatus = 'pending' | 'verifying' | 'active' | 'blocked' | 'failed' | 'disabled' | 'deleted'
 export type DomainRole = 'canonical' | 'secondary'
 
 const PAGES_DOMAIN_REQUEST_TIMEOUT_MS = 10_000
@@ -371,7 +371,7 @@ function secondSslValidation(hostname: CloudflareCustomHostname) {
 export function mapCloudflareStatus(hostnameStatus?: string, sslStatus?: string, dnsStatus: string = 'pending'): DomainStatus {
   if (hostnameStatus === 'active' && sslStatus === 'active' && dnsStatus === 'valid') return 'active'
   if (hostnameStatus === 'blocked') return 'blocked'
-  if (hostnameStatus === 'moved') return 'stuck'
+  if (hostnameStatus === 'moved') return 'failed'
   if (hostnameStatus === 'deleted') return 'failed'
   if (hostnameStatus === 'pending' || hostnameStatus === 'pending_validation' || sslStatus === 'pending_validation') return 'verifying'
   if (hostnameStatus === 'active' || sslStatus === 'active') return 'verifying'
@@ -531,7 +531,7 @@ async function persistCloudflareState(
         : (before.dns_status || 'pending')
   const mappedStatus = mapCloudflareStatus(hostname.status, hostname.ssl?.status, dnsStatus)
   const now = new Date().toISOString()
-  const status = isPendingTooLong(before, mappedStatus, Date.parse(now)) ? 'stuck' : mappedStatus
+  const status = isPendingTooLong(before, mappedStatus, Date.parse(now)) ? 'failed' : mappedStatus
   const activatedAt = status === 'active' ? (before.activated_at || now) : before.activated_at
   const certificateLastActiveAt = hostname.ssl?.status === 'active'
     ? now
@@ -841,7 +841,7 @@ export async function syncDomainWithCloudflare(
     signal?.throwIfAborted()
     const shouldPatch = options.forceRevalidation
       || hostname.status === 'moved'
-      || domain.status === 'stuck'
+      || domain.status === 'failed'
       || (Boolean(dnsInspection?.points_to_saas) && hostname.status !== 'active')
     let triggeredRevalidation = false
     if (shouldPatch) {
@@ -1082,7 +1082,7 @@ export async function reconcileDueDomains(env: DomainEnv, db: D1Database, limit 
     FROM site_domains sd
     LEFT JOIN domain_reconciliation_jobs j ON j.domain_id = sd.id
     WHERE sd.type = 'custom'
-      AND sd.status IN ('pending', 'verifying', 'stuck', 'failed', 'blocked')
+      AND sd.status IN ('pending', 'verifying', 'failed', 'blocked')
       AND (sd.next_check_at IS NULL OR sd.next_check_at <= ? OR j.run_after <= ?)
     ORDER BY COALESCE(j.run_after, sd.next_check_at, sd.created_at) ASC
     LIMIT ?

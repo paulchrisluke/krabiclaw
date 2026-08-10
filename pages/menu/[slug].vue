@@ -365,7 +365,7 @@ type LightboxMediaItem = {
   description?: string
 }
 
-const { menu: pageMenu, config: siteConfig, error } = await usePublicPageData()
+const { menu: pageMenu, config: siteConfig, error } = await usePublicPageData({ lazy: false })
 if (error.value) {
   throw error.value
 }
