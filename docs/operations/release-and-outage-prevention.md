@@ -23,12 +23,11 @@ error, wrong tenant identity, wrong URL, or incomplete inspection is
 **unverified** and blocks the release. Never report browser validation as passed
 when it was only inferred from CI or a local script.
 
-The concrete immutable-candidate implementation is defined in
+The concrete release implementation is defined in
 [release-candidate-contract.md](release-candidate-contract.md). Shared staging
-may be changed only by its locked full-candidate workflow, and normal
-production releases may be changed only by the manifest-gated workflow's
-separate deploy dispatch after its read-only preflight report has been
-reviewed; the production mutation job also uses the protected environment.
+may be changed only by its locked full-candidate workflow. A push or merge to
+`main` automatically builds, migrates, and deploys that exact SHA to production,
+then verifies its provenance, assets, and real tenant navigation.
 During an incident, the separate **Production rollback (exact-target,
 manifest-gated)** workflow is the only rollback entrypoint: its read-only
 preflight proves the declared current and target Worker identities, and only
