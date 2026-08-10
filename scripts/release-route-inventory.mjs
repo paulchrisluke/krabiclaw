@@ -142,7 +142,7 @@ const NCLS_SERVICE_ROUTES = [
 ]
 
 const PLATFORM_DOC_ROUTES = [
-  ['/docs/getting-started/getting-started-with-krabiclaw', 'Getting started with KrabiClaw'],
+  ['/docs/getting-started/getting-started', 'Getting started with KrabiClaw'],
   ['/docs/getting-started/deploy-your-site', 'Deploy your site'],
   ['/docs/getting-started/customize-brand-theme', 'Set a brand color'],
   ['/docs/getting-started/invite-your-team', 'Invite your team'],

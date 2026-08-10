@@ -237,7 +237,7 @@ INSERT OR REPLACE INTO platform_docs (id, title, slug, body, excerpt, category, 
 VALUES (
   'doc-013',
   'Getting started with KrabiClaw',
-  'getting-started-with-krabiclaw',
+  'getting-started',
   '# Getting started with KrabiClaw
 
 Create your first KrabiClaw site, add your business details, choose how you want to manage it, and publish your first version.
@@ -299,7 +299,7 @@ After the site exists, you can connect KrabiClaw to ChatGPT if you want to edit 
   NULL,
   'Learn how to create a KrabiClaw account, use onboarding to build your first site, connect ChatGPT, and publish the first live version.',
   'getting started with KrabiClaw, create website, business onboarding, connect ChatGPT, publish site, local business website setup',
-  '/docs/getting-started/getting-started-with-krabiclaw',
+  '/docs/getting-started/getting-started',
   'index, follow',
   'Beginner',
   0,
@@ -394,7 +394,7 @@ Yes. Nothing there is required to go live. Add them anytime from ChatGPT, ChowBo
 
 ## Related guides
 
-- [Getting started with KrabiClaw](/docs/getting-started/getting-started-with-krabiclaw)
+- [Getting started with KrabiClaw](/docs/getting-started/getting-started)
 - [Customize your brand and theme](/docs/getting-started/customize-brand-theme)
 - [Invite your team](/docs/getting-started/invite-your-team)
 - [Set up notifications](/docs/getting-started/set-up-notifications)
