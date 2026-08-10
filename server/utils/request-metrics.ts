@@ -1,4 +1,5 @@
 import { getHeader, getResponseHeader, getResponseStatus, setHeader, type H3Event } from 'h3'
+import { errorChainForTelemetry } from '~/server/utils/error-telemetry'
 
 export interface RequestDataMetrics {
   requestId: string
@@ -15,7 +16,19 @@ export interface RequestDataMetrics {
 
 const metricsByEvent = new WeakMap<H3Event, RequestDataMetrics>()
 const databaseByEvent = new WeakMap<H3Event, D1Database>()
-const statementTargets = new WeakMap<object, object>()
+const statementTargets = new WeakMap<object, { target: object; query: string }>()
+const SLOW_D1_QUERY_MS = 1000
+
+type D1MetaSummary = {
+  duration?: number
+  rows_read?: number
+  rows_written?: number
+  served_by_region?: string
+  served_by_colo?: string
+  served_by_primary?: boolean
+  total_attempts?: number
+  timings?: { sql_duration_ms?: number }
+}
 
 export function getRequestDataMetrics(event: H3Event): RequestDataMetrics {
   let metrics = metricsByEvent.get(event)
@@ -42,40 +55,109 @@ export function recordRequestPhase(event: H3Event, phase: string, startedAt: num
   metrics.phases[phase] = (metrics.phases[phase] ?? 0) + performance.now() - startedAt
 }
 
-function recordResult(metrics: RequestDataMetrics, value: unknown) {
+function recordResult(metrics: RequestDataMetrics, value: unknown): D1MetaSummary[] {
+  const summaries: D1MetaSummary[] = []
   const results = Array.isArray(value) ? value : [value]
   for (const result of results) {
     if (!result || typeof result !== 'object' || !('meta' in result)) continue
-    const meta = (result as { meta?: { rows_read?: number; rows_written?: number } }).meta
+    const meta = (result as { meta?: D1MetaSummary }).meta
     metrics.rowsRead += Number(meta?.rows_read) || 0
     metrics.rowsWritten += Number(meta?.rows_written) || 0
+    if (meta) summaries.push(meta)
   }
+  return summaries
 }
 
-function wrapStatement(statement: object, metrics: RequestDataMetrics): object {
+function queryIdentity(query: string) {
+  const normalized = query.replace(/\s+/g, ' ').trim()
+  const operation = normalized.match(/^([a-z]+)/i)?.[1]?.toUpperCase() ?? 'UNKNOWN'
+  const tableMatch = operation === 'INSERT'
+    ? normalized.match(/\bINTO\s+["`[]?([\w-]+)/i)
+    : operation === 'UPDATE'
+      ? normalized.match(/^UPDATE\s+["`[]?([\w-]+)/i)
+      : normalized.match(/\bFROM\s+["`[]?([\w-]+)/i)
+  return { normalized, operation, table: tableMatch?.[1] ?? null }
+}
+
+async function queryFingerprint(normalizedQuery: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(normalizedQuery))
+  return [...new Uint8Array(digest)]
+    .slice(0, 8)
+    .map(byte => byte.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+async function logD1Query(
+  level: 'error' | 'warn',
+  event: H3Event,
+  query: string,
+  statementMethod: string,
+  durationMs: number,
+  error?: unknown,
+  meta: D1MetaSummary[] = [],
+) {
+  const metrics = getRequestDataMetrics(event)
+  const identity = queryIdentity(query)
+  const firstMeta = meta[0]
+  console[level]('[d1-query]', JSON.stringify({
+    event: error ? 'd1_query_failed' : 'd1_query_slow',
+    request_id: metrics.requestId,
+    ray_id: getHeader(event, 'cf-ray') ?? null,
+    route: event.path,
+    statement_method: statementMethod,
+    operation: identity.operation,
+    table: identity.table,
+    query_fingerprint: await queryFingerprint(identity.normalized),
+    duration_ms: Number(durationMs.toFixed(2)),
+    d1_meta: firstMeta
+      ? {
+          duration_ms: firstMeta.duration ?? null,
+          sql_duration_ms: firstMeta.timings?.sql_duration_ms ?? null,
+          rows_read: firstMeta.rows_read ?? null,
+          rows_written: firstMeta.rows_written ?? null,
+          served_by_region: firstMeta.served_by_region ?? null,
+          served_by_colo: firstMeta.served_by_colo ?? null,
+          served_by_primary: firstMeta.served_by_primary ?? null,
+          total_attempts: firstMeta.total_attempts ?? null,
+        }
+      : null,
+    error_chain: error ? errorChainForTelemetry(error) : null,
+  }))
+}
+
+function wrapStatement(statement: object, metrics: RequestDataMetrics, event: H3Event, query: string): object {
   const proxy = new Proxy(statement, {
     get(target, property) {
       const value = Reflect.get(target, property, target)
       if (property === 'bind' && typeof value === 'function') {
-        return (...args: unknown[]) => wrapStatement(value.apply(target, args) as object, metrics)
+        return (...args: unknown[]) => wrapStatement(value.apply(target, args) as object, metrics, event, query)
       }
       if (['first', 'all', 'run', 'raw'].includes(String(property)) && typeof value === 'function') {
         return async (...args: unknown[]) => {
           metrics.statementCount += 1
           const startedAt = performance.now()
+          let queryDurationMs = 0
           try {
             const result = await value.apply(target, args)
-            recordResult(metrics, result)
+            queryDurationMs = performance.now() - startedAt
+            const meta = recordResult(metrics, result)
+            if (queryDurationMs >= SLOW_D1_QUERY_MS) {
+              await logD1Query('warn', event, query, String(property), queryDurationMs, undefined, meta)
+            }
             return result
+          } catch (error) {
+            queryDurationMs = performance.now() - startedAt
+            await logD1Query('error', event, query, String(property), queryDurationMs, error)
+            throw error
           } finally {
-            metrics.d1DurationMs += performance.now() - startedAt
+            metrics.d1DurationMs += queryDurationMs || performance.now() - startedAt
           }
         }
       }
       return typeof value === 'function' ? value.bind(target) : value
     },
   })
-  statementTargets.set(proxy, statement)
+  statementTargets.set(proxy, { target: statement, query })
   return proxy
 }
 
@@ -87,20 +169,39 @@ export function instrumentD1(event: H3Event, database: D1Database): D1Database {
     get(target, property) {
       const value = Reflect.get(target, property, target)
       if (property === 'prepare' && typeof value === 'function') {
-        return (...args: unknown[]) => wrapStatement(value.apply(target, args) as object, metrics)
+        return (...args: unknown[]) => wrapStatement(
+          value.apply(target, args) as object,
+          metrics,
+          event,
+          typeof args[0] === 'string' ? args[0] : 'unknown',
+        )
       }
       if (property === 'batch' && typeof value === 'function') {
         return async (statements: object[]) => {
           metrics.statementCount += statements.length
           metrics.batchRoundTrips += 1
           const startedAt = performance.now()
+          let batchDurationMs = 0
           try {
-            const originals = statements.map(statement => statementTargets.get(statement) ?? statement)
+            const originals = statements.map(statement => statementTargets.get(statement)?.target ?? statement)
             const result = await value.call(target, originals)
+            batchDurationMs = performance.now() - startedAt
             recordResult(metrics, result)
             return result
+          } catch (error) {
+            batchDurationMs = performance.now() - startedAt
+            console.error('[d1-query]', JSON.stringify({
+              event: 'd1_batch_failed',
+              request_id: metrics.requestId,
+              ray_id: getHeader(event, 'cf-ray') ?? null,
+              route: event.path,
+              statement_count: statements.length,
+              duration_ms: Number(batchDurationMs.toFixed(2)),
+              error_chain: errorChainForTelemetry(error),
+            }))
+            throw error
           } finally {
-            metrics.d1DurationMs += performance.now() - startedAt
+            metrics.d1DurationMs += batchDurationMs || performance.now() - startedAt
           }
         }
       }

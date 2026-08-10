@@ -5,6 +5,7 @@ import {
   finalizeTrackedRequestMetrics,
   flushRequestMetrics,
   getRequestDataMetrics,
+  instrumentD1,
 } from '../../server/utils/request-metrics.ts'
 
 function completedRedirectEvent() {
@@ -54,4 +55,43 @@ test('completed redirects remain valid metrics records without late header write
   assert.equal(records.length, 1)
   assert.equal(records[0]?.[0], '[data-request]')
   assert.match(String(records[0]?.[1]), /"status":302/)
+})
+
+test('D1 failures retain the nested provider cause without logging bound values', async () => {
+  const { event } = completedRedirectEvent()
+  event.path = '/api/auth/oauth2/token'
+  event.node.req.headers = { 'cf-ray': 'test-ray-SIN' }
+  const cause = new Error('D1 DB is overloaded. Requests queued for too long.')
+  const failure = new Error('Failed query: SELECT * FROM oauthResource\nparams: customer-secret', { cause })
+  const statement = {
+    bind() { return this },
+    async all() { throw failure },
+  }
+  const database = {
+    prepare() { return statement },
+  } as unknown as D1Database
+  const records: unknown[][] = []
+  const originalError = console.error
+  console.error = (...args: unknown[]) => records.push(args)
+
+  try {
+    await assert.rejects(
+      instrumentD1(event, database)
+        .prepare('SELECT * FROM "oauthResource" WHERE "identifier" = ?')
+        .bind('customer-secret')
+        .all(),
+      failure,
+    )
+  } finally {
+    console.error = originalError
+  }
+
+  assert.equal(records.length, 1)
+  assert.equal(records[0]?.[0], '[d1-query]')
+  const payload = JSON.parse(String(records[0]?.[1])) as Record<string, unknown>
+  assert.equal(payload.event, 'd1_query_failed')
+  assert.equal(payload.table, 'oauthResource')
+  assert.equal(payload.ray_id, 'test-ray-SIN')
+  assert.match(JSON.stringify(payload.error_chain), /Requests queued for too long/)
+  assert.doesNotMatch(JSON.stringify(payload), /customer-secret/)
 })

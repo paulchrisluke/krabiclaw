@@ -1,6 +1,9 @@
 import { getHeader, getRequestURL, getHeaders } from 'h3'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
 import { execute, queryFirst } from '~/server/db'
+import { cloudflareEnv } from '~/server/utils/api-response'
+import { errorChainForTelemetry } from '~/server/utils/error-telemetry'
+import { getRequestDataMetrics, recordRequestPhase } from '~/server/utils/request-metrics'
 
 // This route takes precedence over server/api/auth/[...].ts for token exchange.
 // Purpose: make authorization_code exchanges idempotent so ChatGPT's two concurrent
@@ -9,22 +12,32 @@ import { execute, queryFirst } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const startedAt = Date.now()
-  const cfEnv = event.context.cloudflare?.env as CloudflareEnv | undefined
+  const requestMetrics = getRequestDataMetrics(event)
+  const cfEnv = cloudflareEnv(event) as CloudflareEnv
   if (!cfEnv?.DB) throw createError({ statusCode: 503, message: 'Database unavailable' })
 
-  const auth = createAuth(cfEnv)
+  const cloudflareContext = event.context.cloudflare?.context
+  const waitUntil = cloudflareContext?.waitUntil?.bind(cloudflareContext)
+  const auth = createAuth(cfEnv, { waitUntil })
 
   const rawBody = await readRawBody(event) ?? ''
   const params = new URLSearchParams(rawBody)
   const code = params.get('code')
   const grantType = params.get('grant_type')
   const clientFingerprint = await safeFingerprint(params.get('client_id'))
+  const rayId = getHeader(event, 'cf-ray') ?? null
   const requestFields = {
     grant_type: grantType ?? 'unknown',
     client_fingerprint: clientFingerprint,
-    ray_id: getHeader(event, 'cf-ray') ?? null,
+    request_id: requestMetrics.requestId,
+    ray_id: rayId,
+    request_colo: rayId?.split('-').at(-1) ?? null,
+    deployment_version: String(
+      cfEnv.DEPLOYMENT_VERSION ?? cfEnv.CF_PAGES_COMMIT_SHA ?? cfEnv.GITHUB_SHA ?? 'unknown',
+    ),
     user_agent: getHeader(event, 'user-agent') ?? null,
   }
+  let failedPhase = 'better_auth'
 
   const buildRequest = () => {
     const url = getRequestURL(event)
@@ -32,85 +45,146 @@ export default defineEventHandler(async (event) => {
     return new Request(url.toString(), { method: 'POST', headers, body: rawBody })
   }
 
-  // Only wrap authorization_code — pass refresh_token and others straight through.
-  if (grantType !== 'authorization_code' || !code) {
-    const res = await auth.handler(buildRequest())
+  const runAuthHandler = async () => {
+    failedPhase = 'better_auth'
+    const phaseStartedAt = performance.now()
+    try {
+      return await auth.handler(buildRequest())
+    } finally {
+      recordRequestPhase(event, 'oauth_better_auth', phaseStartedAt)
+    }
+  }
+
+  try {
+    // Only wrap authorization_code — pass refresh_token and others straight through.
+    if (grantType !== 'authorization_code' || !code) {
+      const res = await runAuthHandler()
+      const responseBody = await res.text()
+      logTokenExchange(tokenLogLevel(res.status), {
+        ...requestFields,
+        status: res.status,
+        failed_phase: res.status >= 500 ? failedPhase : null,
+        duration_ms: Date.now() - startedAt,
+        ...requestMetricSummary(requestMetrics),
+        ...tokenResponseSummary(responseBody),
+      })
+      return new Response(responseBody, { status: res.status, headers: res.headers })
+    }
+
+    const now = new Date().toISOString()
+    const expiresAt = new Date(Date.now() + 90_000).toISOString()
+
+    // Prune expired entries (best-effort, non-blocking on failure).
+    void execute(cfEnv.DB, 'DELETE FROM token_exchange_cache WHERE expires_at < ?', [now]).catch(() => null)
+
+    // Atomic claim via INSERT OR IGNORE. First concurrent request wins (changes = 1).
+    failedPhase = 'idempotency_claim'
+    const claimStartedAt = performance.now()
+    let insertResult: Awaited<ReturnType<typeof execute>>
+    try {
+      insertResult = await execute(
+        cfEnv.DB,
+        `INSERT OR IGNORE INTO token_exchange_cache (code, state, response_body, http_status, created_at, expires_at)
+         VALUES (?, 'pending', '', 0, ?, ?)`,
+        [code, now, expiresAt],
+      )
+    } finally {
+      recordRequestPhase(event, 'oauth_idempotency_claim', claimStartedAt)
+    }
+
+    const claimed = Number(insertResult.meta.changes ?? 0) === 1
+
+    if (!claimed) {
+      failedPhase = 'idempotency_wait'
+      const waitStartedAt = performance.now()
+      let cachedResponse: Response | null = null
+      // A concurrent request already claimed this code. Poll for its result.
+      try {
+        for (let i = 0; i < 12; i++) {
+          await new Promise(r => setTimeout(r, 250))
+          const cached = await queryFirst<{ response_body: string; http_status: number }>(
+            cfEnv.DB,
+            `SELECT response_body, http_status FROM token_exchange_cache WHERE code = ? AND state = 'done'`,
+            [code],
+          )
+          if (cached) {
+            logTokenExchange(tokenLogLevel(cached.http_status), {
+              ...requestFields,
+              status: cached.http_status,
+              failed_phase: cached.http_status >= 500 ? failedPhase : null,
+              duration_ms: Date.now() - startedAt,
+              idempotency_cache: 'hit',
+              ...requestMetricSummary(requestMetrics),
+              ...tokenResponseSummary(cached.response_body),
+            })
+            cachedResponse = new Response(cached.response_body, {
+              status: cached.http_status,
+              headers: { 'Content-Type': 'application/json' },
+            })
+            break
+          }
+        }
+      } finally {
+        recordRequestPhase(event, 'oauth_idempotency_wait', waitStartedAt)
+      }
+      if (cachedResponse) return cachedResponse
+      // Timed out (3s) — fall through and try directly (primary may have failed).
+      console.error('[Token] idempotency wait timed out, attempting direct exchange')
+    }
+
+    // Exchange the code with better-auth.
+    const res = await runAuthHandler()
     const responseBody = await res.text()
-    logTokenExchange(res.status >= 400 ? 'warn' : 'info', {
+
+    logTokenExchange(tokenLogLevel(res.status), {
       ...requestFields,
       status: res.status,
+      failed_phase: res.status >= 500 ? failedPhase : null,
       duration_ms: Date.now() - startedAt,
+      idempotency_cache: claimed ? 'miss' : 'timeout',
+      ...requestMetricSummary(requestMetrics),
       ...tokenResponseSummary(responseBody),
     })
-    return new Response(responseBody, { status: res.status, headers: res.headers })
-  }
 
-  const now = new Date().toISOString()
-  const expiresAt = new Date(Date.now() + 90_000).toISOString()
-
-  // Prune expired entries (best-effort, non-blocking on failure).
-  execute(cfEnv.DB, 'DELETE FROM token_exchange_cache WHERE expires_at < ?', [now]).catch(() => null)
-
-  // Atomic claim via INSERT OR IGNORE. First concurrent request wins (changes = 1).
-  const insertResult = await execute(
-    cfEnv.DB,
-    `INSERT OR IGNORE INTO token_exchange_cache (code, state, response_body, http_status, created_at, expires_at)
-     VALUES (?, 'pending', '', 0, ?, ?)`,
-    [code, now, expiresAt],
-  )
-
-  const claimed = Number(insertResult.meta.changes ?? 0) === 1
-
-  if (!claimed) {
-    // A concurrent request already claimed this code. Poll for its result.
-    for (let i = 0; i < 12; i++) {
-      await new Promise(r => setTimeout(r, 250))
-      const cached = await queryFirst<{ response_body: string; http_status: number }>(
+    // Persist result so concurrent duplicates can use it.
+    failedPhase = 'idempotency_store'
+    const storeStartedAt = performance.now()
+    try {
+      await execute(
         cfEnv.DB,
-        `SELECT response_body, http_status FROM token_exchange_cache WHERE code = ? AND state = 'done'`,
-        [code],
+        `UPDATE token_exchange_cache SET state = 'done', response_body = ?, http_status = ? WHERE code = ?`,
+        [responseBody, res.status, code],
+      ).catch(err =>
+        console.error('[Token] failed to store exchange result:', err)
       )
-      if (cached) {
-        logTokenExchange(cached.http_status >= 400 ? 'warn' : 'info', {
-          ...requestFields,
-          status: cached.http_status,
-          duration_ms: Date.now() - startedAt,
-          idempotency_cache: 'hit',
-          ...tokenResponseSummary(cached.response_body),
-        })
-        return new Response(cached.response_body, {
-          status: cached.http_status,
-          headers: { 'Content-Type': 'application/json' },
-        })
-      }
+    } finally {
+      recordRequestPhase(event, 'oauth_idempotency_store', storeStartedAt)
     }
-    // Timed out (3s) — fall through and try directly (primary may have failed).
-    console.error('[Token] idempotency wait timed out, attempting direct exchange')
+
+    return new Response(responseBody, { status: res.status, headers: res.headers })
+  } catch (error) {
+    console.error('[OAUTH_TOKEN]', JSON.stringify({
+      event: 'token_exchange_failed',
+      ...requestFields,
+      status: 500,
+      duration_ms: Date.now() - startedAt,
+      failed_phase: failedPhase,
+      ...requestMetricSummary(requestMetrics),
+      error_chain: errorChainForTelemetry(error),
+    }))
+    throw error
   }
-
-  // Exchange the code with better-auth.
-  const res = await auth.handler(buildRequest())
-  const responseBody = await res.text()
-
-  logTokenExchange(res.status >= 400 ? 'warn' : 'info', {
-    ...requestFields,
-    status: res.status,
-    duration_ms: Date.now() - startedAt,
-    idempotency_cache: claimed ? 'miss' : 'timeout',
-    ...tokenResponseSummary(responseBody),
-  })
-
-  // Persist result so concurrent duplicates can use it.
-  await execute(
-    cfEnv.DB,
-    `UPDATE token_exchange_cache SET state = 'done', response_body = ?, http_status = ? WHERE code = ?`,
-    [responseBody, res.status, code],
-  ).catch(err =>
-    console.error('[Token] failed to store exchange result:', err)
-  )
-
-  return new Response(responseBody, { status: res.status, headers: res.headers })
 })
+
+function requestMetricSummary(metrics: ReturnType<typeof getRequestDataMetrics>) {
+  return {
+    statement_count: metrics.statementCount,
+    d1_duration_ms: Number(metrics.d1DurationMs.toFixed(2)),
+    phase_timings_ms: Object.fromEntries(
+      Object.entries(metrics.phases).map(([name, duration]) => [name, Number(duration.toFixed(2))]),
+    ),
+  }
+}
 
 async function safeFingerprint(value: string | null) {
   if (!value) return null
@@ -141,9 +215,16 @@ function tokenResponseSummary(responseBody: string) {
   }
 }
 
-function logTokenExchange(level: 'info' | 'warn', fields: Record<string, unknown>) {
+function tokenLogLevel(status: number): 'info' | 'warn' | 'error' {
+  if (status >= 500) return 'error'
+  if (status >= 400) return 'warn'
+  return 'info'
+}
+
+function logTokenExchange(level: 'info' | 'warn' | 'error', fields: Record<string, unknown>) {
+  const status = typeof fields.status === 'number' ? fields.status : 0
   console[level]('[OAUTH_TOKEN]', JSON.stringify({
-    event: 'token_exchange',
+    event: status >= 500 ? 'token_exchange_failed' : 'token_exchange',
     ...fields,
   }))
 }
