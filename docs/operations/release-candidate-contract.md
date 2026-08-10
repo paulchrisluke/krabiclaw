@@ -74,9 +74,9 @@ the entire sequence:
    nonzero operation plan writes reviewed evidence and blocks before baseline
    capture or staging traffic mutation.
 2. Capture the current staging deployment and baseline Worker version.
-3. Capture migration state and run the explicit pending-migration
-   additive/backward-compatible guard. A failure blocks before any database
-   write.
+3. Capture migration state and run the migration safety check. Relationship
+   preservation failures and silent row-loss patterns block before any database
+   write; intentional schema removals are permitted.
 4. Check that the pre-provisioned test-mode staging secret names exist. The
    candidate never runs `secret put`: publishing a secret creates a new Worker
    version outside the immutable upload chain.
