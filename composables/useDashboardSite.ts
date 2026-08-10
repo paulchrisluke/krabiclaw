@@ -21,8 +21,6 @@ interface DashboardSite {
   default_currency: string | null
   source_locale: string | null
   feature_overrides: string | null
-  heroImageUrl?: string | null
-  locationHeroImageUrl?: string | null
 }
 
 interface DashboardSiteSummary {
@@ -33,6 +31,7 @@ interface DashboardSiteSummary {
   status: string | null
   onboarding_status: string | null
   plan: string | null
+  preview_image_url: string | null
 }
 
 interface DashboardLocation {
@@ -93,7 +92,8 @@ const isDashboardContextResponse = (value: unknown): value is DashboardContextRe
     isRecord(site)
     && typeof site.id === 'string'
     && (site.brand_name === null || typeof site.brand_name === 'string')
-    && (site.subdomain === null || typeof site.subdomain === 'string'))
+    && (site.subdomain === null || typeof site.subdomain === 'string')
+    && (site.preview_image_url === null || typeof site.preview_image_url === 'string'))
   && Array.isArray(value.locations)
   && value.locations.every(isDashboardLocation)
   && typeof value.managedServiceEnabled === 'boolean'

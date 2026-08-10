@@ -36,7 +36,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const result = await copyLocationBatch(
-    env as Record<string, string | undefined>,
+    env,
     db,
     organization.id,
     site.id,

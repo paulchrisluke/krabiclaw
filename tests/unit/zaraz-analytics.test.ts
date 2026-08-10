@@ -44,6 +44,7 @@ test('platform Zaraz GA4 is scoped to platform hosts instead of every zone hostn
 
   assert.equal(config.consent?.enabled, false)
   assert.equal(config.tools.googleAnalytics.defaultPurpose, undefined)
+  assert.equal(config.tools.googleAnalytics.defaultFields.user_id, '{{ client.user_id }}')
   assert.deepEqual(config.tools.googleAnalytics.actions.Pageview.firingTriggers, ['Pageview'])
   assert.deepEqual(config.tools.googleAnalytics.actions.Pageview.blockingTriggers, ['ga-platform', 'ga-consent-not-accepted'])
 

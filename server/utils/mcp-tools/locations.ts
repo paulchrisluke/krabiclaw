@@ -81,7 +81,7 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'copy_location_batch',
-      description: 'Copy menus, media, content, reviews, Q&A, and/or experiences from one location to another. Use this to duplicate a fully-built location as a starting point for a new one, instead of recreating content by hand. Provide target_location_id to copy into an existing location, or new_location_title to create a fresh one first. Items with external identifiers (Google review/question ids) are copied without that identifier since the copy is not the literal external record.',
+      description: 'Copy menus, media, content, reviews, Q&A, and/or experiences from one location to another. Use this to duplicate a fully-built location as a starting point for a new one, instead of recreating content by hand. Provide target_location_id to copy into an existing location, or new_location_title to create a fresh one first. External identifiers are omitted where the copied record is not the same external record.',
       domain: 'locations',
       minimumRole: 'editor',
       confirmRequired: true,

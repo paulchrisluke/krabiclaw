@@ -88,7 +88,7 @@ export interface PostChannelJob {
   id: string
   post_id: string
   organization_id: string
-  channel: 'site' | 'gmb' | 'instagram' | 'facebook'
+  channel: 'site' | 'instagram' | 'facebook'
   status: 'pending' | 'published' | 'failed' | 'skipped'
   provider_post_id: string | null
   error: string | null
@@ -755,7 +755,7 @@ export async function publishPost(
   organizationId: string,
   siteId: string,
   postId: string,
-  channels: Array<'site' | 'gmb' | 'instagram' | 'facebook'>,
+  channels: Array<'site' | 'instagram' | 'facebook'>,
   env: DomainEnv,
 ): Promise<PostWithChannels | null> {
   if (!channels.length) {

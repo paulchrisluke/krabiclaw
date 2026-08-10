@@ -109,13 +109,14 @@ export default defineEventHandler(async (event) => {
   // to match.
   if (role === 'editor') {
     await addMemberResourceAccess(db, {
+      env,
       userId: target.userId,
       organizationId: organization.id,
       siteId,
       locationId,
     })
   } else if (isScopedRole(target.role)) {
-    await removeAllMemberResourceAccess(db, { organizationId: organization.id, userId: target.userId })
+    await removeAllMemberResourceAccess(db, { env, organizationId: organization.id, userId: target.userId })
   }
 
   return jsonResponse({ success: true, memberId: target.id, role })

@@ -10,183 +10,56 @@ on:
 permissions:
   contents: read
 
-# Group by PR number so a new push cancels that PR's stale in-progress run —
-# runners were queueing up behind old commits' runs, starving the current
-# commit's run of hosted runners. Push events (main/staging, which deploy)
-# group by commit sha instead, which never collides with another run, so a
-# deploy in progress is never auto-cancelled by this.
+# CI may deploy the isolated preview Worker for representative browser tests,
+# but it never mutates shared staging or production. Staging candidates and
+# production releases are explicit workflows with their own release gates.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   typecheck:
-    name: Type check
+    name: Type check and unit tests
     if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
+          ref: ${{ github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "22"
           cache: yarn
       - run: yarn install --frozen-lockfile
-      - run: yarn lint:better-auth-boundaries
-      - run: yarn typecheck
+      - run: yarn quality
       - run: yarn test:unit
       - run: yarn mcp:compat
 
-  changes:
-    name: Detect changed paths
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/staging')
+  build-production:
+    name: Production build
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: read
-    outputs:
-      pottery_house: ${{ steps.filter.outputs.pottery_house }}
-      blawby: ${{ steps.filter.outputs.blawby }}
-      seed_relevant: ${{ steps.filter.outputs.seed_relevant }}
-      auth: ${{ steps.filter.outputs.auth }}
-      dashboard: ${{ steps.filter.outputs.dashboard }}
-      billing: ${{ steps.filter.outputs.billing }}
-      notifications: ${{ steps.filter.outputs.notifications }}
-      mcp: ${{ steps.filter.outputs.mcp }}
-      seo: ${{ steps.filter.outputs.seo }}
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
+          ref: ${{ github.sha }}
           persist-credentials: false
-      - uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590
-        id: filter
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          filters: |
-            pottery_house:
-              - 'scripts/**'
-              - '!scripts/*blawby*.mjs'
-              - 'components/saya/**'
-              - 'pages/**'
-              - '!pages/admin/**'
-              - '!pages/dashboard/**'
-              - '!pages/account/**'
-              - '!pages/auth/**'
-              - '!pages/oauth/**'
-              - 'utils/vertical-copy.ts'
-            blawby:
-              - 'components/blawby/**'
-              - 'composables/useBlawby**'
-              - 'layouts/blawby.vue'
-              - 'migrations/**'
-              - 'pages/about.vue'
-              - 'pages/article/**'
-              - 'pages/blog/**'
-              - 'pages/contact/**'
-              - 'pages/donate.vue'
-              - 'pages/policies/**'
-              - 'pages/pricing.vue'
-              - 'pages/schedule.vue'
-              - 'pages/services/**'
-              - 'pages/third-party-notices.vue'
-              - 'scripts/*blawby*.mjs'
-              - 'scripts/client-verify.mjs'
-              - 'scripts/utils/seo-migration-contract.mjs'
-              - 'server/api/editor/sites/**/professional-services*'
-              - 'server/api/editor/sites/**/qa/**'
-              - 'server/api/editor/sites/**/qa.*'
-              - 'server/api/editor/sites/**/reviews/**'
-              - 'server/api/editor/sites/**/reviews.*'
-              - 'server/api/public/sites/**/blawby.get.ts'
-              - 'server/api/public/sites/**/blawby/**'
-              - 'server/api/public/sites/**/contact.post.ts'
-              - 'server/api/public/sites/**/conversion-events.post.ts'
-              - 'server/db/schema.ts'
-              - 'server/middleware/zz-redirects.ts'
-              - 'server/plugins/tenant-sitemap-filter.ts'
-              - 'server/utils/professional-services*.ts'
-              - 'server/utils/location-qa.ts'
-              - 'server/utils/site-reviews.ts'
-              - 'server/utils/platform-content.ts'
-              - 'server/utils/mcp-executor/qa.ts'
-              - 'server/utils/mcp-executor/reviews.ts'
-              - 'server/utils/mcp-workflows.ts'
-              - 'types/blawby.ts'
-              - 'utils/template-registry.ts'
-              - 'utils/blawby-pricing.ts'
-              - 'tests/e2e/blawby.spec.ts'
-              - 'tests/e2e/site-content-scopes.spec.ts'
-              - 'tests/unit/blawby*.test.ts'
-              - 'tests/unit/site-content-scopes.test.ts'
-            seed_relevant:
-              - 'scripts/generate-demo-bundle.ts'
-              - 'scripts/generate-demo-seed.ts'
-              - 'scripts/generate-pottery-house-seed.ts'
-              - 'scripts/generate-kikuzuki-seed.ts'
-              - 'scripts/utils/d1-seed-file.mjs'
-              - 'seed-definitions/**'
-              - 'server/db/schema.ts'
-              - 'migrations/**'
-            auth:
-              - 'server/api/auth/**'
-              - 'server/utils/auth*'
-              - 'pages/auth/**'
-              - 'middleware/auth*'
-              - 'tests/e2e/auth.spec.ts'
-              - 'tests/e2e/oauth-discovery.spec.ts'
-            dashboard:
-              - 'components/dashboard/**'
-              - 'pages/dashboard/**'
-              - 'server/api/dashboard/**'
-              - 'server/api/editor/**'
-              - 'tests/e2e/dashboard*.spec.ts'
-            billing:
-              - 'server/api/billing/**'
-              - 'server/utils/billing*'
-              - 'server/utils/stripe*'
-              - 'pages/dashboard/**/billing.vue'
-              - 'tests/e2e/billing*.spec.ts'
-            notifications:
-              - 'server/utils/notifications.ts'
-              - 'server/utils/whatsapp.ts'
-              - 'server/emails/**'
-              - 'server/api/**/contact*'
-              - 'server/api/**/reservations/**'
-              - 'tests/e2e/notifications.spec.ts'
-            mcp:
-              - 'build/cloudflare-dev-module.ts'
-              - 'build/runtime/cloudflare-bindings-dev.ts'
-              - 'docs/local-mcp-harness.md'
-              - 'docs/media-workflow-contract.md'
-              - 'migrations/**'
-              - 'nuxt.config.ts'
-              - 'pages/oauth/login.vue'
-              - 'playwright.config.ts'
-              - 'scripts/check-*mcp*.mjs'
-              - 'scripts/demo-recording/**'
-              - 'scripts/test-mcp-local-tunnel.mjs'
-              - 'server/api/auth/**'
-              - 'server/api/dev/mcp-telemetry.get.ts'
-              - 'server/api/mcp-test/tiny-video.get.ts'
-              - 'server/api/mcp.post.ts'
-              - 'server/db/schema.ts'
-              - 'server/middleware/00.r2-media.ts'
-              - 'server/middleware/dev-connector-logging.ts'
-              - 'server/utils/auth.ts'
-              - 'server/utils/mcp*/**'
-              - 'server/utils/mcp*'
-              - 'tests/e2e/mcp-*.spec.ts'
-              - 'tests/e2e/helpers/mcp.ts'
-              - 'tests/e2e/oauth-discovery.spec.ts'
-              - 'types/nitro.d.ts'
-              - 'wrangler.toml'
-            seo:
-              - 'app.vue'
-              - 'layouts/**'
-              - 'server/plugins/tenant-sitemap-filter.ts'
-              - 'server/routes/**'
-              - 'utils/seo*'
-              - 'tests/e2e/seo.spec.ts'
+          node-version: "22"
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - run: yarn build
+      - name: Upload immutable PR build artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: production-build-${{ github.sha }}
+          path: .output
+          include-hidden-files: true
+          retention-days: 14
+          if-no-files-found: error
 
   guardrails:
     name: CI guardrails
@@ -195,18 +68,20 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
+          ref: ${{ github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "22"
           cache: yarn
+      - run: yarn install --frozen-lockfile
       - name: Run Node-only guardrails
         run: |
           node scripts/check-better-auth-boundaries.mjs
+          node scripts/check-product-model-guard.mjs
           node scripts/lint-seeds.mjs
           node scripts/lint-migrations.mjs
           node scripts/lint-tool-parity.mjs
-
       - name: Check pipeline scripts
         run: |
           for f in \
@@ -225,15 +100,15 @@ jobs:
             scripts/lint-migrations.mjs \
             scripts/lint-tool-parity.mjs \
             scripts/fixtures/pottery-house-krabi.fixture.mjs; do
-            node --check "$f" && echo "✓ $f" || exit 1
+            node --check "$f"
           done
 
   e2e-representative:
-    name: E2E representative tests
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.draft == false
-    needs: [changes]
+    name: E2E representative tests (preview only)
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: [build-production]
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     concurrency:
       group: shared-preview-deployment
       cancel-in-progress: false
@@ -244,127 +119,114 @@ jobs:
       NUXT_PUBLIC_PLATFORM_DOMAIN: https://preview.krabiclaw.com
       NUXT_PUBLIC_FREE_SITE_DOMAIN: https://preview.krabiclaw.com
       NUXT_PUBLIC_APP_NAME: KrabiClaw
-
       BETTER_AUTH_SECRET: test-secret-for-ci
       BETTER_AUTH_URL: https://preview.krabiclaw.com
       E2E_ALLOW_DEV_ROUTES: "true"
       E2E_DEV_ROUTE_SECRET: ${{ secrets.E2E_DEV_ROUTE_SECRET_PREVIEW }}
+      PLAYWRIGHT_PREVIEW_URL: https://krabiclaw-preview.paulchrisluke.workers.dev
+      PLAYWRIGHT_WORKERS: "1"
+      WORKER_NAME: krabiclaw-preview
+      DEPLOYMENT_IDENTITY_ORIGIN: https://preview.krabiclaw.com
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
+          ref: ${{ github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "22"
           cache: yarn
       - run: yarn install --frozen-lockfile
-      - name: Build application
-        env:
-          NODE_OPTIONS: --max-old-space-size=6144
-        run: yarn build
+      - run: npx playwright install --with-deps chromium
+      - name: Download immutable production build artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: production-build-${{ github.sha }}
+          path: .output
       - name: Migrate preview database
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: yarn migrate:preview
-      - name: Verify Cloudflare resources
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: yarn cloudflare:resources
+        run: |
+          set -euo pipefail
+          applied="$RUNNER_TEMP/preview-migrations-applied.json"
+          pending="$RUNNER_TEMP/preview-migrations-pending.txt"
+          npx wrangler d1 execute DB --env preview --remote \
+            --command 'SELECT id, name, applied_at FROM d1_migrations ORDER BY id' \
+            --json > "$applied"
+          node scripts/verify-migration-state.mjs \
+            --pre-apply \
+            --lineage-marker 0108_reconcile_drizzle_migration_history.sql \
+            --migrations-dir migrations \
+            --remote-json "$applied"
+          npx wrangler d1 migrations list DB --env preview --remote | tee "$pending"
+          yarn migrate:check
+          npx wrangler d1 migrations apply DB --env preview --remote
       - name: Sweep E2E artifacts
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        # Runs as its own wrangler d1 execute call, separate from the fixture reseed below - was
-        # previously concatenated into one combined file with the 3 seed scripts and executed as a
-        # single call with no retry logic (execWithRetry only applies inside this script's own
-        # self-executing mode, not a raw `wrangler d1 execute --file` in a workflow step), sharing
-        # one CPU budget across everything. That's the exact problem e2e-staging already avoided
-        # by running each script separately - confirmed as a real, reproducing failure here too
-        # ("D1 DB exceeded its CPU time limit and was reset", no retry, single attempt).
         run: node --experimental-strip-types scripts/reset-e2e-artifacts.ts --preview
       - name: Seed preview fixtures
-        if: needs.changes.outputs.seed_relevant == 'true'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        # Skipped entirely on PRs touching neither seed data nor schema - DELETE-then-INSERT of
-        # demo/Pottery House/Kikuzuki is idempotent but wasted work otherwise.
         run: |
           node --experimental-strip-types scripts/generate-demo-bundle.ts
           node --experimental-strip-types scripts/generate-demo-seed.ts --preview --stdout > /tmp/preview-seed.sql
           node --experimental-strip-types scripts/generate-pottery-house-seed.ts --preview --stdout >> /tmp/preview-seed.sql
           node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --preview --stdout >> /tmp/preview-seed.sql
           npx wrangler d1 execute DB --env preview --remote --file /tmp/preview-seed.sql
-      - name: Sync preview secrets
+      - name: Check pre-provisioned preview secrets
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          PREVIEW_SECRET_PREVIEW: ${{ secrets.PREVIEW_SECRET_PREVIEW }}
-        # Preview is shared across concurrent/overlapping PR runs, so the secret must stay
-        # stable across runs — regenerating it per run would invalidate draft preview
-        # tokens issued by another run still in flight. Sourced from a fixed repo secret.
         run: |
-          printf '%s' "$PREVIEW_SECRET_PREVIEW" | npx wrangler secret put PREVIEW_SECRET --env preview
-      - name: Sync preview dev-route secret
+          npx wrangler secret list --env preview --format json > "$RUNNER_TEMP/preview-secrets.json"
+          for secret_name in STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET PREVIEW_SECRET E2E_DEV_ROUTE_SECRET EMAIL_REPLY_SECRET EMAIL_INBOUND_SECRET; do
+            jq -e --arg name "$secret_name" '.. | objects | select((.name? // .key?) == $name)' "$RUNNER_TEMP/preview-secrets.json" >/dev/null
+          done
+      - name: Deploy preview Worker once
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          E2E_DEV_ROUTE_SECRET_PREVIEW: ${{ secrets.E2E_DEV_ROUTE_SECRET_PREVIEW }}
-        # Gates server/api/dev/* (see server/utils/dev-route-auth.ts) — must match the
-        # header this job's own curl/Playwright calls send, so keep this in sync with
-        # the E2E_DEV_ROUTE_SECRET env var above.
         run: |
-          printf '%s' "$E2E_DEV_ROUTE_SECRET_PREVIEW" | npx wrangler secret put E2E_DEV_ROUTE_SECRET --env preview
-      - name: Sync preview email reply secrets
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          EMAIL_REPLY_SECRET_PREVIEW: ${{ secrets.EMAIL_REPLY_SECRET_PREVIEW }}
-          EMAIL_INBOUND_SECRET_PREVIEW: ${{ secrets.EMAIL_INBOUND_SECRET_PREVIEW }}
-        # Signs/verifies reply+<type>-<id>-<token>@reply.preview.krabiclaw.com addresses (see
-        # server/utils/submission-messages.ts). Must stay stable across runs — rotating it would
-        # invalidate reply-to addresses already sent out in guest emails from a prior run.
-        run: |
-          printf '%s' "$EMAIL_REPLY_SECRET_PREVIEW" | npx wrangler secret put EMAIL_REPLY_SECRET --env preview
-          printf '%s' "$EMAIL_INBOUND_SECRET_PREVIEW" | npx wrangler secret put EMAIL_INBOUND_SECRET --env preview
-      - name: Deploy preview Worker
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          WRANGLER_LOG: debug
-        # Secret updates publish Worker versions. Deploy last so HTML and the
-        # immutable Nuxt assets always propagate as one final version.
-        run: yarn deploy:preview:worker
+          set -euo pipefail
+          npx wrangler deploy --env preview --tag "$GITHUB_SHA" --message "Required preview candidate $GITHUB_SHA" --old-asset-ttl 600 --strict
+          npx wrangler deployments status --env preview --name krabiclaw-preview --json > "$RUNNER_TEMP/preview-deployment.json"
+          PREVIEW_VERSION_ID="$(node -e '
+            const fs=require("node:fs");const root=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const deployment=root.latest_deployment??root;const versions=Array.isArray(deployment.versions)?deployment.versions:[];const active=versions.filter(v=>Number(v.percentage??v.traffic??0)===100);if(versions.length!==1||active.length!==1)process.exit(2);const id=active[0].version_id??active[0].versionId??active[0].id;if(typeof id!=="string")process.exit(3);console.log(id)
+          ' "$RUNNER_TEMP/preview-deployment.json")"
+          test -n "$PREVIEW_VERSION_ID"
+          echo "PREVIEW_VERSION_ID=$PREVIEW_VERSION_ID" >> "$GITHUB_ENV"
+          echo "WORKER_VERSION_OVERRIDE=$PREVIEW_VERSION_ID" >> "$GITHUB_ENV"
       - name: Purge preview HTML cache
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          PREVIEW_CACHE_ORIGIN: https://preview.krabiclaw.com
-        run: node --experimental-strip-types scripts/purge-preview-cache.ts
-      - run: npx playwright install --with-deps chromium
+          DEPLOYMENT_CACHE_ORIGIN: https://preview.krabiclaw.com
+        run: node --experimental-strip-types scripts/purge-deployment-cache.ts
       - name: Wait for deployed assets
-        env:
-          PLAYWRIGHT_PREVIEW_URL: https://krabiclaw-preview.paulchrisluke.workers.dev
         run: node scripts/wait-for-deployed-assets.mjs
-      - name: Warm up preview Worker
+      - name: Verify exact preview Worker and assets
         env:
-          PREVIEW_WORKER_URL: https://krabiclaw-preview.paulchrisluke.workers.dev
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          curl -sf --connect-timeout 5 --max-time 15 "$PREVIEW_WORKER_URL/" || true
-          curl -sf --connect-timeout 5 --max-time 15 "$PREVIEW_WORKER_URL/blog" || true
-          curl -sf --connect-timeout 5 --max-time 15 -L -H "x-dev-route-secret: ${E2E_DEV_ROUTE_SECRET}" "$PREVIEW_WORKER_URL/api/dev/login" || true
-      - name: Run representative tests
-        env:
-          PLAYWRIGHT_PREVIEW_URL: https://krabiclaw-preview.paulchrisluke.workers.dev
-          POTTERY_HOUSE_CHANGED: ${{ needs.changes.outputs.pottery_house }}
-          BLAWBY_CHANGED: ${{ needs.changes.outputs.blawby }}
-        # Focused representative subset, not full matrix
+          node scripts/verify-deployed-candidate.mjs \
+            --base-url https://preview.krabiclaw.com \
+            --expected-sha "$GITHUB_SHA" \
+            --expected-version-id "$PREVIEW_VERSION_ID" \
+            --worker-name krabiclaw-preview \
+            --version-override "$PREVIEW_VERSION_ID" \
+            --output "$RUNNER_TEMP/preview-verification.json"
+      - name: Run required representative browser coverage
         run: |
           yarn test:e2e:representative
           yarn test:e2e:public-rendering
-          [ "$POTTERY_HOUSE_CHANGED" != "true" ] || PLAYWRIGHT_WORKERS=1 yarn test:e2e:pottery-house
-          [ "$BLAWBY_CHANGED" != "true" ] || yarn test:e2e:blawby
+          yarn test:e2e:dashboard:smoke
+          yarn test:e2e:blawby-cms:smoke
+          yarn test:e2e:smoke:billing
+          yarn test:e2e:links-page
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -374,334 +236,3 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
-
-  e2e-staging:
-    name: E2E staging
-    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
-    needs: [changes]
-    runs-on: ubuntu-latest
-    # Every staging run migrates, resets, and reseeds the same remote D1 database.
-    # Queue pushes so fixture writes and deployment smoke tests cannot overlap.
-    concurrency:
-      group: shared-staging-deployment
-      cancel-in-progress: false
-    env:
-      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
-      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET_TEST }}
-      NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
-      NUXT_PUBLIC_PLATFORM_DOMAIN: https://staging.krabiclaw.com
-      NUXT_PUBLIC_FREE_SITE_DOMAIN: https://staging.krabiclaw.com
-      NUXT_PUBLIC_APP_NAME: KrabiClaw
-
-      BETTER_AUTH_SECRET: test-secret-for-ci
-      BETTER_AUTH_URL: https://staging.krabiclaw.com
-      E2E_ALLOW_DEV_ROUTES: "true"
-      E2E_DEV_ROUTE_SECRET: ${{ secrets.E2E_DEV_ROUTE_SECRET_STAGING }}
-      PLAYWRIGHT_PREVIEW_URL: https://staging.krabiclaw.com
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: "22"
-          cache: yarn
-      - run: yarn install --frozen-lockfile
-      - name: Build application
-        env:
-          NODE_OPTIONS: --max-old-space-size=6144
-        run: yarn build
-      - name: Migrate + seed staging database
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          yarn migrate:staging
-          node --experimental-strip-types scripts/generate-demo-bundle.ts
-          node --experimental-strip-types scripts/reset-e2e-artifacts.ts --staging
-          node --experimental-strip-types scripts/generate-demo-seed.ts --staging
-          node --experimental-strip-types scripts/generate-pottery-house-seed.ts --staging
-          node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --staging
-          yarn seed:docs:staging
-      - name: Sync staging Stripe secrets
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          STRIPE_SECRET_KEY_TEST: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
-          STRIPE_WEBHOOK_SECRET_STAGING: ${{ secrets.STRIPE_WEBHOOK_SECRET_STAGING }}
-        run: |
-          echo "$STRIPE_SECRET_KEY_TEST" | npx wrangler secret put STRIPE_SECRET_KEY --env staging
-          echo "$STRIPE_WEBHOOK_SECRET_STAGING" | npx wrangler secret put STRIPE_WEBHOOK_SECRET --env staging
-      - name: Sync staging email reply secrets
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          EMAIL_REPLY_SECRET_STAGING: ${{ secrets.EMAIL_REPLY_SECRET_STAGING }}
-          EMAIL_INBOUND_SECRET_STAGING: ${{ secrets.EMAIL_INBOUND_SECRET_STAGING }}
-        # Signs/verifies reply+<type>-<id>-<token>@reply.staging.krabiclaw.com addresses (see
-        # server/utils/submission-messages.ts). Must stay stable across runs — rotating it would
-        # invalidate reply-to addresses already sent out in guest emails from a prior run.
-        run: |
-          printf '%s' "$EMAIL_REPLY_SECRET_STAGING" | npx wrangler secret put EMAIL_REPLY_SECRET --env staging
-          printf '%s' "$EMAIL_INBOUND_SECRET_STAGING" | npx wrangler secret put EMAIL_INBOUND_SECRET --env staging
-      - name: Sync staging preview secret
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        # Staging can be reseeded by overlapping pushes, so the secret must stay stable
-        # across runs — regenerating it per run would invalidate draft preview tokens
-        # issued by another run still in flight. Sourced from a fixed repo secret.
-        run: |
-          echo "${{ secrets.PREVIEW_SECRET_STAGING }}" | npx wrangler secret put PREVIEW_SECRET --env staging
-      - name: Sync staging dev-route secret
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          E2E_DEV_ROUTE_SECRET_STAGING: ${{ secrets.E2E_DEV_ROUTE_SECRET_STAGING }}
-        # Gates server/api/dev/* (see server/utils/dev-route-auth.ts) — must match the
-        # header this job's own curl/Playwright calls send, so keep this in sync with
-        # the E2E_DEV_ROUTE_SECRET env var above.
-        run: |
-          printf '%s' "$E2E_DEV_ROUTE_SECRET_STAGING" | npx wrangler secret put E2E_DEV_ROUTE_SECRET --env staging
-      - name: Deploy staging Worker
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          WRANGLER_LOG: debug
-        # Secret updates publish Worker versions. Deploy last so HTML and the
-        # immutable Nuxt assets always propagate as one final version.
-        run: yarn deploy:staging:worker
-      - run: npx playwright install --with-deps chromium
-      - name: Warm up staging Worker
-        run: |
-          curl -sf --connect-timeout 5 --max-time 15 "https://staging.krabiclaw.com/" || true
-          curl -sf --connect-timeout 5 --max-time 15 "https://staging.krabiclaw.com/blog" || true
-          curl -sf --connect-timeout 5 --max-time 15 "https://staging.krabiclaw.com/api/billing/plans" || true
-          curl -sf --connect-timeout 5 --max-time 15 -L -H "x-dev-route-secret: ${E2E_DEV_ROUTE_SECRET}" "https://staging.krabiclaw.com/api/dev/login" || true
-      - name: Run focused smoke tests
-        env:
-          DASHBOARD_CHANGED: ${{ needs.changes.outputs.dashboard }}
-          BILLING_CHANGED: ${{ needs.changes.outputs.billing }}
-          POTTERY_HOUSE_CHANGED: ${{ needs.changes.outputs.pottery_house }}
-          BLAWBY_CHANGED: ${{ needs.changes.outputs.blawby }}
-        run: |
-          yarn test:e2e:smoke
-          yarn test:e2e:public-rendering
-          [ "$DASHBOARD_CHANGED" != "true" ] || yarn test:e2e:dashboard:smoke
-          [ "$BILLING_CHANGED" != "true" ] || yarn test:e2e:smoke:billing
-          [ "$POTTERY_HOUSE_CHANGED" != "true" ] || PLAYWRIGHT_WORKERS=1 yarn test:e2e:pottery-house
-          [ "$BLAWBY_CHANGED" != "true" ] || yarn test:e2e:blawby
-      - name: Upload Playwright report
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: playwright-report-staging
-          path: |
-            playwright-report/
-            test-results/
-          retention-days: 7
-
-  prod-deploy:
-    name: Deploy to production
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    env:
-      NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
-      NUXT_PUBLIC_PLATFORM_DOMAIN: https://krabiclaw.com
-      NUXT_PUBLIC_FREE_SITE_DOMAIN: https://krabiclaw.com
-      NUXT_PUBLIC_APP_NAME: KrabiClaw
-
-      BETTER_AUTH_URL: https://krabiclaw.com
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: "22"
-          cache: yarn
-      - run: yarn install --frozen-lockfile
-      - name: Build application
-        env:
-          NODE_OPTIONS: --max-old-space-size=6144
-        run: yarn build
-      - name: Migrate + deploy production Worker
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          WRANGLER_LOG: debug
-        run: |
-          yarn migrate:prod
-          yarn deploy:prod:worker
-      - name: Sync production Discord webhook secret
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        run: |
-          if [ -n "$DISCORD_WEBHOOK_URL" ]; then
-            printf '%s' "$DISCORD_WEBHOOK_URL" | npx wrangler secret put DISCORD_WEBHOOK_URL
-          else
-            echo "DISCORD_WEBHOOK_URL is not configured; signup Discord delivery will be recorded as failed."
-          fi
-      - name: Sync production Stripe secrets
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
-          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
-        run: |
-          echo "$STRIPE_SECRET_KEY" | npx wrangler secret put STRIPE_SECRET_KEY
-          echo "$STRIPE_WEBHOOK_SECRET" | npx wrangler secret put STRIPE_WEBHOOK_SECRET
-      - name: Sync production AI Search secret
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          PLATFORM_SEARCH_REINDEX_SECRET: ${{ secrets.PLATFORM_SEARCH_REINDEX_SECRET }}
-        # Authenticates POST /api/internal/search/reindex (server/api/internal/search/reindex.post.ts).
-        run: |
-          echo "$PLATFORM_SEARCH_REINDEX_SECRET" | npx wrangler secret put PLATFORM_SEARCH_REINDEX_SECRET
-      - name: Check AI Search item count (diagnostic)
-        continue-on-error: true
-        env:
-          PLATFORM_SEARCH_REINDEX_SECRET: ${{ secrets.PLATFORM_SEARCH_REINDEX_SECRET }}
-        # Temporary: several prior reindex runs failed from a raw connection timeout
-        # before ever reaching the delete-stale-items step, so orphaned items from
-        # earlier key formats may have accumulated. This reports the current item
-        # count/listing time without doing any uploads, so it's safe to fail without
-        # blocking the deploy (continue-on-error) — purely informational.
-        run: yarn ai-search:status:prod
-      - name: Rebuild AI Search index (production)
-        env:
-          PLATFORM_SEARCH_REINDEX_SECRET: ${{ secrets.PLATFORM_SEARCH_REINDEX_SECRET }}
-        # Migrations applied above can leave newly published platform docs/blog posts or tenant
-        # blog posts unindexed — see docs/ai-search.md. No continue-on-error: a failed rebuild
-        # must fail the deploy job loudly rather than silently leaving production search stale.
-        run: yarn ai-search:sync --base-url https://krabiclaw.com
-
-  prod-smoke:
-    name: Production smoke
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    needs: [prod-deploy]
-    steps:
-      - name: Check Pottery House + platform public routes
-        shell: bash
-        run: |
-          set -euo pipefail
-          pottery_hosts=("https://pottery-house.krabiclaw.com")
-          pottery_routes=("/" "/experiences" "/experiences/pottery-wheel-class" "/about" "/contact")
-
-          for host in "${pottery_hosts[@]}"; do
-            echo "== ${host} =="
-            for route in "${pottery_routes[@]}"; do
-              url="${host}${route}"
-              code=$(curl -L -s -o /tmp/page.html -w "%{http_code}" "${url}")
-              title=$(grep -o '<title>.*</title>' /tmp/page.html | head -n1 | sed -E 's#</?title>##g' || true)
-              echo "${route} -> ${code} | ${title:-<no-title>}"
-              [[ "${code}" -lt 400 ]] || (echo "Route failed: ${url}" && exit 1)
-            done
-          done
-
-          for url in "https://krabiclaw.com/" "https://krabiclaw.com/blog"; do
-            code=$(curl -L -s -o /tmp/page.html -w "%{http_code}" "${url}")
-            title=$(grep -o '<title>.*</title>' /tmp/page.html | head -n1 | sed -E 's#</?title>##g' || true)
-            echo "${url} -> ${code} | ${title:-<no-title>}"
-            [[ "${code}" -lt 400 ]] || (echo "Route failed: ${url}" && exit 1)
-          done
-
-  prod-auth-canary:
-    name: Production auth canary
-    # Disabled on every merge while dev velocity is high — sends a real WhatsApp/SMS OTP
-    # per run, which adds up fast at merge frequency. Real-send coverage still runs daily
-    # via prod-daily-canary. For on-demand real-send testing, use the separate
-    # "Production Real-Send Canaries" workflow_dispatch workflow.
-    if: vars.ENABLE_REAL_SEND_TESTS == 'true'
-    runs-on: ubuntu-latest
-    needs: [prod-smoke]
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: "22"
-          cache: yarn
-      - run: yarn install --frozen-lockfile
-      - run: npx playwright install --with-deps chromium
-      - name: Run production auth canary
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CANARY_BASE_URL: ${{ secrets.CANARY_BASE_URL }}
-          CANARY_PHONE_E164: ${{ secrets.CANARY_PHONE_E164 }}
-          CANARY_SITE_ID: ${{ secrets.CANARY_SITE_ID }}
-          CANARY_ORG_ID: ${{ secrets.CANARY_ORG_ID }}
-        run: |
-          set -euo pipefail
-          yarn canary:prod | tee canary-auth.log
-      - name: Upload auth canary log
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: prod-auth-canary-log
-          path: canary-auth.log
-          if-no-files-found: ignore
-
-  prod-notification-canary:
-    name: Production notification canary
-    # Disabled on every merge while dev velocity is high — sends a real email + real
-    # WhatsApp message per run. Real-send coverage still runs daily via prod-daily-canary.
-    # For on-demand real-send testing, use the separate "Production Real-Send
-    # Canaries" workflow_dispatch workflow.
-    if: vars.ENABLE_REAL_SEND_TESTS == 'true'
-    runs-on: ubuntu-latest
-    needs: [prod-auth-canary]
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: "22"
-          cache: yarn
-      - run: yarn install --frozen-lockfile
-      - name: Run production notification canary
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CANARY_BASE_URL: ${{ secrets.CANARY_BASE_URL }}
-          CANARY_SITE_ID: ${{ secrets.CANARY_SITE_ID }}
-          CANARY_ORG_ID: ${{ secrets.CANARY_ORG_ID }}
-          CANARY_NOTIFICATION_EMAIL: ${{ secrets.CANARY_NOTIFICATION_EMAIL }}
-          CANARY_NOTIFICATION_PHONE_E164: ${{ secrets.CANARY_NOTIFICATION_PHONE_E164 }}
-        run: |
-          set -euo pipefail
-          yarn canary:notifications 2>&1 | tee canary-notifications.log
-      - name: Upload notification canary log
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: prod-notification-canary-log
-          path: canary-notifications.log
-          if-no-files-found: ignore
-
-# ── Pottery House fixture ─────────────────────────────────────────────────────
-# The fixture (yarn fixture:pottery-house) requires a running site — it cannot
-# run in standard CI without a full dev server and seeded local D1.
-#
-# REQUIRED MANUAL CHECK before merging any PR that touches:
-#   scripts/         (importer pipeline changes)
-#   components/saya/ (theme copy changes)
-#   utils/vertical-copy.ts
-#   pages/           (routing changes)
-#
-# Run locally against your dev instance:
-#   yarn fixture:pottery-house --url http://localhost:3000 --site-id site-pottery-house
-#
-# Against staging/preview (wildcard TLS only covers one subdomain level there,
-# so the fixture sends x-preview-tenant automatically — just pass --slug too):
-#   yarn fixture:pottery-house --url https://staging.krabiclaw.com --site-id site-pottery-house --slug pottery-house
-#
-# Or trigger the fixture.yml workflow against a preview deploy.
-# See .github/workflows/fixture.yml

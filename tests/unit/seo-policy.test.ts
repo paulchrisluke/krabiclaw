@@ -83,18 +83,12 @@ test('tenant-only routes cannot render as thin platform pages', () => {
   assert.equal(isTenantOnlySeoPath('/docs'), false)
 })
 
-test('technical assets and legacy optimizer endpoints are non-indexable but not private', () => {
+test('manifests and legacy optimizer endpoints are non-indexable but not private', () => {
   for (const route of [
     '/_next',
     '/_next/image',
     '/_next/image?url=%2Flogo.png&w=384&q=75',
-    '/tenant-icon',
-    '/tenant-icon.svg',
-    '/tenant-icon-192.png',
-    '/tenant-icon-512.png',
     '/tenant.webmanifest',
-    '/favicon.ico',
-    '/apple-touch-icon.png',
     '/site.webmanifest',
   ]) {
     const pathname = route.split('?')[0]!
@@ -104,6 +98,18 @@ test('technical assets and legacy optimizer endpoints are non-indexable but not 
 
   assert.equal(isTechnicalAssetSeoPath('/'), false)
   assert.equal(isTechnicalAssetSeoPath('/blog'), false)
+
+  for (const route of [
+    '/tenant-icon',
+    '/tenant-icon.png',
+    '/tenant-icon.svg',
+    '/tenant-icon-192.png',
+    '/tenant-icon-512.png',
+    '/favicon.ico',
+    '/apple-touch-icon.png',
+  ]) {
+    assert.equal(isTechnicalAssetSeoPath(route), false, route)
+  }
 })
 
 test('preview and deployment-provider hosts are globally non-indexable', () => {

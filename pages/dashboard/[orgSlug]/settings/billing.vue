@@ -27,24 +27,6 @@
           :description="errorMessage"
         />
 
-        <!-- Auto top-up warning banner -->
-        <UAlert
-          v-if="savedCard && !autoTopupEnabled"
-          color="warning"
-          variant="soft"
-          icon="i-lucide-zap"
-          title="Auto top-up is off"
-          description="When your credits run out, AI features will stop working. Enable auto top-up to keep things running."
-        >
-          <template #actions>
-            <UButton size="xs" color="warning" variant="soft" @click="autoTopupModalOpen = true">
-              Set up auto top-up
-            </UButton>
-          </template>
-        </UAlert>
-
-
-
         <UCard v-if="sites.length">
           <template #header>
             <div class="flex items-center justify-between">
@@ -124,87 +106,111 @@
             </div>
             <UBadge label="Default" color="success" variant="soft" size="xs" />
           </div>
-          <p v-else class="text-sm text-muted">No payment method saved. Add one by purchasing credits or upgrading your plan.</p>
+          <p v-else class="text-sm text-muted">No payment method saved. Add one when you subscribe or upgrade your plan.</p>
         </UCard>
 
-        <!-- AI Credits -->
+        <!-- Shared organization usage quota -->
         <UCard>
           <template #header>
-            <div class="space-y-3">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
                 <UIcon name="i-lucide-bot" class="size-4 text-primary" />
-                <h2 class="font-semibold">AI Credits</h2>
+                <h2 class="font-semibold">Shared usage credits</h2>
               </div>
               <div class="flex items-center gap-2">
                 <span v-if="credits" class="text-sm text-muted">
-                  {{ credits.lifetime_used.toLocaleString() }} used · {{ credits.balance.toLocaleString() }} remaining
+                  <template v-if="credits.reconciliationRequired">Usage unavailable pending approved reconciliation</template>
+                  <template v-else-if="credits.unlimited">Unlimited this UTC week</template>
+                  <template v-else-if="credits.periodRemaining !== null">{{ credits.periodRemaining.toLocaleString() }} remaining this UTC week</template>
+                  <template v-else>Allowance unavailable</template>
                 </span>
-                <UDropdownMenu v-if="savedCard" :items="creditBundles" :content="{ align: 'end' }">
-                  <UButton size="xs" color="primary" variant="soft" icon="i-lucide-credit-card" trailing-icon="i-lucide-chevron-down" :loading="buyingCredits !== null">
-                    Buy credits
-                  </UButton>
-                </UDropdownMenu>
                 <UButton v-else size="xs" color="primary" variant="soft" icon="i-lucide-zap" @click="openServiceUpsell('growth', 'billing-credits')">
                   Upgrade for more
                 </UButton>
               </div>
-            </div>
-
-            <!-- Auto top-up row -->
-            <div v-if="savedCard" class="flex items-center justify-between rounded-lg border border-default px-4 py-3">
-              <div class="min-w-0 flex-1">
-                <p class="text-sm font-medium text-highlighted">Auto top-up</p>
-                <p class="text-xs text-muted">
-                  <span v-if="autoTopupEnabled">Enabled — top up {{ autoTopupBundleLabel }} when balance drops below {{ autoTopupThreshold }} credits</span>
-                  <span v-else>Off — credits won't auto-refill when you run out</span>
-                </p>
-              </div>
-              <UButton size="xs" color="neutral" variant="ghost" class="ml-4 shrink-0" @click="autoTopupModalOpen = true">
-                {{ autoTopupEnabled ? 'Settings' : 'Set up' }}
-              </UButton>
-            </div>
             </div>
           </template>
 
           <USkeleton v-if="creditsLoading" class="h-32 w-full" />
 
           <div v-else-if="credits" class="space-y-4">
-            <div>
+            <div v-if="credits.reconciliationRequired" class="rounded-lg border border-warning-200 bg-warning-50 px-3 py-3 text-sm text-warning-800 dark:border-warning-800 dark:bg-warning-950 dark:text-warning-200">
+              <p class="font-medium">Shared usage quota unavailable pending approved reconciliation</p>
+              <p class="mt-1 text-xs">Current allowance and remaining quota are unavailable until the older credit projection receives an approved billing adjustment.</p>
+            </div>
+            <div v-else-if="credits.unlimited" class="rounded-lg bg-elevated px-3 py-3 text-sm">
+              <p class="font-medium text-highlighted">Unlimited shared usage credits</p>
+              <p class="mt-1 text-xs text-muted">The organization plan has no finite weekly allowance.</p>
+            </div>
+            <div v-else-if="credits.periodRemaining !== null">
               <div class="mb-1 flex items-center justify-between text-xs text-muted">
-                <span>{{ credits.lifetime_used.toLocaleString() }} used</span>
-                <span>{{ (credits.balance + credits.lifetime_used).toLocaleString() }} total granted</span>
+                <span>{{ credits.periodUsed.toLocaleString() }} used this UTC week</span>
+                <span>{{ credits.periodRemaining.toLocaleString() }} remaining</span>
               </div>
-              <UProgress
-                :model-value="credits.lifetime_used"
-                :max="credits.balance + credits.lifetime_used || 1"
-                :color="credits.balance < 50 ? 'error' : credits.balance < 200 ? 'warning' : 'primary'"
-              />
+              <p class="text-xs text-muted">
+                Effective current allowance:
+                <span v-if="credits.periodAllowance !== null">{{ credits.periodAllowance.toLocaleString() }} credits</span>
+                <span v-else>unavailable</span>
+                for this period.
+              </p>
             </div>
 
-            <div v-if="credits.quota" class="grid gap-2 text-xs sm:grid-cols-2">
+            <div class="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-3">
               <div class="rounded-lg bg-elevated px-3 py-2">
-                <p class="text-muted">Weekly AI quota</p>
+                <p class="text-muted">Plan allowance</p>
                 <p class="mt-0.5 font-semibold tabular-nums">
-                  {{ Number(credits.quota.weeklyUsed).toLocaleString() }}
-                  <span v-if="credits.quota.weeklyLimit !== null"> / {{ Number(credits.quota.weeklyLimit).toLocaleString() }}</span>
-                  <span v-else> / unlimited</span>
+                  <span v-if="credits.planAllowance !== null">{{ credits.planAllowance.toLocaleString() }} / UTC week</span>
+                  <span v-else-if="credits.unlimited">Unlimited</span>
+                  <span v-else>Unavailable</span>
                 </p>
               </div>
               <div class="rounded-lg bg-elevated px-3 py-2">
-                <p class="text-muted">Per-chat session cap</p>
+                <p class="text-muted">Effective current allowance</p>
                 <p class="mt-0.5 font-semibold tabular-nums">
-                  <span v-if="credits.quota.sessionLimit !== null">{{ Number(credits.quota.sessionLimit).toLocaleString() }} credits</span>
-                  <span v-else>unlimited</span>
+                  <span v-if="credits.periodAllowance !== null">{{ credits.periodAllowance.toLocaleString() }} credits</span>
+                  <span v-else-if="credits.unlimited">Unlimited</span>
+                  <span v-else>Unavailable</span>
                 </p>
+              </div>
+              <div class="rounded-lg bg-elevated px-3 py-2">
+                <p class="text-muted">Used this UTC week</p>
+                <p class="mt-0.5 font-semibold tabular-nums">{{ credits.periodUsed.toLocaleString() }}</p>
+              </div>
+              <div class="rounded-lg bg-elevated px-3 py-2">
+                <p class="text-muted">Remaining this UTC week</p>
+                <p class="mt-0.5 font-semibold tabular-nums">
+                  <span v-if="credits.periodRemaining !== null">{{ credits.periodRemaining.toLocaleString() }}</span>
+                  <span v-else-if="credits.unlimited">Unlimited</span>
+                  <span v-else>Unavailable</span>
+                </p>
+              </div>
+              <div class="rounded-lg bg-elevated px-3 py-2">
+                <p class="text-muted">Current UTC-week period</p>
+                <p class="mt-0.5 font-semibold">{{ formatDate(credits.periodStart) }} – {{ formatDate(credits.periodEnd) }}</p>
+              </div>
+              <div class="rounded-lg bg-elevated px-3 py-2">
+                <p class="text-muted">Lifetime usage</p>
+                <p class="mt-0.5 font-semibold tabular-nums">{{ credits.lifetimeUsed.toLocaleString() }}</p>
+              </div>
+              <div class="rounded-lg bg-elevated px-3 py-2">
+                <p class="text-muted">Per-chat cap</p>
+                <p class="mt-0.5 font-semibold tabular-nums">
+                  <span v-if="credits.sessionLimit !== null">{{ credits.sessionLimit.toLocaleString() }} credits</span>
+                  <span v-else-if="credits.unlimited">Unlimited</span>
+                  <span v-else>Unavailable</span>
+                </p>
+              </div>
+              <div v-if="credits.reconciliationRequired" class="rounded-lg border border-warning-200 bg-warning-50 px-3 py-2 text-warning-700 dark:border-warning-800 dark:bg-warning-950 dark:text-warning-300 sm:col-span-2 lg:col-span-3">
+                <p class="font-medium">Quota reconciliation required</p>
+                <p class="mt-0.5">An older credit projection needs an approved billing adjustment before usage can continue.</p>
               </div>
             </div>
 
-            <div v-if="credits.by_action?.length" class="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <div v-for="row in credits.by_action" :key="row.action" class="rounded-lg bg-elevated px-3 py-2">
-                <p class="text-xs text-muted capitalize">{{ String(row.action).replace(/_/g, ' ') }}</p>
-                <p class="mt-0.5 text-lg font-semibold tabular-nums">{{ Number(row.total_credits).toLocaleString() }}</p>
-                <p class="text-xs text-muted">{{ row.calls }} call{{ Number(row.calls) === 1 ? '' : 's' }}</p>
+            <div v-if="credits.byAction?.length" class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div v-for="row in credits.byAction" :key="`${row.resource}:${row.action}:${row.charged}`" class="rounded-lg bg-elevated px-3 py-2">
+                <p class="text-xs text-muted capitalize">{{ String(row.action || row.resource).replace(/_/g, ' ') }}</p>
+                <p class="mt-0.5 text-lg font-semibold tabular-nums">{{ row.quantity.toLocaleString() }}</p>
+                <p class="text-xs text-muted">{{ row.calls }} call{{ row.calls === 1 ? '' : 's' }} · {{ row.charged === false ? 'not charged' : row.charged === true ? 'charged' : 'charge unknown' }}</p>
               </div>
             </div>
 
@@ -214,28 +220,28 @@
                 <table class="w-full text-sm">
                   <thead class="bg-elevated">
                     <tr>
+                      <th class="px-3 py-2 text-left text-xs font-medium text-muted">Resource</th>
                       <th class="px-3 py-2 text-left text-xs font-medium text-muted">Action</th>
                       <th class="px-3 py-2 text-left text-xs font-medium text-muted">Site</th>
-                      <th class="px-3 py-2 text-right text-xs font-medium text-muted">In</th>
-                      <th class="px-3 py-2 text-right text-xs font-medium text-muted">Out</th>
-                      <th class="px-3 py-2 text-right text-xs font-medium text-muted">Credits</th>
+                      <th class="px-3 py-2 text-right text-xs font-medium text-muted">Quantity</th>
+                      <th class="px-3 py-2 text-right text-xs font-medium text-muted">Charged</th>
                       <th class="px-3 py-2 text-right text-xs font-medium text-muted">When</th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-default">
                     <tr v-for="(row, i) in credits.usage" :key="i" class="hover:bg-elevated/50">
-                      <td class="px-3 py-2 capitalize">{{ String(row.action).replace(/_/g, ' ') }}</td>
-                      <td class="px-3 py-2 text-muted">{{ row.site_name || '—' }}</td>
-                      <td class="px-3 py-2 text-right tabular-nums text-muted">{{ Number(row.input_tokens).toLocaleString() }}</td>
-                      <td class="px-3 py-2 text-right tabular-nums text-muted">{{ Number(row.output_tokens).toLocaleString() }}</td>
-                      <td class="px-3 py-2 text-right font-medium tabular-nums">{{ row.credits_charged }}</td>
+                      <td class="px-3 py-2 capitalize">{{ String(row.resource).replace(/_/g, ' ') }}</td>
+                      <td class="px-3 py-2 capitalize">{{ row.action ? String(row.action).replace(/_/g, ' ') : '—' }}</td>
+                      <td class="px-3 py-2 text-muted">{{ row.site_name || row.site_id || '—' }}</td>
+                      <td class="px-3 py-2 text-right font-medium tabular-nums">{{ row.quantity.toLocaleString() }}</td>
+                      <td class="px-3 py-2 text-right text-muted">{{ row.charged === false ? 'No' : row.charged === true ? 'Yes' : 'Unknown' }}</td>
                       <td class="px-3 py-2 text-right text-muted">{{ formatRelativeTime(String(row.created_at)) }}</td>
                     </tr>
                   </tbody>
                 </table>
               </div>
             </div>
-            <p v-else class="text-sm text-muted">No AI usage yet.</p>
+            <p v-else class="text-sm text-muted">No usage recorded this UTC week.</p>
           </div>
 
           <div v-else class="rounded-lg border border-dashed border-default bg-elevated p-5">
@@ -313,30 +319,30 @@
     </template>
   </UDashboardPanel>
 
-  <BillingAutoTopupSettingsModal
-    v-model:open="autoTopupModalOpen"
-    :initial-enabled="autoTopupEnabled"
-    :initial-bundle="autoTopupBundle"
-    :initial-threshold="autoTopupThreshold"
-    @saved="onAutoTopupSaved"
-  />
 </template>
 
 <script setup lang="ts">
 const dashboardApi = useDashboardApi()
 
 import { authClient } from '~/lib/auth-client'
-import { CREDIT_BUNDLES, type CreditBundleSize } from '~/shared/creditBundles'
 const toast = useToast()
 
 definePageMeta({ layout: 'dashboard' })
 
 const route = useRoute()
 const router = useRouter()
-const { trackPlanViewed, trackCheckoutStarted, trackPaymentMethodAdded } = useAnalytics()
+const {
+  trackPlanViewed,
+  trackCheckoutStarted,
+  trackSubscriptionUpgrade,
+  trackSubscriptionDowngrade,
+  trackSubscriptionCheckoutSuccess,
+} = useAnalytics()
+const { isAuthenticated } = useAuth()
+const { startSubscriptionCheckout } = useSubscriptionCheckout()
 const loading = ref(true)
 const billing = ref<ApiRecord | null>(null)
-const credits = ref<ApiRecord | null>(null)
+const credits = ref<BillingCreditsResource | null>(null)
 
 interface SiteBillingSummary {
   siteId: string
@@ -360,74 +366,13 @@ const annual = ref(false)
 interface SavedCard { brand: string; last4: string; exp_month: number; exp_year: number }
 const savedCard = ref<SavedCard | null>(null)
 
-const autoTopupEnabled = ref(false)
-const autoTopupBundle = ref<CreditBundleSize>(500)
-const autoTopupThreshold = ref(100)
-const autoTopupModalOpen = ref(false)
-
-const autoTopupBundleLabel = computed(() => {
-  const b = CREDIT_BUNDLES.find(x => x.credits === autoTopupBundle.value)
-  return b ? `${b.credits.toLocaleString()} credits (${b.price})` : '500 credits ($9)'
-})
-
-function onAutoTopupSaved(settings: { enabled: boolean; bundle: CreditBundleSize; threshold: number }) {
-  autoTopupEnabled.value = settings.enabled
-  autoTopupBundle.value = settings.bundle
-  autoTopupThreshold.value = settings.threshold
-}
-
-const buyingCredits = ref<number | null>(null)
-const { purchase: purchaseCreditsFn } = useCreditPurchase()
-
-async function purchaseCredits(bundle: 500 | 2500 | 5000) {
-  if (process.env.NODE_ENV === 'development') {
-    buyingCredits.value = bundle
-    try {
-      const res = await dashboardApi<{ balance?: number; error?: string }>('/api/billing/credits/add', {
-        method: 'POST',
-        body: { bundle },
-        validate: (value): value is { balance?: number; error?: string } =>
-          isRecord(value)
-          && (typeof value.balance === 'number' || typeof value.error === 'string'),
-      })
-      if (res.balance !== undefined) {
-        toast.add({ description: `Added ${bundle} credits. New balance: ${res.balance}`, color: 'success' })
-        await loadCredits()
-      }
-    } catch { /* non-critical */ } finally {
-      buyingCredits.value = null
-    }
-    return
-  }
-  await purchaseCreditsFn(bundle, async () => {
-    trackPaymentMethodAdded()
-    await loadCredits()
-  })
-}
-
-const creditBundles = [
-  [
-    { label: '500 credits — $9', icon: 'i-lucide-zap', onSelect: () => purchaseCredits(500) },
-    { label: '2,500 credits — $29', icon: 'i-lucide-zap', onSelect: () => purchaseCredits(2500) },
-    { label: '5,000 credits — $49', icon: 'i-lucide-zap', onSelect: () => purchaseCredits(5000) },
-  ]
-]
-
 const { plans, displayPrice } = usePlans()
 const { open: openServiceUpsell } = useServiceUpsell()
 
-const loadCredits = async () => {
-  creditsLoading.value = true
-  try {
-    credits.value = await dashboardApi<ApiRecord>('/api/billing/credits', {
-      validate: isCreditsResponse,
-    })
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'Failed to load AI credits'
-    throw error
-  } finally {
-    creditsLoading.value = false
-  }
+function planPriceId(planId: string | null | undefined): string | null {
+  if (!planId) return null
+  const plan = plans.value?.find(item => item.id === planId)
+  return plan?.prices.find(price => price.interval === (annual.value ? 'year' : 'month'))?.id ?? null
 }
 
 const { formatRelativeTime, formatExactDateTime: formatDate } = useHumanTime()
@@ -446,34 +391,30 @@ const upgradeToPlan = async (plan: string) => {
     if (typeof organizationId !== 'string' || !organizationId) {
       throw new Error('Organization ID not found')
     }
-    const currentUrl = new URL(window.location.href)
-    for (const key of ['success', 'canceled', 'plan']) currentUrl.searchParams.delete(key)
-    const successUrl = new URL(currentUrl)
-    successUrl.searchParams.set('success', 'true')
-    const cancelUrl = new URL(currentUrl)
-    cancelUrl.searchParams.set('canceled', 'true')
     if (billing.value?.subscriptionStatus === 'past_due') {
       await openBillingPortal()
       return
     }
-    const response = await authClient.subscription.upgrade({
+    const currentPlan = selectedSite.value?.plan ?? (typeof billing.value?.plan === 'string' ? billing.value.plan : 'free')
+    const subscriptionId = typeof billing.value?.stripeSubscriptionId === 'string'
+      ? billing.value.stripeSubscriptionId
+      : null
+    const previousPriceId = planPriceId(currentPlan)
+    const newPriceId = planPriceId(plan)
+    await startSubscriptionCheckout({
+      organizationId,
+      siteId: selectedSiteId.value,
       plan,
+      currentPlan,
+      subscriptionId,
       annual: annual.value,
-      referenceId: organizationId,
-      ...(typeof billing.value?.stripeSubscriptionId === 'string'
-        ? { subscriptionId: billing.value.stripeSubscriptionId }
-        : {}),
-      customerType: 'organization',
-      metadata: { site_id: selectedSiteId.value, ga_client_id: getGaClientId() },
-      successUrl: successUrl.toString(),
-      cancelUrl: cancelUrl.toString(),
-      returnUrl: currentUrl.toString(),
-      disableRedirect: true,
+      previousPriceId,
+      newPriceId,
+      onAction: action => {
+        if (action === 'upgrade') trackSubscriptionUpgrade(plan)
+        if (action === 'downgrade' && plan !== 'free') trackSubscriptionDowngrade(plan)
+      },
     })
-    if (response.error) throw new Error(response.error.message ?? 'Failed to create checkout session')
-    const checkoutUrl = response.data && 'url' in response.data ? response.data.url : null
-    if (!checkoutUrl) throw new Error('Better Auth Stripe did not return a checkout URL')
-    await navigateTo(checkoutUrl, { external: true })
   } catch (err) {
     errorMessage.value = err instanceof Error ? err.message : 'Failed to create checkout session'
   } finally {
@@ -509,9 +450,45 @@ const openBillingPortal = async () => {
 
 interface BillingResource {
   billing: ApiRecord
-  credits: ApiRecord
+  credits: BillingCreditsResource
   paymentMethod: { card: SavedCard | null }
   sites: { success: true; sites: SiteBillingSummary[] }
+}
+
+interface BillingCreditsUsage {
+  resource: string
+  site_id: string | null
+  site_name: string | null
+  action: string | null
+  quantity: number
+  charged: boolean | null
+  created_at: string
+}
+
+interface BillingCreditsGroup {
+  resource: string
+  action: string | null
+  charged: boolean | null
+  quantity: number
+  calls: number
+}
+
+interface BillingCreditsResource {
+  plan: string
+  planAllowance: number | null
+  periodAllowance: number | null
+  periodUsed: number
+  periodRemaining: number | null
+  periodStart: string
+  periodEnd: string
+  lifetimeUsed: number
+  sessionLimit: number | null
+  sessionUsed: number
+  sessionRemaining: number | null
+  unlimited: boolean
+  reconciliationRequired: boolean
+  usage: BillingCreditsUsage[]
+  byAction: BillingCreditsGroup[]
 }
 
 const isSiteBillingSummary = (value: unknown): value is SiteBillingSummary =>
@@ -533,22 +510,39 @@ const isSavedCard = (value: unknown): value is SavedCard =>
   && typeof value.exp_year === 'number'
 const isPaymentMethodResponse = (value: unknown): value is { card: SavedCard | null } =>
   isRecord(value) && (value.card === null || isSavedCard(value.card))
-const isCreditsResponse = (value: unknown): value is ApiRecord =>
+const isCreditsResponse = (value: unknown): value is BillingCreditsResource =>
   isRecord(value)
-  && typeof value.balance === 'number'
-  && typeof value.lifetime_used === 'number'
+  && typeof value.plan === 'string'
+  && (value.planAllowance === null || typeof value.planAllowance === 'number')
+  && (value.periodAllowance === null || typeof value.periodAllowance === 'number')
+  && typeof value.periodUsed === 'number'
+  && (value.periodRemaining === null || typeof value.periodRemaining === 'number')
+  && typeof value.periodStart === 'string'
+  && typeof value.periodEnd === 'string'
+  && typeof value.lifetimeUsed === 'number'
+  && (value.sessionLimit === null || typeof value.sessionLimit === 'number')
+  && typeof value.sessionUsed === 'number'
+  && (value.sessionRemaining === null || typeof value.sessionRemaining === 'number')
+  && typeof value.unlimited === 'boolean'
+  && typeof value.reconciliationRequired === 'boolean'
   && Array.isArray(value.usage)
   && value.usage.every(row =>
     isRecord(row)
-    && typeof row.action === 'string'
-    && typeof row.credits_charged === 'number'
+    && typeof row.resource === 'string'
+    && (row.site_id === null || typeof row.site_id === 'string')
+    && (row.site_name === null || typeof row.site_name === 'string')
+    && (row.action === null || typeof row.action === 'string')
+    && typeof row.quantity === 'number'
+    && (row.charged === null || typeof row.charged === 'boolean')
     && typeof row.created_at === 'string',
   )
-  && Array.isArray(value.by_action)
-  && value.by_action.every(row =>
+  && Array.isArray(value.byAction)
+  && value.byAction.every(row =>
     isRecord(row)
-    && typeof row.action === 'string'
-    && typeof row.total_credits === 'number'
+    && typeof row.resource === 'string'
+    && (row.action === null || typeof row.action === 'string')
+    && (row.charged === null || typeof row.charged === 'boolean')
+    && typeof row.quantity === 'number'
     && typeof row.calls === 'number',
   )
 const isBillingResponse = (value: unknown): value is ApiRecord =>
@@ -557,7 +551,6 @@ const isBillingResponse = (value: unknown): value is ApiRecord =>
   && isRecord(value.billing)
   && typeof value.billing.organizationId === 'string'
   && typeof value.billing.plan === 'string'
-  && typeof value.billing.autoTopupEnabled === 'boolean'
 const requestEvent = useRequestEvent()
 const { data: billingResource, error: billingResourceError, pending: billingResourcePending } = await useAsyncData<BillingResource>(
   computed(() => `dashboard-billing:${String(route.params.orgSlug || '')}`),
@@ -571,7 +564,7 @@ const { data: billingResource, error: billingResourceError, pending: billingReso
     }
     const [billingResponse, creditsResponse, paymentMethodResponse, sitesResponse] = await Promise.all([
       dashboardApi<ApiRecord>('/api/billing/status', { validate: isBillingResponse }),
-      dashboardApi<ApiRecord>('/api/billing/credits', { validate: isCreditsResponse }),
+      dashboardApi<BillingCreditsResource>('/api/billing/credits', { validate: isCreditsResponse }),
       dashboardApi<{ card: SavedCard | null }>('/api/billing/payment-method', { validate: isPaymentMethodResponse }),
       dashboardApi<{ success: true; sites: SiteBillingSummary[] }>('/api/billing/sites', { validate: isSitesResponse }),
     ])
@@ -598,16 +591,17 @@ watchEffect(() => {
   savedCard.value = resource.paymentMethod.card
   sites.value = resource.sites.sites
   if (!selectedSiteId.value && sites.value.length === 1) selectedSiteId.value = sites.value[0]!.siteId
-  autoTopupEnabled.value = Boolean(billing.value.autoTopupEnabled)
-  const bundleValue = Number(billing.value.autoTopupBundle)
-  autoTopupBundle.value = bundleValue === 2500 || bundleValue === 5000 ? bundleValue : 500
-  autoTopupThreshold.value = Number(billing.value.autoTopupThreshold) || 100
 })
 
 onMounted(async () => {
   const { success, plan, canceled, siteId, ...restQuery } = route.query
 
+  if (typeof siteId === 'string' && sites.value.some(s => s.siteId === siteId)) {
+    selectedSiteId.value = siteId
+  }
+
   if (success === 'true') {
+    trackSubscriptionCheckoutSuccess(selectedSite.value?.plan ?? undefined)
     const paymentStatus = billing.value?.paymentStatus
     toast.add({
       description: paymentStatus === 'paid'
@@ -626,11 +620,6 @@ onMounted(async () => {
   }
 
   // Auto-start checkout if plan query param exists
-  const { isAuthenticated } = useAuth()
-  if (typeof siteId === 'string' && sites.value.some(s => s.siteId === siteId)) {
-    selectedSiteId.value = siteId
-  }
-
   if (isAuthenticated.value && plan) {
     const planId = Array.isArray(plan) ? plan[0] : String(plan)
     if (planId) await upgradeToPlan(planId)

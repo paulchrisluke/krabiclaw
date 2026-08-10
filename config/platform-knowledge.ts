@@ -81,10 +81,10 @@ export const PLATFORM_KNOWLEDGE_FAQ_ENTRIES: PlatformKnowledgeFaqEntry[] = [
     keywords: ['first website', 'create site', 'signup', 'subdomain', 'launch'],
   },
   {
-    id: 'google-business-optional',
-    title: 'Can I use KrabiClaw without Google Business?',
-    answer: 'Yes. Google Business is optional. You can add your hours, offerings, photos, and content manually and connect Google later.',
-    keywords: ['google business', 'optional', 'manual setup', 'without google'],
+    id: 'google-places-optional',
+    title: 'Can I use KrabiClaw without Google Places?',
+    answer: 'Yes. Google Places is optional. You can add your hours, offerings, photos, and content manually, then import public location details from Google Maps later.',
+    keywords: ['google places', 'google maps', 'optional', 'manual setup', 'without google'],
   },
   {
     id: 'menu-updates',
@@ -95,8 +95,8 @@ export const PLATFORM_KNOWLEDGE_FAQ_ENTRIES: PlatformKnowledgeFaqEntry[] = [
   {
     id: 'hours-updates',
     title: 'How do I update opening hours?',
-    answer: 'Go to the dashboard location settings to edit hours manually, or connect Google Business if you want hours to stay in sync.',
-    keywords: ['hours', 'opening hours', 'business hours', 'location settings'],
+    answer: 'Go to the dashboard location settings to edit hours manually, or import the public hours from Google Places and re-sync when needed.',
+    keywords: ['hours', 'opening hours', 'business hours', 'location settings', 'google places'],
   },
   {
     id: 'custom-domain',
@@ -113,8 +113,8 @@ export const PLATFORM_KNOWLEDGE_FAQ_ENTRIES: PlatformKnowledgeFaqEntry[] = [
   {
     id: 'google-reviews',
     title: 'Will my Google reviews show on my site?',
-    answer: 'Yes. When Google Business is connected, reviews can appear on your site automatically.',
-    keywords: ['google reviews', 'reviews', 'sync reviews'],
+    answer: 'Yes. Google Places can import the public reviews available for a location onto your site.',
+    keywords: ['google reviews', 'google places', 'reviews', 'sync reviews'],
   },
   {
     id: 'plans-change',
@@ -210,7 +210,7 @@ export const PLATFORM_KNOWLEDGE_PAGE_ENTRIES: PlatformKnowledgePageEntry[] = [
     title: 'Pricing Plans',
     path: '/pricing',
     snippet: 'Compare tiers, billing, AI credits, and what each plan unlocks.',
-    body: 'Pricing explains the differences between free and paid plans, billing expectations, managed support, and which features are available at each tier.',
+    body: 'Pricing explains the differences between free and paid plans, billing expectations, Growth priority support, and which features are available at each tier.',
     icon: 'credit-card',
     section: 'Platform',
     keywords: ['pricing', 'plan', 'billing', 'upgrade', 'credits'],
@@ -221,10 +221,10 @@ export const PLATFORM_KNOWLEDGE_PAGE_ENTRIES: PlatformKnowledgePageEntry[] = [
     title: 'Platform Features',
     path: '/features',
     snippet: 'Learn how KrabiClaw handles content, analytics, SEO, speed, and AI-assisted workflows.',
-    body: 'Features cover AI editing, Google Business integrations, analytics, performance, site management, and tools for local businesses to own their direct traffic.',
+    body: 'Features cover AI editing, Google Places imports, analytics, performance, site management, and tools for local businesses to own their direct traffic.',
     icon: 'star',
     section: 'Platform',
-    keywords: ['features', 'seo', 'analytics', 'performance', 'google business'],
+    keywords: ['features', 'seo', 'analytics', 'performance', 'google places'],
     surfaces: ['public', 'docs', 'blog', 'help', 'chowbot'],
   },
   {
@@ -242,8 +242,8 @@ export const PLATFORM_KNOWLEDGE_PAGE_ENTRIES: PlatformKnowledgePageEntry[] = [
     id: 'templates-saya-page',
     title: 'Saya Template',
     path: '/templates/saya',
-    snippet: 'Editorial restaurant and experience websites with deep Google Business integration.',
-    body: 'The Saya template is the flagship KrabiClaw theme for restaurants and experiences — editorial typography, location-centric navigation, and Google Business data sync. Free on all plans.',
+    snippet: 'Editorial restaurant and experience websites with Google Places imports.',
+    body: 'The Saya template is the flagship KrabiClaw theme for restaurants and experiences — editorial typography, location-centric navigation, and Google Places imports. Free on all plans.',
     icon: 'layout-template',
     section: 'Platform',
     keywords: ['saya', 'template', 'theme', 'restaurant', 'experience', 'free'],
@@ -404,7 +404,7 @@ export const PLATFORM_DASHBOARD_ROUTE_ENTRIES: PlatformDashboardRouteEntry[] = [
     body: 'Location settings contains only configuration owned by one location.',
     icon: 'settings',
     section: 'Location',
-    keywords: ['location settings', 'address', 'hours', 'google business', 'notifications'],
+    keywords: ['location settings', 'address', 'hours', 'google places', 'notifications'],
     surfaces: ['dashboard'],
   },
   {

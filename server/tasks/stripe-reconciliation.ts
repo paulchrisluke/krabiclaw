@@ -1,8 +1,11 @@
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
 import { execute, queryAll, type DbClient } from '~/server/db'
 import { createStripePlanLoader, recordStripeEventFailure, MAX_STRIPE_WEBHOOK_ATTEMPTS, type BetterAuthSubscriptionAdapter } from '~/server/utils/better-auth-stripe'
-import Stripe from 'stripe'
+import type Stripe from 'stripe'
 import { processStripeEvent } from '~/server/utils/stripe-event-processing'
+import { createStripeClient } from '~/server/utils/stripe-client'
+import { expireStripeGa4Intents } from '~/server/utils/stripe-ga4-intents'
+import { defineScheduledTask } from '~/server/utils/scheduled-task'
 
 interface StripeTaskContext {
   cloudflare?: { env?: ApiRecord }
@@ -33,7 +36,7 @@ async function clearExpiredStripeEventPayloads(db: DbClient, now = new Date()): 
   `, [cutoff])
 }
 
-export default defineTask({
+export default defineScheduledTask({
   meta: {
     name: 'billing:stripe-reconciliation',
     description: 'Retry leased Stripe events whose Better Auth or app projection did not complete',
@@ -46,12 +49,13 @@ export default defineTask({
     if (!db) throw new Error('DB is required')
     if (!env.STRIPE_SECRET_KEY) return { result: { ...empty, skipped: 'STRIPE_SECRET_KEY is not configured' } }
 
-    const stripe = new Stripe(env.STRIPE_SECRET_KEY, { maxNetworkRetries: 0, timeout: 10_000 })
+    const stripe = createStripeClient(env.STRIPE_SECRET_KEY)
     const loadStripePlans = createStripePlanLoader(stripe, env)
     const auth = createAuth(env as CloudflareEnv)
     const authContext = await auth.$context
     const adapter = authContext.adapter as unknown as BetterAuthSubscriptionAdapter
     await clearExpiredStripeEventPayloads(db)
+    await expireStripeGa4Intents(db)
     const events = await queryAll<RetryableStripeEvent>(db, `
       SELECT stripe_event_id, payload
       FROM stripe_webhook_events

@@ -31,6 +31,7 @@ async function completeManualWizard(
     await expect(page.getByRole('button', { name: 'Skip for now' })).toHaveCount(0)
   }
 
+  await expect(page.locator('[data-onboarding-hydrated="true"]')).toBeVisible()
   await page.getByRole('button', { name: 'Start building' }).click()
   if (!skipVertical) {
     const verticalLabel = vertical === 'professional_service'
@@ -85,7 +86,13 @@ async function completeManualWizard(
 
 type TransferPlan = 'free' | 'growth'
 
-async function openMockedTransferOnboarding(
+const TRANSFER_SOURCE_OWNER_USER_ID = 'user-mcp-growth-service'
+const TRANSFER_RECIPIENT_USER_IDS: Record<TransferPlan, string> = {
+  free: 'user-mcp-free',
+  growth: 'user-mcp-growth',
+}
+
+async function openTransferOnboarding(
   page: Page,
   baseURL: string,
   {
@@ -99,92 +106,99 @@ async function openMockedTransferOnboarding(
   } = {},
 ) {
   const suffix = Date.now()
-  const userId = `e2e-transfer-ui-${plan}-${suffix}`
-  const siteId = `site-transfer-ui-${suffix}`
-  const siteSlug = `transfer-site-${suffix}`
-  const locationId = `loc-transfer-ui-${suffix}`
+  // The source site is deliberately always created by the seeded Growth
+  // service fixture owner. The accepting user already owns the
+  // seeded free or Growth fixture organization for this case. This keeps the
+  // assertion meaningful under the one-org subscription model: the transferred
+  // site's plan must come from the recipient organization, not the source site's
+  // denormalized plan and not a newly-created recipient org.
+  const ownerUserId = TRANSFER_SOURCE_OWNER_USER_ID
+  const recipientUserId = TRANSFER_RECIPIENT_USER_IDS[plan]
+  const recipientEmail = `${recipientUserId}@example.test`
 
-  await loginFreshUser(page, baseURL, userId)
-
-  // Signup no longer auto-creates an org (see server/utils/auth.ts) — this test
-  // navigates to a real /dashboard/{orgSlug}/... route (only the site/location
-  // data below is mocked), so the fresh user needs a real org to belong to.
-  // Creating a throwaway site is the same on-demand path a first-time user
-  // actually goes through; its own siteId/slug are unused below since the
-  // mocked routes take over as soon as the wizard loads.
+  // Build the fixture through the real transfer APIs. The recipient's seeded
+  // organization supplies the effective free/Growth plan without starting a
+  // Stripe checkout; the transfer itself remains a no-payment handoff.
+  await loginFreshUser(page, baseURL, ownerUserId)
   const createSiteRes = await page.request.post(`${baseURL}/api/sites`, {
     data: {
-      name: `Throwaway Org ${suffix}`,
+      name: `Transfer UI ${plan} ${suffix}`,
       subdomain: `e2e-throwaway-${suffix}`,
       vertical: 'restaurant',
     },
   })
   expect(createSiteRes.status()).toBe(200)
+  const createdSite = await createSiteRes.json() as {
+    siteId?: string
+    subdomain?: string
+  }
+  expect(createdSite.siteId).toEqual(expect.any(String))
+  expect(createdSite.subdomain).toContain('e2e-')
+  const siteId = createdSite.siteId!
+  const siteSlug = createdSite.subdomain!
 
+  // Keep the source/recipient plan distinction explicit. The source fixture is
+  // Growth for both cases; the free case must be resolved by the recipient
+  // organization's projection during transfer acceptance.
+  const sourceSiteRes = await page.request.get(`${baseURL}/api/sites/${siteId}`)
+  expect(sourceSiteRes.status()).toBe(200)
+  const sourceSite = await sourceSiteRes.json() as { plan?: string }
+  expect(sourceSite.plan).toBe('growth')
+
+  const transferRes = await page.request.post(`${baseURL}/api/admin/sites/${siteId}/transfer`, {
+    data: {
+      email: recipientEmail,
+      message: 'Transfer onboarding E2E fixture.',
+    },
+  })
+  expect(transferRes.status()).toBe(200)
+  const transfer = await transferRes.json() as { id?: string; token?: string }
+  expect(transfer.id).toEqual(expect.any(String))
+  expect(transfer.token).toEqual(expect.any(String))
+
+  await loginFreshUser(page, baseURL, recipientUserId)
+  const acceptRes = await page.request.post(`${baseURL}/api/site-transfer/${transfer.token}/accept`, {
+    data: {},
+  })
+  expect(acceptRes.status()).toBe(200)
+  const acceptBody = await acceptRes.json() as { success?: boolean; site_id?: string }
+  expect(acceptBody.success).toBe(true)
+  expect(acceptBody.site_id).toBe(siteId)
+
+  // Establish a fresh session so Better Auth carries the seeded recipient org
+  // as the active scope for the page's direct SSR loader.
+  await loginFreshUser(page, baseURL, recipientUserId)
   const contextRes = await page.request.get(`${baseURL}/api/dashboard/context`)
   expect(contextRes.status()).toBe(200)
-  const context = await contextRes.json() as { organization?: { id?: string; slug?: string } }
-  const orgId = context.organization?.id
+  const context = await contextRes.json() as {
+    organization?: { id?: string; slug?: string }
+    sites?: Array<{ id?: string; plan?: string }>
+  }
   const orgSlug = context.organization?.slug
-  expect(orgId).toBeTruthy()
-  expect(orgSlug).toBeTruthy()
+  expect(orgSlug).toEqual(expect.any(String))
+  expect(context.sites?.some(site => site.id === siteId && site.plan === plan)).toBe(true)
 
-  await page.route('**/api/dashboard/context?afterTransfer=true', async route => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        success: true,
-        organization: { id: orgId, slug: orgSlug },
-        site: {
-          id: siteId,
-          brand_name: 'Mock Transfer Site',
-          vertical: 'restaurant',
-          subdomain: siteSlug,
-          plan,
-        },
-      }),
-    })
-  })
-
-  await page.route(`**/api/sites/${siteId}/locations`, async route => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        locations: [
-          {
-            id: locationId,
-            title: 'Mock Transfer Location',
-            slug: 'mock-transfer-location',
-            is_primary: true,
-            notification_phone: null,
-          },
-        ],
-      }),
-    })
-  })
+  const locationsRes = await page.request.get(`${baseURL}/api/sites/${siteId}/locations`)
+  expect(locationsRes.status()).toBe(200)
+  const locationsBody = await locationsRes.json() as {
+    locations?: Array<{ id?: string }>
+  }
+  const locationId = locationsBody.locations?.[0]?.id
+  expect(locationId).toEqual(expect.any(String))
 
   await page.route(`**/api/editor/sites/${siteId}/notifications`, async route => {
-    if (route.request().method() === 'PATCH') {
-      await route.fulfill({
-        status: notificationSaveStatus,
-        contentType: 'application/json',
-        body: JSON.stringify(notificationSaveStatus >= 400
-          ? { error: notificationSaveError }
-          : { success: true, notifications: { whatsapp_phone: '+15555550100', channels: ['whatsapp'] } }),
-      })
-      return
-    }
-
+    if (route.request().method() !== 'PATCH') return await route.continue()
     await route.fulfill({
-      status: 200,
+      status: notificationSaveStatus,
       contentType: 'application/json',
-      body: JSON.stringify({ success: true, notifications: { whatsapp_phone: null, channels: ['whatsapp'] } }),
+      body: JSON.stringify(notificationSaveStatus >= 400
+        ? { error: notificationSaveError }
+        : { success: true, notifications: { whatsapp_phone: '+15555550100', channels: ['whatsapp'] } }),
     })
   })
 
-  await page.route(`**/api/dashboard/locations/${locationId}`, async route => {
+  await page.route(`**/api/dashboard/locations/${locationId!}`, async route => {
+    if (route.request().method() !== 'PATCH') return await route.continue()
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -200,9 +214,20 @@ async function openMockedTransferOnboarding(
     })
   })
 
-  await page.goto(`${baseURL}/dashboard/${orgSlug}/onboarding`, { waitUntil: 'load' })
+  let transferContextRequests = 0
+  page.on('request', request => {
+    if (new URL(request.url()).pathname === '/api/dashboard/transfer-onboarding-context') {
+      transferContextRequests += 1
+    }
+  })
+  const onboardingUrl = `${baseURL}/dashboard/${orgSlug}/onboarding?transfer=${encodeURIComponent(transfer.id!)}`
+  await page.goto(onboardingUrl, { waitUntil: 'load' })
+  expect(new URL(page.url()).searchParams.get('transfer')).toBe(transfer.id)
+  await expect(page.locator('[data-transfer-onboarding-hydrated="true"]')).toBeVisible()
+  await expect(page.getByText('Your site is ready')).toBeVisible()
+  expect(transferContextRequests).toBe(0)
 
-  return { siteId, orgSlug: orgSlug!, siteSlug }
+  return { siteId, orgSlug: orgSlug!, siteSlug, transferId: transfer.id! }
 }
 
 async function saveNotificationSettings(page: Page, siteId: string) {
@@ -268,6 +293,7 @@ test.describe('onboarding wizard UI', () => {
     // again rather than continuing mid-flow from this mobile-only check.
     await page.setViewportSize({ width: 390, height: 844 })
     await page.goto(`${baseURL}/dashboard/onboarding`, { waitUntil: 'load' })
+    await expect(page.locator('[data-onboarding-hydrated="true"]')).toBeVisible()
     await page.getByRole('button', { name: 'Start building' }).click()
     await expect(page.getByRole('button', { name: /Restaurant, café or bar/ })).toBeVisible()
     await expect(page.getByRole('button', { name: /Experience, class or activity/ })).toBeVisible()
@@ -300,7 +326,7 @@ test.describe('onboarding wizard UI', () => {
   })
 
   test('transfer handoff wizard saves free-plan notifications and skips paid-only steps', async ({ page, baseURL }) => {
-    const { siteId, orgSlug, siteSlug } = await openMockedTransferOnboarding(page, baseURL!, { plan: 'free' })
+    const { siteId, orgSlug, siteSlug } = await openTransferOnboarding(page, baseURL!, { plan: 'free' })
 
     await reachNotificationStep(page)
     const saveResponse = await saveNotificationSettings(page, siteId)
@@ -317,7 +343,7 @@ test.describe('onboarding wizard UI', () => {
   })
 
   test('transfer handoff wizard shows paid-plan social and domain steps', async ({ page, baseURL }) => {
-    const { siteId, orgSlug, siteSlug } = await openMockedTransferOnboarding(page, baseURL!, { plan: 'growth' })
+    const { siteId, orgSlug, siteSlug } = await openTransferOnboarding(page, baseURL!, { plan: 'growth' })
 
     await reachNotificationStep(page)
     const saveResponse = await saveNotificationSettings(page, siteId)
@@ -339,7 +365,7 @@ test.describe('onboarding wizard UI', () => {
 
   test('transfer handoff wizard keeps notification save failures visible', async ({ page, baseURL }) => {
     const saveError = 'whatsapp_phone is required'
-    const { siteId } = await openMockedTransferOnboarding(page, baseURL!, {
+    const { siteId } = await openTransferOnboarding(page, baseURL!, {
       plan: 'free',
       notificationSaveStatus: 400,
       notificationSaveError: saveError,

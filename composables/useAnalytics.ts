@@ -11,7 +11,7 @@ declare global {
   interface Window {
     zaraz?: {
       track: (_eventName: string, _params?: Record<string, unknown>) => void
-      set: (_key: string, _value: Record<string, string>) => void
+      set: (_key: string, _value: string | undefined | Record<string, string>, _options?: { scope?: 'page' | 'session' | 'persist' }) => void
       consent?: {
         APIReady?: boolean
         set: (_preferences: Record<string, boolean>) => void
@@ -29,13 +29,17 @@ export type AnalyticsEventName =
   | 'domain_connected'
   // Billing & Subscription
   // subscription_created/plan_upgraded/plan_downgraded/subscription_cancelled
-  // fire server-side from server/api/billing/webhook.post.ts via
-  // sendGa4Event (Stripe webhook -> GA4 Measurement Protocol), not from here
+  // fire server-side from the Better Auth Stripe event queue via
+  // server/utils/stripe-ga4.ts, not from here
   // — client-side tracking can't see plan changes made through the Stripe
   // customer portal, or a checkout that completes after the tab closes.
   | 'plan_viewed'
   | 'checkout_started'
   | 'payment_method_added'
+  | 'subscription_upgrade'
+  | 'subscription_downgrade'
+  | 'subscription_cancelled'
+  | 'subscription_checkout_success'
   // Content Creation
   | 'menu_item_created'
   | 'menu_imported'
@@ -68,7 +72,7 @@ export interface AnalyticsEventProperties {
   domain?: string
 
   // Billing
-  plan?: string // 'free', 'growth', 'managed', 'seo_accelerator'
+  plan?: string // 'free' or 'growth'
   value?: number // monetary value in cents
   currency?: string
 
@@ -114,13 +118,65 @@ export interface AnalyticsEventInput extends AnalyticsEventProperties {
 // `GA1.1.<random>.<timestamp>`; client_id is the last two segments).
 // Used to stitch server-side Stripe webhook events back to the browsing
 // session that started checkout — see server/utils/ga4-measurement-protocol.ts.
-export const getGaClientId = (): string | null => {
-  if (!import.meta.client) return null
-  const match = document.cookie.match(/(?:^|;\s*)_ga=([^;]+)/)
+function decodeCookieValue(value: string): string {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
+}
+
+export function parseGaClientId(cookieHeader: string): string | null {
+  const match = cookieHeader.match(/(?:^|;\s*)_ga=([^;]+)/)
   if (!match) return null
-  const parts = (match[1] ?? '').split('.')
+  const parts = decodeCookieValue(match[1] ?? '').split('.')
   if (parts.length < 4) return null
   return `${parts[2]}.${parts[3]}`
+}
+
+export function parseGaSessionId(cookieHeader: string): number | null {
+  for (const cookie of cookieHeader.split(';')) {
+    const [rawName, ...rawValue] = cookie.trim().split('=')
+    if (!rawName?.startsWith('_ga_')) continue
+    const value = decodeCookieValue(rawValue.join('='))
+    const firstSessionSegment = value.match(/^GS\d+\.\d+\.(\d+)/)?.[1]
+      ?? value.match(/(?:^|[$.])s(\d+)(?:[$.]|$)/)?.[1]
+      ?? value.split('.').find((part, index) => index >= 2 && /^\d+$/.test(part))
+    const sessionId = Number(firstSessionSegment)
+    if (Number.isSafeInteger(sessionId) && sessionId > 0) return sessionId
+  }
+  return null
+}
+
+export const getGaClientId = (): string | null => {
+  if (!import.meta.client) return null
+  return parseGaClientId(document.cookie)
+}
+
+export const getGaSessionId = (): number | null => {
+  if (!import.meta.client) return null
+  return parseGaSessionId(document.cookie)
+}
+
+export const getGaSessionCapturedAt = (): number | null => {
+  return getGaSessionId() ? Math.floor(Date.now() / 1000) : null
+}
+
+export interface BillingAnalyticsContext {
+  gaClientId?: string
+  gaSessionId?: string
+  gaSessionCapturedAt?: number
+}
+
+export const getBillingAnalyticsContext = (): BillingAnalyticsContext => {
+  const gaClientId = getGaClientId()
+  const gaSessionId = getGaSessionId()
+  const gaSessionCapturedAt = gaSessionId ? getGaSessionCapturedAt() : null
+  return {
+    ...(gaClientId ? { gaClientId } : {}),
+    ...(gaSessionId ? { gaSessionId: String(gaSessionId) } : {}),
+    ...(gaSessionCapturedAt ? { gaSessionCapturedAt } : {}),
+  }
 }
 
 export const useAnalytics = () => {
@@ -186,6 +242,23 @@ export const useAnalytics = () => {
 
   const trackPaymentMethodAdded = () => {
     trackEvent('payment_method_added', {})
+  }
+
+  const setUserId = (userId: string | null | undefined) => {
+    if (!import.meta.client || typeof window === 'undefined') return
+    window.zaraz?.set('user_id', userId ?? undefined, { scope: 'session' })
+  }
+
+  const trackSubscriptionUpgrade = (plan: string, value?: number) => {
+    trackEvent('subscription_upgrade', { plan, value, currency: 'USD' })
+  }
+
+  const trackSubscriptionDowngrade = (plan: string) => {
+    trackEvent('subscription_downgrade', { plan })
+  }
+
+  const trackSubscriptionCheckoutSuccess = (plan?: string) => {
+    trackEvent('subscription_checkout_success', { plan })
   }
 
   // Content Creation
@@ -266,6 +339,11 @@ export const useAnalytics = () => {
     trackPlanViewed,
     trackCheckoutStarted,
     trackPaymentMethodAdded,
+    trackSubscriptionUpgrade,
+    trackSubscriptionDowngrade,
+    trackSubscriptionCheckoutSuccess,
+    setUserId,
+    getBillingAnalyticsContext,
     trackMenuItemCreated,
     trackMenuImported,
     trackPostCreated,

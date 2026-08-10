@@ -256,7 +256,7 @@ const URL_STRUCTURE_OPTIONS = [
   { label: 'Brand pages', value: 'brand_pages' },
 ]
 const CHANNEL_OPTIONS = [{ label: 'Email', value: 'email' }, { label: 'WhatsApp', value: 'whatsapp' }]
-const hasFacebookAccess = computed(() => ['growth', 'managed', 'seo_accelerator'].includes(dashboard.site.value?.plan ?? ''))
+const hasFacebookAccess = computed(() => dashboard.site.value?.plan === 'growth')
 const verticalLabel = computed(() => {
   const vertical = dashboard.site.value?.vertical
   return vertical ? VERTICAL_LABELS[vertical] ?? vertical : null

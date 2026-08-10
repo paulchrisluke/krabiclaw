@@ -5,6 +5,41 @@ import { execute } from '~/server/db'
 
 const PLACES_BASE = 'https://places.googleapis.com/v1/places'
 
+// Generate a canonical Google Maps embed URL from the location data already
+// stored by the Places importer. This helper does not call Google.
+export const calculateMapEmbedUrl = (loc: {
+  title: string
+  maps_url?: string | null
+  latitude?: number | null
+  longitude?: number | null
+  address?: string | null
+  city?: string | null
+}) => {
+  if (loc.maps_url) {
+    try {
+      const url = new URL(loc.maps_url)
+      const cid = url.searchParams.get('cid')
+      if (cid) return `https://maps.google.com/maps?cid=${cid}&output=embed`
+    } catch { /* use the next available source */ }
+  }
+
+  if (loc.latitude != null && loc.longitude != null) {
+    return `https://maps.google.com/maps?q=${loc.latitude},${loc.longitude}&output=embed`
+  }
+
+  let address = loc.address || loc.city || ''
+  if (address.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(address) as { addressLines?: string[]; streetAddress?: string }
+      address = parsed.addressLines?.[0] || parsed.streetAddress || loc.city || ''
+    } catch { /* use the raw address */ }
+  }
+
+  if (!address) return null
+  const query = loc.title ? `${loc.title}, ${address}` : address
+  return `https://maps.google.com/maps?q=${encodeURIComponent(String(query))}&output=embed`
+}
+
 export class PlaceDetailsError extends Error {
   public readonly statusCode: number
 

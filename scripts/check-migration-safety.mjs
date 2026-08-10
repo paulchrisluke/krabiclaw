@@ -19,12 +19,15 @@ function migrationNumber(fileName) {
   return match ? Number(match[1]) : null
 }
 
-export function findUnsafeMigrationStatements(fileName, sql, migrationContext = sql) {
+export function findUnsafeMigrationStatements(fileName, sql, migrationContext = sql, migrationContextOffset) {
   if (IMMUTABLE_ALLOWLIST.has(fileName)) return []
   const number = migrationNumber(fileName)
   if (number !== null && number < FIRST_ENFORCED_MIGRATION) return []
 
   const findings = []
+  const resolvedContextOffset = Number.isInteger(migrationContextOffset) && migrationContextOffset >= 0
+    ? migrationContextOffset
+    : Math.max(0, migrationContext.lastIndexOf(sql))
   if (/\bINSERT\s+OR\s+IGNORE\b/i.test(sql)) {
     findings.push('INSERT OR IGNORE can silently discard rows during a migration')
   }
@@ -36,8 +39,7 @@ export function findUnsafeMigrationStatements(fileName, sql, migrationContext = 
       const backupName = `__um_backup_${table}`
       const newTableName = `__new_${table}`
       const dropIndex = match.index ?? 0
-      const contextDropIndex = migrationContext.indexOf(match[0])
-      const sequenceDropIndex = contextDropIndex === NOT_FOUND ? dropIndex : contextDropIndex
+      const sequenceDropIndex = resolvedContextOffset + dropIndex
       const backupIndex = findIndex(migrationContext, new RegExp(`CREATE\\s+TABLE\\s+\`?${backupName}\`?\\s+AS\\s+SELECT\\s+\\*\\s+FROM\\s+\`?${table}\`?`, 'i'))
       const newTableIndex = findIndex(sql, new RegExp(`CREATE\\s+TABLE\\s+\`?${newTableName}\`?`, 'i'))
       const restoreIndex = findIndex(sql, new RegExp(`INSERT\\s+INTO\\s+\`?${table}\`?\\s+SELECT\\s+\\*\\s+FROM\\s+\`?${backupName}\`?`, 'i'))
@@ -78,11 +80,20 @@ export async function checkMigrationDirectory(migrationsDir) {
   const files = (await readdir(migrationsDir)).filter(file => /^\d{4}_.+\.sql$/.test(file)).sort()
   const violations = []
   const migrationSql = new Map()
-  for (const file of files) migrationSql.set(file, await readFile(path.join(migrationsDir, file), 'utf8'))
+  const migrationOffsets = new Map()
+  let contextOffset = 0
+  for (const file of files) {
+    const sql = await readFile(path.join(migrationsDir, file), 'utf8')
+    migrationSql.set(file, sql)
+    migrationOffsets.set(file, contextOffset)
+    contextOffset += sql.length + 1
+  }
   const migrationContext = Array.from(migrationSql.values()).join('\n')
   for (const file of files) {
     const sql = migrationSql.get(file) ?? ''
-    for (const reason of findUnsafeMigrationStatements(file, sql, migrationContext)) violations.push(`${file}: ${reason}`)
+    for (const reason of findUnsafeMigrationStatements(file, sql, migrationContext, migrationOffsets.get(file))) {
+      violations.push(`${file}: ${reason}`)
+    }
   }
   return violations
 }

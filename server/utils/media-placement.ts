@@ -10,6 +10,8 @@ import {
   type ResolvedMediaAsset,
 } from '~/server/utils/media-asset-manager'
 import { getTenantPageForEditorByPath, updateTenantPageDraft } from '~/server/utils/tenant-pages'
+import { materializeTenantFavicon } from '~/server/utils/favicon-derivative'
+import { deleteFromR2 } from '~/server/utils/cloudflare-r2'
 
 export type MediaPlacementTarget =
   | { type: 'site_logo' }
@@ -28,7 +30,7 @@ export interface SetMediaPlacementInput {
   memberId?: string
   role?: MemberAccessPrincipal['role']
   userId: string
-  env?: unknown
+  env?: ApiRecord
   target: MediaPlacementTarget
   assetIds: string[]
 }
@@ -49,6 +51,29 @@ type PlacementDefinition = {
   cardinality: 'single' | 'ordered'
   allowedKinds: Array<ResolvedMediaAsset['kind']>
   requireCoverPoster: boolean
+}
+
+export function replaceStoryImageBlock(
+  blocks: Array<{ id: string; type: string; position: number; data: Record<string, unknown> }>,
+  assetId: string | null,
+) {
+  let replaced = false
+  const next = blocks.flatMap((block) => {
+    if (block.type !== 'image' || block.data.field !== 'story.image') return [block]
+    if (!assetId || replaced) return []
+    const { url: _url, ...data } = block.data
+    replaced = true
+    return [{ ...block, data: { ...data, asset_id: assetId } }]
+  })
+  if (assetId && !replaced) {
+    next.push({
+      id: crypto.randomUUID(),
+      type: 'image',
+      position: next.length,
+      data: { field: 'story.image', asset_id: assetId, alt: 'Story image' },
+    })
+  }
+  return next
 }
 
 export function mediaPlacementDefinition(target: MediaPlacementTarget): PlacementDefinition {
@@ -122,15 +147,13 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
 
   switch (input.target.type) {
     case 'site_logo': {
-      const result = await execute(db, `UPDATE sites SET logo_asset_id = ?, updated_at = ? WHERE organization_id = ? AND id = ?`, [
-        assetId,
+      await assignSiteLogoWithFavicon(db, {
+        env: input.env,
+        organizationId: input.organizationId,
+        siteId: input.siteId,
+        asset: media[0] ?? null,
         now,
-        input.organizationId,
-        input.siteId,
-      ])
-      if (!result?.success || Number(result.meta?.changes ?? 0) === 0) {
-        throw createError({ statusCode: 404, statusMessage: 'Site not found' })
-      }
+      })
       return placementResult(input.target, media, 'site', input.siteId, now)
     }
     case 'home_hero': {
@@ -174,9 +197,7 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
           pageType: canonicalPage.page_type,
           recipe: canonicalPage.recipe,
           sortOrder: canonicalPage.sort_order,
-          blocks: canonicalPage.blocks.map(block => block.type === 'image' && block.data.field === 'story.image'
-            ? { ...block, data: { ...block.data, asset_id: assetId } }
-            : block),
+          blocks: replaceStoryImageBlock(canonicalPage.blocks, assetId),
           expectedDocumentUpdatedAt: canonicalPage.document.updated_at,
         },
       })
@@ -290,6 +311,67 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
       }
       return placementResult(input.target, media, 'experience', experience.id, now, targetLocationId)
     }
+  }
+}
+
+export async function assignSiteLogoWithFavicon(
+  db: DbClient,
+  input: {
+    env?: ApiRecord
+    organizationId: string
+    siteId: string
+    asset: ResolvedMediaAsset | null
+    now?: string
+    onlyIfEmpty?: boolean
+  },
+): Promise<void> {
+  const now = input.now ?? new Date().toISOString()
+  let derivative: { key: string; publicUrl: string } | null = null
+  if (input.asset) {
+    if (!input.env) throw createError({ statusCode: 500, statusMessage: 'Media storage unavailable' })
+    derivative = await materializeTenantFavicon(input.env, {
+      siteId: input.siteId,
+      assetId: input.asset.id,
+      sourceUrl: input.asset.public_url,
+    })
+  }
+
+  try {
+    const result = await execute(db, `
+      UPDATE sites
+         SET logo_asset_id = ?,
+             settings = CASE
+               WHEN ? IS NULL THEN json_remove(COALESCE(settings, '{}'), '$.favicon_url')
+               ELSE json_set(COALESCE(settings, '{}'), '$.favicon_url', ?)
+             END,
+             updated_at = ?
+       WHERE organization_id = ? AND id = ?
+         AND (? = 0 OR logo_asset_id IS NULL)
+    `, [
+      input.asset?.id ?? null,
+      derivative?.publicUrl ?? null,
+      derivative?.publicUrl ?? null,
+      now,
+      input.organizationId,
+      input.siteId,
+      input.onlyIfEmpty ? 1 : 0,
+    ])
+    if (!result?.success || Number(result.meta?.changes ?? 0) === 0) {
+      throw createError({ statusCode: input.onlyIfEmpty ? 409 : 404, statusMessage: input.onlyIfEmpty ? 'Site logo already assigned' : 'Site not found' })
+    }
+  } catch (error) {
+    if (derivative && input.env) {
+      try {
+        await deleteFromR2(input.env, derivative.key)
+      } catch (cleanupError) {
+        console.error('favicon_derivative_cleanup_failed', {
+          siteId: input.siteId,
+          key: derivative.key,
+          error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+        })
+      }
+    }
+    throw error
   }
 }
 

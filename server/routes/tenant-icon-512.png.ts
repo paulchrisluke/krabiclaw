@@ -5,7 +5,5 @@ export default defineEventHandler((event) => {
     platformFileName: 'web-app-manifest-512x512.png',
     width: 512,
     height: 512,
-    format: 'png',
-    requireFormatConversion: true,
   })
 })

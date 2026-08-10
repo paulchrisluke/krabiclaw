@@ -51,6 +51,21 @@ export function getR2Url(env: ApiRecord, key: string): string {
   return `${normalizedBase}/${encodedKey}`
 }
 
+export function getR2KeyFromPublicUrl(env: ApiRecord, value: string): string | null {
+  const base = typeof env.MEDIA_BASE_URL === 'string' ? env.MEDIA_BASE_URL.trim() : ''
+  if (!base) return null
+  try {
+    const baseUrl = new URL(base.replace(/\/+$/, '') + '/')
+    const candidate = new URL(value)
+    if (candidate.origin !== baseUrl.origin || !candidate.pathname.startsWith(baseUrl.pathname)) return null
+    const encodedKey = candidate.pathname.slice(baseUrl.pathname.length)
+    if (!encodedKey) return null
+    return normalizeR2Key(encodedKey.split('/').map(segment => decodeURIComponent(segment)).join('/'))
+  } catch {
+    return null
+  }
+}
+
 /** Generate a namespaced R2 key for a media asset. */
 export function buildR2Key(siteId: string, assetId: string, filename: string): string {
   const sanitizeSegment = (value: string, label: string): string => {

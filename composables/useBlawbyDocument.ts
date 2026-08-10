@@ -37,6 +37,7 @@ export function resolveBlawbyPath(path: string): string {
 export function resolveBlawbyRouteTarget(path: string, params: Record<string, unknown> = {}): BlawbyRouteTarget {
   const routePath = resolveBlawbyPath(path)
   if (routePath === '/') return { recipe: 'home', slug: null }
+  if (routePath === '/links') return { recipe: 'links', slug: null }
   if (routePath === '/services') return { recipe: 'services', slug: null }
   if (/^\/services\/[^/]+$/.test(routePath)) return { recipe: 'offering', slug: String(params.slug || '') }
   if (routePath === '/about') return { recipe: 'about', slug: null }

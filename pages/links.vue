@@ -37,50 +37,46 @@
 </template>
 
 <script setup lang="ts">
-interface PublicLinksItem {
-  id: string
-  label: string
-  destination: string
-}
-interface PublicSiteLinksPayload {
-  site: {
-    id: string
-    organization_id: string
-    brand_name: string | null
-    brand_description: string | null
-    logo_url: string | null
-    template: 'saya' | 'blawby'
-  }
-  page: {
-    title: string
-    robots: string
-    seo_title: string | null
-    seo_description: string | null
-  }
-  items: PublicLinksItem[]
-}
+import { TENANT_TYPES } from '~/utils/tenant-routing'
+import { ApiClientError, publicApiRequest } from '~/utils/api-clients'
+import { isPublicLinksPayload, isPublicLinksResponse, type PublicLinksItem, type PublicLinksPayload } from '~/utils/public-links-contract'
 
 definePageMeta({ layout: false })
 
-const { siteId, isTenant } = useTenantSite()
-if (!isTenant || !siteId) throw createError({ statusCode: 404, statusMessage: 'Links page not found' })
+const tenantState = useTenantSite()
+const requestEvent = useRequestEvent()
+const siteId = import.meta.server
+  ? (requestEvent?.context.siteId as string | null | undefined) ?? tenantState.siteId
+  : tenantState.siteId
+const isTenant = import.meta.server
+  ? requestEvent?.context.tenantType === TENANT_TYPES.TENANT || tenantState.isTenant
+  : tenantState.isTenant
+if (!isTenant || !siteId) {
+  throw createError({ statusCode: 404, statusMessage: 'Links page not found' })
+}
 
-const { data, error } = await useAsyncData<PublicSiteLinksPayload | null>(
+const { data, error } = await useAsyncData<PublicLinksPayload | null>(
   `public-links-page-${siteId}`,
-  async () => {
+  async (_nuxtApp, { signal }) => {
     if (import.meta.server) {
-      const requestEvent = useRequestEvent()
-      if (!requestEvent) return null
+      if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
       const [{ cloudflareEnv }, { getPublicLinksPage }] = await Promise.all([
         import('~/server/utils/api-response'),
         import('~/server/utils/site-links'),
       ])
       const db = cloudflareEnv(requestEvent).db
       if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-      return await getPublicLinksPage(db, siteId)
+      const response = await getPublicLinksPage(db, siteId)
+      if (response !== null && !isPublicLinksPayload(response)) {
+        throw new ApiClientError('Public links response did not match its contract', 502, 'INVALID_PUBLIC_LINKS_RESPONSE', null)
+      }
+      return response
     }
-    const response = await $fetch<{ success: boolean } & PublicSiteLinksPayload>(`/api/public/sites/${siteId}/links-page`)
-    return response
+    return await publicApiRequest(`/api/public/sites/${encodeURIComponent(siteId)}/links-page`, {
+      signal,
+      coalesceKey: `public-links-page-${siteId}`,
+      validate: isPublicLinksResponse,
+    })
   },
   { server: true, lazy: false },
 )

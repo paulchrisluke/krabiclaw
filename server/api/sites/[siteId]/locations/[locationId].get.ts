@@ -50,8 +50,6 @@ interface LocationRow {
   is_primary: number | boolean
   status: string
   last_synced_at: string | null
-  google_location_id: string | null
-  google_connection_id: string | null
   created_at: string
   updated_at: string
 }
@@ -96,7 +94,7 @@ export default defineEventHandler(async (event) => {
              bl.categories, bl.description, bl.short_description, bl.email, bl.price_level,
              bl.facebook_url, bl.instagram_url, bl.tiktok_url, bl.google_place_id,
              bl.rating, bl.review_count, bl.is_primary, bl.status,
-             bl.last_synced_at, bl.google_location_id, bl.google_connection_id,
+             bl.last_synced_at,
              bl.hero_media_asset_id, bl.created_at, bl.updated_at,
              ma.public_url, ma.thumbnail_url, ma.kind
       FROM business_locations bl

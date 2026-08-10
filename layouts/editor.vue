@@ -22,9 +22,6 @@
         </UCard>
       </div>
       <slot v-else />
-      <!-- Feature-flagged off — see composables/useUpgradeModal.ts for why and
-           how to bring it back. -->
-      <SayaUpgradeModal v-if="UPGRADE_MODAL_ENABLED" />
     </div>
   </UApp>
 </template>
@@ -39,8 +36,6 @@
 // via a dedicated endpoint and never call useDashboardSite at all — set
 // `skipDashboardContext: true` in definePageMeta to bypass this gate
 // entirely rather than being blocked on a context load they never start.
-import { UPGRADE_MODAL_ENABLED } from '~/composables/useUpgradeModal'
-import SayaUpgradeModal from '~/components/saya/_ignored/SayaUpgradeModal.vue'
 import { useDashboardSite } from '~/composables/useDashboardSite'
 import '~/assets/css/dashboard.css'
 

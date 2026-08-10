@@ -6,6 +6,8 @@ import {
   renderBookingPolicySummary,
   resolveBookingPolicy,
   validateBookingPolicyPatch,
+  validateBookingPolicyScope,
+  type BookingPolicyScopeType,
   type BookingPolicyType,
 } from '~/server/utils/booking-policies'
 import { assertResourceAccess } from '~/server/utils/member-access'
@@ -38,6 +40,13 @@ export default defineEventHandler(async (event) => {
   const locationId = typeof body.location_id === 'string' ? body.location_id : null
   const experienceId = typeof body.experience_id === 'string' ? body.experience_id : null
   const locale = typeof body.locale === 'string' ? body.locale : 'en'
+  const scopeType: BookingPolicyScopeType = body.scope_type === 'location' || body.scope_type === 'experience' ? body.scope_type : 'site'
+  validateBookingPolicyScope({
+    policyType: policyType as BookingPolicyType,
+    scopeType,
+    locationId,
+    experienceId,
+  })
 
   if (locationId) {
     const location = await queryFirst<{ id: string }>(db, `SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1`, [locationId, siteId])

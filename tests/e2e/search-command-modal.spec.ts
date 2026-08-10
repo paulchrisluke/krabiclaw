@@ -148,7 +148,15 @@ test.describe('Blawby command search modal', () => {
 
       const input = node.querySelector('input[type="text"]') as HTMLElement
       const inputRgb = getComputedStyle(input).color
-      return { inputRgb, inkRgb, primaryRgb, uiText, ink }
+      return {
+        inputRgb,
+        inkRgb,
+        primaryRgb,
+        uiText,
+        ink,
+        colorScheme: getComputedStyle(shell).colorScheme,
+        bg: getComputedStyle(shell).getPropertyValue('--blawby-bg').trim(),
+      }
     })
     expect(lightTokens.uiText).toBe(lightTokens.ink)
     expect(lightTokens.inputRgb).toBe(lightTokens.inkRgb)
@@ -160,8 +168,10 @@ test.describe('Blawby command search modal', () => {
     await page.waitForTimeout(400)
     await assertNoBannedLabels(page)
 
+    // Blawby intentionally keeps one professional-service palette regardless of
+    // the platform dark-mode preference. The tenant shell owns its color scheme.
     await page.evaluate(() => document.documentElement.classList.add('dark'))
-    const darkTokens = await dialog.evaluate((node) => {
+    const unchangedTokens = await dialog.evaluate((node) => {
       const shell = node.closest('.blawby-shell') as HTMLElement
       return {
         colorScheme: getComputedStyle(shell).colorScheme,
@@ -171,11 +181,11 @@ test.describe('Blawby command search modal', () => {
         uiText: getComputedStyle(shell).getPropertyValue('--ui-text').trim(),
       }
     })
-    expect(darkTokens.colorScheme).toBe('dark')
-    expect(darkTokens.bg).toBe('#0f1222')
-    expect(darkTokens.uiBg).toBe(darkTokens.bg)
-    expect(darkTokens.ink).toBe('#f4f6fb')
-    expect(darkTokens.uiText).toBe(darkTokens.ink)
+    expect(unchangedTokens.colorScheme).toBe(lightTokens.colorScheme)
+    expect(unchangedTokens.bg).toBe(lightTokens.bg)
+    expect(unchangedTokens.uiBg).toBe(unchangedTokens.bg)
+    expect(unchangedTokens.ink).toBe(lightTokens.ink)
+    expect(unchangedTokens.uiText).toBe(unchangedTokens.ink)
     await assertDialogContrast(page)
   })
 })

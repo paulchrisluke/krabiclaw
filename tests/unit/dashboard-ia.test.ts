@@ -84,6 +84,26 @@ test('admin impersonation uses Better Auth APIs without custom proxy routes', ()
   }
 })
 
+test('admin clients uses the organization billing projection for plan state', () => {
+  const clientsRoute = source('server/api/admin/clients.get.ts')
+
+  assert.match(clientsRoute, /COALESCE\(ob\.plan, 'free'\) AS plan/)
+  assert.match(clientsRoute, /ob\.status AS subscription_status/)
+  assert.match(clientsRoute, /ob\.current_period_end/)
+  assert.match(clientsRoute, /WHERE COALESCE\(ob\.plan, 'free'\) = 'growth'/)
+  assert.doesNotMatch(clientsRoute, /COALESCE\(sb\.plan, s\.plan/)
+  assert.doesNotMatch(clientsRoute, /LEFT JOIN site_billing sb/)
+})
+
+test('admin overview lists the full hierarchy without drill-down routes', () => {
+  const overviewPage = source('pages/admin/index.vue')
+  assert.match(overviewPage, /organization\.sites/)
+  assert.match(overviewPage, /site\.locations/)
+  assert.doesNotMatch(overviewPage, /\/admin\/organizations\//)
+  assert.equal(existsSync(resolve(root, 'pages/admin/organizations')), false)
+  assert.equal(existsSync(resolve(root, 'server/api/admin/portfolio')), false)
+})
+
 test('dashboard context and location navigation never infer residual selections', () => {
   const context = source('server/utils/dashboard-context.ts')
   const contextRoute = source('server/api/dashboard/context.get.ts')
@@ -141,6 +161,22 @@ test('responsive dashboard navigation keeps one canonical desktop sidebar with m
   assert.match(layout, /mobileMoreItems/)
   assert.match(layout, /firstLocationManagerItem/)
   assert.match(layout, /navigationItems\.value/)
+})
+
+test('organization sidebar and mobile navigation share the requested item order', () => {
+  const layout = source('layouts/dashboard.vue')
+  const labels = ['Today', 'Calendar', 'Sites', 'Inbox', 'Menu']
+  let previousIndex = -1
+
+  for (const label of labels) {
+    const index = layout.indexOf(`label: '${label}'`)
+    assert.ok(index > previousIndex, `${label} appears in organization navigation order`)
+    previousIndex = index
+  }
+
+  assert.match(layout, /overviewGroup[\s\S]*organizationNavigationItems\.value/)
+  assert.match(layout, /scope\.value === 'organization'[\s\S]*organizationNavigationItems\.value\.map/)
+  assert.match(layout, /icon: 'i-lucide-(sun|calendar-days|globe|inbox|menu)'/)
 })
 
 test('organization switcher routes directly to canonical org slugs', () => {

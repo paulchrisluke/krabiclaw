@@ -35,8 +35,9 @@ export function resolveImageUploadProvider(contentType: string, env: ApiRecord):
 
 // Prefers the user's active organization (session-based auth only — see
 // McpUserContext.activeOrganizationId) and falls back to the oldest
-// membership, matching the REST places endpoints. Never throws: billing
-// failures must not surface as a Google Places tool failure.
+// membership, matching the REST places endpoints. A user without a
+// membership is intentionally a no-op; membership/accounting query failures
+// propagate so a provider call cannot be reported as an unqualified success.
 export async function chargeFlatCreditsForUser(
   user: McpUserContext,
   action: FlatCreditAction,
@@ -47,17 +48,11 @@ export async function chargeFlatCreditsForUser(
     JOIN member m ON o.id = m.organizationId
     WHERE m.userId = ?
     ORDER BY CASE WHEN o.id = ? THEN 0 ELSE 1 END, o.createdAt ASC LIMIT 1
-  `, [user.userId, activeOrgId]).catch((error) => {
-    console.error(`chargeFlatCreditsForUser org lookup failed for ${action}:`, error, { userId: user.userId });
-    return null;
-  });
+  `, [user.userId, activeOrgId]);
   if (!orgRow) return;
 
-  const result = await chargeFlatCredits(user.db, orgRow.organizationId, { action }).catch((error) => {
-    console.error(`chargeFlatCredits threw for ${action}:`, error);
-    return null;
-  });
-  if (result && !result.charged) {
+  const result = await chargeFlatCredits(user.db, orgRow.organizationId, { action });
+  if (!result.charged) {
     console.error(`chargeFlatCredits did not charge for ${action}`, {
       organizationId: orgRow.organizationId,
       newBalance: result.newBalance,
@@ -421,6 +416,8 @@ function filenameExtension(contentType: string, fallback = "bin"): string {
       return "gif";
     case "image/avif":
       return "avif";
+    case "image/svg+xml":
+      return "svg";
     case "video/mp4":
       return "mp4";
     case "video/webm":
@@ -645,7 +642,7 @@ export interface ResolvedMediaFile {
   kind: "image" | "video" | "file";
 }
 
-const RESOLVED_MEDIA_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"]);
+const RESOLVED_MEDIA_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif", "image/svg+xml"]);
 
 async function readMediaBufferWithLimit(
   response: Response,
@@ -1372,6 +1369,8 @@ export function extensionForContentType(contentType: string) {
       return "webp";
     case "image/gif":
       return "gif";
+    case "image/svg+xml":
+      return "svg";
     case "image/png":
     default:
       return "png";
@@ -1380,7 +1379,7 @@ export function extensionForContentType(contentType: string) {
 
 export function normalizeChannelsInput(
   args: Record<string, unknown>,
-): Array<"site" | "gmb" | "instagram" | "facebook"> {
+): Array<"site" | "instagram" | "facebook"> {
   const rawChannels = args.channels;
   const rawTargets = args.targets;
 
@@ -1405,7 +1404,7 @@ export function normalizeChannelsInput(
 
 export function normalizeChannelArray(
   value: unknown,
-): Array<"site" | "gmb" | "instagram" | "facebook"> {
+): Array<"site" | "instagram" | "facebook"> {
   if (!Array.isArray(value) || !value.length) {
     throw mcpProtocolError(
       MCP_ERROR.invalidParams,
@@ -1414,9 +1413,8 @@ export function normalizeChannelArray(
   }
 
   const normalized = value.filter(
-    (item): item is "site" | "gmb" | "instagram" | "facebook" =>
+    (item): item is "site" | "instagram" | "facebook" =>
       item === "site" ||
-      item === "gmb" ||
       item === "instagram" ||
       item === "facebook",
   );
@@ -1424,7 +1422,7 @@ export function normalizeChannelArray(
   if (normalized.length !== value.length) {
     throw mcpProtocolError(
       MCP_ERROR.invalidParams,
-      "channels may only contain site, facebook, instagram, or gmb.",
+      "channels may only contain site, facebook, or instagram.",
     );
   }
 

@@ -20,7 +20,7 @@ export interface CuratedSiteDefinition extends CuratedSiteIdentity {
     theme: string
     brandDescription: string
     status: 'active' | 'inactive'
-    plan: 'free' | 'growth' | 'managed' | 'seo_accelerator'
+    plan: 'free' | 'growth'
     onboardingStatus: 'pending' | 'active' | 'failed'
     urlStructure: 'location_subdirectories' | 'flat'
     primaryLocationId: string
@@ -36,13 +36,13 @@ export interface CuratedSiteDefinition extends CuratedSiteIdentity {
   siteDomains: CuratedSiteDomainDefinition[]
   locations: CuratedLocationDefinition[]
   mediaAssets: CuratedMediaAssetDefinition[]
-  siteContent: CuratedSiteContentDefinition[]
+  tenantPageContent: CuratedTenantPageContentDefinition[]
   experiences: CuratedExperienceDefinition[]
   reviews: CuratedReviewDefinition[]
   menus: CuratedMenuDefinition[]
   locationQa: CuratedLocationQaDefinition[]
   posts: CuratedPostDefinition[]
-  siteContentTranslations?: CuratedSiteContentTranslationDefinition[]
+  tenantPageLocaleFields?: CuratedTenantPageLocaleFieldDefinition[]
   businessLocationTranslations?: CuratedBusinessLocationTranslationDefinition[]
   menuTranslations?: CuratedMenuTranslationDefinition[]
   menuItemTranslations?: CuratedMenuItemTranslationDefinition[]
@@ -53,7 +53,7 @@ export interface CuratedSiteDefinition extends CuratedSiteIdentity {
   }
   organizationBilling?: {
     status: string
-    plan: string
+    plan: 'free' | 'growth'
   }
 }
 
@@ -139,7 +139,7 @@ export interface CuratedMediaAssetDefinition {
   category: 'food' | 'interior' | 'exterior' | 'team' | 'other'
 }
 
-export interface CuratedSiteContentDefinition {
+export interface CuratedTenantPageContentDefinition {
   id: string
   locationId: string | null
   page: string
@@ -226,7 +226,7 @@ export interface CuratedLocationQaDefinition {
   answerAuthor: string
   isOwnerAnswer: boolean
   upvoteCount: number
-  source: 'manual' | 'google'
+  source: 'manual' | 'import' | 'template'
   status: 'published' | 'pending' | 'rejected'
   sortOrder: number
 }
@@ -251,7 +251,7 @@ export interface CuratedPostDefinition {
   channelJobs: CuratedPostChannelJobDefinition[]
 }
 
-export interface CuratedSiteContentTranslationDefinition {
+export interface CuratedTenantPageLocaleFieldDefinition {
   id: string
   locationId: string | null
   locale: string
@@ -332,7 +332,7 @@ export interface CompiledSeedMediaAsset {
   status: 'active'
 }
 
-export interface CompiledSeedSiteContent {
+export interface CompiledSeedTenantPageContent {
   id: string
   organizationId: string
   siteId: string
@@ -344,7 +344,7 @@ export interface CompiledSeedSiteContent {
   heroSubtitle: string | null
   heroImageAssetId: string | null
   heroVideoAssetId: string | null
-  type: CuratedSiteContentDefinition['type']
+  type: CuratedTenantPageContentDefinition['type']
   source: 'manual' | 'generated'
 }
 
@@ -461,7 +461,7 @@ export interface CompiledSeedPost {
   channelJobs: CompiledSeedPostChannelJob[]
 }
 
-export interface CompiledSeedSiteContentTranslation {
+export interface CompiledSeedTenantPageLocaleField {
   id: string
   organizationId: string
   siteId: string
@@ -473,8 +473,8 @@ export interface CompiledSeedSiteContentTranslation {
   heroTitle: string | null
   heroSubtitle: string | null
   value: string | null
-  type: CuratedSiteContentTranslationDefinition['type']
-  status: CuratedSiteContentTranslationDefinition['status']
+  type: CuratedTenantPageLocaleFieldDefinition['type']
+  status: CuratedTenantPageLocaleFieldDefinition['status']
   sourceHash: string
   translatedAt: string | null
   reviewedAt: string | null
@@ -537,13 +537,13 @@ export interface CompiledCuratedSiteBundle {
   siteDomains: CuratedSiteDomainDefinition[]
   locations: CuratedLocationDefinition[]
   mediaAssets: CompiledSeedMediaAsset[]
-  siteContent: CompiledSeedSiteContent[]
+  tenantPageContent: CompiledSeedTenantPageContent[]
   experiences: CompiledSeedExperience[]
   reviews: CompiledSeedReview[]
   menus: CompiledSeedMenu[]
   locationQa: CompiledSeedLocationQa[]
   posts: CompiledSeedPost[]
-  siteContentTranslations: CompiledSeedSiteContentTranslation[]
+  tenantPageLocaleFields: CompiledSeedTenantPageLocaleField[]
   businessLocationTranslations: CompiledSeedBusinessLocationTranslation[]
   menuTranslations: CompiledSeedMenuTranslation[]
   menuItemTranslations: CompiledSeedMenuItemTranslation[]
@@ -558,7 +558,7 @@ export interface CompiledCuratedSiteBundle {
   }
   organizationBilling?: {
     status: string
-    plan: string
+    plan: 'free' | 'growth'
   }
 }
 

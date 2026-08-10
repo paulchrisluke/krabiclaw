@@ -93,49 +93,6 @@
       "order_now": "สั่งเลย",
       "reserve": "จองเลย"
     },
-    "upgrade": {
-      "pro_feature": "ฟีเจอร์พิเศษ",
-      "default_description": "ฟีเจอร์นี้ต้องการแผนแบบชำระเงิน",
-      "close_modal": "ปิด",
-      "get_pro": "อัปเกรด",
-      "features": {
-        "qa-writeback": {
-          "title": "ส่งคำถาม",
-          "description": "ให้แขกส่งคำถามโดยตรงจากเว็บไซต์ของคุณ ซิงก์กลับไปยัง Google Business Q&A รวมอยู่ในแผน Growth"
-        },
-        "custom-domain": {
-          "title": "โดเมนของคุณเอง",
-          "description": "เชื่อมต่อโดเมนของคุณเอง (yourdomain.com) แทนโดเมน krabiclaw.com รวมอยู่ในแผน Growth"
-        },
-        "add-location": {
-          "title": "เพิ่มสาขาที่สอง",
-          "description": "จัดการหลายสาขาภายใต้แบรนด์เดียว แต่ละสาขามีเมนู รีวิว และเวลาทำการของตนเอง รวมอยู่ในแผน Managed"
-        },
-        "connect-gmb": {
-          "title": "เชื่อมต่อ Google Business",
-          "description": "ซิงก์เวลาทำการ รีวิว รูปภาพ และโพสต์โดยอัตโนมัติจาก Google Business Profile รวมอยู่ในแผน Growth"
-        },
-        "google-business-sync": {
-          "title": "ซิงก์ Google Business",
-          "description": "ซิงก์ข้อมูล Google Business โดยอัตโนมัติพร้อมยังคงสามารถแก้ไขด้วยตัวเองได้ รวมอยู่ในแผน Growth"
-        },
-        "remove-branding": {
-          "title": "ลบโลโก้ KrabiClaw",
-          "description": "ลบแถบ \"ขับเคลื่อนโดย krabiclaw.com\" ออกจากเว็บไซต์ของคุณ รวมอยู่ในแผน Managed"
-        }
-      },
-      "bullets": {
-        "gmb_1": "เติมข้อมูล Google Business โดยอัตโนมัติเมื่อเชื่อมต่อ",
-        "gmb_2": "ยังคงสามารถแก้ไขด้วยตัวเองได้ในตัวแก้ไขเนื้อหา",
-        "gmb_3": "ซิงก์รายละเอียดธุรกิจ เวลาทำการ รูปภาพ รีวิว และโพสต์",
-        "domain_1": "เชื่อมต่อโดเมนของคุณเอง",
-        "domain_2": "ใช้ใบรับรอง HTTPS ที่จัดการให้",
-        "domain_3": "คง krabiclaw.com subdomain ของคุณไว้",
-        "default_1": "ปลดล็อกฟีเจอร์นี้",
-        "default_2": "จัดการได้จากแดชบอร์ด",
-        "default_3": "คงการตั้งค่าเว็บไซต์ปัจจุบันของคุณ"
-      }
-    },
     "about": {
       "our_story": "เรื่องราวของเรา",
       "placeholder": "ประสบการณ์แท้จริง",
@@ -147,7 +104,7 @@
     "qa": {
       "title": "ถาม-ตอบ",
       "subtitle": "คำถามที่พบบ่อย",
-      "google_guest": "แขก Google",
+      "guest": "แขก",
       "asked_by": "ถามโดย {author} • {date}",
       "response_from_owner": "การตอบกลับจากเจ้าของ • {date}",
       "no_answer": "ยังไม่มีคำตอบ",
@@ -167,7 +124,7 @@
       "find_us": "มาหาเรา",
       "map_for": "แผนที่สำหรับ {title}",
       "location_map": "แผนที่สาขา",
-      "map_synced": "แผนที่ซิงก์จาก Google Business",
+      "map_synced": "แผนที่ซิงก์จาก Google Places",
       "get_directions": "ดูเส้นทาง",
       "apple_maps": "Apple Maps",
       "address": "ที่อยู่",
@@ -196,7 +153,7 @@
       "back_to": "กลับไปยัง {title}",
       "title": "แขกของเราพูดว่าอะไร",
       "based_on": "อิงจากรีวิว {count} รายการ",
-      "synced_live": "ซิงก์แบบเรียลไทม์จาก Google Business",
+      "synced_live": "ซิงก์จาก Google Places",
       "no_reviews_title": "ยังไม่มีรีวิว",
       "no_reviews_desc": "เป็นคนแรกที่แชร์ประสบการณ์ของคุณกับเราบน Google",
       "aggregate_only_title": "คะแนน {rating} จาก Google จาก {count} รีวิว",

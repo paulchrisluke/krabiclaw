@@ -6,7 +6,11 @@
 import { executeBatch, queryFirst, type BatchQuery } from "~/server/db";
 import { getHeader, setHeader, type H3Event } from "h3";
 import { cloudflareEnv } from "~/server/utils/api-response";
-import { calculateMapEmbedUrl } from "~/server/utils/google-business";
+import { calculateMapEmbedUrl } from "~/server/utils/google-places";
+import {
+  buildPublicReviewAggregate,
+  normalizePublicReviewAggregateRows,
+} from "~/server/utils/public-review-aggregate";
 import { getPublicTenantPageForPath, type PublicTenantPage } from "~/server/utils/public-tenant-pages";
 import {
   mapMenu,
@@ -413,6 +417,7 @@ async function loadPublicPageSource(
   const needsGlobalPosts = requestedDatasets.has("posts") && !locationSlug;
   // Pages that display location hero images (cards or detail header)
   const needsLocations =
+    requestedDatasets.has("reviews") ||
     requestedDatasets.has("location") ||
     requestedDatasets.has("menu") ||
     requestedDatasets.has("experiences") ||
@@ -425,6 +430,7 @@ async function loadPublicPageSource(
   let idxReviews = -1,
     idxLocReviews = -1;
   let idxFullReviews = -1,
+    idxReviewAggregate = -1,
     idxPhotos = -1,
     idxQa = -1;
   let idxMenus = -1,
@@ -585,6 +591,13 @@ async function loadPublicPageSource(
       [locationId, siteId],
     );
 
+  if (locationId && requestedDatasets.has("reviews"))
+    idxReviewAggregate = push(
+      `SELECT rating
+       FROM reviews WHERE location_id = ? AND site_id = ? AND status = 'approved'`,
+      [locationId, siteId],
+    );
+
   if (requestedDatasets.has("photos"))
     idxPhotos = push(
       locationId
@@ -639,15 +652,17 @@ async function loadPublicPageSource(
   if (requestedDatasets.has("qa"))
     idxQa = push(
       locationId
-        ? `SELECT id, question, question_author, question_date,
-                  answer, answer_author, answer_date, is_owner_answer, upvote_count
+        ? `SELECT id, location_id, question, question_author, question_date,
+                  answer, answer_author, answer_date, is_owner_answer, upvote_count,
+                  created_at, updated_at
            FROM location_qa
            WHERE location_id = ? AND site_id = ? AND status = 'published'
            ORDER BY is_owner_answer DESC, upvote_count DESC, sort_order, created_at`
-        : `SELECT id, question, question_author, question_date,
-                  answer, answer_author, answer_date, is_owner_answer, upvote_count
+        : `SELECT id, location_id, question, question_author, question_date,
+                  answer, answer_author, answer_date, is_owner_answer, upvote_count,
+                  created_at, updated_at
            FROM location_qa
-           WHERE site_id = ? AND location_id IS NULL AND page_path IS NULL AND status = 'published'
+           WHERE site_id = ? AND page_path IS NULL AND status = 'published'
            ORDER BY is_owner_answer DESC, upvote_count DESC, sort_order, created_at`,
       locationId ? [locationId, siteId] : [siteId],
     );
@@ -677,6 +692,10 @@ async function loadPublicPageSource(
     idxFullReviews >= 0
       ? (batchResults[idxFullReviews] as { results: ReviewRow[] })
       : { results: [] as ReviewRow[] };
+  const reviewAggregateRows =
+    idxReviewAggregate >= 0
+      ? (batchResults[idxReviewAggregate] as { results: Array<{ rating: number | string | null }> })
+      : { results: [] as Array<{ rating: number | string | null }> };
   const photoRows =
     idxPhotos >= 0
       ? (batchResults[idxPhotos] as { results: Record<string, unknown>[] })
@@ -954,16 +973,13 @@ async function loadPublicPageSource(
   ]);
   options.signal?.throwIfAborted();
   const policyLocale = locale ?? sourceLocale!;
-  const reservationPolicySiteDefault = reservationPolicies
-    ? renderBookingPolicySummary(reservationPolicies.site, policyLocale)
-    : null;
   const reservationPolicyByLocation = Object.fromEntries(
     Array.from(reservationPolicies?.byLocation ?? [], ([locationId, policy]) => [
       locationId,
-      renderBookingPolicySummary(policy, policyLocale),
+      policy.id ? renderBookingPolicySummary(policy, policyLocale) : null,
     ]),
   );
-  const experiencePolicySiteDefault = experiencePolicies
+  const experiencePolicySiteDefault = experiencePolicies?.site
     ? renderBookingPolicySummary(experiencePolicies.site, policyLocale)
     : null;
   const experiencePolicyById = Object.fromEntries(
@@ -989,10 +1005,19 @@ async function loadPublicPageSource(
         })()
       : [],
   }));
-  const reviewsDist = [1, 2, 3, 4, 5].map((star) => ({
-    star,
-    count: fullReviews.filter((r) => r.rating === star).length,
-  }));
+  const aggregateLocation = locationForAggregate ? {
+    rating: typeof locationForAggregate.rating === 'number' ? locationForAggregate.rating : null,
+    review_count: typeof locationForAggregate.review_count === 'number' ? locationForAggregate.review_count : null,
+    last_synced_at: typeof locationForAggregate.last_synced_at === 'string' ? locationForAggregate.last_synced_at : null,
+  } : {
+    rating: null,
+    review_count: null,
+    last_synced_at: null,
+  };
+  const reviewsAggregate = buildPublicReviewAggregate(
+    normalizePublicReviewAggregateRows(reviewAggregateRows.results),
+    aggregateLocation,
+  );
 
   // Shape photos (type E)
   const photos = (photoRows?.results ?? []).map((asset, index) => ({
@@ -1043,16 +1068,7 @@ async function loadPublicPageSource(
     menu: menuData,
     locationReviews: locationReviewRows?.results ?? [],
     globalReviews: needsGlobalReviews ? reviewRows.results ?? [] : [],
-    reviewsAggregate: requestedDatasets.has("reviews")
-      && locationForAggregate?.last_synced_at
-      && locationForAggregate.rating != null
-      && locationForAggregate.review_count != null
-      ? {
-          rating: locationForAggregate.rating,
-          review_count: locationForAggregate.review_count,
-          distribution: reviewsDist,
-        }
-      : null,
+    reviewsAggregate: requestedDatasets.has("reviews") ? reviewsAggregate : null,
     reviewsList: requestedDatasets.has("reviews") ? fullReviews : [],
     photosList: requestedDatasets.has("photos") ? photos : [],
     qaList: requestedDatasets.has("qa") ? qaRows?.results ?? [] : [],
@@ -1060,7 +1076,6 @@ async function loadPublicPageSource(
     blogPost: requestedDatasets.has("blogPost") ? blogPost : null,
     postsList: requestedDatasets.has("posts") ? locationPublishedPosts : [],
     globalPosts: needsGlobalPosts ? globalPublishedPosts : [],
-    reservationPolicySiteDefault,
     reservationPolicyByLocation,
     experiencePolicySiteDefault,
     experiencePolicyById,

@@ -1,9 +1,6 @@
-export type UpsellType =
-  | 'growth'
-  | 'managed'
-  | 'seo_accelerator'
-  | 'seasonal'
-  | 'gbp_setup'
+import type { NewSalePlanId } from '~/shared/billing-model'
+
+export type UpsellType = NewSalePlanId
 
 interface ServiceUpsellState {
   isOpen: boolean

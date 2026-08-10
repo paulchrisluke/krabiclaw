@@ -17,8 +17,6 @@ export interface SiteConfig {
   source_locale?: string
   google_analytics_measurement_id?: string
   google_site_verification?: string
-  hero_image_url?: string
-  location_hero_image_url?: string
   hero_image_is_placeholder?: string
   default_timezone?: string
 }

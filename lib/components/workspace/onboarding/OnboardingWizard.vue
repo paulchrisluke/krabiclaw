@@ -1,6 +1,7 @@
 <template>
   <div
     class="relative flex min-h-0 flex-col border-r border-default bg-default"
+    :data-onboarding-hydrated="onboardingHydrated ? 'true' : 'false'"
     @dragenter.prevent="dragCounter++"
     @dragover.prevent
     @dragleave="dragCounter = Math.max(0, dragCounter - 1)"
@@ -393,6 +394,7 @@ const WELCOME_POINTS: [string, string][] = isAddingLocation.value
 // ─── State ───────────────────────────────────────────────────────────────────
 
 const step = ref<WizardStep>('welcome')
+const onboardingHydrated = ref(false)
 const messages = ref<WizardMessage[]>([])
 const conversationMessages = computed(() => messages.value.map(msg => ({
   role: msg.from === 'user' ? 'user' as const : 'assistant' as const,
@@ -522,6 +524,7 @@ const draftPreviewPayload = ref<DraftSavedPayload | null>(null)
 let _dompurify: { sanitize: (_s: string) => string } = { sanitize: (_s: string) => _s }
 let _dompurifyLoaded = false
 onMounted(async () => {
+  onboardingHydrated.value = true
   if (import.meta.client) {
     _dompurify = await loadDomPurify()
     _dompurifyLoaded = true

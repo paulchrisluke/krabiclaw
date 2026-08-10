@@ -1,19 +1,10 @@
 import { contentRegistry } from "~/config/content-registry";
 import { resolveSiteCmsCapabilities } from "~/server/utils/cms-capabilities";
-import { hasSiteEntitlement } from "~/server/utils/billing";
-import {
-  getGoogleBusinessAccounts,
-  getGoogleBusinessAuthUrl,
-  getGoogleBusinessConnection,
-  getGoogleBusinessLocations,
-  syncGoogleLocations,
-} from "~/server/utils/google-business";
 import {
   getOrgWhatsAppPhone,
   setOrgWhatsAppPhone,
 } from "~/server/utils/whatsapp";
 import type { CloudflareEnv } from "~/server/utils/auth";
-import { signOAuthState } from "~/server/utils/encryption";
 import { updateLocation } from "~/server/utils/location-management";
 import { execute, queryAll, queryFirst, type DbClient } from "~/server/db";
 import { revokeReviewRequestForBooking } from "~/server/utils/review-requests";
@@ -159,7 +150,7 @@ export async function updateNotificationsSettings(
   siteId: string,
   whatsappPhone?: string,
   channels?: string[],
-  env?: ApiRecord,
+  env?: CloudflareEnv,
   actorHeaders?: HeadersInit,
 ) {
   const ops: Promise<unknown>[] = []
@@ -694,147 +685,6 @@ export async function deleteContentField(
 ) {
   void db; void organizationId; void siteId; void input; void actorId
   throw createError({ statusCode: 410, statusMessage: 'Field-based page deletion has been removed. Delete a block in the Pages manager and save the complete draft.' });
-}
-
-export async function getGoogleBusinessLocationConnectionForMcp(
-  env: CloudflareEnv,
-  db: D1Database,
-  organizationId: string,
-  siteId: string,
-  locationId: string,
-) {
-  const entitled = await hasSiteEntitlement(db, siteId, "google_business");
-  if (!entitled) {
-    throw new Error("Google Business integration requires a paid plan.");
-  }
-  const connection = await getGoogleBusinessConnection(
-    env,
-    organizationId,
-    siteId,
-    locationId,
-  );
-  if (!connection) return null;
-  return {
-    id: connection.id,
-    provider_account_email: connection.provider_account_email,
-    status: connection.status,
-    expires_at: connection.expires_at,
-    created_at: connection.created_at,
-    updated_at: connection.updated_at,
-  };
-}
-
-export async function getGoogleBusinessLocationAuthUrlForMcp(
-  env: CloudflareEnv,
-  db: D1Database,
-  organizationId: string,
-  siteId: string,
-  locationId: string,
-  userId: string,
-) {
-  const entitled = await hasSiteEntitlement(db, siteId, "google_business");
-  if (!entitled) {
-    throw new Error("Google Business integration requires a paid plan.");
-  }
-  const secret = env.CONNECTOR_TOKEN_ENCRYPTION_KEY;
-  if (!secret)
-    throw new Error("Server misconfiguration: encryption key not set");
-
-  const state = await signOAuthState(secret, {
-    siteId,
-    organizationId,
-    userId,
-    locationId,
-    timestamp: Date.now(),
-  });
-  return { auth_url: getGoogleBusinessAuthUrl(env, state) };
-}
-
-export async function listGoogleBusinessAccountsForMcp(
-  env: CloudflareEnv,
-  db: D1Database,
-  organizationId: string,
-  siteId: string,
-) {
-  const entitled = await hasSiteEntitlement(db, siteId, "google_business");
-  if (!entitled) {
-    throw new Error("Google Business integration requires a paid plan.");
-  }
-  const connection = await getGoogleBusinessConnection(
-    env,
-    organizationId,
-    siteId,
-  );
-  if (!connection) throw new Error("Google Business not connected");
-
-  const accounts = await getGoogleBusinessAccounts(
-    env,
-    connection.encrypted_access_token,
-  );
-  const accountsWithLocations = await Promise.all(
-    accounts.map(async (account) => ({
-      ...account,
-      locations: await getGoogleBusinessLocations(
-        env,
-        connection.encrypted_access_token,
-        account.name,
-      ),
-    })),
-  );
-
-  return {
-    connection: {
-      id: connection.id,
-      provider_account_email: connection.provider_account_email,
-      status: connection.status,
-      connected_at: connection.created_at,
-    },
-    accounts: accountsWithLocations,
-  };
-}
-
-export async function syncGoogleBusinessLocationsForMcp(
-  env: CloudflareEnv,
-  db: D1Database,
-  organizationId: string,
-  siteId: string,
-  accountId: string,
-  locationIds: string[],
-) {
-  const entitled = await hasSiteEntitlement(db, siteId, "google_business");
-  if (!entitled) {
-    throw new Error("Google Business integration requires a paid plan.");
-  }
-  const connection = await getGoogleBusinessConnection(
-    env,
-    organizationId,
-    siteId,
-  );
-  if (!connection) throw new Error("Google Business not connected");
-
-  const allLocations = await getGoogleBusinessLocations(
-    env,
-    connection.encrypted_access_token,
-    accountId,
-  );
-  const selectedLocations = allLocations.filter((location) =>
-    locationIds.includes(location.name),
-  );
-  if (!selectedLocations.length) throw new Error("No valid locations found");
-
-  const { reviewsUpserted } = await syncGoogleLocations(
-    env,
-    organizationId,
-    siteId,
-    selectedLocations,
-    connection.encrypted_access_token,
-  );
-
-  return {
-    success: true,
-    synced_locations: selectedLocations.length,
-    reviews_upserted: reviewsUpserted,
-  };
 }
 
 function safeJson(value: unknown) {

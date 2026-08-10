@@ -1,7 +1,8 @@
 name: Preview Verify
 
-# Trigger manually after a preview deploy (Cloudflare Workers preview URLs are
-# not automatically known at PR time — run this after wrangler deploy --env preview).
+# Supplementary client-content verification for an existing preview URL. This
+# does not prove Worker provenance and is never release approval; the required
+# PR lane owns the immutable preview deployment and browser evidence.
 on:
   workflow_dispatch:
     inputs:
@@ -25,6 +26,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'

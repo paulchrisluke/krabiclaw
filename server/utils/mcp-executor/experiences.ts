@@ -2,7 +2,7 @@ import type { McpExecutorContext } from './shared'
 import { createExperience, deleteExperience, getExperienceBookingsSummary, getExperienceById, getSlotAvailability, listExperienceBookings, listExperienceBookingsForSite, listExperiences, listSlotOverrides, resolveExperienceTimezone, updateBookingStatus, updateExperience, upsertSlotOverride, type CreateExperienceInput, type UpdateExperienceInput } from '~/server/utils/experiences'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
-import { loadSettingsPayload, SiteNotFoundError } from '~/server/utils/site-settings'
+import { loadSettingsPayload, SiteSettingsNotFoundError } from '~/server/utils/site-settings'
 import { attachViewUrlToRecord, NOT_HANDLED, expandSlotGeneratorArgs, mutationContextPayload, omit, optionalDaysWindow, optionalString, requiredString } from './shared'
 
 function attachExperienceViewUrl(experience: object, site: McpExecutorContext["site"]) {
@@ -49,7 +49,7 @@ export async function handleExperiencesTools(ctx: McpExecutorContext): Promise<u
           const siteRow = (await loadSettingsPayload(site.db, site.organizationId, site.siteId)) as Record<string, unknown>;
           locationId = (siteRow.primary_location_id as string | null) ?? null;
         } catch (err) {
-          if (err instanceof SiteNotFoundError) {
+          if (err instanceof SiteSettingsNotFoundError) {
             throw mcpProtocolError(MCP_ERROR.invalidParams, "Site not found");
           }
           throw err;

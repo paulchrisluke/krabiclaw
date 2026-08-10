@@ -1,6 +1,6 @@
 import { jsonResponse } from "~/server/utils/api-response";
 import { requireBlogAccess } from "~/server/utils/blog-access";
-import { updatePlatformBlogPost, getPlatformBlogPost } from "~/server/utils/platform-content";
+import { updatePlatformBlogPost } from "~/server/utils/platform-content";
 import { httpErrorDetails } from "~/server/utils/http-error";
 
 export default defineEventHandler(async (event) => {
@@ -24,10 +24,9 @@ export default defineEventHandler(async (event) => {
   try {
     const { db } = await requireBlogAccess(event, siteId);
 
-    await updatePlatformBlogPost(db, postId, { unpublish: true }, siteId);
-    const post = await getPlatformBlogPost(db, postId, siteId);
+    const result = await updatePlatformBlogPost(db, postId, { unpublish: true }, siteId);
 
-    return jsonResponse({ success: true, post });
+    return jsonResponse({ success: true, post: result.post });
   } catch (error) {
     console.error("Failed to unpublish blog post:", error);
     const { message, statusCode } = httpErrorDetails(error, "Failed to unpublish blog post");

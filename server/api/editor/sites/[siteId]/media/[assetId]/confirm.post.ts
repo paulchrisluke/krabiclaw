@@ -1,13 +1,14 @@
 // POST /api/editor/sites/[siteId]/media/[assetId]/confirm
 // Called after client has uploaded directly to Cloudflare Images.
 // Marks the asset active and resolves the public URL.
-import { execute, queryFirst } from '~/server/db'
+import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { buildImageUrl, hasCloudflareImagesConfig } from '~/server/utils/cloudflare-images'
 import { activateMediaAsset, getMediaAsset } from '~/server/utils/media-asset-manager'
 import { assertResourceAccess } from '~/server/utils/member-access'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
+import { assignSiteLogoWithFavicon } from '~/server/utils/media-placement'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -57,7 +58,25 @@ export default defineEventHandler(async (event) => {
   )
 
   if (siteRecord && asset.category === 'logo' && !siteRecord.logo_asset_id) {
-    await execute(db, `UPDATE sites SET logo_asset_id = ?, updated_at = ? WHERE id = ?`, [assetId, new Date().toISOString(), siteId])
+    await assignSiteLogoWithFavicon(db, {
+      env,
+      organizationId: site.organization_id,
+      siteId,
+      asset: {
+        id: assetId,
+        kind: 'image',
+        public_url: publicUrl,
+        thumbnail_url: thumbnailUrl,
+        mime_type: asset.mime_type,
+        width: asset.width,
+        height: asset.height,
+        duration: null,
+        alt_text: asset.alt_text,
+        provider: 'cloudflare_images',
+        status: 'active',
+      },
+      onlyIfEmpty: true,
+    })
   }
 
   return jsonResponse({ id: assetId, publicUrl, thumbnailUrl, status: 'active' })

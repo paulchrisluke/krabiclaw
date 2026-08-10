@@ -9,6 +9,16 @@ type RoleUser = {
   role: "owner" | "admin" | "editor" | "member";
 };
 
+async function loginAsFreshChowbotUser(
+  request: APIRequestContext,
+  baseURL: string,
+  label: string,
+) {
+  const userId = `e2e-chowbot-${label}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  await loginAs(request, baseURL, userId);
+  return userId;
+}
+
 async function execChowbotTool(
   request: APIRequestContext,
   baseURL: string,
@@ -34,13 +44,17 @@ test.describe("mcp tools", () => {
   }) => {
     test.setTimeout(60_000);
 
-    await loginAs(request, baseURL!);
+    const freshUserId = await loginAsFreshChowbotUser(
+      request,
+      baseURL!,
+      "delete-post",
+    );
 
     const sessionRes = await request.get(`${baseURL}/api/auth/get-session`);
     expect(sessionRes.status()).toBe(200);
     const session = (await sessionRes.json()) as { user?: { id?: string } };
     const ownerUserId = session.user?.id;
-    expect(ownerUserId).toEqual(expect.any(String));
+    expect(ownerUserId).toBe(freshUserId);
 
     const contextRes = await request.get(`${baseURL}/api/dashboard/context`);
     expect(contextRes.status()).toBe(200);
@@ -48,12 +62,20 @@ test.describe("mcp tools", () => {
       organization?: { id?: string };
       site?: { id?: string | null };
     };
-    const organizationId = context.organization?.id;
     const siteId = await ensureSite(
       request,
       baseURL!,
       context.site?.id ?? null,
     );
+
+    const contextAfterSiteRes = await request.get(
+      `${baseURL}/api/dashboard/context`,
+    );
+    expect(contextAfterSiteRes.status()).toBe(200);
+    const contextAfterSite = (await contextAfterSiteRes.json()) as {
+      organization?: { id?: string };
+    };
+    const organizationId = contextAfterSite.organization?.id;
     expect(organizationId).toEqual(expect.any(String));
 
     const createUser = async (role: "admin" | "editor") => {
@@ -124,7 +146,7 @@ test.describe("mcp tools", () => {
   }) => {
     test.setTimeout(60_000);
 
-    await loginAs(request, baseURL!);
+    await loginAsFreshChowbotUser(request, baseURL!, "update-settings");
 
     const contextRes = await request.get(`${baseURL}/api/dashboard/context`);
     expect(contextRes.status()).toBe(200);
@@ -184,7 +206,7 @@ test.describe("mcp tools", () => {
   }) => {
     test.setTimeout(60_000);
 
-    await loginAs(request, baseURL!);
+    await loginAsFreshChowbotUser(request, baseURL!, "location-qa");
 
     const siteId = await ensureSite(request, baseURL!, null);
 
@@ -291,7 +313,7 @@ test.describe("mcp tools", () => {
   }) => {
     test.setTimeout(60_000);
 
-    await loginAs(request, baseURL!);
+    await loginAsFreshChowbotUser(request, baseURL!, "menu");
     const siteId = await ensureSite(request, baseURL!, null);
 
     const created = await execChowbotTool(request, baseURL!, siteId, "create_menu", {
@@ -395,7 +417,7 @@ test.describe("mcp tools", () => {
   }) => {
     test.setTimeout(60_000);
 
-    await loginAs(request, baseURL!);
+    await loginAsFreshChowbotUser(request, baseURL!, "role-entitlement");
     const siteId = await ensureSite(request, baseURL!, null);
 
     const contextRes = await request.get(`${baseURL}/api/dashboard/context`);
@@ -444,7 +466,7 @@ test.describe("mcp tools", () => {
   }) => {
     test.setTimeout(30_000);
 
-    await loginAs(request, baseURL!);
+    await loginAsFreshChowbotUser(request, baseURL!, "locales");
     const siteId = await ensureSite(request, baseURL!, null);
 
     const result = await execChowbotTool(request, baseURL!, siteId, "list_locales", {});
@@ -458,7 +480,7 @@ test.describe("mcp tools", () => {
   }) => {
     test.setTimeout(60_000);
 
-    await loginAs(request, baseURL!);
+    await loginAsFreshChowbotUser(request, baseURL!, "shared-tools");
     const siteId = await ensureSite(request, baseURL!, null);
 
     const contacts = await execChowbotTool(request, baseURL!, siteId, "get_contact_inquiries", {});
@@ -522,7 +544,7 @@ test.describe("mcp tools", () => {
   }) => {
     test.setTimeout(60_000);
 
-    await loginAs(request, baseURL!);
+    await loginAsFreshChowbotUser(request, baseURL!, "page");
     const siteId = await ensureSite(request, baseURL!, null);
 
     const before = await execChowbotTool(request, baseURL!, siteId, "get_page_fields", { page: "home" });
@@ -539,7 +561,7 @@ test.describe("mcp tools", () => {
     const updated = await execChowbotTool(request, baseURL!, siteId, "update_page_content", {
       page: "home",
       changes: { blocks: [...originalBlocks, addedBlock] },
-    });
+    }, [{ role: "user", content: "yes confirm" }]);
     expect(updated.result.error).toBeUndefined();
     expect(updated.result.success).toBe(true);
 

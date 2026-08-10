@@ -39,6 +39,7 @@ import {
 } from "~/server/utils/mcp-runtime";
 import { getCloudflareWaitUntil, isMcpMutatingTool } from "~/server/utils/mcp-route-helpers";
 import { logMcpToolCallEvent } from "~/server/utils/mcp-telemetry";
+import { describeErrorForTelemetry } from "~/server/utils/error-telemetry";
 const TENANT_CATALOG_FINGERPRINT = catalogFingerprint(MCP_PUBLIC_TOOLS);
 
 // Fires a telemetry write without ever blocking or failing the MCP response.
@@ -231,7 +232,7 @@ This entire flow runs within the current conversation — do not tell the user t
 
 ## Choosing a content type
 KrabiClaw has three distinct content-creation tools — do not default to whichever one comes to mind first. Ask yourself whether the request is time-boxed, narrative, or a permanent offering:
-- **create_post** — a time-boxed announcement, offer, or event that should fan out to Facebook/Instagram/GMB. Use for "we're running a sale this week" or "come to our event Saturday."
+- **create_post** — a time-boxed announcement, offer, or event that can be published to the website and connected Facebook/Instagram channels. Use for "we're running a sale this week" or "come to our event Saturday."
 - **create_blog_post** — long-form narrative/story content on the site's own blog. Use for "write about our history" or "announce our new location" as a story, not an action.
 - **create_experience** — a permanent, bookable offering with its own page: a class, package, tour, or group/custom-booking option that needs pricing/availability and a Reserve Now (or Contact Us, if left priceless) CTA. Use for "we want a dedicated page for X" when X is something people book or inquire about, even if there's no fixed price yet — leave price/price_amount unset for a "contact us for pricing" experience rather than writing a post or blog entry about it.
 If a request is ambiguous, ask a brief clarifying question rather than guessing.
@@ -282,7 +283,7 @@ When a public-facing tool result includes \`view_url\` or \`public_url\`, includ
 
 All other tools require a site_id obtained from get_workspace_context, list_sites, or create_site. Never guess, invent, derive, or pass through site IDs from URLs/domains. Use get_current_user when the user asks which account is connected.
 
-Common workflows: update menus and items, create and publish site posts, triage contact and reservation submissions, update page content directly, upload media, reply to reviews, manage experiences and bookings, and generate or replace images for any content section. Locale management, social publishing, domains, and managed-service requests are available only when explicitly enabled for this connector; otherwise direct the user to the dashboard.`,
+Common workflows: update menus and items, create and publish site posts, triage contact and reservation submissions, update page content directly, upload media, reply to reviews, manage experiences and bookings, and generate or replace images for any content section. Manual locale management is available through the locale tools. Social publishing, domains, and priority-support requests are shown only when connector eligibility enables them; otherwise direct the user to the dashboard.`,
       });
     }
 
@@ -465,8 +466,7 @@ Common workflows: update menus and items, create and publish site posts, triage 
         // graceful isError:true 200, not a raw HTTP 500 — MCP clients can't
         // act on a transport-level error mid-tool-call any more than they
         // can act on a raw 401 (see resolveMissingMcpCredential). Confirmed
-        // via issue #386/#408 staging verification: get_google_business_connection's
-        // plain "requires a paid plan" throw was leaking as a 500.
+        // Tool business-rule failures must stay inside the MCP error envelope.
         return mcpSuccess(request.id, {
           isError: true,
           content: [{ type: "text", text: mcpErr.message }],

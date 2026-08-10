@@ -91,16 +91,6 @@ export const ai_credits = sqliteTable("ai_credits", {
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
-export const stripe_credit_topups = sqliteTable("stripe_credit_topups", {
-	checkout_session_id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	credits: integer().notNull(),
-	processed_at: text(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	index("stripe_credit_topups_organization_id_idx").on(table.organization_id),
-]);
-
 export const ai_usage_log = sqliteTable("ai_usage_log", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
@@ -143,8 +133,6 @@ export const business_locations = sqliteTable("business_locations", {
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
 	slug: text().notNull(),
-	google_location_id: text(),
-	google_connection_id: text().references((): AnySQLiteColumn => google_business_connections.id, { onDelete: "set null" } ),
 	title: text().notNull(),
 	address: text(),
 	city: text(),
@@ -561,38 +549,6 @@ export const facebook_pages_connections = sqliteTable("facebook_pages_connection
 	unique("facebook_pages_connections_organization_id_site_id_unique").on(table.organization_id, table.site_id),
 ]);
 
-export const google_business_connections = sqliteTable("google_business_connections", {
-	id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
-	location_id: text().references((): AnySQLiteColumn => business_locations.id, { onDelete: "set null" } ),
-	connected_by_user_id: text().references(() => user.id, { onDelete: "set null" } ),
-	provider_account_email: text().notNull(),
-	encrypted_access_token: text().notNull(),
-	encrypted_refresh_token: text().notNull(),
-	scopes: text().notNull(),
-	expires_at: text(),
-	status: text().default("active").notNull(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	unique("google_business_connections_organization_id_site_id_location_id_unique").on(table.organization_id, table.site_id, table.location_id),
-	uniqueIndex("idx_google_business_connections_site_level_unique").on(table.organization_id, table.site_id).where(sql`location_id IS NULL`),
-]);
-
-export const google_business_events = sqliteTable("google_business_events", {
-	id: text().primaryKey(),
-	organization_id: text().references(() => organization.id, { onDelete: "cascade" } ),
-	site_id: text().references(() => sites.id, { onDelete: "cascade" } ),
-	google_location_id: text(),
-	event_type: text(),
-	payload: text(),
-	status: text().default("pending").notNull(),
-	error: text(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-});
-
 export const google_place_snapshots = sqliteTable("google_place_snapshots", {
 	id: text().primaryKey(),
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
@@ -649,7 +605,6 @@ export const location_qa = sqliteTable("location_qa", {
 	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" } ),
 	location_id: text().references(() => business_locations.id, { onDelete: "cascade" } ),
 	page_path: text(),
-	google_question_id: text(),
 	question: text().notNull(),
 	question_author: text(),
 	question_date: text(),
@@ -664,13 +619,12 @@ export const location_qa = sqliteTable("location_qa", {
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
-	uniqueIndex("idx_location_qa_google_id").on(table.google_question_id).where(sql`google_question_id IS NOT NULL`),
 	index("idx_location_qa_location").on(table.location_id, table.status, table.sort_order),
 	index("idx_location_qa_site").on(table.site_id, table.status, table.sort_order).where(sql`location_id IS NULL`),
 	index("idx_location_qa_page").on(table.site_id, table.page_path, table.status, table.sort_order).where(sql`location_id IS NULL AND page_path IS NOT NULL`),
 	check("location_qa_scope_check", sql`location_id IS NULL OR page_path IS NULL`),
 	check("location_qa_page_path_check", sql`page_path IS NULL OR page_path LIKE '/%'`),
-	check("location_qa_source_check", sql`source IN ('gmb','google_maps','manual','llm_generated','manual_override','template','import')`),
+	check("location_qa_source_check", sql`source IN ('manual','import','template')`),
 	check("location_qa_status_check", sql`status IN ('published','hidden')`),
 	index("location_qa_organization_id_idx").on(table.organization_id),
 ]);
@@ -732,6 +686,7 @@ export const member = sqliteTable("member", {
 export const team = sqliteTable("team", {
 	id: text().primaryKey(),
 	name: text().notNull(),
+	memberCount: integer().default(0).notNull(),
 	organizationId: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
 	createdAt: integer({ mode: "timestamp" }).default(sql`(unixepoch())`).notNull(),
 	updatedAt: integer({ mode: "timestamp" }),
@@ -1138,6 +1093,8 @@ export const organization_billing = sqliteTable("organization_billing", {
 	organization_id: text().primaryKey().references(() => organization.id, { onDelete: "cascade" } ),
 	stripe_customer_id: text().unique(),
 	stripe_subscription_id: text().unique(),
+	ga_client_id: text(),
+	ga_user_id: text().references(() => user.id, { onDelete: "set null" } ),
 	stripe_subscription_item_id: text().unique(),
 	status: text().default("free").notNull(),
 	plan: text().default("free").notNull(),
@@ -1149,9 +1106,6 @@ export const organization_billing = sqliteTable("organization_billing", {
 	last_payment_event_id: text(),
 	current_period_end: text(),
 	cancel_at_period_end: numeric().default(sql`false`),
-	auto_topup_enabled: integer().default(0).notNull(),
-	auto_topup_bundle: integer().default(500).notNull(),
-	auto_topup_threshold: integer().default(100).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
@@ -1498,13 +1452,13 @@ export const booking_policies = sqliteTable("booking_policies", {
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
 	index("booking_policies_site_type_idx").on(table.site_id, table.policy_type),
-	uniqueIndex("booking_policies_reservation_site_unique").on(table.site_id).where(sql`policy_type = 'reservation' AND scope_type = 'site'`),
 	uniqueIndex("booking_policies_reservation_location_unique").on(table.location_id).where(sql`policy_type = 'reservation' AND scope_type = 'location' AND location_id IS NOT NULL`),
 	uniqueIndex("booking_policies_experience_site_unique").on(table.site_id).where(sql`policy_type = 'experience' AND scope_type = 'site'`),
 	uniqueIndex("booking_policies_experience_location_unique").on(table.location_id).where(sql`policy_type = 'experience' AND scope_type = 'location' AND location_id IS NOT NULL`),
 	uniqueIndex("booking_policies_experience_scope_unique").on(table.experience_id).where(sql`policy_type = 'experience' AND scope_type = 'experience' AND experience_id IS NOT NULL`),
 	check("booking_policies_policy_type_check", sql`policy_type IN ('reservation', 'experience')`),
 	check("booking_policies_scope_type_check", sql`scope_type IN ('site', 'location', 'experience')`),
+	check("booking_policies_reservation_location_scope_check", sql`policy_type != 'reservation' OR (scope_type = 'location' AND location_id IS NOT NULL AND experience_id IS NULL)`),
 	index("booking_policies_organization_id_idx").on(table.organization_id),
 ]);
 
@@ -1600,18 +1554,6 @@ export const review_media = sqliteTable("review_media", {
 	index("idx_review_media_review_id").on(table.review_id),
 	check("review_media_kind_check", sql`kind IN ('image', 'video')`),
 	check("review_media_status_check", sql`status IN ('pending', 'approved', 'rejected', 'deleted')`),
-]);
-
-export const service_addon_purchases = sqliteTable("service_addon_purchases", {
-	id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	addon_type: text().notNull(),
-	checkout_session_id: text().notNull().unique(),
-	stripe_payment_intent_id: text(),
-	fulfilled_at: text(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	index("service_addon_purchases_organization_id_idx").on(table.organization_id),
 ]);
 
 export const session = sqliteTable("session", {
@@ -2269,10 +2211,46 @@ export const stripe_invoice_payments = sqliteTable("stripe_invoice_payments", {
 	past_due_since: text(),
 	last_event_created: integer().notNull(),
 	last_event_id: text().notNull(),
+	ga4_purchase_status: text().default("pending"),
+	ga4_purchase_event_id: text(),
+	ga4_purchase_attempt_count: integer().default(0).notNull(),
+	ga4_purchase_claimed_at: text(),
+	ga4_purchase_sent_at: text(),
+	ga4_purchase_error: text(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 }, (table) => [
 	index("stripe_invoice_payments_organization_idx").on(table.organization_id, table.period_end),
 	index("stripe_invoice_payments_subscription_idx").on(table.stripe_subscription_id, table.period_end),
+]);
+
+export const stripe_ga4_subscription_intents = sqliteTable("stripe_ga4_subscription_intents", {
+	id: text().primaryKey(),
+	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
+	user_id: text().notNull().references(() => user.id, { onDelete: "cascade" } ),
+	stripe_subscription_id: text(),
+	action: text().notNull(),
+	site_id: text().references(() => sites.id, { onDelete: "set null" } ),
+	client_id: text(),
+	session_id: text(),
+	session_captured_at: integer(),
+	previous_price_id: text(),
+	new_price_id: text(),
+	effective_timing: text().default("immediate").notNull(),
+	source: text().default("browser").notNull(),
+	status: text().default("pending").notNull(),
+	lifecycle_sent_at: text(),
+	consumed_at: text(),
+	consumed_event_id: text(),
+	expires_at: text().notNull(),
+	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
+}, (table) => [
+	index("stripe_ga4_subscription_intents_subscription_idx").on(table.stripe_subscription_id, table.status, table.created_at),
+	index("stripe_ga4_subscription_intents_organization_idx").on(table.organization_id, table.status, table.created_at),
+	index("stripe_ga4_subscription_intents_expiry_idx").on(table.status, table.expires_at),
+	check("stripe_ga4_subscription_intents_action_check", sql`${table.action} IN ('initial_subscription', 'upgrade', 'downgrade')`),
+	check("stripe_ga4_subscription_intents_status_check", sql`${table.status} IN ('pending', 'consumed', 'expired')`),
+	check("stripe_ga4_subscription_intents_timing_check", sql`${table.effective_timing} IN ('immediate', 'period_end')`),
 ]);
 
 export const usage_events = sqliteTable("usage_events", {

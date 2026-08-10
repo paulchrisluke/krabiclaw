@@ -1,7 +1,7 @@
 // Get public business locations for a site
 import { queryAll, queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { calculateMapEmbedUrl } from '~/server/utils/google-business'
+import { calculateMapEmbedUrl } from '~/server/utils/google-places'
 
 type JsonPrimitive = string | number | boolean | null
 type JsonValue = JsonPrimitive | JsonObject | JsonValue[]
@@ -31,8 +31,6 @@ interface LocationRow {
   is_primary: number | boolean
   status: string
   last_synced_at: string | null
-  google_location_id: string | null
-  google_connection_id: string | null
   city: string | null
   neighborhood: string | null
   public_url: string | null
@@ -91,8 +89,8 @@ export default defineEventHandler(async (event) => {
     }>(db, `
       SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.website_url, bl.maps_url,
              bl.latitude, bl.longitude, bl.opening_hours, bl.rating, bl.review_count,
-             bl.is_primary, bl.status, bl.last_synced_at, bl.google_location_id,
-             bl.google_connection_id, bl.city, bl.neighborhood, bl.grab_url, bl.uber_eats_url, bl.foodpanda_url,
+             bl.is_primary, bl.status, bl.last_synced_at,
+             bl.city, bl.neighborhood, bl.grab_url, bl.uber_eats_url, bl.foodpanda_url,
              bl.hero_media_asset_id,
              ma.public_url AS hero_public_url, ma.kind AS hero_kind, ma.thumbnail_url
       FROM business_locations bl

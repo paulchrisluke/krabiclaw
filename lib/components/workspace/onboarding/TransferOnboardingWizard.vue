@@ -269,8 +269,8 @@ const inviteSuccess = ref(false)
 const inviteError = ref<string | null>(null)
 const notificationError = ref<string | null>(null)
 
-const showDomainStep = computed(() => ['growth', 'managed', 'seo_accelerator'].includes(props.plan))
-const showSocialStep = computed(() => ['growth', 'managed', 'seo_accelerator'].includes(props.plan))
+const showDomainStep = computed(() => props.plan === 'growth')
+const showSocialStep = computed(() => props.plan === 'growth')
 const domainsSiteSlug = computed(() => props.siteSlug || props.siteId)
 const domainsPath = computed(() => `/dashboard/${props.orgSlug}/sites/${domainsSiteSlug.value}/domains`)
 

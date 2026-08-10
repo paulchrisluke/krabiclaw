@@ -610,6 +610,11 @@
   dependencies:
     tslib "^2.4.0"
 
+"@epic-web/invariant@^1.0.0":
+  version "1.0.0"
+  resolved "https://registry.yarnpkg.com/@epic-web/invariant/-/invariant-1.0.0.tgz#1073e5dee6dd540410784990eb73e4acd25c9813"
+  integrity sha512-lrTPqgvfFQtR/eY/qkIzp98OGdNJu0m5ji3q/nJI8v3SXkRKEnWiOxMmbvcSoAIzv/cGiuvRy57k4suKQSAdwA==
+
 "@es-joy/jsdoccomment@~0.86.0":
   version "0.86.0"
   resolved "https://registry.yarnpkg.com/@es-joy/jsdoccomment/-/jsdoccomment-0.86.0.tgz#f7276904ed73bf2136993627033aeb5183b4392a"
@@ -6637,6 +6642,14 @@ cross-argv@^2.0.0:
   version "2.0.0"
   resolved "https://registry.yarnpkg.com/cross-argv/-/cross-argv-2.0.0.tgz#2e7907ba3246f82c967623a3e8525925bbd6c0ad"
   integrity sha512-YIaY9TR5Nxeb8SMdtrU8asWVM4jqJDNDYlKV21LxtYcfNJhp1kEsgSa6qXwXgzN0WQWGODps0+TlGp2xQSHwOg==
+
+cross-env@^10.1.0:
+  version "10.1.0"
+  resolved "https://registry.yarnpkg.com/cross-env/-/cross-env-10.1.0.tgz#cfd2a6200df9ed75bfb9cb3d7ce609c13ea21783"
+  integrity sha512-GsYosgnACZTADcmEyJctkJIoqAhHjttw7RsFrVoJNXbsWWqaq6Ym+7kZjq6mS45O0jij6vtiReppKQEtqWy6Dw==
+  dependencies:
+    "@epic-web/invariant" "^1.0.0"
+    cross-spawn "^7.0.6"
 
 cross-spawn@^7.0.0, cross-spawn@^7.0.3, cross-spawn@^7.0.6:
   version "7.0.6"

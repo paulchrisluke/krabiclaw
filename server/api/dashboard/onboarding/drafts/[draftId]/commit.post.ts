@@ -7,7 +7,7 @@ import { runSiteCreation } from '~/server/utils/site-creation'
 import { setConfig } from '~/server/utils/site-config'
 import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
 import { createMediaAsset } from '~/server/utils/media-asset-manager'
-import { createTenantPage, getTenantPageForEditorByPath, publishTenantPage, updateTenantPageDraft } from '~/server/utils/tenant-pages'
+import { applyOnboardingTenantPages } from '~/server/utils/tenant-pages'
 import type { SiteVertical } from '~/utils/vertical-copy'
 
 type SiteEnv = Parameters<typeof runSiteCreation>[0]
@@ -36,9 +36,13 @@ function onboardingPageBlocks(rows: Array<{ id?: string; field: string; content:
   for (const row of rows) {
     if (row.field === 'hero') {
       blocks.push({ id: row.id ?? crypto.randomUUID(), type: 'hero', position: blocks.length, data: { title: row.hero_title ?? row.content ?? undefined, subtitle: row.hero_subtitle, asset_id: heroAssetId ?? row.hero_media_asset_id ?? null } })
+    } else if (row.type === 'media' || row.field.endsWith('.image')) {
+      if (row.hero_media_asset_id) {
+        blocks.push({ id: row.id ?? crypto.randomUUID(), type: 'image', position: blocks.length, data: { field: row.field, asset_id: row.hero_media_asset_id, alt: row.field } })
+      }
     } else if (row.content?.trim()) {
-      const type = row.type === 'media' || row.field.endsWith('.image') ? 'image' : row.field.endsWith('.title') || row.field.endsWith('.headline') ? 'heading' : 'markdown'
-      blocks.push({ id: row.id ?? crypto.randomUUID(), type, position: blocks.length, data: type === 'image' ? { field: row.field, url: row.content, alt: row.field } : type === 'heading' ? { field: row.field, text: row.content, level: 2 } : { field: row.field, markdown: row.content } })
+      const type = row.field.endsWith('.title') || row.field.endsWith('.headline') ? 'heading' : 'markdown'
+      blocks.push({ id: row.id ?? crypto.randomUUID(), type, position: blocks.length, data: type === 'heading' ? { field: row.field, text: row.content, level: 2 } : { field: row.field, markdown: row.content } })
     }
   }
   if (!blocks.length) blocks.push({ id: crypto.randomUUID(), type: 'hero', position: 0, data: { title: 'Welcome', subtitle: null } })
@@ -211,10 +215,6 @@ export default defineEventHandler(async (event) => {
       }
     }
 
-    const heroImageUrl = payload.preview.config.hero_image_url
-    const locationHeroImageUrl = payload.preview.config.location_hero_image_url
-    if (heroImageUrl) await setConfig(db, organizationId, siteId, 'hero_image_url', heroImageUrl)
-    if (locationHeroImageUrl) await setConfig(db, organizationId, siteId, 'location_hero_image_url', locationHeroImageUrl)
     // No real Maps photo was available, so the hero remains the non-photo Saya treatment.
     // Record this so the onboarding checklist can distinguish it from owner-provided media.
     const heroIsPlaceholder = !payload.source.place?.photos?.[0]?.photoUri
@@ -226,21 +226,22 @@ export default defineEventHandler(async (event) => {
       rows.push(row)
       contentByPage.set(row.page, rows)
     }
-    for (const [pageName, rows] of contentByPage) {
-      const path = onboardingPagePath(pageName)
-      let current: Awaited<ReturnType<typeof getTenantPageForEditorByPath>> | null = null
-      try { current = await getTenantPageForEditorByPath(db, siteId, path) } catch (error) {
-        if (!(error && typeof error === 'object' && 'statusCode' in error && Number((error as { statusCode?: unknown }).statusCode) === 404)) throw error
-      }
-      const pageType = pageName === 'privacy' || pageName === 'terms' ? 'legal' : pageName === 'home' || pageName === 'about' || pageName === 'contact' ? 'system' : 'recipe'
-      const blocks = onboardingPageBlocks(rows, pageName === 'home' ? heroAssetId : null)
-      if (!current) {
-        await createTenantPage(db, { organizationId, siteId, userId: session.user.id, trustedSystemPage: pageType === 'system', data: { locale: 'en', path, title: rows.find(row => row.field === 'hero')?.hero_title ?? pageName, pageType, recipe: pageName, blocks, publish: true } })
-      } else {
-        const updated = await updateTenantPageDraft(db, current.id, { userId: session.user.id, scope: { siteId, organizationId }, data: { path: current.path, title: rows.find(row => row.field === 'hero')?.hero_title ?? current.title, summary: current.summary, seoTitle: current.seo_title, seoDescription: current.seo_description, canonicalUrl: current.canonical_url, robots: current.robots, pageType: current.page_type, recipe: current.recipe, sortOrder: current.sort_order, blocks, expectedDocumentUpdatedAt: current.document.updated_at } })
-        await publishTenantPage(db, current.id, { userId: session.user.id, scope: { siteId, organizationId }, expectedDocumentUpdatedAt: updated.page.document.updated_at })
-      }
-    }
+    await applyOnboardingTenantPages(db, {
+      organizationId,
+      siteId,
+      userId: session.user.id,
+      pages: [...contentByPage].map(([pageName, rows]) => {
+        const pageType = pageName === 'privacy' || pageName === 'terms' ? 'legal' : pageName === 'home' || pageName === 'about' || pageName === 'contact' ? 'system' : 'recipe'
+        return {
+          path: onboardingPagePath(pageName),
+          title: rows.find(row => row.field === 'hero')?.hero_title ?? pageName,
+          pageType,
+          recipe: pageName,
+          blocks: onboardingPageBlocks(rows, pageName === 'home' ? heroAssetId : null),
+          trustedSystemPage: pageType === 'system',
+        }
+      }),
+    })
 
     // The full rebuild (menu/qa/posts/reviews delete+insert) plus the final
     // draft status flip runs as a single atomic D1 batch, so a failure partway through

@@ -82,7 +82,7 @@ const receiptRows = computed(() => {
 // experience-specific policy, then the server-rendered site default. This
 // route has no slug parameter, so experiencePolicyById is typically empty.
 const resolvedPolicySummary = computed(() => {
-  if (confirmation.value?.sitePolicySummary) return confirmation.value.sitePolicySummary as ApiRecord
+  if (confirmation.value?.policySummary) return confirmation.value.policySummary as ApiRecord
   const experienceId = confirmation.value?.experienceId
   if (experienceId && experiencePolicyById.value[experienceId]) return experiencePolicyById.value[experienceId]
   return experiencePolicySiteDefault.value as ApiRecord | null

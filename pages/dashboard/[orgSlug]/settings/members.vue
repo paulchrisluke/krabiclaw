@@ -406,13 +406,13 @@ const isMembersResponse = (
   && value.invitations.every(invitation => isRecord(invitation) && typeof invitation.id === 'string')
 
 const route = useRoute()
+const requestEvent = useRequestEvent()
 const membersKey = computed(() => `dashboard-org-members-${String(route.params.orgSlug ?? '')}`)
 
 const { data, pending, refresh } = await useAsyncData(
   membersKey,
   async () => {
     if (import.meta.server) {
-      const requestEvent = useRequestEvent()
       if (!requestEvent) return null
       const [{ cloudflareEnv }, { getAuthSession }, { getOrganizationMembersData }, { queryFirst }] = await Promise.all([
         import('~/server/utils/api-response'),

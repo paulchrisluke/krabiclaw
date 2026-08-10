@@ -35,9 +35,9 @@ function createDb() {
 
 const schema = {}
 
-async function createTenantPage(_db: unknown, input: unknown) {
-  createdTenantPages.push(input)
-  return { page: null, revision_id: 'test-revision' }
+async function createTenantPagesBatch(_db: unknown, input: { pages: unknown[] }) {
+  createdTenantPages.push(...input.pages)
+  return { created: input.pages.length }
 }
 
 mock.module('../../server/db/index.ts', {
@@ -45,7 +45,7 @@ mock.module('../../server/db/index.ts', {
 })
 
 mock.module('../../server/utils/tenant-pages.ts', {
-  namedExports: { createTenantPage },
+  namedExports: { createTenantPagesBatch },
 })
 
 const { seedNewSite } = await import('../../server/utils/site-template.ts')

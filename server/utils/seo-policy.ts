@@ -69,14 +69,7 @@ export const TENANT_ONLY_ROUTE_PREFIXES = [
 ] as const
 
 export const TECHNICAL_ASSET_EXACT_ROUTES = new Set([
-  '/apple-touch-icon.png',
-  '/favicon.ico',
   '/site.webmanifest',
-  '/tenant-icon',
-  '/tenant-icon.png',
-  '/tenant-icon.svg',
-  '/tenant-icon-192.png',
-  '/tenant-icon-512.png',
   '/tenant.webmanifest',
 ])
 

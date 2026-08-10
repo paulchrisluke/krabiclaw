@@ -650,7 +650,7 @@
       "status": "active"
     }
   ],
-  "siteContent": [
+  "tenantPageContent": [
     {
       "id": "sc-demo-home-hero",
       "organizationId": "org-demo",
@@ -688,10 +688,10 @@
       "locationId": null,
       "page": "about",
       "field": "story.image",
-      "content": "https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/cad82f19-5ecd-43cd-8781-606a59256000/public",
+      "content": null,
       "heroTitle": null,
       "heroSubtitle": null,
-      "heroImageAssetId": null,
+      "heroImageAssetId": "media-demo-team-1",
       "heroVideoAssetId": null,
       "type": "media",
       "source": "manual"
@@ -1483,7 +1483,7 @@
       ]
     }
   ],
-  "siteContentTranslations": [
+  "tenantPageLocaleFields": [
     {
       "id": "sct-demo-th-home-hero",
       "organizationId": "org-demo",

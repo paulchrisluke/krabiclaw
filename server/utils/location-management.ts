@@ -6,6 +6,7 @@ import type { CmsCapabilityOverrideDelta, ProductFeature } from "~/config/cms-re
 import { resolveSiteCmsCapabilities } from "~/server/utils/cms-capabilities";
 import { checkModuleHasLiveData } from "~/server/utils/module-content-guard";
 import { ensureLocationTeam } from "~/server/utils/member-access";
+import type { CloudflareEnv } from "~/server/utils/auth";
 
 // Require format-valid E.164 at the shared location write boundary (issue
 // #293 Section D/I) — this is the one place createLocation/updateLocation
@@ -22,7 +23,7 @@ export function normalizeLocationNotificationPhone(raw: string | null | undefine
   return parsed.e164;
 }
 
-type SetupEnv = Record<string, string | undefined>;
+type SetupEnv = CloudflareEnv;
 
 const MAX_SLUG_ATTEMPTS = 10;
 
@@ -74,7 +75,7 @@ export async function syncLocationWhatsAppAccess(
   if (newPhone) {
     try {
       const { ensureWhatsAppRecipientAccess, sendWhatsAppAccessInvitation } = await import("~/server/utils/whatsapp-access");
-      const access = await ensureWhatsAppRecipientAccess(db, {
+      const access = await ensureWhatsAppRecipientAccess(env, db, {
         organizationId,
         siteId,
         locationId,
@@ -82,7 +83,7 @@ export async function syncLocationWhatsAppAccess(
         inviterUserId,
       });
       if (access.status === "invitation_pending" && access.shouldDeliverInvitation && access.invitationId) {
-        await sendWhatsAppAccessInvitation(env as Parameters<typeof sendWhatsAppAccessInvitation>[0], db, {
+        await sendWhatsAppAccessInvitation(env, db, {
           organizationId,
           siteId,
           locationId,
@@ -105,7 +106,8 @@ export async function syncLocationWhatsAppAccess(
     // `env` here is the full Cloudflare env under a narrower local type
     // (mirrors the same cast in setOrgWhatsAppPhone in whatsapp.ts) —
     // createAuth only reads the DB/Better-Auth-config fields it needs.
-    await recalculateScopesForPhoneChange(db, createAuth(env as unknown as Parameters<typeof createAuth>[0]), {
+    await recalculateScopesForPhoneChange(db, createAuth(env), {
+      env,
       organizationId,
       siteId,
       locationId,
@@ -785,7 +787,13 @@ export async function createLocation(
 
       await executeBatch(db, statements);
       try {
-        await ensureLocationTeam(db, { organizationId, siteId, locationId: id, name: title });
+        await ensureLocationTeam(db, {
+          env,
+          organizationId,
+          siteId,
+          locationId: id,
+          name: title,
+        });
       } catch (teamError) {
         // D1 has no cross-statement transactions, so the
         // location row above is already committed. Team provisioning is not
@@ -1228,11 +1236,6 @@ export async function deleteLocation(
   }
   const locationId = existing.id;
   const now = new Date().toISOString();
-  // A location delete can cascade SET NULL into Google Business rows. If the
-  // site already has a site-level connection, that null transition can collide
-  // with the partial unique index on google_business_connections.
-  // Remove location-scoped connections and pointers up front so the hard delete
-  // stays deterministic and does not depend on SQLite's constraint ordering.
   const statements = [
     {
       query: `
@@ -1262,13 +1265,6 @@ export async function deleteLocation(
     },
     {
       query: `
-      DELETE FROM google_business_connections
-      WHERE organization_id = ? AND site_id = ? AND location_id = ?
-    `,
-      params: [organizationId, siteId, locationId],
-    },
-    {
-      query: `
       DELETE FROM business_locations
       WHERE id = ? AND organization_id = ? AND site_id = ?
     `,
@@ -1277,7 +1273,7 @@ export async function deleteLocation(
   ];
 
   const batchResults = await executeBatch(db, statements);
-  const deleteResult = batchResults[4];
+  const deleteResult = batchResults[3];
 
   if (!deleteResult?.meta.changes) {
     return { status: 404, data: { error: "Location not found." } };

@@ -187,8 +187,6 @@ export async function notifySiteTransferReminder(
 
   const planLabel: Record<string, string> = {
     growth: 'Growth ($49/mo)',
-    managed: 'Managed ($149/mo)',
-    seo_accelerator: 'SEO Accelerator ($349/mo)',
   }
 
   const platformDomain = (env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'krabiclaw.com').replace(/^https?:\/\//, '').replace(/\/$/, '')
@@ -197,7 +195,7 @@ export async function notifySiteTransferReminder(
       siteName: opts.siteName,
       transferUrl: opts.transferUrl,
       domain: opts.invitedDomain ?? null,
-      planLabel: opts.invitedPlan ? (planLabel[opts.invitedPlan] ?? opts.invitedPlan) : null,
+      planLabel: opts.invitedPlan ? (planLabel[opts.invitedPlan] ?? 'Unsupported plan') : null,
       customDomainsPaused: opts.customDomainsPaused,
       platformDomain,
     },

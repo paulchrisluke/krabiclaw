@@ -2,61 +2,40 @@ import type Stripe from 'stripe'
 import type { StripePlan, Subscription as BetterAuthSubscription } from '@better-auth/stripe'
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { getPlanEntitlements, type EntitlementsMap } from '~/server/utils/billing-entitlements'
-import { grantQuota } from '~/server/utils/usage-metering'
 import { getEffectiveAccessPlan } from '~/server/utils/billing-access'
 import { betterAuthTimestampToIso } from '~/server/utils/better-auth-timestamps'
-import { isManagedServiceEnabled } from '~/server/utils/feature-flags'
+import {
+  isKnownRecurringPlan,
+  isNewSalePlan,
+} from '~/shared/billing-model'
+import {
+  assertGrowthStripeCatalogPrices,
+  resolveStripeCatalogPrice,
+  selectStripeCatalogPrice,
+  type StripeCatalogPriceResolution,
+} from '~/server/utils/stripe-catalog'
 
 const WEBHOOK_LEASE_MS = 5 * 60 * 1000
-const INVOICE_QUOTA_BILLING_REASONS = new Set(['subscription_create', 'subscription_cycle'])
-export const CONCIERGE_PLAN_IDS = new Set(['managed', 'seo_accelerator'])
-
 export function selectCanonicalStripePrice(
   product: Stripe.Product,
   prices: Stripe.Price[],
   interval: 'month' | 'year',
 ): Stripe.Price | null {
-  const candidates = prices.filter(price =>
-    price.recurring?.interval === interval
-    && price.recurring.interval_count === 1
-    && typeof price.unit_amount === 'number'
-    && price.unit_amount > 0
-    && typeof price.currency === 'string'
-    && price.currency.length > 0,
-  )
-  if (candidates.length === 0) return null
+  return selectStripeCatalogPrice(product, prices, interval)
+}
 
-  const metadataKey = interval === 'month' ? 'monthly_price_id' : 'annual_price_id'
-  const metadataPriceId = product.metadata?.[metadataKey]?.trim()
-  if (metadataPriceId) {
-    const selected = candidates.find(price => price.id === metadataPriceId)
-    if (!selected) {
-      throw new Error(`Stripe product ${product.id} has an invalid ${metadataKey} canonical price`)
-    }
-    return selected
-  }
-
-  const lookupKeyCandidates = candidates.filter(price => {
-    const lookupKey = price.lookup_key?.toLowerCase() ?? ''
-    return interval === 'month'
-      ? lookupKey.includes('month')
-      : lookupKey.includes('annual') || lookupKey.includes('year')
-  })
-  if (lookupKeyCandidates.length > 1) {
-    throw new Error(`Stripe product ${product.id} has multiple ${interval} prices marked by lookup_key`)
-  }
-  if (lookupKeyCandidates.length === 1) {
-    return lookupKeyCandidates[0] ?? null
-  }
-  if (candidates.length !== 1) {
-    throw new Error(`Stripe product ${product.id} must have exactly one canonical ${interval} price`)
-  }
-  return candidates[0] ?? null
+export function resolveCanonicalStripePrice(
+  products: Stripe.Product[],
+  prices: Stripe.Price[],
+  planId: string,
+  interval: 'month' | 'year',
+): StripeCatalogPriceResolution {
+  return resolveStripeCatalogPrice(products, prices, planId, interval)
 }
 
 export async function getBetterAuthStripePlans(
   stripe: Stripe,
-  env?: ApiRecord,
+  _env?: ApiRecord,
   options: { includeFeatureDisabled?: boolean } = {},
 ): Promise<StripePlan[]> {
   const products: Stripe.Product[] = []
@@ -98,12 +77,12 @@ export async function getBetterAuthStripePlans(
   for (const product of products) {
     const planId = product.metadata?.plan_id?.trim()
     if (!planId) continue
-    if (planId === 'free') continue
-    if (
-      !options.includeFeatureDisabled
-      && CONCIERGE_PLAN_IDS.has(planId)
-      && !isManagedServiceEnabled(env)
-    ) continue
+    // Stripe may contain old or unrelated products. Only the canonical
+    // recurring plans are meaningful to Better Auth billing. Runtime plan
+    // identity is intentionally Starter/Growth only; retired catalog products
+    // remain an operator cleanup concern, not an entitlement source.
+    if (!isKnownRecurringPlan(planId)) continue
+    if (!options.includeFeatureDisabled && !isNewSalePlan(planId)) continue
     if (planIds.has(planId)) throw new Error(`Stripe has multiple active products for plan ${planId}`)
 
     const billablePrices = (pricesByProduct.get(product.id) ?? []).filter(
@@ -114,6 +93,9 @@ export async function getBetterAuthStripePlans(
       throw new Error(`Stripe product ${product.id} for plan ${planId} is missing a canonical monthly price`)
     }
     const yearly = selectCanonicalStripePrice(product, billablePrices, 'year')
+    if (isNewSalePlan(planId)) {
+      assertGrowthStripeCatalogPrices(monthly, yearly)
+    }
     if (yearly && yearly.currency !== monthly.currency) {
       throw new Error(`Stripe product ${product.id} has monthly and annual prices in different currencies`)
     }
@@ -153,15 +135,18 @@ function stripePlanCacheScope(env?: ApiRecord): string {
     ? env.STRIPE_ACCOUNT_ID.trim()
     : 'platform'
   const secretKey = typeof env?.STRIPE_SECRET_KEY === 'string' ? env.STRIPE_SECRET_KEY : ''
-  const mode = secretKey.startsWith('sk_live') ? 'live' : 'test'
-  const managedServices = isManagedServiceEnabled(env) ? 'on' : 'off'
-  return `${account}:${mode}:managed-services:${managedServices}`
+  const mode = /^(?:sk|rk)_live_/.test(secretKey)
+    ? 'live'
+    : /^(?:sk|rk)_test_/.test(secretKey)
+      ? 'test'
+      : 'unknown'
+  return `${account}:${mode}`
 }
 
 /**
  * Keeps one validated Stripe catalog snapshot per option set and coalesces
- * concurrent refreshes. A transient refresh failure serves the last known-good
- * snapshot so checkout and reconciliation do not multiply catalog requests.
+ * concurrent refreshes. A refresh failure remains an error; callers must not
+ * turn an unavailable or invalid catalog into an apparently valid checkout.
  */
 export function createStripePlanLoader(
   stripe: Stripe,
@@ -182,10 +167,6 @@ export function createStripePlanLoader(
       .then((plans) => {
         stripePlanSnapshots.set(key, { plans, expiresAt: Date.now() + ttlMs })
         return plans
-      })
-      .catch((error) => {
-        if (snapshot) return snapshot.plans
-        throw error
       })
       .finally(() => stripePlanPending.delete(key))
     stripePlanPending.set(key, refresh)
@@ -219,6 +200,9 @@ export async function projectOrganizationSubscription(
   db: DbClient,
   input: SubscriptionProjectionInput,
 ): Promise<void> {
+  if (!isKnownRecurringPlan(input.plan)) {
+    throw new Error(`Unsupported runtime billing plan "${input.plan}"`)
+  }
   const now = new Date().toISOString()
   const paymentRow = await queryFirst<{
     payment_status: string | null
@@ -292,8 +276,7 @@ export async function projectOrganizationSubscription(
       AND key NOT IN (${entitlementKeys.map(() => '?').join(', ')})`,
     params: [input.organizationId, ...entitlementKeys],
   })
-  await executeBatch(db, organizationQueries)
-
+  const allQueries = [...organizationQueries]
   for (const site of sites) {
     const siteQueries: Array<{ query: string; params: unknown[] }> = []
     for (const [key, value] of entitlementEntries) {
@@ -337,7 +320,7 @@ export async function projectOrganizationSubscription(
         site.id,
         input.organizationId,
         null,
-        input.plan,
+        accessPlan,
         input.status,
         isoDate(input.periodEnd),
         input.cancelAtPeriodEnd ? 1 : 0,
@@ -349,8 +332,9 @@ export async function projectOrganizationSubscription(
       query: `UPDATE sites SET plan = ?, updated_at = ? WHERE id = ? AND organization_id = ?`,
       params: [accessPlan, now, site.id, input.organizationId],
     })
-    await executeBatch(db, siteQueries)
+    allQueries.push(...siteQueries)
   }
+  await executeBatch(db, allQueries)
 }
 
 function stripeCustomerId(customer: Stripe.Subscription['customer']): string | null {
@@ -425,10 +409,14 @@ async function resolveHistoricalSubscriptionPlan(
     ? await stripe.products.retrieve(resolvedPrice.product)
     : resolvedPrice.product
   if (!product || 'deleted' in product) return null
-  if (resolvedPrice.metadata?.price_role?.trim().toLowerCase() !== 'base') return null
+  // Early catalog prices predate price_role metadata. Treat a missing role as
+  // the historical base price, while rejecting any explicit non-base role.
+  // Product seat metadata remains a second guard for rotated seat prices.
+  const priceRole = resolvedPrice.metadata?.price_role?.trim().toLowerCase()
+  if (priceRole && priceRole !== 'base') return null
   if (product.metadata?.seat_price_id?.trim() === resolvedPrice.id) return null
-  const planId = product.metadata?.plan_id?.trim()
-  if (!planId || planId === 'free') return null
+  const planId = product.metadata?.plan_id?.trim().toLowerCase()
+  if (!planId || !isKnownRecurringPlan(planId)) return null
   return {
     name: planId,
     priceId: resolvedPrice.id,
@@ -464,7 +452,12 @@ function stripeSubscriptionPeriod(subscription: Stripe.Subscription, item: Strip
   }
 }
 
-async function resolveSubscriptionPlan(
+/**
+ * Resolves the single configured or historical recurring base item for a
+ * subscription. Invoice processing uses the same resolver as lifecycle
+ * reconciliation so a seat/add-on item can never become plan authority.
+ */
+export async function resolveCanonicalSubscriptionPlan(
   stripe: Stripe,
   subscription: Stripe.Subscription,
   loadPlans: StripePlanLoader,
@@ -487,7 +480,12 @@ async function resolveSubscriptionPlan(
     throw new Error(`Stripe subscription ${subscription.id} has multiple configured recurring plan items; retrying`)
   }
   const configuredBase = configuredBaseMatches[0]
-  if (configuredBase) return configuredBase
+  if (configuredBase) {
+    if (!isKnownRecurringPlan(configuredBase.plan.name)) {
+      throw new Error(`Stripe subscription ${subscription.id} resolved an unsupported runtime billing plan; retrying`)
+    }
+    return configuredBase
+  }
 
   const historicalBaseMatches: ResolvedSubscriptionPlan[] = []
   for (const item of subscription.items.data) {
@@ -510,7 +508,7 @@ async function findExistingSubscription(
 ): Promise<ReconciledSubscriptionRow | null> {
   const metadata = { ...metadataFallback, ...stripeSubscription.metadata }
   const metadataSubscriptionId = metadata.subscriptionId?.trim()
-  const metadataReferenceId = metadata.referenceId?.trim()
+  const metadataReferenceId = organizationReferenceFromMetadata(metadata)
   const customerId = stripeCustomerIdValue(stripeSubscription.customer)
   let existing: ReconciledSubscriptionRow | null = null
   if (metadataSubscriptionId) {
@@ -537,6 +535,20 @@ async function findExistingSubscription(
   return existing
 }
 
+/**
+ * Better Auth's Stripe plugin uses `referenceId` as the subscription owner.
+ * Transfer checkouts historically also emitted `organization_id`; accept that
+ * key only as a compatibility fallback and fail closed when the two disagree.
+ */
+function organizationReferenceFromMetadata(metadata: Record<string, string>): string | null {
+  const referenceId = metadata.referenceId?.trim() || null
+  const legacyOrganizationId = metadata.organization_id?.trim() || null
+  if (referenceId && legacyOrganizationId && referenceId !== legacyOrganizationId) {
+    throw new Error('Stripe subscription metadata has conflicting organization references; retrying')
+  }
+  return referenceId ?? legacyOrganizationId
+}
+
 async function repairBetterAuthSubscriptionRow(
   db: DbClient,
   stripe: Stripe,
@@ -557,22 +569,22 @@ async function repairBetterAuthSubscriptionRow(
 
   let resolved: ResolvedSubscriptionPlan
   try {
-    resolved = await resolveSubscriptionPlan(stripe, stripeSubscription, loadPlans)
+    resolved = await resolveCanonicalSubscriptionPlan(stripe, stripeSubscription, loadPlans)
   } catch (error) {
-    if (!deleted || !existing?.plan) throw error
+    if (!deleted || !existing?.plan || !isKnownRecurringPlan(existing.plan)) throw error
     const item = stripeSubscription.items.data[0]
     if (!item) throw error
     resolved = { item, plan: { name: existing.plan } }
   }
   const customerId = stripeCustomerIdValue(stripeSubscription.customer) ?? existing?.stripeCustomerId ?? null
   const metadata = { ...metadataFallback, ...stripeSubscription.metadata }
-  let referenceId = existing?.referenceId ?? metadata.referenceId?.trim()
+  let referenceId: string | null = existing?.referenceId ?? organizationReferenceFromMetadata(metadata)
   if (!referenceId && customerId) {
     const organization = await adapter.findOne<{ id: string }>({
       model: 'organization',
       where: [{ field: 'stripeCustomerId', value: customerId }],
     })
-    referenceId = organization?.id
+    referenceId = organization?.id ?? null
   }
   if (!referenceId) throw new Error(`Stripe subscription ${stripeSubscription.id} has no organization reference; retrying`)
 
@@ -653,9 +665,9 @@ export async function reconcileBetterAuthSubscriptionEvent(
   adapter: BetterAuthSubscriptionAdapter,
   loadPlans: StripePlanLoader,
 ): Promise<void> {
-  if (event.type === 'checkout.session.completed') {
+  if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
     const session = event.data.object as Stripe.Checkout.Session
-    if (session.mode !== 'subscription' || session.metadata?.type === 'site_transfer') return
+    if (session.mode !== 'subscription') return
     const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id
     if (!subscriptionId) throw new Error(`Subscription checkout ${session.id} has no subscription; retrying`)
     await projectCurrentStripeSubscription(db, await stripe.subscriptions.retrieve(subscriptionId), false, stripe, event, adapter, loadPlans, session.metadata)
@@ -684,6 +696,10 @@ export async function enqueueStripeEvent(db: DbClient, event: Stripe.Event): Pro
     VALUES (?, ?, ?, 'pending', ?, 0, ?)
   `, [crypto.randomUUID(), event.id, event.type, payload, createdAt])
   if (Number(inserted?.meta.changes ?? 0) > 0) return true
+  // A duplicate Stripe delivery is not an operator replay. Leave failed and
+  // dead-lettered events in their existing bounded state so provider retries
+  // cannot reset the attempt budget. Operator replay is a separate, signed
+  // administrative operation that never replaces the retained payload.
   return false
 }
 
@@ -784,53 +800,17 @@ export async function recordStripeEvent(
   }
 }
 
-interface InvoiceSubscriptionResolution {
-  organizationId: string
-  customerId: string | null
-  stripeSubscription: Stripe.Subscription
-}
-
-export function invoiceSubscriptionId(invoice: Stripe.Invoice & {
-  subscription?: string | { id: string } | null
-  parent?: {
-    subscription_details?: {
-      subscription?: string | { id: string } | null
-    } | null
-  } | null
+export function invoiceSubscriptionId(invoice: {
+  subscription?: unknown
+  parent?: unknown
 }): string | null {
-  const subscriptionValue = invoice.subscription ?? invoice.parent?.subscription_details?.subscription
-  return typeof subscriptionValue === 'string' ? subscriptionValue : subscriptionValue?.id ?? null
-}
-
-async function resolveInvoiceSubscription(
-  db: DbClient,
-  stripe: Stripe,
-  stripeSubscriptionId: string,
-  adapter: BetterAuthSubscriptionAdapter,
-): Promise<InvoiceSubscriptionResolution> {
-  const local = await adapter.findOne<{ referenceId: string }>({
-    model: 'subscription',
-    where: [{ field: 'stripeSubscriptionId', value: stripeSubscriptionId }],
-  })
-
-  const stripeSubscription = await stripe.subscriptions.retrieve(stripeSubscriptionId)
-  const stripeCustomerId = stripeCustomerIdValue(stripeSubscription.customer)
-  const metadataReferenceId = stripeSubscription.metadata?.referenceId?.trim()
-  const customerOrganization = stripeCustomerId
-    ? await adapter.findOne<{ id: string }>({
-        model: 'organization',
-        where: [{ field: 'stripeCustomerId', value: stripeCustomerId }],
-      })
-    : null
-  const organizationId = local?.referenceId || metadataReferenceId || customerOrganization?.id
-  if (!organizationId) {
-    throw new Error(`Stripe invoice subscription ${stripeSubscriptionId} has no organization reference; retrying`)
-  }
-  return {
-    organizationId,
-    customerId: stripeCustomerId,
-    stripeSubscription,
-  }
+  const parent = invoice.parent as { subscription_details?: { subscription?: unknown } | null } | null | undefined
+  const subscriptionValue = invoice.subscription ?? parent?.subscription_details?.subscription
+  return typeof subscriptionValue === 'string'
+    ? subscriptionValue
+    : subscriptionValue && typeof subscriptionValue === 'object' && 'id' in subscriptionValue && typeof subscriptionValue.id === 'string'
+      ? subscriptionValue.id
+      : null
 }
 
 function stripeCustomerIdValue(customer: Stripe.Subscription['customer']): string | null {
@@ -853,8 +833,22 @@ export async function markOrganizationPayment(
     invoicePeriodStart?: string | null
     invoicePeriodEnd?: string | null
     pastDueSince?: string | null
+    canonicalPaidEvidence?: boolean
   },
 ): Promise<void> {
+  if (input.canonicalPaidEvidence) {
+    const periodStart = input.invoicePeriodStart ? Date.parse(input.invoicePeriodStart) : Number.NaN
+    const periodEnd = input.invoicePeriodEnd ? Date.parse(input.invoicePeriodEnd) : Number.NaN
+    if (
+      input.paymentStatus !== 'paid'
+      || !input.basePlanPriceId
+      || !Number.isFinite(periodStart)
+      || !Number.isFinite(periodEnd)
+      || periodStart >= periodEnd
+    ) {
+      throw new Error('Canonical paid invoice evidence requires a paid base price and ordered line period')
+    }
+  }
   const now = new Date().toISOString()
   if (!input.invoiceId) {
     if (input.paymentStatus === 'paid') {
@@ -886,6 +880,22 @@ export async function markOrganizationPayment(
             WHEN excluded.last_event_created > stripe_invoice_payments.last_event_created
               OR (excluded.last_event_created = stripe_invoice_payments.last_event_created AND excluded.last_event_id > stripe_invoice_payments.last_event_id)
               THEN COALESCE(excluded.base_plan_price_id, stripe_invoice_payments.base_plan_price_id)
+            WHEN ? = 1
+              AND stripe_invoice_payments.organization_id = excluded.organization_id
+              AND stripe_invoice_payments.stripe_subscription_id = excluded.stripe_subscription_id
+              AND excluded.status = 'paid'
+              AND stripe_invoice_payments.base_plan_price_id IS NULL
+              AND excluded.base_plan_price_id IS NOT NULL
+              AND julianday(excluded.period_start) IS NOT NULL
+              AND julianday(excluded.period_end) > julianday(excluded.period_start)
+              AND (
+                stripe_invoice_payments.period_end IS NULL
+                OR (
+                  julianday(stripe_invoice_payments.period_end) IS NOT NULL
+                  AND julianday(excluded.period_end) >= julianday(stripe_invoice_payments.period_end)
+                )
+              )
+              THEN excluded.base_plan_price_id
               ELSE stripe_invoice_payments.base_plan_price_id END,
           status = CASE
             WHEN excluded.last_event_created > stripe_invoice_payments.last_event_created
@@ -895,11 +905,43 @@ export async function markOrganizationPayment(
             WHEN excluded.last_event_created > stripe_invoice_payments.last_event_created
               OR (excluded.last_event_created = stripe_invoice_payments.last_event_created AND excluded.last_event_id > stripe_invoice_payments.last_event_id)
               THEN COALESCE(excluded.period_start, stripe_invoice_payments.period_start)
+            WHEN ? = 1
+              AND stripe_invoice_payments.organization_id = excluded.organization_id
+              AND stripe_invoice_payments.stripe_subscription_id = excluded.stripe_subscription_id
+              AND excluded.status = 'paid'
+              AND stripe_invoice_payments.base_plan_price_id IS NULL
+              AND excluded.base_plan_price_id IS NOT NULL
+              AND julianday(excluded.period_start) IS NOT NULL
+              AND julianday(excluded.period_end) > julianday(excluded.period_start)
+              AND (
+                stripe_invoice_payments.period_end IS NULL
+                OR (
+                  julianday(stripe_invoice_payments.period_end) IS NOT NULL
+                  AND julianday(excluded.period_end) >= julianday(stripe_invoice_payments.period_end)
+                )
+              )
+              THEN excluded.period_start
               ELSE stripe_invoice_payments.period_start END,
           period_end = CASE
             WHEN excluded.last_event_created > stripe_invoice_payments.last_event_created
               OR (excluded.last_event_created = stripe_invoice_payments.last_event_created AND excluded.last_event_id > stripe_invoice_payments.last_event_id)
               THEN COALESCE(excluded.period_end, stripe_invoice_payments.period_end)
+            WHEN ? = 1
+              AND stripe_invoice_payments.organization_id = excluded.organization_id
+              AND stripe_invoice_payments.stripe_subscription_id = excluded.stripe_subscription_id
+              AND excluded.status = 'paid'
+              AND stripe_invoice_payments.base_plan_price_id IS NULL
+              AND excluded.base_plan_price_id IS NOT NULL
+              AND julianday(excluded.period_start) IS NOT NULL
+              AND julianday(excluded.period_end) > julianday(excluded.period_start)
+              AND (
+                stripe_invoice_payments.period_end IS NULL
+                OR (
+                  julianday(stripe_invoice_payments.period_end) IS NOT NULL
+                  AND julianday(excluded.period_end) >= julianday(stripe_invoice_payments.period_end)
+                )
+              )
+              THEN excluded.period_end
               ELSE stripe_invoice_payments.period_end END,
           past_due_since = CASE
             WHEN excluded.last_event_created > stripe_invoice_payments.last_event_created
@@ -936,6 +978,9 @@ export async function markOrganizationPayment(
         input.eventCreated,
         input.eventId,
         now,
+        input.canonicalPaidEvidence ? 1 : 0,
+        input.canonicalPaidEvidence ? 1 : 0,
+        input.canonicalPaidEvidence ? 1 : 0,
       ],
     },
     {
@@ -1013,183 +1058,6 @@ export async function markOrganizationPayment(
       params: [`sb-${site.id}`, site.id, input.organizationId, now, input.organizationId],
     })),
   ])
-}
-
-export async function grantInvoiceQuota(
-  db: DbClient,
-  stripe: Stripe,
-  event: Stripe.Event,
-  adapter: BetterAuthSubscriptionAdapter,
-  loadPlans: StripePlanLoader,
-): Promise<void> {
-  if (event.type !== 'invoice.paid') return
-  const invoice = event.data.object as Stripe.Invoice & {
-    lines: Stripe.ApiList<Stripe.InvoiceLineItem>
-    subscription?: string | { id: string } | null
-    parent?: {
-      subscription_details?: {
-        subscription?: string | { id: string } | null
-      } | null
-    } | null
-  }
-  if (!INVOICE_QUOTA_BILLING_REASONS.has(String(invoice.billing_reason ?? ''))) return
-  const stripeSubscriptionId = invoiceSubscriptionId(invoice)
-  if (!stripeSubscriptionId) return
-
-  const subscription = await resolveInvoiceSubscription(db, stripe, stripeSubscriptionId, adapter)
-  type InvoiceLine = Stripe.InvoiceLineItem & {
-    type?: string
-    subscription?: string | Stripe.Subscription | null
-    subscription_item?: string | null
-    price?: string | Stripe.Price | null
-    period?: { start?: number; end?: number } | null
-    proration?: boolean
-    pricing?: {
-      type?: string
-      price_details?: { price?: string | Stripe.Price | null } | null
-    } | null
-    parent?: {
-      type?: string
-      subscription_item_details?: {
-        subscription?: string | null
-        subscription_item?: string | null
-        proration?: boolean
-      } | null
-      invoice_item_details?: {
-        subscription?: string | null
-        proration?: boolean
-      } | null
-    } | null
-  }
-  const linePrice = (line: InvoiceLine): string | Stripe.Price | null | undefined =>
-    line.price ?? line.pricing?.price_details?.price
-  let invoiceLines: InvoiceLine[] = [...(invoice.lines?.data ?? []) as InvoiceLine[]]
-  let startingAfter = invoiceLines.at(-1)?.id
-  const mustReloadFirstPage = invoiceLines.some(line => typeof linePrice(line) === 'string')
-  if (mustReloadFirstPage) {
-    invoiceLines = []
-    startingAfter = undefined
-  }
-  while (invoice.lines?.has_more || mustReloadFirstPage) {
-    const page = await stripe.invoices.listLineItems(invoice.id, {
-      limit: 100,
-      ...(startingAfter ? { starting_after: startingAfter } : {}),
-      expand: ['data.pricing.price_details.price'],
-    })
-    invoiceLines.push(...page.data)
-    if (!page.has_more) break
-    const next = page.data.at(-1)?.id
-    if (!next || next === startingAfter) throw new Error(`Stripe invoice ${invoice.id} line pagination did not advance; retrying`)
-    startingAfter = next
-  }
-  invoiceLines = await Promise.all(invoiceLines.map(async (line) => {
-    const price = linePrice(line)
-    if (typeof price !== 'string') return line
-    return {
-      ...line,
-      price: await stripe.prices.retrieve(price, { expand: ['product'] }),
-    }
-  }))
-
-  const recurringLines = invoiceLines.filter((line) => {
-    const parent = line.parent
-    const lineSubscription = line.subscription
-    const lineSubscriptionId = typeof lineSubscription === 'string'
-      ? lineSubscription
-      : lineSubscription?.id
-        ?? parent?.subscription_item_details?.subscription
-        ?? parent?.invoice_item_details?.subscription
-    const proration = Boolean(line.proration)
-      || Boolean(parent?.subscription_item_details?.proration)
-      || Boolean(parent?.invoice_item_details?.proration)
-    const price = linePrice(line)
-    const isSubscriptionLine = line.type === 'subscription' || parent?.type === 'subscription_item_details'
-    return lineSubscriptionId === stripeSubscriptionId
-      && isSubscriptionLine
-      && !proration
-      && typeof price !== 'string'
-      && Boolean(price?.recurring)
-      && Boolean(line.period?.start && line.period?.end)
-  })
-  if (recurringLines.length === 0) {
-    throw new Error(`Stripe invoice ${invoice.id} has no deterministic recurring subscription line; retrying`)
-  }
-
-  const resolvedSubscriptionPlan = await resolveSubscriptionPlan(stripe, subscription.stripeSubscription, loadPlans)
-  const baseSubscriptionItemId = resolvedSubscriptionPlan.item.id
-  const basePlanPriceIds = new Set([
-    resolvedSubscriptionPlan.item.price.id,
-    resolvedSubscriptionPlan.plan.priceId,
-    resolvedSubscriptionPlan.plan.annualDiscountPriceId,
-  ].filter((priceId): priceId is string => Boolean(priceId)))
-  const invoiceLineSubscriptionItemId = (line: InvoiceLine): string | null =>
-    line.subscription_item
-    ?? line.parent?.subscription_item_details?.subscription_item
-    ?? null
-  const basePlanLines = recurringLines.filter((line) => {
-    const subscriptionItemId = invoiceLineSubscriptionItemId(line)
-    if (baseSubscriptionItemId) return subscriptionItemId === baseSubscriptionItemId
-    const price = linePrice(line)
-    return typeof price !== 'string' && Boolean(price?.id && basePlanPriceIds.has(price.id))
-  })
-  if (basePlanLines.length !== 1) {
-    throw new Error(`Stripe invoice ${invoice.id} does not identify exactly one base subscription item line; retrying`)
-  }
-  const line = basePlanLines[0]
-  if (!line) throw new Error(`Stripe invoice ${invoice.id} has no base subscription item line; retrying`)
-  const price = linePrice(line)
-  if (!price || typeof price === 'string' || !price.id) {
-    throw new Error(`Stripe invoice ${invoice.id} base subscription item line has no price; retrying`)
-  }
-  const plan = resolvedSubscriptionPlan.plan
-  const priceId = price.id
-  const periodStartSeconds = line.period?.start
-  const periodEndSeconds = line.period?.end
-  if (!periodStartSeconds || !periodEndSeconds) {
-    throw new Error(`Stripe invoice ${invoice.id} plan line has no deterministic billing period; retrying`)
-  }
-  const periodStart = new Date(periodStartSeconds * 1000).toISOString()
-  const periodEnd = new Date(periodEndSeconds * 1000).toISOString()
-  const accessPlan = getEffectiveAccessPlan({
-    plan: plan.name,
-    status: subscription.stripeSubscription.status,
-    paymentStatus: 'paid',
-    paidThrough: periodEnd,
-    periodEnd,
-  })
-  await markOrganizationPayment(db, {
-    organizationId: subscription.organizationId,
-    customerId: subscription.customerId,
-    subscriptionId: stripeSubscriptionId,
-    paymentStatus: 'paid',
-    eventCreated: event.created,
-    eventId: event.id,
-    paidThrough: periodEnd,
-    invoiceId: invoice.id,
-    basePlanPriceId: priceId,
-    invoicePeriodStart: periodStart,
-    invoicePeriodEnd: periodEnd,
-  })
-  await projectCurrentStripeSubscription(db, subscription.stripeSubscription, false, stripe, event, adapter, loadPlans)
-  if (accessPlan === 'free') return
-
-  const entitlements = getPlanEntitlements(plan.name)
-  const aiCredits = entitlements.ai_credits
-  if (typeof aiCredits !== 'number' || aiCredits <= 0) return
-
-  const periodKey = `stripe-invoice:${invoice.id}:subscription:${stripeSubscriptionId}:price:${priceId}:${periodStart}:${periodEnd}`
-  await grantQuota(db, {
-    organizationId: subscription.organizationId,
-    resource: 'ai_inference',
-    quantity: aiCredits,
-    unit: 'credit',
-    periodKey,
-    periodStart,
-    periodEnd,
-    grantType: 'plan',
-    reason: `Stripe invoice ${invoice.id} paid for ${plan.name}`,
-    idempotencyKey: periodKey,
-  })
 }
 
 export function entitlementLimits(plan: string): EntitlementsMap {

@@ -15,9 +15,10 @@ import {
   renderDemoExperienceSeedBlock,
   renderCompiledDemoContentBlock,
   renderCompiledDemoTenantPagesBlock,
-  renderCompiledDemoTranslationsBlock,
+  renderCompiledDemoLocaleVariantsBlock,
   renderCompiledDemoBillingBlock,
 } from "../../seed-definitions/demo.ts";
+import { compileCuratedSiteFixture } from "../../seed-definitions/compile.ts";
 import { serializeCompiledSeedBundle } from "../../seed-definitions/serialize.ts";
 
 test("demo fixture experience slugs are unique", () => {
@@ -60,7 +61,7 @@ test("compiled demo seed normalizes org/site ids onto compiled rows", () => {
     ),
   );
   assert.ok(
-    compiledDemoSeed.siteContent.every(
+    compiledDemoSeed.tenantPageContent.every(
       (entry) => entry.organizationId === demoFixture.organizationId,
     ),
   );
@@ -69,6 +70,69 @@ test("compiled demo seed normalizes org/site ids onto compiled rows", () => {
       (experience) => experience.siteId === demoFixture.siteId,
     ),
   );
+});
+
+test("compiled curated fixtures require an explicit published source locale", () => {
+  const sourceLocaleField = demoFixture.tenantPageLocaleFields![0]!;
+  assert.throws(
+    () => compileCuratedSiteFixture({
+      ...demoFixture,
+      tenantPageLocaleFields: [{ ...sourceLocaleField, locale: "en" }],
+    }),
+    /must target a non-source locale/,
+  );
+
+  assert.throws(
+    () => compileCuratedSiteFixture({
+      ...demoFixture,
+      siteLocales: demoFixture.siteLocales.map((locale) =>
+        locale.isSource ? { ...locale, status: "draft" as const } : locale,
+      ),
+    }),
+    /Source locale "en" must be published/,
+  );
+});
+
+test("compiled curated fixtures reject source-locale manual translation rows", () => {
+  assert.throws(
+    () => compileCuratedSiteFixture({
+      ...demoFixture,
+      businessLocationTranslations: [{
+        ...demoFixture.businessLocationTranslations![0]!,
+        id: "source-location-translation",
+        locale: "en",
+      }],
+    }),
+    /Business location translation .*must target a non-source locale/,
+  );
+
+  assert.throws(
+    () => compileCuratedSiteFixture({
+      ...demoFixture,
+      menuTranslations: [{
+        ...demoFixture.menuTranslations![0]!,
+        id: "source-menu-translation",
+        locale: "en",
+      }],
+    }),
+    /Menu translation .*must target a non-source locale/,
+  );
+
+  assert.throws(
+    () => compileCuratedSiteFixture({
+      ...demoFixture,
+      menuItemTranslations: [{
+        ...demoFixture.menuItemTranslations![0]!,
+        id: "source-menu-item-translation",
+        locale: "en",
+      }],
+    }),
+    /Menu item translation .*must target a non-source locale/,
+  );
+
+  assert.ok(compiledDemoSeed.businessLocationTranslations.every((entry) => entry.locale !== "en"));
+  assert.ok(compiledDemoSeed.menuTranslations.every((entry) => entry.locale !== "en"));
+  assert.ok(compiledDemoSeed.menuItemTranslations.every((entry) => entry.locale !== "en"));
 });
 
 test("compiled demo seed can be serialized into a deterministic artifact bundle", () => {
@@ -160,14 +224,19 @@ test("demo content block delegates page composition to canonical tenant pages", 
   assert.match(pages, /Wood fire\. Brooklyn nights\./);
   assert.match(pages, /A trattoria shaped by the oven\./);
   assert.match(pages, /Pizza classes, tasting nights, and big-table evenings\./);
+  assert.match(pages, /"asset_id":"media-demo-team-1"/);
+  const imagePayloads = [...pages.matchAll(/'image', \d+, NULL, '((?:[^']|'')*)', CURRENT_TIMESTAMP/g)]
+    .map(match => JSON.parse(match[1]!.replaceAll("''", "'")) as Record<string, unknown>);
+  assert.ok(imagePayloads.length > 0);
+  assert.ok(imagePayloads.every(payload => !("url" in payload)));
 });
 
-test("demo translations block includes Thai translations for content, locations, and menus", () => {
-  const sql = renderCompiledDemoTranslationsBlock();
+test("demo locale data block includes Thai fields for content, locations, and menus", () => {
+  const sql = renderCompiledDemoLocaleVariantsBlock();
   const pages = renderCompiledDemoTenantPagesBlock();
 
   assert.doesNotMatch(sql, /site_content_translations/);
-  assert.match(sql, /demo_translations/);
+  assert.match(sql, /demo_locale_variants/);
   assert.match(sql, /INSERT OR IGNORE INTO business_location_translations/);
   assert.match(sql, /INSERT OR IGNORE INTO menu_translations/);
   assert.match(sql, /INSERT OR IGNORE INTO menu_item_translations/);
@@ -177,7 +246,22 @@ test("demo translations block includes Thai translations for content, locations,
 test("demo billing block includes ai credits and site billing state", () => {
   const sql = renderCompiledDemoBillingBlock();
 
+  assert.equal(compiledDemoSeed.aiCredits?.balance, 500);
+  assert.equal(compiledDemoSeed.organizationBilling?.plan, "free");
   assert.match(sql, /INSERT OR REPLACE INTO ai_credits/);
+  assert.match(sql, /balance_period_key/);
+  assert.match(sql, /INSERT OR IGNORE INTO usage_quota_grants/);
+  assert.match(sql, /'ai_inference', 500, 'credit'/);
+  assert.match(sql, /:version:seed/);
+  assert.match(sql, /'seed-plan-' \|\| 'org-demo' \|\| ':' \|\| date\('now'/);
+  assert.match(sql, /applied_at, created_at/);
+  assert.match(sql, /DELETE FROM subscription/);
+  assert.match(sql, /DELETE FROM stripe_invoice_payments WHERE organization_id = 'org-demo';/);
+  assert.match(sql, /INSERT OR REPLACE INTO organization_billing/);
+  assert.match(sql, /'ob-org-demo'/);
+  assert.match(sql, /'free', 'unknown'/);
+  assert.match(sql, /UPDATE organization\s+SET stripeCustomerId = NULL\s+WHERE id = 'org-demo';/);
+  assert.match(sql, /INSERT OR REPLACE INTO organization_entitlements/);
   assert.match(sql, /INSERT OR REPLACE INTO site_billing/);
   assert.match(sql, /INSERT OR REPLACE INTO site_entitlements/);
   assert.match(sql, /127/);

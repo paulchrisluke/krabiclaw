@@ -1,6 +1,6 @@
 import { compileCuratedSiteFixture } from './compile.ts'
 import type { CuratedMenuItemDefinition, CuratedSiteDefinition } from './contracts.ts'
-import { renderSiteBillingSql, renderSiteEntitlementsSql } from './billing-sql.ts'
+import { renderCanonicalBillingSql } from './billing-sql.ts'
 import { renderTenantPagesSeedSql } from './tenant-pages.ts'
 
 function escapeSql(value: string): string {
@@ -408,7 +408,7 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
     { id: 'media-tkma-food-2', locationId: 'loc-kikuzuki-tkma', ...cfImg('f0b1e4a4-28b3-466b-8947-300100c5e500', 'tkma-food-2'), altText: 'Sashimi at Take Me Away by KIKUZUKI' },
     { id: 'media-tkma-food-3', locationId: 'loc-kikuzuki-tkma', ...cfImg('d299dd02-5b40-4133-cb85-b947259d4500', 'tkma-food-3'), altText: 'Yakiniku skewers at Take Me Away by KIKUZUKI' },
   ],
-  siteContent: [
+  tenantPageContent: [
     {
       id: 'sc-kiku-home-hero',
       locationId: null,
@@ -596,7 +596,7 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
     },
   ],
   aiCredits: {
-    balance: 302,
+    balance: 2000,
     lifetimeUsed: 198,
   },
   organizationBilling: {
@@ -857,9 +857,10 @@ export function renderKikuzukiContentBlock(): string {
   return renderTenantPagesSeedSql({
     siteId: identity.siteId,
     organizationId: identity.organizationId,
-    locales: compiledKikuzukiSeed.siteLocales.map(locale => locale.locale),
-    rows: compiledKikuzukiSeed.siteContent,
-    translations: compiledKikuzukiSeed.siteContentTranslations,
+    sourceLocale: compiledKikuzukiSeed.siteLocales.find(locale => locale.isSource)!.locale,
+    locales: compiledKikuzukiSeed.siteLocales.map(locale => ({ locale: locale.locale, status: locale.status })),
+    rows: compiledKikuzukiSeed.tenantPageContent,
+    localeFields: compiledKikuzukiSeed.tenantPageLocaleFields,
     sqlValue,
     sqlJson,
   })
@@ -969,13 +970,11 @@ export function renderKikuzukiBillingBlock(): string {
   const parts: string[] = []
 
   if (aiCredits) {
-    parts.push(`INSERT OR REPLACE INTO ai_credits (organization_id, balance, lifetime_used)
-VALUES (${sqlValue(identity.organizationId)}, ${aiCredits.balance}, ${aiCredits.lifetimeUsed});`)
-  }
-
-  if (organizationBilling) {
-    parts.push(renderSiteBillingSql(identity.siteId, identity.organizationId, organizationBilling, sqlValue))
-    parts.push(renderSiteEntitlementsSql(identity.siteId, identity.organizationId, organizationBilling.plan, sqlValue))
+    if (organizationBilling) {
+      parts.push(renderCanonicalBillingSql(identity.siteId, identity.organizationId, organizationBilling, sqlValue, aiCredits))
+    }
+  } else if (organizationBilling) {
+    parts.push(renderCanonicalBillingSql(identity.siteId, identity.organizationId, organizationBilling, sqlValue))
   }
 
   return `-- BEGIN GENERATED: kikuzuki_billing

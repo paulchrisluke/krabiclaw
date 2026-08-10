@@ -31,6 +31,8 @@ jobs:
         run: yarn lint:better-auth-boundaries
       - name: Run data-loading guardrails
         run: yarn lint:data-loading
+      - name: Run product-model guard
+        run: yarn lint:product-model
 
   focused-typecheck:
     name: Focused typecheck
@@ -67,7 +69,7 @@ jobs:
   mcp-compat:
     name: MCP compatibility check
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 3
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:

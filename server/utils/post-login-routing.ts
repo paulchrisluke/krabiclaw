@@ -1,16 +1,20 @@
 import { queryFirst } from '~/server/db'
 import { userHasLinkedCustomers } from '~/server/utils/guest-claims'
+import { hasPlatformAdminPermission } from '~/utils/platform-admin-access'
 
-export type PostLoginDestination = '/account' | '/dashboard/onboarding' | `/dashboard/${string}`
+export type PostLoginDestination = '/account' | '/admin' | '/dashboard/onboarding' | `/dashboard/${string}`
 
 export interface PostLoginUser {
   id: string
+  role?: string | null
 }
 
 export async function resolvePostLoginDestination(
   db: D1Database,
   user: PostLoginUser,
 ): Promise<PostLoginDestination> {
+  if (hasPlatformAdminPermission(user.role)) return '/admin'
+
   const row = await queryFirst<{ slug: string }>(db, `
     SELECT o.slug
     FROM organization o

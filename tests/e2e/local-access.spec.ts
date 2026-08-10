@@ -21,6 +21,7 @@ function sqlValue(value: string): string {
 
 test('owner can configure a site- or location-scoped editor invitation', async ({ page, baseURL }) => {
   test.setTimeout(60_000)
+  test.skip(new URL(baseURL!).hostname !== 'localhost', 'This smoke test reads invitation scope from local D1.')
   const inviteEmail = 'e2e-scoped-editor@playwright.example'
   localD1Query(`DELETE FROM invitation WHERE organizationId = 'org-pottery-house' AND email = ${sqlValue(inviteEmail)}`)
   const pageErrors = collectPageErrors(page)
@@ -159,9 +160,8 @@ test('phone invitation verifies identity, accepts access, and opens the scoped d
 
   const homeResponse = await page.request.get(`${baseURL}/api/dashboard/home`, { headers: scopedHeaders })
   expect(homeResponse.status()).toBe(200)
-  const home = await homeResponse.json() as { locations: Array<{ id: string }>; credits: unknown }
+  const home = await homeResponse.json() as { locations: Array<{ id: string }> }
   expect(home.locations.map(location => location.id)).toEqual([LOCATION_ID])
-  expect(home.credits).toBeNull()
 
   expect((await page.request.get(`${baseURL}/api/dashboard/locations/${LOCATION_ID}`, { headers: scopedHeaders })).status()).toBe(200)
   expect((await page.request.get(`${baseURL}/api/dashboard/locations/${SIBLING_LOCATION_ID}`, { headers: scopedHeaders })).status()).toBe(404)

@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
-import { MCP_FREE_USER_ID, MCP_MANAGED_USER_ID } from './helpers/plan-fixtures'
-import { MCP_VERSION, MCP_MANAGED_SITE_ID, mcpRequest, mcpData } from './helpers/mcp'
+import { MCP_FREE_USER_ID, MCP_GROWTH_SERVICE_USER_ID } from './helpers/plan-fixtures'
+import { MCP_VERSION, MCP_GROWTH_SERVICE_SITE_ID, mcpRequest, mcpData } from './helpers/mcp'
 
 // Split out of mcp.spec.ts (content/publishing tool tests) — see
 // helpers/mcp.ts for why. This group covers post publishing, tenant blog
@@ -18,8 +18,8 @@ test.describe('stateless MCP server', () => {
   // shared one further.
 
   test('invalid event and offer posts are rejected with validation errors', async ({ request, baseURL }) => {
-    await loginAs(request, baseURL!, MCP_MANAGED_USER_ID)
-    const siteId = MCP_MANAGED_SITE_ID
+    await loginAs(request, baseURL!, MCP_GROWTH_SERVICE_USER_ID)
+    const siteId = MCP_GROWTH_SERVICE_SITE_ID
 
     const invalidEvent = await mcpRequest(request, baseURL!, {
       method: 'tools/call', toolName: 'create_post',
@@ -42,8 +42,8 @@ test.describe('stateless MCP server', () => {
 
   test('a post publishes immediately, stays idempotent on repeat, and matches the public API', async ({ request, baseURL }) => {
     test.setTimeout(90_000)
-    await loginAs(request, baseURL!, MCP_MANAGED_USER_ID)
-    const siteId = MCP_MANAGED_SITE_ID
+    await loginAs(request, baseURL!, MCP_GROWTH_SERVICE_USER_ID)
+    const siteId = MCP_GROWTH_SERVICE_SITE_ID
     let createdPostId: string | undefined
 
     try {
@@ -136,8 +136,8 @@ test.describe('stateless MCP server', () => {
   // file was split and timed out the same way (run 30084182210).
   test('event and offer post types store their type-specific fields', async ({ request, baseURL }) => {
     test.setTimeout(60_000)
-    await loginAs(request, baseURL!, MCP_MANAGED_USER_ID)
-    const siteId = MCP_MANAGED_SITE_ID
+    await loginAs(request, baseURL!, MCP_GROWTH_SERVICE_USER_ID)
+    const siteId = MCP_GROWTH_SERVICE_SITE_ID
     const now = Date.now()
     const createdPostIds: string[] = []
 
@@ -318,7 +318,7 @@ test.describe('stateless MCP server', () => {
       'get_translation_inventory', 'start_translation_job', 'list_translation_jobs',
       'get_translation_job', 'run_translation_job_batch', 'get_translation_review_items',
       'save_translation_review_item', 'publish_translations',
-      'list_work_requests', 'get_google_business_connection',
+      'list_work_requests',
     ]))
     expect(allToolNames.length).toBeGreaterThan(50)
 

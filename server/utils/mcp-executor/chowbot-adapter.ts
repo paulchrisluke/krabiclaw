@@ -23,7 +23,9 @@ export interface ChowbotExecutorSite {
   userId: string
   memberId: string
   organizationId: string
+  organizationSlug?: string
   siteId: string
+  subdomain?: string | null
   role: McpToolRole
   sessionId?: string | null
 }
@@ -101,7 +103,9 @@ export async function runMcpExecutorToolForChowbot(
         isPlatformAdmin: false,
         scopes: ['tenant'],
         organizationId: site.organizationId,
+        organizationSlug: site.organizationSlug,
         siteId: site.siteId,
+        subdomain: site.subdomain,
         role: site.role,
       },
     }

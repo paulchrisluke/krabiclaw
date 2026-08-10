@@ -18,6 +18,7 @@ interface ZarazTool {
   name: string
   enabled: boolean
   settings: Record<string, unknown>
+  defaultFields?: Record<string, string | boolean>
   actions: Record<string, ZarazAction>
   [key: string]: unknown
 }
@@ -177,6 +178,15 @@ function ga4ToolTemplate(config: ZarazConfig): ZarazTool | undefined {
   )
 }
 
+function zarazFieldMap(value: unknown): Record<string, string | boolean> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  return Object.fromEntries(
+    Object.entries(value).filter(([, fieldValue]) =>
+      typeof fieldValue === 'string' || typeof fieldValue === 'boolean'
+    ),
+  )
+}
+
 function upsertGa4Tool(
   config: ZarazConfig,
   key: string,
@@ -191,6 +201,11 @@ function upsertGa4Tool(
     name: existing?.name || input.name,
     enabled: true,
     settings: { ...(template?.settings ?? {}), ...(existing?.settings ?? {}), tid: input.measurementId },
+    defaultFields: {
+      ...zarazFieldMap(template?.defaultFields),
+      ...zarazFieldMap(existing?.defaultFields),
+      user_id: '{{ client.user_id }}',
+    },
     defaultPurpose: undefined,
     actions: scopeActionsToTrigger(existing?.actions ?? template?.actions, [input.triggerKey, CONSENT_BLOCK_TRIGGER]),
   }

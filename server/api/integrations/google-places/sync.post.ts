@@ -13,8 +13,8 @@ export default defineEventHandler(async (event) => {
 
   const { env, db, site } = await requireRequestedLocationAccess(event, locationId, body.siteId)
 
-  if (!await hasSiteEntitlement(db, site.id, 'google_business')) {
-    return jsonResponse({ error: 'Google Business sync requires a Growth plan or higher.' }, { status: 403 })
+  if (!await hasSiteEntitlement(db, site.id, 'google_places')) {
+    return jsonResponse({ error: 'Google Places sync requires a Growth plan or higher.' }, { status: 403 })
   }
 
   const apiKey = env.GOOGLE_PLACES_API_KEY as string | undefined
@@ -40,7 +40,7 @@ export default defineEventHandler(async (event) => {
       locationId,
       location.google_place_id
     )
-    await chargeFlatCredits(db, site.organization_id, { siteId: site.id, action: 'google_places_details' }).catch(() => {})
+    await chargeFlatCredits(db, site.organization_id, { siteId: site.id, action: 'google_places_details' })
     await purgePublicResourceCacheSafe(env, site.id)
 
     return jsonResponse({

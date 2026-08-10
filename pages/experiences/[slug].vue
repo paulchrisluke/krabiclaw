@@ -23,18 +23,24 @@
 
     <div v-else>
 
-      <!-- ── Mobile sticky bottom CTA ───────────────────────── -->
+      <!-- One responsive primary CTA: the mobile sticky row and desktop card
+           resolve the same action, so the footer remains secondary navigation. -->
       <div
-        v-if="experience.status !== 'sold_out' && !experienceLocationClosureMessage && !noBookableSlotsMessage"
+        v-if="experienceCta"
+        data-experience-cta="mobile"
         class="lg:hidden fixed bottom-0 inset-x-0 z-30 flex items-center justify-between gap-4 border-t border-default bg-default/95 backdrop-blur-sm px-5 py-4 shadow-lg"
       >
-        <div class="min-w-0">
+        <div v-if="experienceCta.action === 'book' && experience.price" class="min-w-0">
           <p v-if="experienceIsOnSale" class="text-xs text-muted line-through">{{ experienceCompareAtPrice }}</p>
-          <p v-if="experience.price" class="font-semibold text-default leading-tight">{{ experience.price }}</p>
+          <p class="font-semibold text-default leading-tight">{{ experience.price }}</p>
           <p class="text-xs text-muted">per person</p>
         </div>
-        <SayaButton class="shrink-0" @click="openBookingModal">
-          Reserve Now
+        <SayaButton
+          class="shrink-0"
+          :to="experienceCta.to"
+          @click="handleExperienceCtaClick"
+        >
+          {{ experienceCta.label }}
         </SayaButton>
       </div>
 
@@ -196,7 +202,7 @@
           </div>
 
           <!-- ── RIGHT: Sticky booking card ───────────────── -->
-          <div class="lg:sticky lg:top-8">
+          <div class="hidden lg:block lg:sticky lg:top-8">
             <div class="rounded-xl border border-default bg-elevated p-6 shadow-sm space-y-5">
 
               <!-- Title + tagline (desktop only) -->
@@ -243,7 +249,7 @@
                 v-if="experience.status === 'sold_out'"
                 class="rounded-lg bg-red-50 dark:bg-red-950/30 px-4 py-3 text-sm font-medium text-red-600 dark:text-red-400 text-center"
               >
-                This experience is currently sold out.
+                {{ experienceCopy.soldOutLabel }}
               </div>
 
               <!-- Location closed (e.g. renovations) -->
@@ -254,16 +260,16 @@
                 {{ experienceLocationClosureMessage }}
               </div>
 
-              <!-- Inquiry-only (no price and/or no schedule) — links to /contact
-                   with the experience pre-filled, instead of a dead-end message. -->
-              <div v-else-if="isInquiryOnly" class="pt-2">
-                <SayaButton block :to="contactUrl">
-                  Contact Us
+              <div v-else-if="experienceCta" data-experience-cta="desktop" class="pt-2">
+                <SayaButton
+                  block
+                  :to="experienceCta.to"
+                  @click="handleExperienceCtaClick"
+                >
+                  {{ experienceCta.label }}
                 </SayaButton>
               </div>
 
-              <!-- No bookable slots — never shows a misleading free-text time
-                   field; only a clear "not currently bookable" message. -->
               <div
                 v-else-if="noBookableSlotsMessage"
                 class="rounded-lg bg-amber-50 dark:bg-amber-950/30 px-4 py-3 text-sm font-medium text-amber-700 dark:text-amber-400 text-center"
@@ -271,61 +277,54 @@
                 {{ noBookableSlotsMessage }}
               </div>
 
-              <!-- Booking Button (Desktop) -->
-              <div v-else class="pt-2">
-                <SayaButton block @click="openBookingModal">
-                  Reserve Now
-                </SayaButton>
-              </div>
-
-              <!-- Booking Modal Flow -->
-              <BookingModal
-                v-model="isBookingModalOpen"
-                :title="modalTitle"
-                :can-go-back="bookingStep > 1 && !submitting"
-                @back="prevStep"
-              >
-                <!-- STEP 1: TIME (party size + day-grouped availability, single scrollable surface) -->
-                <div v-if="bookingStep === 1" class="flex flex-1 flex-col min-h-0">
-                  <BookingTimeStep
-                    v-model="timeSelection"
-                    :dates="availabilityDates"
-                    :loading="availabilityLoading"
-                    :guests="form.party_size_num"
-                    :guests-max="experience.max_capacity ?? 8"
-                    guests-label="Guests"
-                    @update:guests="form.party_size_num = $event"
-                    @next="nextStep"
-                  />
-                  <div v-if="bookingError" role="alert" class="mt-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">
-                    {{ bookingError }}
-                  </div>
-                </div>
-
-                <!-- STEP 2: CONTACT DETAILS -->
-                <div v-else-if="bookingStep === 2" class="flex-1 overflow-y-auto">
-                  <BookingRecap
-                    v-if="timeSelection"
-                    :main-line="`${timeSelection.label.split(',')[0]} · ${fmt12Hour(timeSelection.time)}`"
-                    :meta-line="`${form.party_size_num} ${form.party_size_num === 1 ? 'guest' : 'guests'}`"
-                    @edit="bookingStep = 1"
-                  />
-                  <div v-if="bookingError" role="alert" class="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">
-                    {{ bookingError }}
-                  </div>
-                  <BookingContactForm
-                    :initial-state="{ name: form.guest_name, email: form.guest_email, phone: form.guest_phone, notes: form.notes }"
-                    :loading="submitting"
-                    submit-text="Confirm booking"
-                    @submit="handleContactSubmit"
-                  />
-                </div>
-              </BookingModal>
-
             </div>
           </div>
 
         </div>
+
+        <!-- One shared booking modal is mounted outside responsive card visibility. -->
+        <BookingModal
+          v-model="isBookingModalOpen"
+          :title="modalTitle"
+          :can-go-back="bookingStep > 1 && !submitting"
+          @back="prevStep"
+        >
+          <!-- STEP 1: TIME (party size + day-grouped availability, single scrollable surface) -->
+          <div v-if="bookingStep === 1" class="flex flex-1 flex-col min-h-0">
+            <BookingTimeStep
+              v-model="timeSelection"
+              :dates="availabilityDates"
+              :loading="availabilityLoading"
+              :guests="form.party_size_num"
+              :guests-max="experience.max_capacity ?? 8"
+              guests-label="Guests"
+              @update:guests="form.party_size_num = $event"
+              @next="nextStep"
+            />
+            <div v-if="bookingError" role="alert" class="mt-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">
+              {{ bookingError }}
+            </div>
+          </div>
+
+          <!-- STEP 2: CONTACT DETAILS -->
+          <div v-else-if="bookingStep === 2" class="flex-1 overflow-y-auto">
+            <BookingRecap
+              v-if="timeSelection"
+              :main-line="`${timeSelection.label.split(',')[0]} · ${fmt12Hour(timeSelection.time)}`"
+              :meta-line="`${form.party_size_num} ${form.party_size_num === 1 ? 'guest' : 'guests'}`"
+              @edit="bookingStep = 1"
+            />
+            <div v-if="bookingError" role="alert" class="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">
+              {{ bookingError }}
+            </div>
+            <BookingContactForm
+              :initial-state="{ name: form.guest_name, email: form.guest_email, phone: form.guest_phone, notes: form.notes }"
+              :loading="submitting"
+              submit-text="Confirm booking"
+              @submit="handleContactSubmit"
+            />
+          </div>
+        </BookingModal>
       </section>
 
     </div>
@@ -337,6 +336,11 @@
 import { setBookingConfirmation } from '~/composables/useBookingHandoff'
 import { getActiveSpecialClosure, formatClosureMessage } from '~/utils/formatters'
 import { formatMoneyAmount, isSaleActive } from '~/shared/money'
+import {
+  buildExperienceContactUrl,
+  resolveExperienceAvailabilityMessage,
+  resolveExperienceDetailCta,
+} from '~/utils/experience-cta'
 
 definePageMeta({ key: (route) => route.fullPath })
 
@@ -348,6 +352,8 @@ const { siteId, site } = useTenantSite()
 const siteName = computed(() => (site as ApiValue)?.brand_name || (site as ApiValue)?.name || 'KrabiClaw')
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
+const { locale, t } = useI18n()
+const experienceCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
 
 const { experienceDetail: experience, config: siteConfig, pending, locations, experiencePolicyById } = await usePublicPageData()
 
@@ -371,27 +377,30 @@ const experienceLocationClosureMessage = computed(() => {
   return formatClosureMessage(getActiveSpecialClosure(loc.special_hours, loc.timezone))
 })
 
-// availability_state is derived server-side from real slots/bookings/overrides
-// (see computeExperienceAvailabilitySummary) — 'full'/'no_slots'/'inquiry_only'
-// mean there's nothing bookable right now, so the CTA/booking button is
-// replaced with a clear message instead of opening a modal with no real slots.
 const noBookableSlotsMessage = computed(() => {
-  switch ((experience.value as ApiValue)?.availability_state) {
-    case 'full': return 'Fully booked for the next few weeks. Please check back later.'
-    case 'no_slots': return 'This experience has no scheduled times right now.'
-    case 'inquiry_only': return 'Contact us to arrange a booking for this experience.'
-    default: return null
-  }
+  return resolveExperienceAvailabilityMessage(
+    (experience.value as ApiValue)?.availability_state,
+    {
+      fullyBooked: experienceCopy.value.fullyBookedLabel,
+      notScheduled: experienceCopy.value.notScheduledLabel,
+      temporarilyUnavailable: experienceCopy.value.temporarilyUnavailableLabel,
+    },
+  )
 })
-
-const isInquiryOnly = computed(() => (experience.value as ApiValue)?.availability_state === 'inquiry_only')
 
 const contactUrl = computed(() => {
   const exp = experience.value as ApiValue
-  if (!exp?.id) return '/contact'
-  const params = new URLSearchParams({ experienceId: exp.id, experienceTitle: exp.title ?? '' })
-  return `/contact?${params.toString()}`
+  return buildExperienceContactUrl(exp?.id, exp?.title)
 })
+
+const experienceCta = computed(() => resolveExperienceDetailCta({
+  status: (experience.value as ApiValue)?.status,
+  availabilityState: (experience.value as ApiValue)?.availability_state,
+  locationClosed: Boolean(experienceLocationClosureMessage.value),
+  bookLabel: experienceCopy.value.reserveCta,
+  contactLabel: t('saya.footer.contact_us'),
+  contactUrl: contactUrl.value,
+}))
 
 const experiencePolicySummary = computed(() => {
   const experienceId = experience.value?.id
@@ -459,6 +468,10 @@ function openBookingModal() {
   bookingStep.value = 1
   bookingError.value = null
   isBookingModalOpen.value = true
+}
+
+function handleExperienceCtaClick() {
+  if (experienceCta.value?.action === 'book') openBookingModal()
 }
 
 function nextStep() {
@@ -554,7 +567,7 @@ async function submitBooking() {
       siteId,
       siteName: siteName.value,
       guestName: form.guest_name.trim(),
-      sitePolicySummary: res.policy_summary ?? null,
+      policySummary: res.policy_summary ?? null,
       experienceId: experience.value?.id ?? null,
       title: experience.value?.title,
       date: timeSelection.value.day,

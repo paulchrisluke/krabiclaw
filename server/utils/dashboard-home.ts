@@ -1,6 +1,7 @@
-import { queryAll, queryFirst, type DbClient } from '~/server/db'
+import { queryAll, type DbClient } from '~/server/db'
 import { isOrganizationWideRole, teamAccessPredicate } from '~/server/utils/member-access'
 import { getGuestThreadOperationSummary } from '~/server/domain/guest-threads/repository'
+import { calculateMapEmbedUrl } from '~/server/utils/google-places'
 
 export interface DashboardHomeLocation {
   id: string
@@ -13,12 +14,10 @@ export interface DashboardHomeLocation {
   status: string
   updated_at: string
   hero_url: string | null
-}
-
-export interface DashboardHomeCredits {
-  balance: number
-  lifetime_used: number
-  last_topped_up_at: string | null
+  address: { addressLines?: string[] } | null
+  latitude: number | null
+  longitude: number | null
+  map_embed_url: string | null
 }
 
 export interface DashboardHomeEvent {
@@ -36,7 +35,6 @@ export interface DashboardHomeEvent {
 
 export interface DashboardHomeData {
   locations: DashboardHomeLocation[]
-  credits: DashboardHomeCredits | null
   events: DashboardHomeEvent[]
   operations: {
     openThreads: number
@@ -52,6 +50,21 @@ function safeJsonParse(value: string): unknown {
   } catch {
     return null
   }
+}
+
+function parseLocationAddress(value: string | null): { addressLines?: string[] } | null {
+  if (!value) return null
+  const parsed = safeJsonParse(value)
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+  const address = parsed as { addressLines?: unknown; streetAddress?: unknown }
+  if (Array.isArray(address.addressLines) && address.addressLines.every(line => typeof line === 'string')) {
+    return { addressLines: address.addressLines }
+  }
+  if (address.addressLines !== undefined) return null
+  if (typeof address.streetAddress === 'string' && address.streetAddress.trim()) {
+    return { addressLines: [address.streetAddress.trim()] }
+  }
+  return {}
 }
 
 // Shared by server/api/dashboard/home.get.ts and the dashboard home page's SSR
@@ -87,14 +100,17 @@ export async function getDashboardHomeData(
           AND ${teamAccessPredicate({ userIdExpr: 'm.userId', siteTeamExpr: 's.team_id', locationTeamExpr: 'bl.team_id' })}
       )`
     : ''
-  const [locations, credits, events, operations] = await Promise.all([
+  const [locations, events, operations] = await Promise.all([
     queryAll<{
       id: string; slug: string; title: string; city: string | null
       rating: number | null; review_count: number | null
       is_primary: number; status: string; updated_at: string
       hero_url: string | null
+      address: string | null; maps_url: string | null
+      latitude: number | null; longitude: number | null
     }>(db, `
       SELECT bl.id, bl.slug, bl.title, bl.city, bl.rating, bl.review_count,
+             bl.address, bl.maps_url, bl.latitude, bl.longitude,
              bl.is_primary, bl.status, bl.updated_at,
              COALESCE(ma_hero.thumbnail_url, ma_hero.public_url) as hero_url
       FROM business_locations bl
@@ -104,13 +120,6 @@ export async function getDashboardHomeData(
       ${locationScopeClause}
       ORDER BY bl.is_primary DESC, bl.title ASC
     `, scoped && principal ? [organizationId, siteId, principal.memberId] : [organizationId, siteId]),
-
-    scoped ? Promise.resolve(null) : queryFirst<{
-      balance: number; lifetime_used: number; last_topped_up_at: string | null
-    }>(db, `
-      SELECT balance, lifetime_used, last_topped_up_at
-      FROM ai_credits WHERE organization_id = ?
-    `, [organizationId]),
 
     queryAll<{
       id: string; event_type: string; entity_type: string | null
@@ -143,11 +152,15 @@ export async function getDashboardHomeData(
   const operationCounts = operations ?? { openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 }
 
   return {
-    locations: locations.map(l => ({
-      ...l,
-      is_primary: Boolean(l.is_primary),
-    })),
-    credits,
+    locations: locations.map((l) => {
+      const address = parseLocationAddress(l.address)
+      return {
+        ...l,
+        is_primary: Boolean(l.is_primary),
+        address,
+        map_embed_url: calculateMapEmbedUrl({ ...l, address: address?.addressLines?.[0] ?? null }),
+      }
+    }),
     events: events.map(e => ({
       ...e,
       metadata: e.metadata ? safeJsonParse(e.metadata) : null,

@@ -11,7 +11,7 @@ import { recordRequestPhase } from '~/server/utils/request-metrics'
 
 export async function loadDashboardContext(
   event: H3Event,
-  scope?: { orgSlug?: string | null; siteSlug?: string | null; afterTransfer?: boolean },
+  scope?: { orgSlug?: string | null; siteId?: string | null; siteSlug?: string | null; afterTransfer?: boolean },
 ) {
   const contextStartedAt = performance.now()
   const managedServiceEnabled = isManagedServiceEnabled(cloudflareEnv(event))
@@ -20,6 +20,7 @@ export async function loadDashboardContext(
     requireOrganization: scope?.orgSlug ? true : false,
     allowTransferFallback: scope?.afterTransfer,
     organizationSlug: scope?.orgSlug,
+    siteId: scope?.siteId,
     siteSlug: scope?.siteSlug,
     // This function is the canonical /api/dashboard/context payload loader —
     // called directly by that route's own handler (where event.path already

@@ -31,14 +31,34 @@
         <div class="flex items-center gap-2">
           <UIcon name="i-lucide-bot" class="size-4 text-primary" />
           <span class="text-sm font-semibold">ChowBot</span>
-          <UTooltip v-if="balance !== null" :text="`${balance} credits remaining`">
+          <UTooltip v-if="reconciliationRequired" text="Shared usage quota is unavailable pending approved reconciliation">
+            <UBadge
+              color="warning"
+              variant="subtle"
+              size="sm"
+              class="cursor-default"
+            >
+              Usage unavailable
+            </UBadge>
+          </UTooltip>
+          <UTooltip v-else-if="unlimited" text="Unlimited shared usage credits this UTC week">
+            <UBadge
+              color="neutral"
+              variant="subtle"
+              size="sm"
+              class="cursor-default tabular-nums"
+            >
+              Unlimited / week
+            </UBadge>
+          </UTooltip>
+          <UTooltip v-else-if="periodRemaining !== null" :text="`${periodRemaining.toLocaleString()} shared credits remaining this UTC week`">
             <UBadge
               :color="isDepleted ? 'error' : isLow ? 'warning' : 'neutral'"
               variant="subtle"
               size="sm"
               class="cursor-default tabular-nums"
             >
-              {{ (total !== null ? total - balance : 0).toLocaleString() }} / {{ (total ?? balance).toLocaleString() }}
+              {{ periodRemaining.toLocaleString() }} remaining
             </UBadge>
           </UTooltip>
         </div>
@@ -64,28 +84,35 @@
         </div>
       </div>
 
-      <div v-if="isDepleted" class="shrink-0 border-b border-error-200 dark:border-error-800 bg-error-50 dark:bg-error-950 px-4 py-3 flex flex-col gap-2">
+      <div v-if="reconciliationRequired" class="shrink-0 border-b border-warning-200 dark:border-warning-800 bg-warning-50 dark:bg-warning-950 px-4 py-3 flex flex-col gap-2">
+        <div class="flex items-center gap-2 text-xs text-warning-700 dark:text-warning-300">
+          <UIcon name="i-lucide-triangle-alert" class="size-3.5 shrink-0" />
+          <span class="font-medium">Shared usage quota unavailable pending approved reconciliation</span>
+        </div>
+        <NuxtLink v-if="orgSettings.billing.value" :to="orgSettings.billing.value" class="text-xs font-medium text-warning-800 underline dark:text-warning-200" @click="close">
+          Review billing status →
+        </NuxtLink>
+      </div>
+      <div v-else-if="isDepleted" class="shrink-0 border-b border-error-200 dark:border-error-800 bg-error-50 dark:bg-error-950 px-4 py-3 flex flex-col gap-2">
         <div class="flex items-center gap-2 text-xs text-error-600 dark:text-error-400">
           <UIcon name="i-lucide-triangle-alert" class="size-3.5 shrink-0" />
-          <span class="font-medium">No AI credits remaining</span>
+          <span class="font-medium">Shared weekly usage quota exhausted</span>
         </div>
-        <div class="flex gap-2">
-          <UButton size="xs" color="error" variant="solid" :loading="buyingCredits === 500" :disabled="!!buyingCredits" @click="purchaseCredits(500)">500 — $9</UButton>
-          <UButton size="xs" color="error" variant="soft" :loading="buyingCredits === 2500" :disabled="!!buyingCredits" @click="purchaseCredits(2500)">2,500 — $29</UButton>
-          <UButton size="xs" color="error" variant="soft" :loading="buyingCredits === 5000" :disabled="!!buyingCredits" @click="purchaseCredits(5000)">5,000 — $49</UButton>
-        </div>
+        <NuxtLink v-if="orgSettings.billing.value" :to="orgSettings.billing.value" class="text-xs font-medium text-error-700 underline dark:text-error-300" @click="close">
+          Review your subscription plan →
+        </NuxtLink>
       </div>
       <div v-else-if="isLow" class="shrink-0 bg-warning-50 dark:bg-warning-950 px-4 py-2 text-xs text-warning-600 dark:text-warning-400 flex items-center gap-2">
         <UIcon name="i-lucide-triangle-alert" class="size-3.5 shrink-0" />
-        Low credits ({{ balance }} remaining).
-        <NuxtLink v-if="orgSettings.billing.value" :to="orgSettings.billing.value" class="underline" @click="close">Top up →</NuxtLink>
+        Low shared credits ({{ periodRemaining }} remaining this UTC week).
+        <NuxtLink v-if="orgSettings.billing.value" :to="orgSettings.billing.value" class="underline" @click="close">Review plan →</NuxtLink>
       </div>
 
       <ChowBotConversation
         v-model:input="input"
         :messages="messages"
         :placeholder="promptPlaceholder"
-        :disabled="isLoading || isUploading || creatingRestaurant || (!siteId && !setupMode) || isDepleted"
+        :disabled="isLoading || isUploading || creatingRestaurant || (!siteId && !setupMode) || isBlocked"
         :loading="isLoading || isUploading || creatingRestaurant"
         :messages-status="isLoading ? 'streaming' : isUploading ? 'submitted' : undefined"
         :empty-title="emptyTitle"
@@ -148,7 +175,7 @@
               color="neutral"
               variant="ghost"
               size="xs"
-              :disabled="isLoading || isUploading || !siteId || isDepleted || setupMode"
+              :disabled="isLoading || isUploading || !siteId || isBlocked || setupMode"
               @click="fileInputRef?.click()"
             />
           </UTooltip>
@@ -180,6 +207,7 @@ import { getQuickActionPrompts } from '~/composables/useOnboardingPrompts'
 import { sanitizeHtmlForSsr } from '~/utils/markdown'
 import { loadDomPurify } from '~/utils/dom-purify-loader'
 import type { SiteVertical } from '~/utils/vertical-copy'
+import { isSiteCreationResponse } from '~/utils/site-creation-response'
 
 const dashboardApi = useDashboardApi()
 const props = defineProps<{ embedded?: boolean; setupMode?: boolean }>()
@@ -190,21 +218,9 @@ const { isOpen, messages, isLoading, siteId, close, sendMessage, clearMessages, 
 const { paths: dashboardSiteLinkPaths } = useDashboardSiteLinks(siteId.value ?? '')
 const orgSettings = useOrgSettings()
 const DOMPurify = import.meta.client ? await loadDomPurify() : { sanitize: sanitizeHtmlForSsr }
-const { balance, total, isLow, isDepleted, fetch: fetchCredits } = useAiCredits(siteId)
+const { periodRemaining, unlimited, reconciliationRequired, isLow, isDepleted, isBlocked, fetch: fetchCredits } = useAiCredits(siteId)
 
 watch(isOpen, (open: boolean) => { if (open && siteId.value) fetchCredits() })
-
-const buyingCredits = ref<number | null>(null)
-const { purchase: purchaseCreditsFn } = useCreditPurchase()
-
-async function purchaseCredits(bundle: 500 | 2500 | 5000) {
-  buyingCredits.value = bundle
-  try {
-    await purchaseCreditsFn(bundle, async () => { await fetchCredits() })
-  } finally {
-    buyingCredits.value = null
-  }
-}
 
 const input = ref('')
 
@@ -232,7 +248,7 @@ const regularStarterPrompts = computed(() => [
 ])
 
 const setupStarterPrompts = [
-  'Start from Google Business',
+  'Start from Google Maps',
   'Start from Facebook or Instagram',
   'Build manually with ChowBot',
 ]
@@ -245,7 +261,8 @@ const emptyDescription = computed(() => setupMode.value && !siteId.value
 )
 const promptPlaceholder = computed(() => {
   if (setupMode.value && !siteId.value) return setupStep.value === 'source' ? 'Tell ChowBot where to start...' : 'Reply to ChowBot...'
-  if (isDepleted.value) return 'Purchase credits above to continue...'
+  if (reconciliationRequired.value) return 'Usage quota unavailable pending reconciliation...'
+  if (isDepleted.value) return 'Review your subscription plan to continue...'
   if (pendingFile.value) return 'Add a caption (optional) then press send...'
   if (pendingText.value) return 'Add a note (optional) then press send...'
   return 'Ask ChowBot anything...'
@@ -311,7 +328,7 @@ function normalizeSubdomain(value: string) {
 function setupPromptForSource() {
   const businessWord = setupVertical.value === 'experience' ? 'experience' : 'restaurant'
   if (setupSource.value === 'google') {
-    return `Help me start from my Google Business profile. I want to set up locations, hours, photos, and ${businessWord} details.`
+    return `Help me start from my Google Maps listing. I want to set up locations, hours, and ${businessWord} details.`
   }
   if (setupSource.value === 'facebook') {
     return `Help me start from my Facebook or Instagram presence. I want to turn existing social content into my ${businessWord} site.`
@@ -344,7 +361,7 @@ function handleSetupVerticalReply(text: string) {
     {
       role: 'assistant',
       content: setupSource.value === 'google'
-        ? `Great. First, what is the ${nameWord} name? After I create the workspace, I can help connect Google Business from here.`
+        ? `Great. First, what is the ${nameWord} name? After I create the workspace, I can help import Google Places details from here.`
         : setupSource.value === 'facebook'
           ? `Perfect. What is the ${nameWord} name? After I create the workspace, I can help connect Meta and turn existing content into the site.`
           : `Easy. What is the ${nameWord} name? I will create the workspace first, then we can build it together step by step.`,
@@ -439,10 +456,7 @@ async function handleSetupMessage(text: string) {
         subdomain: requestedSubdomain,
         vertical: setupVertical.value ?? 'restaurant',
       },
-      validate: (value): value is { site: { id: string } } =>
-        isRecord(value)
-        && isRecord(value.site)
-        && typeof value.site.id === 'string',
+      validate: isSiteCreationResponse,
     })
 
     await dashboard.refresh()

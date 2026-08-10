@@ -63,8 +63,6 @@ export interface DashboardSiteRow {
   // or null for pure vertical defaults — see resolveSiteCmsCapabilities
   // (server/utils/cms-capabilities.ts), the one place this is parsed.
   feature_overrides: string | null
-  heroImageUrl?: string | null
-  locationHeroImageUrl?: string | null
 }
 
 export interface DashboardLocationRow {
@@ -86,7 +84,6 @@ export interface DashboardLocationContextRow {
   organization_id: string
   site_id: string
   slug: string
-  google_location_id: string | null
   title: string
   address: string | null
   city: string | null
@@ -125,6 +122,11 @@ export interface DashboardContextOptions {
   // throw to represent that state instead of erroring.
   requireOrganization?: boolean
   organizationSlug?: string | null
+  // Explicit site scope used by transfer onboarding when a transferred site
+  // has no generated subdomain (for example a custom-domain-only site).
+  // Membership and organization ownership are still enforced by the same
+  // canonical site query and assertMemberSiteAccess call below.
+  siteId?: string | null
   siteSlug?: string | null
   // The scoped-role path allowlist (SCOPED_ROLE_DASHBOARD_ROUTES) only lists
   // /api/dashboard/* patterns. event.path is correct when a real API route
@@ -313,23 +315,32 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
   // before a site is known/selected, so a missing header there means "no site
   // selected yet" rather than a client error — only callers that need a site
   // get the hard 400.
+  const siteId = options.siteId ?? null
   const siteSlug = options.siteSlug ?? getHeader(event, 'x-dashboard-site-slug')
 
-  if (!siteSlug && options.requireSite !== false) {
+  if (!siteId && !siteSlug && options.requireSite !== false) {
     throw createError({ statusCode: 400, message: 'Site slug is required. Use /dashboard/{orgSlug}/sites/{siteSlug} routes.' })
   }
 
-  const site = siteSlug
+  const site = siteId
     ? await queryFirst<DashboardSiteRow>(db, `
+        SELECT id, organization_id, brand_name, vertical, subdomain, custom_domain, public_url,
+               status, onboarding_status, plan, primary_location_id, default_currency, source_locale, feature_overrides
+        FROM sites
+        WHERE organization_id = ? AND id = ?
+        LIMIT 1
+      `, [organization.id, siteId])
+    : siteSlug
+      ? await queryFirst<DashboardSiteRow>(db, `
         SELECT id, organization_id, brand_name, vertical, subdomain, custom_domain, public_url,
                status, onboarding_status, plan, primary_location_id, default_currency, source_locale, feature_overrides
         FROM sites
         WHERE organization_id = ? AND subdomain = ?
         LIMIT 1
-      `, [organization.id, siteSlug])
-    : options.allowTransferFallback
-      ? await resolveRecentlyTransferredSite(db, organization.id, session.user.id)
-      : null
+        `, [organization.id, siteSlug])
+      : options.allowTransferFallback
+        ? await resolveRecentlyTransferredSite(db, organization.id, session.user.id)
+        : null
 
   if (!site && options.requireSite !== false) {
     throw createError({ statusCode: 404, message: 'Site not found' })
@@ -344,28 +355,13 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
     })
   }
 
-  const siteConfig = site
-    ? await queryAll<{ key: string; value: string | null }>(db, `
-        SELECT key, value
-        FROM site_config
-        WHERE organization_id = ? AND site_id = ?
-          AND key IN ('hero_image_url', 'location_hero_image_url')
-      `, [organization.id, site.id])
-    : []
-
-  const configByKey = Object.fromEntries(siteConfig.map((row) => [row.key, row.value]))
-
   return {
     env,
     db,
     session,
     userId: session.user.id,
     organization,
-    site: site ? {
-      ...site,
-      heroImageUrl: configByKey.hero_image_url ?? null,
-      locationHeroImageUrl: configByKey.location_hero_image_url ?? null,
-    } : null
+    site,
   }
 }
 
@@ -377,15 +373,31 @@ export interface DashboardSiteSummaryRow {
   status: string | null
   onboarding_status: string | null
   plan: string | null
+  preview_image_url: string | null
 }
 
 export async function listOrganizationSites(db: DbClient, organizationId: string, principal?: { memberId: string; role: string }) {
   return await queryAll<DashboardSiteSummaryRow>(db, `
-    SELECT id, brand_name, subdomain, vertical, status, onboarding_status, plan
-    FROM sites
-    WHERE organization_id = ?
-      ${principal && !isOrganizationWideRole(principal.role) ? 'AND EXISTS (SELECT 1 FROM member m JOIN teamMember tm ON tm.userId = m.userId AND tm.teamId = sites.team_id WHERE m.id = ? AND m.organizationId = sites.organization_id)' : ''}
-    ORDER BY created_at ASC, id ASC
+    SELECT s.id, s.brand_name, s.subdomain, s.vertical, s.status,
+           s.onboarding_status, s.plan,
+           COALESCE(ma_site_og.public_url, ma_hero.thumbnail_url, ma_hero.public_url) AS preview_image_url
+    FROM sites s
+    LEFT JOIN media_assets ma_site_og
+      ON ma_site_og.id = s.og_image_asset_id
+     AND ma_site_og.site_id = s.id
+     AND ma_site_og.organization_id = s.organization_id
+     AND ma_site_og.status = 'active'
+    LEFT JOIN business_locations bl
+      ON bl.id = s.primary_location_id
+     AND bl.site_id = s.id
+     AND bl.organization_id = s.organization_id
+    LEFT JOIN media_assets ma_hero
+      ON ma_hero.id = bl.hero_media_asset_id
+     AND ma_hero.site_id = s.id
+     AND ma_hero.organization_id = s.organization_id
+    WHERE s.organization_id = ?
+      ${principal && !isOrganizationWideRole(principal.role) ? 'AND EXISTS (SELECT 1 FROM member m JOIN teamMember tm ON tm.userId = m.userId AND tm.teamId = s.team_id WHERE m.id = ? AND m.organizationId = s.organization_id)' : ''}
+    ORDER BY s.created_at ASC, s.id ASC
   `, principal && !isOrganizationWideRole(principal.role) ? [organizationId, principal.memberId] : [organizationId])
 }
 

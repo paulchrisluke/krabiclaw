@@ -1,0 +1,878 @@
+name: Production release (manifest-gated)
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Run read-only preflight first; deploy requires a separate dispatch after reviewing that preflight
+        required: true
+        default: preflight
+        type: choice
+        options:
+          - preflight
+          - deploy
+      staging_run_id:
+        description: Full-lane run ID that produced the verified staging manifest (preflight operation)
+        required: false
+        type: string
+      preflight_run_id:
+        description: Successful preflight run ID reviewed before the deploy operation
+        required: false
+        type: string
+      source_sha:
+        description: Full source SHA used to dispatch this workflow (dispatch the SHA under review)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+
+jobs:
+  production-environment-preflight:
+    name: Verify production Environment protection
+    if: inputs.operation == 'deploy'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Require the protected production Environment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          response="$RUNNER_TEMP/production-environment.json"
+          api_url="${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/environments/production"
+          http_status="$(curl -sS --connect-timeout 10 --max-time 20 --retry 0 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            -o "$response" \
+            -w '%{http_code}' \
+            "$api_url")"
+          if [[ "$http_status" != "200" ]]; then
+            echo "GitHub production Environment API returned HTTP $http_status; release is blocked" >&2
+            exit 1
+          fi
+          if ! jq -e '
+            .name == "production"
+            and ((.protection_rules | type) == "array")
+            and (
+              [
+                .protection_rules[]?
+                | select(.type == "required_reviewers" and .prevent_self_review == true)
+                | (.reviewers // [])
+                | select(type == "array")
+                | .[]
+                | select(
+                    type == "object"
+                    and (.reviewer | type == "object")
+                    and ((.reviewer.login? // .reviewer.name? // .reviewer.slug?) | type == "string" and length > 0)
+                  )
+              ] | length
+            ) > 0
+          ' "$response" >/dev/null; then
+            echo "GitHub production Environment is missing a valid required_reviewers rule/reviewer list; release is blocked" >&2
+            exit 1
+          fi
+          echo "Verified GitHub production Environment protection with required reviewers."
+
+  production-stripe-webhook-preflight:
+    name: Verify production Stripe webhook contract (read-only)
+    if: inputs.operation == 'preflight'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - name: Read production webhook endpoint with the live Stripe key
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY_LIVE }}
+          STRIPE_WEBHOOK_EXPECTED_MODE: live
+          STRIPE_WEBHOOK_ENDPOINT_URL: https://krabiclaw.com/api/billing/webhook
+          STRIPE_WEBHOOK_PREFLIGHT_EVIDENCE_PATH: ${{ runner.temp }}/production-stripe-webhook-preflight.json
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]
+          [[ "$SOURCE_SHA" == "$GITHUB_SHA" ]]
+          node --experimental-strip-types scripts/preflight-stripe-webhook-endpoint.mjs
+      - name: Assert production webhook evidence is redacted
+        if: always()
+        env:
+          EVIDENCE_PATH: ${{ runner.temp }}/production-stripe-webhook-preflight.json
+        run: |
+          set -euo pipefail
+          test -s "$EVIDENCE_PATH"
+          if grep -E '(sk|rk)_(test|live)_[A-Za-z0-9]+' "$EVIDENCE_PATH"; then
+            echo "Production webhook preflight evidence contains a Stripe key" >&2
+            exit 1
+          fi
+      - name: Upload production webhook preflight evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: production-stripe-webhook-preflight-${{ github.sha }}
+          path: ${{ runner.temp }}/production-stripe-webhook-preflight.json
+          retention-days: 90
+          if-no-files-found: error
+
+  preflight:
+    name: Prove staging manifest and dry-run production
+    if: inputs.operation == 'preflight'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - name: Download the immutable staging manifest and build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STAGING_RUN_ID: ${{ inputs.staging_run_id }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" == "$GITHUB_SHA" ]] || {
+            echo "Dispatch this workflow from the candidate source SHA ($SOURCE_SHA != $GITHUB_SHA)" >&2
+            exit 1
+          }
+          [[ "$STAGING_RUN_ID" =~ ^[0-9]+$ ]] || {
+            echo "staging_run_id must be a numeric GitHub Actions run ID" >&2
+            exit 1
+          }
+          mkdir -p "$RUNNER_TEMP/staging-manifest" "$RUNNER_TEMP/staging-build"
+          gh run view "$STAGING_RUN_ID" --json conclusion,event,headSha,workflowName > "$RUNNER_TEMP/staging-manifest/staging-run.json"
+          jq -e --arg sha "$SOURCE_SHA" '.conclusion == "success" and .event == "workflow_dispatch" and .headSha == $sha and .workflowName == "CI (Full Validation Lane)"' "$RUNNER_TEMP/staging-manifest/staging-run.json" >/dev/null
+          gh run download "$STAGING_RUN_ID" --name "candidate-manifest-$SOURCE_SHA" --dir "$RUNNER_TEMP/staging-manifest"
+          gh run download "$STAGING_RUN_ID" --name "production-build-$SOURCE_SHA" --dir "$RUNNER_TEMP/staging-build"
+          MANIFEST_PATH="$(find "$RUNNER_TEMP/staging-manifest" -type f -name candidate-manifest.json -print -quit)"
+          test -n "$MANIFEST_PATH"
+          if [[ "$MANIFEST_PATH" != "$RUNNER_TEMP/staging-manifest/candidate-manifest.json" ]]; then
+            cp "$MANIFEST_PATH" "$RUNNER_TEMP/staging-manifest/candidate-manifest.json"
+          fi
+          BUILD_ENTRY="$(find "$RUNNER_TEMP/staging-build" -type f -path '*/server/index.mjs' -print -quit)"
+          test -n "$BUILD_ENTRY"
+          BUILD_ROOT="${BUILD_ENTRY%/server/index.mjs}"
+          test ! -e .output
+          cp -R "$BUILD_ROOT" .output
+          build_file_count="$(find .output -type f | wc -l | tr -d ' ')"
+          build_tree_sha256="$(find .output -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}')"
+          server_entry_sha256="$(sha256sum .output/server/index.mjs | awk '{print $1}')"
+          jq -e --arg count "$build_file_count" --arg tree "$build_tree_sha256" --arg server "$server_entry_sha256" \
+            '.build.fileCount == ($count | tonumber) and .build.treeSha256 == $tree and .build.serverEntrySha256 == $server' \
+            "$RUNNER_TEMP/staging-manifest/candidate-manifest.json" >/dev/null
+      - name: Validate staging evidence and exact source identity
+        id: manifest
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -euo pipefail
+          manifest="$RUNNER_TEMP/staging-manifest/candidate-manifest.json"
+          jq -e \
+            --arg sha "$SOURCE_SHA" \
+            '.status == "verified" and .sourceSha == $sha and .candidate.sourceSha == $sha and .candidate.versionTag == $sha and .candidate.promoted == true and (.candidate.versionId | type == "string") and (((.candidate.splitDeployment | type) == "object") or ((.candidate.splitDeployment | type) == "array")) and (((.candidate.deployedDeployment | type) == "object") or ((.candidate.deployedDeployment | type) == "array")) and (.assets.deployed.sourceSha == $sha) and (.assets.deployed.workerVersionId == .candidate.versionId) and (.assets.deployed.routeInventory.requiredSurfaces == ["platform", "saya", "blawby"]) and (([.assets.deployed.routeInventory.surfaces[] | select(.name == "saya") | (.variants // [])[] | .name] | sort) == ["kikuzuki", "pottery-house"]) and (.browser.status == "passed") and (.browser.baseUrl == "https://staging.krabiclaw.com") and (.browser.routeInventory.requiredSurfaces == ["platform", "saya", "blawby"]) and (([.browser.routeInventory.surfaces[] | select(.name == "saya") | (.variants // [])[] | .name] | sort) == ["kikuzuki", "pottery-house"]) and (.browser.desktop == true) and (.browser.mobile == true) and (.browser.saya.desktop == true) and (.browser.saya.mobile == true) and (.browser.blawby.desktop == true) and (.browser.blawby.mobile == true) and (.browser.linksPageLifecycle.status == "passed") and (.benchmark.comparison.ok == true) and (.benchmark.baseline.sourceSha == .baseline.sourceSha) and (.benchmark.baseline.workerVersionId == .baseline.versionId) and (.benchmark.candidate.sourceSha == $sha) and (.benchmark.candidate.workerVersionId == .candidate.versionId) and (.benchmark.comparison.baseline.sourceSha == .baseline.sourceSha) and (.benchmark.comparison.head.sourceSha == $sha) and (.migrations.after != null) and ((.migrations.after.remoteApplied | type) == "object" or (.migrations.after.remoteApplied | type) == "array") and ((.migrations.after.files | length) == 0) and (.migrations.stateAfter.status == "verified") and (.migrations.stateAfter.exactSet == true) and (.migrations.stateAfter.exactOrder == true) and (.stripeWebhookPreflight.status == "passed") and (.stripeWebhookPreflight.testMode == true) and (.stripeWebhookPreflight.sourceSha == $sha) and (.stripeCatalogPreflight.status == "passed") and (.stripeCatalogPreflight.accountMode == "test") and (.stripeCatalogPreflight.sourceSha == $sha) and (.stripeCatalogPreflight.sourceSha == $sha) and (.stripeCanary.status == "passed") and (.stripeCanary.testMode == true) and (.stripeCanary.sourceSha == $sha) and (.stripeCanary.workerVersionId == .candidate.versionId)' \
+            "$manifest" >/dev/null
+          jq -e '.stripeCatalogPreflight.accountId | test("^acct_[A-Za-z0-9]+$")' "$manifest" >/dev/null
+          jq -e '.stripeCatalogPreflight.providerSnapshotSha256 | test("^[0-9a-f]{64}$")' "$manifest" >/dev/null
+          staging_version_id="$(jq -r '.candidate.versionId' "$manifest")"
+          [[ "$staging_version_id" != "null" && -n "$staging_version_id" ]]
+          echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+          echo "staging_version_id=$staging_version_id" >> "$GITHUB_OUTPUT"
+          cat "$manifest"
+      - name: Re-verify exact staging Worker and assets (read-only)
+        env:
+          STAGING_BASE_URL: https://staging.krabiclaw.com
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          STAGING_VERSION_ID: ${{ steps.manifest.outputs.staging_version_id }}
+        run: |
+          set -euo pipefail
+          test "$STAGING_BASE_URL" = "https://staging.krabiclaw.com"
+          node scripts/release-route-inventory.mjs --base-url "$STAGING_BASE_URL" --output "$RUNNER_TEMP/staging-manifest/release-route-inventory.json" >/dev/null
+          node scripts/verify-deployed-candidate.mjs \
+            --base-url "$STAGING_BASE_URL" \
+            --expected-sha "$SOURCE_SHA" \
+            --expected-version-id "$STAGING_VERSION_ID" \
+            --worker-name krabiclaw-staging \
+            --route-inventory "$RUNNER_TEMP/staging-manifest/release-route-inventory.json" \
+            --output "$RUNNER_TEMP/staging-manifest/staging-reverification.json"
+      - name: Capture production migration preflight (read-only)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute DB --remote --command 'SELECT id, name, applied_at FROM d1_migrations ORDER BY id' --json > "$RUNNER_TEMP/staging-manifest/production-migrations-before-applied.json"
+          npx wrangler d1 migrations list DB --remote | tee "$RUNNER_TEMP/staging-manifest/production-migrations-before.txt"
+          yarn migrate:check
+          {
+            echo "## Issue #554 production release preflight"
+            echo "- Source SHA: \`${{ inputs.source_sha }}\`"
+            echo "- Staging Worker Version: \`${{ steps.manifest.outputs.staging_version_id }}\`"
+            echo "- Build identity:"
+            jq -c '.build' "$RUNNER_TEMP/staging-manifest/candidate-manifest.json"
+            echo "- Current production migration output (read-only):"
+            sed 's/^/  /' "$RUNNER_TEMP/staging-manifest/production-migrations-before.txt"
+            echo "- The protected production environment must have mandatory required-reviewer approval before migration, upload, split rollout, purge, or browser verification."
+            echo '- Commands gated behind approval: one protected remote migration apply, one tagged Worker Version upload, baseline 100%/candidate 0% browser gate, promotion, purge, deployed browser verification, and AI Search sync.'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Capture production baseline provenance (read-only)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          baseline_status="$RUNNER_TEMP/staging-manifest/production-baseline-deployment.json"
+          baseline_version="$RUNNER_TEMP/staging-manifest/production-baseline-version.json"
+          baseline_provenance="$RUNNER_TEMP/staging-manifest/production-baseline-provenance.json"
+          npx wrangler deployments status --name krabiclaw --json > "$baseline_status"
+          BASELINE_VERSION_ID="$(node -e '
+            const fs=require("node:fs");const root=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const deployment=root.latest_deployment??root;const versions=Array.isArray(deployment.versions)?deployment.versions:[];const id=v=>v?.version_id??v?.versionId??v?.id;const traffic=v=>Number(v?.percentage??v?.traffic??NaN);const rows=versions.map(v=>({id:id(v),traffic:traffic(v)}));const active=rows.filter(v=>v.traffic>0);if(!rows.length||rows.some(v=>typeof v.id!=="string"||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(v.id)||!Number.isFinite(v.traffic)||v.traffic<0||v.traffic>100)||Math.abs(rows.reduce((sum,v)=>sum+v.traffic,0)-100)>0.001||active.length!==1||active[0].traffic!==100)process.exit(2);console.log(active[0].id)
+          ' "$baseline_status")"
+          npx wrangler versions view "$BASELINE_VERSION_ID" --json > "$baseline_version"
+          node scripts/verify-production-baseline-provenance.mjs \
+            --deployment-file "$baseline_status" \
+            --version-file "$baseline_version" \
+            --api-url https://krabiclaw.com/api/deployment \
+            --expected-version-id "$BASELINE_VERSION_ID" \
+            --worker-name krabiclaw \
+            --output "$baseline_provenance"
+          jq -e --arg version "$BASELINE_VERSION_ID" '.status == "verified" and .versionId == $version and (.versionTag | test("^[0-9a-f]{40}$")) and .api.workerVersionId == $version and .api.sourceSha == .versionTag and .api.workerVersionTag == .versionTag' "$baseline_provenance" >/dev/null
+          {
+            echo "- Current production Worker baseline: \`$BASELINE_VERSION_ID\`"
+            echo "- Baseline source tag and live /api/deployment provenance: verified read-only"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Run read-only migration and Worker dry-runs against exact artifact
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          yarn migrate:check
+          npx wrangler deploy --dry-run --strict
+      - name: Carry forward the immutable candidate evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: approved-staging-evidence-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/staging-manifest/candidate-manifest.json
+            ${{ runner.temp }}/staging-manifest/staging-run.json
+            ${{ runner.temp }}/staging-manifest/staging-reverification.json
+            ${{ runner.temp }}/staging-manifest/production-migrations-before-applied.json
+            ${{ runner.temp }}/staging-manifest/production-migrations-before.txt
+            ${{ runner.temp }}/staging-manifest/production-baseline-deployment.json
+            ${{ runner.temp }}/staging-manifest/production-baseline-version.json
+            ${{ runner.temp }}/staging-manifest/production-baseline-provenance.json
+            .output
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: error
+
+  deploy-production:
+    name: Deploy verified candidate to production
+    if: inputs.operation == 'deploy' && needs.production-environment-preflight.result == 'success'
+    needs: [production-environment-preflight]
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    timeout-minutes: 120
+    env:
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      PLAYWRIGHT_PREVIEW_URL: https://krabiclaw.com
+      PLAYWRIGHT_WORKERS: "1"
+      WORKER_NAME: krabiclaw
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - name: Attest and download the separately reviewed preflight
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREFLIGHT_RUN_ID: ${{ inputs.preflight_run_id }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]
+          [[ "$PREFLIGHT_RUN_ID" =~ ^[0-9]+$ ]]
+          test "$SOURCE_SHA" = "$GITHUB_SHA"
+          gh run view "$PREFLIGHT_RUN_ID" --json conclusion,event,headSha,workflowName > "$RUNNER_TEMP/production-preflight-run.json"
+          jq -e --arg sha "$SOURCE_SHA" '.conclusion == "success" and .event == "workflow_dispatch" and .headSha == $sha and .workflowName == "Production release (manifest-gated)"' "$RUNNER_TEMP/production-preflight-run.json" >/dev/null
+          mkdir -p "$RUNNER_TEMP/approved-staging"
+          gh run download "$PREFLIGHT_RUN_ID" \
+            --name "approved-staging-evidence-$SOURCE_SHA" \
+            --dir "$RUNNER_TEMP/approved-staging"
+          mkdir -p "$RUNNER_TEMP/production-webhook-preflight"
+          gh run download "$PREFLIGHT_RUN_ID" \
+            --name "production-stripe-webhook-preflight-$SOURCE_SHA" \
+            --dir "$RUNNER_TEMP/production-webhook-preflight"
+          PRODUCTION_WEBHOOK_PREFLIGHT_PATH="$(find "$RUNNER_TEMP/production-webhook-preflight" -type f -name production-stripe-webhook-preflight.json -print -quit)"
+          test -n "$PRODUCTION_WEBHOOK_PREFLIGHT_PATH"
+          expected_webhook_api_version="$(node --experimental-strip-types --input-type=module -e "import { STRIPE_WEBHOOK_API_VERSION } from './shared/stripe-contract.ts'; process.stdout.write(STRIPE_WEBHOOK_API_VERSION)")"
+          expected_webhook_events="$(node --experimental-strip-types --input-type=module -e "import { STRIPE_WEBHOOK_EVENTS } from './scripts/lib/stripe-webhook-preflight.mjs'; process.stdout.write(JSON.stringify([...STRIPE_WEBHOOK_EVENTS].sort()))")"
+          jq -e \
+            --arg sha "$SOURCE_SHA" \
+            --arg expected_url "https://krabiclaw.com/api/billing/webhook" \
+            --arg expected_api_version "$expected_webhook_api_version" \
+            --argjson expected_events "$expected_webhook_events" \
+            '.status == "passed" and .accountMode == "live" and .testMode == false and .sourceSha == $sha and .expectedUrl == $expected_url and .expectedApiVersion == $expected_api_version and .effectiveApiVersion == $expected_api_version and ((.apiVersionSource == "endpoint" and (.apiVersion | type) == "string" and .apiVersion == $expected_api_version) or (.apiVersionSource == "account_default" and has("apiVersion") and (.apiVersion | type) == "null" and (.accountDefaultApiVersions | type) == "array" and .accountDefaultApiVersions == [$expected_api_version] and (.accountDefaultApiVersionsTruncated | type) == "boolean" and .accountDefaultApiVersionsTruncated == false and (.accountDefaultResponseCount | type) == "number" and (.accountDefaultResponseCount | floor) == .accountDefaultResponseCount and .accountDefaultResponseCount >= 1 and (.accountDefaultMissingResponseCount | type) == "number" and (.accountDefaultMissingResponseCount | floor) == .accountDefaultMissingResponseCount and .accountDefaultMissingResponseCount == 0)) and .enabledEvents == $expected_events and .expectedEvents == $expected_events and (.endpointId | type == "string") and (.endpointId | test("^we_[0-9a-f]{8}$"))' \
+            "$PRODUCTION_WEBHOOK_PREFLIGHT_PATH" >/dev/null
+          if grep -E '(sk|rk)_(test|live)_[A-Za-z0-9]+' "$PRODUCTION_WEBHOOK_PREFLIGHT_PATH"; then
+            echo "Production webhook preflight artifact contains a Stripe key" >&2
+            exit 1
+          fi
+          MANIFEST_PATH="$(find "$RUNNER_TEMP/approved-staging" -type f -name candidate-manifest.json -print -quit)"
+          test -n "$MANIFEST_PATH"
+          if [[ "$MANIFEST_PATH" != "$RUNNER_TEMP/approved-staging/candidate-manifest.json" ]]; then
+            cp "$MANIFEST_PATH" "$RUNNER_TEMP/approved-staging/candidate-manifest.json"
+          fi
+          jq -e --arg sha "$SOURCE_SHA" '.status == "verified" and .sourceSha == $sha and .candidate.sourceSha == $sha and .candidate.promoted == true and (.candidate.versionId | type == "string") and .database.mutationAttempted == true and .database.interventionRequired == false' "$RUNNER_TEMP/approved-staging/candidate-manifest.json" >/dev/null
+          STAGING_VERSION_ID="$(jq -r '.candidate.versionId' "$RUNNER_TEMP/approved-staging/candidate-manifest.json")"
+          test -n "$STAGING_VERSION_ID"
+          test "$STAGING_VERSION_ID" != "null"
+          echo "STAGING_VERSION_ID=$STAGING_VERSION_ID" >> "$GITHUB_ENV"
+          APPROVED_BASELINE_PROVENANCE_PATH="$(find "$RUNNER_TEMP/approved-staging" -type f -name production-baseline-provenance.json -print -quit)"
+          test -n "$APPROVED_BASELINE_PROVENANCE_PATH"
+          jq -e '.status == "verified" and (.versionId | test("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")) and (.versionTag | test("^[0-9a-f]{40}$")) and .api.workerVersionId == .versionId and .api.sourceSha == .versionTag and .api.workerVersionTag == .versionTag' "$APPROVED_BASELINE_PROVENANCE_PATH" >/dev/null
+          echo "APPROVED_BASELINE_PROVENANCE_PATH=$APPROVED_BASELINE_PROVENANCE_PATH" >> "$GITHUB_ENV"
+          test -n "$(find "$RUNNER_TEMP/approved-staging" -type f -name production-migrations-before.txt -print -quit)"
+          test -n "$(find "$RUNNER_TEMP/approved-staging" -type f -name staging-reverification.json -print -quit)"
+          test -n "$(find "$RUNNER_TEMP/approved-staging" -type f -name staging-run.json -print -quit)"
+          BUILD_ENTRY="$(find "$RUNNER_TEMP/approved-staging" -type f -path '*/server/index.mjs' -print -quit)"
+          test -n "$BUILD_ENTRY"
+          BUILD_ROOT="${BUILD_ENTRY%/server/index.mjs}"
+          test ! -e .output
+          cp -R "$BUILD_ROOT" .output
+          build_file_count="$(find .output -type f | wc -l | tr -d ' ')"
+          build_tree_sha256="$(find .output -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}')"
+          server_entry_sha256="$(sha256sum .output/server/index.mjs | awk '{print $1}')"
+          jq -e --arg count "$build_file_count" --arg tree "$build_tree_sha256" --arg server "$server_entry_sha256" '.build.fileCount == ($count | tonumber) and .build.treeSha256 == $tree and .build.serverEntrySha256 == $server' "$RUNNER_TEMP/approved-staging/candidate-manifest.json" >/dev/null
+      - run: npx playwright install --with-deps chromium
+      - name: Capture baseline, migrate, roll out, verify, and promote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PLATFORM_SEARCH_REINDEX_SECRET: ${{ secrets.PLATFORM_SEARCH_REINDEX_SECRET }}
+        run: |
+          set -Eeuo pipefail
+          work_dir="$RUNNER_TEMP/production-candidate"
+          mkdir -p "$work_dir"
+          baseline_status="$work_dir/baseline-deployment.json"
+          split_status="$work_dir/candidate-split-deployment.json"
+          deployed_status="$work_dir/candidate-deployed.json"
+          baseline_version="$work_dir/baseline-version.json"
+          baseline_provenance="$work_dir/production-baseline-provenance-attestation.json"
+          approved_baseline_provenance="${APPROVED_BASELINE_PROVENANCE_PATH:?approved baseline provenance artifact path is required}"
+          candidate_version="$work_dir/candidate-version.json"
+          versions_before="$work_dir/versions-before.json"
+          versions_after="$work_dir/versions-after.json"
+          upload_log="$work_dir/candidate-upload.log"
+          migrations_before="$work_dir/migrations-before.txt"
+          migrations_after="$work_dir/migrations-after.txt"
+          migrations_before_applied="$work_dir/migrations-before-applied.json"
+          migrations_after_applied="$work_dir/migrations-after-applied.json"
+          migration_state_before="$work_dir/migration-state-before.json"
+          migration_state_after="$work_dir/migration-state-after.json"
+          production_secrets="$work_dir/production-secrets.json"
+          candidate_verification="$work_dir/candidate-verification.json"
+          deployed_verification="$work_dir/deployed-verification.json"
+          route_inventory="$work_dir/release-route-inventory.json"
+          traffic_mutation_flag="$work_dir/traffic-mutation-attempted"
+          database_mutation_flag="$work_dir/database-mutation-attempted"
+          restore_status="$work_dir/restored-baseline-deployment.json"
+          restore_cache="$work_dir/restored-baseline-cache.log"
+          browser_projects="$work_dir/browser-projects.txt"
+          deployed_browser_projects="$work_dir/deployed-browser-projects.txt"
+          browser_evidence="$work_dir/browser-evidence.json"
+          search_sync_evidence="$work_dir/search-sync.json"
+          release_manifest="$work_dir/production-release-manifest.json"
+          staging_manifest="$RUNNER_TEMP/approved-staging/candidate-manifest.json"
+          node scripts/release-route-inventory.mjs --base-url https://krabiclaw.com --output "$route_inventory" >/dev/null
+
+          BASELINE_VERSION_ID=""
+          CANDIDATE_VERSION_ID=""
+          PROMOTED="false"
+          RESTORED_BASELINE="false"
+          RESTORE_INTERVENTION_REQUIRED="false"
+          TRAFFIC_MUTATION_ATTEMPTED="false"
+          DATABASE_MUTATION_ATTEMPTED="false"
+          DATABASE_INTERVENTION_REQUIRED="false"
+          ROLLBACK_HANDLED="false"
+          SPLIT_ACTIVE="false"
+          export BASELINE_VERSION_ID CANDIDATE_VERSION_ID PROMOTED RESTORED_BASELINE RESTORE_INTERVENTION_REQUIRED TRAFFIC_MUTATION_ATTEMPTED DATABASE_MUTATION_ATTEMPTED DATABASE_INTERVENTION_REQUIRED SPLIT_ACTIVE
+
+          write_manifest() {
+            local exit_status="${1:-0}"
+            export EXIT_STATUS="$exit_status"
+            node <<'NODE'
+          const fs=require('node:fs')
+          const readJson=(path)=>{try{return JSON.parse(fs.readFileSync(path,'utf8'))}catch{return null}}
+          const readText=(path)=>{try{return fs.readFileSync(path,'utf8')}catch{return null}}
+          const databaseMutationAttempted=process.env.DATABASE_MUTATION_ATTEMPTED==='true'
+          const databaseInterventionRequired=process.env.DATABASE_INTERVENTION_REQUIRED==='true'
+          const manifest={
+            schemaVersion:1,
+            sourceSha:process.env.SOURCE_SHA,
+            status:process.env.EXIT_STATUS==='0'?'verified':databaseInterventionRequired?'intervention_required':'failed',
+            preflight:readJson(process.env.PREFLIGHT_RUN_PATH),
+            stagingManifest:readJson(process.env.STAGING_MANIFEST_PATH),
+            baseline:{versionId:process.env.BASELINE_VERSION_ID||null,versionEvidence:readJson(process.env.BASELINE_VERSION_PATH),deployment:readJson(process.env.BASELINE_STATUS_PATH),provenance:readJson(process.env.BASELINE_PROVENANCE_PATH)},
+            candidate:{versionId:process.env.CANDIDATE_VERSION_ID||null,versionTag:process.env.CANDIDATE_SOURCE_TAG||null,promoted:process.env.PROMOTED==='true',versionEvidence:readJson(process.env.CANDIDATE_VERSION_PATH),splitDeployment:readJson(process.env.SPLIT_STATUS_PATH),deployedDeployment:readJson(process.env.DEPLOYED_STATUS_PATH)},
+            migrations:{before:{pending:readText(process.env.MIGRATIONS_BEFORE_PATH),applied:readJson(process.env.MIGRATIONS_BEFORE_APPLIED_PATH)},after:{pending:readText(process.env.MIGRATIONS_AFTER_PATH),applied:readJson(process.env.MIGRATIONS_AFTER_APPLIED_PATH),state:readJson(process.env.MIGRATION_STATE_AFTER_PATH)},stateBefore:readJson(process.env.MIGRATION_STATE_BEFORE_PATH),stateAfter:readJson(process.env.MIGRATION_STATE_AFTER_PATH)},
+            database:{mutationAttempted:databaseMutationAttempted,interventionRequired:databaseInterventionRequired,marker:readText(process.env.DATABASE_MUTATION_FLAG_PATH)},
+            assets:{candidate:readJson(process.env.CANDIDATE_VERIFICATION_PATH),deployed:readJson(process.env.DEPLOYED_VERIFICATION_PATH)},
+            browser:readJson(process.env.BROWSER_EVIDENCE_PATH),
+            searchSync:readJson(process.env.SEARCH_SYNC_EVIDENCE_PATH),
+            restore:{
+              status:process.env.RESTORE_INTERVENTION_REQUIRED==='true'
+                ? 'intervention_required'
+                : process.env.RESTORED_BASELINE==='true' ? 'verified' : 'not_attempted',
+              deployment:readJson(process.env.RESTORE_STATUS_PATH),
+              cache:readText(process.env.RESTORE_CACHE_PATH),
+            },
+            restoredBaseline:process.env.RESTORED_BASELINE==='true',
+            splitActive:process.env.SPLIT_ACTIVE==='true',
+            trafficMutationAttempted:process.env.TRAFFIC_MUTATION_ATTEMPTED==='true',
+          }
+          fs.writeFileSync(process.env.RELEASE_MANIFEST_PATH,JSON.stringify(manifest,null,2)+'\n')
+          NODE
+          }
+
+          restore_baseline() {
+            if [[ "$TRAFFIC_MUTATION_ATTEMPTED" != "true" ]]; then
+              echo "No production Worker traffic mutation was attempted; no compensating deployment will be created"
+              return 0
+            fi
+            if [[ -z "$BASELINE_VERSION_ID" ]]; then
+              echo "No known production baseline version is available for restoration; operator intervention is required" >&2
+              RESTORE_INTERVENTION_REQUIRED="true"
+              export RESTORE_INTERVENTION_REQUIRED
+              return 1
+            fi
+            if [[ "$SPLIT_ACTIVE" != "true" ]]; then
+              echo "Production traffic state is unknown; forcing baseline restoration" >&2
+              SPLIT_ACTIVE="true"
+              export SPLIT_ACTIVE
+            fi
+            printf '%s\n' "true" > "$traffic_mutation_flag"
+            if ! npx wrangler versions deploy "$BASELINE_VERSION_ID@100" --message "Restore production baseline after candidate failure" --yes; then
+              echo "Production baseline restoration failed; operator intervention is required" >&2
+              RESTORE_INTERVENTION_REQUIRED="true"
+              export RESTORE_INTERVENTION_REQUIRED
+              return 1
+            fi
+            if ! npx wrangler deployments status --name krabiclaw --json > "$restore_status"; then
+              echo "Production baseline restoration status capture failed; operator intervention is required" >&2
+              RESTORE_INTERVENTION_REQUIRED="true"
+              export RESTORE_INTERVENTION_REQUIRED
+              return 1
+            fi
+            if ! node -e '
+              const fs=require("node:fs")
+              const root=JSON.parse(fs.readFileSync(process.argv[1],"utf8"))
+              const deployment=root.latest_deployment??root
+              const versions=Array.isArray(deployment.versions)?deployment.versions:[]
+              const id=v=>v?.version_id??v?.versionId??v?.id
+              const traffic=v=>Number(v?.percentage??v?.traffic??NaN)
+              const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+              const rows=versions.map(v=>({id:id(v),traffic:traffic(v)}))
+              const baseline=rows.find(v=>v.id===process.argv[2])
+              const candidate=rows.find(v=>v.id===process.argv[3])
+              const active=rows.filter(v=>v.traffic>0)
+              const total=rows.reduce((sum,v)=>sum+v.traffic,0)
+              if(!rows.length||rows.some(v=>typeof v.id!=="string"||!uuid.test(v.id)||!Number.isFinite(v.traffic)||v.traffic<0||v.traffic>100))process.exit(2)
+              if(Math.abs(total-100)>0.001)process.exit(3)
+              if(active.length!==1||active[0].id!==process.argv[2]||active[0].traffic!==100)process.exit(4)
+              if(!baseline||baseline.traffic!==100)process.exit(5)
+              if(candidate&&candidate.traffic!==0)process.exit(6)
+            ' "$restore_status" "$BASELINE_VERSION_ID" "$CANDIDATE_VERSION_ID"; then
+              echo "Production baseline restoration deployment verification failed; operator intervention is required" >&2
+              RESTORE_INTERVENTION_REQUIRED="true"
+              export RESTORE_INTERVENTION_REQUIRED
+              return 1
+            fi
+            if ! DEPLOYMENT_CACHE_ORIGIN=https://krabiclaw.com node --experimental-strip-types scripts/purge-deployment-cache.ts > "$restore_cache"; then
+              echo "Production baseline restoration cache purge failed; operator intervention is required" >&2
+              RESTORE_INTERVENTION_REQUIRED="true"
+              export RESTORE_INTERVENTION_REQUIRED
+              return 1
+            fi
+            RESTORED_BASELINE="true"
+            SPLIT_ACTIVE="false"
+            RESTORE_INTERVENTION_REQUIRED="false"
+            export RESTORED_BASELINE SPLIT_ACTIVE RESTORE_INTERVENTION_REQUIRED
+          }
+          detect_candidate_deployment() {
+            if [[ "$TRAFFIC_MUTATION_ATTEMPTED" != "true" ]]; then
+              echo "No production Worker traffic mutation was attempted; deployment status is not a rollback trigger"
+              return 0
+            fi
+            if [[ -z "$BASELINE_VERSION_ID" ]]; then
+              RESTORE_INTERVENTION_REQUIRED="true"
+              export RESTORE_INTERVENTION_REQUIRED
+              return 1
+            fi
+            if [[ "$SPLIT_ACTIVE" == "true" ]]; then return 0; fi
+            local exit_status="$work_dir/exit-deployment-status.json"
+            if ! npx wrangler deployments status --name krabiclaw --json > "$exit_status"; then
+              echo "Unable to determine production traffic after a candidate mutation; forcing baseline restoration" >&2
+              SPLIT_ACTIVE="true"
+              RESTORE_INTERVENTION_REQUIRED="true"
+              export SPLIT_ACTIVE RESTORE_INTERVENTION_REQUIRED
+              return 1
+            fi
+            if ! node -e '
+              const fs=require("node:fs");const root=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const deployment=root.latest_deployment??root;const versions=Array.isArray(deployment.versions)?deployment.versions:[];const expected=process.argv[2];if(versions.length===0)process.exit(1);const rows=versions.map(v=>({id:v?.version_id??v?.versionId??v?.id,traffic:Number(v?.percentage??v?.traffic??NaN)}));if(rows.some(v=>typeof v.id!=="string"||!Number.isFinite(v.traffic)||v.traffic<0||v.traffic>100))process.exit(2);const total=rows.reduce((sum,v)=>sum+v.traffic,0);if(Math.abs(total-100)>0.001)process.exit(3);if(rows.filter(v=>v.traffic>0).length!==1)process.exit(4);if(!rows.some(v=>v.id===expected))process.exit(5)
+            ' "$exit_status" "${CANDIDATE_VERSION_ID:-}"; then
+              echo "Production deployment status did not prove the candidate state; forcing baseline restoration" >&2
+              SPLIT_ACTIVE="true"
+              RESTORE_INTERVENTION_REQUIRED="true"
+              export SPLIT_ACTIVE RESTORE_INTERVENTION_REQUIRED
+              return 1
+            fi
+            SPLIT_ACTIVE="true"
+            export SPLIT_ACTIVE
+          }
+          on_exit() {
+            local exit_status="$?"
+            if [[ "$exit_status" != "0" ]]; then
+              if [[ "$DATABASE_MUTATION_ATTEMPTED" == "true" ]]; then
+                DATABASE_INTERVENTION_REQUIRED="true"
+                export DATABASE_INTERVENTION_REQUIRED
+                echo "A production database migration was attempted before failure; the old Worker may remain at 100%, but database state requires operator intervention. No database rollback is claimed or attempted." >&2
+              fi
+              if [[ "$TRAFFIC_MUTATION_ATTEMPTED" == "true" ]]; then
+                detect_candidate_deployment || true
+                restore_baseline || true
+                ROLLBACK_HANDLED="true"
+              else
+                echo "No production Worker traffic mutation was attempted; skipping compensating baseline deployment"
+              fi
+            fi
+            if ! write_manifest "$exit_status"; then
+              echo "Production release manifest generation failed" >&2
+              exit_status=1
+              if [[ "$DATABASE_MUTATION_ATTEMPTED" == "true" ]]; then
+                DATABASE_INTERVENTION_REQUIRED="true"
+                export DATABASE_INTERVENTION_REQUIRED
+              fi
+              if [[ "$TRAFFIC_MUTATION_ATTEMPTED" == "true" && "$ROLLBACK_HANDLED" != "true" ]]; then
+                detect_candidate_deployment || true
+                restore_baseline || true
+                ROLLBACK_HANDLED="true"
+              fi
+              if ! write_manifest "$exit_status"; then
+                echo "Production failed manifest rewrite also failed; operator intervention is required" >&2
+              fi
+            fi
+            exit "$exit_status"
+          }
+          export PREFLIGHT_RUN_PATH="$RUNNER_TEMP/production-preflight-run.json" STAGING_MANIFEST_PATH="$staging_manifest" BASELINE_STATUS_PATH="$baseline_status" SPLIT_STATUS_PATH="$split_status" DEPLOYED_STATUS_PATH="$deployed_status" BASELINE_VERSION_PATH="$baseline_version" BASELINE_PROVENANCE_PATH="$baseline_provenance" CANDIDATE_VERSION_PATH="$candidate_version" MIGRATIONS_BEFORE_PATH="$migrations_before" MIGRATIONS_AFTER_PATH="$migrations_after" MIGRATIONS_BEFORE_APPLIED_PATH="$migrations_before_applied" MIGRATIONS_AFTER_APPLIED_PATH="$migrations_after_applied" MIGRATION_STATE_BEFORE_PATH="$migration_state_before" MIGRATION_STATE_AFTER_PATH="$migration_state_after" CANDIDATE_VERIFICATION_PATH="$candidate_verification" DEPLOYED_VERIFICATION_PATH="$deployed_verification" RESTORE_STATUS_PATH="$restore_status" RESTORE_CACHE_PATH="$restore_cache" BROWSER_EVIDENCE_PATH="$browser_evidence" BROWSER_PROJECTS_PATH="$browser_projects" DEPLOYED_BROWSER_PROJECTS_PATH="$deployed_browser_projects" ROUTE_INVENTORY_PATH="$route_inventory" RELEASE_ROUTE_INVENTORY_PATH="$route_inventory" DATABASE_MUTATION_FLAG_PATH="$database_mutation_flag" SEARCH_SYNC_EVIDENCE_PATH="$search_sync_evidence" RELEASE_MANIFEST_PATH="$release_manifest"
+          trap on_exit EXIT
+
+          echo "Capturing the current production baseline before any mutation"
+          npx wrangler deployments status --name krabiclaw --json > "$baseline_status"
+          BASELINE_VERSION_ID="$(node -e '
+            const fs=require("node:fs");const root=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const deployment=root.latest_deployment??root;const versions=Array.isArray(deployment.versions)?deployment.versions:[];const active=versions.filter(v=>Number(v.percentage??v.traffic??0)===100);if(versions.length!==1||active.length!==1)process.exit(2);const id=active[0].version_id??active[0].versionId??active[0].id;if(typeof id!=="string")process.exit(3);console.log(id)
+          ' "$baseline_status")"
+          test -n "$BASELINE_VERSION_ID"
+          export BASELINE_VERSION_ID
+          npx wrangler versions view "$BASELINE_VERSION_ID" --json > "$baseline_version"
+          jq -e --arg version "$BASELINE_VERSION_ID" '.status == "verified" and .versionId == $version and (.versionTag | test("^[0-9a-f]{40}$")) and .api.workerVersionId == $version and .api.sourceSha == .versionTag and .api.workerVersionTag == .versionTag' "$approved_baseline_provenance" >/dev/null
+          node scripts/verify-production-baseline-provenance.mjs \
+            --deployment-file "$baseline_status" \
+            --version-file "$baseline_version" \
+            --api-url https://krabiclaw.com/api/deployment \
+            --expected-version-id "$BASELINE_VERSION_ID" \
+            --worker-name krabiclaw \
+            --output "$baseline_provenance"
+          jq -e --arg version "$BASELINE_VERSION_ID" --arg tag "$(jq -r '.versionTag' "$approved_baseline_provenance")" '.status == "verified" and .versionId == $version and .versionTag == $tag and .api.workerVersionId == $version and .api.sourceSha == .versionTag and .api.workerVersionTag == .versionTag' "$baseline_provenance" >/dev/null
+          npx wrangler secret list --format json > "$production_secrets"
+          for secret_name in STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET PLATFORM_SEARCH_REINDEX_SECRET; do jq -e --arg name "$secret_name" '.. | objects | select((.name? // .key?) == $name)' "$production_secrets" >/dev/null; done
+
+          echo "Uploading exactly one production candidate Worker Version before any remote database mutation"
+          npx wrangler versions list --json > "$versions_before"
+          npx wrangler versions upload --tag "$SOURCE_SHA" --message "Verified staging candidate $SOURCE_SHA" 2>&1 | tee "$upload_log"
+          npx wrangler versions list --json > "$versions_after"
+          CANDIDATE_VERSION_ID="$(node -e '
+            const fs=require("node:fs");const before=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const after=JSON.parse(fs.readFileSync(process.argv[2],"utf8"));const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;if(!Array.isArray(before)||!Array.isArray(after))process.exit(3);const ids=versions=>versions.map(v=>v?.id).filter(id=>typeof id==="string"&&uuid.test(id));const old=new Set(ids(before));const fresh=[...new Set(ids(after).filter(id=>!old.has(id)))];if(fresh.length!==1)process.exit(2);console.log(fresh[0])
+          ' "$versions_before" "$versions_after")"
+          test -n "$CANDIDATE_VERSION_ID"
+          export CANDIDATE_VERSION_ID
+          npx wrangler versions view "$CANDIDATE_VERSION_ID" --json > "$candidate_version"
+          CANDIDATE_SOURCE_TAG="$(node -e '
+            const fs=require("node:fs");const id=process.argv[2];const root=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const q=[root];while(q.length){const v=q.shift();if(!v||typeof v!=="object")continue;if(Array.isArray(v)){q.push(...v);continue};if(v.id===id||v.version_id===id||v.versionId===id){const tag=v.tag??v.worker_tag??v.version_tag??v.metadata?.tag??v.annotations?.tag??v.annotations?.["workers/tag"];if(typeof tag==="string"){console.log(tag);break}}q.push(...Object.values(v))}
+          ' "$candidate_version" "$CANDIDATE_VERSION_ID")"
+          test "$CANDIDATE_SOURCE_TAG" = "$SOURCE_SHA"
+          export CANDIDATE_SOURCE_TAG
+
+          echo "Capturing production migration state before apply"
+          npx wrangler d1 execute DB --remote --command 'SELECT id, name, applied_at FROM d1_migrations ORDER BY id' --json > "$migrations_before_applied"
+          node scripts/verify-migration-state.mjs \
+            --pre-apply \
+            --migrations-dir migrations \
+            --remote-json "$migrations_before_applied" \
+            --output "$migration_state_before"
+          npx wrangler d1 migrations list DB --remote | tee "$migrations_before"
+          yarn migrate:check
+          echo "Persisting the durable production database mutation marker before migration apply"
+          DATABASE_MUTATION_ATTEMPTED="true"
+          printf '%s\n' "true" > "$database_mutation_flag"
+          export DATABASE_MUTATION_ATTEMPTED
+          npx wrangler d1 migrations apply DB --remote
+          npx wrangler d1 execute DB --remote --command 'SELECT id, name, applied_at FROM d1_migrations ORDER BY id' --json > "$migrations_after_applied"
+          node scripts/verify-migration-state.mjs \
+            --migrations-dir migrations \
+            --remote-json "$migrations_after_applied" \
+            --output "$migration_state_after"
+          npx wrangler d1 migrations list DB --remote | tee "$migrations_after"
+          if grep -Eiq '(pending|unapplied|not applied|to be applied)' "$migrations_after" && grep -Eiq '[0-9]{4}_[A-Za-z0-9_-]+\.sql' "$migrations_after"; then
+            echo "Pending production migrations remain after apply" >&2
+            exit 1
+          fi
+
+          echo "Holding production baseline at 100% while candidate is verified at 0%"
+          TRAFFIC_MUTATION_ATTEMPTED="true"
+          printf '%s\n' "true" > "$traffic_mutation_flag"
+          export TRAFFIC_MUTATION_ATTEMPTED
+          npx wrangler versions deploy "$BASELINE_VERSION_ID@100" "$CANDIDATE_VERSION_ID@0" --message "Production candidate smoke test" --yes
+          SPLIT_ACTIVE="true"
+          export SPLIT_ACTIVE
+          npx wrangler deployments status --name krabiclaw --json > "$split_status"
+          node -e '
+            const fs=require("node:fs");const root=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const deployment=root.latest_deployment??root;const versions=Array.isArray(deployment.versions)?deployment.versions:[];const percentage=id=>{const row=versions.find(v=>(v.version_id??v.versionId??v.id)===id);return row?Number(row.percentage??row.traffic??NaN):NaN};if(versions.length!==2||percentage(process.argv[2])!==100||percentage(process.argv[3])!==0)process.exit(2)
+          ' "$split_status" "$BASELINE_VERSION_ID" "$CANDIDATE_VERSION_ID"
+          export WORKER_VERSION_OVERRIDE="$CANDIDATE_VERSION_ID"
+          node scripts/wait-for-deployed-assets.mjs
+          node scripts/verify-deployed-candidate.mjs --base-url https://krabiclaw.com --expected-sha "$SOURCE_SHA" --expected-version-id "$CANDIDATE_VERSION_ID" --worker-name krabiclaw --version-override "$CANDIDATE_VERSION_ID" --route-inventory "$route_inventory" --output "$candidate_verification"
+          npx playwright test --list > "$browser_projects"
+          grep -F 'public-surfaces-desktop' "$browser_projects" >/dev/null
+          grep -F 'public-surfaces-mobile' "$browser_projects" >/dev/null
+          npx playwright test tests/e2e/public-surfaces-release.spec.ts --project=public-surfaces-desktop --project=public-surfaces-mobile --workers=1
+          cp -R playwright-report "$work_dir/candidate-playwright-report"
+
+          echo "Promoting candidate to 100% only after every production gate passes"
+          TRAFFIC_MUTATION_ATTEMPTED="true"
+          printf '%s\n' "true" > "$traffic_mutation_flag"
+          export TRAFFIC_MUTATION_ATTEMPTED
+          npx wrangler versions deploy "$CANDIDATE_VERSION_ID@100" --message "Promote verified production candidate" --yes
+          PROMOTED="true"
+          export PROMOTED
+          npx wrangler deployments status --name krabiclaw --json > "$deployed_status"
+          node -e '
+            const fs=require("node:fs");const root=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const deployment=root.latest_deployment??root;const versions=Array.isArray(deployment.versions)?deployment.versions:[];const row=versions.find(v=>(v.version_id??v.versionId??v.id)===process.argv[2]);if(versions.length!==1||!row||Number(row.percentage??row.traffic??NaN)!==100)process.exit(2)
+          ' "$deployed_status" "$CANDIDATE_VERSION_ID"
+          DEPLOYMENT_CACHE_ORIGIN=https://krabiclaw.com node --experimental-strip-types scripts/purge-deployment-cache.ts
+          unset WORKER_VERSION_OVERRIDE
+          DEPLOYMENT_EXPECTED_SOURCE_SHA="$SOURCE_SHA" DEPLOYMENT_EXPECTED_WORKER_VERSION="$CANDIDATE_VERSION_ID" node scripts/wait-for-deployed-assets.mjs
+          node scripts/verify-deployed-candidate.mjs --base-url https://krabiclaw.com --expected-sha "$SOURCE_SHA" --expected-version-id "$CANDIDATE_VERSION_ID" --worker-name krabiclaw --route-inventory "$route_inventory" --output "$deployed_verification"
+          npx playwright test tests/e2e/public-surfaces-release.spec.ts --project=public-surfaces-desktop --project=public-surfaces-mobile --workers=1
+          cp -R playwright-report "$work_dir/deployed-playwright-report"
+          npx playwright test --list > "$deployed_browser_projects"
+          WORK_DIR="$work_dir" BROWSER_PROJECTS_PATH="$browser_projects" DEPLOYED_BROWSER_PROJECTS_PATH="$deployed_browser_projects" BROWSER_EVIDENCE_PATH="$browser_evidence" node -e 'const fs=require("node:fs"),path=require("node:path");const candidate=fs.readFileSync(process.env.BROWSER_PROJECTS_PATH,"utf8");const deployed=fs.readFileSync(process.env.DEPLOYED_BROWSER_PROJECTS_PATH,"utf8");const inventory=JSON.parse(fs.readFileSync(process.env.ROUTE_INVENTORY_PATH,"utf8"));if(JSON.stringify(inventory.requiredSurfaces)!==JSON.stringify(["platform","saya","blawby"]))process.exit(2);for(const report of ["candidate-playwright-report/index.html","deployed-playwright-report/index.html"]){if(!fs.existsSync(path.join(process.env.WORK_DIR,report)))process.exit(2)}fs.writeFileSync(process.env.BROWSER_EVIDENCE_PATH,JSON.stringify({status:"passed",baseUrl:"https://krabiclaw.com",routeInventory:{requiredSurfaces:inventory.requiredSurfaces,surfaces:inventory.surfaces.map(surface=>({name:surface.name,routes:surface.routes,variants:surface.variants??[]}))},desktop:deployed.includes("public-surfaces-desktop"),mobile:deployed.includes("public-surfaces-mobile"),saya:{desktop:deployed.includes("public-surfaces-desktop"),mobile:deployed.includes("public-surfaces-mobile")},blawby:{desktop:deployed.includes("public-surfaces-desktop"),mobile:deployed.includes("public-surfaces-mobile")},interactiveEvidence:{routeActions:"tests/e2e/public.spec.ts",pagesEditor:"tests/e2e/universal-cms.spec.ts",billing:"tests/e2e/stripe-testmode-canary.spec.ts",linksPage:"tests/e2e/links-page.spec.ts"},candidateOverride:{status:"passed",projects:["public-surfaces-desktop","public-surfaces-mobile"],report:"candidate-playwright-report/index.html"},deployed:{status:"passed",projects:["public-surfaces-desktop","public-surfaces-mobile"],report:"deployed-playwright-report/index.html"},projects:["public-surfaces-desktop","public-surfaces-mobile"]},null,2))'
+          yarn ai-search:sync:prod | tee "$search_sync_evidence"
+          SPLIT_ACTIVE="false"
+          export SPLIT_ACTIVE
+      - name: Upload production release evidence
+        id: upload-production-evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: production-release-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/production-candidate/production-release-manifest.json
+            ${{ runner.temp }}/production-candidate/**
+            .output
+            playwright-report/
+            test-results/
+          include-hidden-files: true
+          retention-days: 90
+          if-no-files-found: error
+      - name: Restore exact production baseline after evidence upload failure
+        if: always() && steps.upload-production-evidence.outcome != 'success'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PRODUCTION_BASE_URL: https://krabiclaw.com
+        run: |
+          set -Eeuo pipefail
+
+          work_dir="$RUNNER_TEMP/production-candidate"
+          manifest="$work_dir/production-release-manifest.json"
+          recovery="$work_dir/production-upload-failure-recovery.json"
+          restore_status="$work_dir/upload-failure-restored-baseline.json"
+          restore_cache="$work_dir/upload-failure-restored-cache.log"
+          uuid_pattern='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+
+          write_recovery() {
+            local status="$1"
+            local reason="$2"
+            local restored="$3"
+            local cache_purged="$4"
+            RECOVERY_PATH="$recovery" RECOVERY_STATUS="$status" RECOVERY_REASON="$reason" RECOVERY_RESTORED="$restored" RECOVERY_CACHE_PURGED="$cache_purged" BASELINE_VERSION_ID="${baseline_version:-}" CANDIDATE_VERSION_ID="${candidate_version:-}" node --input-type=module <<'NODE'
+          import { mkdirSync, writeFileSync } from 'node:fs'
+          import { dirname } from 'node:path'
+          mkdirSync(dirname(process.env.RECOVERY_PATH), { recursive: true })
+          writeFileSync(process.env.RECOVERY_PATH, `${JSON.stringify({
+            schemaVersion: 1,
+            kind: 'production-evidence-upload-failure-recovery',
+            status: process.env.RECOVERY_STATUS,
+            reason: process.env.RECOVERY_REASON,
+            restored: process.env.RECOVERY_RESTORED === 'true',
+            cachePurged: process.env.RECOVERY_CACHE_PURGED === 'true',
+            baselineVersionId: process.env.BASELINE_VERSION_ID || null,
+            candidateVersionId: process.env.CANDIDATE_VERSION_ID || null,
+          }, null, 2)}\n`)
+          NODE
+          }
+
+          test "$PRODUCTION_BASE_URL" = "https://krabiclaw.com"
+          if [[ ! -s "$manifest" ]]; then
+            echo "Production evidence upload failed and no local release manifest exists; traffic state cannot be changed safely" >&2
+            baseline_version=""
+            candidate_version=""
+            write_recovery "intervention_required" "Release manifest is missing after evidence upload failure; production traffic state cannot be proven safely." "false" "false" || true
+            exit 1
+          fi
+          if ! jq -e 'type == "object" and (.trafficMutationAttempted | type == "boolean") and (.restoredBaseline | type == "boolean")' "$manifest" >/dev/null; then
+            echo "Production release manifest is malformed after evidence upload failure; traffic state cannot be changed safely" >&2
+            baseline_version=""
+            candidate_version=""
+            write_recovery "intervention_required" "Release manifest is malformed after evidence upload failure; production traffic state cannot be proven safely." "false" "false" || true
+            exit 1
+          fi
+
+          traffic_mutation_attempted="$(jq -r '.trafficMutationAttempted' "$manifest")"
+          baseline_version="$(jq -r '.baseline.versionId // empty' "$manifest")"
+          candidate_version="$(jq -r '.candidate.versionId // empty' "$manifest")"
+          restored_baseline="$(jq -r '.restoredBaseline' "$manifest")"
+          restore_manifest_status="$(jq -r '.restore.status // empty' "$manifest")"
+
+          if [[ "$traffic_mutation_attempted" != "true" ]]; then
+            echo "Production evidence upload failed before any Worker traffic mutation; no compensating deployment will be created"
+            write_recovery "not_attempted" "Evidence upload failed, but the manifest proves no production Worker traffic mutation was attempted." "false" "false"
+            exit 1
+          fi
+          if [[ "$restored_baseline" == "true" && "$restore_manifest_status" == "verified" ]]; then
+            echo "Production evidence upload failed after the exact baseline had already been restored"
+            write_recovery "already_restored" "Evidence upload failed, but the manifest proves the exact production baseline was already restored and verified." "true" "true"
+            exit 1
+          fi
+          if [[ -z "$baseline_version" || ! "$baseline_version" =~ $uuid_pattern ]]; then
+            echo "Production evidence upload failed without a valid manifest-declared baseline version; operator intervention is required" >&2
+            write_recovery "intervention_required" "Manifest-declared baseline version is missing or invalid after evidence upload failure." "false" "false" || true
+            exit 1
+          fi
+          if [[ -n "$candidate_version" && ! "$candidate_version" =~ $uuid_pattern ]]; then
+            echo "Production evidence upload failed with an invalid manifest-declared candidate version; operator intervention is required" >&2
+            write_recovery "intervention_required" "Manifest-declared candidate version is invalid after evidence upload failure." "false" "false" || true
+            exit 1
+          fi
+
+          write_recovery "restoring" "Production evidence upload failed after traffic mutation; restoring only the manifest-declared baseline." "false" "false"
+          if ! npx wrangler versions deploy "$baseline_version@100" --message "Restore production baseline after release evidence upload failure" --yes; then
+            echo "Exact production baseline restoration failed; operator intervention is required" >&2
+            write_recovery "intervention_required" "Exact production baseline deployment failed after evidence upload failure." "false" "false" || true
+            exit 1
+          fi
+          if ! npx wrangler deployments status --name "$WORKER_NAME" --json > "$restore_status"; then
+            echo "Exact production baseline status capture failed; operator intervention is required" >&2
+            write_recovery "intervention_required" "Exact production baseline status capture failed after evidence upload failure." "false" "false" || true
+            exit 1
+          fi
+          if ! EXPECTED_BASELINE_VERSION="$baseline_version" EXPECTED_CANDIDATE_VERSION="$candidate_version" STATUS_PATH="$restore_status" node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs'
+          const value = JSON.parse(readFileSync(process.env.STATUS_PATH, 'utf8'))
+          const deployment = value?.latest_deployment ?? value
+          const versions = Array.isArray(deployment?.versions) ? deployment.versions : []
+          const idOf = version => version?.version_id ?? version?.versionId ?? version?.id
+          const trafficOf = version => Number(version?.percentage ?? version?.traffic ?? NaN)
+          const rows = versions.map(version => ({ id: idOf(version), traffic: trafficOf(version) }))
+          const active = rows.filter(row => row.traffic > 0)
+          const total = rows.reduce((sum, row) => sum + row.traffic, 0)
+          const baseline = rows.find(row => row.id === process.env.EXPECTED_BASELINE_VERSION)
+          const candidate = process.env.EXPECTED_CANDIDATE_VERSION ? rows.find(row => row.id === process.env.EXPECTED_CANDIDATE_VERSION) : null
+          if (!rows.length || rows.some(row => typeof row.id !== 'string' || !Number.isFinite(row.traffic) || row.traffic < 0 || row.traffic > 100)) throw new Error('production traffic contains an unknown version or invalid percentage')
+          if (Math.abs(total - 100) > 0.001) throw new Error('production traffic does not total 100%')
+          if (active.length !== 1 || active[0].id !== process.env.EXPECTED_BASELINE_VERSION || active[0].traffic !== 100) throw new Error('production traffic does not prove the exact baseline at 100%')
+          if (!baseline || baseline.traffic !== 100) throw new Error('manifest-declared baseline version is absent from production traffic')
+          if (candidate && candidate.traffic !== 0) throw new Error('candidate version remains active after production baseline restoration')
+          NODE
+          then
+            echo "Exact production baseline traffic verification failed; operator intervention is required" >&2
+            write_recovery "intervention_required" "Production traffic remained ambiguous after exact baseline restoration." "false" "false" || true
+            exit 1
+          fi
+          if ! DEPLOYMENT_CACHE_ORIGIN="$PRODUCTION_BASE_URL" node --experimental-strip-types scripts/purge-deployment-cache.ts > "$restore_cache"; then
+            echo "Exact production baseline cache purge failed; operator intervention is required" >&2
+            write_recovery "intervention_required" "Production baseline traffic was restored, but cache purge failed after evidence upload failure." "false" "false" || true
+            exit 1
+          fi
+          write_recovery "restored" "Evidence upload failed after mutation; exact manifest-declared production baseline was restored, verified at 100%, candidate is 0% or absent, and cache was purged." "true" "true"
+          echo "Production evidence upload failed; the exact baseline was restored, but the release remains failed because durable evidence upload did not succeed." >&2
+          exit 1
+      - name: Prepare durable production recovery evidence
+        if: always()
+        run: |
+          set -Eeuo pipefail
+          work_dir="$RUNNER_TEMP/production-candidate"
+          recovery="$work_dir/production-upload-failure-recovery.json"
+          manifest="$work_dir/production-release-manifest.json"
+          marker="$work_dir/database-mutation-attempted"
+          if [[ ! -s "$recovery" ]]; then
+            manifest_status="not_required"
+            traffic_mutation_attempted="false"
+            database_mutation_attempted="$( [[ -s "$marker" ]] && printf true || printf false )"
+            if [[ -s "$manifest" ]]; then
+              manifest_status="$(jq -r '.restore.status // "not_required"' "$manifest")"
+              traffic_mutation_attempted="$(jq -r '.trafficMutationAttempted // false' "$manifest")"
+              database_mutation_attempted="$(jq -r '.database.mutationAttempted // false' "$manifest")"
+            fi
+            RECOVERY_PATH="$recovery" RECOVERY_STATUS="$manifest_status" TRAFFIC_MUTATION_ATTEMPTED="$traffic_mutation_attempted" DATABASE_MUTATION_ATTEMPTED="$database_mutation_attempted" node --input-type=module <<'NODE'
+          import { mkdirSync, writeFileSync } from 'node:fs'
+          import { dirname } from 'node:path'
+          mkdirSync(dirname(process.env.RECOVERY_PATH), { recursive: true })
+          writeFileSync(process.env.RECOVERY_PATH, `${JSON.stringify({ schemaVersion: 1, kind: 'production-recovery-evidence', status: process.env.RECOVERY_STATUS, trafficMutationAttempted: process.env.TRAFFIC_MUTATION_ATTEMPTED === 'true', databaseMutationAttempted: process.env.DATABASE_MUTATION_ATTEMPTED === 'true' }, null, 2)}\n`)
+          NODE
+          fi
+          test -s "$recovery"
+      - name: Upload separate production recovery evidence
+        id: upload-production-recovery-evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: production-recovery-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/production-candidate/production-upload-failure-recovery.json
+          retention-days: 90
+          if-no-files-found: error
+      - name: Report production recovery evidence transport
+        if: always()
+        run: |
+          if [[ "${{ steps.upload-production-recovery-evidence.outcome }}" != "success" ]]; then
+            echo "Production recovery evidence upload also failed; operator intervention is required." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Production recovery evidence upload: succeeded." >> "$GITHUB_STEP_SUMMARY"
+          fi

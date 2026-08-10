@@ -1,19 +1,20 @@
 // POST /api/admin/sites/[siteId]/transfer — initiate a site transfer to a new owner
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { getAuthSession } from '~/server/utils/auth'
-import { executeBatch, queryFirst, type BatchQuery } from '~/server/db'
+import { createAuth, getAuthSession } from '~/server/utils/auth'
+import { executeBatch, queryAll, queryFirst, type BatchQuery } from '~/server/db'
 import { hashEmail, isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import { normalizeHost } from '~/server/utils/tenant-hosts'
 import { rootDomainForPair } from '~/server/utils/domain-shared'
-import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
+import { assertNewSalePlan, type NewSalePlanId } from '~/shared/billing-model'
 import {
   buildTransferDomainSnapshot,
+  cancelPendingSiteTransfer,
   serializeTransferDomainSnapshot,
 } from '~/server/utils/site-transfer'
 import { useRender } from 'vue-email'
 import SiteTransferInvite from '~/server/emails/templates/SiteTransferInvite'
+import { getOrgAdapter } from 'better-auth/plugins'
 
-const ALLOWED_PLANS = ['growth', 'managed', 'seo_accelerator']
 const TOKEN_BYTES = 32
 
 function generateToken(): string {
@@ -35,31 +36,53 @@ export default defineEventHandler(async (event) => {
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
   const userId = session.user.id
-  const isPlatAdmin = await hasPlatformEventPermission(event, env, { platform: ['organizations'] })
-
-  // Verify caller is platform admin or an owner/admin of this site
-  const site = await queryFirst<{ id: string; organization_id: string; brand_name: string | null }>(
-    db,
-    isPlatAdmin
-      ? `SELECT s.id, s.organization_id, s.brand_name FROM sites s WHERE s.id = ? LIMIT 1`
-      : `SELECT s.id, s.organization_id, s.brand_name FROM sites s
-         JOIN member m ON m.organizationId = s.organization_id
-         WHERE s.id = ? AND m.userId = ? AND m.role IN ('owner', 'admin') LIMIT 1`,
-    isPlatAdmin ? [siteId] : [siteId, userId],
-  )
+  const site = await queryFirst<{ id: string; organization_id: string; brand_name: string | null }>(db, `
+    SELECT id, organization_id, brand_name
+    FROM sites
+    WHERE id = ?
+    LIMIT 1
+  `, [siteId])
 
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
-  let body: { email?: string; message?: string; plan?: string; coupon?: string; domain?: string; interval?: string }
+  // Better Auth owns organization membership. Platform control-plane access is
+  // intentionally not a tenant-owner bypass for this mutation.
+  try {
+    const auth = createAuth(env)
+    const context = await auth.$context
+    const member = await getOrgAdapter(
+      context as Parameters<typeof getOrgAdapter>[0],
+      {},
+    ).findMemberByOrgId({ userId, organizationId: site.organization_id })
+    const memberRecord = member && typeof member === 'object'
+      ? member as { userId?: unknown; organizationId?: unknown; role?: unknown }
+      : null
+    const role = typeof memberRecord?.role === 'string' ? memberRecord.role : null
+    if (memberRecord?.userId !== userId
+      || memberRecord.organizationId !== site.organization_id
+      || (role !== 'owner' && role !== 'admin')) {
+      return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+    }
+  } catch (error) {
+    console.error('site_transfer_initiation_membership_check_failed', { siteId, userId, error })
+    return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+  }
+
+  let body: { email?: string; message?: string; plan?: unknown; coupon?: string; domain?: string; interval?: string }
   try {
     body = await readBody(event)
   } catch {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const invitedPlan = body.plan?.trim() || null
-  if (invitedPlan && !ALLOWED_PLANS.includes(invitedPlan)) {
-    return jsonResponse({ error: `Invalid plan. Allowed: ${ALLOWED_PLANS.join(', ')}` }, { status: 400 })
+  const requestedPlan = typeof body.plan === 'string' ? body.plan.trim() : ''
+  let invitedPlan: NewSalePlanId | null = null
+  if (requestedPlan) {
+    try {
+      invitedPlan = assertNewSalePlan(requestedPlan)
+    } catch (error) {
+      return jsonResponse({ error: error instanceof Error ? error.message : 'Invalid plan' }, { status: 400 })
+    }
   }
   const invitedInterval: 'month' | 'year' = body.interval === 'year' ? 'year' : 'month'
   const invitedCoupon = body.coupon?.trim() || null
@@ -85,16 +108,66 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'A valid recipient email is required' }, { status: 422 })
   }
 
-  // Check for identical pending request to avoid double-submission
-  const existingPending = await queryFirst<{ id: string }>(
+  // Check for an identical pending request before touching any existing
+  // transfer. The recipient conflict is intentionally preserved: an
+  // identical invite remains payable/claimable rather than being replaced.
+  const pendingTransfers = await queryAll<{
+    id: string
+    to_email: string
+    custom_domains_removed_at: string | null
+  }>(
     db,
-    `SELECT id FROM site_transfer_requests
-     WHERE site_id = ? AND to_email = ? AND status = 'pending' LIMIT 1`,
-    [siteId, toEmail],
+    `SELECT id, to_email, custom_domains_removed_at
+       FROM site_transfer_requests
+      WHERE site_id = ? AND status = 'pending'
+      ORDER BY created_at ASC`,
+    [siteId],
   )
 
+  const existingPending = (pendingTransfers || []).find(row => row.to_email.toLowerCase() === toEmail)
   if (existingPending) {
     return jsonResponse({ error: 'A pending transfer request to this email already exists.' }, { status: 409 })
+  }
+
+  // Every replacement must run the canonical cancellation saga first. This
+  // is especially important for paid rows: cancelPendingSiteTransfer fences
+  // the exact claim/session, expires any real Checkout, and restores paused
+  // domains before the replacement can be inserted. A failed, ambiguous, or
+  // completed payment leaves the prior request untouched and blocks this one.
+  for (const pendingTransfer of pendingTransfers || []) {
+    try {
+      const cleanup = await cancelPendingSiteTransfer(env, db, pendingTransfer.id)
+      if (!cleanup.cancelled) {
+        return jsonResponse({
+          error: pendingTransfer.custom_domains_removed_at
+            ? 'An existing transfer changed while its custom-domain cleanup was pending. Retry after it settles.'
+            : 'An existing transfer could not be safely cancelled. Retry after it settles.',
+        }, { status: 409 })
+      }
+      const remainingMarker = await queryFirst<{
+        status: string
+        custom_domains_removed_at: string | null
+      }>(db, `
+        SELECT status, custom_domains_removed_at
+          FROM site_transfer_requests
+         WHERE id = ?
+        LIMIT 1
+      `, [pendingTransfer.id])
+      if (!remainingMarker || remainingMarker.status === 'pending' || remainingMarker.custom_domains_removed_at) {
+        return jsonResponse({ error: 'The existing transfer custom-domain cleanup is incomplete. Finish cleanup before replacing it.' }, { status: 409 })
+      }
+    } catch (error) {
+      console.error('site_transfer_replacement_cleanup_failed', {
+        transferId: pendingTransfer.id,
+        siteId,
+        error,
+      })
+      return jsonResponse({
+        error: pendingTransfer.custom_domains_removed_at
+          ? 'The existing transfer custom-domain cleanup is incomplete. Finish cleanup before replacing it.'
+          : 'The existing transfer could not be safely cancelled. Retry after it settles.',
+      }, { status: 409 })
+    }
   }
 
   const id = crypto.randomUUID()
@@ -117,9 +190,11 @@ export default defineEventHandler(async (event) => {
 
   const batch: BatchQuery[] = [
     {
-      query: `UPDATE site_transfer_requests SET status = 'cancelled'
-       WHERE site_id = ? AND status = 'pending'`,
-      params: [siteId],
+      query: `SELECT CASE WHEN EXISTS (
+        SELECT 1 FROM site_transfer_requests
+         WHERE site_id = ? AND status = 'pending'
+      ) THEN json(?) ELSE NULL END`,
+      params: [siteId, 'pending transfer appeared while the replacement was being prepared'],
     },
     {
       query: `INSERT INTO site_transfer_requests
@@ -151,6 +226,9 @@ export default defineEventHandler(async (event) => {
     const dbErr = err as Record<string, unknown>
     const msg = typeof dbErr.message === 'string' ? dbErr.message : ''
     const code = typeof dbErr.code === 'string' ? dbErr.code : ''
+    if (msg.includes('malformed JSON')) {
+      return jsonResponse({ error: 'The existing transfer cancellation cleanup is incomplete. Finish cleanup before replacing it.' }, { status: 409 })
+    }
     if (msg.includes('UNIQUE') || msg.includes('constraint') || code === 'SQLITE_CONSTRAINT') {
       return jsonResponse({ error: 'A pending transfer request already exists for this site.' }, { status: 409 })
     }
@@ -165,10 +243,8 @@ export default defineEventHandler(async (event) => {
   // Send invite email via Resend (best-effort — don't block the response)
   if (env.RESEND_API_KEY || !shouldSendRealEmail(env)) {
     const initiatorName = (session.user as { name?: string }).name || session.user.email || 'Your web designer'
-    const planLabel: Record<string, string> = {
+    const planLabel: Record<NewSalePlanId, string> = {
       growth: 'Growth ($49/mo)',
-      managed: 'Managed ($149/mo)',
-      seo_accelerator: 'SEO Accelerator ($349/mo)',
     }
     const discountNote = invitedCoupon ? ' — a discount has been applied automatically at checkout' : ''
     const resolvedPlanLabel = invitedPlan ? `${planLabel[invitedPlan] ?? invitedPlan}${discountNote}` : null

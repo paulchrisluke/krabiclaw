@@ -1,8 +1,9 @@
 import { executeBatch, queryAll, queryFirst, rawClient, type BatchQuery, type DbClient } from '~/server/db'
 import { createLocation, deleteLocation, updateLocation, type CreateLocationInput } from '~/server/utils/location-management'
 import { uniqueSlug } from '~/server/utils/experiences'
+import type { CloudflareEnv } from '~/server/utils/auth'
 
-type SetupEnv = Record<string, string | undefined>
+type SetupEnv = CloudflareEnv
 
 export type CopyEntityType = 
   | 'menus' 
@@ -477,12 +478,10 @@ async function copyLocationQa(
     const newId = crypto.randomUUID()
     manifest.entities.location_qa.new_ids.push(newId)
 
-    // google_question_id is uniquely indexed (idx_location_qa_google_id); the copy is not
-    // the literal Google Q&A entry, so it must not carry the source's external id.
     statements.push({
       query: `
-        INSERT INTO location_qa (id, organization_id, site_id, location_id, google_question_id, question, question_author, question_date, answer, answer_author, answer_date, is_owner_answer, upvote_count, source, status, sort_order, created_at, updated_at)
-        SELECT ?, organization_id, site_id, ?, NULL, question, question_author, question_date, answer, answer_author, answer_date, is_owner_answer, upvote_count, source, status, sort_order, ?, ?
+        INSERT INTO location_qa (id, organization_id, site_id, location_id, question, question_author, question_date, answer, answer_author, answer_date, is_owner_answer, upvote_count, source, status, sort_order, created_at, updated_at)
+        SELECT ?, organization_id, site_id, ?, question, question_author, question_date, answer, answer_author, answer_date, is_owner_answer, upvote_count, source, status, sort_order, ?, ?
         FROM location_qa WHERE id = ?
       `,
       params: [newId, targetLocationId, now, now, item.id],

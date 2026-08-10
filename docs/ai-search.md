@@ -48,7 +48,9 @@ Platform doc and platform blog admin writes trigger a full AI Search rebuild aft
 
 Production deploys and client imports that write `blog_posts` directly do **not** go through that in-request hook, so production needs an explicit rebuild:
 
-- `yarn deploy` runs `yarn ai-search:sync:prod` as its last step.
+- Production AI Search synchronization is an explicit final operation inside
+  the protected manifest-gated release job. Its result is retained with the
+  production release evidence; direct deploy commands cannot invoke it.
 - Production CI (`.github/workflows/ci.yml`) syncs the `PLATFORM_SEARCH_REINDEX_SECRET` repo secret and runs a blocking "Rebuild AI Search index (production)" step. A failed production rebuild fails the deploy job instead of silently leaving production search stale.
 - Preview and staging deploys intentionally do not rebuild AI Search. Their deploy and smoke-test health is independent of indexing the non-production fixture corpus.
 

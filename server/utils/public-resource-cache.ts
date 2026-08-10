@@ -7,13 +7,13 @@ import { normalizeHost } from '~/server/utils/tenant-hosts'
 // params instead of host + pathname — public resources are looked up by siteId
 // directly, not by tenant hostname, so no hostname resolution is needed here.
 //
-// Cache key: public~<siteId>~<contract>~<page>~<location>~<experience>~<datasets>~<blogSlug>~<locale>,
+// Cache key: public~<siteId>~v2~<contract>~<page>~<location>~<experience>~<datasets>~<blogSlug>~<locale>,
 // each field percent-encoded (mirrors composables/usePublicPageRequest.ts's
 // usePublicPageKey(), minus `token` — cached entries are never preview/draft-authorized,
 // see the preview authorization guard in the shell and page services).
 // Raised from 60s to 300s once every bootstrap-relevant write path was confirmed to call
 // purgePublicResourceCache/purgePublicResourceCacheSafe (dashboard editor routes + MCP were already
-// covered; location CRUD, onboarding setup/commit, and Google Business/Places sync were a
+// covered; location CRUD, onboarding setup/commit, and Google Places sync were a
 // gap closed alongside this change — see those call sites for purgePublicResourceCacheSafe).
 export const PUBLIC_RESOURCE_CACHE_TTL_SECONDS = 300
 
@@ -104,6 +104,7 @@ export function buildPublicResourceCacheKey(siteId: string, params: PublicResour
   return [
     'public',
     encodeKeyField(siteId),
+    'v2',
     params.contract,
     encodeKeyField(params.page),
     encodeKeyField(params.location),

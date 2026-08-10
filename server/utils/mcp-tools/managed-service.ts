@@ -4,7 +4,7 @@ import { siteTool, workRequestObject } from './shared'
 export const MANAGED_SERVICE_TOOLS: McpToolDefinition[] = [
   siteTool({
       name: 'list_work_requests',
-      description: 'List managed-service work requests.',
+      description: 'List Growth priority-support work requests.',
       domain: 'managed_service',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -17,7 +17,7 @@ export const MANAGED_SERVICE_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'create_work_request',
-      description: 'Create a managed-service work request.',
+      description: 'Create a Growth priority-support work request.',
       domain: 'managed_service',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -25,7 +25,7 @@ export const MANAGED_SERVICE_TOOLS: McpToolDefinition[] = [
       inputSchema: {
         type: {
           type: 'string',
-          enum: ['content_update', 'menu_update', 'seo', 'google_business', 'seasonal', 'photo_update', 'social_media', 'technical', 'other'],
+          enum: ['content_update', 'menu_update', 'seo', 'google_places', 'seasonal', 'photo_update', 'social_media', 'technical', 'other'],
           description: 'Category of work needed.',
         },
         title: { type: 'string', description: 'Short summary of what needs to be done (max 120 chars).' },

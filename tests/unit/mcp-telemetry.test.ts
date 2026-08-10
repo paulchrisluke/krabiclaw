@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { describeErrorForTelemetry } from "../../server/utils/mcp-telemetry.ts";
+import { describeErrorForTelemetry } from "../../server/utils/error-telemetry.ts";
 
 test("describeErrorForTelemetry preserves a nested database root cause", () => {
   const cause = new Error("D1_ERROR: CHECK constraint failed: media_assets_category_check");

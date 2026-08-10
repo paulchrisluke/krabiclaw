@@ -181,12 +181,23 @@ async function executeTool(
   if (!normalizedRole) {
     return { error: "Could not verify your permissions for this site." };
   }
+  const dashboardRouteContext = name === "get_dashboard_link"
+    ? await queryFirst<{ organizationSlug: string; siteSlug: string | null }>(db, `
+        SELECT o.slug AS organizationSlug, s.subdomain AS siteSlug
+        FROM organization o
+        JOIN sites s ON s.organization_id = o.id
+        WHERE o.id = ? AND s.id = ?
+        LIMIT 1
+      `, [orgId, siteId])
+    : null;
   const executorSite = {
     db,
     env: env as CloudflareEnv,
     userId,
     memberId: ctx.memberId,
     organizationId: orgId,
+    organizationSlug: dashboardRouteContext?.organizationSlug,
+    subdomain: dashboardRouteContext?.siteSlug ?? null,
     siteId,
     role: normalizedRole,
     sessionId: ctx.sessionId,
@@ -1088,7 +1099,7 @@ Rules in setup mode:
     : "";
 
   const managedServiceGuidance = isConversationalToolGroupEnabled(env, "managed_service")
-    ? "- Managed service requests: submit work to Paul & Julia's queue (content, SEO, Google Business, seasonal, photos, social media)\n"
+    ? "- Priority-support requests: submit work to the KrabiClaw support queue (content, SEO, Google Places, seasonal, photos, social media)\n"
     : "";
   const localeGuidance = "- Locale-specific content: use list_locales, upsert_locale, and delete_locale to manage locale versions, then edit each locale's page content manually in the dashboard page manager\n";
 

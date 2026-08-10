@@ -83,6 +83,7 @@
 
 <script setup lang="ts">
 import type { UpsellType } from '~/composables/useServiceUpsell'
+import { NEW_SALE_PLAN_ID } from '~/shared/billing-model'
 
 const config = useRuntimeConfig()
 
@@ -91,7 +92,7 @@ const PAUL_PHOTO_URL = 'https://res.cloudinary.com/pcl-labs/image/upload/v171469
 const JULIA_PHOTO_URL = 'https://res.cloudinary.com/pcl-labs/image/upload/v1714706641/PCL-Labs/1682091954266_vrcx3n.webp'
 
 const { isOpen, type, close } = useServiceUpsell()
-const { offerSubscribe } = useSiteSubscribe()
+const { startOrganizationCheckout } = useOrganizationSubscription()
 const toast = useToast()
 const loading = ref(false)
 const dashboard = useDashboardSite()
@@ -108,9 +109,7 @@ interface UpsellContent {
 
 function buildContentMap(experience: boolean): Record<UpsellType, UpsellContent> {
   const foodWord = experience ? 'craft' : 'food'
-  const menuWord = experience ? 'offerings' : 'menu'
   const menuCapitalized = experience ? 'Offerings' : 'Menu'
-  const businessWord = experience ? 'business' : 'restaurant'
 
   return {
     growth: {
@@ -121,93 +120,27 @@ function buildContentMap(experience: boolean): Record<UpsellType, UpsellContent>
         `${menuCapitalized} updates via ChatGPT — just send us a message`,
         'WhatsApp booking & reservation notifications',
         'Auto-sync from Facebook & Instagram',
-        'Google Business profile sync',
+        'Google Places imports',
         'Post-booking review requests',
       ],
       price: '$49',
       priceNote: '/ month',
       cta: 'Get Growth — $49/mo',
     },
-    managed: {
-      headline: `We run your ${businessWord} online, end to end`,
-      subheading: `Send us a voice note on WhatsApp. We handle ${menuWord} updates, posts, and your Google presence.`,
-      bullets: [
-        `${menuCapitalized}, posts & seasonal content managed for you`,
-        'Full Google Business profile management',
-        'Post-booking review requests and reminders',
-        'Custom domain + free SSL',
-        'Priority WhatsApp support — we respond fast',
-      ],
-      price: '$149',
-      priceNote: '/ month',
-      cta: 'Get Managed — $149/mo',
-    },
-    seo_accelerator: {
-      headline: `Julia's SEO playbook — applied to your ${businessWord}`,
-      subheading: "Julia grew tiffycooks.com to 1M active impressions/day. We apply that same strategy to get tourists finding you first.",
-      bullets: [
-        'Local & travel keyword targeting for your area',
-        'Google Maps authority building',
-        'Monthly content cadence — blog, photos, posts',
-        'Competitive analysis & monthly reporting',
-        'Everything in Managed included',
-      ],
-      price: '$349',
-      priceNote: '/ month',
-      cta: 'Get SEO Accelerator — $349/mo',
-    },
-    seasonal: {
-      headline: 'Seasonal relaunch package',
-      subheading: `Fresh photos, updated ${menuWord}, and a promotion post — all set before your next busy season.`,
-      bullets: [
-        experience ? 'Offerings refresh with seasonal updates' : 'Menu refresh with seasonal items',
-        'Updated promotional content & featured photos',
-        'Google Business post announcing the update',
-      ],
-      price: '$99',
-      priceNote: 'one-time',
-      cta: 'Get Seasonal Relaunch — $99',
-    },
-    gbp_setup: {
-      headline: 'Google Business optimization',
-      subheading: `We audit and optimize your Google Business profile so you show up when tourists search nearby ${experience ? 'businesses' : 'restaurants'}.`,
-      bullets: [
-        'Full profile audit & keyword optimization',
-        'Category, attributes, and hours review',
-        'Photo uploads and Q&A setup',
-      ],
-      price: '$49',
-      priceNote: 'one-time',
-      cta: 'Get Google Business Setup — $49',
-    },
   }
 }
 
 const content = computed<UpsellContent>(() => buildContentMap(isExperience.value)[type.value ?? 'growth'])
 
-const RECURRING_TYPES: UpsellType[] = ['growth', 'managed', 'seo_accelerator']
-
 async function handleCta() {
   if (!type.value) return
   loading.value = true
   try {
-    if (RECURRING_TYPES.includes(type.value)) {
-      const siteId = dashboard.siteId.value
-      if (!siteId) throw new Error('Choose a site before starting checkout')
-      close()
-      await offerSubscribe(siteId, type.value)
-    } else {
-      const res = await $fetch<{ checkoutUrl: string }>('/api/billing/service-addon', {
-        method: 'POST',
-        body: { addonType: type.value },
-      })
-      if (res.checkoutUrl) {
-        close()
-        await navigateTo(res.checkoutUrl, { external: true })
-      } else {
-        throw new Error('Missing checkoutUrl')
-      }
-    }
+    if (type.value !== NEW_SALE_PLAN_ID) return
+    const siteId = dashboard.siteId.value
+    if (!siteId) throw new Error('Choose a site before starting checkout')
+    close()
+    await startOrganizationCheckout(siteId, type.value)
   } catch (err) {
     console.error('Checkout error:', err)
     toast.add({ title: 'Something went wrong', description: 'Please visit our help page instead.', color: 'error' })

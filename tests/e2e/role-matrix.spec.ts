@@ -10,7 +10,7 @@ type RoleUser = {
 test.describe('role permission matrix', () => {
   test.describe.configure({ mode: 'serial' })
 
-  test('content + billing permissions by role', async ({ request, baseURL }) => {
+  test('content permissions by role', async ({ request, baseURL }) => {
     test.setTimeout(60_000)
 
     const ownerLogin = await request.get(devLoginUrl(baseURL!), { headers: devLoginHeaders(), maxRedirects: 0 })
@@ -51,18 +51,6 @@ test.describe('role permission matrix', () => {
       expect(login.status()).toBe(302)
     }
 
-    const checkoutStatus = async (expected: 'owner' | 'non_owner') => {
-      expect(siteId).toEqual(expect.any(String))
-      const res = await request.post(`${baseURL}/api/billing/checkout`, {
-        data: { plan: 'growth', interval: 'month', siteId },
-      })
-      if (expected === 'owner') {
-        expect(res.status()).toBe(200)
-      } else {
-        expect(res.status()).toBe(403)
-      }
-    }
-
     const contentUpdateStatus = async () => {
       const pages = await request.get(`${baseURL}/api/editor/sites/${siteId}/pages`)
       if (pages.status() !== 200) return pages
@@ -77,22 +65,17 @@ test.describe('role permission matrix', () => {
       })
     }
 
-    const assertRole = async (
-      userId: string,
-      expectedCheckout: 'owner' | 'non_owner',
-      expectedContentUpdate?: number,
-    ) => {
+    const assertRole = async (userId: string, expectedContentUpdate?: number) => {
       await asUser(userId)
-      await checkoutStatus(expectedCheckout)
       if (siteId && expectedContentUpdate !== undefined) {
         expect((await contentUpdateStatus()).status()).toBe(expectedContentUpdate)
       }
     }
 
-    await assertRole(ownerUserId!, 'owner', 200)
-    await assertRole(admin.id, 'non_owner', 200)
-    await assertRole(editor.id, 'non_owner', 200)
-    await assertRole(member.id, 'non_owner', 404)
+    await assertRole(ownerUserId!, 200)
+    await assertRole(admin.id, 200)
+    await assertRole(editor.id, 200)
+    await assertRole(member.id, 403)
 
   })
 
@@ -178,7 +161,7 @@ test.describe('role permission matrix', () => {
     await deletePostAs(editor.id, editorPostId, 404)
 
     const memberPostId = await createDraftPost(`Member edit ${Date.now()}`)
-    await updatePostAs(member.id, memberPostId, 404)
+    await updatePostAs(member.id, memberPostId, 403)
     await deletePostAs(member.id, memberPostId, 404)
   })
 })

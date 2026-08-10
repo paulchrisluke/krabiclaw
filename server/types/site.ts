@@ -103,7 +103,7 @@ export interface LaunchReadiness {
     integrations: {
       ready: boolean
       items: {
-        google_business_connected: boolean
+        google_places_configured: boolean
         locations_imported: boolean
       }
     }

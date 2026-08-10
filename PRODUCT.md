@@ -17,7 +17,7 @@ Customer-facing ChatGPT app for tenant site management.
 - OAuth2 authorization at `/api/auth/oauth2/` — ChatGPT handles auth before any tool call
 - MCP endpoint at `/api/mcp` (`server/api/mcp.post.ts`)
 - Scope: `tenant`
-- 90+ MCP tools covering: site setup, locations, menus, experiences, posts, media, locale management, Google Business, Facebook, analytics, work requests
+- 60+ MCP tools covering: site setup, locations, menus, experiences, posts, media, locale management, Google Places, Facebook, analytics, work requests
 - Widget system is legacy/deprecated for client photo uploads; Client MCP should ask users to attach photos directly in ChatGPT and then use `upload_user_photo`. `list_sites`, `import_from_maps`, `show_site_preview`, `show_generated_images`, and onboarding return plain text.
 - Image generation via ChatGPT's native `image_generation` Responses API tool (`gpt-image-1` / `gpt-image-2`) — not DALL-E
 - Plugin landing page at `/plugin`
@@ -57,27 +57,58 @@ Professional-service tenants render through the Blawby template (see "Public Tem
 
 ## Business Model
 
-Pricing managed entirely in Stripe — never duplicated in code. All pricing UI reads from `GET /api/billing/plans`.
+Recurring amounts and plan IDs are intentionally fixed in the reviewed Stripe
+catalog contract (`scripts/lib/stripe-catalog-plan.mjs`). Customer-facing
+billing surfaces load the canonical plan details from `GET /api/billing/plans`.
 
 | Tier | Price | Key Features |
 |------|-------|-------------|
-| Free (Starter) | $0 | Subdomain, Saya theme, manual editor, basic AI credits, 1 locale, Post-booking review requests |
-| Growth | $49/mo | Custom domain + SSL, Google Business sync, 2,000 AI credits/mo, manual locale editing, Priority Support |
+| Free (Starter) | $0 | Subdomain, Saya theme, manual editor, 500 AI credits/week, 1 locale |
+| Growth | $49/mo or $588/year | Custom domain + SSL, Google Places imports, 2,000 AI credits/week, post-booking review requests, manual locale editing, Priority Support |
 
-Locations are unlimited on all plans. Credit top-ups are available as one-time purchases.
+One Better Auth organization subscription covers every site in the organization. AI
+usage is measured in the append-only `usage_events` ledger and provisioned by
+append-only `usage_quota_grants`; the `ai_credits` row is a derived enforcement
+balance, not a purchasable wallet. One-time credit purchases, service add-ons,
+and automatic top-ups are retired. The 2026-08-09 production/provider census
+found no customer purchase, fulfillment, or outstanding-obligation history for
+those products. The active schema removes their unused tables and columns;
+immutable applied migrations retain the historical definitions only.
 
-**Upgrade modal** triggers on: connecting Google Business, custom domain setup, removing KrabiClaw branding.
+**Upgrade modal** triggers on: Google Places import, custom domain setup, removing KrabiClaw branding.
 
-**Managed / Concierge Services Deprecated.** The "Managed by Paul & Julia" service (including Managed and SEO Accelerator tiers) is no longer offered. The `MANAGED_SERVICE_ENABLED` feature flag remains off to hide these from the dashboard and marketing sites.
+**Starter and Growth are the complete runtime plan model.** Managed and SEO
+Accelerator were created as Stripe catalog products but were never purchased or
+subscribed to. They are provider-retirement records only and must be archived;
+they are not runtime plan identities, historical entitlements, or fulfillment
+obligations.
+
+Growth includes priority-support work requests and Facebook integration. The
+internal `managed_service` entitlement is the capability key used by those
+Growth features; it is not a plan identity. `MANAGED_SERVICE_ENABLED` controls
+whether Growth support intake is open and must never expose another plan in a
+checkout, transfer, upsell, or catalog surface.
+
+Pending site handoffs do not pause or delete the source owner's custom domains.
+Reminders are informational; payment gates ownership acceptance, not the
+current customer's live website. Acceptance and cancellation own the
+compare-and-set restoration/cleanup saga, including recovery of legacy paused
+domain markers.
 
 ### WhatsApp / Google Places cost recovery
 
 WhatsApp Business API sends and Google Places API calls cost real per-use money with no dedicated billing surface — rather than build new metered Stripe billing pre-launch, they draw from the existing `ai_credits` balance (`server/utils/ai-credits.ts`) via `chargeFlatCredits()`, alongside the token-based charging already enforced on `/api/ai/*`.
 
 - Charged: WhatsApp notifications (`sendWhatsAppNotification`), ChowBot free-text WhatsApp replies, and on-demand Google Places search/details calls (dashboard autocomplete, onboarding maps import, manual re-sync, the MCP `import_from_maps` tool).
-- Never charged: WhatsApp OTP (`sendWhatsAppOtp`) — auth-critical, must always send — and the background `google-business-sync` cron task, which is infrastructure upkeep a customer didn't explicitly trigger.
+- Never charged: WhatsApp OTP (`sendWhatsAppOtp`) — auth-critical, must always send — and the background `google-places-sync` cron task, which is infrastructure upkeep a customer didn't explicitly trigger.
 - Exhaustion is a **soft-fail** for both: the action still goes through at zero balance (losing a reservation confirmation is worse than the unpaid cost), unlike the hard 402 block on `/api/ai/*`.
-- Flat per-action credit costs (`ACTION_CREDIT_COSTS` in `ai-credits.ts`) are launch-time estimates pegged against the cheapest $9/500-credit top-up rate vs. list Meta/Google pricing — revisit once real invoiced volume exists.
+- Flat per-action quota costs (`ACTION_CREDIT_COSTS` in `ai-credits.ts`) are launch-time estimates against list Meta/Google pricing — revisit once real invoiced volume exists.
+
+### Locale model
+
+Non-source locales are manually authored variants. The editor and MCP expose
+explicit locale-variant records; there is no automated translation job, review
+queue, or translation entitlement in the active product surface.
 
 ---
 
@@ -156,7 +187,6 @@ Both Saya and Blawby support a blog: Saya's is the shared `posts` primitive rend
 | WhatsApp Business API | ✅ Built — blocked on real number |
 | Facebook / Instagram Graph API | ✅ OAuth + Pages sync + publish built |
 | Google Places API sync | ✅ Live — hours, address, rating, reviews (up to 5) |
-| Google Business Profile API | ⏳ API approval pending — RPM quota locked at 0 |
 | Google Places API | ✅ Live — location autocomplete + `import_from_maps` MCP tool |
 | Cloudflare R2 media host | ✅ Built — video upload/playback |
 | ChatGPT Client MCP | ✅ Live — primary customer creation surface |
@@ -170,7 +200,7 @@ Both Saya and Blawby support a blog: Saya's is the shared `posts` primitive rend
 - All backend-originated AI calls route through Cloudflare AI Gateway — never call model APIs directly from server code (exception: ChatGPT native `image_generation` is initiated by the OpenAI runtime, not by KrabiClaw server code, and bypasses the gateway by design)
 - MCP server is the canonical creation surface; dashboard CMS and ChowBot are secondary
 - Posts are the content primitive — channels are adapters on top of `post_channel_jobs`
-- All location data is CRUD-available in D1 regardless of GMB connection — GMB sync is additive
+- All location data is CRUD-available in D1; Google Places import is additive and read-only with respect to Google
 - Notification delivery is channel-agnostic — `notifications.channel` column means email/push can be added with no schema change
 - WhatsApp and Instagram both go through the same Facebook app — single OAuth covers both
 - ChowBot is the owner of AI conversations; dashboard and WhatsApp are interfaces over the same D1-backed backend
@@ -183,8 +213,8 @@ Both Saya and Blawby support a blog: Saya's is the shared `posts` primitive rend
 
 - **Organization** is the site/brand workspace and billing/team boundary — vertical-neutral: an org can hold a restaurant, an experience business, or a professional-service firm, and (per "One org can have multiple sites" below) can even hold a mix.
 - **One org can have multiple sites** — there is no unique-per-org constraint on sites. Sites are explicit everywhere — there is no "first site in org" fallback in dashboard routing or billing.
-- Each site has its own plan and Stripe subscription (`site_billing`). The Stripe *customer* stays at org level (`organization_billing.stripe_customer_id`) — one payment method covers every site in the org.
-- A new site always starts on `free`, even under a paid org. If the org already has another site on a paid plan and a saved card on file, the dashboard offers to auto-subscribe the new site immediately (`POST /api/billing/site-subscribe`, no Checkout redirect). Otherwise it's a normal Checkout upgrade later.
+- One Better Auth organization subscription and shared weekly quota cover every site in the organization. A new site inherits the organization's effective plan without another checkout. `organization_billing` is the application projection of that organization-level authority.
+- `sites.plan`, `site_billing`, and `site_entitlements` are compatibility and reporting projections for site-scoped consumers. They do not authorize checkout, paid access, transfer acceptance, or quota, and must be reconciled from the owning organization's effective plan rather than treated as independent subscriptions.
 - **Sites** are the primary day-to-day dashboard context and selector. A location becomes the working context only inside that site's location workspace. For Saya (restaurant/experience) sites this is a physical location; Blawby's offerings are site-level by default and don't require a location to have a public street address (a professional-service tenant may serve a statewide/remote area).
 - Public tenant routes are template-specific: Saya remains location/experience-centric under `/locations/[slug]` and `/experiences/[slug]`; Blawby is offering-centric under `/services/[slug]` (see "Public Templates" above).
 - Dashboard routes follow the Vercel-style workspace shape, with an explicit site segment:
@@ -192,8 +222,8 @@ Both Saya and Blawby support a blog: Saya's is the shared `posts` primitive rend
   - `/dashboard/{orgSlug}/sites/{siteSlug}` — site workspace (`siteSlug` is the site's `subdomain`)
   - `/dashboard/{orgSlug}/sites/{siteSlug}/locations/{locationSlug}` — location workspace
   - `/dashboard/{orgSlug}/sites/new` — create another site under this org
-  - `/dashboard/{orgSlug}/settings/billing` — org billing (lists every site's plan/subscription, not just one)
+  - `/dashboard/{orgSlug}/settings/billing` — the organization's subscription, shared quota, invoices, and plan management
   - `/dashboard/account/settings` — personal account settings
 - App-facing dashboard APIs use `/api/dashboard/*`; the active site is resolved server-side from the `x-dashboard-site-slug` header (auto-attached by `plugins/dashboard-site-header.ts` based on the route's `siteSlug`), not by guessing the org's oldest site.
-- **Site transfers move only the site** — its locations, content, billing, and entitlements reparent into the recipient's own existing org. The org itself, its other sites, and org-level billing/credits never move.
+- **Site transfers move only the site and its tenant data.** Neither organization's subscription, quota ledger, grants, nor billing customer moves. After acceptance, the recipient organization's effective plan governs the transferred site and any site-scoped compatibility projections are reconciled from that organization authority.
 - Dashboard is home for: billing, org settings, unified inbox (contact inquiries, reservations, bookings, reviews), analytics.

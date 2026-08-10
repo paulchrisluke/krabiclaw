@@ -2,6 +2,12 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { queryFirst } from '~/server/db'
 import { getStripe } from '~/server/utils/billing'
+import {
+  assertGrowthStripeCatalogPrices,
+  resolveStripeCatalogPrice,
+  selectStripeCatalogPrice,
+} from '~/server/utils/stripe-catalog'
+import { assertNewSalePlan, type NewSalePlanId } from '~/shared/billing-model'
 import type Stripe from 'stripe'
 
 export default defineEventHandler(async (event) => {
@@ -27,18 +33,14 @@ export default defineEventHandler(async (event) => {
     brand_name: string | null
     slug: string
     subdomain: string | null
-    initiated_by_name: string
-    initiated_by_email: string
   }>(
     db,
     `SELECT r.id, r.site_id, r.to_email, r.status, r.message,
             r.invited_plan, r.invited_coupon, r.invited_interval, r.invited_domain,
             r.requires_payment, r.custom_domains_removed_at,
-            s.brand_name, s.slug, s.subdomain,
-            u.name AS initiated_by_name, u.email AS initiated_by_email
+            s.brand_name, s.slug, s.subdomain
      FROM site_transfer_requests r
      JOIN sites s ON s.id = r.site_id
-     JOIN user u ON u.id = r.initiated_by_user_id
      WHERE r.token = ? LIMIT 1`,
     [token],
   )
@@ -49,10 +51,34 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Transfer is no longer active', status: row.status }, { status: 410 })
   }
 
-  const requiresPayment = row.requires_payment === 1 || Boolean(row.invited_plan)
+  const hasInvitedPlan = row.invited_plan !== null && row.invited_plan !== undefined
+  const requiresPayment = row.requires_payment === 1 || hasInvitedPlan
+  if (requiresPayment && !row.invited_plan) {
+    return jsonResponse({
+      error: 'This handoff is missing a supported billing plan. Ask the sender to reissue it with Growth.',
+    }, { status: 409 })
+  }
+
+  let validatedPlan: NewSalePlanId | null = null
+  if (hasInvitedPlan) {
+    try {
+      validatedPlan = assertNewSalePlan(row.invited_plan)
+    } catch {
+      return jsonResponse({
+        error: 'This handoff uses a retired or unsupported billing plan. Ask the sender to reissue it with Growth.',
+      }, { status: 409 })
+    }
+  }
+
   const invitedInterval: 'month' | 'year' = row.invited_interval === 'year' ? 'year' : 'month'
 
-  // Fetch plan price + coupon discount from Stripe (best-effort)
+  if (validatedPlan && !env.STRIPE_SECRET_KEY) {
+    return jsonResponse({ error: 'Stripe pricing is temporarily unavailable for this paid handoff.' }, { status: 503 })
+  }
+
+  // Fetch the canonical plan price and any invited coupon from Stripe. A
+  // stored coupon is part of the checkout contract; never silently render the
+  // undiscounted price when Stripe cannot resolve it.
   interface PricingInfo {
     base_cents: number
     discounted_cents: number | null
@@ -62,81 +88,81 @@ export default defineEventHandler(async (event) => {
   let pricing_month: PricingInfo | null = null
   let pricing_year: PricingInfo | null = null
 
-  if (row.invited_plan && env.STRIPE_SECRET_KEY) {
-    try {
-      const stripe = getStripe(env)
-      const products: Stripe.Product[] = []
-      let productsStartingAfter: string | undefined
-      do {
-        const page = await stripe.products.list({
-          active: true,
-          limit: 100,
-          ...(productsStartingAfter ? { starting_after: productsStartingAfter } : {}),
-        })
-        products.push(...page.data)
-        productsStartingAfter = page.has_more ? page.data.at(-1)?.id : undefined
-      } while (productsStartingAfter)
+  if (validatedPlan && env.STRIPE_SECRET_KEY) {
+    const stripe = getStripe(env)
+    const products: Stripe.Product[] = []
+    let productsStartingAfter: string | undefined
+    do {
+      const page = await stripe.products.list({
+        active: true,
+        limit: 100,
+        ...(productsStartingAfter ? { starting_after: productsStartingAfter } : {}),
+      })
+      products.push(...page.data)
+      productsStartingAfter = page.has_more ? page.data.at(-1)?.id : undefined
+    } while (productsStartingAfter)
 
-      const product = products.find((p) => p.metadata?.plan_id === row.invited_plan)
-      if (product) {
-        const prices: Stripe.Price[] = []
-        let pricesStartingAfter: string | undefined
-        do {
-          const page = await stripe.prices.list({
-            active: true,
-            product: product.id,
-            type: 'recurring',
-            limit: 100,
-            ...(pricesStartingAfter ? { starting_after: pricesStartingAfter } : {}),
-          })
-          prices.push(...page.data)
-          pricesStartingAfter = page.has_more ? page.data.at(-1)?.id : undefined
-        } while (pricesStartingAfter)
+    const prices: Stripe.Price[] = []
+    let pricesStartingAfter: string | undefined
+    do {
+      const page = await stripe.prices.list({
+        active: true,
+        type: 'recurring',
+        limit: 100,
+        ...(pricesStartingAfter ? { starting_after: pricesStartingAfter } : {}),
+      })
+      prices.push(...page.data)
+      pricesStartingAfter = page.has_more ? page.data.at(-1)?.id : undefined
+    } while (pricesStartingAfter)
 
-        let coupon_duration: string | null = null
-        let coupon_duration_months: number | null = null
-        let coupon_percent_off: number | null = null
-        let coupon_amount_off: number | null = null
-        if (row.invited_coupon) {
-          try {
-            const coupon = await stripe.coupons.retrieve(row.invited_coupon)
-            coupon_duration = coupon.duration ?? null
-            coupon_duration_months = coupon.duration_in_months ?? null
-            coupon_percent_off = coupon.percent_off ?? null
-            coupon_amount_off = coupon.amount_off ?? null
-          } catch {
-            // Coupon not found — show base price without discount
-          }
+    const canonical = resolveStripeCatalogPrice(products, prices, validatedPlan, 'month')
+    const monthPrice = canonical.price
+    const yearPrice = selectStripeCatalogPrice(canonical.product, prices, 'year')
+    assertGrowthStripeCatalogPrices(monthPrice, yearPrice)
+
+    let coupon_duration: string | null = null
+    let coupon_duration_months: number | null = null
+    let coupon_percent_off: number | null = null
+    let coupon_amount_off: number | null = null
+    if (row.invited_coupon) {
+      try {
+        const coupon = await stripe.coupons.retrieve(row.invited_coupon)
+        coupon_duration = coupon.duration ?? null
+        coupon_duration_months = coupon.duration_in_months ?? null
+        coupon_percent_off = coupon.percent_off ?? null
+        coupon_amount_off = coupon.amount_off ?? null
+      } catch (error) {
+        if ((error as { code?: string })?.code === 'resource_missing') {
+          return jsonResponse({
+            error: 'This handoff discount is no longer available. Ask the sender to reissue it.',
+          }, { status: 409 })
         }
-
-        const applyDiscount = (amount: number): number | null => {
-          if (coupon_percent_off) return Math.round(amount * (1 - coupon_percent_off / 100))
-          if (coupon_amount_off) return Math.max(0, amount - coupon_amount_off)
-          return null
-        }
-
-        const monthPrice = prices.find((p) => p.recurring?.interval === 'month' && p.recurring.interval_count === 1)
-        if (monthPrice?.unit_amount) {
-          pricing_month = {
-            base_cents: monthPrice.unit_amount,
-            discounted_cents: applyDiscount(monthPrice.unit_amount),
-            coupon_duration,
-            coupon_duration_months,
-          }
-        }
-
-        const yearPrice = prices.find((p) => p.recurring?.interval === 'year' && p.recurring.interval_count === 1)
-        if (yearPrice?.unit_amount) {
-          pricing_year = {
-            base_cents: yearPrice.unit_amount,
-            discounted_cents: applyDiscount(yearPrice.unit_amount),
-            coupon_duration,
-            coupon_duration_months,
-          }
-        }
+        throw error
       }
-    } catch (e) {
-      console.error('[transfer] Stripe pricing error:', e)
+    }
+
+    const applyDiscount = (amount: number): number | null => {
+      if (coupon_percent_off) return Math.round(amount * (1 - coupon_percent_off / 100))
+      if (coupon_amount_off) return Math.max(0, amount - coupon_amount_off)
+      return null
+    }
+
+    if (monthPrice.unit_amount) {
+      pricing_month = {
+        base_cents: monthPrice.unit_amount,
+        discounted_cents: applyDiscount(monthPrice.unit_amount),
+        coupon_duration,
+        coupon_duration_months,
+      }
+    }
+
+    if (yearPrice?.unit_amount) {
+      pricing_year = {
+        base_cents: yearPrice.unit_amount,
+        discounted_cents: applyDiscount(yearPrice.unit_amount),
+        coupon_duration,
+        coupon_duration_months,
+      }
     }
   }
 
@@ -156,8 +182,5 @@ export default defineEventHandler(async (event) => {
     requires_payment: requiresPayment,
     never_expires: true,
     site_subdomain: row.subdomain,
-    initiated_by_name: row.initiated_by_name,
-    // Redact the initiating email to just the domain for privacy
-    initiated_by_domain: row.initiated_by_email.split('@')[1] ?? '',
   })
 })

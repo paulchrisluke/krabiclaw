@@ -4,12 +4,14 @@ import { potteryHouseFixture } from '../../seed-definitions/pottery-house'
 
 const siteId = potteryHouseFixture.siteId
 const wheelClass = potteryHouseFixture.experiences.find((e) => e.slug === 'pottery-wheel-class')!
+const monthlyMembership = potteryHouseFixture.experiences.find((e) => e.slug === 'monthly-membership')!
 
 const routes = [
   { path: '/', title: /Pottery House Krabi/, text: potteryHouseFixture.site.brandName },
   ...potteryHouseFixture.publicRoutes,
   { path: '/about', title: /Pottery House/, text: 'Pottery House' },
-  // Location phone numbers on this page can be refreshed by a live Google Business
+  { path: '/qa', title: /Q&A \| Pottery House Krabi/, text: 'Do I need any experience to join a class?' },
+  // Location phone numbers on this page can be refreshed by a live Google Places
   // sync and drift from the static seed fixture, so assert on stable page copy
   // instead of a phone number that isn't guaranteed to match what was seeded.
   { path: '/contact', title: /Contact/, text: 'Get in touch' },
@@ -75,6 +77,48 @@ test.describe('pottery house public site', () => {
 
     // Tagline is detail-page-only content
     await expect(page.locator('body')).toContainText(wheelClass.tagline)
+
+    await expectHealthyPage(page, errors)
+  })
+
+  test('experience detail exposes one canonical CTA per viewport and preserves inquiry context', async ({ page }) => {
+    const errors = collectPageErrors(page)
+    const expectedContactHref = `/contact?experienceId=${monthlyMembership.id}&experienceTitle=${encodeURIComponent(monthlyMembership.title).replaceAll('%20', '+')}`
+    await page.context().addCookies([{
+      name: 'kc_consent',
+      value: 'accepted',
+      domain: new URL(potteryHouseBaseURL).hostname,
+      path: '/',
+    }])
+
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await page.goto(`${potteryHouseBaseURL}/experiences/${monthlyMembership.slug}`, { waitUntil: 'domcontentloaded' })
+
+    const desktopInquiryCta = page.locator('[data-experience-cta="desktop"]')
+    await expect(desktopInquiryCta).toBeVisible()
+    await expect(desktopInquiryCta.getByRole('link', { name: 'Contact Us' })).toHaveAttribute('href', expectedContactHref)
+    await expect(page.locator('[data-experience-cta]:visible')).toHaveCount(1)
+
+    await page.setViewportSize({ width: 390, height: 844 })
+    const mobileInquiryCta = page.locator('[data-experience-cta="mobile"]')
+    await expect(mobileInquiryCta).toBeVisible()
+    await expect(mobileInquiryCta.getByRole('link', { name: 'Contact Us' })).toHaveAttribute('href', expectedContactHref)
+    await expect(page.locator('[data-experience-cta]:visible')).toHaveCount(1)
+
+    await page.goto(`${potteryHouseBaseURL}/experiences/${wheelClass.slug}`, { waitUntil: 'domcontentloaded' })
+    await page.waitForLoadState('networkidle')
+    const mobileBookableCta = page.locator('[data-experience-cta="mobile"]')
+    await expect(mobileBookableCta.getByRole('button', { name: 'Book a class' })).toBeVisible()
+    await expect(page.locator('[data-experience-cta]:visible')).toHaveCount(1)
+    await mobileBookableCta.getByRole('button', { name: 'Book a class' }).click()
+    await expect(page.getByRole('dialog')).toBeVisible()
+    await expect(page.getByRole('dialog')).toContainText('Select a time')
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await expect(page.locator('[data-experience-cta="desktop"]').getByRole('button', { name: 'Book a class' })).toBeVisible()
+    await expect(page.locator('[data-experience-cta]:visible')).toHaveCount(1)
 
     await expectHealthyPage(page, errors)
   })

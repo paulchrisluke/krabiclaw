@@ -84,7 +84,7 @@ export default defineEventHandler(async (event) => {
     const creditOk = await hasCredits(db, orgId, session.session.id)
     if (!creditOk) {
       return jsonResponse(
-        { error: 'No AI credits remaining. Upgrade your plan or purchase more credits.' },
+        { error: 'Shared weekly usage quota exhausted. Upgrade your organization plan to continue.' },
         { status: 402 }
       )
     }

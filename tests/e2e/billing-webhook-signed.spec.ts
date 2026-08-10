@@ -98,13 +98,13 @@ test.describe('billing webhook signed flow', () => {
     expect(replayBody.success).toBe(true)
   })
 
-  test('immediately fulfills a paid service add-on once and accepts subscription/setup checkout modes', async ({ page, baseURL }) => {
-    const login = await page.goto(devLoginUrl(baseURL!), {
-      waitUntil: 'domcontentloaded',
+  test('ignores retired one-time checkout metadata and accepts subscription/setup checkout modes', async ({ request, baseURL }) => {
+    const login = await request.get(devLoginUrl(baseURL!), {
       headers: devLoginHeaders(),
+      maxRedirects: 0,
     })
-    expect(login?.status() ?? 0).toBeLessThan(400)
-    const contextResponse = await page.request.get(`${baseURL}/api/dashboard/context`)
+    expect(login.status()).toBe(302)
+    const contextResponse = await request.get(`${baseURL}/api/dashboard/context`)
     expect(contextResponse.status()).toBe(200)
     const contextBody = await contextResponse.json() as { organization?: { id?: string } }
     const organizationId = contextBody.organization?.id
@@ -112,8 +112,8 @@ test.describe('billing webhook signed flow', () => {
 
     const sendSigned = async (event: Record<string, unknown>) => {
       const payload = JSON.stringify(event)
-      const signed = await runtimeStripeSignature(page.request, baseURL!, payload)
-      return page.request.post(`${baseURL}/api/billing/webhook`, {
+      const signed = await runtimeStripeSignature(request, baseURL!, payload)
+      return request.post(`${baseURL}/api/billing/webhook`, {
         headers: {
           'content-type': 'application/json',
           'stripe-signature': signed.signature,
@@ -124,7 +124,7 @@ test.describe('billing webhook signed flow', () => {
     }
 
     const timestamp = Math.floor(Date.now() / 1000)
-    const sessionId = `cs_addon_e2e_${Date.now()}`
+    const sessionId = `cs_retired_addon_e2e_${Date.now()}`
     const paymentEvent = {
       id: `evt_addon_e2e_${Date.now()}`,
       object: 'event',
@@ -137,7 +137,7 @@ test.describe('billing webhook signed flow', () => {
           object: 'checkout.session',
           mode: 'payment',
           payment_status: 'paid',
-          payment_intent: `pi_addon_e2e_${Date.now()}`,
+          payment_intent: `pi_retired_addon_e2e_${Date.now()}`,
           metadata: { organization_id: organizationId, type: 'service_addon', addon_type: 'seasonal' },
         },
       },
@@ -147,19 +147,22 @@ test.describe('billing webhook signed flow', () => {
 
     const stateUrl = `${baseURL}/api/dev/billing-state?organization_id=${encodeURIComponent(organizationId!)}`
     await expect.poll(async () => {
-      const response = await page.request.get(stateUrl, { headers: devLoginHeaders() })
-      const body = await response.json() as { webhook_events: Array<{ stripe_event_id: string; status?: string }>; service_addon_purchases: Array<{ checkout_session_id: string }> }
+      const response = await request.get(stateUrl, { headers: devLoginHeaders() })
+      const body = await response.json() as { webhook_events: Array<{ stripe_event_id: string; status?: string }> }
+      const matchingEvents = body.webhook_events.filter(item => item.stripe_event_id === paymentEvent.id)
       return {
-        event: body.webhook_events.find(item => item.stripe_event_id === paymentEvent.id)?.status,
-        purchases: body.service_addon_purchases.filter(item => item.checkout_session_id === sessionId).length,
+        event: matchingEvents[0]?.status,
+        eventCount: matchingEvents.length,
       }
-    }, { timeout: 10_000 }).toEqual({ event: 'processed', purchases: 1 })
+    }, { timeout: 10_000 }).toEqual({ event: 'processed', eventCount: 1 })
 
     const replay = await sendSigned(paymentEvent)
     expect(replay.status()).toBe(200)
-    const replayState = await page.request.get(stateUrl, { headers: devLoginHeaders() })
-    const replayBody = await replayState.json() as { service_addon_purchases: Array<{ checkout_session_id: string }> }
-    expect(replayBody.service_addon_purchases.filter(item => item.checkout_session_id === sessionId)).toHaveLength(1)
+    const replayState = await request.get(stateUrl, { headers: devLoginHeaders() })
+    const replayBody = await replayState.json() as { webhook_events: Array<{ stripe_event_id: string; status?: string }> }
+    expect(replayBody.webhook_events.filter(item => item.stripe_event_id === paymentEvent.id)).toEqual([
+      expect.objectContaining({ stripe_event_id: paymentEvent.id, status: 'processed' }),
+    ])
 
     const modeEventIds: string[] = []
     for (const mode of ['subscription', 'setup']) {
@@ -170,16 +173,15 @@ test.describe('billing webhook signed flow', () => {
         object: 'event',
         created: timestamp,
         livemode: false,
-        type: 'checkout.session.completed',
+        type: mode === 'subscription' ? 'checkout.session.async_payment_succeeded' : 'checkout.session.completed',
         data: {
           object: {
             id: `cs_${mode}_e2e_${Date.now()}`,
             object: 'checkout.session',
             mode,
-            payment_status: mode === 'subscription' ? 'unpaid' : 'no_payment_required',
+            payment_status: mode === 'subscription' ? 'paid' : 'no_payment_required',
             metadata: {
               organization_id: organizationId,
-              ...(mode === 'subscription' ? { type: 'site_transfer' } : {}),
             },
           },
         },
@@ -188,7 +190,7 @@ test.describe('billing webhook signed flow', () => {
     }
 
     await expect.poll(async () => {
-      const response = await page.request.get(stateUrl, { headers: devLoginHeaders() })
+      const response = await request.get(stateUrl, { headers: devLoginHeaders() })
       const body = await response.json() as { webhook_events: Array<{ stripe_event_id: string; status?: string }> }
       return modeEventIds.map(id => body.webhook_events.find(item => item.stripe_event_id === id)?.status)
     }, { timeout: 10_000 }).toEqual(['processed', 'processed'])

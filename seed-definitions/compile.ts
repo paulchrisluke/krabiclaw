@@ -11,8 +11,8 @@ import type {
   CompiledSeedPost,
   CompiledSeedPostChannelJob,
   CompiledSeedReview,
-  CompiledSeedSiteContent,
-  CompiledSeedSiteContentTranslation,
+  CompiledSeedTenantPageContent,
+  CompiledSeedTenantPageLocaleField,
   CuratedSiteDefinition,
 } from './contracts.ts'
 
@@ -37,7 +37,7 @@ export function compileCuratedSiteFixture(
   uniqueStrings(fixture.siteDomains.map((d) => d.domain), 'site domain')
   uniqueStrings(fixture.mediaAssets.map((a) => a.id), 'media asset id')
   uniqueStrings(fixture.mediaAssets.map((a) => a.fileName), 'media asset file name')
-  uniqueStrings(fixture.siteContent.map((e) => e.id), 'site content id')
+  uniqueStrings(fixture.tenantPageContent.map((e) => e.id), 'tenant page content id')
   uniqueStrings(fixture.experiences.map((e) => e.id), 'experience id')
   uniqueStrings(fixture.experiences.map((e) => e.slug), 'experience slug')
   uniqueStrings(fixture.reviews.map((r) => r.id), 'review id')
@@ -46,11 +46,20 @@ export function compileCuratedSiteFixture(
   uniqueStrings(fixture.locationQa.map((q) => q.id), 'location qa id')
   uniqueStrings(fixture.posts.map((p) => p.id), 'post id')
   uniqueStrings(fixture.posts.flatMap((p) => p.channelJobs.map((j) => j.id)), 'post channel job id')
-  uniqueStrings((fixture.siteContentTranslations ?? []).map((entry) => entry.id), 'site content translation id')
+  uniqueStrings((fixture.tenantPageLocaleFields ?? []).map((entry) => entry.id), 'tenant page locale field id')
   uniqueStrings((fixture.businessLocationTranslations ?? []).map((entry) => entry.id), 'business location translation id')
   uniqueStrings((fixture.menuTranslations ?? []).map((entry) => entry.id), 'menu translation id')
   uniqueStrings((fixture.menuItemTranslations ?? []).map((entry) => entry.id), 'menu item translation id')
   uniqueStrings(fixture.publicRoutes.map((r) => r.path), 'public route path')
+
+  const sourceLocales = fixture.siteLocales.filter((locale) => locale.isSource)
+  if (sourceLocales.length !== 1) {
+    throw new Error(`Fixture must declare exactly one source locale; found ${sourceLocales.length}`)
+  }
+  const sourceLocale = sourceLocales[0]!.locale
+  if (sourceLocales[0]!.status !== 'published') {
+    throw new Error(`Source locale "${sourceLocale}" must be published`)
+  }
 
   const mediaAssets: CompiledSeedMediaAsset[] = fixture.mediaAssets.map((asset) => {
     if (asset.locationId && !locationIds.has(asset.locationId)) {
@@ -76,15 +85,15 @@ export function compileCuratedSiteFixture(
     }
   })
 
-  const siteContent: CompiledSeedSiteContent[] = fixture.siteContent.map((entry) => {
+  const tenantPageContent: CompiledSeedTenantPageContent[] = fixture.tenantPageContent.map((entry) => {
     if (entry.locationId && !locationIds.has(entry.locationId)) {
-      throw new Error(`Site content "${entry.id}" references unknown location "${entry.locationId}"`)
+      throw new Error(`Tenant page content "${entry.id}" references unknown location "${entry.locationId}"`)
     }
     if (entry.heroImageAssetId && !mediaIds.has(entry.heroImageAssetId)) {
-      throw new Error(`Site content "${entry.id}" references unknown hero image asset "${entry.heroImageAssetId}"`)
+      throw new Error(`Tenant page content "${entry.id}" references unknown hero image asset "${entry.heroImageAssetId}"`)
     }
     if (entry.heroVideoAssetId && !mediaIds.has(entry.heroVideoAssetId)) {
-      throw new Error(`Site content "${entry.id}" references unknown hero video asset "${entry.heroVideoAssetId}"`)
+      throw new Error(`Tenant page content "${entry.id}" references unknown hero video asset "${entry.heroVideoAssetId}"`)
     }
     return {
       id: entry.id,
@@ -257,12 +266,15 @@ export function compileCuratedSiteFixture(
     }
   })
 
-  const siteContentTranslations: CompiledSeedSiteContentTranslation[] = (fixture.siteContentTranslations ?? []).map((entry) => {
+  const tenantPageLocaleFields: CompiledSeedTenantPageLocaleField[] = (fixture.tenantPageLocaleFields ?? []).map((entry) => {
+    if (entry.locale === sourceLocale) {
+      throw new Error(`Tenant page locale field "${entry.id}" must target a non-source locale`)
+    }
     if (!siteLocaleIds.has(entry.locale)) {
-      throw new Error(`Site content translation "${entry.id}" references unknown locale "${entry.locale}"`)
+      throw new Error(`Tenant page locale field "${entry.id}" references unknown locale "${entry.locale}"`)
     }
     if (entry.locationId && !locationIds.has(entry.locationId)) {
-      throw new Error(`Site content translation "${entry.id}" references unknown location "${entry.locationId}"`)
+      throw new Error(`Tenant page locale field "${entry.id}" references unknown location "${entry.locationId}"`)
     }
     return {
       id: entry.id,
@@ -285,6 +297,9 @@ export function compileCuratedSiteFixture(
   })
 
   const businessLocationTranslations: CompiledSeedBusinessLocationTranslation[] = (fixture.businessLocationTranslations ?? []).map((entry) => {
+    if (entry.locale === sourceLocale) {
+      throw new Error(`Business location translation "${entry.id}" must target a non-source locale`)
+    }
     if (!siteLocaleIds.has(entry.locale)) {
       throw new Error(`Business location translation "${entry.id}" references unknown locale "${entry.locale}"`)
     }
@@ -310,6 +325,9 @@ export function compileCuratedSiteFixture(
   })
 
   const menuTranslations: CompiledSeedMenuTranslation[] = (fixture.menuTranslations ?? []).map((entry) => {
+    if (entry.locale === sourceLocale) {
+      throw new Error(`Menu translation "${entry.id}" must target a non-source locale`)
+    }
     if (!siteLocaleIds.has(entry.locale)) {
       throw new Error(`Menu translation "${entry.id}" references unknown locale "${entry.locale}"`)
     }
@@ -333,6 +351,9 @@ export function compileCuratedSiteFixture(
   })
 
   const menuItemTranslations: CompiledSeedMenuItemTranslation[] = (fixture.menuItemTranslations ?? []).map((entry) => {
+    if (entry.locale === sourceLocale) {
+      throw new Error(`Menu item translation "${entry.id}" must target a non-source locale`)
+    }
     if (!siteLocaleIds.has(entry.locale)) {
       throw new Error(`Menu item translation "${entry.id}" references unknown locale "${entry.locale}"`)
     }
@@ -369,13 +390,13 @@ export function compileCuratedSiteFixture(
     siteDomains: fixture.siteDomains.map((entry) => ({ ...entry })),
     locations: fixture.locations.map((location) => ({ ...location })),
     mediaAssets,
-    siteContent,
+    tenantPageContent,
     experiences,
     reviews,
     menus,
     locationQa,
     posts,
-    siteContentTranslations,
+    tenantPageLocaleFields,
     businessLocationTranslations,
     menuTranslations,
     menuItemTranslations,

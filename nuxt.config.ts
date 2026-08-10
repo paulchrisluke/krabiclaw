@@ -27,14 +27,6 @@ function pickIcons(collection: string, names: string[]) {
 
   return subset
 }
-// Opt-out only: GitHub Actions sets CI=true on every runner, including the
-// preview/staging/prod deploy jobs that build the artifact actually shipped
-// to Cloudflare, so gating this on ambient CI silently strips every
-// scheduled task (analytics aggregation, billing reminders, sync jobs, ...)
-// from production. Set NUXT_DISABLE_NITRO_TASKS=true explicitly if a local
-// dev/E2E run needs to avoid task-import side effects on the D1 proxy binding.
-const enableNitroTasks = process.env.NUXT_DISABLE_NITRO_TASKS !== 'true'
-
 // Optional build analysis for bundle inspection; it has no runtime effect.
 const analyzeBundle = process.env.PERF_BUNDLE_ANALYZE === 'true'
 const publicPerfTestPage = process.env.PERF_PUBLIC_TEST_PAGE !== 'false'
@@ -170,6 +162,12 @@ export default defineNuxtConfig({
         { charset: 'utf-8' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
         { name: 'theme-color', content: '#1F2547' }
+      ],
+      script: [
+        {
+          key: 'platform-theme-init',
+          innerHTML: "try{const p=localStorage.getItem('krabiclaw-theme')||'system';const d=p==='dark'||(p==='system'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d)}catch{}",
+        },
       ],
       link: [
         // Every Saya hero/content image is served from Cloudflare Images
@@ -333,14 +331,7 @@ export default defineNuxtConfig({
           '/tenant-setup-incomplete',
           '/tenant-setup-pending',
           '/_next',
-          '/apple-touch-icon.png',
-          '/favicon.ico',
           '/site.webmanifest',
-          '/tenant-icon',
-          '/tenant-icon.png',
-          '/tenant-icon.svg',
-          '/tenant-icon-192.png',
-          '/tenant-icon-512.png',
           '/tenant.webmanifest',
         ],
       },
@@ -491,20 +482,6 @@ export default defineNuxtConfig({
       envFiles: process.env.NUXT_CF_ENV_FILE ? [process.env.NUXT_CF_ENV_FILE] : undefined,
       silent: true,
     },
-    experimental: {
-      tasks: enableNitroTasks,
-    },
-    // Set NUXT_DISABLE_NITRO_TASKS=true to keep task modules out of a local
-    // dev/E2E boot if task imports break the nitro-cloudflare-dev D1 proxy binding.
-    scheduledTasks: enableNitroTasks ? {
-      '*/5 * * * *': ['blog-scheduled-publish'],
-      '*/2 * * * *': ['public-resource-cache-invalidation'],
-      '*/10 * * * *': ['domain-reconciliation'],
-      '0 3 * * *': ['domain-reconciliation-daily', 'analytics-aggregate-daily'],
-      '0 4 * * *': ['site-transfer-reminders'],
-      '0 0 * * 0': ['google-business-sync'],
-      '0 * * * *': ['instagram-sync-process', 'review-request-automation', 'stripe-reconciliation']
-    } : {},
     devServer: {
       watch: ['server']
     },

@@ -2,6 +2,11 @@
 
 Use this workflow when running Codex or Claude agents in parallel worktrees.
 
+Before any user-facing change or release decision, read the mandatory
+[release and outage prevention contract](../operations/release-and-outage-prevention.md).
+The workflow below describes development mechanics; it does not replace the
+deployed browser gate or the incident rules in that document.
+
 ## Worktrees And Branches
 
 - Start each issue from current `staging` in its own worktree and focused branch.
@@ -9,6 +14,11 @@ Use this workflow when running Codex or Claude agents in parallel worktrees.
 - Before opening a PR, fetch/rebase onto latest `origin/staging`.
 - Keep one issue per PR unless the user explicitly approves a combined integration branch.
 - Do not merge without explicit user approval.
+- Do not treat a green check run as browser validation. For renderer, migration,
+  CMS, public-route, auth, billing, or other user-visible changes, the exact
+  deployed candidate must pass the full applicable browser matrix before
+  promotion. A missing, timed-out, blank, broken-media, or partially inspected
+  route is unverified and blocks release.
 
 ## Pull Requests
 
@@ -65,7 +75,7 @@ node -v
 node -e "console.log(v8.getHeapStatistics().heap_size_limit)" -r v8
 ```
 
-Codex desktop sessions may inherit the machine's default shell `node` instead of the bundled workspace runtime. If `yarn typecheck`, `yarn lint`, or `yarn build` fails with V8 heap exhaustion or the process is killed without a product error, rerun with the bundled Codex Node runtime first and give Node enough heap:
+Codex desktop sessions may inherit the machine's default shell `node` instead of the bundled workspace runtime. If `yarn typecheck` or `yarn lint` fails with V8 heap exhaustion or the process is killed without a product error, rerun with the bundled Codex Node runtime first and give Node enough heap:
 
 ```bash
 PATH="$HOME/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin:$PATH" \
@@ -73,7 +83,7 @@ NODE_OPTIONS=--max-old-space-size=8192 \
 yarn typecheck
 ```
 
-Use the same `PATH` and `NODE_OPTIONS` prefix for `yarn lint`, `yarn build`, and other heavy local checks. Do this before describing the check as blocked; local validation is still required.
+Use the same `PATH` and `NODE_OPTIONS` prefix for `yarn lint` and other heavy local checks. Production builds must run through `yarn build`, which configures its required heap itself. Do not invoke `nuxi build` directly or retry an initial default-heap failure. Scheduled jobs are exercised with `yarn test:scheduled-tasks` and the local `wrangler dev --test-scheduled` harness. Do this before describing a check as blocked; local validation is still required.
 
 ## Cloudflare Resource Readiness
 

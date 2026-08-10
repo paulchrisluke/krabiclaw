@@ -7,7 +7,7 @@ one canonical source, one in-flight promise, and one terminal result.
 
 The tenant page resource is keyed by site/draft, route parameters, locale, and
 the requested datasets. Its response contains both the persistent shell
-(identity, locations, configuration, locales, Google Business summary, and
+(identity, locations, configuration, locales, Google Places summary, and
 capabilities) and the selected route data (content, menus, experiences,
 availability, policies, and optional collections).
 
