@@ -29,71 +29,24 @@ describe('Tenant Favicon – Unit Tests', () => {
       assert.ok(links.some((l) => l.href === '/site.webmanifest'))
     })
 
-    test('Kikuzuki (PNG, extensionless URL, tenantLogoMimeType=image/png): icon type is image/png', () => {
-      const links = buildTenantHeadLinks({
-        isPlatform: false,
-        tenantLogoUrl: KIKUZUKI_LOGO,
-        tenantLogoMimeType: 'image/png',
-        tenantBrandName: 'Kikuzuki',
-        isDraftPreview: false,
-      })
-      const icon = links.find((l) => l.key === 'app-icon-tenant')
-      assert.equal(icon?.type, 'image/png')
-      assert.match(icon?.href || '', /^\/tenant-icon\?v=/)
-    })
-
-    test('Pottery House (JPEG, extensionless URL, tenantLogoMimeType=image/jpeg): icon type is image/jpeg', () => {
-      const links = buildTenantHeadLinks({
-        isPlatform: false,
-        tenantLogoUrl: POTTERY_HOUSE_LOGO,
-        tenantLogoMimeType: 'image/jpeg',
-        tenantBrandName: 'Pottery House Krabi',
-        isDraftPreview: false,
-      })
-      const icon = links.find((l) => l.key === 'app-icon-tenant')
-      assert.equal(icon?.type, 'image/jpeg')
-    })
-
-    test('extensionless URL with no MIME type: type attribute is omitted', () => {
-      const links = buildTenantHeadLinks({
-        isPlatform: false,
-        tenantLogoUrl: 'https://imagedelivery.net/account/image/public',
-        tenantLogoMimeType: null,
-        tenantBrandName: 'Unknown Brand',
-        isDraftPreview: false,
-      })
-      const icon = links.find((l) => l.key === 'app-icon-tenant')
-      assert.equal(icon?.type, undefined)
-    })
-
-    test('dedicated SVG favicon URL: favicon MIME wins over logo MIME', () => {
-      const links = buildTenantHeadLinks({
-        isPlatform: false,
-        tenantLogoUrl: POTTERY_HOUSE_LOGO,
-        tenantLogoMimeType: 'image/jpeg',   // logo is JPEG
-        tenantFaviconUrl: 'https://cdn.example.com/custom-icon.svg',
-        tenantFaviconMimeType: null,          // no explicit MIME — extension inference applies
-        tenantBrandName: 'Custom Brand',
-        isDraftPreview: false,
-      })
-      const icon = links.find((l) => l.key === 'app-icon-tenant')
-      // Extension of .svg should produce image/svg+xml, NOT image/jpeg from logo
-      assert.equal(icon?.type, 'image/svg+xml')
-    })
-
-    test('dedicated favicon with no extension and no MIME: type omitted, not inherited from logo', () => {
-      const links = buildTenantHeadLinks({
-        isPlatform: false,
-        tenantLogoUrl: POTTERY_HOUSE_LOGO,
-        tenantLogoMimeType: 'image/jpeg',
-        tenantFaviconUrl: 'https://cdn.example.com/custom-favicon', // extensionless
-        tenantFaviconMimeType: null,
-        tenantBrandName: 'Custom Brand',
-        isDraftPreview: false,
-      })
-      const icon = links.find((l) => l.key === 'app-icon-tenant')
-      // Must NOT inherit image/jpeg from logo
-      assert.equal(icon?.type, undefined)
+    test('tenant redirect icon leaves the response format authoritative', () => {
+      for (const source of [
+        KIKUZUKI_LOGO,
+        POTTERY_HOUSE_LOGO,
+        'https://cdn.example.com/custom-icon.svg',
+        'https://cdn.example.com/custom-icon.png',
+      ]) {
+        const links = buildTenantHeadLinks({
+          isPlatform: false,
+          tenantLogoUrl: POTTERY_HOUSE_LOGO,
+          tenantFaviconUrl: source,
+          tenantBrandName: 'Custom Brand',
+          isDraftPreview: false,
+        })
+        const icon = links.find((link) => link.key === 'app-icon-tenant')
+        assert.equal(icon?.type, undefined)
+        assert.match(icon?.href || '', /^\/tenant-icon\?v=/)
+      }
     })
 
     test('version fingerprint changes when logo URL changes', () => {
