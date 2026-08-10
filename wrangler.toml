@@ -12,7 +12,7 @@ binding = "CF_VERSION_METADATA"
 [triggers]
 # Every expression is dispatched by workers/app-entry.ts. Keep this list in
 # sync with SCHEDULED_TASKS in server/scheduled-tasks.ts.
-crons = ["*/5 * * * *", "*/2 * * * *", "*/10 * * * *", "0 3 * * *", "0 4 * * *", "0 0 * * 0", "0 * * * *"]
+crons = ["*/5 * * * *", "*/2 * * * *", "*/10 * * * *", "0 3 * * *", "0 4 * * *", "0 0 * * SUN", "0 * * * *"]
 
 [[routes]]
 pattern = "*.krabiclaw.com/*"
