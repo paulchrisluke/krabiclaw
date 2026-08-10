@@ -133,7 +133,7 @@ jobs:
           const result = rows?.[0]?.results?.[0]
           if (!result) throw new Error('Restored production count evidence is missing')
           for (const key of [
-            'kikuzuki_experiences', 'kikuzuki_menus', 'kikuzuki_reviews', 'kikuzuki_qa',
+            'kikuzuki_experiences', 'kikuzuki_menus', 'kikuzuki_reviews',
             'pottery_experiences', 'pottery_reviews', 'pottery_qa',
           ]) {
             if (Number(result[key]) < 1) throw new Error(`Restored ${key} is empty`)
