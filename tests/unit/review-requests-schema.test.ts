@@ -34,6 +34,6 @@ test('review request migration extends bookings, reviews, and locations', () => 
 test('review request entitlement follows paid plan policy', () => {
   assert.match(billingSource, /review_requests: false/)
   assert.match(billingSource, /case 'growth':\s*return \{[^}]*review_requests: true/s)
-  assert.match(billingSource, /case 'managed':\s*return \{[^}]*review_requests: true/s)
-  assert.match(billingSource, /case 'seo_accelerator':\s*return \{[^}]*review_requests: true/s)
+  assert.doesNotMatch(billingSource, /case 'managed':/)
+  assert.doesNotMatch(billingSource, /case 'seo_accelerator':/)
 })

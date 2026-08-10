@@ -50,7 +50,6 @@ const VERTICAL_OPTIONS: { label: string; value: SiteVertical }[] = [
 
 const route = useRoute()
 const router = useRouter()
-const { offerSubscribe } = useSiteSubscribe()
 
 const orgSlug = route.params.orgSlug as string
 const name = ref('')
@@ -70,7 +69,6 @@ async function submit() {
     const res = await dashboardApi<{
       siteId: string
       subdomain: string
-      offerSubscribePlan: string | null
       error?: string
     }>('/api/sites', {
       method: 'POST',
@@ -78,20 +76,15 @@ async function submit() {
       validate: (value): value is {
         siteId: string
         subdomain: string
-        offerSubscribePlan: string | null
         error?: string
       } =>
         isRecord(value)
         && typeof value.siteId === 'string'
         && typeof value.subdomain === 'string'
-        && (value.offerSubscribePlan === null || typeof value.offerSubscribePlan === 'string')
         && (value.error === undefined || typeof value.error === 'string'),
     })
 
     await router.push(`/dashboard/${orgSlug}/sites/${res.subdomain}`)
-    if (res.offerSubscribePlan) {
-      await offerSubscribe(res.siteId, res.offerSubscribePlan)
-    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Could not create site. Please try again.'
   } finally {

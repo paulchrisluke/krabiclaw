@@ -22,6 +22,51 @@ const userTeams = new Map([
   ['user-site', new Set(['site:site-2'])],
   ['user-multi', new Set(['location:loc-1', 'location:loc-2'])],
 ])
+const siteConfig = new Map<string, string | null>()
+const persistedSiteTeams = new Map<string, string | null>()
+const persistedLocationTeams = new Map<string, string | null>()
+
+const provisionedTeams = new Map<string, { id: string; organizationId: string; name: string }>()
+const provisionedMemberships = new Map<string, { id: string; teamId: string; userId: string }>()
+const teamAdapterCalls: string[] = []
+const teamAdapter = {
+  findTeamById: async (input: { teamId: string; organizationId?: string }) => {
+    teamAdapterCalls.push(`find:${input.teamId}:${input.organizationId || ''}`)
+    const team = provisionedTeams.get(input.teamId)
+    return team && (!input.organizationId || team.organizationId === input.organizationId) ? team : null
+  },
+  createTeam: async (input: { id: string; organizationId: string; name: string }) => {
+    teamAdapterCalls.push(`create:${input.id}`)
+    const team = { id: input.id, organizationId: input.organizationId, name: input.name }
+    provisionedTeams.set(input.id, team)
+    return team
+  },
+  findOrCreateTeamMember: async (input: { teamId: string; userId: string }) => {
+    teamAdapterCalls.push(`findOrCreate:${input.teamId}:${input.userId}`)
+    const key = `${input.teamId}:${input.userId}`
+    const existing = provisionedMemberships.get(key)
+    if (existing) return existing
+    const member = { id: `membership:${key}`, teamId: input.teamId, userId: input.userId }
+    provisionedMemberships.set(key, member)
+    return member
+  },
+  findTeamMember: async (input: { teamId: string; userId: string }) => {
+    teamAdapterCalls.push(`findMember:${input.teamId}:${input.userId}`)
+    return provisionedMemberships.get(`${input.teamId}:${input.userId}`) ?? null
+  },
+  removeTeamMember: async (input: { teamId: string; userId: string }) => {
+    teamAdapterCalls.push(`remove:${input.teamId}:${input.userId}`)
+    provisionedMemberships.delete(`${input.teamId}:${input.userId}`)
+  },
+  listTeamsByUser: async (input: { userId: string }) => {
+    teamAdapterCalls.push(`listTeams:${input.userId}`)
+    return [...provisionedMemberships.values()]
+      .filter(member => member.userId === input.userId)
+      .map(member => provisionedTeams.get(member.teamId))
+      .filter((team): team is { id: string; organizationId: string; name: string } => Boolean(team))
+      .map(team => ({ ...team, createdAt: new Date() }))
+  },
+}
 
 function hasSiteTeam(memberId: unknown, siteId: unknown) {
   const member = members.get(String(memberId))
@@ -40,6 +85,23 @@ function hasLocationTeam(memberId: unknown, siteId: unknown, locationId: unknown
 }
 
 async function queryFirst<T>(_db: unknown, query: string, params: unknown[] = []): Promise<T | undefined> {
+  if (query.includes('FROM site_config') && query.includes('key = ?')) {
+    const [organizationId, siteId] = params
+    const key = `${organizationId}:${siteId}`
+    return (siteConfig.has(key) ? { value: siteConfig.get(key) } : undefined) as T | undefined
+  }
+  if (query.includes('SELECT team_id') && query.includes('FROM business_locations')) {
+    const [locationId, siteId, organizationId] = params
+    return (persistedLocationTeams.has(`${organizationId}:${siteId}:${locationId}`)
+      ? { team_id: persistedLocationTeams.get(`${organizationId}:${siteId}:${locationId}`) ?? null }
+      : undefined) as T | undefined
+  }
+  if (query.includes('SELECT team_id') && query.includes('FROM sites')) {
+    const [siteId, organizationId] = params
+    return (persistedSiteTeams.has(`${organizationId}:${siteId}`)
+      ? { team_id: persistedSiteTeams.get(`${organizationId}:${siteId}`) ?? null }
+      : undefined) as T | undefined
+  }
   if (query.includes('JOIN sites s') && query.includes('tm.teamId = s.team_id')) {
     const [siteId, memberId] = params
     return (hasSiteTeam(memberId, siteId) ? { id: 'team-member-site' } : undefined) as T | undefined
@@ -83,6 +145,18 @@ mock.module('../../server/db/index.ts', {
   },
 })
 
+mock.module('../../server/utils/auth.ts', {
+  namedExports: {
+    createAuth: () => ({ $context: Promise.resolve({}) }),
+  },
+})
+
+mock.module('better-auth/plugins', {
+  namedExports: {
+    getOrgAdapter: () => teamAdapter,
+  },
+})
+
 const {
   isOrganizationWideRole,
   isScopedRole,
@@ -96,6 +170,12 @@ const {
   resolveDashboardSiteAccess,
   canScopedRoleUseDashboardPath,
   teamAccessPredicate,
+  ensureSiteTeam,
+  ensureLocationTeam,
+  addUserToResourceTeam,
+  removeUserFromResourceTeam,
+  removeMemberResourceAccess,
+  removeAllMemberResourceAccess,
 } = await import('../../server/utils/member-access.ts')
 
 test('owner and admin bypass every team check', async () => {
@@ -187,4 +267,191 @@ test('teamAccessPredicate treats an explicit null locationTeamExpr the same as o
     teamAccessPredicate({ userIdExpr: 'm.userId', siteTeamExpr: 's.team_id', locationTeamExpr: null }),
     teamAccessPredicate({ userIdExpr: 'm.userId', siteTeamExpr: 's.team_id' }),
   )
+})
+
+test('resource team provisioning uses Better Auth Teams with deterministic scoped ids and idempotency', async () => {
+  provisionedTeams.clear()
+  provisionedMemberships.clear()
+  teamAdapterCalls.length = 0
+
+  const env = {} as never
+  assert.equal(await ensureSiteTeam({} as never, {
+    env,
+    organizationId: 'org-1',
+    siteId: 'site-1',
+    name: 'Main site',
+  }), 'site:site-1')
+  assert.equal(await ensureSiteTeam({} as never, {
+    env,
+    organizationId: 'org-1',
+    siteId: 'site-1',
+    name: 'Main site',
+  }), 'site:site-1')
+  assert.equal(await ensureLocationTeam({} as never, {
+    env,
+    organizationId: 'org-1',
+    siteId: 'site-1',
+    locationId: 'location-1',
+    name: 'Beach',
+  }), 'location:location-1')
+
+  assert.deepEqual([...provisionedTeams.values()], [
+    { id: 'site:site-1', organizationId: 'org-1', name: 'Main site' },
+    { id: 'location:location-1', organizationId: 'org-1', name: 'Beach' },
+  ])
+  assert.equal(teamAdapterCalls.filter(call => call === 'create:site:site-1').length, 1)
+  assert.equal(teamAdapterCalls.filter(call => call === 'create:location:location-1').length, 1)
+})
+
+test('resource team membership add/remove is idempotent through Better Auth Teams', async () => {
+  provisionedMemberships.clear()
+  teamAdapterCalls.length = 0
+  const env = {} as never
+
+  await addUserToResourceTeam({} as never, { env, teamId: 'site:site-1', userId: 'user-1' })
+  await addUserToResourceTeam({} as never, { env, teamId: 'site:site-1', userId: 'user-1' })
+  assert.equal(provisionedMemberships.size, 1)
+  assert.equal(teamAdapterCalls.filter(call => call === 'findOrCreate:site:site-1:user-1').length, 2)
+
+  assert.equal(await removeUserFromResourceTeam({} as never, { env, teamId: 'site:site-1', userId: 'user-1' }), true)
+  assert.equal(await removeUserFromResourceTeam({} as never, { env, teamId: 'site:site-1', userId: 'user-1' }), false)
+  assert.equal(provisionedMemberships.size, 0)
+})
+
+test('bulk resource access removal only revokes matching-organization teams and is idempotent', async () => {
+  provisionedTeams.clear()
+  provisionedMemberships.clear()
+  teamAdapterCalls.length = 0
+  provisionedTeams.set('site:org-one', { id: 'site:org-one', organizationId: 'org-1', name: 'Org one' })
+  provisionedTeams.set('site:org-two', { id: 'site:org-two', organizationId: 'org-2', name: 'Org two' })
+
+  const env = {} as never
+  await addUserToResourceTeam({} as never, { env, teamId: 'site:org-one', userId: 'user-shared' })
+  await addUserToResourceTeam({} as never, { env, teamId: 'site:org-two', userId: 'user-shared' })
+
+  await removeAllMemberResourceAccess({} as never, { env, organizationId: 'org-1', userId: 'user-shared' })
+  assert.equal(provisionedMemberships.has('site:org-one:user-shared'), false)
+  assert.equal(provisionedMemberships.has('site:org-two:user-shared'), true)
+
+  await assert.doesNotReject(() => removeAllMemberResourceAccess({} as never, {
+    env,
+    organizationId: 'org-1',
+    userId: 'user-shared',
+  }))
+  await removeAllMemberResourceAccess({} as never, { env, organizationId: 'org-no-match', userId: 'user-shared' })
+  assert.equal(provisionedMemberships.has('site:org-two:user-shared'), true)
+})
+
+test('resource team provisioning rejects a deterministic id owned by another organization', async () => {
+  provisionedTeams.clear()
+  teamAdapterCalls.length = 0
+  provisionedTeams.set('site:site-1', { id: 'site:site-1', organizationId: 'org-other', name: 'Other' })
+
+  await assert.rejects(
+    () => ensureSiteTeam({} as never, {
+      env: {} as never,
+      organizationId: 'org-1',
+      siteId: 'site-1',
+    }),
+    /belongs to another organization/,
+  )
+  assert.equal(teamAdapterCalls.some(call => call === 'create:site:site-1'), false)
+})
+
+test('transferred resources use a generation namespace and old source membership cannot authorize the current pointer', async () => {
+  provisionedTeams.clear()
+  provisionedMemberships.clear()
+  teamAdapterCalls.length = 0
+  siteConfig.clear()
+  siteConfig.set('org-recipient:site-transfer', JSON.stringify({ transfer_id: 'transfer-1', generation: '7' }))
+  provisionedTeams.set('site:site-transfer', {
+    id: 'site:site-transfer',
+    organizationId: 'org-source',
+    name: 'Source team',
+  })
+  members.set('member-transfer', { userId: 'user-transfer', organizationId: 'org-recipient' })
+  userTeams.set('user-transfer', new Set(['site:site-transfer']))
+  siteTeams.set('site-transfer', 'site:site-transfer:generation:7')
+
+  const env = {} as never
+  assert.equal(await ensureSiteTeam({} as never, {
+    env,
+    organizationId: 'org-recipient',
+    siteId: 'site-transfer',
+  }), 'site:site-transfer:generation:7')
+  assert.equal(await ensureLocationTeam({} as never, {
+    env,
+    organizationId: 'org-recipient',
+    siteId: 'site-transfer',
+    locationId: 'location-transfer',
+  }), 'location:location-transfer:generation:7')
+  assert.equal(provisionedTeams.get('site:site-transfer:generation:7')?.organizationId, 'org-recipient')
+  assert.equal(provisionedTeams.get('location:location-transfer:generation:7')?.organizationId, 'org-recipient')
+  await assert.rejects(() => assertSiteWideAccess({} as never, {
+    memberId: 'member-transfer',
+    role: 'editor',
+    organizationId: 'org-recipient',
+    siteId: 'site-transfer',
+  }))
+})
+
+test('invalid configured team generation fails closed while legacy resources keep legacy ids', async () => {
+  siteConfig.clear()
+  siteConfig.set('org-invalid:site-invalid', '{"transfer_id":"transfer-1"}')
+  await assert.rejects(
+    () => ensureSiteTeam({} as never, {
+      env: {} as never,
+      organizationId: 'org-invalid',
+      siteId: 'site-invalid',
+    }),
+    /Invalid resource_team_generation/,
+  )
+
+  assert.equal(await ensureSiteTeam({} as never, {
+    env: {} as never,
+    organizationId: 'org-legacy',
+    siteId: 'site-legacy',
+  }), 'site:site-legacy')
+  assert.equal(await ensureLocationTeam({} as never, {
+    env: {} as never,
+    organizationId: 'org-legacy',
+    siteId: 'site-legacy',
+    locationId: 'location-legacy',
+  }), 'location:location-legacy')
+  siteConfig.clear()
+})
+
+test('resource access removal revokes the persisted generated team pointer', async () => {
+  provisionedTeams.clear()
+  provisionedMemberships.clear()
+  teamAdapterCalls.length = 0
+  persistedSiteTeams.clear()
+  persistedLocationTeams.clear()
+  const env = {} as never
+  const generatedSiteTeam = 'site:site-transfer:generation:7'
+  const generatedLocationTeam = 'location:location-transfer:generation:7'
+  provisionedTeams.set(generatedSiteTeam, { id: generatedSiteTeam, organizationId: 'org-recipient', name: 'Transferred site' })
+  provisionedTeams.set(generatedLocationTeam, { id: generatedLocationTeam, organizationId: 'org-recipient', name: 'Transferred location' })
+  persistedSiteTeams.set('org-recipient:site-transfer', generatedSiteTeam)
+  persistedLocationTeams.set('org-recipient:site-transfer:location-transfer', generatedLocationTeam)
+  await addUserToResourceTeam({} as never, { env, userId: 'user-transfer', teamId: generatedSiteTeam })
+  await addUserToResourceTeam({} as never, { env, userId: 'user-transfer', teamId: generatedLocationTeam })
+
+  assert.equal(await removeMemberResourceAccess({} as never, {
+    env,
+    userId: 'user-transfer',
+    organizationId: 'org-recipient',
+    siteId: 'site-transfer',
+    locationId: null,
+  }), true)
+  assert.equal(await removeMemberResourceAccess({} as never, {
+    env,
+    userId: 'user-transfer',
+    organizationId: 'org-recipient',
+    siteId: 'site-transfer',
+    locationId: 'location-transfer',
+  }), true)
+  assert.equal(teamAdapterCalls.includes(`remove:${generatedSiteTeam}:user-transfer`), true)
+  assert.equal(teamAdapterCalls.includes(`remove:${generatedLocationTeam}:user-transfer`), true)
+  assert.equal(provisionedMemberships.size, 0)
 })

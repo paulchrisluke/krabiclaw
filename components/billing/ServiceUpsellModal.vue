@@ -83,6 +83,7 @@
 
 <script setup lang="ts">
 import type { UpsellType } from '~/composables/useServiceUpsell'
+import { NEW_SALE_PLAN_ID } from '~/shared/billing-model'
 
 const config = useRuntimeConfig()
 
@@ -91,7 +92,7 @@ const PAUL_PHOTO_URL = 'https://res.cloudinary.com/pcl-labs/image/upload/v171469
 const JULIA_PHOTO_URL = 'https://res.cloudinary.com/pcl-labs/image/upload/v1714706641/PCL-Labs/1682091954266_vrcx3n.webp'
 
 const { isOpen, type, close } = useServiceUpsell()
-const { offerSubscribe } = useSiteSubscribe()
+const { startOrganizationCheckout } = useOrganizationSubscription()
 const toast = useToast()
 const loading = ref(false)
 const dashboard = useDashboardSite()
@@ -108,9 +109,7 @@ interface UpsellContent {
 
 function buildContentMap(experience: boolean): Record<UpsellType, UpsellContent> {
   const foodWord = experience ? 'craft' : 'food'
-  const menuWord = experience ? 'offerings' : 'menu'
   const menuCapitalized = experience ? 'Offerings' : 'Menu'
-  const businessWord = experience ? 'business' : 'restaurant'
 
   return {
     growth: {
@@ -128,50 +127,20 @@ function buildContentMap(experience: boolean): Record<UpsellType, UpsellContent>
       priceNote: '/ month',
       cta: 'Get Growth — $49/mo',
     },
-    managed: {
-      headline: `We run your ${businessWord} online, end to end`,
-      subheading: `Send us a voice note on WhatsApp. We handle ${menuWord} updates, posts, and your Google presence.`,
-      bullets: [
-        `${menuCapitalized}, posts & seasonal content managed for you`,
-        'Full Google Business profile management',
-        'Post-booking review requests and reminders',
-        'Custom domain + free SSL',
-        'Priority WhatsApp support — we respond fast',
-      ],
-      price: '$149',
-      priceNote: '/ month',
-      cta: 'Get Managed — $149/mo',
-    },
-    seo_accelerator: {
-      headline: `Julia's SEO playbook — applied to your ${businessWord}`,
-      subheading: "Julia grew tiffycooks.com to 1M active impressions/day. We apply that same strategy to get tourists finding you first.",
-      bullets: [
-        'Local & travel keyword targeting for your area',
-        'Google Maps authority building',
-        'Monthly content cadence — blog, photos, posts',
-        'Competitive analysis & monthly reporting',
-        'Everything in Managed included',
-      ],
-      price: '$349',
-      priceNote: '/ month',
-      cta: 'Get SEO Accelerator — $349/mo',
-    },
   }
 }
 
 const content = computed<UpsellContent>(() => buildContentMap(isExperience.value)[type.value ?? 'growth'])
 
-const RECURRING_TYPES: UpsellType[] = ['growth', 'managed', 'seo_accelerator']
-
 async function handleCta() {
   if (!type.value) return
   loading.value = true
   try {
-    if (!RECURRING_TYPES.includes(type.value)) return
+    if (type.value !== NEW_SALE_PLAN_ID) return
     const siteId = dashboard.siteId.value
     if (!siteId) throw new Error('Choose a site before starting checkout')
     close()
-    await offerSubscribe(siteId, type.value)
+    await startOrganizationCheckout(siteId, type.value)
   } catch (err) {
     console.error('Checkout error:', err)
     toast.add({ title: 'Something went wrong', description: 'Please visit our help page instead.', color: 'error' })

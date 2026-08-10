@@ -84,6 +84,17 @@ test('admin impersonation uses Better Auth APIs without custom proxy routes', ()
   }
 })
 
+test('admin clients uses the organization billing projection for plan state', () => {
+  const clientsRoute = source('server/api/admin/clients.get.ts')
+
+  assert.match(clientsRoute, /COALESCE\(ob\.plan, 'free'\) AS plan/)
+  assert.match(clientsRoute, /ob\.status AS subscription_status/)
+  assert.match(clientsRoute, /ob\.current_period_end/)
+  assert.match(clientsRoute, /WHERE COALESCE\(ob\.plan, 'free'\) = 'growth'/)
+  assert.doesNotMatch(clientsRoute, /COALESCE\(sb\.plan, s\.plan/)
+  assert.doesNotMatch(clientsRoute, /LEFT JOIN site_billing sb/)
+})
+
 test('admin overview lists the full hierarchy without drill-down routes', () => {
   const overviewPage = source('pages/admin/index.vue')
   assert.match(overviewPage, /organization\.sites/)

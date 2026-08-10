@@ -1,8 +1,9 @@
 import { executeBatch, queryAll, queryFirst, rawClient, type BatchQuery, type DbClient } from '~/server/db'
 import { createLocation, deleteLocation, updateLocation, type CreateLocationInput } from '~/server/utils/location-management'
 import { uniqueSlug } from '~/server/utils/experiences'
+import type { CloudflareEnv } from '~/server/utils/auth'
 
-type SetupEnv = Record<string, string | undefined>
+type SetupEnv = CloudflareEnv
 
 export type CopyEntityType = 
   | 'menus' 

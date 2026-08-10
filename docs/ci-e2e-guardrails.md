@@ -4,11 +4,19 @@ This is the source of truth for avoiding local-vs-CI auth and billing drift in E
 
 ## Tier intent
 
-- `e2e-smoke` on preview proves the app still deploys and basic public, tenant, auth, write, billing, and deployment contracts work on a live Cloudflare Worker.
-- `e2e-representative` adds a small public-rendering sentinel for Saya experience, Saya restaurant, and Blawby service archetypes at mobile and desktop widths. It checks styled SSR content, loaded styles, post-load stability, hydration/page errors, and first-party response failures without running every client suite.
-- `e2e-staging` always runs the same minimal smoke after deployment, then runs subsystem and client suites selected from the staging push's changed paths.
-- `E2E full regression` runs nightly and on manual dispatch against staging. It owns exhaustive browser/client verification and does not block ordinary PRs or staging pushes.
-- `prod-smoke` on `main` should probe only domains and routes we deliberately keep live in production. Intentionally disabled customer domains are not valid production smoke targets.
+- The required PR lane reuses one immutable production build and deploys only
+  isolated preview. Its representative suite always includes dashboard Pages,
+  billing, links, and Blawby CMS coverage; path filters cannot omit them.
+- The explicit full lane owns the shared-staging lock. It applies and records
+  migrations/fixtures, uploads one tagged Worker Version, tests it at 0% by
+  version override, runs the full matrix and comparative benchmark, then
+  verifies the promoted custom domain on desktop and mobile.
+- The production lane consumes that exact staging manifest and build. Its
+  preflight is read-only and every production mutation waits for the protected
+  environment approval.
+- The scheduled E2E workflow is pinned, read-only Saya/Blawby telemetry against
+  one retained build artifact and Worker Version. It is not the full lane and
+  never seeds, migrates, deploys, invokes providers, or writes production.
 
 ## Recent staging lessons
 
@@ -33,7 +41,7 @@ This is the source of truth for avoiding local-vs-CI auth and billing drift in E
 
 ## CI env parity (required for dashboard E2E)
 
-`e2e-smoke`, `e2e-staging`, and `e2e-full` must include:
+Remote preview and staging browser jobs that exercise dashboard/billing must include:
 
 - `STRIPE_SECRET_KEY` (use test key in CI)
 - `STRIPE_WEBHOOK_SECRET`
@@ -68,8 +76,13 @@ For local Miniflare-backed tests, keep bindings with `remote = false` in `wrangl
 - Draft pull requests do not deploy or run remote E2E. Marking a PR ready, or pushing a new commit after it is ready, starts the preview deployment and smoke suite.
 - PR descriptions must include filled `Browser:` and `Static:` validation lines. `Browser` is for Playwright, CI E2E, or manual browser evidence; `Static` is for unit, lint, typecheck, build, and guardrail evidence.
 - Preview seeds are generated into one SQL bundle and applied with one remote D1 operation. The bundle remains idempotent and uses the same real preview D1, migration flow, fixed secrets, and deployed Worker as before.
-- `e2e-smoke` and every staging deployment run `yarn test:e2e:smoke`. Staging adds path-gated `auth`, `dashboard`, `billing`, `notifications`, `mcp`, `seo`, Pottery House, and Blawby suites.
-- Preview and staging always run `yarn test:e2e:public-rendering`; the full Pottery House and Blawby suites remain path-gated, while exhaustive client verification stays in the nightly/manual full lane.
-- The full `yarn test:e2e:full` suite and exhaustive client verifiers run in `.github/workflows/e2e-full.yml`. Failures retain Playwright reports/screenshots and are reported in the workflow summary, but are not a required development gate.
+- Required preview coverage is explicit and never path-gated for dashboard Pages,
+  billing, links, or Blawby CMS.
+- The full `yarn test:e2e:full` suite runs in the manually dispatched
+  `.github/workflows/ci-full.yml` candidate job against one immutable staging
+  version. Failures restore the deployed baseline when a candidate split
+  exists and retain the manifest, Playwright reports, and benchmark evidence.
+- `.github/workflows/e2e-full.yml` is read-only scheduled telemetry, not a
+  mutable staging regression lane.
 - CI defaults to two Playwright workers. Stateful notification, MCP, and client suites explicitly use one worker against shared remote D1.
 - The seed, migration, tool-parity, and script-syntax checks run together in one Node-only job, avoiding redundant dependency installations.

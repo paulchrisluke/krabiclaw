@@ -49,18 +49,6 @@ export default defineEventHandler(async (event) => {
   // already resolved tenant type/host before triggering these. Skip the DB
   // lookup and host parsing entirely rather than redoing it per phantom request.
   if (isInternalSelfFetch(event)) {
-    const pathname = getRequestURL(event).pathname
-    const isSyntheticAssetRequest = pathname.startsWith('/_i18n/')
-      || pathname.startsWith('/_nuxt/')
-      || pathname.startsWith('/api/_nuxt_icon/')
-      || pathname === '/__nuxt_error'
-    if (!isSyntheticAssetRequest) {
-      console.error('tenant_resolution_missing_cloudflare_context', {
-        host: getHeader(event, 'host') || null,
-        pathname,
-        cfRay: getHeader(event, 'cf-ray') || null,
-      })
-    }
     return;
   }
 

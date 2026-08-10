@@ -144,7 +144,6 @@ interface Location {
   latitude: number | null; longitude: number | null
   map_embed_url: string | null
 }
-interface Credits { balance: number; lifetime_used: number; last_topped_up_at: string | null }
 interface SiteEvent {
   id: string; event_type: string; location_id: string | null
   metadata: Record<string, unknown> | null; created_at: string
@@ -159,7 +158,6 @@ interface OperationsSummary {
 
 type DashboardHomeResponse = {
   locations: Location[]
-  credits: Credits | null
   events: SiteEvent[]
   operations: OperationsSummary
 }
@@ -183,11 +181,6 @@ const isDashboardHomeResponse = (value: unknown): value is DashboardHomeResponse
     && (location.longitude === null || typeof location.longitude === 'number')
     && (location.map_embed_url === null || typeof location.map_embed_url === 'string'),
   )
-  && (value.credits === null || (
-    isRecord(value.credits)
-    && typeof value.credits.balance === 'number'
-    && typeof value.credits.lifetime_used === 'number'
-  ))
   && Array.isArray(value.events)
   && value.events.every(event =>
     isRecord(event) && typeof event.id === 'string' && typeof event.event_type === 'string',
@@ -230,11 +223,13 @@ const { data, pending } = await useAsyncData(
       // throws here rather than needing a manual null check. A missing site is a
       // legitimate state (mirrors home.get.ts's own `!site` branch, e.g. onboarding
       // in progress) and returns empty data rather than erroring.
-      const context = await getDashboardContext(requestEvent, { requireSite: false })
+      const context = await getDashboardContext(requestEvent, {
+        requireSite: false,
+        pathname: '/api/dashboard/home',
+      })
       if (!context.site) {
         return {
           locations: [],
-          credits: null,
           events: [],
           operations: { openThreads: 0, unreadThreads: 0, reservations: 0, experienceBookings: 0 },
         }

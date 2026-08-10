@@ -1314,8 +1314,9 @@ Next steps:
   3. Approve:  yarn client:import --slug ${SLUG} --approve
   4. Apply:    yarn client:import --slug ${SLUG} --apply${ALLOW_STOCK ? " --allow-stock" : ""}
   5. Verify:   yarn client:verify --url http://localhost:3000 --vertical ${VERTICAL} --site-id site-${SLUG} --slug ${SLUG}
-  6. Deploy + verify prod:
-               yarn deploy
+  6. Release + verify prod:
+               Run "CI (Full Validation Lane)", then the protected
+               "Production release (manifest-gated)" workflow.
                yarn client:verify --url https://${SLUG}.krabiclaw.com --vertical ${VERTICAL} --site-id site-${SLUG} --slug ${SLUG}
 
   Or use the onboard wrapper (steps 1-5 in one command):

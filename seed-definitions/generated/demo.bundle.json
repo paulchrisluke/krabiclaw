@@ -650,7 +650,7 @@
       "status": "active"
     }
   ],
-  "siteContent": [
+  "tenantPageContent": [
     {
       "id": "sc-demo-home-hero",
       "organizationId": "org-demo",
@@ -1483,7 +1483,7 @@
       ]
     }
   ],
-  "siteLocaleVariants": [
+  "tenantPageLocaleFields": [
     {
       "id": "sct-demo-th-home-hero",
       "organizationId": "org-demo",

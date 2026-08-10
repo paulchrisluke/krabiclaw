@@ -1,6 +1,6 @@
 import { compileCuratedSiteFixture } from './compile.ts'
 import type { CuratedSiteDefinition } from './contracts.ts'
-import { renderSiteBillingSql, renderSiteEntitlementsSql } from './billing-sql.ts'
+import { renderCanonicalBillingSql } from './billing-sql.ts'
 import { renderTenantPagesSeedSql } from './tenant-pages.ts'
 
 function escapeSql(value: string): string {
@@ -490,7 +490,7 @@ export const demoFixture: CuratedSiteDefinition = {
       category: 'interior',
     },
   ],
-  siteContent: [
+  tenantPageContent: [
     // Home page
     {
       id: 'sc-demo-home-hero',
@@ -1144,7 +1144,7 @@ export const demoFixture: CuratedSiteDefinition = {
       ],
     },
   ],
-  siteLocaleVariants: [
+  tenantPageLocaleFields: [
     {
       id: 'sct-demo-th-home-hero',
       locationId: null,
@@ -1806,13 +1806,14 @@ export function renderCompiledDemoContentBlock(): string {
 }
 
 export function renderCompiledDemoTenantPagesBlock(): string {
-  const sourceRows = compiledDemoSeed.siteContent.filter(entry => !entry.locationId)
+  const sourceRows = compiledDemoSeed.tenantPageContent.filter(entry => !entry.locationId)
   return renderTenantPagesSeedSql({
     siteId: 'site-demo',
     organizationId: 'org-demo',
-    locales: compiledDemoSeed.siteLocales.map(locale => locale.locale),
+    sourceLocale: compiledDemoSeed.siteLocales.find(locale => locale.isSource)!.locale,
+    locales: compiledDemoSeed.siteLocales.map(locale => ({ locale: locale.locale, status: locale.status })),
     rows: sourceRows,
-    translations: compiledDemoSeed.siteLocaleVariants.filter(entry => !entry.locationId),
+    localeFields: compiledDemoSeed.tenantPageLocaleFields.filter(entry => !entry.locationId),
     pages: ['locations', 'menu', 'order', 'experiences', 'reservations', 'qa', 'reviews', 'posts', 'photos'],
     additionalPages: compiledDemoSeed.locations.map(location => ({
       page: 'location',
@@ -1903,13 +1904,11 @@ export function renderCompiledDemoBillingBlock(): string {
   const parts: string[] = []
 
   if (aiCredits) {
-    parts.push(`INSERT OR REPLACE INTO ai_credits (organization_id, balance, lifetime_used)
-VALUES (${sqlValue(identity.organizationId)}, ${aiCredits.balance}, ${aiCredits.lifetimeUsed});`)
-  }
-
-  if (organizationBilling) {
-    parts.push(renderSiteBillingSql(identity.siteId, identity.organizationId, organizationBilling, sqlValue))
-    parts.push(renderSiteEntitlementsSql(identity.siteId, identity.organizationId, organizationBilling.plan, sqlValue))
+    if (organizationBilling) {
+      parts.push(renderCanonicalBillingSql(identity.siteId, identity.organizationId, organizationBilling, sqlValue, aiCredits))
+    }
+  } else if (organizationBilling) {
+    parts.push(renderCanonicalBillingSql(identity.siteId, identity.organizationId, organizationBilling, sqlValue))
   }
 
   return `-- BEGIN GENERATED: demo_billing

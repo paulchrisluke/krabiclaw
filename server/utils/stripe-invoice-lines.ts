@@ -56,11 +56,24 @@ export function invoiceLineIsSubscription(line: StripeInvoiceLine): boolean {
     || line.parent?.type === 'subscription_item_details'
 }
 
+export function invoiceLineExactQuantity(line: StripeInvoiceLine): number | null {
+  const quantityDecimal = (line as { quantity_decimal?: unknown }).quantity_decimal
+  const hasQuantity = typeof line.quantity === 'number'
+  const hasDecimal = typeof quantityDecimal === 'string' && quantityDecimal.trim().length > 0
+  if (!hasQuantity && !hasDecimal) return 1
+  const quantity = hasQuantity ? line.quantity : Number(quantityDecimal)
+  const decimal = hasDecimal ? Number(quantityDecimal) : quantity
+  if (
+    !Number.isSafeInteger(quantity)
+    || !Number.isSafeInteger(decimal)
+    || Number(quantity) <= 0
+    || quantity !== decimal
+  ) return null
+  return quantity
+}
+
 export function invoiceLineQuantity(line: StripeInvoiceLine): number {
-  const quantity = line.quantity
-    ?? (typeof line.quantity_decimal === 'string' ? Number(line.quantity_decimal) : null)
-    ?? 1
-  return Number.isFinite(quantity) && quantity > 0 ? quantity : 1
+  return invoiceLineExactQuantity(line) ?? 1
 }
 
 export function invoiceLineUnitAmount(line: StripeInvoiceLine): number | null {
@@ -75,9 +88,11 @@ export async function loadStripeInvoiceLines(
   },
 ): Promise<StripeInvoiceLine[]> {
   if (!invoice.id) throw new Error('Stripe invoice id is required to load invoice lines')
-  let invoiceLines: StripeInvoiceLine[] = [...(invoice.lines?.data ?? []) as StripeInvoiceLine[]]
+  const embeddedLines = invoice.lines?.data
+  let invoiceLines: StripeInvoiceLine[] = [...(embeddedLines ?? []) as StripeInvoiceLine[]]
   let startingAfter = invoiceLines.at(-1)?.id
-  const mustReloadFirstPage = invoiceLines.some(line => typeof invoiceLinePrice(line) === 'string')
+  const mustReloadFirstPage = !Array.isArray(embeddedLines)
+    || invoiceLines.some(line => typeof invoiceLinePrice(line) === 'string')
 
   if (mustReloadFirstPage) {
     invoiceLines = []

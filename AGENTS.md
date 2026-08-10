@@ -502,15 +502,15 @@ Activity, Q&A, support, guest inbox, onboarding, Lobby, and Saya still need func
 - Never put `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_ACCOUNT_ID` in top-level job `env:`.
 - All E2E jobs require Stripe env vars.
 - Remote staging seeds must be idempotent.
-- Production smoke must not include intentionally disabled paid customer domains.
-- `www.potteryhousekrabi.com` is intentionally disabled and excluded from `prod-smoke`.
+- Production browser verification must not include intentionally disabled paid customer domains.
+- `www.potteryhousekrabi.com` is intentionally disabled and excluded from production browser verification.
 - `pottery-house.krabiclaw.com` remains covered.
 
 ### Preview/Staging Data Lifecycle
 
 `env.preview` and `env.staging` in `wrangler.toml` must always declare their own `[triggers]` block (`crons = []` unless a job is deliberately scoped to that environment). Cron triggers are inherited from the top-level `[triggers]` block unless an environment overrides them — an env without its own `[triggers]` silently runs production's full cron schedule against its own database. This previously went unnoticed and drove preview/staging D1 "rows read" billing into the billions as scheduled tasks repeatedly scanned ever-growing E2E-generated data.
 
-Curated fixture data (Pottery House, Kikuzuki, demo seed, MCP plan fixtures) is reset on every seed run via `DELETE`-then-`INSERT` on fixed IDs — it never grows. Anything else E2E specs create must be swept by `scripts/reset-e2e-artifacts.ts`, which runs as part of the seed step in both `e2e-smoke` and `e2e-staging`. For it to catch what a spec creates:
+Curated fixture data (Pottery House, Kikuzuki, demo seed, MCP plan fixtures) is reset on every seed run via `DELETE`-then-`INSERT` on fixed IDs — it never grows. Anything else E2E specs create must be swept by `scripts/reset-e2e-artifacts.ts`, which runs as part of both the required preview seed and the locked full staging-candidate seed. For it to catch what a spec creates:
 
 - Any throwaway site/org (`POST /api/sites`, `tests/e2e/helpers/ensure-site.ts`, or an MCP `create_site` call) must use a `subdomain` containing `e2e-` — the sweep deletes the owning `organization` row, which cascades through every org-scoped table.
 - Any guest-facing row created against a persistent fixture site (bookings, contact submissions, reservations) must use an `...@playwright.example` guest email — there's no throwaway org to cascade from, so these are swept by that marker directly.
@@ -626,8 +626,14 @@ Required pipeline:
 2. Human review of `client-imports/<slug>/`
 3. `client:import --approve`
 4. `client:import --apply`
-5. `client:verify`
-6. `client:deploy`
+5. `client:verify` against the local candidate
+6. Run **CI (Full Validation Lane)** for the exact source SHA
+7. Run **Production release (manifest-gated)** first with `operation=preflight`, review its dry-run report, then separately dispatch `operation=deploy` with that preflight run ID and protected-environment approval
+8. `client:deploy --skip-seed --skip-deploy` for final deployed client verification
+
+`client:deploy` never releases the Worker itself. Direct staging/production
+deploy commands are blocked so client onboarding cannot bypass the immutable
+candidate and production approval chain.
 
 If any step fails, fix the source of truth:
 
@@ -654,7 +660,7 @@ These failures must never recur:
 - Image 404s serving from `bootstrap` response
 - Manual D1 mutations outside the approved `client:apply` path
 
-Run fixture before merging PRs that touch `scripts/`, `components/saya/`, `pages/`, or `utils/vertical-copy.ts` (the same paths the `changes` job's `pottery_house` filter watches in `.github/workflows/ci.yml`):
+Run the fixture before merging PRs that touch `scripts/`, `components/saya/`, `pages/`, or `utils/vertical-copy.ts`. Required preview coverage is not path-filtered, but these remain the Pottery House impact paths:
 
 ```bash
 yarn fixture:pottery-house --url http://localhost:3000 --site-id site-pottery-house

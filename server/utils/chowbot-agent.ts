@@ -1099,7 +1099,7 @@ Rules in setup mode:
     : "";
 
   const managedServiceGuidance = isConversationalToolGroupEnabled(env, "managed_service")
-    ? "- Managed service requests: submit work to Paul & Julia's queue (content, SEO, Google Business, seasonal, photos, social media)\n"
+    ? "- Priority-support requests: submit work to the KrabiClaw support queue (content, SEO, Google Business, seasonal, photos, social media)\n"
     : "";
   const localeGuidance = "- Locale-specific content: use list_locales, upsert_locale, and delete_locale to manage locale versions, then edit each locale's page content manually in the dashboard page manager\n";
 

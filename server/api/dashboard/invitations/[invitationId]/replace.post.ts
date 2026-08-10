@@ -75,7 +75,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     for (const scope of invitation.scopes) {
-      const access = await ensureWhatsAppRecipientAccess(db, {
+      const access = await ensureWhatsAppRecipientAccess(env, db, {
         organizationId: organization.id,
         siteId: scope.site_id,
         locationId: scope.location_id,

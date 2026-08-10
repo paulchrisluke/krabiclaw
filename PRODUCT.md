@@ -57,23 +57,42 @@ Professional-service tenants render through the Blawby template (see "Public Tem
 
 ## Business Model
 
-Pricing managed entirely in Stripe — never duplicated in code. All pricing UI reads from `GET /api/billing/plans`.
+Recurring amounts and plan IDs are intentionally fixed in the reviewed Stripe
+catalog contract (`scripts/lib/stripe-catalog-plan.mjs`). Customer-facing
+billing surfaces load the canonical plan details from `GET /api/billing/plans`.
 
 | Tier | Price | Key Features |
 |------|-------|-------------|
-| Free (Starter) | $0 | Subdomain, Saya theme, manual editor, weekly AI quota, 1 locale, Post-booking review requests |
-| Growth | $49/mo | Custom domain + SSL, Google Business sync, 2,000 AI credits/week, manual locale editing, Priority Support |
+| Free (Starter) | $0 | Subdomain, Saya theme, manual editor, 500 AI credits/week, 1 locale |
+| Growth | $49/mo or $588/year | Custom domain + SSL, Google Business sync, 2,000 AI credits/week, post-booking review requests, manual locale editing, Priority Support |
 
 One Better Auth organization subscription covers every site in the organization. AI
 usage is measured in the append-only `usage_events` ledger and provisioned by
 append-only `usage_quota_grants`; the `ai_credits` row is a derived enforcement
 balance, not a purchasable wallet. One-time credit purchases, service add-ons,
-and automatic top-ups are retired. Their historical tables and fulfillment rows
-remain read-only for audit history.
+and automatic top-ups are retired. The 2026-08-09 production/provider census
+found no customer purchase, fulfillment, or outstanding-obligation history for
+those products. Their legacy schema remains frozen as migration history only.
 
 **Upgrade modal** triggers on: connecting Google Business, custom domain setup, removing KrabiClaw branding.
 
-**Managed / Concierge Services Deprecated.** The "Managed by Paul & Julia" service (including Managed and SEO Accelerator tiers) is no longer offered. The `MANAGED_SERVICE_ENABLED` feature flag remains off to hide these from the dashboard and marketing sites.
+**Starter and Growth are the complete runtime plan model.** Managed and SEO
+Accelerator were created as Stripe catalog products but were never purchased or
+subscribed to. They are provider-retirement records only and must be archived;
+they are not runtime plan identities, historical entitlements, or fulfillment
+obligations.
+
+Growth includes priority-support work requests and Facebook integration. The
+internal `managed_service` entitlement is the capability key used by those
+Growth features; it is not a plan identity. `MANAGED_SERVICE_ENABLED` controls
+whether Growth support intake is open and must never expose another plan in a
+checkout, transfer, upsell, or catalog surface.
+
+Pending site handoffs do not pause or delete the source owner's custom domains.
+Reminders are informational; payment gates ownership acceptance, not the
+current customer's live website. Acceptance and cancellation own the
+compare-and-set restoration/cleanup saga, including recovery of legacy paused
+domain markers.
 
 ### WhatsApp / Google Places cost recovery
 
@@ -194,8 +213,8 @@ Both Saya and Blawby support a blog: Saya's is the shared `posts` primitive rend
 
 - **Organization** is the site/brand workspace and billing/team boundary — vertical-neutral: an org can hold a restaurant, an experience business, or a professional-service firm, and (per "One org can have multiple sites" below) can even hold a mix.
 - **One org can have multiple sites** — there is no unique-per-org constraint on sites. Sites are explicit everywhere — there is no "first site in org" fallback in dashboard routing or billing.
-- Each site has its own plan and Stripe subscription (`site_billing`). The Stripe *customer* stays at org level (`organization_billing.stripe_customer_id`) — one payment method covers every site in the org.
-- A new site always starts on `free`, even under a paid org. If the org already has another site on a paid plan and a saved card on file, the dashboard offers to auto-subscribe the new site immediately (`POST /api/billing/site-subscribe`, no Checkout redirect). Otherwise it's a normal Checkout upgrade later.
+- One Better Auth organization subscription and shared weekly quota cover every site in the organization. A new site inherits the organization's effective plan without another checkout. `organization_billing` is the application projection of that organization-level authority.
+- `sites.plan`, `site_billing`, and `site_entitlements` are compatibility and reporting projections for site-scoped consumers. They do not authorize checkout, paid access, transfer acceptance, or quota, and must be reconciled from the owning organization's effective plan rather than treated as independent subscriptions.
 - **Sites** are the primary day-to-day dashboard context and selector. A location becomes the working context only inside that site's location workspace. For Saya (restaurant/experience) sites this is a physical location; Blawby's offerings are site-level by default and don't require a location to have a public street address (a professional-service tenant may serve a statewide/remote area).
 - Public tenant routes are template-specific: Saya remains location/experience-centric under `/locations/[slug]` and `/experiences/[slug]`; Blawby is offering-centric under `/services/[slug]` (see "Public Templates" above).
 - Dashboard routes follow the Vercel-style workspace shape, with an explicit site segment:
@@ -203,8 +222,8 @@ Both Saya and Blawby support a blog: Saya's is the shared `posts` primitive rend
   - `/dashboard/{orgSlug}/sites/{siteSlug}` — site workspace (`siteSlug` is the site's `subdomain`)
   - `/dashboard/{orgSlug}/sites/{siteSlug}/locations/{locationSlug}` — location workspace
   - `/dashboard/{orgSlug}/sites/new` — create another site under this org
-  - `/dashboard/{orgSlug}/settings/billing` — org billing (lists every site's plan/subscription, not just one)
+  - `/dashboard/{orgSlug}/settings/billing` — the organization's subscription, shared quota, invoices, and plan management
   - `/dashboard/account/settings` — personal account settings
 - App-facing dashboard APIs use `/api/dashboard/*`; the active site is resolved server-side from the `x-dashboard-site-slug` header (auto-attached by `plugins/dashboard-site-header.ts` based on the route's `siteSlug`), not by guessing the org's oldest site.
-- **Site transfers move only the site** — its locations, content, billing, and entitlements reparent into the recipient's own existing org. The org itself, its other sites, and org-level billing/credits never move.
+- **Site transfers move only the site and its tenant data.** Neither organization's subscription, quota ledger, grants, nor billing customer moves. After acceptance, the recipient organization's effective plan governs the transferred site and any site-scoped compatibility projections are reconciled from that organization authority.
 - Dashboard is home for: billing, org settings, unified inbox (contact inquiries, reservations, bookings, reviews), analytics.

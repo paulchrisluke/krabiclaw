@@ -148,18 +148,21 @@ test.describe('billing webhook signed flow', () => {
     const stateUrl = `${baseURL}/api/dev/billing-state?organization_id=${encodeURIComponent(organizationId!)}`
     await expect.poll(async () => {
       const response = await request.get(stateUrl, { headers: devLoginHeaders() })
-      const body = await response.json() as { webhook_events: Array<{ stripe_event_id: string; status?: string }>; service_addon_purchases: Array<{ checkout_session_id: string }> }
+      const body = await response.json() as { webhook_events: Array<{ stripe_event_id: string; status?: string }> }
+      const matchingEvents = body.webhook_events.filter(item => item.stripe_event_id === paymentEvent.id)
       return {
-        event: body.webhook_events.find(item => item.stripe_event_id === paymentEvent.id)?.status,
-        purchases: body.service_addon_purchases.filter(item => item.checkout_session_id === sessionId).length,
+        event: matchingEvents[0]?.status,
+        eventCount: matchingEvents.length,
       }
-    }, { timeout: 10_000 }).toEqual({ event: 'processed', purchases: 0 })
+    }, { timeout: 10_000 }).toEqual({ event: 'processed', eventCount: 1 })
 
     const replay = await sendSigned(paymentEvent)
     expect(replay.status()).toBe(200)
     const replayState = await request.get(stateUrl, { headers: devLoginHeaders() })
-    const replayBody = await replayState.json() as { service_addon_purchases: Array<{ checkout_session_id: string }> }
-    expect(replayBody.service_addon_purchases.filter(item => item.checkout_session_id === sessionId)).toHaveLength(0)
+    const replayBody = await replayState.json() as { webhook_events: Array<{ stripe_event_id: string; status?: string }> }
+    expect(replayBody.webhook_events.filter(item => item.stripe_event_id === paymentEvent.id)).toEqual([
+      expect.objectContaining({ stripe_event_id: paymentEvent.id, status: 'processed' }),
+    ])
 
     const modeEventIds: string[] = []
     for (const mode of ['subscription', 'setup']) {

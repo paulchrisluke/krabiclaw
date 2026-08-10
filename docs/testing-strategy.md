@@ -14,9 +14,13 @@ client-fixture suites run manually or in the scheduled full-regression
 workflow; staging adds only focused dashboard or billing smoke when those paths
 change.
 
-Performance sampling is also separate from routine PR smoke. Run the
-30-sample Saya, Blawby, and dashboard benchmark deliberately against staging
-for release evidence rather than multiplying browser samples after every push.
+Performance sampling is also separate from routine PR smoke. The merge-ready
+comparison runs 20–30 samples per side against the same fixture, cache state,
+runner, and Worker versions (the full release workflow uses 25 baseline and 25
+candidate samples). It reports median and an appropriate upper percentile; it
+does not report p99 from fewer than 100 observations. Keep this deliberate
+release evidence separate from routine PR smoke rather than multiplying browser
+samples after every push.
 
 KrabiClaw treats browser and E2E validation as the product gate. Unit tests, lint, typecheck, and static guardrails are hygiene unless they protect a narrow pure contract that browser tests cannot exercise directly.
 

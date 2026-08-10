@@ -3,8 +3,9 @@
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { createAuth } from '~/server/utils/auth'
 import { assertDevRouteAllowed } from '~/server/utils/dev-route-auth'
-import { hasPlatformAdminPermission } from '~/utils/platform-admin-access'
-import { execute, queryAll, queryFirst } from '~/server/db'
+import { queryFirst } from '~/server/db'
+import { getOrgAdapter } from 'better-auth/plugins'
+import { selectDevLoginUser } from '~/server/utils/dev-login-selection'
 
 // Mirrors better-call's signCookieValue (HMAC-SHA256, base64(raw signature),
 // `${value}.${signature}`) since better-auth only exposes signed-cookie
@@ -53,22 +54,25 @@ export default defineEventHandler(async (event) => {
 
   const auth = createAuth(env)
   const ctx = await auth.$context
+  const organizationAdapter = getOrgAdapter(ctx as Parameters<typeof getOrgAdapter>[0], {})
 
   const userId = query.userId !== undefined ? validateDevUserId(query.userId) : undefined
 
   let user: { id: string; email: string; role?: string | null } | null = null
   if (userId) {
-    user = await queryFirst<{ id: string; email: string; role?: string | null }>(
-      db, 'SELECT id, email, role FROM user WHERE id = ? LIMIT 1', [userId]
-    )
+    const existing = await ctx.internalAdapter.findUserById(userId)
+    user = existing ? {
+      id: existing.id,
+      email: existing.email,
+      role: (existing as typeof existing & { role?: string | null }).role,
+    } : null
     if (!user) {
       const email = `${userId}@example.test`
       try {
         // Goes through better-auth's internalAdapter, the same path real
         // signups/OAuth use — this fires databaseHooks.user.create.after
-        // (server/utils/auth.ts), which creates the owner org/member row and
-        // sends the admin-signup notification, so dev-login test users can't
-        // silently drift from what a real signup produces.
+        // (server/utils/auth.ts) and sends the signup notification, so dev-login
+        // test users can't silently drift from what a real signup produces.
         const created = await ctx.internalAdapter.createUser<{ id: string; email: string; role?: string | null }>(
           {
             id: userId,
@@ -83,9 +87,12 @@ export default defineEventHandler(async (event) => {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         if (/PRIMARY KEY|UNIQUE constraint failed/i.test(message)) {
-          user = await queryFirst<{ id: string; email: string; role?: string | null }>(
-            db, 'SELECT id, email, role FROM user WHERE id = ? LIMIT 1', [userId]
-          )
+          const raced = await ctx.internalAdapter.findUserById(userId)
+          user = raced ? {
+            id: raced.id,
+            email: raced.email,
+            role: (raced as typeof raced & { role?: string | null }).role,
+          } : null
         } else {
           console.error(`Dev login user auto-create failed for ${userId}: ${message}`, error)
           throw createError({ statusCode: 500, statusMessage: 'Failed to create dev login user' })
@@ -96,37 +103,38 @@ export default defineEventHandler(async (event) => {
       }
     }
   } else {
-    const results = await queryAll<{ id: string; email: string; role?: string | null; has_org: number; is_owner: number; has_site: number }>(db, `
-      SELECT u.id, u.email, u.role,
-             COUNT(DISTINCT m.id) > 0 AS has_org,
-             COUNT(DISTINCT CASE WHEN m.role = 'owner' THEN m.id END) > 0 AS is_owner,
-             COUNT(DISTINCT CASE WHEN s.id IS NOT NULL THEN m.id END) > 0 AS has_site
-      FROM user u
-      LEFT JOIN member m ON m.userId = u.id
-      LEFT JOIN sites s ON s.organization_id = m.organizationId
-      GROUP BY u.id
-      ORDER BY has_site DESC, is_owner DESC, has_org DESC, u.createdAt ASC
-      LIMIT 50
-    `)
-    user = results.find((row) => !hasPlatformAdminPermission(row.role)) ?? null
+    const selected = await selectDevLoginUser({
+      internalAdapter: ctx.internalAdapter,
+      organizationAdapter,
+      hasSite: async (organizationIds) => organizationIds.length > 0
+        && Boolean(await queryFirst<{ id: string }>(
+          db,
+          `SELECT id FROM sites WHERE organization_id IN (${organizationIds.map(() => '?').join(', ')}) LIMIT 1`,
+          organizationIds,
+        )),
+    })
+
+    user = selected
+      ? {
+        id: selected.id,
+        email: selected.email,
+        role: (selected as typeof selected & { role?: string | null }).role,
+      }
+      : null
     if (!user) {
       throw createError({ statusCode: 500, statusMessage: 'No suitable dev user' })
     }
   }
   if (!user) throw createError({ statusCode: 500, statusMessage: 'No users in database' })
 
-  const session = await ctx.internalAdapter.createSession(user.id)
-  const activeOrganization = await queryFirst<{ id: string }>(db, `
-    SELECT o.id
-    FROM organization o
-    JOIN member m ON m.organizationId = o.id
-    WHERE m.userId = ?
-    ORDER BY o.createdAt ASC
-    LIMIT 1
-  `, [user.id])
-  if (activeOrganization) {
-    await execute(db, 'UPDATE session SET activeOrganizationId = ? WHERE id = ?', [activeOrganization.id, session.id])
-  }
+  const organizations = (await organizationAdapter.listOrganizations(user.id))
+    .slice()
+    .sort((left, right) => timestampValue(left.createdAt) - timestampValue(right.createdAt))
+  const session = await ctx.internalAdapter.createSession(
+    user.id,
+    undefined,
+    organizations[0] ? { activeOrganizationId: organizations[0].id } : undefined,
+  )
   const signed = `${session.token}.${await hmacSign(session.token, ctx.secret)}`
 
   const cookieName = ctx.authCookies.sessionToken.name
@@ -140,3 +148,13 @@ export default defineEventHandler(async (event) => {
 
   await sendRedirect(event, '/api/post-login')
 })
+
+function timestampValue(value: Date | string | number): number {
+  if (value instanceof Date) {
+    const timestamp = value.getTime()
+    return Number.isNaN(timestamp) ? Number.POSITIVE_INFINITY : timestamp
+  }
+  if (typeof value === 'number') return Number.isFinite(value) ? value : Number.POSITIVE_INFINITY
+  const parsed = Date.parse(value)
+  return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed
+}

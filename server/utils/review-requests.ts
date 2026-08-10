@@ -1,4 +1,5 @@
 import { execute, queryFirst, type DbClient } from '~/server/db'
+import { hasSiteEntitlement } from '~/server/utils/billing'
 
 export type ReviewBookingType = 'reservation' | 'experience_booking'
 export type CompletionSource = 'manual' | 'auto'
@@ -70,24 +71,8 @@ export function addDays(iso: string, days: number): string {
   return isoFromMs(new Date(iso).getTime() + days * 86_400_000)
 }
 
-function truthyEntitlement(value: string | null | undefined): boolean {
-  if (!value) return false
-  return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase())
-}
-
 export async function hasReviewRequestsEntitlement(db: DbClient, siteId: string): Promise<boolean> {
-  const row = await queryFirst<{ entitlement_value: string | null; plan: string | null }>(db, `
-    SELECT se.value AS entitlement_value, COALESCE(sb.plan, s.plan, 'free') AS plan
-    FROM sites s
-    LEFT JOIN site_entitlements se ON se.site_id = s.id AND se.key = 'review_requests'
-    LEFT JOIN site_billing sb ON sb.site_id = s.id
-    WHERE s.id = ?
-    LIMIT 1
-  `, [siteId])
-
-  if (!row) return false
-  if (truthyEntitlement(row.entitlement_value)) return true
-  return ['growth', 'managed', 'seo_accelerator'].includes(row.plan ?? 'free')
+  return await hasSiteEntitlement(db, siteId, 'review_requests')
 }
 
 export function createReviewRequestToken(): string {

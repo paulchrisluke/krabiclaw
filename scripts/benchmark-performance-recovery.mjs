@@ -3,6 +3,12 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 
+import {
+  createBenchmarkVersionConfig,
+  summarizeSamples,
+  validateBenchmarkSampleCount,
+} from './lib/performance-comparison.mjs'
+
 function parseArgs(argv) {
   const values = {}
   for (let index = 0; index < argv.length; index += 1) {
@@ -17,24 +23,6 @@ function parseArgs(argv) {
     }
   }
   return values
-}
-
-function percentile(values, value) {
-  if (!values.length) return null
-  const sorted = [...values].sort((left, right) => left - right)
-  const index = Math.ceil((value / 100) * sorted.length) - 1
-  return sorted[Math.max(0, index)]
-}
-
-function summarize(samples, field, sampleCount) {
-  const values = samples
-    .map(sample => sample[field])
-    .filter(value => typeof value === 'number' && Number.isFinite(value))
-  return {
-    p50: percentile(values, 50),
-    p95: percentile(values, 95),
-    p99: sampleCount >= 100 ? percentile(values, 99) : null,
-  }
 }
 
 function parseNumericHeader(response, name) {
@@ -68,10 +56,9 @@ function tenantTarget(baseUrl, slug) {
   return { baseUrl: url, headers: {} }
 }
 
-async function measureScenario(context, scenario, sampleCount) {
-  const samples = []
-  for (let index = 0; index < sampleCount; index += 1) {
-    const page = await context.newPage()
+async function measurePage(context, scenario, sampleNumber) {
+  const page = await context.newPage()
+  try {
     if (Object.keys(scenario.headers).length > 0) {
       const scenarioOrigin = new URL(scenario.url).origin
       await page.route('**/*', async (route) => {
@@ -113,8 +100,8 @@ async function measureScenario(context, scenario, sampleCount) {
         interactionProxyMs: performance.now() - interactionStartedAt,
       }
     })
-    samples.push({
-      sample: index + 1,
+    return {
+      sample: sampleNumber,
       status: response?.status() ?? 0,
       totalMs,
       ...browserMetrics,
@@ -123,38 +110,65 @@ async function measureScenario(context, scenario, sampleCount) {
       d1QueryCount: response ? parseNumericHeader(response, 'x-d1-query-count') : null,
       responseBytes: response ? parseNumericHeader(response, 'x-response-bytes') : null,
       cacheStatus: response?.headers()['x-data-cache'] ?? null,
-    })
+    }
+  } finally {
     await page.close()
+  }
+}
+
+async function measureScenario(context, scenario, sampleCount) {
+  // Prime the same browser/Worker/cache path once, then discard that result.
+  // Both comparison candidates perform exactly one warm-up per scenario.
+  await measurePage(context, scenario, 0)
+  const samples = []
+  for (let index = 0; index < sampleCount; index += 1) {
+    samples.push(await measurePage(context, scenario, index + 1))
   }
   return {
     name: scenario.name,
     template: scenario.template,
     url: scenario.url,
+    warmupCount: 1,
     samples,
     errors: samples.filter(sample =>
       sample.status < 200 || sample.status >= 400 || sample.failedRequestCount > 0,
     ).length,
-    totalMs: summarize(samples, 'totalMs', sampleCount),
-    ttfbMs: summarize(samples, 'ttfbMs', sampleCount),
-    lcpMs: summarize(samples, 'lcpMs', sampleCount),
-    interactionProxyMs: summarize(samples, 'interactionProxyMs', sampleCount),
-    requestCount: summarize(samples, 'requestCount', sampleCount),
-    d1QueryCount: summarize(samples, 'd1QueryCount', sampleCount),
-    responseBytes: summarize(samples, 'responseBytes', sampleCount),
+    totalMs: summarizeSamples(samples, 'totalMs'),
+    ttfbMs: summarizeSamples(samples, 'ttfbMs'),
+    lcpMs: summarizeSamples(samples, 'lcpMs'),
+    interactionProxyMs: summarizeSamples(samples, 'interactionProxyMs'),
+    requestCount: summarizeSamples(samples, 'requestCount'),
+    d1QueryCount: summarizeSamples(samples, 'd1QueryCount'),
+    responseBytes: summarizeSamples(samples, 'responseBytes'),
   }
 }
 
 const args = parseArgs(process.argv.slice(2))
 const baseUrl = args['base-url'] ?? 'http://localhost:3000'
-const samples = Math.max(3, Number(args.samples) || 5)
+const runLabel = String(args['run-label'] ?? process.env.BENCHMARK_RUN_LABEL ?? 'smoke')
+const samples = validateBenchmarkSampleCount(Math.max(3, Number(args.samples) || 5), runLabel)
 const outputDir = path.resolve(args['output-dir'] ?? 'test-results/performance-recovery')
 const platformUrl = new URL(baseUrl)
 const sayaTarget = tenantTarget(baseUrl, 'demo')
 const blawbyTarget = tenantTarget(baseUrl, 'ncls')
+const workerName = String(args['worker-name'] ?? process.env.WORKER_NAME ?? 'krabiclaw').trim() || 'krabiclaw'
+const workerVersionConfig = createBenchmarkVersionConfig({
+  workerVersionId: args['worker-version-id'] ?? args['worker-version'] ?? process.env.WORKER_VERSION_ID,
+  workerVersionOverride: args['worker-version-override'] ?? process.env.WORKER_VERSION_OVERRIDE,
+  workerName,
+})
+const { workerVersionId, workerVersionOverride, workerVersionHeaders } = workerVersionConfig
+const cacheState = String(args['cache-state'] ?? process.env.BENCHMARK_CACHE_STATE ?? 'unspecified')
+const sourceSha = String(
+  args['source-sha']
+    ?? process.env.SOURCE_SHA
+    ?? process.env.GITHUB_SHA
+    ?? execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }),
+).trim()
 
 const browser = await chromium.launch()
 try {
-  const context = await browser.newContext()
+  const context = await browser.newContext({ extraHTTPHeaders: workerVersionHeaders })
   await context.addInitScript(() => {
     window.__krabiBenchmarkLcp = null
     new PerformanceObserver((list) => {
@@ -166,7 +180,10 @@ try {
   const loginResponse = await context.request.get(
     new URL('/api/dev/login?userId=user-pottery-house', platformUrl).toString(),
     {
-      headers: { 'x-dev-route-secret': process.env.E2E_DEV_ROUTE_SECRET ?? 'ci-dev-route-secret' },
+      headers: {
+        'x-dev-route-secret': process.env.E2E_DEV_ROUTE_SECRET ?? 'ci-dev-route-secret',
+        ...workerVersionHeaders,
+      },
       maxRedirects: 0,
     },
   )
@@ -204,36 +221,57 @@ try {
     results.push(await measureScenario(context, scenario, samples))
   }
 
+  const browserVersion = browser.version()
+  const fixtures = {
+    saya: isPreviewContext(platformUrl.hostname)
+      ? 'site-demo / x-preview-tenant: demo'
+      : `site-demo / ${sayaTarget.baseUrl.hostname}`,
+    blawby: isPreviewContext(platformUrl.hostname)
+      ? 'NCLS seed / x-preview-tenant: ncls'
+      : `NCLS seed / ${blawbyTarget.baseUrl.hostname}`,
+    dashboard: 'user-pottery-house / pottery-house seed',
+  }
   const report = {
-    commit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+    runLabel,
+    sourceSha,
+    // Keep commit as an alias for report consumers that predate the immutable
+    // sourceSha field.  Comparisons always use sourceSha.
+    commit: sourceSha,
+    workerVersionId,
+    workerVersionOverride,
+    workerName,
+    cacheState,
     workingTreeDirty:
       execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim().length > 0,
     measuredAt: new Date().toISOString(),
     environment: baseUrl,
     browser: 'Playwright Chromium',
-    sampleCount: samples,
-    fixtures: {
-      saya: isPreviewContext(platformUrl.hostname)
-        ? 'site-demo / x-preview-tenant: demo'
-        : `site-demo / ${sayaTarget.baseUrl.hostname}`,
-      blawby: isPreviewContext(platformUrl.hostname)
-        ? 'NCLS seed / x-preview-tenant: ncls'
-        : `NCLS seed / ${blawbyTarget.baseUrl.hostname}`,
-      dashboard: 'user-pottery-house / pottery-house seed',
+    runner: {
+      platform: process.platform,
+      nodeVersion: process.version,
+      browser: 'chromium',
+      browserVersion,
     },
+    sampleCount: samples,
+    warmupCount: 1,
+    warmupSamplesDiscarded: results.reduce((total, result) => total + result.warmupCount, 0),
+    fixtures,
+    scenarios: results.map(result => ({ name: result.name, template: result.template, url: result.url })),
+    errors: results.reduce((total, result) => total + result.errors, 0),
     note:
       'The current template registry contains Saya and Blawby; no Lobby template or fixture exists in this revision.',
     results,
   }
   await mkdir(outputDir, { recursive: true })
-  const jsonPath = path.join(outputDir, 'performance-recovery.json')
-  const markdownPath = path.join(outputDir, 'performance-recovery.md')
+  const outputStem = `performance-recovery-${runLabel}`
+  const jsonPath = path.join(outputDir, `${outputStem}.json`)
+  const markdownPath = path.join(outputDir, `${outputStem}.md`)
   await writeFile(jsonPath, `${JSON.stringify(report, null, 2)}\n`)
   const rows = results.map(result => [
     result.name,
     result.template,
     result.errors,
-    result.totalMs.p50,
+    result.totalMs.median,
     result.totalMs.p95,
     result.totalMs.p99,
     result.ttfbMs.p95,
@@ -246,14 +284,20 @@ try {
   await writeFile(markdownPath, [
     '# Performance recovery benchmark',
     '',
-    `- Commit: \`${report.commit}${report.workingTreeDirty ? '+working-tree' : ''}\``,
+    `- Run label: \`${report.runLabel}\``,
+    `- Source SHA: \`${report.sourceSha}${report.workingTreeDirty ? '+working-tree' : ''}\``,
+    `- Worker: \`${report.workerName}\` / version \`${report.workerVersionId}\``,
+    `- Worker override: \`${report.workerVersionOverride ?? 'none'}\``,
     `- Measured: ${report.measuredAt}`,
     `- Environment: ${report.environment}`,
     `- Browser: ${report.browser}`,
+    `- Cache state: ${report.cacheState}`,
     `- Samples per scenario: ${report.sampleCount}`,
+    `- Warm-ups: ${report.warmupCount} per scenario (${report.warmupSamplesDiscarded} discarded total)`,
+    `- Errors: ${report.errors}`,
     `- Note: ${report.note}`,
     '',
-    '| Scenario | Template | Errors | total p50 | total p95 | total p99* | TTFB p95 | LCP p95 | interaction proxy p95 | data requests p95 | D1 p95 | bytes p95 |',
+    '| Scenario | Template | Errors | total median | total p95 | total p99* | TTFB p95 | LCP p95 | interaction proxy p95 | data requests p95 | D1 p95 | bytes p95 |',
     '|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|',
     ...rows.map(row => `| ${row} |`),
     '',

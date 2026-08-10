@@ -7,6 +7,8 @@ import {
   checkLegacyFallbackFlag,
   checkDashboardFetchUsage,
   checkAdminFetchUsage,
+  checkSsrRequestEventCapture,
+  checkDeleteBodyUsage,
 } from '../../scripts/lib/data-loading-guardrails.mjs'
 
 test('checkGlobalFetchAndRetry flags globalThis.$fetch mutation', () => {
@@ -95,4 +97,36 @@ test('checkAdminFetchUsage flags both $fetch and dashboardFetch (admin needs app
 
 test('checkAdminFetchUsage passes applicationFetch usage', () => {
   assert.deepEqual(checkAdminFetchUsage('f.vue', 'await applicationFetch("/api/x")'), [])
+})
+
+test('SSR detail loaders capture the request event before the async-data boundary', () => {
+  const unsafe = `
+    const { data } = await useAsyncData('detail', async () => {
+      const requestEvent = useRequestEvent()
+      return await loadFromDb(requestEvent)
+    })
+  `
+  assert.deepEqual(checkSsrRequestEventCapture('pages/detail.vue', unsafe), [
+    'pages/detail.vue: capture useRequestEvent() during page setup before useAsyncData',
+  ])
+
+  const safe = `
+    const requestEvent = useRequestEvent()
+    const { data } = await useAsyncData('detail', async () => {
+      return await loadFromDb(requestEvent)
+    })
+  `
+  assert.deepEqual(checkSsrRequestEventCapture('pages/detail.vue', safe), [])
+})
+
+test('DELETE routes keep mutation inputs out of request bodies', () => {
+  assert.match(
+    checkDeleteBodyUsage('server/api/editor/sites/[siteId]/pages/[variantId].delete.ts', 'const body = await readBody(event)').join('\n'),
+    /must not read request bodies/,
+  )
+  assert.deepEqual(
+    checkDeleteBodyUsage('server/api/editor/sites/[siteId]/pages/[variantId].delete.ts', 'const query = getQuery(event)'),
+    [],
+  )
+  assert.deepEqual(checkDeleteBodyUsage('server/api/editor/sites/[siteId]/pages.post.ts', 'const body = await readBody(event)'), [])
 })

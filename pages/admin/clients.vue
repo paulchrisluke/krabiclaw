@@ -24,8 +24,8 @@
         <UCard v-else-if="clients.length === 0">
           <div class="text-center">
             <UIcon name="i-lucide-store" class="mx-auto size-10 text-muted mb-3" />
-            <p class="font-semibold text-highlighted">No managed clients yet</p>
-            <p class="text-sm text-muted mt-1">Clients on Growth, Managed, or SEO Accelerator will appear here.</p>
+            <p class="font-semibold text-highlighted">No paid clients yet</p>
+            <p class="text-sm text-muted mt-1">Growth clients will appear here.</p>
           </div>
         </UCard>
 
@@ -255,8 +255,35 @@
                   <span class="text-muted">Has account</span>
                   <UBadge :label="billingStatus.pending_transfer.recipient_ready ? 'Yes' : 'Not yet'" :color="billingStatus.pending_transfer.recipient_ready ? 'success' : 'warning'" variant="soft" size="xs" />
                 </div>
+                <div v-if="billingStatus.pending_transfer.recipient_ready" class="space-y-2 px-4 py-2.5">
+                  <label for="recipient-organization" class="block text-muted">Recipient organization</label>
+                  <select
+                    v-if="billingStatus.pending_transfer.recipient_organizations.length > 1"
+                    id="recipient-organization"
+                    v-model="selectedRecipientOrganizationId"
+                    class="w-full rounded-md border border-default bg-default px-3 py-2 text-sm text-default focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  >
+                    <option value="" disabled>Select an organization</option>
+                    <option v-for="organization in billingStatus.pending_transfer.recipient_organizations" :key="organization.id" :value="organization.id">
+                      {{ organization.name }} ({{ organization.slug }})
+                    </option>
+                  </select>
+                  <span v-else class="text-default">
+                    {{ billingStatus.pending_transfer.recipient_organizations[0]?.name }}
+                    <span class="text-muted">({{ billingStatus.pending_transfer.recipient_organizations[0]?.slug }})</span>
+                  </span>
+                </div>
               </div>
-              <UAlert v-if="!billingStatus.pending_transfer.recipient_ready" color="warning" variant="soft" description="Ask them to click the transfer link and create an account first — then you can force accept." />
+              <UAlert
+                v-if="!billingStatus.pending_transfer.recipient_ready"
+                color="warning"
+                variant="soft"
+                :description="billingStatus.pending_transfer.recipient_resolution === 'no_owned_organization'
+                  ? 'The recipient has an account but does not own an organization yet. Ask them to create one before force accepting.'
+                  : billingStatus.pending_transfer.recipient_resolution === 'ambiguous'
+                    ? 'More than one exact recipient account matched. Reconcile the recipient identity before force accepting.'
+                  : 'Ask them to click the transfer link and create an account first — then you can force accept.'"
+              />
               <UAlert v-if="forceAcceptError" color="error" variant="soft" :description="forceAcceptError" />
               <UAlert v-if="forceAcceptResult" color="success" variant="soft" :title="`Site transferred to ${forceAcceptResult.to_email}`" description="They can now access it in their dashboard." />
               <UButton
@@ -264,6 +291,7 @@
                 block
                 color="success"
                 :loading="forceAccepting"
+                :disabled="!selectedRecipientOrganizationId"
                 icon="i-lucide-send"
                 @click="forceAcceptTransfer"
               >
@@ -283,6 +311,7 @@
 
 <script setup lang="ts">
 import { getErrorMessage } from '~/utils/errors'
+import { NEW_SALE_PAID_PLAN_IDS } from '~/shared/billing-model'
 
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Clients | KrabiClaw Admin', robots: 'noindex, nofollow' })
@@ -334,11 +363,23 @@ interface BillingStatus {
     created_at: string
     brand_name: string | null
     recipient_ready: boolean
+    recipient_resolution: 'missing' | 'ambiguous' | 'no_owned_organization' | 'ready'
+    recipient_organizations: Array<{
+      id: string
+      name: string
+      slug: string
+    }>
   } | null
 }
 
-const validateBillingStatus = validateApiShape<BillingStatus>({
+const validateBillingStatusBase = validateApiShape<BillingStatus>({
   org_name: 'string',
+  org_slug: 'nullable-string',
+  stripe_customer_id: 'nullable-string',
+  stripe_subscription_id: 'nullable-string',
+  plan: 'nullable-string',
+  status: 'nullable-string',
+  current_period_end: 'nullable-string',
   sites_billing: {
     arrayOf: {
       site_id: 'string',
@@ -354,6 +395,44 @@ const validateBillingStatus = validateApiShape<BillingStatus>({
   pending_transfer: 'nullable-object',
 })
 
+const validatePendingTransfer = validateApiShape<NonNullable<BillingStatus['pending_transfer']>>({
+  id: 'string',
+  site_id: 'string',
+  to_email: 'string',
+  invited_plan: 'nullable-string',
+  invited_interval: 'string',
+  invited_domain: 'nullable-string',
+  requires_payment: 'boolean',
+  created_at: 'string',
+  brand_name: 'nullable-string',
+  recipient_ready: 'boolean',
+  recipient_resolution: 'string',
+  recipient_organizations: {
+    arrayOf: {
+      id: 'string',
+      name: 'string',
+      slug: 'string',
+    },
+  },
+})
+
+const isTransferRecipientResolution = (value: unknown): value is NonNullable<BillingStatus['pending_transfer']>['recipient_resolution'] => value === 'missing'
+  || value === 'ambiguous'
+  || value === 'no_owned_organization'
+  || value === 'ready'
+
+const validateBillingStatus = (value: unknown): value is BillingStatus => (
+  validateBillingStatusBase(value)
+  && (value.pending_transfer === null
+    || (validatePendingTransfer(value.pending_transfer)
+      && isTransferRecipientResolution(value.pending_transfer.recipient_resolution)
+      && (value.pending_transfer.recipient_ready
+        ? value.pending_transfer.recipient_resolution === 'ready'
+          && value.pending_transfer.recipient_organizations.length > 0
+        : value.pending_transfer.recipient_resolution !== 'ready'
+          && value.pending_transfer.recipient_organizations.length === 0)))
+)
+
 const clients = ref<Client[]>([])
 const clientsLoading = ref(true)
 const impersonatingClientOrgId = ref<string | null>(null)
@@ -362,16 +441,12 @@ const { refreshSession } = useAuth()
 
 const PLAN_LABELS: Record<string, string> = {
   growth: 'Growth',
-  managed: 'Managed',
-  seo_accelerator: 'SEO Accelerator',
 }
 const PLAN_COLORS: Record<string, 'primary' | 'success' | 'warning'> = {
   growth: 'warning',
-  managed: 'primary',
-  seo_accelerator: 'success',
 }
 
-function planLabel(plan: string) { return PLAN_LABELS[plan] ?? plan }
+function planLabel(plan: string) { return PLAN_LABELS[plan] ?? 'Unsupported plan' }
 function planColor(plan: string) { return PLAN_COLORS[plan] ?? 'neutral' }
 
 async function loadClients() {
@@ -420,6 +495,12 @@ const billingError = ref('')
 const forceAccepting = ref(false)
 const forceAcceptResult = ref<{ success: boolean; to_email: string } | null>(null)
 const forceAcceptError = ref('')
+const selectedRecipientOrganizationId = ref('')
+
+function setSelectedRecipientOrganization(status: BillingStatus | null) {
+  const organizations = status?.pending_transfer?.recipient_organizations ?? []
+  selectedRecipientOrganizationId.value = organizations.length === 1 ? organizations[0]!.id : ''
+}
 
 async function openBilling(client: Client) {
   billingClient.value = client
@@ -427,12 +508,14 @@ async function openBilling(client: Client) {
   billingError.value = ''
   forceAcceptResult.value = null
   forceAcceptError.value = ''
+  selectedRecipientOrganizationId.value = ''
   billingOpen.value = true
   billingLoading.value = true
   try {
     billingStatus.value = await applicationFetch<BillingStatus>(`/api/admin/organizations/${client.org_id}/billing`, {
       validate: validateBillingStatus,
     })
+    setSelectedRecipientOrganization(billingStatus.value)
   } catch (err: unknown) {
     billingError.value = getErrorMessage(err, 'Failed to load billing info')
   } finally {
@@ -442,6 +525,10 @@ async function openBilling(client: Client) {
 
 async function forceAcceptTransfer() {
   if (!billingStatus.value?.pending_transfer?.site_id) return
+  if (!selectedRecipientOrganizationId.value) {
+    forceAcceptError.value = 'Select the recipient organization before force accepting.'
+    return
+  }
   forceAccepting.value = true
   forceAcceptResult.value = null
   forceAcceptError.value = ''
@@ -451,6 +538,9 @@ async function forceAcceptTransfer() {
       {
         method: 'POST',
         validate: validateApiShape({ success: 'boolean', to_email: 'string' }),
+        body: {
+          organizationId: selectedRecipientOrganizationId.value,
+        },
       },
     )
     forceAcceptResult.value = res
@@ -458,6 +548,7 @@ async function forceAcceptTransfer() {
     billingStatus.value = await applicationFetch<BillingStatus>(`/api/admin/organizations/${billingClient.value!.org_id}/billing`, {
       validate: validateBillingStatus,
     })
+    setSelectedRecipientOrganization(billingStatus.value)
   } catch (err: unknown) {
     forceAcceptError.value = getErrorMessage(err, 'Failed to transfer site')
   } finally {
@@ -486,9 +577,7 @@ const handoffError = ref('')
 
 const PLAN_OPTIONS = [
   { label: 'No plan (they choose later)', value: '' },
-  { label: 'Growth — $49/mo', value: 'growth' },
-  { label: 'Managed — $149/mo', value: 'managed' },
-  { label: 'SEO Accelerator — $349/mo', value: 'seo_accelerator' },
+  ...NEW_SALE_PAID_PLAN_IDS.map(plan => ({ label: 'Growth — $49/mo', value: plan })),
 ]
 
 const handoffDomainNeedsPlan = computed(() => Boolean(handoffDomain.value.trim()) && !handoffPlan.value)

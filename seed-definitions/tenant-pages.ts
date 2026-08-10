@@ -9,7 +9,7 @@ export interface SeedTenantPageRow {
   heroVideoAssetId?: string | null
 }
 
-export interface SeedTenantPageTranslation {
+export interface SeedTenantPageLocaleField {
   locale: string
   page: string
   field: string
@@ -17,6 +17,12 @@ export interface SeedTenantPageTranslation {
   value?: string | null
   heroTitle?: string | null
   heroSubtitle?: string | null
+  status: 'draft' | 'published' | 'stale'
+}
+
+interface SeedTenantPageLocale {
+  locale: string
+  status: 'draft' | 'published' | 'disabled'
 }
 
 type SqlValue = (_value: string | number | boolean | null) => string
@@ -128,48 +134,69 @@ ${blockSql}`
 export function renderTenantPagesSeedSql(input: {
   siteId: string
   organizationId: string
-  locales: string[]
+  sourceLocale: string
+  locales: SeedTenantPageLocale[]
   rows: SeedTenantPageRow[]
-  translations?: SeedTenantPageTranslation[]
+  localeFields?: SeedTenantPageLocaleField[]
   pages?: string[]
   additionalPages?: Array<{ page: string; path: string; title: string }>
   sqlValue: SqlValue
   sqlJson: SqlJson
 }) {
+  if (!input.locales.some(locale => locale.locale === input.sourceLocale)) {
+    throw new Error(`Source locale "${input.sourceLocale}" is not configured for this site`)
+  }
   const pages = Array.from(new Set([...input.rows.map(row => row.page), ...(input.pages ?? []), 'home', 'about', 'contact']))
   const chunks: string[] = []
-  for (const locale of input.locales) {
+  const publishedLocales = input.locales.filter(locale => locale.status === 'published')
+  for (const locale of publishedLocales) {
     for (const page of pages) {
       const sourceRows = input.rows.filter(row => row.page === page)
-      const translatedRows = locale === input.locales[0]
+      const localizedRows = locale.locale === input.sourceLocale
         ? sourceRows
-        : sourceRows.map(row => {
-            const translated = input.translations?.find(item => item.locale === locale && item.page === page && item.field === row.field)
-            return translated ? { ...row, content: translated.content ?? translated.value ?? row.content, heroTitle: translated.heroTitle ?? row.heroTitle, heroSubtitle: translated.heroSubtitle ?? row.heroSubtitle } : row
+        : sourceRows.flatMap(row => {
+            const localized = input.localeFields?.find(item =>
+              item.locale === locale.locale &&
+              item.page === page &&
+              item.field === row.field &&
+              item.status === 'published',
+            )
+            if (!localized) return []
+            const hasLocalizedValue = [localized.content, localized.value, localized.heroTitle, localized.heroSubtitle]
+              .some(value => value !== undefined && value !== null)
+            if (!hasLocalizedValue) return []
+            return [{
+              ...row,
+              content: localized.content ?? localized.value ?? null,
+              heroTitle: localized.heroTitle ?? null,
+              heroSubtitle: localized.heroSubtitle ?? null,
+            }]
           })
+      if (locale.locale !== input.sourceLocale && localizedRows.length === 0) continue
       chunks.push(renderPage(
         input.siteId,
         input.organizationId,
         page,
-        locale,
-        translatedRows,
+        locale.locale,
+        localizedRows,
         input.sqlValue,
         input.sqlJson,
-        locale === input.locales[0],
+        locale.locale === input.sourceLocale,
       ))
     }
   }
-  for (const locale of input.locales) {
+  for (const locale of publishedLocales) {
     for (const page of input.additionalPages ?? []) {
+      if (locale.locale !== input.sourceLocale) continue
       chunks.push(renderPage(
         input.siteId,
         input.organizationId,
         page.page,
-        locale,
+        locale.locale,
         [],
         input.sqlValue,
         input.sqlJson,
-        locale === input.locales[0],
+        locale.locale === input.sourceLocale,
         page.path,
         page.title,
       ))

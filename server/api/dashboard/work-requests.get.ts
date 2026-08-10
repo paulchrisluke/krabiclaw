@@ -1,4 +1,4 @@
-// GET /api/dashboard/work-requests — managed client views their own requests
+// GET /api/dashboard/work-requests — Growth client views their own priority-support requests
 import { jsonResponse } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { listWorkRequests } from '~/server/utils/work-requests-dashboard'

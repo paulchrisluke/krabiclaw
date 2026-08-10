@@ -1,6 +1,57 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { createError, getHeader } from 'h3'
+import { createError, getHeader, toWebRequest } from 'h3'
 import { queryFirst, queryAll } from '~/server/db'
+import { createAuth } from '~/server/utils/auth'
+import {
+  isStripeTestSecretKey,
+  shouldReadStripeTestCanaryBillingState,
+} from '~/server/utils/stripe-testmode-canary'
+
+function stableTimestamp(value: Date | number | string | null | undefined): string | null {
+  if (value instanceof Date) return value.toISOString()
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const millis = value < 10_000_000_000 ? value * 1000 : value
+    const date = new Date(millis)
+    return Number.isNaN(date.getTime()) ? null : date.toISOString()
+  }
+  if (typeof value === 'string' && value.trim()) return value
+  return null
+}
+
+interface BetterAuthSubscriptionRead {
+  id?: string
+  referenceId?: string
+  plan?: string
+  status?: string
+  stripeCustomerId?: string | null
+  stripeSubscriptionId?: string | null
+  periodStart?: Date | number | string | null
+  periodEnd?: Date | number | string | null
+  cancelAtPeriodEnd?: boolean | number | null
+}
+
+interface BetterAuthSubscriptionApi {
+  listActiveSubscriptions(_input: {
+    query: { referenceId: string; customerType: 'organization' }
+    headers: Headers
+  }): Promise<BetterAuthSubscriptionRead[]>
+}
+
+function mapBetterAuthSubscription(row: BetterAuthSubscriptionRead | null) {
+  return row
+    ? {
+        id: row.id ?? null,
+        referenceId: row.referenceId ?? null,
+        plan: row.plan ?? null,
+        status: row.status ?? null,
+        stripeCustomerId: row.stripeCustomerId ?? null,
+        stripeSubscriptionId: row.stripeSubscriptionId ?? null,
+        periodStart: stableTimestamp(row.periodStart),
+        periodEnd: stableTimestamp(row.periodEnd),
+        cancelAtPeriodEnd: Boolean(row.cancelAtPeriodEnd),
+      }
+    : null
+}
 
 const textEncoder = new TextEncoder()
 
@@ -39,6 +90,15 @@ export default defineEventHandler(async (event) => {
   const query = getQuery(event)
   const organizationId = String(query.organization_id || '').trim()
   const stripeEventId = String(query.stripe_event_id || '').trim()
+  const requestedBetterAuthSubscription = String(query.include_better_auth || '') === '1'
+  const canaryHeader = getHeader(event, 'x-stripe-test-canary')
+
+  if (requestedBetterAuthSubscription && canaryHeader !== '1') {
+    throw createError({ statusCode: 400, statusMessage: 'Stripe canary header required' })
+  }
+  if (requestedBetterAuthSubscription && !isStripeTestSecretKey(env.STRIPE_SECRET_KEY)) {
+    throw createError({ statusCode: 503, statusMessage: 'Stripe test-mode canary unavailable' })
+  }
 
   if (!organizationId) {
     return jsonResponse({ error: 'organization_id is required' }, { status: 400 })
@@ -46,33 +106,57 @@ export default defineEventHandler(async (event) => {
 
   const billing = await queryFirst(db, `
     SELECT ob.organization_id, ob.stripe_customer_id,
-           sb.site_id, ob.stripe_subscription_id, sb.stripe_subscription_item_id,
-           sb.status, sb.plan, sb.current_period_end, sb.cancel_at_period_end, sb.updated_at
+           ob.stripe_subscription_id, ob.status, ob.plan,
+           ob.payment_status, ob.current_period_end, ob.cancel_at_period_end, ob.updated_at
     FROM organization_billing ob
-    LEFT JOIN sites s ON s.organization_id = ob.organization_id
-    LEFT JOIN site_billing sb ON sb.site_id = s.id
-    WHERE ob.organization_id = ?
-    ORDER BY s.created_at ASC LIMIT 1
+    WHERE ob.organization_id = ? LIMIT 1
   `, [organizationId])
 
+  let betterAuthSubscription: ReturnType<typeof mapBetterAuthSubscription> = null
+  if (shouldReadStripeTestCanaryBillingState({
+    requested: requestedBetterAuthSubscription,
+    canaryHeader,
+    secretKey: env.STRIPE_SECRET_KEY,
+  })) {
+    // Better Auth owns the canonical subscription row. Use its documented API
+    // with the caller's session headers so the canary proves the same
+    // organization authorization boundary as the owner checkout flow.
+    const betterAuthApi = createAuth(env).api as unknown as BetterAuthSubscriptionApi
+    const betterAuthSubscriptions = await betterAuthApi.listActiveSubscriptions({
+      query: { referenceId: organizationId, customerType: 'organization' },
+      headers: toWebRequest(event).headers,
+    })
+    const betterAuthSubscriptionRow = betterAuthSubscriptions.find(subscription => subscription.referenceId === organizationId) ?? null
+    betterAuthSubscription = mapBetterAuthSubscription(betterAuthSubscriptionRow)
+  }
+
   const entitlements = await queryAll(db, `
-    SELECT se.key, se.value, se.source, se.created_at, se.updated_at
+    SELECT se.site_id, se.key, se.value, se.source
     FROM site_entitlements se
     JOIN sites s ON s.id = se.site_id
     WHERE s.organization_id = ?
     ORDER BY se.key ASC
   `, [organizationId])
 
-  const serviceAddonPurchases = await queryAll(db, `
-    SELECT checkout_session_id, addon_type, stripe_payment_intent_id, created_at
-    FROM service_addon_purchases
+  const sitePlans = await queryAll(db, `
+    SELECT id AS site_id, plan, status
+    FROM sites
     WHERE organization_id = ?
-    ORDER BY created_at DESC
+    ORDER BY id ASC
+  `, [organizationId])
+
+  const invoicePayments = await queryAll(db, `
+    SELECT stripe_invoice_id, organization_id, stripe_subscription_id,
+           base_plan_price_id, status, period_start, period_end,
+           last_event_id
+    FROM stripe_invoice_payments
+    WHERE organization_id = ?
+    ORDER BY period_end DESC, stripe_invoice_id DESC
     LIMIT 20
   `, [organizationId])
 
   let sql = `
-    SELECT id, stripe_event_id, event_type, status, payload, error,
+    SELECT id, stripe_event_id, event_type, status,
            claimed_at, lease_expires_at, attempt_count, created_at
     FROM stripe_webhook_events
     WHERE 1 = 1
@@ -88,8 +172,10 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({
     billing: billing ?? null,
+    better_auth_subscription: betterAuthSubscription ?? null,
     entitlements: entitlements ?? [],
-    service_addon_purchases: serviceAddonPurchases ?? [],
+    site_plans: sitePlans ?? [],
+    invoice_payments: invoicePayments ?? [],
     webhook_events: webhookEvents ?? [],
   })
 })

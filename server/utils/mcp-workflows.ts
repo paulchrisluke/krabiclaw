@@ -159,7 +159,7 @@ export async function updateNotificationsSettings(
   siteId: string,
   whatsappPhone?: string,
   channels?: string[],
-  env?: ApiRecord,
+  env?: CloudflareEnv,
   actorHeaders?: HeadersInit,
 ) {
   const ops: Promise<unknown>[] = []

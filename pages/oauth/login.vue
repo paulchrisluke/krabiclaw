@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-(--ui-bg) px-4 py-12">
+  <main class="min-h-screen flex items-center justify-center bg-(--ui-bg) px-4 py-12">
     <div class="w-full max-w-sm">
 
       <!-- App connecting banner -->
@@ -97,7 +97,7 @@
       </div>
 
     </div>
-  </div>
+  </main>
 </template>
 
 <script setup>

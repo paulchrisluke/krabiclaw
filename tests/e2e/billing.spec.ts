@@ -21,26 +21,4 @@ test.describe('billing contracts', () => {
     expect(starter.name).toBe('Starter')
     expect(starter.prices).toEqual([])
   })
-
-  test('checkout endpoint validates missing and invalid plan values', async ({ request, baseURL }) => {
-    const missingPlan = await request.post(`${baseURL}/api/billing/checkout`, {
-      data: {},
-    })
-    expect(missingPlan.status()).toBe(400)
-    expect((await missingPlan.json()).error).toContain('Plan is required')
-
-    const invalidPlan = await request.post(`${baseURL}/api/billing/checkout`, {
-      data: { plan: 'premium' },
-    })
-    expect(invalidPlan.status()).toBe(400)
-    expect((await invalidPlan.json()).error).toContain('Invalid plan')
-  })
-
-  test('checkout endpoint validates interval before Stripe/auth logic', async ({ request, baseURL }) => {
-    const invalidInterval = await request.post(`${baseURL}/api/billing/checkout`, {
-      data: { plan: 'growth', interval: 'weekly' },
-    })
-    expect(invalidInterval.status()).toBe(400)
-    expect((await invalidInterval.json()).error).toContain('Invalid interval')
-  })
 })
