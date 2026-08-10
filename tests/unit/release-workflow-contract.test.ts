@@ -286,7 +286,7 @@ test('immutable route inventory enumerates every reviewed fixture target and bro
     surfaces: Array<{
       name: string
       routes: Array<{ path: string; content: string; expectedPath: string; allowRedirects: Array<{ status: number; path: string }> }>
-      variants?: Array<{ name: string; routes: Array<{ path: string; content: string; expectedPath: string; allowRedirects: Array<{ status: number; path: string }> }> }>
+      variants?: Array<{ name: string; baseUrl: string; routes: Array<{ path: string; content: string; expectedPath: string; allowRedirects: Array<{ status: number; path: string }> }> }>
     }>
   }
   const surface = (name: string) => {
@@ -299,6 +299,7 @@ test('immutable route inventory enumerates every reviewed fixture target and bro
   const pottery = saya.variants?.find(item => item.name === 'pottery-house')
   const kikuzuki = saya.variants?.find(item => item.name === 'kikuzuki')
   assert.ok(pottery && kikuzuki)
+  assert.equal(pottery.baseUrl, 'https://www.potteryhousekrabi.com')
   assert.ok(!paths(saya).has('/menu/margherita'), 'editable production demo menu items must not be immutable release routes')
   for (const target of [saya, pottery, kikuzuki]) {
     const targetPaths = paths(target)
@@ -328,7 +329,7 @@ test('immutable route inventory enumerates every reviewed fixture target and bro
   assert.equal(platformRoute('/oauth/consent')?.content, 'This app wants to access your KrabiClaw Account.')
   const potteryReservations = pottery.routes.find(route => route.path === '/reservations')
   assert.equal(potteryReservations?.expectedPath, '/experiences')
-  assert.deepEqual(potteryReservations?.allowRedirects, [{ status: 302, origin: 'https://pottery-house.krabiclaw.com', path: '/experiences' }])
+  assert.deepEqual(potteryReservations?.allowRedirects, [{ status: 302, origin: 'https://www.potteryhousekrabi.com', path: '/experiences' }])
   for (const service of ['family', 'small-business-and-nonprofits', 'employment', 'tenant-rights', 'probate-and-estate', 'special-education-and-iep-advocacy']) {
     assert.ok(ncls.has(`/services/${service}`), `NCLS missing service ${service}`)
   }
