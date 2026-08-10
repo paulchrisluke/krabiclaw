@@ -49,7 +49,7 @@ export function buildTenantHeadLinks(options: TenantHeadLinkOptions): HeadLink[]
   const links: HeadLink[] = [
     { key: 'app-icon-tenant', rel: 'icon', href: `/tenant-icon?v=${v}` },
     { key: 'app-icon-shortcut', rel: 'shortcut icon', href: `/favicon.ico?v=${v}` },
-    { key: 'app-icon-apple', rel: 'apple-touch-icon', sizes: '180x180', href: `/apple-touch-icon.png?v=${v}` },
+    { key: 'app-icon-apple', rel: 'apple-touch-icon', href: `/apple-touch-icon.png?v=${v}` },
   ]
 
   if (!options.isDraftPreview) {

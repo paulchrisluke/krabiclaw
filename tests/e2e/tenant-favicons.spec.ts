@@ -47,17 +47,11 @@ test.describe('Tenant Favicon Endpoints & Host Isolation E2E Tests', () => {
     const endpoints = ['/tenant-icon-192.png', '/tenant-icon-512.png', '/apple-touch-icon.png', '/favicon.ico']
     for (const ep of endpoints) {
       const endpointUrl = new URL(ep, baseUrl).toString()
-      const firstResponse = await request.get(endpointUrl, { headers, maxRedirects: 0 })
-      expect(firstResponse.status()).toBe(302)
-      expectDeployedFaviconCrawlable(baseUrl, firstResponse.headers())
-      expect(firstResponse.headers().location).not.toContain('/platform/')
-
-      const res = await request.get(endpointUrl, { headers, maxRedirects: 5 })
-      expect(res.status()).toBe(200)
-      expect(res.headers()['content-type']).toMatch(/^image\//)
-      expectDeployedFaviconCrawlable(baseUrl, res.headers())
-      const url = res.url()
-      expect(url).not.toContain('/platform/')
+      const response = await request.get(endpointUrl, { headers, maxRedirects: 0 })
+      expect(response.status()).toBe(200)
+      expect(response.headers()['content-type']).toMatch(/^image\//)
+      expect(response.headers().location).toBeUndefined()
+      expectDeployedFaviconCrawlable(baseUrl, response.headers())
     }
 
     const robots = await request.get(new URL('/robots.txt', baseUrl).toString(), { headers })
@@ -72,8 +66,8 @@ test.describe('Tenant Favicon Endpoints & Host Isolation E2E Tests', () => {
     expect(resSiteManifest.status()).toBe(200)
     const manifestJson = await resSiteManifest.json()
     expect(manifestJson.name).toContain('Pottery House')
-    expect(manifestJson.icons.some((i: { src: string }) => i.src.includes('/tenant-icon-192.png'))).toBe(true)
     expect(manifestJson.icons.some((i: { src: string }) => i.src.includes('/tenant-icon-512.png'))).toBe(true)
+    expect(manifestJson.icons).toHaveLength(1)
   })
 
   test('Kikuzuki tenant host endpoints return tenant-specific assets without platform fallbacks', async ({ request }) => {

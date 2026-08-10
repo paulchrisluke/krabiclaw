@@ -1,8 +1,9 @@
-import { setHeader, sendRedirect, type H3Event } from 'h3'
+import { createError, sendStream, setHeader, sendRedirect, type H3Event } from 'h3'
 import { sanitizeUrl } from '~/utils/sanitize'
 import type { TenantHostEnv } from '~/server/utils/tenant-hosts'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
+import { getR2KeyFromPublicUrl } from '~/server/utils/cloudflare-r2'
 
 function escapeXml(value: string): string {
   return value
@@ -64,39 +65,59 @@ export function isCloudflareImagesUrl(url: string): boolean {
  * Replaces the trailing variant segment (e.g. `/public`) with `/w=N,h=N,fit=pad,f=format`.
  * `fit=pad` ensures the image is contained in the requested square without distortion.
  */
-export function getCloudflareImageVariantUrl(url: string, width: number, height: number, format = 'png'): string {
+export function getCloudflareImageVariantUrl(url: string, width: number, height: number, format: 'webp' | 'jpeg' = 'webp'): string {
   if (!url) return url
   return url.replace(/\/[a-zA-Z0-9_-]+$/, `/w=${width},h=${height},fit=pad,f=${format}`)
 }
 
-export function getTenantFaviconSvg(brandName?: string | null, logoUrl?: string | null): string {
-  if (logoUrl) {
-    const escapedLogo = escapeXml(logoUrl)
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64"><image href="${escapedLogo}" width="64" height="64" preserveAspectRatio="xMidYMid meet"/></svg>`
-  }
-
-  const name = brandName?.trim() || 'KrabiClaw'
-  const letter = escapeXml(name.charAt(0).toUpperCase() || 'K')
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="#1F2547"/><text x="32" y="44" text-anchor="middle" font-family="system-ui,sans-serif" font-size="28" font-weight="bold" fill="white">${letter}</text></svg>`
+export function getTenantFaviconSvg(faviconUrl: string): string {
+  const escapedUrl = escapeXml(faviconUrl)
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64"><image href="${escapedUrl}" width="64" height="64" preserveAspectRatio="xMidYMid meet"/></svg>`
 }
 
 export interface FaviconOptions {
   platformFileName: string
   width?: number
   height?: number
-  format?: string
-  /** When true, always return a real SVG response (200 image/svg+xml) regardless of source. */
+  format?: 'webp' | 'jpeg'
+  /** When true, return an SVG wrapper around the configured favicon source. */
   returnSvg?: boolean
-  /**
-   * When true, only redirect to the source URL if that URL can be transformed to
-   * the advertised format (currently: Cloudflare Images). If the source cannot be
-   * transformed, fall back to the SVG letter badge so the endpoint never returns a
-   * JPEG or PNG from a route that declares a different Content-Type.
-   */
-  requireFormatConversion?: boolean
 }
 
-export function handleFaviconRequest(event: H3Event, options: FaviconOptions) {
+async function serveR2Favicon(event: H3Event, env: ApiRecord, url: string) {
+  const key = getR2KeyFromPublicUrl(env, url)
+  if (!key) return null
+  if (!env.MEDIA_BUCKET) throw createError({ statusCode: 503, statusMessage: 'Media storage unavailable' })
+  const object = await env.MEDIA_BUCKET.get(key)
+  if (!object) throw createError({ statusCode: 404, statusMessage: 'Tenant favicon not found' })
+  setHeader(event, 'content-type', object.httpMetadata?.contentType || 'image/png')
+  setHeader(event, 'content-length', object.size)
+  setHeader(event, 'etag', object.etag)
+  setHeader(event, 'cache-control', 'public, max-age=31536000, immutable')
+  return sendStream(event, object.body)
+}
+
+async function proxyFavicon(event: H3Event, url: string) {
+  const response = await fetch(url, {
+    headers: { accept: 'image/webp,image/*' },
+    redirect: 'follow',
+    signal: AbortSignal.timeout(10_000),
+  })
+  if (!response.ok || !response.body) {
+    throw createError({ statusCode: 502, statusMessage: `Tenant favicon source failed (${response.status})` })
+  }
+  const responseType = response.headers.get('content-type')?.split(';', 1)[0]?.trim() || ''
+  if (!responseType.startsWith('image/')) {
+    throw createError({ statusCode: 502, statusMessage: 'Tenant favicon source returned a non-image response' })
+  }
+  setHeader(event, 'content-type', responseType)
+  const length = response.headers.get('content-length')
+  if (length) setHeader(event, 'content-length', Number(length))
+  setHeader(event, 'cache-control', 'public, max-age=3600, stale-while-revalidate=86400')
+  return sendStream(event, response.body)
+}
+
+export async function handleFaviconRequest(event: H3Event, options: FaviconOptions) {
   const env = cloudflareEnv(event)
 
   if (event.context.tenantType === TENANT_TYPES.PLATFORM) {
@@ -113,51 +134,34 @@ export function handleFaviconRequest(event: H3Event, options: FaviconOptions) {
 
   const faviconUrl = sanitizeUrl(site?.favicon_url)
   const logoUrl = sanitizeUrl(site?.logo_url)
-
+  const sourceUrl = faviconUrl && !isPlatformAssetUrl(faviconUrl, env)
+    ? faviconUrl
+    : logoUrl && !isPlatformAssetUrl(logoUrl, env)
+      ? logoUrl
+      : null
   setHeader(event, 'cache-control', 'public, max-age=3600, stale-while-revalidate=86400')
 
-  // Always return real SVG for SVG format requests
   if (options.returnSvg) {
-    const targetImage = (faviconUrl && !isPlatformAssetUrl(faviconUrl, env)) ? faviconUrl : ((logoUrl && !isPlatformAssetUrl(logoUrl, env)) ? logoUrl : null)
-    const svg = getTenantFaviconSvg(site?.brand_name, targetImage)
+    if (!sourceUrl) {
+      throw createError({ statusCode: 404, statusMessage: 'Tenant favicon not configured' })
+    }
+    const svg = getTenantFaviconSvg(sourceUrl)
     setHeader(event, 'content-type', 'image/svg+xml')
     return svg
   }
 
-  // 1. Configured tenant favicon (if present and not platform asset)
-  if (faviconUrl && !isPlatformAssetUrl(faviconUrl, env)) {
+  if (sourceUrl) {
+    const r2Response = await serveR2Favicon(event, env, sourceUrl)
+    if (r2Response) return r2Response
     if (options.width && options.height) {
-      if (isCloudflareImagesUrl(faviconUrl)) {
-        const target = getCloudflareImageVariantUrl(faviconUrl, options.width, options.height, options.format || 'png')
-        return sendRedirect(event, target, 302)
-      } else if (options.requireFormatConversion) {
-        // Cannot guarantee the format — fall through to SVG badge
-      } else {
-        return sendRedirect(event, faviconUrl, 302)
+      if (isCloudflareImagesUrl(sourceUrl)) {
+        const target = getCloudflareImageVariantUrl(sourceUrl, options.width, options.height, options.format || 'webp')
+        return proxyFavicon(event, target)
       }
-    } else {
-      return sendRedirect(event, faviconUrl, 302)
+      throw createError({ statusCode: 422, statusMessage: 'Tenant favicon is not managed media' })
     }
+    return proxyFavicon(event, sourceUrl)
   }
 
-  // 2. Tenant logo
-  if (logoUrl && !isPlatformAssetUrl(logoUrl, env)) {
-    if (options.width && options.height) {
-      if (isCloudflareImagesUrl(logoUrl)) {
-        const target = getCloudflareImageVariantUrl(logoUrl, options.width, options.height, options.format || 'png')
-        return sendRedirect(event, target, 302)
-      } else if (options.requireFormatConversion) {
-        // Cannot guarantee the format — fall through to SVG badge
-      } else {
-        return sendRedirect(event, logoUrl, 302)
-      }
-    } else {
-      return sendRedirect(event, logoUrl, 302)
-    }
-  }
-
-  // 3. Fallback: generated SVG letter badge (always valid format-neutral)
-  const svg = getTenantFaviconSvg(site?.brand_name)
-  setHeader(event, 'content-type', 'image/svg+xml')
-  return svg
+  throw createError({ statusCode: 404, statusMessage: 'Tenant favicon not configured' })
 }
