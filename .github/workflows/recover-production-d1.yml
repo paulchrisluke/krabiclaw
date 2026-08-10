@@ -1,0 +1,125 @@
+name: Recover production D1 location data
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type RESTORE_PRODUCTION_LOCATION_DATA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    name: Restore production data before migration 0111
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require exact recovery confirmation
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+        run: test "$CONFIRM" = RESTORE_PRODUCTION_LOCATION_DATA
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - name: Restore production D1 to the last pre-0111 bookmark
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          RESTORE_TIMESTAMP: "2026-08-10T10:46:15.000Z"
+        run: |
+          set -euo pipefail
+          npx wrangler d1 time-travel info DB --json > "$RUNNER_TEMP/current-bookmark.json"
+          npx wrangler d1 time-travel info DB --timestamp "$RESTORE_TIMESTAMP" --json > "$RUNNER_TEMP/recovery-bookmark.json"
+          npx wrangler d1 time-travel restore DB --timestamp "$RESTORE_TIMESTAMP" --json > "$RUNNER_TEMP/restore-result.json"
+          npx wrangler d1 execute DB --remote --json --command "
+            SELECT
+              (SELECT COUNT(*) FROM experiences WHERE site_id = 'site-kikuzuki') AS kikuzuki_experiences,
+              (SELECT COUNT(*) FROM menus WHERE site_id = 'site-kikuzuki') AS kikuzuki_menus,
+              (SELECT COUNT(*) FROM reviews WHERE site_id = 'site-kikuzuki') AS kikuzuki_reviews,
+              (SELECT COUNT(*) FROM location_qa WHERE site_id = 'site-kikuzuki') AS kikuzuki_qa,
+              (SELECT COUNT(*) FROM experiences WHERE site_id = 'site-pottery-house') AS pottery_experiences,
+              (SELECT COUNT(*) FROM reviews WHERE site_id = 'site-pottery-house') AS pottery_reviews,
+              (SELECT COUNT(*) FROM location_qa WHERE site_id = 'site-pottery-house') AS pottery_qa,
+              (SELECT COUNT(*) FROM d1_migrations WHERE name = '0111_sharp_switch.sql') AS destructive_migration_applied;
+          " > "$RUNNER_TEMP/restored-counts.json"
+          node - "$RUNNER_TEMP/restored-counts.json" <<'NODE'
+          const fs = require('node:fs')
+          const rows = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
+          const result = rows?.[0]?.results?.[0]
+          if (!result) throw new Error('Restored production count evidence is missing')
+          for (const key of [
+            'kikuzuki_experiences', 'kikuzuki_menus', 'kikuzuki_reviews', 'kikuzuki_qa',
+            'pottery_experiences', 'pottery_reviews', 'pottery_qa',
+          ]) {
+            if (Number(result[key]) < 1) throw new Error(`Restored ${key} is empty`)
+          }
+          if (Number(result.destructive_migration_applied) !== 0) {
+            throw new Error('Destructive migration 0111 is still recorded after recovery')
+          }
+          console.log(JSON.stringify(result))
+          NODE
+      - name: Purge stale public resource and HTML caches
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          for prefix in 'public~' 'html:'; do
+            keys="$RUNNER_TEMP/kv-$(printf '%s' "$prefix" | tr -cd '[:alnum:]').json"
+            npx wrangler kv key list --binding SITE_CACHE --remote --prefix "$prefix" > "$keys"
+            if test "$(node -e 'console.log(JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8")).length)' "$keys")" -gt 0; then
+              npx wrangler kv bulk delete "$keys" --binding SITE_CACHE --remote --force
+            fi
+          done
+      - name: Verify restored public experiences and featured rows
+        run: |
+          set -euo pipefail
+          verify_site() {
+            base_url="$1"
+            site_id="$2"
+            expected_title="$3"
+            expect_menu="$4"
+            payload="$RUNNER_TEMP/${site_id}.json"
+            curl -fsS --retry 5 --retry-delay 2 --connect-timeout 10 --max-time 30 \
+              "$base_url/api/public/sites/$site_id/page?page=home&datasets=content%2Cexperiences%2Clocation%2Cmenu" \
+              -H 'cache-control: no-store' > "$payload"
+            node - "$payload" "$expected_title" "$expect_menu" <<'NODE'
+          const fs = require('node:fs')
+          const payload = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
+          const expected = process.argv[3]
+          if (!payload.experiencesList?.some(item => item.title === expected)) {
+            throw new Error(`Public payload is missing restored experience: ${expected}`)
+          }
+          if (process.argv[4] === 'true' && !payload.menu) {
+            throw new Error('Public payload is missing restored menu data')
+          }
+          NODE
+            curl -fsS --retry 5 --retry-delay 2 --connect-timeout 10 --max-time 30 "$base_url/" | grep -F "$expected_title" >/dev/null
+            curl -fsS --retry 5 --retry-delay 2 --connect-timeout 10 --max-time 30 "$base_url/experiences" | grep -F "$expected_title" >/dev/null
+          }
+          verify_site 'https://www.kikuzuki-thailand.com' 'site-kikuzuki' 'Teppanyaki Experience' 'true'
+          verify_site 'https://pottery-house.krabiclaw.com' 'site-pottery-house' 'Pottery Wheel Class' 'false'
+      - name: Upload recovery evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: production-d1-recovery-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/current-bookmark.json
+            ${{ runner.temp }}/recovery-bookmark.json
+            ${{ runner.temp }}/restore-result.json
+            ${{ runner.temp }}/restored-counts.json
+          if-no-files-found: warn
+          retention-days: 14
