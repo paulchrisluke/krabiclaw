@@ -91,16 +91,6 @@ export const ai_credits = sqliteTable("ai_credits", {
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
-export const stripe_credit_topups = sqliteTable("stripe_credit_topups", {
-	checkout_session_id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	credits: integer().notNull(),
-	processed_at: text(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	index("stripe_credit_topups_organization_id_idx").on(table.organization_id),
-]);
-
 export const ai_usage_log = sqliteTable("ai_usage_log", {
 	id: text().primaryKey(),
 	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
@@ -1116,9 +1106,6 @@ export const organization_billing = sqliteTable("organization_billing", {
 	last_payment_event_id: text(),
 	current_period_end: text(),
 	cancel_at_period_end: numeric().default(sql`false`),
-	auto_topup_enabled: integer().default(0).notNull(),
-	auto_topup_bundle: integer().default(500).notNull(),
-	auto_topup_threshold: integer().default(100).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
@@ -1567,18 +1554,6 @@ export const review_media = sqliteTable("review_media", {
 	index("idx_review_media_review_id").on(table.review_id),
 	check("review_media_kind_check", sql`kind IN ('image', 'video')`),
 	check("review_media_status_check", sql`status IN ('pending', 'approved', 'rejected', 'deleted')`),
-]);
-
-export const service_addon_purchases = sqliteTable("service_addon_purchases", {
-	id: text().primaryKey(),
-	organization_id: text().notNull().references(() => organization.id, { onDelete: "cascade" } ),
-	addon_type: text().notNull(),
-	checkout_session_id: text().notNull().unique(),
-	stripe_payment_intent_id: text(),
-	fulfilled_at: text(),
-	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-}, (table) => [
-	index("service_addon_purchases_organization_id_idx").on(table.organization_id),
 ]);
 
 export const session = sqliteTable("session", {

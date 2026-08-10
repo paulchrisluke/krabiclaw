@@ -28,8 +28,9 @@ capacity outside the subscription entitlement projection.
 - `ai_credits` remains a derived enforcement balance and historical usage
   summary, not a customer-purchasable wallet.
 - One-time credit checkout, service-addon checkout, and auto-top-up writers are
-  removed. Their unused legacy schema remains frozen as migration history;
-  there are no customer fulfillment obligations to preserve.
+  removed. Their unused tables and columns are removed from the active schema;
+  immutable applied migrations retain the historical definitions. There are no
+  customer fulfillment obligations to preserve.
 - Growth includes priority-support work requests and Facebook integration. The
   internal `managed_service` capability remains true for Growth. It is a
   capability key, not a saleable plan identity.
@@ -107,11 +108,11 @@ capacity outside the subscription entitlement projection.
   must not silently refill or overwrite it. The reconciliation plan preserves
   its remaining balance with an auditable current-period reset, then normal
   weekly grants begin at the next period boundary.
-- Legacy credit top-up, service add-on, and auto-top-up schema remains frozen as
-  migration history. Active fulfillment writes are removed. The production
-  census found no recorded or still-open customer obligation; a future census
-  must still fail closed and report any unexpected row rather than fulfilling
-  or replacing it automatically.
+- Legacy credit top-up, service add-on, and auto-top-up schema is removed after
+  the production census found no recorded or still-open customer obligation.
+  Historical applied migrations remain immutable. Any pre-apply census must
+  fail closed on an unexpected row rather than dropping, fulfilling, or
+  replacing it automatically.
 
 ## Consequences
 

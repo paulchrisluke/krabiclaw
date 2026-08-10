@@ -43,6 +43,16 @@ test('product-model guard accepts explicit shared UTC-week organization copy', (
   )
 })
 
+test('product-model guard rejects retired billing schema and writers', () => {
+  for (const source of [
+    'export const stripe_credit_topups = sqliteTable("stripe_credit_topups", {})',
+    'await db.prepare("INSERT INTO service_addon_purchases (id) VALUES (?)")',
+    'const auto_topup_enabled = true',
+  ]) {
+    assert.equal(findProductModelViolations('server/db/schema.ts', source).length, 1)
+  }
+})
+
 test('product-model guard scans locale copy and keeps retired upsell files deleted', () => {
   const root = mkdtempSync(join(tmpdir(), 'krabiclaw-product-copy-'))
   try {
