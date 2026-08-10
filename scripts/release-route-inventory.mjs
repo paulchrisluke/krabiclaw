@@ -212,7 +212,12 @@ const SURFACE_DEFINITIONS = Object.freeze([
     // so its individual menu-item slugs are not immutable release routes.
     routes: sayaFixtureRoutes('demo.ts', 'Ember & Slice', ['brooklyn', 'west-village'], 'body', false),
     variants: [
-      { name: 'pottery-house', tenantSlug: 'pottery-house', routes: sayaFixtureRoutes('pottery-house.ts', 'Pottery House') },
+      {
+        name: 'pottery-house',
+        tenantSlug: 'pottery-house',
+        productionBaseUrl: 'https://www.potteryhousekrabi.com',
+        routes: sayaFixtureRoutes('pottery-house.ts', 'Pottery House'),
+      },
       { name: 'kikuzuki', tenantSlug: 'kikuzuki-krabi-thailand', routes: sayaFixtureRoutes('kikuzuki.ts', 'Kikuzuki') },
     ],
   },
@@ -297,6 +302,7 @@ function normalizeRouteDefinition(baseUrl, definition) {
 
 export function buildReleaseRouteInventory(baseUrl) {
   const rootBaseUrl = normalizeBaseUrl(baseUrl)
+  const isProductionRoot = new URL(rootBaseUrl).hostname === 'krabiclaw.com'
   return {
     schemaVersion: 2,
     rootBaseUrl,
@@ -319,7 +325,9 @@ export function buildReleaseRouteInventory(baseUrl) {
               variants: definition.variants.map(variant => normalizeTarget(
                 variant,
                 variant.name,
-                surfaceBaseUrl(rootBaseUrl, variant.tenantSlug),
+                isProductionRoot && variant.productionBaseUrl
+                  ? normalizeBaseUrl(variant.productionBaseUrl)
+                  : surfaceBaseUrl(rootBaseUrl, variant.tenantSlug),
                 variant.tenantSlug,
               )),
             }
