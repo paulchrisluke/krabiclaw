@@ -104,7 +104,7 @@ function contentForSayaPath(path, brandName) {
   return brandName
 }
 
-function sayaFixtureRoutes(fileName, brandName, locationSlugs = fixtureLocationSlugs(fileName), identity = 'body', includeMenuItemRoutes = true) {
+function sayaFixtureRoutes(fileName, brandName, locationSlugs = fixtureLocationSlugs(fileName), identity = 'body') {
   const vertical = fixtureVertical(fileName)
   const experienceSlugs = fixtureSectionSlugs(fileName, 'experiences:', 'reviews:')
   const menuItemSlugs = fixtureMenuItemSlugs(fileName)
@@ -125,9 +125,7 @@ function sayaFixtureRoutes(fileName, brandName, locationSlugs = fixtureLocationS
   }
   for (const { reviewId, locationSlug } of reviewRoutes) add(`/locations/${locationSlug}/reviews/${reviewId}`)
   for (const slug of experienceSlugs) add(`/experiences/${slug}`)
-  if (includeMenuItemRoutes) {
-    for (const slug of menuItemSlugs) add(`/menu/${slug}`)
-  }
+  for (const slug of menuItemSlugs) add(`/menu/${slug}`)
   for (const slug of postIds) {
     add(`/posts/${slug}`)
   }
@@ -208,16 +206,9 @@ const SURFACE_DEFINITIONS = Object.freeze([
   {
     name: 'saya',
     tenantSlug: 'demo',
-    // Production demo content is editable and is not reseeded during releases,
-    // so its individual menu-item slugs are not immutable release routes.
-    routes: sayaFixtureRoutes('demo.ts', 'Ember & Slice', ['brooklyn', 'west-village'], 'body', false),
+    routes: sayaFixtureRoutes('demo.ts', 'Ember & Slice', ['brooklyn', 'west-village']),
     variants: [
-      {
-        name: 'pottery-house',
-        tenantSlug: 'pottery-house',
-        productionBaseUrl: 'https://www.potteryhousekrabi.com',
-        routes: sayaFixtureRoutes('pottery-house.ts', 'Pottery House'),
-      },
+      { name: 'pottery-house', tenantSlug: 'pottery-house', routes: sayaFixtureRoutes('pottery-house.ts', 'Pottery House') },
       { name: 'kikuzuki', tenantSlug: 'kikuzuki-krabi-thailand', routes: sayaFixtureRoutes('kikuzuki.ts', 'Kikuzuki') },
     ],
   },
@@ -302,7 +293,6 @@ function normalizeRouteDefinition(baseUrl, definition) {
 
 export function buildReleaseRouteInventory(baseUrl) {
   const rootBaseUrl = normalizeBaseUrl(baseUrl)
-  const isProductionRoot = new URL(rootBaseUrl).hostname === 'krabiclaw.com'
   return {
     schemaVersion: 2,
     rootBaseUrl,
@@ -325,9 +315,7 @@ export function buildReleaseRouteInventory(baseUrl) {
               variants: definition.variants.map(variant => normalizeTarget(
                 variant,
                 variant.name,
-                isProductionRoot && variant.productionBaseUrl
-                  ? normalizeBaseUrl(variant.productionBaseUrl)
-                  : surfaceBaseUrl(rootBaseUrl, variant.tenantSlug),
+                surfaceBaseUrl(rootBaseUrl, variant.tenantSlug),
                 variant.tenantSlug,
               )),
             }
