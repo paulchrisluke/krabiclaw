@@ -20,6 +20,8 @@ const BUILD_ID_JSON_PATTERN = /["']buildId["']\s*:\s*["']([0-9a-f-]{36})["']/i
 const NUXT_ASSET_PATTERN = /(?:src|href)=["'](\/_nuxt\/[^"'#\s]+)["']/gi
 const VERSION_OVERRIDE_HEADER = 'Cloudflare-Workers-Version-Overrides'
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000
+const PROVENANCE_MAX_ATTEMPTS = 5
+const PROVENANCE_RETRY_DELAY_MS = 1_000
 
 function isUuidLike(value) {
   return typeof value === 'string' && UUID_LIKE_PATTERN.test(value)
@@ -298,16 +300,28 @@ function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
 async function verifyEndpoint(baseUrl, options, extraHeaders = {}) {
   const url = new URL('/api/deployment', baseUrl)
   url.searchParams.set(
     'deployment-verification',
     `${options.expectedSha}-${options.expectedWorkerVersionId ?? 'source-only'}`,
   )
-  const response = await fetchWithTimeout(url, {
-    headers: requestHeaders(options.versionOverrideHeader, extraHeaders),
-    timeoutMs: options.timeoutMs,
-  })
+  let response
+  let attempt = 0
+  while (attempt < PROVENANCE_MAX_ATTEMPTS) {
+    attempt += 1
+    response = await fetchWithTimeout(url, {
+      headers: requestHeaders(options.versionOverrideHeader, extraHeaders),
+      timeoutMs: options.timeoutMs,
+    })
+    if (response.status !== 404 || attempt === PROVENANCE_MAX_ATTEMPTS) break
+    await response.arrayBuffer()
+    await sleep(PROVENANCE_RETRY_DELAY_MS)
+  }
   if (isRedirectStatus(response.status)) {
     throw new CandidateVerificationError(`/api/deployment returned an unexpected redirect to ${redirectLocation(response, url, '/api/deployment').toString()}`, 'UNEXPECTED_REDIRECT')
   }

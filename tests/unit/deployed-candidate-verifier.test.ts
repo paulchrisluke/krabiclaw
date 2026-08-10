@@ -19,7 +19,12 @@ const sourceSha = '0123456789abcdef0123456789abcdef01234567'
 const workerVersionId = '01234567-89ab-cdef-0123-456789abcdef'
 const buildId = '01234567-89ab-cdef-0123-456789abcdef'
 
-async function startCandidateFixture({ versionId = workerVersionId, buildIdForRoutes = buildId, sourceShaForEndpoint = sourceSha } = {}) {
+async function startCandidateFixture({
+  versionId = workerVersionId,
+  buildIdForRoutes = buildId,
+  sourceShaForEndpoint = sourceSha,
+  provenance404s = 0,
+} = {}) {
   const buildDir = await mkdtemp(join(tmpdir(), 'krabiclaw-build-'))
   await mkdir(join(buildDir, '_nuxt', 'builds', 'meta'), { recursive: true })
   await mkdir(join(buildDir, '_nuxt'), { recursive: true })
@@ -40,10 +45,17 @@ async function startCandidateFixture({ versionId = workerVersionId, buildIdForRo
   ])
   const seenVersionOverrideHeaders = []
   const seenRequestUrls = []
+  let provenanceRequests = 0
   const server = createServer((request, response) => {
     seenRequestUrls.push(request.url ?? '')
     seenVersionOverrideHeaders.push(request.headers['cloudflare-workers-version-overrides'] ?? null)
     if (new URL(request.url ?? '/', 'http://fixture.invalid').pathname === '/api/deployment') {
+      provenanceRequests += 1
+      if (provenanceRequests <= provenance404s) {
+        response.writeHead(404)
+        response.end('not ready')
+        return
+      }
       response.writeHead(200, { 'content-type': 'application/json' })
       response.end(JSON.stringify({
         sourceSha: sourceShaForEndpoint,
@@ -128,6 +140,26 @@ test('verifyDeployedCandidate applies the Cloudflare version override header and
 
     assert.ok(fixture.seenVersionOverrideHeaders.length > 0)
     assert.ok(fixture.seenVersionOverrideHeaders.every((value) => value === `krabiclaw="${workerVersionId}"`))
+  } finally {
+    await fixture.close()
+  }
+})
+
+test('verifyDeployedCandidate retries transient baseline 404s at the provenance boundary', async () => {
+  const fixture = await startCandidateFixture({ provenance404s: 1 })
+
+  try {
+    const evidence = await verifyDeployedCandidate({
+      baseUrl: fixture.baseUrl,
+      expectedSha: sourceSha,
+      expectedWorkerVersionId: workerVersionId,
+      workerName: 'krabiclaw',
+      versionOverride: workerVersionId,
+      buildDir: fixture.buildDir,
+    })
+
+    assert.equal(evidence.sourceSha, sourceSha)
+    assert.equal(fixture.seenRequestUrls.filter(url => url.startsWith('/api/deployment?')).length, 2)
   } finally {
     await fixture.close()
   }
