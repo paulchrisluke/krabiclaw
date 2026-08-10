@@ -32,6 +32,23 @@ export interface WebpToPngWasmDeps {
   pngEncoderWasmModule?: WebAssembly.Module
 }
 
+export async function convertWebpBytesToPng(
+  bytes: ArrayBuffer,
+  deps: WebpToPngWasmDeps = {},
+): Promise<Uint8Array | null> {
+  try {
+    await Promise.all([
+      ensureWebpDecoderInitialized(deps.webpDecoderWasmModule),
+      ensurePngEncoderInitialized(deps.pngEncoderWasmModule),
+    ])
+    const imageData = await decodeWebp(bytes)
+    if (!imageData) return null
+    return new Uint8Array(await encodePng(imageData))
+  } catch {
+    return null
+  }
+}
+
 function base64ToUint8Array(base64: string): Uint8Array {
   const binary = atob(base64)
   const bytes = new Uint8Array(binary.length)
@@ -66,18 +83,13 @@ export async function convertWebpDataUriToPng(
   const match = /^data:image\/webp;base64,(.+)$/.exec(dataUri)
   if (!match) return null
   try {
-    await Promise.all([
-      ensureWebpDecoderInitialized(deps.webpDecoderWasmModule),
-      ensurePngEncoderInitialized(deps.pngEncoderWasmModule),
-    ])
     const webpBytes = base64ToUint8Array(match[1]!)
     // base64ToUint8Array always allocates a fresh, dedicated ArrayBuffer (never a
     // SharedArrayBuffer or a view into a larger buffer), so this is a safe narrowing —
     // Uint8Array.prototype.buffer is just typed broadly as ArrayBufferLike in lib.dom.
-    const imageData = await decodeWebp(webpBytes.buffer as ArrayBuffer)
-    if (!imageData) return null
-    const pngBuffer = await encodePng(imageData)
-    return `data:image/png;base64,${arrayBufferToBase64(pngBuffer)}`
+    const pngBytes = await convertWebpBytesToPng(webpBytes.buffer as ArrayBuffer, deps)
+    if (!pngBytes) return null
+    return `data:image/png;base64,${arrayBufferToBase64(pngBytes.buffer as ArrayBuffer)}`
   } catch {
     return null
   }

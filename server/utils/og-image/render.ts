@@ -1,11 +1,12 @@
 import satori, { init as initSatori } from 'satori/standalone'
-import { Resvg, initWasm, type InitInput } from '@resvg/resvg-wasm'
+import { Resvg, type InitInput } from '@resvg/resvg-wasm'
 import type { ReactNode } from 'react'
 import { OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT, type OgImageRenderPayload } from '~/utils/social-metadata'
 import { getOgImageFonts } from './fonts.ts'
 import { resolveOgImageRenderer } from './renderers/index.ts'
 import { fetchImageAsDataUri } from './fetch-image.ts'
 import { convertWebpDataUriToPng } from './webp-to-png.ts'
+import { ensureResvgInitialized } from '~/server/utils/resvg-runtime'
 import platformLogoBase64 from '~/server/assets/platform-logo'
 
 // A same-zone self-fetch (this Worker requesting its own krabiclaw.com/krabi-claw-logo.png)
@@ -31,13 +32,7 @@ function resolveLogoDataUri(logoUrl: string | null | undefined): Promise<string 
 
 // initWasm() may only run once per isolate. Cached at module scope so repeated renders in
 // the same Worker isolate (or the same test process) reuse the initialized module.
-let resvgInit: Promise<void> | null = null
 let satoriInit: Promise<void> | null = null
-
-async function loadBundledResvgWasm(): Promise<WebAssembly.Module> {
-  const { default: wasmModule } = await import('@resvg/resvg-wasm/index_bg.wasm')
-  return wasmModule
-}
 
 async function loadBundledYogaWasm(): Promise<WebAssembly.Module> {
   const { default: wasmModule } = await import('satori/yoga.wasm')
@@ -73,18 +68,6 @@ async function resolveWebpSafeDataUri(
     deps.pngEncoderWasmModule ? Promise.resolve(deps.pngEncoderWasmModule) : loadBundledPngEncoderWasm(),
   ])
   return convertWebpDataUriToPng(dataUri, { webpDecoderWasmModule, pngEncoderWasmModule })
-}
-
-async function ensureResvgInitialized(wasmModule?: InitInput): Promise<void> {
-  if (!resvgInit) {
-    resvgInit = Promise.resolve(wasmModule ?? loadBundledResvgWasm())
-      .then(module => initWasm(module))
-      .catch((error) => {
-        resvgInit = null
-        throw error
-      })
-  }
-  await resvgInit
 }
 
 async function ensureSatoriInitialized(wasmModule?: InitInput): Promise<void> {

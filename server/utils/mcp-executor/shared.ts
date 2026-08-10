@@ -416,6 +416,8 @@ function filenameExtension(contentType: string, fallback = "bin"): string {
       return "gif";
     case "image/avif":
       return "avif";
+    case "image/svg+xml":
+      return "svg";
     case "video/mp4":
       return "mp4";
     case "video/webm":
@@ -640,7 +642,7 @@ export interface ResolvedMediaFile {
   kind: "image" | "video" | "file";
 }
 
-const RESOLVED_MEDIA_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"]);
+const RESOLVED_MEDIA_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif", "image/svg+xml"]);
 
 async function readMediaBufferWithLimit(
   response: Response,
@@ -1367,6 +1369,8 @@ export function extensionForContentType(contentType: string) {
       return "webp";
     case "image/gif":
       return "gif";
+    case "image/svg+xml":
+      return "svg";
     case "image/png":
     default:
       return "png";

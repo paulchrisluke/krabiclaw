@@ -5,7 +5,5 @@ export default defineEventHandler((event) => {
     platformFileName: 'favicon-96x96.png',
     width: 96,
     height: 96,
-    format: 'png',
-    requireFormatConversion: true,
   })
 })

@@ -42,9 +42,7 @@ useHead(() => {
     link: buildTenantHeadLinks({
       isPlatform,
       tenantLogoUrl: tenantLogoUrl.value,
-      tenantLogoMimeType: site?.logo_mime_type || null,
       tenantFaviconUrl: site?.favicon_url || null,
-      tenantFaviconMimeType: null, // favicon_url is a plain URL string; type inferred from extension
       tenantBrandName: tenantBrandName.value,
       isDraftPreview: route.path.startsWith('/preview/draft/'),
       isSitePreview: route.path.startsWith('/preview/site/'),

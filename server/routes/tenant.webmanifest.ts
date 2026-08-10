@@ -27,22 +27,9 @@ export default defineEventHandler((event) => {
     short_name: brandName.slice(0, 32),
     icons: [
       {
-        src: `/tenant-icon-192.png?v=${v}`,
-        sizes: '192x192',
-        type: 'image/png',
-        purpose: 'any maskable',
-      },
-      {
         src: `/tenant-icon-512.png?v=${v}`,
         sizes: '512x512',
-        type: 'image/png',
         purpose: 'any maskable',
-      },
-      {
-        src: `/tenant-icon.svg?v=${v}`,
-        sizes: 'any',
-        type: 'image/svg+xml',
-        purpose: 'any',
       },
     ],
     theme_color: '#1F2547',
