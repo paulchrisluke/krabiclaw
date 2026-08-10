@@ -58,7 +58,7 @@ jobs:
           export DEPLOYMENT_EXPECTED_SOURCE_SHA="$GITHUB_SHA"
           export DEPLOYMENT_EXPECTED_WORKER_VERSION="$PRODUCTION_VERSION_ID"
           DEPLOYMENT_CACHE_ORIGIN=https://krabiclaw.com node --experimental-strip-types scripts/purge-deployment-cache.ts
-          node scripts/wait-for-deployed-assets.mjs
+          PLAYWRIGHT_PREVIEW_URL=https://krabiclaw.com node scripts/wait-for-deployed-assets.mjs
           node scripts/verify-deployed-candidate.mjs \
             --base-url https://krabiclaw.com \
             --expected-sha "$GITHUB_SHA" \
