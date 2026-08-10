@@ -10,7 +10,8 @@ const routes = [
   { path: '/', title: /Pottery House Krabi/, text: potteryHouseFixture.site.brandName },
   ...potteryHouseFixture.publicRoutes,
   { path: '/about', title: /Pottery House/, text: 'Pottery House' },
-  // Location phone numbers on this page can be refreshed by a live Google Business
+  { path: '/qa', title: /Q&A \| Pottery House Krabi/, text: 'Do I need any experience to join a class?' },
+  // Location phone numbers on this page can be refreshed by a live Google Places
   // sync and drift from the static seed fixture, so assert on stable page copy
   // instead of a phone number that isn't guaranteed to match what was seeded.
   { path: '/contact', title: /Contact/, text: 'Get in touch' },

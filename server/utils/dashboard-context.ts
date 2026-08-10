@@ -84,7 +84,6 @@ export interface DashboardLocationContextRow {
   organization_id: string
   site_id: string
   slug: string
-  google_location_id: string | null
   title: string
   address: string | null
   city: string | null

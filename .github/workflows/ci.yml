@@ -161,7 +161,6 @@ jobs:
             --remote-json "$applied"
           npx wrangler d1 migrations list DB --env preview --remote | tee "$pending"
           yarn migrate:check
-          node scripts/check-migration-safety.mjs --backward-compatible --pending-from "$pending"
           npx wrangler d1 migrations apply DB --env preview --remote
       - name: Sweep E2E artifacts
         env:

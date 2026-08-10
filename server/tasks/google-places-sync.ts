@@ -67,7 +67,7 @@ export default defineScheduledTask({
 
     const apiKey = env.GOOGLE_PLACES_API_KEY as string | undefined
     if (!apiKey) {
-      console.warn('[google-business-sync] GOOGLE_PLACES_API_KEY not configured — skipping')
+      console.warn('[google-places-sync] GOOGLE_PLACES_API_KEY not configured — skipping')
       return { result: emptyResult }
     }
 
@@ -87,7 +87,7 @@ export default defineScheduledTask({
         AND bl.status = 'active'
       ORDER BY bl.organization_id, bl.site_id
     `)
-    const locations = billingRows.filter((row) => hasScheduledPaidEntitlement(row, 'google_business'))
+    const locations = billingRows.filter((row) => hasScheduledPaidEntitlement(row, 'google_places'))
 
     if (locations.length === 0) {
       return { result: emptyResult }
@@ -109,7 +109,7 @@ export default defineScheduledTask({
         organizationId: loc.organization_id,
         siteId: loc.site_id,
         resource: 'scheduled_task',
-        source: 'google_business_sync',
+        source: 'google_places_sync',
         provider: 'krabiclaw',
         channel: 'google_places',
         quantity: 1,
@@ -130,7 +130,7 @@ export default defineScheduledTask({
         locResult.reviews_upserted = reviewsUpserted
       } catch (err) {
         locResult.error = err instanceof Error ? err.message : String(err)
-        console.error(`[google-business-sync] Places sync failed for location ${loc.id} (${loc.title}):`, locResult.error)
+        console.error(`[google-places-sync] Places sync failed for location ${loc.id} (${loc.title}):`, locResult.error)
       }
 
       if (!locResult.error) {

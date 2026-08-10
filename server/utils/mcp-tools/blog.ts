@@ -17,7 +17,7 @@ const blogContentBlockSchema = {
 export const BLOG_TOOLS: McpToolDefinition[] = [
   siteTool({
       name: 'list_blog_posts',
-      description: 'List this site\'s blog posts (draft and published). This is the site\'s own long-form content blog — distinct from list_posts, which is the social-update feed (events/offers/announcements that fan out to Facebook/Instagram/GMB).',
+      description: 'List this site\'s blog posts (draft and published). This is the site\'s own long-form content blog — distinct from list_posts, which is the social-update feed (events/offers/announcements that can publish to Facebook/Instagram).',
       domain: 'blog',
       minimumRole: 'editor',
       confirmRequired: false,
@@ -48,7 +48,7 @@ export const BLOG_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'create_blog_post',
-      description: 'Create a long-form, evergreen, SEO-indexed article (site history, guides, "why choose us") as a draft by default using content_blocks as the only authoring shape. Always review the draft at edit_url in the tenant-themed editor. Set publish=true only when explicitly requested; scheduled_for schedules publication. category is free text for tenant blogs. For time-boxed, social-style announcements (tonight\'s event, a limited offer) that publish immediately and can fan out to Facebook/Instagram/GMB, use create_post instead.',
+      description: 'Create a long-form, evergreen, SEO-indexed article (site history, guides, "why choose us") as a draft by default using content_blocks as the only authoring shape. Always review the draft at edit_url in the tenant-themed editor. Set publish=true only when explicitly requested; scheduled_for schedules publication. category is free text for tenant blogs. For time-boxed, social-style announcements (tonight\'s event, a limited offer) that publish immediately and can publish to Facebook/Instagram, use create_post instead.',
       domain: 'blog',
       minimumRole: 'editor',
       confirmRequired: false,

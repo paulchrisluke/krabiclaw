@@ -24,24 +24,6 @@
     </template>
 
 
-    <!-- Ask a question band -->
-    <section class="border-b border-default border-t bg-elevated">
-      <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-8 px-4 py-10 sm:px-6 lg:px-8">
-        <div>
-          <p class="saya-eyebrow mb-2 text-muted">{{ t('saya.qa_page.dont_see') }}</p>
-          <div class="saya-display saya-italic text-3xl text-default">{{ t('saya.qa_page.ask_us') }}</div>
-        </div>
-        <a
-          :href="location?.gmb_qa_url || '#'"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="inline-flex items-center rounded-full bg-default px-7 py-3.5 text-xs font-medium uppercase tracking-widest text-inverted no-underline transition hover:opacity-80"
-        >
-          {{ t('saya.qa_page.ask_question') }}
-        </a>
-      </div>
-    </section>
-
     <!-- Q&A list -->
     <section class="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
       <div v-if="sorted.length === 0" class="flex flex-col items-center justify-center rounded-3xl border border-dashed border-default bg-muted/30 py-20 text-center">
@@ -50,16 +32,6 @@
         </div>
         <h3 class="mt-6 saya-display saya-italic text-3xl text-default">{{ t('saya.qa_page.no_questions_title') }}</h3>
         <p class="mt-2 max-w-sm text-sm text-muted">{{ t('saya.qa_page.no_questions_desc') }}</p>
-        <div class="mt-8">
-          <a
-            :href="location?.gmb_qa_url || '#'"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="inline-flex items-center rounded-full bg-primary px-6 py-2.5 text-xs font-semibold uppercase tracking-widest text-(--primary-foreground,#fff) shadow-sm transition hover:opacity-90"
-          >
-            {{ t('saya.qa_page.ask_question') }}
-          </a>
-        </div>
       </div>
 
       <div v-else class="flex flex-col gap-6">
@@ -74,7 +46,7 @@
             <div class="flex-1 min-w-0">
               <p class="text-base font-medium leading-snug text-default">{{ q.question }}</p>
               <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
-                <span>{{ t('saya.qa_page.asked_by', { author: q.question_author }) }}</span>
+                <span>{{ t('saya.qa_page.asked_by', { author: q.question_author || t('saya.qa.guest') }) }}</span>
                 <span>·</span>
                 <span>{{ formatQaDate(q.question_date) }}</span>
                 <template v-if="q.upvote_count > 0">

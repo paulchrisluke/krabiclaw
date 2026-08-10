@@ -215,7 +215,6 @@ function createSchema(db: Database.Database) {
     CREATE TABLE chowbot_conversations (id TEXT PRIMARY KEY, organization_id TEXT, site_id TEXT);
     CREATE TABLE invitation_access_scope (id TEXT PRIMARY KEY, organization_id TEXT, site_id TEXT, location_id TEXT);
     CREATE TABLE facebook_pages_connections (id TEXT PRIMARY KEY, organization_id TEXT, site_id TEXT, encrypted_user_token TEXT);
-    CREATE TABLE google_business_connections (id TEXT PRIMARY KEY, organization_id TEXT, site_id TEXT, encrypted_access_token TEXT, encrypted_refresh_token TEXT);
     CREATE TABLE google_analytics_connections (id TEXT PRIMARY KEY, organization_id TEXT, site_id TEXT, encrypted_access_token TEXT, encrypted_refresh_token TEXT);
     CREATE TABLE mcp_workspace_preferences (
       user_id TEXT PRIMARY KEY,
@@ -238,7 +237,7 @@ function createSchema(db: Database.Database) {
   ]
   const retain = [
     'ai_usage_log', 'usage_events', 'stripe_ga4_subscription_intents', 'canary_runs',
-    'mcp_tool_call_events', 'notification_events', 'notifications', 'google_business_events',
+    'mcp_tool_call_events', 'notification_events', 'notifications',
     'client_import_artifacts', 'chowbot_messages',
   ]
   for (const table of [...reparent, ...retain]) {
@@ -343,12 +342,9 @@ function seedFixture(db: Database.Database) {
       VALUES ('user-source', '${SOURCE_ORG}', '${SITE_ID}', 'location-1', 'before');
     INSERT INTO dashboard_preferences(id, selected_location_id) VALUES ('prefs-source', 'location-1');
     INSERT INTO facebook_pages_connections(id, organization_id, site_id, encrypted_user_token) VALUES ('fb-1', '${SOURCE_ORG}', '${SITE_ID}', 'fb-secret');
-    INSERT INTO google_business_connections(id, organization_id, site_id, encrypted_access_token, encrypted_refresh_token) VALUES ('gb-1', '${SOURCE_ORG}', '${SITE_ID}', 'gb-secret', 'gb-refresh');
     INSERT INTO google_analytics_connections(id, organization_id, site_id, encrypted_access_token, encrypted_refresh_token) VALUES ('ga-1', '${SOURCE_ORG}', '${SITE_ID}', 'ga-secret', 'ga-refresh');
-    INSERT INTO google_business_connections(id, organization_id, site_id, encrypted_access_token, encrypted_refresh_token) VALUES ('gb-foreign', '${RECIPIENT_ORG}', '${SITE_ID}', 'gb-foreign-secret', 'gb-foreign-refresh');
     INSERT INTO invitation_access_scope(id, organization_id, site_id, location_id) VALUES ('scope-1', '${SOURCE_ORG}', '${SITE_ID}', 'location-1');
     INSERT INTO notifications(id, organization_id, site_id) VALUES ('notification-1', '${SOURCE_ORG}', '${SITE_ID}');
-    INSERT INTO google_business_events(id, organization_id, site_id) VALUES ('google-event-1', '${SOURCE_ORG}', '${SITE_ID}');
     INSERT INTO chowbot_messages(id, organization_id, site_id) VALUES ('message-1', '${SOURCE_ORG}', '${SITE_ID}');
   `)
 }
@@ -429,10 +425,8 @@ test('site transfer batch moves canonical site data, retains ledgers, revokes pr
     assert.equal(db.prepare('SELECT COUNT(*) AS count FROM media_assets WHERE id LIKE ?').get(`__site_transfer_${TRANSFER_ID}__%`)?.count, 0)
 
     assert.equal(db.prepare('SELECT organization_id FROM notifications WHERE id = ?').get('notification-1')?.organization_id, SOURCE_ORG)
-    assert.equal(db.prepare('SELECT organization_id FROM google_business_events WHERE id = ?').get('google-event-1')?.organization_id, SOURCE_ORG)
     assert.equal(db.prepare('SELECT organization_id FROM chowbot_messages WHERE id = ?').get('message-1')?.organization_id, SOURCE_ORG)
     assert.equal(db.prepare('SELECT COUNT(*) AS count FROM facebook_pages_connections WHERE site_id = ?').get(SITE_ID)?.count, 0)
-    assert.equal(db.prepare('SELECT COUNT(*) AS count FROM google_business_connections WHERE site_id = ?').get(SITE_ID)?.count, 0)
     assert.equal(db.prepare('SELECT COUNT(*) AS count FROM google_analytics_connections WHERE site_id = ?').get(SITE_ID)?.count, 0)
     assert.equal(db.prepare('SELECT COUNT(*) AS count FROM invitation_access_scope WHERE site_id = ?').get(SITE_ID)?.count, 0)
     assert.deepEqual(db.prepare('SELECT site_id, location_id FROM mcp_workspace_preferences WHERE user_id = ?').get('user-source'), { site_id: null, location_id: null })

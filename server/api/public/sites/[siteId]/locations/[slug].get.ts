@@ -1,7 +1,7 @@
 // Get public business location by slug
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { calculateMapEmbedUrl } from '~/server/utils/google-business'
+import { calculateMapEmbedUrl } from '~/server/utils/google-places'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -79,13 +79,10 @@ export default defineEventHandler(async (event) => {
       [location.id],
     )
 
-    // Derive GMB action URLs from place ID when available
+    // Derive the Google review-writing URL from the Places ID when available.
     const placeId = location.google_place_id
-    const gmb_review_url = placeId
+    const google_review_url = placeId
       ? `https://search.google.com/local/writereview?placeid=${placeId}`
-      : null
-    const gmb_qa_url = placeId
-      ? `https://search.google.com/local/questions?placeid=${placeId}`
       : null
 
 
@@ -125,8 +122,7 @@ export default defineEventHandler(async (event) => {
       city: location.city,
       currency: site.default_currency || DEFAULT_CURRENCY,
       google_place_id: location.google_place_id,
-      gmb_review_url,
-      gmb_qa_url
+      google_review_url
     }
     
     return jsonResponse({

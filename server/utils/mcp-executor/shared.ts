@@ -1379,7 +1379,7 @@ export function extensionForContentType(contentType: string) {
 
 export function normalizeChannelsInput(
   args: Record<string, unknown>,
-): Array<"site" | "gmb" | "instagram" | "facebook"> {
+): Array<"site" | "instagram" | "facebook"> {
   const rawChannels = args.channels;
   const rawTargets = args.targets;
 
@@ -1404,7 +1404,7 @@ export function normalizeChannelsInput(
 
 export function normalizeChannelArray(
   value: unknown,
-): Array<"site" | "gmb" | "instagram" | "facebook"> {
+): Array<"site" | "instagram" | "facebook"> {
   if (!Array.isArray(value) || !value.length) {
     throw mcpProtocolError(
       MCP_ERROR.invalidParams,
@@ -1413,9 +1413,8 @@ export function normalizeChannelArray(
   }
 
   const normalized = value.filter(
-    (item): item is "site" | "gmb" | "instagram" | "facebook" =>
+    (item): item is "site" | "instagram" | "facebook" =>
       item === "site" ||
-      item === "gmb" ||
       item === "instagram" ||
       item === "facebook",
   );
@@ -1423,7 +1422,7 @@ export function normalizeChannelArray(
   if (normalized.length !== value.length) {
     throw mcpProtocolError(
       MCP_ERROR.invalidParams,
-      "channels may only contain site, facebook, instagram, or gmb.",
+      "channels may only contain site, facebook, or instagram.",
     );
   }
 

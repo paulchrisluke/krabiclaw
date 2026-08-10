@@ -87,7 +87,6 @@ const E2E_FIXTURE_SITE_RETAINED_TABLES = [
   'mcp_tool_call_events',
   'notification_events',
   'notifications',
-  'google_business_events',
   'client_import_artifacts',
   'chowbot_messages',
   'chowbot_conversations',

@@ -226,7 +226,7 @@ export interface CuratedLocationQaDefinition {
   answerAuthor: string
   isOwnerAnswer: boolean
   upvoteCount: number
-  source: 'manual' | 'google'
+  source: 'manual' | 'import' | 'template'
   status: 'published' | 'pending' | 'rejected'
   sortOrder: number
 }

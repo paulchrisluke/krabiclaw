@@ -134,7 +134,7 @@ const comparisonRows: ComparisonRow[] = [
   { feature: 'Shared organization usage credits', free: '500 / UTC week', growth: '2,000 / UTC week' },
   { feature: 'Custom domain', free: false, growth: true },
   { feature: 'Facebook auto-sync', free: false, growth: true },
-  { feature: 'Google Business sync', free: false, growth: true },
+  { feature: 'Google Places imports', free: false, growth: true },
   { feature: 'Post-booking review requests', free: false, growth: true },
   { feature: 'Messaging notifications', free: false, growth: true },
   { feature: 'Support', free: 'Community', growth: 'Priority' },

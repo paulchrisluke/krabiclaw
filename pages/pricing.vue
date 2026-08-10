@@ -116,7 +116,7 @@ if (!isBlawby.value) {
 // Structured-data descriptions for the public Starter and Growth catalog.
 const OFFER_DESCRIPTIONS: Record<string, string> = {
   free: 'Free business website with offerings and basic SEO',
-  growth: 'Custom domain, messaging notifications, and Google Business sync',
+  growth: 'Custom domain, messaging notifications, and Google Places imports',
 }
 
 // Reactive getter so this stays correct if plans finish loading after this
@@ -124,7 +124,7 @@ const OFFER_DESCRIPTIONS: Record<string, string> = {
 usePlatformPageSeo(() => ({
   path: '/pricing',
   title: 'Pricing',
-  description: 'Business websites from $49/month, built and edited through the free KrabiClaw ChatGPT app. Custom domain, messaging notifications, and Google Business sync on Growth — or start free. No contracts.',
+  description: 'Business websites from $49/month, built and edited through the free KrabiClaw ChatGPT app. Custom domain, messaging notifications, and Google Places imports on Growth — or start free. No contracts.',
   breadcrumbs: [
     { name: 'Home', url: '/' },
     { name: 'Pricing', url: '/pricing' },

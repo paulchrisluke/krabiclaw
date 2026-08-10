@@ -26,7 +26,7 @@ test('scheduled paid entitlement requires invoice-backed paid_through', () => {
   assert.throws(
     () => hasScheduledPaidEntitlement(
       { ...projectionRow, paid_through: null },
-      'google_business',
+      'google_places',
       now,
     ),
     /paid active subscriptions require paid_through/,
@@ -35,9 +35,9 @@ test('scheduled paid entitlement requires invoice-backed paid_through', () => {
     ...projectionRow,
     payment_status: 'unknown',
     paid_through: null,
-  }, 'google_business', now), false)
+  }, 'google_places', now), false)
   assert.equal(
-    hasScheduledPaidEntitlement(projectionRow, 'google_business', now),
+    hasScheduledPaidEntitlement(projectionRow, 'google_places', now),
     true,
   )
 })
@@ -59,7 +59,7 @@ test('scheduled paid entitlement fails closed for expired or malformed billing p
     ),
     /unknown plan/,
   )
-  assert.equal(hasScheduledPaidEntitlement(null, 'google_business', now), false)
+  assert.equal(hasScheduledPaidEntitlement(null, 'google_places', now), false)
 })
 
 test('paged scheduled access skips expired rows without starving later paid organizations', async () => {

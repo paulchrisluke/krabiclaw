@@ -248,7 +248,7 @@ const regularStarterPrompts = computed(() => [
 ])
 
 const setupStarterPrompts = [
-  'Start from Google Business',
+  'Start from Google Maps',
   'Start from Facebook or Instagram',
   'Build manually with ChowBot',
 ]
@@ -328,7 +328,7 @@ function normalizeSubdomain(value: string) {
 function setupPromptForSource() {
   const businessWord = setupVertical.value === 'experience' ? 'experience' : 'restaurant'
   if (setupSource.value === 'google') {
-    return `Help me start from my Google Business profile. I want to set up locations, hours, photos, and ${businessWord} details.`
+    return `Help me start from my Google Maps listing. I want to set up locations, hours, and ${businessWord} details.`
   }
   if (setupSource.value === 'facebook') {
     return `Help me start from my Facebook or Instagram presence. I want to turn existing social content into my ${businessWord} site.`
@@ -361,7 +361,7 @@ function handleSetupVerticalReply(text: string) {
     {
       role: 'assistant',
       content: setupSource.value === 'google'
-        ? `Great. First, what is the ${nameWord} name? After I create the workspace, I can help connect Google Business from here.`
+        ? `Great. First, what is the ${nameWord} name? After I create the workspace, I can help import Google Places details from here.`
         : setupSource.value === 'facebook'
           ? `Perfect. What is the ${nameWord} name? After I create the workspace, I can help connect Meta and turn existing content into the site.`
           : `Easy. What is the ${nameWord} name? I will create the workspace first, then we can build it together step by step.`,

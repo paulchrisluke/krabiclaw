@@ -194,8 +194,8 @@ const faqItems = [
     a: 'None. KrabiClaw is flat-rate. Whether you take 10 or 10,000 bookings or experience reservations, you pay the same monthly price — no per-cover or per-ticket commissions.'
   },
   {
-    q: 'How does Google Business Profile sync work?',
-    a: 'Connect your Google Business account and KrabiClaw pulls in your verified hours, photos, reviews, and details automatically. Growth keeps your profile synced on an ongoing basis.'
+    q: 'How do Google Places imports work?',
+    a: 'Choose a Google Maps listing and KrabiClaw imports the public hours, address, ratings, reviews, and location details available through Google Places. You can re-sync when you want to refresh the data.'
   },
   {
     q: 'Is there a contract or setup fee?',
@@ -206,7 +206,7 @@ const faqItems = [
 usePlatformPageSeo({
   path: '/features',
   title: 'Platform Features',
-  description: 'KrabiClaw features: edit your local business site through ChatGPT, take bookings, sync with Google Business, manage localized content, and track real-time analytics.',
+  description: 'KrabiClaw features: edit your local business site through ChatGPT, take bookings, import Google Places data, manage localized content, and track real-time analytics.',
   breadcrumbs: [
     { name: 'Home', url: '/' },
     { name: 'Features', url: '/features' },

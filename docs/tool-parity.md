@@ -37,7 +37,7 @@ These groups are hidden by default on both conversational surfaces where present
 
 | Group | Env flag | Client MCP tools | ChowBot tools |
 | --- | --- | --- | --- |
-| Social/OAuth publishing | `CONVERSATIONAL_TOOLS_SOCIAL_PUBLISHING_ENABLED=true` | `get_facebook_connection`, `publish_to_facebook`, `sync_facebook_page`, `get_google_business_connection`, `get_google_business_auth_url`, `list_google_business_accounts`, `sync_google_business_locations`; external `publish_post` channels are also blocked while disabled | None today; `publish_post` already publishes site-only |
+| Social publishing | `CONVERSATIONAL_TOOLS_SOCIAL_PUBLISHING_ENABLED=true` | `get_facebook_connection`, `publish_to_facebook`, `sync_facebook_page`; external `publish_post` channels are also blocked while disabled | None today; `publish_post` already publishes site-only |
 | Domains | `CONVERSATIONAL_TOOLS_DOMAINS_ENABLED=true` | `get_site_domains`, `create_domain`, `set_canonical_domain`, `delete_domain`, `sync_domain` | None |
 | Managed service | `CONVERSATIONAL_TOOLS_MANAGED_SERVICE_ENABLED=true` | `list_work_requests`, `create_work_request` | Same names |
 

@@ -115,7 +115,6 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
       const postId = requiredString(args, "post_id");
       const wantsFacebook = channels.includes("facebook");
       const wantsInstagram = channels.includes("instagram");
-      const wantsGmb = channels.includes("gmb");
       const socialEnabled = isConversationalToolGroupEnabled(site.env, "social_publishing");
 
       let facebookConnection: Awaited<ReturnType<typeof getFacebookPagesConnection>> | null = null;
@@ -158,14 +157,6 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
           })));
         }
       }
-      if (wantsGmb) {
-        await execute(
-          site.db,
-          `UPDATE post_channel_jobs SET status = 'skipped', error = ? WHERE post_id = ? AND channel = 'gmb'`,
-          ["not_connected", postId],
-        );
-      }
-
       if ((wantsFacebook || wantsInstagram) && !socialSkipReason) {
         const pageToken = facebookConnection!.encrypted_page_token!;
         const pageId = facebookConnection!.facebook_page_id!;

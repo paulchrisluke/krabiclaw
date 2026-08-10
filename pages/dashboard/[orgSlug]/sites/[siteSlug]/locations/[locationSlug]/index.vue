@@ -50,13 +50,13 @@
         </UCard>
 
         <UAlert
-          v-if="needsGoogleConnection"
+          v-if="needsGooglePlaces"
           color="warning"
           variant="soft"
           icon="i-lucide-triangle-alert"
-          title="Connect Google Business Profile"
-          description="Syncing this location keeps hours, photos, and profile details current from the source."
-          :actions="[{ label: 'Manage integrations', to: `${locationBase}/settings`, color: 'warning', variant: 'soft' }]"
+          title="Add a Google Place ID"
+          description="Add a Google Place ID in settings to import hours, ratings, reviews, and location details from Google Places."
+          :actions="[{ label: 'Open location settings', to: `${locationBase}/settings`, color: 'warning', variant: 'soft' }]"
         />
 
         <div class="grid gap-6 xl:grid-cols-2">
@@ -74,15 +74,11 @@
             <template #header><h2 class="font-semibold text-highlighted">Connected Services</h2></template>
             <div class="space-y-4 text-sm">
               <div class="flex items-center justify-between gap-3">
-                <span class="text-highlighted">Google Business Profile</span>
-                <UBadge :color="googleConnection ? 'success' : 'neutral'" variant="soft">{{ googleConnection ? 'Connected' : 'Not connected' }}</UBadge>
-              </div>
-              <div class="flex items-center justify-between gap-3">
                 <span class="text-highlighted">Google Places</span>
                 <UBadge :color="location.google_place_id ? 'success' : 'neutral'" variant="soft">{{ location.google_place_id ? 'Configured' : 'Not configured' }}</UBadge>
               </div>
-              <p v-if="googleConnection" class="text-muted">Account: {{ googleConnection.provider_account_email }}</p>
-              <UButton color="neutral" variant="outline" :to="`${locationBase}/settings`">Manage integrations</UButton>
+              <p class="text-muted">Read-only import for hours, ratings, reviews, and location details.</p>
+              <UButton color="neutral" variant="outline" :to="`${locationBase}/settings`">Manage Google Places</UButton>
             </div>
           </UCard>
         </div>
@@ -134,7 +130,6 @@ interface LocationOverview {
   opening_hours?: Parameters<typeof getTodayGoogleHours>[0]
 }
 
-interface GoogleConnection { provider_account_email: string }
 interface InboxSummary { openThreads: number; unreadThreads: number }
 
 const route = useRoute()
@@ -146,7 +141,6 @@ const locationBase = computed(() => `/dashboard/${String(route.params.orgSlug)}/
 const location = ref<LocationOverview | null>(null)
 const menus = ref<ApiRecord[]>([])
 const inboxSummary = ref<InboxSummary>({ openThreads: 0, unreadThreads: 0 })
-const googleConnection = ref<GoogleConnection | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
 const addressLabel = computed(() => location.value?.address?.addressLines?.join(', ') || location.value?.city || 'Not set')
@@ -173,7 +167,7 @@ const hasMenu = computed(() => featureSet.value.has('menu'))
 const hasReviews = computed(() => featureSet.value.has('reviews'))
 const hasReservations = computed(() => featureSet.value.has('reservations'))
 const hasExperiences = computed(() => featureSet.value.has('experiences'))
-const needsGoogleConnection = computed(() => !googleConnection.value || !location.value?.google_place_id)
+const needsGooglePlaces = computed(() => !location.value?.google_place_id)
 const primaryManageItem = computed(() => workspaceLinks.value.find(item => ['menu', 'experiences', 'services'].includes(item.feature)) ?? workspaceLinks.value[0] ?? null)
 const primaryManageLabel = computed(() => primaryManageItem.value?.label ?? 'Manage')
 const primaryManageValue = computed(() => {
@@ -220,13 +214,6 @@ const isMenusResponse = (value: unknown): value is { success: boolean; menus: Ap
   && Array.isArray(value.menus)
   && value.menus.every(menu => isRecord(menu) && typeof menu.id === 'string')
 
-const isConnectionResponse = (
-  value: unknown,
-): value is { connection: GoogleConnection | null } =>
-  isRecord(value)
-  && (value.connection === null
-    || (isRecord(value.connection) && typeof value.connection.provider_account_email === 'string'))
-
 const isThreadsSummaryResponse = (value: unknown): value is { summary: InboxSummary } =>
   isRecord(value)
   && isRecord(value.summary)
@@ -236,7 +223,6 @@ const isThreadsSummaryResponse = (value: unknown): value is { summary: InboxSumm
 interface LocationOverviewResource {
   location: { success: boolean; location: LocationOverview }
   menus: { success: boolean; menus: ApiRecord[] }
-  connection: { connection: GoogleConnection | null }
   threads: { summary: InboxSummary }
 }
 
@@ -256,7 +242,7 @@ const { data: overview, pending: overviewPending, error: overviewError } =
         includeMenus: hasMenu.value,
       }) as LocationOverviewResource
     }
-    const [locationResponse, menuResponse, connectionResponse, threadsResponse] = await Promise.all([
+    const [locationResponse, menuResponse, threadsResponse] = await Promise.all([
       dashboardApi<{ success: boolean; location: LocationOverview }>(
         `/api/dashboard/locations/${locationId.value}`,
         { validate: isLocationResponse },
@@ -267,10 +253,6 @@ const { data: overview, pending: overviewPending, error: overviewError } =
             { validate: isMenusResponse },
           )
         : Promise.resolve({ success: true, menus: [] }),
-      dashboardApi<{ connection: GoogleConnection | null }>(
-        `/api/sites/${siteId}/locations/${locationId.value}/integrations/google-business`,
-        { validate: isConnectionResponse },
-      ),
       dashboardApi<{ summary: InboxSummary }>(`/api/dashboard/sites/${siteId}/guest-threads`, {
         query: { location_id: locationId.value },
         validate: isThreadsSummaryResponse,
@@ -279,7 +261,6 @@ const { data: overview, pending: overviewPending, error: overviewError } =
     return {
       location: locationResponse,
       menus: menuResponse,
-      connection: connectionResponse,
       threads: threadsResponse,
     }
   }, { lazy: import.meta.client })
@@ -293,7 +274,6 @@ watch([overview, overviewPending, overviewError], ([resource, pending, cause]) =
   if (!resource) return
   location.value = resource.location.location
   menus.value = resource.menus.menus
-  googleConnection.value = resource.connection.connection
   inboxSummary.value = resource.threads.summary
   error.value = null
 }, { immediate: true })

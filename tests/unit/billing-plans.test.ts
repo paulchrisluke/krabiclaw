@@ -113,7 +113,7 @@ const CACHED_STARTER_PLAN = {
   limits: {
     aiCredits: 500,
     customDomain: false,
-    googleBusiness: false,
+    googlePlaces: false,
     advancedSeo: false,
     whiteLabel: false,
     apiAccess: false,
@@ -133,7 +133,7 @@ const CACHED_GROWTH_PLAN = {
   limits: {
     aiCredits: 2000,
     customDomain: true,
-    googleBusiness: true,
+    googlePlaces: true,
     advancedSeo: false,
     whiteLabel: false,
     apiAccess: false,
@@ -312,7 +312,7 @@ test('Stripe metadata cannot override application-owned Growth capabilities', as
       plan_id: 'growth',
       ai_credits: '999999',
       custom_domains: 'false',
-      google_business: 'false',
+      google_places: 'false',
       advanced_seo: 'true',
       white_label: 'true',
       api_access: 'true',
@@ -326,7 +326,7 @@ test('Stripe metadata cannot override application-owned Growth capabilities', as
   assert.deepEqual(growth?.limits, {
     aiCredits: 2000,
     customDomain: true,
-    googleBusiness: true,
+    googlePlaces: true,
     advancedSeo: false,
     whiteLabel: false,
     apiAccess: false,

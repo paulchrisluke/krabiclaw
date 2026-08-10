@@ -63,7 +63,6 @@ test('E2E reset sweeps aged e2e-prefixed sites inside protected fixture orgs wit
     'mcp_tool_call_events',
     'notification_events',
     'notifications',
-    'google_business_events',
     'client_import_artifacts',
     'chowbot_messages',
     'chowbot_conversations',

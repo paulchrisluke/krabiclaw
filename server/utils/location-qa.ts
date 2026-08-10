@@ -32,7 +32,6 @@ export interface LocationQaRow {
   site_id: string
   location_id: string | null
   page_path: string | null
-  google_question_id: string | null
   question: string
   question_author: string | null
   question_date: string | null
@@ -72,7 +71,7 @@ function stringOrNull(value: unknown, maxLength: number) {
 export async function listQa(db: DbClient, siteId: string, locationId: string | null, publishedOnly = false, pagePath?: string | null) {
   const scope = scopeSql(locationId, pagePath)
   return await queryAll<LocationQaRow>(db, `
-    SELECT id, organization_id, site_id, location_id, page_path, google_question_id, question,
+    SELECT id, organization_id, site_id, location_id, page_path, question,
            question_author, question_date, answer, answer_author, answer_date,
            is_owner_answer, upvote_count, source, status, sort_order, created_at, updated_at
     FROM location_qa

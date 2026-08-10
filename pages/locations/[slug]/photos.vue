@@ -35,7 +35,7 @@
         <!-- Empty -->
         <div v-if="sorted.length === 0" class="py-24 text-center">
           <div class="saya-display saya-italic text-3xl text-default">No photos yet.</div>
-          <p class="mt-2 text-sm text-muted">Photos synced from Google Business will appear here.</p>
+          <p class="mt-2 text-sm text-muted">Photos added by the team will appear here.</p>
         </div>
 
         <!-- Masonry -->

@@ -3,7 +3,7 @@
     <header class="mx-auto max-w-7xl px-4 pt-16 pb-12 sm:px-6 lg:px-8">
       <p class="saya-kicker mb-6">Q&A</p>
       <h1 class="saya-display-md text-default"><em class="saya-italic">Frequently</em> asked</h1>
-      <p class="mt-5 max-w-xl text-sm leading-relaxed text-muted">Questions asked by guests on Google. Owner-answered questions are pinned to the top.</p>
+      <p class="mt-5 max-w-xl text-sm leading-relaxed text-muted">Questions from guests and answers from the team. Owner-answered questions are pinned to the top.</p>
 
       <!-- Multi-location pills -->
       <div v-if="locations.length > 1" class="mt-8 flex flex-wrap gap-3">
@@ -18,7 +18,7 @@
         </NuxtLink>
       </div>
     </header>
-    <LazySayaQA :qa="googleQA" :show-title="false" />
+    <LazySayaQA :qa="qaList" :show-title="false" />
   </div>
 </template>
 
@@ -29,7 +29,6 @@ const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
 const { googleBusiness, qaList, locations, config } = await usePublicPageData()
-const googleQA = computed(() => qaList.value || [])
 const siteName = computed(() => site?.brand_name || googleBusiness.value?.business?.title || 'Our Site')
 
 useTenantSocialMetadata(() => ({

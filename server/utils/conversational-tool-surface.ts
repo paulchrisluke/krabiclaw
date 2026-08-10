@@ -38,10 +38,6 @@ const GROUP_TOOL_NAMES: Record<ConversationalToolSurfaceGroup, readonly string[]
     'get_facebook_connection',
     'publish_to_facebook',
     'sync_facebook_page',
-    'get_google_business_connection',
-    'get_google_business_auth_url',
-    'list_google_business_accounts',
-    'sync_google_business_locations',
   ],
   domains: [
     'get_site_domains',

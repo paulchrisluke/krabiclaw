@@ -36,14 +36,14 @@ describe('conversational tool surface policy', () => {
 
   test('blocks stale calls to hidden tools', () => {
     assert.throws(
-      () => assertConversationalToolEnabled('sync_google_business_locations'),
+      () => assertConversationalToolEnabled('publish_to_facebook'),
       /CONVERSATIONAL_TOOLS_SOCIAL_PUBLISHING_ENABLED/,
     )
   })
 
   test('blocked-tool error is MCP-shaped with methodNotFound, not a generic internal error', () => {
     try {
-      assertConversationalToolEnabled('sync_google_business_locations')
+      assertConversationalToolEnabled('publish_to_facebook')
       assert.fail('expected assertConversationalToolEnabled to throw')
     } catch (error) {
       // This is what mcp.post.ts's catch block does with a thrown auth/gating

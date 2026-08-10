@@ -13,7 +13,7 @@ import { normalizeHost } from '~/server/utils/tenant-hosts'
 // see the preview authorization guard in the shell and page services).
 // Raised from 60s to 300s once every bootstrap-relevant write path was confirmed to call
 // purgePublicResourceCache/purgePublicResourceCacheSafe (dashboard editor routes + MCP were already
-// covered; location CRUD, onboarding setup/commit, and Google Business/Places sync were a
+// covered; location CRUD, onboarding setup/commit, and Google Places sync were a
 // gap closed alongside this change — see those call sites for purgePublicResourceCacheSafe).
 export const PUBLIC_RESOURCE_CACHE_TTL_SECONDS = 300
 

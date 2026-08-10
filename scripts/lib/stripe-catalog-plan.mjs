@@ -55,7 +55,7 @@ export const PLAN_DEFINITIONS = Object.freeze([
       'Bookings & ticketed experiences',
       'Messaging booking & reservation notifications',
       'Auto-sync from Facebook & Instagram',
-      'Google Business profile sync',
+      'Google Places imports',
     ],
   },
 ])

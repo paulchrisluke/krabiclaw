@@ -5,7 +5,7 @@ import {
 
 /** Paid capabilities that are consumed directly by scheduled integrations. */
 export type ScheduledPaidEntitlement =
-  | 'google_business'
+  | 'google_places'
   | 'managed_service'
   | 'review_requests'
 

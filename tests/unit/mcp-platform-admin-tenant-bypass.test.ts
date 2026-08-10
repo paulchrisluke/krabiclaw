@@ -55,7 +55,7 @@ mock.module('../../server/db/index.ts', {
     execute: async () => ({ meta: { changes: 0 } }),
     executeBatch: async () => [],
     // mcp-workflows.ts pulls in a wide module graph (billing, WhatsApp,
-    // google-business, etc.) purely for other exports it doesn't use here;
+    // other integration modules purely for exports it doesn't use here;
     // those modules import these from '~/server/db' at load time, so they
     // need to exist even though this test never calls them.
     createDb: () => { throw new Error('createDb should not be called in this test') },
