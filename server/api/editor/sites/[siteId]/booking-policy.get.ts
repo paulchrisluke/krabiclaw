@@ -1,7 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { queryFirst } from '~/server/db'
-import { getDirectBookingPolicy, renderBookingPolicySummary, resolveBookingPolicy, type BookingPolicyScopeType, type BookingPolicyType } from '~/server/utils/booking-policies'
+import { getDirectBookingPolicy, renderBookingPolicySummary, resolveBookingPolicy, validateBookingPolicyScope, type BookingPolicyScopeType, type BookingPolicyType } from '~/server/utils/booking-policies'
 import { assertResourceAccess } from '~/server/utils/member-access'
 
 export default defineEventHandler(async (event) => {
@@ -32,13 +32,8 @@ export default defineEventHandler(async (event) => {
   const locationId = typeof query.location_id === 'string' ? query.location_id : null
   const experienceId = typeof query.experience_id === 'string' ? query.experience_id : null
   const locale = typeof query.locale === 'string' ? query.locale : 'en'
-  if (policyType === 'reservation' && query.scope_type !== 'location') {
-    return jsonResponse({ error: 'reservation policies require scope_type=location' }, { status: 400 })
-  }
-  if (policyType === 'reservation' && !locationId) {
-    return jsonResponse({ error: 'reservation policies require location_id' }, { status: 400 })
-  }
   const scopeType: BookingPolicyScopeType = query.scope_type === 'location' || query.scope_type === 'experience' ? query.scope_type : 'site'
+  validateBookingPolicyScope({ policyType, scopeType, locationId, experienceId })
 
   const principal = { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId }
   if (locationId) {

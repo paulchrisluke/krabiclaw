@@ -4,7 +4,7 @@
 
 **AI-Managed Local Presence**
 
-KrabiClaw should own the category of local-business websites that are managed through ChatGPT and kept current from the owner's existing operating surfaces: Google Business Profile, Google Maps, Facebook, Instagram, WhatsApp, menus, reviews, photos, bookings, and analytics.
+KrabiClaw should own the category of local-business websites that are managed through ChatGPT and kept current from the owner's existing operating surfaces: Google Maps, Google Places, Facebook, Instagram, WhatsApp, menus, reviews, photos, bookings, and analytics.
 
 The blog should stop behaving like a generic small-business marketing blog. It should become the public operating manual for how local businesses use ChatGPT to keep their web presence accurate, searchable, and strategically active without learning a new CMS.
 
@@ -18,7 +18,7 @@ KrabiClaw is a website and marketing operating layer for local businesses where:
 
 - ChatGPT is the primary creation and management surface.
 - The website is SSR-rendered, SEO-first, and structured around local-business intent.
-- Google Business Profile, Google Places, Facebook, Instagram, media, posts, menus, experiences, reviews, analytics, and locale-specific content are connected into the same system.
+- Google Places, Google Maps, Facebook, Instagram, media, posts, menus, experiences, reviews, analytics, and locale-specific content are connected into the same system.
 - Owners can keep their existing behavior: talk to ChatGPT, send WhatsApp updates, publish to social, or use the dashboard only when needed.
 - Analytics can guide the next marketing move instead of sitting in a reporting tab nobody uses.
 
@@ -100,11 +100,11 @@ Primary categories: Technology, Business
 
 ### 2. Google Maps Plus Website Sync
 
-Purpose: capture owners who think their Google profile is enough, then show why synced website content matters.
+Purpose: capture owners who think their Google Maps listing is enough, then show why owned website content matters.
 
 Example topics:
 
-- Google Business Profile is not a website
+- Google Maps is not a website
 - What should sync between Google Maps and your restaurant website
 - How to keep hours, menus, photos, reviews, and location pages consistent
 - Why multi-location businesses need real location pages
@@ -170,7 +170,7 @@ Primary categories: Business, SEO, Marketing
 | Priority | Title | Primary Intent | Category |
 |---:|---|---|---|
 | 1 | How To Manage A Restaurant Website Through ChatGPT | Category creation | Technology |
-| 2 | Google Business Profile Is Not A Website | Local SEO education | SEO |
+| 2 | Google Maps Is Not A Website | Local SEO education | SEO |
 | 3 | AI Website Builder Vs ChatGPT Website Manager | Differentiation | Business |
 | 4 | Restaurant Website SEO Checklist For 2026 | High-intent search | SEO |
 | 5 | How To Get Your Restaurant Recommended By ChatGPT | AI discovery | SEO |
@@ -190,7 +190,7 @@ Every strategic blog post should include:
 
 1. A direct answer in the first 80 words.
 2. A concrete local-business example.
-3. A clear explanation of what changes on the website, Google profile, social channels, or analytics workflow.
+3. A clear explanation of what changes on the website, Google Maps listing, social channels, or analytics workflow.
 4. A KrabiClaw-specific workflow or product angle.
 5. A practical checklist or decision framework.
 6. Internal links to relevant product, blog, docs, or pricing pages when available.
@@ -240,7 +240,7 @@ Before writing new posts, audit existing published posts.
 Delete or unpublish a post when:
 
 - It is generic small-business or AI advice that could appear on any SaaS blog.
-- It does not mention KrabiClaw, ChatGPT workflows, local SEO, Google Business Profile, social sync, analytics, restaurants, experiences, or managed service.
+- It does not mention KrabiClaw, ChatGPT workflows, local SEO, Google Maps, social sync, analytics, restaurants, experiences, or managed service.
 - It cannot be rewritten into one of the six pillars above.
 - It targets an audience KrabiClaw does not currently serve.
 - It creates inaccurate expectations about product behavior.

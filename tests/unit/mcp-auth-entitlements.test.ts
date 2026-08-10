@@ -37,7 +37,7 @@ test('MCP entitlement discovery ignores stale site and organization rows when ca
   projection = {
     entitlements: {
       custom_domains: false,
-      google_business: false,
+      google_places: false,
       managed_service: false,
     },
   }
@@ -46,7 +46,7 @@ test('MCP entitlement discovery ignores stale site and organization rows when ca
   const entitlements = await getActiveEntitlements(
     {} as D1Database,
     'org-free',
-    ['custom_domains', 'google_business', 'managed_service'],
+    ['custom_domains', 'google_places', 'managed_service'],
     'site-stale-paid',
   )
 
@@ -58,7 +58,7 @@ test('MCP entitlement discovery returns only requested canonical Growth booleans
   projection = {
     entitlements: {
       custom_domains: true,
-      google_business: true,
+      google_places: true,
       managed_service: true,
       seo_accelerator: false,
       review_requests: 'true',
@@ -69,10 +69,10 @@ test('MCP entitlement discovery returns only requested canonical Growth booleans
   const entitlements = await getActiveEntitlements(
     {} as D1Database,
     'org-growth',
-    ['custom_domains', 'google_business', 'managed_service', 'seo_accelerator', 'review_requests'],
+    ['custom_domains', 'google_places', 'managed_service', 'seo_accelerator', 'review_requests'],
   )
 
-  assert.deepEqual([...entitlements], ['custom_domains', 'google_business', 'managed_service'])
+  assert.deepEqual([...entitlements], ['custom_domains', 'google_places', 'managed_service'])
   assert.deepEqual(queriedTables, [])
 })
 

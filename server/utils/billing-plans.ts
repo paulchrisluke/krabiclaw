@@ -25,7 +25,7 @@ export interface PlanPrice {
 export interface PlanLimits {
   aiCredits: number | 'unlimited'
   customDomain: boolean
-  googleBusiness: boolean
+  googlePlaces: boolean
   advancedSeo: boolean
   whiteLabel: boolean
   apiAccess: boolean
@@ -101,7 +101,7 @@ function publicPlanLimits(planId: string): PlanLimits {
   return {
     aiCredits,
     customDomain: entitlements.custom_domains === true,
-    googleBusiness: entitlements.google_business === true,
+    googlePlaces: entitlements.google_places === true,
     advancedSeo: entitlements.advanced_seo === true,
     whiteLabel: entitlements.white_label === true,
     apiAccess: entitlements.api_access === true,
@@ -152,14 +152,14 @@ function isPlanLimits(value: unknown, planId: string): value is PlanLimits {
   return (
     validAiCredits
     && typeof value.customDomain === 'boolean'
-    && typeof value.googleBusiness === 'boolean'
+    && typeof value.googlePlaces === 'boolean'
     && typeof value.advancedSeo === 'boolean'
     && typeof value.whiteLabel === 'boolean'
     && typeof value.apiAccess === 'boolean'
     && typeof value.support === 'string'
     && value.aiCredits === expected.aiCredits
     && value.customDomain === expected.customDomain
-    && value.googleBusiness === expected.googleBusiness
+    && value.googlePlaces === expected.googlePlaces
     && value.advancedSeo === expected.advancedSeo
     && value.whiteLabel === expected.whiteLabel
     && value.apiAccess === expected.apiAccess

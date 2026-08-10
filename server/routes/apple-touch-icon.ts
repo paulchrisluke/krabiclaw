@@ -5,7 +5,5 @@ export default defineEventHandler((event) => {
     platformFileName: 'apple-touch-icon.png',
     width: 180,
     height: 180,
-    format: 'png',
-    requireFormatConversion: true,
   })
 })

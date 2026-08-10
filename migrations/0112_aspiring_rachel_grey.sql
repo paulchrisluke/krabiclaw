@@ -1,25 +1,26 @@
-CREATE TABLE `__booking_policies_0110_backup` AS
+CREATE TABLE `__booking_policies_0112_backup` AS
 SELECT * FROM `booking_policies`;--> statement-breakpoint
 
 UPDATE `booking_policies` AS `location_policy`
 SET
-	`booking_window_days` = COALESCE(`location_policy`.`booking_window_days`, (SELECT `site_policy`.`booking_window_days` FROM `__booking_policies_0110_backup` AS `site_policy` WHERE `site_policy`.`site_id` = `location_policy`.`site_id` AND `site_policy`.`policy_type` = 'reservation' AND `site_policy`.`scope_type` = 'site')),
-	`advance_notice_minutes` = COALESCE(`location_policy`.`advance_notice_minutes`, (SELECT `site_policy`.`advance_notice_minutes` FROM `__booking_policies_0110_backup` AS `site_policy` WHERE `site_policy`.`site_id` = `location_policy`.`site_id` AND `site_policy`.`policy_type` = 'reservation' AND `site_policy`.`scope_type` = 'site')),
-	`free_cancellation_until_minutes` = COALESCE(`location_policy`.`free_cancellation_until_minutes`, (SELECT `site_policy`.`free_cancellation_until_minutes` FROM `__booking_policies_0110_backup` AS `site_policy` WHERE `site_policy`.`site_id` = `location_policy`.`site_id` AND `site_policy`.`policy_type` = 'reservation' AND `site_policy`.`scope_type` = 'site')),
-	`late_arrival_grace_minutes` = COALESCE(`location_policy`.`late_arrival_grace_minutes`, (SELECT `site_policy`.`late_arrival_grace_minutes` FROM `__booking_policies_0110_backup` AS `site_policy` WHERE `site_policy`.`site_id` = `location_policy`.`site_id` AND `site_policy`.`policy_type` = 'reservation' AND `site_policy`.`scope_type` = 'site')),
-	`host_confirmation_sla_minutes` = COALESCE(`location_policy`.`host_confirmation_sla_minutes`, (SELECT `site_policy`.`host_confirmation_sla_minutes` FROM `__booking_policies_0110_backup` AS `site_policy` WHERE `site_policy`.`site_id` = `location_policy`.`site_id` AND `site_policy`.`policy_type` = 'reservation' AND `site_policy`.`scope_type` = 'site')),
-	`reschedule_allowed` = COALESCE(`location_policy`.`reschedule_allowed`, (SELECT `site_policy`.`reschedule_allowed` FROM `__booking_policies_0110_backup` AS `site_policy` WHERE `site_policy`.`site_id` = `location_policy`.`site_id` AND `site_policy`.`policy_type` = 'reservation' AND `site_policy`.`scope_type` = 'site')),
-	`reschedule_cutoff_minutes` = COALESCE(`location_policy`.`reschedule_cutoff_minutes`, (SELECT `site_policy`.`reschedule_cutoff_minutes` FROM `__booking_policies_0110_backup` AS `site_policy` WHERE `site_policy`.`site_id` = `location_policy`.`site_id` AND `site_policy`.`policy_type` = 'reservation' AND `site_policy`.`scope_type` = 'site')),
-	`deposit_required` = COALESCE(`location_policy`.`deposit_required`, (SELECT `site_policy`.`deposit_required` FROM `__booking_policies_0110_backup` AS `site_policy` WHERE `site_policy`.`site_id` = `location_policy`.`site_id` AND `site_policy`.`policy_type` = 'reservation' AND `site_policy`.`scope_type` = 'site')),
-	`deposit_trigger_party_size` = COALESCE(`location_policy`.`deposit_trigger_party_size`, (SELECT `site_policy`.`deposit_trigger_party_size` FROM `__booking_policies_0110_backup` AS `site_policy` WHERE `site_policy`.`site_id` = `location_policy`.`site_id` AND `site_policy`.`policy_type` = 'reservation' AND `site_policy`.`scope_type` = 'site')),
-	`special_requests_allowed` = COALESCE(`location_policy`.`special_requests_allowed`, (SELECT `site_policy`.`special_requests_allowed` FROM `__booking_policies_0110_backup` AS `site_policy` WHERE `site_policy`.`site_id` = `location_policy`.`site_id` AND `site_policy`.`policy_type` = 'reservation' AND `site_policy`.`scope_type` = 'site')),
-	`minimum_guest_age` = COALESCE(`location_policy`.`minimum_guest_age`, (SELECT `site_policy`.`minimum_guest_age` FROM `__booking_policies_0110_backup` AS `site_policy` WHERE `site_policy`.`site_id` = `location_policy`.`site_id` AND `site_policy`.`policy_type` = 'reservation' AND `site_policy`.`scope_type` = 'site')),
-	`accessibility_contact_required` = COALESCE(`location_policy`.`accessibility_contact_required`, (SELECT `site_policy`.`accessibility_contact_required` FROM `__booking_policies_0110_backup` AS `site_policy` WHERE `site_policy`.`site_id` = `location_policy`.`site_id` AND `site_policy`.`policy_type` = 'reservation' AND `site_policy`.`scope_type` = 'site')),
-	`additional_notes_html` = COALESCE(`location_policy`.`additional_notes_html`, (SELECT `site_policy`.`additional_notes_html` FROM `__booking_policies_0110_backup` AS `site_policy` WHERE `site_policy`.`site_id` = `location_policy`.`site_id` AND `site_policy`.`policy_type` = 'reservation' AND `site_policy`.`scope_type` = 'site'))
+	`booking_window_days` = COALESCE(`location_policy`.`booking_window_days`, (SELECT `site_policy`.`booking_window_days` FROM `__booking_policies_0112_backup` AS `site_policy` WHERE `site_policy`.`site_id` = `location_policy`.`site_id` AND `site_policy`.`policy_type` = 'reservation' AND `site_policy`.`scope_type` = 'site')),
+	`advance_notice_minutes` = COALESCE(`location_policy`.`advance_notice_minutes`, (SELECT `site_policy`.`advance_notice_minutes` FROM `__booking_policies_0112_backup` AS `site_policy` WHERE `site_policy`.`site_id` = `location_policy`.`site_id` AND `site_policy`.`policy_type` = 'reservation' AND `site_policy`.`scope_type` = 'site')),
+	`free_cancellation_until_minutes` = COALESCE(`location_policy`.`free_cancellation_until_minutes`, (SELECT `site_policy`.`free_cancellation_until_minutes` FROM `__booking_policies_0112_backup` AS `site_policy` WHERE `site_policy`.`site_id` = `location_policy`.`site_id` AND `site_policy`.`policy_type` = 'reservation' AND `site_policy`.`scope_type` = 'site')),
+	`late_arrival_grace_minutes` = COALESCE(`location_policy`.`late_arrival_grace_minutes`, (SELECT `site_policy`.`late_arrival_grace_minutes` FROM `__booking_policies_0112_backup` AS `site_policy` WHERE `site_policy`.`site_id` = `location_policy`.`site_id` AND `site_policy`.`policy_type` = 'reservation' AND `site_policy`.`scope_type` = 'site')),
+	`host_confirmation_sla_minutes` = COALESCE(`location_policy`.`host_confirmation_sla_minutes`, (SELECT `site_policy`.`host_confirmation_sla_minutes` FROM `__booking_policies_0112_backup` AS `site_policy` WHERE `site_policy`.`site_id` = `location_policy`.`site_id` AND `site_policy`.`policy_type` = 'reservation' AND `site_policy`.`scope_type` = 'site')),
+	`reschedule_allowed` = COALESCE(`location_policy`.`reschedule_allowed`, (SELECT `site_policy`.`reschedule_allowed` FROM `__booking_policies_0112_backup` AS `site_policy` WHERE `site_policy`.`site_id` = `location_policy`.`site_id` AND `site_policy`.`policy_type` = 'reservation' AND `site_policy`.`scope_type` = 'site')),
+	`reschedule_cutoff_minutes` = COALESCE(`location_policy`.`reschedule_cutoff_minutes`, (SELECT `site_policy`.`reschedule_cutoff_minutes` FROM `__booking_policies_0112_backup` AS `site_policy` WHERE `site_policy`.`site_id` = `location_policy`.`site_id` AND `site_policy`.`policy_type` = 'reservation' AND `site_policy`.`scope_type` = 'site')),
+	`deposit_required` = COALESCE(`location_policy`.`deposit_required`, (SELECT `site_policy`.`deposit_required` FROM `__booking_policies_0112_backup` AS `site_policy` WHERE `site_policy`.`site_id` = `location_policy`.`site_id` AND `site_policy`.`policy_type` = 'reservation' AND `site_policy`.`scope_type` = 'site')),
+	`deposit_trigger_party_size` = COALESCE(`location_policy`.`deposit_trigger_party_size`, (SELECT `site_policy`.`deposit_trigger_party_size` FROM `__booking_policies_0112_backup` AS `site_policy` WHERE `site_policy`.`site_id` = `location_policy`.`site_id` AND `site_policy`.`policy_type` = 'reservation' AND `site_policy`.`scope_type` = 'site')),
+	`special_requests_allowed` = COALESCE(`location_policy`.`special_requests_allowed`, (SELECT `site_policy`.`special_requests_allowed` FROM `__booking_policies_0112_backup` AS `site_policy` WHERE `site_policy`.`site_id` = `location_policy`.`site_id` AND `site_policy`.`policy_type` = 'reservation' AND `site_policy`.`scope_type` = 'site')),
+	`weather_policy` = COALESCE(`location_policy`.`weather_policy`, (SELECT `site_policy`.`weather_policy` FROM `__booking_policies_0112_backup` AS `site_policy` WHERE `site_policy`.`site_id` = `location_policy`.`site_id` AND `site_policy`.`policy_type` = 'reservation' AND `site_policy`.`scope_type` = 'site')),
+	`minimum_guest_age` = COALESCE(`location_policy`.`minimum_guest_age`, (SELECT `site_policy`.`minimum_guest_age` FROM `__booking_policies_0112_backup` AS `site_policy` WHERE `site_policy`.`site_id` = `location_policy`.`site_id` AND `site_policy`.`policy_type` = 'reservation' AND `site_policy`.`scope_type` = 'site')),
+	`accessibility_contact_required` = COALESCE(`location_policy`.`accessibility_contact_required`, (SELECT `site_policy`.`accessibility_contact_required` FROM `__booking_policies_0112_backup` AS `site_policy` WHERE `site_policy`.`site_id` = `location_policy`.`site_id` AND `site_policy`.`policy_type` = 'reservation' AND `site_policy`.`scope_type` = 'site')),
+	`additional_notes_html` = COALESCE(`location_policy`.`additional_notes_html`, (SELECT `site_policy`.`additional_notes_html` FROM `__booking_policies_0112_backup` AS `site_policy` WHERE `site_policy`.`site_id` = `location_policy`.`site_id` AND `site_policy`.`policy_type` = 'reservation' AND `site_policy`.`scope_type` = 'site'))
 WHERE `location_policy`.`policy_type` = 'reservation'
 	AND `location_policy`.`scope_type` = 'location'
 	AND EXISTS (
-		SELECT 1 FROM `__booking_policies_0110_backup` AS `site_policy`
+		SELECT 1 FROM `__booking_policies_0112_backup` AS `site_policy`
 		WHERE `site_policy`.`site_id` = `location_policy`.`site_id`
 			AND `site_policy`.`policy_type` = 'reservation'
 			AND `site_policy`.`scope_type` = 'site'
@@ -39,9 +40,9 @@ SELECT
 	`site_policy`.`booking_window_days`, `site_policy`.`advance_notice_minutes`, `site_policy`.`free_cancellation_until_minutes`,
 	`site_policy`.`late_arrival_grace_minutes`, `site_policy`.`host_confirmation_sla_minutes`, `site_policy`.`reschedule_allowed`,
 	`site_policy`.`reschedule_cutoff_minutes`, `site_policy`.`deposit_required`, `site_policy`.`deposit_trigger_party_size`,
-	`site_policy`.`special_requests_allowed`, NULL, `site_policy`.`minimum_guest_age`,
+	`site_policy`.`special_requests_allowed`, `site_policy`.`weather_policy`, `site_policy`.`minimum_guest_age`,
 	`site_policy`.`accessibility_contact_required`, `site_policy`.`additional_notes_html`, `site_policy`.`created_at`, `site_policy`.`updated_at`
-FROM `__booking_policies_0110_backup` AS `site_policy`
+FROM `__booking_policies_0112_backup` AS `site_policy`
 JOIN `business_locations` AS `location` ON `location`.`site_id` = `site_policy`.`site_id`
 WHERE `site_policy`.`policy_type` = 'reservation'
 	AND `site_policy`.`scope_type` = 'site'
@@ -100,25 +101,33 @@ CREATE UNIQUE INDEX `booking_policies_experience_location_unique` ON `booking_po
 CREATE UNIQUE INDEX `booking_policies_experience_scope_unique` ON `booking_policies` (`experience_id`) WHERE policy_type = 'experience' AND scope_type = 'experience' AND experience_id IS NOT NULL;--> statement-breakpoint
 CREATE INDEX `booking_policies_organization_id_idx` ON `booking_policies` (`organization_id`);--> statement-breakpoint
 
-CREATE TABLE `__booking_policies_0110_assertions` (
+CREATE TABLE `__booking_policies_0112_assertions` (
 	`violation` text NOT NULL CHECK (`violation` = '')
 );--> statement-breakpoint
-INSERT INTO `__booking_policies_0110_assertions` (`violation`)
+INSERT INTO `__booking_policies_0112_assertions` (`violation`)
 SELECT 'reservation policy remained outside location scope'
 WHERE EXISTS (
 	SELECT 1 FROM `booking_policies`
 	WHERE `policy_type` = 'reservation'
 		AND (`scope_type` != 'location' OR `location_id` IS NULL OR `experience_id` IS NOT NULL)
 );--> statement-breakpoint
-INSERT INTO `__booking_policies_0110_assertions` (`violation`)
+INSERT INTO `__booking_policies_0112_assertions` (`violation`)
+SELECT 'direct location reservation policy was not preserved'
+WHERE EXISTS (
+	SELECT 1 FROM `__booking_policies_0112_backup` AS `original`
+	WHERE `original`.`policy_type` = 'reservation'
+		AND `original`.`scope_type` = 'location'
+		AND NOT EXISTS (SELECT 1 FROM `booking_policies` AS `preserved` WHERE `preserved`.`id` = `original`.`id`)
+);--> statement-breakpoint
+INSERT INTO `__booking_policies_0112_assertions` (`violation`)
 SELECT 'experience booking policy was not preserved'
-WHERE (SELECT COUNT(*) FROM `__booking_policies_0110_backup` WHERE `policy_type` = 'experience')
+WHERE (SELECT COUNT(*) FROM `__booking_policies_0112_backup` WHERE `policy_type` = 'experience')
 	!= (SELECT COUNT(*) FROM `booking_policies` WHERE `policy_type` = 'experience');--> statement-breakpoint
-INSERT INTO `__booking_policies_0110_assertions` (`violation`)
+INSERT INTO `__booking_policies_0112_assertions` (`violation`)
 SELECT 'site reservation policy was not materialized for every location'
 WHERE EXISTS (
 	SELECT 1
-	FROM `__booking_policies_0110_backup` AS `site_policy`
+	FROM `__booking_policies_0112_backup` AS `site_policy`
 	JOIN `business_locations` AS `location` ON `location`.`site_id` = `site_policy`.`site_id`
 	WHERE `site_policy`.`policy_type` = 'reservation'
 		AND `site_policy`.`scope_type` = 'site'
@@ -129,5 +138,8 @@ WHERE EXISTS (
 				AND `materialized`.`location_id` = `location`.`id`
 		)
 );--> statement-breakpoint
-DROP TABLE `__booking_policies_0110_assertions`;--> statement-breakpoint
-DROP TABLE `__booking_policies_0110_backup`;
+INSERT INTO `__booking_policies_0112_assertions` (`violation`)
+SELECT 'pragma_foreign_key_check'
+WHERE EXISTS (SELECT 1 FROM pragma_foreign_key_check);--> statement-breakpoint
+DROP TABLE `__booking_policies_0112_assertions`;--> statement-breakpoint
+DROP TABLE `__booking_policies_0112_backup`;

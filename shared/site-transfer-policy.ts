@@ -63,7 +63,6 @@ export const SITE_TRANSFER_RETAIN_TABLES = [
   'mcp_tool_call_events',
   'notification_events',
   'notifications',
-  'google_business_events',
   'client_import_artifacts',
   'chowbot_conversations',
   'chowbot_messages',
@@ -71,7 +70,6 @@ export const SITE_TRANSFER_RETAIN_TABLES = [
 
 export const SITE_TRANSFER_REVOKE_TABLES = [
   'facebook_pages_connections',
-  'google_business_connections',
   'google_analytics_connections',
   'invitation_access_scope',
   'mcp_workspace_preferences',

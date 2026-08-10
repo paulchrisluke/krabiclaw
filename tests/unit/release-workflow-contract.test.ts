@@ -148,15 +148,15 @@ test('required CI checks out the immutable event SHA and never mutates shared st
   const migrationHistoryRead = source.indexOf('SELECT id, name, applied_at FROM d1_migrations ORDER BY id', previewMigrationStep)
   const migrationPrefixCheck = source.indexOf('scripts/verify-migration-state.mjs', migrationHistoryRead)
   const pendingMigrationRead = source.indexOf('wrangler d1 migrations list DB --env preview --remote', migrationPrefixCheck)
-  const compatibilityCheck = source.indexOf('scripts/check-migration-safety.mjs --backward-compatible', pendingMigrationRead)
-  const migrationApply = source.indexOf('wrangler d1 migrations apply DB --env preview --remote', compatibilityCheck)
+  const migrationSafetyCheck = source.indexOf('yarn migrate:check', pendingMigrationRead)
+  const migrationApply = source.indexOf('wrangler d1 migrations apply DB --env preview --remote', migrationSafetyCheck)
   assert.ok(previewMigrationStep >= 0, 'required CI must define a preview migration step')
   assert.ok(migrationHistoryRead > previewMigrationStep, 'preview migration history must be captured before mutation')
   assert.ok(migrationPrefixCheck > migrationHistoryRead, 'preview migration history must be an exact local prefix')
   assert.match(source.slice(migrationPrefixCheck, pendingMigrationRead), /--lineage-marker 0108_reconcile_drizzle_migration_history\.sql/)
   assert.ok(pendingMigrationRead > migrationPrefixCheck, 'pending preview migrations must be listed after history validation')
-  assert.ok(compatibilityCheck > pendingMigrationRead, 'pending preview migrations must be checked for backward compatibility')
-  assert.ok(migrationApply > compatibilityCheck, 'preview migration apply must follow every read-only migration guard')
+  assert.ok(migrationSafetyCheck > pendingMigrationRead, 'pending preview migrations must pass migration safety checks')
+  assert.ok(migrationApply > migrationSafetyCheck, 'preview migration apply must follow every read-only migration guard')
   assert.match(deployedAssetWait, /createWorkerVersionOverrideHeaders/)
   assert.match(deployedAssetWait, /WORKER_VERSION_OVERRIDE/)
   assert.match(deployedAssetWait, /DEPLOYMENT_EXPECTED_SOURCE_SHA/)
@@ -166,6 +166,18 @@ test('required CI checks out the immutable event SHA and never mutates shared st
   assert.match(deployedAssetWait, /GITHUB_SHA/)
   assert.match(deployedAssetWait, /\/api\/deployment/)
   assert.match(deployedAssetWait, /MAX_WAIT_MS = 180_000/)
+})
+
+test('release workflows permit intentional schema cleanup while retaining migration safety checks', async () => {
+  for (const path of [
+    '.github/workflows/ci.yml',
+    '.github/workflows/ci-full.yml',
+    '.github/workflows/release-production.yml',
+  ]) {
+    const source = await repoFile(path)
+    assert.doesNotMatch(source, /check-migration-safety\.mjs --backward-compatible/, `${path} must not impose an additive-only migration policy`)
+    assert.match(source, /yarn migrate:check/, `${path} must retain relationship and row-loss migration safety checks`)
+  }
 })
 
 test('full lane keeps one uninterrupted staging candidate lock and gates candidate promotion', async () => {

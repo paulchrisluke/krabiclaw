@@ -1236,11 +1236,6 @@ export async function deleteLocation(
   }
   const locationId = existing.id;
   const now = new Date().toISOString();
-  // A location delete can cascade SET NULL into Google Business rows. If the
-  // site already has a site-level connection, that null transition can collide
-  // with the partial unique index on google_business_connections.
-  // Remove location-scoped connections and pointers up front so the hard delete
-  // stays deterministic and does not depend on SQLite's constraint ordering.
   const statements = [
     {
       query: `
@@ -1270,13 +1265,6 @@ export async function deleteLocation(
     },
     {
       query: `
-      DELETE FROM google_business_connections
-      WHERE organization_id = ? AND site_id = ? AND location_id = ?
-    `,
-      params: [organizationId, siteId, locationId],
-    },
-    {
-      query: `
       DELETE FROM business_locations
       WHERE id = ? AND organization_id = ? AND site_id = ?
     `,
@@ -1285,7 +1273,7 @@ export async function deleteLocation(
   ];
 
   const batchResults = await executeBatch(db, statements);
-  const deleteResult = batchResults[4];
+  const deleteResult = batchResults[3];
 
   if (!deleteResult?.meta.changes) {
     return { status: 404, data: { error: "Location not found." } };

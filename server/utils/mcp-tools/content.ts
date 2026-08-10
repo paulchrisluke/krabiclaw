@@ -298,7 +298,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
           resolved_policy: bookingPolicyObject,
           summary: { ...renderedBookingPolicySummaryObject, type: ['object', 'null'] },
         },
-        required: ['resolved_policy', 'summary'],
+        required: ['policy', 'resolved_policy', 'summary'],
       },
     }),
   siteTool({

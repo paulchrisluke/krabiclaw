@@ -478,7 +478,7 @@ function experienceCoverImage(exp: Experience): string | null {
   return null
 }
 
-// Content hero fields take precedence; fall back to Google Business primary photo
+// Content hero fields take precedence; fall back to the imported primary photo
 const contentHero = computed(() => getContentHero({ title: '', subtitle: '', image: '', video: '' }))
 const heroMedia = computed(() => {
   if (contentHero.value.video) return resolveMedia({ public_url: contentHero.value.video, kind: contentHero.value.videoKind || 'video' })

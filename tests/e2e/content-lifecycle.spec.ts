@@ -126,6 +126,11 @@ test.describe('content write lifecycle', () => {
     const siteScopeRes = await request.get(`${baseURL}/api/editor/sites/${siteId}/booking-policy?policy_type=reservation&scope_type=site`)
     expect(siteScopeRes.status()).toBe(400)
 
+    const siteScopePreviewRes = await request.post(`${baseURL}/api/editor/sites/${siteId}/booking-policy/preview`, {
+      data: { policy_type: 'reservation', scope_type: 'site', location_id: locationId },
+    })
+    expect(siteScopePreviewRes.status()).toBe(400)
+
     const beforeRes = await request.get(`${baseURL}/api/editor/sites/${siteId}/booking-policy?policy_type=reservation&scope_type=location&location_id=${locationId}`)
     expect(beforeRes.status()).toBe(200)
     expect(((await beforeRes.json()) as { policy: ReservationPolicy | null }).policy).toBeNull()
@@ -141,7 +146,7 @@ test.describe('content write lifecycle', () => {
         deposit_trigger_party_size: 7,
       },
     })
-    expect(saveRes.status()).toBe(200)
+    expect(saveRes.status(), await saveRes.text()).toBe(200)
 
     const getRes = await request.get(`${baseURL}/api/editor/sites/${siteId}/booking-policy?policy_type=reservation&scope_type=location&location_id=${locationId}`)
     expect(getRes.status()).toBe(200)

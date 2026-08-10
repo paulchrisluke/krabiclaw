@@ -416,6 +416,8 @@ function filenameExtension(contentType: string, fallback = "bin"): string {
       return "gif";
     case "image/avif":
       return "avif";
+    case "image/svg+xml":
+      return "svg";
     case "video/mp4":
       return "mp4";
     case "video/webm":
@@ -640,7 +642,7 @@ export interface ResolvedMediaFile {
   kind: "image" | "video" | "file";
 }
 
-const RESOLVED_MEDIA_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"]);
+const RESOLVED_MEDIA_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif", "image/svg+xml"]);
 
 async function readMediaBufferWithLimit(
   response: Response,
@@ -1367,6 +1369,8 @@ export function extensionForContentType(contentType: string) {
       return "webp";
     case "image/gif":
       return "gif";
+    case "image/svg+xml":
+      return "svg";
     case "image/png":
     default:
       return "png";
@@ -1375,7 +1379,7 @@ export function extensionForContentType(contentType: string) {
 
 export function normalizeChannelsInput(
   args: Record<string, unknown>,
-): Array<"site" | "gmb" | "instagram" | "facebook"> {
+): Array<"site" | "instagram" | "facebook"> {
   const rawChannels = args.channels;
   const rawTargets = args.targets;
 
@@ -1400,7 +1404,7 @@ export function normalizeChannelsInput(
 
 export function normalizeChannelArray(
   value: unknown,
-): Array<"site" | "gmb" | "instagram" | "facebook"> {
+): Array<"site" | "instagram" | "facebook"> {
   if (!Array.isArray(value) || !value.length) {
     throw mcpProtocolError(
       MCP_ERROR.invalidParams,
@@ -1409,9 +1413,8 @@ export function normalizeChannelArray(
   }
 
   const normalized = value.filter(
-    (item): item is "site" | "gmb" | "instagram" | "facebook" =>
+    (item): item is "site" | "instagram" | "facebook" =>
       item === "site" ||
-      item === "gmb" ||
       item === "instagram" ||
       item === "facebook",
   );
@@ -1419,7 +1422,7 @@ export function normalizeChannelArray(
   if (normalized.length !== value.length) {
     throw mcpProtocolError(
       MCP_ERROR.invalidParams,
-      "channels may only contain site, facebook, instagram, or gmb.",
+      "channels may only contain site, facebook, or instagram.",
     );
   }
 

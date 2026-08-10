@@ -145,7 +145,6 @@ owner/admin callers and keep their existing organization-level checks.
 | `sites/[siteId]/locations/[locationId].get.ts` | | | ✓ | | | inline SQL + `assertLocationAccess` |
 | `sites/[siteId]/locations.post.ts` | | ✓ | | | | `requireSiteAccess` + `assertSiteWideAccess` |
 | `sites/[siteId]/locations/[locationId].patch.ts` | | | ✓ | | | `requireLocationAccess` |
-| `sites/[siteId]/locations/[locationId]/integrations/google-business/index.get.ts`, `auth.post.ts` | | | ✓ | | | `requireLocationAccess`; OAuth callback revalidates the state principal's exact location access before storing credentials |
 | `editor/sites/[siteId]/context.get.ts` | | | | | ✓ | inline SQL + `assertSiteContextAccess`; response now filters `locations`/`scopes` to `listAccessibleLocationIds`, and drops the "Brand-wide" scope option for location-only editors — this endpoint was previously **not caught by the initial 58-file grep** (found only in the final proof sweep) and was returning the full site directory to any editor regardless of scope |
 | `editor/sites/[siteId]/locations/[locationId]/qa/[qaId].patch.ts`, `qa/reorder.post.ts` | | | ✓ | | | inline SQL + `assertLocationAccess` — also missed by the initial grep pass, found in the proof sweep |
 | `whatsapp/webhook.post.ts` (`listRecentGuestNotificationCandidates`) | | | | | | filters editor candidates by site/location resource team membership |

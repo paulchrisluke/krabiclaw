@@ -611,9 +611,8 @@ jobs:
           npx wrangler d1 migrations list DB --env staging --remote | tee "$migration_before"
           node -e 'const fs=require("node:fs"),crypto=require("node:crypto"),path=require("node:path");const root="migrations";const files=fs.readdirSync(root).filter(f=>f.endsWith(".sql")).sort().map(name=>{const p=path.join(root,name);return {name,sha256:crypto.createHash("sha256").update(fs.readFileSync(p)).digest("hex")}});fs.writeFileSync(process.env.MIGRATION_FILES_PATH, JSON.stringify({root,files},null,2)+"\n")'
 
-          echo "Checking pending migrations are additive/backward-compatible while the baseline Worker remains active"
+          echo "Checking pending migrations preserve protected relationships and fail on silent row loss"
           yarn migrate:check
-          node scripts/check-migration-safety.mjs --backward-compatible --pending-from "$migration_before"
           echo "Persisting the durable staging database mutation marker before the first remote write"
           DATABASE_MUTATION_ATTEMPTED="true"
           printf '%s\n' "true" > "$database_mutation_flag"

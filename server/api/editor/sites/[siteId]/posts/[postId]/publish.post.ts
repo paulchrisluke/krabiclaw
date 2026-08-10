@@ -24,7 +24,7 @@ export default defineEventHandler(async (event) => {
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
   const body = await readBody(event)
-  const channels: Array<'site' | 'gmb' | 'instagram' | 'facebook'> =
+  const channels: Array<'site' | 'instagram' | 'facebook'> =
     body?.channels ?? ['site']
 
   const site = await loadMemberSiteRow(db, siteId, session.user.id)

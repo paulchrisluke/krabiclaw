@@ -390,7 +390,7 @@ const googleReviewSummary = computed(() => {
 
 const restaurantName = computed(() => site?.brand_name || businessTitle.value || 'Business')
 
-// Hero metadata from CMS and Google Business — used for OG image metadata below,
+// Hero metadata from CMS and imported location data — used for OG image metadata below,
 // SayaHomeHero.vue resolves its own copy via getHero() from its :data prop.
 const hero = computed(() => getHero({
   title: businessTitle.value || '',

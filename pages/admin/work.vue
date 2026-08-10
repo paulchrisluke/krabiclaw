@@ -116,7 +116,7 @@ const workShowDone = ref(false)
 const WORK_TYPE_ICONS: Record<string, string> = {
   content_update: 'i-lucide-file-text', menu_update: 'i-lucide-utensils',
   seo: 'i-lucide-trending-up',
-  google_business: 'i-lucide-map-pin', seasonal: 'i-lucide-sparkles',
+  google_places: 'i-lucide-map-pin', seasonal: 'i-lucide-sparkles',
   photo_update: 'i-lucide-image', social_media: 'i-lucide-share-2',
   technical: 'i-lucide-wrench', other: 'i-lucide-circle-help',
 }
@@ -124,7 +124,7 @@ const WORK_TYPE_COLORS: Record<string, string> = {
   content_update: 'bg-blue-50 dark:bg-blue-950/40 text-blue-600',
   menu_update: 'bg-amber-50 dark:bg-amber-950/40 text-amber-600',
   seo: 'bg-green-50 dark:bg-green-950/40 text-green-600',
-  google_business: 'bg-red-50 dark:bg-red-950/40 text-red-500',
+  google_places: 'bg-red-50 dark:bg-red-950/40 text-red-500',
   seasonal: 'bg-orange-50 dark:bg-orange-950/40 text-orange-500',
   photo_update: 'bg-pink-50 dark:bg-pink-950/40 text-pink-500',
   social_media: 'bg-sky-50 dark:bg-sky-950/40 text-sky-500',

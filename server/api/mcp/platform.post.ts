@@ -254,8 +254,7 @@ export default defineEventHandler(async (event) => {
         // graceful isError:true 200, not a raw HTTP 500 — MCP clients can't
         // act on a transport-level error mid-tool-call any more than they
         // can act on a raw 401 (see resolveMissingMcpCredential). Confirmed
-        // via issue #386/#408 staging verification: get_google_business_connection's
-        // plain "requires a paid plan" throw was leaking as a 500.
+        // Tool business-rule failures must stay inside the MCP error envelope.
         logPlatformMcpEventDetached(event, env.DB, {
           userId: callUser.userId,
           requestId: request.id,

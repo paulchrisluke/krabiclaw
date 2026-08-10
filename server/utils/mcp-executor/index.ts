@@ -13,7 +13,6 @@ import { handleAnalyticsTools } from './analytics'
 import { handleBlogTools } from './blog'
 import { handleContentTools } from './content'
 import { handleExperiencesTools } from './experiences'
-import { handleGoogleBusinessTools } from './google-business'
 import { handleIntegrationsTools } from './integrations'
 import { handleLocalesTools } from './locales'
 import { handleLocationsTools } from './locations'
@@ -49,7 +48,6 @@ export const DOMAIN_HANDLERS: Record<string, (_ctx: McpExecutorContext) => Promi
   blog: handleBlogTools,
   content: handleContentTools,
   experiences: handleExperiencesTools,
-  google_business: handleGoogleBusinessTools,
   integrations: handleIntegrationsTools,
   locales: handleLocalesTools,
   locations: handleLocationsTools,

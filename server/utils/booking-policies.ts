@@ -321,7 +321,7 @@ function applyPolicy(base: ResolvedBookingPolicy, next: BookingPolicy): Resolved
   return merged
 }
 
-function assertScope(input: GetDirectBookingPolicyInput) {
+export function validateBookingPolicyScope(input: Pick<GetDirectBookingPolicyInput, 'policyType' | 'scopeType' | 'locationId' | 'experienceId'>) {
   if (input.policyType === 'reservation' && input.scopeType !== 'location') {
     throw createError({ statusCode: 400, statusMessage: 'reservation policies must use location scope' })
   }
@@ -462,7 +462,7 @@ export async function getDirectBookingPolicy(
   db: DbClient,
   input: GetDirectBookingPolicyInput,
 ): Promise<BookingPolicy | null> {
-  assertScope(input)
+  validateBookingPolicyScope(input)
   if (input.scopeType === 'site') {
     const row = await queryFirst<BookingPolicyRow>(
       db,
@@ -677,7 +677,7 @@ export async function upsertBookingPolicy(
   db: DbClient,
   input: UpsertBookingPolicyInput,
 ): Promise<BookingPolicy> {
-  assertScope(input)
+  validateBookingPolicyScope(input)
   const existing = await getDirectBookingPolicy(db, input)
   const patch = input.patch
   const now = new Date().toISOString()

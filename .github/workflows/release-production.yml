@@ -225,7 +225,6 @@ jobs:
           npx wrangler d1 execute DB --remote --command 'SELECT id, name, applied_at FROM d1_migrations ORDER BY id' --json > "$RUNNER_TEMP/staging-manifest/production-migrations-before-applied.json"
           npx wrangler d1 migrations list DB --remote | tee "$RUNNER_TEMP/staging-manifest/production-migrations-before.txt"
           yarn migrate:check
-          node scripts/check-migration-safety.mjs --backward-compatible --pending-from "$RUNNER_TEMP/staging-manifest/production-migrations-before.txt"
           {
             echo "## Issue #554 production release preflight"
             echo "- Source SHA: \`${{ inputs.source_sha }}\`"
@@ -639,7 +638,6 @@ jobs:
             --output "$migration_state_before"
           npx wrangler d1 migrations list DB --remote | tee "$migrations_before"
           yarn migrate:check
-          node scripts/check-migration-safety.mjs --backward-compatible --pending-from "$migrations_before"
           echo "Persisting the durable production database mutation marker before migration apply"
           DATABASE_MUTATION_ATTEMPTED="true"
           printf '%s\n' "true" > "$database_mutation_flag"

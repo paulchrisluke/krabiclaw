@@ -12,7 +12,7 @@
       <!-- Real Q&A items -->
       <div 
         v-for="item in displayedQA" 
-        :key="item.name"
+        :key="item.id"
         class="bg-default border border-default rounded-3xl p-8 shadow-sm hover:shadow-md transition-shadow"
       >
         <div class="flex items-start gap-4 mb-6">
@@ -20,21 +20,21 @@
             Q
           </span>
           <div>
-            <h3 class="text-lg font-bold text-default mb-1">{{ item.text }}</h3>
+            <h3 class="text-lg font-bold text-default mb-1">{{ item.question }}</h3>
             <p class="text-[10px] text-muted font-bold uppercase tracking-widest">
-              {{ $t('saya.qa.asked_by', { author: item.author?.displayName || $t('saya.qa.google_guest'), date: formatDate(item.createTime) }) }}
+              {{ $t('saya.qa.asked_by', { author: item.question_author || $t('saya.qa.guest'), date: formatDate(item.question_date || item.created_at) }) }}
             </p>
           </div>
         </div>
 
-        <div v-if="item.topAnswer" class="flex items-start gap-4 bg-muted rounded-2xl p-6">
+        <div v-if="item.answer" class="flex items-start gap-4 bg-muted rounded-2xl p-6">
           <span class="flex size-8 shrink-0 items-center justify-center rounded-full bg-inverted text-xs font-bold text-inverted">
             A
           </span>
           <div>
-            <p class="text-default leading-relaxed text-sm mb-2">{{ item.topAnswer.text }}</p>
+            <p class="text-default leading-relaxed text-sm mb-2">{{ item.answer }}</p>
             <p class="text-[10px] text-muted font-bold uppercase tracking-widest">
-              {{ $t('saya.qa.response_from_owner', { date: formatDate(item.topAnswer.updateTime) }) }}
+              {{ $t('saya.qa.response_from_owner', { date: formatDate(item.answer_date || item.updated_at) }) }}
             </p>
           </div>
         </div>

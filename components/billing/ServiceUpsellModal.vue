@@ -120,7 +120,7 @@ function buildContentMap(experience: boolean): Record<UpsellType, UpsellContent>
         `${menuCapitalized} updates via ChatGPT — just send us a message`,
         'WhatsApp booking & reservation notifications',
         'Auto-sync from Facebook & Instagram',
-        'Google Business profile sync',
+        'Google Places imports',
         'Post-booking review requests',
       ],
       price: '$49',

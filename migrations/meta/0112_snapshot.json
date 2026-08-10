@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "a4c3e826-62f8-4266-8e06-7753a42a8fa8",
-  "prevId": "d958e1a1-a5d5-41b8-9776-ab237a0483cb",
+  "id": "efdb335f-3eab-444a-ade3-7f18ff6db90f",
+  "prevId": "a4c3e826-62f8-4266-8e06-7753a42a8fa8",
   "tables": {
     "account": {
       "name": "account",
@@ -967,14 +967,6 @@
           ],
           "isUnique": false
         },
-        "booking_policies_reservation_site_unique": {
-          "name": "booking_policies_reservation_site_unique",
-          "columns": [
-            "site_id"
-          ],
-          "isUnique": true,
-          "where": "policy_type = 'reservation' AND scope_type = 'site'"
-        },
         "booking_policies_reservation_location_unique": {
           "name": "booking_policies_reservation_location_unique",
           "columns": [
@@ -1079,6 +1071,10 @@
         "booking_policies_scope_type_check": {
           "name": "booking_policies_scope_type_check",
           "value": "scope_type IN ('site', 'location', 'experience')"
+        },
+        "booking_policies_reservation_location_scope_check": {
+          "name": "booking_policies_reservation_location_scope_check",
+          "value": "policy_type != 'reservation' OR (scope_type = 'location' AND location_id IS NOT NULL AND experience_id IS NULL)"
         }
       }
     },

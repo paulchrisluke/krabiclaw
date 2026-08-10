@@ -318,7 +318,7 @@ test.describe('stateless MCP server', () => {
       'get_translation_inventory', 'start_translation_job', 'list_translation_jobs',
       'get_translation_job', 'run_translation_job_batch', 'get_translation_review_items',
       'save_translation_review_item', 'publish_translations',
-      'list_work_requests', 'get_google_business_connection',
+      'list_work_requests',
     ]))
     expect(allToolNames.length).toBeGreaterThan(50)
 

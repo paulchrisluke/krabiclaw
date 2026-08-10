@@ -37,43 +37,19 @@
             <div class="space-y-5 text-sm">
               <section class="space-y-3">
                 <div class="flex items-center justify-between gap-4">
-                  <span class="font-medium text-highlighted">Business Profile</span>
-                  <UBadge :color="gbConnection ? 'success' : 'neutral'" variant="soft">
-                    {{ gbConnection ? 'Connected' : 'Not connected' }}
+                  <span class="font-medium text-highlighted">Google Places</span>
+                  <UBadge :color="location.google_place_id ? 'success' : 'neutral'" variant="soft">
+                    {{ location.google_place_id ? 'Ready' : 'Not configured' }}
                   </UBadge>
                 </div>
-                <div v-if="gbConnection" class="space-y-3">
+                <div v-if="location.google_place_id" class="space-y-3">
                   <div class="flex items-center justify-between gap-4">
-                    <span class="text-muted">Account</span>
-                    <span class="truncate text-right text-highlighted">{{ gbConnection.provider_account_email }}</span>
-                  </div>
-                  <div class="flex items-center justify-between gap-4">
-                    <span class="text-muted">Last synced</span>
+                    <span class="text-muted">Last imported</span>
                     <span class="text-right text-highlighted">{{ location.last_synced_at || 'Never' }}</span>
                   </div>
                 </div>
-                <p v-else class="text-muted">Connect Google Business to sync reviews, photos, and location data.</p>
-
-                <UButton
-                  v-if="!gbConnection"
-                  icon="i-simple-icons-google"
-                  :loading="connectingGoogle"
-                  block
-                  @click="connectGoogleBusiness"
-                >
-                  Connect Google Business
-                </UButton>
-              </section>
-
-              <section class="space-y-3 border-t border-default pt-5">
-                <div class="flex items-center justify-between gap-4">
-                  <span class="font-medium text-highlighted">Places</span>
-                  <UBadge :color="location.google_place_id ? 'success' : 'neutral'" variant="soft">
-                    {{ location.google_place_id ? 'Ready' : 'No Place ID' }}
-                  </UBadge>
-                </div>
                 <p class="text-muted">
-                  {{ location.google_place_id ? `Place ID: ${location.google_place_id}` : 'Add a Google Place ID in Location Details to sync hours, address, rating, and reviews.' }}
+                  {{ location.google_place_id ? `Place ID: ${location.google_place_id}` : 'Add a Google Place ID in Location Details to import hours, address, ratings, and reviews.' }}
                 </p>
                 <p v-if="placeSyncResult" class="text-success">{{ placeSyncResult }}</p>
                 <UButton
@@ -347,20 +323,10 @@ interface BusinessLocation {
   review_count: number | null
   is_primary: boolean
   status: string
-  google_location_id: string | null
   last_synced_at: string | null
   hero_media_asset_id?: string | null
   notification_phone?: string | null
   timezone?: string | null
-}
-
-interface GbConnection {
-  id: string
-  provider_account_email: string
-  status: string
-  expires_at?: string
-  created_at: string
-  updated_at: string
 }
 
 interface DayHours {
@@ -381,8 +347,6 @@ const locationId = computed(() => dashboardLocation.currentLocationId.value ?? '
 const loading = ref(true)
 const error = ref<string | null>(null)
 const location = ref<BusinessLocation | null>(null)
-const gbConnection = ref<GbConnection | null>(null)
-const connectingGoogle = ref(false)
 const syncingPlace = ref(false)
 const savingLocationFeatures = ref(false)
 const locationEnabledFeatureSet = reactive<Partial<Record<ProductFeature, boolean>>>({})
@@ -427,16 +391,6 @@ const isCapabilitySummary = (value: unknown): value is LocationCapabilitySummary
     || (Array.isArray(value.location_effective_features) && value.location_effective_features.every(item => typeof item === 'string')))
 const isLocationResponse = (value: unknown): value is { success: true; location: BusinessLocation } & LocationCapabilitySummary =>
   isRecord(value) && value.success === true && isBusinessLocation(value.location) && isCapabilitySummary(value)
-const isGbConnection = (value: unknown): value is GbConnection =>
-  isRecord(value)
-  && typeof value.id === 'string'
-  && typeof value.provider_account_email === 'string'
-  && typeof value.status === 'string'
-  && typeof value.created_at === 'string'
-  && typeof value.updated_at === 'string'
-const isConnectionResponse = (value: unknown): value is { success: true; connection: GbConnection | null } =>
-  isRecord(value) && value.success === true && (value.connection === null || isGbConnection(value.connection))
-
 function fillLocationFeatures(summary: LocationCapabilitySummary) {
   siteEffectiveFeatures.value = summary.site_effective_features ?? []
   locationEffectiveFeatures.value = summary.location_effective_features ?? []
@@ -721,43 +675,6 @@ async function saveLocationDetails() {
   }
 }
 
-const connectGoogleBusiness = async () => {
-  const requestedLocationId = locationId.value
-  connectingGoogle.value = true
-  try {
-    const res = await dashboardApi<{ success: boolean; authUrl: string }>(
-      `/api/sites/${siteId}/locations/${requestedLocationId}/integrations/google-business/auth`,
-      {
-        method: 'POST',
-        validate: (value): value is { success: boolean; authUrl: string } =>
-          isRecord(value) && value.success === true && typeof value.authUrl === 'string',
-      }
-    )
-    if (locationId.value !== requestedLocationId) {
-      connectingGoogle.value = false
-      return
-    }
-    if (res.success && res.authUrl) {
-      try {
-        const parsed = new URL(res.authUrl)
-        if (parsed.protocol !== 'https:' || parsed.hostname !== 'accounts.google.com') {
-          throw new Error('Invalid OAuth redirect URL')
-        }
-        window.location.href = res.authUrl
-      } catch {
-        toast.add({ description: 'Invalid OAuth redirect URL returned by server', color: 'error' })
-        connectingGoogle.value = false
-      }
-    } else {
-      toast.add({ description: 'Failed to start Google Business connection', color: 'error' })
-      connectingGoogle.value = false
-    }
-  } catch (err) {
-    toast.add({ description: getErrorMessage(err, 'Failed to start Google Business connection'), color: 'error' })
-    connectingGoogle.value = false
-  }
-}
-
 async function syncGooglePlace() {
   if (!location.value?.google_place_id) return
   const requestedLocationId = locationId.value
@@ -793,7 +710,6 @@ async function syncGooglePlace() {
 
 interface LocationSettingsResource {
   location: { success: true; location: BusinessLocation } & LocationCapabilitySummary
-  connection: { success: true; connection: GbConnection | null }
 }
 
 const requestEvent = useRequestEvent()
@@ -811,17 +727,11 @@ const {
     const { loadDashboardLocationSettings } = await import('~/server/utils/dashboard-editor-resources')
     return await loadDashboardLocationSettings(requestEvent, siteId, requestedLocationId)
   }
-  const [locationResponse, connectionResponse] = await Promise.all([
-    dashboardApi<{ success: true; location: BusinessLocation } & LocationCapabilitySummary>(
-      `/api/dashboard/locations/${requestedLocationId}`,
-      { validate: isLocationResponse },
-    ),
-    dashboardApi<{ success: true; connection: GbConnection | null }>(
-      `/api/sites/${siteId}/locations/${requestedLocationId}/integrations/google-business`,
-      { validate: isConnectionResponse },
-    ),
-  ])
-  return { location: locationResponse, connection: connectionResponse }
+  const locationResponse = await dashboardApi<{ success: true; location: BusinessLocation } & LocationCapabilitySummary>(
+    `/api/dashboard/locations/${requestedLocationId}`,
+    { validate: isLocationResponse },
+  )
+  return { location: locationResponse }
 }, {
   watch: [locationId],
 })
@@ -834,7 +744,6 @@ watchEffect(() => {
   const resource = locationSettingsResource.value
   if (!resource) return
   location.value = resource.location.location
-  gbConnection.value = resource.connection.connection
   fillLocationFeatures(resource.location)
   fillDetailsForm(resource.location.location)
 })
@@ -843,14 +752,6 @@ const loadLocationWorkspace = async () => {
   await refreshLocationWorkspace()
   return !locationSettingsError.value
 }
-
-onMounted(() => {
-  if (route.query.gb === 'connected') {
-    toast.add({ description: 'Google Business connected successfully', color: 'success' })
-    const { gb: _gb, ...restQuery } = route.query
-    router.replace({ name: route.name as string, params: route.params, query: restQuery })
-  }
-})
 
 useSeoMeta({ title: 'Location Settings | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>

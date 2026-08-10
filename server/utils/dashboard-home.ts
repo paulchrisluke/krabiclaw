@@ -1,7 +1,7 @@
 import { queryAll, type DbClient } from '~/server/db'
 import { isOrganizationWideRole, teamAccessPredicate } from '~/server/utils/member-access'
 import { getGuestThreadOperationSummary } from '~/server/domain/guest-threads/repository'
-import { calculateMapEmbedUrl } from '~/server/utils/google-business'
+import { calculateMapEmbedUrl } from '~/server/utils/google-places'
 
 export interface DashboardHomeLocation {
   id: string

@@ -28,7 +28,7 @@ mock.module('../../server/db/index.ts', {
   namedExports: { queryAll, queryFirst, execute },
 })
 
-const { getDirectBookingPolicy, resolveBookingPolicy, resolveBookingPolicyIndex } = await import('../../server/utils/booking-policies.ts')
+const { getDirectBookingPolicy, resolveBookingPolicy, resolveBookingPolicyIndex, validateBookingPolicyScope } = await import('../../server/utils/booking-policies.ts')
 
 for (const count of [1, 8, 25]) {
   test(`resolveBookingPolicyIndex issues exactly one bulk query for ${count} experiences`, async () => {
@@ -67,6 +67,17 @@ test('reservation policies reject site scope', async () => {
       scopeType: 'site',
     }),
     /reservation policies must use location scope/,
+  )
+})
+
+test('reservation policy scope validation requires a location target', () => {
+  assert.throws(
+    () => validateBookingPolicyScope({
+      policyType: 'reservation',
+      scopeType: 'location',
+      locationId: null,
+    }),
+    /location scope requires location_id/,
   )
 })
 
