@@ -343,7 +343,7 @@ test('immutable route inventory enumerates every reviewed fixture target and bro
   assert.match(legacySource, /targetSourceSha/)
 })
 
-test('main pushes automatically build, deploy, and verify production while migrations are paused', async () => {
+test('main pushes automatically build, safely migrate, deploy, and verify production', async () => {
   const source = await repoFile('.github/workflows/release-production.yml')
   const jobs = await workflowJobs('.github/workflows/release-production.yml')
   const deploy = jobs['deploy-production']
@@ -353,8 +353,7 @@ test('main pushes automatically build, deploy, and verify production while migra
   assert.equal(deploy.environment, undefined)
   assert.equal(deploy.needs, undefined)
   assert.match(source, /ref: \$\{\{ github\.sha \}\}/)
-  assert.match(source, /yarn build[\s\S]*wrangler deploy --tag "\$GITHUB_SHA"/)
-  assert.doesNotMatch(source, /wrangler d1 migrations apply DB --remote/)
+  assert.match(source, /yarn build[\s\S]*yarn migrate:check[\s\S]*reconcile-location-parent-migration\.mjs --remote[\s\S]*wrangler d1 migrations apply DB --remote[\s\S]*wrangler deploy --tag "\$GITHUB_SHA"/)
   assert.match(source, /purge-deployment-cache\.ts[\s\S]*wait-for-deployed-assets\.mjs[\s\S]*verify-deployed-candidate\.mjs/)
   assert.match(source, /PLAYWRIGHT_PREVIEW_URL=https:\/\/krabiclaw\.com node scripts\/wait-for-deployed-assets\.mjs/)
   assert.doesNotMatch(source, /playwright install|playwright test|public-rendering-sentinel/)

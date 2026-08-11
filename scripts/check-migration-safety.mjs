@@ -12,6 +12,7 @@ const PROTECTED_PARENT_TABLES = new Set([
 ])
 const IMMUTABLE_ALLOWLIST = new Set(['0047_free_molecule_man.sql'])
 const FIRST_ENFORCED_MIGRATION = 72
+const FIRST_PARENT_DROP_BANNED_MIGRATION = 114
 const NOT_FOUND = -1
 
 function migrationNumber(fileName) {
@@ -36,6 +37,10 @@ export function findUnsafeMigrationStatements(fileName, sql, migrationContext = 
   for (const match of sql.matchAll(dropPattern)) {
     const table = match[1]
     if (PROTECTED_PARENT_TABLES.has(table)) {
+      if (number !== null && number >= FIRST_PARENT_DROP_BANNED_MIGRATION) {
+        findings.push(`DROP TABLE ${table} is forbidden for referenced parent tables; use additive ALTER statements or a reviewed operational reconciler`)
+        continue
+      }
       const backupName = `__um_backup_${table}`
       const newTableName = `__new_${table}`
       const dropIndex = match.index ?? 0
