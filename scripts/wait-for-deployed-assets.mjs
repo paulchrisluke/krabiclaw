@@ -1,4 +1,5 @@
-import { readdirSync } from 'node:fs'
+import { mkdirSync, readdirSync, writeFileSync } from 'node:fs'
+import { dirname } from 'node:path'
 import { createWorkerVersionOverrideHeaders } from './lib/worker-version-override.mjs'
 
 const rawBaseUrl = process.env.PLAYWRIGHT_PREVIEW_URL
@@ -38,7 +39,8 @@ if (rawIdentityOrigin) {
 
 const expectedSourceSha = (process.env.DEPLOYMENT_EXPECTED_SOURCE_SHA ?? process.env.GITHUB_SHA)?.trim().toLowerCase() || null
 const expectedWorkerVersion = (process.env.DEPLOYMENT_EXPECTED_WORKER_VERSION ?? process.env.WORKER_VERSION_OVERRIDE)?.trim().toLowerCase() || null
-if ((rawIdentityOrigin || expectedSourceSha || expectedWorkerVersion) && (!expectedSourceSha || !expectedWorkerVersion)) {
+const readinessOutput = process.env.DEPLOYMENT_READINESS_OUTPUT?.trim() || null
+if ((rawIdentityOrigin || readinessOutput || expectedSourceSha || expectedWorkerVersion) && (!expectedSourceSha || !expectedWorkerVersion)) {
   throw new Error('Expected source SHA and Worker version must be provided together for deployment identity checks.')
 }
 if (expectedSourceSha && !/^[0-9a-f]{40}$/.test(expectedSourceSha)) {
@@ -138,10 +140,16 @@ async function verifyHtmlAndAssets(url, headers = {}) {
       throw new Error(`${assetPath} returned HTTP ${assetResponse.status}`)
     }
   }))
+
+  return {
+    url: url.origin + url.pathname,
+    buildId,
+    assets: [...new Set(assetPaths.map(path => path.split('?')[0]))].sort(),
+  }
 }
 
 async function verifyDeploymentIdentity(origin, attempt) {
-  if (!expectedSourceSha || !expectedWorkerVersion) return
+  if (!expectedSourceSha || !expectedWorkerVersion) return null
 
   const identityUrl = new URL('/api/deployment', origin)
   identityUrl.searchParams.set('asset-propagation-check', `${Date.now()}-${attempt}`)
@@ -164,6 +172,32 @@ async function verifyDeploymentIdentity(origin, attempt) {
   if (actualSourceSha !== expectedSourceSha || actualWorkerVersion !== expectedWorkerVersion) {
     throw new Error(`${origin} /api/deployment identity mismatch (expected ${expectedSourceSha}/${expectedWorkerVersion}, got ${actualSourceSha ?? '<missing>'}/${actualWorkerVersion ?? '<missing>'})`)
   }
+
+  return {
+    origin,
+    sourceSha: actualSourceSha,
+    workerVersionId: actualWorkerVersion,
+  }
+}
+
+function writeReadinessEvidence(identityChecks, surfaceChecks, attempt) {
+  if (!readinessOutput) return
+
+  mkdirSync(dirname(readinessOutput), { recursive: true })
+  writeFileSync(readinessOutput, `${JSON.stringify({
+    schemaVersion: 1,
+    kind: 'deployed-assets-readiness',
+    ok: true,
+    baseUrl: baseUrl.origin,
+    sourceSha: expectedSourceSha,
+    workerVersionId: expectedWorkerVersion,
+    versionOverride: Boolean(process.env.WORKER_VERSION_OVERRIDE),
+    attempts: attempt,
+    consecutiveReadyChecks,
+    identityChecks,
+    surfaceChecks,
+    capturedAt: new Date().toISOString(),
+  }, null, 2)}\n`)
 }
 
 let consecutiveReadyChecks = 0
@@ -173,28 +207,36 @@ let lastError = 'no readiness attempt completed'
 while (Date.now() - startedAt < MAX_WAIT_MS) {
   attempt += 1
   try {
+    const identityChecks = []
     for (const origin of identityOrigins) {
-      await verifyDeploymentIdentity(origin, attempt)
+      const identity = await verifyDeploymentIdentity(origin, attempt)
+      if (identity) identityChecks.push(identity)
     }
 
     const homepageUrl = new URL(baseUrl)
     homepageUrl.searchParams.set('asset-propagation-check', `${Date.now()}-${attempt}`)
 
-    await verifyHtmlAndAssets(homepageUrl)
+    const homepage = await verifyHtmlAndAssets(homepageUrl)
 
     const tenantUrl = new URL(baseUrl)
     tenantUrl.searchParams.set('asset-propagation-check', `${Date.now()}-${attempt}`)
-    await verifyHtmlAndAssets(tenantUrl, {
+    const tenant = await verifyHtmlAndAssets(tenantUrl, {
       'x-preview-tenant': 'demo',
       'cache-control': 'no-store',
     })
 
     const dashboardUrl = new URL('/dashboard', baseUrl)
     dashboardUrl.searchParams.set('asset-propagation-check', `${Date.now()}-${attempt}`)
-    await verifyHtmlAndAssets(dashboardUrl)
+    const dashboard = await verifyHtmlAndAssets(dashboardUrl)
+    const surfaceChecks = [
+      { surface: 'platform', ...homepage },
+      { surface: 'demo', ...tenant },
+      { surface: 'dashboard', ...dashboard },
+    ]
 
     consecutiveReadyChecks += 1
     if (consecutiveReadyChecks >= 2) {
+      writeReadinessEvidence(identityChecks, surfaceChecks, attempt)
       console.log(`Deployed public surface assets are stable (attempt ${attempt}).`)
       process.exit(0)
     }

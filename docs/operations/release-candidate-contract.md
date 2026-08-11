@@ -84,9 +84,12 @@ the entire sequence:
    timeout, browser error, missing route, or incomplete inspection is
    unverified.
 9. Promote the candidate to **100%** only after every preceding gate passes,
-   purge the deployment HTML cache, and verify the staging custom domain and
-   assets without an override. Run the named Saya/Blawby desktop and mobile
-   browser projects once more against that deployed custom-domain version.
+   purge the deployment HTML cache, and require two consecutive checks of the
+   exact source SHA, Worker version, staging custom domain, and representative
+   assets without an override. Persist that readiness result as the deployed
+   provenance evidence; do not repeat the same endpoint probe in a second
+   verifier. Run the named Saya/Blawby desktop and mobile browser projects once
+   more against that deployed custom-domain version.
 10. Run the explicit test-mode Stripe checkout canary against the promoted
    custom-domain candidate with no version override. Provider webhooks cannot
    carry the 0% override, so this gate is post-promotion by design; a failure

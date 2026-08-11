@@ -106,14 +106,19 @@ function assertPromotedCandidateReadiness(script: string, label: string): void {
   const unpin = script.indexOf('unset WORKER_VERSION_OVERRIDE', promotedStatus)
   const expectedVersion = script.indexOf('DEPLOYMENT_EXPECTED_WORKER_VERSION="$CANDIDATE_VERSION_ID"', unpin)
   const readiness = script.indexOf('node scripts/wait-for-deployed-assets.mjs', expectedVersion)
-  const verifier = script.indexOf('node scripts/verify-deployed-candidate.mjs', readiness)
+  const evidence = script.indexOf('test -s "$deployed_verification"', readiness)
+  const browser = script.indexOf('Opening each tenant homepage', evidence)
+  const duplicateVerifier = script.indexOf('node scripts/verify-deployed-candidate.mjs', readiness)
 
   assert.ok(promotion >= 0, `${label}: candidate promotion must be present`)
   assert.ok(promotedStatus > promotion, `${label}: promoted traffic must be proven before readiness checks`)
   assert.ok(unpin > promotedStatus, `${label}: promoted readiness must not use a version override`)
   assert.ok(expectedVersion > unpin, `${label}: promoted readiness must require the candidate version`)
   assert.ok(readiness > expectedVersion, `${label}: promoted route propagation must be bounded`)
-  assert.ok(verifier > readiness, `${label}: deployed verification must follow promoted readiness`)
+  assert.match(script.slice(unpin, readiness), /DEPLOYMENT_READINESS_OUTPUT="\$deployed_verification"/)
+  assert.ok(evidence > readiness, `${label}: promoted readiness evidence must be persisted`)
+  assert.ok(browser > evidence, `${label}: browser verification must follow promoted readiness evidence`)
+  assert.ok(duplicateVerifier === -1 || duplicateVerifier > browser, `${label}: promoted readiness must not be repeated by a second verifier`)
 }
 
 test('required CI checks out the immutable event SHA and never mutates shared staging or production', async () => {
@@ -167,6 +172,10 @@ test('required CI checks out the immutable event SHA and never mutates shared st
   assert.match(deployedAssetWait, /GITHUB_SHA/)
   assert.match(deployedAssetWait, /\/api\/deployment/)
   assert.match(deployedAssetWait, /MAX_WAIT_MS = 180_000/)
+  assert.match(deployedAssetWait, /DEPLOYMENT_READINESS_OUTPUT/)
+  assert.match(deployedAssetWait, /kind: 'deployed-assets-readiness'/)
+  assert.match(deployedAssetWait, /identityChecks/)
+  assert.match(deployedAssetWait, /surfaceChecks/)
 })
 
 test('release workflows permit intentional schema cleanup while retaining migration safety checks', async () => {

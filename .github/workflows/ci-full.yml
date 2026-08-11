@@ -613,17 +613,11 @@ jobs:
           echo "Purging staging HTML cache and verifying the promoted custom domain"
           DEPLOYMENT_CACHE_ORIGIN="$STAGING_BASE_URL" node --experimental-strip-types scripts/purge-deployment-cache.ts
           unset WORKER_VERSION_OVERRIDE
-          DEPLOYMENT_EXPECTED_SOURCE_SHA="$GITHUB_SHA" \
+          DEPLOYMENT_READINESS_OUTPUT="$deployed_verification" \
+            DEPLOYMENT_EXPECTED_SOURCE_SHA="$GITHUB_SHA" \
             DEPLOYMENT_EXPECTED_WORKER_VERSION="$CANDIDATE_VERSION_ID" \
             node scripts/wait-for-deployed-assets.mjs
-
-          node scripts/verify-deployed-candidate.mjs \
-            --base-url "$STAGING_BASE_URL" \
-            --expected-sha "$GITHUB_SHA" \
-            --expected-version-id "$CANDIDATE_VERSION_ID" \
-            --worker-name "$WORKER_NAME" \
-            --route-inventory "$route_inventory" \
-            --output "$deployed_verification"
+          test -s "$deployed_verification"
           echo "Opening each tenant homepage and clicking its public navigation on the promoted candidate"
           npx playwright test tests/e2e/public-rendering-sentinel.spec.ts \
             --project=chromium \
