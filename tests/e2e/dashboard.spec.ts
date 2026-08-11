@@ -205,7 +205,7 @@ test.describe('dashboard functional smoke', () => {
 
     const currentPagesUrl = page.url()
     const routeLeaveDialog = page.waitForEvent('dialog').then(dialog => dialog.dismiss())
-    await page.getByRole('link', { name: 'Media library', exact: true }).click()
+    await page.locator('[id^="dashboard-sidebar"]').getByRole('link', { name: 'Today', exact: true }).click()
     await routeLeaveDialog
     await expect(page).toHaveURL(currentPagesUrl)
     await expect(page.getByRole('heading', { name: pageTitle, exact: true })).toBeVisible()
@@ -595,7 +595,7 @@ test.describe('dashboard functional smoke', () => {
     // point falls through to the anchor's plain href and forces a hard reload
     // (bypassing the mock again). 'networkidle' waits out that gap reliably.
     const overviewUrl = `${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi`
-    const experiencesLink = page.locator('[id^="dashboard-sidebar"]').getByRole('link', { name: 'Experiences' })
+    const experiencesLink = page.getByRole('link', { name: 'Experiences', exact: true })
 
     // The route mock must be registered before the overview page loads, not
     // after — NuxtLink eagerly prefetches its target route's data as soon as
@@ -643,22 +643,27 @@ test.describe('dashboard functional smoke', () => {
     // Same SSR-direct-service constraint as the experiences page above (see the
     // comment there) — media.vue fetches via loadDashboardMedia during SSR, so
     // the mock must be hit through an in-app SPA transition, not a URL nav.
-    const settingsUrl = `${baseURL}/dashboard/kikuzuki-krabi-thailand/sites/kikuzuki-krabi-thailand/settings`
-    const mediaLink = page.locator('[id^="dashboard-sidebar"]').getByRole('link', { name: 'Media library' })
+    const overviewUrl = `${baseURL}/dashboard/kikuzuki-krabi-thailand/sites/kikuzuki-krabi-thailand`
+    const mediaLink = page.getByRole('link').filter({ hasText: 'Media library' })
 
     await page.route('**/api/editor/sites/site-kikuzuki/media?**', async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ media: [] }) })
     })
-    await page.goto(settingsUrl, { waitUntil: 'networkidle' })
+    await page.goto(overviewUrl, { waitUntil: 'networkidle' })
     await mediaLink.click()
     await expect(page).toHaveURL(/\/media$/)
     await expect(page.getByText('No media yet')).toBeVisible()
     await page.unroute('**/api/editor/sites/site-kikuzuki/media?**')
 
     await page.route('**/api/editor/sites/site-kikuzuki/media?**', async (route) => {
+      const url = new URL(route.request().url())
+      if (url.searchParams.get('limit') === '6') {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ media: [] }) })
+        return
+      }
       await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Test failure' }) })
     })
-    await page.goto(settingsUrl, { waitUntil: 'networkidle' })
+    await page.goto(overviewUrl, { waitUntil: 'networkidle' })
     await mediaLink.click()
     await expect(page).toHaveURL(/\/media$/)
     await expect(page.getByText('No media yet')).toBeHidden()
@@ -670,13 +675,14 @@ test.describe('dashboard functional smoke', () => {
     await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
     await page.goto(devLoginUrl(baseURL!, 'user-kikuzuki'), { waitUntil: 'load' })
 
-    const settingsUrl = `${baseURL}/dashboard/kikuzuki-krabi-thailand/sites/kikuzuki-krabi-thailand/settings`
-    const blogLink = page.locator('[id^="dashboard-sidebar"]').getByRole('link', { name: 'Blog posts' })
+    const overviewUrl = `${baseURL}/dashboard/kikuzuki-krabi-thailand/sites/kikuzuki-krabi-thailand`
+    const blogLink = page.getByRole('link').filter({ hasText: /^Blog/ })
 
     await page.route('**/api/editor/sites/site-kikuzuki/blog/posts', async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ posts: [] }) })
     })
-    await page.goto(settingsUrl, { waitUntil: 'networkidle' })
+    await page.goto(overviewUrl, { waitUntil: 'networkidle' })
+    await page.getByRole('button', { name: 'Pages', exact: true }).click()
     await blogLink.click()
     await expect(page).toHaveURL(/\/blog$/)
     await expect(page.getByText('No blog posts yet. Create your first post to get started.')).toBeVisible()
@@ -685,7 +691,8 @@ test.describe('dashboard functional smoke', () => {
     await page.route('**/api/editor/sites/site-kikuzuki/blog/posts', async (route) => {
       await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Test failure' }) })
     })
-    await page.goto(settingsUrl, { waitUntil: 'networkidle' })
+    await page.goto(overviewUrl, { waitUntil: 'networkidle' })
+    await page.getByRole('button', { name: 'Pages', exact: true }).click()
     await blogLink.click()
     await expect(page).toHaveURL(/\/blog$/)
     await expect(page.getByText('No blog posts yet. Create your first post to get started.')).toBeHidden()
@@ -698,7 +705,7 @@ test.describe('dashboard functional smoke', () => {
     await page.goto(devLoginUrl(baseURL!, 'user-kikuzuki'), { waitUntil: 'load' })
 
     const overviewUrl = `${baseURL}/dashboard/kikuzuki-krabi-thailand/sites/kikuzuki-krabi-thailand/locations/kikuzuki-japanese-robatayaki-izakaya`
-    const menuLink = page.locator('[id^="dashboard-sidebar"]').getByRole('link', { name: 'Menus' })
+    const menuLink = page.getByRole('link', { name: 'Menu', exact: true })
 
     await page.route('**/api/editor/sites/site-kikuzuki/menus?**', async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, menus: [] }) })
