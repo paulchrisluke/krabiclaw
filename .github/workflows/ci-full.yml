@@ -165,8 +165,6 @@ jobs:
           restore_cache="$work_dir/restored-baseline-cache.log"
           export RESTORE_STATUS_PATH="$restore_status" RESTORE_CACHE_PATH="$restore_cache"
           stripe_webhook_preflight="$work_dir/stripe-webhook-preflight.json"
-          stripe_catalog_plan="$work_dir/stripe-catalog-plan.json"
-          stripe_catalog_evidence="$work_dir/stripe-catalog-preflight.json"
           stripe_canary_evidence="$work_dir/stripe-canary-evidence.json"
 
           BASELINE_VERSION_ID=""
@@ -185,7 +183,7 @@ jobs:
           export MIGRATION_BEFORE_PATH="$migration_before" MIGRATION_AFTER_PATH="$migration_after" MIGRATION_BEFORE_APPLIED_PATH="$migration_before_applied" MIGRATION_AFTER_APPLIED_PATH="$migration_after_applied" MIGRATION_STATE_BEFORE_PATH="$migration_state_before" MIGRATION_STATE_AFTER_PATH="$migration_state_after" MIGRATION_FILES_PATH="$migration_files" STAGING_SECRETS_PATH="$staging_secrets"
           export CANDIDATE_VERIFICATION_PATH="$candidate_verification" DEPLOYED_VERIFICATION_PATH="$deployed_verification"
           export ROUTE_INVENTORY_PATH="$route_inventory" RELEASE_ROUTE_INVENTORY_PATH="$route_inventory" DATABASE_MUTATION_FLAG_PATH="$database_mutation_flag"
-          export BROWSER_EVIDENCE_PATH="$browser_evidence" BUILD_IDENTITY_PATH="$build_identity" STRIPE_WEBHOOK_PREFLIGHT_PATH="$stripe_webhook_preflight" STRIPE_CATALOG_PREFLIGHT_PATH="$stripe_catalog_evidence" STRIPE_CANARY_EVIDENCE_PATH="$stripe_canary_evidence"
+          export BROWSER_EVIDENCE_PATH="$browser_evidence" BUILD_IDENTITY_PATH="$build_identity" STRIPE_WEBHOOK_PREFLIGHT_PATH="$stripe_webhook_preflight" STRIPE_CANARY_EVIDENCE_PATH="$stripe_canary_evidence"
 
           write_manifest() {
             local exit_status="${1:-0}"
@@ -261,7 +259,6 @@ jobs:
             },
             stagingSecrets: readJson(process.env.STAGING_SECRETS_PATH),
             stripeWebhookPreflight: readJson(process.env.STRIPE_WEBHOOK_PREFLIGHT_PATH),
-            stripeCatalogPreflight: readJson(process.env.STRIPE_CATALOG_PREFLIGHT_PATH),
             assets: {
               candidate: readJson(process.env.CANDIDATE_VERIFICATION_PATH),
               deployed: readJson(process.env.DEPLOYED_VERIFICATION_PATH),
@@ -449,57 +446,6 @@ jobs:
           STRIPE_WEBHOOK_PREFLIGHT_EVIDENCE_PATH="$stripe_webhook_preflight" \
             node --experimental-strip-types scripts/preflight-stripe-webhook-endpoint.mjs
           test -s "$stripe_webhook_preflight"
-
-          echo "Generating read-only Stripe test-mode recurring catalog plan before staging mutation"
-          STRIPE_SECRET_KEY="$STRIPE_SECRET_KEY" \
-            node scripts/seed-stripe.mjs --dry-run --require-test-mode --plan-file "$stripe_catalog_plan"
-          test -s "$stripe_catalog_plan"
-          STRIPE_CATALOG_PLAN_PATH="$stripe_catalog_plan" STRIPE_CATALOG_PREFLIGHT_PATH="$stripe_catalog_evidence" \
-            node --input-type=module <<'NODE'
-          import { readFileSync, writeFileSync } from 'node:fs'
-          import { PLAN_DEFINITIONS, planSha256 } from './scripts/lib/stripe-catalog-plan.mjs'
-
-          const plan = JSON.parse(readFileSync(process.env.STRIPE_CATALOG_PLAN_PATH, 'utf8'))
-          if (plan.accountMode !== 'test') throw new Error('Stripe catalog preflight did not produce a test-mode plan.')
-          if (typeof plan.accountId !== 'string' || !/^acct_[A-Za-z0-9]+$/.test(plan.accountId)) {
-            throw new Error('Stripe catalog preflight did not prove an exact Stripe account ID.')
-          }
-          if (plan.providerSnapshot?.accountId !== plan.accountId) {
-            throw new Error('Stripe catalog preflight account binding is inconsistent.')
-          }
-          if (plan.planSha256 !== planSha256(plan)) throw new Error('Stripe catalog preflight plan hash is invalid.')
-          if (typeof plan.providerSnapshotSha256 !== 'string' || !/^[0-9a-f]{64}$/.test(plan.providerSnapshotSha256)) {
-            throw new Error('Stripe catalog preflight snapshot hash is invalid.')
-          }
-          const operations = Array.isArray(plan.operations) ? plan.operations : []
-          const operationCounts = {}
-          for (const operation of operations) {
-            operationCounts[operation.type] = (operationCounts[operation.type] ?? 0) + 1
-          }
-          const operationCount = operations.length
-          const evidence = {
-            schemaVersion: 1,
-            kind: 'stripe-recurring-catalog-preflight',
-            status: operationCount === 0 ? 'passed' : 'blocked_drift',
-            sourceSha: process.env.GITHUB_SHA,
-            accountId: plan.accountId,
-            accountMode: plan.accountMode,
-            providerSnapshotSha256: plan.providerSnapshotSha256,
-            planSha256: plan.planSha256,
-            fixedExpectedMonthlyAmountsCents: Object.fromEntries(
-              PLAN_DEFINITIONS.map(definition => [definition.planId, definition.amountCents]).sort(([a], [b]) => a.localeCompare(b)),
-            ),
-            operationSummary: {
-              total: operationCount,
-              byType: Object.fromEntries(Object.entries(operationCounts).sort(([a], [b]) => a.localeCompare(b))),
-            },
-          }
-          const raw = JSON.stringify(evidence)
-          if (/(?:sk|rk|whsec)_(?:test|live)?_[A-Za-z0-9]+/.test(raw)) throw new Error('Stripe catalog evidence contains a raw secret.')
-          writeFileSync(process.env.STRIPE_CATALOG_PREFLIGHT_PATH, `${JSON.stringify(evidence, null, 2)}\n`)
-          if (operationCount !== 0) throw new Error(`Stripe catalog drift requires separate reviewed test-mode apply approval; ${operationCount} operations remain in the read-only plan.`)
-          NODE
-          test -s "$stripe_catalog_evidence"
 
           echo "Hashing the exact downloaded production build artifact"
           build_file_count="$(find .output -type f | wc -l | tr -d ' ')"

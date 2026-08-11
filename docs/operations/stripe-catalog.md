@@ -55,10 +55,11 @@ STRIPE_SECRET_KEY=rk_test_... node scripts/seed-stripe.mjs \
   --dry-run --require-test-mode --plan-file .tmp/stripe-catalog-plan.json
 ```
 
-The full-validation candidate workflow runs this preflight before any staging
-mutation. It records only the source SHA, test account ID and mode, provider snapshot
-hash, plan hash, fixed monthly amounts, and an operation summary in the
-candidate manifest; the raw secret is never written to the plan or evidence.
+Catalog reconciliation is an explicit operator workflow and is not coupled to
+application deployment. Staging releases verify the configured webhook and a
+real test-mode checkout journey, while catalog drift is planned, reviewed, and
+applied separately with the commands below. This prevents unrelated product
+metadata copy from blocking an application or incident release.
 
 Review the plan and its `providerSnapshotSha256`, `operations`, and fixed
 amounts. Apply only the reviewed file, with the exact hash copied from its
