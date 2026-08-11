@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import { BLOG_TOOLS } from '../../server/utils/mcp-tools/blog.ts'
 import { MCP_PUBLIC_TOOLS } from '../../server/utils/mcp-tools/index.ts'
+import { renderMcpPrompt } from '../../server/utils/mcp-prompts.ts'
 import { MEDIA_TOOLS } from '../../server/utils/mcp-tools/media.ts'
 import { POSTS_TOOLS } from '../../server/utils/mcp-tools/posts.ts'
 import { siteIdSchema } from '../../server/utils/mcp-tools/shared.ts'
@@ -112,6 +113,12 @@ test('media placement contract does not reintroduce entity-specific assignment t
     assert.equal(mcpNames.has(name), false, `${name} must not be exposed by MCP`)
     assert.equal(chowbotNames.has(name), false, `${name} must not be exposed by ChowBot`)
   }
+})
+
+test('photo prompt uploads each confirmed attachment once before reporting placement', () => {
+  const prompt = renderMcpPrompt('add_photos_to_site', {}).text
+  assert.match(prompt, /upload_user_media exactly once for each confirmed attachment/)
+  assert.match(prompt, /Upload every confirmed photo before reporting any of them as placed/)
 })
 
 test('MCP site_id schema requires the internal site id, not a public locator', () => {

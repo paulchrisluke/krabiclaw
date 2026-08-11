@@ -229,7 +229,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
           "If the user hasn't already attached photos in this conversation, ask them to attach the photos they want to add directly in ChatGPT.",
           "For each attached photo, inspect it visually first, then ask the user (or infer from context) where it should go: the homepage main photo, a specific location's main photo, the about/story section, a menu item, an experience, or a post.",
           "Confirm the target site and placement with the user before uploading anything.",
-          "After confirmation, call upload_user_media once with file (the resolved ChatGPT file reference for the attachment), then call set_media with the matching target_type and exact entity id returned by a read tool. Never switch to a bare file_id or invent a download URL. For ordered placements such as experience_media, first call the read tool, merge each uploaded asset into the existing ordered media ids, then assign the complete asset_ids list.",
+          "After confirmation, call upload_user_media exactly once for each confirmed attachment with file set to its resolved ChatGPT file reference. Upload every confirmed photo before reporting any of them as placed, then call set_media with the matching target_type and exact entity id returned by a read tool. Never switch to a bare file_id or invent a download URL. For ordered placements such as experience_media, first call the read tool, merge each uploaded asset into the existing ordered media ids, then assign the complete asset_ids list.",
           "Reply confirming exactly where each photo was placed.",
         ].join(" "),
       };

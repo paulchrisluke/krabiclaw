@@ -474,7 +474,16 @@ export function createAuth(env: CloudflareEnv) {
         impersonationSessionDuration: 60 * 60,
       }),
       phoneNumber({
-        sendOTP: ({ phoneNumber: phone, code }) => sendWhatsAppOtp(env, phone, code),
+        sendOTP: async ({ phoneNumber: phone, code }) => {
+          try {
+            await sendWhatsAppOtp(env, phone, code)
+          } catch (error) {
+            console.error('auth_whatsapp_otp_failed', {
+              error: error instanceof Error ? error.message : String(error),
+            })
+            throw error
+          }
+        },
         otpLength: 6,
         expiresIn: 300,
         phoneNumberValidator: async (phone) => {
