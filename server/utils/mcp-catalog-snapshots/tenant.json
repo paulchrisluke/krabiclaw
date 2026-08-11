@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:57d2af499db6da872c90de1d96967c304c6d71008ea3471d6be8c3eb3c856407",
+  "fingerprint": "sha256:fc1dd4d83c438939d5c15471edd3236732da2b08ff79ba6ced1078e3c8d2988b",
   "tools": [
     {
       "name": "add_menu_items_batch",
@@ -10584,6 +10584,163 @@
       "name": "set_media",
       "inputSchema": {
         "additionalProperties": false,
+        "oneOf": [
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "location_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "menu_item_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "post_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "experience_id"
+                  ]
+                }
+              ]
+            },
+            "properties": {
+              "target_type": {
+                "enum": [
+                  "site_logo",
+                  "home_hero",
+                  "home_story_image",
+                  "about_story_image"
+                ]
+              }
+            }
+          },
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "menu_item_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "post_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "experience_id"
+                  ]
+                }
+              ]
+            },
+            "properties": {
+              "target_type": {
+                "const": "location_hero"
+              }
+            },
+            "required": [
+              "location_id"
+            ]
+          },
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "location_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "post_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "experience_id"
+                  ]
+                }
+              ]
+            },
+            "properties": {
+              "target_type": {
+                "const": "menu_item_media"
+              }
+            },
+            "required": [
+              "menu_item_id"
+            ]
+          },
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "location_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "menu_item_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "experience_id"
+                  ]
+                }
+              ]
+            },
+            "properties": {
+              "target_type": {
+                "enum": [
+                  "post_image",
+                  "blog_post_image"
+                ]
+              }
+            },
+            "required": [
+              "post_id"
+            ]
+          },
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "location_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "menu_item_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "post_id"
+                  ]
+                }
+              ]
+            },
+            "properties": {
+              "target_type": {
+                "const": "experience_media"
+              }
+            },
+            "required": [
+              "experience_id"
+            ]
+          }
+        ],
         "properties": {
           "asset_ids": {
             "description": "Complete desired asset-id state for the target. Empty clears. Duplicates are rejected.",

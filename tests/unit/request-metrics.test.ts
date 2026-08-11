@@ -142,7 +142,7 @@ test('D1 batch failure telemetry identifies statements without bound values', as
     await assert.rejects(
       instrumented.batch([
         instrumented.prepare('SELECT * FROM oauthResource WHERE identifier = ?').bind('customer-secret'),
-        instrumented.prepare('UPDATE oauthAccessToken SET updatedAt = ?').bind('customer-secret'),
+        instrumented.prepare('UPDATE oauthAccessToken SET token = ?').bind('customer-secret'),
       ]),
       failure,
     )

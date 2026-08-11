@@ -12,5 +12,10 @@ test('Blawby CI fixture seeds the current canonical page model without the retir
   assert.match(sql, /INSERT INTO content_blocks/)
   assert.match(sql, /"section":"hero"/)
   assert.match(sql, /North Carolina Legal Services/)
+  assert.equal(sql.match(/INSERT INTO tenant_pages/g)?.length, 5)
+  assert.equal(sql.match(/INSERT INTO tenant_page_variants/g)?.length, 5)
+  for (const path of ['/', '/about', '/contact', '/pricing', '/services']) {
+    assert.ok(sql.includes(`'${path}'`), `missing page path ${path}`)
+  }
   assert.doesNotMatch(sql, /client-imports|ncls-blawby\.mjs|retry|BEGIN|COMMIT/)
 })

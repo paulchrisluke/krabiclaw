@@ -487,13 +487,18 @@ export function toolFileReference(value: unknown, key: string): ToolFileReferenc
   };
 }
 
+async function fetchToolFile(file: ToolFileReference, timeoutMs: number): Promise<Response> {
+  const safeDownloadUrl = assertSafeDownloadUrl(file.download_url, `Attachment ${file.file_id}`);
+  return await fetch(safeDownloadUrl, {
+    redirect: "manual",
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+}
+
 export async function resolveGeneratedImageFile(
   file: ToolFileReference,
 ): Promise<{ buffer: ArrayBuffer; contentType: string; filename: string }> {
-  const safeDownloadUrl = assertSafeDownloadUrl(file.download_url, `Attachment ${file.file_id}`);
-  const response = await fetch(safeDownloadUrl, {
-    signal: AbortSignal.timeout(15_000),
-  });
+  const response = await fetchToolFile(file, 15_000);
   if (!response.ok) {
     throw createError({
       statusCode: 400,
@@ -588,10 +593,7 @@ async function readMediaBufferWithLimit(
 export async function resolveUserUploadedMediaFile(
   file: ToolFileReference,
 ): Promise<ResolvedMediaFile> {
-  const safeDownloadUrl = assertSafeDownloadUrl(file.download_url, `Attachment ${file.file_id}`);
-  const response = await fetch(safeDownloadUrl, {
-    signal: AbortSignal.timeout(30_000),
-  });
+  const response = await fetchToolFile(file, 30_000);
   if (!response.ok) {
     throw createError({
       statusCode: 400,

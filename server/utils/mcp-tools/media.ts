@@ -1,6 +1,21 @@
 import type { McpToolDefinition } from './shared'
 import { chatgptFileInput, mediaAssetObject, resolvedMediaAssetObject, siteTool } from './shared'
 
+const mediaEntityIdFields = ['location_id', 'menu_item_id', 'post_id', 'experience_id'] as const
+
+function mediaTargetBranch(targetTypes: string[], requiredEntityId?: typeof mediaEntityIdFields[number]) {
+  const forbiddenEntityIds = mediaEntityIdFields.filter(field => field !== requiredEntityId)
+  return {
+    properties: {
+      target_type: targetTypes.length === 1
+        ? { const: targetTypes[0] }
+        : { enum: targetTypes },
+    },
+    ...(requiredEntityId ? { required: [requiredEntityId] } : {}),
+    not: { anyOf: forbiddenEntityIds.map(field => ({ required: [field] })) },
+  }
+}
+
 export const MEDIA_TOOLS: McpToolDefinition[] = [
   siteTool({
       name: 'set_media',
@@ -25,6 +40,13 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
           uniqueItems: true,
           description: 'Complete desired asset-id state for the target. Empty clears. Duplicates are rejected.',
         },
+        oneOf: [
+          mediaTargetBranch(['site_logo', 'home_hero', 'home_story_image', 'about_story_image']),
+          mediaTargetBranch(['location_hero'], 'location_id'),
+          mediaTargetBranch(['menu_item_media'], 'menu_item_id'),
+          mediaTargetBranch(['post_image', 'blog_post_image'], 'post_id'),
+          mediaTargetBranch(['experience_media'], 'experience_id'),
+        ],
       },
       required: ['target_type', 'asset_ids'],
       outputSchema: {

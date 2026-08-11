@@ -11,7 +11,7 @@ import { PostValidationError, validatePostInput } from '../../server/utils/post-
 
 type ToolContract = {
   name: string
-  inputSchema: { required?: readonly string[], properties?: Record<string, unknown>, additionalProperties?: boolean }
+  inputSchema: { required?: readonly string[], properties?: Record<string, unknown>, additionalProperties?: boolean, oneOf?: unknown[] }
   outputSchema?: { properties?: Record<string, unknown> }
 }
 
@@ -53,6 +53,31 @@ test('blog, post, and media MCP schemas expose the canonical writable contract',
   assert.equal(setMedia.inputSchema.additionalProperties, false)
   assert.equal(setMedia.inputSchema.properties?.target, undefined)
   assert.ok(setMedia.inputSchema.properties?.target_type)
+  assert.equal(setMedia.inputSchema.oneOf?.length, 5)
+  const mediaBranches = setMedia.inputSchema.oneOf as Array<{
+    properties: { target_type: { const?: string, enum?: string[] } }
+    required?: string[]
+    not: { anyOf: Array<{ required: string[] }> }
+  }>
+  const siteBranch = mediaBranches.find(candidate => candidate.properties.target_type.enum?.includes('site_logo'))
+  assert.ok(siteBranch)
+  assert.equal(siteBranch.required, undefined)
+  assert.equal(siteBranch.not.anyOf.length, 4)
+  for (const [targetType, entityId] of [
+    ['location_hero', 'location_id'],
+    ['menu_item_media', 'menu_item_id'],
+    ['post_image', 'post_id'],
+    ['experience_media', 'experience_id'],
+  ] as const) {
+    const branch = mediaBranches.find(candidate =>
+      candidate.properties.target_type.const === targetType
+      || candidate.properties.target_type.enum?.includes(targetType),
+    )
+    assert.ok(branch, `missing schema branch for ${targetType}`)
+    assert.deepEqual(branch.required, [entityId])
+    assert.equal(branch.not.anyOf.some(candidate => candidate.required.includes(entityId)), false)
+    assert.equal(branch.not.anyOf.length, 3)
+  }
 
   assert.match(upload.description, /only upload path/i)
   assert.match(upload.description, /native ChatGPT file argument/i)

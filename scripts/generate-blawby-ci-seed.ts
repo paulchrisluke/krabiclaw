@@ -209,6 +209,26 @@ export function renderBlawbyCiFixtureSql(): string {
   return `-- Deterministic Blawby fixture for preview release checks.
 PRAGMA foreign_keys = ON;
 
+DELETE FROM content_blocks
+ WHERE document_id IN (
+   SELECT id FROM content_documents
+    WHERE (owner_type = 'tenant_page' AND (
+             owner_id IN (SELECT id FROM tenant_page_variants WHERE site_id = ${sqlValue(SITE_ID)})
+             OR owner_id LIKE 'variant-ncls-ci-%'
+             OR owner_id LIKE '%site-ncls-blawby%'
+          ))
+       OR (owner_type = 'tenant_blog' AND owner_id LIKE 'blog_ncls_%')
+ );
+DELETE FROM content_revisions
+ WHERE document_id IN (
+   SELECT id FROM content_documents
+    WHERE (owner_type = 'tenant_page' AND (
+             owner_id IN (SELECT id FROM tenant_page_variants WHERE site_id = ${sqlValue(SITE_ID)})
+             OR owner_id LIKE 'variant-ncls-ci-%'
+             OR owner_id LIKE '%site-ncls-blawby%'
+          ))
+       OR (owner_type = 'tenant_blog' AND owner_id LIKE 'blog_ncls_%')
+ );
 DELETE FROM content_documents
  WHERE (owner_type = 'tenant_page' AND (
           owner_id IN (SELECT id FROM tenant_page_variants WHERE site_id = ${sqlValue(SITE_ID)})
@@ -216,6 +236,18 @@ DELETE FROM content_documents
           OR owner_id LIKE '%site-ncls-blawby%'
        ))
     OR (owner_type = 'tenant_blog' AND owner_id LIKE 'blog_ncls_%');
+DELETE FROM tenant_page_variants WHERE site_id = ${sqlValue(SITE_ID)} OR id LIKE 'variant-ncls-ci-%';
+DELETE FROM tenant_pages WHERE site_id = ${sqlValue(SITE_ID)} OR id LIKE 'page-ncls-ci-%';
+DELETE FROM tenant_navigation_items WHERE site_id = ${sqlValue(SITE_ID)} OR id LIKE 'nav-ncls-ci-%';
+DELETE FROM offerings WHERE site_id = ${sqlValue(SITE_ID)} OR id = 'offering-ncls-consultation';
+DELETE FROM site_theme_tokens WHERE site_id = ${sqlValue(SITE_ID)} OR id = 'theme-ncls-ci';
+DELETE FROM site_consultation_settings WHERE site_id = ${sqlValue(SITE_ID)} OR id = 'consultation-ncls-ci';
+DELETE FROM tenant_compliance WHERE site_id = ${sqlValue(SITE_ID)} OR id = 'compliance-ncls-ci';
+DELETE FROM site_domains WHERE site_id = ${sqlValue(SITE_ID)} OR id LIKE 'domain-ncls-ci-%';
+DELETE FROM site_locales WHERE site_id = ${sqlValue(SITE_ID)} OR id = 'locale-ncls-ci-en';
+UPDATE sites SET primary_location_id = NULL WHERE id = ${sqlValue(SITE_ID)} OR subdomain = 'ncls';
+DELETE FROM business_locations WHERE site_id = ${sqlValue(SITE_ID)} OR id = ${sqlValue(LOCATION_ID)};
+DELETE FROM member WHERE organizationId = ${sqlValue(ORGANIZATION_ID)} OR id = 'member-ncls-blawby';
 DELETE FROM sites WHERE id = ${sqlValue(SITE_ID)} OR subdomain = 'ncls';
 DELETE FROM organization WHERE id = ${sqlValue(ORGANIZATION_ID)} OR slug = 'north-carolina-legal-services';
 DELETE FROM user WHERE id = ${sqlValue(USER_ID)} OR email = 'ncls-blawby@example.test';
