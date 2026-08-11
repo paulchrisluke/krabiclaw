@@ -45,11 +45,7 @@ Every candidate run records all of the following in
 - a post-promotion test-mode Stripe organization checkout canary (at 100% of
   the candidate, using disposable `e2e-` state, hosted Checkout, Better Auth
   subscription, app billing/entitlement projection, processed webhook, and
-  invoice ledger evidence with redacted provider IDs); and
-- a read-only test-mode recurring Stripe catalog plan preflight tied to the
-  same source SHA; the plan must contain zero operations for the candidate to
-  proceed. A nonzero plan is recorded as `blocked_drift` and uploaded for a
-  separate reviewed test-mode apply; it is never silently treated as passed;
+  invoice ledger evidence with redacted provider IDs).
 The manifest must make it possible for a reviewer to follow one source SHA to
 one build artifact, one Worker Version, one migration snapshot, and one set of
 browser results. Missing, ambiguous, or indirectly inferred
@@ -65,9 +61,6 @@ the entire sequence:
 1. Run the read-only test-mode Stripe webhook endpoint preflight before any
    staging mutation. It must use the existing `STRIPE_SECRET_KEY_TEST` secret,
    refuse live keys, and fail on endpoint count or event-set drift.
-   The recurring catalog dry-run follows the same read-only boundary: any
-   nonzero operation plan writes reviewed evidence and blocks before baseline
-   capture or staging traffic mutation.
 2. Capture the current staging deployment and baseline Worker version.
 3. Capture migration state and run the migration safety check. Relationship
    preservation failures and silent row-loss patterns block before any database
