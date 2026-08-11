@@ -31,8 +31,16 @@ jobs:
       - run: yarn install --frozen-lockfile
       - name: Build exact main revision
         run: yarn build
-      # Production migrations are intentionally paused while the location-parent
-      # rebuild recovery is completed. Main Worker deployment remains automatic.
+      - name: Check migration data safety
+        run: yarn migrate:check
+      - name: Reconcile historical location migration and apply pending migrations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          node scripts/reconcile-location-parent-migration.mjs --remote
+          npx wrangler d1 migrations apply DB --remote
       - name: Deploy exact main revision
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

@@ -147,6 +147,25 @@ describe('migration safety', () => {
     assert.deepEqual(findUnsafeMigrationStatements('0072_safe.sql', 'CREATE TRIGGER media_guard BEFORE INSERT ON media_assets BEGIN SELECT 1; END;'), [])
   })
 
+  it('forbids future referenced-parent rebuilds even when parent-only assertions are present', () => {
+    const sql = `
+      CREATE TABLE __um_backup_business_locations AS SELECT * FROM business_locations;
+      CREATE TABLE __new_business_locations (id text primary key);
+      INSERT INTO __new_business_locations SELECT * FROM __um_backup_business_locations;
+      DROP TABLE business_locations;
+      ALTER TABLE __new_business_locations RENAME TO business_locations;
+      CREATE TABLE __um_assert_0114 (violation text not null check (violation = ''));
+      SELECT 'business_locations_backup_count_mismatch'
+      WHERE (SELECT COUNT(*) FROM __um_backup_business_locations) != (SELECT COUNT(*) FROM business_locations);
+      SELECT 1 FROM pragma_foreign_key_check;
+      DROP TABLE __um_assert_0114;
+      DROP TABLE __um_backup_business_locations;
+    `
+    assert.deepEqual(findUnsafeMigrationStatements('0114_bad_parent_rebuild.sql', sql), [
+      'DROP TABLE business_locations is forbidden for referenced parent tables; use additive ALTER statements or a reviewed operational reconciler',
+    ])
+  })
+
   it('does not retroactively fail immutable migration history', () => {
     assert.deepEqual(findUnsafeMigrationStatements('0049_old.sql', 'DROP TABLE `media_assets`;'), [])
     assert.deepEqual(findUnsafeMigrationStatements('0047_free_molecule_man.sql', 'DROP TABLE `media_assets`;'), [])
