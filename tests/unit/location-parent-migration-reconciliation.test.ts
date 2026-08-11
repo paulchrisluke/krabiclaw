@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import Database from 'better-sqlite3'
-import { reconcileLocationParentMigration } from '../../scripts/reconcile-location-parent-migration.mjs'
+import { parentRebuildStatements, reconcileLocationParentMigration, removeLegacyGoogleConnectionSchema } from '../../scripts/reconcile-location-parent-migration.mjs'
 
 function createLegacyDatabase() {
   const db = new Database(':memory:')
@@ -53,6 +53,10 @@ function adapter(db: Database.Database) {
   return {
     query: async (sql: string) => db.prepare(sql).all() as Array<Record<string, unknown>>,
     run: async (sql: string) => { db.exec(sql); return [] },
+    batch: async (statements: string[]) => {
+      db.transaction(() => { for (const statement of statements) db.exec(statement) })()
+      return []
+    },
   }
 }
 
@@ -74,12 +78,69 @@ test('safe 0111 reconciliation preserves every location-owned row and is idempot
     assert.equal((db.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type='table' AND name='google_business_events'").get() as { count: number }).count, 0)
     assert.equal((db.prepare("SELECT COUNT(*) AS count FROM d1_migrations WHERE name='0111_sharp_switch.sql'").get() as { count: number }).count, 1)
 
-    const repeated = await reconcileLocationParentMigration(adapter(db))
-    assert.equal(repeated.status, 'already_reconciled')
+    const cleanupStatements = [
+      'CREATE TABLE __new_business_locations (id text PRIMARY KEY, title text NOT NULL)',
+      'INSERT INTO __new_business_locations (id, title) SELECT id, title FROM business_locations',
+      'DROP TABLE business_locations',
+      'ALTER TABLE __new_business_locations RENAME TO business_locations',
+    ]
+    const repeated = await reconcileLocationParentMigration(adapter(db), { rebuildStatements: cleanupStatements })
+    assert.equal(repeated.status, 'reconciled_and_cleaned')
     assert.equal((db.prepare('SELECT COUNT(*) AS count FROM experiences').get() as { count: number }).count, 1)
+    assert.equal(db.prepare('PRAGMA table_info(business_locations)').all().some(row => (row as { name: string }).name === 'google_connection_id'), false)
+    assert.equal((db.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type='table' AND name='google_business_connections'").get() as { count: number }).count, 0)
+
+    const finalRun = await reconcileLocationParentMigration(adapter(db), { rebuildStatements: cleanupStatements })
+    assert.equal(finalRun.status, 'already_reconciled')
   } finally {
     db.close()
   }
+})
+
+test('complete cleanup restores cascaded, transitive, and nulled location relationships', async () => {
+  const db = new Database(':memory:')
+  db.pragma('foreign_keys = ON')
+  db.exec(`
+    CREATE TABLE google_business_connections (id text PRIMARY KEY, location_id text);
+    CREATE TABLE business_locations (id text PRIMARY KEY, google_connection_id text REFERENCES google_business_connections(id) ON DELETE SET NULL, title text NOT NULL);
+    CREATE TABLE experiences (id text PRIMARY KEY, location_id text REFERENCES business_locations(id) ON DELETE CASCADE);
+    CREATE TABLE experience_media (id text PRIMARY KEY, experience_id text REFERENCES experiences(id) ON DELETE CASCADE);
+    CREATE TABLE posts (id text PRIMARY KEY, location_id text REFERENCES business_locations(id) ON DELETE SET NULL);
+    INSERT INTO google_business_connections VALUES ('connection-1', 'location-1');
+    INSERT INTO business_locations VALUES ('location-1', 'connection-1', 'Location');
+    INSERT INTO experiences VALUES ('experience-1', 'location-1');
+    INSERT INTO experience_media VALUES ('media-1', 'experience-1');
+    INSERT INTO posts VALUES ('post-1', 'location-1');
+  `)
+  try {
+    const statements = [
+      'CREATE TABLE __new_business_locations (id text PRIMARY KEY, title text NOT NULL)',
+      'INSERT INTO __new_business_locations (id, title) SELECT id, title FROM business_locations',
+      'DROP TABLE business_locations',
+      'ALTER TABLE __new_business_locations RENAME TO business_locations',
+    ]
+    const result = await removeLegacyGoogleConnectionSchema(adapter(db), statements)
+    assert.equal(result.status, 'cleaned')
+    assert.equal((db.prepare('SELECT location_id FROM experiences').get() as { location_id: string }).location_id, 'location-1')
+    assert.equal((db.prepare('SELECT experience_id FROM experience_media').get() as { experience_id: string }).experience_id, 'experience-1')
+    assert.equal((db.prepare('SELECT location_id FROM posts').get() as { location_id: string }).location_id, 'location-1')
+    assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), [])
+  } finally {
+    db.close()
+  }
+})
+
+test('extracts only the parent rebuild from immutable 0111', () => {
+  const statements = parentRebuildStatements(`
+    CREATE TABLE __new_business_locations (id text);--> statement-breakpoint
+    INSERT INTO __new_business_locations SELECT id FROM business_locations;--> statement-breakpoint
+    DROP TABLE business_locations;--> statement-breakpoint
+    DROP TABLE google_business_connections;--> statement-breakpoint
+    DROP TABLE google_business_events;
+  `)
+  assert.equal(statements.length, 3)
+  assert.match(statements[0]!, /CREATE TABLE __new_business_locations/)
+  assert.match(statements.at(-1)!, /DROP TABLE business_locations/)
 })
 
 test('safe 0111 reconciliation refuses an unexpected migration boundary', async () => {
@@ -91,4 +152,3 @@ test('safe 0111 reconciliation refuses an unexpected migration boundary', async 
     db.close()
   }
 })
-
