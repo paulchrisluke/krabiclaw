@@ -2304,15 +2304,6 @@ export const themes = sqliteTable("themes", {
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 });
 
-export const token_exchange_cache = sqliteTable("token_exchange_cache", {
-	code: text().primaryKey(),
-	state: text().default("pending").notNull(),
-	response_body: text().default("").notNull(),
-	http_status: integer().default(0).notNull(),
-	created_at: text().notNull(),
-	expires_at: text().notNull(),
-});
-
 export const user = sqliteTable("user", {
 	id: text().primaryKey(),
 	name: text().notNull(),

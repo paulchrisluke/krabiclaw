@@ -1138,7 +1138,6 @@ export const BOUNDED_WRITE_TOOL_NAMES = [
   'analyze_document',
   'save_generated_image',
   'save_generated_image_file',
-  'upload_user_photo',
   'upload_user_media',
   'set_media',
   'set_brand_color',

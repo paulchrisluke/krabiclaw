@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:6e3a6c8149575eb3560b3adb6a00e37bd5b445271e0a6597cd4de498ca4152a3",
+  "fingerprint": "sha256:fc1dd4d83c438939d5c15471edd3236732da2b08ff79ba6ced1078e3c8d2988b",
   "tools": [
     {
       "name": "add_menu_items_batch",
@@ -10583,31 +10583,162 @@
     {
       "name": "set_media",
       "inputSchema": {
-        "additionalProperties": true,
-        "allOf": [
+        "additionalProperties": false,
+        "oneOf": [
           {
-            "else": {
-              "properties": {
-                "asset_ids": {
-                  "maxItems": 1
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "location_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "menu_item_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "post_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "experience_id"
+                  ]
                 }
+              ]
+            },
+            "properties": {
+              "target_type": {
+                "enum": [
+                  "site_logo",
+                  "home_hero",
+                  "home_story_image",
+                  "about_story_image"
+                ]
+              }
+            }
+          },
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "menu_item_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "post_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "experience_id"
+                  ]
+                }
+              ]
+            },
+            "properties": {
+              "target_type": {
+                "const": "location_hero"
               }
             },
-            "if": {
-              "properties": {
-                "target": {
-                  "properties": {
-                    "type": {
-                      "enum": [
-                        "experience_media",
-                        "menu_item_media"
-                      ]
-                    }
-                  }
+            "required": [
+              "location_id"
+            ]
+          },
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "location_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "post_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "experience_id"
+                  ]
                 }
+              ]
+            },
+            "properties": {
+              "target_type": {
+                "const": "menu_item_media"
               }
             },
-            "then": {}
+            "required": [
+              "menu_item_id"
+            ]
+          },
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "location_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "menu_item_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "experience_id"
+                  ]
+                }
+              ]
+            },
+            "properties": {
+              "target_type": {
+                "enum": [
+                  "post_image",
+                  "blog_post_image"
+                ]
+              }
+            },
+            "required": [
+              "post_id"
+            ]
+          },
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "location_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "menu_item_id"
+                  ]
+                },
+                {
+                  "required": [
+                    "post_id"
+                  ]
+                }
+              ]
+            },
+            "properties": {
+              "target_type": {
+                "const": "experience_media"
+              }
+            },
+            "required": [
+              "experience_id"
+            ]
           }
         ],
         "properties": {
@@ -10619,135 +10750,44 @@
             "type": "array",
             "uniqueItems": true
           },
+          "experience_id": {
+            "description": "Required only for experience_media. Use the exact id returned by get_experience or list_experiences.",
+            "type": "string"
+          },
+          "location_id": {
+            "description": "Required only for location_hero. Use the exact id returned by get_location or list_locations; never pass a slug, name, URL, or site_id.",
+            "type": "string"
+          },
+          "menu_item_id": {
+            "description": "Required only for menu_item_media. Use the exact id returned by a menu read tool.",
+            "type": "string"
+          },
+          "post_id": {
+            "description": "Required only for post_image or blog_post_image. Use the exact id returned by the matching post read tool.",
+            "type": "string"
+          },
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
           },
-          "target": {
-            "description": "Discriminated media placement target. Supported types: site_logo, home_hero, home_story_image, about_story_image, location_hero, menu_item_media, post_image, blog_post_image, experience_media.",
-            "oneOf": [
-              {
-                "properties": {
-                  "type": {
-                    "const": "site_logo"
-                  }
-                },
-                "required": [
-                  "type"
-                ]
-              },
-              {
-                "properties": {
-                  "location_id": {
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  },
-                  "type": {
-                    "const": "home_hero"
-                  }
-                },
-                "required": [
-                  "type"
-                ]
-              },
-              {
-                "properties": {
-                  "type": {
-                    "const": "home_story_image"
-                  }
-                },
-                "required": [
-                  "type"
-                ]
-              },
-              {
-                "properties": {
-                  "type": {
-                    "const": "about_story_image"
-                  }
-                },
-                "required": [
-                  "type"
-                ]
-              },
-              {
-                "properties": {
-                  "location_id": {
-                    "type": "string"
-                  },
-                  "type": {
-                    "const": "location_hero"
-                  }
-                },
-                "required": [
-                  "type",
-                  "location_id"
-                ]
-              },
-              {
-                "properties": {
-                  "menu_item_id": {
-                    "type": "string"
-                  },
-                  "type": {
-                    "const": "menu_item_media"
-                  }
-                },
-                "required": [
-                  "type",
-                  "menu_item_id"
-                ]
-              },
-              {
-                "properties": {
-                  "post_id": {
-                    "type": "string"
-                  },
-                  "type": {
-                    "const": "post_image"
-                  }
-                },
-                "required": [
-                  "type",
-                  "post_id"
-                ]
-              },
-              {
-                "properties": {
-                  "post_id": {
-                    "type": "string"
-                  },
-                  "type": {
-                    "const": "blog_post_image"
-                  }
-                },
-                "required": [
-                  "type",
-                  "post_id"
-                ]
-              },
-              {
-                "properties": {
-                  "experience_id": {
-                    "type": "string"
-                  },
-                  "type": {
-                    "const": "experience_media"
-                  }
-                },
-                "required": [
-                  "type",
-                  "experience_id"
-                ]
-              }
+          "target_type": {
+            "description": "The placement to replace. This is a required top-level field.",
+            "enum": [
+              "site_logo",
+              "home_hero",
+              "home_story_image",
+              "about_story_image",
+              "location_hero",
+              "menu_item_media",
+              "post_image",
+              "blog_post_image",
+              "experience_media"
             ],
-            "type": "object"
+            "type": "string"
           }
         },
         "required": [
-          "target",
+          "target_type",
           "asset_ids"
         ],
         "type": "object"
@@ -15337,19 +15377,7 @@
     {
       "name": "upload_user_media",
       "inputSchema": {
-        "additionalProperties": true,
-        "oneOf": [
-          {
-            "required": [
-              "file"
-            ]
-          },
-          {
-            "required": [
-              "file_id"
-            ]
-          }
-        ],
+        "additionalProperties": false,
         "properties": {
           "category": {
             "description": "What this media will be used for.",
@@ -15391,10 +15419,6 @@
             ],
             "type": "object"
           },
-          "file_id": {
-            "description": "Resolved file identifier for a user-uploaded image, video, or Markdown document (e.g. file_abc123). Prefer file when the host can supply the filename directly.",
-            "type": "string"
-          },
           "poster_file": {
             "description": "Optional poster/thumbnail image for a video upload. Ignored for image uploads.",
             "properties": {
@@ -15422,7 +15446,9 @@
             "type": "string"
           }
         },
-        "required": [],
+        "required": [
+          "file"
+        ],
         "type": "object"
       },
       "outputSchema": {
@@ -15468,97 +15494,6 @@
           "status",
           "public_url",
           "kind"
-        ],
-        "type": "object"
-      }
-    },
-    {
-      "name": "upload_user_photo",
-      "inputSchema": {
-        "additionalProperties": true,
-        "oneOf": [
-          {
-            "required": [
-              "file"
-            ]
-          },
-          {
-            "required": [
-              "file_id"
-            ]
-          }
-        ],
-        "properties": {
-          "category": {
-            "description": "What this photo will be used for.",
-            "enum": [
-              "exterior",
-              "interior",
-              "food",
-              "menu",
-              "team",
-              "logo",
-              "blog",
-              "other"
-            ],
-            "type": "string"
-          },
-          "description": {
-            "description": "Description of the photo (stored as alt text).",
-            "type": "string"
-          },
-          "file": {
-            "description": "Authorized file reference supplied by ChatGPT after rewriting the declared top-level file argument, including a temporary download_url and file_id.",
-            "properties": {
-              "download_url": {
-                "type": "string"
-              },
-              "file_id": {
-                "type": "string"
-              },
-              "file_name": {
-                "type": "string"
-              },
-              "mime_type": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "download_url",
-              "file_id"
-            ],
-            "type": "object"
-          },
-          "file_id": {
-            "description": "Resolved file identifier for a user-uploaded image (e.g. file_abc123). Prefer this when the host can supply it directly.",
-            "type": "string"
-          },
-          "site_id": {
-            "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
-            "type": "string"
-          }
-        },
-        "required": [],
-        "type": "object"
-      },
-      "outputSchema": {
-        "properties": {
-          "assetId": {
-            "type": "string"
-          },
-          "nextStep": {
-            "type": "string"
-          },
-          "publicUrl": {
-            "type": "string"
-          },
-          "thumbnailUrl": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "assetId",
-          "publicUrl"
         ],
         "type": "object"
       }

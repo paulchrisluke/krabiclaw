@@ -144,6 +144,7 @@ test('required CI checks out the immutable event SHA and never mutates shared st
   assert.match(source, /DEPLOYMENT_IDENTITY_ORIGIN:\s*https:\/\/preview\.krabiclaw\.com/)
   assert.match(source, /WORKER_VERSION_OVERRIDE=\$PREVIEW_VERSION_ID/)
   assert.match(source, /--version-override "\$PREVIEW_VERSION_ID"/)
+  assert.match(source, /generate-blawby-ci-seed\.ts --stdout/)
   const previewMigrationStep = source.indexOf('name: Migrate preview database')
   const migrationHistoryRead = source.indexOf('SELECT id, name, applied_at FROM d1_migrations ORDER BY id', previewMigrationStep)
   const migrationPrefixCheck = source.indexOf('scripts/verify-migration-state.mjs', migrationHistoryRead)

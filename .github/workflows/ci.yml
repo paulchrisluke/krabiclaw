@@ -172,10 +172,12 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
+          set -euo pipefail
           node --experimental-strip-types scripts/generate-demo-bundle.ts
           node --experimental-strip-types scripts/generate-demo-seed.ts --preview --stdout > /tmp/preview-seed.sql
           node --experimental-strip-types scripts/generate-pottery-house-seed.ts --preview --stdout >> /tmp/preview-seed.sql
           node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --preview --stdout >> /tmp/preview-seed.sql
+          node --experimental-strip-types scripts/generate-blawby-ci-seed.ts --stdout >> /tmp/preview-seed.sql
           npx wrangler d1 execute DB --env preview --remote --file /tmp/preview-seed.sql
       - name: Check pre-provisioned preview secrets
         env:

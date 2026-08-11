@@ -254,7 +254,7 @@ export function assignmentForGeneratedTarget(
     case "logo":
       return {
         assignTool: "set_media",
-        assignArgs: { site_id: siteId, target: { type: "site_logo" }, asset_ids: [] },
+        assignArgs: { site_id: siteId, target_type: "site_logo", asset_ids: [] },
         title: "Logo Concepts",
         subtitle: "Choose the mark that feels most like the brand.",
         useLabel: `Use as logo${forSite}`,
@@ -263,7 +263,7 @@ export function assignmentForGeneratedTarget(
     case "home_hero":
       return {
         assignTool: "set_media",
-        assignArgs: { site_id: siteId, target: { type: "home_hero" }, asset_ids: [] },
+        assignArgs: { site_id: siteId, target_type: "home_hero", asset_ids: [] },
         title: "Homepage Hero Images",
         subtitle: "Choose the image that best sets the tone for the homepage.",
         useLabel: `Use as homepage hero${forSite}`,
@@ -272,7 +272,7 @@ export function assignmentForGeneratedTarget(
     case "about_story_image":
       return {
         assignTool: "set_media",
-        assignArgs: { site_id: siteId, target: { type: "about_story_image" }, asset_ids: [] },
+        assignArgs: { site_id: siteId, target_type: "about_story_image", asset_ids: [] },
         title: "Story Images",
         subtitle: "Choose the image that best tells the brand story on the About page.",
         useLabel: `Use as About story image${forSite}`,
@@ -281,7 +281,7 @@ export function assignmentForGeneratedTarget(
     case "home_story_image":
       return {
         assignTool: "set_media",
-        assignArgs: { site_id: siteId, target: { type: "home_story_image" }, asset_ids: [] },
+        assignArgs: { site_id: siteId, target_type: "home_story_image", asset_ids: [] },
         title: "Story Images",
         subtitle: "Choose the image that best tells the brand story on the homepage.",
         useLabel: `Use as homepage story image${forSite}`,
@@ -291,7 +291,7 @@ export function assignmentForGeneratedTarget(
       const locationId = requiredString(args, "location_id");
       return {
         assignTool: "set_media",
-        assignArgs: { site_id: siteId, target: { type: "location_hero", location_id: locationId }, asset_ids: [] },
+        assignArgs: { site_id: siteId, target_type: "location_hero", location_id: locationId, asset_ids: [] },
         title: "Location Hero Images",
         subtitle: "Choose the image that best represents this location.",
         useLabel: `Use as location hero${forSite}`,
@@ -302,7 +302,7 @@ export function assignmentForGeneratedTarget(
       const postId = requiredString(args, "post_id");
       return {
         assignTool: "set_media",
-        assignArgs: { site_id: siteId, target: { type: "post_image", post_id: postId }, asset_ids: [] },
+        assignArgs: { site_id: siteId, target_type: "post_image", post_id: postId, asset_ids: [] },
         title: "Post Images",
         subtitle: "Choose the image that best fits this post.",
         useLabel: `Use for this post${forSite}`,
@@ -313,7 +313,7 @@ export function assignmentForGeneratedTarget(
       const menuItemId = requiredString(args, "menu_item_id");
       return {
         assignTool: "set_media",
-        assignArgs: { site_id: siteId, target: { type: "menu_item_media", menu_item_id: menuItemId }, asset_ids: [] },
+        assignArgs: { site_id: siteId, target_type: "menu_item_media", menu_item_id: menuItemId, asset_ids: [] },
         title: "Menu Item Media",
         subtitle: "Choose the media that best sells this item.",
         useLabel: `Use for this menu item${forSite}`,
@@ -324,7 +324,7 @@ export function assignmentForGeneratedTarget(
       const experienceId = requiredString(args, "experience_id");
       return {
         assignTool: "set_media",
-        assignArgs: { site_id: siteId, target: { type: "experience_media", experience_id: experienceId }, asset_ids: [] },
+        assignArgs: { site_id: siteId, target_type: "experience_media", experience_id: experienceId, asset_ids: [] },
         title: "Experience Media",
         subtitle: "Choose the media that best captures the experience.",
         useLabel: `Use for this experience${forSite}`,
@@ -487,126 +487,18 @@ export function toolFileReference(value: unknown, key: string): ToolFileReferenc
   };
 }
 
-async function fetchUploadedFileFromAiGateway(
-  fileId: string,
-  env: ApiRecord,
-  maxBytes: number,
-): Promise<{ buffer: ArrayBuffer; contentType: string; normalizedFileId: string }> {
-  const accountId = env.CF_ACCOUNT_ID as string | undefined;
-  const gatewayName = env.CF_GATEWAY_NAME as string | undefined;
-  const aigToken = env.CLOUDFLARE_API_TOKEN as string | undefined;
-
-  if (!accountId || !gatewayName || !aigToken) {
-    throw new Error(
-      "CF AI Gateway env vars not configured (CF_ACCOUNT_ID, CF_GATEWAY_NAME, CLOUDFLARE_API_TOKEN)",
-    );
-  }
-
-  const normalizedFileId = fileId
-    .trim()
-    .replace(/^sediment:\/\//i, "")
-    .replace(/^file:\/\//i, "")
-    .replace(/^\/+/, "");
-
-  if (!normalizedFileId || !/^[a-zA-Z0-9_-]+$/.test(normalizedFileId)) {
-    throw mcpProtocolError(
-      MCP_ERROR.invalidParams,
-      "file_id must be a valid uploaded file identifier.",
-    );
-  }
-
-  const url = `https://gateway.ai.cloudflare.com/v1/${accountId}/${gatewayName}/openai/v1/files/${normalizedFileId}/content`;
-  const response = await fetch(url, {
-    headers: { "cf-aig-authorization": `Bearer ${aigToken}` },
-    signal: AbortSignal.timeout(30_000),
+async function fetchToolFile(file: ToolFileReference, timeoutMs: number): Promise<Response> {
+  const safeDownloadUrl = assertSafeDownloadUrl(file.download_url, `Attachment ${file.file_id}`);
+  return await fetch(safeDownloadUrl, {
+    redirect: "manual",
+    signal: AbortSignal.timeout(timeoutMs),
   });
-
-  if (!response.ok) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: `Failed to fetch uploaded file ${normalizedFileId} via AI Gateway: ${response.status}`,
-    });
-  }
-
-  const buffer = await readMediaBufferWithLimit(response, `File ${normalizedFileId}`, maxBytes);
-  const contentType = response.headers.get("content-type") ?? "application/octet-stream";
-  return { buffer, contentType, normalizedFileId };
-}
-
-export async function resolveUserUploadedImageFile(
-  fileId: string,
-  env: ApiRecord,
-): Promise<{ buffer: ArrayBuffer; contentType: string; filename: string }> {
-  const { buffer, contentType, normalizedFileId } = await fetchUploadedFileFromAiGateway(fileId, env, MAX_IMAGE_BYTES);
-
-  if (!contentType.startsWith("image/")) {
-    throw mcpProtocolError(
-      MCP_ERROR.invalidParams,
-      `File ${normalizedFileId} is not an image.`,
-    );
-  }
-
-  const bytes = new Uint8Array(buffer);
-  const detectedContentType = validateImageBuffer(
-    bytes,
-    `file ${normalizedFileId}`,
-  );
-  const filename = safeAttachmentFilename({ file_id: normalizedFileId }, detectedContentType);
-  return { buffer, contentType: detectedContentType, filename };
-}
-
-/**
- * file_id-only fallback for upload_user_media, mirroring
- * resolveUserUploadedImageFile's AI Gateway fetch but accepting video/* in
- * addition to image/*, using the same magic-byte sniffing as
- * resolveUserUploadedMediaFile rather than trusting the declared content type.
- */
-export async function resolveUserUploadedMediaFileById(
-  fileId: string,
-  env: ApiRecord,
-): Promise<ResolvedMediaFile> {
-  const { buffer, contentType, normalizedFileId } = await fetchUploadedFileFromAiGateway(fileId, env, MAX_VIDEO_BYTES);
-  const bytes = new Uint8Array(buffer);
-  const markdownType = resolveMarkdownMimeType(contentType);
-  if (markdownType) {
-    assertMarkdownSize(bytes.byteLength);
-    decodeMarkdownText(buffer);
-    return { buffer, contentType: markdownType, filename: safeAttachmentFilename({ file_id: normalizedFileId }, markdownType), kind: "file" };
-  }
-  if (bytes.byteLength < 64) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: `Invalid media payload from file ${normalizedFileId}: payload too small.`,
-    });
-  }
-
-  const sniffedContentType = sniffMediaMimeType(bytes);
-  const isVideo = VIDEO_MIME_TYPES.has(sniffedContentType);
-  const isImage = RESOLVED_MEDIA_IMAGE_TYPES.has(sniffedContentType);
-  if (!isVideo && !isImage) {
-    throw mcpProtocolError(
-      MCP_ERROR.invalidParams,
-      `File ${normalizedFileId} is not a supported image or video type.`,
-    );
-  }
-  if (isImage && bytes.byteLength > MAX_IMAGE_BYTES) {
-    throw createError({
-      statusCode: 413,
-      statusMessage: `Invalid image payload from file ${normalizedFileId}: payload exceeds ${MAX_IMAGE_BYTES} byte limit.`,
-    });
-  }
-
-  const filename = safeAttachmentFilename({ file_id: normalizedFileId }, sniffedContentType);
-  return { buffer, contentType: sniffedContentType, filename, kind: isVideo ? "video" : "image" };
 }
 
 export async function resolveGeneratedImageFile(
   file: ToolFileReference,
 ): Promise<{ buffer: ArrayBuffer; contentType: string; filename: string }> {
-  const safeDownloadUrl = assertSafeDownloadUrl(file.download_url, `Attachment ${file.file_id}`);
-  const response = await fetch(safeDownloadUrl, {
-    signal: AbortSignal.timeout(15_000),
-  });
+  const response = await fetchToolFile(file, 15_000);
   if (!response.ok) {
     throw createError({
       statusCode: 400,
@@ -701,10 +593,7 @@ async function readMediaBufferWithLimit(
 export async function resolveUserUploadedMediaFile(
   file: ToolFileReference,
 ): Promise<ResolvedMediaFile> {
-  const safeDownloadUrl = assertSafeDownloadUrl(file.download_url, `Attachment ${file.file_id}`);
-  const response = await fetch(safeDownloadUrl, {
-    signal: AbortSignal.timeout(30_000),
-  });
+  const response = await fetchToolFile(file, 30_000);
   if (!response.ok) {
     throw createError({
       statusCode: 400,

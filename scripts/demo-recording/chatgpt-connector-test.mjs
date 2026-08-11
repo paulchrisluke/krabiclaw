@@ -188,7 +188,7 @@ async function main() {
     if (!videoAssetId || uploadedVideo.status !== 'active') throw new Error('Attachment upload did not return an active video asset.')
     if (!publicUrl || !(await fetch(publicUrl)).ok) throw new Error('Attachment video public URL did not return 200.')
 
-    await runPrompt(rl, 'Assign uploaded video', `I explicitly confirm this change. Assign KrabiClaw video asset_id ${videoAssetId} as the homepage hero video for site_id ${siteId} now.`, 'set_media', { siteId, arguments: { site_id: siteId, 'target.type': 'home_hero', asset_ids: [videoAssetId] } })
+    await runPrompt(rl, 'Assign uploaded video', `I explicitly confirm this change. Assign KrabiClaw video asset_id ${videoAssetId} as the homepage hero video for site_id ${siteId} now.`, 'set_media', { siteId, arguments: { site_id: siteId, target_type: 'home_hero', asset_ids: [videoAssetId] } })
 
     console.log(`# Actual ChatGPT connector behavior passed. Cleaning up created content...`)
   } catch (error) {
@@ -200,7 +200,7 @@ async function main() {
       try {
         const cookie = await devSession(userId)
         if (videoAssetId) {
-          await mcpCall(cookie, 'set_media', { site_id: siteId, target: { type: 'home_hero' }, asset_ids: [] })
+          await mcpCall(cookie, 'set_media', { site_id: siteId, target_type: 'home_hero', asset_ids: [] })
           await mcpCall(cookie, 'delete_media_asset', { site_id: siteId, asset_id: videoAssetId })
           evidence.cleanup.video = 'cleared and deleted'
         }

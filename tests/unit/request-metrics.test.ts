@@ -142,7 +142,7 @@ test('D1 batch failure telemetry identifies statements without bound values', as
     await assert.rejects(
       instrumented.batch([
         instrumented.prepare('SELECT * FROM oauthResource WHERE identifier = ?').bind('customer-secret'),
-        instrumented.prepare('UPDATE token_exchange_cache SET state = ?').bind('customer-secret'),
+        instrumented.prepare('UPDATE oauthAccessToken SET token = ?').bind('customer-secret'),
       ]),
       failure,
     )
@@ -156,7 +156,7 @@ test('D1 batch failure telemetry identifies statements without bound values', as
   assert.equal(payload.statement_count, 2)
   assert.deepEqual(payload.statements, [
     { operation: 'SELECT', table: 'oauthResource' },
-    { operation: 'UPDATE', table: 'token_exchange_cache' },
+    { operation: 'UPDATE', table: 'oauthAccessToken' },
   ])
   assert.doesNotMatch(JSON.stringify(payload), /customer-secret/)
 })

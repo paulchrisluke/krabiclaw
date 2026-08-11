@@ -55,7 +55,7 @@ export const LOCATIONS_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'update_location',
-      description: 'Update a location\'s own details: regular opening hours, temporary closures/special hours, contact info, and social/delivery links. Use set_media with target type location_hero for hero media placement. Only provided fields are changed.',
+      description: 'Update a location\'s own details: regular opening hours, temporary closures/special hours, contact info, and social/delivery links. Use set_media with target_type location_hero and this location\'s exact id for hero media placement. Only provided fields are changed.',
       domain: 'locations',
       minimumRole: 'editor',
       confirmRequired: false,

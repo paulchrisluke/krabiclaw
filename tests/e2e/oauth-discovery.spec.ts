@@ -82,7 +82,7 @@ test.describe('OAuth discovery endpoints', () => {
     expect((body.code_challenge_methods_supported as string[])).toContain('S256')
   })
 
-  test('repeat authorize skips consent after remembered approval for the same CIMD client', async ({ request, baseURL }) => {
+  test('public CIMD exchanges an authorization code once and reuses remembered consent', async ({ request, baseURL }) => {
     // The CIMD client_id document (test-client-metadata) is served by this same
     // app/origin, so the auth server's fetch of it is a same-zone Worker
     // self-fetch on a deployed Cloudflare Worker. That self-fetch fails there
@@ -112,13 +112,14 @@ test.describe('OAuth discovery endpoints', () => {
 
     const cimdClientId = `${baseURL}/api/auth/oauth2/test-client-metadata?nonce=${Date.now()}`
     const redirectUri = `${baseURL}/oauth/test-callback`
+    const verifier = 'krabiclaw-public-cimd-e2e-verifier-0123456789'
     const authorizeParams = {
       client_id: cimdClientId,
       redirect_uri: redirectUri,
       response_type: 'code',
       scope: 'openid offline_access tenant',
       state: 'first-pass',
-      code_challenge: 'test-challenge-s256',
+      code_challenge: pkceChallenge(verifier),
       code_challenge_method: 'S256',
       resource: `${baseURL}/api/mcp`,
     }
@@ -148,7 +149,27 @@ test.describe('OAuth discovery endpoints', () => {
     const consentBody = await consentRes.json() as { url?: string }
     expect(consentBody.url).toBeTruthy()
     const consentRedirect = new URL(consentBody.url!)
-    expect(consentRedirect.searchParams.get('code')).toBeTruthy()
+    const code = consentRedirect.searchParams.get('code')
+    expect(code).toBeTruthy()
+
+    const exchangeCode = async () => await request.post(`${baseURL}/api/auth/oauth2/token`, {
+      headers: { Origin: baseURL! },
+      form: {
+        grant_type: 'authorization_code',
+        client_id: cimdClientId,
+        code: code!,
+        redirect_uri: redirectUri,
+        code_verifier: verifier,
+      },
+    })
+    const token = await exchangeCode()
+    expect(token.status()).toBe(200)
+    const tokenBody = await token.json() as { access_token?: string, refresh_token?: string }
+    expect(tokenBody.access_token).toBeTruthy()
+    expect(tokenBody.refresh_token).toBeTruthy()
+
+    const replay = await exchangeCode()
+    expect(replay.status()).toBe(400)
 
     const secondAuthorize = await request.get(oauthAuthorizeUrl(baseURL!, {
       ...authorizeParams,

@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import { BLOG_TOOLS } from '../../server/utils/mcp-tools/blog.ts'
 import { MCP_PUBLIC_TOOLS } from '../../server/utils/mcp-tools/index.ts'
+import { renderMcpPrompt } from '../../server/utils/mcp-prompts.ts'
 import { MEDIA_TOOLS } from '../../server/utils/mcp-tools/media.ts'
 import { POSTS_TOOLS } from '../../server/utils/mcp-tools/posts.ts'
 import { siteIdSchema } from '../../server/utils/mcp-tools/shared.ts'
@@ -11,7 +12,7 @@ import { PostValidationError, validatePostInput } from '../../server/utils/post-
 
 type ToolContract = {
   name: string
-  inputSchema: { required?: readonly string[], properties?: Record<string, unknown> }
+  inputSchema: { required?: readonly string[], properties?: Record<string, unknown>, additionalProperties?: boolean, oneOf?: unknown[] }
   outputSchema?: { properties?: Record<string, unknown> }
 }
 
@@ -33,6 +34,9 @@ test('blog, post, and media MCP schemas expose the canonical writable contract',
   }
 
   const upload = tool(MEDIA_TOOLS, 'upload_user_media')
+  assert.deepEqual(upload.inputSchema.required, ['file'])
+  assert.equal(upload.inputSchema.additionalProperties, false)
+  assert.equal(upload.inputSchema.properties?.file_id, undefined)
   for (const property of ['asset_id', 'status', 'public_url', 'thumbnail_url']) {
     assert.ok(upload.outputSchema?.properties?.[property], `missing upload output ${property}`)
   }
@@ -43,11 +47,43 @@ test('blog, post, and media MCP schemas expose the canonical writable contract',
   assert.equal((MEDIA_TOOLS as ToolContract[]).some(candidate => candidate.name === 'open_video_upload'), false)
   assert.equal((MEDIA_TOOLS as ToolContract[]).some(candidate => candidate.name.startsWith('open_') && candidate.name.includes('upload')), false)
   assert.equal((MEDIA_TOOLS as ToolContract[]).some(candidate => candidate.name === 'set_media'), true)
+  assert.equal(MCP_PUBLIC_TOOLS.some(candidate => candidate.name === 'upload_user_photo'), false)
+
+  const setMedia = tool(MEDIA_TOOLS, 'set_media')
+  assert.deepEqual(setMedia.inputSchema.required, ['target_type', 'asset_ids'])
+  assert.equal(setMedia.inputSchema.additionalProperties, false)
+  assert.equal(setMedia.inputSchema.properties?.target, undefined)
+  assert.ok(setMedia.inputSchema.properties?.target_type)
+  assert.equal(setMedia.inputSchema.oneOf?.length, 5)
+  const mediaBranches = setMedia.inputSchema.oneOf as Array<{
+    properties: { target_type: { const?: string, enum?: string[] } }
+    required?: string[]
+    not: { anyOf: Array<{ required: string[] }> }
+  }>
+  const siteBranch = mediaBranches.find(candidate => candidate.properties.target_type.enum?.includes('site_logo'))
+  assert.ok(siteBranch)
+  assert.equal(siteBranch.required, undefined)
+  assert.equal(siteBranch.not.anyOf.length, 4)
+  for (const [targetType, entityId] of [
+    ['location_hero', 'location_id'],
+    ['menu_item_media', 'menu_item_id'],
+    ['post_image', 'post_id'],
+    ['experience_media', 'experience_id'],
+  ] as const) {
+    const branch = mediaBranches.find(candidate =>
+      candidate.properties.target_type.const === targetType
+      || candidate.properties.target_type.enum?.includes(targetType),
+    )
+    assert.ok(branch, `missing schema branch for ${targetType}`)
+    assert.deepEqual(branch.required, [entityId])
+    assert.equal(branch.not.anyOf.some(candidate => candidate.required.includes(entityId)), false)
+    assert.equal(branch.not.anyOf.length, 3)
+  }
 
   assert.match(upload.description, /only upload path/i)
-  assert.match(upload.description, /native ChatGPT file reference/i)
-  assert.match(upload.description, /Do not call upload widget tools/i)
-  assert.match(upload.description, /no tool whose name starts with "open_"/i)
+  assert.match(upload.description, /native ChatGPT file argument/i)
+  assert.match(upload.description, /never pass a bare file_id/i)
+  assert.match(upload.description, /one download attempt/i)
 })
 
 test('media placement contract does not reintroduce entity-specific assignment tools', () => {
@@ -77,6 +113,12 @@ test('media placement contract does not reintroduce entity-specific assignment t
     assert.equal(mcpNames.has(name), false, `${name} must not be exposed by MCP`)
     assert.equal(chowbotNames.has(name), false, `${name} must not be exposed by ChowBot`)
   }
+})
+
+test('photo prompt uploads each confirmed attachment once before reporting placement', () => {
+  const prompt = renderMcpPrompt('add_photos_to_site', {}).text
+  assert.match(prompt, /upload_user_media exactly once for each confirmed attachment/)
+  assert.match(prompt, /Upload every confirmed photo before reporting any of them as placed/)
 })
 
 test('MCP site_id schema requires the internal site id, not a public locator', () => {
