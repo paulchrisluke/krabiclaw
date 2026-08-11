@@ -73,7 +73,7 @@ test.describe('stateless MCP server', () => {
       const placement = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
         toolName: 'set_media',
-        args: { site_id: siteId, target: { type: 'post_image', post_id: created.id }, asset_ids: [imageAssetId] },
+        args: { site_id: siteId, target_type: 'post_image', post_id: created.id, asset_ids: [imageAssetId] },
       })
       if (placement.status() !== 200) console.error(await placement.text())
       expect(placement.status()).toBe(200)

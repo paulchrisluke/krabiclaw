@@ -8,12 +8,10 @@ import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import {
   NOT_HANDLED,
   mutationContextPayload,
-  objectRecord,
   optionalString,
   requiredString,
   resolveImageUploadProvider,
   resolveUserUploadedMediaFile,
-  resolveUserUploadedMediaFileById,
   toolFileReference,
 } from './shared'
 
@@ -21,7 +19,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
   const { toolName, args, site } = ctx
   switch (toolName) {
     case "set_media": {
-      const target = mediaPlacementTarget(objectRecord(args.target, "target"));
+      const target = mediaPlacementTarget(args);
       const assetIdsRaw = args.asset_ids;
       if (!Array.isArray(assetIdsRaw) || !assetIdsRaw.every((item): item is string => typeof item === "string")) {
         throw mcpProtocolError(MCP_ERROR.invalidParams, "asset_ids must be an array of strings.");
@@ -56,24 +54,12 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
       const description = optionalString(args, "description") ?? null;
       const category = optionalString(args, "category") ?? null;
       const fileReferenceValue = args.file;
-      const fileReference = fileReferenceValue !== undefined
-        ? toolFileReference(fileReferenceValue, "file")
-        : null;
-      const fileId = optionalString(args, "file_id") ?? null;
+      const fileReference = toolFileReference(fileReferenceValue, "file");
       const posterReference = args.poster_file !== undefined
         ? toolFileReference(args.poster_file, "poster_file")
         : null;
 
-      if (!fileReference && !fileId) {
-        throw mcpProtocolError(
-          MCP_ERROR.invalidParams,
-          "upload_user_media requires either file or file_id.",
-        );
-      }
-
-      const resolved = fileReference
-        ? await resolveUserUploadedMediaFile(fileReference)
-        : await resolveUserUploadedMediaFileById(fileId!, site.env);
+      const resolved = await resolveUserUploadedMediaFile(fileReference);
 
       const provider = resolved.kind === "image"
         ? resolveImageUploadProvider(resolved.contentType, site.env)
@@ -107,7 +93,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         source: "uploaded",
         provider,
         category: (category as never) ?? null,
-        altText: description ?? fileReference?.file_name ?? fileId,
+        altText: description ?? fileReference.file_name ?? fileReference.file_id,
         poster,
       });
 
@@ -181,9 +167,26 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
 }
 
 function mediaPlacementTarget(raw: Record<string, unknown>): MediaPlacementTarget {
-  const type = requiredString(raw, "type") as MediaPlacementTarget["type"];
-  if (type === "site_logo" || type === "home_story_image" || type === "about_story_image") return { type };
-  if (type === "home_hero") return { type, location_id: optionalString(raw, "location_id") ?? null };
+  const type = requiredString(raw, "target_type") as MediaPlacementTarget["type"];
+  const entityIdKeys = ["location_id", "menu_item_id", "post_id", "experience_id"] as const;
+  const allowedEntityId = type === "location_hero"
+    ? "location_id"
+    : type === "menu_item_media"
+      ? "menu_item_id"
+      : type === "post_image" || type === "blog_post_image"
+        ? "post_id"
+        : type === "experience_media"
+          ? "experience_id"
+          : undefined;
+  const unexpectedEntityIds = entityIdKeys.filter(key => key !== allowedEntityId && raw[key] !== undefined);
+  if (unexpectedEntityIds.length > 0) {
+    throw mcpProtocolError(
+      MCP_ERROR.invalidParams,
+      `${unexpectedEntityIds.join(", ")} cannot be used with target_type ${type}.`,
+    );
+  }
+
+  if (type === "site_logo" || type === "home_story_image" || type === "about_story_image" || type === "home_hero") return { type };
   if (type === "location_hero") return { type, location_id: requiredString(raw, "location_id") };
   if (type === "menu_item_media") return { type, menu_item_id: requiredString(raw, "menu_item_id") };
   if (type === "post_image") return { type, post_id: requiredString(raw, "post_id") };

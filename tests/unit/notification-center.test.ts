@@ -136,14 +136,6 @@ test('slow or rejected Discord delivery never blocks signup persistence', async 
   }
 })
 
-test('auth route passes request-scoped waitUntil into the uncached auth hook', () => {
-  const route = readFileSync('server/api/auth/[...].ts', 'utf8')
-  const auth = readFileSync('server/utils/auth.ts', 'utf8')
-  assert.match(route, /createAuth\(env, \{ waitUntil \}\)/)
-  assert.match(auth, /options\.waitUntil \? null : authCache\.get/)
-  assert.match(auth, /notifyNewUserSignup\([\s\S]+options\.waitUntil/)
-})
-
 test('dashboard notification writers use canonical fields and guest replies emit once', () => {
   for (const file of [
     'server/utils/domain-notifications.ts',

@@ -509,9 +509,11 @@ export async function executeMcpToolCall(
     }
 
     const picker = pickerConfigFromShowGeneratedImages(normalizedArguments, activeSiteName);
-    if (picker.assignTool === "set_media" && picker.assignArgs?.target && typeof picker.assignArgs.target === "object") {
-      const target = picker.assignArgs.target as { type?: unknown; menu_item_id?: unknown };
-      if (target.type === "menu_item_media" && typeof target.menu_item_id === "string" && activeSiteContext) {
+    if (picker.assignTool === "set_media" && picker.assignArgs) {
+      const assignArgs = picker.assignArgs;
+      const targetType = assignArgs.target_type;
+      const menuItemId = assignArgs.menu_item_id;
+      if (targetType === "menu_item_media" && typeof menuItemId === "string" && activeSiteContext) {
         const rows = await queryAll<{ asset_id: string }>(
           activeSiteContext.db,
           `
@@ -523,9 +525,9 @@ export async function executeMcpToolCall(
               AND m.organization_id = ? AND m.site_id = ?
             ORDER BY mim.sort_order ASC
           `,
-          [activeSiteContext.siteId, target.menu_item_id, activeSiteContext.organizationId, activeSiteContext.siteId],
+          [activeSiteContext.siteId, menuItemId, activeSiteContext.organizationId, activeSiteContext.siteId],
         );
-        picker.assignArgs.asset_ids = rows.map((row) => row.asset_id);
+        assignArgs.asset_ids = rows.map((row) => row.asset_id);
       }
     }
     const isDebug = normalizedArguments.debug === true;

@@ -33,10 +33,43 @@ test.describe('stateless MCP server', () => {
       extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
     })
     expect(tools.status()).toBe(200)
-    const toolsBody = await tools.json() as { result: { tools: Array<{ name: string, outputSchema?: Record<string, unknown>, _meta?: Record<string, unknown> }> } }
+    const toolsBody = await tools.json() as { result: { tools: Array<{ name: string, inputSchema?: { required?: string[], properties?: Record<string, unknown>, additionalProperties?: boolean }, outputSchema?: Record<string, unknown>, _meta?: Record<string, unknown> }> } }
     expect(toolsBody.result.tools.filter(tool => tool.name.startsWith('open_') && tool.name.includes('upload')).map(tool => tool.name)).toEqual([])
-    expect(toolsBody.result.tools.find(tool => tool.name === 'upload_user_media')).toBeTruthy()
+    expect(toolsBody.result.tools.find(tool => tool.name === 'upload_user_photo')).toBeUndefined()
+    const uploadTool = toolsBody.result.tools.find(tool => tool.name === 'upload_user_media')
+    expect(uploadTool?.inputSchema?.required).toEqual(['file'])
+    expect(uploadTool?.inputSchema?.properties?.file_id).toBeUndefined()
+    expect(uploadTool?.inputSchema?.additionalProperties).toBe(false)
+    const setMediaTool = toolsBody.result.tools.find(tool => tool.name === 'set_media')
+    expect(setMediaTool?.inputSchema?.required).toEqual(['target_type', 'asset_ids'])
+    expect(setMediaTool?.inputSchema?.properties?.target).toBeUndefined()
+    expect(setMediaTool?.inputSchema?.additionalProperties).toBe(false)
     expect(toolsBody.result.tools.filter(tool => tool._meta?.ui || tool._meta?.['openai/outputTemplate'])).toEqual([])
+
+    const locations = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'list_locations',
+      args: { site_id: MCP_GROWTH_SITE_ID },
+    })
+    expect(locations.status()).toBe(200)
+    const locationId = mcpData<{ locations: Array<{ id: string }> }>(await locations.json()).locations[0]?.id
+    expect(locationId).toEqual(expect.any(String))
+
+    const mismatchedTarget = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'set_media',
+      siteId: MCP_GROWTH_SITE_ID,
+      args: {
+        site_id: MCP_GROWTH_SITE_ID,
+        target_type: 'home_hero',
+        location_id: locationId,
+        asset_ids: [],
+      },
+    })
+    expect(mismatchedTarget.status()).toBe(200)
+    const mismatchedTargetBody = await mismatchedTarget.json() as { result?: { isError?: boolean, content?: Array<{ text?: string }> } }
+    expect(mismatchedTargetBody.result?.isError).toBe(true)
+    expect(mismatchedTargetBody.result?.content?.[0]?.text).toContain('location_id cannot be used with target_type home_hero')
 
     const resources = await mcpRequest(request, baseURL!, { method: 'resources/list' })
     expect(resources.status()).toBe(200)
@@ -151,13 +184,13 @@ test.describe('stateless MCP server', () => {
       const assign = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
         toolName: 'set_media',
-        args: { site_id: siteId, target: { type: 'home_hero' }, asset_ids: [assetId] },
+        args: { site_id: siteId, target_type: 'home_hero', asset_ids: [assetId] },
       })
       if (assign.status() !== 200) console.error(await assign.text())
       expect(assign.status()).toBe(200)
     } finally {
       if (assetId) {
-        await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'set_media', args: { site_id: siteId, target: { type: 'home_hero' }, asset_ids: [] } })
+        await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'set_media', args: { site_id: siteId, target_type: 'home_hero', asset_ids: [] } })
         await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'delete_media_asset', args: { site_id: siteId, asset_id: assetId } })
       }
     }

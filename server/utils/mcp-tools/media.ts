@@ -4,41 +4,29 @@ import { chatgptFileInput, mediaAssetObject, resolvedMediaAssetObject, siteTool 
 export const MEDIA_TOOLS: McpToolDefinition[] = [
   siteTool({
       name: 'set_media',
-      description: 'Assign existing media assets to a CMS placement. Uploading and placement are separate: call upload_user_media to create reusable media_assets, get_site_media_assets to choose asset ids, then set_media to replace the complete desired media state for the target. asset_ids order is authoritative; empty asset_ids clears the target. Position 0 is the cover for ordered mixed-media targets. Video cover/hero assets must already have thumbnail_url/poster metadata.',
+      description: 'Assign existing media assets to exactly one CMS placement. Pass target_type as a top-level enum and use only the matching entity-id field returned by a read tool. asset_ids is the complete desired state; an empty array clears it. Position 0 is the cover for ordered mixed-media placements. Video cover/hero assets must already have thumbnail_url/poster metadata.',
       domain: 'media',
       minimumRole: 'editor',
       confirmRequired: false,
+      strict: true,
       inputSchema: {
-        target: {
-          type: 'object',
-          description: 'Discriminated media placement target. Supported types: site_logo, home_hero, home_story_image, about_story_image, location_hero, menu_item_media, post_image, blog_post_image, experience_media.',
-          oneOf: [
-            { properties: { type: { const: 'site_logo' } }, required: ['type'] },
-            { properties: { type: { const: 'home_hero' }, location_id: { type: ['string', 'null'] } }, required: ['type'] },
-            { properties: { type: { const: 'home_story_image' } }, required: ['type'] },
-            { properties: { type: { const: 'about_story_image' } }, required: ['type'] },
-            { properties: { type: { const: 'location_hero' }, location_id: { type: 'string' } }, required: ['type', 'location_id'] },
-            { properties: { type: { const: 'menu_item_media' }, menu_item_id: { type: 'string' } }, required: ['type', 'menu_item_id'] },
-            { properties: { type: { const: 'post_image' }, post_id: { type: 'string' } }, required: ['type', 'post_id'] },
-            { properties: { type: { const: 'blog_post_image' }, post_id: { type: 'string' } }, required: ['type', 'post_id'] },
-            { properties: { type: { const: 'experience_media' }, experience_id: { type: 'string' } }, required: ['type', 'experience_id'] },
-          ],
+        target_type: {
+          type: 'string',
+          enum: ['site_logo', 'home_hero', 'home_story_image', 'about_story_image', 'location_hero', 'menu_item_media', 'post_image', 'blog_post_image', 'experience_media'],
+          description: 'The placement to replace. This is a required top-level field.',
         },
+        location_id: { type: 'string', description: 'Required only for location_hero. Use the exact id returned by get_location or list_locations; never pass a slug, name, URL, or site_id.' },
+        menu_item_id: { type: 'string', description: 'Required only for menu_item_media. Use the exact id returned by a menu read tool.' },
+        post_id: { type: 'string', description: 'Required only for post_image or blog_post_image. Use the exact id returned by the matching post read tool.' },
+        experience_id: { type: 'string', description: 'Required only for experience_media. Use the exact id returned by get_experience or list_experiences.' },
         asset_ids: {
           type: 'array',
           items: { type: 'string' },
           uniqueItems: true,
           description: 'Complete desired asset-id state for the target. Empty clears. Duplicates are rejected.',
         },
-        allOf: [
-          {
-            if: { properties: { target: { properties: { type: { enum: ['experience_media', 'menu_item_media'] } } } } },
-            then: {},
-            else: { properties: { asset_ids: { maxItems: 1 } } },
-          },
-        ],
       },
-      required: ['target', 'asset_ids'],
+      required: ['target_type', 'asset_ids'],
       outputSchema: {
         type: 'object',
         properties: {
@@ -71,22 +59,18 @@ export const MEDIA_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'upload_user_media',
-      description: 'The only upload path for user-provided images, videos, and Markdown documents (.md/.markdown). Accepts a resolved native ChatGPT file reference and validates the actual bytes. The returned asset_id is active and immediately assignable. For a video, poster_file may provide a thumbnail. Only call this tool when the host supplied a real file/file_id reference; never invent one. Do not call upload widget tools; no tool whose name starts with "open_" and contains "upload" exists.',
+      description: 'The only upload path for user-provided images, videos, and Markdown documents (.md/.markdown). Call it only with the resolved native ChatGPT file argument; never pass a bare file_id or invent a download URL. One call performs one download attempt. If attachment delivery fails, stop and ask the user to attach the file again instead of trying another transport. The returned asset_id is active and immediately assignable. For a video, poster_file may provide a thumbnail.',
       domain: 'media',
       minimumRole: 'editor',
       confirmRequired: false,
+      strict: true,
       inputSchema: {
         file: chatgptFileInput,
-        file_id: { type: 'string', description: 'Resolved file identifier for a user-uploaded image, video, or Markdown document (e.g. file_abc123). Prefer file when the host can supply the filename directly.' },
         poster_file: { ...chatgptFileInput, description: 'Optional poster/thumbnail image for a video upload. Ignored for image uploads.' },
         category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'blog', 'other'], description: 'What this media will be used for.' },
         description: { type: 'string', description: 'Description of the media (stored as alt text).' },
-        oneOf: [
-          { required: ['file'] },
-          { required: ['file_id'] },
-        ],
       },
-      required: [],
+      required: ['file'],
       fileParams: ['file', 'poster_file'],
       outputSchema: {
         type: 'object',

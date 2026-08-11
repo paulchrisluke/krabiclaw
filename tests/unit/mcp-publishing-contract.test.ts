@@ -11,7 +11,7 @@ import { PostValidationError, validatePostInput } from '../../server/utils/post-
 
 type ToolContract = {
   name: string
-  inputSchema: { required?: readonly string[], properties?: Record<string, unknown> }
+  inputSchema: { required?: readonly string[], properties?: Record<string, unknown>, additionalProperties?: boolean }
   outputSchema?: { properties?: Record<string, unknown> }
 }
 
@@ -33,6 +33,9 @@ test('blog, post, and media MCP schemas expose the canonical writable contract',
   }
 
   const upload = tool(MEDIA_TOOLS, 'upload_user_media')
+  assert.deepEqual(upload.inputSchema.required, ['file'])
+  assert.equal(upload.inputSchema.additionalProperties, false)
+  assert.equal(upload.inputSchema.properties?.file_id, undefined)
   for (const property of ['asset_id', 'status', 'public_url', 'thumbnail_url']) {
     assert.ok(upload.outputSchema?.properties?.[property], `missing upload output ${property}`)
   }
@@ -43,11 +46,18 @@ test('blog, post, and media MCP schemas expose the canonical writable contract',
   assert.equal((MEDIA_TOOLS as ToolContract[]).some(candidate => candidate.name === 'open_video_upload'), false)
   assert.equal((MEDIA_TOOLS as ToolContract[]).some(candidate => candidate.name.startsWith('open_') && candidate.name.includes('upload')), false)
   assert.equal((MEDIA_TOOLS as ToolContract[]).some(candidate => candidate.name === 'set_media'), true)
+  assert.equal(MCP_PUBLIC_TOOLS.some(candidate => candidate.name === 'upload_user_photo'), false)
+
+  const setMedia = tool(MEDIA_TOOLS, 'set_media')
+  assert.deepEqual(setMedia.inputSchema.required, ['target_type', 'asset_ids'])
+  assert.equal(setMedia.inputSchema.additionalProperties, false)
+  assert.equal(setMedia.inputSchema.properties?.target, undefined)
+  assert.ok(setMedia.inputSchema.properties?.target_type)
 
   assert.match(upload.description, /only upload path/i)
-  assert.match(upload.description, /native ChatGPT file reference/i)
-  assert.match(upload.description, /Do not call upload widget tools/i)
-  assert.match(upload.description, /no tool whose name starts with "open_"/i)
+  assert.match(upload.description, /native ChatGPT file argument/i)
+  assert.match(upload.description, /never pass a bare file_id/i)
+  assert.match(upload.description, /one download attempt/i)
 })
 
 test('media placement contract does not reintroduce entity-specific assignment tools', () => {

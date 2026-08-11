@@ -34,10 +34,10 @@ and plain-language requests, not just exact/technical phrasing.
 
 | User says | Expected behavior |
 | --- | --- |
-| "Change the big photo" | Calls `get_site_media_assets`, then `set_media` with target `home_hero` (or asks which page/location if ambiguous) |
-| "Change the cover photo for my downtown location" | Calls `list_locations` to resolve the location, then `set_media` with target `location_hero` |
-| "Add pictures of my food" | Asks the user to attach photos, then `upload_user_photo` followed by `set_media` with target `menu_item_image` or a placement question |
-| "Change our logo" | Calls `get_site_media_assets`, then `set_media` with target `site_logo` |
+| "Change the big photo" | Calls `get_site_media_assets`, then `set_media` with `target_type: "home_hero"` (or asks which page/location if ambiguous) |
+| "Change the cover photo for my downtown location" | Calls `list_locations` to resolve the location, then `set_media` with `target_type: "location_hero"` and the exact `location_id` |
+| "Add pictures of my food" | Asks the user to attach photos, calls `upload_user_media` once per attachment, then calls `set_media` with `target_type: "menu_item_media"` and the exact `menu_item_id`, or asks a placement question |
+| "Change our logo" | Calls `get_site_media_assets`, then `set_media` with `target_type: "site_logo"` |
 | "Post this on my site" | Calls `create_post`, then `publish_post` without stopping to just describe the step |
 
 ## Indirect / fuzzy-intent prompts
@@ -67,7 +67,7 @@ described flow when invoked via `prompts/get`:
 | Prompt name | Should route through |
 | --- | --- |
 | `improve_my_homepage` | `get_page_fields` (home) → `get_site_media_assets` → suggestions → confirm → `update_page_content`/`set_media` |
-| `add_photos_to_site` | attach → `upload_user_photo` → `set_media` with target `experience_media`, `menu_item_image`, or the confirmed placement |
+| `add_photos_to_site` | attach → `upload_user_media` once per attachment → `set_media` with `target_type: "experience_media"`, `target_type: "menu_item_media"`, or the confirmed placement |
 | `finish_my_site_setup` | `get_workspace_context` → media/page/menu/experience checks → single next step |
 | `make_site_more_bookable` | `get_page_fields` (home) → `list_locations` → `list_menus`/`list_experiences` → suggestions |
 | `make_my_site_look_better` | `get_page_fields` → `get_site_media_assets` → suggestions, biggest visual impact first |

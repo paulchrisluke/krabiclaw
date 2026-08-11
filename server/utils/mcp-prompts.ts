@@ -164,7 +164,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
             ? `If none exists, call create_menu with name "${menuName}".`
             : "If none exists, call create_menu with a sensible name based on the business.",
           `Parse the following into individual menu items (name, section, price, and description where given), then call add_menu_items_batch with all of them in one call rather than creating items one at a time: ${itemsDescription}`,
-          "If the user has photos or videos for any dish, offer to attach them after the items are created, then place them with set_media using target type menu_item_media — do not block creating the menu on having media.",
+          "If the user has photos or videos for any dish, offer to attach them after the items are created, then place them with set_media using target_type menu_item_media and the exact menu_item_id — do not block creating the menu on having media.",
           "Report back the menu name and the items that were added.",
         ].join(" "),
       };
@@ -178,7 +178,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
         text: [
           `Call create_post with this body: ${body}`,
           postType ? `Use post_type "${postType}".` : "",
-          "If the user has supplied or approved media for this post, create the post first, then use set_media with target type post_image for the selected cover asset.",
+          "If the user has supplied or approved media for this post, create the post first, then use set_media with target_type post_image and the exact post_id for the selected cover asset.",
           channels
             ? `If media is supplied or approved, call publish_post with channels [${channels}] only after set_media succeeds; otherwise immediately after create_post succeeds. Do not stop to describe the publish step instead of executing it.`
             : "If media is supplied or approved, call publish_post only after set_media succeeds; otherwise immediately after create_post succeeds. publish_post defaults to the site channel. Do not stop to describe the publish step instead of executing it.",
@@ -193,7 +193,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
         text: [
           `Based on this description, call create_experience with a sensible title, tagline, body, and any of price_amount/duration_minutes/max_capacity/time_slots that are implied or stated: ${description}`,
           "Use a status appropriate to whether this should go live immediately or stay as a draft — ask the user if it's not obvious.",
-          "If the user has media ready, call set_media after creation with target type experience_media and the complete ordered asset_ids list.",
+          "If the user has media ready, call set_media after creation with target_type experience_media, the exact experience_id, and the complete ordered asset_ids list.",
           "Report back what was created, its current status, and the live URL when one is available.",
         ].join(" "),
       };
@@ -229,7 +229,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
           "If the user hasn't already attached photos in this conversation, ask them to attach the photos they want to add directly in ChatGPT.",
           "For each attached photo, inspect it visually first, then ask the user (or infer from context) where it should go: the homepage main photo, a specific location's main photo, the about/story section, a menu item, an experience, or a post.",
           "Confirm the target site and placement with the user before uploading anything.",
-          "After confirmation, call upload_user_media with file (the resolved ChatGPT file reference for the attachment) or file_id for each photo, then call set_media with the matching target type. For ordered targets such as experience_media, first call the read tool, merge each uploaded asset into the existing ordered media ids, then assign the complete asset_ids list.",
+          "After confirmation, call upload_user_media once with file (the resolved ChatGPT file reference for the attachment), then call set_media with the matching target_type and exact entity id returned by a read tool. Never switch to a bare file_id or invent a download URL. For ordered placements such as experience_media, first call the read tool, merge each uploaded asset into the existing ordered media ids, then assign the complete asset_ids list.",
           "Reply confirming exactly where each photo was placed.",
         ].join(" "),
       };
