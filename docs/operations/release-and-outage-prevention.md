@@ -1,169 +1,135 @@
 # Release and Outage Prevention
 
-This is a mandatory operating contract for every LLM or human conversation that
-changes, reviews, deploys, or releases KrabiClaw. `AGENTS.md` and `CLAUDE.md`
-link here so a new conversation starts with the same incident lessons and
-release gates.
+This contract applies to work that changes, deploys, or releases user-facing
+runtime behavior or database schema. It keeps the release path simple and makes
+customer behavior, rather than release bookkeeping, the approval signal.
 
-## The release rule
+## Release rule
 
-Green CI is necessary, but it is not release approval. A user-facing release
-is not safe to promote until the deployed staging or production release has been
-opened in a real browser and the required route matrix has been inspected.
-Unit tests, typecheck, lint, migration checks, scripted E2E, a production build,
-and a green GitHub check cannot substitute for that browser gate.
+KrabiClaw uses the branch-driven flow in [release-flow.md](release-flow.md): a
+pull request deploys preview, a push to `staging` deploys the staging Worker,
+and a push to `main` deploys production. Each environment receives one normal
+Cloudflare Worker deployment. Do not add candidate manifests, version-override
+headers, Worker UUID tracking, custom release locks, or repository rollback
+commands.
 
-The deployed representative E2E job is a prerequisite for reporting browser
-validation: pending, failed, cancelled, or missing means the release is not
-browser-validated. That job is representative only and still does not replace
-the complete route-by-route browser matrix for a high-risk release.
+Green CI is necessary, but it is not release approval. As soon as an environment
+is deployed, start the relevant browser and MCP checks while the remaining CI
+jobs continue. Automated E2E and manual browser evidence are independent gates;
+neither must wait for the other to begin.
 
-One timeout, closed tab, blank or partial section, broken image/video, console
-error, wrong tenant identity, wrong URL, or incomplete inspection is
-**unverified** and blocks the release. Never report browser validation as passed
-when it was only inferred from CI or a local script.
+Validation follows product risk:
 
-The concrete implementation is defined in [release-flow.md](release-flow.md).
-Pull requests deploy preview, pushes to `staging` deploy staging and run the
-full E2E suite, and pushes to `main` deploy production and run read-only browser
-smoke. Each environment receives one normal Cloudflare Worker deployment.
-During an incident, restore a known-good Cloudflare deployment without changing
-D1 data, then repair the source through the same branch flow. Direct
-convenience deploy or rollback commands are not release approval.
+1. Test the affected authenticated flow or tenant journey first.
+2. Check representative client sites before platform marketing routes.
+3. Run the exhaustive tenant route matrix only for shared renderer, routing,
+   theme, content-model, or destructive content-migration changes.
 
-## Start every new task or conversation with a state snapshot
+A reproducible first-party failure blocks promotion. An operator-closed tab or
+an isolated third-party timeout is not an application failure; retry the
+inspection once to determine ownership, then report the actual result.
 
-Before reasoning from an earlier conversation, fetch and record:
+## Normal release sequence
 
-1. The working branch, clean/dirty status, `origin/staging`, `origin/main`, and
-   the exact deployed Worker SHA for each environment.
-2. Every relevant PR's base, head, merge status, and source-PR ancestry. A
-   merged integration PR does not prove that all source-PR work survived.
-3. The current migration and seed state. For content migrations, record source
-   row counts, canonical tenant-page/locale/document/revision/block counts, and
-   any unmapped or rejected records before treating legacy-table removal as
-   safe.
-4. A status table with these separate states: code landed, staging deployed,
-   staging browser verified, production deployed, production browser verified,
-   and deferred operational work.
+1. Keep one coherent bugfix or feature in one ready pull request targeting
+   `staging`. Split work only when the changes are independently releasable.
+2. Run focused validation locally. CI owns the single environment-specific
+   build, preview deployment, and representative preview E2E coverage.
+3. When preview deploys, test the affected customer journey immediately.
+4. Merge to `staging` after required PR checks and preview validation pass.
+5. When staging deploys, begin credentialed MCP and tenant browser validation
+   immediately while the full staging E2E suite continues.
+6. Promote with the ordinary `staging` to `main` pull request only after the
+   required staging checks and scoped customer validation pass.
+7. After production deploys, repeat the affected read-only customer journeys
+   and production smoke. Use an explicit canary identity for any production
+   action that writes or sends notifications.
 
-Do not carry forward a prior agent's claim of “green,” “deployed,” “complete,”
-or “verified” without checking the underlying commit, deployment, logs, and
-browser evidence.
+GitHub workflow runs and Cloudflare's native deployment history are sufficient
+release evidence. Do not invent a second mapping between Git commits and Worker
+version identifiers.
 
-## Required release sequence
+## Browser and MCP verification
 
-1. Read the PR reviews and the product goal together. Convert every deferred
-   item into an explicit issue or acceptance criterion; do not silently turn a
-   partial implementation into a completed feature.
-2. Keep billing, content/migrations, renderer changes, and UI polish in separate
-   reviewable PRs. If an integration PR is necessary, keep the source PRs and
-   their surviving work traceable until they are safely re-landed or explicitly
-   superseded.
-3. Run focused local validation and a production build. For any public,
-   dashboard, CMS, auth, billing, or renderer change, use a real browser locally
-   when practical, but treat local evidence as preparation rather than deployed
-   release evidence.
-4. Merge to staging. Wait for its deployment and required checks, then run the
-   full browser matrix below against the deployed staging host.
-5. Promote only after staging is browser-verified. After production deploy,
-   identify the exact production SHA and repeat the relevant browser matrix on
-   production. A staging pass does not prove the production deployment is good.
-6. Close the issue or describe the work as complete only when code, migrations,
-   deployed runtime, browser evidence, and operational acceptance all pass.
+Use the browser state appropriate to the behavior. Anonymous public routes may
+use a fresh context. Dashboard, OAuth, and MCP checks must use a credentialed
+test account; rendering the login page does not validate authentication.
 
-## Mandatory browser gate
+For an auth or MCP change, exercise the deployed flow end to end:
 
-Use a fresh browser context and inspect every published public route
-individually. Use the live sitemap/navigation and fixture data to enumerate the
-current route set; do not test only the homepage or a representative subset for
-a high-risk renderer, content, migration, or routing change.
+- OAuth protected-resource and authorization-server discovery;
+- credentialed authorization with PKCE and token exchange;
+- bearer-authenticated MCP `initialize` and `tools/list`;
+- `get_current_user` and a tenant-scoped read such as `list_sites`;
+- the affected safe write or media journey when tool behavior changed;
+- one real ChatGPT app session when the defect involves ChatGPT tool selection,
+  attachment delivery, or host-provided file arguments.
 
-For every route, verify:
+For affected tenant routes, verify the final URL, tenant identity, visible copy,
+first-party media, primary navigation and calls to action, console errors,
+failed first-party requests, hydration errors, blank sections, and late content
+disappearance. Mutating form and booking interactions belong on preview or
+staging fixtures. Production checks stay read-only unless a dedicated canary is
+explicitly authorized.
 
-- the final URL, redirects, tenant identity, title, and visible rendered copy;
-- the complete section/block composition, with a full-page scroll;
-- desktop and narrow/mobile responsive layout;
-- every image, video, poster, font, and other first-party media asset loads and
-  has the correct type and content;
-- links, buttons, forms, reservations, contact, booking, and other route-local
-  actions where published;
-- browser console errors, failed first-party requests, hydration errors, blank
-  sections, skeleton-only states, and late content disappearance.
+The representative client order is:
 
-The minimum high-risk tenant matrix is:
+1. Pottery House: home, experiences and details, locations, contact, and
+   reservations.
+2. Kikuzuki: home, menu and items, locations, and reservations.
+3. NCLS: home, services and details, pricing, articles, contact, and schedule.
+4. Demo fixtures needed by the affected feature.
+5. A minimal set of affected platform, authentication, help, docs, or legal
+   routes.
 
-- platform marketing, docs, blog, templates, authentication, help, and legal
-  routes;
-- Demo: menu/items, experiences/details, both locations/subpages, reviews,
-  Q&A, posts, photos, about, contact, reservations, and blog;
-- Pottery House: all experience details, both locations/subpages, posts/blog,
-  contact, reservations, reviews, Q&A, photos, and about;
-- Kikuzuki: all published menu/item routes, locations/subpages, reservations,
-  reviews, Q&A, posts, photos, about, contact, and published experiences;
-- NCLS: services/details, pricing, blog/articles, contact/confirmation,
-  schedule, donation, policies, notices, and legacy redirects.
-
-If the route inventory changes, enumerate the new published routes rather than
-assuming this list is still complete. A route that was not opened is not
-verified.
+For a shared renderer, routing, theme, content-model, or destructive
+content-migration change, expand that representative set to every published
+route using the sitemap and fixture inventory. Check desktop and narrow/mobile
+layouts and full-page media composition. A route that was not opened remains
+unverified, but unrelated route families do not block a narrowly scoped change.
 
 ## Migration and content safety
 
-Preserve source data until a migration has proved its mapping. Before dropping
-or retiring a legacy table or writer:
+Applied migration files are immutable. `server/db/schema.ts` remains the source
+of truth, and staging and production use native `wrangler d1 migrations apply`.
 
-- run a dry-run or equivalent inventory grouped by tenant, locale, page/type,
-  publication state, and media/reference;
-- assert the expected canonical tenant pages, locale variants, content
-  documents, revisions, and typed blocks, including representative client
-  counts;
-- fail loudly on an unmapped record; never silently drop content or turn an API
-  error into an empty success;
-- verify the deployed readers and seeders use the canonical source of truth;
-- only then apply the destructive part of the migration and repeat a read-only
-  post-migration census.
+Before dropping or retiring a legacy table or writer:
 
-Historical migration files may retain legacy names because applied migration
-history is immutable. Migration fixtures or tests that exercise that historical
-SQL may also contain those names as inputs, but they are not active product
-paths. New runtime code, seed writes, active fixtures, tests, and documentation
-must make the distinction explicit and must not reintroduce legacy writers or
-automated-translation product paths.
-Manual customer-managed locale variants remain supported unless an approved
-product decision removes them separately.
+- remove every runtime reader and writer;
+- inventory any records that require mapping into the canonical schema;
+- fail on unmapped records rather than silently discarding them;
+- apply the migration locally from a clean database and from the prior schema;
+- compare the resulting schema and run `PRAGMA foreign_key_check`;
+- repeat a read-only schema and foreign-key check after deployment.
 
-Never reseed or hand-mutate production data to hide a renderer or routing bug.
-For an outage, preserve the database and stabilize the known-good renderer or
-Worker first. Optional rollback checks can follow the emergency stabilization;
-customer-facing downtime is not a reason to wait for them.
+Never rebuild a referenced parent table with `DROP TABLE`; D1 may execute
+foreign-key actions during a generated rebuild. An obsolete unreferenced table
+may be dropped in the same release once these checks pass. Do not retain inert
+tables or compatibility code for an extra release as a substitute for proving
+the migration.
 
-## Incident and rollback rules
+Never reseed or hand-mutate production to hide a renderer, routing, or migration
+bug. Preserve customer data and fix the source of truth.
 
-When a deployed site is broken:
+## Incident recovery
 
-1. Declare the affected environment, routes, and observed symptom.
-2. Compare the deployed renderer selection and runtime logs with the last
-   verified release.
-3. Restore the smallest known-good renderer/release path first, without
-   dropping data or reseeding.
-4. Re-open the affected routes in a real browser, including all affected client
-   sites and responsive layouts.
-5. Only after service is stable, audit the source/canonical data and repair the
-   failed release in a narrow PR. Do not land the broad feature branch as an
-   emergency fix.
+When a deployed customer journey is broken:
 
-## Handoff and issue hygiene
+1. Identify the affected environment, client routes or MCP operations, and the
+   observed first-party failure.
+2. Use Cloudflare's ordinary deployment history to restore the last known-good
+   Worker without changing D1 data.
+3. Re-open the affected customer journeys, including the relevant client sites
+   and authenticated flows.
+4. Repair the source in one narrow pull request through the normal preview,
+   `staging`, and `main` branch flow.
 
-Every final handoff must state: what landed, what is deployed, which browser
-matrix was actually opened, what remains unverified, and which operational or
-product decisions are deferred. “Complete” means the acceptance evidence
-exists; it does not mean the implementation compiles.
+Do not build a custom rollback system or delay emergency stabilization for
+release bookkeeping.
 
-Close completed implementation issues only when their promised scope is
-actually delivered. Keep operational follow-ups, pricing decisions,
-compatibility-path removal, editor visual polish, and documentation cleanup in
-explicit open issues rather than burying them in a merged PR description. The
-current post-release follow-up for the Stripe operations, business-model
-cleanup, visual Pages editor, and active legacy-naming audit is
-[#554](https://github.com/paulchrisluke/krabiclaw/issues/554).
+## Handoff
+
+Report what landed, which environment deployed, which customer journeys were
+actually exercised, and what remains unverified. Do not call platform-only
+checks client-site verification, a rendered login page an auth pass, or a
+scripted request a real ChatGPT tool-usage pass.

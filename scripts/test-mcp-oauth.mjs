@@ -26,7 +26,8 @@ const TOKEN_URL = `${BASE_URL}/api/auth/oauth2/token`;
 const DEV_LOGIN_URL = `${BASE_URL}/api/dev/login`;
 const AUTHORIZE_URL = `${BASE_URL}/api/auth/oauth2/authorize`;
 const CONSENT_URL = `${BASE_URL}/api/auth/oauth2/consent`;
-const TEST_CLIENT_METADATA_URL = `${BASE_URL}/api/auth/oauth2/test-client-metadata`;
+const TEST_CLIENT_METADATA_URL = process.env.MCP_CIMD_CLIENT_URL ??
+  `${BASE_URL}/api/auth/oauth2/test-client-metadata`;
 
 const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? "2025-06-18";
 
@@ -234,8 +235,8 @@ async function main() {
     section("CIMD + PKCE auth flow (staging)");
     const { verifier, challenge } = pkce();
     const state = randomBytes(16).toString("hex");
-    const redirectUri = `${BASE_URL}/oauth/test-callback`;
-    const testClientId = `${TEST_CLIENT_METADATA_URL}?nonce=${Date.now()}`;
+    const testClientId = TEST_CLIENT_METADATA_URL;
+    const redirectUri = new URL("/oauth/test-callback", testClientId).toString();
     pass(`Using CIMD client: ${testClientId}`);
 
     // Authorization request (redirects to consent page)

@@ -72,6 +72,7 @@ test('each environment uses one normal Worker deploy followed by its browser gat
     stepRun(jobs['e2e-staging']!, 'Deploy staging Worker'),
     'npx wrangler deploy --env staging --old-asset-ttl 600 --strict',
   )
+  assert.equal(stepRun(jobs['e2e-staging']!, 'Run OAuth bearer MCP smoke'), 'yarn test:mcp')
   assert.equal(stepRun(jobs['e2e-staging']!, 'Run full staging E2E suite'), 'yarn test:e2e:full')
 
   const productionMigrations = stepRun(jobs['deploy-production']!, 'Apply production migrations')
