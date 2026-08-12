@@ -4,8 +4,8 @@ This is the source of truth for avoiding local-vs-CI auth and billing drift in E
 
 ## Tier intent
 
-- The required PR lane reuses one production build and deploys only isolated
-  preview. Its representative suite always includes dashboard Pages,
+- The required PR lane builds for and deploys only isolated preview. Its
+  representative suite always includes dashboard Pages,
   billing, links, and Blawby CMS coverage; path filters cannot omit them.
 - A push to `staging` applies migrations, deploys the staging Worker normally,
   and then runs the full Playwright suite against that deployment.

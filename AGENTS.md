@@ -91,7 +91,7 @@ See `docs/adr/0021-better-auth-authorization-target.md`.
 
 ## Database Schema Workflow
 
-`server/db/schema.ts` (Drizzle ORM) is the **source of truth** for new schema changes. `migrations/0001_initial.sql` through `migrations/0007_*.sql` are historical, hand-authored, **already applied to every real environment (staging, production) and immutable** — never rename, edit, renumber, or re-squash them. From `0008` onward, migrations are _generated_ from `schema.ts` via `drizzle-kit generate` and applied via wrangler D1 migrations.
+`server/db/schema.ts` (Drizzle ORM) is the **source of truth** for new schema changes. `migrations/0001_initial.sql` through `migrations/0007_*.sql` are historical and hand-authored. From `0008` onward, migrations are generated from `schema.ts` via `drizzle-kit generate` and applied via Wrangler D1 migrations. Any migration applied to any shared environment is immutable by filename and content; never rename, edit, renumber, or re-squash it.
 
 **Why the split:** `wrangler d1 migrations apply` tracks applied migrations by **filename**, not content/checksum. An environment that already ran `0001_initial.sql`...`0007_*.sql` has those exact filenames recorded — it has no idea a squashed `0000_something.sql` is "the same" schema. Renaming/squashing history that's already applied anywhere makes wrangler treat the new file as unapplied and try to re-run it, immediately failing with `table X already exists`. There is no clever flag around this; the only safe move is to never touch an already-applied filename and always add new migrations with higher numbers.
 
@@ -108,7 +108,7 @@ See `docs/adr/0021-better-auth-authorization-target.md`.
 9. Any schema change must be checked against current server queries.
 10. Never define `d1_migrations` in `schema.ts`.
 11. After `db:generate`, wipe `.wrangler/state/v3/d1`, run `yarn schema:local`, then run the relevant seed command.
-12. `yarn migrate:check` must pass before applying migrations. Never rebuild a referenced parent table such as `media_assets` with `DROP TABLE`; D1 may execute foreign-key actions even when generated SQL includes `PRAGMA foreign_keys=OFF`, clearing references or cascading child rows. Use additive columns, indexes, or triggers. If a table rebuild is unavoidable, design and test an explicit relationship-preserving migration and recovery plan first.
+12. `yarn lint:migrations` must pass before applying migrations. New migrations may not use `DROP TABLE`; D1 may execute foreign-key actions even when generated SQL includes `PRAGMA foreign_keys=OFF`, clearing references or cascading child rows. Use additive columns, indexes, or triggers. If a table removal or rebuild is unavoidable, design and review an explicit relationship-preserving migration and recovery plan before changing the lint rule.
 
 ### D1 does not support raw transactions
 
@@ -255,14 +255,13 @@ Required on each relevant PR push:
 - Impacted unit/integration tests.
 - Representative E2E tests only.
 - Deterministic request, query, payload, retry, and SSR-call budgets.
-- One production build in parallel.
+- One environment-specific build in the deployment job.
 - Target required CI wall-clock duration: 10 minutes or less.
 
 Run the exhaustive suite after the staging deployment:
 - Full browser and route matrix.
 - Full E2E suite.
 - Long-running database integration coverage.
-- Comparative performance benchmarks.
 
 Performance policy:
 - PR smoke benchmark: 3-5 samples for affected representative journeys.
@@ -285,7 +284,7 @@ The final report must identify:
 Do not claim that a benchmark was executed when only a source-code contract
 test or static assertion was run.
 
-### Three CI lanes
+### CI execution stages
 
 #### 1. Focused development lane: target under 2 minutes
 
@@ -303,15 +302,13 @@ The LLM should run this lane repeatedly while working.
 Run this lane locally with focused package scripts; do not duplicate the
 required GitHub workflow.
 
-#### 2. Required PR lane: target under 8–10 minutes wall-clock
-
-Run jobs in parallel:
+#### 2. Pull request gate
 
 - Full typecheck and lint.
 - Impacted unit and integration tests.
-- A small set of representative E2E tests.
+- One preview-specific build and deploy.
+- A small set of representative E2E tests against preview.
 - Deterministic request, query, and payload budgets.
-- One production build, in its own parallel job.
 
 Do not run every template, every dashboard page, every browser, and every benchmark sample on every push.
 
@@ -324,7 +321,6 @@ After a push to `staging`:
 - Full E2E suite.
 - All supported browser/template combinations.
 - Long-running D1 integration tests.
-- Flake and retry analysis.
 
 After a push to `main`, deploy production and run read-only browser smoke. Do
 not run mutating E2E suites against production.
@@ -628,11 +624,11 @@ Required pipeline:
 5. `client:verify` against the local build
 6. Merge to `staging`; CI deploys and runs the full E2E suite
 7. Merge the verified staging release into `main`; CI deploys and runs production browser smoke
-8. `client:deploy --skip-seed --skip-deploy` for final deployed client verification
+8. `client:deploy --skip-seed` for final deployed client verification
 
-`client:deploy` never releases the Worker itself. Direct staging/production
-deploy commands are blocked so client onboarding cannot bypass the staging and
-production branch gates.
+`client:deploy` never releases the Worker itself. The package exposes no direct
+staging or production deploy commands; client onboarding goes through the
+staging and production branch gates.
 
 If any step fails, fix the source of truth:
 

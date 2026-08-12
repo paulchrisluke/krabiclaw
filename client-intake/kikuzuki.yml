@@ -1,6 +1,6 @@
 # Kikuzuki Krabi Thailand — Client Intake
 # Usage: yarn client:onboard --from client-intake/kikuzuki.yml
-# Seed: yarn seed:kikuzuki (local) | yarn seed:kikuzuki:staging | yarn seed:kikuzuki:remote
+# Seed: yarn seed:kikuzuki (local) or yarn seed:kikuzuki:preview (CI)
 
 slug: kikuzuki-krabi-thailand
 vertical: restaurant

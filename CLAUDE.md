@@ -84,7 +84,7 @@ See `docs/adr/0021-better-auth-authorization-target.md`.
 
 ## Database Schema Workflow
 
-`server/db/schema.ts` (Drizzle ORM) is the **source of truth** for new schema changes. `migrations/0001_initial.sql` through `migrations/0007_*.sql` are historical, hand-authored, **already applied to every real environment (staging, production) and immutable** — never rename, edit, renumber, or re-squash them. From `0008` onward, migrations are _generated_ from `schema.ts` via `drizzle-kit generate` and applied via wrangler D1 migrations.
+`server/db/schema.ts` (Drizzle ORM) is the **source of truth** for new schema changes. `migrations/0001_initial.sql` through `migrations/0007_*.sql` are historical and hand-authored. From `0008` onward, migrations are generated from `schema.ts` via `drizzle-kit generate` and applied via Wrangler D1 migrations. Any migration applied to any shared environment is immutable by filename and content; never rename, edit, renumber, or re-squash it.
 
 **Why the split:** `wrangler d1 migrations apply` tracks applied migrations by **filename**, not content/checksum. An environment that already ran `0001_initial.sql`...`0007_*.sql` has those exact filenames recorded — it has no idea a squashed `0000_something.sql` is "the same" schema. Renaming/squashing history that's already applied anywhere makes wrangler treat the new file as unapplied and try to re-run it, immediately failing with `table X already exists`. There is no clever flag around this; the only safe move is to never touch an already-applied filename and always add new migrations with higher numbers.
 
@@ -223,9 +223,9 @@ Three environment gates exist in `.github/workflows/ci.yml`:
 
 ### Required PR lane
 
-Runs quality, unit, and build jobs and may migrate, seed, and deploy only the
-isolated preview environment. The same `.output` artifact is reused for preview
-browser coverage; shared staging and production are never changed by a PR.
+Runs checks, builds for preview, and may migrate, seed, and deploy only the
+isolated preview environment. Shared staging and production are never changed
+by a PR.
 
 ### Staging lane
 
@@ -238,8 +238,8 @@ Playwright suite against `staging.krabiclaw.com`.
 Runs on pushes to `main`. It applies pending migrations, deploys the production
 Worker normally, and runs read-only public browser smoke.
 
-Direct `yarn deploy` and staging/production Worker convenience commands are
-blocked. The contract is `docs/operations/release-flow.md`.
+The package exposes no staging or production deploy, migration, seed, or
+rollback aliases. The contract is `docs/operations/release-flow.md`.
 
 ### CI Environment Rules
 

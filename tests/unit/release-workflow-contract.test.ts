@@ -18,10 +18,21 @@ type WorkflowJob = {
   steps?: WorkflowStep[]
 }
 
-async function workflowJobs(): Promise<Record<string, WorkflowJob>> {
-  const document = parse(await repoFile('.github/workflows/ci.yml')) as {
-    jobs?: Record<string, WorkflowJob>
+type WorkflowDocument = {
+  on?: {
+    pull_request?: { branches?: string[] }
+    push?: { branches?: string[] }
   }
+  env?: Record<string, string>
+  jobs?: Record<string, WorkflowJob>
+}
+
+async function workflowDocument(): Promise<WorkflowDocument> {
+  return parse(await repoFile('.github/workflows/ci.yml')) as WorkflowDocument
+}
+
+async function workflowJobs(): Promise<Record<string, WorkflowJob>> {
+  const document = await workflowDocument()
   assert.ok(document.jobs)
   return document.jobs
 }
@@ -33,11 +44,11 @@ function stepRun(job: WorkflowJob, name: string): string {
 }
 
 test('one CI workflow owns preview, staging, and production lifecycle gates', async () => {
-  const source = await repoFile('.github/workflows/ci.yml')
+  const document = await workflowDocument()
   const jobs = await workflowJobs()
 
-  assert.match(source, /pull_request:[\s\S]*branches: \[main, staging\]/)
-  assert.match(source, /push:[\s\S]*branches: \[main, staging\]/)
+  assert.deepEqual(document.on?.pull_request?.branches, ['main', 'staging'])
+  assert.deepEqual(document.on?.push?.branches, ['main', 'staging'])
   assert.ok(jobs['e2e-representative'])
   assert.equal(jobs['e2e-staging']?.if, "github.event_name == 'push' && github.ref == 'refs/heads/staging'")
   assert.equal(jobs['deploy-production']?.if, "github.event_name == 'push' && github.ref == 'refs/heads/main'")
@@ -52,7 +63,7 @@ test('each environment uses one normal Worker deploy followed by its browser gat
   )
 
   const stagingMigrations = stepRun(jobs['e2e-staging']!, 'Apply staging migrations')
-  assert.match(stagingMigrations, /yarn migrate:check[\s\S]*wrangler d1 migrations apply DB --env staging --remote/)
+  assert.equal(stagingMigrations, 'npx wrangler d1 migrations apply DB --env staging --remote')
   assert.equal(
     stepRun(jobs['e2e-staging']!, 'Deploy staging Worker'),
     'npx wrangler deploy --env staging --old-asset-ttl 600 --strict',
@@ -60,7 +71,7 @@ test('each environment uses one normal Worker deploy followed by its browser gat
   assert.equal(stepRun(jobs['e2e-staging']!, 'Run full staging E2E suite'), 'yarn test:e2e:full')
 
   const productionMigrations = stepRun(jobs['deploy-production']!, 'Apply production migrations')
-  assert.match(productionMigrations, /yarn migrate:check[\s\S]*wrangler d1 migrations apply DB --remote/)
+  assert.equal(productionMigrations, 'npx wrangler d1 migrations apply DB --remote')
   assert.equal(
     stepRun(jobs['deploy-production']!, 'Deploy production Worker'),
     'npx wrangler deploy --old-asset-ttl 600 --strict',
@@ -91,14 +102,27 @@ test('custom candidate and nightly release machinery is absent', async () => {
   for (const deleted of [
     '.github/workflows/ci-full.yml',
     '.github/workflows/e2e-full.yml',
+    '.github/workflows/fixture.yml',
+    '.github/workflows/preview-verify.yml',
     '.github/workflows/release-production.yml',
     '.github/workflows/rollback-production.yml',
+    '.github/workflows/zaraz-ga-backfill.yml',
+    'scripts/backfill-missing-blog-content-documents.mjs',
+    'scripts/check-migration-safety.mjs',
+    'scripts/verify-migration-state.mjs',
+    'scripts/release-command-blocked.mjs',
+    'scripts/rollback-prod.mjs',
+    'scripts/wrangler-retry.ts',
+    'scripts/zaraz-ga-backfill.mjs',
   ]) {
     await assert.rejects(access(new URL(`../../${deleted}`, import.meta.url)))
   }
 })
 
 test('Cloudflare credentials stay scoped to mutation steps', async () => {
+  const document = await workflowDocument()
+  assert.equal(document.env?.CLOUDFLARE_API_TOKEN, undefined)
+  assert.equal(document.env?.CLOUDFLARE_ACCOUNT_ID, undefined)
   const jobs = await workflowJobs()
   for (const [jobName, job] of Object.entries(jobs)) {
     assert.equal(job.env?.CLOUDFLARE_API_TOKEN, undefined, `${jobName} has a job-level API token`)

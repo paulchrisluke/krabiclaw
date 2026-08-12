@@ -14,13 +14,15 @@ retains ordinary deployment history. The repository does not upload hidden
 candidate versions, split traffic, send version-override headers, track Worker
 UUIDs, create candidate manifests, or run a nightly release lane.
 
-The deployment jobs run `yarn migrate:check` before applying pending D1
-migrations. Preview fixtures are reset and seeded for PR isolation. Staging
-keeps its persistent fixtures and sweeps only disposable E2E artifacts.
-Production is never seeded by CI.
+The checks job runs the repository's migration lint once. Each deployment job
+then builds for its own environment and uses native
+`wrangler d1 migrations apply`; Wrangler owns the applied-migration history.
+Preview fixtures are reset and seeded for PR isolation. Staging keeps its
+persistent fixtures and sweeps only disposable E2E artifacts. Production is
+never seeded by CI.
 
-Direct staging and production deploy or migration package aliases remain
-blocked. Releases enter those environments only through reviewed branch
-merges. During an outage, restore a known-good deployment with Cloudflare's
-deployment history without changing D1 data, then repair the source through the
-normal `staging` to `main` flow.
+The package exposes no staging or production deploy, migration, seed, or
+rollback aliases. Releases enter those environments only through reviewed
+branch merges. During an outage, use Cloudflare's deployment history without
+changing D1 data, then repair the source through the normal `staging` to `main`
+flow.

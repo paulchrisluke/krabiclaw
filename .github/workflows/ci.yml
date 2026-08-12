@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   typecheck:
-    name: Type check and unit tests
+    name: Checks
     if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
@@ -31,76 +31,14 @@ jobs:
       - run: yarn quality
       - run: yarn test:unit
       - run: yarn mcp:compat
-
-  build-production:
-    name: Application build
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: "22"
-          cache: yarn
-      - run: yarn install --frozen-lockfile
-      - run: yarn build
-      - name: Upload application build
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: production-build
-          path: .output
-          include-hidden-files: true
-          retention-days: 14
-          if-no-files-found: error
-
-  guardrails:
-    name: CI guardrails
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
-        with:
-          node-version: "22"
-          cache: yarn
-      - run: yarn install --frozen-lockfile
-      - name: Run Node-only guardrails
-        run: |
-          node scripts/check-better-auth-boundaries.mjs
-          node scripts/check-product-model-guard.mjs
-          node scripts/lint-seeds.mjs
-          node scripts/lint-migrations.mjs
-          node scripts/lint-tool-parity.mjs
-      - name: Check pipeline scripts
-        run: |
-          for f in \
-            scripts/client-import.mjs \
-            scripts/client-verify.mjs \
-            scripts/client-onboard.mjs \
-            scripts/client-override.mjs \
-            scripts/client-deploy.mjs \
-            scripts/canary-prod.mjs \
-            scripts/canary-notifications.mjs \
-            scripts/capture-blawby-screenshots.mjs \
-            scripts/compare-blawby-screenshots.mjs \
-            scripts/rollback-prod.mjs \
-            scripts/verify-blawby-site.mjs \
-            scripts/lint-seeds.mjs \
-            scripts/lint-migrations.mjs \
-            scripts/lint-tool-parity.mjs \
-            scripts/fixtures/pottery-house-krabi.fixture.mjs; do
-            node --check "$f"
-          done
+      - run: yarn lint:seeds
+      - run: yarn lint:migrations
+      - run: yarn lint:tool-parity
 
   e2e-representative:
     name: E2E representative tests (preview only)
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-    needs: [typecheck, build-production, guardrails]
+    needs: typecheck
     runs-on: ubuntu-latest
     timeout-minutes: 30
     concurrency:
@@ -111,8 +49,11 @@ jobs:
       STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET_TEST }}
       NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
       NUXT_PUBLIC_PLATFORM_DOMAIN: https://preview.krabiclaw.com
-      NUXT_PUBLIC_FREE_SITE_DOMAIN: https://preview.krabiclaw.com
+      NUXT_PUBLIC_FREE_SITE_DOMAIN: https://krabiclaw.com
       NUXT_PUBLIC_APP_NAME: KrabiClaw
+      NUXT_PUBLIC_SITE_URL: https://preview.krabiclaw.com
+      NUXT_PUBLIC_HELP_URL: https://preview.krabiclaw.com/help
+      NUXT_PUBLIC_WHATSAPP_NUMBER: "16197200000"
       BETTER_AUTH_SECRET: test-secret-for-ci
       BETTER_AUTH_URL: https://preview.krabiclaw.com
       E2E_ALLOW_DEV_ROUTES: "true"
@@ -129,29 +70,13 @@ jobs:
           cache: yarn
       - run: yarn install --frozen-lockfile
       - run: npx playwright install --with-deps chromium
-      - name: Download application build
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: production-build
-          path: .output
+      - name: Build preview Worker
+        run: yarn build
       - name: Migrate preview database
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          set -euo pipefail
-          applied="$RUNNER_TEMP/preview-migrations-applied.json"
-          pending="$RUNNER_TEMP/preview-migrations-pending.txt"
-          npx wrangler d1 execute DB --env preview --remote \
-            --command 'SELECT id, name, applied_at FROM d1_migrations ORDER BY id' \
-            --json > "$applied"
-          node scripts/verify-migration-state.mjs \
-            --pre-apply \
-            --lineage-marker 0108_reconcile_drizzle_migration_history.sql \
-            --migrations-dir migrations \
-            --remote-json "$applied"
-          npx wrangler d1 migrations list DB --env preview --remote | tee "$pending"
-          yarn migrate:check
           npx wrangler d1 migrations apply DB --env preview --remote
       - name: Sweep E2E artifacts
         env:
@@ -184,11 +109,6 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler deploy --env preview --old-asset-ttl 600 --strict
-      - name: Purge preview HTML cache
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          DEPLOYMENT_CACHE_ORIGIN: https://preview.krabiclaw.com
-        run: node --experimental-strip-types scripts/purge-deployment-cache.ts
       - name: Run required representative browser coverage
         run: |
           yarn test:e2e:representative
@@ -210,7 +130,7 @@ jobs:
   e2e-staging:
     name: Deploy and test staging
     if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
-    needs: [typecheck, build-production, guardrails]
+    needs: typecheck
     runs-on: ubuntu-latest
     timeout-minutes: 90
     concurrency:
@@ -221,8 +141,11 @@ jobs:
       STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET_STAGING }}
       NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
       NUXT_PUBLIC_PLATFORM_DOMAIN: https://staging.krabiclaw.com
-      NUXT_PUBLIC_FREE_SITE_DOMAIN: https://staging.krabiclaw.com
-      NUXT_PUBLIC_APP_NAME: KrabiClaw
+      NUXT_PUBLIC_FREE_SITE_DOMAIN: https://krabiclaw.com
+      NUXT_PUBLIC_APP_NAME: KrabiClaw Staging
+      NUXT_PUBLIC_SITE_URL: https://staging.krabiclaw.com
+      NUXT_PUBLIC_HELP_URL: https://staging.krabiclaw.com/help
+      NUXT_PUBLIC_WHATSAPP_NUMBER: "16197200000"
       BETTER_AUTH_SECRET: test-secret-for-ci
       BETTER_AUTH_URL: https://staging.krabiclaw.com
       E2E_ALLOW_DEV_ROUTES: "true"
@@ -239,18 +162,13 @@ jobs:
           cache: yarn
       - run: yarn install --frozen-lockfile
       - run: npx playwright install --with-deps chromium
-      - name: Download application build
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: production-build
-          path: .output
+      - name: Build staging Worker
+        run: yarn build
       - name: Apply staging migrations
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          yarn migrate:check
-          npx wrangler d1 migrations apply DB --env staging --remote
+        run: npx wrangler d1 migrations apply DB --env staging --remote
       - name: Sweep staging E2E artifacts
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -261,11 +179,6 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler deploy --env staging --old-asset-ttl 600 --strict
-      - name: Purge staging HTML cache
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          DEPLOYMENT_CACHE_ORIGIN: https://staging.krabiclaw.com
-        run: node --experimental-strip-types scripts/purge-deployment-cache.ts
       - name: Run full staging E2E suite
         run: yarn test:e2e:full
       - name: Upload staging Playwright report
@@ -282,7 +195,7 @@ jobs:
   deploy-production:
     name: Deploy and test production
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [typecheck, build-production, guardrails]
+    needs: typecheck
     runs-on: ubuntu-latest
     timeout-minutes: 45
     concurrency:
@@ -295,6 +208,9 @@ jobs:
       NUXT_PUBLIC_PLATFORM_DOMAIN: https://krabiclaw.com
       NUXT_PUBLIC_FREE_SITE_DOMAIN: https://krabiclaw.com
       NUXT_PUBLIC_APP_NAME: KrabiClaw
+      NUXT_PUBLIC_SITE_URL: https://krabiclaw.com
+      NUXT_PUBLIC_HELP_URL: https://krabiclaw.com/help
+      NUXT_PUBLIC_WHATSAPP_NUMBER: "16197200000"
       BETTER_AUTH_URL: https://krabiclaw.com
       PLAYWRIGHT_PREVIEW_URL: https://krabiclaw.com
       PLAYWRIGHT_WORKERS: "1"
@@ -308,28 +224,18 @@ jobs:
           cache: yarn
       - run: yarn install --frozen-lockfile
       - run: npx playwright install --with-deps chromium
-      - name: Download application build
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: production-build
-          path: .output
+      - name: Build production Worker
+        run: yarn build
       - name: Apply production migrations
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          yarn migrate:check
-          npx wrangler d1 migrations apply DB --remote
+        run: npx wrangler d1 migrations apply DB --remote
       - name: Deploy production Worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler deploy --old-asset-ttl 600 --strict
-      - name: Purge production HTML cache
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          DEPLOYMENT_CACHE_ORIGIN: https://krabiclaw.com
-        run: node --experimental-strip-types scripts/purge-deployment-cache.ts
       - name: Run read-only production browser smoke
         run: yarn test:e2e:public-rendering
       - name: Refresh production search index

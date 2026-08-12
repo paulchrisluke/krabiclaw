@@ -4,7 +4,6 @@ import { execSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { execWithRetry } from './wrangler-retry.ts'
 import {
   renderCompiledDemoContentBlock,
   renderCompiledDemoTenantPagesBlock,
@@ -114,32 +113,21 @@ ${tenantPages}`
 }
 
 const isStdout = process.argv.includes('--stdout')
-const isRemote = process.argv.includes('--remote')
-const isStaging = process.argv.includes('--staging')
 const isPreview = process.argv.includes('--preview')
 
-if (isStaging && process.env.KRABICLAW_RELEASE_CONTEXT !== 'ci-full-staging') {
-  console.error('Direct staging seeding is disabled; staging deployments do not reseed fixtures.')
-  process.exit(1)
-}
-if (isRemote) {
-  console.error('Direct production seeding is disabled; production release workflows never run fixture seeds.')
+if (process.argv.includes('--remote') || process.argv.includes('--staging')) {
+  console.error('This seed supports only local and preview databases.')
   process.exit(1)
 }
 
-if ([isRemote, isStaging, isPreview].filter(Boolean).length > 1) {
-  console.error('Only one of --remote, --staging, or --preview may be provided.')
-  process.exit(1)
-}
-
-const envFlag = isStaging ? '--env staging' : isPreview ? '--env preview' : isRemote ? '' : '--local'
-const remoteFlag = isRemote || isStaging || isPreview ? '--remote' : ''
+const envFlag = isPreview ? '--env preview' : '--local'
+const remoteFlag = isPreview ? '--remote' : ''
 
 const sql = `-- Demo seed for local development - Saya theme showcase
 -- Ephemeral: generated from seed-definitions/demo.ts
 -- Preview at: http://demo.localhost:3000
 -- Production at: https://demo.krabiclaw.com
--- Destructive for demo-owned rows: safe to re-run with yarn seed:local or yarn seed:remote --confirm-production
+-- Destructive for demo-owned rows: safe to re-run locally or against preview.
 
 PRAGMA foreign_keys = ON;
 
@@ -231,7 +219,7 @@ if (isStdout) {
     writeFileSync(sqlPath, sql, 'utf8')
     const cmd = `npx wrangler d1 execute DB ${envFlag} ${remoteFlag} --file "${sqlPath}"`.trim()
     console.log(`[seed:demo] Applying: ${cmd}`)
-    await execWithRetry(() => execSync(cmd, { stdio: 'inherit' }), 'seed:demo')
+    execSync(cmd, { stdio: 'inherit' })
     console.log('[seed:demo] Done.')
   } finally {
     rmSync(dir, { recursive: true, force: true })
