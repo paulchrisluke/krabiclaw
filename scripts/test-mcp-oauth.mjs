@@ -15,6 +15,8 @@
  */
 
 import { createHash, randomBytes } from "crypto";
+import { request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
 
 const BASE_URL = process.argv.includes("--base-url")
   ? process.argv[process.argv.indexOf("--base-url") + 1]
@@ -41,25 +43,41 @@ const IS_STAGING = (() => {
 // ─── helpers ────────────────────────────────────────────────────────────────
 
 async function request(url, init = {}) {
-  const response = await fetch(url, {
-    ...init,
-    redirect: "manual",
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  const target = new URL(url);
+  const transport = target.protocol === "https:" ? httpsRequest : httpRequest;
+
+  return await new Promise((resolve, reject) => {
+    const request = transport(target, {
+      method: init.method ?? "GET",
+      headers: init.headers,
+      family: 4,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    }, (response) => {
+      const chunks = [];
+      response.on("data", (chunk) => chunks.push(chunk));
+      response.on("end", () => {
+        const bodyText = Buffer.concat(chunks).toString("utf8").trim();
+        let body;
+        try {
+          body = JSON.parse(bodyText);
+        } catch {
+          body = bodyText;
+        }
+
+        resolve({
+          status: response.statusCode ?? 0,
+          body,
+          wwwAuthenticate: response.headers["www-authenticate"] ?? "",
+          location: response.headers.location ?? "",
+          setCookies: response.headers["set-cookie"] ?? [],
+        });
+      });
+    });
+
+    request.on("error", reject);
+    if (init.body !== undefined) request.write(init.body);
+    request.end();
   });
-  const bodyText = (await response.text()).trim();
-  let body;
-  try {
-    body = JSON.parse(bodyText);
-  } catch {
-    body = bodyText;
-  }
-  return {
-    status: response.status,
-    body,
-    wwwAuthenticate: response.headers.get("www-authenticate") ?? "",
-    location: response.headers.get("location") ?? "",
-    setCookies: response.headers.getSetCookie(),
-  };
 }
 
 function get(url, headers = {}) {
