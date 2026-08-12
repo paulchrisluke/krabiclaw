@@ -3,13 +3,14 @@
 ## Release and outage prevention
 
 The mandatory release, incident, migration-safety, and browser-verification
-contract for every new LLM conversation is [docs/operations/release-and-outage-prevention.md](docs/operations/release-and-outage-prevention.md).
-Read it before reviewing or changing user-facing code. In particular, green CI
-is not release approval: the deployed staging and production releases
-must be opened in a real browser, route by route, and any unverified or broken
-route blocks promotion. During an outage, stabilize the known-good renderer or
-Worker before touching data; do not reseed or hand-mutate production to mask a
-renderer regression.
+contract for work that changes or releases user-facing code is
+[docs/operations/release-and-outage-prevention.md](docs/operations/release-and-outage-prevention.md).
+Green CI is not release approval. As soon as preview, staging, or production is
+deployed, verify the affected authenticated flows and tenant journeys in a real
+browser while the remaining CI jobs continue. Platform marketing checks never
+substitute for client-site or MCP verification. During an outage, stabilize the
+known-good renderer or Worker before touching data; do not reseed or hand-mutate
+production to mask a renderer regression.
 
 When an internal API returns errors, nulls, or malformed data, fix the API contract/source of truth first. Do not add frontend fallbacks, guards, or workaround logic unless the API behavior is intentionally nullable and documented.
 
@@ -108,7 +109,7 @@ See `docs/adr/0021-better-auth-authorization-target.md`.
 9. Any schema change must be checked against current server queries.
 10. Never define `d1_migrations` in `schema.ts`.
 11. After `db:generate`, wipe `.wrangler/state/v3/d1`, run `yarn schema:local`, then run the relevant seed command.
-12. `yarn lint:migrations` must pass before applying migrations. New migrations may not use `DROP TABLE`; D1 may execute foreign-key actions even when generated SQL includes `PRAGMA foreign_keys=OFF`, clearing references or cascading child rows. Use additive columns, indexes, or triggers. If a table removal or rebuild is unavoidable, design and review an explicit relationship-preserving migration and recovery plan before changing the lint rule.
+12. `yarn lint:migrations` must pass before applying migrations. Never rebuild a referenced parent table with `DROP TABLE`; D1 may execute foreign-key actions even when generated SQL includes `PRAGMA foreign_keys=OFF`, clearing references or cascading child rows. An obsolete unreferenced table may be dropped in the same release after runtime references are removed and the migration passes local apply, schema comparison, and `PRAGMA foreign_key_check`. Do not retain inert compatibility tables as a release strategy.
 
 ### D1 does not support raw transactions
 

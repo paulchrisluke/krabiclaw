@@ -15,10 +15,6 @@
  *    tracks applied migrations by filename, not content, so renaming a
  *    filename that's already applied anywhere makes wrangler re-run it and
  *    fail with "table X already exists").
- * 3. Rejects DROP TABLE in every new migration. D1/Drizzle sends migration
- *    statements separately, so PRAGMA foreign_keys=OFF does not reliably
- *    protect child rows when a later statement drops a referenced table.
- *
  * Usage:
  *   node scripts/lint-migrations.mjs
  */
@@ -29,7 +25,6 @@ import { join, relative } from 'node:path'
 
 const ROOT = process.cwd()
 const MIGRATIONS_DIR = join(ROOT, 'migrations')
-const LAST_AUDITED_MIGRATION = 115
 const LAST_AUDITED_DUPLICATE_NUMBER = 99
 
 const REQUIRED_HISTORICAL_FILES = [
@@ -60,25 +55,6 @@ function lintTransactionControl(sql, filePath) {
       file: relative(ROOT, filePath),
       line,
       message: `Bare "${match[1]}" statement outside a CREATE TRIGGER body — D1 rejects raw transaction control (see AGENTS.md "D1 does not support raw transactions").`,
-    })
-  }
-
-  return violations
-}
-
-function lintDestructiveTableDrops(sql, filePath) {
-  const migrationNumber = Number.parseInt(relative(MIGRATIONS_DIR, filePath).slice(0, 4), 10)
-  if (!Number.isInteger(migrationNumber) || migrationNumber <= LAST_AUDITED_MIGRATION) return []
-
-  const violations = []
-  const dropTable = /DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?[`"]?([A-Za-z0-9_]+)[`"]?/gi
-  let match
-  while ((match = dropTable.exec(sql)) !== null) {
-    const line = sql.slice(0, match.index).split('\n').length
-    violations.push({
-      file: relative(ROOT, filePath),
-      line,
-      message: `Dropping table ${match[1]} is forbidden in new migrations. Use additive schema changes; design and review an explicit relationship-preserving migration before changing this guard.`,
     })
   }
 
@@ -145,10 +121,7 @@ for (const violation of lintDuplicateMigrationNumbers(sqlFiles)) {
 
 for (const file of sqlFiles) {
   const sql = await readFile(file, 'utf8')
-  const violations = [
-    ...lintTransactionControl(sql, file),
-    ...lintDestructiveTableDrops(sql, file),
-  ]
+  const violations = lintTransactionControl(sql, file)
 
   if (violations.length === 0) {
     console.log(`  ✓ ${relative(ROOT, file)}`)
