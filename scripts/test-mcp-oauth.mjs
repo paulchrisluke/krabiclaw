@@ -14,7 +14,6 @@
  *   MCP_BEARER_TOKEN=eyJ... yarn test:mcp:prod # prod, full flow
  */
 
-import { execSync } from "child_process";
 import { createHash, randomBytes } from "crypto";
 
 const BASE_URL = process.argv.includes("--base-url")
@@ -30,6 +29,7 @@ const TEST_CLIENT_METADATA_URL = process.env.MCP_CIMD_CLIENT_URL ??
   `${BASE_URL}/api/auth/oauth2/test-client-metadata`;
 
 const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? "2025-06-18";
+const REQUEST_TIMEOUT_MS = 15_000;
 
 const IS_STAGING = (() => {
   try {
@@ -40,60 +40,13 @@ const IS_STAGING = (() => {
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
-function curl(args) {
-  return execSync(`curl -s -4 ${args}`, { encoding: "utf8" });
-}
-
-function get(url, headers = {}) {
-  const headerArgs = Object.entries(headers)
-    .map(([k, v]) => `-H ${JSON.stringify(`${k}: ${v}`)}`)
-    .join(" ");
-  const raw = curl(`-D - ${headerArgs} ${JSON.stringify(url)}`);
-  return parseResponse(raw);
-}
-
-function post(url, body, headers = {}) {
-  const headerArgs = Object.entries({
-    "Content-Type": "application/json",
-    ...headers,
-  })
-    .map(([k, v]) => `-H ${JSON.stringify(`${k}: ${v}`)}`)
-    .join(" ");
-  const bodyArg = `-d ${JSON.stringify(JSON.stringify(body))}`;
-  const raw = curl(
-    `-D - -X POST ${headerArgs} ${bodyArg} ${JSON.stringify(url)}`,
-  );
-  return parseResponse(raw);
-}
-
-function postForm(url, params, headers = {}) {
-  const formData = new URLSearchParams(params).toString();
-  const headerArgs = Object.entries({
-    "Content-Type": "application/x-www-form-urlencoded",
-    ...headers,
-  })
-    .map(([k, v]) => `-H ${JSON.stringify(`${k}: ${v}`)}`)
-    .join(" ");
-  const raw = curl(
-    `-D - -X POST ${headerArgs} -d ${JSON.stringify(formData)} ${JSON.stringify(url)}`,
-  );
-  return parseResponse(raw);
-}
-
-function parseResponse(raw) {
-  const sep = raw.indexOf("\r\n\r\n") !== -1 ? "\r\n\r\n" : "\n\n";
-  const blankIdx = raw.indexOf(sep);
-  const headerSection = blankIdx !== -1 ? raw.slice(0, blankIdx) : "";
-  const bodyText =
-    blankIdx !== -1 ? raw.slice(blankIdx + sep.length).trim() : raw.trim();
-  const statusMatch = headerSection.match(/HTTP\/[\d.]+ (\d+)/);
-  const status = statusMatch ? parseInt(statusMatch[1], 10) : 0;
-  const wwwAuth =
-    (headerSection.match(/www-authenticate:\s*(.+)/i) ?? [])[1]?.trim() ?? "";
-  const location =
-    (headerSection.match(/location:\s*(.+)/i) ?? [])[1]?.trim() ?? "";
-  const setCookie =
-    (headerSection.match(/set-cookie:\s*(.+)/i) ?? [])[1]?.trim() ?? "";
+async function request(url, init = {}) {
+  const response = await fetch(url, {
+    ...init,
+    redirect: "manual",
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+  const bodyText = (await response.text()).trim();
   let body;
   try {
     body = JSON.parse(bodyText);
@@ -101,13 +54,38 @@ function parseResponse(raw) {
     body = bodyText;
   }
   return {
-    status,
+    status: response.status,
     body,
-    wwwAuthenticate: wwwAuth,
-    location,
-    setCookie,
-    headers: headerSection,
+    wwwAuthenticate: response.headers.get("www-authenticate") ?? "",
+    location: response.headers.get("location") ?? "",
+    setCookies: response.headers.getSetCookie(),
   };
+}
+
+function get(url, headers = {}) {
+  return request(url, { headers });
+}
+
+function post(url, body, headers = {}) {
+  return request(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+function postForm(url, params, headers = {}) {
+  return request(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      ...headers,
+    },
+    body: new URLSearchParams(params).toString(),
+  });
 }
 
 function pkce() {
@@ -162,7 +140,7 @@ async function main() {
 
   // 1. Discovery
   section("Discovery");
-  const { body: prJson } = get(
+  const { body: prJson } = await get(
     `${BASE_URL}/.well-known/oauth-protected-resource`,
   );
   const advertisedResource = prJson.resource;
@@ -176,7 +154,7 @@ async function main() {
     pass("oauth-protected-resource issuer matches");
   else fail("oauth-protected-resource issuer mismatch", prJson);
 
-  const { body: asJson } = get(
+  const { body: asJson } = await get(
     `${BASE_URL}/.well-known/oauth-authorization-server`,
   );
   if (asJson.issuer === BASE_URL) pass(`well-known issuer = ${asJson.issuer}`);
@@ -187,7 +165,7 @@ async function main() {
 
   // 2. Unauthenticated 401
   section("Unauthenticated request");
-  const unauth = post(MCP_URL, {
+  const unauth = await post(MCP_URL, {
     jsonrpc: "2.0",
     id: 1,
     method: "tools/list",
@@ -215,20 +193,14 @@ async function main() {
       return;
     }
 
-    const loginResp = get(DEV_LOGIN_URL, { "x-dev-route-secret": devSecret });
+    const loginResp = await get(DEV_LOGIN_URL, { "x-dev-route-secret": devSecret });
     // dev login sets a session cookie and redirects to /api/post-login
-    const setCookieMatches =
-      loginResp.headers.match(/set-cookie:\s*([^\r\n]+)/gi) || [];
-    const rawCookie =
-      loginResp.setCookie ||
-      (setCookieMatches[0]
-        ? setCookieMatches[0].replace(/^set-cookie:\s*/i, "")
-        : "");
+    const rawCookie = loginResp.setCookies[0] ?? "";
     const sessionCookie = rawCookie.split(";")[0];
     if (sessionCookie)
       pass(`Got session cookie (${sessionCookie.split("=")[0]})`);
     else {
-      fail("Dev login did not return session cookie", loginResp.headers);
+      fail("Dev login did not return session cookie", loginResp.status);
       return;
     }
 
@@ -250,7 +222,7 @@ async function main() {
       code_challenge_method: "S256",
       resource: advertisedResource,
     });
-    const authResp = get(`${AUTHORIZE_URL}?${authParams}`, {
+    const authResp = await get(`${AUTHORIZE_URL}?${authParams}`, {
       Cookie: sessionCookie,
     });
     // Should redirect to consent page
@@ -270,7 +242,7 @@ async function main() {
     const oauthQuery = consentUrl.search.slice(1); // everything after ?
 
     // POST consent accept
-    const consentResp = post(
+    const consentResp = await post(
       CONSENT_URL,
       { accept: true, oauth_query: oauthQuery },
       { Cookie: sessionCookie, Origin: BASE_URL },
@@ -288,7 +260,7 @@ async function main() {
     pass(`Got authorization code: ${code.slice(0, 8)}...`);
 
     // Exchange code for token
-    const tokenResp = postForm(TOKEN_URL, {
+    const tokenResp = await postForm(TOKEN_URL, {
       grant_type: "authorization_code",
       code,
       redirect_uri: redirectUri,
@@ -348,7 +320,7 @@ async function main() {
 
   // 4. MCP initialize
   section("MCP initialize");
-  const initResp = post(
+  const initResp = await post(
     MCP_URL,
     {
       jsonrpc: "2.0",
@@ -374,7 +346,7 @@ async function main() {
   }
 
   // 5. notifications/initialized
-  const notifResp = post(
+  const notifResp = await post(
     MCP_URL,
     { jsonrpc: "2.0", method: "notifications/initialized" },
     {
@@ -388,7 +360,7 @@ async function main() {
 
   // 6. tools/list
   section("MCP tools/list");
-  const listResp = post(
+  const listResp = await post(
     MCP_URL,
     { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} },
     {
@@ -407,7 +379,7 @@ async function main() {
 
   // 7. tools/call list_sites
   section("MCP tools/call list_sites");
-  const callResp = post(
+  const callResp = await post(
     MCP_URL,
     {
       jsonrpc: "2.0",
