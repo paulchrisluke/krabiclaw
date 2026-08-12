@@ -173,6 +173,8 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler deploy --env staging --old-asset-ttl 600 --strict
+      - name: Run OAuth bearer MCP smoke
+        run: yarn test:mcp
       - name: Run full staging E2E suite
         run: yarn test:e2e:full
       - name: Upload staging Playwright report
