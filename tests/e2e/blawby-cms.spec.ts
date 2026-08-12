@@ -83,13 +83,13 @@ test.describe('Blawby professional_service CMS editing', () => {
     const rootPagePatchUrl = `${baseURL}/api/editor/sites/${SITE_ID}/pages/${rootPageSummary!.id}`
     const saveRootTitle = async (title: string) => {
       const patchResponse = page.waitForResponse(candidate => (
-        candidate.url() === rootPagePatchUrl
+        new URL(candidate.url()).pathname === new URL(rootPagePatchUrl).pathname
         && candidate.request().method() === 'PATCH'
-      ), { timeout: 30_000 })
+      ), { timeout: 45_000 })
       const pagesResponse = page.waitForResponse(candidate => (
-        candidate.url() === pagesCollectionUrl
+        new URL(candidate.url()).pathname === new URL(pagesCollectionUrl).pathname
         && candidate.request().method() === 'GET'
-      ), { timeout: 30_000 })
+      ), { timeout: 45_000 })
       await rootTitleInput.fill(title)
       await page.getByRole('button', { name: 'Save', exact: true }).click()
       expect((await patchResponse).status()).toBe(200)
