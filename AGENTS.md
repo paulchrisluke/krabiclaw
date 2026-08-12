@@ -5,7 +5,7 @@
 The mandatory release, incident, migration-safety, and browser-verification
 contract for every new LLM conversation is [docs/operations/release-and-outage-prevention.md](docs/operations/release-and-outage-prevention.md).
 Read it before reviewing or changing user-facing code. In particular, green CI
-is not release approval: the exact deployed staging and production candidates
+is not release approval: the deployed staging and production releases
 must be opened in a real browser, route by route, and any unverified or broken
 route blocks promotion. During an outage, stabilize the known-good renderer or
 Worker before touching data; do not reseed or hand-mutate production to mask a
@@ -258,8 +258,7 @@ Required on each relevant PR push:
 - One production build in parallel.
 - Target required CI wall-clock duration: 10 minutes or less.
 
-Run the exhaustive suite only nightly, manually, or when the PR is marked
-merge-ready:
+Run the exhaustive suite after the staging deployment:
 - Full browser and route matrix.
 - Full E2E suite.
 - Long-running database integration coverage.
@@ -280,7 +279,7 @@ The final report must identify:
 - Existing tests reused.
 - Redundant tests removed or consolidated.
 - Focused validation results.
-- Full validation results, only when the full lane was run.
+- Full validation results, only when the staging lane was run.
 - Benchmark results, only when the benchmark lane was run.
 
 Do not claim that a benchmark was executed when only a source-code contract
@@ -301,7 +300,8 @@ Run after each implementation batch:
 
 The LLM should run this lane repeatedly while working.
 
-Workflow: `.github/workflows/ci-dev.yml`
+Run this lane locally with focused package scripts; do not duplicate the
+required GitHub workflow.
 
 #### 2. Required PR lane: target under 8–10 minutes wall-clock
 
@@ -317,20 +317,19 @@ Do not run every template, every dashboard page, every browser, and every benchm
 
 Workflow: `.github/workflows/ci.yml`
 
-#### 3. Full validation lane: merge-ready, manual, or nightly
+#### 3. Staging and production deployment gates
 
-Run only when the PR is marked ready, given a performance label, or on schedule:
+After a push to `staging`:
 
 - Full E2E suite.
 - All supported browser/template combinations.
-- Complete production build variants.
 - Long-running D1 integration tests.
-- Comparative performance benchmark.
 - Flake and retry analysis.
 
-This lane can take 20–30 minutes without blocking every development iteration.
+After a push to `main`, deploy production and run read-only browser smoke. Do
+not run mutating E2E suites against production.
 
-Workflow: `.github/workflows/ci-full.yml`
+Workflow: `.github/workflows/ci.yml`
 
 ### Replace repeated tests with invariant-owned tests
 
@@ -510,7 +509,7 @@ Activity, Q&A, support, guest inbox, onboarding, Lobby, and Saya still need func
 
 `env.preview` and `env.staging` in `wrangler.toml` must always declare their own `[triggers]` block (`crons = []` unless a job is deliberately scoped to that environment). Cron triggers are inherited from the top-level `[triggers]` block unless an environment overrides them — an env without its own `[triggers]` silently runs production's full cron schedule against its own database. This previously went unnoticed and drove preview/staging D1 "rows read" billing into the billions as scheduled tasks repeatedly scanned ever-growing E2E-generated data.
 
-Curated fixture data (Pottery House, Kikuzuki, demo seed, MCP plan fixtures) is reset on every seed run via `DELETE`-then-`INSERT` on fixed IDs — it never grows. Anything else E2E specs create must be swept by `scripts/reset-e2e-artifacts.ts`, which runs as part of both the required preview seed and the locked full staging-candidate seed. For it to catch what a spec creates:
+Curated fixture data (Pottery House, Kikuzuki, demo seed, MCP plan fixtures) is reset on every preview seed run via `DELETE`-then-`INSERT` on fixed IDs — it never grows. Anything else E2E specs create must be swept by `scripts/reset-e2e-artifacts.ts`, which runs before preview and staging browser coverage. For it to catch what a spec creates:
 
 - Any throwaway site/org (`POST /api/sites`, `tests/e2e/helpers/ensure-site.ts`, or an MCP `create_site` call) must use a `subdomain` containing `e2e-` — the sweep deletes the owning `organization` row, which cascades through every org-scoped table.
 - Any guest-facing row created against a persistent fixture site (bookings, contact submissions, reservations) must use an `...@playwright.example` guest email — there's no throwaway org to cascade from, so these are swept by that marker directly.
@@ -626,14 +625,14 @@ Required pipeline:
 2. Human review of `client-imports/<slug>/`
 3. `client:import --approve`
 4. `client:import --apply`
-5. `client:verify` against the local candidate
-6. Run **CI (Full Validation Lane)** for the exact source SHA
-7. Merge the reviewed staging release into `main`; the production workflow deploys that exact main SHA automatically
+5. `client:verify` against the local build
+6. Merge to `staging`; CI deploys and runs the full E2E suite
+7. Merge the verified staging release into `main`; CI deploys and runs production browser smoke
 8. `client:deploy --skip-seed --skip-deploy` for final deployed client verification
 
 `client:deploy` never releases the Worker itself. Direct staging/production
-deploy commands are blocked so client onboarding cannot bypass the immutable
-candidate and production approval chain.
+deploy commands are blocked so client onboarding cannot bypass the staging and
+production branch gates.
 
 If any step fails, fix the source of truth:
 

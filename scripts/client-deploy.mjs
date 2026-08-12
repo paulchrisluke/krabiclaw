@@ -7,7 +7,7 @@
  *   2. Verify against live URL  (client:verify)
  *
  * Worker releases are intentionally excluded. They must use the immutable
- * staging-candidate and protected production workflows.
+ * staging and production branch workflows.
  *
  * Usage:
  *   yarn client:deploy \
@@ -85,7 +85,7 @@ if (!args['skip-seed']) {
 
 // ── Step 2: Worker release boundary ───────────────────────────────────────────
 
-console.log('\n  Step 2: Worker release handled by the immutable candidate workflows (--skip-deploy acknowledged)')
+console.log('\n  Step 2: Worker release handled by staging and production branch workflows (--skip-deploy acknowledged)')
 
 // ── Step 3: Verify against live URL ──────────────────────────────────────────
 
@@ -113,7 +113,7 @@ if (verifyResult.status === 0) {
   console.error(`  ✗ Post-deploy verify FAILED`)
   console.error(`\n  Fix the issues reported above, then verify the already released Worker again:`)
   console.error(`    yarn client:deploy --slug ${SLUG} --vertical ${VERTICAL} --site-id ${SITE_ID} --skip-seed --skip-deploy`)
-  console.error('  Worker fixes must go through the immutable staging candidate and protected production release workflows.')
+  console.error('  Worker fixes must go through staging and main.')
   console.log(hr('═'))
   process.exit(verifyResult.status ?? 1)
 }

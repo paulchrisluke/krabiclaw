@@ -119,7 +119,7 @@ const isStaging = process.argv.includes('--staging')
 const isPreview = process.argv.includes('--preview')
 
 if (isStaging && process.env.KRABICLAW_RELEASE_CONTEXT !== 'ci-full-staging') {
-  console.error('Direct staging seeding is disabled; use the locked CI (Full Validation Lane).')
+  console.error('Direct staging seeding is disabled; staging deployments do not reseed fixtures.')
   process.exit(1)
 }
 if (isRemote) {

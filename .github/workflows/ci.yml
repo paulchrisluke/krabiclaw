@@ -1,4 +1,4 @@
-name: CI (Required PR Lane)
+name: CI
 
 on:
   pull_request:
@@ -10,9 +10,6 @@ on:
 permissions:
   contents: read
 
-# CI may deploy the isolated preview Worker for representative browser tests,
-# but it never mutates shared staging or production. Staging candidates and
-# production releases are explicit workflows with their own release gates.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -25,7 +22,6 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          ref: ${{ github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
@@ -44,7 +40,6 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          ref: ${{ github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
@@ -52,10 +47,10 @@ jobs:
           cache: yarn
       - run: yarn install --frozen-lockfile
       - run: yarn build
-      - name: Upload immutable PR build artifact
+      - name: Upload production build
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: production-build-${{ github.sha }}
+          name: production-build
           path: .output
           include-hidden-files: true
           retention-days: 14
@@ -68,7 +63,6 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          ref: ${{ github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
@@ -106,7 +100,7 @@ jobs:
   e2e-representative:
     name: E2E representative tests (preview only)
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-    needs: [build-production]
+    needs: [typecheck, build-production, guardrails]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     concurrency:
@@ -125,12 +119,9 @@ jobs:
       E2E_DEV_ROUTE_SECRET: ${{ secrets.E2E_DEV_ROUTE_SECRET_PREVIEW }}
       PLAYWRIGHT_PREVIEW_URL: https://krabiclaw-preview.paulchrisluke.workers.dev
       PLAYWRIGHT_WORKERS: "1"
-      WORKER_NAME: krabiclaw-preview
-      DEPLOYMENT_IDENTITY_ORIGIN: https://preview.krabiclaw.com
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          ref: ${{ github.sha }}
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
@@ -138,10 +129,10 @@ jobs:
           cache: yarn
       - run: yarn install --frozen-lockfile
       - run: npx playwright install --with-deps chromium
-      - name: Download immutable production build artifact
+      - name: Download production build
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: production-build-${{ github.sha }}
+          name: production-build
           path: .output
       - name: Migrate preview database
         env:
@@ -188,39 +179,16 @@ jobs:
           for secret_name in STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET PREVIEW_SECRET E2E_DEV_ROUTE_SECRET EMAIL_REPLY_SECRET EMAIL_INBOUND_SECRET; do
             jq -e --arg name "$secret_name" '.. | objects | select((.name? // .key?) == $name)' "$RUNNER_TEMP/preview-secrets.json" >/dev/null
           done
-      - name: Deploy preview Worker once
+      - name: Deploy preview Worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          set -euo pipefail
-          npx wrangler deploy --env preview --tag "$GITHUB_SHA" --message "Required preview candidate $GITHUB_SHA" --old-asset-ttl 600 --strict
-          npx wrangler deployments status --env preview --name krabiclaw-preview --json > "$RUNNER_TEMP/preview-deployment.json"
-          PREVIEW_VERSION_ID="$(node -e '
-            const fs=require("node:fs");const root=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const deployment=root.latest_deployment??root;const versions=Array.isArray(deployment.versions)?deployment.versions:[];const active=versions.filter(v=>Number(v.percentage??v.traffic??0)===100);if(versions.length!==1||active.length!==1)process.exit(2);const id=active[0].version_id??active[0].versionId??active[0].id;if(typeof id!=="string")process.exit(3);console.log(id)
-          ' "$RUNNER_TEMP/preview-deployment.json")"
-          test -n "$PREVIEW_VERSION_ID"
-          echo "PREVIEW_VERSION_ID=$PREVIEW_VERSION_ID" >> "$GITHUB_ENV"
-          echo "WORKER_VERSION_OVERRIDE=$PREVIEW_VERSION_ID" >> "$GITHUB_ENV"
+        run: npx wrangler deploy --env preview --old-asset-ttl 600 --strict
       - name: Purge preview HTML cache
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           DEPLOYMENT_CACHE_ORIGIN: https://preview.krabiclaw.com
         run: node --experimental-strip-types scripts/purge-deployment-cache.ts
-      - name: Wait for deployed assets
-        run: node scripts/wait-for-deployed-assets.mjs
-      - name: Verify exact preview Worker and assets
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          node scripts/verify-deployed-candidate.mjs \
-            --base-url https://preview.krabiclaw.com \
-            --expected-sha "$GITHUB_SHA" \
-            --expected-version-id "$PREVIEW_VERSION_ID" \
-            --worker-name krabiclaw-preview \
-            --version-override "$PREVIEW_VERSION_ID" \
-            --output "$RUNNER_TEMP/preview-verification.json"
       - name: Run required representative browser coverage
         run: |
           yarn test:e2e:representative
@@ -238,3 +206,143 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
+
+  e2e-staging:
+    name: Deploy and test staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+    needs: [typecheck, build-production, guardrails]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    concurrency:
+      group: staging-deployment
+      cancel-in-progress: false
+    env:
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET_STAGING }}
+      NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
+      NUXT_PUBLIC_PLATFORM_DOMAIN: https://staging.krabiclaw.com
+      NUXT_PUBLIC_FREE_SITE_DOMAIN: https://staging.krabiclaw.com
+      NUXT_PUBLIC_APP_NAME: KrabiClaw
+      BETTER_AUTH_SECRET: test-secret-for-ci
+      BETTER_AUTH_URL: https://staging.krabiclaw.com
+      E2E_ALLOW_DEV_ROUTES: "true"
+      E2E_DEV_ROUTE_SECRET: ${{ secrets.E2E_DEV_ROUTE_SECRET_STAGING }}
+      PLAYWRIGHT_PREVIEW_URL: https://staging.krabiclaw.com
+      PLAYWRIGHT_WORKERS: "1"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - run: npx playwright install --with-deps chromium
+      - name: Download production build
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: production-build
+          path: .output
+      - name: Apply staging migrations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          yarn migrate:check
+          npx wrangler d1 migrations apply DB --env staging --remote
+      - name: Sweep staging E2E artifacts
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node --experimental-strip-types scripts/reset-e2e-artifacts.ts --staging
+      - name: Deploy staging Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy --env staging --old-asset-ttl 600 --strict
+      - name: Purge staging HTML cache
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          DEPLOYMENT_CACHE_ORIGIN: https://staging.krabiclaw.com
+        run: node --experimental-strip-types scripts/purge-deployment-cache.ts
+      - name: Run full staging E2E suite
+        run: yarn test:e2e:full
+      - name: Upload staging Playwright report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: playwright-report-staging
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  deploy-production:
+    name: Deploy and test production
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [typecheck, build-production, guardrails]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    concurrency:
+      group: production-deployment
+      cancel-in-progress: false
+    env:
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+      NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
+      NUXT_PUBLIC_PLATFORM_DOMAIN: https://krabiclaw.com
+      NUXT_PUBLIC_FREE_SITE_DOMAIN: https://krabiclaw.com
+      NUXT_PUBLIC_APP_NAME: KrabiClaw
+      BETTER_AUTH_URL: https://krabiclaw.com
+      PLAYWRIGHT_PREVIEW_URL: https://krabiclaw.com
+      PLAYWRIGHT_WORKERS: "1"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - run: npx playwright install --with-deps chromium
+      - name: Download production build
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: production-build
+          path: .output
+      - name: Apply production migrations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          yarn migrate:check
+          npx wrangler d1 migrations apply DB --remote
+      - name: Deploy production Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy --old-asset-ttl 600 --strict
+      - name: Purge production HTML cache
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          DEPLOYMENT_CACHE_ORIGIN: https://krabiclaw.com
+        run: node --experimental-strip-types scripts/purge-deployment-cache.ts
+      - name: Run read-only production browser smoke
+        run: yarn test:e2e:public-rendering
+      - name: Refresh production search index
+        env:
+          PLATFORM_SEARCH_REINDEX_SECRET: ${{ secrets.PLATFORM_SEARCH_REINDEX_SECRET }}
+        run: yarn ai-search:sync:prod
+      - name: Upload production Playwright report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: playwright-report-production
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+          if-no-files-found: ignore

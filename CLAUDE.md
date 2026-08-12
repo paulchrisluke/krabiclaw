@@ -5,7 +5,7 @@
 The mandatory release, incident, migration-safety, and browser-verification
 contract for every new LLM conversation is [docs/operations/release-and-outage-prevention.md](docs/operations/release-and-outage-prevention.md).
 Read it before reviewing or changing user-facing code. In particular, green CI
-is not release approval: the exact deployed staging and production candidates
+is not release approval: the deployed staging and production releases
 must be opened in a real browser, route by route, and any unverified or broken
 route blocks promotion. During an outage, stabilize the known-good renderer or
 Worker before touching data; do not reseed or hand-mutate production to mask a
@@ -219,33 +219,27 @@ The bodies in `server/utils/whatsapp.ts`'s `TEMPLATES` map must match approved t
 
 ## CI / E2E Architecture
 
-Three lanes exist:
+Three environment gates exist in `.github/workflows/ci.yml`:
 
 ### Required PR lane
 
-Runs immutable-SHA quality/unit/build jobs and may migrate, seed, and deploy
-only the isolated preview environment. The same `.output` artifact is reused
-for preview browser coverage; shared staging and production are never changed.
+Runs quality, unit, and build jobs and may migrate, seed, and deploy only the
+isolated preview environment. The same `.output` artifact is reused for preview
+browser coverage; shared staging and production are never changed by a PR.
 
-### Full staging candidate lane
+### Staging lane
 
-Runs only by explicit dispatch. It owns one uninterrupted staging lock, one
-production build, one tagged Worker Version, migration/fixture evidence, the
-full browser matrix, and a 25-sample baseline/candidate comparison. It promotes
-only that verified version and then repeats the custom-domain browser gate.
+Runs on pushes to `staging`. It applies pending migrations, sweeps disposable
+E2E artifacts, deploys the staging Worker normally, and runs the full
+Playwright suite against `staging.krabiclaw.com`.
 
-### Production release lane
+### Production lane
 
-Runs as two explicit dispatches with the successful staging manifest and exact
-source SHA. `operation=preflight` is read-only and emits the production
-migration/build report. Only a later `operation=deploy` dispatch consuming that
-preflight run can reach migration, version upload, split rollout, and browser
-verification; the job also names the protected `production` environment.
-Pushes to `main` never deploy production.
+Runs on pushes to `main`. It applies pending migrations, deploys the production
+Worker normally, and runs read-only public browser smoke.
 
 Direct `yarn deploy` and staging/production Worker convenience commands are
-blocked. The exact contract is
-`docs/operations/release-candidate-contract.md`.
+blocked. The contract is `docs/operations/release-flow.md`.
 
 ### CI Environment Rules
 
@@ -261,7 +255,7 @@ blocked. The exact contract is
 
 `env.preview` and `env.staging` in `wrangler.toml` must always declare their own `[triggers]` block (`crons = []` unless a job is deliberately scoped to that environment). Cron triggers are inherited from the top-level `[triggers]` block unless an environment overrides them — an env without its own `[triggers]` silently runs production's full cron schedule against its own database. This previously went unnoticed and drove preview/staging D1 "rows read" billing into the billions as scheduled tasks repeatedly scanned ever-growing E2E-generated data.
 
-Curated fixture data (Pottery House, Kikuzuki, demo seed, MCP plan fixtures) is reset on every seed run via `DELETE`-then-`INSERT` on fixed IDs — it never grows. Anything else E2E specs create must be swept by `scripts/reset-e2e-artifacts.ts`, which runs in both the required preview seed and the locked full staging-candidate seed. For it to catch what a spec creates:
+Curated fixture data (Pottery House, Kikuzuki, demo seed, MCP plan fixtures) is reset on every preview seed run via `DELETE`-then-`INSERT` on fixed IDs — it never grows. Anything else E2E specs create must be swept by `scripts/reset-e2e-artifacts.ts`, which runs before preview and staging browser coverage. For it to catch what a spec creates:
 
 - Any throwaway site/org (`POST /api/sites`, `tests/e2e/helpers/ensure-site.ts`, or an MCP `create_site` call) must use a `subdomain` containing `e2e-` — the sweep deletes the owning `organization` row, which cascades through every org-scoped table.
 - Any guest-facing row created against a persistent fixture site (bookings, contact submissions, reservations) must use an `...@playwright.example` guest email — there's no throwaway org to cascade from, so these are swept by that marker directly.

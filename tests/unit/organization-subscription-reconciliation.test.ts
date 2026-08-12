@@ -237,8 +237,6 @@ async function report(overrides: Partial<Parameters<typeof reconcileOrganization
     organization: { id: REQUEST.organizationId, stripeCustomerId: 'cus_test' },
     request: REQUEST,
     actor: 'operator-1',
-    sourceSha: '0123456789abcdef0123456789abcdef01234567',
-    workerVersionId: '01234567-89ab-cdef-0123-456789abcdef',
     providerModeVerified: true,
     now: NOW,
     loadPlans,
@@ -272,46 +270,13 @@ test('provider mode and direct operator boundaries fail closed', () => {
   assert.throws(() => assertOrganizationSubscriptionReconciliationOperatorSession({ user: { id: 'operator-1' }, session: { impersonatedBy: 'admin-1' } }))
 })
 
-test('provenance shape and exact organization identity are blocking evidence', async () => {
+test('exact organization identity is blocking evidence', async () => {
   resetRows()
-  const invalidProvenance = await report({ sourceSha: 'ABC', workerVersionId: 'worker' })
-  assert.equal(invalidProvenance.status, 'blocked')
-  assert.ok(invalidProvenance.drifts.some(drift => drift.code === 'deployment_provenance_invalid'))
   const wrongOrganization = await report({ organization: { id: 'org-other', stripeCustomerId: 'cus_test' } })
   assert.equal(wrongOrganization.status, 'blocked')
   assert.ok(wrongOrganization.drifts.some(drift => drift.code === 'organization_identity_mismatch'))
   assert.equal(wrongOrganization.request.organizationId, REQUEST.organizationId)
   assert.equal(wrongOrganization.betterAuth.organization.id, 'org-other')
-})
-
-test('invalid deployment provenance blocks before any Stripe provider call', async () => {
-  resetRows()
-  const stripe = provider()
-  let providerCalls = 0
-  ;(stripe.accounts as unknown as { retrieve: () => Promise<unknown> }).retrieve = async () => {
-    providerCalls += 1
-    return { id: REQUEST.expectedStripeAccountId }
-  }
-  ;(stripe.customers as unknown as { search: () => Promise<unknown>; retrieve: () => Promise<unknown> }).search = async () => {
-    providerCalls += 1
-    return { data: [], has_more: false }
-  }
-  ;(stripe.customers as unknown as { retrieve: () => Promise<unknown> }).retrieve = async () => {
-    providerCalls += 1
-    return { id: 'cus_test', deleted: false, metadata: {} }
-  }
-  ;(stripe.subscriptions as unknown as { search: () => Promise<unknown>; list: () => Promise<unknown> }).search = async () => {
-    providerCalls += 1
-    return { data: [], has_more: false, next_page: null }
-  }
-  ;(stripe.subscriptions as unknown as { list: () => Promise<unknown> }).list = async () => {
-    providerCalls += 1
-    return { data: [], has_more: false }
-  }
-  const result = await report({ stripe, sourceSha: 'ABC', workerVersionId: 'worker' })
-  assert.equal(result.status, 'blocked')
-  assert.ok(result.drifts.some(drift => drift.code === 'deployment_provenance_invalid'))
-  assert.equal(providerCalls, 0)
 })
 
 test('clean match report includes canonical projection, evidence, and deterministic digest', async () => {
@@ -1230,7 +1195,7 @@ test('route and utility are read-only and keep Better Auth SQL behind its adapte
   assert.match(routeSource, /assertStripeProviderMode\(env\.STRIPE_SECRET_KEY, request\.providerMode\)/u)
   assert.match(routeSource, /setResponseHeader\(event, ['"]cache-control['"], ['"]no-store['"]\)/u)
   assert.match(routeSource, /headers: \{ ['"]cache-control['"]: ['"]no-store['"] \}/u)
-  assert.match(routeSource, /assertStripeProviderMode[\s\S]*readDeploymentProvenance[\s\S]*const auth = createAuth/u)
+  assert.match(routeSource, /assertStripeProviderMode[\s\S]*const auth = createAuth/u)
   assert.match(routeSource, /instanceof OperatorSessionError/u)
   assert.match(routeSource, /getOrgAdapter/iu)
 })

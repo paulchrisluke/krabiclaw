@@ -6,9 +6,6 @@ compatibility_flags = ["nodejs_compat_v2"]
 [assets]
 directory = ".output/public"
 
-[version_metadata]
-binding = "CF_VERSION_METADATA"
-
 [triggers]
 # Every expression is dispatched by workers/app-entry.ts. Keep this list in
 # sync with SCHEDULED_TASKS in server/scheduled-tasks.ts.
@@ -141,9 +138,6 @@ routes = [
   { pattern = "preview.krabiclaw.com/*", zone_name = "krabiclaw.com" }
 ]
 
-[env.preview.version_metadata]
-binding = "CF_VERSION_METADATA"
-
 # Top-level [triggers] crons are inherited by named environments unless
 # overridden here. Preview is a CI-only, per-PR database — scheduled tasks
 # (domain-reconciliation, etc.) must never run
@@ -228,9 +222,6 @@ enabled = false
 routes = [
   { pattern = "staging.krabiclaw.com/*", zone_name = "krabiclaw.com" }
 ]
-
-[env.staging.version_metadata]
-binding = "CF_VERSION_METADATA"
 
 # See env.preview.triggers above — same rationale, same fix.
 [env.staging.triggers]

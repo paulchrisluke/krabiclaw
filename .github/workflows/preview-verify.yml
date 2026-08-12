@@ -1,8 +1,8 @@
 name: Preview Verify
 
 # Supplementary client-content verification for an existing preview URL. This
-# does not prove Worker provenance and is never release approval; the required
-# PR lane owns the immutable preview deployment and browser evidence.
+# is not release approval; the required PR lane owns the preview deployment and
+# browser evidence.
 on:
   workflow_dispatch:
     inputs:

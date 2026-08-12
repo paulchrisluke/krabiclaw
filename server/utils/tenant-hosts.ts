@@ -12,7 +12,7 @@ const PAGES_DEV_HOST = 'krabiclaw.pages.dev'
 // CI deploys real preview Workers to `<alias-or-version>-krabiclaw-preview.<account-subdomain>.workers.dev`
 // (see [env.preview] in wrangler.toml and the e2e-smoke job in ci.yml) and runs
 // Playwright straight against that live edge URL — same shape of problem as
-// PAGES_DEV_HOST above, just for `wrangler versions upload --preview-alias`.
+// PAGES_DEV_HOST above, for the preview Worker's workers.dev hostname.
 const WORKERS_DEV_PREVIEW_HOST_PATTERN = /^(?:[a-z0-9-]+-)?krabiclaw-preview\.[a-z0-9-]+\.workers\.dev$/
 
 // Strip protocol, path, and port so config values (which may be

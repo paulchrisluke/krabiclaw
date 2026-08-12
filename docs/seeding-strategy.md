@@ -9,7 +9,7 @@ Two sources of truth, one ephemeral execution format:
 3. **Generated SQL** — ephemeral apply artifact, never hand-maintained
 
 Schema DDL lives in `migrations/` and is applied by the environment's locked
-release workflow before candidate promotion. Seed data is entirely separate
+preview workflow before browser coverage. Seed data is entirely separate
 and never belongs in migration files.
 
 ---
@@ -116,21 +116,21 @@ Historical backfill tooling:
 ## CI seeding
 
 Seeds run on every PR (preview) and once inside an explicitly dispatched,
-locked staging-candidate workflow. They are not conditional on file changes.
+preview workflow. They are not conditional on file changes.
 The generate scripts run first, so the `.ts` fixture is the actual source of
 truth in CI — not committed SQL or a push-triggered shared-staging loop.
 
 | Trigger           | Environment  | What runs                                                                      |
 | ----------------- | ------------ | ------------------------------------------------------------------------------ |
 | PR opened/updated | `preview`    | generate demo + pottery house → apply SQL; generate kikuzuki → apply ephemeral |
-| Locked full-candidate workflow | `staging` | same as above against staging D1, while holding `shared-staging-candidate` |
+| Push to `staging` | `staging` | migrations and E2E artifact sweep; persistent fixtures are not reseeded |
 | Push to `main`    | `production` | migrations only, no seed                                                       |
 
 Scripts:
 
 - `yarn seed:kikuzuki` — local D1
 - `yarn seed:kikuzuki:preview` — preview D1 (CI)
-- `yarn seed:kikuzuki:staging` — blocked outside the locked full-candidate workflow
+- `yarn seed:kikuzuki:staging` — blocked; staging releases do not reseed fixtures
 - `yarn seed:kikuzuki:remote` — blocked; production seeding is not a release operation
 
 ---
@@ -159,19 +159,18 @@ Kikuzuki and Pottery House currently live on the curated-fixture path (typed `se
 
 ### Why this matters
 
-Remote tenant seed aliases are blocked. The manifest-gated production workflow never
-calls a seed, and the locked full-candidate workflow is the only path that may
-run curated staging fixtures. `business_locations`, `media_assets`, `menus`,
+Remote tenant seed aliases are blocked. Production and staging deployment jobs
+never seed curated client data. `business_locations`, `media_assets`, `menus`,
 `sites`, and `site_domains` use `INSERT OR REPLACE` in the generated SQL, so a
 manual rerun would silently clobber client edits; the command guard prevents
 that accidental production path.
 
-Preview and staging seeding (`generate-kikuzuki-seed.ts --preview` / `--staging` in CI) target `krabiclaw-db-preview` / `krabiclaw-db-staging` — separate databases from production — so they do not put a transferred tenant's real data at risk. Don't use `staging.krabiclaw.com` as a sandbox for the actual business owner once transferred, though: every explicitly dispatched full candidate resets its fixtures, so anything done there outside of E2E assertions is disposable.
+Preview seeding targets `krabiclaw-db-preview`, which is separate from production. Staging fixtures persist across deploys; only throwaway `e2e-` artifacts are swept before the staging suite.
 
 ### Steps to take at transfer time
 
 1. **Stop using `--remote` for this tenant.** Remove or guard the `--remote` branch in `scripts/generate-<tenant>-seed.ts` so it can't be run again by accident.
-2. **Pull the tenant out of CI seeding.** Delete its preview seed line from `.github/workflows/ci.yml` and staging seed line from `.github/workflows/ci-full.yml`. Continuing to reseed preview/staging with a fixture that no longer reflects the live site's real state is misleading, not just unnecessary.
+2. **Pull the tenant out of CI seeding.** Delete its preview seed line from `.github/workflows/ci.yml`. Continuing to reseed preview with a fixture that no longer reflects the live site's real state is misleading, not just unnecessary.
 3. **Replace its E2E coverage.** Either retire the assertions that depended on the seeded fixture, point them at the pinned read-only production telemetry lane, or stand up a fresh synthetic tenant to cover the feature being tested (e.g. the second-location flow) without depending on a tenant that now has real client edits.
 4. **Archive, don't delete, the fixture.** Move `seed-definitions/<tenant>.ts` and `scripts/generate-<tenant>-seed.ts` under `scripts/archive/`-style historical reference (same treatment as the June 11, 2026 media backfill tooling) so the original recipe is preserved but nothing in the active workflow can re-run it.
 5. **Treat the tenant like any other client from this point on.** Future changes flow only through the dashboard/MCP/API. If you ever need to bulk-restore or clone its state, build a `client:import` manifest from the live site and use `client:replay` — never resurrect the old typed fixture.

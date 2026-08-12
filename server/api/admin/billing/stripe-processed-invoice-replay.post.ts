@@ -2,7 +2,6 @@ import { getOrgAdapter } from 'better-auth/plugins'
 import { defineEventHandler, readBody, setResponseHeader } from 'h3'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { createAuth, getAuthSession } from '~/server/utils/auth'
-import { readDeploymentProvenance } from '~/server/utils/deployment-provenance'
 import {
   assertStripeProviderMode,
   OrganizationSubscriptionReconciliationError,
@@ -50,17 +49,6 @@ export default defineEventHandler(async (event) => {
     }
 
     assertStripeProviderMode(env.STRIPE_SECRET_KEY, request.input.providerMode)
-    let provenance: ReturnType<typeof readDeploymentProvenance>
-    try {
-      provenance = readDeploymentProvenance(env.CF_VERSION_METADATA)
-    } catch {
-      throw new StripeProcessedInvoiceReplayError(
-        'deployment_provenance_unavailable',
-        503,
-        'Immutable deployment provenance is unavailable or malformed.',
-      )
-    }
-
     const auth = createAuth(env)
     const authContext = await auth.$context
     const organizationAdapter = getOrgAdapter(authContext as Parameters<typeof getOrgAdapter>[0], {})
@@ -85,14 +73,8 @@ export default defineEventHandler(async (event) => {
         expectedStripeAccountId: request.input.expectedStripeAccountId,
       },
       actor,
-      sourceSha: provenance.sourceSha,
-      workerVersionId: provenance.worker.id,
       providerModeVerified: true,
     })
-    const source = {
-      sourceSha: provenance.sourceSha,
-      workerVersionId: provenance.worker.id,
-    }
 
     if (request.mode === 'preview') {
       return noStore(await previewStripeProcessedInvoiceReplay(
@@ -101,7 +83,6 @@ export default defineEventHandler(async (event) => {
         request.input,
         actor,
         report,
-        source,
       ))
     }
     if (!request.expectedStateSha256 || !request.approvalToken) {
@@ -117,7 +98,6 @@ export default defineEventHandler(async (event) => {
       request.input,
       actor,
       report,
-      source,
       request.expectedStateSha256,
       request.approvalToken,
     ))
