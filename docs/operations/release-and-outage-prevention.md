@@ -8,13 +8,13 @@ release gates.
 ## The release rule
 
 Green CI is necessary, but it is not release approval. A user-facing release
-is not safe to merge or promote until the exact deployed candidate has been
+is not safe to promote until the deployed staging or production release has been
 opened in a real browser and the required route matrix has been inspected.
 Unit tests, typecheck, lint, migration checks, scripted E2E, a production build,
 and a green GitHub check cannot substitute for that browser gate.
 
 The deployed representative E2E job is a prerequisite for reporting browser
-validation: pending, failed, cancelled, or missing means the candidate is not
+validation: pending, failed, cancelled, or missing means the release is not
 browser-validated. That job is representative only and still does not replace
 the complete route-by-route browser matrix for a high-risk release.
 
@@ -23,16 +23,13 @@ error, wrong tenant identity, wrong URL, or incomplete inspection is
 **unverified** and blocks the release. Never report browser validation as passed
 when it was only inferred from CI or a local script.
 
-The concrete release implementation is defined in
-[release-candidate-contract.md](release-candidate-contract.md). Shared staging
-may be changed only by its locked full-candidate workflow. A push or merge to
-`main` automatically builds, migrates, and deploys that exact SHA to production,
-then verifies its provenance, assets, and real tenant navigation.
-During an incident, the separate **Production rollback (exact-target,
-manifest-gated)** workflow is the only rollback entrypoint: its read-only
-preflight proves the declared current and target Worker identities, and only
-its protected mutation job may route the exact target. Direct convenience
-deploy or rollback commands are not release approval.
+The concrete implementation is defined in [release-flow.md](release-flow.md).
+Pull requests deploy preview, pushes to `staging` deploy staging and run the
+full E2E suite, and pushes to `main` deploy production and run read-only browser
+smoke. Each environment receives one normal Cloudflare Worker deployment.
+During an incident, restore a known-good Cloudflare deployment without changing
+D1 data, then repair the source through the same branch flow. Direct
+convenience deploy or rollback commands are not release approval.
 
 ## Start every new task or conversation with a state snapshot
 
@@ -67,7 +64,7 @@ browser evidence.
    dashboard, CMS, auth, billing, or renderer change, use a real browser locally
    when practical, but treat local evidence as preparation rather than deployed
    release evidence.
-4. Deploy the exact candidate to staging. Wait for required checks, then run the
+4. Merge to staging. Wait for its deployment and required checks, then run the
    full browser matrix below against the deployed staging host.
 5. Promote only after staging is browser-verified. After production deploy,
    identify the exact production SHA and repeat the relevant browser matrix on
@@ -145,7 +142,7 @@ customer-facing downtime is not a reason to wait for them.
 
 When a deployed site is broken:
 
-1. Declare the exact affected environment, SHA, routes, and observed symptom.
+1. Declare the affected environment, routes, and observed symptom.
 2. Compare the deployed renderer selection and runtime logs with the last
    verified release.
 3. Restore the smallest known-good renderer/release path first, without

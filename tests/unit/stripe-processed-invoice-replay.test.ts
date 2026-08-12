@@ -33,10 +33,6 @@ const {
 } = await import('../../server/utils/stripe-processed-invoice-replay.ts')
 
 const NOW = new Date('2026-08-10T12:00:00.000Z')
-const SOURCE = {
-  sourceSha: 'a'.repeat(40),
-  workerVersionId: '11111111-2222-4333-8444-555555555555',
-}
 const INPUT = {
   organizationId: 'org-kikuzuki',
   stripeEventId: 'evt-kikuzuki-paid',
@@ -172,7 +168,6 @@ function reconciliationReport(): OrganizationSubscriptionReconciliationReport {
     kind: 'organization-subscription-reconciliation',
     capturedAt: NOW.toISOString(),
     operator: { actor: 'operator-1', direct: true },
-    source: { ...SOURCE },
     request: {
       organizationId: INPUT.organizationId,
       providerMode: INPUT.providerMode,
@@ -311,16 +306,15 @@ test('request and operator boundaries reject payload injection and impersonation
   )
 })
 
-test('operator route fails closed on permission, provenance, mode, and cache boundaries', () => {
+test('operator route fails closed on permission, mode, and cache boundaries', () => {
   assert.match(routeSource, /platformPermissionJsonResponse\(event, env, \{ platform: \['billing'\] \}\)/u)
   assert.match(routeSource, /setResponseHeader\(event, 'cache-control', 'no-store'\)/u)
   assert.match(routeSource, /headers: \{ 'cache-control': 'no-store' \}/u)
   const modeGuard = routeSource.indexOf('assertStripeProviderMode(')
-  const provenance = routeSource.indexOf('readDeploymentProvenance(')
   const auth = routeSource.indexOf('createAuth(env)')
   const provider = routeSource.indexOf('createStripeClient(')
-  assert.ok(modeGuard >= 0 && provenance > modeGuard)
-  assert.ok(auth > provenance && provider > provenance)
+  assert.ok(modeGuard >= 0)
+  assert.ok(auth > modeGuard && provider > modeGuard)
   assert.doesNotMatch(routeSource, /processStripeEvent|usage_quota_grants|ai_credits/u)
 })
 
@@ -334,7 +328,6 @@ test('preview signs exact provider and local evidence without mutating the proce
     INPUT,
     'operator-1',
     reconciliationReport(),
-    SOURCE,
     NOW,
   )
 
@@ -371,7 +364,6 @@ test('approved apply queues the retained event once without resetting attempts o
     INPUT,
     'operator-1',
     report,
-    SOURCE,
     NOW,
   )
   assert.equal(preview.status, 'preview')
@@ -388,7 +380,6 @@ test('approved apply queues the retained event once without resetting attempts o
     INPUT,
     'operator-1',
     report,
-    SOURCE,
     preview.plan.expectedStateSha256,
     preview.plan.approvalToken,
     NOW,
@@ -425,7 +416,6 @@ test('approved apply queues the retained event once without resetting attempts o
     INPUT,
     'operator-1',
     report,
-    SOURCE,
     preview.plan.expectedStateSha256,
     preview.plan.approvalToken,
     NOW,
@@ -447,7 +437,6 @@ test('apply rejects stale state and a tampered approval without queueing', async
     INPUT,
     'operator-1',
     staleReport,
-    SOURCE,
     NOW,
   )
   assert.equal(stalePreview.status, 'preview')
@@ -460,7 +449,6 @@ test('apply rejects stale state and a tampered approval without queueing', async
       INPUT,
       'operator-1',
       staleReport,
-      SOURCE,
       stalePreview.plan.expectedStateSha256,
       stalePreview.plan.approvalToken,
       NOW,
@@ -477,7 +465,6 @@ test('apply rejects stale state and a tampered approval without queueing', async
     INPUT,
     'operator-1',
     tamperedReport,
-    SOURCE,
     NOW,
   )
   assert.equal(tamperedPreview.status, 'preview')
@@ -491,7 +478,6 @@ test('apply rejects stale state and a tampered approval without queueing', async
       INPUT,
       'operator-1',
       tamperedReport,
-      SOURCE,
       tamperedPreview.plan.expectedStateSha256,
       tamperedToken,
       NOW,
@@ -520,7 +506,6 @@ test('preview is an idempotent no-op after canonical invoice evidence is already
     INPUT,
     'operator-1',
     reconciliationReport(),
-    SOURCE,
     NOW,
   )
   assert.deepEqual(result, {
@@ -569,11 +554,6 @@ test('preview blocks malformed local, retained, and provider evidence without wr
       code: 'provider_evidence_invalid',
     },
     {
-      label: 'provider source mismatch',
-      mutateReport: report => { report.source.sourceSha = 'c'.repeat(40) },
-      code: 'reconciliation_evidence_mismatch',
-    },
-    {
       label: 'unrelated blocked reconciliation drift',
       mutateReport: report => {
         report.drifts.push({
@@ -614,7 +594,6 @@ test('preview blocks malformed local, retained, and provider evidence without wr
         INPUT,
         'operator-1',
         report,
-        SOURCE,
         item.now ?? NOW,
       ),
       expectError(item.code),

@@ -6,9 +6,6 @@ compatibility_flags = ["nodejs_compat_v2"]
 [assets]
 directory = ".output/public"
 
-[version_metadata]
-binding = "CF_VERSION_METADATA"
-
 [triggers]
 # Every expression is dispatched by workers/app-entry.ts. Keep this list in
 # sync with SCHEDULED_TASKS in server/scheduled-tasks.ts.
@@ -34,6 +31,9 @@ BETTER_AUTH_URL = "https://krabiclaw.com"
 NUXT_PUBLIC_PLATFORM_DOMAIN = "https://krabiclaw.com"
 NUXT_PUBLIC_FREE_SITE_DOMAIN = "https://krabiclaw.com"
 NUXT_PUBLIC_APP_NAME = "KrabiClaw"
+NUXT_PUBLIC_SITE_URL = "https://krabiclaw.com"
+NUXT_PUBLIC_HELP_URL = "https://krabiclaw.com/help"
+NUXT_PUBLIC_WHATSAPP_NUMBER = "16197200000"
 AI_SEARCH_NAMESPACE = "default"
 AI_SEARCH_INSTANCE_ID = "krabiclaw-platform-knowledge"
 GA4_MEASUREMENT_ID = "G-NJ1BSP9BYG"
@@ -141,9 +141,6 @@ routes = [
   { pattern = "preview.krabiclaw.com/*", zone_name = "krabiclaw.com" }
 ]
 
-[env.preview.version_metadata]
-binding = "CF_VERSION_METADATA"
-
 # Top-level [triggers] crons are inherited by named environments unless
 # overridden here. Preview is a CI-only, per-PR database — scheduled tasks
 # (domain-reconciliation, etc.) must never run
@@ -159,6 +156,9 @@ NUXT_PUBLIC_PLATFORM_DOMAIN = "https://preview.krabiclaw.com"
 MEDIA_BASE_URL = "https://preview.krabiclaw.com/__media"
 NUXT_PUBLIC_FREE_SITE_DOMAIN = "https://krabiclaw.com"
 NUXT_PUBLIC_APP_NAME = "KrabiClaw"
+NUXT_PUBLIC_SITE_URL = "https://preview.krabiclaw.com"
+NUXT_PUBLIC_HELP_URL = "https://preview.krabiclaw.com/help"
+NUXT_PUBLIC_WHATSAPP_NUMBER = "16197200000"
 AI_SEARCH_NAMESPACE = "default"
 AI_SEARCH_INSTANCE_ID = "krabiclaw-platform-knowledge-preview"
 # Analytics is intentionally disabled outside production.
@@ -229,9 +229,6 @@ routes = [
   { pattern = "staging.krabiclaw.com/*", zone_name = "krabiclaw.com" }
 ]
 
-[env.staging.version_metadata]
-binding = "CF_VERSION_METADATA"
-
 # See env.preview.triggers above — same rationale, same fix.
 [env.staging.triggers]
 crons = []
@@ -243,6 +240,9 @@ NUXT_PUBLIC_PLATFORM_DOMAIN = "https://staging.krabiclaw.com"
 MEDIA_BASE_URL = "https://staging.krabiclaw.com/__media"
 NUXT_PUBLIC_FREE_SITE_DOMAIN = "https://krabiclaw.com"
 NUXT_PUBLIC_APP_NAME = "KrabiClaw Staging"
+NUXT_PUBLIC_SITE_URL = "https://staging.krabiclaw.com"
+NUXT_PUBLIC_HELP_URL = "https://staging.krabiclaw.com/help"
+NUXT_PUBLIC_WHATSAPP_NUMBER = "16197200000"
 AI_SEARCH_NAMESPACE = "default"
 AI_SEARCH_INSTANCE_ID = "krabiclaw-platform-knowledge-staging"
 # Analytics is intentionally disabled outside production.

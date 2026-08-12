@@ -19,7 +19,6 @@ import { sendPasswordResetEmail, sendVerificationEmail } from '~/server/utils/au
 import { validatePassword } from '~/utils/password-validation'
 import { fireSiteEventSafe, resolvePrimarySiteForEvent } from '~/server/utils/site-events'
 import type { InferSelectModel } from 'drizzle-orm'
-import type { WorkerVersionMetadata } from '@cloudflare/workers-types'
 import { organizationAccessControl, organizationRoles } from '~/utils/organization-access'
 import { platformAdminAccessControl, platformAdminRoles } from '~/utils/platform-admin-access'
 import {
@@ -104,7 +103,6 @@ export interface CloudflareEnv {
   CLOUDFLARE_IMAGES_ACCOUNT_ID?: string
   CLOUDFLARE_IMAGES_API_TOKEN?: string
   CF_ZONE_ID?: string
-  CF_VERSION_METADATA?: WorkerVersionMetadata
   CF_CUSTOM_HOSTNAMES_API_TOKEN?: string
   CF_ZARAZ_API_TOKEN?: string
   CF_SAAS_CNAME_TARGET?: string

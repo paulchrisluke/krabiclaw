@@ -4,19 +4,13 @@ This is the source of truth for avoiding local-vs-CI auth and billing drift in E
 
 ## Tier intent
 
-- The required PR lane reuses one immutable production build and deploys only
-  isolated preview. Its representative suite always includes dashboard Pages,
+- The required PR lane builds for and deploys only isolated preview. Its
+  representative suite always includes dashboard Pages,
   billing, links, and Blawby CMS coverage; path filters cannot omit them.
-- The explicit full lane owns the shared-staging lock. It applies and records
-  migrations/fixtures, uploads one tagged Worker Version, tests it at 0% by
-  version override, runs the full matrix and comparative benchmark, then
-  verifies the promoted custom domain on desktop and mobile.
-- The production lane consumes that exact staging manifest and build. Its
-  preflight is read-only and every production mutation waits for the protected
-  environment approval.
-- The scheduled E2E workflow is pinned, read-only Saya/Blawby telemetry against
-  one retained build artifact and Worker Version. It is not the full lane and
-  never seeds, migrates, deploys, invokes providers, or writes production.
+- A push to `staging` applies migrations, deploys the staging Worker normally,
+  and then runs the full Playwright suite against that deployment.
+- A push to `main` applies migrations, deploys production normally, and then
+  runs read-only public browser smoke. There is no scheduled release lane.
 
 ## Recent staging lessons
 
@@ -78,11 +72,7 @@ For local Miniflare-backed tests, keep bindings with `remote = false` in `wrangl
 - Preview seeds are generated into one SQL bundle and applied with one remote D1 operation. The bundle remains idempotent and uses the same real preview D1, migration flow, fixed secrets, and deployed Worker as before.
 - Required preview coverage is explicit and never path-gated for dashboard Pages,
   billing, links, or Blawby CMS.
-- The full `yarn test:e2e:full` suite runs in the manually dispatched
-  `.github/workflows/ci-full.yml` candidate job against one immutable staging
-  version. Failures restore the deployed baseline when a candidate split
-  exists and retain the manifest, Playwright reports, and benchmark evidence.
-- `.github/workflows/e2e-full.yml` is read-only scheduled telemetry, not a
-  mutable staging regression lane.
+- The full `yarn test:e2e:full` suite runs after every successful staging
+  deployment. Production runs only the read-only public rendering sentinel.
 - CI defaults to two Playwright workers. Stateful notification, MCP, and client suites explicitly use one worker against shared remote D1.
 - The seed, migration, tool-parity, and script-syntax checks run together in one Node-only job, avoiding redundant dependency installations.

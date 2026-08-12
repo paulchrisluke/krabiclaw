@@ -16,7 +16,7 @@ deployed browser gate or the incident rules in that document.
 - Do not merge without explicit user approval.
 - Do not treat a green check run as browser validation. For renderer, migration,
   CMS, public-route, auth, billing, or other user-visible changes, the exact
-  deployed candidate must pass the full applicable browser matrix before
+  deployed release must pass the full applicable browser matrix before
   promotion. A missing, timed-out, blank, broken-media, or partially inspected
   route is unverified and blocks release.
 

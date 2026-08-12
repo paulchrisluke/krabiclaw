@@ -173,7 +173,7 @@ future delivery surfaces and are not required for this in-app center.
 2. Provision the rotated URL directly as the Cloudflare Worker secret through
    the approved secret-management procedure. Release workflows only verify
    required secret names; they never run `secret put`, because that would
-   create an untracked Worker Version outside the candidate chain.
+   create a deployment outside the normal branch flow.
 3. Preview and staging stay `log_only` and do not need the production secret.
 4. Confirm a new signup creates a `platform.user_signup` record and a successful
    `notification_deliveries` row before relying on Discord operationally.

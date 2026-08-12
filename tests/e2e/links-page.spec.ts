@@ -10,7 +10,6 @@ const DEMO_SITE_SLUG = 'demo'
 
 const BLAWBY_OWNER_USER_ID = 'user-ncls-blawby'
 const BLAWBY_SITE_ID = 'site-ncls-blawby'
-const REQUIRE_RELEASE_BLAWBY_LINKS = process.env.KRABICLAW_RELEASE_CONTEXT === 'ci-full-staging'
 
 type LinkItemInput = {
   id?: string
@@ -197,7 +196,7 @@ test.describe('tenant links page', () => {
     const errors = collectPageErrors(page)
     await loginAs(request, baseURL!, BLAWBY_OWNER_USER_ID)
     const existing = await request.get(`${baseURL}/api/editor/sites/${BLAWBY_SITE_ID}/links-page`)
-    if (existing.status() === 404 && !REQUIRE_RELEASE_BLAWBY_LINKS) {
+    if (existing.status() === 404 && !process.env.CI) {
       test.skip(true, 'NCLS Blawby fixture is not seeded in this environment')
     }
     expect(existing.status()).toBe(200)

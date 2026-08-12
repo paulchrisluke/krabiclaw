@@ -12,17 +12,13 @@ Multi-tenant restaurant SaaS. Nuxt 4 + Cloudflare Pages + D1.
 |---|---|
 | `yarn dev` | Dev server (localhost:3000) with local Cloudflare bindings for D1/R2/KV and tenant subdomain routing on `*.localhost`. |
 | `yarn build` | Production build → `.output/` |
-| `yarn deploy` | Intentionally blocked; production releases use the manifest-gated GitHub Actions workflow. |
 | `yarn db:generate` | Generate a new `migrations/*.sql` file from `server/db/schema.ts` |
 | `yarn schema:local` | Apply pending `migrations/*.sql` to local D1 |
-| `yarn schema:remote` | Blocked; production migrations run only inside the protected manifest-gated release workflow. |
 | `yarn drizzle:check` | Verify `server/db/schema.ts` hasn't drifted from the live D1 schema |
 | `yarn seed:local` | Seed demo data locally |
 | `yarn stripe:listen` | Forward Stripe webhooks to localhost (local dev only) |
 | `yarn canary:prod` | Production-safe authenticated browser canary (read-only checks). |
 | `yarn canary:notifications` | Production provider-level email/WhatsApp notification canary. |
-| `yarn zaraz:ga:backfill` | Blocked legacy apply alias; use **Zaraz GA4 Backfill Plan** for read-only staging/preview planning. |
-| `yarn rollback:prod` | Blocked; use **Production rollback (exact-target, manifest-gated)** with the declared current/target Worker IDs, target SHA, incident reason, and protected approval. |
 | `yarn test:mcp:local` | Local ChatGPT MCP harness preflight against the public tunnel target. |
 
 ---
@@ -132,50 +128,28 @@ ulimit -n 65536
 
 ## Deployment
 
-Direct staging and production deploy commands are intentionally blocked.
+Deployment follows the branches in `.github/workflows/ci.yml`:
 
-1. Dispatch **CI (Full Validation Lane)** from the exact candidate SHA. It
-   builds once, locks staging, uploads one tagged Worker Version, applies and
-   records staging migrations, verifies the 0% candidate by version override,
-   runs the full browser lane and genuine 25-sample comparison, then verifies
-   the promoted custom domain.
-2. Review its `candidate-manifest.json` evidence.
-3. Dispatch **Production release (manifest-gated)** with `operation=preflight`,
-   that staging run ID, and the exact SHA. Review its read-only migration/build
-   report.
-4. Only then dispatch the same workflow with `operation=deploy` and the
-   successful preflight run ID. This separate dispatch is the explicit
-   post-report approval; the mutation job also names the protected
-   `production` environment for its required-reviewer gate.
+1. Pull requests deploy the isolated preview Worker and run representative E2E.
+2. Merges to `staging` apply staging migrations, deploy the staging Worker, and
+   run the full Playwright suite.
+3. A reviewed `staging` to `main` merge applies production migrations, deploys
+   the production Worker, and runs read-only production browser smoke.
 
-`yarn deploy`, `yarn deploy:staging`, and their direct Worker variants fail
-closed so they cannot bypass the immutable-candidate evidence chain. Preview
-remains an isolated PR environment. See
-[docs/operations/release-candidate-contract.md](docs/operations/release-candidate-contract.md)
-for the exact contract.
-
-Remote staging and production migration/seed aliases (`migrate:staging`,
-`migrate:prod`, `schema:remote`, `schema:staging`, `seed:*:staging`, and
-`seed:*:remote`) also fail closed. The full candidate and production release
-workflows invoke their remote operations only while holding their protected
-workflow lock and recording the exact source/build evidence.
+The package exposes no staging or production deploy, migration, seed, or
+rollback aliases. CI invokes native Wrangler commands only in the matching
+branch job. There are no custom Worker version IDs, candidate traffic splits,
+baseline manifests, or nightly release lanes. See
+[docs/operations/release-flow.md](docs/operations/release-flow.md).
 
 The **Zaraz GA4 Backfill Plan** workflow is read-only and accepts only preview or
 staging targets. It reads the target D1 connections and the current zone-level
 Zaraz configuration, then emits a plan; it never applies a Zaraz `PUT` and has
-no production operator path. The legacy `yarn zaraz:ga:backfill` alias is
-blocked so it cannot bypass that boundary.
+no production operator path.
 
-Emergency production rollback is a separate manual workflow named
-**Production rollback (exact-target, manifest-gated)**. Its read-only preflight
-requires the exact current Worker version, exact target Worker version, exact
-40-character target source SHA, and incident reason; it proves target
-provenance, build/assets, and the Saya/Blawby route inventory before any
-approval. Only its protected `production` mutation job may route the exact
-target at 100%, and it proves the deployed desktop/mobile browser surfaces.
-The workflow never chooses an inferred “previous” version or writes customer
-data; if post-mutation state is unknown it restores only the explicitly
-declared current version and records intervention evidence.
+During an incident, use Cloudflare's deployment history to restore the last
+known-good production deployment without changing D1 data. Then land the source
+fix through `staging` and `main` and repeat the browser gates.
 
 Production secrets live in the Cloudflare dashboard → Workers & Pages → krabiclaw → Settings → Variables.
 
@@ -196,7 +170,7 @@ The mandatory deployed-browser release gate and outage recovery rules are docume
 
 ## Schema
 
-`server/db/schema.ts` (Drizzle ORM) is the source of truth for new schema changes. `migrations/0001_initial.sql`–`0007_*.sql` are historical and immutable (already applied everywhere) — from `0008` onward, schema changes start in `schema.ts`, then `yarn db:generate` (`drizzle-kit generate`) produces the matching additive `migrations/000N_*.sql` file. Use `yarn schema:local` locally; preview migrations belong to the required PR workflow, and staging/production migrations belong to their protected candidate workflows. Do not invoke a remote migration command as a substitute for release approval. `drizzle-kit generate` cannot emit triggers or CHECK constraints, so those required constraints must be hand-appended to the generated migration; indexes and uniques declared in `schema.ts` are generated normally. Full workflow, the constraint caveats, and the 2026-06-25 incident (a squashed baseline broke staging CI and silently dropped ~80 triggers/indexes — since reverted) are documented in `AGENTS.md`'s "Database Schema Workflow" section.
+`server/db/schema.ts` (Drizzle ORM) is the source of truth for new schema changes. `migrations/0001_initial.sql`–`0007_*.sql` are historical and hand-authored; from `0008` onward, schema changes start in `schema.ts`, then `yarn db:generate` (`drizzle-kit generate`) produces the matching additive `migrations/000N_*.sql` file. Every migration becomes immutable as soon as any shared environment applies it. Use `yarn schema:local` locally; preview migrations belong to the required PR workflow, and staging/production migrations run in their branch deployment jobs. New migrations may not use `DROP TABLE`. Do not invoke a remote migration command as a substitute for release approval. `drizzle-kit generate` cannot emit triggers or CHECK constraints, so those required constraints must be hand-appended to the generated migration; indexes and uniques declared in `schema.ts` are generated normally. Full workflow and constraint caveats are documented in `AGENTS.md`'s "Database Schema Workflow" section.
 
 ```bash
 yarn db:generate     # generate a migration from schema.ts after editing it
