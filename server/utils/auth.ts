@@ -16,11 +16,9 @@ import { phoneTemporaryEmail } from '~/server/utils/phone-invitations'
 import { parsePhoneOrThrow, PHONE_METADATA_VERSION } from '~/utils/phone'
 import { notifyNewUserSignup } from '~/server/utils/notification-center'
 import { sendPasswordResetEmail, sendVerificationEmail } from '~/server/utils/auth-email'
-import { scheduleOtpDelivery } from '~/server/utils/auth-otp-delivery'
 import { validatePassword } from '~/utils/password-validation'
 import { fireSiteEventSafe, resolvePrimarySiteForEvent } from '~/server/utils/site-events'
 import type { InferSelectModel } from 'drizzle-orm'
-import type { WorkerVersionMetadata } from '@cloudflare/workers-types'
 import { organizationAccessControl, organizationRoles } from '~/utils/organization-access'
 import { platformAdminAccessControl, platformAdminRoles } from '~/utils/platform-admin-access'
 import {
@@ -105,7 +103,6 @@ export interface CloudflareEnv {
   CLOUDFLARE_IMAGES_ACCOUNT_ID?: string
   CLOUDFLARE_IMAGES_API_TOKEN?: string
   CF_ZONE_ID?: string
-  CF_VERSION_METADATA?: WorkerVersionMetadata
   CF_CUSTOM_HOSTNAMES_API_TOKEN?: string
   CF_ZARAZ_API_TOKEN?: string
   CF_SAAS_CNAME_TARGET?: string
@@ -133,10 +130,6 @@ export interface CloudflareEnv {
 
 // WeakMap keyed on the D1 binding instance — safe for the Worker lifecycle
 const authCache = new WeakMap<D1Database, unknown>()
-
-interface CreateAuthOptions {
-  waitUntil?: (_task: Promise<unknown>) => void
-}
 
 function normalizeOrigin(value: string | undefined): string | null {
   const trimmed = value?.trim().replace(/\/$/, '')
@@ -185,12 +178,10 @@ function trustedOriginsForAuth(env: CloudflareEnv): string[] | ((_request?: Requ
   return [...origins]
 }
 
-export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) {
+export function createAuth(env: CloudflareEnv) {
   const d1 = env.DB
 
-  // Request-scoped background scheduling must never be captured by a cached auth
-  // instance. Auth endpoints get a fresh instance; session reads keep the cache.
-  const cached = options.waitUntil ? null : authCache.get(d1)
+  const cached = authCache.get(d1)
   if (cached) return cached as ReturnType<typeof betterAuth>
 
   const db = env.db ?? createDb(d1)
@@ -222,7 +213,7 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
             await notifyNewUserSignup(db, env, {
               id: user.id,
               email: user.email,
-            }, options.waitUntil).catch((err) => console.error('signup_notification_failed', err))
+            }).catch((err) => console.error('signup_notification_failed', err))
           }
         }
       },
@@ -456,23 +447,21 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
         } as never,
         onEvent: async (event) => {
           const queued = await enqueueStripeEvent(db, event)
-          if (!queued || !options.waitUntil || !env.STRIPE_SECRET_KEY) return
+          if (!queued || !env.STRIPE_SECRET_KEY) return
           const authContext = await instance.$context
-          options.waitUntil(
-            processStripeEvent(
-              env,
-              db,
-              event,
-              stripeClient,
-              authContext.adapter as unknown as import('~/server/utils/better-auth-stripe').BetterAuthSubscriptionAdapter,
-              loadStripePlans,
-            ).catch((error) => {
-              console.error('stripe_webhook_immediate_processing_failed', {
-                stripeEventId: event.id,
-                error: error instanceof Error ? error.message : String(error),
-              })
-            }),
-          )
+          await processStripeEvent(
+            env,
+            db,
+            event,
+            stripeClient,
+            authContext.adapter as unknown as import('~/server/utils/better-auth-stripe').BetterAuthSubscriptionAdapter,
+            loadStripePlans,
+          ).catch((error) => {
+            console.error('stripe_webhook_immediate_processing_failed', {
+              stripeEventId: event.id,
+              error: error instanceof Error ? error.message : String(error),
+            })
+          })
         },
       }),
       admin({
@@ -483,8 +472,15 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
         impersonationSessionDuration: 60 * 60,
       }),
       phoneNumber({
-        sendOTP: ({ phoneNumber: phone, code }) => {
-          scheduleOtpDelivery(sendWhatsAppOtp(env, phone, code), options.waitUntil)
+        sendOTP: async ({ phoneNumber: phone, code }) => {
+          try {
+            await sendWhatsAppOtp(env, phone, code)
+          } catch (error) {
+            console.error('auth_whatsapp_otp_failed', {
+              error: error instanceof Error ? error.message : String(error),
+            })
+            throw error
+          }
         },
         otpLength: 6,
         expiresIn: 300,
@@ -550,7 +546,7 @@ export function createAuth(env: CloudflareEnv, options: CreateAuthOptions = {}) 
     }
   })
 
-  if (!options.waitUntil) authCache.set(d1, instance)
+  authCache.set(d1, instance)
   return instance
 }
 

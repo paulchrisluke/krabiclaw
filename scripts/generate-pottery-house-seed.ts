@@ -4,7 +4,6 @@ import { execSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { execWithRetry } from './wrangler-retry.ts'
 import {
   renderCompiledPotteryHouseBillingBlock,
   renderCompiledPotteryHouseBlogBlock,
@@ -19,27 +18,21 @@ import {
 } from '../seed-definitions/pottery-house.ts'
 
 const isStdout = process.argv.includes('--stdout')
-const isRemote = process.argv.includes('--remote')
-const isStaging = process.argv.includes('--staging')
 const isPreview = process.argv.includes('--preview')
 
-if (isStaging && process.env.KRABICLAW_RELEASE_CONTEXT !== 'ci-full-staging') {
-  console.error('Direct staging seeding is disabled; use the locked CI (Full Validation Lane).')
-  process.exit(1)
-}
-if (isRemote) {
-  console.error('Direct production seeding is disabled; production release workflows never run fixture seeds.')
+if (process.argv.includes('--remote') || process.argv.includes('--staging')) {
+  console.error('This seed supports only local and preview databases.')
   process.exit(1)
 }
 
-const envFlag = isStaging ? '--env staging' : isPreview ? '--env preview' : isRemote ? '' : '--local'
-const remoteFlag = isRemote || isStaging || isPreview ? '--remote' : ''
+const envFlag = isPreview ? '--env preview' : '--local'
+const remoteFlag = isPreview ? '--remote' : ''
 
 const sql = `-- Pottery House Krabi seed
 -- Ephemeral: generated from seed-definitions/pottery-house.ts
 -- Preview at: http://pottery-house.localhost:3000
 -- Production at: https://pottery-house.krabiclaw.com
--- Destructive for pottery-house-owned rows: safe to re-run with yarn seed:local or yarn seed:remote --confirm-production
+-- Destructive for pottery-house-owned rows: safe to re-run locally or against preview.
 
 PRAGMA foreign_keys = ON;
 
@@ -92,7 +85,7 @@ if (isStdout) {
   process.exit(0)
 }
 
-if (isRemote || isStaging || isPreview) {
+if (isPreview) {
   const checkCmd = `npx wrangler d1 execute DB ${envFlag} ${remoteFlag} --command "SELECT organization_id FROM sites WHERE id = 'site-pottery-house'" --json`.trim()
   const checkOutput = execSync(checkCmd, { encoding: 'utf8' })
   const currentOrgId = JSON.parse(checkOutput)?.[0]?.results?.[0]?.organization_id
@@ -115,7 +108,7 @@ try {
   writeFileSync(sqlPath, sql, 'utf8')
   const cmd = `npx wrangler d1 execute DB ${envFlag} ${remoteFlag} --file "${sqlPath}"`.trim()
   console.log(`[seed:pottery-house] Applying: ${cmd}`)
-  await execWithRetry(() => execSync(cmd, { stdio: 'inherit' }), 'seed:pottery-house')
+  execSync(cmd, { stdio: 'inherit' })
   console.log('[seed:pottery-house] Done.')
 } finally {
   rmSync(dir, { recursive: true, force: true })

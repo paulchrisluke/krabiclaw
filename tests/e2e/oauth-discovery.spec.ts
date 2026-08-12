@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { createHash } from 'node:crypto'
 import { decodeProtectedHeader, importJWK, SignJWT } from 'jose'
-import { devLoginHeaders, isDeployedWorkerTarget, testEnv } from './test-env'
+import { devLoginHeaders, testEnv } from './test-env'
 
 const PRIVATE_CLIENT_TEST_KEY_ID = 'krabiclaw-cimd-e2e-rs256'
 const PRIVATE_CLIENT_TEST_JWK = {
@@ -82,19 +82,7 @@ test.describe('OAuth discovery endpoints', () => {
     expect((body.code_challenge_methods_supported as string[])).toContain('S256')
   })
 
-  test('repeat authorize skips consent after remembered approval for the same CIMD client', async ({ request, baseURL }) => {
-    // The CIMD client_id document (test-client-metadata) is served by this same
-    // app/origin, so the auth server's fetch of it is a same-zone Worker
-    // self-fetch on a deployed Cloudflare Worker. That self-fetch fails there
-    // deterministically (reproduced directly via curl against preview.krabiclaw.com,
-    // not a timeout — a Cloudflare Workers/zone-level restriction on a Worker's
-    // own subrequest into its own route, not app logic). The same flow passes
-    // reliably against a local dev server exposed through a real public tunnel
-    // (see docs/local-mcp-harness.md), so this test is local-harness-only until
-    // the CIMD test fixture is hosted off-zone or the platform restriction is
-    // otherwise worked around.
-    test.skip(isDeployedWorkerTarget(baseURL!), 'CIMD same-zone self-fetch is not supported on deployed Cloudflare Workers — verify via the local MCP tunnel harness instead')
-
+  test('public CIMD exchanges an authorization code once and reuses remembered consent', async ({ request, baseURL }) => {
     const devHeaders = devLoginHeaders()
     test.skip(!devHeaders, 'E2E_DEV_ROUTE_SECRET required for dev login')
 
@@ -110,20 +98,24 @@ test.describe('OAuth discovery endpoints', () => {
     expect(cookies.length).toBeGreaterThan(0)
     const cookieHeader = cookies.join('; ')
 
-    const cimdClientId = `${baseURL}/api/auth/oauth2/test-client-metadata?nonce=${Date.now()}`
-    const redirectUri = `${baseURL}/oauth/test-callback`
+    const cimdClientId = process.env.MCP_CIMD_CLIENT_URL || `${baseURL}/api/auth/oauth2/test-client-metadata?nonce=${Date.now()}`
+    const redirectUri = new URL('/oauth/test-callback', cimdClientId).toString()
+    const verifier = 'krabiclaw-public-cimd-e2e-verifier-0123456789'
     const authorizeParams = {
       client_id: cimdClientId,
       redirect_uri: redirectUri,
       response_type: 'code',
       scope: 'openid offline_access tenant',
       state: 'first-pass',
-      code_challenge: 'test-challenge-s256',
+      code_challenge: pkceChallenge(verifier),
       code_challenge_method: 'S256',
       resource: `${baseURL}/api/mcp`,
     }
 
-    const firstAuthorize = await request.get(oauthAuthorizeUrl(baseURL!, authorizeParams), {
+    const firstAuthorize = await request.get(oauthAuthorizeUrl(baseURL!, {
+      ...authorizeParams,
+      prompt: 'consent',
+    }), {
       headers: { Cookie: cookieHeader },
       maxRedirects: 0,
     })
@@ -148,7 +140,27 @@ test.describe('OAuth discovery endpoints', () => {
     const consentBody = await consentRes.json() as { url?: string }
     expect(consentBody.url).toBeTruthy()
     const consentRedirect = new URL(consentBody.url!)
-    expect(consentRedirect.searchParams.get('code')).toBeTruthy()
+    const code = consentRedirect.searchParams.get('code')
+    expect(code).toBeTruthy()
+
+    const exchangeCode = async () => await request.post(`${baseURL}/api/auth/oauth2/token`, {
+      headers: { Origin: baseURL! },
+      form: {
+        grant_type: 'authorization_code',
+        client_id: cimdClientId,
+        code: code!,
+        redirect_uri: redirectUri,
+        code_verifier: verifier,
+      },
+    })
+    const token = await exchangeCode()
+    expect(token.status()).toBe(200)
+    const tokenBody = await token.json() as { access_token?: string, refresh_token?: string }
+    expect(tokenBody.access_token).toBeTruthy()
+    expect(tokenBody.refresh_token).toBeTruthy()
+
+    const replay = await exchangeCode()
+    expect(replay.status()).toBe(400)
 
     const secondAuthorize = await request.get(oauthAuthorizeUrl(baseURL!, {
       ...authorizeParams,
@@ -169,7 +181,6 @@ test.describe('OAuth discovery endpoints', () => {
   })
 
   test('ChatGPT-shaped CIMD uses private_key_jwt and rejects assertion replay', async ({ request, baseURL }) => {
-    test.skip(isDeployedWorkerTarget(baseURL!), 'same-zone CIMD/JWKS self-fetch requires the public local tunnel')
     test.skip(new URL(baseURL!).protocol !== 'https:', 'CIMD requires an HTTPS client metadata and JWKS URI')
     const devHeaders = devLoginHeaders()
     test.skip(!devHeaders, 'E2E_DEV_ROUTE_SECRET required for dev login')
@@ -185,8 +196,8 @@ test.describe('OAuth discovery endpoints', () => {
       .join('; ')
     expect(cookieHeader).toBeTruthy()
 
-    const clientId = `${baseURL}/api/auth/oauth2/test-private-client-metadata?nonce=${Date.now()}`
-    const redirectUri = `${baseURL}/oauth/test-callback`
+    const clientId = process.env.MCP_PRIVATE_CIMD_CLIENT_URL || `${baseURL}/api/auth/oauth2/test-private-client-metadata?nonce=${Date.now()}`
+    const redirectUri = new URL('/oauth/test-callback', clientId).toString()
     const verifier = 'krabiclaw-private-cimd-e2e-verifier-0123456789'
     const authorizeParams = {
       client_id: clientId,
@@ -199,7 +210,10 @@ test.describe('OAuth discovery endpoints', () => {
       resource: `${baseURL}/api/mcp`,
     }
 
-    const authorize = await request.get(oauthAuthorizeUrl(baseURL!, authorizeParams), {
+    const authorize = await request.get(oauthAuthorizeUrl(baseURL!, {
+      ...authorizeParams,
+      prompt: 'consent',
+    }), {
       headers: { Cookie: cookieHeader },
       maxRedirects: 0,
     })

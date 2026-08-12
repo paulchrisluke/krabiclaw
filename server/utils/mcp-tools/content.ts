@@ -344,7 +344,7 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
     }),
   siteTool({
       name: 'update_home_hero',
-      description: 'Update the homepage hero text — this affects the homepage, never a location\'s own separate page. If the user is talking about one particular location\'s own page (e.g. a closure or an announcement image for one location), use update_location instead. To place media, call set_media with target home_hero. Only provided fields are changed.',
+      description: 'Update the homepage hero text — this affects the homepage, never a location\'s own separate page. If the user is talking about one particular location\'s own page (e.g. a closure or an announcement image for one location), use update_location instead. To place media, call set_media with target_type home_hero. Only provided fields are changed.',
       domain: 'content',
       minimumRole: 'editor',
       confirmRequired: false,

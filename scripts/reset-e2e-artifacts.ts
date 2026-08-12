@@ -4,7 +4,6 @@ import { execSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { execWithRetry } from './wrangler-retry.ts'
 
 // Sweeps rows that Playwright E2E specs leave behind on preview/staging, so scheduled tasks and
 // manual queries against these environments don't scan an ever-growing table. Two categories:
@@ -358,7 +357,7 @@ if (isStdout) {
     writeFileSync(sqlPath, sql, 'utf8')
     const cmd = `npx wrangler d1 execute DB ${envFlag} ${remoteFlag} --file "${sqlPath}"`.trim()
     console.log(`[reset-e2e-artifacts] Applying: ${cmd}`)
-    await execWithRetry(() => execSync(cmd, { stdio: 'inherit' }), 'reset-e2e-artifacts')
+    execSync(cmd, { stdio: 'inherit' })
     console.log('[reset-e2e-artifacts] Done.')
   } finally {
     rmSync(dir, { recursive: true, force: true })

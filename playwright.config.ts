@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test'
+import { existsSync } from 'node:fs'
 import { testBaseUrl, testEnv } from './tests/e2e/test-env'
+
+if (existsSync('.env')) process.loadEnvFile('.env')
 
 const port = Number(testEnv('PORT') || 3000)
 const previewUrl = testEnv('PLAYWRIGHT_PREVIEW_URL')
@@ -7,11 +10,6 @@ const baseURL = previewUrl || testBaseUrl()
 const devRouteSecret = testEnv('E2E_DEV_ROUTE_SECRET') || 'ci-dev-route-secret'
 const emailDeliveryMode = process.env.EMAIL_DELIVERY_MODE || 'log_only'
 const whatsAppDeliveryMode = process.env.WHATSAPP_DELIVERY_MODE || 'log_only'
-const workerVersionOverride = testEnv('WORKER_VERSION_OVERRIDE')
-const workerName = testEnv('WORKER_NAME') || 'krabiclaw'
-const workerVersionHeaders: Record<string, string> = workerVersionOverride
-  ? { 'Cloudflare-Workers-Version-Overrides': `${workerName}="${workerVersionOverride}"` }
-  : {}
 const shellQuote = (value: string) => `'${value.replace(/'/g, "'\\''")}'`
 
 process.env.E2E_DEV_ROUTE_SECRET = devRouteSecret
@@ -36,10 +34,6 @@ export default defineConfig({
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL,
-    // Pin every browser/API request to one immutable Cloudflare Worker version
-    // when a candidate override is supplied. This keeps login, page, and API
-    // requests on the same deployed source during verification.
-    extraHTTPHeaders: workerVersionHeaders,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure'

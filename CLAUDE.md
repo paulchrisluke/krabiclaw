@@ -3,13 +3,14 @@
 ## Release and outage prevention
 
 The mandatory release, incident, migration-safety, and browser-verification
-contract for every new LLM conversation is [docs/operations/release-and-outage-prevention.md](docs/operations/release-and-outage-prevention.md).
-Read it before reviewing or changing user-facing code. In particular, green CI
-is not release approval: the exact deployed staging and production candidates
-must be opened in a real browser, route by route, and any unverified or broken
-route blocks promotion. During an outage, stabilize the known-good renderer or
-Worker before touching data; do not reseed or hand-mutate production to mask a
-renderer regression.
+contract for work that changes or releases user-facing code is
+[docs/operations/release-and-outage-prevention.md](docs/operations/release-and-outage-prevention.md).
+Green CI is not release approval. As soon as preview, staging, or production is
+deployed, verify the affected authenticated flows and tenant journeys in a real
+browser while the remaining CI jobs continue. Platform marketing checks never
+substitute for client-site or MCP verification. During an outage, stabilize the
+known-good renderer or Worker before touching data; do not reseed or hand-mutate
+production to mask a renderer regression.
 
 When an internal API returns errors, nulls, or malformed data, fix the API contract/source of truth first. Do not add frontend fallbacks, guards, or workaround logic unless the API behavior is intentionally nullable and documented.
 
@@ -84,7 +85,7 @@ See `docs/adr/0021-better-auth-authorization-target.md`.
 
 ## Database Schema Workflow
 
-`server/db/schema.ts` (Drizzle ORM) is the **source of truth** for new schema changes. `migrations/0001_initial.sql` through `migrations/0007_*.sql` are historical, hand-authored, **already applied to every real environment (staging, production) and immutable** — never rename, edit, renumber, or re-squash them. From `0008` onward, migrations are _generated_ from `schema.ts` via `drizzle-kit generate` and applied via wrangler D1 migrations.
+`server/db/schema.ts` (Drizzle ORM) is the **source of truth** for new schema changes. `migrations/0001_initial.sql` through `migrations/0007_*.sql` are historical and hand-authored. From `0008` onward, migrations are generated from `schema.ts` via `drizzle-kit generate` and applied via Wrangler D1 migrations. Any migration applied to any shared environment is immutable by filename and content; never rename, edit, renumber, or re-squash it.
 
 **Why the split:** `wrangler d1 migrations apply` tracks applied migrations by **filename**, not content/checksum. An environment that already ran `0001_initial.sql`...`0007_*.sql` has those exact filenames recorded — it has no idea a squashed `0000_something.sql` is "the same" schema. Renaming/squashing history that's already applied anywhere makes wrangler treat the new file as unapplied and try to re-run it, immediately failing with `table X already exists`. There is no clever flag around this; the only safe move is to never touch an already-applied filename and always add new migrations with higher numbers.
 
@@ -101,6 +102,7 @@ See `docs/adr/0021-better-auth-authorization-target.md`.
 9. Any schema change must be checked against current server queries.
 10. Never define `d1_migrations` in `schema.ts`.
 11. After `db:generate`, wipe `.wrangler/state/v3/d1`, run `yarn schema:local`, then run the relevant seed command.
+12. `yarn lint:migrations` must pass before applying migrations. Never rebuild a referenced parent table with `DROP TABLE`; D1 may execute foreign-key actions even when generated SQL includes `PRAGMA foreign_keys=OFF`, clearing references or cascading child rows. An obsolete unreferenced table may be dropped in the same release after runtime references are removed and the migration passes local apply, schema comparison, and `PRAGMA foreign_key_check`. Do not retain inert compatibility tables as a release strategy.
 
 ### D1 does not support raw transactions
 
@@ -219,33 +221,27 @@ The bodies in `server/utils/whatsapp.ts`'s `TEMPLATES` map must match approved t
 
 ## CI / E2E Architecture
 
-Three lanes exist:
+Three environment gates exist in `.github/workflows/ci.yml`:
 
 ### Required PR lane
 
-Runs immutable-SHA quality/unit/build jobs and may migrate, seed, and deploy
-only the isolated preview environment. The same `.output` artifact is reused
-for preview browser coverage; shared staging and production are never changed.
+Runs checks, builds for preview, and may migrate, seed, and deploy only the
+isolated preview environment. Shared staging and production are never changed
+by a PR.
 
-### Full staging candidate lane
+### Staging lane
 
-Runs only by explicit dispatch. It owns one uninterrupted staging lock, one
-production build, one tagged Worker Version, migration/fixture evidence, the
-full browser matrix, and a 25-sample baseline/candidate comparison. It promotes
-only that verified version and then repeats the custom-domain browser gate.
+Runs on pushes to `staging`. It applies pending migrations, sweeps disposable
+E2E artifacts, deploys the staging Worker normally, and runs the full
+Playwright suite against `staging.krabiclaw.com`.
 
-### Production release lane
+### Production lane
 
-Runs as two explicit dispatches with the successful staging manifest and exact
-source SHA. `operation=preflight` is read-only and emits the production
-migration/build report. Only a later `operation=deploy` dispatch consuming that
-preflight run can reach migration, version upload, split rollout, and browser
-verification; the job also names the protected `production` environment.
-Pushes to `main` never deploy production.
+Runs on pushes to `main`. It applies pending migrations, deploys the production
+Worker normally, and runs read-only public browser smoke.
 
-Direct `yarn deploy` and staging/production Worker convenience commands are
-blocked. The exact contract is
-`docs/operations/release-candidate-contract.md`.
+The package exposes no staging or production deploy, migration, seed, or
+rollback aliases. The contract is `docs/operations/release-flow.md`.
 
 ### CI Environment Rules
 
@@ -253,15 +249,11 @@ blocked. The exact contract is
 - Never put `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_ACCOUNT_ID` in top-level job `env:`.
 - All E2E jobs require Stripe env vars.
 - Remote staging seeds must be idempotent.
-- Production browser verification must not include intentionally disabled paid customer domains.
-- `www.potteryhousekrabi.com` is intentionally disabled and excluded from production browser verification.
-- `pottery-house.krabiclaw.com` remains covered.
-
 ### Preview/Staging Data Lifecycle
 
 `env.preview` and `env.staging` in `wrangler.toml` must always declare their own `[triggers]` block (`crons = []` unless a job is deliberately scoped to that environment). Cron triggers are inherited from the top-level `[triggers]` block unless an environment overrides them — an env without its own `[triggers]` silently runs production's full cron schedule against its own database. This previously went unnoticed and drove preview/staging D1 "rows read" billing into the billions as scheduled tasks repeatedly scanned ever-growing E2E-generated data.
 
-Curated fixture data (Pottery House, Kikuzuki, demo seed, MCP plan fixtures) is reset on every seed run via `DELETE`-then-`INSERT` on fixed IDs — it never grows. Anything else E2E specs create must be swept by `scripts/reset-e2e-artifacts.ts`, which runs in both the required preview seed and the locked full staging-candidate seed. For it to catch what a spec creates:
+Curated fixture data (Pottery House, Kikuzuki, demo seed, MCP plan fixtures) is reset on every preview seed run via `DELETE`-then-`INSERT` on fixed IDs — it never grows. Anything else E2E specs create must be swept by `scripts/reset-e2e-artifacts.ts`, which runs before preview and staging browser coverage. For it to catch what a spec creates:
 
 - Any throwaway site/org (`POST /api/sites`, `tests/e2e/helpers/ensure-site.ts`, or an MCP `create_site` call) must use a `subdomain` containing `e2e-` — the sweep deletes the owning `organization` row, which cascades through every org-scoped table.
 - Any guest-facing row created against a persistent fixture site (bookings, contact submissions, reservations) must use an `...@playwright.example` guest email — there's no throwaway org to cascade from, so these are swept by that marker directly.

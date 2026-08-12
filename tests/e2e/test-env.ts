@@ -1,51 +1,10 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
-
-const envFiles = ['.env', '.env.example']
-let fileEnv: Record<string, string> | null = null
-
-function parseEnvFile(path: string) {
-  return Object.fromEntries(
-    readFileSync(path, 'utf8')
-      .split('\n')
-      .map(line => line.trim())
-      .filter(line => line && !line.startsWith('#') && line.includes('='))
-      .map((line) => {
-        const index = line.indexOf('=')
-        const key = line.slice(0, index).trim()
-        let value = line.slice(index + 1).trim()
-        // Only remove surrounding quotes if they form a matching pair
-        if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-          value = value.slice(1, -1)
-        }
-        return [key, value]
-      })
-  )
-}
-
-function readFileEnv() {
-  if (fileEnv) return fileEnv
-
-  fileEnv = {}
-  for (const file of envFiles) {
-    const path = resolve(process.cwd(), file)
-    if (existsSync(path)) {
-      fileEnv = { ...parseEnvFile(path), ...fileEnv }
-    }
-  }
-  return fileEnv
-}
-
-export const testEnv = (key: string): string => process.env[key] ?? readFileEnv()[key] ?? ''
+export const testEnv = (key: string): string => process.env[key] ?? ''
 
 export function testBaseUrl() {
   const previewUrl = process.env.PLAYWRIGHT_PREVIEW_URL
   if (previewUrl) return previewUrl
 
   let port = Number.parseInt(process.env.PORT ?? '', 10)
-  if (Number.isNaN(port) || port <= 0) {
-    port = Number.parseInt(readFileEnv().PORT ?? '', 10)
-  }
   if (Number.isNaN(port) || port <= 0) port = 3000
 
   // Local E2E should target the webServer port explicitly instead of a stale
@@ -58,10 +17,10 @@ export function testBaseUrl() {
 }
 
 // x-preview-tenant carries tenant identity when subdomain routing isn't available:
-// workers.dev single-level wildcard, staging.*, preview.* (wildcard TLS only
-// covers one subdomain level so demo.preview.krabiclaw.com won't handshake).
+// the named local tunnel, workers.dev, staging.*, and preview.*.
 // Must stay in sync with isPreviewContext in server/utils/tenant-hosts.ts.
 function isPreviewContext(hostname: string) {
+  if (hostname === 'local.krabiclaw.com') return true
   if (hostname === 'workers.dev' || hostname.endsWith('.workers.dev')) return true
   if (/^(?:staging|preview)\.[^.]+\.[^.]+$/.test(hostname)) return true
   return false
@@ -71,35 +30,13 @@ function previewWorkerHeaders(slug: string): Record<string, string> {
   return { 'x-preview-tenant': slug, 'cache-control': 'no-store' }
 }
 
-// True when the test target is a real deployed Cloudflare Worker (preview.*,
-// staging.*, *.workers.dev) rather than a local dev server or local tunnel.
-// Server-side self-fetches to a same-zone URL (e.g. the CIMD test-client-metadata
-// fixture, fetched by our own auth server) fail on deployed Workers — reproduced
-// deterministically via direct curl to preview.krabiclaw.com/api/auth/oauth2/authorize,
-// not a timeout, not present when the same flow runs against a real public tunnel
-// in local dev. Root cause is Cloudflare zone/Workers-runtime behavior for a
-// Worker's own subrequest into its own route, not app logic — see
-// docs/local-mcp-harness.md.
-export function isDeployedWorkerTarget(baseURL: string): boolean {
-  return isPreviewContext(new URL(baseURL).hostname)
-}
-
-// A public quick tunnel (`cloudflared tunnel --url ...`) proxies exactly one
-// hostname straight to localhost:3000 — it has no wildcard/subdomain routing,
-// so prefixing "demo." or "pottery-house." onto it (like the platform-domain
-// subdomain convention below) would point at a hostname the tunnel never
-// proxies. Pass these through unchanged, same as preview/staging hosts.
-export function isQuickTunnelHost(hostname: string): boolean {
-  return hostname.endsWith('.trycloudflare.com')
-}
-
 export function tenantTestBaseUrl() {
   const base = new URL(testBaseUrl())
   if (['localhost', '127.0.0.1', '[::1]'].includes(base.hostname)) {
     base.hostname = 'demo.localhost'
     return base.toString().replace(/\/$/, '')
   }
-  if (isPreviewContext(base.hostname) || isQuickTunnelHost(base.hostname)) {
+  if (isPreviewContext(base.hostname)) {
     return base.toString().replace(/\/$/, '')
   }
   base.hostname = base.hostname.startsWith('demo.') ? base.hostname : `demo.${base.hostname}`
@@ -112,7 +49,7 @@ export function potteryHouseTestBaseUrl() {
     base.hostname = 'pottery-house.localhost'
     return base.toString().replace(/\/$/, '')
   }
-  if (isPreviewContext(base.hostname) || isQuickTunnelHost(base.hostname)) {
+  if (isPreviewContext(base.hostname)) {
     return base.toString().replace(/\/$/, '')
   }
   base.hostname = base.hostname.startsWith('pottery-house.') ? base.hostname : `pottery-house.${base.hostname}`
@@ -136,7 +73,7 @@ export function kikuzukiTestBaseUrl() {
     base.hostname = 'kikuzuki-krabi-thailand.localhost'
     return base.toString().replace(/\/$/, '')
   }
-  if (isPreviewContext(base.hostname) || isQuickTunnelHost(base.hostname)) {
+  if (isPreviewContext(base.hostname)) {
     return base.toString().replace(/\/$/, '')
   }
   base.hostname = base.hostname.startsWith('kikuzuki-krabi-thailand.')

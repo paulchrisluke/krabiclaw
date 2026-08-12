@@ -2132,6 +2132,7 @@ export const sites = sqliteTable("sites", {
 	status: text().default("active"),
 	plan: text().default("free"),
 	onboarding_status: text().default("pending"),
+	url_structure: text().default("location_subdirectories").notNull(),
 	vertical: text().default("restaurant").notNull(),
 	content_source: text(),
 	media_source: text(),
@@ -2156,6 +2157,7 @@ export const sites = sqliteTable("sites", {
 	check("sites_status_check", sql`${table.status} IN ('active', 'inactive', 'suspended')`),
 	check("sites_plan_check", sql`${table.plan} IN ('free', 'growth', 'managed', 'seo_accelerator')`),
 	check("sites_onboarding_status_check", sql`${table.onboarding_status} IN ('pending', 'active', 'failed')`),
+	check("sites_url_structure_check", sql`${table.url_structure} IN ('location_subdirectories', 'brand_pages')`),
 	check("sites_vertical_check", sql`${table.vertical} IN ('restaurant', 'experience', 'retail', 'wellness', 'service')`),
 	check("sites_content_source_check", sql`${table.content_source} IN ('google_maps', 'client_supplied', 'generated')`),
 	check("sites_media_source_check", sql`${table.media_source} IN ('client_photos', 'stock', 'mixed')`),
@@ -2300,15 +2302,6 @@ export const themes = sqliteTable("themes", {
 	status: text().default("active"),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
-});
-
-export const token_exchange_cache = sqliteTable("token_exchange_cache", {
-	code: text().primaryKey(),
-	state: text().default("pending").notNull(),
-	response_body: text().default("").notNull(),
-	http_status: integer().default(0).notNull(),
-	created_at: text().notNull(),
-	expires_at: text().notNull(),
 });
 
 export const user = sqliteTable("user", {

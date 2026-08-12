@@ -28,7 +28,7 @@ function contentType(headers: Headers): string {
 function cloudflareSquareSourceUrl(sourceUrl: string): string {
   return sourceUrl.replace(
     /\/[a-zA-Z0-9_-]+$/,
-    `/w=${FAVICON_SIZE},h=${FAVICON_SIZE},fit=pad,background=white,anim=false,f=webp`,
+    `/w=${FAVICON_SIZE},h=${FAVICON_SIZE},fit=pad,background=white,anim=false,f=jpeg`,
   )
 }
 
@@ -61,7 +61,7 @@ async function loadSource(env: ApiRecord, sourceUrl: string): Promise<{ bytes: A
   }
 
   const response = await fetch(cloudflareSquareSourceUrl(sourceUrl), {
-    headers: { accept: 'image/webp,image/*' },
+    headers: { accept: 'image/jpeg' },
     redirect: 'follow',
     signal: AbortSignal.timeout(15_000),
   })

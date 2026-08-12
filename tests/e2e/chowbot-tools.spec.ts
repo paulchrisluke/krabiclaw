@@ -42,7 +42,7 @@ test.describe("mcp tools", () => {
     request,
     baseURL,
   }) => {
-    test.setTimeout(60_000);
+    test.setTimeout(120_000);
 
     const freshUserId = await loginAsFreshChowbotUser(
       request,

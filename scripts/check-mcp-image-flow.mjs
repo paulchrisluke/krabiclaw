@@ -258,7 +258,7 @@ async function main() {
 
   await assertImageAssignmentTool(headers, 'set_media', {
     site_id: siteId,
-    target: { type: 'site_logo' },
+    target_type: 'site_logo',
     asset_ids: [assetId],
   }, (payload) => {
     expectValue('set_media site_logo returns asset id', payload?.asset_ids?.[0] === assetId, payload)
@@ -267,7 +267,7 @@ async function main() {
 
   await assertImageAssignmentTool(headers, 'set_media', {
     site_id: siteId,
-    target: { type: 'home_hero' },
+    target_type: 'home_hero',
     asset_ids: [assetId],
   }, (payload) => {
     expectValue('set_media home_hero updates page content', payload?.entity === 'page_content', payload)
@@ -276,7 +276,7 @@ async function main() {
 
   await assertImageAssignmentTool(headers, 'set_media', {
     site_id: siteId,
-    target: { type: 'about_story_image' },
+    target_type: 'about_story_image',
     asset_ids: [dataUrlImage?.assetId],
   }, (payload) => {
     expectValue('set_media about_story_image updates page content', payload?.id === 'about', payload)
@@ -285,7 +285,7 @@ async function main() {
 
   await assertImageAssignmentTool(headers, 'set_media', {
     site_id: siteId,
-    target: { type: 'home_story_image' },
+    target_type: 'home_story_image',
     asset_ids: [rawBase64Image?.assetId],
   }, (payload) => {
     expectValue('set_media home_story_image updates page content', payload?.id === 'home', payload)
@@ -294,7 +294,8 @@ async function main() {
 
   await assertImageAssignmentTool(headers, 'set_media', {
     site_id: siteId,
-    target: { type: 'location_hero', location_id: locationId },
+    target_type: 'location_hero',
+    location_id: locationId,
     asset_ids: [assetId],
   }, (payload) => {
     expectValue('set_media location_hero returns location id', payload?.id === locationId, payload)
@@ -303,7 +304,8 @@ async function main() {
 
   await assertImageAssignmentTool(headers, 'set_media', {
     site_id: siteId,
-    target: { type: 'menu_item_media', menu_item_id: itemId },
+    target_type: 'menu_item_media',
+    menu_item_id: itemId,
     asset_ids: [assetId, secondAssetId],
   }, (payload) => {
     expectValue('set_media menu_item_media returns item id', payload?.id === itemId, payload)
@@ -312,7 +314,8 @@ async function main() {
 
   await assertImageAssignmentTool(headers, 'set_media', {
     site_id: siteId,
-    target: { type: 'post_image', post_id: postId },
+    target_type: 'post_image',
+    post_id: postId,
     asset_ids: [assetId],
   }, (payload) => {
     expectValue('set_media post_image returns post id', payload?.id === postId, payload)
@@ -321,7 +324,8 @@ async function main() {
 
   await assertImageAssignmentTool(headers, 'set_media', {
     site_id: siteId,
-    target: { type: 'experience_media', experience_id: experienceId },
+    target_type: 'experience_media',
+    experience_id: experienceId,
     asset_ids: [assetId],
   }, (payload) => {
     expectValue('set_media experience_media returns experience id', payload?.id === experienceId, payload)

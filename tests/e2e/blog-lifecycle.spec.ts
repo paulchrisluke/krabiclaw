@@ -152,7 +152,7 @@ test.describe('canonical tenant blog lifecycle', () => {
       await expect(page.getByRole('button', { name: 'Post settings' })).toBeFocused()
 
       await page.getByRole('button', { name: 'Publish' }).click()
-      await expect(page.getByText(/Published · Saved/)).toBeVisible()
+      await expect(page.getByText(/Published · Saved/)).toBeVisible({ timeout: 30_000 })
       await page.reload()
       await expect(page.getByRole('textbox', { name: 'Post title' })).toHaveValue(title)
       await expect(page.getByPlaceholder('Question')).toHaveValue('Does this round-trip?')

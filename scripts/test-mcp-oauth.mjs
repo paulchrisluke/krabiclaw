@@ -14,8 +14,9 @@
  *   MCP_BEARER_TOKEN=eyJ... yarn test:mcp:prod # prod, full flow
  */
 
-import { execSync } from "child_process";
 import { createHash, randomBytes } from "crypto";
+import { request as httpsRequest } from "node:https";
+import { readHttpResponse } from "./utils/read-http-response.mjs";
 
 const BASE_URL = process.argv.includes("--base-url")
   ? process.argv[process.argv.indexOf("--base-url") + 1]
@@ -26,87 +27,68 @@ const TOKEN_URL = `${BASE_URL}/api/auth/oauth2/token`;
 const DEV_LOGIN_URL = `${BASE_URL}/api/dev/login`;
 const AUTHORIZE_URL = `${BASE_URL}/api/auth/oauth2/authorize`;
 const CONSENT_URL = `${BASE_URL}/api/auth/oauth2/consent`;
-const TEST_CLIENT_METADATA_URL = `${BASE_URL}/api/auth/oauth2/test-client-metadata`;
+const TEST_CLIENT_METADATA_URL = process.env.MCP_CIMD_CLIENT_URL ??
+  `${BASE_URL}/api/auth/oauth2/test-client-metadata`;
 
 const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? "2025-06-18";
+const REQUEST_TIMEOUT_MS = 15_000;
 
-const IS_STAGING = (() => {
-  try {
-    const h = new URL(BASE_URL).hostname;
-    return h === "localhost" || h === "127.0.0.1" || h === "staging.krabiclaw.com";
-  } catch { return false; }
-})();
+const USE_DEV_LOGIN = process.env.MCP_DEV_LOGIN === "1";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
-function curl(args) {
-  return execSync(`curl -s -4 ${args}`, { encoding: "utf8" });
+async function request(url, init = {}) {
+  const target = new URL(url);
+  if (target.protocol !== "https:") {
+    throw new Error(`MCP OAuth smoke requires HTTPS, received ${target.origin}`);
+  }
+
+  return await new Promise((resolve, reject) => {
+    const request = httpsRequest(target, {
+      method: init.method ?? "GET",
+      headers: init.headers,
+      family: 4,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    }, response => readHttpResponse(response, target.href).then(resolve, reject));
+
+    request.on("error", reject);
+    if (init.body !== undefined) request.write(init.body);
+    request.end();
+  });
+}
+
+function jsonBody(response, label) {
+  const contentType = response.headers["content-type"];
+  if (typeof contentType !== "string" || !contentType.startsWith("application/json")) {
+    throw new Error(`${label} returned non-JSON content-type: ${String(contentType)}`);
+  }
+  return JSON.parse(response.bodyText);
 }
 
 function get(url, headers = {}) {
-  const headerArgs = Object.entries(headers)
-    .map(([k, v]) => `-H ${JSON.stringify(`${k}: ${v}`)}`)
-    .join(" ");
-  const raw = curl(`-D - ${headerArgs} ${JSON.stringify(url)}`);
-  return parseResponse(raw);
+  return request(url, { headers });
 }
 
 function post(url, body, headers = {}) {
-  const headerArgs = Object.entries({
-    "Content-Type": "application/json",
-    ...headers,
-  })
-    .map(([k, v]) => `-H ${JSON.stringify(`${k}: ${v}`)}`)
-    .join(" ");
-  const bodyArg = `-d ${JSON.stringify(JSON.stringify(body))}`;
-  const raw = curl(
-    `-D - -X POST ${headerArgs} ${bodyArg} ${JSON.stringify(url)}`,
-  );
-  return parseResponse(raw);
+  return request(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
+    },
+    body: JSON.stringify(body),
+  });
 }
 
 function postForm(url, params, headers = {}) {
-  const formData = new URLSearchParams(params).toString();
-  const headerArgs = Object.entries({
-    "Content-Type": "application/x-www-form-urlencoded",
-    ...headers,
-  })
-    .map(([k, v]) => `-H ${JSON.stringify(`${k}: ${v}`)}`)
-    .join(" ");
-  const raw = curl(
-    `-D - -X POST ${headerArgs} -d ${JSON.stringify(formData)} ${JSON.stringify(url)}`,
-  );
-  return parseResponse(raw);
-}
-
-function parseResponse(raw) {
-  const sep = raw.indexOf("\r\n\r\n") !== -1 ? "\r\n\r\n" : "\n\n";
-  const blankIdx = raw.indexOf(sep);
-  const headerSection = blankIdx !== -1 ? raw.slice(0, blankIdx) : "";
-  const bodyText =
-    blankIdx !== -1 ? raw.slice(blankIdx + sep.length).trim() : raw.trim();
-  const statusMatch = headerSection.match(/HTTP\/[\d.]+ (\d+)/);
-  const status = statusMatch ? parseInt(statusMatch[1], 10) : 0;
-  const wwwAuth =
-    (headerSection.match(/www-authenticate:\s*(.+)/i) ?? [])[1]?.trim() ?? "";
-  const location =
-    (headerSection.match(/location:\s*(.+)/i) ?? [])[1]?.trim() ?? "";
-  const setCookie =
-    (headerSection.match(/set-cookie:\s*(.+)/i) ?? [])[1]?.trim() ?? "";
-  let body;
-  try {
-    body = JSON.parse(bodyText);
-  } catch {
-    body = bodyText;
-  }
-  return {
-    status,
-    body,
-    wwwAuthenticate: wwwAuth,
-    location,
-    setCookie,
-    headers: headerSection,
-  };
+  return request(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      ...headers,
+    },
+    body: new URLSearchParams(params).toString(),
+  });
 }
 
 function pkce() {
@@ -161,9 +143,17 @@ async function main() {
 
   // 1. Discovery
   section("Discovery");
-  const { body: prJson } = get(
+  const protectedResourceResponse = await get(
     `${BASE_URL}/.well-known/oauth-protected-resource`,
   );
+  const prJson = jsonBody(
+    protectedResourceResponse,
+    "OAuth protected-resource discovery",
+  );
+  if (protectedResourceResponse.status !== 200) {
+    fail("oauth-protected-resource endpoint failed", prJson);
+    return;
+  }
   const advertisedResource = prJson.resource;
   if (advertisedResource === `${BASE_URL}/api/mcp`) {
     pass(`protected resource = ${advertisedResource}`);
@@ -175,9 +165,17 @@ async function main() {
     pass("oauth-protected-resource issuer matches");
   else fail("oauth-protected-resource issuer mismatch", prJson);
 
-  const { body: asJson } = get(
+  const authorizationServerResponse = await get(
     `${BASE_URL}/.well-known/oauth-authorization-server`,
   );
+  const asJson = jsonBody(
+    authorizationServerResponse,
+    "OAuth authorization-server discovery",
+  );
+  if (authorizationServerResponse.status !== 200) {
+    fail("oauth-authorization-server endpoint failed", asJson);
+    return;
+  }
   if (asJson.issuer === BASE_URL) pass(`well-known issuer = ${asJson.issuer}`);
   else fail("well-known issuer mismatch", asJson.issuer);
   if (asJson.code_challenge_methods_supported?.includes("S256"))
@@ -186,7 +184,7 @@ async function main() {
 
   // 2. Unauthenticated 401
   section("Unauthenticated request");
-  const unauth = post(MCP_URL, {
+  const unauth = await post(MCP_URL, {
     jsonrpc: "2.0",
     id: 1,
     method: "tools/list",
@@ -194,8 +192,8 @@ async function main() {
   });
   if (unauth.status === 401) pass("401 without Bearer token");
   else fail("Expected 401 without token", unauth.status);
-  const wwwAuth = unauth.wwwAuthenticate ?? "";
-  if (wwwAuth.includes("resource_metadata"))
+  const wwwAuth = unauth.headers["www-authenticate"];
+  if (typeof wwwAuth === "string" && wwwAuth.includes("resource_metadata"))
     pass("WWW-Authenticate has resource_metadata");
   else fail("WWW-Authenticate missing resource_metadata", wwwAuth);
 
@@ -205,37 +203,37 @@ async function main() {
   if (accessToken) {
     section("Bearer token (from env)");
     pass("Using MCP_BEARER_TOKEN from environment");
-  } else if (IS_STAGING) {
-    // Full headless PKCE flow via dev-login
-    section("Dev login (staging)");
+  } else if (USE_DEV_LOGIN) {
+    section("Dev login");
     const devSecret = process.env.E2E_DEV_ROUTE_SECRET;
     if (!devSecret) {
       fail("E2E_DEV_ROUTE_SECRET not set — required for staging headless flow");
       return;
     }
 
-    const loginResp = get(DEV_LOGIN_URL, { "x-dev-route-secret": devSecret });
+    const loginResp = await get(DEV_LOGIN_URL, { "x-dev-route-secret": devSecret });
     // dev login sets a session cookie and redirects to /api/post-login
-    const setCookieMatches =
-      loginResp.headers.match(/set-cookie:\s*([^\r\n]+)/gi) || [];
-    const rawCookie =
-      loginResp.setCookie ||
-      (setCookieMatches[0]
-        ? setCookieMatches[0].replace(/^set-cookie:\s*/i, "")
-        : "");
-    const sessionCookie = rawCookie.split(";")[0];
-    if (sessionCookie)
+    const setCookies = loginResp.headers["set-cookie"];
+    if (loginResp.status !== 302 || !Array.isArray(setCookies) || setCookies.length !== 1) {
+      fail("Dev login did not return one session cookie", {
+        status: loginResp.status,
+        setCookies,
+      });
+      return;
+    }
+    const sessionCookie = setCookies[0].split(";", 1)[0];
+    if (sessionCookie.includes("="))
       pass(`Got session cookie (${sessionCookie.split("=")[0]})`);
     else {
-      fail("Dev login did not return session cookie", loginResp.headers);
+      fail("Dev login returned a malformed session cookie", setCookies[0]);
       return;
     }
 
-    section("CIMD + PKCE auth flow (staging)");
+    section("CIMD + PKCE auth flow");
     const { verifier, challenge } = pkce();
     const state = randomBytes(16).toString("hex");
-    const redirectUri = `${BASE_URL}/oauth/test-callback`;
-    const testClientId = `${TEST_CLIENT_METADATA_URL}?nonce=${Date.now()}`;
+    const testClientId = TEST_CLIENT_METADATA_URL;
+    const redirectUri = new URL("/oauth/test-callback", testClientId).toString();
     pass(`Using CIMD client: ${testClientId}`);
 
     // Authorization request (redirects to consent page)
@@ -248,46 +246,51 @@ async function main() {
       code_challenge: challenge,
       code_challenge_method: "S256",
       resource: advertisedResource,
+      prompt: "consent",
     });
-    const authResp = get(`${AUTHORIZE_URL}?${authParams}`, {
+    const authResp = await get(`${AUTHORIZE_URL}?${authParams}`, {
       Cookie: sessionCookie,
     });
     // Should redirect to consent page
-    const consentLocation = authResp.location;
-    if (!consentLocation) {
-      fail("Auth did not redirect to consent", authResp.status);
+    const consentLocation = authResp.headers.location;
+    if (authResp.status !== 302 || typeof consentLocation !== "string") {
+      fail("Auth did not redirect to consent", {
+        status: authResp.status,
+        body: authResp.bodyText,
+      });
+      return;
+    }
+
+    // Extract oauth_query from consent redirect
+    const consentUrl = new URL(consentLocation, BASE_URL);
+    if (consentUrl.pathname !== "/oauth/consent") {
+      fail("Auth redirected to an unexpected route", consentUrl.toString());
       return;
     }
     pass("Auth request redirected to consent page");
-
-    // Extract oauth_query from consent redirect
-    const consentUrl = new URL(
-      consentLocation.startsWith("http")
-        ? consentLocation
-        : `${BASE_URL}${consentLocation}`,
-    );
     const oauthQuery = consentUrl.search.slice(1); // everything after ?
 
     // POST consent accept
-    const consentResp = post(
+    const consentResp = await post(
       CONSENT_URL,
       { accept: true, oauth_query: oauthQuery },
       { Cookie: sessionCookie, Origin: BASE_URL },
     );
-    if (consentResp.status !== 200 || !consentResp.body?.url) {
-      fail("Consent failed", consentResp.body);
+    const consentBody = jsonBody(consentResp, "OAuth consent");
+    if (consentResp.status !== 200 || typeof consentBody.url !== "string") {
+      fail("Consent failed", consentBody);
       return;
     }
-    const callbackUrl = new URL(consentResp.body.url);
+    const callbackUrl = new URL(consentBody.url);
     const code = callbackUrl.searchParams.get("code");
     if (!code) {
-      fail("No code in consent callback", consentResp.body.url);
+      fail("No code in consent callback", consentBody.url);
       return;
     }
     pass(`Got authorization code: ${code.slice(0, 8)}...`);
 
     // Exchange code for token
-    const tokenResp = postForm(TOKEN_URL, {
+    const tokenResp = await postForm(TOKEN_URL, {
       grant_type: "authorization_code",
       code,
       redirect_uri: redirectUri,
@@ -295,12 +298,13 @@ async function main() {
       code_verifier: verifier,
       resource: advertisedResource,
     });
-    if (tokenResp.status !== 200 || !tokenResp.body.access_token) {
-      fail("Token exchange failed", tokenResp.body);
+    const tokenBody = jsonBody(tokenResp, "OAuth token exchange");
+    if (tokenResp.status !== 200 || typeof tokenBody.access_token !== "string") {
+      fail("Token exchange failed", tokenBody);
       return;
     }
-    accessToken = tokenResp.body.access_token;
-    pass(`Got JWT access token (type=${tokenResp.body.token_type})`);
+    accessToken = tokenBody.access_token;
+    pass(`Got JWT access token (type=${tokenBody.token_type})`);
 
     const accessTokenPayload = decodeJwtPayload(accessToken);
     if (accessTokenPayload && hasAudience(accessTokenPayload, advertisedResource)) {
@@ -315,10 +319,10 @@ async function main() {
       fail("access token missing tenant scope", accessTokenPayload);
       return;
     }
-    if (typeof tokenResp.body.id_token === "string") {
+    if (typeof tokenBody.id_token === "string") {
       pass("token response includes id_token for reauthorization context");
     } else {
-      fail("token response missing id_token", tokenResp.body);
+      fail("token response missing id_token", tokenBody);
       return;
     }
   } else {
@@ -347,7 +351,7 @@ async function main() {
 
   // 4. MCP initialize
   section("MCP initialize");
-  const initResp = post(
+  const initResp = await post(
     MCP_URL,
     {
       jsonrpc: "2.0",
@@ -364,16 +368,18 @@ async function main() {
       "MCP-Protocol-Version": MCP_VERSION,
     },
   );
-  if (initResp.status === 200 && initResp.body?.result?.protocolVersion) {
+  const initBody = jsonBody(initResp, "MCP initialize");
+  if (initResp.status === 200 && initBody?.result?.protocolVersion === MCP_VERSION) {
     pass(
-      `initialize OK — server protocolVersion=${initResp.body.result.protocolVersion}`,
+      `initialize OK — server protocolVersion=${initBody.result.protocolVersion}`,
     );
   } else {
-    fail("initialize failed", initResp.body);
+    fail("initialize failed", initBody);
+    return;
   }
 
   // 5. notifications/initialized
-  const notifResp = post(
+  const notifResp = await post(
     MCP_URL,
     { jsonrpc: "2.0", method: "notifications/initialized" },
     {
@@ -387,7 +393,7 @@ async function main() {
 
   // 6. tools/list
   section("MCP tools/list");
-  const listResp = post(
+  const listResp = await post(
     MCP_URL,
     { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} },
     {
@@ -395,34 +401,43 @@ async function main() {
       "MCP-Protocol-Version": MCP_VERSION,
     },
   );
-  if (listResp.status === 200 && Array.isArray(listResp.body?.result?.tools)) {
-    pass(`tools/list returned ${listResp.body.result.tools.length} tools`);
-    const names = listResp.body.result.tools.map((t) => t.name);
-    if (names.includes("list_sites")) pass("list_sites tool present");
-    else fail("list_sites missing from tools/list", names.slice(0, 5));
+  const listBody = jsonBody(listResp, "MCP tools/list");
+  if (listResp.status === 200 && Array.isArray(listBody?.result?.tools)) {
+    pass(`tools/list returned ${listBody.result.tools.length} tools`);
+    const names = listBody.result.tools.map((tool) => tool.name);
+    for (const requiredTool of ["get_current_user", "list_sites"]) {
+      if (names.includes(requiredTool)) pass(`${requiredTool} tool present`);
+      else fail(`${requiredTool} missing from tools/list`, names);
+    }
   } else {
-    fail("tools/list failed", listResp.body);
+    fail("tools/list failed", listBody);
   }
 
-  // 7. tools/call list_sites
-  section("MCP tools/call list_sites");
-  const callResp = post(
-    MCP_URL,
-    {
-      jsonrpc: "2.0",
-      id: 3,
-      method: "tools/call",
-      params: { name: "list_sites", arguments: {} },
-    },
-    {
-      Authorization: `Bearer ${accessToken}`,
-      "MCP-Protocol-Version": MCP_VERSION,
-    },
-  );
-  if (callResp.status === 200 && !callResp.body?.result?.isError) {
-    pass("list_sites call succeeded");
-  } else {
-    fail("list_sites call failed", callResp.body);
+  // 7. Authenticated identity and tenant tool calls
+  for (const [id, toolName] of [
+    [3, "get_current_user"],
+    [4, "list_sites"],
+  ]) {
+    section(`MCP tools/call ${toolName}`);
+    const callResp = await post(
+      MCP_URL,
+      {
+        jsonrpc: "2.0",
+        id,
+        method: "tools/call",
+        params: { name: toolName, arguments: {} },
+      },
+      {
+        Authorization: `Bearer ${accessToken}`,
+        "MCP-Protocol-Version": MCP_VERSION,
+      },
+    );
+    const callBody = jsonBody(callResp, `MCP tools/call ${toolName}`);
+    if (callResp.status === 200 && !callBody?.result?.isError) {
+      pass(`${toolName} call succeeded`);
+    } else {
+      fail(`${toolName} call failed`, callBody);
+    }
   }
 
   console.log(

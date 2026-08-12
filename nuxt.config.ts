@@ -240,7 +240,7 @@ export default defineNuxtConfig({
       watch: {
         ignored: ['**/.worktrees/**', '**/.claude/**', '**/.wrangler/**', '**/.data/**', '**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**']
       },
-      allowedHosts: ['.trycloudflare.com', 'local.krabiclaw.com', '.krabiclaw.com']
+      allowedHosts: ['.krabiclaw.com']
     },
   },
 
@@ -477,9 +477,6 @@ export default defineNuxtConfig({
       // Force deterministic binding discovery in CI/dev.
       configPath: './wrangler.toml',
       persistDir: '.wrangler/state/v3',
-      // The MCP tunnel harness supplies one generated, untracked env file so
-      // its public origin never requires mutating the developer's .dev.vars.
-      envFiles: process.env.NUXT_CF_ENV_FILE ? [process.env.NUXT_CF_ENV_FILE] : undefined,
       silent: true,
     },
     devServer: {

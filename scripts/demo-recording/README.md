@@ -65,7 +65,7 @@ telemetry gate documented in
 yarn test:mcp:chatgpt
 ```
 
-That command creates its own quick tunnel, runs the automated API/Playwright
+That command starts the existing local tunnel, runs the automated API/Playwright
 prerequisites, prints the exact `/api/mcp` URL to use for `devkrabiclaw`, and
 then pauses while you use a normal ChatGPT browser and verifies each expected
 tool call through KrabiClaw telemetry before stopping the tunnel.

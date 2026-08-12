@@ -140,7 +140,6 @@ Check:
 - `BETTER_AUTH_URL`
 - `NUXT_PUBLIC_PLATFORM_DOMAIN`
 - `MCP_BASE_URL`
-- `tunnel.yml` hostname
 - ChatGPT connector URL used during setup
 
 All of them must point at the same origin for the current harness session.

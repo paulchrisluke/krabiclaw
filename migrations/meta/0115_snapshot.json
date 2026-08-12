@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "30d420b5-b776-4771-87d3-d187f630fc45",
-  "prevId": "85b35295-194a-4207-abd0-d4fd86f02b87",
+  "id": "53fdc8e6-bc0b-4b1f-af6a-40ddb4243c35",
+  "prevId": "30d420b5-b776-4771-87d3-d187f630fc45",
   "tables": {
     "account": {
       "name": "account",
@@ -18974,61 +18974,6 @@
           "isUnique": true
         }
       },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "token_exchange_cache": {
-      "name": "token_exchange_cache",
-      "columns": {
-        "code": {
-          "name": "code",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "state": {
-          "name": "state",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'pending'"
-        },
-        "response_body": {
-          "name": "response_body",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "''"
-        },
-        "http_status": {
-          "name": "http_status",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},

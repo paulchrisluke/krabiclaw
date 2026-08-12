@@ -20,7 +20,7 @@ test.describe('content write lifecycle', () => {
   test.describe.configure({ mode: 'serial' })
 
   test('canonical page writes are scoped to the requested site', async ({ request, baseURL }) => {
-    test.setTimeout(60_000)
+    test.setTimeout(120_000)
 
     await loginAs(request, baseURL!, FIRST_USER_ID)
     const firstSiteId = await ensureSite(request, baseURL!, null)

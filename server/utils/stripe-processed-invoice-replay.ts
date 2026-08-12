@@ -39,11 +39,6 @@ export interface ParsedStripeProcessedInvoiceReplayRequest {
   approvalToken?: string
 }
 
-export interface StripeProcessedInvoiceReplaySource {
-  sourceSha: string
-  workerVersionId: string
-}
-
 interface ReplayRepair {
   basePlanPriceId: string
   periodStart: string
@@ -124,7 +119,6 @@ export interface StripeProcessedInvoiceReplayPlan {
   kind: 'stripe-processed-invoice-replay'
   actor: string
   input: StripeProcessedInvoiceReplayInput
-  source: StripeProcessedInvoiceReplaySource
   reconciliation: {
     reportSha256: string
     status: OrganizationSubscriptionReconciliationReport['status']
@@ -412,7 +406,6 @@ function validateProviderEvidence(
   report: OrganizationSubscriptionReconciliationReport,
   input: StripeProcessedInvoiceReplayInput,
   actor: string,
-  source: StripeProcessedInvoiceReplaySource,
   retained: RetainedInvoicePaidEvent,
   organization: OrganizationBillingReplayRow,
 ): ReplayRepair {
@@ -424,8 +417,6 @@ function validateProviderEvidence(
   if (
     !/^[0-9a-f]{64}$/u.test(report.reportSha256)
     || report.operator.actor !== actor
-    || report.source.sourceSha !== source.sourceSha
-    || report.source.workerVersionId !== source.workerVersionId
     || report.request.organizationId !== input.organizationId
     || report.request.providerMode !== input.providerMode
     || report.request.expectedStripeAccountId !== input.expectedStripeAccountId
@@ -505,7 +496,6 @@ async function readReplayEvidence(
   input: StripeProcessedInvoiceReplayInput,
   actor: string,
   report: OrganizationSubscriptionReconciliationReport,
-  source: StripeProcessedInvoiceReplaySource,
   now: Date,
 ): Promise<ReplayEvidence> {
   const eventRow = await readEventRow(db, input.stripeEventId)
@@ -529,7 +519,7 @@ async function readReplayEvidence(
   ) {
     fail('local_evidence_mismatch', 409, 'Local invoice or organization billing evidence does not match the retained event.')
   }
-  const repair = validateProviderEvidence(report, input, actor, source, retained, organization)
+  const repair = validateProviderEvidence(report, input, actor, retained, organization)
   if (invoice.base_plan_price_id !== null) {
     if (
       invoice.base_plan_price_id !== repair.basePlanPriceId
@@ -595,10 +585,8 @@ async function replayStateDigest(
   evidence: ReplayEvidence,
   input: StripeProcessedInvoiceReplayInput,
   report: OrganizationSubscriptionReconciliationReport,
-  source: StripeProcessedInvoiceReplaySource,
 ): Promise<string> {
   return await sha256CanonicalJson({
-    source,
     request: input,
     reconciliationReportSha256: report.reportSha256,
     event: {
@@ -626,12 +614,10 @@ async function replayStateDigest(
 function approvalRequest(
   input: StripeProcessedInvoiceReplayInput,
   report: OrganizationSubscriptionReconciliationReport,
-  source: StripeProcessedInvoiceReplaySource,
   evidence: ReplayEvidence,
 ) {
   return {
     input,
-    source,
     reconciliationReportSha256: report.reportSha256,
     payloadSha256: evidence.payloadSha256,
     repair: evidence.repair,
@@ -663,10 +649,9 @@ export async function previewStripeProcessedInvoiceReplay(
   input: StripeProcessedInvoiceReplayInput,
   actor: string,
   report: OrganizationSubscriptionReconciliationReport,
-  source: StripeProcessedInvoiceReplaySource,
   now = new Date(),
 ): Promise<StripeProcessedInvoiceReplayPreviewResult> {
-  const evidence = await readReplayEvidence(db, input, actor, report, source, now)
+  const evidence = await readReplayEvidence(db, input, actor, report, now)
   if (replayIsAlreadyApplied(evidence)) return alreadyAppliedResult(evidence)
   if (!processedStateIsClean(evidence.eventRow)) {
     if (replayIsAlreadyQueued(evidence.eventRow)) {
@@ -674,14 +659,14 @@ export async function previewStripeProcessedInvoiceReplay(
     }
     fail('invalid_state', 409, 'Stripe invoice event is not a clean processed replay candidate.')
   }
-  const expectedStateSha256 = await replayStateDigest(evidence, input, report, source)
+  const expectedStateSha256 = await replayStateDigest(evidence, input, report)
   const expiresAt = new Date(now.getTime() + APPROVAL_WINDOW_MS).toISOString()
   let approvalToken: string
   try {
     approvalToken = await createOperatorApprovalToken(secret, {
       purpose: APPROVAL_PURPOSE,
       actor,
-      request: approvalRequest(input, report, source, evidence),
+      request: approvalRequest(input, report, evidence),
       expectedStateSha256,
       expiresAt,
     })
@@ -693,7 +678,6 @@ export async function previewStripeProcessedInvoiceReplay(
     kind: 'stripe-processed-invoice-replay',
     actor,
     input,
-    source,
     reconciliation: {
       reportSha256: report.reportSha256,
       status: report.status,
@@ -746,7 +730,6 @@ export async function applyStripeProcessedInvoiceReplay(
   input: StripeProcessedInvoiceReplayInput,
   actor: string,
   report: OrganizationSubscriptionReconciliationReport,
-  source: StripeProcessedInvoiceReplaySource,
   expectedStateSha256: string,
   approvalToken: string,
   now = new Date(),
@@ -754,7 +737,7 @@ export async function applyStripeProcessedInvoiceReplay(
   if (!/^[0-9a-f]{64}$/u.test(expectedStateSha256)) {
     fail('invalid_request', 400, 'expectedStateSha256 must be a lowercase SHA-256 digest.')
   }
-  const evidence = await readReplayEvidence(db, input, actor, report, source, now)
+  const evidence = await readReplayEvidence(db, input, actor, report, now)
   if (replayIsAlreadyApplied(evidence)) return alreadyAppliedResult(evidence)
   if (replayIsAlreadyQueued(evidence.eventRow)) {
     return {
@@ -767,7 +750,7 @@ export async function applyStripeProcessedInvoiceReplay(
   if (!processedStateIsClean(evidence.eventRow)) {
     fail('invalid_state', 409, 'Stripe invoice event is not a clean processed replay candidate.')
   }
-  const currentStateSha256 = await replayStateDigest(evidence, input, report, source)
+  const currentStateSha256 = await replayStateDigest(evidence, input, report)
   if (currentStateSha256 !== expectedStateSha256) {
     fail('stale_state', 409, 'Processed invoice replay state changed after review.')
   }
@@ -775,7 +758,7 @@ export async function applyStripeProcessedInvoiceReplay(
     await verifyOperatorApprovalToken(secret, approvalToken, {
       purpose: APPROVAL_PURPOSE,
       actor,
-      request: approvalRequest(input, report, source, evidence),
+      request: approvalRequest(input, report, evidence),
       expectedStateSha256,
       now,
     })

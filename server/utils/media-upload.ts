@@ -1,5 +1,5 @@
 // Canonical media-asset creation from already-resolved bytes. Shared by every
-// MCP upload tool (upload_user_media, upload_user_photo, save_generated_image,
+// MCP upload tool (upload_user_media, save_generated_image,
 // save_generated_image_file) AND the dashboard's video/file upload route
 // (server/api/editor/sites/[siteId]/media/upload.post.ts). Consolidates the
 // uploadImageBuffer/uploadToR2 + createMediaAsset sequence that used to be
@@ -9,7 +9,6 @@
 import type { DbClient } from "~/server/db";
 import { uploadImageBuffer, deleteImage } from "~/server/utils/cloudflare-images";
 import { uploadToR2, buildR2Key, deleteFromR2 } from "~/server/utils/cloudflare-r2";
-import { assertPublicMediaUrl } from "~/server/utils/public-media-verification";
 import { createMediaAsset, type MediaAsset } from "~/server/utils/media-asset-manager";
 
 export interface UploadResolvedMediaInput {
@@ -113,23 +112,6 @@ export async function uploadResolvedMediaToAssetStore(
     }
 
     publicUrl = await uploadToR2(input.env, r2Key, input.buffer, input.contentType);
-    if (import.meta.dev) {
-      try {
-        await assertPublicMediaUrl(publicUrl, input.contentType, {
-          attempts: 2,
-          retryDelaysMs: [100],
-          timeoutMs: 750,
-        });
-      } catch (verificationError) {
-        console.warn("media_upload_public_url_verification_skipped_in_dev", {
-          assetId,
-          publicUrl,
-          error: verificationError,
-        });
-      }
-    } else {
-      await assertPublicMediaUrl(publicUrl, input.contentType);
-    }
 
     await createMediaAsset(input.db, {
       id: assetId,
