@@ -144,6 +144,7 @@ jobs:
       BETTER_AUTH_URL: https://staging.krabiclaw.com
       E2E_ALLOW_DEV_ROUTES: "true"
       E2E_DEV_ROUTE_SECRET: ${{ secrets.E2E_DEV_ROUTE_SECRET_STAGING }}
+      MCP_CIMD_CLIENT_URL: https://krabiclaw-preview.paulchrisluke.workers.dev/api/auth/oauth2/test-client-metadata
       PLAYWRIGHT_PREVIEW_URL: https://staging.krabiclaw.com
       PLAYWRIGHT_WORKERS: "1"
     steps:

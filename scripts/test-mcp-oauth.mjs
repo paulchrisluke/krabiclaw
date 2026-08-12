@@ -27,7 +27,7 @@ const DEV_LOGIN_URL = `${BASE_URL}/api/dev/login`;
 const AUTHORIZE_URL = `${BASE_URL}/api/auth/oauth2/authorize`;
 const CONSENT_URL = `${BASE_URL}/api/auth/oauth2/consent`;
 const TEST_CLIENT_METADATA_URL = process.env.MCP_CIMD_CLIENT_URL ??
-  "https://krabiclaw-preview.paulchrisluke.workers.dev/api/auth/oauth2/test-client-metadata";
+  `${BASE_URL}/api/auth/oauth2/test-client-metadata`;
 
 const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? "2025-06-18";
 
