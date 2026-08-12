@@ -61,6 +61,10 @@ test('each environment uses one normal Worker deploy followed by its browser gat
     stepRun(jobs['e2e-representative']!, 'Deploy preview Worker'),
     'npx wrangler deploy --env preview --old-asset-ttl 600 --strict',
   )
+  assert.equal(
+    stepRun(jobs['e2e-representative']!, 'Run required representative browser coverage'),
+    'yarn test:e2e:representative',
+  )
 
   const stagingMigrations = stepRun(jobs['e2e-staging']!, 'Apply staging migrations')
   assert.equal(stagingMigrations, 'npx wrangler d1 migrations apply DB --env staging --remote')
