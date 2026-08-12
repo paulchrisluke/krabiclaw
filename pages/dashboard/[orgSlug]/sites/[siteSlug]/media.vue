@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Media library">
         <template #leading>
-          <DashboardSidebarCollapseButton />
+          <DashboardNavbarLeading />
         </template>
       </UDashboardNavbar>
     </template>

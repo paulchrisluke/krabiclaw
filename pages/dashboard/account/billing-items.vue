@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Billing Items">
         <template #leading>
-          <DashboardSidebarCollapseButton />
+          <DashboardNavbarLeading back-to-organization />
         </template>
       </UDashboardNavbar>
     </template>

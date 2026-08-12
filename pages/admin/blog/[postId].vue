@@ -12,8 +12,8 @@
     :initial-post="postResource?.post ?? null"
     defer-load
     title="Edit Post"
-    back-url="/admin"
-    back-label="Admin"
+    back-url="/admin/blog"
+    back-label="Posts"
     :is-edit="true"
   />
 </template>

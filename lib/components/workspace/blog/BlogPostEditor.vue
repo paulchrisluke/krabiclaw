@@ -1,7 +1,7 @@
 <template>
   <div class="fixed inset-0 z-50 flex min-h-0 flex-col bg-default text-default">
     <header class="sticky top-0 z-30 flex min-h-14 shrink-0 items-center gap-2 border-b border-default bg-elevated px-2 pb-[env(safe-area-inset-top)] sm:px-4">
-      <UButton icon="i-lucide-arrow-left" color="neutral" variant="ghost" size="sm" @click="goBack">Posts</UButton>
+      <UButton icon="i-lucide-chevron-left" color="neutral" variant="ghost" size="sm" @click="goBack">{{ backLabel }}</UButton>
       <p class="min-w-0 flex-1 truncate text-xs text-muted sm:text-sm">
         {{ statusLabel }} · <span :class="saveState === 'failed' || saveState === 'conflict' ? 'text-error' : ''">{{ saveLabel }}</span>
       </p>
@@ -124,8 +124,8 @@ import type { BlogPostRepository, BlogPost, BlogEditorBlock, PlatformBlogUpdateI
 import { generatedExcerpt, initialBlogEditorBlocks, normalizeBlogSlug, resolveBlogPublicPath, resolveBlogSeo, SerializedSnapshotQueue } from '~/utils/blog-editor'
 import { getErrorMessage } from '~/utils/errors'
 
-const props = withDefaults(defineProps<{ repository: BlogPostRepository; initialPost?: BlogPost | null; deferLoad?: boolean; postId?: string; siteId?: string; isEdit?: boolean; backUrl?: string; mediaPickerComponent?: Component; freeTextCategory?: boolean }>(), {
-  initialPost: null, deferLoad: false, postId: undefined, siteId: '', isEdit: false, backUrl: '/admin', mediaPickerComponent: undefined, freeTextCategory: false,
+const props = withDefaults(defineProps<{ repository: BlogPostRepository; initialPost?: BlogPost | null; deferLoad?: boolean; postId?: string; siteId?: string; isEdit?: boolean; backUrl?: string; backLabel?: string; mediaPickerComponent?: Component; freeTextCategory?: boolean }>(), {
+  initialPost: null, deferLoad: false, postId: undefined, siteId: '', isEdit: false, backUrl: '/admin', backLabel: 'Posts', mediaPickerComponent: undefined, freeTextCategory: false,
 })
 const route = useRoute()
 const postId = computed(() => props.postId || String(route.params.postId || ''))

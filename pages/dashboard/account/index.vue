@@ -3,14 +3,14 @@
     <template #header>
       <UDashboardNavbar title="Account">
         <template #leading>
-          <DashboardSidebarCollapseButton />
+          <DashboardNavbarLeading back-to-organization />
         </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
       <div class="max-w-4xl space-y-4">
-        <UCard v-for="item in items" :key="item.to" variant="soft">
+        <UCard v-for="item in items" :key="item.label" variant="soft">
           <NuxtLink :to="item.to" class="flex items-center justify-between gap-4">
             <div class="flex items-center gap-4">
               <div class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
@@ -33,9 +33,14 @@
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Account | KrabiClaw', robots: 'noindex, nofollow' })
 
-const items = [
-  { label: 'Profile', description: 'Your name, avatar, and personal account details.', icon: 'i-lucide-user', to: '/dashboard/account/profile' },
-  { label: 'Authentication', description: 'Sign-in methods: email, Google, WhatsApp.', icon: 'i-lucide-shield', to: '/dashboard/account/authentication' },
-  { label: 'Billing Items', description: 'Personal-account billing and payment history.', icon: 'i-lucide-receipt', to: '/dashboard/account/billing-items' },
-]
+const route = useRoute()
+const organizationQuery = computed(() => ({
+  ...(typeof route.query.organization === 'string' ? { organization: route.query.organization } : {}),
+  ...(typeof route.query.organizationName === 'string' ? { organizationName: route.query.organizationName } : {}),
+}))
+const items = computed(() => [
+  { label: 'Profile', description: 'Your name, avatar, and personal account details.', icon: 'i-lucide-user', to: { path: '/dashboard/account/profile', query: organizationQuery.value } },
+  { label: 'Authentication', description: 'Sign-in methods: email, Google, WhatsApp.', icon: 'i-lucide-shield', to: { path: '/dashboard/account/authentication', query: organizationQuery.value } },
+  { label: 'Billing Items', description: 'Personal-account billing and payment history.', icon: 'i-lucide-receipt', to: { path: '/dashboard/account/billing-items', query: organizationQuery.value } },
+])
 </script>

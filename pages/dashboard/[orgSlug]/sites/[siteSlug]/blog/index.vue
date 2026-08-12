@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Blog Posts">
         <template #leading>
-          <DashboardSidebarCollapseButton />
+          <DashboardNavbarLeading />
         </template>
 
         <template #right>

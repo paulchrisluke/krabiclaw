@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Q&A">
         <template #leading>
-          <DashboardSidebarCollapseButton />
+          <DashboardNavbarLeading />
         </template>
         <template #trailing>
           <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="loading" @click="loadQa">Refresh</UButton>

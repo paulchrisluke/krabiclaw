@@ -3,10 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Edit Documentation">
         <template #leading>
-          <DashboardSidebarCollapseButton />
-        </template>
-        <template #trailing>
-          <UButton to="/admin/docs" color="neutral" variant="soft" icon="i-lucide-arrow-left" size="sm">Docs</UButton>
+          <DashboardNavbarLeading detail-to="/admin/docs" detail-label="Docs" />
         </template>
       </UDashboardNavbar>
     </template>

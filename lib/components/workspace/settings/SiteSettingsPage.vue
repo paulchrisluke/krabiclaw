@@ -2,7 +2,7 @@
   <UDashboardPanel id="site-settings">
     <template #header>
       <UDashboardNavbar title="Site Settings">
-        <template #leading><DashboardSidebarCollapseButton /></template>
+        <template #leading><DashboardNavbarLeading /></template>
       </UDashboardNavbar>
     </template>
 

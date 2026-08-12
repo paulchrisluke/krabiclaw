@@ -2,7 +2,7 @@
   <UDashboardPanel id="site-overview">
     <template #header>
       <UDashboardNavbar :title="siteName">
-        <template #leading><DashboardSidebarCollapseButton /></template>
+        <template #leading><DashboardNavbarLeading /></template>
       </UDashboardNavbar>
     </template>
 

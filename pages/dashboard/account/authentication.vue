@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Authentication">
         <template #leading>
-          <DashboardSidebarCollapseButton />
+          <DashboardNavbarLeading back-to-organization />
         </template>
       </UDashboardNavbar>
     </template>
@@ -63,7 +63,7 @@
                 </div>
                 <div class="flex items-center gap-4">
                   <UBadge v-if="sessionData?.user?.phoneNumberVerified" color="success" variant="subtle" size="sm">Verified</UBadge>
-                  <UButton color="neutral" variant="soft" size="sm" to="/dashboard/account/profile">
+                  <UButton color="neutral" variant="soft" size="sm" :to="profileTo">
                     {{ sessionData?.user?.phoneNumber ? 'Manage' : 'Add' }}
                   </UButton>
                 </div>
@@ -85,6 +85,14 @@ definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Authentication | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
 const { data: sessionData } = useAuth()
+const route = useRoute()
+const profileTo = computed(() => ({
+  path: '/dashboard/account/profile',
+  query: {
+    ...(typeof route.query.organization === 'string' ? { organization: route.query.organization } : {}),
+    ...(typeof route.query.organizationName === 'string' ? { organizationName: route.query.organizationName } : {}),
+  },
+}))
 
 // listAccounts() doesn't expose a per-account email (only providerId/accountId/
 // scopes) — there's no Google-specific email to show, so "connected" renders a

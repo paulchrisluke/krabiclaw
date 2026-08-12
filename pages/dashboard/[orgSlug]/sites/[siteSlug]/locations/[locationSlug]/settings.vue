@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Location Settings">
         <template #leading>
-          <DashboardSidebarCollapseButton />
+          <DashboardNavbarLeading />
         </template>
       </UDashboardNavbar>
     </template>

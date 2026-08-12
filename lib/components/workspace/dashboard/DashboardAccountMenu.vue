@@ -80,8 +80,19 @@ defineProps<{ collapsed?: boolean }>()
 
 const { data: sessionData, signOut } = useAuth()
 const route = useRoute()
+const dashboard = useDashboardSite()
 const { preference, setPreference } = usePlatformTheme()
 const config = useRuntimeConfig()
+
+const accountSettingsTo = computed(() => ({
+  path: '/dashboard/account/profile',
+  query: dashboard.organization.value?.slug
+    ? {
+        organization: dashboard.organization.value.slug,
+        organizationName: dashboard.organization.value.name,
+      }
+    : {},
+}))
 
 function getThemeIcon(pref: 'system' | 'light' | 'dark') {
   if (pref === 'system') return 'i-lucide-monitor'
@@ -118,7 +129,7 @@ async function handleSignOut() {
 }
 
 const items = computed<DropdownMenuItem[][]>(() => [
-  [{ label: 'Account settings', icon: 'i-lucide-settings', to: '/dashboard/account/profile' }],
+  [{ label: 'Account settings', icon: 'i-lucide-settings', to: accountSettingsTo.value }],
   [{ slot: 'theme', onSelect: (e: Event) => e.preventDefault() }],
   [
     { label: 'Help', icon: 'i-lucide-circle-help', to: config.public.helpUrl as string, target: '_blank' },
