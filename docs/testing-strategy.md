@@ -5,19 +5,6 @@ Release and outage decisions follow the mandatory
 This document defines test-layer responsibilities; it does not authorize a
 release when the deployed browser matrix has not been inspected.
 
-## CI feedback loop
-
-The required PR preview smoke is a focused deployed-runtime contract, not the
-full browser suite. It covers representative public SSR/hydration, one public
-write, request/query/payload budgets, and dashboard context. The full
-Playwright suite runs after the staging deployment; production runs read-only
-public browser smoke.
-
-Performance sampling is separate from routine PR smoke. A deliberate
-comparison uses the same fixture, cache state, and runner for both revisions.
-It reports median and an appropriate upper percentile; it does not report p99
-from fewer than 100 observations.
-
 KrabiClaw treats browser and E2E validation as the product gate. Unit tests, lint, typecheck, and static guardrails are hygiene unless they protect a narrow pure contract that browser tests cannot exercise directly.
 
 ## Current Inventory

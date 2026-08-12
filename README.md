@@ -103,21 +103,6 @@ yarn test:mcp:local:tunnel
 The full env contract, tunnel setup, write-smoke mode, and ChatGPT handoff are
 documented in [docs/local-mcp-harness.md](docs/local-mcp-harness.md).
 
-### Performance validation
-
-For page performance, build the Worker and measure the real browser journeys
-against that artifact. Do not use the old dev-only isolation pages or run a
-large benchmark while editing. Deterministic data-loading checks remain useful
-when transport or query code changes:
-
-```bash
-yarn build:cf
-yarn lint:data-loading
-```
-
-The current browser evidence and release-only benchmark policy are documented
-in [docs/performance/performance-recovery-2026-08.md](docs/performance/performance-recovery-2026-08.md).
-
 ### macOS file limit fix
 
 ```bash

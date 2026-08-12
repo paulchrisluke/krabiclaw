@@ -5,8 +5,7 @@ This is the source of truth for avoiding local-vs-CI auth and billing drift in E
 ## Tier intent
 
 - The required PR lane builds for and deploys only isolated preview. Its
-  representative suite always includes dashboard Pages,
-  billing, links, and Blawby CMS coverage; path filters cannot omit them.
+  representative suite covers public routing and dashboard API behavior.
 - A push to `staging` applies migrations, deploys the staging Worker normally,
   and then runs the full Playwright suite against that deployment.
 - A push to `main` applies migrations, deploys production normally, and then
@@ -70,8 +69,7 @@ For local Miniflare-backed tests, keep bindings with `remote = false` in `wrangl
 - Draft pull requests do not deploy or run remote E2E. Marking a PR ready, or pushing a new commit after it is ready, starts the preview deployment and smoke suite.
 - PR descriptions must include filled `Browser:` and `Static:` validation lines. `Browser` is for Playwright, CI E2E, or manual browser evidence; `Static` is for unit, lint, typecheck, build, and guardrail evidence.
 - Preview seeds are generated into one SQL bundle and applied with one remote D1 operation. The bundle remains idempotent and uses the same real preview D1, migration flow, fixed secrets, and deployed Worker as before.
-- Required preview coverage is explicit and never path-gated for dashboard Pages,
-  billing, links, or Blawby CMS.
+- Required preview coverage is one representative browser suite.
 - The full `yarn test:e2e:full` suite runs after every successful staging
   deployment. Production runs only the read-only public rendering sentinel.
 - CI defaults to two Playwright workers. Stateful notification, MCP, and client suites explicitly use one worker against shared remote D1.

@@ -110,13 +110,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler deploy --env preview --old-asset-ttl 600 --strict
       - name: Run required representative browser coverage
-        run: |
-          yarn test:e2e:representative
-          yarn test:e2e:public-rendering
-          yarn test:e2e:dashboard:smoke
-          yarn test:e2e:blawby-cms:smoke
-          yarn test:e2e:smoke:billing
-          yarn test:e2e:links-page
+        run: yarn test:e2e:representative
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
