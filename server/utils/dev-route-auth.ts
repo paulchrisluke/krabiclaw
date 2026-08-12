@@ -28,16 +28,16 @@ function normalizeHostname(host: string): string {
   // Handle bracketed IPv6 addresses like [::1]:3000
   if (host.startsWith('[')) {
     const endBracket = host.indexOf(']')
-    return endBracket === -1 ? host : host.slice(1, endBracket)
+    return (endBracket === -1 ? host : host.slice(1, endBracket)).toLowerCase().replace(/\.$/, '')
   }
   // A bare IPv6 address (e.g. "::1", "fe80::1") has 2+ colons and no port to
   // strip. A regular "hostname:port" or "ipv4:port" has exactly one colon —
   // splitting on it and taking the first part is correct for those.
   const colonCount = (host.match(/:/g) ?? []).length
   if (colonCount >= 2) {
-    return host
+    return host.toLowerCase().replace(/\.$/, '')
   }
-  return host.split(':')[0] || ''
+  return (host.split(':')[0] || '').toLowerCase().replace(/\.$/, '')
 }
 
 export function assertDevRouteAllowed(event: H3Event) {
@@ -73,8 +73,13 @@ export function assertDevRouteAllowed(event: H3Event) {
   }
 }
 
-export function assertE2eFixtureEnabled() {
+export function assertE2eFixtureEnabled(event: H3Event) {
   if (!import.meta.dev && process.env.E2E_ALLOW_DEV_ROUTES !== 'true') {
+    throw createError({ statusCode: 404, statusMessage: 'Not found' })
+  }
+
+  const hostname = normalizeHostname(getRequestHost(event) || '')
+  if (!isLocalHost(hostname) && !isPreviewContext(hostname)) {
     throw createError({ statusCode: 404, statusMessage: 'Not found' })
   }
 }

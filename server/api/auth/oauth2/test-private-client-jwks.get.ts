@@ -2,8 +2,8 @@ import { assertE2eFixtureEnabled } from '~/server/utils/dev-route-auth'
 
 export const PRIVATE_CLIENT_TEST_KEY_ID = 'krabiclaw-cimd-e2e-rs256'
 
-export default defineEventHandler(() => {
-  assertE2eFixtureEnabled()
+export default defineEventHandler((event) => {
+  assertE2eFixtureEnabled(event)
 
   return {
     keys: [{

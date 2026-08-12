@@ -125,7 +125,13 @@ test('getFreeSiteDomain falls back to krabiclaw.com when unconfigured', () => {
 
 test('the named local tunnel uses explicit tenant headers instead of nested hostnames', () => {
   assert.equal(isPreviewContext('local.krabiclaw.com'), true)
+  assert.equal(isPreviewContext('LOCAL.KRABICLAW.COM'), true)
+  assert.equal(isPreviewContext('local.krabiclaw.com.'), true)
   assert.equal(isPreviewContext('demo.local.krabiclaw.com'), false)
+  assert.equal(isPreviewContext('preview.krabiclaw.com'), true)
+  assert.equal(isPreviewContext('staging.krabiclaw.com'), true)
+  assert.equal(isPreviewContext('preview.customer.com'), false)
+  assert.equal(isPreviewContext('some-other-worker.paulchrisluke.workers.dev'), false)
 })
 
 test('deriveSubdomain matches a subdomain of the configured platform domain', () => {

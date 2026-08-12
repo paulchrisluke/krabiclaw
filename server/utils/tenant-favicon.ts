@@ -1,16 +1,16 @@
-import { createError, getHeader, sendStream, setHeader, sendRedirect, type H3Event } from 'h3'
+import { createError, getRequestURL, sendStream, setHeader, sendRedirect, type H3Event } from 'h3'
 import { sanitizeUrl } from '~/utils/sanitize'
 import type { TenantHostEnv } from '~/server/utils/tenant-hosts'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 import { getR2KeyFromPublicUrl } from '~/server/utils/cloudflare-r2'
-import { isPreviewContext } from '~/server/utils/tenant-hosts'
+import { isNonIndexableHost } from '~/server/utils/seo-policy'
 
 const PREVIEW_CACHE_CONTROL = 'private, no-store, max-age=0'
 
 function setFaviconCacheControl(event: H3Event, cacheControl: string) {
-  const host = getHeader(event, 'host') || ''
-  setHeader(event, 'cache-control', isPreviewContext(host) ? PREVIEW_CACHE_CONTROL : cacheControl)
+  const hostname = getRequestURL(event).hostname
+  setHeader(event, 'cache-control', isNonIndexableHost(hostname) ? PREVIEW_CACHE_CONTROL : cacheControl)
 }
 
 function escapeXml(value: string): string {

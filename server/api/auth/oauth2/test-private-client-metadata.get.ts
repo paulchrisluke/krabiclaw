@@ -2,7 +2,7 @@ import { getRequestURL } from 'h3'
 import { assertE2eFixtureEnabled } from '~/server/utils/dev-route-auth'
 
 export default defineEventHandler((event) => {
-  assertE2eFixtureEnabled()
+  assertE2eFixtureEnabled(event)
 
   const requestUrl = getRequestURL(event)
   const origin = requestUrl.origin

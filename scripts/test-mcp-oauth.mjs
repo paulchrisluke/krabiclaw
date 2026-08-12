@@ -369,12 +369,13 @@ async function main() {
     },
   );
   const initBody = jsonBody(initResp, "MCP initialize");
-  if (initResp.status === 200 && initBody?.result?.protocolVersion) {
+  if (initResp.status === 200 && initBody?.result?.protocolVersion === MCP_VERSION) {
     pass(
       `initialize OK — server protocolVersion=${initBody.result.protocolVersion}`,
     );
   } else {
     fail("initialize failed", initBody);
+    return;
   }
 
   // 5. notifications/initialized

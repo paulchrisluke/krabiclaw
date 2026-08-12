@@ -1,5 +1,5 @@
-import { getHeader, setHeader } from 'h3'
-import { isPreviewContext } from '~/server/utils/tenant-hosts'
+import { getRequestURL, setHeader } from 'h3'
+import { isNonIndexableHost } from '~/server/utils/seo-policy'
 
 export default defineEventHandler((event) => {
   const site = event.context.site as {
@@ -13,8 +13,8 @@ export default defineEventHandler((event) => {
 
   setHeader(event, 'x-robots-tag', 'noindex, nofollow, noarchive')
   setHeader(event, 'content-type', 'application/manifest+json')
-  const host = getHeader(event, 'host') || ''
-  setHeader(event, 'cache-control', isPreviewContext(host)
+  const hostname = getRequestURL(event).hostname
+  setHeader(event, 'cache-control', isNonIndexableHost(hostname)
     ? 'private, no-store, max-age=0'
     : 'public, max-age=3600, stale-while-revalidate=86400')
 
