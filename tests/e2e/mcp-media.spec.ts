@@ -1,5 +1,4 @@
 import { expect, test } from '@playwright/test'
-import { isDeployedWorkerTarget } from './test-env'
 import { loginAs } from './helpers/auth'
 import { MCP_GROWTH_USER_ID } from './helpers/plan-fixtures'
 import { MCP_VERSION, MCP_GROWTH_SITE_ID, mcpRequest, mcpData, ensureSite, loginAsFreshMcpUser } from './helpers/mcp'
@@ -150,11 +149,6 @@ test.describe('stateless MCP server', () => {
   })
 
   test('native ChatGPT attachment upload produces an active, public, assignable video asset', async ({ request, baseURL }) => {
-    // The test fixture download_url points at this same app's own /api/mcp-test/tiny-video
-    // route. On deployed Cloudflare Workers this becomes a same-zone self-fetch and
-    // can fail independently of app logic. Real ChatGPT attachments use OpenAI-hosted
-    // download URLs, so deployed verification happens through the live connector.
-    test.skip(isDeployedWorkerTarget(baseURL!), 'Same-zone self-fetch of the tiny-video test fixture is not supported on deployed Cloudflare Workers')
     test.setTimeout(90_000)
     await loginAsFreshMcpUser(request, baseURL!)
     const siteId = await ensureSite(request, baseURL!)

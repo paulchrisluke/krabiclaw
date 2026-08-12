@@ -103,12 +103,6 @@ function expectValue(label, condition, detail) {
   else fail(label, detail)
 }
 
-function findHero(content) {
-  return Array.isArray(content?.fields)
-    ? content.fields.find(item => item?.field === 'hero')
-    : null
-}
-
 async function main() {
   console.log(`Checking MCP edit flow at ${BASE_URL}`)
   const headers = await getAuthHeaders()
@@ -156,11 +150,26 @@ async function main() {
   expectValue('get_workspace_context marks one active site', Array.isArray(workspaceData?.sites) && workspaceData.sites.filter(site => site?.active === true).length === 1 && workspaceData.sites.find(site => site?.active === true)?.id === siteId, workspaceData)
 
   const draftTitle = `MCP edit check ${Date.now()}`
+  const contentBefore = await mcp(headers, 'get_page_fields', { page: 'home' })
+  expectStatus('get_page_fields succeeds before update', contentBefore)
+  const blocks = resultData(contentBefore.body)?.blocks
+  if (!Array.isArray(blocks)) {
+    fail('get_page_fields did not return canonical blocks', contentBefore.body)
+    process.exit(1)
+  }
   const save = await mcp(headers, 'update_page_content', {
     page: 'home',
     changes: {
-      'hero.title': draftTitle,
-      'hero.subtitle': 'Edited through MCP edit-flow checker',
+      blocks: blocks.map(block => block?.type === 'hero'
+        ? {
+            ...block,
+            data: {
+              ...block.data,
+              title: draftTitle,
+              subtitle: 'Edited through MCP edit-flow checker',
+            },
+          }
+        : block),
     },
   })
   expectStatus('update_page_content succeeds', save)
@@ -169,8 +178,8 @@ async function main() {
 
   const content = await mcp(headers, 'get_page_fields', { page: 'home' })
   expectStatus('get_page_fields succeeds', content)
-  const hero = findHero(resultData(content.body))
-  if (hero?.hero_title === draftTitle) pass('canonical content includes updated hero title')
+  const hero = resultData(content.body)?.blocks?.find(block => block?.type === 'hero')
+  if (hero?.data?.title === draftTitle) pass('canonical content includes updated hero title')
   else fail('canonical content did not include updated hero title', hero)
 
   process.exit(failed ? 1 : 0)

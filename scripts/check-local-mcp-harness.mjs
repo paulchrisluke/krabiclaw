@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { readFileSync, existsSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 
 const _baseUrlArg = process.argv.includes('--base-url')
@@ -11,12 +10,8 @@ if (_baseUrlArg !== undefined && !_baseUrlArg) {
   process.exit(1)
 }
 
-const BASE_URL = (_baseUrlArg ?? process.env.MCP_BASE_URL ?? process.env.BETTER_AUTH_URL ?? 'https://local.krabiclaw.com').replace(/\/$/, '')
+const BASE_URL = (_baseUrlArg ?? process.env.MCP_BASE_URL ?? process.env.BETTER_AUTH_URL ?? 'http://localhost:3000').replace(/\/$/, '')
 const WRITE_SMOKE = process.argv.includes('--write-smoke')
-const CANONICAL_LOCAL_ORIGIN = 'https://local.krabiclaw.com'
-const TUNNEL_CONFIG_PATH = 'tunnel.yml'
-const CANONICAL_TUNNEL_ID = 'ba36c78c-9e7d-4312-be92-63a58d96baba'
-const CANONICAL_TUNNEL_NAME = 'krabiclaw-local'
 const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? '2025-06-18'
 
 let failed = false
@@ -60,34 +55,6 @@ function parseOrigin(value, label) {
   }
 }
 
-function extractTunnelHostname() {
-  if (!existsSync(TUNNEL_CONFIG_PATH)) return null
-  const source = readFileSync(TUNNEL_CONFIG_PATH, 'utf8')
-  const match = source.match(/^\s*-?\s*hostname:\s*("?)([^"\n#]+)\1\s*$/m)
-  return match ? `https://${match[2].trim()}` : null
-}
-
-// Quick tunnels (`cloudflared tunnel --url ...`) never read tunnel.yml — its
-// hostname always still points at the named krabiclaw-local tunnel, so a
-// mismatch against a *.trycloudflare.com BASE_URL is expected, not a
-// misconfiguration. Keep the check fatal for every other host (i.e. actual
-// named-tunnel usage, where tunnel.yml SHOULD match).
-function isQuickTunnelOrigin(origin) {
-  if (!origin) return false
-  try {
-    return new URL(origin).hostname.endsWith('.trycloudflare.com')
-  } catch {
-    return false
-  }
-}
-
-function extractTunnelId() {
-  if (!existsSync(TUNNEL_CONFIG_PATH)) return null
-  const source = readFileSync(TUNNEL_CONFIG_PATH, 'utf8')
-  const match = source.match(/^\s*tunnel:\s*("?)([^"\n#]+)\1\s*$/m)
-  return match ? match[2].trim() : null
-}
-
 async function fetchJson(url, options = {}) {
   const res = await fetch(url, options)
   const text = await res.text()
@@ -98,59 +65,6 @@ async function fetchJson(url, options = {}) {
     body = text
   }
   return { res, body }
-}
-
-async function verifyRemoteTunnelConfig(baseOrigin) {
-  const accountId = envValue('CF_ACCOUNT_ID')
-  const apiToken = envValue('CLOUDFLARE_API_TOKEN')
-  if (!accountId || !apiToken) {
-    skip('remote tunnel verification skipped; set CF_ACCOUNT_ID and CLOUDFLARE_API_TOKEN to compare against Cloudflare')
-    return
-  }
-
-  const remote = await fetchJson(`https://api.cloudflare.com/client/v4/accounts/${accountId}/cfd_tunnel/${CANONICAL_TUNNEL_ID}/configurations`, {
-    headers: {
-      authorization: `Bearer ${apiToken}`,
-      'content-type': 'application/json',
-    },
-  })
-
-  if (remote.res.status !== 200 || remote.body?.success !== true) {
-    fail('could not read remote Cloudflare tunnel configuration', { status: remote.res.status, body: remote.body })
-    return
-  }
-
-  const remoteTunnelId = remote.body?.result?.tunnel_id ?? ''
-  const remoteHostname = remote.body?.result?.config?.ingress?.find((entry) => entry.hostname)?.hostname ?? ''
-  const remoteService = remote.body?.result?.config?.ingress?.find((entry) => entry.hostname)?.service ?? ''
-
-  if (remoteTunnelId === CANONICAL_TUNNEL_ID) pass('remote Cloudflare tunnel id matches canonical local tunnel')
-  else fail('remote Cloudflare tunnel id mismatch', { expected: CANONICAL_TUNNEL_ID, actual: remoteTunnelId })
-
-  if (remoteHostname && `https://${remoteHostname}` === baseOrigin) pass('remote Cloudflare tunnel hostname matches MCP origin')
-  else fail('remote Cloudflare tunnel hostname mismatch', { remoteHostname, baseOrigin })
-
-  if (remoteService === 'http://localhost:3000' || remoteService === 'http://127.0.0.1:3000') {
-    pass('remote Cloudflare tunnel forwards to the expected local dev server')
-  } else {
-    fail('remote Cloudflare tunnel service target mismatch', { remoteService })
-  }
-
-  const tunnel = await fetchJson(`https://api.cloudflare.com/client/v4/accounts/${accountId}/cfd_tunnel/${CANONICAL_TUNNEL_ID}`, {
-    headers: {
-      authorization: `Bearer ${apiToken}`,
-      'content-type': 'application/json',
-    },
-  })
-
-  if (tunnel.res.status !== 200 || tunnel.body?.success !== true) {
-    fail('could not read remote Cloudflare tunnel metadata', { status: tunnel.res.status, body: tunnel.body })
-    return
-  }
-
-  const remoteName = tunnel.body?.result?.name ?? ''
-  if (remoteName === CANONICAL_TUNNEL_NAME) pass('remote Cloudflare tunnel name matches expected local tunnel')
-  else fail('remote Cloudflare tunnel name mismatch', { expected: CANONICAL_TUNNEL_NAME, actual: remoteName })
 }
 
 async function verifyOAuthMetadata(baseOrigin) {
@@ -246,7 +160,7 @@ function runNodeScript(script, args, env) {
   if (result.status === 0) {
     pass(`${script} passed`)
   } else {
-    fail(`${script} failed`, { exitCode: result.status })
+    throw new Error(`${script} failed with exit code ${result.status ?? 'unknown'}`)
   }
 }
 
@@ -275,29 +189,6 @@ async function main() {
   if (baseOrigin && mcpOrigin && baseOrigin === mcpOrigin) pass('requested base URL matches MCP_BASE_URL')
   else fail('requested base URL must match MCP_BASE_URL', { baseUrl: BASE_URL, mcpBaseUrl })
 
-  if (baseOrigin === CANONICAL_LOCAL_ORIGIN) pass('using canonical local MCP hostname')
-  else skip(`non-canonical MCP base URL (${BASE_URL}); recommended default is ${CANONICAL_LOCAL_ORIGIN}`)
-
-  const tunnelHostname = extractTunnelHostname()
-  const tunnelId = extractTunnelId()
-  if (!tunnelHostname) {
-    fail(`could not find hostname in ${TUNNEL_CONFIG_PATH}`)
-  } else if (baseOrigin && tunnelHostname === baseOrigin) {
-    pass(`${TUNNEL_CONFIG_PATH} hostname matches BETTER_AUTH_URL/MCP_BASE_URL`)
-  } else if (isQuickTunnelOrigin(baseOrigin)) {
-    skip(`${TUNNEL_CONFIG_PATH} hostname mismatch (expected — using a trycloudflare.com quick tunnel, not the named tunnel)`, { tunnelHostname, baseUrl: BASE_URL })
-  } else {
-    fail(`${TUNNEL_CONFIG_PATH} hostname mismatch`, { tunnelHostname, baseUrl: BASE_URL })
-  }
-
-  if (!tunnelId) {
-    fail(`could not find tunnel id in ${TUNNEL_CONFIG_PATH}`)
-  } else if (tunnelId === CANONICAL_TUNNEL_ID) {
-    pass(`${TUNNEL_CONFIG_PATH} uses the canonical krabiclaw-local tunnel id`)
-  } else {
-    fail(`${TUNNEL_CONFIG_PATH} tunnel id mismatch`, { expected: CANONICAL_TUNNEL_ID, actual: tunnelId })
-  }
-
   const usingBearerToken = Boolean(envValue('MCP_BEARER_TOKEN'))
   const usingDevLogin = envValue('MCP_DEV_LOGIN') === '1'
 
@@ -313,7 +204,7 @@ async function main() {
 
   await verifyOAuthMetadata(baseOrigin)
   await verifyDevRoutes(baseOrigin, requireSecret)
-  await verifyRemoteTunnelConfig(baseOrigin)
+  if (failed) throw new Error('Local MCP preflight failed.')
 
   const childEnv = {
     ...process.env,

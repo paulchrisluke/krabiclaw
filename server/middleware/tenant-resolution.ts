@@ -61,9 +61,8 @@ export default defineEventHandler(async (event) => {
   const host = getHeader(event, "host") || "";
   const env = cloudflareEnv(event);
 
-  // Preview E2E: allow tests running against *.workers.dev preview Workers to
-  // specify tenant via x-preview-tenant header. Only trusted for workers.dev
-  // hosts — production custom domains never match this path.
+  // Shared local, preview, and staging hosts carry tenant identity in a header.
+  // Production custom domains never match this host boundary.
   if (isPreviewContext(host)) {
     const previewSlug = getHeader(event, "x-preview-tenant");
     if (previewSlug && /^[a-z0-9-]+$/.test(previewSlug)) {

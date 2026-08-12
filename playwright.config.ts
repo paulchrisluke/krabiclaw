@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test'
+import { existsSync } from 'node:fs'
 import { testBaseUrl, testEnv } from './tests/e2e/test-env'
+
+if (existsSync('.env')) process.loadEnvFile('.env')
 
 const port = Number(testEnv('PORT') || 3000)
 const previewUrl = testEnv('PLAYWRIGHT_PREVIEW_URL')

@@ -67,14 +67,15 @@ export function isPlatformHost(host: string, env: TenantHostEnv): boolean {
 }
 
 // Returns true for hosts where x-preview-tenant header carries tenant identity
-// because subdomain routing is unavailable (wildcard TLS cert only covers one
-// subdomain level, so demo.preview.krabiclaw.com or demo.staging.krabiclaw.com
-// won't handshake). Applies to workers.dev, staging.*, and preview.* hosts.
+// because subdomain routing is unavailable (the named local tunnel has one
+// hostname, and wildcard TLS covers only one subdomain level for staging and
+// preview). Applies only to the named local host and KrabiClaw's deployed
+// preview and staging hosts.
 export function isPreviewContext(host: string): boolean {
-  const hostname = hostnameOf(host)
-  if (hostname.endsWith('.workers.dev')) return true
-  if (/^(?:staging|preview)\.[^.]+\.[^.]+$/.test(hostname)) return true
-  return false
+  const hostname = hostnameOf(host).toLowerCase().replace(/\.$/, '')
+  if (hostname === 'local.krabiclaw.com') return true
+  if (hostname === 'preview.krabiclaw.com' || hostname === 'staging.krabiclaw.com') return true
+  return WORKERS_DEV_PREVIEW_HOST_PATTERN.test(hostname)
 }
 
 // The domain that free-tier subdomains (e.g. "demo.krabiclaw.com") are minted

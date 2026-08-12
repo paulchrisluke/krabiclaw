@@ -1,13 +1,9 @@
-import { getHeader } from 'h3'
-import { isPreviewContext } from '~/server/utils/tenant-hosts'
+import { assertE2eFixtureEnabled } from '~/server/utils/dev-route-auth'
 
 export const PRIVATE_CLIENT_TEST_KEY_ID = 'krabiclaw-cimd-e2e-rs256'
 
 export default defineEventHandler((event) => {
-  const host = getHeader(event, 'host') || ''
-  if (!import.meta.dev && !isPreviewContext(host)) {
-    throw createError({ statusCode: 403, statusMessage: 'Forbidden in production' })
-  }
+  assertE2eFixtureEnabled(event)
 
   return {
     keys: [{

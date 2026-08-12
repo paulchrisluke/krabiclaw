@@ -24,7 +24,7 @@ Tenant canonical tags and breadcrumb/schema URLs resolve against the rendered re
 
 ### Non-production hosts
 
-Preview, staging, `pages.dev`, `workers.dev`, `trycloudflare.com`, and the local tunnel host are globally non-indexable.
+The named local tunnel (`local.krabiclaw.com`), preview, staging, `pages.dev`, and `workers.dev` hosts are globally non-indexable.
 
 These hosts receive:
 
