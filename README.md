@@ -15,7 +15,7 @@ Multi-tenant restaurant SaaS. Nuxt 4 + Cloudflare Pages + D1.
 | `yarn db:generate` | Generate a new `migrations/*.sql` file from `server/db/schema.ts` |
 | `yarn schema:local` | Apply pending `migrations/*.sql` to local D1 |
 | `yarn drizzle:check` | Verify `server/db/schema.ts` hasn't drifted from the live D1 schema |
-| `yarn seed:local` | Seed demo data locally |
+| `yarn seed:local` | Reset all local demo and client test fixtures |
 | `yarn stripe:listen` | Forward Stripe webhooks to localhost (local dev only) |
 | `yarn canary:prod` | Production-safe authenticated browser canary (read-only checks). |
 | `yarn canary:notifications` | Production provider-level email/WhatsApp notification canary. |
@@ -65,7 +65,7 @@ GOOGLE_CLIENT_SECRET=
 
 ```bash
 yarn schema:local
-yarn seed:local             # optional — loads demo data
+yarn seed:local             # optional — loads local demo and client test fixtures
 ```
 
 ### 4. Run
@@ -142,10 +142,10 @@ Set protected internal job secrets with Wrangler:
 
 ```bash
 openssl rand -base64 32
-yarn wrangler pages secret put CRON_SECRET
+yarn wrangler secret put CRON_SECRET
 ```
 
-`CRON_SECRET` protects internal scheduled endpoints. Local `yarn dev` reads it from `.env`; `wrangler pages dev` reads it from `.dev.vars`.
+`CRON_SECRET` protects internal scheduled endpoints. Local commands read their configuration from `.env`; deployed Workers use Cloudflare secrets and the variables in `wrangler.toml`.
 
 CI + E2E auth/billing parity, tier intent, and staging-vs-production smoke rules are documented in [docs/ci-e2e-guardrails.md](docs/ci-e2e-guardrails.md). MCP reconnect triage and Cloudflare auth debugging are documented in [docs/mcp-auth-debugging.md](docs/mcp-auth-debugging.md) and [docs/observability-debugging.md](docs/observability-debugging.md).
 

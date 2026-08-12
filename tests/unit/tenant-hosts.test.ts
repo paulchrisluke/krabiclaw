@@ -7,6 +7,7 @@ import {
   getPlatformHosts,
   hostnameOf,
   isPlatformHost,
+  isPreviewContext,
   normalizeHost,
   type TenantHostEnv,
 } from '../../server/utils/tenant-hosts.ts'
@@ -120,6 +121,11 @@ test('getFreeSiteDomain normalizes the configured domain and strips its port', (
 
 test('getFreeSiteDomain falls back to krabiclaw.com when unconfigured', () => {
   assert.equal(getFreeSiteDomain({}), 'krabiclaw.com')
+})
+
+test('the named local tunnel uses explicit tenant headers instead of nested hostnames', () => {
+  assert.equal(isPreviewContext('local.krabiclaw.com'), true)
+  assert.equal(isPreviewContext('demo.local.krabiclaw.com'), false)
 })
 
 test('deriveSubdomain matches a subdomain of the configured platform domain', () => {

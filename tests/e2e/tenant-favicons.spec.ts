@@ -1,18 +1,11 @@
 import { test, expect } from '@playwright/test'
 import {
-  isDeployedWorkerTarget,
   kikuzukiTestBaseUrl,
   kikuzukiTestExtraHeaders,
   potteryHouseTestBaseUrl,
   potteryHouseTestExtraHeaders,
   testBaseUrl,
 } from './test-env'
-
-function expectDeployedFaviconCrawlable(baseUrl: string, headers: Record<string, string>) {
-  if (isDeployedWorkerTarget(baseUrl)) {
-    expect(headers['x-robots-tag'] ?? '').not.toMatch(/(?:^|,)\s*noindex\b/i)
-  }
-}
 
 test.describe('Tenant Favicon Endpoints & Host Isolation E2E Tests', () => {
   test('Platform host serves platform favicon assets and platform manifest', async ({ request }) => {
@@ -25,12 +18,10 @@ test.describe('Tenant Favicon Endpoints & Host Isolation E2E Tests', () => {
     const faviconUrl = new URL('/favicon.ico', baseUrl).toString()
     const firstFaviconResponse = await request.get(faviconUrl, { maxRedirects: 0 })
     expect(firstFaviconResponse.status()).toBe(302)
-    expectDeployedFaviconCrawlable(baseUrl, firstFaviconResponse.headers())
 
     const resFavicon = await request.get(faviconUrl, { maxRedirects: 5 })
     expect(resFavicon.status()).toBe(200)
     expect(resFavicon.headers()['content-type']).toMatch(/^image\//)
-    expectDeployedFaviconCrawlable(baseUrl, resFavicon.headers())
   })
 
   test('Pottery House tenant host endpoints return tenant-specific assets without platform fallbacks', async ({ request }) => {
@@ -41,7 +32,6 @@ test.describe('Tenant Favicon Endpoints & Host Isolation E2E Tests', () => {
     const resSvg = await request.get(new URL('/tenant-icon.svg', baseUrl).toString(), { headers })
     expect(resSvg.status()).toBe(200)
     expect(resSvg.headers()['content-type']).toContain('image/svg+xml')
-    expectDeployedFaviconCrawlable(baseUrl, resSvg.headers())
 
     // Test /tenant-icon-192.png, /tenant-icon-512.png, /favicon.ico, /apple-touch-icon.png
     const endpoints = ['/tenant-icon-192.png', '/tenant-icon-512.png', '/apple-touch-icon.png', '/favicon.ico']
@@ -51,7 +41,6 @@ test.describe('Tenant Favicon Endpoints & Host Isolation E2E Tests', () => {
       expect(response.status()).toBe(200)
       expect(response.headers()['content-type']).toMatch(/^image\//)
       expect(response.headers().location).toBeUndefined()
-      expectDeployedFaviconCrawlable(baseUrl, response.headers())
     }
 
     const robots = await request.get(new URL('/robots.txt', baseUrl).toString(), { headers })

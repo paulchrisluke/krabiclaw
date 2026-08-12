@@ -3,12 +3,11 @@ import { setupTenantHeaders, tenantBaseURL, tenantExtraHeaders } from './helpers
 
 function isNonProductionHost(value: string): boolean {
   const host = new URL(value).hostname
-  return host === 'preview.krabiclaw.com'
+  return host === 'local.krabiclaw.com'
+    || host === 'preview.krabiclaw.com'
     || host === 'staging.krabiclaw.com'
-    || host === 'local.krabiclaw.com'
     || host.endsWith('.pages.dev')
     || host.endsWith('.workers.dev')
-    || host.endsWith('.trycloudflare.com')
 }
 
 test.describe('platform SEO contracts', () => {

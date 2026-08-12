@@ -67,13 +67,14 @@ export function assertDevRouteAllowed(event: H3Event) {
       throw createError({ statusCode: 403, statusMessage: 'Forbidden' })
     }
 
-    // Belt-and-suspenders: E2E_ALLOW_DEV_ROUTES is only meant to be set on
-    // preview/staging (wrangler.toml [env.preview]/[env.staging]). If it ever
-    // leaks into a production-looking deploy, this login-bypass route would
-    // otherwise become a live impersonate-any-user backdoor. Gate on the
-    // request host too, so a config mistake 404s instead of granting access.
     if (!isLocalHost(hostname) && !isPreviewContext(hostname)) {
       throw createError({ statusCode: 404, statusMessage: 'Not found' })
     }
+  }
+}
+
+export function assertE2eFixtureEnabled() {
+  if (!import.meta.dev && process.env.E2E_ALLOW_DEV_ROUTES !== 'true') {
+    throw createError({ statusCode: 404, statusMessage: 'Not found' })
   }
 }

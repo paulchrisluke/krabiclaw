@@ -3,7 +3,7 @@ export function isDevPerfHostAllowed(
   hasCfRay: boolean,
   publicTestPageEnabled = false,
 ): boolean {
-  const allowedHosts = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0', 'local.krabiclaw.com'])
+  const allowedHosts = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0'])
   // Strip port and IPv6 brackets from the raw Host header value so callers
   // don't need to normalise before calling this function.
   const raw = requestHostHeader ?? ''

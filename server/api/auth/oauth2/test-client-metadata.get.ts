@@ -1,14 +1,8 @@
-import { getHeader, getRequestURL } from 'h3'
-import { isPreviewContext } from '~/server/utils/tenant-hosts'
+import { getRequestURL } from 'h3'
+import { assertE2eFixtureEnabled } from '~/server/utils/dev-route-auth'
 
 export default defineEventHandler((event) => {
-  const host = getHeader(event, 'host') || ''
-  if (!import.meta.dev && !isPreviewContext(host)) {
-    throw createError({
-      statusCode: 403,
-      statusMessage: 'Forbidden in production'
-    })
-  }
+  assertE2eFixtureEnabled()
 
   const requestUrl = getRequestURL(event)
   const origin = requestUrl.origin

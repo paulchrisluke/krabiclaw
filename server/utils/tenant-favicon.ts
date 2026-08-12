@@ -1,9 +1,17 @@
-import { createError, sendStream, setHeader, sendRedirect, type H3Event } from 'h3'
+import { createError, getHeader, sendStream, setHeader, sendRedirect, type H3Event } from 'h3'
 import { sanitizeUrl } from '~/utils/sanitize'
 import type { TenantHostEnv } from '~/server/utils/tenant-hosts'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 import { getR2KeyFromPublicUrl } from '~/server/utils/cloudflare-r2'
+import { isPreviewContext } from '~/server/utils/tenant-hosts'
+
+const PREVIEW_CACHE_CONTROL = 'private, no-store, max-age=0'
+
+function setFaviconCacheControl(event: H3Event, cacheControl: string) {
+  const host = getHeader(event, 'host') || ''
+  setHeader(event, 'cache-control', isPreviewContext(host) ? PREVIEW_CACHE_CONTROL : cacheControl)
+}
 
 function escapeXml(value: string): string {
   return value
@@ -93,7 +101,7 @@ async function serveR2Favicon(event: H3Event, env: ApiRecord, url: string) {
   setHeader(event, 'content-type', object.httpMetadata?.contentType || 'image/png')
   setHeader(event, 'content-length', object.size)
   setHeader(event, 'etag', object.etag)
-  setHeader(event, 'cache-control', 'public, max-age=31536000, immutable')
+  setFaviconCacheControl(event, 'public, max-age=31536000, immutable')
   return sendStream(event, object.body)
 }
 
@@ -113,7 +121,7 @@ async function proxyFavicon(event: H3Event, url: string) {
   setHeader(event, 'content-type', responseType)
   const length = response.headers.get('content-length')
   if (length) setHeader(event, 'content-length', Number(length))
-  setHeader(event, 'cache-control', 'public, max-age=3600, stale-while-revalidate=86400')
+  setFaviconCacheControl(event, 'public, max-age=3600, stale-while-revalidate=86400')
   return sendStream(event, response.body)
 }
 
@@ -139,7 +147,7 @@ export async function handleFaviconRequest(event: H3Event, options: FaviconOptio
     : logoUrl && !isPlatformAssetUrl(logoUrl, env)
       ? logoUrl
       : null
-  setHeader(event, 'cache-control', 'public, max-age=3600, stale-while-revalidate=86400')
+  setFaviconCacheControl(event, 'public, max-age=3600, stale-while-revalidate=86400')
 
   if (options.returnSvg) {
     if (!sourceUrl) {

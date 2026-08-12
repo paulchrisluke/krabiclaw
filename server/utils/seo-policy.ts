@@ -100,12 +100,11 @@ export function isTechnicalAssetSeoPath(pathname: string): boolean {
 
 export function isNonIndexableHost(hostname: string): boolean {
   const host = hostname.toLowerCase().replace(/\.$/, '')
-  return host === 'preview.krabiclaw.com'
+  return host === 'local.krabiclaw.com'
+    || host === 'preview.krabiclaw.com'
     || host === 'staging.krabiclaw.com'
-    || host === 'local.krabiclaw.com'
     || host.endsWith('.pages.dev')
     || host.endsWith('.workers.dev')
-    || host.endsWith('.trycloudflare.com')
 }
 
 export function resolveRuntimeSeoSiteConfig(input: {
