@@ -16,6 +16,7 @@
 
 import { createHash, randomBytes } from "crypto";
 import { request as httpsRequest } from "node:https";
+import { readHttpResponse } from "./utils/read-http-response.mjs";
 
 const BASE_URL = process.argv.includes("--base-url")
   ? process.argv[process.argv.indexOf("--base-url") + 1]
@@ -48,22 +49,7 @@ async function request(url, init = {}) {
       headers: init.headers,
       family: 4,
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    }, (response) => {
-      const chunks = [];
-      response.on("data", (chunk) => chunks.push(chunk));
-      response.on("end", () => {
-        if (response.statusCode === undefined) {
-          reject(new Error(`Missing HTTP status for ${target.href}`));
-          return;
-        }
-
-        resolve({
-          status: response.statusCode,
-          headers: response.headers,
-          bodyText: Buffer.concat(chunks).toString("utf8").trim(),
-        });
-      });
-    });
+    }, response => readHttpResponse(response, target.href).then(resolve, reject));
 
     request.on("error", reject);
     if (init.body !== undefined) request.write(init.body);
