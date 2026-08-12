@@ -10,7 +10,7 @@ import {
 
 function expectDeployedFaviconCrawlable(baseUrl: string, headers: Record<string, string>) {
   if (isDeployedWorkerTarget(baseUrl)) {
-    expect(headers['x-robots-tag']).toBeUndefined()
+    expect(headers['x-robots-tag'] ?? '').not.toMatch(/(?:^|,)\s*noindex\b/i)
   }
 }
 

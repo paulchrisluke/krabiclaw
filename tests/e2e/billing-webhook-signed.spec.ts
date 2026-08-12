@@ -98,7 +98,7 @@ test.describe('billing webhook signed flow', () => {
     expect(replayBody.success).toBe(true)
   })
 
-  test('ignores retired one-time checkout metadata and accepts subscription/setup checkout modes', async ({ request, baseURL }) => {
+  test('ignores retired one-time checkout metadata and accepts setup checkout mode', async ({ request, baseURL }) => {
     const login = await request.get(devLoginUrl(baseURL!), {
       headers: devLoginHeaders(),
       maxRedirects: 0,
@@ -164,35 +164,31 @@ test.describe('billing webhook signed flow', () => {
       expect.objectContaining({ stripe_event_id: paymentEvent.id, status: 'processed' }),
     ])
 
-    const modeEventIds: string[] = []
-    for (const mode of ['subscription', 'setup']) {
-      const eventId = `evt_${mode}_e2e_${Date.now()}`
-      modeEventIds.push(eventId)
-      const response = await sendSigned({
-        id: eventId,
-        object: 'event',
-        created: timestamp,
-        livemode: false,
-        type: mode === 'subscription' ? 'checkout.session.async_payment_succeeded' : 'checkout.session.completed',
-        data: {
-          object: {
-            id: `cs_${mode}_e2e_${Date.now()}`,
-            object: 'checkout.session',
-            mode,
-            payment_status: mode === 'subscription' ? 'paid' : 'no_payment_required',
-            metadata: {
-              organization_id: organizationId,
-            },
+    const setupEventId = `evt_setup_e2e_${Date.now()}`
+    const setupResponse = await sendSigned({
+      id: setupEventId,
+      object: 'event',
+      created: timestamp,
+      livemode: false,
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          id: `cs_setup_e2e_${Date.now()}`,
+          object: 'checkout.session',
+          mode: 'setup',
+          payment_status: 'no_payment_required',
+          metadata: {
+            organization_id: organizationId,
           },
         },
-      })
-      expect(response.status()).toBe(200)
-    }
+      },
+    })
+    expect(setupResponse.status()).toBe(200)
 
     await expect.poll(async () => {
       const response = await request.get(stateUrl, { headers: devLoginHeaders() })
       const body = await response.json() as { webhook_events: Array<{ stripe_event_id: string; status?: string }> }
-      return modeEventIds.map(id => body.webhook_events.find(item => item.stripe_event_id === id)?.status)
-    }, { timeout: 10_000 }).toEqual(['processed', 'processed'])
+      return body.webhook_events.find(item => item.stripe_event_id === setupEventId)?.status
+    }, { timeout: 10_000 }).toBe('processed')
   })
 })

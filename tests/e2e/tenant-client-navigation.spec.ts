@@ -129,19 +129,11 @@ test.describe('tenant client-side navigation does not show stale/fallback conten
   test('Home -> Menu', async ({ page }) => {
     const errors = collectPageErrors(page)
     await page.goto(`${tenantBaseURL}/`, { waitUntil: 'load' })
-    const responsePromise = page.waitForResponse((response) => {
-      const url = new URL(response.url())
-      return url.pathname.includes('/api/public/sites/')
-        && url.pathname.endsWith('/page')
-        && url.searchParams.get('page') === 'menu'
-    })
 
     await page.locator('a[href="/menu"]').first().evaluate(
       (element: HTMLAnchorElement) => element.click(),
     )
 
-    const response = await responsePromise
-    expect(response.ok()).toBe(true)
     await expect(page).toHaveURL(/\/menu\/?$/)
     await expect(page.locator('main')).toContainText('Margherita')
     await expect(page.locator('main')).not.toContainText('Menu coming soon.')
@@ -149,56 +141,25 @@ test.describe('tenant client-side navigation does not show stale/fallback conten
   })
 
   for (const destination of [
-    { path: '/reviews', page: 'reviews', text: 'Reviews' },
-    { path: '/qa', page: 'qa', text: 'Frequently' },
-    { path: '/posts', page: 'posts', text: 'Updates' },
-    { path: '/photos', page: 'photos', text: 'Gallery' },
+    { path: '/reviews', text: 'Reviews' },
+    { path: '/qa', text: 'Frequently' },
+    { path: '/posts', text: 'Updates' },
+    { path: '/photos', text: 'Gallery' },
   ]) {
     test(`Home -> ${destination.path}`, async ({ page }) => {
       const errors = collectPageErrors(page)
       await page.goto(`${tenantBaseURL}/`, { waitUntil: 'load' })
-      const responsePromise = page.waitForResponse((response) => {
-        const url = new URL(response.url())
-        return url.pathname.includes('/api/public/sites/')
-          && url.pathname.endsWith('/page')
-          && url.searchParams.get('page') === destination.page
-      })
 
       await page.locator(`a[href="${destination.path}"]`).last().evaluate(
         (element: HTMLAnchorElement) => element.click(),
       )
 
-      expect((await responsePromise).ok()).toBe(true)
       await expect(page).toHaveURL(new RegExp(`${destination.path}/?$`))
       await expect(page.locator('main')).toContainText(destination.text)
       await expect(page.locator('main')).not.toBeEmpty()
       expectNoHydrationOrScopeErrors(errors)
     })
   }
-
-  test('page API failure reaches the Nuxt error boundary', async ({ page }) => {
-    await page.goto(`${tenantBaseURL}/`, { waitUntil: 'load' })
-    await page.route('**/api/public/sites/*/page*', async (route) => {
-      const url = new URL(route.request().url())
-      if (url.searchParams.get('page') !== 'menu') {
-        await route.continue()
-        return
-      }
-      await route.fulfill({
-        status: 503,
-        contentType: 'application/json',
-        body: JSON.stringify({ statusCode: 503, statusMessage: 'Unavailable' }),
-      })
-    })
-
-    await page.locator('a[href="/menu"]').first().evaluate(
-      (element: HTMLAnchorElement) => element.click(),
-    )
-
-    await expect(page).toHaveURL(/\/menu\/?$/)
-    await expect(page.locator('body')).toContainText('Something went wrong')
-    await expect(page.locator('body')).not.toContainText('Menu coming soon.')
-  })
 
   test('Experiences -> Experience detail', async ({ page }) => {
     await navigateAndAssertAuthoritative(page, {

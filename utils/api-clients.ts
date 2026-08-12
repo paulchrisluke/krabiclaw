@@ -1,6 +1,6 @@
 export const PUBLIC_READ_TIMEOUT_MS = 6_000
 export const DASHBOARD_READ_TIMEOUT_MS = 8_000
-export const MUTATION_TIMEOUT_MS = 15_000
+export const MUTATION_TIMEOUT_MS = 30_000
 
 export class ApiClientError extends Error {
   readonly statusCode: number

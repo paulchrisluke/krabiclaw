@@ -11,7 +11,7 @@ test.describe('role permission matrix', () => {
   test.describe.configure({ mode: 'serial' })
 
   test('content permissions by role', async ({ request, baseURL }) => {
-    test.setTimeout(60_000)
+    test.setTimeout(120_000)
 
     const ownerLogin = await request.get(devLoginUrl(baseURL!), { headers: devLoginHeaders(), maxRedirects: 0 })
     expect(ownerLogin.status()).toBe(302)

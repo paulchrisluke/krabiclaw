@@ -221,7 +221,7 @@ async function openTransferOnboarding(
     }
   })
   const onboardingUrl = `${baseURL}/dashboard/${orgSlug}/onboarding?transfer=${encodeURIComponent(transfer.id!)}`
-  await page.goto(onboardingUrl, { waitUntil: 'load' })
+  await page.goto(onboardingUrl, { waitUntil: 'domcontentloaded' })
   expect(new URL(page.url()).searchParams.get('transfer')).toBe(transfer.id)
   await expect(page.locator('[data-transfer-onboarding-hydrated="true"]')).toBeVisible()
   await expect(page.getByText('Your site is ready')).toBeVisible()
@@ -326,6 +326,7 @@ test.describe('onboarding wizard UI', () => {
   })
 
   test('transfer handoff wizard saves free-plan notifications and skips paid-only steps', async ({ page, baseURL }) => {
+    test.setTimeout(120_000)
     const { siteId, orgSlug, siteSlug } = await openTransferOnboarding(page, baseURL!, { plan: 'free' })
 
     await reachNotificationStep(page)

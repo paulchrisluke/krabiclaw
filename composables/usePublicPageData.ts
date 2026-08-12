@@ -61,12 +61,12 @@ export const usePublicPageData = async (options: {
   const route = useRoute();
   const params = usePublicPageRequest();
   const entityId = siteId || draftId || null;
-  const requestedParams = options.datasets
+  const requestedParams = computed(() => options.datasets
     ? { ...params.value, datasets: [...options.datasets] }
-    : { ...params.value, datasets: [...params.value.datasets] }
-  const key = usePublicPageKey(entityId, requestedParams);
+    : { ...params.value, datasets: [...params.value.datasets] })
+  const key = computed(() => usePublicPageKey(entityId, requestedParams.value));
 
-  const url = usePublicPageUrl(siteId, requestedParams);
+  const url = computed(() => usePublicPageUrl(siteId, requestedParams.value));
 
   const shell = useSiteShellState();
   const requestEvent = import.meta.server ? useRequestEvent() : undefined
@@ -79,27 +79,30 @@ export const usePublicPageData = async (options: {
       ? { data: ref<PublicPagePayload>(), error: ref<Error | null>(null), pending: ref(false), refresh: async () => {} }
       : useAsyncData<PublicPagePayload>(
           key,
-          (_nuxtApp, { signal }) => loadPublicResourcePayload<PublicPagePayload>({
+          (_nuxtApp, { signal }) => {
+            const currentParams = requestedParams.value
+            return loadPublicResourcePayload<PublicPagePayload>({
               draftId,
               siteId,
               resourceKind: 'page',
-              url,
-              key,
+              url: url.value,
+              key: key.value,
               query: {
-                page: requestedParams.page ?? undefined,
-                location: requestedParams.location ?? undefined,
-                experience: requestedParams.experience ?? undefined,
-                datasets: [...requestedParams.datasets].sort().join(',') || undefined,
-                blogSlug: requestedParams.blogSlug ?? undefined,
-                locale: requestedParams.locale ?? undefined,
-                token: requestedParams.token ?? undefined,
+                page: currentParams.page ?? undefined,
+                location: currentParams.location ?? undefined,
+                experience: currentParams.experience ?? undefined,
+                datasets: [...currentParams.datasets].sort().join(',') || undefined,
+                blogSlug: currentParams.blogSlug ?? undefined,
+                locale: currentParams.locale ?? undefined,
+                token: currentParams.token ?? undefined,
               },
               validate: (value): value is PublicPagePayload =>
-                isPublicPagePayload(value, requestedParams.page ?? 'home'),
+                isPublicPagePayload(value, currentParams.page ?? 'home'),
               failureMessage: 'Public page failed',
               signal,
               requestEvent,
-            }),
+            })
+          },
           {
             server: options.server ?? true,
             lazy: deferredSupplement,
@@ -134,8 +137,8 @@ export const usePublicPageData = async (options: {
 
   // ── Single location (for /locations/[slug]/* pages) ───────
   const location = computed(() => {
-    if (!requestedParams.location) return null;
-    return locations.value.find((l) => l.slug === requestedParams.location) ?? null;
+    if (!requestedParams.value.location) return null;
+    return locations.value.find((l) => l.slug === requestedParams.value.location) ?? null;
   });
 
   // ── Location reviews preview (3 items) ───────────────────
