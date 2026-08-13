@@ -98,9 +98,8 @@ const E2E_FIXTURE_SITE_RETAINED_TABLES = [
 ] as const
 
 // Every fixture user a seed script creates under a fixed ID or that also happens to use
-// '@example.test' (server/api/dev/login.get.ts's auto-create path uses exactly this domain for
-// every dev-login test user, so several fixtures collide with it and must be excluded by ID, not
-// just by domain): user-mcp-free/growth/growth-service (scripts/generate-demo-seed.ts's
+// '@example.test' must be excluded by ID, not just by domain: user-mcp-free/growth/growth-service
+// (scripts/generate-demo-seed.ts's
 // Growth service fixture) and the site-transfer recipient both use @example.test. user-ncls-blawby
 // The curated Blawby fixture uses 'ncls-blawby@example.test' and does match the domain — it
 // must stay excluded by ID: it's entered_by_user_id on NCLS's owner-entered reviews, and deleting
@@ -329,13 +328,9 @@ DELETE FROM notifications WHERE id IN (
   SELECT id FROM notifications WHERE organization_id IN (${guestBookingOrgIdList}) AND recipient LIKE '%@playwright.example' AND created_at < '${cutoff}' LIMIT ${batchSize}
 );
 
--- Category 3: dev-login-created test users. server/api/dev/login.get.ts's userId-less path
--- auto-creates a user under '<userId>@example.test' for every dev-login call that doesn't pass
--- an explicit userId - the exact query that was reading 47.5M rows per execution (99.5% of all
--- D1 rows read on preview/staging, per wrangler d1 insights) because it scanned this ever-growing
--- table with 3 correlated EXISTS subqueries per row. That query is now fixed to a single indexed
--- pass regardless of table size, but this table still grows unboundedly without a sweep, so it's
--- covered here too. member/session/invitation(as inviter) all cascade from user.id
+-- Category 3: historical test users created by the removed dev-login bypass. Keep sweeping these
+-- legacy '<userId>@example.test' rows until every shared environment has aged them out.
+-- member/session/invitation(as inviter) all cascade from user.id
 -- (ON DELETE CASCADE), so deleting the user row is sufficient - it does NOT cascade up to
 -- organization/sites (organization isn't a child of user), but those are independently covered by
 -- category 1 above regardless of whether their owning user was already swept.

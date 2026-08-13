@@ -2,19 +2,14 @@ import { expect, test } from "@playwright/test";
 import type { APIRequestContext } from "@playwright/test";
 import { devLoginHeaders } from "./test-env";
 import { ensureSite } from "./helpers/ensure-site";
-import { loginAs } from "./helpers/auth";
-
-type RoleUser = {
-  id: string;
-  role: "owner" | "admin" | "editor" | "member";
-};
+import { inviteAndAcceptMember, loginAs } from "./helpers/auth";
 
 async function loginAsFreshChowbotUser(
   request: APIRequestContext,
   baseURL: string,
   label: string,
 ) {
-  const userId = `e2e-chowbot-${label}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const userId = `user-e2e-chowbot-${label}`;
   await loginAs(request, baseURL, userId);
   return userId;
 }
@@ -78,18 +73,16 @@ test.describe("mcp tools", () => {
     const organizationId = contextAfterSite.organization?.id;
     expect(organizationId).toEqual(expect.any(String));
 
-    const createUser = async (role: "admin" | "editor") => {
-      const res = await request.post(`${baseURL}/api/dev/test-member`, {
-        data: { role, organizationId },
-        headers: devLoginHeaders(),
-      });
-      expect(res.status()).toBe(200);
-      const body = (await res.json()) as { user: RoleUser };
-      return body.user;
-    };
-
-    const admin = await createUser("admin");
-    const editor = await createUser("editor");
+    const admin = await inviteAndAcceptMember(request, baseURL!, {
+      userId: "user-e2e-chowbot-admin",
+      role: "admin",
+    });
+    await loginAs(request, baseURL!, ownerUserId!);
+    const editor = await inviteAndAcceptMember(request, baseURL!, {
+      userId: "user-e2e-chowbot-editor",
+      role: "editor",
+      siteId,
+    });
 
     const createDraftPost = async (title: string) => {
       await loginAs(request, baseURL!, ownerUserId!);
@@ -422,10 +415,7 @@ test.describe("mcp tools", () => {
 
     const contextRes = await request.get(`${baseURL}/api/dashboard/context`);
     expect(contextRes.status()).toBe(200);
-    const context = (await contextRes.json()) as {
-      organization?: { id?: string };
-    };
-    const organizationId = context.organization?.id;
+    await contextRes.json();
 
     // Capture the owner's session before switching to the editor below —
     // loginAs swaps the request's session cookie, so get-session must run
@@ -433,12 +423,11 @@ test.describe("mcp tools", () => {
     const ownerSession = await request.get(`${baseURL}/api/auth/get-session`);
     const ownerUserId = ((await ownerSession.json()) as { user?: { id?: string } }).user?.id;
 
-    const editorRes = await request.post(`${baseURL}/api/dev/test-member`, {
-      data: { role: "editor", organizationId },
-      headers: devLoginHeaders(),
+    const editor = await inviteAndAcceptMember(request, baseURL!, {
+      userId: "user-e2e-review-editor",
+      role: "editor",
+      siteId,
     });
-    expect(editorRes.status()).toBe(200);
-    const editor = ((await editorRes.json()) as { user: RoleUser }).user;
 
     // reply_to_review requires MCP minimumRole 'owner' — an editor must be
     // rejected by the adapter before it ever reaches reviews.ts.

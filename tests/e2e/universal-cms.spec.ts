@@ -3,7 +3,7 @@ import { loginAs } from './helpers/auth'
 
 test.describe('universal CMS', () => {
   test('opens at the site scope and exposes canonical CMS managers', async ({ page, baseURL }) => {
-    await loginAs(page.request, baseURL!, 'user-mcp-free')
+    await loginAs(page.request, baseURL!, 'user-e2e-free-owner')
     await page.goto('/dashboard/mcp-free-fixture/sites/mcp-free-fixture/pages', { waitUntil: 'networkidle' })
 
     await expect(page.getByText('Site pages', { exact: true })).toBeVisible()
@@ -14,7 +14,7 @@ test.describe('universal CMS', () => {
   })
 
   test('unsupported page deep links fail instead of redirecting to another page', async ({ page, baseURL }) => {
-    await loginAs(page.request, baseURL!, 'user-mcp-free')
+    await loginAs(page.request, baseURL!, 'user-e2e-free-owner')
     await page.goto('/dashboard/mcp-free-fixture/sites/mcp-free-fixture/content/services')
     await expect(page.getByText('Error 404', { exact: true })).toBeVisible()
     await expect(page.locator('body')).toContainText('Page not found')

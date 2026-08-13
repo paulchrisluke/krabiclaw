@@ -1,9 +1,10 @@
 import { execFileSync } from 'node:child_process'
 import { expect, test } from '@playwright/test'
-import { dashboardOrgHeaders, devLoginHeaders, devLoginUrl } from './test-env'
+import { dashboardOrgHeaders } from './test-env'
 import { collectPageErrors } from './helpers'
+import { loginAsPage } from './helpers/auth'
 
-const POTTERY_OWNER_USER_ID = 'user-pottery-house'
+const POTTERY_OWNER_USER_ID = 'user-e2e-pottery-owner'
 const SITE_ID = 'site-pottery-house'
 const LOCATION_ID = 'loc-pottery-house'
 const SIBLING_LOCATION_ID = 'loc-pottery-beachfront'
@@ -25,9 +26,7 @@ test('owner can configure a site- or location-scoped editor invitation', async (
   const inviteEmail = 'e2e-scoped-editor@playwright.example'
   localD1Query(`DELETE FROM invitation WHERE organizationId = 'org-pottery-house' AND email = ${sqlValue(inviteEmail)}`)
   const pageErrors = collectPageErrors(page)
-  await page.context().setExtraHTTPHeaders(devLoginHeaders() || {})
-  const login = await page.goto(devLoginUrl(baseURL!, POTTERY_OWNER_USER_ID), { waitUntil: 'load' })
-  expect(login?.status()).toBeLessThan(400)
+  await loginAsPage(page, baseURL!, POTTERY_OWNER_USER_ID)
 
   await page.goto(`${baseURL}/dashboard/pottery-house-krabi/settings/members`, { waitUntil: 'load' })
   await page.waitForFunction(() => Boolean((document.querySelector('#__nuxt') as Element & { __vue_app__?: unknown } | null)?.__vue_app__))
@@ -77,9 +76,7 @@ test('phone invitation verifies identity, accepts access, and opens the scoped d
   test.setTimeout(180_000)
   test.skip(new URL(baseURL!).hostname !== 'localhost', 'This smoke test retrieves its log-only OTP from local D1.')
 
-  await page.context().setExtraHTTPHeaders(devLoginHeaders() || {})
-  const ownerLogin = await page.goto(devLoginUrl(baseURL!, POTTERY_OWNER_USER_ID), { waitUntil: 'load' })
-  expect(ownerLogin?.status()).toBeLessThan(400)
+  await loginAsPage(page, baseURL!, POTTERY_OWNER_USER_ID)
 
   const suffix = String(Date.now()).slice(-8)
   const phone = `+669${suffix}`

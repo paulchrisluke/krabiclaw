@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext } from '@playwright/test'
-import { collectPageErrors, setupTenantHeaders, tenantBaseURL } from './helpers'
-import { devLoginHeaders, devLoginUrl } from './test-env'
+import { collectPageErrors, tenantBaseURL } from './helpers'
+import { loginAsPage } from './helpers/auth'
+import { devLoginHeaders } from './test-env'
 import { demoFixture } from '../../seed-definitions/demo'
 
 const demoSiteId = demoFixture.siteId
@@ -266,10 +267,7 @@ test.describe('reply threading', () => {
     expect(ownerNotificationPayload.deep_link).not.toContain('?thread=')
 
     const errors = collectPageErrors(page)
-    await setupTenantHeaders(page, baseURL!, devHeaders())
-
-    const login = await page.goto(devLoginUrl(baseURL!, 'user-demo'), { waitUntil: 'load' })
-    expect(login?.status()).toBeLessThan(400)
+    await loginAsPage(page, baseURL!, 'user-e2e-demo-owner')
 
     const inboxUrl = `${baseURL}/dashboard/${demoOrgSlug}/sites/${demoSiteSlug}/locations/${demoLocationSlug}/inbox`
     const inboxResponse = await page.goto(inboxUrl, { waitUntil: 'load' })

@@ -153,8 +153,8 @@ export async function createScratchLocation(request: APIRequestContext, baseURL:
   return locationId as string
 }
 
-export async function loginAsFreshMcpUser(request: APIRequestContext, baseURL: string) {
-  const userId = `e2e-mcp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+export async function loginAsFreshMcpUser(request: APIRequestContext, baseURL: string, label: string) {
+  const userId = `user-e2e-mcp-fresh-${label}`
   await loginAs(request, baseURL, userId)
   return userId
 }

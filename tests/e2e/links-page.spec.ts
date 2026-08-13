@@ -1,14 +1,13 @@
 import { expect, test, type APIRequestContext } from '@playwright/test'
 import { blawbyBaseURL, blawbyExtraHeaders, collectPageErrors, expectHealthyPage, setupTenantHeaders, tenantBaseURL, tenantExtraHeaders } from './helpers'
-import { loginAs } from './helpers/auth'
-import { devLoginHeaders, devLoginUrl } from './test-env'
+import { loginAs, loginAsPage } from './helpers/auth'
 
-const DEMO_OWNER_USER_ID = 'user-demo'
+const DEMO_OWNER_USER_ID = 'user-e2e-demo-owner'
 const DEMO_SITE_ID = 'site-demo'
 const DEMO_ORG_SLUG = 'ember-slice-demo'
 const DEMO_SITE_SLUG = 'demo'
 
-const BLAWBY_OWNER_USER_ID = 'user-ncls-blawby'
+const BLAWBY_OWNER_USER_ID = 'user-e2e-ncls-owner'
 const BLAWBY_SITE_ID = 'site-ncls-blawby'
 
 type LinkItemInput = {
@@ -72,9 +71,7 @@ test.describe('tenant links page', () => {
     await resetLinksPage(request, baseURL!, DEMO_SITE_ID, 'Ember & Slice')
 
     try {
-      await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
-      const login = await page.goto(devLoginUrl(baseURL!, DEMO_OWNER_USER_ID), { waitUntil: 'load' })
-      expect(login?.status()).toBeLessThan(400)
+      await loginAsPage(page, baseURL!, DEMO_OWNER_USER_ID)
 
       const dashboardResponse = await page.goto(`${baseURL}/dashboard/${DEMO_ORG_SLUG}/sites/${DEMO_SITE_SLUG}/links`, { waitUntil: 'load' })
       expect(dashboardResponse?.status()).toBeLessThan(400)

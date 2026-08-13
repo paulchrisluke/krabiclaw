@@ -74,13 +74,29 @@ yarn seed:local             # optional — loads local demo and client test fixt
 yarn dev
 ```
 
-App at `http://localhost:3000`. Dev login (bypasses OAuth): `http://localhost:3000/api/dev/login`
+App at `http://localhost:3000`.
 
-Tenant sites resolve locally on `*.localhost`, for example:
+For browser tests, use the production Worker locally instead of Nuxt's dev
+server:
+
+```bash
+yarn test:e2e:local tests/e2e/smoke.spec.ts
+```
+
+Playwright applies the local D1 schema, clears disposable E2E artifacts, seeds
+the curated sites and verified synthetic Better Auth accounts, builds the
+Cloudflare Worker, and starts it under local workerd. Authenticated tests sign
+in through Better Auth with those credentials; no email inbox or authentication
+bypass route is involved.
+
+Tenant sites use the same shared-host routing contract as preview and staging:
+the browser targets `localhost` and the test helper supplies
+`x-preview-tenant` for the selected fixture. This avoids relying on wildcard
+localhost DNS behavior that differs across browsers and Wrangler versions.
 
 ```text
-http://pottery-house.localhost:3000/experiences
-http://kikuzuki-krabi-thailand.localhost:3000/reservations
+http://localhost:3000/experiences       (x-preview-tenant: pottery-house)
+http://localhost:3000/reservations      (x-preview-tenant: kikuzuki-krabi-thailand)
 ```
 
 `yarn dev` now disables Wrangler remote bindings by default so tenant dev does not depend on a remote Workers AI proxy session. This matters because Wrangler otherwise tries to open a remote preview session for the `AI` binding before attaching local `DB`/R2/KV bindings; if that handshake times out, tenant hosts fall through to `Site Not Found` even when local D1 is seeded correctly.

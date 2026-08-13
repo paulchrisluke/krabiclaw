@@ -1,10 +1,12 @@
 import { expect, test } from '@playwright/test'
-import { dashboardOrgHeaders, devLoginHeaders, devLoginUrl } from './test-env'
+import { loginAs } from './helpers/auth'
+import { dashboardOrgHeaders } from './test-env'
+
+const POTTERY_E2E_OWNER_ID = 'user-e2e-pottery-owner'
 
 test.describe('dashboard API smoke', () => {
-  test('dashboard APIs work after dev login', async ({ request, baseURL }) => {
-    const login = await request.get(devLoginUrl(baseURL!), { headers: devLoginHeaders() })
-    expect(login.status()).toBeLessThan(400)
+  test('dashboard APIs work after credential login', async ({ request, baseURL }) => {
+    await loginAs(request, baseURL!)
 
     const contextResponse = await request.get(`${baseURL}/api/dashboard/context`)
     expect(contextResponse.status()).toBe(200)
@@ -19,8 +21,7 @@ test.describe('dashboard API smoke', () => {
   })
 
   test('owner can update a canonical tenant page directly via dashboard API', async ({ request, baseURL }) => {
-    const login = await request.get(devLoginUrl(baseURL!), { headers: devLoginHeaders() })
-    expect(login.status()).toBeLessThan(400)
+    await loginAs(request, baseURL!)
 
     const contextRes = await request.get(`${baseURL}/api/dashboard/context`)
     expect(contextRes.status()).toBe(200)
@@ -72,8 +73,7 @@ test.describe('dashboard API smoke', () => {
   })
 
   test('location id dashboard API ignores stale dashboard headers and checks the location owner org', async ({ request, baseURL }) => {
-    const login = await request.get(devLoginUrl(baseURL!, 'user-pottery-house'), { headers: devLoginHeaders() })
-    expect(login.status()).toBeLessThan(400)
+    await loginAs(request, baseURL!, POTTERY_E2E_OWNER_ID)
 
     const noHeader = await request.get(`${baseURL}/api/dashboard/locations/loc-pottery-house`)
     expect(noHeader.status()).toBe(200)

@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { credentialSession } from './utils/e2e-auth.mjs'
+
 const BASE_URL = (process.argv.includes('--base-url')
   ? process.argv[process.argv.indexOf('--base-url') + 1]
   : process.env.MCP_BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
@@ -30,24 +32,10 @@ async function getAuthHeaders() {
     return { authorization: `Bearer ${process.env.MCP_BEARER_TOKEN}` }
   }
 
-  if (!isLocal && process.env.MCP_DEV_LOGIN !== '1') {
-    throw new Error('Set MCP_BEARER_TOKEN for remote checks, or MCP_DEV_LOGIN=1 for a local tunnel.')
+  if (!isLocal && process.env.MCP_CREDENTIAL_LOGIN !== '1') {
+    throw new Error('Set MCP_BEARER_TOKEN for remote checks, or MCP_CREDENTIAL_LOGIN=1 for a credentialed tunnel.')
   }
-
-  const url = new URL('/api/dev/login', BASE_URL)
-  if (USER_ID) {
-    url.searchParams.set('userId', USER_ID)
-  } else if (!SITE_ID) {
-    url.searchParams.set('userId', `mcp-ops-${Date.now()}`)
-  }
-
-  const headers = {}
-  if (process.env.E2E_DEV_ROUTE_SECRET) headers['x-dev-route-secret'] = process.env.E2E_DEV_ROUTE_SECRET
-
-  const res = await fetch(url, { headers, redirect: 'manual' })
-  const cookie = res.headers.get('set-cookie')?.split(';')[0]
-  if (!cookie) throw new Error(`Dev login did not return a session cookie. Status: ${res.status}`)
-  return { cookie }
+  return credentialSession(BASE_URL, { userId: USER_ID || 'user-e2e-mcp-owner-c' })
 }
 
 async function mcp(headers, name, args = {}) {

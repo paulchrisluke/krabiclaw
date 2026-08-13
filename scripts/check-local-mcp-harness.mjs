@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process'
+import { credentialSession } from './utils/e2e-auth.mjs'
 
 const _baseUrlArg = process.argv.includes('--base-url')
   ? process.argv[process.argv.indexOf('--base-url') + 1]
@@ -133,16 +134,8 @@ async function verifyDevRoutes(baseOrigin, requireSecret) {
   const headers = {}
   if (requireSecret) headers['x-dev-route-secret'] = envValue('E2E_DEV_ROUTE_SECRET')
 
-  const devLogin = await fetch(`${baseOrigin}/api/dev/login`, {
-    headers,
-    redirect: 'manual',
-  })
-  const setCookie = devLogin.headers.get('set-cookie')
-  if ((devLogin.status === 302 || devLogin.status === 307) && setCookie) {
-    pass('/api/dev/login responds with a session cookie')
-  } else {
-    fail('/api/dev/login did not return a session cookie', { status: devLogin.status, location: devLogin.headers.get('location') })
-  }
+  await credentialSession(baseOrigin, { userId: 'user-e2e-demo-owner' })
+  pass('Better Auth credential sign-in returns a session cookie')
 
   const telemetry = await fetchJson(`${baseOrigin}/api/dev/mcp-telemetry?since=${encodeURIComponent(new Date().toISOString())}&limit=1`, {
     headers,
@@ -190,11 +183,11 @@ async function main() {
   else fail('requested base URL must match MCP_BASE_URL', { baseUrl: BASE_URL, mcpBaseUrl })
 
   const usingBearerToken = Boolean(envValue('MCP_BEARER_TOKEN'))
-  const usingDevLogin = envValue('MCP_DEV_LOGIN') === '1'
+  const usingCredentialLogin = envValue('MCP_CREDENTIAL_LOGIN') === '1'
 
   if (usingBearerToken) pass('MCP_BEARER_TOKEN is set; bearer-token replay mode enabled')
-  else if (usingDevLogin) pass('MCP_DEV_LOGIN=1; headless local tunnel auth mode enabled')
-  else fail('set MCP_BEARER_TOKEN or MCP_DEV_LOGIN=1 before running the local MCP harness')
+  else if (usingCredentialLogin) pass('MCP_CREDENTIAL_LOGIN=1; credentialed local tunnel auth mode enabled')
+  else fail('set MCP_BEARER_TOKEN or MCP_CREDENTIAL_LOGIN=1 before running the local MCP harness')
 
   const requireSecret = true
   if (requireSecret) {
@@ -212,7 +205,7 @@ async function main() {
     NUXT_PUBLIC_PLATFORM_DOMAIN: platformDomain,
     MCP_BASE_URL: baseOrigin,
     E2E_ALLOW_DEV_ROUTES: 'true',
-    MCP_DEV_LOGIN: usingBearerToken ? process.env.MCP_DEV_LOGIN ?? '' : '1',
+    MCP_CREDENTIAL_LOGIN: usingBearerToken ? process.env.MCP_CREDENTIAL_LOGIN ?? '' : '1',
   }
 
   runNodeScript('scripts/check-mcp-app-contract.mjs', ['--base-url', baseOrigin], childEnv)

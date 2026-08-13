@@ -1,12 +1,10 @@
 import { expect, request as playwrightRequest, test, type APIRequestContext, type Page } from '@playwright/test'
-import { dashboardOrgHeaders, devLoginHeaders, devLoginUrl } from './test-env'
+import { findE2eAuthFixture } from '../../config/e2e-auth-fixtures'
+import { loginAs } from './helpers/auth'
+import { dashboardOrgHeaders } from './test-env'
 
 async function loginFreshUser(request: APIRequestContext, baseURL: string, userId: string) {
-  const res = await request.get(devLoginUrl(baseURL, userId), {
-    headers: devLoginHeaders(),
-    maxRedirects: 0,
-  })
-  expect(res.status()).toBe(302)
+  await loginAs(request, baseURL, userId)
 }
 
 // Drives the chat-style OnboardingWizard from "Start building" through the
@@ -93,8 +91,8 @@ interface AcceptedTransferFixture {
   locationId: string
 }
 
-const TRANSFER_SOURCE_OWNER_USER_ID = 'user-mcp-growth-service'
-const TRANSFER_RECIPIENT_USER_ID = 'user-mcp-growth'
+const TRANSFER_SOURCE_OWNER_USER_ID = 'user-e2e-growth-service-owner'
+const TRANSFER_RECIPIENT_USER_ID = 'user-e2e-growth-owner'
 
 async function createAcceptedTransferFixture(
   baseURL: string,
@@ -106,7 +104,7 @@ async function createAcceptedTransferFixture(
   // sites are handed off only into a paid workspace.
   const ownerUserId = TRANSFER_SOURCE_OWNER_USER_ID
   const recipientUserId = TRANSFER_RECIPIENT_USER_ID
-  const recipientEmail = `${recipientUserId}@example.test`
+  const recipientEmail = findE2eAuthFixture(recipientUserId).email
 
   // Build the fixture through the real transfer APIs. The recipient's seeded
   // Growth organization supplies the effective plan without starting another
@@ -266,8 +264,7 @@ test.describe('onboarding wizard UI', () => {
   test('a new user can build a site manually and open the dashboard', async ({ page, baseURL }) => {
     test.setTimeout(120_000)
     const suffix = Date.now()
-    const userId = `e2e-onboard-${suffix}`
-    await loginFreshUser(page.request, baseURL!, userId)
+    await loginFreshUser(page.request, baseURL!, 'user-e2e-onboarding')
 
     let onboardingContextRequests = 0
     let legacyContextRequests = 0
@@ -298,8 +295,7 @@ test.describe('onboarding wizard UI', () => {
   test('wizard shows all three business-type choices on mobile and desktop, and Legal/professional services creates a Blawby site', async ({ page, baseURL }) => {
     test.setTimeout(90_000)
     const suffix = Date.now()
-    const userId = `e2e-onboard-pro-${suffix}`
-    await loginFreshUser(page.request, baseURL!, userId)
+    await loginFreshUser(page.request, baseURL!, 'user-e2e-onboarding-professional')
 
     // Mobile-first layout check: the picker must render cleanly (all three
     // choices reachable) at a small viewport. Reload fresh at desktop size
@@ -372,8 +368,7 @@ test.describe('onboarding wizard UI', () => {
   test('a failed post-creation context refresh surfaces a terminal error instead of silently reapplying stale context', async ({ page, baseURL }) => {
     test.setTimeout(120_000)
     const suffix = Date.now()
-    const userId = `e2e-onboard-retry-${suffix}`
-    await loginFreshUser(page.request, baseURL!, userId)
+    await loginFreshUser(page.request, baseURL!, 'user-e2e-onboarding-retry')
 
     // Initial load succeeds via real SSR (no HTTP request for page.route to
     // intercept — see loadContextResource's import.meta.server branch), so

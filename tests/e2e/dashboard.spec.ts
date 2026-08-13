@@ -1,12 +1,13 @@
 import { expect, test, type Dialog } from '@playwright/test'
-import { collectPageErrors, setupTenantHeaders } from './helpers'
-import { dashboardOrgHeaders, devLoginHeaders, devLoginUrl } from './test-env'
+import { collectPageErrors } from './helpers'
+import { loginAsPage } from './helpers/auth'
+import { dashboardOrgHeaders } from './test-env'
 
 test.describe('dashboard functional smoke', () => {
-  test('dev login opens the owner dashboard', async ({ page, baseURL }) => {
+  test('credential login opens the owner dashboard', async ({ page, baseURL }) => {
     const errors = collectPageErrors(page)
-    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
-    const login = await page.goto(devLoginUrl(baseURL!), { waitUntil: 'load' })
+    await loginAsPage(page, baseURL!)
+    const login = await page.goto(`${baseURL}/api/post-login`, { waitUntil: 'load' })
     expect(login?.status()).toBeLessThan(400)
     await expect(page).toHaveURL(/\/dashboard/)
     await expect(page.locator('body')).toContainText(/Sites|Let's build your site/)
@@ -21,12 +22,8 @@ test.describe('dashboard functional smoke', () => {
   test('owner can open core dashboard pages for their org', async ({ page, baseURL }) => {
     test.setTimeout(60_000)
     const errors = collectPageErrors(page)
-    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
     const suffix = Date.now()
-    const userId = `e2e-dashboard-org-pages-${suffix}`
-    const login = await page.goto(devLoginUrl(baseURL!, userId), { waitUntil: 'load' })
-    expect(login?.status()).toBeLessThan(400)
-    await expect(page).toHaveURL(/\/dashboard/)
+    await loginAsPage(page, baseURL!, 'user-e2e-dashboard-org-pages')
 
     const createSiteRes = await page.request.post(`${baseURL}/api/sites`, {
       data: {
@@ -64,9 +61,7 @@ test.describe('dashboard functional smoke', () => {
   test('organization Today and Calendar render agenda data, navigate months, and filter kinds', async ({ page, baseURL }) => {
     test.setTimeout(90_000)
     await page.setViewportSize({ width: 1280, height: 900 })
-    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
-    const login = await page.goto(devLoginUrl(baseURL!, 'user-pottery-house'), { waitUntil: 'load' })
-    expect(login?.status()).toBeLessThan(400)
+    await loginAsPage(page, baseURL!, 'user-e2e-pottery-owner')
 
     const agendaItem = (overrides: Record<string, unknown> = {}) => ({
       id: 'reservation:e2e-agenda-reservation',
@@ -160,8 +155,7 @@ test.describe('dashboard functional smoke', () => {
     page.on('console', message => {
       if (message.type() === 'error') applicationErrors.push(`console: ${message.text()}`)
     })
-    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
-    await page.goto(devLoginUrl(baseURL!, 'user-mcp-growth'), { waitUntil: 'load' })
+    await loginAsPage(page, baseURL!, 'user-e2e-growth-owner')
 
     const response = await page.goto(`${baseURL}/dashboard/mcp-growth-fixture/sites/mcp-growth-fixture/pages`, { waitUntil: 'domcontentloaded' })
     expect(response?.status()).toBe(200)
@@ -498,8 +492,7 @@ test.describe('dashboard functional smoke', () => {
 
   test('Pages manager keeps the newest selection when page responses finish out of order', async ({ page, baseURL }) => {
     test.setTimeout(90_000)
-    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
-    await page.goto(devLoginUrl(baseURL!, 'user-mcp-growth'), { waitUntil: 'load' })
+    await loginAsPage(page, baseURL!, 'user-e2e-growth-owner')
 
     const response = await page.goto(`${baseURL}/dashboard/mcp-growth-fixture/sites/mcp-growth-fixture/pages`, { waitUntil: 'domcontentloaded' })
     expect(response?.status()).toBe(200)
@@ -551,9 +544,7 @@ test.describe('dashboard functional smoke', () => {
 
   test('canonical account, organization, site, and location routes render with responsive navigation', async ({ page, baseURL }) => {
     test.setTimeout(90_000)
-    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
-    const login = await page.goto(devLoginUrl(baseURL!, 'user-pottery-house'), { waitUntil: 'load' })
-    expect(login?.status()).toBeLessThan(400)
+    await loginAsPage(page, baseURL!, 'user-e2e-pottery-owner')
 
     const routes = [
       ['/dashboard/account/profile', 'Profile'],
@@ -609,17 +600,7 @@ test.describe('dashboard functional smoke', () => {
 
   test('site-wide manager reaches its site workspace but not organization settings', async ({ page, baseURL }) => {
     test.setTimeout(60_000)
-    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
-    await page.goto(devLoginUrl(baseURL!, 'user-pottery-house'), { waitUntil: 'load' })
-
-    const memberResponse = await page.request.post(`${baseURL}/api/dev/test-member`, {
-      headers: devLoginHeaders(),
-      data: { role: 'editor', organizationId: 'org-pottery-house', name: 'E2E Site Manager' },
-    })
-    expect(memberResponse.status()).toBe(200)
-    const member = await memberResponse.json() as { user: { id: string } }
-
-    await page.goto(devLoginUrl(baseURL!, member.user.id), { waitUntil: 'load' })
+    await loginAsPage(page, baseURL!, 'user-e2e-pottery-editor')
     const siteSettings = await page.goto(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/settings`, { waitUntil: 'load' })
     expect(siteSettings?.status()).toBeLessThan(400)
     await expect(page.getByText('Site Settings', { exact: true }).first()).toBeVisible()
@@ -630,8 +611,7 @@ test.describe('dashboard functional smoke', () => {
 
   test('capability-gated manager routes 404 when the vertical does not expose them, and resolve when it does', async ({ page, baseURL }) => {
     test.setTimeout(60_000)
-    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
-    await page.goto(devLoginUrl(baseURL!, 'user-pottery-house'), { waitUntil: 'load' })
+    await loginAsPage(page, baseURL!, 'user-e2e-pottery-owner')
 
     // Pottery House is an experience/saya site, not a restaurant (config/cms-registry.ts
     // verticalDefaultFeatures — verified against the live seed via `yarn seed:pottery-local`,
@@ -672,8 +652,7 @@ test.describe('dashboard functional smoke', () => {
 
   test('location experiences page distinguishes populated, empty, and failed list states', async ({ page, baseURL }) => {
     test.setTimeout(60_000)
-    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
-    await page.goto(devLoginUrl(baseURL!, 'user-pottery-house'), { waitUntil: 'load' })
+    await loginAsPage(page, baseURL!, 'user-e2e-pottery-owner')
 
     // The experiences page fetches its list via a direct server-side call during
     // SSR (see loadDashboardLocationExperiences in dashboard-editor-resources.ts),
@@ -730,8 +709,7 @@ test.describe('dashboard functional smoke', () => {
 
   test('site media library distinguishes empty and failed list states', async ({ page, baseURL }) => {
     test.setTimeout(60_000)
-    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
-    await page.goto(devLoginUrl(baseURL!, 'user-kikuzuki'), { waitUntil: 'load' })
+    await loginAsPage(page, baseURL!, 'user-e2e-kikuzuki-owner')
 
     // Same SSR-direct-service constraint as the experiences page above (see the
     // comment there) — media.vue fetches via loadDashboardMedia during SSR, so
@@ -765,8 +743,7 @@ test.describe('dashboard functional smoke', () => {
 
   test('blog posts list distinguishes empty and failed list states', async ({ page, baseURL }) => {
     test.setTimeout(60_000)
-    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
-    await page.goto(devLoginUrl(baseURL!, 'user-kikuzuki'), { waitUntil: 'load' })
+    await loginAsPage(page, baseURL!, 'user-e2e-kikuzuki-owner')
 
     const overviewUrl = `${baseURL}/dashboard/kikuzuki-krabi-thailand/sites/kikuzuki-krabi-thailand`
     const blogLink = page.getByRole('link').filter({ hasText: /^Blog/ })
@@ -794,8 +771,7 @@ test.describe('dashboard functional smoke', () => {
 
   test('location menu distinguishes empty and failed list states', async ({ page, baseURL }) => {
     test.setTimeout(60_000)
-    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
-    await page.goto(devLoginUrl(baseURL!, 'user-kikuzuki'), { waitUntil: 'load' })
+    await loginAsPage(page, baseURL!, 'user-e2e-kikuzuki-owner')
 
     const overviewUrl = `${baseURL}/dashboard/kikuzuki-krabi-thailand/sites/kikuzuki-krabi-thailand/locations/kikuzuki-japanese-robatayaki-izakaya`
     const menuLink = page.getByRole('link', { name: 'Menu', exact: true })
