@@ -61,6 +61,98 @@ test.describe('dashboard functional smoke', () => {
     expect(nonHydrationErrors).toEqual([])
   })
 
+  test('organization Today and Calendar render agenda data, navigate months, and filter kinds', async ({ page, baseURL }) => {
+    test.setTimeout(90_000)
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
+    const login = await page.goto(devLoginUrl(baseURL!, 'user-pottery-house'), { waitUntil: 'load' })
+    expect(login?.status()).toBeLessThan(400)
+
+    const agendaItem = (overrides: Record<string, unknown> = {}) => ({
+      id: 'reservation:e2e-agenda-reservation',
+      kind: 'reservation',
+      startsAt: '2026-08-13T02:00:00.000Z',
+      endsAt: null,
+      dayKey: '2026-08-13',
+      timeZone: 'Asia/Bangkok',
+      showTimeZone: false,
+      title: 'Agenda Guest',
+      subtitle: '2 guests',
+      status: 'new',
+      siteId: 'site-pottery-house',
+      locationId: 'loc-pottery-house',
+      locationTitle: 'Pottery House Krabi',
+      to: '/dashboard/pottery-house-krabi/sites/pottery-house/conversations/thread-e2e-agenda',
+      ...overrides,
+    })
+    const metadata = {
+      availableKinds: ['reservation', 'experience_booking', 'post', 'thread'],
+      sites: [{ id: 'site-pottery-house', label: 'Pottery House Krabi', slug: 'pottery-house' }],
+      locations: [{ id: 'loc-pottery-house', siteId: 'site-pottery-house', title: 'Pottery House Krabi' }],
+    }
+
+    await page.route('**/api/dashboard/today', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items: [agendaItem()], attention: [],
+          counts: { reservations: 1, experienceBookings: 0, threadsNeedingAttention: 0, posts: 0 },
+          ...metadata, resolvedAt: '2026-08-13T03:00:00.000Z',
+        }),
+      })
+    })
+    await page.goto(`${baseURL}/dashboard/pottery-house-krabi`, { waitUntil: 'networkidle' })
+    await page.getByRole('link', { name: 'Today', exact: true }).first().click()
+    await expect(page).toHaveURL(/\/dashboard\/pottery-house-krabi\/today$/)
+    await expect(page.getByRole('navigation', { name: "Today's metrics" })).toContainText('Reservations')
+    const scheduleLink = page.getByRole('link', { name: /Agenda Guest/ })
+    await expect(scheduleLink).toBeVisible()
+    await expect(scheduleLink).toHaveAttribute('href', '/dashboard/pottery-house-krabi/sites/pottery-house/conversations/thread-e2e-agenda')
+
+    let agendaRequestCount = 0
+    await page.route('**/api/dashboard/agenda?**', async route => {
+      agendaRequestCount += 1
+      const requestUrl = new URL(route.request().url())
+      const from = requestUrl.searchParams.get('from')!
+      const kind = requestUrl.searchParams.get('kinds')
+      const itemKind = kind === 'post' ? 'post' : 'reservation'
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items: [agendaItem({
+            id: `${itemKind}:${agendaRequestCount}`,
+            kind: itemKind,
+            dayKey: from,
+            startsAt: `${from}T02:00:00.000Z`,
+            title: `${itemKind === 'post' ? 'Post' : 'Reservation'} month ${agendaRequestCount}`,
+          })],
+          ...metadata,
+        }),
+      })
+    })
+    await page.getByRole('link', { name: 'Calendar', exact: true }).first().click()
+    await expect(page).toHaveURL(/\/dashboard\/pottery-house-krabi\/calendar$/)
+    await expect(page.getByText(/Reservation month/).first()).toBeVisible()
+    const monthHeading = page.getByRole('heading', { level: 2 }).first()
+    const firstMonthLabel = await monthHeading.textContent()
+    await page.getByRole('button', { name: 'Next month' }).click()
+    await expect(monthHeading).not.toHaveText(firstMonthLabel ?? '')
+    await expect(page.getByText(/Reservation month 2/).first()).toBeVisible()
+
+    await page.getByRole('combobox', { name: 'Kind' }).click()
+    await page.getByRole('option', { name: 'Post', exact: true }).click()
+    await expect(page.getByText(/Post month 3/).first()).toBeVisible()
+    expect(agendaRequestCount).toBeGreaterThanOrEqual(3)
+
+    await page.setViewportSize({ width: 390, height: 844 })
+    await expect(page.getByTestId('calendar-month-grid')).toBeHidden()
+    await expect(page.getByTestId('calendar-mobile-list')).toBeVisible()
+    await expect(page.getByTestId('calendar-mobile-list').getByRole('link', { name: /Post month 3/ })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Back to Pottery House Krabi' })).toBeVisible()
+  })
+
   test('Pages manager runs one typed-block and custom-page lifecycle tracer journey', async ({ page, baseURL }) => {
     test.setTimeout(240_000)
     const applicationErrors: string[] = []

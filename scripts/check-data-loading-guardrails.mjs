@@ -1,5 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import {
   PROHIBITED_LEGACY_PATHS,
   CANONICAL_LOADER_PATHS,
@@ -13,7 +14,7 @@ import {
   checkDeleteBodyUsage,
 } from './lib/data-loading-guardrails.mjs'
 
-const root = new URL('..', import.meta.url).pathname
+const root = fileURLToPath(new URL('..', import.meta.url))
 const dashboardRoots = [
   'pages/dashboard',
   'lib/components/workspace',
@@ -112,7 +113,7 @@ for (const directory of dashboardRoots) {
   for (const file of await filesUnder(directory)) {
     const source = await readFile(join(root, file), 'utf8')
     // Skip DashboardAccountMenu.vue for /api/health platform health check
-    if (file === 'lib/components/workspace/dashboard/DashboardAccountMenu.vue') continue
+    if (file.replaceAll('\\', '/') === 'lib/components/workspace/dashboard/DashboardAccountMenu.vue') continue
     violations.push(...checkDashboardFetchUsage(file, source))
   }
 }
