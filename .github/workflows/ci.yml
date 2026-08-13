@@ -176,6 +176,18 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: node --experimental-strip-types scripts/reset-e2e-artifacts.ts --staging
+      - name: Seed staging fixtures
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          node --experimental-strip-types scripts/generate-demo-bundle.ts
+          node --experimental-strip-types scripts/generate-demo-seed.ts --preview --stdout > /tmp/staging-seed.sql
+          node --experimental-strip-types scripts/generate-pottery-house-seed.ts --preview --stdout >> /tmp/staging-seed.sql
+          node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --preview --stdout >> /tmp/staging-seed.sql
+          node --experimental-strip-types scripts/generate-blawby-ci-seed.ts --stdout >> /tmp/staging-seed.sql
+          npx wrangler d1 execute DB --env staging --remote --file /tmp/staging-seed.sql
       - name: Run OAuth bearer MCP smoke
         run: yarn test:mcp
       - name: Run full staging E2E suite
