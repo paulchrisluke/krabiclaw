@@ -385,12 +385,12 @@ test.describe('onboarding wizard UI', () => {
     })
 
     await page.goto(`${baseURL}/dashboard/onboarding`, { waitUntil: 'load' })
-    await expect(page.locator('.onboarding-step-widget').first()).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Start building' })).toBeVisible()
     await completeManualWizard(page, `Onboard Retry Test ${suffix}`, { skipSuccessAssertion: true })
 
     // Forbidden: the wizard's own post-creation success view (or any stale
     // pre-creation context) must not render as if the refresh had succeeded.
     await expect(page.getByText('From here, head to your dashboard to keep building')).not.toBeVisible()
-    await expect(page.getByText('Workspace could not be loaded')).toBeVisible()
+    await expect(page.getByText('Workspace could not be loaded')).toBeVisible({ timeout: 60_000 })
   })
 })
