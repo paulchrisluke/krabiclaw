@@ -116,9 +116,11 @@ const dashboard = useDashboardSite()
 const { preference, setPreference } = usePlatformTheme()
 const config = useRuntimeConfig()
 const mobileOpen = ref(false)
-const accountRouteQuery = inject(dashboardAccountRouteQueryKey, computed(() => dashboard.organization.value?.slug
-  ? { organization: dashboard.organization.value.slug, organizationName: dashboard.organization.value.name }
-  : {}))
+const accountRouteQuery = inject(dashboardAccountRouteQueryKey, computed((): Record<string, string> => {
+  const organization = dashboard.organization.value
+  if (!organization?.slug) return {}
+  return { organization: organization.slug, organizationName: organization.name }
+}))
 
 const profileTo = computed(() => ({
   path: '/dashboard/account/profile',

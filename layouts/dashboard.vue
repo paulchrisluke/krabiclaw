@@ -274,9 +274,11 @@ const accountOrganization = computed(() => organizations.value.find(org => org.s
   ?? organizations.value.find(org => org.id === activeOrganizationId.value)
   ?? organizations.value[0]
   ?? null)
-const accountRouteQuery = computed(() => accountOrganization.value?.slug
-  ? { organization: accountOrganization.value.slug, organizationName: accountOrganization.value.name }
-  : {})
+const accountRouteQuery = computed((): Record<string, string> => {
+  const target = accountOrganization.value
+  if (!target?.slug) return {}
+  return { organization: target.slug, organizationName: target.name }
+})
 const impersonatedBy = computed(() => {
   const session = sessionData.value?.session as { impersonatedBy?: string } | undefined
   return session?.impersonatedBy
