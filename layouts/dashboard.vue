@@ -87,7 +87,7 @@
     </UDashboardGroup>
 
     <div
-      v-if="mobileNavItems.length"
+      v-if="mobileNavItems.length && !isAccountRoute"
       class="fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 md:hidden"
       data-testid="dashboard-mobile-nav"
     >
@@ -105,9 +105,7 @@
           :title="item.label"
           :class="item.active ? 'bg-primary/10 text-primary' : 'text-dimmed'"
         />
-        <NuxtLink to="/dashboard/account/profile" aria-label="Account" title="Account" class="flex size-9 items-center justify-center rounded-full">
-          <UAvatar :src="sessionData?.user?.image ?? undefined" :alt="sessionData?.user?.name || 'Account'" size="xs" />
-        </NuxtLink>
+        <DashboardAccountMenu mobile-only />
       </nav>
     </div>
 
@@ -120,6 +118,7 @@
 import ChowBot from '~/lib/components/workspace/dashboard/ChowBot.vue'
 import DashboardScopeHeader from '~/lib/components/workspace/dashboard/DashboardScopeHeader.vue'
 import type { DashboardScopeHeaderModel } from '~/lib/components/workspace/dashboard/DashboardScopeHeader.vue'
+import { dashboardAccountRouteQueryKey, dashboardOrganizationParentKey, dashboardScopeHeaderModelKey } from '~/lib/components/workspace/dashboard/dashboardScopeHeaderContext'
 import { authClient } from '~/lib/auth-client'
 import { useAuth } from '~/composables/useAuth'
 import { useAnalytics } from '~/composables/useAnalytics'
@@ -145,10 +144,9 @@ import '~/assets/css/dashboard.css'
 //   Site items must not leak into location scope and vice versa — this was a
 //   real bug here once, caused by checking "does siteBase/locationBase exist"
 //   instead of "does the manager's scope match the CURRENT scope".
-// - The parent ("← back") row is a normal UNavigationMenu item built from
-//   scopeHeaderModel.parent, not custom-styled markup living in the switcher
-//   header — this guarantees identical sizing/spacing to every other nav item
-//   by construction instead of hand-matching CSS.
+// - At md and above, the parent row is a normal UNavigationMenu item built from
+//   scopeHeaderModel.parent. Below md the same model is provided to
+//   DashboardNavbarLeading because the sidebar is hidden.
 // - New verticals/templates need zero changes here — add the combination to
 //   cmsCapabilityRegistry and nav/capabilities update automatically. A new
 //   manager id (not just a new vertical reusing existing ids) needs an entry
@@ -260,6 +258,25 @@ const canManageOrganization = computed(() => ['owner', 'admin'].includes(organiz
 const dashboardLocation = useDashboardLocation()
 
 const organizations = computed<readonly AuthOrganization[]>(() => unref(organizationsState)?.data ?? [])
+const requestedAccountOrganizationSlug = computed(() => {
+  const slug = routeName.value.startsWith('dashboard-account') ? route.query.organization : null
+  return typeof slug === 'string' && /^[a-z0-9-]+$/.test(slug) ? slug : null
+})
+const requestedAccountOrganizationName = computed(() => {
+  const name = routeName.value.startsWith('dashboard-account') ? route.query.organizationName : null
+  return typeof name === 'string' && name.trim().length <= 100 ? name.trim() : null
+})
+const activeOrganizationId = computed(() => {
+  const session = sessionData.value?.session as { activeOrganizationId?: string | null } | undefined
+  return session?.activeOrganizationId ?? null
+})
+const accountOrganization = computed(() => organizations.value.find(org => org.slug === requestedAccountOrganizationSlug.value)
+  ?? organizations.value.find(org => org.id === activeOrganizationId.value)
+  ?? organizations.value[0]
+  ?? null)
+const accountRouteQuery = computed(() => accountOrganization.value?.slug
+  ? { organization: accountOrganization.value.slug, organizationName: accountOrganization.value.name }
+  : {})
 const impersonatedBy = computed(() => {
   const session = sessionData.value?.session as { impersonatedBy?: string } | undefined
   return session?.impersonatedBy
@@ -284,6 +301,7 @@ const locationsBase = computed(() => siteBase.value ? `${siteBase.value}/locatio
 const currentLocationSlug = dashboardLocation.routeLocationSlug
 const locationBase = computed(() => locationsBase.value && currentLocationSlug.value ? `${locationsBase.value}/${currentLocationSlug.value}` : null)
 const routeName = computed(() => typeof route.name === 'string' ? route.name : '')
+const isAccountRoute = computed(() => routeName.value.startsWith('dashboard-account'))
 const isAdminRoute = computed(() => routeName.value.startsWith('admin'))
 const isConversationsRoute = computed(() => routeName.value.includes('conversations'))
 const showChowBot = computed(() => !isConversationsRoute.value
@@ -324,9 +342,9 @@ const scope = computed<'organization' | 'site' | 'location'>(() => {
   return 'organization'
 })
 
-// One reusable scope-header model, per issue #316's authoritative clarification:
-// the parent row is a visible, always-present part of this single component at
-// every scope — never a menu item, never a separate per-scope implementation.
+// One reusable scope-header model feeds both the desktop sidebar and the mobile
+// navbar leading control. Detail pages may override it with an explicit index
+// parent, but scope navigation never infers a parent from browser history.
 const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
   if (scope.value === 'site' || scope.value === 'location') {
     return {
@@ -559,9 +577,9 @@ const settingsGroup = computed(() => {
   if (routeName.value.startsWith('dashboard-account')) {
     return [
       { label: 'Account', type: 'label' },
-      { label: 'Profile', icon: 'i-lucide-user', to: '/dashboard/account/profile' },
-      { label: 'Authentication', icon: 'i-lucide-shield', to: '/dashboard/account/authentication' },
-      { label: 'Billing Items', icon: 'i-lucide-receipt', to: '/dashboard/account/billing-items' },
+      { label: 'Profile', icon: 'i-lucide-user', to: { path: '/dashboard/account/profile', query: accountRouteQuery.value } },
+      { label: 'Authentication', icon: 'i-lucide-shield', to: { path: '/dashboard/account/authentication', query: accountRouteQuery.value } },
+      { label: 'Billing Items', icon: 'i-lucide-receipt', to: { path: '/dashboard/account/billing-items', query: accountRouteQuery.value } },
     ]
   }
   return []
@@ -584,6 +602,18 @@ const navigationItems = computed(() => {
   if (routeName.value.startsWith('dashboard-account')) return [settingsGroup.value]
   return [mobileNavItems.value.map(({ key: _key, active: _active, ...item }) => item)]
 })
+provide(dashboardScopeHeaderModelKey, scopeHeaderModel)
+provide(dashboardOrganizationParentKey, computed(() => {
+  const target = isAccountRoute.value ? accountOrganization.value : organization.value ?? accountOrganization.value
+  if (target) return { label: target.name, to: `/dashboard/${encodeURIComponent(target.slug)}` }
+  return requestedAccountOrganizationSlug.value
+    ? {
+        label: requestedAccountOrganizationName.value ?? requestedAccountOrganizationSlug.value,
+        to: `/dashboard/${encodeURIComponent(requestedAccountOrganizationSlug.value)}`,
+      }
+    : null
+}))
+provide(dashboardAccountRouteQueryKey, accountRouteQuery)
 
 interface DashboardMobileNavItem {
   key: string

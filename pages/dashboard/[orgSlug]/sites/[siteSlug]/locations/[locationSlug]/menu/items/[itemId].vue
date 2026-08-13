@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar :title="itemName || 'Menu Item'">
         <template #leading>
-          <DashboardSidebarCollapseButton />
+          <DashboardNavbarLeading :detail-to="backPath" detail-label="Menu" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -48,7 +48,7 @@ if (!siteId || !itemId) {
 }
 
 const { menuPath } = useDashboardSiteLinks(siteId)
-const _backPath = computed(() => menuPath())
+const backPath = computed(() => menuPath())
 
 const pageError = computed(() => menuId.value ? null : 'Menu ID is required to edit an item')
 

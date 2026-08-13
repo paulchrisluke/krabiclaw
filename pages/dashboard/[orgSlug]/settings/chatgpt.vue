@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="ChatGPT">
         <template #leading>
-          <DashboardSidebarCollapseButton />
+          <DashboardNavbarLeading />
         </template>
       </UDashboardNavbar>
     </template>

@@ -3,17 +3,7 @@
     <template #header>
       <UDashboardNavbar :title="conversationTitle">
         <template #leading>
-          <div class="flex items-center gap-1">
-            <DashboardSidebarCollapseButton />
-            <UButton
-              :to="assistantPath"
-              icon="i-lucide-arrow-left"
-              label="Assistant"
-              color="neutral"
-              variant="ghost"
-              size="sm"
-            />
-          </div>
+          <DashboardNavbarLeading :detail-to="assistantPath" detail-label="Assistant" />
         </template>
         <template #right>
           <UButton

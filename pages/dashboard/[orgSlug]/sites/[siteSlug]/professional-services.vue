@@ -2,7 +2,7 @@
   <UDashboardPanel id="site-professional-services">
     <template #header>
       <UDashboardNavbar title="Services">
-        <template #leading><DashboardSidebarCollapseButton /></template>
+        <template #leading><DashboardNavbarLeading /></template>
         <template #right><UButton :to="pagesPath" color="neutral" variant="soft">Pages</UButton></template>
       </UDashboardNavbar>
     </template>

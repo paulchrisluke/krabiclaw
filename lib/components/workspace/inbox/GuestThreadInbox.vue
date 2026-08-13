@@ -6,17 +6,10 @@
     <template #header>
       <UDashboardNavbar :title="navbarTitle">
         <template #leading>
-          <UButton
-            v-if="isDetailMode"
-            icon="i-lucide-chevron-left"
-            color="neutral"
-            variant="ghost"
-            size="sm"
-            square
-            aria-label="Back to inbox"
-            @click="goBackToList"
+          <DashboardNavbarLeading
+            :detail-to="isDetailMode ? listRoute : null"
+            detail-label="Inbox"
           />
-          <DashboardSidebarCollapseButton v-else />
         </template>
 
       </UDashboardNavbar>

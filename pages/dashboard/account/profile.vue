@@ -3,164 +3,53 @@
     <template #header>
       <UDashboardNavbar title="Profile">
         <template #leading>
-          <DashboardSidebarCollapseButton />
+          <DashboardNavbarLeading :detail-to="accountIndexTo" detail-label="Account" />
         </template>
+        <template #right><DashboardAccountMenu mobile-only class="md:hidden" /></template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
-      <div class="max-w-4xl space-y-6">
-        
-        <!-- Avatar -->
-        <UCard :ui="{ body: 'p-6' }">
-          <div class="flex items-center justify-between gap-6">
-            <div class="space-y-1 flex-1">
-              <h3 class="text-base font-medium text-highlighted">Avatar</h3>
-              <p class="text-sm text-muted">
-                Your avatar comes from your active sign-in provider.
-              </p>
-            </div>
-            <div class="shrink-0">
-              <UAvatar
-                :src="sessionData?.user?.image ?? undefined"
-                :text="getInitials(sessionData?.user?.name || sessionData?.user?.email)"
-                alt="User avatar"
-                size="3xl"
-                class="ring-1 ring-border"
-              />
-            </div>
-          </div>
-          <template #footer>
-            <div class="flex items-center justify-between text-sm text-muted">
-              <span>Use your profile name below when a provider does not supply an image.</span>
-            </div>
-          </template>
-        </UCard>
+      <div class="w-full max-w-[var(--ws-page-narrow,45rem)]">
+        <section class="flex items-center gap-4 pb-[22px] max-sm:pb-[18px]" :class="rowTone('avatar')">
+          <UAvatar :src="sessionData?.user?.image ?? undefined" :text="getInitials(sessionData?.user?.name || sessionData?.user?.email)" alt="User avatar" class="size-14" />
+          <span class="account-action text-muted" title="Avatar is managed by your sign-in provider">Change photo</span>
+        </section>
 
-        <!-- Display Name -->
-        <UCard :ui="{ body: 'p-6' }">
-          <div class="space-y-4">
-            <UFormField label="Display Name" name="displayName" help="Please enter your full name, or a display name you are comfortable with.">
-              <UInput
-                v-model="nameInput"
-                class="max-w-md"
-                @input="nameTouched = true"
-                @keydown.enter="saveName"
-              />
-            </UFormField>
-          </div>
-          <template #footer>
-            <div class="flex items-center justify-between text-sm text-muted">
-              <span>Please use 32 characters at maximum.</span>
-              <UButton 
-                size="sm" 
-                color="neutral" 
-                variant="solid" 
-                :disabled="!nameDirty"
-                :loading="nameSaving"
-                @click="saveName"
-              >
-                Save
-              </UButton>
+        <section class="profile-row" :class="rowTone('name')">
+          <div class="min-w-0 flex-1" :class="editingRow === 'name' ? 'space-y-3.5' : ''">
+            <div class="flex items-start justify-between gap-4">
+              <div><h3 class="profile-label">Display name</h3><p v-if="editingRow !== 'name'" class="profile-value">{{ sessionData?.user?.name || 'Not set' }}</p></div>
+              <button v-if="editingRow === 'name'" type="button" class="account-action" @click="cancelEdit">Cancel</button>
             </div>
-          </template>
-        </UCard>
+            <UInput v-if="editingRow === 'name'" v-model="nameInput" class="max-w-md" size="xl" autofocus @input="nameTouched = true" @keydown.enter="saveNameAndClose" />
+            <UButton v-if="editingRow === 'name'" size="sm" :disabled="!nameDirty" :loading="nameSaving" @click="saveNameAndClose">Save</UButton>
+          </div>
+          <button v-if="editingRow !== 'name'" type="button" class="account-action" @click="editingRow = 'name'">Edit</button>
+        </section>
 
-        <!-- Email -->
-        <UCard :ui="{ body: 'p-6' }">
-          <div class="space-y-4">
-            <div class="space-y-1">
-              <h3 class="text-base font-medium text-highlighted">Email</h3>
-              <p class="text-sm text-muted">Your primary email will be used for account-related notifications.</p>
-            </div>
-            <div class="flex items-center gap-3">
-              <span class="font-medium text-highlighted">{{ sessionData?.user?.email }}</span>
-              <UBadge color="primary" variant="subtle" size="sm">Primary</UBadge>
-              <UBadge v-if="sessionData?.user?.emailVerified" color="success" variant="subtle" size="sm">Verified</UBadge>
-            </div>
-          </div>
-          <template #footer>
-            <div class="flex items-center justify-between text-sm text-muted">
-              <span>Your account email works across Google, WhatsApp, and email/password sign-in.</span>
-            </div>
-          </template>
-        </UCard>
+        <section class="profile-row" :class="rowTone('email')">
+          <div class="min-w-0"><h3 class="profile-label">Email</h3><p class="profile-value">{{ sessionData?.user?.email }}</p><p class="profile-meta"><UIcon name="i-logos-google-icon" class="size-3.5" />Signed in with Google</p></div>
+        </section>
 
-        <!-- Phone Number -->
-        <UCard :ui="{ body: 'p-6' }">
-          <div class="space-y-4">
-            <UFormField label="Phone Number" name="phoneNumber" help="Enter a phone number to receive important service updates by WhatsApp.">
-              <UInput
-                v-model="phoneInput"
-                class="max-w-md"
-                placeholder="+1234567890"
-                @input="phoneTouched = true"
-                @keydown.enter="requestPhoneVerify"
-              />
-            </UFormField>
-            <div v-if="sessionData?.user?.phoneNumberVerified && phoneInput === sessionData?.user?.phoneNumber" class="flex items-center gap-2 mt-2">
-              <UIcon name="i-lucide-circle-check" class="text-success size-5" />
-              <span class="text-sm text-success">Verified</span>
-            </div>
+        <section class="profile-row items-start" :class="rowTone('phone')">
+          <div class="min-w-0 flex-1 space-y-3">
+            <div><h3 class="profile-label">Phone number</h3><p v-if="editingRow !== 'phone'" class="profile-value">{{ sessionData?.user?.phoneNumber || 'Not set' }}</p><p v-if="editingRow !== 'phone'" class="profile-meta" :class="sessionData?.user?.phoneNumberVerified ? 'text-success' : 'text-warning'"><span class="size-1.5 rounded-full bg-current" />{{ sessionData?.user?.phoneNumberVerified ? 'Verified' : 'Not verified' }}</p></div>
+            <UInput v-if="editingRow === 'phone'" v-model="phoneInput" class="max-w-md" size="xl" placeholder="+1234567890" autofocus @input="phoneTouched = true" @keydown.enter="requestPhoneVerify" />
+            <div v-if="editingRow === 'phone'" class="flex items-center gap-3"><UButton size="sm" :disabled="!phoneDirty || !phoneInput.trim()" :loading="phoneSaving" @click="requestPhoneVerify">Verify & Save</UButton><button type="button" class="account-action" @click="cancelEdit">Cancel</button></div>
           </div>
-          <template #footer>
-            <div class="flex items-center justify-between text-sm text-muted">
-              <span>A verification code will be sent via WhatsApp.</span>
-              <UButton 
-                size="sm" 
-                color="neutral" 
-                variant="solid" 
-                :disabled="!phoneDirty || !phoneInput.trim()"
-                :loading="phoneSaving"
-                @click="requestPhoneVerify"
-              >
-                Verify & Save
-              </UButton>
-            </div>
-          </template>
-        </UCard>
+          <button v-if="editingRow !== 'phone'" type="button" class="account-action" @click="editingRow = 'phone'">Edit</button>
+        </section>
 
-        <!-- User ID -->
-        <UCard :ui="{ body: 'p-6' }">
-          <div class="space-y-4">
-            <UFormField label="User ID" name="userId" help="This is your unique user ID within the platform.">
-              <div class="flex items-center gap-2 max-w-md">
-                <UInput 
-                  :model-value="sessionData?.user?.id" 
-                  readonly
-                  class="font-mono text-sm flex-1"
-                />
-                <UButton
-                  color="neutral"
-                  variant="ghost"
-                  icon="i-lucide-clipboard"
-                  aria-label="Copy user ID"
-                  @click="copyUserId"
-                />
-              </div>
-            </UFormField>
-          </div>
-          <template #footer>
-            <div class="flex items-center justify-between text-sm text-muted">
-              <span>Used when interacting with support or API.</span>
-            </div>
-          </template>
-        </UCard>
+        <section class="profile-row" :class="rowTone('user-id')">
+          <div class="min-w-0"><h3 class="profile-label">User ID</h3><p class="profile-value font-mono">{{ sessionData?.user?.id }}</p></div>
+          <button type="button" class="account-action" @click="copyUserId">Copy</button>
+        </section>
 
-        <!-- Danger Zone -->
-        <UCard class="border-error transition-colors" :ui="{ body: 'p-6', footer: 'p-0' }">
-          <div class="space-y-1">
-            <h3 class="text-base font-semibold text-highlighted">Delete Account</h3>
-            <p class="text-sm text-muted">Permanently remove your Personal Account and all of its contents from the platform. This action is not reversible, so please continue with caution.</p>
-          </div>
-          <template #footer>
-            <div class="flex items-center justify-end border-t border-error/20 bg-error/5 p-4">
-              <UButton color="error" variant="solid" @click="deleteModalOpen = true">
-                Delete Personal Account
-              </UButton>
-            </div>
-          </template>
-        </UCard>
+        <section class="profile-row" :class="rowTone('delete')">
+          <div><h3 class="profile-label text-error">Delete account</h3><p class="profile-value whitespace-normal">Removes your account, organization, site, locations and menu data.</p></div>
+          <button type="button" class="account-action text-error" @click="deleteModalOpen = true">Delete</button>
+        </section>
       </div>
     </template>
   </UDashboardPanel>
@@ -258,6 +147,14 @@ import { useAuth } from '~/composables/useAuth'
 definePageMeta({ layout: 'dashboard' })
 
 const toast = useToast()
+const route = useRoute()
+const accountIndexTo = computed(() => ({
+  path: '/dashboard/account',
+  query: {
+    ...(typeof route.query.organization === 'string' ? { organization: route.query.organization } : {}),
+    ...(typeof route.query.organizationName === 'string' ? { organizationName: route.query.organizationName } : {}),
+  },
+}))
 const { data: sessionData } = useAuth()
 const refreshSession = async () => {
   await authClient.getSession()
@@ -266,20 +163,40 @@ const refreshSession = async () => {
 const nameInput = ref(sessionData.value?.user?.name || '')
 const nameDirty = computed(() => nameInput.value.trim() !== (sessionData.value?.user?.name || ''))
 const nameSaving = ref(false)
+type ProfileRow = 'avatar' | 'name' | 'email' | 'phone' | 'user-id' | 'delete'
+const editingRow = ref<ProfileRow | null>(null)
+
+function rowTone(row: ProfileRow) {
+  return editingRow.value && editingRow.value !== row ? 'opacity-40' : ''
+}
+
+function cancelEdit() {
+  nameInput.value = sessionData.value?.user?.name || ''
+  phoneInput.value = sessionData.value?.user?.phoneNumber || ''
+  nameTouched.value = false
+  phoneTouched.value = false
+  editingRow.value = null
+}
 
 async function saveName() {
-  if (!nameDirty.value) return
+  if (!nameDirty.value) return false
   nameSaving.value = true
   try {
     await authClient.updateUser({ name: nameInput.value.trim() })
     await refreshSession()
     toast.add({ title: 'Name updated', icon: 'i-lucide-circle-check', color: 'success' })
+    return true
   } catch (_err) {
     const msg = _err instanceof Error ? _err.message : String(_err)
     toast.add({ title: 'Update failed', description: msg, color: 'error' })
+    return false
   } finally {
     nameSaving.value = false
   }
+}
+
+async function saveNameAndClose() {
+  if (await saveName()) editingRow.value = null
 }
 
 // useAuth()'s session resolves asynchronously, so nameInput starts as '' before
@@ -334,6 +251,7 @@ async function verifyPhone() {
     
     await refreshSession()
     verifyModalOpen.value = false
+    editingRow.value = null
     toast.add({ title: 'Phone verified', icon: 'i-lucide-circle-check', color: 'success' })
   } catch (_err) {
     verifyError.value = _err instanceof Error ? _err.message : String(_err)
@@ -434,3 +352,20 @@ async function confirmDeleteAccount() {
 
 useSeoMeta({ title: 'Profile | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 </script>
+
+<style scoped>
+.profile-row {
+  display: flex;
+  min-height: var(--ws-row-min-height, 66px);
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-block: 20px;
+  border-bottom: 1px solid var(--ui-border);
+  transition: opacity 150ms ease;
+}
+.profile-label { font-size: 14px; font-weight: 600; color: var(--ui-text-highlighted); }
+.profile-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; color: var(--ui-text-muted); }
+.profile-meta { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 12px; }
+.account-action { flex-shrink: 0; font-size: 13.5px; font-weight: 600; color: var(--ui-text-highlighted); text-decoration: underline; text-underline-offset: 3px; }
+</style>

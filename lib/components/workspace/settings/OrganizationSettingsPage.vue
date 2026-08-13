@@ -2,7 +2,7 @@
   <UDashboardPanel id="organization-settings">
     <template #header>
       <UDashboardNavbar title="Organization Settings">
-        <template #leading><DashboardSidebarCollapseButton /></template>
+        <template #leading><DashboardNavbarLeading /></template>
       </UDashboardNavbar>
     </template>
     <template #body>

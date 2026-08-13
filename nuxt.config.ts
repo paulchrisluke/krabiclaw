@@ -475,7 +475,7 @@ export default defineNuxtConfig({
     preset: 'cloudflare-module',
     cloudflareDev: {
       // Force deterministic binding discovery in CI/dev.
-      configPath: './wrangler.toml',
+      configPath: './wrangler.dev.toml',
       persistDir: '.wrangler/state/v3',
       silent: true,
     },

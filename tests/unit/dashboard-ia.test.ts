@@ -154,8 +154,36 @@ test('responsive dashboard navigation keeps one canonical desktop sidebar and on
   assert.equal((layout.match(/^\s*<UDashboardSidebar\b/gm) ?? []).length, 1)
   assert.match(layout, /data-testid="dashboard-mobile-nav"/)
   assert.match(layout, /mobileNavItems/)
-  assert.match(layout, /to="\/dashboard\/account\/profile"/)
+  assert.match(layout, /<DashboardAccountMenu mobile-only \/>/)
+  assert.match(layout, /mobileNavItems\.length && !isAccountRoute/)
   assert.doesNotMatch(layout, /mobileMoreItems|dashboard-mobile-more|mobileRevenueItem/)
+})
+
+test('account surfaces use the mobile index and row-based account design', () => {
+  const menu = source('lib/components/workspace/dashboard/DashboardAccountMenu.vue')
+  const profile = source('pages/dashboard/account/profile.vue')
+  const authentication = source('pages/dashboard/account/authentication.vue')
+  const billing = source('pages/dashboard/account/billing-items.vue')
+
+  assert.match(menu, /label: 'Profile'/)
+  assert.match(menu, /mobileOnly/)
+  assert.match(menu, /<UModal/)
+  assert.match(menu, /v-model:open="mobileOpen"/)
+  assert.doesNotMatch(menu, /role="dialog"/)
+  assert.match(profile, /editingRow/)
+  assert.match(profile, /class="profile-row/)
+  assert.doesNotMatch(authentication, /<UCard/)
+  assert.doesNotMatch(billing, /<UCard/)
+})
+
+test('mobile account avatar opens the shared sheet from the bottom nav and moves to the header on account pages', () => {
+  const layout = source('layouts/dashboard.vue')
+  assert.match(layout, /<DashboardAccountMenu mobile-only \/>/)
+  assert.doesNotMatch(layout, /<NuxtLink :to="accountIndexTo"/)
+  assert.doesNotMatch(source('pages/dashboard/[orgSlug]/sites/[siteSlug]/index.vue'), /DashboardAccountMenu/)
+  for (const page of ['index.vue', 'profile.vue', 'authentication.vue', 'billing-items.vue']) {
+    assert.match(source(`pages/dashboard/account/${page}`), /<DashboardAccountMenu mobile-only class="md:hidden" \/>/)
+  }
 })
 
 test('organization, site, and location navigation share the requested item order', () => {

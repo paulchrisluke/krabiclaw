@@ -1,5 +1,6 @@
 <template>
   <UDropdownMenu
+    v-if="!mobileOnly"
     :items="items"
     :content="{ align: 'start', collisionPadding: 12, side: 'top', sideOffset: 12 }"
     :ui="{ content: 'w-[260px]' }"
@@ -71,17 +72,58 @@
       </div>
     </template>
   </UDropdownMenu>
+
+  <template v-else>
+    <UButton
+      color="neutral"
+      variant="ghost"
+      square
+      :avatar="{ src: sessionData?.user?.image ?? undefined, alt: sessionData?.user?.name || 'User avatar', size: 'sm' }"
+      aria-label="Open account menu"
+      @click="mobileOpen = true"
+    />
+    <UModal
+      v-model:open="mobileOpen"
+      title="Account menu"
+      :close="false"
+      :ui="{ overlay: 'md:hidden', content: 'fixed inset-x-0 bottom-0 top-auto max-h-[85dvh] overflow-y-auto rounded-t-2xl border border-default bg-elevated p-4 shadow-2xl sm:max-w-none md:hidden' }"
+    >
+      <template #content>
+        <div class="mx-auto mb-4 h-1 w-10 rounded-full bg-accented" />
+        <div class="mb-3 px-3"><p class="font-semibold text-highlighted">{{ sessionData?.user?.name || 'User' }}</p><p class="truncate text-sm text-muted">{{ sessionData?.user?.email }}</p></div>
+        <nav class="divide-y divide-default border-y border-default">
+          <NuxtLink :to="profileTo" class="mobile-account-row" @click="mobileOpen = false"><UIcon name="i-lucide-user" class="size-5" /><span>Profile</span><UIcon name="i-lucide-chevron-right" class="ml-auto size-4 text-dimmed" /></NuxtLink>
+          <div class="mobile-account-row"><span>Theme</span><div class="ml-auto flex gap-1"><UButton v-for="pref in ['system', 'light', 'dark'] as const" :key="pref" :icon="getThemeIcon(pref)" square size="xs" color="neutral" :variant="preference === pref ? 'soft' : 'ghost'" :aria-label="`${pref} theme`" @click="setPreference(pref)" /></div></div>
+          <a :href="config.public.helpUrl as string" target="_blank" class="mobile-account-row"><UIcon name="i-lucide-circle-help" class="size-5" /><span>Help</span></a>
+          <NuxtLink to="/docs" class="mobile-account-row" @click="mobileOpen = false"><UIcon name="i-lucide-book-open" class="size-5" /><span>Docs</span></NuxtLink>
+          <button type="button" class="mobile-account-row w-full text-error" @click="handleSignOut"><UIcon name="i-lucide-log-out" class="size-5" /><span>Log Out</span></button>
+        </nav>
+        <div class="flex items-center justify-between px-3 pt-4 text-sm"><span class="text-muted">Platform Status</span><span class="font-medium text-highlighted">{{ platformStatus === 'normal' ? 'All systems normal.' : platformStatus === 'loading' ? 'Checking status...' : 'System interruption' }}</span></div>
+      </template>
+    </UModal>
+  </template>
 </template>
 
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
+import { dashboardAccountRouteQueryKey } from './dashboardScopeHeaderContext'
 
-defineProps<{ collapsed?: boolean }>()
+defineProps<{ collapsed?: boolean, mobileOnly?: boolean }>()
 
 const { data: sessionData, signOut } = useAuth()
 const route = useRoute()
+const dashboard = useDashboardSite()
 const { preference, setPreference } = usePlatformTheme()
 const config = useRuntimeConfig()
+const mobileOpen = ref(false)
+const accountRouteQuery = inject(dashboardAccountRouteQueryKey, computed(() => dashboard.organization.value?.slug
+  ? { organization: dashboard.organization.value.slug, organizationName: dashboard.organization.value.name }
+  : {}))
+
+const profileTo = computed(() => ({
+  path: '/dashboard/account/profile',
+  query: accountRouteQuery.value,
+}))
 
 function getThemeIcon(pref: 'system' | 'light' | 'dark') {
   if (pref === 'system') return 'i-lucide-monitor'
@@ -118,7 +160,7 @@ async function handleSignOut() {
 }
 
 const items = computed<DropdownMenuItem[][]>(() => [
-  [{ label: 'Account settings', icon: 'i-lucide-settings', to: '/dashboard/account/profile' }],
+  [{ label: 'Profile', icon: 'i-lucide-user', to: profileTo.value }],
   [{ slot: 'theme', onSelect: (e: Event) => e.preventDefault() }],
   [
     { label: 'Help', icon: 'i-lucide-circle-help', to: config.public.helpUrl as string, target: '_blank' },
@@ -132,5 +174,16 @@ const items = computed<DropdownMenuItem[][]>(() => [
 .dashboard-account-menu-button:hover,
 .dashboard-account-menu-button:focus-visible {
   background-color: var(--ui-bg-accented) !important;
+}
+
+.mobile-account-row {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  gap: 0.75rem;
+  padding-inline: 0.75rem;
+  color: var(--ui-text);
+  font-size: 0.875rem;
+  font-weight: 500;
 }
 </style>

@@ -18,6 +18,11 @@ export default defineAppConfig({
         }
       ]
     },
+    dashboardNavbar: {
+      slots: {
+        toggle: 'hidden'
+      }
+    },
     input: {
       defaultVariants: {
         size: 'md',
