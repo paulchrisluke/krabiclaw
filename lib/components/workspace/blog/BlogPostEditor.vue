@@ -1,15 +1,16 @@
 <template>
   <div class="fixed inset-0 z-50 flex min-h-0 flex-col bg-default text-default">
     <header class="sticky top-0 z-30 flex min-h-14 shrink-0 items-center gap-2 border-b border-default bg-elevated px-2 pb-[env(safe-area-inset-top)] sm:px-4">
-      <UButton icon="i-lucide-arrow-left" color="neutral" variant="ghost" size="sm" @click="goBack">Posts</UButton>
+      <UButton icon="i-lucide-arrow-left" color="neutral" variant="ghost" size="sm" :disabled="!interactive" @click="goBack">Posts</UButton>
       <p class="min-w-0 flex-1 truncate text-xs text-muted sm:text-sm">
-        {{ statusLabel }} · <span :class="saveState === 'failed' || saveState === 'conflict' ? 'text-error' : ''">{{ saveLabel }}</span>
+        {{ lifecycleLabel }} · <span :class="saveState === 'failed' || saveState === 'conflict' ? 'text-error' : ''">{{ saveLabel }}</span>
       </p>
-      <UButton icon="i-lucide-share-2" color="neutral" variant="ghost" size="sm" aria-label="Share editor" :disabled="!post" @click="share"><span class="hidden sm:inline">Share</span></UButton>
-      <UButton ref="settingsButton" icon="i-lucide-settings" color="neutral" variant="ghost" size="sm" aria-label="Post settings" @click="openSettings"><span class="hidden sm:inline">Settings</span></UButton>
-      <UButton v-if="post?.published_at" color="neutral" variant="soft" size="sm" :loading="unpublishing" @click="unpublish">Unpublish</UButton>
-      <UButton size="sm" :loading="publishing" :disabled="loadPending || saveState === 'conflict'" @click="publish">Publish</UButton>
+      <UButton icon="i-lucide-share-2" color="neutral" variant="ghost" size="sm" aria-label="Share editor" :disabled="!interactive || !post" @click="share"><span class="hidden sm:inline">Share</span></UButton>
+      <UButton ref="settingsButton" icon="i-lucide-settings" color="neutral" variant="ghost" size="sm" aria-label="Post settings" :disabled="!interactive" @click="openSettings"><span class="hidden sm:inline">Settings</span></UButton>
+      <UButton v-if="post && (post.status === 'published' || post.status === 'scheduled')" color="neutral" variant="soft" size="sm" :loading="unpublishing" :disabled="!interactive || publishing || unpublishing" @click="unpublish">Unpublish</UButton>
+      <UButton size="sm" :loading="publishing" :disabled="!interactive || publishing || unpublishing || loadPending || saveState === 'conflict'" @click="publish">Publish</UButton>
     </header>
+    <p v-if="actionError" role="alert" class="shrink-0 border-b border-error/30 bg-error/10 px-4 py-2 text-sm text-error">{{ actionError }}</p>
 
     <div v-if="loadPending" class="grid min-h-0 flex-1 place-items-center"><UIcon name="i-lucide-loader-circle" class="size-6 animate-spin" /></div>
     <div v-else-if="loadError" class="grid min-h-0 flex-1 place-items-center p-6"><UAlert color="error" :description="loadError" /></div>
@@ -120,8 +121,8 @@
 import type { Component } from 'vue'
 import BlogArticleView from '~/components/blog/BlogArticleView.vue'
 import PlatformMediaPicker from '~/lib/components/workspace/media/PlatformMediaPicker.vue'
-import type { BlogPostRepository, BlogPost, BlogEditorBlock, PlatformBlogUpdateInput, SiteAuthor } from './types'
-import { generatedExcerpt, initialBlogEditorBlocks, normalizeBlogSlug, resolveBlogPublicPath, resolveBlogSeo, SerializedSnapshotQueue } from '~/utils/blog-editor'
+import type { BlogLifecycleState, BlogPostRepository, BlogPost, BlogEditorBlock, PlatformBlogUpdateInput, SiteAuthor } from './types'
+import { generatedExcerpt, initialBlogEditorBlocks, normalizeBlogSlug, resolveBlogPublicPath, resolveBlogSeo, scheduledLifecycleValue, SerializedSnapshotQueue } from '~/utils/blog-editor'
 import { getErrorMessage } from '~/utils/errors'
 
 const props = withDefaults(defineProps<{ repository: BlogPostRepository; initialPost?: BlogPost | null; deferLoad?: boolean; postId?: string; siteId?: string; isEdit?: boolean; backUrl?: string; mediaPickerComponent?: Component; freeTextCategory?: boolean }>(), {
@@ -131,9 +132,11 @@ const route = useRoute()
 const postId = computed(() => props.postId || String(route.params.postId || ''))
 const post = ref<BlogPost | null>(null)
 const blocks = ref<BlogEditorBlock[]>(initialBlogEditorBlocks())
+const interactive = ref(false)
 const loadPending = ref(true)
 const loadError = ref('')
 const saveState = ref<'saved' | 'saving' | 'failed' | 'conflict'>('saved')
+const actionError = ref('')
 const publishing = ref(false)
 const unpublishing = ref(false)
 const settingsOpen = ref(false)
@@ -208,6 +211,7 @@ const editorCanvasStyle = computed(() => {
   }
 })
 const statusLabel = computed(() => post.value?.status === 'scheduled' ? 'Scheduled' : post.value?.published_at ? 'Published' : 'Draft')
+const lifecycleLabel = computed(() => publishing.value ? 'Publishing…' : unpublishing.value ? 'Unpublishing…' : statusLabel.value)
 const generatedSlug = computed(() => normalizeBlogSlug(form.title))
 const resolvedExcerpt = computed(() => generatedExcerpt(blocks.value))
 const resolvedSiteName = computed(() => post.value?.editor_site_name || (props.siteId ? 'Our Site' : 'KrabiClaw'))
@@ -264,8 +268,27 @@ const saveQueue = new SerializedSnapshotQueue<SaveSnapshot, BlogPost>(
   },
 )
 
-watch([() => ({ ...form }), blocks, tagsText, publishTiming, slugResetRequested], () => { if (!applyingServerSnapshot) queueSave() }, { deep: true, flush: 'sync' })
+watch([
+  () => ({
+    title: form.title,
+    category: form.category,
+    excerpt: form.excerpt,
+    seo_title: form.seo_title,
+    seo_description: form.seo_description,
+    social_image_asset_id: form.social_image_asset_id,
+    slug: form.slug,
+    canonical_url: form.canonical_url,
+    robots: form.robots,
+    visibility: form.visibility,
+    redirect_old_slug: form.redirect_old_slug,
+    site_author_id: form.site_author_id,
+  }),
+  blocks,
+  tagsText,
+  slugResetRequested,
+], () => { if (!applyingServerSnapshot) queueSave() }, { deep: true, flush: 'sync' })
 onMounted(async () => {
+  interactive.value = true
   window.addEventListener('beforeunload', beforeUnload)
   window.addEventListener('popstate', onPopState)
   void loadAuthors()
@@ -281,15 +304,20 @@ async function load() {
   } catch (error) { loadError.value = getErrorMessage(error, 'Failed to load post.') } finally { loadPending.value = false }
 }
 function applyLoadedPost(loaded: BlogPost) {
-  syncServerVersions(loaded)
-  post.value = loaded
-  Object.assign(form, { title: loaded.title, category: loaded.category || '', excerpt: loaded.excerpt || '', seo_title: loaded.seo_title || '', seo_description: loaded.seo_description || '', social_image_asset_id: loaded.social_image_asset_id || '', slug: loaded.slug || '', canonical_url: loaded.canonical_url || '', robots: loaded.robots || '', visibility: loaded.visibility || 'public', scheduled_for: toLocalDatetime(loaded.scheduled_for), redirect_old_slug: true, site_author_id: loaded.site_author_id || '' })
-  slugResetRequested.value = false
-  tagsText.value = loaded.tags?.join(', ') || ''
-  publishTiming.value = loaded.scheduled_for ? 'Scheduled' : 'Now'
-  if (!loaded.content_document) throw new Error('Blog content document is missing')
-  blocks.value = structuredClone(loaded.content_document.blocks || [])
-  ensureTrailingTextBlock()
+  applyingServerSnapshot = true
+  try {
+    syncServerVersions(loaded)
+    post.value = loaded
+    Object.assign(form, { title: loaded.title, category: loaded.category || '', excerpt: loaded.excerpt || '', seo_title: loaded.seo_title || '', seo_description: loaded.seo_description || '', social_image_asset_id: loaded.social_image_asset_id || '', slug: loaded.slug || '', canonical_url: loaded.canonical_url || '', robots: loaded.robots || '', visibility: loaded.visibility || 'public', scheduled_for: toLocalDatetime(loaded.scheduled_for), redirect_old_slug: true, site_author_id: loaded.site_author_id || '' })
+    slugResetRequested.value = false
+    tagsText.value = loaded.tags?.join(', ') || ''
+    publishTiming.value = loaded.scheduled_for ? 'Scheduled' : 'Now'
+    if (!loaded.content_document) throw new Error('Blog content document is missing')
+    blocks.value = structuredClone(loaded.content_document.blocks || [])
+    ensureTrailingTextBlock()
+  } finally {
+    void nextTick(() => { applyingServerSnapshot = false })
+  }
 }
 watch(() => props.initialPost, (loaded) => {
   if (!loaded) return
@@ -307,12 +335,20 @@ function queueSave() {
   dirty = true
   if (saveTimer) clearTimeout(saveTimer)
   if (!post.value && !props.isEdit) {
-    if (isDraftValid()) saveTimer = setTimeout(() => { void createDraft(false).catch(() => {}) }, 900)
+    if (isDraftValid()) saveTimer = setTimeout(() => {
+      void createDraft(false).catch((error: unknown) => {
+        actionError.value = getErrorMessage(error, 'Failed to create the draft.')
+      })
+    }, 900)
     return
   }
   if (post.value) {
     saveQueue.mark(buildSaveSnapshot())
-    saveTimer = setTimeout(() => { void flushSave().catch(() => {}) }, 900)
+    saveTimer = setTimeout(() => {
+      void flushSave().catch((error: unknown) => {
+        actionError.value = getErrorMessage(error, 'Failed to save the draft.')
+      })
+    }, 900)
   }
 }
 async function flushSave() {
@@ -333,11 +369,83 @@ async function flushSave() {
   }
 }
 function buildSaveSnapshot(id = postId.value): SaveSnapshot {
-  const scheduledFor = publishTiming.value === 'Scheduled' && form.scheduled_for ? new Date(form.scheduled_for).toISOString() : null
-  return { postId: id, payload: { title: form.title, category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, social_image_asset_id: form.social_image_asset_id || null, slug: slugResetRequested.value ? null : form.slug !== post.value?.slug ? form.slug : undefined, reset_slug_override: slugResetRequested.value || undefined, redirect_old_slug: form.redirect_old_slug, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, scheduled_for: scheduledFor, content_blocks: structuredClone(toRaw(blocks.value)), site_author_id: form.site_author_id || null } }
+  return { postId: id, payload: { title: form.title, category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, social_image_asset_id: form.social_image_asset_id || null, slug: slugResetRequested.value ? null : form.slug !== post.value?.slug ? form.slug : undefined, reset_slug_override: slugResetRequested.value || undefined, redirect_old_slug: form.redirect_old_slug, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, content_blocks: structuredClone(toRaw(blocks.value)), site_author_id: form.site_author_id || null } }
 }
-async function publish() { publishing.value = true; try { if (!post.value) { await createDraft(true); return } if (dirty) saveQueue.mark(buildSaveSnapshot()); await saveQueue.runExclusive(async () => { const updated = await props.repository.update(postId.value, { publish: true, scheduled_for: publishTiming.value === 'Scheduled' && form.scheduled_for ? new Date(form.scheduled_for).toISOString() : null, expected_updated_at: serverPostUpdatedAt }); syncServerVersions(updated); post.value = updated; return updated }); saveState.value = 'saved' } catch (error: unknown) { const status = Number((error as { statusCode?: number; status?: number })?.statusCode ?? (error as { status?: number })?.status); saveState.value = status === 409 ? 'conflict' : 'failed' } finally { publishing.value = false } }
-async function unpublish() { if (!post.value) return; unpublishing.value = true; try { if (dirty) saveQueue.mark(buildSaveSnapshot()); await saveQueue.runExclusive(async () => { const updated = await props.repository.update(postId.value, { unpublish: true, expected_updated_at: serverPostUpdatedAt }); syncServerVersions(updated); post.value = updated; return updated }); saveState.value = 'saved' } catch (error: unknown) { const status = Number((error as { statusCode?: number; status?: number })?.statusCode ?? (error as { status?: number })?.status); saveState.value = status === 409 ? 'conflict' : 'failed' } finally { unpublishing.value = false } }
+function lifecycleVersionInput() {
+  if (!serverPostUpdatedAt || !serverDocumentUpdatedAt) throw new Error('Blog lifecycle version is unavailable. Reload the editor.')
+  return { expected_updated_at: serverPostUpdatedAt, expected_document_updated_at: serverDocumentUpdatedAt }
+}
+function applyLifecycle(lifecycle: BlogLifecycleState) {
+  if (!post.value?.content_document) throw new Error('Blog content document is missing')
+  post.value = {
+    ...post.value,
+    status: lifecycle.status,
+    published_at: lifecycle.published_at,
+    first_published_at: post.value.first_published_at ?? lifecycle.published_at,
+    scheduled_for: lifecycle.scheduled_for,
+    updated_at: lifecycle.updated_at,
+    content_document: {
+      ...post.value.content_document,
+      document: {
+        ...post.value.content_document.document,
+        updated_at: lifecycle.content_document_updated_at,
+        published_revision_id: lifecycle.status === 'published'
+          ? post.value.content_document.document.draft_revision_id
+          : lifecycle.status === 'draft'
+            ? null
+            : post.value.content_document.document.published_revision_id,
+      },
+    },
+  }
+  serverPostUpdatedAt = lifecycle.updated_at
+  serverDocumentUpdatedAt = lifecycle.content_document_updated_at
+  form.scheduled_for = toLocalDatetime(lifecycle.scheduled_for)
+  publishTiming.value = lifecycle.scheduled_for ? 'Scheduled' : 'Now'
+}
+function recordLifecycleError(error: unknown) {
+  const status = Number((error as { statusCode?: number; status?: number })?.statusCode ?? (error as { status?: number })?.status)
+  saveState.value = status === 409 ? 'conflict' : 'failed'
+  actionError.value = getErrorMessage(error, 'Failed to change publishing status.')
+}
+async function publish() {
+  actionError.value = ''
+  publishing.value = true
+  try {
+    if (!post.value) { await createDraft(true); return }
+    if (dirty) saveQueue.mark(buildSaveSnapshot())
+    await saveQueue.runExclusive(async () => {
+      const lifecycle = await props.repository.publish(postId.value, {
+        ...lifecycleVersionInput(),
+        scheduled_for: scheduledLifecycleValue(publishTiming.value, form.scheduled_for),
+      })
+      applyLifecycle(lifecycle)
+      return lifecycle
+    })
+    saveState.value = 'saved'
+  } catch (error: unknown) {
+    recordLifecycleError(error)
+  } finally {
+    publishing.value = false
+  }
+}
+async function unpublish() {
+  if (!post.value) return
+  actionError.value = ''
+  unpublishing.value = true
+  try {
+    if (dirty) saveQueue.mark(buildSaveSnapshot())
+    await saveQueue.runExclusive(async () => {
+      const lifecycle = await props.repository.unpublish(postId.value, lifecycleVersionInput())
+      applyLifecycle(lifecycle)
+      return lifecycle
+    })
+    saveState.value = 'saved'
+  } catch (error: unknown) {
+    recordLifecycleError(error)
+  } finally {
+    unpublishing.value = false
+  }
+}
 async function createDraft(publishNow: boolean) {
   if (!isDraftValid()) return null
   publishAfterCreateRequested ||= publishNow
@@ -346,7 +454,7 @@ async function createDraft(publishNow: boolean) {
     if (saveTimer) clearTimeout(saveTimer)
     saveState.value = 'saving'
     dirty = false
-    let created = await props.repository.create({ title: form.title, content_blocks: structuredClone(toRaw(blocks.value)), category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, social_image_asset_id: form.social_image_asset_id || null, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, scheduled_for: publishTiming.value === 'Scheduled' && form.scheduled_for ? new Date(form.scheduled_for).toISOString() : null, publish: publishNow, site_author_id: form.site_author_id || null })
+    let created = await props.repository.create({ title: form.title, content_blocks: structuredClone(toRaw(blocks.value)), category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, social_image_asset_id: form.social_image_asset_id || null, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, site_author_id: form.site_author_id || null })
     applyingServerSnapshot = true
     post.value = created
     syncServerVersions(created)
@@ -358,14 +466,16 @@ async function createDraft(publishNow: boolean) {
       await flushSave()
       created = post.value || created
     }
-    if (publishAfterCreateRequested && !created.published_at && created.status !== 'published') {
-      created = await saveQueue.runExclusive(async () => await props.repository.update(created.id, {
-        publish: true,
-        scheduled_for: publishTiming.value === 'Scheduled' && form.scheduled_for ? new Date(form.scheduled_for).toISOString() : null,
-        expected_updated_at: serverPostUpdatedAt,
-      }))
-      syncServerVersions(created)
-      post.value = created
+    if (publishAfterCreateRequested) {
+      await saveQueue.runExclusive(async () => {
+        const lifecycle = await props.repository.publish(created.id, {
+          ...lifecycleVersionInput(),
+          scheduled_for: scheduledLifecycleValue(publishTiming.value, form.scheduled_for),
+        })
+        applyLifecycle(lifecycle)
+        return lifecycle
+      })
+      created = post.value || created
     }
     dirty = false
     saveState.value = 'saved'

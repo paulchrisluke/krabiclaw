@@ -339,7 +339,7 @@ yarn client:onboard \
   --maps-url "https://www.google.com/maps/place/Pottery+House+Krabi/..." \
   --maps-url "https://www.google.com/maps/place/Beachfront+Pottery+Krabi/..." \
   --images ./new-client-Pottery-House-Krabi \
-  --live-url https://pottery-house.krabiclaw.com \
+  --live-url https://www.potteryhousekrabi.com \
   --site-id site-pottery-house-krabi \
   --remote
 ```

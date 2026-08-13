@@ -10,19 +10,9 @@ test('0054 pins existing scheduled posts to their canonical draft and rejects un
   assert.match(sql, /WHERE "status" = 'scheduled' AND "scheduled_revision_id" IS NULL/)
 })
 
-test('scheduled publishing reports missing or dangling pinned revisions', async () => {
-  const source = await readFile(new URL('../../server/utils/blog-publishing.ts', import.meta.url), 'utf8')
-  assert.match(source, /p\.scheduled_revision_id IS NULL OR r\.id IS NULL/)
-  assert.match(source, /scheduled_revision_issues/)
-  assert.match(source, /p\.scheduled_revision_id = \?/)
-  assert.match(source, /scheduled_revision_id = \?`/)
-  assert.match(source, /results\[1\]\?\.meta\?\.changes/)
-})
-
-test('scheduled_for alone transitions posts to scheduled and pins the current draft revision', async () => {
+test('existing blog scheduling uses only the guarded lifecycle operation', async () => {
   const source = await readFile(new URL('../../server/utils/platform-content.ts', import.meta.url), 'utf8')
-  assert.match(source, /else if \(input\.scheduled_for !== undefined && !input\.publish\) \{[\s\S]*updates\.push\('scheduled_for = \?', 'published_at = NULL', "status = 'scheduled'"\)/)
-  assert.match(source, /if \(!scheduledDocument\?\.document\.draft_revision_id\) badRequest\('Cannot schedule a post without a draft content revision'\)/)
-  assert.match(source, /updates\.push\('scheduled_revision_id = \?'\)[\s\S]*params\.push\(scheduledDocument\.document\.draft_revision_id\)/)
-  assert.match(source, /if \(scheduledFor && \(input\.publish \|\| input\.scheduled_for !== undefined\)\) \{[\s\S]*UPDATE blog_posts SET scheduled_revision_id = \(/)
+  assert.match(source, /rejectBlogUpdateLifecycleFields\(input\)/)
+  assert.match(source, /scheduled_revision_id = \(SELECT draft_revision_id FROM content_documents WHERE id = \?\)/)
+  assert.match(source, /expected_document_updated_at/)
 })

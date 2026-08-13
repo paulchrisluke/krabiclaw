@@ -108,8 +108,7 @@ test('isPlatformHost recognizes the deployed *.pages.dev preview host', () => {
 
 test('isPlatformHost recognizes deployed CI preview Worker hosts on workers.dev', () => {
   assert.equal(isPlatformHost('krabiclaw-preview.paulchrisluke.workers.dev', prodEnv), true)
-  assert.equal(isPlatformHost('ci-pr-1234567890-krabiclaw-preview.paulchrisluke.workers.dev', prodEnv), true)
-  assert.equal(isPlatformHost('5a91b33e-krabiclaw-preview.paulchrisluke.workers.dev', prodEnv), true)
+  assert.equal(isPlatformHost('ci-pr-1234567890-krabiclaw-preview.paulchrisluke.workers.dev', prodEnv), false)
   assert.equal(isPlatformHost('some-other-worker.paulchrisluke.workers.dev', prodEnv), false)
 })
 
@@ -131,6 +130,7 @@ test('the named local tunnel uses explicit tenant headers instead of nested host
   assert.equal(isPreviewContext('preview.krabiclaw.com'), true)
   assert.equal(isPreviewContext('staging.krabiclaw.com'), true)
   assert.equal(isPreviewContext('preview.customer.com'), false)
+  assert.equal(isPreviewContext('ci-pr-1234567890-krabiclaw-preview.paulchrisluke.workers.dev'), false)
   assert.equal(isPreviewContext('some-other-worker.paulchrisluke.workers.dev'), false)
 })
 

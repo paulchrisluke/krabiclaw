@@ -70,6 +70,17 @@ test("compiled pottery house seed normalizes org/site ids onto compiled rows", (
   );
 });
 
+test("pottery house seed keeps the paid custom domain canonical", () => {
+  assert.deepEqual(
+    compiledPotteryHouseSeed.siteDomains.map(({ domain, type, role }) => ({ domain, type, role })),
+    [
+      { domain: "pottery-house.localhost", type: "subdomain", role: "secondary" },
+      { domain: "pottery-house.krabiclaw.com", type: "subdomain", role: "secondary" },
+      { domain: "www.potteryhousekrabi.com", type: "custom", role: "canonical" },
+    ],
+  );
+});
+
 test("pottery house core block includes site, locale, domain, and location rows with contact_phone", () => {
   const sql = renderCompiledPotteryHouseCoreSeedBlock();
 

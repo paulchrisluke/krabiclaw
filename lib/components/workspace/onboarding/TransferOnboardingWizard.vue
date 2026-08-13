@@ -33,6 +33,7 @@
           size="md"
           icon="i-lucide-arrow-right"
           class="self-start"
+          :disabled="!interactive"
           @click="advance('preview')"
         >
           Let's go
@@ -205,6 +206,7 @@ interface Location {
 }
 
 interface Props {
+  interactive: boolean
   siteId: string
   orgSlug: string
   siteSlug: string

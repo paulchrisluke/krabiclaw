@@ -1,6 +1,6 @@
 {
   "surface": "platform",
-  "fingerprint": "sha256:5d1d73f94ffb6ee1bc22cffe0e0a91d4a1ed6530ea2387a21071ae6d4ee3c02f",
+  "fingerprint": "sha256:29e0825243ae587092c8a8e0bc24aeb3f99435d2057426216dc43fa9cdc48782",
   "tools": [
     {
       "name": "create_platform_blog_post",
@@ -47,6 +47,7 @@
                     "gallery",
                     "faq",
                     "how_to",
+                    "divider",
                     "ai_assistance",
                     "cta",
                     "callout"
@@ -113,9 +114,6 @@
               "string",
               "null"
             ]
-          },
-          "publish": {
-            "type": "boolean"
           },
           "robots": {
             "enum": [
@@ -217,6 +215,7 @@
                         "gallery",
                         "faq",
                         "how_to",
+                        "divider",
                         "ai_assistance",
                         "cta",
                         "callout"
@@ -244,10 +243,7 @@
                 "type": "string"
               },
               "document_updated_at": {
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "type": "string"
               },
               "excerpt": {
                 "type": [
@@ -386,6 +382,12 @@
                   "null"
                 ]
               },
+              "scheduled_for": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "seo_description": {
                 "type": [
                   "string",
@@ -445,6 +447,7 @@
               "hide_from_nav",
               "featured_order",
               "published_at",
+              "scheduled_for",
               "created_at",
               "updated_at",
               "seo_title",
@@ -1893,6 +1896,7 @@
                         "gallery",
                         "faq",
                         "how_to",
+                        "divider",
                         "ai_assistance",
                         "cta",
                         "callout"
@@ -1920,10 +1924,7 @@
                 "type": "string"
               },
               "document_updated_at": {
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "type": "string"
               },
               "excerpt": {
                 "type": [
@@ -2062,6 +2063,12 @@
                   "null"
                 ]
               },
+              "scheduled_for": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "seo_description": {
                 "type": [
                   "string",
@@ -2121,6 +2128,7 @@
               "hide_from_nav",
               "featured_order",
               "published_at",
+              "scheduled_for",
               "created_at",
               "updated_at",
               "seo_title",
@@ -4252,9 +4260,24 @@
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
+          "expected_document_updated_at": {
+            "description": "Exact post.document_updated_at token from the latest successful get_platform_blog_post or blog mutation.",
+            "type": "string"
+          },
+          "expected_updated_at": {
+            "description": "Exact post.updated_at token from the latest successful get_platform_blog_post or blog mutation.",
+            "type": "string"
+          },
           "post_id": {
             "description": "Post id or slug.",
             "type": "string"
+          },
+          "scheduled_for": {
+            "description": "Optional future ISO 8601 datetime with timezone. Omit or pass null to publish immediately.",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "site_id": {
             "description": "Optional site id for a tenant blog post.",
@@ -4262,7 +4285,9 @@
           }
         },
         "required": [
-          "post_id"
+          "post_id",
+          "expected_updated_at",
+          "expected_document_updated_at"
         ],
         "type": "object"
       },
@@ -4320,6 +4345,7 @@
                         "gallery",
                         "faq",
                         "how_to",
+                        "divider",
                         "ai_assistance",
                         "cta",
                         "callout"
@@ -4347,10 +4373,7 @@
                 "type": "string"
               },
               "document_updated_at": {
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "type": "string"
               },
               "excerpt": {
                 "type": [
@@ -4489,6 +4512,12 @@
                   "null"
                 ]
               },
+              "scheduled_for": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "seo_description": {
                 "type": [
                   "string",
@@ -4548,6 +4577,7 @@
               "hide_from_nav",
               "featured_order",
               "published_at",
+              "scheduled_for",
               "created_at",
               "updated_at",
               "seo_title",
@@ -6016,6 +6046,7 @@
                     "gallery",
                     "faq",
                     "how_to",
+                    "divider",
                     "ai_assistance",
                     "cta",
                     "callout"
@@ -6106,6 +6137,7 @@
                         "gallery",
                         "faq",
                         "how_to",
+                        "divider",
                         "ai_assistance",
                         "cta",
                         "callout"
@@ -6133,10 +6165,7 @@
                 "type": "string"
               },
               "document_updated_at": {
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "type": "string"
               },
               "excerpt": {
                 "type": [
@@ -6275,6 +6304,12 @@
                   "null"
                 ]
               },
+              "scheduled_for": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "seo_description": {
                 "type": [
                   "string",
@@ -6334,6 +6369,7 @@
               "hide_from_nav",
               "featured_order",
               "published_at",
+              "scheduled_for",
               "created_at",
               "updated_at",
               "seo_title",
@@ -6899,6 +6935,14 @@
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
+          "expected_document_updated_at": {
+            "description": "Exact post.document_updated_at token from the latest successful get_platform_blog_post or blog mutation.",
+            "type": "string"
+          },
+          "expected_updated_at": {
+            "description": "Exact post.updated_at token from the latest successful get_platform_blog_post or blog mutation.",
+            "type": "string"
+          },
           "post_id": {
             "description": "Post id or slug.",
             "type": "string"
@@ -6909,7 +6953,9 @@
           }
         },
         "required": [
-          "post_id"
+          "post_id",
+          "expected_updated_at",
+          "expected_document_updated_at"
         ],
         "type": "object"
       },
@@ -6967,6 +7013,7 @@
                         "gallery",
                         "faq",
                         "how_to",
+                        "divider",
                         "ai_assistance",
                         "cta",
                         "callout"
@@ -6994,10 +7041,7 @@
                 "type": "string"
               },
               "document_updated_at": {
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "type": "string"
               },
               "excerpt": {
                 "type": [
@@ -7136,6 +7180,12 @@
                   "null"
                 ]
               },
+              "scheduled_for": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "seo_description": {
                 "type": [
                   "string",
@@ -7195,6 +7245,7 @@
               "hide_from_nav",
               "featured_order",
               "published_at",
+              "scheduled_for",
               "created_at",
               "updated_at",
               "seo_title",
@@ -8166,6 +8217,7 @@
                         "gallery",
                         "faq",
                         "how_to",
+                        "divider",
                         "ai_assistance",
                         "cta",
                         "callout"
@@ -8193,10 +8245,7 @@
                 "type": "string"
               },
               "document_updated_at": {
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "type": "string"
               },
               "excerpt": {
                 "type": [
@@ -8335,6 +8384,12 @@
                   "null"
                 ]
               },
+              "scheduled_for": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "seo_description": {
                 "type": [
                   "string",
@@ -8394,6 +8449,7 @@
               "hide_from_nav",
               "featured_order",
               "published_at",
+              "scheduled_for",
               "created_at",
               "updated_at",
               "seo_title",

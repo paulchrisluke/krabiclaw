@@ -1,16 +1,16 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:fc1dd4d83c438939d5c15471edd3236732da2b08ff79ba6ced1078e3c8d2988b",
+  "fingerprint": "sha256:4bd5c5b2e8ef9f6f3c9b0e13c71ace135d26120fae360e36da020171aed935d8",
   "tools": [
     {
       "name": "add_menu_items_batch",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "items": {
             "description": "Up to 100 new menu items to add.",
             "items": {
-              "additionalProperties": true,
+              "additionalProperties": false,
               "properties": {
                 "allergens": {
                   "items": {
@@ -56,6 +56,7 @@
                 "media": {
                   "description": "Ordered image/video media asset references. Position 0 is the cover everywhere. Videos in cover position must already have thumbnail_url/poster metadata.",
                   "items": {
+                    "additionalProperties": false,
                     "properties": {
                       "asset_id": {
                         "description": "Active image or video asset id from get_site_media_assets.",
@@ -75,14 +76,6 @@
                 "preparation": {
                   "type": [
                     "string",
-                    "null"
-                  ]
-                },
-                "price": {
-                  "description": "Legacy alias accepted for compatibility. Prefer price_amount.",
-                  "type": [
-                    "string",
-                    "number",
                     "null"
                   ]
                 },
@@ -625,10 +618,6 @@
           "excerpt": {
             "type": "string"
           },
-          "publish": {
-            "description": "Publish immediately. Defaults to false (draft).",
-            "type": "boolean"
-          },
           "robots": {
             "enum": [
               "index,follow",
@@ -637,13 +626,6 @@
               "noindex,nofollow",
               null
             ],
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "scheduled_for": {
-            "description": "ISO 8601 datetime with timezone. Publishes automatically when due.",
             "type": [
               "string",
               "null"
@@ -789,11 +771,8 @@
                 "type": "string"
               },
               "document_updated_at": {
-                "description": "Concurrency token required when replacing content_blocks.",
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "description": "Concurrency token required when replacing content_blocks or changing publication state.",
+                "type": "string"
               },
               "edit_url": {
                 "type": [
@@ -1689,7 +1668,7 @@
     {
       "name": "create_menu_item",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "allergens": {
             "items": {
@@ -1771,14 +1750,6 @@
           "preparation": {
             "type": [
               "string",
-              "null"
-            ]
-          },
-          "price": {
-            "description": "Legacy alias accepted for compatibility. Prefer price_amount.",
-            "type": [
-              "string",
-              "number",
               "null"
             ]
           },
@@ -2137,10 +2108,6 @@
       },
       "outputSchema": {
         "properties": {
-          "id": {
-            "description": "New site ID — pass as site_id in all subsequent calls.",
-            "type": "string"
-          },
           "message": {
             "type": "string"
           },
@@ -2151,15 +2118,11 @@
             "description": "New site ID — pass as site_id in all subsequent calls.",
             "type": "string"
           },
-          "status": {
-            "type": "string"
-          },
           "subdomain": {
             "type": "string"
           }
         },
         "required": [
-          "id",
           "siteId",
           "subdomain"
         ],
@@ -3034,11 +2997,8 @@
                 "type": "string"
               },
               "document_updated_at": {
-                "description": "Concurrency token required when replacing content_blocks.",
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "description": "Concurrency token required when replacing content_blocks or changing publication state.",
+                "type": "string"
               },
               "edit_url": {
                 "type": [
@@ -5314,7 +5274,12 @@
         "additionalProperties": true,
         "properties": {
           "kind": {
-            "description": "Filter by asset type: \"image\" or \"video\".",
+            "description": "Filter by asset type.",
+            "enum": [
+              "image",
+              "video",
+              "file"
+            ],
             "type": "string"
           },
           "location_id": {
@@ -5360,7 +5325,8 @@
                 "kind": {
                   "enum": [
                     "image",
-                    "video"
+                    "video",
+                    "file"
                   ],
                   "type": "string"
                 },
@@ -5386,7 +5352,8 @@
                   "enum": [
                     "pending",
                     "active",
-                    "deleted"
+                    "deleted",
+                    "failed"
                   ],
                   "type": "string"
                 },
@@ -5850,57 +5817,6 @@
           "maps_url": {
             "description": "Google Maps URL or short share link (maps.app.goo.gl or google.com/maps/place/...).",
             "type": "string"
-          },
-          "matching_policy": {
-            "additionalProperties": false,
-            "description": "Controls how strictly the backend validates the Places API result. Defaults to strict coordinate matching.",
-            "properties": {
-              "allow_name_only_fallback": {
-                "description": "If false (default), reject when no coordinates are available to bias the search.",
-                "type": "boolean"
-              },
-              "max_distance_km": {
-                "description": "Rejection threshold in km. Default 5.",
-                "type": "number"
-              },
-              "prefer_backend_extraction": {
-                "description": "If true (default), backend URL extraction takes precedence over parsed_hint.",
-                "type": "boolean"
-              },
-              "require_coordinate_match": {
-                "description": "If true (default), reject any Places result more than max_distance_km from URL coordinates.",
-                "type": "boolean"
-              }
-            },
-            "type": "object"
-          },
-          "parsed_hint": {
-            "additionalProperties": false,
-            "description": "Optional, non-authoritative hints from LLM URL parsing. Backend always re-extracts independently and logs divergence >1 km.",
-            "properties": {
-              "expected_country": {
-                "type": "string"
-              },
-              "expected_region": {
-                "type": "string"
-              },
-              "feature_id": {
-                "type": "string"
-              },
-              "internal_id": {
-                "type": "string"
-              },
-              "lat": {
-                "type": "number"
-              },
-              "lng": {
-                "type": "number"
-              },
-              "name_hint": {
-                "type": "string"
-              }
-            },
-            "type": "object"
           }
         },
         "required": [
@@ -8266,11 +8182,26 @@
     {
       "name": "publish_blog_post",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
+          "expected_document_updated_at": {
+            "description": "Exact post.document_updated_at concurrency token from the latest get_blog_post or successful blog mutation.",
+            "type": "string"
+          },
+          "expected_updated_at": {
+            "description": "Exact post.updated_at concurrency token from the latest get_blog_post or successful blog mutation.",
+            "type": "string"
+          },
           "post_id": {
             "description": "Post id or slug.",
             "type": "string"
+          },
+          "scheduled_for": {
+            "description": "Optional future ISO 8601 datetime with timezone. Omit or pass null to publish immediately.",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
@@ -8278,7 +8209,9 @@
           }
         },
         "required": [
-          "post_id"
+          "post_id",
+          "expected_updated_at",
+          "expected_document_updated_at"
         ],
         "type": "object"
       },
@@ -8369,11 +8302,8 @@
                 "type": "string"
               },
               "document_updated_at": {
-                "description": "Concurrency token required when replacing content_blocks.",
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "description": "Concurrency token required when replacing content_blocks or changing publication state.",
+                "type": "string"
               },
               "edit_url": {
                 "type": [
@@ -8622,7 +8552,7 @@
     {
       "name": "publish_post",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "channels": {
             "description": "Channels to publish to. Defaults to [\"site\"].",
@@ -8642,18 +8572,6 @@
           "site_id": {
             "description": "Internal KrabiClaw site ID from get_workspace_context, list_sites, or create_site, e.g. site-pottery-house. Do not pass a public URL, hostname, subdomain, custom domain, slug, or site name here.",
             "type": "string"
-          },
-          "targets": {
-            "description": "Deprecated alias for channels. Prefer channels.",
-            "items": {
-              "enum": [
-                "site",
-                "facebook",
-                "instagram"
-              ],
-              "type": "string"
-            },
-            "type": "array"
           }
         },
         "required": [
@@ -9464,11 +9382,8 @@
                 "type": "string"
               },
               "document_updated_at": {
-                "description": "Concurrency token required when replacing content_blocks.",
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "description": "Concurrency token required when replacing content_blocks or changing publication state.",
+                "type": "string"
               },
               "edit_url": {
                 "type": [
@@ -11531,12 +11446,12 @@
     {
       "name": "sync_menu_items",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "items": {
             "description": "Items to reconcile. Up to 100.",
             "items": {
-              "additionalProperties": true,
+              "additionalProperties": false,
               "properties": {
                 "allergens": {
                   "items": {
@@ -11579,6 +11494,7 @@
                 "media": {
                   "description": "Ordered image/video media asset references. Position 0 is the cover everywhere. Videos in cover position must already have thumbnail_url/poster metadata.",
                   "items": {
+                    "additionalProperties": false,
                     "properties": {
                       "asset_id": {
                         "description": "Active image or video asset id from get_site_media_assets.",
@@ -11820,8 +11736,16 @@
     {
       "name": "unpublish_blog_post",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
+          "expected_document_updated_at": {
+            "description": "Exact post.document_updated_at concurrency token from the latest get_blog_post or successful blog mutation.",
+            "type": "string"
+          },
+          "expected_updated_at": {
+            "description": "Exact post.updated_at concurrency token from the latest get_blog_post or successful blog mutation.",
+            "type": "string"
+          },
           "post_id": {
             "description": "Post id or slug.",
             "type": "string"
@@ -11832,7 +11756,9 @@
           }
         },
         "required": [
-          "post_id"
+          "post_id",
+          "expected_updated_at",
+          "expected_document_updated_at"
         ],
         "type": "object"
       },
@@ -11923,11 +11849,8 @@
                 "type": "string"
               },
               "document_updated_at": {
-                "description": "Concurrency token required when replacing content_blocks.",
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "description": "Concurrency token required when replacing content_blocks or changing publication state.",
+                "type": "string"
               },
               "edit_url": {
                 "type": [
@@ -12306,13 +12229,6 @@
               "null"
             ]
           },
-          "scheduled_for": {
-            "description": "Future ISO 8601 datetime with timezone to schedule publication of the current draft revision; null clears scheduling.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "seo_description": {
             "type": [
               "string",
@@ -12461,11 +12377,8 @@
                 "type": "string"
               },
               "document_updated_at": {
-                "description": "Concurrency token required when replacing content_blocks.",
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "description": "Concurrency token required when replacing content_blocks or changing publication state.",
+                "type": "string"
               },
               "edit_url": {
                 "type": [
@@ -12791,9 +12704,6 @@
             "description": "Post id or slug.",
             "type": "string"
           },
-          "publish": {
-            "type": "boolean"
-          },
           "redirect_old_slug": {
             "description": "Defaults true after first publish.",
             "type": "boolean"
@@ -12809,13 +12719,6 @@
               "noindex,nofollow",
               null
             ],
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "scheduled_for": {
-            "description": "ISO 8601 datetime with timezone. A future value transitions the post to scheduled and snapshots the current draft revision; null clears scheduling.",
             "type": [
               "string",
               "null"
@@ -12865,9 +12768,6 @@
           },
           "title": {
             "type": "string"
-          },
-          "unpublish": {
-            "type": "boolean"
           },
           "visibility": {
             "enum": [
@@ -12969,11 +12869,8 @@
                 "type": "string"
               },
               "document_updated_at": {
-                "description": "Concurrency token required when replacing content_blocks.",
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "description": "Concurrency token required when replacing content_blocks or changing publication state.",
+                "type": "string"
               },
               "edit_url": {
                 "type": [
@@ -14128,7 +14025,24 @@
     {
       "name": "update_media_asset",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
+        "anyOf": [
+          {
+            "required": [
+              "alt_text"
+            ]
+          },
+          {
+            "required": [
+              "location_id"
+            ]
+          },
+          {
+            "required": [
+              "category"
+            ]
+          }
+        ],
         "properties": {
           "alt_text": {
             "type": "string"
@@ -14137,6 +14051,16 @@
             "type": "string"
           },
           "category": {
+            "enum": [
+              "exterior",
+              "interior",
+              "food",
+              "menu",
+              "team",
+              "logo",
+              "blog",
+              "other"
+            ],
             "type": "string"
           },
           "location_id": {
@@ -14155,72 +14079,7 @@
       "outputSchema": {
         "properties": {
           "updated": {
-            "properties": {
-              "alt_text": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "category": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "created_at": {
-                "type": "string"
-              },
-              "file_name": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "id": {
-                "type": "string"
-              },
-              "kind": {
-                "enum": [
-                  "image",
-                  "video"
-                ],
-                "type": "string"
-              },
-              "location_id": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "provider": {
-                "type": "string"
-              },
-              "public_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "source": {
-                "type": "string"
-              },
-              "status": {
-                "enum": [
-                  "pending",
-                  "active",
-                  "deleted"
-                ],
-                "type": "string"
-              },
-              "thumbnail_url": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              }
-            },
-            "type": "object"
+            "type": "boolean"
           }
         },
         "required": [
@@ -14305,7 +14164,7 @@
     {
       "name": "update_menu_item",
       "inputSchema": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "allergens": {
             "items": {
@@ -14387,14 +14246,6 @@
           "preparation": {
             "type": [
               "string",
-              "null"
-            ]
-          },
-          "price": {
-            "description": "Legacy alias accepted for compatibility. Prefer price_amount.",
-            "type": [
-              "string",
-              "number",
               "null"
             ]
           },
@@ -15420,7 +15271,7 @@
             "type": "object"
           },
           "poster_file": {
-            "description": "Optional poster/thumbnail image for a video upload. Ignored for image uploads.",
+            "description": "Optional poster/thumbnail image. Only valid for video uploads.",
             "properties": {
               "download_url": {
                 "type": "string"
@@ -15466,12 +15317,6 @@
           },
           "next_step": {
             "type": "string"
-          },
-          "poster_warning": {
-            "type": [
-              "string",
-              "null"
-            ]
           },
           "public_url": {
             "type": "string"

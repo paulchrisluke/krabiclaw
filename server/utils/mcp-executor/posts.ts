@@ -238,19 +238,11 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
         }
       }
 
-      // Query actual channel job outcomes to report accurate results. Best-effort:
-      // the publish (and any social writes) already succeeded above, so a failure
-      // here must not turn a successful publish into a reported failure.
-      let channelJobs: Array<{ channel: string; status: string; error: string | null }> = [];
-      try {
-        channelJobs = await queryAll<{ channel: string; status: string; error: string | null }>(
-          site.db,
-          `SELECT channel, status, error FROM post_channel_jobs WHERE post_id = ?`,
-          [postId],
-        );
-      } catch (err) {
-        console.warn('[publish_post] Failed to read channel job outcomes:', err);
-      }
+      const channelJobs = await queryAll<{ channel: string; status: string; error: string | null }>(
+        site.db,
+        `SELECT channel, status, error FROM post_channel_jobs WHERE post_id = ?`,
+        [postId],
+      );
 
       const publishedChannels = channelJobs.filter(j => j.status === 'published').map(j => j.channel);
       const failedChannels = channelJobs.filter(j => j.status === 'failed').map(j => ({ channel: j.channel, error: j.error }));
@@ -263,17 +255,10 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
         locationId: post && typeof post.location_id === "string" ? post.location_id : null,
       });
 
-      // Attempt to re-fetch the post for the response, but don't fail if it's missing or errors
-      let hydratedPublishedPost = null;
-      try {
-        const publishedPost = await getPost(site.db, site.organizationId, site.siteId, postId, site.env);
-        if (publishedPost) {
-          hydratedPublishedPost = attachViewUrlToRecord(publishedPost, site, {}, site.env);
-        }
-      } catch (err) {
-        // Refetch failed, but publish succeeded - continue with available post data
-        console.warn('[publish_post] Failed to refetch post after publish:', err);
-      }
+      const publishedPost = await getPost(site.db, site.organizationId, site.siteId, postId, site.env);
+      if (!publishedPost)
+        throw createError({ statusCode: 500, statusMessage: "Published post could not be read" });
+      const hydratedPublishedPost = attachViewUrlToRecord(publishedPost, site, {}, site.env);
 
       const hasFailures = failedChannels.length > 0 || skippedChannels.length > 0;
       const successMessage = hasFailures
@@ -286,7 +271,7 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
           entity: "post",
           id: post.id,
           slug: post.slug,
-          public_url: hydratedPublishedPost?.public_url ?? null,
+          public_url: hydratedPublishedPost.public_url,
           channels: publishedChannels,
           channel_outcomes: channelOutcomes,
           context: publishContext,
@@ -294,10 +279,9 @@ export async function handlePostsTools(ctx: McpExecutorContext): Promise<unknown
             failed_channels: failedChannels,
             skipped_channels: skippedChannels,
           } : {}),
-          ...(hydratedPublishedPost ? {} : { warning: "Post data unavailable after publish, but operation succeeded" }),
         },
         successMessage,
-        hydratedPublishedPost ? { post: hydratedPublishedPost } : undefined,
+        { post: hydratedPublishedPost },
       );
     }
     case "delete_post": {

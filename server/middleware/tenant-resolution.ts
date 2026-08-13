@@ -6,7 +6,6 @@ import { queryFirst } from "~/server/db";
 import { TENANT_TYPES, type TenantType } from "~/utils/tenant-routing";
 import { cloudflareEnv, isInternalSelfFetch } from "../utils/api-response";
 import {
-  deriveSubdomain,
   getFreeSiteDomain,
   hostnameOf,
   isPlatformHost,
@@ -15,11 +14,6 @@ import {
 import { verifyScopedPreviewToken } from "../utils/preview-token";
 import { isPlatformPath } from "~/utils/platform-routes";
 import { parseOnboardingDraftPayload } from "~/server/utils/onboarding-drafts";
-
-interface TenantResolutionEnv {
-  NUXT_PUBLIC_FREE_SITE_DOMAIN?: string;
-  NUXT_PUBLIC_PLATFORM_DOMAIN?: string;
-}
 
 interface TenantSiteRow {
   id: string;
@@ -66,11 +60,9 @@ export default defineEventHandler(async (event) => {
   if (isPreviewContext(host)) {
     const previewSlug = getHeader(event, "x-preview-tenant");
     if (previewSlug && /^[a-z0-9-]+$/.test(previewSlug)) {
-      // Look up by subdomain directly — freeSiteDomain differs between staging/preview/production,
-      // so constructing `${slug}.${freeSiteDomain}` would produce 'pottery-house.staging.krabiclaw.com'
-      // in staging but site_domains only stores 'pottery-house.krabiclaw.com'.
       const db = env.db;
       if (db) {
+        const tenantDomain = `${previewSlug}.${getFreeSiteDomain(env)}`;
         const site = await queryFirst<TenantSiteRow>(
           db,
           `
@@ -80,16 +72,19 @@ export default defineEventHandler(async (event) => {
                  ma.mime_type AS logo_mime_type,
                  json_extract(s.settings, '$.favicon_url') AS favicon_url, s.vertical
           FROM sites s
+          JOIN site_domains requested
+            ON requested.site_id = s.id
+           AND requested.type = 'subdomain'
+           AND requested.status = 'active'
           LEFT JOIN site_domains canonical
             ON canonical.site_id = s.id
-           AND canonical.type = 'subdomain'
            AND canonical.role = 'canonical'
            AND canonical.status = 'active'
           LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
-          WHERE s.subdomain = ? AND s.status = 'active' AND s.onboarding_status = 'active'
+          WHERE requested.domain = ? AND s.status = 'active' AND s.onboarding_status = 'active'
           LIMIT 1
         `,
-          [previewSlug],
+          [tenantDomain],
         );
         if (site) {
           event.context.siteId = site.id;
@@ -225,15 +220,9 @@ export default defineEventHandler(async (event) => {
 
   const isPlatform = isPlatformHost(host, env);
 
-  // Normal requests resolve platform-vs-tenant by host, not by pathname.
-  // Tenant sites legitimately own routes like /experiences, /reservations,
-  // /locations, /menu, and /contact on their custom domains. Treating those
-  // path prefixes as platform globally causes SSR on tenant hosts to
-  // serialize a platform context (siteId=null), which is exactly how
-  // www.potteryhousekrabi.com/experiences ended up rendering the KrabiClaw
-  // empty-state page while the tenant bootstrap API still returned real
-  // experience data. isPlatformPath() stays in use above for preview-route
-  // guards on true platform hosts.
+  // Normal requests resolve platform-vs-tenant by host. Tenant sites own their
+  // public route families; isPlatformPath() is only a preview-route guard on a
+  // confirmed platform host.
   if (isPlatform) {
     setTenantType(event, TENANT_TYPES.PLATFORM);
     event.context.siteId = null;
@@ -267,12 +256,11 @@ export default defineEventHandler(async (event) => {
   event.context.siteId = null;
 });
 
-async function resolveTenantSite(
+export async function resolveTenantSite(
   host: string,
   event: Parameters<typeof cloudflareEnv>[0],
 ): Promise<TenantSiteRow | null> {
   const runtimeEnv = cloudflareEnv(event);
-  const env = runtimeEnv as TenantResolutionEnv;
   const db = runtimeEnv.db;
   const hostname = hostnameOf(host);
 
@@ -298,8 +286,7 @@ async function resolveTenantSite(
     );
   }
 
-  // Try custom domains first (from site_domains table)
-  const customDomainSite = await queryFirst<TenantSiteRow>(
+  return (await queryFirst<TenantSiteRow>(
     db,
     `
     SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status, sd.domain,
@@ -312,66 +299,10 @@ async function resolveTenantSite(
     LEFT JOIN site_domains canonical
       ON canonical.site_id = s.id AND canonical.role = 'canonical' AND canonical.status = 'active'
     LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
-    WHERE sd.domain = ? AND sd.type = 'custom' AND sd.status = 'active'
+    WHERE sd.domain = ? AND sd.type IN ('custom', 'subdomain') AND sd.status = 'active'
       AND s.status = 'active' AND s.onboarding_status = 'active'
     LIMIT 1
   `,
     [hostname],
-  );
-
-  if (customDomainSite) return customDomainSite;
-
-  // Try subdomains
-  const platformDomain = getFreeSiteDomain(env);
-  const isPlatformSubdomainHost =
-    hostname !== "localhost" &&
-    hostname !== platformDomain &&
-    hostname.endsWith(`.${platformDomain}`);
-
-  if (isPlatformSubdomainHost) {
-    const subdomain = deriveSubdomain(hostname, platformDomain);
-    if (!subdomain) return null;
-
-    const subdomainSite = await queryFirst<TenantSiteRow>(
-      db,
-      `
-      SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status, sd.domain,
-             COALESCE(canonical.domain, sd.domain) AS canonical_domain,
-             s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url,
-             ma.mime_type AS logo_mime_type,
-             json_extract(s.settings, '$.favicon_url') AS favicon_url, s.vertical
-      FROM sites s
-      JOIN site_domains sd ON s.id = sd.site_id
-      LEFT JOIN site_domains canonical
-        ON canonical.site_id = s.id AND canonical.role = 'canonical' AND canonical.status = 'active'
-      LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
-      WHERE sd.domain = ? AND sd.type = 'subdomain' AND sd.status = 'active'
-        AND s.status = 'active' AND s.onboarding_status = 'active'
-      LIMIT 1
-    `,
-      [`${subdomain}.${platformDomain}`],
-    );
-
-    if (subdomainSite) return subdomainSite;
-
-    // Fallback for sites that predate site_domains population — resolve by sites.subdomain directly.
-    // This keeps existing sites live until site_domains records are seeded.
-    return await queryFirst<TenantSiteRow>(
-      db,
-      `
-      SELECT s.id, s.organization_id, s.theme_id, s.subdomain, s.onboarding_status,
-             ? AS canonical_domain,
-             s.brand_name, COALESCE(ma.public_url, s.logo_url) AS logo_url,
-             ma.mime_type AS logo_mime_type,
-             json_extract(s.settings, '$.favicon_url') AS favicon_url, s.vertical
-      FROM sites s
-      LEFT JOIN media_assets ma ON s.logo_asset_id = ma.id AND ma.status = 'active'
-      WHERE s.subdomain = ? AND s.status = 'active' AND s.onboarding_status = 'active'
-      LIMIT 1
-    `,
-      [hostname, subdomain],
-    );
-  }
-
-  return null;
+  )) ?? null;
 }

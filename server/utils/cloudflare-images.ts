@@ -1,13 +1,11 @@
 interface CloudflareImagesEnv {
   CF_ACCOUNT_ID?: string
-  CLOUDFLARE_ACCOUNT_ID?: string
-  CLOUDFLARE_IMAGES_ACCOUNT_ID?: string
   CLOUDFLARE_IMAGES_API_TOKEN?: string
   CLOUDFLARE_IMAGES_VARIANT_BASE?: string
 }
 
 function accountId(env: CloudflareImagesEnv): string {
-  return env.CLOUDFLARE_IMAGES_ACCOUNT_ID || env.CLOUDFLARE_ACCOUNT_ID || env.CF_ACCOUNT_ID || ''
+  return env.CF_ACCOUNT_ID || ''
 }
 
 export function hasCloudflareImagesConfig(env: CloudflareImagesEnv): boolean {
@@ -36,6 +34,7 @@ export async function requestImageUpload(env: CloudflareImagesEnv): Promise<{ im
     method: 'POST',
     headers: authHeader(env),
     body: formData,
+    signal: AbortSignal.timeout(30_000),
   })
   if (!res.ok) throw new Error(`CF Images direct_upload error ${res.status}: ${await res.text()}`)
   const data = await res.json() as CloudflareImagesResponse
@@ -50,7 +49,7 @@ export async function requestImageUpload(env: CloudflareImagesEnv): Promise<{ im
 /** Upload an image buffer directly (for server-generated images). */
 export async function uploadImageBuffer(
   env: CloudflareImagesEnv,
-  buffer: ArrayBuffer,
+  buffer: ArrayBuffer | Uint8Array<ArrayBuffer>,
   filename: string,
   contentType = 'image/png'
 ): Promise<{ imageId: string; publicUrl: string; thumbnailUrl: string }> {
@@ -94,13 +93,14 @@ export async function deleteImage(env: CloudflareImagesEnv, imageId: string): Pr
     res = await fetch(`${apiBase(env)}/v1/${imageId}`, {
       method: 'DELETE',
       headers: authHeader(env),
+      signal: AbortSignal.timeout(30_000),
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error'
     throw new Error(`CF Images delete request failed for ${imageId}: ${message}`)
   }
 
-  if (!res.ok) {
+  if (!res.ok && res.status !== 404) {
     const details = await res.text()
     throw new Error(`CF Images delete error ${res.status}: ${details}`)
   }

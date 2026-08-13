@@ -452,7 +452,6 @@ const MEDIA_ASSET_COLUMNS = [
   'created_by_user_id',
   'created_at',
   'updated_at',
-  'delete_pending_at',
 ] as const
 
 const MEDIA_ASSET_COPY_COLUMNS = MEDIA_ASSET_COLUMNS.slice(3).join(', ')

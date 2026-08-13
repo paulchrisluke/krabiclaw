@@ -6,6 +6,7 @@ import {
   flushRequestMetrics,
   getRequestDataMetrics,
   instrumentD1,
+  unwrapInstrumentedD1,
 } from '../../server/utils/request-metrics.ts'
 
 function completedRedirectEvent() {
@@ -159,4 +160,17 @@ test('D1 batch failure telemetry identifies statements without bound values', as
     { operation: 'UPDATE', table: 'oauthAccessToken' },
   ])
   assert.doesNotMatch(JSON.stringify(payload), /customer-secret/)
+})
+
+test('request instrumentation preserves the underlying Worker binding identity', () => {
+  const raw = {
+    prepare() { return { all: async () => ({ results: [] }) } },
+  } as unknown as D1Database
+  const first = instrumentD1(completedRedirectEvent().event, raw)
+  const second = instrumentD1(completedRedirectEvent().event, raw)
+
+  assert.notEqual(first, second)
+  assert.equal(unwrapInstrumentedD1(first), raw)
+  assert.equal(unwrapInstrumentedD1(second), raw)
+  assert.equal(unwrapInstrumentedD1(raw), raw)
 })

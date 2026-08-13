@@ -359,7 +359,7 @@ export const blogPostObject = {
     preview_url: { type: ['string', 'null'] },
     view_url: { type: ['string', 'null'] },
     content_blocks: { type: 'array', items: blogContentBlockObject },
-    document_updated_at: { type: ['string', 'null'], description: 'Concurrency token required when replacing content_blocks.' },
+    document_updated_at: { type: 'string', description: 'Concurrency token required when replacing content_blocks or changing publication state.' },
   },
   required: [
     'id', 'title', 'slug', 'excerpt', 'category', 'tags',
@@ -554,14 +554,14 @@ export const mediaAssetObject = {
   type: 'object',
   properties: {
     id: { type: 'string' },
-    kind: { type: 'string', enum: ['image', 'video'] },
+    kind: { type: 'string', enum: ['image', 'video', 'file'] },
     provider: { type: 'string' },
     source: { type: 'string' },
     public_url: { type: ['string', 'null'] },
     thumbnail_url: { type: ['string', 'null'] },
     alt_text: { type: ['string', 'null'] },
     category: { type: ['string', 'null'] },
-    status: { type: 'string', enum: ['pending', 'active', 'deleted'] },
+    status: { type: 'string', enum: ['pending', 'active', 'deleted', 'failed'] },
     file_name: { type: ['string', 'null'] },
     location_id: { type: ['string', 'null'] },
     created_at: { type: 'string' },
@@ -1017,7 +1017,7 @@ export function siteTool(definition: Omit<RawMcpToolDefinition, 'inputSchema' | 
   inputSchema?: Record<string, unknown>
   required?: string[]
   outputSchema?: Record<string, unknown>
-  // Opt-in: rejects unknown top-level arguments (see validateNoUnknownTopLevelArguments).
+  // Opt-in: rejects unknown arguments (see validateArguments).
   // Defaults to false (additionalProperties: true) to preserve existing behavior for
   // tools that haven't been reviewed for this yet — enable per-tool as they're audited.
   strict?: boolean

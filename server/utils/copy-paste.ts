@@ -127,9 +127,19 @@ export async function copyLocationBatch(
   // own batch — there's no single transaction spanning it and the entity-copy batch
   // below. If anything past this point fails, delete the location we just created
   // rather than leaving an empty, half-configured location behind.
-  const cleanupOnFailure = async <T>(result: T): Promise<T> => {
+  const cleanupOnFailure = async <T extends { success: false; error: string }>(result: T): Promise<T> => {
     if (createdNewLocation) {
-      await deleteLocation(env, rawClient(db), organizationId, siteId, targetLocationId, userId).catch(() => {})
+      try {
+        const cleanupResult = await deleteLocation(env, rawClient(db), organizationId, siteId, targetLocationId, userId)
+        if (cleanupResult.status !== 200) {
+          throw new Error((cleanupResult.data as { error?: string }).error ?? 'Failed to remove the new location')
+        }
+      } catch (cleanupError) {
+        throw new AggregateError(
+          [new Error(result.error), cleanupError],
+          'Location copy failed and the new location could not be removed',
+        )
+      }
     }
     return result
   }
@@ -360,8 +370,8 @@ async function copyMediaAssets(
 
     statements.push({
       query: `
-        INSERT INTO media_assets (id, organization_id, site_id, location_id, kind, provider, source, cloudflare_image_id, r2_key, google_media_name, public_url, thumbnail_url, mime_type, file_name, file_size, width, height, duration, alt_text, category, status, created_by_user_id, created_at, updated_at, delete_pending_at)
-        SELECT ?, organization_id, site_id, ?, kind, provider, source, cloudflare_image_id, r2_key, google_media_name, public_url, thumbnail_url, mime_type, file_name, file_size, width, height, duration, alt_text, category, status, created_by_user_id, ?, ?, NULL
+        INSERT INTO media_assets (id, organization_id, site_id, location_id, kind, provider, source, cloudflare_image_id, r2_key, google_media_name, public_url, thumbnail_url, mime_type, file_name, file_size, width, height, duration, alt_text, category, status, created_by_user_id, created_at, updated_at)
+        SELECT ?, organization_id, site_id, ?, kind, provider, source, cloudflare_image_id, r2_key, google_media_name, public_url, thumbnail_url, mime_type, file_name, file_size, width, height, duration, alt_text, category, status, created_by_user_id, ?, ?
         FROM media_assets WHERE id = ?
       `,
       params: [newId, targetLocationId, now, now, asset.id],

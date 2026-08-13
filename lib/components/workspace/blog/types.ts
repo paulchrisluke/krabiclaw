@@ -86,30 +86,13 @@ export interface PlatformBlogCreateInput {
   nav_section_order?: number | null
   hide_from_nav?: boolean | number | null
   featured_order?: number | null
-  faq_items?: Array<{ question: string; answer: string; position?: number | null }>
-  faq_label?: string | null
-  faq_status?: 'active' | 'inactive' | null
-  faq_render_enabled?: boolean
-  faq_schema_enabled?: boolean
-  how_to_steps?: Array<{ name: string; text: string; image_asset_id?: string | null; url?: string | null; position?: number | null }>
-  how_to_estimated_time?: string | null
-  how_to_tool_items?: string[]
-  how_to_supply_items?: string[]
-  how_to_label?: string | null
-  how_to_status?: 'active' | 'inactive' | null
-  how_to_render_enabled?: boolean
-  how_to_schema_enabled?: boolean
-  components?: BlogComponent[]
-  publish?: boolean
   visibility?: 'public' | 'unlisted'
-  scheduled_for?: string | null
   social_image_asset_id?: string | null
   site_author_id?: string | null
 }
 
 export interface PlatformBlogUpdateInput {
   title?: string
-  body?: string
   excerpt?: string | null
   category?: string | null
   tags?: string[] | null
@@ -125,24 +108,7 @@ export interface PlatformBlogUpdateInput {
   nav_section_order?: number | null
   hide_from_nav?: boolean | number | null
   featured_order?: number | null
-  faq_items?: Array<{ question: string; answer: string; position?: number | null }>
-  faq_label?: string | null
-  faq_status?: 'active' | 'inactive' | null
-  faq_render_enabled?: boolean
-  faq_schema_enabled?: boolean
-  how_to_steps?: Array<{ name: string; text: string; image_asset_id?: string | null; url?: string | null; position?: number | null }>
-  how_to_estimated_time?: string | null
-  how_to_tool_items?: string[]
-  how_to_supply_items?: string[]
-  how_to_label?: string | null
-  how_to_status?: 'active' | 'inactive' | null
-  how_to_render_enabled?: boolean
-  how_to_schema_enabled?: boolean
-  components?: BlogComponent[]
-  publish?: boolean
-  unpublish?: boolean
   visibility?: 'public' | 'unlisted'
-  scheduled_for?: string | null
   social_image_asset_id?: string | null
   slug?: string | null
   redirect_old_slug?: boolean
@@ -163,6 +129,15 @@ export interface SiteAuthor {
   sort_order?: number
 }
 
+export interface BlogLifecycleState {
+  id: string
+  status: 'draft' | 'published' | 'scheduled'
+  published_at: string | null
+  scheduled_for: string | null
+  updated_at: string
+  content_document_updated_at: string
+}
+
 export interface BlogPostRepository {
   listUrl: string
   editUrl(_postId: string): string
@@ -170,8 +145,8 @@ export interface BlogPostRepository {
   create(_input: PlatformBlogCreateInput): Promise<BlogPost & { id: string }>
   update(_postId: string, _input: PlatformBlogUpdateInput): Promise<BlogPost>
   delete(_postId: string): Promise<void>
-  publish(_postId: string): Promise<void>
-  unpublish(_postId: string): Promise<void>
+  publish(_postId: string, _input: { expected_updated_at: string; expected_document_updated_at: string; scheduled_for?: string | null }): Promise<BlogLifecycleState>
+  unpublish(_postId: string, _input: { expected_updated_at: string; expected_document_updated_at: string }): Promise<BlogLifecycleState>
   listAuthors?(): Promise<SiteAuthor[]>
   createAuthor?(_input: { name: string; title?: string | null }): Promise<SiteAuthor>
 }

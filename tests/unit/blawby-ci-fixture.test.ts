@@ -17,5 +17,9 @@ test('Blawby CI fixture seeds the current canonical page model without the retir
   for (const path of ['/', '/about', '/contact', '/pricing', '/services']) {
     assert.ok(sql.includes(`'${path}'`), `missing page path ${path}`)
   }
+  assert.match(sql, /'https:\/\/www\.northcarolinalegalservices\.org'/)
+  assert.match(sql, /'ncls\.krabiclaw\.com',\s*'subdomain', 'secondary'/)
+  assert.match(sql, /'www\.northcarolinalegalservices\.org',\s*'custom', 'canonical'/)
+  assert.match(sql, /'northcarolinalegalservices\.org',\s*'custom', 'secondary'/)
   assert.doesNotMatch(sql, /client-imports|ncls-blawby\.mjs|retry|BEGIN|COMMIT/)
 })

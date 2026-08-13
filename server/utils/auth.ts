@@ -27,11 +27,37 @@ import {
 } from '~/server/utils/better-auth-stripe'
 import { processStripeEvent } from '~/server/utils/stripe-event-processing'
 import { createStripeClient } from '~/server/utils/stripe-client'
+import { unwrapInstrumentedD1 } from '~/server/utils/request-metrics'
 
 type MemberRow = InferSelectModel<typeof schema.member>
 type InvitationRow = InferSelectModel<typeof schema.invitation>
 
 const CIMD_TENANT_SCOPES = ['openid', 'offline_access', 'tenant'] as const
+
+export const OAUTH_SIGNING_POLICY = {
+  algorithm: 'RS256',
+  resourceSeedMode: 'merge',
+} as const
+
+export function oauthSigningConfig(authBaseUrl: string) {
+  return {
+    resourceSeedMode: OAUTH_SIGNING_POLICY.resourceSeedMode,
+    resources: [
+      {
+        identifier: `${authBaseUrl}/api/mcp`,
+        name: 'KrabiClaw tenant MCP',
+        allowedScopes: ['openid', 'offline_access', 'tenant'],
+        signingAlgorithm: OAUTH_SIGNING_POLICY.algorithm,
+      },
+      {
+        identifier: `${authBaseUrl}/api/mcp/platform`,
+        name: 'KrabiClaw platform MCP',
+        allowedScopes: ['openid', 'offline_access', 'platform_admin'],
+        signingAlgorithm: OAUTH_SIGNING_POLICY.algorithm,
+      },
+    ],
+  }
+}
 
 const organizationOptions = {
   ac: organizationAccessControl,
@@ -98,9 +124,7 @@ export interface CloudflareEnv {
   AI_SEARCH_INSTANCE_ID?: string
   PLATFORM_SEARCH_REINDEX_SECRET?: string
   CF_ACCOUNT_ID?: string
-  CLOUDFLARE_ACCOUNT_ID?: string
   CLOUDFLARE_API_TOKEN?: string
-  CLOUDFLARE_IMAGES_ACCOUNT_ID?: string
   CLOUDFLARE_IMAGES_API_TOKEN?: string
   CF_ZONE_ID?: string
   CF_CUSTOM_HOSTNAMES_API_TOKEN?: string
@@ -179,12 +203,12 @@ function trustedOriginsForAuth(env: CloudflareEnv): string[] | ((_request?: Requ
 }
 
 export function createAuth(env: CloudflareEnv) {
-  const d1 = env.DB
+  const d1 = unwrapInstrumentedD1(env.DB)
 
   const cached = authCache.get(d1)
   if (cached) return cached as ReturnType<typeof betterAuth>
 
-  const db = env.db ?? createDb(d1)
+  const db = d1 === env.DB && env.db ? env.db : createDb(d1)
   const authBaseUrl = (env.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
   const stripeClient = createStripeClient(env.STRIPE_SECRET_KEY ?? 'sk_test_placeholder')
   const loadStripePlans = createStripePlanLoader(stripeClient, env)
@@ -323,11 +347,7 @@ export function createAuth(env: CloudflareEnv) {
     plugins: [
       jwt({
         jwks: {
-          // OpenID Connect Discovery requires RS256 support, and ChatGPT
-          // validates the returned ID token before it ever initializes MCP.
-          // Better Auth defaults to EdDSA, which produced a successful token
-          // response followed by ChatGPT's generic connection failure.
-          keyPairConfig: { alg: 'RS256' },
+          keyPairConfig: { alg: OAUTH_SIGNING_POLICY.algorithm },
         },
         jwt: {
           // Explicit issuer so oauthProvider's getOAuthServerConfig advertises the
@@ -385,24 +405,7 @@ export function createAuth(env: CloudflareEnv) {
         allowUnauthenticatedClientRegistration: false,
         enforcePerClientResources: false,
         scopes: ['openid', 'offline_access', 'tenant', 'platform_admin'],
-        resources: [
-          {
-            identifier: `${authBaseUrl}/api/mcp`,
-            name: 'KrabiClaw tenant MCP',
-            allowedScopes: ['openid', 'offline_access', 'tenant'],
-            // Pin access-token issuance so Better Auth lazily provisions the
-            // new RSA key before it creates the ID token. This safely rotates
-            // away from existing EdDSA rows while leaving their public keys
-            // available for already-issued token verification.
-            signingAlgorithm: 'RS256',
-          },
-          {
-            identifier: `${authBaseUrl}/api/mcp/platform`,
-            name: 'KrabiClaw platform MCP',
-            allowedScopes: ['openid', 'offline_access', 'platform_admin'],
-            signingAlgorithm: 'RS256',
-          },
-        ],
+        ...oauthSigningConfig(authBaseUrl),
         // Well-known metadata is served at /api/auth/.well-known/* by the plugin's
         // onRequest hook. Root-level /.well-known/* are covered by Nitro routes.
         silenceWarnings: {

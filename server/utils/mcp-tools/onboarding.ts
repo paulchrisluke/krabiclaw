@@ -12,31 +12,6 @@ export const ONBOARDING_TOOLS: McpToolDefinition[] = [
         type: 'object',
         properties: {
           maps_url: { type: 'string', description: 'Google Maps URL or short share link (maps.app.goo.gl or google.com/maps/place/...).' },
-          parsed_hint: {
-            type: 'object',
-            description: 'Optional, non-authoritative hints from LLM URL parsing. Backend always re-extracts independently and logs divergence >1 km.',
-            properties: {
-              name_hint: { type: 'string' },
-              lat: { type: 'number' },
-              lng: { type: 'number' },
-              feature_id: { type: 'string' },
-              internal_id: { type: 'string' },
-              expected_country: { type: 'string' },
-              expected_region: { type: 'string' },
-            },
-            additionalProperties: false,
-          },
-          matching_policy: {
-            type: 'object',
-            description: 'Controls how strictly the backend validates the Places API result. Defaults to strict coordinate matching.',
-            properties: {
-              allow_name_only_fallback: { type: 'boolean', description: 'If false (default), reject when no coordinates are available to bias the search.' },
-              require_coordinate_match: { type: 'boolean', description: 'If true (default), reject any Places result more than max_distance_km from URL coordinates.' },
-              max_distance_km: { type: 'number', description: 'Rejection threshold in km. Default 5.' },
-              prefer_backend_extraction: { type: 'boolean', description: 'If true (default), backend URL extraction takes precedence over parsed_hint.' },
-            },
-            additionalProperties: false,
-          },
         },
         required: ['maps_url'],
         additionalProperties: false,

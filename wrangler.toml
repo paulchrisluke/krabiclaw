@@ -1,7 +1,7 @@
 name = "krabiclaw"
 main = "workers/app-entry.ts"
 compatibility_date = "2024-11-01"
-compatibility_flags = ["nodejs_compat_v2"]
+compatibility_flags = ["nodejs_compat_v2", "global_fetch_strictly_public"]
 
 [assets]
 directory = ".output/public"
@@ -34,6 +34,7 @@ NUXT_PUBLIC_APP_NAME = "KrabiClaw"
 NUXT_PUBLIC_SITE_URL = "https://krabiclaw.com"
 NUXT_PUBLIC_HELP_URL = "https://krabiclaw.com/help"
 NUXT_PUBLIC_WHATSAPP_NUMBER = "16197200000"
+MEDIA_BASE_URL = "https://media.krabiclaw.com"
 AI_SEARCH_NAMESPACE = "default"
 AI_SEARCH_INSTANCE_ID = "krabiclaw-platform-knowledge"
 GA4_MEASUREMENT_ID = "G-NJ1BSP9BYG"

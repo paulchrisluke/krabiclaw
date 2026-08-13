@@ -92,9 +92,3 @@ An MCP auth pass requires all of the following:
   tool selection, attachment delivery, or host-provided file arguments.
 
 OAuth discovery alone is not an MCP pass.
-
-## CIMD fixture
-
-Automated tests use the preview Worker's client metadata endpoint so Better
-Auth fetches client metadata from a separate origin, matching ChatGPT's hosted
-client metadata model. The OAuth server under test remains the local Worker.

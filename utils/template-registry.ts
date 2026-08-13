@@ -162,7 +162,7 @@ export interface TemplateMarketingMetadata {
   /**
    * Canonical live-demo destination.
    * - Blawby: the NCLS-approved production showcase, a literal URL —
-   *   `https://ncls.krabiclaw.com` — presented as an approved customer
+   *   `https://www.northcarolinalegalservices.org` — presented as an approved customer
    *   site, not a synthetic fixture.
    * - Saya: null. Saya's demo runs on an ephemeral seeded subdomain that
    *   differs between dev and production (`demo.<platformHostname>`), so
@@ -292,7 +292,7 @@ export const publicTemplateMarketing: Record<PublicTemplateSlug, TemplateMarketi
     priceLabel: 'Included on Growth',
     priceNote: 'Approved customer showcase: North Carolina Legal Services',
     schemaOffer: null,
-    demoUrl: 'https://ncls.krabiclaw.com',
+    demoUrl: 'https://www.northcarolinalegalservices.org',
     previewImageUrl: '/templates/blawby-preview.jpg',
     logoUrl: 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/27bc2bf2-8582-4ed1-e77c-45d7a3215b00/public',
     demoLabel: 'View live customer site',
@@ -334,7 +334,7 @@ export const publicTemplateMarketing: Record<PublicTemplateSlug, TemplateMarketi
     ],
     specs: [
       { label: 'Price', value: 'Included on Growth' },
-      { label: 'Live showcase', value: 'ncls.krabiclaw.com' },
+      { label: 'Live showcase', value: 'www.northcarolinalegalservices.org' },
       { label: 'Mobile', value: 'Fully responsive' },
       { label: 'Structured data', value: 'ProfessionalService' },
     ],

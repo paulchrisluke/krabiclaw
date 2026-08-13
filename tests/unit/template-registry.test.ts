@@ -58,7 +58,7 @@ test('findPublishedTemplateMarketing resolves known slugs and 404s (returns null
 })
 
 test('Blawby marketing metadata uses the NCLS-approved literal demo URL; Saya resolves its demo at runtime', () => {
-  assert.equal(publicTemplateMarketing.blawby.demoUrl, 'https://ncls.krabiclaw.com')
+  assert.equal(publicTemplateMarketing.blawby.demoUrl, 'https://www.northcarolinalegalservices.org')
   assert.equal(publicTemplateMarketing.saya.demoUrl, null)
 })
 
