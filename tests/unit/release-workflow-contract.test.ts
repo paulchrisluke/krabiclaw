@@ -124,6 +124,14 @@ test('Worker egress uses Cloudflare strict-public fetch for CIMD resolution', as
   )
 })
 
+test('staging OAuth smoke exercises CIMD without restoring dynamic registration', async () => {
+  const smoke = await repoFile('scripts/test-mcp-oauth.mjs')
+  assert.match(smoke, /client_id_metadata_document_supported === true/)
+  assert.match(smoke, /process\.env\.MCP_CIMD_CLIENT_URL/)
+  assert.match(smoke, /CIMD \+ PKCE auth flow/)
+  assert.doesNotMatch(smoke, /\/api\/auth\/oauth2\/register|Dynamic client registration|DCR \+ PKCE/)
+})
+
 test('every deployed Worker environment has its canonical media delivery URL', async () => {
   const wrangler = await repoFile('wrangler.toml')
   assert.match(tomlSection(wrangler, 'vars'), /MEDIA_BASE_URL = "https:\/\/media\.krabiclaw\.com"/)

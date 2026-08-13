@@ -25,7 +25,6 @@ const BASE_URL = process.argv.includes("--base-url")
 const MCP_URL = `${BASE_URL}/api/mcp`;
 const TOKEN_URL = `${BASE_URL}/api/auth/oauth2/token`;
 const DEV_LOGIN_URL = `${BASE_URL}/api/dev/login`;
-const REGISTER_URL = `${BASE_URL}/api/auth/oauth2/register`;
 const AUTHORIZE_URL = `${BASE_URL}/api/auth/oauth2/authorize`;
 const CONSENT_URL = `${BASE_URL}/api/auth/oauth2/consent`;
 
@@ -180,16 +179,16 @@ async function main() {
   if (asJson.code_challenge_methods_supported?.includes("S256"))
     pass("S256 PKCE advertised");
   else fail("S256 PKCE missing from well-known");
-  if (asJson.registration_endpoint === REGISTER_URL)
-    pass(`DCR registration endpoint = ${REGISTER_URL}`);
+  if (asJson.registration_endpoint === undefined)
+    pass("DCR registration endpoint is not advertised");
   else {
-    fail("DCR registration endpoint missing from well-known", asJson);
+    fail("DCR registration endpoint is still advertised", asJson);
     return;
   }
-  if (asJson.client_id_metadata_document_supported === undefined)
-    pass("CIMD is not advertised");
+  if (asJson.client_id_metadata_document_supported === true)
+    pass("CIMD is advertised");
   else {
-    fail("CIMD is still advertised", asJson);
+    fail("CIMD support is missing from well-known", asJson);
     return;
   }
 
@@ -240,39 +239,34 @@ async function main() {
       return;
     }
 
-    section("DCR + PKCE auth flow");
+    section("CIMD + PKCE auth flow");
     const { verifier, challenge } = pkce();
     const state = randomBytes(16).toString("hex");
-    const redirectUri = "https://chatgpt.com/connector/oauth/krabiclaw-smoke";
-    const registrationResp = await post(REGISTER_URL, {
-      client_name: "KrabiClaw ChatGPT DCR smoke",
-      redirect_uris: [redirectUri],
-      grant_types: ["authorization_code"],
-      response_types: ["code"],
-      token_endpoint_auth_method: "none",
-    });
-    const registrationBody = jsonBody(registrationResp, "OAuth dynamic client registration");
-    if (registrationResp.status !== 201 || typeof registrationBody.client_id !== "string") {
-      fail("Dynamic client registration failed", registrationBody);
+    const testClientId = process.env.MCP_CIMD_CLIENT_URL ??
+      `${BASE_URL}/api/auth/oauth2/test-client-metadata?nonce=${Date.now()}`;
+    const clientMetadataResp = await get(testClientId);
+    const clientMetadata = jsonBody(clientMetadataResp, "OAuth client metadata document");
+    if (clientMetadataResp.status !== 200 || clientMetadata.client_id !== testClientId) {
+      fail("CIMD client metadata document failed", clientMetadata);
       return;
     }
-    if (registrationBody.client_secret !== undefined) {
-      fail("Public DCR client unexpectedly received a client secret", registrationBody);
+    if (clientMetadata.token_endpoint_auth_method !== "none") {
+      fail("Public CIMD client has the wrong token auth method", clientMetadata);
       return;
     }
-    if (registrationBody.token_endpoint_auth_method !== "none") {
-      fail("Public DCR client has the wrong token auth method", registrationBody);
+    if (!Array.isArray(clientMetadata.redirect_uris) || clientMetadata.redirect_uris.length !== 1) {
+      fail("Public CIMD client must advertise one redirect URI", clientMetadata);
       return;
     }
-    const registrationScopes = new Set(String(registrationBody.scope ?? "").split(/\s+/).filter(Boolean));
-    for (const requiredScope of ["openid", "offline_access", "tenant", "platform_admin"]) {
-      if (!registrationScopes.has(requiredScope)) {
-        fail(`DCR client missing ${requiredScope} capability`, registrationBody);
+    const clientScopes = new Set(String(clientMetadata.scope ?? "").split(/\s+/).filter(Boolean));
+    for (const requiredScope of ["openid", "offline_access", "tenant"]) {
+      if (!clientScopes.has(requiredScope)) {
+        fail(`CIMD client missing ${requiredScope} capability`, clientMetadata);
         return;
       }
     }
-    const testClientId = registrationBody.client_id;
-    pass(`Registered public OAuth client: ${testClientId}`);
+    const redirectUri = clientMetadata.redirect_uris[0];
+    pass(`Resolved public CIMD client: ${testClientId}`);
 
     // Authorization request (redirects to consent page)
     const authParams = new URLSearchParams({
