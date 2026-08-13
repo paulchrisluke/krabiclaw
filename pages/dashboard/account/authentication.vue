@@ -3,23 +3,21 @@
     <template #header>
       <UDashboardNavbar title="Authentication">
         <template #leading>
-          <DashboardNavbarLeading back-to-organization />
+          <DashboardNavbarLeading :detail-to="accountIndexTo" detail-label="Account" icon-only />
         </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
-      <div class="max-w-4xl space-y-10">
+      <div class="mx-auto w-full max-w-4xl space-y-10">
         
         <!-- Sign-in Methods -->
         <section class="space-y-4">
           <div class="space-y-1">
             <h3 class="text-xl font-semibold text-highlighted">Sign-in Methods</h3>
-            <p class="text-sm text-muted">Customize how you access your account. Link your social profiles or phone number for seamless, secure authentication.</p>
           </div>
 
-          <UCard variant="soft">
-            <div class="divide-y divide-default">
+            <div class="divide-y divide-default border-y border-default">
               <!-- Email -->
               <div class="flex items-center justify-between p-4 sm:px-6">
                 <div class="flex items-center gap-4">
@@ -69,7 +67,6 @@
                 </div>
               </div>
             </div>
-          </UCard>
         </section>
 
       </div>
@@ -86,6 +83,13 @@ useSeoMeta({ title: 'Authentication | KrabiClaw Dashboard', robots: 'noindex, no
 
 const { data: sessionData } = useAuth()
 const route = useRoute()
+const accountIndexTo = computed(() => ({
+  path: '/dashboard/account',
+  query: {
+    ...(typeof route.query.organization === 'string' ? { organization: route.query.organization } : {}),
+    ...(typeof route.query.organizationName === 'string' ? { organizationName: route.query.organizationName } : {}),
+  },
+}))
 const profileTo = computed(() => ({
   path: '/dashboard/account/profile',
   query: {

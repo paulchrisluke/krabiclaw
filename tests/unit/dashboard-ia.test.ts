@@ -154,8 +154,24 @@ test('responsive dashboard navigation keeps one canonical desktop sidebar and on
   assert.equal((layout.match(/^\s*<UDashboardSidebar\b/gm) ?? []).length, 1)
   assert.match(layout, /data-testid="dashboard-mobile-nav"/)
   assert.match(layout, /mobileNavItems/)
-  assert.match(layout, /to="\/dashboard\/account\/profile"/)
+  assert.match(layout, /:to="accountIndexTo"/)
+  assert.match(layout, /mobileNavItems\.length && !isAccountRoute/)
   assert.doesNotMatch(layout, /mobileMoreItems|dashboard-mobile-more|mobileRevenueItem/)
+})
+
+test('account surfaces use the mobile index and row-based account design', () => {
+  const menu = source('lib/components/workspace/dashboard/DashboardAccountMenu.vue')
+  const profile = source('pages/dashboard/account/profile.vue')
+  const authentication = source('pages/dashboard/account/authentication.vue')
+  const billing = source('pages/dashboard/account/billing-items.vue')
+
+  assert.match(menu, /label: 'Profile'/)
+  assert.match(menu, /mobileOnly/)
+  assert.match(menu, /aria-modal="true"/)
+  assert.match(profile, /editingRow/)
+  assert.match(profile, /class="profile-row/)
+  assert.doesNotMatch(authentication, /<UCard/)
+  assert.doesNotMatch(billing, /<UCard/)
 })
 
 test('organization, site, and location navigation share the requested item order', () => {

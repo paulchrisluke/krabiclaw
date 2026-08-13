@@ -87,7 +87,7 @@
     </UDashboardGroup>
 
     <div
-      v-if="mobileNavItems.length"
+      v-if="mobileNavItems.length && !isAccountRoute"
       class="fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 md:hidden"
       data-testid="dashboard-mobile-nav"
     >
@@ -105,7 +105,7 @@
           :title="item.label"
           :class="item.active ? 'bg-primary/10 text-primary' : 'text-dimmed'"
         />
-        <NuxtLink :to="accountProfileTo" aria-label="Account" title="Account" class="flex size-9 items-center justify-center rounded-full">
+        <NuxtLink :to="accountIndexTo" aria-label="Account" title="Account" class="flex size-9 items-center justify-center rounded-full">
           <UAvatar :src="sessionData?.user?.image ?? undefined" :alt="sessionData?.user?.name || 'Account'" size="xs" />
         </NuxtLink>
       </nav>
@@ -284,7 +284,7 @@ const accountRouteQuery = computed(() => requestedAccountOrganizationSlug.value
   : organization.value?.slug
     ? { organization: organization.value.slug, organizationName: organization.value.name }
     : {})
-const accountProfileTo = computed(() => ({ path: '/dashboard/account/profile', query: accountRouteQuery.value }))
+const accountIndexTo = computed(() => ({ path: '/dashboard/account', query: accountRouteQuery.value }))
 const impersonatedBy = computed(() => {
   const session = sessionData.value?.session as { impersonatedBy?: string } | undefined
   return session?.impersonatedBy
@@ -309,6 +309,7 @@ const locationsBase = computed(() => siteBase.value ? `${siteBase.value}/locatio
 const currentLocationSlug = dashboardLocation.routeLocationSlug
 const locationBase = computed(() => locationsBase.value && currentLocationSlug.value ? `${locationsBase.value}/${currentLocationSlug.value}` : null)
 const routeName = computed(() => typeof route.name === 'string' ? route.name : '')
+const isAccountRoute = computed(() => routeName.value.startsWith('dashboard-account'))
 const isAdminRoute = computed(() => routeName.value.startsWith('admin'))
 const isConversationsRoute = computed(() => routeName.value.includes('conversations'))
 const showChowBot = computed(() => !isConversationsRoute.value

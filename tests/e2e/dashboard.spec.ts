@@ -492,7 +492,7 @@ test.describe('dashboard functional smoke', () => {
     await expect(page.getByRole('dialog')).toBeVisible()
     await page.keyboard.press('Escape')
     await page.getByTestId('dashboard-account-menu-button').click()
-    await expect(page.getByText('Account settings', { exact: true })).toBeVisible()
+    await expect(page.getByText('Profile', { exact: true })).toBeVisible()
     await expect(page.getByText('Platform Status', { exact: true })).toBeVisible()
     await page.keyboard.press('Escape')
     await page.getByRole('button', { name: 'Collapse sidebar' }).click()

@@ -3,15 +3,17 @@
     <template #header>
       <UDashboardNavbar title="Account">
         <template #leading>
-          <DashboardNavbarLeading back-to-organization />
+          <DashboardNavbarLeading back-to-organization icon-only />
+        </template>
+        <template #right>
+          <DashboardAccountMenu mobile-only class="md:hidden" />
         </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
-      <div class="max-w-4xl space-y-4">
-        <UCard v-for="item in items" :key="item.label" variant="soft">
-          <NuxtLink :to="item.to" class="flex items-center justify-between gap-4">
+      <div class="mx-auto w-full max-w-4xl divide-y divide-default">
+          <NuxtLink v-for="item in items" :key="item.label" :to="item.to" class="flex min-h-20 items-center justify-between gap-4 py-4">
             <div class="flex items-center gap-4">
               <div class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
                 <UIcon :name="item.icon" class="size-5 text-highlighted" />
@@ -23,7 +25,6 @@
             </div>
             <UIcon name="i-lucide-chevron-right" class="size-4 text-dimmed" />
           </NuxtLink>
-        </UCard>
       </div>
     </template>
   </UDashboardPanel>

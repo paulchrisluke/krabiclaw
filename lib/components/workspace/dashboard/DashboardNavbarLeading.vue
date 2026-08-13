@@ -36,16 +36,19 @@ const props = withDefaults(defineProps<{
   detailTo?: RouteLocationRaw | null
   detailLabel?: string
   backToOrganization?: boolean
+  iconOnly?: boolean
 }>(), {
   detailTo: null,
   detailLabel: 'Back',
   backToOrganization: false,
+  iconOnly: false,
 })
 
 const scopeHeaderModel = inject(dashboardScopeHeaderModelKey, null)
 const organizationParent = inject(dashboardOrganizationParentKey, null)
 const labelElement = ref<HTMLElement | null>(null)
-const iconOnly = ref(false)
+const measuredIconOnly = ref(false)
+const iconOnly = computed(() => props.iconOnly || measuredIconOnly.value)
 
 const detailParent = computed(() => props.detailTo
   ? { label: props.detailLabel, to: props.detailTo }
@@ -54,10 +57,10 @@ const scopeParent = computed(() => scopeHeaderModel?.value.parent ?? null)
 const visibleLabel = computed(() => detailParent.value?.label ?? scopeParent.value?.label ?? '')
 
 async function measureLabel() {
-  iconOnly.value = false
+  measuredIconOnly.value = false
   await nextTick()
   const label = labelElement.value
-  iconOnly.value = Boolean(label && label.scrollWidth > label.clientWidth)
+  measuredIconOnly.value = Boolean(label && label.scrollWidth > label.clientWidth)
 }
 
 watch(visibleLabel, measureLabel, { flush: 'post' })

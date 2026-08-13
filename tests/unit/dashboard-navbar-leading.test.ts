@@ -62,8 +62,9 @@ test('every dashboard navbar delegates its leading slot to the shared resolver',
   }
 })
 
-test('account settings always return to the active organization', () => {
-  for (const page of ['index.vue', 'profile.vue', 'authentication.vue', 'billing-items.vue']) {
-    assert.match(read(`pages/dashboard/account/${page}`), /<DashboardNavbarLeading back-to-organization \/>/)
+test('account index returns to the workspace and detail pages return to account', () => {
+  assert.match(read('pages/dashboard/account/index.vue'), /<DashboardNavbarLeading back-to-organization icon-only \/>/)
+  for (const page of ['profile.vue', 'authentication.vue', 'billing-items.vue']) {
+    assert.match(read(`pages/dashboard/account/${page}`), /:detail-to="accountIndexTo" detail-label="Account" icon-only/)
   }
 })
