@@ -16,7 +16,7 @@
         :ui="{ label: 'truncate text-left' }"
       />
     </UDropdownMenu>
-    <DashboardSidebarCollapseButton sidebar />
+    <DashboardSidebarCollapseButton />
   </div>
 </template>
 

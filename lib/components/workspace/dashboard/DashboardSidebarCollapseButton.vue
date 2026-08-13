@@ -1,7 +1,6 @@
 <template>
   <UButton
     class="shrink-0"
-    :class="sidebar ? '' : 'hidden md:flex'"
     color="neutral"
     variant="ghost"
     :icon="sidebarCollapsed ? appConfig.ui.icons.panelOpen : appConfig.ui.icons.panelClose"
@@ -12,8 +11,6 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{ sidebar?: boolean }>()
-
 const appConfig = useAppConfig()
 const nuxtApp = useNuxtApp()
 const sidebarCollapsed = useState<boolean>('dashboard-sidebar-collapsed', () => false)

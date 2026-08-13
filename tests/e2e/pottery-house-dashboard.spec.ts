@@ -10,13 +10,14 @@ test.describe('pottery house dashboard', () => {
     const login = await page.goto(devLoginUrl(baseURL!), { waitUntil: 'load' })
     expect(login?.status()).toBeLessThan(400)
 
-    // Keep API setup and assertions on Playwright's dedicated request context.
-    // page.request has repeatedly stalled after the browser dev-login redirect
-    // on deployed preview Workers, while the same request-fixture flow is stable.
+    // Keep API setup and assertions on Playwright's dedicated request context,
+    // but stop at the login response instead of following the dashboard redirect
+    // chain a second time after the browser has already rendered it above.
     const apiLogin = await request.get(devLoginUrl(baseURL!), {
       headers: devLoginHeaders(),
+      maxRedirects: 0,
     })
-    expect(apiLogin.status()).toBeLessThan(400)
+    expect(apiLogin.status()).toBe(302)
 
     const contextRes = await request.get(`${baseURL}/api/dashboard/context`)
     expect(contextRes.status()).toBe(200)
