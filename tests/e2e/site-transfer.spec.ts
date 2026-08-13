@@ -1,8 +1,9 @@
 import { expect, test, type APIRequestContext } from '@playwright/test'
-import { devLoginHeaders, devLoginUrl, testEnv } from './test-env'
+import { loginAs } from './helpers/auth'
+import { devLoginHeaders } from './test-env'
 
-const POTTERY_OWNER_USER_ID = 'IZO6M01zZkvD1yrOFjoCDXdzdx4mAjOO'
-const RECIPIENT_USER_ID = 'Nfqw39lwLZ1vejIfYJv24xvD4UKJh8re'
+const POTTERY_OWNER_USER_ID = 'user-e2e-pottery-owner'
+const RECIPIENT_USER_ID = 'user-e2e-transfer-recipient'
 
 async function createTransferFixtureSite(request: APIRequestContext, baseURL: string) {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -29,17 +30,13 @@ test.describe('site transfer handoff flow', () => {
   test('paid handoff stays pending until checkout completes and reminders can be forced', async ({ page, request, baseURL }) => {
     test.setTimeout(60_000)
     test.skip(
-      !testEnv('STRIPE_SECRET_KEY') || !testEnv('NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'),
+      !process.env.STRIPE_SECRET_KEY || !process.env.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
       'Stripe must be configured for the paid handoff flow test.',
     )
 
     const since = new Date().toISOString()
 
-    const recipientLogin = await request.get(devLoginUrl(baseURL!, RECIPIENT_USER_ID), {
-      headers: devLoginHeaders(),
-      maxRedirects: 0,
-    })
-    expect(recipientLogin.status()).toBe(302)
+    await loginAs(request, baseURL!, RECIPIENT_USER_ID)
 
     const recipientSession = await request.get(`${baseURL}/api/auth/get-session`)
     expect(recipientSession.status()).toBe(200)
@@ -47,11 +44,7 @@ test.describe('site transfer handoff flow', () => {
     const recipientEmail = recipientSessionBody.user?.email
     expect(recipientEmail).toEqual(expect.any(String))
 
-    const adminLogin = await request.get(devLoginUrl(baseURL!, POTTERY_OWNER_USER_ID), {
-      headers: devLoginHeaders(),
-      maxRedirects: 0,
-    })
-    expect(adminLogin.status()).toBe(302)
+    await loginAs(request, baseURL!, POTTERY_OWNER_USER_ID)
     const transferFixture = await createTransferFixtureSite(request, baseURL!)
 
     const cancelExisting = await request.delete(`${baseURL}/api/admin/sites/${transferFixture.siteId}/transfer`)
@@ -92,11 +85,7 @@ test.describe('site transfer handoff flow', () => {
     const notificationsBody = await notifications.json() as { notifications: Array<{ template: string }> }
     expect(notificationsBody.notifications.some((row) => row.template === 'site_transfer_reminder')).toBe(true)
 
-    const demoLogin = await request.get(devLoginUrl(baseURL!, RECIPIENT_USER_ID), {
-      headers: devLoginHeaders(),
-      maxRedirects: 0,
-    })
-    expect(demoLogin.status()).toBe(302)
+    await loginAs(request, baseURL!, RECIPIENT_USER_ID)
 
     const demoContext = await request.get(`${baseURL}/api/dashboard/context`)
     expect(demoContext.status()).toBe(200)
@@ -128,11 +117,7 @@ test.describe('site transfer handoff flow', () => {
   test('transfer cancellation keeps site in original org and clears pending state', async ({ request, baseURL }) => {
     test.setTimeout(60_000)
 
-    const adminLogin = await request.get(devLoginUrl(baseURL!, POTTERY_OWNER_USER_ID), {
-      headers: devLoginHeaders(),
-      maxRedirects: 0,
-    })
-    expect(adminLogin.status()).toBe(302)
+    await loginAs(request, baseURL!, POTTERY_OWNER_USER_ID)
     const transferFixture = await createTransferFixtureSite(request, baseURL!)
 
     // Cancel any leftover pending transfer first

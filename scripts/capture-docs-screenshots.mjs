@@ -4,13 +4,9 @@
 // so they land in Cloudflare Images with a public_url ready to paste into the
 // docs' markdown body / how_to step image_asset_id.
 //
-// Requires: `yarn dev` running locally and a local dev user with Better Auth
-// Admin access. Defaults to a user id of "docs-admin" — if no working admin
-// session exists in local D1, run the break-glass recovery command once before
-// using this script:
-//
-//   curl "http://localhost:3000/api/dev/login?userId=docs-admin" -o /dev/null
-//   yarn platform-admin:break-glass-promote --email docs-admin@example.test --local
+// Requires: E2E_TEST_PASSWORD in the environment, plus the prepared local E2E
+// database and Worker provisioned with that same value. The seeded
+// platform-admin credential uploads the finished screenshots.
 //
 // Usage:
 //   node scripts/capture-docs-screenshots.mjs [outDir]
@@ -23,14 +19,40 @@
 // scripts/seed-docs.sql (inline ![alt](url) for body images, image_asset_id
 // for how_to component steps).
 import { chromium } from 'playwright'
+import { findE2eAuthFixture } from '../config/e2e-auth-fixtures.ts'
 
 const BASE = process.env.KRABICLAW_BASE_URL || 'http://localhost:3000'
 const OUT = process.argv[2] || '/tmp/krabiclaw-docs-screenshots'
-const ADMIN_USER_ID = process.env.ADMIN_USER_ID || 'docs-admin'
+const ADMIN_USER_ID = process.env.ADMIN_USER_ID || 'user-e2e-platform-admin'
+const E2E_TEST_PASSWORD = process.env.E2E_TEST_PASSWORD
+if (!E2E_TEST_PASSWORD) throw new Error('E2E_TEST_PASSWORD is required for credential sign-in.')
 
 await import('node:fs/promises').then(fs => fs.mkdir(OUT, { recursive: true }))
 
 const browser = await chromium.launch()
+
+async function authenticatePage(page, userId) {
+  const fixture = findE2eAuthFixture(userId)
+  const origin = new URL(BASE).origin
+  const response = await page.request.post(`${BASE}/api/auth/sign-in/email`, {
+    headers: { origin },
+    data: {
+      email: fixture.email,
+      password: E2E_TEST_PASSWORD,
+      rememberMe: false,
+    },
+  })
+  if (!response.ok()) throw new Error(`Credential sign-in failed for ${userId}: ${response.status()} ${await response.text()}`)
+
+  const organizationId = fixture.memberships?.[0]?.organizationId
+  if (organizationId) {
+    const active = await page.request.post(`${BASE}/api/auth/organization/set-active`, {
+      headers: { origin },
+      data: { organizationId },
+    })
+    if (!active.ok()) throw new Error(`Active organization selection failed for ${userId}: ${active.status()} ${await active.text()}`)
+  }
+}
 
 async function uploadScreenshot(filePath, altText, cookieHeader) {
   const fs = await import('node:fs/promises')
@@ -58,7 +80,7 @@ function uniqueName(base) {
 }
 
 async function captureOnboardingFlow(results) {
-  const userId = `docshot-onboarding-${Date.now()}`
+  const userId = 'user-e2e-onboarding'
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   const shot = async (name) => {
     const filePath = `${OUT}/${name}.png`
@@ -66,7 +88,7 @@ async function captureOnboardingFlow(results) {
     results.push({ name, filePath })
   }
 
-  await page.goto(`${BASE}/api/dev/login?userId=${userId}`)
+  await authenticatePage(page, userId)
   await page.goto(`${BASE}/dashboard/onboarding`)
   await page.waitForSelector('text=Tell me about your business')
   await shot('01-welcome')
@@ -122,10 +144,8 @@ async function captureOnboardingFlow(results) {
 }
 
 async function captureDashboardPages(results, userId) {
-  // Reuse the exact user captureOnboardingFlow just created — dev-login with
-  // no userId picks whatever existing dev user ranks highest (owner+site
-  // first), which is very likely a *different*, possibly location-less demo
-  // account, not the business we just walked through onboarding.
+  // Reuse the exact credentialed user that completed the onboarding flow so
+  // the dashboard screenshots show the business created above.
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
   const shot = async (name) => {
     const filePath = `${OUT}/${name}.png`
@@ -133,7 +153,7 @@ async function captureDashboardPages(results, userId) {
     results.push({ name, filePath })
   }
 
-  await page.goto(`${BASE}/api/dev/login?userId=${userId}`)
+  await authenticatePage(page, userId)
   const ctx = await page.evaluate(async () => {
     const res = await fetch('/api/dashboard/context')
     return res.json()
@@ -182,7 +202,7 @@ async function main() {
   // Upload everything via the admin platform-media route.
   const loginPage = await chromium.launch().then(b => b.newPage())
   try {
-    await loginPage.goto(`${BASE}/api/dev/login?userId=${ADMIN_USER_ID}`)
+    await authenticatePage(loginPage, ADMIN_USER_ID)
     const cookieHeader = await getCookieHeader(loginPage)
 
     const uploaded = {}

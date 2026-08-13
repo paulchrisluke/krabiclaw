@@ -1,12 +1,10 @@
 import { expect, test } from '@playwright/test'
-import { devLoginHeaders } from './test-env'
 import { loginAs } from './helpers/auth'
 import { tenantExtraHeaders } from './helpers'
 
-const DEMO_USER_ID = 'user-demo'
+const DEMO_USER_ID = 'user-e2e-demo-owner'
 const DEMO_SITE_ID = 'site-demo'
 const DEMO_LOCATION_ID = 'loc-demo'
-const DEMO_ORG_ID = 'org-demo'
 
 test.describe('review contract regressions', () => {
   test.describe.configure({ mode: 'serial' })
@@ -82,17 +80,8 @@ test.describe('review contract regressions', () => {
     const ownerBody = await ownerReplyRes.json() as { updated: boolean }
     expect(ownerBody.updated).toBe(true)
 
-    // Create an editor user in the demo org / DEMO_ORG_ID
-    const editorRes = await request.post(`${baseURL}/api/dev/test-member`, {
-      data: { role: 'editor', organizationId: DEMO_ORG_ID },
-      headers: devLoginHeaders(),
-    })
-    expect(editorRes.status()).toBe(200)
-    const editorBody = await editorRes.json() as { user: { id: string } }
-    const editorId = editorBody.user.id
-
     // Editor cannot reply — editor is not in the ['owner', 'admin'] access list
-    await loginAs(request, baseURL!, editorId)
+    await loginAs(request, baseURL!, 'user-e2e-demo-editor')
     const editorReplyRes = await request.patch(
       `${baseURL}/api/editor/sites/${DEMO_SITE_ID}/reviews/${reviewId}`,
       {

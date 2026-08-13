@@ -1,8 +1,8 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
-import { blawbyExtraHeaders, setupTenantHeaders } from './helpers'
-import { devLoginHeaders, devLoginUrl } from './test-env'
+import { blawbyExtraHeaders } from './helpers'
+import { loginAsPage } from './helpers/auth'
 
-const OWNER_USER_ID = 'user-ncls-blawby'
+const OWNER_USER_ID = 'user-e2e-ncls-owner'
 const SITE_ID = 'site-ncls-blawby'
 const DASHBOARD_BASE = '/dashboard/north-carolina-legal-services/sites/ncls'
 
@@ -16,12 +16,7 @@ const CURATED_FIXTURE_TITLES = {
 } as const
 
 async function loginAsNclsOwner(page: Page, baseURL: string) {
-  await setupTenantHeaders(page, baseURL, devLoginHeaders() ?? {})
-  const login = await page.goto(devLoginUrl(baseURL, OWNER_USER_ID), {
-    waitUntil: 'load',
-    referer: baseURL,
-  })
-  expect(login?.status()).toBeLessThan(400)
+  await loginAsPage(page, baseURL, OWNER_USER_ID)
 }
 
 async function publicRoute(request: APIRequestContext, baseURL: string, recipe: string) {

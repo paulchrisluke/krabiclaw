@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext } from '@playwright/test'
-import { devLoginHeaders, devLoginUrl } from './test-env'
+import { loginAs } from './helpers/auth'
+import { devLoginHeaders } from './test-env'
 
 async function runtimeStripeSignature(
   request: APIRequestContext,
@@ -16,8 +17,7 @@ async function runtimeStripeSignature(
 
 test.describe('billing webhook signed flow', () => {
   test('queues a valid signed event and is idempotent on replay', async ({ request, baseURL }) => {
-    const login = await request.get(devLoginUrl(baseURL!), { headers: devLoginHeaders() })
-    expect(login.status()).toBeLessThan(400)
+    await loginAs(request, baseURL!)
 
     const context = await request.get(`${baseURL}/api/dashboard/context`)
     expect(context.status()).toBe(200)
@@ -99,11 +99,7 @@ test.describe('billing webhook signed flow', () => {
   })
 
   test('ignores retired one-time checkout metadata and accepts setup checkout mode', async ({ request, baseURL }) => {
-    const login = await request.get(devLoginUrl(baseURL!), {
-      headers: devLoginHeaders(),
-      maxRedirects: 0,
-    })
-    expect(login.status()).toBe(302)
+    await loginAs(request, baseURL!)
     const contextResponse = await request.get(`${baseURL}/api/dashboard/context`)
     expect(contextResponse.status()).toBe(200)
     const contextBody = await contextResponse.json() as { organization?: { id?: string } }

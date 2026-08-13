@@ -122,7 +122,10 @@ test('getFreeSiteDomain falls back to krabiclaw.com when unconfigured', () => {
   assert.equal(getFreeSiteDomain({}), 'krabiclaw.com')
 })
 
-test('the named local tunnel uses explicit tenant headers instead of nested hostnames', () => {
+test('shared local and deployed test hosts use explicit tenant headers instead of nested hostnames', () => {
+  assert.equal(isPreviewContext('localhost'), true)
+  assert.equal(isPreviewContext('localhost:3000'), true)
+  assert.equal(isPreviewContext('127.0.0.1:3000'), true)
   assert.equal(isPreviewContext('local.krabiclaw.com'), true)
   assert.equal(isPreviewContext('LOCAL.KRABICLAW.COM'), true)
   assert.equal(isPreviewContext('local.krabiclaw.com.'), true)

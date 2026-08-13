@@ -54,7 +54,6 @@ jobs:
       NUXT_PUBLIC_SITE_URL: https://preview.krabiclaw.com
       NUXT_PUBLIC_HELP_URL: https://preview.krabiclaw.com/help
       NUXT_PUBLIC_WHATSAPP_NUMBER: "16197200000"
-      BETTER_AUTH_SECRET: test-secret-for-ci
       BETTER_AUTH_URL: https://preview.krabiclaw.com
       E2E_ALLOW_DEV_ROUTES: "true"
       E2E_DEV_ROUTE_SECRET: ${{ secrets.E2E_DEV_ROUTE_SECRET_PREVIEW }}
@@ -70,6 +69,17 @@ jobs:
           cache: yarn
       - run: yarn install --frozen-lockfile
       - run: npx playwright install --with-deps chromium
+      - name: Generate ephemeral test credentials
+        shell: bash
+        run: |
+          auth_secret="$(openssl rand -base64 32)"
+          password="$(openssl rand -hex 32)"
+          echo "::add-mask::$auth_secret"
+          echo "::add-mask::$password"
+          {
+            echo "BETTER_AUTH_SECRET=$auth_secret"
+            echo "E2E_TEST_PASSWORD=$password"
+          } >> "$GITHUB_ENV"
       - name: Build preview Worker
         run: yarn build
       - name: Check pre-provisioned preview secrets
@@ -109,6 +119,11 @@ jobs:
           node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --preview --stdout >> /tmp/preview-seed.sql
           node --experimental-strip-types scripts/generate-blawby-ci-seed.ts --stdout >> /tmp/preview-seed.sql
           npx wrangler d1 execute DB --env preview --remote --file /tmp/preview-seed.sql
+      - name: Provision preview Better Auth fixtures
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node --experimental-strip-types scripts/provision-e2e-auth.ts --preview
       - name: Run required representative browser coverage
         run: yarn test:e2e:representative
       - name: Upload Playwright report
@@ -140,11 +155,10 @@ jobs:
       NUXT_PUBLIC_SITE_URL: https://staging.krabiclaw.com
       NUXT_PUBLIC_HELP_URL: https://staging.krabiclaw.com/help
       NUXT_PUBLIC_WHATSAPP_NUMBER: "16197200000"
-      BETTER_AUTH_SECRET: test-secret-for-ci
       BETTER_AUTH_URL: https://staging.krabiclaw.com
       E2E_ALLOW_DEV_ROUTES: "true"
       E2E_DEV_ROUTE_SECRET: ${{ secrets.E2E_DEV_ROUTE_SECRET_STAGING }}
-      MCP_DEV_LOGIN: "1"
+      MCP_CREDENTIAL_LOGIN: "1"
       MCP_CIMD_CLIENT_URL: https://staging.krabiclaw.com/api/auth/oauth2/test-client-metadata
       MCP_PRIVATE_CIMD_CLIENT_URL: https://staging.krabiclaw.com/api/auth/oauth2/test-private-client-metadata
       PLAYWRIGHT_PREVIEW_URL: https://staging.krabiclaw.com
@@ -159,6 +173,17 @@ jobs:
           cache: yarn
       - run: yarn install --frozen-lockfile
       - run: npx playwright install --with-deps chromium
+      - name: Generate ephemeral test credentials
+        shell: bash
+        run: |
+          auth_secret="$(openssl rand -base64 32)"
+          password="$(openssl rand -hex 32)"
+          echo "::add-mask::$auth_secret"
+          echo "::add-mask::$password"
+          {
+            echo "BETTER_AUTH_SECRET=$auth_secret"
+            echo "E2E_TEST_PASSWORD=$password"
+          } >> "$GITHUB_ENV"
       - name: Build staging Worker
         run: yarn build
       - name: Deploy staging Worker
@@ -188,6 +213,11 @@ jobs:
           node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --preview --stdout >> /tmp/staging-seed.sql
           node --experimental-strip-types scripts/generate-blawby-ci-seed.ts --stdout >> /tmp/staging-seed.sql
           npx wrangler d1 execute DB --env staging --remote --file /tmp/staging-seed.sql
+      - name: Provision staging Better Auth fixtures
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node --experimental-strip-types scripts/provision-e2e-auth.ts --staging
       - name: Run OAuth bearer MCP smoke
         run: yarn test:mcp
       - name: Run full staging E2E suite

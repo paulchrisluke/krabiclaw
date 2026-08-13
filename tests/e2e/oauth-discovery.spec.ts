@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { createHash } from 'node:crypto'
 import { decodeProtectedHeader, importJWK, SignJWT } from 'jose'
-import { devLoginHeaders, testEnv } from './test-env'
+import { loginAs } from './helpers/auth'
 
 const PRIVATE_CLIENT_TEST_KEY_ID = 'krabiclaw-cimd-e2e-rs256'
 const PRIVATE_CLIENT_TEST_JWK = {
@@ -26,7 +26,7 @@ function oauthAuthorizeUrl(baseURL: string, params: Record<string, string>) {
 }
 
 function oauthMetadataBaseURL(baseURL: string) {
-  return (testEnv('BETTER_AUTH_URL') || baseURL).replace(/\/$/, '')
+  return (process.env.BETTER_AUTH_URL || baseURL).replace(/\/$/, '')
 }
 
 test.describe('OAuth discovery endpoints', () => {
@@ -83,20 +83,7 @@ test.describe('OAuth discovery endpoints', () => {
   })
 
   test('public CIMD exchanges an authorization code once and reuses remembered consent', async ({ request, baseURL }) => {
-    const devHeaders = devLoginHeaders()
-    test.skip(!devHeaders, 'E2E_DEV_ROUTE_SECRET required for dev login')
-
-    const loginRes = await request.get(`${baseURL}/api/dev/login?userId=oauth-cimd-e2e`, {
-      headers: devHeaders,
-      maxRedirects: 0,
-    })
-    expect(loginRes.status()).toBe(302)
-
-    const cookies = (loginRes.headersArray() ?? [])
-      .filter((header) => header.name.toLowerCase() === 'set-cookie')
-      .map((header) => header.value.split(';')[0])
-    expect(cookies.length).toBeGreaterThan(0)
-    const cookieHeader = cookies.join('; ')
+    await loginAs(request, baseURL!, 'user-e2e-oauth-cimd')
 
     const cimdClientId = process.env.MCP_CIMD_CLIENT_URL || `${baseURL}/api/auth/oauth2/test-client-metadata?nonce=${Date.now()}`
     const redirectUri = new URL('/oauth/test-callback', cimdClientId).toString()
@@ -115,10 +102,7 @@ test.describe('OAuth discovery endpoints', () => {
     const firstAuthorize = await request.get(oauthAuthorizeUrl(baseURL!, {
       ...authorizeParams,
       prompt: 'consent',
-    }), {
-      headers: { Cookie: cookieHeader },
-      maxRedirects: 0,
-    })
+    }), { maxRedirects: 0 })
     expect(firstAuthorize.status()).toBe(302)
     const consentLocation = firstAuthorize.headers()['location']
     expect(consentLocation).toContain('/oauth/consent?')
@@ -128,7 +112,6 @@ test.describe('OAuth discovery endpoints', () => {
 
     const consentRes = await request.post(`${baseURL}/api/auth/oauth2/consent`, {
       headers: {
-        Cookie: cookieHeader,
         Origin: baseURL!,
       },
       data: {
@@ -165,10 +148,7 @@ test.describe('OAuth discovery endpoints', () => {
     const secondAuthorize = await request.get(oauthAuthorizeUrl(baseURL!, {
       ...authorizeParams,
       state: 'second-pass',
-    }), {
-      headers: { Cookie: cookieHeader },
-      maxRedirects: 0,
-    })
+    }), { maxRedirects: 0 })
     expect(secondAuthorize.status()).toBe(302)
     const secondLocation = secondAuthorize.headers()['location']
     expect(secondLocation).toBeTruthy()
@@ -182,19 +162,7 @@ test.describe('OAuth discovery endpoints', () => {
 
   test('ChatGPT-shaped CIMD uses private_key_jwt and rejects assertion replay', async ({ request, baseURL }) => {
     test.skip(new URL(baseURL!).protocol !== 'https:', 'CIMD requires an HTTPS client metadata and JWKS URI')
-    const devHeaders = devLoginHeaders()
-    test.skip(!devHeaders, 'E2E_DEV_ROUTE_SECRET required for dev login')
-
-    const loginRes = await request.get(`${baseURL}/api/dev/login?userId=oauth-private-cimd-e2e`, {
-      headers: devHeaders,
-      maxRedirects: 0,
-    })
-    expect(loginRes.status()).toBe(302)
-    const cookieHeader = loginRes.headersArray()
-      .filter(header => header.name.toLowerCase() === 'set-cookie')
-      .map(header => header.value.split(';')[0])
-      .join('; ')
-    expect(cookieHeader).toBeTruthy()
+    await loginAs(request, baseURL!, 'user-e2e-oauth-private-cimd')
 
     const clientId = process.env.MCP_PRIVATE_CIMD_CLIENT_URL || `${baseURL}/api/auth/oauth2/test-private-client-metadata?nonce=${Date.now()}`
     const redirectUri = new URL('/oauth/test-callback', clientId).toString()
@@ -213,16 +181,13 @@ test.describe('OAuth discovery endpoints', () => {
     const authorize = await request.get(oauthAuthorizeUrl(baseURL!, {
       ...authorizeParams,
       prompt: 'consent',
-    }), {
-      headers: { Cookie: cookieHeader },
-      maxRedirects: 0,
-    })
+    }), { maxRedirects: 0 })
     expect(authorize.status()).toBe(302)
     const consentUrl = new URL(authorize.headers()['location']!, baseURL)
     expect(consentUrl.pathname).toBe('/oauth/consent')
 
     const consent = await request.post(`${baseURL}/api/auth/oauth2/consent`, {
-      headers: { Cookie: cookieHeader, Origin: baseURL! },
+      headers: { Origin: baseURL! },
       data: { accept: true, oauth_query: consentUrl.search.slice(1) },
     })
     expect(consent.status()).toBe(200)

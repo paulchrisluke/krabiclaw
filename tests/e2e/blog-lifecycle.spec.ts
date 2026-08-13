@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
 
-const USER_ID = 'user-mcp-free'
+const USER_ID = 'user-e2e-free-owner'
 const SITE_ID = 'site-mcp-free'
 const BLOG_WRITE_STATEMENT_BUDGET = 35
 

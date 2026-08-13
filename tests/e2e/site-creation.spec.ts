@@ -1,14 +1,10 @@
 import { expect, test } from '@playwright/test'
-import { devLoginHeaders, devLoginUrl } from './test-env'
+import { loginAs } from './helpers/auth'
 
 test.describe('site creation contracts', () => {
   test('site creation requires an explicit vertical', async ({ request, baseURL }) => {
     const suffix = Date.now()
-    const ownerLogin = await request.get(devLoginUrl(baseURL!, `e2e-site-creation-vertical-${suffix}`), {
-      headers: devLoginHeaders(),
-      maxRedirects: 0,
-    })
-    expect(ownerLogin.status()).toBe(302)
+    await loginAs(request, baseURL!, 'user-e2e-site-creation-vertical')
     const missingVerticalRes = await request.post(`${baseURL}/api/sites`, {
       data: {
         name: `Missing Vertical ${suffix}`,
@@ -35,11 +31,7 @@ test.describe('site creation contracts', () => {
 
   test('an authenticated user can create multiple site workspaces', async ({ request, baseURL }) => {
     const suffix = Date.now()
-    const ownerLogin = await request.get(devLoginUrl(baseURL!, `e2e-site-creation-multi-${suffix}`), {
-      headers: devLoginHeaders(),
-      maxRedirects: 0,
-    })
-    expect(ownerLogin.status()).toBe(302)
+    await loginAs(request, baseURL!, 'user-e2e-site-creation-multiple')
     const firstRes = await request.post(`${baseURL}/api/sites`, {
       data: {
         name: `Multi Site One ${suffix}`,
@@ -69,11 +61,7 @@ test.describe('site creation contracts', () => {
 
   test('professional_service onboarding resolves the Blawby theme through the template registry, not the Saya default', async ({ request, baseURL }) => {
     const suffix = Date.now()
-    const ownerLogin = await request.get(devLoginUrl(baseURL!, `e2e-professional-service-${suffix}`), {
-      headers: devLoginHeaders(),
-      maxRedirects: 0,
-    })
-    expect(ownerLogin.status()).toBe(302)
+    await loginAs(request, baseURL!, 'user-e2e-site-creation-professional')
 
     const createRes = await request.post(`${baseURL}/api/sites`, {
       data: {
@@ -97,11 +85,7 @@ test.describe('site creation contracts', () => {
 
   test('restaurant and experience onboarding still resolve the Saya theme', async ({ request, baseURL }) => {
     const suffix = Date.now()
-    const ownerLogin = await request.get(devLoginUrl(baseURL!, `e2e-saya-theme-${suffix}`), {
-      headers: devLoginHeaders(),
-      maxRedirects: 0,
-    })
-    expect(ownerLogin.status()).toBe(302)
+    await loginAs(request, baseURL!, 'user-e2e-site-creation-saya')
 
     const createRes = await request.post(`${baseURL}/api/sites`, {
       data: {

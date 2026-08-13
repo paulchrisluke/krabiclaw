@@ -1,4 +1,4 @@
 # Cloudflare Pages _headers
 # Applies to all preview deployments (*.pages.dev)
-https://*.pages.dev/*
+https://:project.pages.dev/*
   X-Robots-Tag: noindex

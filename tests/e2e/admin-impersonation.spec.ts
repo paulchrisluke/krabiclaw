@@ -1,16 +1,7 @@
-import { execFileSync } from 'node:child_process'
 import { expect, test } from '@playwright/test'
-import { collectPageErrors, expectHealthyPage, setupTenantHeaders } from './helpers'
-import { dashboardOrgHeaders, devLoginHeaders, devLoginUrl } from './test-env'
-
-function promoteLocalPlatformAdmin(email: string) {
-  execFileSync('yarn', [
-    'platform-admin:break-glass-promote',
-    '--email',
-    email,
-    '--local',
-  ], { cwd: process.cwd(), encoding: 'utf8' })
-}
+import { collectPageErrors, expectHealthyPage } from './helpers'
+import { loginAsPage } from './helpers/auth'
+import { dashboardOrgHeaders } from './test-env'
 
 test('platform admin enters and exits a client workspace through Better Auth impersonation', async ({ page, baseURL }) => {
   test.setTimeout(90_000)
@@ -20,26 +11,10 @@ test('platform admin enters and exits a client workspace through Better Auth imp
   test.skip(!isLocal && !isStaging, 'This smoke test targets the local fixture or the seeded staging fixture.')
 
   const errors = collectPageErrors(page)
-  const adminUserId = isLocal ? `e2e-admin-impersonation-${Date.now()}` : 'user-demo'
-  const adminEmail = `${adminUserId}@example.test`
+  const adminUserId = 'user-e2e-platform-admin'
 
-  await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
-  if (isLocal) {
-    const initialLogin = await page.goto(devLoginUrl(baseURL!, adminUserId), { waitUntil: 'load' })
-    expect(initialLogin?.status()).toBeLessThan(400)
-
-    const deniedAccess = await page.request.get(`${baseURL}/api/admin/access`)
-    expect(deniedAccess.status()).toBe(200)
-    expect(await deniedAccess.json()).toMatchObject({ allowed: false })
-
-    const deniedClients = await page.request.get(`${baseURL}/api/admin/clients`)
-    expect(deniedClients.status()).toBe(403)
-
-    promoteLocalPlatformAdmin(adminEmail)
-  }
-
-  const adminLogin = await page.goto(devLoginUrl(baseURL!, adminUserId), { waitUntil: 'load' })
-  expect(adminLogin?.status()).toBeLessThan(400)
+  await loginAsPage(page, baseURL!, adminUserId)
+  await page.goto(`${baseURL}/api/post-login`, { waitUntil: 'load' })
   await expect(page).toHaveURL(/\/admin(?:\/|$)/)
 
   const adminAccess = await page.request.get(`${baseURL}/api/admin/access`)

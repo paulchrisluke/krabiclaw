@@ -52,7 +52,7 @@ const EXISTING_DEBT_ALLOWLIST = {
   ]),
 }
 
-// These site-creation/transfer/admin billing/dev-login paths are migrated to
+// These site-creation/transfer/admin billing paths are migrated to
 // the Better Auth Organization/session adapter. Keep their SQL surface limited
 // to app-owned tables so a direct Better Auth table mutation cannot quietly
 // return.
@@ -64,7 +64,6 @@ const MIGRATED_ORGANIZATION_ROUTES = [
   'server/api/admin/clients.get.ts',
   'server/api/admin/sites/[siteId]/transfer.post.ts',
   'server/api/admin/sites/[siteId]/transfer.delete.ts',
-  'server/api/dev/login.get.ts',
 ]
 
 // Team rows are Better Auth-owned too. These are the resource-provisioning

@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import readline from 'node:readline/promises'
 import process from 'node:process'
+import { credentialCookie } from '../utils/e2e-auth.mjs'
 
 const rootDir = process.cwd()
 const baseUrl = (process.env.MCP_BASE_URL ?? '').replace(/\/$/, '')
@@ -89,13 +90,12 @@ async function runPrompt(rl, title, prompt, expectedTool, expected = {}) {
   return event
 }
 
-async function devSession(userId) {
-  const url = new URL('/api/dev/login', baseUrl)
-  url.searchParams.set('userId', userId)
-  const response = await fetch(url, { headers: { 'x-dev-route-secret': devSecret }, redirect: 'manual' })
-  const cookie = response.headers.get('set-cookie')?.split(';')[0]
-  if (!cookie) throw new Error(`Dev login cleanup session failed with ${response.status}.`)
-  return cookie
+async function cleanupSession() {
+  return credentialCookie(baseUrl, {
+    email: required(process.env.LOCAL_MCP_TEST_EMAIL, 'LOCAL_MCP_TEST_EMAIL'),
+    password: required(process.env.LOCAL_MCP_TEST_PASSWORD, 'LOCAL_MCP_TEST_PASSWORD'),
+    organizationId: 'org-mcp-growth-service',
+  })
 }
 
 async function mcpCall(cookie, name, args) {
@@ -137,7 +137,7 @@ async function main() {
     console.log('\n# Actual ChatGPT connector gate — normal browser required')
     console.log(`Connector URL: ${baseUrl}/api/mcp`)
     console.log('Create or refresh the Developer Mode connector with that exact URL, then complete login and consent in your regular browser.')
-    console.log('The local email/password account is provisioned from LOCAL_MCP_TEST_EMAIL and LOCAL_MCP_TEST_PASSWORD in .env.')
+    console.log('The local email/password account is provisioned from LOCAL_MCP_TEST_EMAIL and LOCAL_MCP_TEST_PASSWORD.')
     console.log('Open a new ChatGPT chat and enable the connector. This script never launches or controls the browser.')
     await waitForManualAction(rl, 'Finish connector authorization and open the new connector-enabled chat.')
 
@@ -204,7 +204,7 @@ async function main() {
     rl.close()
     if (userId && siteId) {
       try {
-        const cookie = await devSession(userId)
+        const cookie = await cleanupSession()
         if (videoAssetId) {
           try {
             await mcpCall(cookie, 'set_media', { site_id: siteId, target_type: 'home_hero', asset_ids: [] })

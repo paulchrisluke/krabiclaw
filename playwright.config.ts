@@ -1,21 +1,14 @@
+import { randomBytes } from 'node:crypto'
 import { defineConfig, devices } from '@playwright/test'
-import { existsSync } from 'node:fs'
-import { testBaseUrl, testEnv } from './tests/e2e/test-env'
 
-if (existsSync('.env')) process.loadEnvFile('.env')
+const port = Number(process.env.PORT || 3000)
+const previewUrl = process.env.PLAYWRIGHT_PREVIEW_URL
+const baseURL = previewUrl || `http://localhost:${port}`
+const localPrepared = process.env.PLAYWRIGHT_LOCAL_PREPARED === 'true'
 
-const port = Number(testEnv('PORT') || 3000)
-const previewUrl = testEnv('PLAYWRIGHT_PREVIEW_URL')
-const baseURL = previewUrl || testBaseUrl()
-const devRouteSecret = testEnv('E2E_DEV_ROUTE_SECRET') || 'ci-dev-route-secret'
-const emailDeliveryMode = process.env.EMAIL_DELIVERY_MODE || 'log_only'
-const whatsAppDeliveryMode = process.env.WHATSAPP_DELIVERY_MODE || 'log_only'
-
-process.env.PORT = String(port)
-process.env.E2E_ALLOW_DEV_ROUTES = 'true'
-process.env.E2E_DEV_ROUTE_SECRET = devRouteSecret
-process.env.EMAIL_DELIVERY_MODE = emailDeliveryMode
-process.env.WHATSAPP_DELIVERY_MODE = whatsAppDeliveryMode
+if (!previewUrl && !process.env.E2E_TEST_PASSWORD) {
+  process.env.E2E_TEST_PASSWORD = randomBytes(32).toString('hex')
+}
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -39,15 +32,15 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     video: 'retain-on-failure'
   },
-  // Set PLAYWRIGHT_PREVIEW_URL to point at a deployed Cloudflare preview Worker
-  // instead of booting a local `yarn dev` server — skips webServer entirely so
-  // CI tests real edge behavior (real bindings, real runtime) rather than
-  // Nuxt dev + getPlatformProxy's local binding emulation.
+  // Remote suites target an already-deployed Worker. Local suites prepare the
+  // local D1 fixtures, build the production Worker, and run it in workerd.
   webServer: previewUrl ? undefined : {
-    command: 'corepack yarn dev',
-    url: `http://localhost:${port}/api/dev/ready`,
+    command: localPrepared
+      ? `corepack yarn dev:worker --port ${port}`
+      : `corepack yarn e2e:local:server --port ${port}`,
+    url: `http://localhost:${port}/`,
     reuseExistingServer: !process.env.CI,
-    timeout: 180_000,
+    timeout: localPrepared ? 180_000 : 600_000,
     stdout: process.env.CI ? 'pipe' : 'ignore',
     stderr: process.env.CI ? 'pipe' : 'ignore'
   },

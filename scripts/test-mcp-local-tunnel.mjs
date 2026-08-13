@@ -136,6 +136,7 @@ async function main() {
   console.log('# Preparing local D1 and the versioned widget asset')
   await run('yarn', ['schema:local'], { ...process.env, CI: 'true' })
   await run('yarn', ['seed:local'])
+  await run('node', ['--experimental-strip-types', 'scripts/provision-e2e-auth.ts'])
   const localCredentials = values
   if (runChatGPTGate) {
     const localEmail = process.env.LOCAL_MCP_TEST_EMAIL || localCredentials.get('LOCAL_MCP_TEST_EMAIL') || ''
@@ -175,7 +176,7 @@ async function main() {
     MEDIA_BASE_URL: `${origin}/__media`,
     E2E_ALLOW_DEV_ROUTES: 'true',
     E2E_DEV_ROUTE_SECRET: devRouteSecret,
-    MCP_DEV_LOGIN: '1',
+    MCP_CREDENTIAL_LOGIN: '1',
     MCP_ALLOW_CREATE: '1',
     NODE_OPTIONS: [
       process.env.NODE_OPTIONS,

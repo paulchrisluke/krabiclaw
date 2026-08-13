@@ -153,7 +153,7 @@ test.describe('stateless MCP server', () => {
 
   test('ChatGPT-shaped video and poster attachments produce an active, public, assignable hero', async ({ request, baseURL }) => {
     test.setTimeout(90_000)
-    await loginAsFreshMcpUser(request, baseURL!)
+    await loginAsFreshMcpUser(request, baseURL!, 'media')
     const siteId = await ensureSite(request, baseURL!)
     let assetId = ''
 

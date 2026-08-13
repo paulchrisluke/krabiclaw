@@ -19,18 +19,27 @@ This is the source of truth for avoiding local-vs-CI auth and billing drift in E
   - per-spec timeout adjustments when the assertions are still required and the test is just longer on remote infrastructure
 - Staging should not silently lose product coverage just to go green. If a test is removed, narrowed, or bypassed, document why it no longer represents intended production behavior.
 
-## Dev login route rules
+## Better Auth fixture contract
 
-- `GET /api/dev/login` is dev-only unless `E2E_ALLOW_DEV_ROUTES=true`.
-- In CI override mode, the secret must be sent only via `x-dev-route-secret` header.
-- Do not pass dev-route secret in query params (no `?secret=...`).
-
-## E2E helper contract
-
-- Use `devLoginUrl(baseURL, userId?)` for URL only.
-- Use `devLoginHeaders()` for secret header injection.
-- Any test calling dev login must pass:
-  - `request.get(devLoginUrl(baseURL), { headers: devLoginHeaders() })`
+- `config/e2e-auth-fixtures.ts` is the registry of synthetic browser-test
+  identities. Do not attach a test password to a real client or operator email.
+- `scripts/provision-e2e-auth.ts` marks those synthetic emails verified, writes
+  credential accounts, and attaches only their declared fixture memberships.
+  A real inbox is not part of E2E setup.
+- Playwright generates a random `E2E_TEST_PASSWORD` in memory for each local
+  run and passes it to the local preparation process. Preview and staging do
+  the same in their GitHub Actions job, mask it immediately, provision it after
+  the curated seed, and expose it only to that run's Playwright process. No
+  test password is stored in the repository.
+- Authenticated tests use `loginAs()` to call Better Auth's email sign-in API.
+  If the fixture declares a membership, the helper then calls Better Auth's
+  organization `set-active` endpoint; it never writes a session cookie itself.
+- `/api/dev/login` does not exist. Tests and scripts must never mint sessions,
+  sign cookies, or auto-create users through an application route.
+- `E2E_ALLOW_DEV_ROUTES` and `E2E_DEV_ROUTE_SECRET` protect read-only fixture
+  inspection and deterministic trigger routes. They are not authentication.
+- In CI override mode, the dev-route secret is sent only through the
+  `x-dev-route-secret` header, never a query parameter.
 
 ## CI env parity (required for dashboard E2E)
 
@@ -53,14 +62,19 @@ For local Miniflare-backed tests, keep bindings with `remote = false` in `wrangl
 - `[[kv_namespaces]]`
 - `[ai]`
 
-`yarn dev` also disables Wrangler remote bindings at the bridge layer by default (`NUXT_CF_REMOTE_BINDINGS` must be explicitly set to `true` to opt back in). Without that, Wrangler can try to open a remote Workers AI proxy session before attaching local tenant bindings, which makes seeded `*.localhost` tenant routes fail as `Site Not Found`.
+Local Playwright runs build the production bundle and start it with
+`wrangler dev --local`. The launcher sets `--local-upstream localhost:<port>`;
+without it Wrangler derives the upstream from the production route and rewrites
+local `Host` and same-origin `Origin` headers to `krabiclaw.com`. Local tenant
+tests use the same shared-host `x-preview-tenant` routing contract as preview
+and staging.
 
 ## Triage checklist when CI fails but local passes
 
 1. Confirm `gh secret list` contains all expected secrets.
 2. Confirm workflow `env:` passes required secrets into the failing job.
-3. Confirm no dev login query secret usage remains in tests.
-4. Confirm dev login selected user is non-admin, non-platform-owner, and has org membership.
+3. Confirm the failing user exists in `config/e2e-auth-fixtures.ts` and was provisioned after the curated seed.
+4. Confirm its declared organization/team membership matches the permission the test is proving.
 5. Confirm remote seeds are idempotent on repeated runs, especially for unique fields like `sites.subdomain`.
 6. Confirm production smoke targets are still intentionally active customer/platform domains.
 

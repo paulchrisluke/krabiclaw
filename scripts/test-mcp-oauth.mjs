@@ -2,8 +2,8 @@
 /**
  * End-to-end OAuth + MCP smoke test.
  *
- * Against staging (default): does a full headless PKCE flow via the dev-login
- * endpoint, so no browser is needed.
+ * Against staging (default): does a full headless PKCE flow through a seeded
+ * Better Auth credential account, so no browser is needed.
  *
  * Against production: expects a Bearer JWT in the MCP_BEARER_TOKEN env var
  * (the one ChatGPT received), or skips the token-gated checks.
@@ -17,6 +17,7 @@
 import { createHash, randomBytes } from "crypto";
 import { request as httpsRequest } from "node:https";
 import { readHttpResponse } from "./utils/read-http-response.mjs";
+import { credentialCookie } from "./utils/e2e-auth.mjs";
 
 const BASE_URL = process.argv.includes("--base-url")
   ? process.argv[process.argv.indexOf("--base-url") + 1]
@@ -24,14 +25,13 @@ const BASE_URL = process.argv.includes("--base-url")
 
 const MCP_URL = `${BASE_URL}/api/mcp`;
 const TOKEN_URL = `${BASE_URL}/api/auth/oauth2/token`;
-const DEV_LOGIN_URL = `${BASE_URL}/api/dev/login`;
 const AUTHORIZE_URL = `${BASE_URL}/api/auth/oauth2/authorize`;
 const CONSENT_URL = `${BASE_URL}/api/auth/oauth2/consent`;
 
 const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? "2025-06-18";
 const REQUEST_TIMEOUT_MS = 15_000;
 
-const USE_DEV_LOGIN = process.env.MCP_DEV_LOGIN === "1";
+const USE_CREDENTIAL_LOGIN = process.env.MCP_CREDENTIAL_LOGIN === "1";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -213,31 +213,12 @@ async function main() {
   if (accessToken) {
     section("Bearer token (from env)");
     pass("Using MCP_BEARER_TOKEN from environment");
-  } else if (USE_DEV_LOGIN) {
-    section("Dev login");
-    const devSecret = process.env.E2E_DEV_ROUTE_SECRET;
-    if (!devSecret) {
-      fail("E2E_DEV_ROUTE_SECRET not set — required for staging headless flow");
-      return;
-    }
-
-    const loginResp = await get(DEV_LOGIN_URL, { "x-dev-route-secret": devSecret });
-    // dev login sets a session cookie and redirects to /api/post-login
-    const setCookies = loginResp.headers["set-cookie"];
-    if (loginResp.status !== 302 || !Array.isArray(setCookies) || setCookies.length !== 1) {
-      fail("Dev login did not return one session cookie", {
-        status: loginResp.status,
-        setCookies,
-      });
-      return;
-    }
-    const sessionCookie = setCookies[0].split(";", 1)[0];
-    if (sessionCookie.includes("="))
-      pass(`Got session cookie (${sessionCookie.split("=")[0]})`);
-    else {
-      fail("Dev login returned a malformed session cookie", setCookies[0]);
-      return;
-    }
+  } else if (USE_CREDENTIAL_LOGIN) {
+    section("Better Auth credential login");
+    const sessionCookie = await credentialCookie(BASE_URL, {
+      userId: process.env.MCP_E2E_USER_ID || "user-e2e-oauth-cimd",
+    });
+    pass(`Got session cookie (${sessionCookie.split("=")[0]})`);
 
     section("CIMD + PKCE auth flow");
     const { verifier, challenge } = pkce();

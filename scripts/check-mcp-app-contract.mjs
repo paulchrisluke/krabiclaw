@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { credentialSession } from './utils/e2e-auth.mjs'
+
 const _baseUrlArg = process.argv.includes('--base-url')
   ? process.argv[process.argv.indexOf('--base-url') + 1]
   : undefined
@@ -69,26 +71,14 @@ async function authHeaders() {
     return { authorization: `Bearer ${process.env.MCP_BEARER_TOKEN}` }
   }
 
-  const shouldTryDevLogin = process.env.MCP_DEV_LOGIN === '1'
+  const shouldTryCredentialLogin = process.env.MCP_CREDENTIAL_LOGIN === '1'
     || BASE_URL.includes('localhost')
     || BASE_URL.includes('127.0.0.1')
 
-  if (!shouldTryDevLogin) {
+  if (!shouldTryCredentialLogin) {
     return null
   }
-
-  const headers = {}
-  if (process.env.E2E_DEV_ROUTE_SECRET) {
-    headers['x-dev-route-secret'] = process.env.E2E_DEV_ROUTE_SECRET
-  }
-
-  const login = await fetch(`${BASE_URL}/api/dev/login`, {
-    headers,
-    redirect: 'manual',
-  })
-  const setCookie = login.headers.get('set-cookie')
-  if (!setCookie) return null
-  return { cookie: setCookie.split(';')[0] }
+  return credentialSession(BASE_URL, { userId: process.env.MCP_E2E_USER_ID || 'user-e2e-demo-owner' })
 }
 
 function expectStatus(label, actual, expected) {
@@ -125,7 +115,7 @@ async function main() {
 
   const headers = await authHeaders()
   if (!headers) {
-    skip('authenticated checks need MCP_BEARER_TOKEN, localhost dev login, or MCP_DEV_LOGIN=1 for a local tunnel')
+    skip('authenticated checks need MCP_BEARER_TOKEN, local credentials, or MCP_CREDENTIAL_LOGIN=1 for a tunnel')
     process.exit(failed ? 1 : 0)
   }
 

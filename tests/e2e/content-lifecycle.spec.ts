@@ -2,8 +2,8 @@ import { expect, test } from '@playwright/test'
 import { ensureSite } from './helpers/ensure-site'
 import { loginAs } from './helpers/auth'
 
-const DEMO_USER_ID = 'user-demo'
-const FIRST_USER_ID = 'user-demo-growth'
+const DEMO_USER_ID = 'user-e2e-demo-owner'
+const FIRST_USER_ID = 'user-e2e-content-growth'
 const TENANT_PAGE_WRITE_STATEMENT_BUDGET = 30
 
 function expectWriteBudget(response: { headers(): Record<string, string> }, maxStatements = TENANT_PAGE_WRITE_STATEMENT_BUDGET) {

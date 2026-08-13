@@ -1,6 +1,6 @@
 import { expect, request as playwrightRequest, test, type APIRequestContext } from '@playwright/test'
-import { devLoginHeaders, devLoginUrl } from './test-env'
 import { ensureSite } from './helpers/ensure-site'
+import { loginAs } from './helpers/auth'
 
 type RoleUser = {
   id: string
@@ -20,11 +20,7 @@ test.describe('role permission matrix', () => {
   async function authenticatedRequest(userId?: string) {
     const request = await playwrightRequest.newContext()
     requestContexts.push(request)
-    const login = await request.get(devLoginUrl(baseUrl, userId), {
-      headers: devLoginHeaders(),
-      maxRedirects: 0,
-    })
-    expect(login.status()).toBe(302)
+    await loginAs(request, baseUrl, userId)
     return request
   }
 
@@ -49,26 +45,10 @@ test.describe('role permission matrix', () => {
     expect(organizationId).toEqual(expect.any(String))
     siteId = await ensureSite(ownerRequest, baseUrl, context.site?.id ?? null)
 
-    const createUser = async (role: 'admin' | 'editor' | 'member') => {
-      const res = await ownerRequest.post(`${baseUrl}/api/dev/test-member`, {
-        data: { role, organizationId },
-        headers: devLoginHeaders(),
-      })
-      expect(res.status()).toBe(200)
-      const body = await res.json() as { user: RoleUser }
-      expect(body.user.id).toEqual(expect.any(String))
-      return body.user
-    }
-
-    const [admin, editor, member] = await Promise.all([
-      createUser('admin'),
-      createUser('editor'),
-      createUser('member'),
-    ])
     const [adminRequest, editorRequest, memberRequest] = await Promise.all([
-      authenticatedRequest(admin.id),
-      authenticatedRequest(editor.id),
-      authenticatedRequest(member.id),
+      authenticatedRequest('user-e2e-role-admin'),
+      authenticatedRequest('user-e2e-role-editor'),
+      authenticatedRequest('user-e2e-role-member'),
     ])
     roleRequests = {
       owner: ownerRequest,

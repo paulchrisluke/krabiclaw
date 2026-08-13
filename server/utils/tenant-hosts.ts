@@ -63,13 +63,12 @@ export function isPlatformHost(host: string, env: TenantHostEnv): boolean {
   return getPlatformHosts(env).includes(hostname)
 }
 
-// Returns true for hosts where x-preview-tenant header carries tenant identity
-// because subdomain routing is unavailable (the named local tunnel has one
-// hostname, and wildcard TLS covers only one subdomain level for staging and
-// preview). Applies only to the named local host and KrabiClaw's deployed
-// preview and staging hosts.
+// Returns true for shared hosts where x-preview-tenant carries tenant identity
+// because the request cannot use a tenant hostname. This includes local
+// workerd, the named local tunnel, preview, and staging.
 export function isPreviewContext(host: string): boolean {
   const hostname = hostnameOf(host).toLowerCase().replace(/\.$/, '')
+  if (hostname === 'localhost' || hostname === '127.0.0.1') return true
   if (hostname === 'local.krabiclaw.com') return true
   if (hostname === 'preview.krabiclaw.com' || hostname === 'staging.krabiclaw.com') return true
   return WORKERS_DEV_PREVIEW_HOST_PATTERN.test(hostname)

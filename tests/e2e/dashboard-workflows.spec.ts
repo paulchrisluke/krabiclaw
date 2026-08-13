@@ -1,24 +1,23 @@
 import { expect, test } from '@playwright/test'
 import { ensureSite } from './helpers/ensure-site'
-import { dashboardOrgHeaders, devLoginHeaders, devLoginUrl } from './test-env'
+import { loginAs } from './helpers/auth'
+import { dashboardOrgHeaders } from './test-env'
 
 test.describe('dashboard workflow smoke', () => {
   test('public contact submission writes a server-owned site event', async ({ request, baseURL }) => {
     test.setTimeout(60_000)
 
-    // A fresh dedicated user rather than the shared default dev-login user:
+    // A dedicated credentialed user rather than the shared demo owner:
     // /api/dashboard/context only auto-selects a site when the org has exactly
     // one, and the default user's org can end up with
     // zero or several sites depending on what else ran earlier in the suite.
     // Creating our own site keeps this deterministic.
-    const suffix = Date.now()
-    const login = await request.get(devLoginUrl(baseURL!, `e2e-dashboard-contact-event-${suffix}`), { headers: devLoginHeaders() })
-    expect(login.status()).toBeLessThan(400)
+    await loginAs(request, baseURL!, 'user-e2e-dashboard-contact')
 
     const contextRes = await request.get(`${baseURL}/api/dashboard/context`)
     expect(contextRes.status()).toBe(200)
     const context = await contextRes.json()
-    // A brand-new dev-login user has no organization yet (signup no longer
+    // This blank credential fixture has no organization yet (signup no longer
     // auto-creates one — see server/utils/dashboard-context.ts), so the org
     // slug isn't known until after ensureSite creates one via POST /api/sites.
     const siteId = await ensureSite(request, baseURL!, context.site?.id ?? null)
@@ -56,8 +55,7 @@ test.describe('dashboard workflow smoke', () => {
   })
 
   test('support work-request submission is enforced by plan entitlement', async ({ request, baseURL }) => {
-    const login = await request.get(devLoginUrl(baseURL!), { headers: devLoginHeaders() })
-    expect(login.status()).toBeLessThan(400)
+    await loginAs(request, baseURL!)
 
     const contextRes = await request.get(`${baseURL}/api/dashboard/context`)
     expect(contextRes.status()).toBe(200)
