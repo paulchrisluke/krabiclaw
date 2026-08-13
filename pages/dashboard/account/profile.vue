@@ -3,49 +3,52 @@
     <template #header>
       <UDashboardNavbar title="Profile">
         <template #leading>
-          <DashboardNavbarLeading :detail-to="accountIndexTo" detail-label="Account" icon-only />
+          <DashboardNavbarLeading :detail-to="accountIndexTo" detail-label="Account" />
         </template>
+        <template #right><DashboardAccountMenu mobile-only class="md:hidden" /></template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
-      <div class="mx-auto w-full max-w-4xl divide-y divide-default border-y border-default">
-        <section class="profile-row" :class="rowTone('avatar')">
-          <div><h3 class="font-medium text-highlighted">Avatar</h3><p class="text-sm text-muted">Managed by your sign-in provider</p></div>
-          <UAvatar :src="sessionData?.user?.image ?? undefined" :text="getInitials(sessionData?.user?.name || sessionData?.user?.email)" alt="User avatar" size="lg" />
+      <div class="w-full max-w-[var(--ws-page-narrow,45rem)]">
+        <section class="flex items-center gap-4 pb-[22px] max-sm:pb-[18px]" :class="rowTone('avatar')">
+          <UAvatar :src="sessionData?.user?.image ?? undefined" :text="getInitials(sessionData?.user?.name || sessionData?.user?.email)" alt="User avatar" class="size-14" />
+          <span class="account-action text-muted" title="Avatar is managed by your sign-in provider">Change photo</span>
         </section>
 
-        <section class="profile-row items-start" :class="rowTone('name')">
-          <div class="min-w-0 flex-1 space-y-3">
-            <div><h3 class="font-medium text-highlighted">Display Name</h3><p v-if="editingRow !== 'name'" class="truncate text-sm text-muted">{{ sessionData?.user?.name || 'Not set' }}</p></div>
-            <UInput v-if="editingRow === 'name'" v-model="nameInput" class="max-w-md" autofocus @input="nameTouched = true" @keydown.enter="saveName" />
-            <div v-if="editingRow === 'name'" class="flex gap-2"><UButton size="sm" :disabled="!nameDirty" :loading="nameSaving" @click="saveNameAndClose">Save</UButton><UButton size="sm" color="neutral" variant="ghost" @click="cancelEdit">Cancel</UButton></div>
+        <section class="profile-row" :class="rowTone('name')">
+          <div class="min-w-0 flex-1" :class="editingRow === 'name' ? 'space-y-3.5' : ''">
+            <div class="flex items-start justify-between gap-4">
+              <div><h3 class="profile-label">Display name</h3><p v-if="editingRow !== 'name'" class="profile-value">{{ sessionData?.user?.name || 'Not set' }}</p></div>
+              <button v-if="editingRow === 'name'" type="button" class="account-action" @click="cancelEdit">Cancel</button>
+            </div>
+            <UInput v-if="editingRow === 'name'" v-model="nameInput" class="max-w-md" size="xl" autofocus @input="nameTouched = true" @keydown.enter="saveName" />
+            <UButton v-if="editingRow === 'name'" size="sm" :disabled="!nameDirty" :loading="nameSaving" @click="saveNameAndClose">Save</UButton>
           </div>
-          <UButton v-if="editingRow !== 'name'" size="sm" color="neutral" variant="ghost" @click="editingRow = 'name'">Edit</UButton>
+          <button v-if="editingRow !== 'name'" type="button" class="account-action" @click="editingRow = 'name'">Edit</button>
         </section>
 
         <section class="profile-row" :class="rowTone('email')">
-          <div class="min-w-0"><h3 class="font-medium text-highlighted">Email</h3><p class="truncate text-sm text-muted">{{ sessionData?.user?.email }}</p></div>
-          <UBadge v-if="sessionData?.user?.emailVerified" color="success" variant="subtle" size="sm">Verified</UBadge>
+          <div class="min-w-0"><h3 class="profile-label">Email</h3><p class="profile-value">{{ sessionData?.user?.email }}</p><p class="profile-meta"><UIcon name="i-logos-google-icon" class="size-3.5" />Signed in with Google</p></div>
         </section>
 
         <section class="profile-row items-start" :class="rowTone('phone')">
           <div class="min-w-0 flex-1 space-y-3">
-            <div><h3 class="font-medium text-highlighted">Phone Number</h3><p v-if="editingRow !== 'phone'" class="truncate text-sm text-muted">{{ sessionData?.user?.phoneNumber || 'Not set' }}</p></div>
-            <UInput v-if="editingRow === 'phone'" v-model="phoneInput" class="max-w-md" placeholder="+1234567890" autofocus @input="phoneTouched = true" @keydown.enter="requestPhoneVerify" />
-            <div v-if="editingRow === 'phone'" class="flex gap-2"><UButton size="sm" :disabled="!phoneDirty || !phoneInput.trim()" :loading="phoneSaving" @click="requestPhoneVerify">Verify & Save</UButton><UButton size="sm" color="neutral" variant="ghost" @click="cancelEdit">Cancel</UButton></div>
+            <div><h3 class="profile-label">Phone number</h3><p v-if="editingRow !== 'phone'" class="profile-value">{{ sessionData?.user?.phoneNumber || 'Not set' }}</p><p v-if="editingRow !== 'phone'" class="profile-meta" :class="sessionData?.user?.phoneNumberVerified ? 'text-success' : 'text-warning'"><span class="size-1.5 rounded-full bg-current" />{{ sessionData?.user?.phoneNumberVerified ? 'Verified' : 'Not verified' }}</p></div>
+            <UInput v-if="editingRow === 'phone'" v-model="phoneInput" class="max-w-md" size="xl" placeholder="+1234567890" autofocus @input="phoneTouched = true" @keydown.enter="requestPhoneVerify" />
+            <div v-if="editingRow === 'phone'" class="flex items-center gap-3"><UButton size="sm" :disabled="!phoneDirty || !phoneInput.trim()" :loading="phoneSaving" @click="requestPhoneVerify">Verify & Save</UButton><button type="button" class="account-action" @click="cancelEdit">Cancel</button></div>
           </div>
-          <UButton v-if="editingRow !== 'phone'" size="sm" color="neutral" variant="ghost" @click="editingRow = 'phone'">Edit</UButton>
+          <button v-if="editingRow !== 'phone'" type="button" class="account-action" @click="editingRow = 'phone'">Edit</button>
         </section>
 
         <section class="profile-row" :class="rowTone('user-id')">
-          <div class="min-w-0"><h3 class="font-medium text-highlighted">User ID</h3><p class="truncate font-mono text-sm text-muted">{{ sessionData?.user?.id }}</p></div>
-          <UButton color="neutral" variant="ghost" icon="i-lucide-clipboard" aria-label="Copy user ID" @click="copyUserId" />
+          <div class="min-w-0"><h3 class="profile-label">User ID</h3><p class="profile-value font-mono">{{ sessionData?.user?.id }}</p></div>
+          <button type="button" class="account-action" @click="copyUserId">Copy</button>
         </section>
 
         <section class="profile-row" :class="rowTone('delete')">
-          <div><h3 class="font-medium text-error">Delete Account</h3><p class="text-sm text-muted">Permanently remove your personal account</p></div>
-          <UButton color="error" variant="ghost" size="sm" @click="deleteModalOpen = true">Delete</UButton>
+          <div><h3 class="profile-label text-error">Delete account</h3><p class="profile-value whitespace-normal">Removes your account, organization, site, locations and menu data.</p></div>
+          <button type="button" class="account-action text-error" @click="deleteModalOpen = true">Delete</button>
         </section>
       </div>
     </template>
@@ -357,7 +360,12 @@ useSeoMeta({ title: 'Profile | KrabiClaw Dashboard', robots: 'noindex, nofollow'
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding-block: 1rem;
+  padding-block: 20px;
+  border-bottom: 1px solid var(--ui-border);
   transition: opacity 150ms ease;
 }
+.profile-label { font-size: 14px; font-weight: 600; color: var(--ui-text-highlighted); }
+.profile-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; color: var(--ui-text-muted); }
+.profile-meta { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 12px; }
+.account-action { flex-shrink: 0; font-size: 13.5px; font-weight: 600; color: var(--ui-text-highlighted); text-decoration: underline; text-underline-offset: 3px; }
 </style>

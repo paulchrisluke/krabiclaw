@@ -154,7 +154,7 @@ test('responsive dashboard navigation keeps one canonical desktop sidebar and on
   assert.equal((layout.match(/^\s*<UDashboardSidebar\b/gm) ?? []).length, 1)
   assert.match(layout, /data-testid="dashboard-mobile-nav"/)
   assert.match(layout, /mobileNavItems/)
-  assert.match(layout, /:to="accountIndexTo"/)
+  assert.match(layout, /<DashboardAccountMenu mobile-only \/>/)
   assert.match(layout, /mobileNavItems\.length && !isAccountRoute/)
   assert.doesNotMatch(layout, /mobileMoreItems|dashboard-mobile-more|mobileRevenueItem/)
 })
@@ -172,6 +172,16 @@ test('account surfaces use the mobile index and row-based account design', () =>
   assert.match(profile, /class="profile-row/)
   assert.doesNotMatch(authentication, /<UCard/)
   assert.doesNotMatch(billing, /<UCard/)
+})
+
+test('mobile account avatar opens the shared sheet from the bottom nav and moves to the header on account pages', () => {
+  const layout = source('layouts/dashboard.vue')
+  assert.match(layout, /<DashboardAccountMenu mobile-only \/>/)
+  assert.doesNotMatch(layout, /<NuxtLink :to="accountIndexTo"/)
+  assert.doesNotMatch(source('pages/dashboard/[orgSlug]/sites/[siteSlug]/index.vue'), /DashboardAccountMenu/)
+  for (const page of ['index.vue', 'profile.vue', 'authentication.vue', 'billing-items.vue']) {
+    assert.match(source(`pages/dashboard/account/${page}`), /<DashboardAccountMenu mobile-only class="md:hidden" \/>/)
+  }
 })
 
 test('organization, site, and location navigation share the requested item order', () => {

@@ -105,9 +105,7 @@
           :title="item.label"
           :class="item.active ? 'bg-primary/10 text-primary' : 'text-dimmed'"
         />
-        <NuxtLink :to="accountIndexTo" aria-label="Account" title="Account" class="flex size-9 items-center justify-center rounded-full">
-          <UAvatar :src="sessionData?.user?.image ?? undefined" :alt="sessionData?.user?.name || 'Account'" size="xs" />
-        </NuxtLink>
+        <DashboardAccountMenu mobile-only />
       </nav>
     </div>
 
@@ -284,7 +282,6 @@ const accountRouteQuery = computed(() => requestedAccountOrganizationSlug.value
   : organization.value?.slug
     ? { organization: organization.value.slug, organizationName: organization.value.name }
     : {})
-const accountIndexTo = computed(() => ({ path: '/dashboard/account', query: accountRouteQuery.value }))
 const impersonatedBy = computed(() => {
   const session = sessionData.value?.session as { impersonatedBy?: string } | undefined
   return session?.impersonatedBy

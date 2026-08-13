@@ -3,32 +3,33 @@
     <template #header>
       <UDashboardNavbar title="Billing Items">
         <template #leading>
-          <DashboardNavbarLeading :detail-to="accountIndexTo" detail-label="Account" icon-only />
+          <DashboardNavbarLeading :detail-to="accountIndexTo" detail-label="Account" />
         </template>
+        <template #right><DashboardAccountMenu mobile-only class="md:hidden" /></template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
-      <div class="mx-auto w-full max-w-4xl space-y-10">
+      <div class="w-full max-w-[var(--ws-page-narrow,45rem)]">
         
         <!-- Personal Section -->
-        <section class="space-y-4">
-          <h3 class="text-xl font-semibold text-highlighted">Personal</h3>
+        <section>
+          <h3 class="mb-3 text-[15px] font-bold text-highlighted">Personal</h3>
 
-          <div class="border-y border-default py-4">
-            <div class="flex min-h-12 items-center justify-between">
+          <div class="border-y border-default py-[18px]">
+            <div class="flex min-h-8 items-center justify-between gap-4">
               <div class="flex items-center gap-3">
-                <UIcon name="i-lucide-user" class="size-6 text-muted" />
-                <span class="font-medium text-highlighted">{{ sessionData?.user?.name }} Account</span>
+                <UIcon name="i-lucide-user" class="size-5 text-muted" />
+                <span class="text-sm font-semibold text-highlighted">{{ sessionData?.user?.name }}</span>
                 <UBadge color="neutral" variant="soft" size="sm" class="rounded-full px-2">Free</UBadge>
               </div>
+              <NuxtLink to="/pricing" class="account-action">View plans</NuxtLink>
             </div>
           </div>
         </section>
 
-        <!-- Sites Section -->
-        <section class="space-y-4">
-          <h3 class="text-xl font-semibold text-highlighted">Sites</h3>
+        <section class="mt-[34px]">
+          <h3 class="mb-3 text-[15px] font-bold text-highlighted">Organizations</h3>
 
           <div v-if="status === 'pending'" class="space-y-4">
             <USkeleton v-for="i in 2" :key="i" class="h-32 w-full rounded-lg" />
@@ -42,11 +43,11 @@
           </div>
 
           <div v-else-if="!billingItems || billingItems.length === 0" class="text-sm text-muted">
-            You are not a member of any sites.
+            You are not a member of any organizations.
           </div>
 
           <div v-else class="divide-y divide-default border-y border-default">
-            <NuxtLink v-for="item in billingItems" :key="item.organization.id" :to="`/dashboard/${item.organization.slug}/settings/billing`" class="flex min-h-20 w-full items-center justify-between gap-4 py-4 text-left">
+            <NuxtLink v-for="item in billingItems" :key="item.organization.id" :to="`/dashboard/${item.organization.slug}/settings/billing`" class="flex min-h-[var(--ws-row-min-height,66px)] w-full items-center justify-between gap-4 py-[18px] text-left">
               <div class="flex min-w-0 items-center justify-between gap-4">
                 <div class="flex items-center gap-3">
                   <UAvatar :src="item.organization.logo || undefined" :alt="item.organization.name" :ui="{ root: 'rounded-md' }" size="sm" />
@@ -138,3 +139,7 @@ const { data: billingItems, status, error, refresh } = await useAsyncData(
 )
 
 </script>
+
+<style scoped>
+.account-action { flex-shrink: 0; font-size: 13.5px; font-weight: 600; color: var(--ui-text-highlighted); text-decoration: underline; text-underline-offset: 3px; }
+</style>

@@ -1,14 +1,18 @@
 <template>
   <UDashboardPanel id="site-overview">
     <template #header>
-      <UDashboardNavbar :title="siteName">
+      <UDashboardNavbar
+        :title="siteName"
+        :toggle="false"
+        :ui="{ left: 'mx-auto w-full max-w-[var(--ws-page-narrow,45rem)]' }"
+      >
         <template #leading><DashboardNavbarLeading /></template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
       <div class="mx-auto w-full max-w-[var(--ws-page-narrow,45rem)] pb-24">
-        <div class="mb-6 flex items-center gap-2">
+        <div class="mb-3 flex items-center gap-2.5">
           <div class="grid flex-1 grid-cols-2 rounded-full bg-elevated p-1">
             <button
               v-for="item in tabs"
@@ -45,116 +49,88 @@
           :description="supportingError"
         />
 
-        <div v-else-if="activeTab === 'site'" class="space-y-4">
-          <NuxtLink :to="`${siteDashboardPath}/pages`" class="group block">
-            <UCard class="transition group-hover:border-primary/50">
-              <div class="flex items-start justify-between gap-4">
-                <div>
-                  <p class="text-xs font-semibold uppercase tracking-wide text-muted">Publication</p>
-                  <p class="mt-2 flex items-center gap-2 text-lg font-semibold text-highlighted">
-                    <UIcon :name="homePage?.status === 'published' ? 'i-lucide-circle-check' : 'i-lucide-circle-dot-dashed'" class="size-5" />
-                    {{ homePage?.status === 'published' ? 'Live' : 'Draft' }}
-                  </p>
-                  <p class="mt-1 text-sm text-muted">{{ publicationConsequence }}</p>
-                </div>
-                <UIcon name="i-lucide-chevron-right" class="mt-1 size-5 text-muted transition group-hover:translate-x-0.5" />
-              </div>
-            </UCard>
+        <div v-else-if="activeTab === 'site'" class="space-y-3">
+          <NuxtLink :to="`${siteDashboardPath}/pages`" class="site-card group flex items-center gap-3.5">
+            <div class="min-w-0 flex-1">
+              <p class="flex items-center gap-2 text-[15px] font-semibold text-highlighted">
+                <UIcon :name="homePage?.status === 'published' ? 'i-lucide-circle-check' : 'i-lucide-circle-dashed'" class="size-[15px]" :class="homePage?.status === 'published' ? 'text-success' : 'text-warning'" />
+                {{ homePage?.status === 'published' ? 'Live' : 'Draft' }}
+              </p>
+              <p class="mt-1 text-[13px] text-muted">{{ homePage?.status === 'published' ? 'Visible to guests.' : 'Not visible to guests. Publish to go live.' }}</p>
+            </div>
+            <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0 text-dimmed transition group-hover:translate-x-0.5" />
           </NuxtLink>
 
-          <UCard>
-            <template #header>
-              <NuxtLink :to="locationsPath" class="group flex items-center justify-between gap-4">
-                <div>
-                  <p class="font-semibold text-highlighted">Site tour</p>
-                  <p class="mt-1 text-sm text-muted">{{ siteTourSummary }}</p>
-                </div>
-                <UIcon name="i-lucide-chevron-right" class="size-5 text-muted transition group-hover:translate-x-0.5" />
-              </NuxtLink>
-            </template>
-            <div v-if="locations.length" class="divide-y divide-default">
+          <div class="site-card flex flex-col gap-3">
+            <NuxtLink :to="locationsPath" class="group flex items-baseline justify-between gap-3">
+              <div class="flex items-start justify-between gap-4">
+                <p class="text-[15px] font-semibold text-highlighted">Site tour</p>
+              </div>
+              <p class="text-[13px] text-muted">{{ siteTourSummary }}</p>
+            </NuxtLink>
+            <div v-if="locations.length" class="site-tour">
               <NuxtLink
-                v-for="location in locations"
+                v-for="(location, index) in tourLocations"
                 :key="location.id"
                 :to="`${locationsPath}/${location.slug}`"
-                class="group flex min-h-16 items-center gap-4 py-3"
+                class="tour-location"
+                :class="{ 'tour-location-primary': location.is_primary || (tourLocations.length < 3 && index === 0) }"
               >
-                <div class="size-14 shrink-0 overflow-hidden rounded-xl bg-muted">
-                  <img v-if="location.hero_url" :src="cfImageVariant(location.hero_url, { width: 160 }) ?? undefined" :alt="location.title" class="size-full object-cover" />
-                  <div v-else class="flex size-full items-center justify-center"><UIcon name="i-lucide-map-pin" class="size-5 text-muted" /></div>
-                </div>
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-center gap-2">
-                    <p class="truncate font-medium text-highlighted">{{ location.title }}</p>
-                    <UBadge v-if="location.is_primary" size="xs" color="primary" variant="soft">Primary</UBadge>
-                  </div>
-                  <p class="mt-1 truncate text-sm text-muted">{{ locationAddress(location) }}</p>
-                </div>
-                <UIcon name="i-lucide-chevron-right" class="size-4 text-muted transition group-hover:translate-x-0.5" />
+                <img v-if="location.hero_url" :src="cfImageVariant(location.hero_url, { width: 480 }) ?? undefined" :alt="location.title" class="absolute inset-0 size-full object-cover" />
+                <span class="tour-location-label">{{ location.title }}</span>
               </NuxtLink>
             </div>
-            <div v-else class="py-5 text-sm text-muted">No locations yet.</div>
-          </UCard>
+            <NuxtLink v-else :to="locationsPath" class="flex h-40 items-center justify-center rounded-[14px] bg-muted text-sm text-muted">Add photos of your locations</NuxtLink>
+            <NuxtLink v-if="openSiteTasks" :to="locationsPath" class="flex items-center gap-2 text-[13px] font-semibold text-warning"><UIcon name="i-lucide-circle-alert" class="size-3.5" />You have {{ openSiteTasks }} {{ openSiteTasks === 1 ? 'task' : 'tasks' }}</NuxtLink>
+          </div>
 
-          <NuxtLink :to="`${siteDashboardPath}/settings#brand`" class="group block">
-            <UCard class="overflow-hidden transition group-hover:border-primary/50" :ui="{ body: 'p-0 sm:p-0' }">
-              <div v-if="brandCover" class="h-32 overflow-hidden bg-muted"><img :src="brandCover" alt="" class="size-full object-cover" /></div>
-              <div class="p-5">
-                <div class="flex items-start justify-between gap-4">
-                  <div class="flex min-w-0 gap-3">
-                    <div class="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-default bg-default">
+          <NuxtLink :to="`${siteDashboardPath}/settings#brand`" class="site-card group flex flex-col gap-3">
+              <div class="flex items-baseline justify-between gap-3"><p class="text-[15px] font-semibold text-highlighted">Brand</p><p class="truncate text-[13px] text-muted">{{ siteDomain }}</p></div>
+              <div class="h-[132px] overflow-hidden rounded-xl border border-default bg-muted max-md:h-[120px] max-sm:h-[108px]"><img v-if="brandCover" :src="brandCover" alt="" class="size-full object-cover" /></div>
+                <div class="flex items-start gap-5">
+                    <div class="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-default bg-default" :style="!settings?.logo_url ? { backgroundColor: settings?.brand_color } : undefined">
                       <img v-if="settings?.logo_url" :src="settings.logo_url" :alt="`${siteName} logo`" class="size-full object-contain" />
-                      <UIcon v-else name="i-lucide-image" class="size-5 text-muted" />
+                      <UIcon v-else name="i-lucide-upload" class="size-[22px] text-white/60" />
                     </div>
-                    <div class="min-w-0">
-                      <div class="flex items-center gap-2"><p class="font-semibold text-highlighted">Brand</p><span v-if="settings?.brand_color" class="size-3 rounded-full border border-default" :style="{ backgroundColor: settings.brand_color }" /></div>
-                      <p class="mt-1 line-clamp-2 text-sm text-muted">{{ settings?.brand_description || 'Add your brand description' }}</p>
-                      <p class="mt-2 truncate text-xs text-muted">{{ siteDomain }}</p>
+                    <div class="min-w-0 flex-1 space-y-2">
+                      <p class="text-[13px] leading-5 text-muted">{{ settings?.brand_description || 'Add your brand description' }}</p>
+                      <div class="flex items-center gap-2"><span class="size-6 rounded-lg border border-default" :style="{ backgroundColor: settings?.brand_color }" /><span class="text-xs text-muted">Brand color {{ settings?.brand_color }}</span></div>
                     </div>
-                  </div>
-                  <UIcon name="i-lucide-chevron-right" class="size-5 text-muted transition group-hover:translate-x-0.5" />
                 </div>
                 <p v-if="settings?.custom_domain_status !== 'active'" class="mt-4 flex items-center gap-2 text-xs font-medium text-warning">
                   <UIcon name="i-lucide-circle-alert" class="size-4" /> Custom domain not connected
                 </p>
-              </div>
-            </UCard>
           </NuxtLink>
 
-          <NuxtLink v-for="hero in heroCards" :key="hero.label" :to="`${siteDashboardPath}/pages`" class="group block">
-            <UCard class="transition group-hover:border-primary/50">
+          <NuxtLink v-for="hero in heroCards" :key="hero.label" :to="`${siteDashboardPath}/pages`" class="site-card group block">
               <div class="flex items-start justify-between gap-4">
                 <div class="min-w-0">
-                  <p class="text-xs font-semibold uppercase tracking-wide text-muted">{{ hero.label }}</p>
-                  <p class="mt-3 text-2xl text-highlighted" :class="hero.italic ? 'font-serif italic' : 'font-serif'">{{ hero.value }}</p>
+                  <p class="text-[15px] font-semibold text-highlighted">{{ hero.label }}</p>
+                  <p class="mt-3 text-[34px] leading-[1.05] tracking-[-0.02em] text-muted max-md:text-[30px] max-sm:text-[28px]" :class="hero.italic ? 'font-serif italic' : 'font-serif'">{{ hero.value }}</p>
                 </div>
-                <UIcon name="i-lucide-chevron-right" class="size-5 text-muted transition group-hover:translate-x-0.5" />
               </div>
-            </UCard>
           </NuxtLink>
 
-          <NuxtLink :to="`${siteDashboardPath}/media`" class="group block">
-            <UCard class="transition group-hover:border-primary/50">
-              <div class="mb-4 flex items-center justify-between gap-4"><div><p class="font-semibold text-highlighted">Media library</p><p class="mt-1 text-sm text-muted">{{ mediaSummary }}</p></div><UIcon name="i-lucide-chevron-right" class="size-5 text-muted transition group-hover:translate-x-0.5" /></div>
+          <NuxtLink :to="`${siteDashboardPath}/media`" class="site-card group block">
+              <div class="mb-3 flex items-baseline justify-between gap-4"><p class="text-[15px] font-semibold text-highlighted">Media library</p><p class="text-[13px] text-muted">{{ mediaSummary }}</p></div>
               <div v-if="media.length" class="grid grid-cols-5 gap-2">
-                <div v-for="asset in media.slice(0, 5)" :key="asset.id" class="aspect-square overflow-hidden rounded-lg bg-muted"><img :src="asset.thumbnail_url || asset.public_url" alt="" class="size-full object-cover" /></div>
+                <div v-for="asset in media.slice(0, 5)" :key="asset.id" class="aspect-square overflow-hidden rounded-[10px] border border-default bg-muted"><img :src="asset.thumbnail_url || asset.public_url" alt="" class="size-full object-cover" /></div>
               </div>
-            </UCard>
           </NuxtLink>
 
-          <NuxtLink :to="`${siteDashboardPath}/settings`" class="group block">
-            <UCard class="transition group-hover:border-primary/50"><div class="flex items-center justify-between gap-4"><div><p class="font-semibold text-highlighted">Site type</p><p class="mt-1 text-sm capitalize text-muted">{{ siteType }}</p></div><UIcon name="i-lucide-chevron-right" class="size-5 text-muted transition group-hover:translate-x-0.5" /></div></UCard>
+          <NuxtLink :to="`${siteDashboardPath}/settings`" class="site-card group block">
+            <p class="text-[15px] font-semibold text-highlighted">Site type</p><p class="mt-3 text-[15px] capitalize text-muted">{{ siteType }}</p>
           </NuxtLink>
 
-          <UCard>
-            <template #header><NuxtLink :to="`${siteDashboardPath}/links`" class="group flex items-center justify-between gap-4"><div><p class="font-semibold text-highlighted">Links</p><p class="mt-1 text-sm text-muted">{{ activeLinks.length ? `${activeLinks.length} active` : 'Add your first link' }}</p></div><UIcon name="i-lucide-chevron-right" class="size-5 text-muted transition group-hover:translate-x-0.5" /></NuxtLink></template>
-            <div class="divide-y divide-default">
-              <a v-for="link in activeLinks" :key="link.id" :href="link.destination" target="_blank" rel="noopener noreferrer" class="flex min-h-12 items-center gap-3 py-3 text-sm font-medium text-highlighted hover:text-primary">
+          <div class="site-card flex flex-col gap-3">
+            <NuxtLink :to="`${siteDashboardPath}/links`" class="group flex items-center justify-between gap-4"><p class="text-[15px] font-semibold text-highlighted">Links</p><p class="flex items-center gap-2 text-[13px] text-muted">{{ activeLinks.length ? `${activeLinks.length} links` : 'Add your first link' }}<UIcon name="i-lucide-chevron-right" class="size-[15px]" /></p></NuxtLink>
+            <div class="space-y-2">
+              <a v-for="link in activeLinks" :key="link.id" :href="link.destination" target="_blank" rel="noopener noreferrer" class="flex min-h-12 items-center gap-3 rounded-xl border border-default px-4 py-3 text-[13px] font-medium text-highlighted hover:text-primary">
                 <UIcon :name="linkIcon(link.destination)" class="size-5 text-muted" /><span class="min-w-0 flex-1 truncate">{{ link.label }}</span><UIcon name="i-lucide-external-link" class="size-4 text-muted" />
               </a>
               <p v-if="!activeLinks.length" class="py-4 text-sm text-muted">No active links.</p>
             </div>
-          </UCard>
+          </div>
         </div>
 
         <div v-else class="overflow-hidden rounded-2xl border border-default bg-default">
@@ -234,8 +210,13 @@ const pages = computed(() => supporting.value?.pages ?? [])
 const media = computed(() => supporting.value?.media ?? [])
 const activeLinks = computed(() => (supporting.value?.links ?? []).filter(item => item.status === 'active'))
 const homePage = computed(() => pages.value.find(page => page.path === '/'))
-const publicationConsequence = computed(() => homePage.value?.status === 'published' ? 'Guests can see the current published version.' : 'Changes stay private until this page is published.')
 const siteTourSummary = computed(() => `${locations.value.length} ${locations.value.length === 1 ? 'location' : 'locations'}${media.value.length ? ` · ${media.value.length}${media.value.length === 6 ? '+' : ''} photos` : ''}`)
+const tourLocations = computed(() => {
+  const primary = locations.value.find(location => location.is_primary)
+  const others = locations.value.filter(location => location.id !== primary?.id)
+  return primary ? [others[0], primary, others[1]].filter((location): location is Location => Boolean(location)) : locations.value.slice(0, 3)
+})
+const openSiteTasks = computed(() => settings.value?.custom_domain_status === 'active' ? 0 : 1)
 const brandCover = computed(() => locations.value.find(item => item.is_primary)?.hero_url || media.value[0]?.public_url || '')
 const siteDomain = computed(() => dashboard.site.value?.custom_domain || dashboard.site.value?.public_url || (dashboard.site.value?.subdomain ? `${dashboard.site.value.subdomain}.krabiclaw.com` : 'Domain not connected'))
 const publicSiteUrl = computed(() => dashboard.site.value?.public_url || (dashboard.site.value?.subdomain ? `https://${dashboard.site.value.subdomain}.krabiclaw.com` : ''))
@@ -281,6 +262,19 @@ async function enableModule(feature: ProductFeature) {
   } finally { togglingModule.value = null }
 }
 
-function locationAddress(location: Location) { return location.address?.addressLines?.filter(Boolean).join(', ') || location.city || 'Address not set' }
 function linkIcon(destination: string) { try { const host = new URL(destination).hostname.replace(/^www\./, ''); if (host.endsWith('facebook.com')) return 'i-simple-icons-facebook'; if (host.endsWith('instagram.com')) return 'i-simple-icons-instagram'; if (host.endsWith('tiktok.com')) return 'i-simple-icons-tiktok'; if (host.endsWith('youtube.com') || host === 'youtu.be') return 'i-simple-icons-youtube' } catch { return 'i-lucide-link' } return 'i-lucide-link' }
 </script>
+
+<style scoped>
+.site-card { padding: 20px; border: 1px solid var(--ui-border); border-radius: 16px; background: var(--ui-bg-elevated); color: var(--ui-text); transition: border-color 150ms ease; }
+.site-card:hover { border-color: color-mix(in srgb, var(--ui-primary) 50%, var(--ui-border)); }
+.site-tour { display: flex; height: 162px; align-items: center; justify-content: center; padding-block: 6px; }
+.tour-location { position: relative; width: 27%; height: 68%; overflow: hidden; border: 1px solid var(--ui-border-muted); border-radius: 14px; background: var(--ui-bg-muted); }
+.tour-location:first-child { margin-right: -22px; transform: rotate(-6deg); }
+.tour-location:last-child { margin-left: -22px; transform: rotate(6deg); }
+.tour-location-primary { z-index: 1; width: 50%; height: 100%; margin-inline: 0 !important; transform: none !important; box-shadow: 0 10px 26px rgb(4 6 20 / 45%); }
+.tour-location-label { position: absolute; right: 8px; bottom: 8px; left: 8px; overflow: hidden; color: var(--ui-text-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.tour-location-primary .tour-location-label { top: 12px; right: auto; bottom: auto; left: 50%; max-width: calc(100% - 24px); transform: translateX(-50%); border-radius: 999px; background: var(--ui-bg-elevated); padding: 6px 12px; color: var(--ui-text-highlighted); font-size: 12.5px; font-weight: 600; box-shadow: 0 2px 8px rgb(4 6 20 / 45%); }
+@media (max-width: 767px) { .site-card { padding: 18px; } .site-tour { height: 150px; } }
+@media (max-width: 639px) { .site-card { padding: 16px; } .site-tour { height: 140px; } }
+</style>

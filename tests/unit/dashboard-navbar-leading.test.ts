@@ -12,23 +12,27 @@ function vueFiles(root: string): string[] {
   })
 }
 
-test('navbar leading resolves detail back, mobile scope back, then desktop collapse', () => {
+test('navbar leading resolves detail back then mobile scope back without duplicating the sidebar collapse', () => {
   const source = read('lib/components/workspace/dashboard/DashboardNavbarLeading.vue')
   const detail = source.indexOf('v-if="detailParent"')
-  const scope = source.indexOf('v-if="scopeParent"')
-  const collapse = source.indexOf('<DashboardSidebarCollapseButton />')
+  const scope = source.indexOf('v-else-if="scopeParent"')
 
   assert.ok(detail >= 0)
   assert.ok(scope > detail)
-  assert.ok(collapse > scope)
   assert.match(source, /class="min-w-0 shrink-0 md:hidden"/)
   assert.match(source, /icon="i-lucide-chevron-left"/)
+  assert.match(source, /square/)
+  assert.doesNotMatch(source, /labelElement|visibleLabel|measureLabel/)
+  assert.doesNotMatch(source, /DashboardSidebarCollapseButton/)
   assert.doesNotMatch(source, /router\.back|history\.back/)
 })
 
-test('sidebar collapse is desktop-only outside the sidebar header', () => {
+test('sidebar collapse belongs to the desktop sidebar header', () => {
   const source = read('lib/components/workspace/dashboard/DashboardSidebarCollapseButton.vue')
-  assert.match(source, /sidebar \? '' : 'hidden md:flex'/)
+  const scopeHeader = read('lib/components/workspace/dashboard/DashboardScopeHeader.vue')
+  const appConfig = read('app.config.ts')
+  assert.match(scopeHeader, /<DashboardSidebarCollapseButton sidebar \/>/)
+  assert.match(appConfig, /dashboardNavbar:[\s\S]*toggle: 'hidden'/)
   assert.doesNotMatch(source, /route\.path|mobileBackPath/)
 })
 
@@ -63,8 +67,14 @@ test('every dashboard navbar delegates its leading slot to the shared resolver',
 })
 
 test('account index returns to the workspace and detail pages return to account', () => {
-  assert.match(read('pages/dashboard/account/index.vue'), /<DashboardNavbarLeading back-to-organization icon-only \/>/)
+  assert.match(read('pages/dashboard/account/index.vue'), /<DashboardNavbarLeading back-to-organization \/>/)
   for (const page of ['profile.vue', 'authentication.vue', 'billing-items.vue']) {
-    assert.match(read(`pages/dashboard/account/${page}`), /:detail-to="accountIndexTo" detail-label="Account" icon-only/)
+    assert.match(read(`pages/dashboard/account/${page}`), /:detail-to="accountIndexTo" detail-label="Account"/)
   }
+})
+
+test('site overview disables the built-in navbar toggle and aligns its title with page content', () => {
+  const source = read('pages/dashboard/[orgSlug]/sites/[siteSlug]/index.vue')
+  assert.match(source, /:toggle="false"/)
+  assert.match(source, /max-w-\[var\(--ws-page-narrow,45rem\)\]/)
 })

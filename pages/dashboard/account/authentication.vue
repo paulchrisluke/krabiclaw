@@ -3,42 +3,34 @@
     <template #header>
       <UDashboardNavbar title="Authentication">
         <template #leading>
-          <DashboardNavbarLeading :detail-to="accountIndexTo" detail-label="Account" icon-only />
+          <DashboardNavbarLeading :detail-to="accountIndexTo" detail-label="Account" />
         </template>
+        <template #right><DashboardAccountMenu mobile-only class="md:hidden" /></template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
-      <div class="mx-auto w-full max-w-4xl space-y-10">
-        
-        <!-- Sign-in Methods -->
-        <section class="space-y-4">
-          <div class="space-y-1">
-            <h3 class="text-xl font-semibold text-highlighted">Sign-in Methods</h3>
-          </div>
-
+      <div class="w-full max-w-[var(--ws-page-narrow,45rem)]">
             <div class="divide-y divide-default border-y border-default">
               <!-- Email -->
-              <div class="flex items-center justify-between p-4 sm:px-6">
-                <div class="flex items-center gap-4">
-                  <UIcon name="i-lucide-mail" class="size-6 text-muted" />
+              <div class="auth-row">
+                <div class="flex min-w-0 items-center gap-3.5">
+                  <UIcon name="i-lucide-mail" class="size-[22px] shrink-0 text-muted" />
                   <div>
                     <p class="font-medium text-highlighted">Email</p>
                     <p class="text-sm text-muted">{{ sessionData?.user?.email }}</p>
                   </div>
                 </div>
-                <div class="flex items-center gap-4">
-                  <UBadge v-if="sessionData?.user?.emailVerified" color="success" variant="subtle" size="sm">Verified</UBadge>
-                  <UButton color="neutral" variant="soft" size="sm" to="/forgot-password">
-                    Reset password
-                  </UButton>
+                <div class="flex shrink-0 items-center gap-3">
+                  <span v-if="sessionData?.user?.emailVerified" class="status-pill"><span class="status-dot" />Verified</span>
+                  <NuxtLink to="/forgot-password" class="account-action">Reset password</NuxtLink>
                 </div>
               </div>
 
               <!-- Google -->
-              <div class="flex items-center justify-between p-4 sm:px-6">
-                <div class="flex items-center gap-4">
-                  <UIcon name="i-logos-google-icon" class="size-6" />
+              <div class="auth-row">
+                <div class="flex min-w-0 items-center gap-3.5">
+                  <UIcon name="i-logos-google-icon" class="size-[22px] shrink-0" />
                   <div>
                     <p class="font-medium text-highlighted">Google</p>
                     <p v-if="googleStatus === 'loading'" class="text-sm text-muted">Checking…</p>
@@ -50,25 +42,21 @@
               </div>
 
               <!-- WhatsApp (OTP) -->
-              <div class="flex items-center justify-between p-4 sm:px-6">
-                <div class="flex items-center gap-4">
-                  <UIcon name="i-logos-whatsapp-icon" class="size-6" />
+              <div class="auth-row">
+                <div class="flex min-w-0 items-center gap-3.5">
+                  <UIcon name="i-logos-whatsapp-icon" class="size-[22px] shrink-0" />
                   <div>
                     <p class="font-medium text-highlighted">WhatsApp</p>
                     <p v-if="sessionData?.user?.phoneNumber" class="text-sm text-muted">{{ sessionData?.user?.phoneNumber }}</p>
                     <p v-else class="text-sm text-muted">Not connected</p>
                   </div>
                 </div>
-                <div class="flex items-center gap-4">
-                  <UBadge v-if="sessionData?.user?.phoneNumberVerified" color="success" variant="subtle" size="sm">Verified</UBadge>
-                  <UButton color="neutral" variant="soft" size="sm" :to="profileTo">
-                    {{ sessionData?.user?.phoneNumber ? 'Manage' : 'Add' }}
-                  </UButton>
+                <div class="flex shrink-0 items-center gap-3">
+                  <span v-if="sessionData?.user?.phoneNumberVerified" class="status-pill"><span class="status-dot" />Verified</span>
+                  <NuxtLink :to="profileTo" class="account-action">{{ sessionData?.user?.phoneNumber ? 'Manage' : 'Add' }}</NuxtLink>
                 </div>
               </div>
             </div>
-        </section>
-
       </div>
     </template>
   </UDashboardPanel>
@@ -117,3 +105,10 @@ onMounted(async () => {
   }
 })
 </script>
+
+<style scoped>
+.auth-row { display: flex; min-height: var(--ws-row-min-height, 66px); align-items: center; justify-content: space-between; gap: 1rem; padding-block: 18px; }
+.account-action { font-size: 13.5px; font-weight: 600; color: var(--ui-text-highlighted); text-decoration: underline; text-underline-offset: 3px; }
+.status-pill { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; background: var(--ui-bg-muted); padding: 4px 9px; font-size: 12px; font-weight: 600; color: var(--ui-text-muted); }
+.status-dot { width: 6px; height: 6px; border-radius: 999px; background: var(--ui-success); }
+</style>
