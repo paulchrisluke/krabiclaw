@@ -1,4 +1,4 @@
-import type { BlogPostRepository, BlogPost, PlatformBlogCreateInput, PlatformBlogUpdateInput, SiteAuthor } from './types'
+import type { BlogLifecycleState, BlogPostRepository, BlogPost, PlatformBlogCreateInput, PlatformBlogUpdateInput, SiteAuthor } from './types'
 import { dashboardFetch } from '~/composables/dashboardFetch'
 
 interface TenantBlogRepositoryOptions {
@@ -20,6 +20,16 @@ export function tenantBlogRepository({ siteId, orgSlug, siteSlug }: TenantBlogRe
     isRecord(value) && typeof value.id === 'string' && isBlogPost(value.post)
   const isSuccess = (value: unknown): value is { success: true } =>
     isRecord(value) && value.success === true
+  const isLifecycleState = (value: unknown): value is BlogLifecycleState =>
+    isRecord(value)
+    && typeof value.id === 'string'
+    && ['draft', 'published', 'scheduled'].includes(String(value.status))
+    && (value.published_at === null || typeof value.published_at === 'string')
+    && (value.scheduled_for === null || typeof value.scheduled_for === 'string')
+    && typeof value.updated_at === 'string'
+    && typeof value.content_document_updated_at === 'string'
+  const isLifecycleResponse = (value: unknown): value is { success: true; lifecycle: BlogLifecycleState } =>
+    isRecord(value) && value.success === true && isLifecycleState(value.lifecycle)
   const isSiteAuthor = (value: unknown): value is SiteAuthor =>
     isRecord(value)
     && typeof value.id === 'string'
@@ -65,20 +75,22 @@ export function tenantBlogRepository({ siteId, orgSlug, siteSlug }: TenantBlogRe
       await dashboardFetch(`${baseUrl}/${postId}`, scope, { method: 'DELETE', validate: isSuccess })
     },
 
-    async publish(postId: string): Promise<void> {
-      await dashboardFetch(
+    async publish(postId: string, input): Promise<BlogLifecycleState> {
+      const response = await dashboardFetch<{ success: true; lifecycle: BlogLifecycleState }>(
         `/api/editor/sites/${siteId}/blog/${postId}/publish`,
         scope,
-        { method: 'POST', validate: isSuccess },
+        { method: 'POST', body: input, validate: isLifecycleResponse },
       )
+      return response.lifecycle
     },
 
-    async unpublish(postId: string): Promise<void> {
-      await dashboardFetch(
+    async unpublish(postId: string, input): Promise<BlogLifecycleState> {
+      const response = await dashboardFetch<{ success: true; lifecycle: BlogLifecycleState }>(
         `/api/editor/sites/${siteId}/blog/${postId}/unpublish`,
         scope,
-        { method: 'POST', validate: isSuccess },
+        { method: 'POST', body: input, validate: isLifecycleResponse },
       )
+      return response.lifecycle
     },
 
     async listAuthors(): Promise<SiteAuthor[]> {

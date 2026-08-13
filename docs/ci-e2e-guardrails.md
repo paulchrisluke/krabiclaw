@@ -6,9 +6,9 @@ This is the source of truth for avoiding local-vs-CI auth and billing drift in E
 
 - The required PR lane builds for and deploys only isolated preview. Its
   representative suite covers public routing and dashboard API behavior.
-- A push to `staging` applies migrations, deploys the staging Worker normally,
+- A push to `staging` deploys the staging Worker normally, applies migrations,
   and then runs the full Playwright suite against that deployment.
-- A push to `main` applies migrations, deploys production normally, and then
+- A push to `main` deploys production normally, applies migrations, and then
   runs read-only public browser smoke. There is no scheduled release lane.
 
 ## Recent staging lessons

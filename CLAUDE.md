@@ -14,6 +14,13 @@ production to mask a renderer regression.
 
 When an internal API returns errors, nulls, or malformed data, fix the API contract/source of truth first. Do not add frontend fallbacks, guards, or workaround logic unless the API behavior is intentionally nullable and documented.
 
+Application-owned fetch clients use `retry: 0` and centralized explicit
+timeouts. One logical resource load has one network attempt. SSR calls canonical
+server services directly rather than self-fetching. Errors remain errors and
+must not become empty success states. Delete disabled fallback and compatibility
+branches instead of retaining them for safety. A violation discovered in an
+affected path is not excused as pre-existing, out of scope, or high risk.
+
 ---
 
 ## "Pre-existing" is not a stopping point
@@ -121,21 +128,25 @@ This has hit the same way at least three times: `pages/docs/[...segments].vue` (
 **`useRequestFetch()` alone is not reliable enough — it was tried first and escalated away from in both prior incidents.** The proven fix, currently live in `pages/blog/[category]/[slug].vue` and `pages/docs/[...segments].vue`, is to bypass the self-fetch entirely on the server: import the query logic as a plain server util function and call it directly against `cloudflareEnv(requestEvent).db`, inside `useAsyncData`:
 
 ```ts
-const requestEvent = useRequestEvent()
+const requestEvent = useRequestEvent();
 const { data } = await useAsyncData(key, async () => {
   if (import.meta.server) {
-    if (!requestEvent) return null
+    if (!requestEvent) return null;
     const [{ cloudflareEnv }, { getMyThing }] = await Promise.all([
-      import('~/server/utils/api-response'),
-      import('~/server/utils/my-domain-util'),
-    ])
-    const db = cloudflareEnv(requestEvent).db
-    if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-    return await getMyThing(db, /* route params */)
+      import("~/server/utils/api-response"),
+      import("~/server/utils/my-domain-util"),
+    ]);
+    const db = cloudflareEnv(requestEvent).db;
+    if (!db)
+      throw createError({
+        statusCode: 500,
+        statusMessage: "Database not available",
+      });
+    return await getMyThing(db /* route params */);
   }
-  const response = await $fetch<ResponseType>('/api/public/...')
-  return response?.thing ?? null
-})
+  const response = await $fetch<ResponseType>("/api/public/...");
+  return response?.thing ?? null;
+});
 ```
 
 This requires the API route's query logic to live in an importable `server/utils/*.ts` function (not inline in the route handler) so both the route and the page's server-side branch call the same code — the API route becomes a thin wrapper around it. This also satisfies the "shared server/domain utilities" rule under Platform Strategy above: MCP/ChowBot/dashboard code paths that need the same record get the same function.
@@ -227,28 +238,26 @@ Three environment gates exist in `.github/workflows/ci.yml`:
 
 Runs checks, builds for preview, and may migrate, seed, and deploy only the
 isolated preview environment. Shared staging and production are never changed
-by a PR.
+by a PR. One representative browser suite runs against the deployed preview.
 
 ### Staging lane
 
-Runs on pushes to `staging`. It applies pending migrations, sweeps disposable
-E2E artifacts, deploys the staging Worker normally, and runs the full
+Runs on pushes to `staging`. It deploys the staging Worker normally, applies
+pending migrations, sweeps disposable E2E artifacts, and runs the full
 Playwright suite against `staging.krabiclaw.com`.
 
 ### Production lane
 
-Runs on pushes to `main`. It applies pending migrations, deploys the production
-Worker normally, and runs read-only public browser smoke.
+Runs on pushes to `main`. It deploys the production Worker normally, applies
+pending migrations, and runs read-only public browser smoke.
 
-The package exposes no staging or production deploy, migration, seed, or
-rollback aliases. The contract is `docs/operations/release-flow.md`.
+The contract is `docs/operations/release-flow.md`.
 
 ### CI Environment Rules
 
 - Cloudflare credentials are scoped only to Cloudflare steps.
 - Never put `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_ACCOUNT_ID` in top-level job `env:`.
 - All E2E jobs require Stripe env vars.
-- Remote staging seeds must be idempotent.
 ### Preview/Staging Data Lifecycle
 
 `env.preview` and `env.staging` in `wrangler.toml` must always declare their own `[triggers]` block (`crons = []` unless a job is deliberately scoped to that environment). Cron triggers are inherited from the top-level `[triggers]` block unless an environment overrides them — an env without its own `[triggers]` silently runs production's full cron schedule against its own database. This previously went unnoticed and drove preview/staging D1 "rows read" billing into the billions as scheduled tasks repeatedly scanned ever-growing E2E-generated data.
@@ -266,9 +275,12 @@ Do not add a new dev-only reset route or rely on Playwright `afterEach`/`afterAl
 
 Nuxt UI is the default for dashboard/admin surfaces. Saya public, high-traffic surfaces should avoid Nuxt UI interactive components when they affect every tenant page load.
 
-- Every `layout: 'dashboard'` page renders its own `UDashboardPanel` with a `#header` slot containing `UDashboardNavbar` (explicit `title`, `UDashboardSidebarCollapse` in `#leading`) and a `#body` slot for content. `UCard` is still the default content-grouping primitive inside `#body`.
-- Dashboard pages do not use `UPage`, `UPageBody`, or `UPageHeader` — that was the pre-issue-#316 pattern; the whole dashboard shell (`layouts/dashboard.vue` plus every page under `pages/dashboard/**` and `pages/admin/**`) was rewritten off it. See `docs/adr/0019-progressive-drill-in-dashboard-sidebar.md`.
-- `layout: 'editor'` pages (onboarding wizards, content editor, blog editor) are a separate, intentionally different case — they own their own full-screen chrome and do not use `UDashboardPanel` either.
+- Dashboard pages use:
+  - `UCard`
+  - `UPage`
+  - `UPageBody`
+- Dashboard pages do not use `UPageHeader`.
+- Dashboard page content goes directly in `UPageBody`.
 - Saya theme pages keep their raw layout shell and theme-specific components.
 - On `components/saya/**`, prefer native `<button>`, `<NuxtLink>`, `<a>`, Tailwind classes, and inline SVG for always-rendered header/footer paths.
 - Use `components/saya/SayaDropdown.vue` instead of `UDropdownMenu` on the Saya public surface.
@@ -339,7 +351,7 @@ yarn client:onboard \
   --maps-url "https://www.google.com/maps/place/Pottery+House+Krabi/..." \
   --maps-url "https://www.google.com/maps/place/Beachfront+Pottery+Krabi/..." \
   --images ./new-client-Pottery-House-Krabi \
-  --live-url https://pottery-house.krabiclaw.com \
+  --live-url https://www.potteryhousekrabi.com \
   --site-id site-pottery-house-krabi \
   --remote
 ```
@@ -366,8 +378,14 @@ Required pipeline:
 2. Human review of `client-imports/<slug>/`
 3. `client:import --approve`
 4. `client:import --apply`
-5. `client:verify`
-6. `client:deploy`
+5. `client:verify` against the local build
+6. Merge to `staging`; CI deploys and runs the full E2E suite
+7. Merge the verified staging release into `main`; CI deploys and runs production browser smoke
+8. `client:deploy --skip-seed` for final deployed client verification
+
+`client:deploy` never releases the Worker itself. The package exposes no direct
+staging or production deploy commands; client onboarding goes through the
+staging and production branch gates.
 
 If any step fails, fix the source of truth:
 

@@ -31,7 +31,7 @@ const remoteFlag = isPreview ? '--remote' : ''
 const sql = `-- Pottery House Krabi seed
 -- Ephemeral: generated from seed-definitions/pottery-house.ts
 -- Preview at: http://pottery-house.localhost:3000
--- Production at: https://pottery-house.krabiclaw.com
+-- Production at: https://www.potteryhousekrabi.com
 -- Destructive for pottery-house-owned rows: safe to re-run locally or against preview.
 
 PRAGMA foreign_keys = ON;
@@ -44,7 +44,7 @@ VALUES ('saya-theme-v1', 'Saya', 'saya', '1.0.0', 'Restaurant website theme', 'a
 -- keeps the seed idempotent even if a prior run left the subdomain row behind.
 DELETE FROM sites WHERE id = 'site-pottery-house' OR subdomain = 'pottery-house';
 DELETE FROM organization WHERE id = 'org-pottery-house';
-DELETE FROM site_domains WHERE domain IN ('pottery-house.localhost', 'pottery-house.krabiclaw.com');
+DELETE FROM site_domains WHERE domain IN ('pottery-house.localhost', 'pottery-house.krabiclaw.com', 'www.potteryhousekrabi.com');
 
 -- Organization (owned by the dedicated Pottery House owner account)
 INSERT INTO organization (id, name, slug, createdAt)

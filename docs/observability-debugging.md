@@ -228,26 +228,19 @@ reason strings such as `credential_missing`, `credential_rejected:
 invalid_token`, and `credential_rejected: insufficient_scope`, which makes D1
 useful as the first-stop history before escalating to Logs UI.
 
-## MCP tool compatibility
+## MCP tool catalog
 
-Use these D1 queries for stale ChatGPT app catalogs. The same fields are
+Use these D1 queries for ChatGPT app catalog mismatches. The same fields are
 populated for tenant (`mcp_surface = 'client'`) and platform
 (`mcp_surface = 'platform'`) events.
 
 ```sql
 SELECT mcp_surface, unknown_tool_name, oauth_client_id_hash,
-       catalog_fingerprint, deployment_version, COUNT(*) AS failures
+       catalog_fingerprint, COUNT(*) AS failures
   FROM mcp_tool_call_events
  WHERE unknown_tool_name IS NOT NULL
- GROUP BY 1, 2, 3, 4, 5
- ORDER BY failures DESC;
-
-SELECT mcp_surface, compatibility_tool_name, replacement_tool_names,
-       catalog_fingerprint, COUNT(*) AS calls
-  FROM mcp_tool_call_events
- WHERE compatibility_alias_used = 1
  GROUP BY 1, 2, 3, 4
- ORDER BY calls DESC;
+ ORDER BY failures DESC;
 
 SELECT session_id_hash, mcp_surface, method, tool_name,
        jsonrpc_error_code, jsonrpc_error_message, COUNT(*) AS repeats
@@ -270,4 +263,4 @@ SELECT created_at, mcp_surface, method, tool_name, session_id_hash, cf_ray_id
 ```
 
 For release sequencing and OpenAI app refresh/republication, see
-`docs/mcp-tool-evolution.md`.
+`docs/mcp-tool-catalog.md`.

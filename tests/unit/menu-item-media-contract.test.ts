@@ -121,7 +121,6 @@ test('menu item media is hydrated from ordered menu_item_media rows', async () =
           category: 'menu',
           status: 'active',
           created_by_user_id: 'user-1',
-          delete_pending_at: null,
           kind: 'image',
         },
         {
@@ -149,7 +148,6 @@ test('menu item media is hydrated from ordered menu_item_media rows', async () =
           category: 'menu',
           status: 'active',
           created_by_user_id: 'user-1',
-          delete_pending_at: null,
           kind: 'video',
         },
       ],

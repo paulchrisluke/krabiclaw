@@ -12,7 +12,7 @@ function vueFiles(root: string): string[] {
   })
 }
 
-test('navbar leading resolves detail back then mobile scope back without duplicating the sidebar collapse', () => {
+test('navbar leading resolves detail back then mobile scope back with one shared sidebar collapse', () => {
   const source = read('lib/components/workspace/dashboard/DashboardNavbarLeading.vue')
   const detail = source.indexOf('v-if="detailParent"')
   const scope = source.indexOf('v-else-if="scopeParent"')
@@ -22,16 +22,18 @@ test('navbar leading resolves detail back then mobile scope back without duplica
   assert.match(source, /class="min-w-0 shrink-0 md:hidden"/)
   assert.match(source, /icon="i-lucide-chevron-left"/)
   assert.match(source, /square/)
+  assert.equal((source.match(/<DashboardSidebarCollapseButton \/>/g) ?? []).length, 1)
   assert.doesNotMatch(source, /labelElement|visibleLabel|measureLabel/)
-  assert.doesNotMatch(source, /DashboardSidebarCollapseButton/)
   assert.doesNotMatch(source, /router\.back|history\.back/)
 })
 
 test('sidebar collapse belongs to the desktop sidebar header', () => {
   const source = read('lib/components/workspace/dashboard/DashboardSidebarCollapseButton.vue')
   const scopeHeader = read('lib/components/workspace/dashboard/DashboardScopeHeader.vue')
+  const navbarLeading = read('lib/components/workspace/dashboard/DashboardNavbarLeading.vue')
   const appConfig = read('app.config.ts')
   assert.match(scopeHeader, /<DashboardSidebarCollapseButton sidebar \/>/)
+  assert.match(navbarLeading, /<DashboardSidebarCollapseButton \/>/)
   assert.match(appConfig, /dashboardNavbar:[\s\S]*toggle: 'hidden'/)
   assert.doesNotMatch(source, /route\.path|mobileBackPath/)
 })

@@ -27,8 +27,6 @@ const TOKEN_URL = `${BASE_URL}/api/auth/oauth2/token`;
 const DEV_LOGIN_URL = `${BASE_URL}/api/dev/login`;
 const AUTHORIZE_URL = `${BASE_URL}/api/auth/oauth2/authorize`;
 const CONSENT_URL = `${BASE_URL}/api/auth/oauth2/consent`;
-const TEST_CLIENT_METADATA_URL = process.env.MCP_CIMD_CLIENT_URL ??
-  `${BASE_URL}/api/auth/oauth2/test-client-metadata`;
 
 const MCP_VERSION = process.env.MCP_PROTOCOL_VERSION ?? "2025-06-18";
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -181,6 +179,18 @@ async function main() {
   if (asJson.code_challenge_methods_supported?.includes("S256"))
     pass("S256 PKCE advertised");
   else fail("S256 PKCE missing from well-known");
+  if (asJson.registration_endpoint === undefined)
+    pass("DCR registration endpoint is not advertised");
+  else {
+    fail("DCR registration endpoint is still advertised", asJson);
+    return;
+  }
+  if (asJson.client_id_metadata_document_supported === true)
+    pass("CIMD is advertised");
+  else {
+    fail("CIMD support is missing from well-known", asJson);
+    return;
+  }
 
   // 2. Unauthenticated 401
   section("Unauthenticated request");
@@ -232,9 +242,31 @@ async function main() {
     section("CIMD + PKCE auth flow");
     const { verifier, challenge } = pkce();
     const state = randomBytes(16).toString("hex");
-    const testClientId = TEST_CLIENT_METADATA_URL;
-    const redirectUri = new URL("/oauth/test-callback", testClientId).toString();
-    pass(`Using CIMD client: ${testClientId}`);
+    const testClientId = process.env.MCP_CIMD_CLIENT_URL ??
+      `${BASE_URL}/api/auth/oauth2/test-client-metadata?nonce=${Date.now()}`;
+    const clientMetadataResp = await get(testClientId);
+    const clientMetadata = jsonBody(clientMetadataResp, "OAuth client metadata document");
+    if (clientMetadataResp.status !== 200 || clientMetadata.client_id !== testClientId) {
+      fail("CIMD client metadata document failed", clientMetadata);
+      return;
+    }
+    if (clientMetadata.token_endpoint_auth_method !== "none") {
+      fail("Public CIMD client has the wrong token auth method", clientMetadata);
+      return;
+    }
+    if (!Array.isArray(clientMetadata.redirect_uris) || clientMetadata.redirect_uris.length !== 1) {
+      fail("Public CIMD client must advertise one redirect URI", clientMetadata);
+      return;
+    }
+    const clientScopes = new Set(String(clientMetadata.scope ?? "").split(/\s+/).filter(Boolean));
+    for (const requiredScope of ["openid", "offline_access", "tenant"]) {
+      if (!clientScopes.has(requiredScope)) {
+        fail(`CIMD client missing ${requiredScope} capability`, clientMetadata);
+        return;
+      }
+    }
+    const redirectUri = clientMetadata.redirect_uris[0];
+    pass(`Resolved public CIMD client: ${testClientId}`);
 
     // Authorization request (redirects to consent page)
     const authParams = new URLSearchParams({

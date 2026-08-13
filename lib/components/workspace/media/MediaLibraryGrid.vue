@@ -27,13 +27,9 @@
       />
     </div>
 
-    <!-- Progress -->
-    <div v-if="uploading" class="flex flex-col gap-1.5">
-      <div class="flex items-center justify-between gap-2">
-        <span class="text-xs font-medium text-default">Uploading...</span>
-        <span class="text-xs text-muted">{{ Math.round(uploadProgress) }}%</span>
-      </div>
-      <UProgress :value="uploadProgress" color="primary" size="xs" />
+    <div v-if="uploading" class="flex items-center gap-2 text-xs font-medium text-default">
+      <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin" />
+      <span>Uploading...</span>
     </div>
 
     <!-- Error -->
@@ -170,12 +166,11 @@ const emit = defineEmits<{
 
 const toast = useToast()
 const ALL_MEDIA_KIND = 'all'
+const { uploading, error: mediaUploadError, upload: uploadMedia } = useMediaUpload(`/api/editor/sites/${props.siteId}`)
 
 const assets = ref<MediaAsset[]>([])
 const loading = ref(false)
 const loadError = ref<string | null>(null)
-const uploading = ref(false)
-const uploadProgress = ref(0)
 const uploadError = ref<string | null>(null)
 const isDragging = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -259,12 +254,12 @@ async function loadAssets() {
 function onDrop(e: DragEvent) {
   isDragging.value = false
   const file = e.dataTransfer?.files[0]
-  if (file) upload(file)
+  if (file) void upload(file)
 }
 
 function onFileSelect(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
-  if (file) upload(file)
+  if (file) void upload(file)
   if (fileInput.value) fileInput.value.value = ''
 }
 
@@ -291,124 +286,26 @@ async function upload(file: File) {
     return
   }
 
-  if (isImage) {
-    await uploadImage(file)
-  } else {
-    await uploadVideo(file)
-  }
-}
-
-async function uploadImage(file: File) {
-  uploading.value = true
-  uploadProgress.value = 0
   try {
-    const { assetId, uploadUrl } = await dashboardApi<{ assetId: string; uploadUrl: string; imageId: string }>(
-      `/api/editor/sites/${props.siteId}/media/request-upload`,
-      {
-        method: 'POST',
-        body: { filename: file.name, locationId: props.locationId },
-        validate: (value): value is { assetId: string; uploadUrl: string; imageId: string } =>
-          isRecord(value)
-          && typeof value.assetId === 'string'
-          && typeof value.uploadUrl === 'string'
-          && typeof value.imageId === 'string',
-      }
-    )
-
-    uploadProgress.value = 30
-
-    const form = new FormData()
-    form.append('file', file)
-
-    await new Promise<void>((resolve, reject) => {
-      const xhr = new XMLHttpRequest()
-      xhr.open('POST', uploadUrl)
-
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          uploadProgress.value = 30 + (e.loaded / e.total) * 50
-        }
-      }
-
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve()
-        } else {
-          reject(new Error(`Upload failed: ${xhr.status}`))
-        }
-      }
-
-      xhr.onerror = () => reject(new Error('Upload failed'))
-      xhr.send(form)
+    const result = await uploadMedia(file, {
+      locationId: props.locationId,
     })
-
-    uploadProgress.value = 80
-
-    const confirmEndpoint = `/api/editor/sites/${props.siteId}/media/${assetId}/confirm`
-    const asset = await dashboardApi<MediaAsset>(confirmEndpoint, {
-      method: 'POST',
-      validate: isMediaAsset,
-    })
-
-    uploadProgress.value = 100
-    toast.add({ title: 'File uploaded', color: 'success' })
-    await loadAssets()
-    emit('uploaded', asset)
-  } catch (err) {
-    uploadError.value = getErrorMessage(err, 'Upload failed.')
-  } finally {
-    uploading.value = false
-    uploadProgress.value = 0
-  }
-}
-
-async function uploadVideo(file: File) {
-  if (file.size > 50 * 1024 * 1024) {
-    uploadError.value = 'Videos must be under 50 MB.'
-    return
-  }
-  uploading.value = true
-  uploadProgress.value = 0
-  try {
-    const form = new FormData()
-    form.append('file', file)
-    if (props.locationId) form.append('locationId', props.locationId)
-
-    const asset = await new Promise<MediaAsset>((resolve, reject) => {
-      const xhr = new XMLHttpRequest()
-      xhr.open('POST', `/api/editor/sites/${props.siteId}/media/upload`)
-
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          uploadProgress.value = (e.loaded / e.total) * 100
-        }
-      }
-
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            const response = JSON.parse(xhr.responseText)
-            resolve(response)
-          } catch {
-            reject(new Error('Invalid response'))
-          }
-        } else {
-          reject(new Error(`Upload failed: ${xhr.status}`))
-        }
-      }
-
-      xhr.onerror = () => reject(new Error('Upload failed'))
-      xhr.send(form)
-    })
+    if (!result) {
+      uploadError.value = mediaUploadError.value ?? 'Upload failed.'
+      return
+    }
 
     toast.add({ title: 'File uploaded', color: 'success' })
     await loadAssets()
-    emit('uploaded', asset)
+    emit('uploaded', assets.value.find(asset => asset.id === result.id) ?? {
+      id: result.id,
+      kind: result.kind,
+      file_name: file.name,
+      public_url: result.publicUrl ?? undefined,
+      thumbnail_url: result.thumbnailUrl ?? null,
+    })
   } catch (err) {
     uploadError.value = getErrorMessage(err, 'Upload failed.')
-  } finally {
-    uploading.value = false
-    uploadProgress.value = 0
   }
 }
 

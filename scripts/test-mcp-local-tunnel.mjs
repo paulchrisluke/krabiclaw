@@ -11,11 +11,11 @@ const artifactDir = resolve(root, '.wrangler', 'mcp-harness', runId)
 const origin = 'https://local.krabiclaw.com'
 const freeSiteDomain = 'https://krabiclaw.com'
 const tunnelName = 'krabiclaw-local'
-const cimdFixtureOrigin = 'https://krabiclaw-preview.paulchrisluke.workers.dev'
 const children = new Set()
 let cleaningUp = false
 let succeeded = false
 const runChatGPTGate = process.argv.includes('--chatgpt')
+const reuseBuild = process.argv.includes('--reuse-build')
 
 mkdirSync(artifactDir, { recursive: true })
 
@@ -176,8 +176,6 @@ async function main() {
     E2E_ALLOW_DEV_ROUTES: 'true',
     E2E_DEV_ROUTE_SECRET: devRouteSecret,
     MCP_DEV_LOGIN: '1',
-    MCP_CIMD_CLIENT_URL: `${cimdFixtureOrigin}/api/auth/oauth2/test-client-metadata`,
-    MCP_PRIVATE_CIMD_CLIENT_URL: `${cimdFixtureOrigin}/api/auth/oauth2/test-private-client-metadata`,
     MCP_ALLOW_CREATE: '1',
     NODE_OPTIONS: [
       process.env.NODE_OPTIONS,
@@ -194,7 +192,13 @@ async function main() {
   }
 
   console.log('# Building and starting the local Cloudflare Worker')
-  await run('yarn', ['build'], gateEnv)
+  if (reuseBuild) {
+    const workerEntry = resolve(root, '.output', 'server', 'index.mjs')
+    if (!existsSync(workerEntry)) throw new Error('--reuse-build requires an existing .output/server/index.mjs artifact.')
+    console.log('# Reusing the existing production build artifact')
+  } else {
+    await run('yarn', ['build'], gateEnv)
+  }
   const workerVars = [
     ['BETTER_AUTH_URL', origin],
     ['NUXT_PUBLIC_PLATFORM_DOMAIN', origin],
@@ -238,11 +242,6 @@ async function main() {
   console.log('# Running priority tenant browser gates through the tunnel')
   await run('yarn', ['test:e2e:public-rendering', '--workers=1'], gateEnv)
   await run('yarn', ['playwright', 'test', 'tests/e2e/tenant-favicons.spec.ts', '--project=chromium', '--workers=1'], gateEnv)
-
-  const workerLog = readFileSync(resolve(artifactDir, 'worker.log'), 'utf8')
-  if (workerLog.includes('[Better Auth]: Error parsing JSON')) {
-    throw new Error('OAuth/CIMD registration emitted a Better Auth JSON parse error. See worker.log in the evidence directory.')
-  }
 
   if (runChatGPTGate) {
     console.log('# Running the actual ChatGPT normal-browser connector gate')

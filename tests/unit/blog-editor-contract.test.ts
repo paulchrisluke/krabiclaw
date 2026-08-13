@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { readFile } from 'node:fs/promises'
 import { replaceMarkdownRange, splitMarkdownAt } from '../../utils/markdown-source.ts'
+import { platformBlogDraftCreateInput } from '../../server/utils/platform-content-request.ts'
 
 test('slug changes preflight a post collision in the same site scope', async () => {
   const source = await readFile(new URL('../../server/utils/platform-content.ts', import.meta.url), 'utf8')
@@ -71,8 +72,59 @@ test('editor autosave requires canonical documents and serializes draft creation
   assert.match(source, /let createDraftPromise: Promise<BlogPost \| null> \| null = null/)
   assert.match(source, /if \(createDraftPromise\) return await createDraftPromise/)
   assert.match(source, /social_image_asset_id: form\.social_image_asset_id \|\| null/)
-  assert.match(source, /void flushSave\(\)\.catch\(\(\) => \{\}\)/)
   assert.match(source, /flush: 'sync'/)
+})
+
+test('editor creation persists one draft before any token-checked publish or schedule lifecycle', async () => {
+  const source = await readFile(new URL('../../lib/components/workspace/blog/BlogPostEditor.vue', import.meta.url), 'utf8')
+  const createStart = source.indexOf('async function createDraft')
+  const createEnd = source.indexOf('function isDraftValid', createStart)
+  const createFlow = source.slice(createStart, createEnd)
+  const createCall = createFlow.split('\n').find(line => line.includes('props.repository.create(')) ?? ''
+  assert.match(createCall, /props\.repository\.create\(/)
+  assert.doesNotMatch(createCall, /\bpublish\s*:/)
+  assert.doesNotMatch(createCall, /\bscheduled_for\s*:/)
+  assert.match(createFlow, /if \(publishAfterCreateRequested\) \{[\s\S]*props\.repository\.publish\(created\.id, \{[\s\S]*\.\.\.lifecycleVersionInput\(\)/)
+  assert.match(source, /post && \(post\.status === 'published' \|\| post\.status === 'scheduled'\)[\s\S]*@click="unpublish"/)
+  assert.match(source, /form\.scheduled_for = toLocalDatetime\(lifecycle\.scheduled_for\)[\s\S]*publishTiming\.value = lifecycle\.scheduled_for \? 'Scheduled' : 'Now'/)
+})
+
+test('shared blog creation is draft-only and rejects lifecycle fields', async () => {
+  const source = await readFile(new URL('../../server/utils/platform-content.ts', import.meta.url), 'utf8')
+  const createStart = source.indexOf('export async function createPlatformBlogPost')
+  const createEnd = source.indexOf('export async function updatePlatformBlogLifecycle', createStart)
+  const createFlow = source.slice(createStart, createEnd)
+  assert.match(createFlow, /assertDraftOnlyBlogCreate\(input\)/)
+  assert.match(createFlow, /'draft',[\s\S]*input\.visibility \?\? 'public',[\s\S]*null,[\s\S]*null/)
+  assert.match(createFlow, /label: 'Draft canonical blocks'/)
+  assert.match(createFlow, /publish: false/)
+  assert.doesNotMatch(createFlow, /parseScheduledFor/)
+})
+
+test('admin blog create preserves explicit draft metadata and rejects lifecycle fields before mapping', async () => {
+  const source = await readFile(new URL('../../server/api/admin/blog/posts.post.ts', import.meta.url), 'utf8')
+  assert.match(source, /assertDraftOnlyBlogCreate\(body\)/)
+  const mapped = platformBlogDraftCreateInput({
+    title: 'Complete draft',
+    content_blocks: [{ type: 'markdown', data: { markdown: 'Draft body', editor_mode: 'rich' } }],
+    tags: ['canonical', 'draft'],
+    seo_title: 'Search title',
+    social_image_asset_id: 'asset-social',
+    visibility: 'unlisted',
+  })
+  assert.deepEqual({
+    tags: mapped.tags,
+    seo_title: mapped.seo_title,
+    social_image_asset_id: mapped.social_image_asset_id,
+    visibility: mapped.visibility,
+  }, {
+    tags: ['canonical', 'draft'],
+    seo_title: 'Search title',
+    social_image_asset_id: 'asset-social',
+    visibility: 'unlisted',
+  })
+  assert.equal(Object.hasOwn(mapped, 'publish'), false)
+  assert.equal(Object.hasOwn(mapped, 'scheduled_for'), false)
 })
 
 test('settings panel behaves as an accessible modal', async () => {
@@ -94,7 +146,6 @@ test('block controls preserve writable content and persisted-post action boundar
   assert.match(renderer, /\{ \.\.\.step, text: value \}/)
   assert.match(editor, /if \(!last \|\| \(last\.type !== 'markdown' && last\.type !== 'heading'\)\)/)
   assert.match(editor, /function handleMergeBlock[\s\S]*ensureTrailingTextBlock\(\)/)
-  assert.match(editor, /:disabled="!post"/)
   assert.match(editor, /<UButton v-if="post" color="error"/)
   assert.match(editor, /async function share\(\) \{ if \(!post\.value \|\| !postId\.value\) return/)
   assert.match(editor, /async function remove\(\) \{ if \(!post\.value \|\| !postId\.value/)

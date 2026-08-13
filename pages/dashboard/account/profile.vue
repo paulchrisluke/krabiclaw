@@ -22,7 +22,7 @@
               <div><h3 class="profile-label">Display name</h3><p v-if="editingRow !== 'name'" class="profile-value">{{ sessionData?.user?.name || 'Not set' }}</p></div>
               <button v-if="editingRow === 'name'" type="button" class="account-action" @click="cancelEdit">Cancel</button>
             </div>
-            <UInput v-if="editingRow === 'name'" v-model="nameInput" class="max-w-md" size="xl" autofocus @input="nameTouched = true" @keydown.enter="saveName" />
+            <UInput v-if="editingRow === 'name'" v-model="nameInput" class="max-w-md" size="xl" autofocus @input="nameTouched = true" @keydown.enter="saveNameAndClose" />
             <UButton v-if="editingRow === 'name'" size="sm" :disabled="!nameDirty" :loading="nameSaving" @click="saveNameAndClose">Save</UButton>
           </div>
           <button v-if="editingRow !== 'name'" type="button" class="account-action" @click="editingRow = 'name'">Edit</button>

@@ -1,4 +1,10 @@
+import { isPreviewContext } from '../../server/utils/tenant-hosts'
+
 export const testEnv = (key: string): string => process.env[key] ?? ''
+
+export const POTTERY_HOUSE_CANONICAL_URL = 'https://www.potteryhousekrabi.com'
+export const KIKUZUKI_CANONICAL_URL = 'https://www.kikuzuki-thailand.com'
+export const NCLS_CANONICAL_URL = 'https://www.northcarolinalegalservices.org'
 
 export function testBaseUrl() {
   const previewUrl = process.env.PLAYWRIGHT_PREVIEW_URL
@@ -14,16 +20,6 @@ export function testBaseUrl() {
   }
 
   return testEnv('NUXT_PUBLIC_FREE_SITE_DOMAIN') || `http://localhost:${port}`
-}
-
-// x-preview-tenant carries tenant identity when subdomain routing isn't available:
-// the named local tunnel, workers.dev, staging.*, and preview.*.
-// Must stay in sync with isPreviewContext in server/utils/tenant-hosts.ts.
-function isPreviewContext(hostname: string) {
-  if (hostname === 'local.krabiclaw.com') return true
-  if (hostname === 'workers.dev' || hostname.endsWith('.workers.dev')) return true
-  if (/^(?:staging|preview)\.[^.]+\.[^.]+$/.test(hostname)) return true
-  return false
 }
 
 function previewWorkerHeaders(slug: string): Record<string, string> {
@@ -52,8 +48,7 @@ export function potteryHouseTestBaseUrl() {
   if (isPreviewContext(base.hostname)) {
     return base.toString().replace(/\/$/, '')
   }
-  base.hostname = base.hostname.startsWith('pottery-house.') ? base.hostname : `pottery-house.${base.hostname}`
-  return base.toString().replace(/\/$/, '')
+  return POTTERY_HOUSE_CANONICAL_URL
 }
 
 export function blawbyTestBaseUrl() {
@@ -63,8 +58,7 @@ export function blawbyTestBaseUrl() {
     return base.toString().replace(/\/$/, '')
   }
   if (isPreviewContext(base.hostname)) return base.toString().replace(/\/$/, '')
-  base.hostname = base.hostname.startsWith('ncls.') ? base.hostname : `ncls.${base.hostname}`
-  return base.toString().replace(/\/$/, '')
+  return NCLS_CANONICAL_URL
 }
 
 export function kikuzukiTestBaseUrl() {
@@ -76,10 +70,7 @@ export function kikuzukiTestBaseUrl() {
   if (isPreviewContext(base.hostname)) {
     return base.toString().replace(/\/$/, '')
   }
-  base.hostname = base.hostname.startsWith('kikuzuki-krabi-thailand.')
-    ? base.hostname
-    : `kikuzuki-krabi-thailand.${base.hostname}`
-  return base.toString().replace(/\/$/, '')
+  return KIKUZUKI_CANONICAL_URL
 }
 
 export function tenantTestExtraHeaders(): Record<string, string> {

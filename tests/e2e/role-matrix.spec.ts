@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, request as playwrightRequest, test, type APIRequestContext } from '@playwright/test'
 import { devLoginHeaders, devLoginUrl } from './test-env'
 import { ensureSite } from './helpers/ensure-site'
 
@@ -7,32 +7,50 @@ type RoleUser = {
   role: 'owner' | 'admin' | 'editor' | 'member'
 }
 
+type RoleRequests = Record<RoleUser['role'], APIRequestContext>
+
 test.describe('role permission matrix', () => {
   test.describe.configure({ mode: 'serial' })
 
-  test('content permissions by role', async ({ request, baseURL }) => {
-    test.setTimeout(120_000)
+  let baseUrl: string
+  let siteId: string
+  let roleRequests: RoleRequests
+  const requestContexts: APIRequestContext[] = []
 
-    const ownerLogin = await request.get(devLoginUrl(baseURL!), { headers: devLoginHeaders(), maxRedirects: 0 })
-    expect(ownerLogin.status()).toBe(302)
-    const sessionRes = await request.get(`${baseURL}/api/auth/get-session`)
+  async function authenticatedRequest(userId?: string) {
+    const request = await playwrightRequest.newContext()
+    requestContexts.push(request)
+    const login = await request.get(devLoginUrl(baseUrl, userId), {
+      headers: devLoginHeaders(),
+      maxRedirects: 0,
+    })
+    expect(login.status()).toBe(302)
+    return request
+  }
+
+  test.beforeAll(async ({ baseURL }) => {
+    const startedAt = Date.now()
+    baseUrl = baseURL!
+    const ownerRequest = await authenticatedRequest()
+    const [sessionRes, contextRes] = await Promise.all([
+      ownerRequest.get(`${baseUrl}/api/auth/get-session`),
+      ownerRequest.get(`${baseUrl}/api/dashboard/context`),
+    ])
     expect(sessionRes.status()).toBe(200)
     const session = await sessionRes.json() as { user?: { id?: string } }
-    const ownerUserId = session.user?.id
-    expect(ownerUserId).toEqual(expect.any(String))
+    expect(session.user?.id).toEqual(expect.any(String))
 
-    const contextRes = await request.get(`${baseURL}/api/dashboard/context`)
     expect(contextRes.status()).toBe(200)
     const context = await contextRes.json() as {
       organization?: { id?: string }
       site?: { id?: string | null }
     }
     const organizationId = context.organization?.id
-    const siteId = await ensureSite(request, baseURL!, context.site?.id ?? null)
     expect(organizationId).toEqual(expect.any(String))
+    siteId = await ensureSite(ownerRequest, baseUrl, context.site?.id ?? null)
 
     const createUser = async (role: 'admin' | 'editor' | 'member') => {
-      const res = await request.post(`${baseURL}/api/dev/test-member`, {
+      const res = await ownerRequest.post(`${baseUrl}/api/dev/test-member`, {
         data: { role, organizationId },
         headers: devLoginHeaders(),
       })
@@ -42,87 +60,61 @@ test.describe('role permission matrix', () => {
       return body.user
     }
 
-    const admin = await createUser('admin')
-    const editor = await createUser('editor')
-    const member = await createUser('member')
-
-    const asUser = async (userId: string) => {
-      const login = await request.get(devLoginUrl(baseURL!, userId), { headers: devLoginHeaders(), maxRedirects: 0 })
-      expect(login.status()).toBe(302)
+    const [admin, editor, member] = await Promise.all([
+      createUser('admin'),
+      createUser('editor'),
+      createUser('member'),
+    ])
+    const [adminRequest, editorRequest, memberRequest] = await Promise.all([
+      authenticatedRequest(admin.id),
+      authenticatedRequest(editor.id),
+      authenticatedRequest(member.id),
+    ])
+    roleRequests = {
+      owner: ownerRequest,
+      admin: adminRequest,
+      editor: editorRequest,
+      member: memberRequest,
     }
+    expect(Date.now() - startedAt).toBeLessThan(30_000)
+  })
 
-    const contentUpdateStatus = async () => {
-      const pages = await request.get(`${baseURL}/api/editor/sites/${siteId}/pages`)
+  test.afterAll(async () => {
+    await Promise.all(requestContexts.map(request => request.dispose()))
+  })
+
+  test('content permissions by role', async () => {
+    test.setTimeout(60_000)
+
+    const contentUpdateStatus = async (request: APIRequestContext) => {
+      const pages = await request.get(`${baseUrl}/api/editor/sites/${siteId}/pages`)
       if (pages.status() !== 200) return pages
       const home = ((await pages.json()) as { pages: Array<{ id: string; path: string }> }).pages.find(page => page.path === '/')
       if (!home) return pages
-      const detail = await request.get(`${baseURL}/api/editor/sites/${siteId}/pages/${home.id}`)
+      const detail = await request.get(`${baseUrl}/api/editor/sites/${siteId}/pages/${home.id}`)
       if (detail.status() !== 200) return detail
       const body = await detail.json() as { page: { blocks: Array<{ type: string; data: Record<string, unknown> }>; document: { updated_at: string } } }
       const blocks = body.page.blocks.map(block => block.type === 'hero' ? { ...block, data: { ...block.data, title: `Role matrix ${Date.now()}` } } : block)
-      return request.patch(`${baseURL}/api/editor/sites/${siteId}/pages/${home.id}`, {
+      return request.patch(`${baseUrl}/api/editor/sites/${siteId}/pages/${home.id}`, {
         data: { blocks, expectedDocumentUpdatedAt: body.page.document.updated_at },
       })
     }
 
-    const assertRole = async (userId: string, expectedContentUpdate?: number) => {
-      await asUser(userId)
-      if (siteId && expectedContentUpdate !== undefined) {
-        expect((await contentUpdateStatus()).status()).toBe(expectedContentUpdate)
-      }
+    const assertRole = async (role: RoleUser['role'], expectedContentUpdate: number) => {
+      expect((await contentUpdateStatus(roleRequests[role])).status()).toBe(expectedContentUpdate)
     }
 
-    await assertRole(ownerUserId!, 200)
-    await assertRole(admin.id, 200)
-    await assertRole(editor.id, 200)
-    await assertRole(member.id, 403)
-
+    await assertRole('owner', 200)
+    await assertRole('admin', 200)
+    await assertRole('editor', 200)
+    await assertRole('member', 403)
   })
 
-  test('post update/delete permissions by role', async ({ request, baseURL }) => {
+  test('post update/delete permissions by role', async () => {
     test.setTimeout(60_000)
 
-    const ownerLogin = await request.get(devLoginUrl(baseURL!), { headers: devLoginHeaders(), maxRedirects: 0 })
-    expect(ownerLogin.status()).toBe(302)
-
-    const sessionRes = await request.get(`${baseURL}/api/auth/get-session`)
-    expect(sessionRes.status()).toBe(200)
-    const session = await sessionRes.json() as { user?: { id?: string } }
-    const ownerUserId = session.user?.id
-    expect(ownerUserId).toEqual(expect.any(String))
-
-    const contextRes = await request.get(`${baseURL}/api/dashboard/context`)
-    expect(contextRes.status()).toBe(200)
-    const context = await contextRes.json() as {
-      organization?: { id?: string }
-      site?: { id?: string | null }
-    }
-    const organizationId = context.organization?.id
-    const siteId = await ensureSite(request, baseURL!, context.site?.id ?? null)
-    expect(organizationId).toEqual(expect.any(String))
-
-    const createUser = async (role: 'admin' | 'editor' | 'member') => {
-      const res = await request.post(`${baseURL}/api/dev/test-member`, {
-        data: { role, organizationId },
-        headers: devLoginHeaders(),
-      })
-      expect(res.status()).toBe(200)
-      const body = await res.json() as { user: RoleUser }
-      return body.user
-    }
-
-    const admin = await createUser('admin')
-    const editor = await createUser('editor')
-    const member = await createUser('member')
-
-    const asUser = async (userId: string) => {
-      const login = await request.get(devLoginUrl(baseURL!, userId), { headers: devLoginHeaders(), maxRedirects: 0 })
-      expect(login.status()).toBe(302)
-    }
-
     const createDraftPost = async (title: string) => {
-      await asUser(ownerUserId!)
-      const res = await request.post(`${baseURL}/api/editor/sites/${siteId}/posts`, {
+      const res = await roleRequests.owner.post(`${baseUrl}/api/editor/sites/${siteId}/posts`, {
         data: {
           title,
           body: `Body for ${title}`,
@@ -134,34 +126,45 @@ test.describe('role permission matrix', () => {
       return body.post!.id!
     }
 
-    const updatePostAs = async (userId: string, postId: string, expectedStatus: number) => {
-      await asUser(userId)
-      const res = await request.patch(`${baseURL}/api/editor/sites/${siteId}/posts/${postId}`, {
+    const updatePostAs = async (role: RoleUser['role'], postId: string, expectedStatus: number) => {
+      const res = await roleRequests[role].patch(`${baseUrl}/api/editor/sites/${siteId}/posts/${postId}`, {
         data: { title: `Updated ${Date.now()}` },
       })
       expect(res.status()).toBe(expectedStatus)
     }
 
-    const deletePostAs = async (userId: string, postId: string, expectedStatus: number) => {
-      await asUser(userId)
-      const res = await request.delete(`${baseURL}/api/editor/sites/${siteId}/posts/${postId}`)
+    const deletePostAs = async (role: RoleUser['role'], postId: string, expectedStatus: number) => {
+      const res = await roleRequests[role].delete(`${baseUrl}/api/editor/sites/${siteId}/posts/${postId}`)
       expect(res.status()).toBe(expectedStatus)
     }
 
-    const ownerPostId = await createDraftPost(`Owner delete ${Date.now()}`)
-    await updatePostAs(ownerUserId!, ownerPostId, 200)
-    await deletePostAs(ownerUserId!, ownerPostId, 200)
+    const [ownerPostId, adminPostId, editorPostId, memberPostId] = await Promise.all([
+      createDraftPost(`Owner delete ${Date.now()}`),
+      createDraftPost(`Admin delete ${Date.now()}`),
+      createDraftPost(`Editor delete ${Date.now()}`),
+      createDraftPost(`Member edit ${Date.now()}`),
+    ])
 
-    const adminPostId = await createDraftPost(`Admin delete ${Date.now()}`)
-    await updatePostAs(admin.id, adminPostId, 200)
-    await deletePostAs(admin.id, adminPostId, 200)
+    await Promise.all([
+      (async () => {
+        await updatePostAs('owner', ownerPostId, 200)
+        await deletePostAs('owner', ownerPostId, 200)
+      })(),
+      (async () => {
+        await updatePostAs('admin', adminPostId, 200)
+        await deletePostAs('admin', adminPostId, 200)
+      })(),
+      (async () => {
+        await updatePostAs('editor', editorPostId, 200)
+        await deletePostAs('editor', editorPostId, 404)
+      })(),
+      (async () => {
+        await updatePostAs('member', memberPostId, 403)
+        await deletePostAs('member', memberPostId, 404)
+      })(),
+    ])
 
-    const editorPostId = await createDraftPost(`Editor delete ${Date.now()}`)
-    await updatePostAs(editor.id, editorPostId, 200)
-    await deletePostAs(editor.id, editorPostId, 404)
-
-    const memberPostId = await createDraftPost(`Member edit ${Date.now()}`)
-    await updatePostAs(member.id, memberPostId, 403)
-    await deletePostAs(member.id, memberPostId, 404)
+    expect((await roleRequests.owner.delete(`${baseUrl}/api/editor/sites/${siteId}/posts/${editorPostId}`)).status()).toBe(200)
+    expect((await roleRequests.owner.delete(`${baseUrl}/api/editor/sites/${siteId}/posts/${memberPostId}`)).status()).toBe(200)
   })
 })

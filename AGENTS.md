@@ -242,17 +242,16 @@ by a PR. One representative browser suite runs against the deployed preview.
 
 ### Staging lane
 
-Runs on pushes to `staging`. It applies pending migrations, sweeps disposable
-E2E artifacts, deploys the staging Worker normally, and runs the full
+Runs on pushes to `staging`. It deploys the staging Worker normally, applies
+pending migrations, sweeps disposable E2E artifacts, and runs the full
 Playwright suite against `staging.krabiclaw.com`.
 
 ### Production lane
 
-Runs on pushes to `main`. It applies pending migrations, deploys the production
-Worker normally, and runs read-only public browser smoke.
+Runs on pushes to `main`. It deploys the production Worker normally, applies
+pending migrations, and runs read-only public browser smoke.
 
-The package exposes no staging or production deploy, migration, seed, or
-rollback aliases. The contract is `docs/operations/release-flow.md`.
+The contract is `docs/operations/release-flow.md`.
 
 ### CI Environment Rules
 
@@ -352,7 +351,7 @@ yarn client:onboard \
   --maps-url "https://www.google.com/maps/place/Pottery+House+Krabi/..." \
   --maps-url "https://www.google.com/maps/place/Beachfront+Pottery+Krabi/..." \
   --images ./new-client-Pottery-House-Krabi \
-  --live-url https://pottery-house.krabiclaw.com \
+  --live-url https://www.potteryhousekrabi.com \
   --site-id site-pottery-house-krabi \
   --remote
 ```

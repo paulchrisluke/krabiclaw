@@ -82,28 +82,31 @@
       aria-label="Open account menu"
       @click="mobileOpen = true"
     />
-    <Teleport to="body">
-      <div v-if="mobileOpen" class="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="Account menu">
-        <button class="absolute inset-0 bg-black/40" aria-label="Close account menu" @click="mobileOpen = false" />
-        <div class="absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto rounded-t-2xl border border-default bg-elevated p-4 shadow-2xl">
-          <div class="mx-auto mb-4 h-1 w-10 rounded-full bg-accented" />
-          <div class="mb-3 px-3"><p class="font-semibold text-highlighted">{{ sessionData?.user?.name || 'User' }}</p><p class="truncate text-sm text-muted">{{ sessionData?.user?.email }}</p></div>
-          <nav class="divide-y divide-default border-y border-default">
-            <NuxtLink :to="profileTo" class="mobile-account-row" @click="mobileOpen = false"><UIcon name="i-lucide-user" class="size-5" /><span>Profile</span><UIcon name="i-lucide-chevron-right" class="ml-auto size-4 text-dimmed" /></NuxtLink>
-            <div class="mobile-account-row"><span>Theme</span><div class="ml-auto flex gap-1"><UButton v-for="pref in ['system', 'light', 'dark'] as const" :key="pref" :icon="getThemeIcon(pref)" square size="xs" color="neutral" :variant="preference === pref ? 'soft' : 'ghost'" :aria-label="`${pref} theme`" @click="setPreference(pref)" /></div></div>
-            <a :href="config.public.helpUrl as string" target="_blank" class="mobile-account-row"><UIcon name="i-lucide-circle-help" class="size-5" /><span>Help</span></a>
-            <NuxtLink to="/docs" class="mobile-account-row" @click="mobileOpen = false"><UIcon name="i-lucide-book-open" class="size-5" /><span>Docs</span></NuxtLink>
-            <button type="button" class="mobile-account-row w-full text-error" @click="handleSignOut"><UIcon name="i-lucide-log-out" class="size-5" /><span>Log Out</span></button>
-          </nav>
-          <div class="flex items-center justify-between px-3 pt-4 text-sm"><span class="text-muted">Platform Status</span><span class="font-medium text-highlighted">{{ platformStatus === 'normal' ? 'All systems normal.' : platformStatus === 'loading' ? 'Checking status...' : 'System interruption' }}</span></div>
-        </div>
-      </div>
-    </Teleport>
+    <UModal
+      v-model:open="mobileOpen"
+      title="Account menu"
+      :close="false"
+      :ui="{ overlay: 'md:hidden', content: 'fixed inset-x-0 bottom-0 top-auto max-h-[85dvh] overflow-y-auto rounded-t-2xl border border-default bg-elevated p-4 shadow-2xl sm:max-w-none md:hidden' }"
+    >
+      <template #content>
+        <div class="mx-auto mb-4 h-1 w-10 rounded-full bg-accented" />
+        <div class="mb-3 px-3"><p class="font-semibold text-highlighted">{{ sessionData?.user?.name || 'User' }}</p><p class="truncate text-sm text-muted">{{ sessionData?.user?.email }}</p></div>
+        <nav class="divide-y divide-default border-y border-default">
+          <NuxtLink :to="profileTo" class="mobile-account-row" @click="mobileOpen = false"><UIcon name="i-lucide-user" class="size-5" /><span>Profile</span><UIcon name="i-lucide-chevron-right" class="ml-auto size-4 text-dimmed" /></NuxtLink>
+          <div class="mobile-account-row"><span>Theme</span><div class="ml-auto flex gap-1"><UButton v-for="pref in ['system', 'light', 'dark'] as const" :key="pref" :icon="getThemeIcon(pref)" square size="xs" color="neutral" :variant="preference === pref ? 'soft' : 'ghost'" :aria-label="`${pref} theme`" @click="setPreference(pref)" /></div></div>
+          <a :href="config.public.helpUrl as string" target="_blank" class="mobile-account-row"><UIcon name="i-lucide-circle-help" class="size-5" /><span>Help</span></a>
+          <NuxtLink to="/docs" class="mobile-account-row" @click="mobileOpen = false"><UIcon name="i-lucide-book-open" class="size-5" /><span>Docs</span></NuxtLink>
+          <button type="button" class="mobile-account-row w-full text-error" @click="handleSignOut"><UIcon name="i-lucide-log-out" class="size-5" /><span>Log Out</span></button>
+        </nav>
+        <div class="flex items-center justify-between px-3 pt-4 text-sm"><span class="text-muted">Platform Status</span><span class="font-medium text-highlighted">{{ platformStatus === 'normal' ? 'All systems normal.' : platformStatus === 'loading' ? 'Checking status...' : 'System interruption' }}</span></div>
+      </template>
+    </UModal>
   </template>
 </template>
 
 <script setup lang="ts">
 import type { DropdownMenuItem } from '@nuxt/ui'
+import { dashboardAccountRouteQueryKey } from './dashboardScopeHeaderContext'
 
 defineProps<{ collapsed?: boolean, mobileOnly?: boolean }>()
 
@@ -113,15 +116,13 @@ const dashboard = useDashboardSite()
 const { preference, setPreference } = usePlatformTheme()
 const config = useRuntimeConfig()
 const mobileOpen = ref(false)
+const accountRouteQuery = inject(dashboardAccountRouteQueryKey, computed(() => dashboard.organization.value?.slug
+  ? { organization: dashboard.organization.value.slug, organizationName: dashboard.organization.value.name }
+  : {}))
 
 const profileTo = computed(() => ({
   path: '/dashboard/account/profile',
-  query: dashboard.organization.value?.slug
-    ? {
-        organization: dashboard.organization.value.slug,
-        organizationName: dashboard.organization.value.name,
-      }
-    : {},
+  query: accountRouteQuery.value,
 }))
 
 function getThemeIcon(pref: 'system' | 'light' | 'dark') {

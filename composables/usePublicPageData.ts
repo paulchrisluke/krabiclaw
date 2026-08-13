@@ -11,7 +11,7 @@ import { onMounted, onBeforeUnmount } from "vue";
 import {
   usePublicPageRequest,
   usePublicPageKey,
-  usePublicPageUrl,
+  buildPublicPageUrl,
   type PublicPageDataset,
 } from "~/composables/usePublicPageRequest";
 import { useSiteShellState } from "~/composables/useSiteShell";
@@ -66,7 +66,7 @@ export const usePublicPageData = async (options: {
     : { ...params.value, datasets: [...params.value.datasets] })
   const key = computed(() => usePublicPageKey(entityId, requestedParams.value));
 
-  const url = computed(() => usePublicPageUrl(siteId, requestedParams.value));
+  const url = computed(() => buildPublicPageUrl(siteId, requestedParams.value, route));
 
   const shell = useSiteShellState();
   const requestEvent = import.meta.server ? useRequestEvent() : undefined

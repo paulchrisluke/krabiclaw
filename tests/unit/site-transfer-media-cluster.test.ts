@@ -93,8 +93,7 @@ function createSchema(db: Database.Database) {
       status TEXT,
       created_by_user_id TEXT,
       created_at TEXT,
-      updated_at TEXT,
-      delete_pending_at TEXT
+      updated_at TEXT
     );
     CREATE UNIQUE INDEX media_assets_org_site_id_unique ON media_assets(organization_id, site_id, id);
     CREATE TABLE business_locations (

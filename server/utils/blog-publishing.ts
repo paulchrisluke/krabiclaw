@@ -7,44 +7,109 @@ export async function publishDueBlogPosts(db: D1Database, now = new Date()) {
   const revisionIssues = await queryAll<{ id: string }>(db, `
     SELECT p.id
       FROM blog_posts p
-      LEFT JOIN content_documents d ON d.owner_id = p.id AND d.owner_type IN ('platform_blog', 'tenant_blog')
+      LEFT JOIN content_documents d
+        ON d.owner_id = p.id
+       AND d.owner_type = CASE WHEN p.site_id IS NULL THEN 'platform_blog' ELSE 'tenant_blog' END
       LEFT JOIN content_revisions r ON r.id = p.scheduled_revision_id AND r.document_id = d.id
      WHERE p.status = 'scheduled' AND (p.scheduled_revision_id IS NULL OR r.id IS NULL)
      ORDER BY p.scheduled_for, p.id
   `)
-  const due = await queryAll<{ id: string; document_id: string; scheduled_revision_id: string; body_markdown: string }>(db, `
-    SELECT p.id, d.id AS document_id, p.scheduled_revision_id, r.body_markdown
+  const due = await queryAll<{
+    id: string
+    scheduled_for: string
+    post_updated_at: string
+    document_id: string
+    document_updated_at: string
+    scheduled_revision_id: string
+    body_markdown: string
+  }>(db, `
+    SELECT p.id, p.scheduled_for, p.updated_at AS post_updated_at,
+           d.id AS document_id, d.updated_at AS document_updated_at,
+           p.scheduled_revision_id, r.body_markdown
       FROM blog_posts p
-      JOIN content_documents d ON d.owner_id = p.id AND d.owner_type IN ('platform_blog', 'tenant_blog')
+      JOIN content_documents d
+        ON d.owner_id = p.id
+       AND d.owner_type = CASE WHEN p.site_id IS NULL THEN 'platform_blog' ELSE 'tenant_blog' END
       JOIN content_revisions r ON r.id = p.scheduled_revision_id AND r.document_id = d.id
      WHERE p.status = 'scheduled' AND p.scheduled_for IS NOT NULL AND p.scheduled_for <= ?
      ORDER BY scheduled_for ASC LIMIT 100
   `, [now.toISOString()])
   let published = 0
   for (const row of due ?? []) {
-    const timestamp = now.toISOString()
+    const postTimestamp = Date.parse(row.post_updated_at)
+    const documentTimestamp = Date.parse(row.document_updated_at)
+    const timestamp = new Date(Math.max(
+      now.getTime(),
+      Number.isFinite(postTimestamp) ? postTimestamp + 1 : 0,
+      Number.isFinite(documentTimestamp) ? documentTimestamp + 1 : 0,
+    )).toISOString()
     const results = await executeBatch(db, [
+      {
+        query: `INSERT INTO content_blocks (id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at)
+                SELECT ?, ?, NULL, '__scheduled_blog_publish_concurrency_guard__', 0, NULL, '{}', ?, ?
+                 WHERE NOT EXISTS (
+                   SELECT 1
+                     FROM blog_posts p
+                     JOIN content_documents d
+                       ON d.id = ?
+                      AND d.owner_id = p.id
+                      AND d.owner_type = CASE WHEN p.site_id IS NULL THEN 'platform_blog' ELSE 'tenant_blog' END
+                      AND d.updated_at = ?
+                     JOIN content_revisions r
+                       ON r.id = p.scheduled_revision_id
+                      AND r.document_id = d.id
+                    WHERE p.id = ?
+                      AND p.status = 'scheduled'
+                      AND p.scheduled_for = ?
+                      AND p.scheduled_for <= ?
+                      AND p.scheduled_revision_id = ?
+                      AND p.updated_at = ?
+                 )`,
+        params: [
+          crypto.randomUUID(),
+          row.document_id,
+          timestamp,
+          timestamp,
+          row.document_id,
+          row.document_updated_at,
+          row.id,
+          row.scheduled_for,
+          now.toISOString(),
+          row.scheduled_revision_id,
+          row.post_updated_at,
+        ],
+      },
+      {
+        query: `UPDATE content_revisions
+                   SET published_at = COALESCE(published_at, ?)
+                 WHERE id = ? AND document_id = ?`,
+        params: [row.scheduled_for, row.scheduled_revision_id, row.document_id],
+      },
       {
         query: `UPDATE content_documents
                    SET published_revision_id = ?, updated_at = ?
-                 WHERE id = ?
-                   AND EXISTS (
-                     SELECT 1 FROM blog_posts p
-                      WHERE p.id = ? AND p.status = 'scheduled' AND p.scheduled_for <= ?
-                        AND p.scheduled_revision_id = ?
-                   )`,
-        params: [row.scheduled_revision_id, timestamp, row.document_id, row.id, timestamp, row.scheduled_revision_id],
+                 WHERE id = ? AND updated_at = ?`,
+        params: [row.scheduled_revision_id, timestamp, row.document_id, row.document_updated_at],
       },
       {
         query: `UPDATE blog_posts
            SET body = ?, status = 'published', published_at = COALESCE(published_at, scheduled_for, ?),
                first_published_at = COALESCE(first_published_at, scheduled_for, ?),
-               scheduled_revision_id = NULL, updated_at = ?
-         WHERE id = ? AND status = 'scheduled' AND scheduled_for <= ? AND scheduled_revision_id = ?`,
-        params: [row.body_markdown, timestamp, timestamp, timestamp, row.id, timestamp, row.scheduled_revision_id],
+               scheduled_for = NULL, scheduled_revision_id = NULL, updated_at = ?
+         WHERE id = ? AND status = 'scheduled' AND scheduled_for = ? AND scheduled_revision_id = ? AND updated_at = ?`,
+        params: [
+          row.body_markdown,
+          timestamp,
+          timestamp,
+          timestamp,
+          row.id,
+          row.scheduled_for,
+          row.scheduled_revision_id,
+          row.post_updated_at,
+        ],
       },
     ])
-    if (Number(results[1]?.meta?.changes ?? 0) > 0) published++
+    if (Number(results[3]?.meta?.changes ?? 0) > 0) published++
   }
   return { published, scheduled_revision_issues: (revisionIssues ?? []).map(row => row.id) }
 }

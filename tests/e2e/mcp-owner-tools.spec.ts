@@ -214,7 +214,7 @@ test.describe('stateless MCP server', () => {
     })
     expect(qaCreate.status()).toBe(200)
     const qaCreateBody = await qaCreate.json()
-    const qaId = mcpData<{ id?: string }>(qaCreateBody).id
+    const qaId = mcpData<{ id: string }>(qaCreateBody).id
     expect(qaId).toEqual(expect.any(String))
 
     const qaUpdate = await mcpRequest(request, baseURL!, {
@@ -238,7 +238,7 @@ test.describe('stateless MCP server', () => {
     })
     expect(qaCreateSecond.status()).toBe(200)
     const qaCreateSecondBody = await qaCreateSecond.json()
-    const qaIdSecond = mcpData<{ id?: string }>(qaCreateSecondBody).id
+    const qaIdSecond = mcpData<{ id: string }>(qaCreateSecondBody).id
     expect(qaIdSecond).toEqual(expect.any(String))
 
     const qaReorder = await mcpRequest(request, baseURL!, {
@@ -291,9 +291,9 @@ test.describe('stateless MCP server', () => {
           args: { site_id: siteId, question, answer: 'Site-wide answer.' },
         })
         expect(response.status()).toBe(200)
-        const id = mcpData<{ id?: string }>(await response.json()).id
+        const id = mcpData<{ id: string }>(await response.json()).id
         expect(id).toEqual(expect.any(String))
-        qaIds.push(id!)
+        qaIds.push(id)
       }
 
       const reorder = await mcpRequest(request, baseURL!, {
@@ -323,8 +323,8 @@ test.describe('stateless MCP server', () => {
         },
       })
       expect(reviewCreate.status()).toBe(200)
-      const reviewData = mcpData<{ id?: string; verified?: boolean }>(await reviewCreate.json())
-      reviewId = reviewData.id ?? ''
+      const reviewData = mcpData<{ id: string; verified: boolean }>(await reviewCreate.json())
+      reviewId = reviewData.id
       expect(reviewId).toEqual(expect.any(String))
       expect(reviewData.verified).toBe(false)
 
@@ -392,7 +392,7 @@ test.describe('stateless MCP server', () => {
       })
       expect(menu.status()).toBe(200)
       const menuBody = await menu.json()
-      const menuId = mcpData<{ id?: string; menu?: { id: string } }>(menuBody).id ?? mcpData<{ id?: string; menu?: { id: string } }>(menuBody).menu?.id
+      const menuId = mcpData<{ id: string }>(menuBody).id
       expect(menuId).toEqual(expect.any(String))
 
       const menuItem = await mcpRequest(request, baseURL!, {
@@ -402,7 +402,7 @@ test.describe('stateless MCP server', () => {
       })
       expect(menuItem.status()).toBe(200)
       const menuItemBody = await menuItem.json()
-      const menuItemId = mcpData<{ id?: string; item?: { id: string } }>(menuItemBody).id ?? mcpData<{ id?: string; item?: { id: string } }>(menuItemBody).item?.id
+      const menuItemId = mcpData<{ id: string }>(menuItemBody).id
       expect(menuItemId).toEqual(expect.any(String))
 
       const secondMenuItem = await mcpRequest(request, baseURL!, {
@@ -412,7 +412,7 @@ test.describe('stateless MCP server', () => {
       })
       expect(secondMenuItem.status()).toBe(200)
       const secondMenuItemBody = await secondMenuItem.json()
-      const menuItemIdSecond = mcpData<{ id?: string; item?: { id: string } }>(secondMenuItemBody).id ?? mcpData<{ id?: string; item?: { id: string } }>(secondMenuItemBody).item?.id
+      const menuItemIdSecond = mcpData<{ id: string }>(secondMenuItemBody).id
       expect(menuItemIdSecond).toEqual(expect.any(String))
 
       const dessertMenuItem = await mcpRequest(request, baseURL!, {
@@ -507,7 +507,7 @@ test.describe('stateless MCP server', () => {
       })
       expect(post.status()).toBe(200)
       const postBody = await post.json()
-      const postId = mcpData<{ id?: string; post?: { id: string } }>(postBody).id ?? mcpData<{ id?: string; post?: { id: string } }>(postBody).post?.id
+      const postId = mcpData<{ id: string }>(postBody).id
       expect(postId).toEqual(expect.any(String))
 
       const publishedPost = await mcpRequest(request, baseURL!, {
@@ -545,7 +545,7 @@ test.describe('stateless MCP server', () => {
       })
       expect(postDeleteCandidate.status()).toBe(200)
       const postDeleteCandidateBody = await postDeleteCandidate.json()
-      const postDeleteId = mcpData<{ id?: string; post?: { id: string } }>(postDeleteCandidateBody).id ?? mcpData<{ id?: string; post?: { id: string } }>(postDeleteCandidateBody).post?.id
+      const postDeleteId = mcpData<{ id: string }>(postDeleteCandidateBody).id
       expect(postDeleteId).toEqual(expect.any(String))
 
       const postDelete = await mcpRequest(request, baseURL!, {
@@ -575,7 +575,7 @@ test.describe('stateless MCP server', () => {
       })
       expect(experience.status()).toBe(200)
       const experienceBody = await experience.json()
-      const experienceId = mcpData<{ id?: string; experience?: { id: string } }>(experienceBody).id ?? mcpData<{ id?: string; experience?: { id: string } }>(experienceBody).experience?.id
+      const experienceId = mcpData<{ id: string }>(experienceBody).id
       expect(experienceId).toEqual(expect.any(String))
 
       const listedExperiences = await mcpRequest(request, baseURL!, {
@@ -656,7 +656,7 @@ test.describe('stateless MCP server', () => {
       })
       expect(deleteExperienceCandidate.status()).toBe(200)
       const deleteExperienceCandidateBody = await deleteExperienceCandidate.json()
-      const deleteExperienceId = mcpData<{ id?: string; experience?: { id: string } }>(deleteExperienceCandidateBody).id ?? mcpData<{ id?: string; experience?: { id: string } }>(deleteExperienceCandidateBody).experience?.id
+      const deleteExperienceId = mcpData<{ id: string }>(deleteExperienceCandidateBody).id
       expect(deleteExperienceId).toEqual(expect.any(String))
 
       const deleteExperienceRes = await mcpRequest(request, baseURL!, {

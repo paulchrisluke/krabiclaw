@@ -167,7 +167,9 @@ test('account surfaces use the mobile index and row-based account design', () =>
 
   assert.match(menu, /label: 'Profile'/)
   assert.match(menu, /mobileOnly/)
-  assert.match(menu, /aria-modal="true"/)
+  assert.match(menu, /<UModal/)
+  assert.match(menu, /v-model:open="mobileOpen"/)
+  assert.doesNotMatch(menu, /role="dialog"/)
   assert.match(profile, /editingRow/)
   assert.match(profile, /class="profile-row/)
   assert.doesNotMatch(authentication, /<UCard/)

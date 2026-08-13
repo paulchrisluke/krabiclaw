@@ -1,5 +1,5 @@
 import type { McpExecutorContext } from './shared'
-import { createPlatformBlogPost, createSiteAuthor, deletePlatformBlogPost, getPlatformBlogPost, listPlatformBlogPosts, listSiteAuthors, reorderPlatformBlogPosts, updatePlatformBlogPost } from '~/server/utils/platform-content'
+import { createPlatformBlogPost, createSiteAuthor, deletePlatformBlogPost, getPlatformBlogPost, listPlatformBlogPosts, listSiteAuthors, reorderPlatformBlogPosts, updatePlatformBlogLifecycle, updatePlatformBlogPost } from '~/server/utils/platform-content'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 import { attachViewUrlToRecord, NOT_HANDLED, objectArray, omit, optionalString, requiredString } from './shared'
@@ -16,12 +16,9 @@ const UPDATE_BLOG_MUTATION_FIELDS = [
   'canonical_url',
   'robots',
   'visibility',
-  'scheduled_for',
   'slug',
   'redirect_old_slug',
   'reset_slug_override',
-  'publish',
-  'unpublish',
   'site_author_id',
 ]
 
@@ -42,12 +39,27 @@ const BLOG_METADATA_FIELDS = [
   'canonical_url',
   'robots',
   'visibility',
-  'scheduled_for',
   'slug',
   'redirect_old_slug',
   'reset_slug_override',
   'site_author_id',
 ]
+
+const BLOG_CONTENT_BLOCK_TYPES = new Set([
+  'heading',
+  'markdown',
+  'image',
+  'gallery',
+  'faq',
+  'how_to',
+  'divider',
+  'ai_assistance',
+  'cta',
+  'callout',
+])
+
+const BLOG_POST_STATUSES = new Set(['draft', 'published', 'scheduled', 'archived'])
+const BLOG_VISIBILITIES = new Set(['public', 'unlisted'])
 
 function hasAnyField(args: Record<string, unknown>, fields: readonly string[]) {
   return fields.some(field => Object.prototype.hasOwnProperty.call(args, field))
@@ -57,102 +69,134 @@ function requireAtLeastOneField(args: Record<string, unknown>, fields: readonly 
   if (!hasAnyField(args, fields)) throw mcpProtocolError(MCP_ERROR.invalidParams, message)
 }
 
-function toNullableString(value: unknown) {
-  return typeof value === 'string' ? value : null
+function invalidBlogResponse(path: string, expected: string): never {
+  throw mcpProtocolError(MCP_ERROR.internal, `Blog service returned invalid ${path}; expected ${expected}.`)
 }
 
-function toNullableNumber(value: unknown) {
-  return typeof value === 'number' ? value : null
+function responseRecord(value: unknown, path: string) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) invalidBlogResponse(path, 'an object')
+  return value as Record<string, unknown>
 }
 
-function toNullableBoolean(value: unknown) {
-  return typeof value === 'boolean' ? value : null
+function responseString(value: unknown, path: string) {
+  if (typeof value !== 'string' || !value) invalidBlogResponse(path, 'a non-empty string')
+  return value
+}
+
+function responseEnumString(value: unknown, path: string, allowed: Set<string>) {
+  const result = responseString(value, path)
+  if (!allowed.has(result)) invalidBlogResponse(path, `one of ${[...allowed].join(', ')}`)
+  return result
+}
+
+function responseNullableString(value: unknown, path: string) {
+  if (value === null) return null
+  if (typeof value !== 'string') invalidBlogResponse(path, 'a string or null')
+  return value
+}
+
+function responseNullableNumber(value: unknown, path: string) {
+  if (value === null) return null
+  if (typeof value !== 'number' || !Number.isFinite(value)) invalidBlogResponse(path, 'a finite number or null')
+  return value
+}
+
+function responseNumber(value: unknown, path: string) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) invalidBlogResponse(path, 'a finite number')
+  return value
+}
+
+function responseBoolean(value: unknown, path: string) {
+  if (typeof value !== 'boolean') invalidBlogResponse(path, 'a boolean')
+  return value
+}
+
+function responseStringArray(value: unknown, path: string) {
+  if (!Array.isArray(value) || value.some(item => typeof item !== 'string')) {
+    invalidBlogResponse(path, 'an array of strings')
+  }
+  return value as string[]
 }
 
 function toFeaturedImage(value: unknown) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
-  const image = value as Record<string, unknown>
+  if (value === null) return null
+  const image = responseRecord(value, 'post.featured_image')
   return {
-    asset_id: toNullableString(image.asset_id),
-    public_url: toNullableString(image.public_url),
-    kind: toNullableString(image.kind),
-    width: toNullableNumber(image.width),
-    height: toNullableNumber(image.height),
+    asset_id: responseNullableString(image.asset_id, 'post.featured_image.asset_id'),
+    public_url: responseNullableString(image.public_url, 'post.featured_image.public_url'),
+    kind: responseNullableString(image.kind, 'post.featured_image.kind'),
+    width: responseNullableNumber(image.width, 'post.featured_image.width'),
+    height: responseNullableNumber(image.height, 'post.featured_image.height'),
   }
 }
 
-function toContentBlockProjection(value: unknown, fallbackPosition: number) {
-  const block = value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {}
+function toContentBlockProjection(value: unknown, index: number) {
+  const path = `post.content_document.blocks[${index}]`
+  const block = responseRecord(value, path)
+  const data = responseRecord(block.data, `${path}.data`)
   return {
-    id: String(block.id ?? ''),
-    parent_block_id: toNullableString(block.parent_block_id),
-    type: String(block.type ?? 'markdown'),
-    position: typeof block.position === 'number' ? block.position : fallbackPosition,
-    level: toNullableNumber(block.level),
-    data: block.data && typeof block.data === 'object' && !Array.isArray(block.data)
-      ? block.data as Record<string, unknown>
-      : {},
-  }
-}
-
-function toBlogPostProjection(post: Record<string, unknown>) {
-  const contentDocument = post.content_document as { document?: { updated_at?: unknown }; blocks?: unknown } | null | undefined
-  const contentBlocks = Array.isArray(contentDocument?.blocks)
-    ? contentDocument.blocks
-    : Array.isArray(post.content_blocks)
-      ? post.content_blocks
-      : []
-  return {
-    id: String(post.id ?? ''),
-    title: String(post.title ?? ''),
-    slug: String(post.slug ?? ''),
-    excerpt: toNullableString(post.excerpt),
-    category: toNullableString(post.category),
-    tags: Array.isArray(post.tags) ? post.tags.filter((tag): tag is string => typeof tag === 'string') : [],
-    nav_section: toNullableString(post.nav_section),
-    nav_title: toNullableString(post.nav_title),
-    nav_order: toNullableNumber(post.nav_order),
-    nav_section_order: toNullableNumber(post.nav_section_order),
-    hide_from_nav: toNullableBoolean(post.hide_from_nav) ?? false,
-    featured_order: toNullableNumber(post.featured_order),
-    seo_title: toNullableString(post.seo_title),
-    seo_description: toNullableString(post.seo_description),
-    seo_keywords: toNullableString(post.seo_keywords),
-    canonical_url: toNullableString(post.canonical_url),
-    robots: toNullableString(post.robots),
-    author_name: toNullableString(post.author_name),
-    site_author_id: toNullableString(post.site_author_id),
-    published: Boolean(post.published),
-    published_at: toNullableString(post.published_at),
-    status: String(post.status ?? 'draft'),
-    visibility: String(post.visibility ?? 'public'),
-    scheduled_for: toNullableString(post.scheduled_for),
-    created_at: String(post.created_at ?? ''),
-    updated_at: String(post.updated_at ?? ''),
-    featured_image: toFeaturedImage(post.featured_image),
-    admin_edit_url: toNullableString(post.admin_edit_url),
-    edit_url: toNullableString(post.edit_url),
-    public_path: toNullableString(post.public_path),
-    public_url: toNullableString(post.public_url),
-    preview_url: toNullableString(post.preview_url),
-    view_url: toNullableString(post.view_url),
-    content_blocks: contentBlocks.map((block, index) => toContentBlockProjection(block, index)),
-    document_updated_at: toNullableString(contentDocument?.document?.updated_at),
+    id: responseString(block.id, `${path}.id`),
+    parent_block_id: responseNullableString(block.parent_block_id, `${path}.parent_block_id`),
+    type: responseEnumString(block.type, `${path}.type`, BLOG_CONTENT_BLOCK_TYPES),
+    position: responseNumber(block.position, `${path}.position`),
+    level: responseNullableNumber(block.level, `${path}.level`),
+    data,
   }
 }
 
 function toBlogPostSummary(post: Record<string, unknown>) {
-  const projected = toBlogPostProjection(post)
-  const { author_name: _authorName, site_author_id: _siteAuthorId, content_blocks: _contentBlocks, document_updated_at: _documentUpdatedAt, ...summary } = projected
-  return summary
+  return {
+    id: responseString(post.id, 'post.id'),
+    title: responseString(post.title, 'post.title'),
+    slug: responseString(post.slug, 'post.slug'),
+    excerpt: responseNullableString(post.excerpt, 'post.excerpt'),
+    category: responseNullableString(post.category, 'post.category'),
+    tags: responseStringArray(post.tags, 'post.tags'),
+    nav_section: responseNullableString(post.nav_section, 'post.nav_section'),
+    nav_title: responseNullableString(post.nav_title, 'post.nav_title'),
+    nav_order: responseNullableNumber(post.nav_order, 'post.nav_order'),
+    nav_section_order: responseNullableNumber(post.nav_section_order, 'post.nav_section_order'),
+    hide_from_nav: responseBoolean(post.hide_from_nav, 'post.hide_from_nav'),
+    featured_order: responseNullableNumber(post.featured_order, 'post.featured_order'),
+    seo_title: responseNullableString(post.seo_title, 'post.seo_title'),
+    seo_description: responseNullableString(post.seo_description, 'post.seo_description'),
+    seo_keywords: responseNullableString(post.seo_keywords, 'post.seo_keywords'),
+    canonical_url: responseNullableString(post.canonical_url, 'post.canonical_url'),
+    robots: responseNullableString(post.robots, 'post.robots'),
+    published: responseBoolean(post.published, 'post.published'),
+    published_at: responseNullableString(post.published_at, 'post.published_at'),
+    status: responseEnumString(post.status, 'post.status', BLOG_POST_STATUSES),
+    visibility: responseEnumString(post.visibility, 'post.visibility', BLOG_VISIBILITIES),
+    scheduled_for: responseNullableString(post.scheduled_for, 'post.scheduled_for'),
+    created_at: responseString(post.created_at, 'post.created_at'),
+    updated_at: responseString(post.updated_at, 'post.updated_at'),
+    featured_image: toFeaturedImage(post.featured_image),
+    admin_edit_url: responseNullableString(post.admin_edit_url, 'post.admin_edit_url'),
+    edit_url: responseNullableString(post.edit_url, 'post.edit_url'),
+    public_path: responseNullableString(post.public_path, 'post.public_path'),
+    public_url: responseNullableString(post.public_url, 'post.public_url'),
+    preview_url: responseNullableString(post.preview_url, 'post.preview_url'),
+    view_url: responseNullableString(post.view_url, 'post.view_url'),
+  }
+}
+
+export function projectBlogPostForMcp(post: Record<string, unknown>) {
+  const contentDocument = responseRecord(post.content_document, 'post.content_document')
+  const document = responseRecord(contentDocument.document, 'post.content_document.document')
+  if (!Array.isArray(contentDocument.blocks)) invalidBlogResponse('post.content_document.blocks', 'an array')
+  return {
+    ...toBlogPostSummary(post),
+    author_name: responseNullableString(post.author_name, 'post.author_name'),
+    site_author_id: responseNullableString(post.site_author_id, 'post.site_author_id'),
+    content_blocks: contentDocument.blocks.map((block, index) => toContentBlockProjection(block, index)),
+    document_updated_at: responseString(document.updated_at, 'post.content_document.document.updated_at'),
+  }
 }
 
 function blogPostResponse(post: Record<string, unknown>, site: McpExecutorContext['site'], message: string) {
   const hydrated = attachViewUrlToRecord(post, site, {}, site.env)
   return renderStructuredResponse(
-    { post: toBlogPostProjection(hydrated) },
+    { post: projectBlogPostForMcp(hydrated) },
     message,
   )
 }
@@ -176,7 +220,7 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
           site.siteId,
         );
         return {
-          post: toBlogPostProjection(attachViewUrlToRecord(post, site, {}, site.env)),
+          post: projectBlogPostForMcp(attachViewUrlToRecord(post, site, {}, site.env)),
         };
       }
     case "create_blog_post": {
@@ -188,7 +232,7 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
       );
       const hydratedBlogPost = attachViewUrlToRecord(result.post, site, {}, site.env);
       return renderStructuredResponse(
-        { post: toBlogPostProjection(hydratedBlogPost) },
+        { post: projectBlogPostForMcp(hydratedBlogPost) },
         `Created blog post "${result.post.title ?? result.post.id}". Please review the draft at edit_url before publishing.`,
       );
     }
@@ -202,7 +246,7 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
       );
       const hydratedUpdatedBlogPost = attachViewUrlToRecord(result.post, site, {}, site.env);
       return renderStructuredResponse(
-        { post: toBlogPostProjection(hydratedUpdatedBlogPost) },
+        { post: projectBlogPostForMcp(hydratedUpdatedBlogPost) },
         `Updated blog post "${result.post.title ?? result.post.id}". Please review the draft at edit_url before publishing.`,
       );
     }
@@ -239,9 +283,28 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
     case "publish_blog_post":
     case "unpublish_blog_post": {
       const publish = toolName === "publish_blog_post";
-      const result = await updatePlatformBlogPost(site.db, requiredString(args, "post_id"), publish ? { publish: true } : { unpublish: true }, site.siteId);
-      const post = attachViewUrlToRecord(result.post, site, {}, site.env);
-      return renderStructuredResponse({ post: toBlogPostProjection(post) }, `${publish ? "Published" : "Unpublished"} blog post "${result.post.title ?? result.post.id}".`);
+      const postId = requiredString(args, "post_id")
+      const scheduledFor = args.scheduled_for
+      if (publish && Object.prototype.hasOwnProperty.call(args, 'scheduled_for')
+        && scheduledFor !== null
+        && (typeof scheduledFor !== 'string' || !scheduledFor.trim())) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, 'Invalid scheduled_for')
+      }
+      const normalizedScheduledFor = typeof scheduledFor === 'string' ? scheduledFor.trim() : scheduledFor
+      await updatePlatformBlogLifecycle(site.db, postId, {
+        action: publish ? 'publish' : 'unpublish',
+        expected_updated_at: requiredString(args, 'expected_updated_at'),
+        expected_document_updated_at: requiredString(args, 'expected_document_updated_at'),
+        ...(publish && Object.prototype.hasOwnProperty.call(args, 'scheduled_for')
+          ? { scheduled_for: normalizedScheduledFor as string | null }
+          : {}),
+      }, site.siteId)
+      const result = await getPlatformBlogPost(site.db, postId, site.siteId)
+      const post = attachViewUrlToRecord(result, site, {}, site.env)
+      return renderStructuredResponse(
+        { post: projectBlogPostForMcp(post) },
+        `${publish ? (result.status === 'scheduled' ? 'Scheduled' : 'Published') : 'Unpublished'} blog post "${result.title}".`,
+      )
     }
     case "reorder_blog_posts": {
       const items = objectArray(args.items, "items").map((item) => {
@@ -316,10 +379,17 @@ export async function handleBlogTools(ctx: McpExecutorContext): Promise<unknown>
       })
       const authors = await listSiteAuthors(site.db, site.siteId)
       const created = authors.find((author) => author.id === result.id)
+      if (!created) {
+        throw mcpProtocolError(MCP_ERROR.internal, `Created blog author ${result.id} could not be read.`)
+      }
       return {
-        author: created
-          ? { id: created.id, name: created.name, title: created.title, bio: created.bio, image_public_url: created.image_public_url }
-          : { id: result.id, name: requiredString(args, "name"), title: optionalString(args, "title") ?? null, bio: optionalString(args, "bio") ?? null, image_public_url: null },
+        author: {
+          id: created.id,
+          name: created.name,
+          title: created.title,
+          bio: created.bio,
+          image_public_url: created.image_public_url,
+        },
       }
     }
     default:

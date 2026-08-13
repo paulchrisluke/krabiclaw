@@ -270,7 +270,7 @@ INSERT INTO sites
    vertical, content_source, media_source, settings, created_at, updated_at, updated_by)
 VALUES
   (${sqlValue(SITE_ID)}, ${sqlValue(ORGANIZATION_ID)}, 'blawby-theme-v1', 'blawby', 'ncls', 'ncls',
-   'https://ncls.krabiclaw.com', 'North Carolina Legal Services',
+   'https://www.northcarolinalegalservices.org', 'North Carolina Legal Services',
    'Affordable legal services for people, families, and small businesses across North Carolina.',
    'contact@northcarolinalegalservices.org', '+1-919-555-0100', 'en', 'USD', 'active', 'managed',
    'active', 'service', 'client_supplied', 'client_photos', '{}', ${sqlValue(SEEDED_AT)},
@@ -300,7 +300,11 @@ VALUES
   ('domain-ncls-ci-local', ${sqlValue(ORGANIZATION_ID)}, ${sqlValue(SITE_ID)}, 'ncls.localhost',
    'subdomain', 'secondary', 'active', 'valid', ${sqlValue(SEEDED_AT)}, ${sqlValue(SEEDED_AT)}),
   ('domain-ncls-ci-public', ${sqlValue(ORGANIZATION_ID)}, ${sqlValue(SITE_ID)}, 'ncls.krabiclaw.com',
-   'subdomain', 'canonical', 'active', 'valid', ${sqlValue(SEEDED_AT)}, ${sqlValue(SEEDED_AT)});
+   'subdomain', 'secondary', 'active', 'valid', ${sqlValue(SEEDED_AT)}, ${sqlValue(SEEDED_AT)}),
+  ('domain-ncls-ci-custom', ${sqlValue(ORGANIZATION_ID)}, ${sqlValue(SITE_ID)}, 'www.northcarolinalegalservices.org',
+   'custom', 'canonical', 'active', 'valid', ${sqlValue(SEEDED_AT)}, ${sqlValue(SEEDED_AT)}),
+  ('domain-ncls-ci-apex', ${sqlValue(ORGANIZATION_ID)}, ${sqlValue(SITE_ID)}, 'northcarolinalegalservices.org',
+   'custom', 'secondary', 'active', 'valid', ${sqlValue(SEEDED_AT)}, ${sqlValue(SEEDED_AT)});
 
 INSERT INTO tenant_compliance
   (id, organization_id, site_id, entity_name, entity_type, service_area, service_area_type,

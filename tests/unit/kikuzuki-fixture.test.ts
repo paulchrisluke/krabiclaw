@@ -6,6 +6,18 @@ import {
   renderKikuzukiBillingBlock,
 } from '../../seed-definitions/kikuzuki.ts'
 
+test('Kikuzuki seed keeps the paid custom domain canonical', () => {
+  assert.deepEqual(
+    compiledKikuzukiSeed.siteDomains.map(({ domain, type, role }) => ({ domain, type, role })),
+    [
+      { domain: 'kikuzuki-krabi-thailand.localhost', type: 'subdomain', role: 'secondary' },
+      { domain: 'kikuzuki-krabi-thailand.krabiclaw.com', type: 'subdomain', role: 'secondary' },
+      { domain: 'www.kikuzuki-thailand.com', type: 'custom', role: 'canonical' },
+      { domain: 'kikuzuki-thailand.com', type: 'custom', role: 'secondary' },
+    ],
+  )
+})
+
 test('Kikuzuki billing block seeds canonical Better Auth and app projections', () => {
   const sql = renderKikuzukiBillingBlock()
 

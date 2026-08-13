@@ -97,7 +97,7 @@ export function renderPlatformMcpPrompt(name: string, args: Record<string, strin
           'Only send featured_image_asset_id if the writer has already selected or uploaded a real platform media asset. Otherwise leave it unset or null.',
           `If any metadata (title, excerpt, category, SEO fields, etc.) also needs to change, call update_platform_blog_metadata with post_id "${identifier}" and the returned updated_at as expected_updated_at — call get_platform_blog_post again first if replace_platform_blog_content already advanced it.`,
           notes ? `Additional instructions: ${notes}` : '',
-          `Immediately after the content/metadata updates succeed, call publish_platform_blog_post with post_id "${identifier}" — do not stop to describe the publish step instead of executing it.`,
+          `Immediately after the content/metadata updates succeed, call publish_platform_blog_post with post_id "${identifier}", expected_updated_at from the final returned post.updated_at, and expected_document_updated_at from the final returned post.document_updated_at. Do not reuse tokens from an earlier read or mutation, and do not stop to describe the publish step instead of executing it.`,
           'Report back what changed (fields updated, publish status) once both calls complete, including the returned admin_edit_url and public_url or public_path.',
         ].filter(Boolean).join(' '),
       }

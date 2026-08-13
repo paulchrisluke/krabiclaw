@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { access, readFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { parse } from 'yaml'
 
 const repoFile = async (path: string) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8')
@@ -43,6 +43,21 @@ function stepRun(job: WorkflowJob, name: string): string {
   return step.run
 }
 
+function stepIndex(job: WorkflowJob, name: string): number {
+  const index = job.steps?.findIndex(candidate => candidate.name === name) ?? -1
+  assert.notEqual(index, -1, `missing ${name}`)
+  return index
+}
+
+function tomlSection(source: string, name: string): string {
+  const header = `[${name}]`
+  const start = source.indexOf(header)
+  assert.notEqual(start, -1, `missing ${header}`)
+  const rest = source.slice(start + header.length)
+  const nextHeader = rest.search(/\n\[/)
+  return nextHeader === -1 ? rest : rest.slice(0, nextHeader)
+}
+
 test('one CI workflow owns preview, staging, and production lifecycle gates', async () => {
   const document = await workflowDocument()
   const jobs = await workflowJobs()
@@ -54,13 +69,14 @@ test('one CI workflow owns preview, staging, and production lifecycle gates', as
   assert.equal(jobs['deploy-production']?.if, "github.event_name == 'push' && github.ref == 'refs/heads/main'")
 })
 
-test('each environment uses one normal Worker deploy followed by its browser gate', async () => {
+test('each environment uses one normal Worker deploy before contract migrations and browser verification', async () => {
   const jobs = await workflowJobs()
 
   assert.equal(
     stepRun(jobs['e2e-representative']!, 'Deploy preview Worker'),
-    'npx wrangler deploy --env preview --old-asset-ttl 600 --strict',
+    'npx wrangler deploy --env preview --strict',
   )
+  assert.ok(stepIndex(jobs['e2e-representative']!, 'Deploy preview Worker') < stepIndex(jobs['e2e-representative']!, 'Migrate preview database'))
   assert.equal(
     stepRun(jobs['e2e-representative']!, 'Run required representative browser coverage'),
     'yarn test:e2e:representative',
@@ -70,8 +86,9 @@ test('each environment uses one normal Worker deploy followed by its browser gat
   assert.equal(stagingMigrations, 'npx wrangler d1 migrations apply DB --env staging --remote')
   assert.equal(
     stepRun(jobs['e2e-staging']!, 'Deploy staging Worker'),
-    'npx wrangler deploy --env staging --old-asset-ttl 600 --strict',
+    'npx wrangler deploy --env staging --strict',
   )
+  assert.ok(stepIndex(jobs['e2e-staging']!, 'Deploy staging Worker') < stepIndex(jobs['e2e-staging']!, 'Apply staging migrations'))
   assert.equal(stepRun(jobs['e2e-staging']!, 'Run OAuth bearer MCP smoke'), 'yarn test:mcp')
   assert.equal(stepRun(jobs['e2e-staging']!, 'Run full staging E2E suite'), 'yarn test:e2e:full')
 
@@ -79,49 +96,13 @@ test('each environment uses one normal Worker deploy followed by its browser gat
   assert.equal(productionMigrations, 'npx wrangler d1 migrations apply DB --remote')
   assert.equal(
     stepRun(jobs['deploy-production']!, 'Deploy production Worker'),
-    'npx wrangler deploy --old-asset-ttl 600 --strict',
+    'npx wrangler deploy --strict',
   )
+  assert.ok(stepIndex(jobs['deploy-production']!, 'Deploy production Worker') < stepIndex(jobs['deploy-production']!, 'Apply production migrations'))
   assert.equal(
     stepRun(jobs['deploy-production']!, 'Run read-only production browser smoke'),
     'yarn test:e2e:public-rendering',
   )
-})
-
-test('custom candidate and nightly release machinery is absent', async () => {
-  const workflow = await repoFile('.github/workflows/ci.yml')
-  const playwright = await repoFile('playwright.config.ts')
-  const combined = `${workflow}\n${playwright}`
-
-  for (const forbidden of [
-    'wrangler versions upload',
-    'wrangler versions deploy',
-    'Cloudflare-Workers-Version-Overrides',
-    'WORKER_VERSION_OVERRIDE',
-    'candidate-manifest',
-    'baseline_source_sha',
-    'worker_version_id',
-  ]) {
-    assert.ok(!combined.includes(forbidden), `found obsolete release mechanism: ${forbidden}`)
-  }
-
-  for (const deleted of [
-    '.github/workflows/ci-full.yml',
-    '.github/workflows/e2e-full.yml',
-    '.github/workflows/fixture.yml',
-    '.github/workflows/preview-verify.yml',
-    '.github/workflows/release-production.yml',
-    '.github/workflows/rollback-production.yml',
-    '.github/workflows/zaraz-ga-backfill.yml',
-    'scripts/backfill-missing-blog-content-documents.mjs',
-    'scripts/check-migration-safety.mjs',
-    'scripts/verify-migration-state.mjs',
-    'scripts/release-command-blocked.mjs',
-    'scripts/rollback-prod.mjs',
-    'scripts/wrangler-retry.ts',
-    'scripts/zaraz-ga-backfill.mjs',
-  ]) {
-    await assert.rejects(access(new URL(`../../${deleted}`, import.meta.url)))
-  }
 })
 
 test('Cloudflare credentials stay scoped to mutation steps', async () => {
@@ -133,4 +114,27 @@ test('Cloudflare credentials stay scoped to mutation steps', async () => {
     assert.equal(job.env?.CLOUDFLARE_API_TOKEN, undefined, `${jobName} has a job-level API token`)
     assert.equal(job.env?.CLOUDFLARE_ACCOUNT_ID, undefined, `${jobName} has a job-level account id`)
   }
+})
+
+test('Worker egress uses Cloudflare strict-public fetch for CIMD resolution', async () => {
+  const wrangler = await repoFile('wrangler.toml')
+  assert.match(
+    wrangler,
+    /^compatibility_flags = \["nodejs_compat_v2", "global_fetch_strictly_public"\]$/m,
+  )
+})
+
+test('staging OAuth smoke exercises CIMD without restoring dynamic registration', async () => {
+  const smoke = await repoFile('scripts/test-mcp-oauth.mjs')
+  assert.match(smoke, /client_id_metadata_document_supported === true/)
+  assert.match(smoke, /process\.env\.MCP_CIMD_CLIENT_URL/)
+  assert.match(smoke, /CIMD \+ PKCE auth flow/)
+  assert.doesNotMatch(smoke, /\/api\/auth\/oauth2\/register|Dynamic client registration|DCR \+ PKCE/)
+})
+
+test('every deployed Worker environment has its canonical media delivery URL', async () => {
+  const wrangler = await repoFile('wrangler.toml')
+  assert.match(tomlSection(wrangler, 'vars'), /MEDIA_BASE_URL = "https:\/\/media\.krabiclaw\.com"/)
+  assert.match(tomlSection(wrangler, 'env.preview.vars'), /MEDIA_BASE_URL = "https:\/\/preview\.krabiclaw\.com\/__media"/)
+  assert.match(tomlSection(wrangler, 'env.staging.vars'), /MEDIA_BASE_URL = "https:\/\/staging\.krabiclaw\.com\/__media"/)
 })

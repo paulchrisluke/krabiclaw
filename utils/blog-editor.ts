@@ -145,9 +145,20 @@ export function firstImageAssetId(blocks: EditorContentBlock[]) {
 
 export function parseScheduledFor(value: unknown) {
   if (value === undefined || value === null || value === '') return null
-  if (typeof value !== 'string') throw new Error('scheduled_for must be an ISO 8601 datetime')
+  if (typeof value !== 'string'
+    || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value)) {
+    throw new Error('scheduled_for must be an ISO 8601 datetime with Z or a numeric timezone offset')
+  }
   const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) throw new Error('scheduled_for must be an ISO 8601 datetime')
+  if (Number.isNaN(parsed.getTime())) throw new Error('scheduled_for must be an ISO 8601 datetime with Z or a numeric timezone offset')
+  return parsed.toISOString()
+}
+
+export function scheduledLifecycleValue(timing: 'Now' | 'Scheduled', localValue: string) {
+  if (timing === 'Now') return null
+  if (!localValue) throw new Error('Scheduled date and time is required')
+  const parsed = new Date(localValue)
+  if (Number.isNaN(parsed.getTime())) throw new Error('Scheduled date and time is invalid')
   return parsed.toISOString()
 }
 

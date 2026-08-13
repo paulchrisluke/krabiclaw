@@ -121,13 +121,10 @@ export default defineEventHandler(async (event) => {
         try {
           await deleteImage(env, imageId)
         } catch (cleanupError) {
-          const normalizedCleanupError = cleanupError instanceof Error ? cleanupError : new Error('Unknown cleanup error')
-          console.error('media_request_upload_cleanup_failed', {
-            siteId,
-            assetId,
-            imageId,
-            error: normalizedCleanupError.message
-          })
+          throw new AggregateError(
+            [error, cleanupError],
+            `Image upload setup failed: ${error instanceof Error ? error.message : String(error)}; Cloudflare Images cleanup failed: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
+          )
         }
       }
       throw error

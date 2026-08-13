@@ -118,7 +118,7 @@
 import ChowBot from '~/lib/components/workspace/dashboard/ChowBot.vue'
 import DashboardScopeHeader from '~/lib/components/workspace/dashboard/DashboardScopeHeader.vue'
 import type { DashboardScopeHeaderModel } from '~/lib/components/workspace/dashboard/DashboardScopeHeader.vue'
-import { dashboardOrganizationParentKey, dashboardScopeHeaderModelKey } from '~/lib/components/workspace/dashboard/dashboardScopeHeaderContext'
+import { dashboardAccountRouteQueryKey, dashboardOrganizationParentKey, dashboardScopeHeaderModelKey } from '~/lib/components/workspace/dashboard/dashboardScopeHeaderContext'
 import { authClient } from '~/lib/auth-client'
 import { useAuth } from '~/composables/useAuth'
 import { useAnalytics } from '~/composables/useAnalytics'
@@ -274,14 +274,9 @@ const accountOrganization = computed(() => organizations.value.find(org => org.s
   ?? organizations.value.find(org => org.id === activeOrganizationId.value)
   ?? organizations.value[0]
   ?? null)
-const accountRouteQuery = computed(() => requestedAccountOrganizationSlug.value
-  ? {
-      organization: requestedAccountOrganizationSlug.value,
-      ...(requestedAccountOrganizationName.value ? { organizationName: requestedAccountOrganizationName.value } : {}),
-    }
-  : organization.value?.slug
-    ? { organization: organization.value.slug, organizationName: organization.value.name }
-    : {})
+const accountRouteQuery = computed(() => accountOrganization.value?.slug
+  ? { organization: accountOrganization.value.slug, organizationName: accountOrganization.value.name }
+  : {})
 const impersonatedBy = computed(() => {
   const session = sessionData.value?.session as { impersonatedBy?: string } | undefined
   return session?.impersonatedBy
@@ -609,7 +604,7 @@ const navigationItems = computed(() => {
 })
 provide(dashboardScopeHeaderModelKey, scopeHeaderModel)
 provide(dashboardOrganizationParentKey, computed(() => {
-  const target = organization.value ?? accountOrganization.value
+  const target = isAccountRoute.value ? accountOrganization.value : organization.value ?? accountOrganization.value
   if (target) return { label: target.name, to: `/dashboard/${encodeURIComponent(target.slug)}` }
   return requestedAccountOrganizationSlug.value
     ? {
@@ -618,6 +613,7 @@ provide(dashboardOrganizationParentKey, computed(() => {
       }
     : null
 }))
+provide(dashboardAccountRouteQueryKey, accountRouteQuery)
 
 interface DashboardMobileNavItem {
   key: string

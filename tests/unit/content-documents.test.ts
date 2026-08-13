@@ -140,9 +140,9 @@ async function execute(db: Store, query: string, params: unknown[] = []) {
   }
 
   if (query.includes('UPDATE platform_docs')) {
-    const [body, published_at, updated_at, id] = params
+    const [body, updated_at, id] = params
     const doc = db.platformDocs.find(row => row.id === id)
-    if (doc) Object.assign(doc, { body, status: 'published', published_at: doc.published_at ?? published_at, updated_at })
+    if (doc) Object.assign(doc, { body, updated_at })
     return { meta: { changes: doc ? 1 : 0 } }
   }
 
@@ -233,7 +233,7 @@ const {
   createContentDocumentWithBlocks,
   getContentOutline,
   mergeLegacyBlogComponents,
-  publishContentDocumentRevision,
+  publishCurrentPlatformDocRevision,
   renderContentPreview,
   replaceContentBlock,
   replaceContentDocumentBlocks,
@@ -377,24 +377,23 @@ test('block edits produce draft previews and reject stale replacement tokens', a
   assert.equal(updatedOutline[0]?.id, firstBlock.id)
 })
 
-test('publishContentDocumentRevision writes the compatibility body field', async () => {
+test('publishCurrentPlatformDocRevision publishes the current draft for a platform doc', async () => {
   const db = createStore()
   const d1 = db as unknown as D1Database
-  db.blogPosts.push({ id: 'post-1', body: 'old', status: 'draft', published_at: null, updated_at: '' })
-  const initial = await syncContentDocumentFromMarkdown(d1, {
-    ownerType: 'platform_blog',
-    ownerId: 'post-1',
+  db.platformDocs.push({ id: 'doc-1', body: 'old', updated_at: '' })
+  await syncContentDocumentFromMarkdown(d1, {
+    ownerType: 'platform_doc',
+    ownerId: 'doc-1',
     bodyMarkdown: '# Draft\n\nNew body.',
   })
 
-  await publishContentDocumentRevision(d1, initial.document.id)
+  await publishCurrentPlatformDocRevision(d1, 'doc-1')
 
-  const post = db.blogPosts[0]
+  const doc = db.platformDocs[0]
   const document = db.contentDocuments[0]
-  assert.ok(post)
+  assert.ok(doc)
   assert.ok(document)
-  assert.equal(post.status, 'published')
-  assert.match(String(post.body), /New body\./)
+  assert.match(String(doc.body), /New body\./)
   assert.equal(document.published_revision_id, document.draft_revision_id)
 })
 

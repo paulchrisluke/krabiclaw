@@ -21,7 +21,7 @@
  *
  * Usage:
  *   node scripts/fixtures/pottery-house-krabi.fixture.mjs --url http://localhost:3000 --site-id site-pottery-house
- *   node scripts/fixtures/pottery-house-krabi.fixture.mjs --url https://pottery-house.krabiclaw.com --site-id site-pottery-house
+ *   node scripts/fixtures/pottery-house-krabi.fixture.mjs --url https://www.potteryhousekrabi.com --site-id site-pottery-house
  *   node scripts/fixtures/pottery-house-krabi.fixture.mjs --url https://staging.krabiclaw.com --site-id site-pottery-house
  *
  * Site identifiers default to the actual live production values (site id
@@ -65,16 +65,11 @@ function normalizeFixtureBaseUrl(rawUrl, slug) {
 
 const BASE = normalizeFixtureBaseUrl(inputBase, SLUG)
 
-// Mirrors isPreviewContext in server/utils/tenant-hosts.ts: on workers.dev,
-// staging.*, and preview.* hosts, the wildcard TLS cert only covers one
-// subdomain level, so tenant subdomain routing (pottery-house.staging.krabiclaw.com)
-// can't be used — the middleware instead reads tenant identity from the
-// x-preview-tenant header. Without this, every tenant-scoped route/API on
-// staging silently falls through to the platform-route path and 404s.
+// Mirrors the named shared hosts in server/utils/tenant-hosts.ts. Tenant
+// identity on these hosts is explicit in x-preview-tenant.
 function isPreviewContext(hostname) {
-  if (hostname === 'workers.dev' || hostname.endsWith('.workers.dev')) return true
-  if (/^(?:staging|preview)\.[^.]+\.[^.]+$/.test(hostname)) return true
-  return false
+  if (['local.krabiclaw.com', 'preview.krabiclaw.com', 'staging.krabiclaw.com'].includes(hostname)) return true
+  return /^krabiclaw-preview\.[a-z0-9-]+\.workers\.dev$/.test(hostname)
 }
 
 const PREVIEW_HEADERS = isPreviewContext(new URL(BASE).hostname)

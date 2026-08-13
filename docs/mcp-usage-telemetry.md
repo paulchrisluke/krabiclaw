@@ -1,7 +1,7 @@
 # ChatGPT MCP Usage Telemetry
 
 Durable logging of ChatGPT MCP protocol requests,
-for understanding tool discovery/adoption, stale catalogs, and fuzzy-intent flows
+for understanding tool discovery, adoption, catalog drift, and fuzzy-intent flows
 ("change the big photo", "help me get more bookings").
 
 ## What is captured
@@ -12,13 +12,14 @@ MCP requests against `server/api/mcp.post.ts` (tenant surface) and
 `server/utils/mcp-telemetry.ts`. Writes are fire-and-forget — wrapped in
 Cloudflare's `waitUntil` when available, or a detached promise otherwise —
 so telemetry can never add latency to, or fail, an MCP response. A DB write
-failure is swallowed and `console.warn`'d, never thrown.
+failure rejects the execution-context task and is logged rather than becoming
+a false successful telemetry write.
 
 Captured per row: surface, organization/site/location/user id (best-effort),
 request id, method, tool name + domain, HTTP status, JSON-RPC error code/message,
 protocol version, hashed session id, hashed OAuth client id, user agent,
-Cloudflare ray id, deployment version, catalog fingerprint, redacted summaries
-of arguments and result, compatibility/unknown-tool fields, status
+Cloudflare ray id, catalog fingerprint, redacted summaries
+of arguments and result, unknown-tool fields, status
 (`success` / `error` / `auth_required` / `blocked`), and duration in ms.
 
 ## Redaction
@@ -101,5 +102,5 @@ Nothing to wire up manually — every tool routed through
 automatically, using its existing `domain` and `annotations.readOnlyHint`
 from `server/utils/mcp-tools.ts`. There is no separate telemetry
 registration step.
-For tool catalog changes, stale-client adapters, and OpenAI app refresh steps,
-see `docs/mcp-tool-evolution.md`.
+For tool catalog changes and OpenAI app refresh steps, see
+`docs/mcp-tool-catalog.md`.
