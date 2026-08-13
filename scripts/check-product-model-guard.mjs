@@ -152,7 +152,7 @@ export function collectSiteTransferPolicyViolations(root = ROOT) {
 }
 
 export function findProductModelViolations(relativePath, source) {
-  if (relativePath === 'scripts/check-product-model-guard.mjs') return []
+  if (relativePath.replaceAll('\\', '/') === 'scripts/check-product-model-guard.mjs') return []
   return FORBIDDEN_ACTIVE_PATTERNS
     .filter((pattern) => pattern.test(source))
     .map((pattern) => `${relativePath}: ${pattern}`)

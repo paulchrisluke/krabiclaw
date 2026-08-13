@@ -363,6 +363,8 @@ export async function memberHasTeamAccess(db: DbClient, input: { userId: string;
 const SCOPED_ROLE_DASHBOARD_ROUTES = [
   /^\/api\/dashboard\/context$/,
   /^\/api\/dashboard\/home$/,
+  /^\/api\/dashboard\/(?:agenda|today)$/,
+  /^\/dashboard\/[^/]+\/(?:today|calendar)$/,
   /^\/api\/dashboard\/settings$/,
   /^\/api\/dashboard\/locations(?:\/add|\/[^/]+)?$/,
   /^\/api\/dashboard\/sites\/[^/]+\/guest-threads(?:\/[^/]+(?:\/reply)?)?$/,

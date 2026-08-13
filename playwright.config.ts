@@ -10,8 +10,9 @@ const baseURL = previewUrl || testBaseUrl()
 const devRouteSecret = testEnv('E2E_DEV_ROUTE_SECRET') || 'ci-dev-route-secret'
 const emailDeliveryMode = process.env.EMAIL_DELIVERY_MODE || 'log_only'
 const whatsAppDeliveryMode = process.env.WHATSAPP_DELIVERY_MODE || 'log_only'
-const shellQuote = (value: string) => `'${value.replace(/'/g, "'\\''")}'`
 
+process.env.PORT = String(port)
+process.env.E2E_ALLOW_DEV_ROUTES = 'true'
 process.env.E2E_DEV_ROUTE_SECRET = devRouteSecret
 process.env.EMAIL_DELIVERY_MODE = emailDeliveryMode
 process.env.WHATSAPP_DELIVERY_MODE = whatsAppDeliveryMode
@@ -43,7 +44,7 @@ export default defineConfig({
   // CI tests real edge behavior (real bindings, real runtime) rather than
   // Nuxt dev + getPlatformProxy's local binding emulation.
   webServer: previewUrl ? undefined : {
-    command: `PORT=${port} E2E_ALLOW_DEV_ROUTES=true E2E_DEV_ROUTE_SECRET=${shellQuote(devRouteSecret)} EMAIL_DELIVERY_MODE=${shellQuote(emailDeliveryMode)} WHATSAPP_DELIVERY_MODE=${shellQuote(whatsAppDeliveryMode)} yarn dev`,
+    command: 'corepack yarn dev',
     url: `http://localhost:${port}/api/dev/ready`,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
