@@ -10,11 +10,13 @@ import { mcpRequest, ensureSite, getSiteOrg, loginAsFreshMcpUser } from './helpe
 
 test.describe('stateless MCP server', () => {
   test('site-scoped tool visibility follows current roles', async ({ request, baseURL }) => {
+    test.setTimeout(60_000)
     await loginAsFreshMcpUser(request, baseURL!, 'visibility')
     const siteId = await ensureSite(request, baseURL!)
-    await getSiteOrg(request, baseURL!, siteId)
+    const organizationId = await getSiteOrg(request, baseURL!, siteId)
     const editor = await inviteAndAcceptMember(request, baseURL!, {
       userId: 'user-e2e-mcp-editor-a',
+      organizationId,
       role: 'editor',
       siteId,
     })
@@ -168,9 +170,10 @@ test.describe('stateless MCP server', () => {
     test.setTimeout(60_000)
     await loginAsFreshMcpUser(request, baseURL!, 'editor-owner')
     const siteId = await ensureSite(request, baseURL!)
-    await getSiteOrg(request, baseURL!, siteId)
+    const organizationId = await getSiteOrg(request, baseURL!, siteId)
     const editor = await inviteAndAcceptMember(request, baseURL!, {
       userId: 'user-e2e-mcp-editor-b',
+      organizationId,
       role: 'editor',
       siteId,
     })

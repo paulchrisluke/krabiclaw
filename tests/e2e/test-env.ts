@@ -91,3 +91,10 @@ export function devLoginHeaders(): Record<string, string> | undefined {
 export function dashboardOrgHeaders(orgSlug: string): Record<string, string> {
   return { 'x-dashboard-org-slug': orgSlug }
 }
+
+export function dashboardSiteHeaders(orgSlug: string, siteSlug: string): Record<string, string> {
+  return {
+    ...dashboardOrgHeaders(orgSlug),
+    'x-dashboard-site-slug': siteSlug,
+  }
+}

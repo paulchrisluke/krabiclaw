@@ -83,7 +83,7 @@ export async function ensureSite(request: APIRequestContext, baseURL: string) {
     toolName: 'create_site',
     args: {
       name: `MCP E2E ${suffix}`,
-      subdomain: `mcp-e2e-${suffix}`,
+      subdomain: `e2e-mcp-${suffix}`,
       vertical: 'restaurant',
     },
   })

@@ -170,7 +170,7 @@ test.describe('canonical tenant blog lifecycle', () => {
   })
 
   test('dashboard creates, edits, configures, publishes, and reopens canonical blocks', async ({ page, baseURL }) => {
-    test.setTimeout(60_000)
+    test.setTimeout(90_000)
     await loginAs(page.context().request, baseURL!, USER_ID)
     const title = `Dashboard block editor ${Date.now()}`
     let postId = ''

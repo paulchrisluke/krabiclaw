@@ -1,12 +1,15 @@
 import { expect, test } from '@playwright/test'
 import { loginAsPage } from './helpers/auth'
+import { dashboardSiteHeaders } from './test-env'
 
 test.describe('pottery house dashboard', () => {
   test('workspace routes are healthy for its owner and denied to an outsider', async ({ page, baseURL }) => {
     test.setTimeout(90_000)
 
     await loginAsPage(page, baseURL!, 'user-e2e-pottery-owner')
-    const contextRes = await page.request.get(`${baseURL}/api/dashboard/context`)
+    const contextRes = await page.request.get(`${baseURL}/api/dashboard/context`, {
+      headers: dashboardSiteHeaders('pottery-house-krabi', 'pottery-house'),
+    })
     expect(contextRes.status()).toBe(200)
     const context = await contextRes.json() as {
       organization?: { slug?: string | null }

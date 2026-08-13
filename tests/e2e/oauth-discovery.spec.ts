@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 import { createHash } from 'node:crypto'
 import { decodeProtectedHeader, importJWK, SignJWT } from 'jose'
 import { loginAs } from './helpers/auth'
+import { devLoginHeaders } from './test-env'
 
 const PRIVATE_CLIENT_TEST_KEY_ID = 'krabiclaw-cimd-e2e-rs256'
 const PRIVATE_CLIENT_TEST_JWK = {
@@ -228,7 +229,7 @@ test.describe('OAuth discovery endpoints', () => {
     const secondAuthorize = await request.get(oauthAuthorizeUrl(baseURL!, {
       ...authorizeParams,
       state: 'private-replay',
-    }), { headers: { Cookie: cookieHeader }, maxRedirects: 0 })
+    }), { maxRedirects: 0 })
     expect(secondAuthorize.status()).toBe(302)
     const replayCode = new URL(secondAuthorize.headers()['location']!, baseURL).searchParams.get('code')
     expect(replayCode).toBeTruthy()

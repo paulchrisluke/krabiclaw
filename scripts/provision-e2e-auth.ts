@@ -47,6 +47,10 @@ ON CONFLICT(id) DO UPDATE SET
   role = excluded.role,
   updatedAt = unixepoch();
 
+DELETE FROM session WHERE userId = ${sqlString(fixture.id)};
+DELETE FROM teamMember WHERE userId = ${sqlString(fixture.id)};
+DELETE FROM member WHERE userId = ${sqlString(fixture.id)};
+DELETE FROM invitation WHERE lower(email) = lower(${sqlString(fixture.email)});
 DELETE FROM account WHERE userId = ${sqlString(fixture.id)} AND providerId = 'credential';
 INSERT INTO account (id, accountId, providerId, userId, password, createdAt, updatedAt)
 VALUES (${sqlString(`account-${fixture.id}-credential`)}, ${sqlString(fixture.id)}, 'credential', ${sqlString(fixture.id)}, ${sqlString(passwordHash)}, unixepoch(), unixepoch());

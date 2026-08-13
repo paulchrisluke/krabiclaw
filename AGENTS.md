@@ -151,9 +151,9 @@ const { data } = await useAsyncData(key, async () => {
 
 This requires the API route's query logic to live in an importable `server/utils/*.ts` function (not inline in the route handler) so both the route and the page's server-side branch call the same code — the API route becomes a thin wrapper around it. This also satisfies the "shared server/domain utilities" rule under Platform Strategy above: MCP/ChowBot/dashboard code paths that need the same record get the same function.
 
-- Any new page that does a **server-side detail fetch** (single-item route, not the shared bootstrap payload) to an internal API must use this pattern, not bare `useFetch(url, { server: true })` and not bare `useRequestFetch()` by itself.
-- `useBootstrap()` (`composables/useBootstrap.ts`) already implements the weaker `useRequestFetch()` mitigation for the shared per-site bootstrap payload, with a comment noting it hasn't reproduced the failure yet for that route's shape — reuse it instead of a bespoke fetch where the data is already covered by bootstrap, but treat it as unproven if a detail page built on the same idea starts failing.
-- Symptom to recognize: API works when hit directly (curl, Postman) and the index/list page for the same resource renders fine (because it goes through `useBootstrap()`), but the equivalent detail page silently shows a "not found" state in production only, and the failure doesn't reproduce in `nuxt dev`.
+- Any new page that does a **server-side detail fetch** (single-item route, not the shared public shell/page payload) to an internal API must use this pattern, not bare `useFetch(url, { server: true })` and not bare `useRequestFetch()` by itself.
+- Shared public shell/page data goes through `useSiteShellState()` / `usePublicPageData()` and `loadPublicResourcePayload()`. On SSR, `server/middleware/public-resource-provider.ts` calls the canonical server loaders directly with the request's Cloudflare bindings; on the client, the same composables call the `/api/public/sites/[siteId]/shell` and `/page` routes. Reuse this boundary instead of adding a bespoke bootstrap or self-fetch path.
+- Symptom to recognize: the direct API and shared shell/page loader work, but an equivalent detail page silently shows a "not found" state in production only because that detail page self-fetches and loses bindings; the failure often does not reproduce in `nuxt dev`.
 
 ---
 

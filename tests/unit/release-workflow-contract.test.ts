@@ -49,6 +49,10 @@ function stepIndex(job: WorkflowJob, name: string): number {
   return index
 }
 
+function hasStep(job: WorkflowJob, name: string): boolean {
+  return job.steps?.some(candidate => candidate.name === name) ?? false
+}
+
 function tomlSection(source: string, name: string): string {
   const header = `[${name}]`
   const start = source.indexOf(header)
@@ -89,13 +93,8 @@ test('each environment uses one normal Worker deploy before contract migrations 
     'npx wrangler deploy --env staging --strict',
   )
   assert.ok(stepIndex(jobs['e2e-staging']!, 'Deploy staging Worker') < stepIndex(jobs['e2e-staging']!, 'Apply staging migrations'))
-  const stagingSeed = stepRun(jobs['e2e-staging']!, 'Seed staging fixtures')
-  assert.match(stagingSeed, /generate-demo-seed\.ts --preview --stdout/)
-  assert.match(stagingSeed, /generate-pottery-house-seed\.ts --preview --stdout/)
-  assert.match(stagingSeed, /generate-kikuzuki-seed\.ts --preview --stdout/)
-  assert.match(stagingSeed, /wrangler d1 execute DB --env staging --remote --file \/tmp\/staging-seed\.sql/)
-  assert.ok(stepIndex(jobs['e2e-staging']!, 'Sweep staging E2E artifacts') < stepIndex(jobs['e2e-staging']!, 'Seed staging fixtures'))
-  assert.ok(stepIndex(jobs['e2e-staging']!, 'Seed staging fixtures') < stepIndex(jobs['e2e-staging']!, 'Run OAuth bearer MCP smoke'))
+  assert.equal(hasStep(jobs['e2e-staging']!, 'Seed staging fixtures'), false)
+  assert.ok(stepIndex(jobs['e2e-staging']!, 'Sweep staging E2E artifacts') < stepIndex(jobs['e2e-staging']!, 'Run OAuth bearer MCP smoke'))
   assert.equal(stepRun(jobs['e2e-staging']!, 'Run OAuth bearer MCP smoke'), 'yarn test:mcp')
   assert.equal(stepRun(jobs['e2e-staging']!, 'Run full staging E2E suite'), 'yarn test:e2e:full')
 

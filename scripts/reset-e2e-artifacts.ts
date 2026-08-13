@@ -170,7 +170,7 @@ if (!Number.isInteger(batchSize) || batchSize <= 0) {
 const eligibleE2eFixtureSiteIds = `
   SELECT id FROM sites
   WHERE organization_id IN (${fixtureOrgIdList})
-    AND subdomain LIKE 'e2e-%'
+    AND (subdomain LIKE 'e2e-%' OR subdomain LIKE 'mcp-e2e-%')
     AND created_at < '${cutoff}'
   ORDER BY id
   LIMIT ${batchSize}

@@ -75,11 +75,13 @@ test.describe("mcp tools", () => {
 
     const admin = await inviteAndAcceptMember(request, baseURL!, {
       userId: "user-e2e-chowbot-admin",
+      organizationId: organizationId!,
       role: "admin",
     });
     await loginAs(request, baseURL!, ownerUserId!);
     const editor = await inviteAndAcceptMember(request, baseURL!, {
       userId: "user-e2e-chowbot-editor",
+      organizationId: organizationId!,
       role: "editor",
       siteId,
     });
@@ -415,7 +417,9 @@ test.describe("mcp tools", () => {
 
     const contextRes = await request.get(`${baseURL}/api/dashboard/context`);
     expect(contextRes.status()).toBe(200);
-    await contextRes.json();
+    const context = (await contextRes.json()) as { organization?: { id?: string } };
+    const organizationId = context.organization?.id;
+    expect(organizationId).toEqual(expect.any(String));
 
     // Capture the owner's session before switching to the editor below —
     // loginAs swaps the request's session cookie, so get-session must run
@@ -425,6 +429,7 @@ test.describe("mcp tools", () => {
 
     const editor = await inviteAndAcceptMember(request, baseURL!, {
       userId: "user-e2e-review-editor",
+      organizationId: organizationId!,
       role: "editor",
       siteId,
     });

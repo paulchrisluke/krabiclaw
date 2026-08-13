@@ -95,6 +95,7 @@ export const E2E_AUTH_FIXTURES: readonly E2eAuthFixture[] = [
     'oauth-cimd',
     'oauth-private-cimd',
     'content-growth',
+    'role-owner',
     'mcp-owner-a',
     'mcp-owner-b',
     'mcp-owner-c',

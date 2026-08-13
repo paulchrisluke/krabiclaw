@@ -45,12 +45,19 @@ export async function inviteAndAcceptMember(
   baseURL: string,
   input: {
     userId: string
+    organizationId: string
     role: 'owner' | 'admin' | 'editor' | 'member'
     siteId?: string
     locationId?: string
   },
 ) {
   const fixture = findE2eAuthFixture(input.userId)
+  const activeOrganization = await request.post(`${baseURL}/api/auth/organization/set-active`, {
+    headers: { origin: new URL(baseURL).origin },
+    data: { organizationId: input.organizationId },
+  })
+  expect(activeOrganization.status(), await activeOrganization.text()).toBe(200)
+
   const contextResponse = await request.get(`${baseURL}/api/dashboard/context`)
   expect(contextResponse.status(), await contextResponse.text()).toBe(200)
   const context = await contextResponse.json() as { organization?: { slug?: string } }

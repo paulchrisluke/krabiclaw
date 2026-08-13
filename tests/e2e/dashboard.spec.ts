@@ -584,9 +584,11 @@ test.describe('dashboard functional smoke', () => {
     await page.setViewportSize({ width: 390, height: 844 })
     await page.reload({ waitUntil: 'load' })
     await expect(page.locator('[data-sidebar-control-ready]')).toHaveAttribute('data-sidebar-control-ready', 'true')
-    await expect(page.getByRole('navigation')).toContainText('Today')
-    await expect(page.getByRole('navigation')).toContainText('Calendar')
-    await expect(page.getByRole('link', { name: 'Locations', exact: true })).toBeVisible()
+    const mobileNavigation = page.getByTestId('dashboard-mobile-nav').getByRole('navigation')
+    await expect(mobileNavigation).toBeVisible()
+    await expect(mobileNavigation.getByRole('link', { name: 'Today', exact: true })).toBeVisible()
+    await expect(mobileNavigation.getByRole('link', { name: 'Calendar', exact: true })).toBeVisible()
+    await expect(mobileNavigation.getByRole('link', { name: 'Locations', exact: true })).toBeVisible()
 
     expect((await page.request.get(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/new`)).status()).toBe(404)
     expect((await page.request.patch(`${baseURL}/api/dashboard/location-preference`, {

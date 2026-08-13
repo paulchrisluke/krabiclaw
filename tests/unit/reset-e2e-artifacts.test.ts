@@ -50,7 +50,7 @@ test('E2E reset sweeps aged e2e-prefixed sites inside protected fixture orgs wit
   const siteDelete = output.indexOf('DELETE FROM sites\nWHERE id IN')
   assert.ok(siteDelete >= 0, 'expected bounded E2E fixture site deletion')
   assert.match(output, /organization_id IN \([^)]*'org-pottery-house'[^)]*\)/)
-  assert.match(output, /subdomain LIKE 'e2e-%'/)
+  assert.match(output, /subdomain LIKE 'e2e-%' OR subdomain LIKE 'mcp-e2e-%'/)
   assert.match(output, /created_at < '[^']+'/)
   assert.match(output, /ORDER BY id\s+LIMIT 17/)
   assert.match(output, /LIMIT 17/)
