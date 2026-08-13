@@ -112,11 +112,7 @@ export interface LogMcpToolCallEventInput {
   oauthClientId?: string | null;
   userAgent?: string | null;
   cfRayId?: string | null;
-  deploymentVersion?: string | null;
   catalogFingerprint?: string | null;
-  compatibilityAliasUsed?: boolean | null;
-  compatibilityToolName?: string | null;
-  replacementToolNames?: string[] | null;
   unknownToolName?: string | null;
   durationMs?: number | null;
 }
@@ -137,8 +133,7 @@ export async function logMcpToolCallEvent(
   db: DbClient,
   input: LogMcpToolCallEventInput,
 ): Promise<void> {
-  try {
-    await execute(
+  await execute(
       db,
       `
       INSERT INTO mcp_tool_call_events
@@ -146,10 +141,9 @@ export async function logMcpToolCallEvent(
          method, tool_name, tool_domain, is_mutating, arguments_summary_json,
          result_summary_json, status, error_code, error_message,
          http_status, jsonrpc_error_code, jsonrpc_error_message, protocol_version,
-         session_id_hash, oauth_client_id_hash, user_agent, cf_ray_id, deployment_version,
-         catalog_fingerprint, compatibility_alias_used, compatibility_tool_name,
-         replacement_tool_names, unknown_tool_name, duration_ms)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         session_id_hash, oauth_client_id_hash, user_agent, cf_ray_id,
+         catalog_fingerprint, unknown_tool_name, duration_ms)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
       [
         crypto.randomUUID(),
@@ -176,18 +170,14 @@ export async function logMcpToolCallEvent(
         hashIdentifier(input.env, input.oauthClientId),
         truncateText(input.userAgent, 500),
         input.cfRayId ?? null,
-        input.deploymentVersion ?? null,
         input.catalogFingerprint ?? null,
-        input.compatibilityAliasUsed == null ? null : input.compatibilityAliasUsed ? 1 : 0,
-        input.compatibilityToolName ?? null,
-        input.replacementToolNames?.length ? JSON.stringify(input.replacementToolNames) : null,
         input.unknownToolName ?? null,
         input.durationMs ?? null,
       ],
-    );
+  );
 
-    if (input.method === "tools/call" && input.organizationId) {
-      await recordUsageEvent(db, {
+  if (input.method === "tools/call" && input.organizationId) {
+    await recordUsageEvent(db, {
         organizationId: input.organizationId,
         siteId: input.siteId,
         resource: "mcp_operation",
@@ -203,9 +193,6 @@ export async function logMcpToolCallEvent(
           httpStatus: input.httpStatus ?? null,
         },
         idempotencyKey: `mcp:${input.mcpSurface ?? "client"}:${input.requestId == null ? crypto.randomUUID() : String(input.requestId)}`,
-      });
-    }
-  } catch (err: unknown) {
-    console.warn("[mcp-telemetry] failed to log tool call event:", String(err));
+    });
   }
 }

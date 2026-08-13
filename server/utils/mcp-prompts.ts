@@ -121,7 +121,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
             ? `Call get_blog_post with post_id "${reference}" and use its voice, terminology, structure, and SEO field usage as the primary reference.`
             : "Call get_blog_post for the 1-2 most relevant published articles and infer the tenant's established voice and terminology; do not copy KrabiClaw platform voice or invent a generic brand voice.",
           `Draft a complete block-structured article about "${topic}"${keyword ? ` targeting "${keyword}"` : ""}. Use ordered heading, markdown, image, FAQ, How-To, callout, and divider blocks as appropriate. Markdown blocks require editor_mode "rich" for visual-editor-safe prose or "source" for tables/raw HTML. Include category, a short deduplicated tags list, excerpt, seo_title, seo_description, seo_keywords, and robots.`,
-          "Present the full article and computed fields for explicit approval. Do not create or publish yet. After approval, call create_blog_post with content_blocks and without publish so the writer can review the returned admin_edit_url. Publish only when explicitly requested.",
+          "Present the full article and computed fields for explicit approval. Do not create or publish yet. After approval, call create_blog_post with content_blocks so the writer can review the returned admin_edit_url. Publish only when explicitly requested, using the separate dual-token publish_blog_post operation.",
         ].join(" "),
       };
     }
@@ -135,7 +135,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
           `Call get_blog_post with post_id "${identifier}", convert this writer-approved body into the complete canonical content_blocks array, and call replace_blog_content with post.document_updated_at as expected_document_updated_at: ${body}`,
           "Preserve existing category, navigation, tags, and structural blocks unless the approved content requires changing them.",
           notes ? `Additional instructions: ${notes}` : "",
-          `Immediately after the replacement succeeds, call publish_blog_post with post_id "${identifier}". Report the public_url and admin_edit_url.`,
+          `Immediately after the replacement succeeds, call publish_blog_post with post_id "${identifier}", expected_updated_at from the returned post.updated_at, and expected_document_updated_at from the returned post.document_updated_at. Do not reuse the tokens from the earlier read. Report the public_url and admin_edit_url.`,
         ].filter(Boolean).join(" "),
       };
     }

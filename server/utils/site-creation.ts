@@ -50,6 +50,23 @@ export interface SiteCreationResult {
   data: Record<string, unknown>
 }
 
+function asError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error))
+}
+
+async function markSiteCreationFailed(db: D1Database, siteId: string, cause: unknown): Promise<Error> {
+  try {
+    await execute(db, `UPDATE sites SET onboarding_status = 'failed', updated_at = ? WHERE id = ?`,
+      [new Date().toISOString(), siteId])
+  } catch (cleanupError) {
+    return new AggregateError(
+      [asError(cause), asError(cleanupError)],
+      `Site ${siteId} setup failed and its failure status could not be persisted`,
+    )
+  }
+  return asError(cause)
+}
+
 // sites.vertical has a narrower CHECK constraint (sites_vertical_check) than the
 // app-level SiteVertical union — it accepts 'service' but not 'professional_service'.
 // This is the single place that bridges the two: every caller of runSiteCreation
@@ -122,12 +139,9 @@ export async function runSiteCreation(
     return await performSeeding(env, db, siteId, organizationId, name, vertical, normalizedSubdomain)
 
   } catch (error) {
-    console.error('Site creation failed:', error instanceof Error ? error : new Error(String(error)))
-    if (siteId) {
-      await execute(db, `UPDATE sites SET onboarding_status = 'failed', updated_at = ? WHERE id = ?`,
-        [new Date().toISOString(), siteId]).catch(() => {})
-    }
-    return { status: 500, data: { error: 'Failed to create site. Please try again.' } }
+    console.error('Site creation failed:', asError(error))
+    const failure = siteId ? await markSiteCreationFailed(db, siteId, error) : asError(error)
+    return { status: 500, data: { error: failure.message } }
   }
 }
 
@@ -220,11 +234,6 @@ export async function createOrganizationForSite(env: CloudflareEnv, userId: stri
         Reflect.deleteProperty(metadata, SITE_CREATION_MARKER_KEY)
         await adapter.updateOrganization(organization.id, {
           metadata,
-        }).catch((cleanupError) => {
-          console.error('Failed to clear site creation marker', {
-            organizationId: organization.id,
-            error: cleanupError instanceof Error ? cleanupError : new Error(String(cleanupError)),
-          })
         })
       }
     }
@@ -234,21 +243,39 @@ export async function createOrganizationForSite(env: CloudflareEnv, userId: stri
     // If that second step fails, locate the just-created unique slug and
     // remove it only when the expected owner member is absent. Never delete an
     // organization that already has this user as its owner.
-    const partial = await adapter.findOrganizationBySlug(slug).catch(() => null)
+    let partial
+    try {
+      partial = await adapter.findOrganizationBySlug(slug)
+    } catch (lookupError) {
+      throw new AggregateError(
+        [asError(error), asError(lookupError)],
+        `Organization creation failed and partial organization ${slug} could not be inspected`,
+      )
+    }
     if (partial) {
-      const expectedOwner = await adapter.findMemberByOrgId({
-        userId,
-        organizationId: partial.id,
-      }).catch(() => null)
+      let expectedOwner
+      try {
+        expectedOwner = await adapter.findMemberByOrgId({
+          userId,
+          organizationId: partial.id,
+        })
+      } catch (lookupError) {
+        throw new AggregateError(
+          [asError(error), asError(lookupError)],
+          `Organization creation failed and owner state for ${partial.id} could not be inspected`,
+        )
+      }
       const metadata = organizationMetadata(partial.metadata)
       if (metadata[SITE_CREATION_MARKER_KEY] === creationMarker
         && (!expectedOwner || String(expectedOwner.role) !== 'owner')) {
-        await adapter.deleteOrganization(partial.id).catch((cleanupError) => {
-          console.error('Failed to clean up partially-created organization', {
-            organizationId: partial.id,
-            error: cleanupError instanceof Error ? cleanupError : new Error(String(cleanupError)),
-          })
-        })
+        try {
+          await adapter.deleteOrganization(partial.id)
+        } catch (cleanupError) {
+          throw new AggregateError(
+            [asError(error), asError(cleanupError)],
+            `Organization creation failed and partial organization ${partial.id} could not be deleted`,
+          )
+        }
       }
     }
     throw error
@@ -319,37 +346,30 @@ async function performSeeding(
   subdomain: string
 ): Promise<SiteCreationResult> {
   const now = new Date().toISOString()
-  try {
-    await seedNewSite(db, { organizationId, siteId, name, vertical })
+  await seedNewSite(db, { organizationId, siteId, name, vertical })
 
-    const resolvedSubdomain = subdomain || await queryFirst<SubdomainRow>(
-      db, 'SELECT subdomain FROM sites WHERE id = ?', [siteId]
-    ).then(r => r?.subdomain)
+  const resolvedSubdomain = subdomain || await queryFirst<SubdomainRow>(
+    db, 'SELECT subdomain FROM sites WHERE id = ?', [siteId]
+  ).then(r => r?.subdomain)
 
-    if (!resolvedSubdomain?.trim()) throw new Error(`Missing subdomain for site ${siteId}`)
+  if (!resolvedSubdomain?.trim()) throw new Error(`Missing subdomain for site ${siteId}`)
 
-    await createSystemSubdomain(env, db, siteId, organizationId, resolvedSubdomain)
+  await createSystemSubdomain(env, db, siteId, organizationId, resolvedSubdomain)
 
-    // New sites start with the organization's current plan projection. The
-    // organization subscription remains the sole recurring Stripe subscription.
-    const organizationBilling = await getOrganizationBillingStatus(env as BillingEnv, db, organizationId)
-    await setSiteEntitlementsFromPlan(db, siteId, organizationId, organizationBilling.plan)
+  // New sites start with the organization's current plan projection. The
+  // organization subscription remains the sole recurring Stripe subscription.
+  const organizationBilling = await getOrganizationBillingStatus(env as BillingEnv, db, organizationId)
+  await setSiteEntitlementsFromPlan(db, siteId, organizationId, organizationBilling.plan)
 
-    await execute(db, `UPDATE sites SET onboarding_status = 'active', updated_at = ? WHERE id = ?`, [now, siteId])
+  await execute(db, `UPDATE sites SET onboarding_status = 'active', updated_at = ? WHERE id = ?`, [now, siteId])
 
-    return {
-      status: 200,
-      data: {
-        siteId,
-        organizationId,
-        subdomain: resolvedSubdomain,
-        message: 'Site created successfully',
-      }
+  return {
+    status: 200,
+    data: {
+      siteId,
+      organizationId,
+      subdomain: resolvedSubdomain,
+      message: 'Site created successfully',
     }
-
-  } catch (seedError) {
-    console.error('Seeding failed:', seedError instanceof Error ? seedError : new Error(String(seedError)))
-    await execute(db, `UPDATE sites SET onboarding_status = 'failed', updated_at = ? WHERE id = ?`, [now, siteId]).catch(() => {})
-    throw new Error('Failed to complete required site setup')
   }
 }

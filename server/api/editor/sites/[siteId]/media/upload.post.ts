@@ -1,16 +1,14 @@
-// POST /api/editor/sites/[siteId]/media/upload
-// Video/file upload via multipart form. File is streamed to R2 via the MEDIA_BUCKET binding.
-// Max: 50 MB. Client receives an active media_asset immediately.
+import { createError, getHeader, getQuery, getRequestWebStream } from 'h3'
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { uploadResolvedMediaToAssetStore } from '~/server/utils/media-upload'
+import { buildR2Key, getR2Url } from '~/server/utils/cloudflare-r2'
 import { assertResourceAccess } from '~/server/utils/member-access'
-import { sniffMediaMimeType, VIDEO_MIME_TYPES, POSTER_IMAGE_MIME_TYPES, MAX_VIDEO_BYTES, MAX_POSTER_BYTES } from '~/server/utils/media-mime'
+import { createMediaAsset } from '~/server/utils/media-asset-manager'
+import { sniffMediaMimeType, VIDEO_MIME_TYPES, MAX_VIDEO_BYTES } from '~/server/utils/media-mime'
 
-const R2_IMAGE_MIME_TYPES = new Set(['image/avif'])
-const ALLOWED_MIME_TYPES = new Set([...VIDEO_MIME_TYPES, ...R2_IMAGE_MIME_TYPES, 'application/pdf', 'image/svg+xml'])
 const VALID_CATEGORIES = new Set(['exterior', 'interior', 'food', 'menu', 'team', 'other', 'logo'])
+const SIGNATURE_BYTES = 1024
 type MediaCategory = 'exterior' | 'interior' | 'food' | 'menu' | 'team' | 'other' | 'logo'
 
 function sanitizeFilename(raw: string | undefined): string {
@@ -25,8 +23,19 @@ function sanitizeFilename(raw: string | undefined): string {
   return sanitized || 'upload'
 }
 
-function toArrayBuffer(data: Uint8Array): ArrayBuffer {
-  return data.slice().buffer
+function queryValue(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function uploadAndCleanupError(uploadError: unknown, cleanupError: unknown): AggregateError {
+  return new AggregateError(
+    [uploadError, cleanupError],
+    `Video upload failed: ${errorMessage(uploadError)}; R2 cleanup failed: ${errorMessage(cleanupError)}`,
+  )
 }
 
 export default defineEventHandler(async (event) => {
@@ -37,6 +46,7 @@ export default defineEventHandler(async (event) => {
     const env = cloudflareEnv(event)
     const db = env.DB
     if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
+    if (!env.MEDIA_BUCKET) return jsonResponse({ error: 'MEDIA_BUCKET binding not available' }, { status: 500 })
 
     const session = await getAuthSession(event, env)
     if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
@@ -57,56 +67,16 @@ export default defineEventHandler(async (event) => {
     `, [site.organization_id, session.user.id])
     if (!membership) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
 
-    const formData = await readMultipartFormData(event)
-    if (!formData) return jsonResponse({ error: 'Multipart form data required' }, { status: 400 })
-
-    const filePart = formData.find(p => p.name === 'file')
-    if (!filePart?.data) return jsonResponse({ error: 'file field required' }, { status: 400 })
-
-    const detectedContentType = sniffMediaMimeType(filePart.data)
-    const declaredContentType = typeof filePart.type === 'string'
-      ? filePart.type.split(';', 1)[0]?.toLowerCase().trim() || ''
-      : ''
-    const contentType = detectedContentType
-    const filename = sanitizeFilename(filePart.filename)
-    const fileSize = filePart.data.byteLength
-
-    if (!ALLOWED_MIME_TYPES.has(contentType)) {
-      return jsonResponse({ error: `Unsupported file type: ${contentType}` }, { status: 415 })
-    }
-    if (contentType === 'image/svg+xml') {
-      return jsonResponse({ error: 'SVG uploads are not supported for security reasons' }, { status: 415 })
-    }
-    if (declaredContentType && declaredContentType !== contentType) {
-      console.warn('media_upload_mime_mismatch', {
-        siteId,
-        userId: session.user.id,
-        declared: declaredContentType,
-        detected: contentType,
-        filename,
-      })
-      return jsonResponse({ error: 'File type mismatch' }, { status: 400 })
-    }
-    if (fileSize > MAX_VIDEO_BYTES) {
-      return jsonResponse({ error: 'File too large (max 50 MB)' }, { status: 413 })
-    }
-
-    const locationIdPart = formData.find(p => p.name === 'locationId')
-    let locationId: string | null = null
-    if (locationIdPart?.data) {
-      const candidate = Buffer.from(locationIdPart.data).toString().trim()
-      if (candidate) {
-        const location = await queryFirst(db, `
-          SELECT id
-          FROM business_locations
-          WHERE id = ? AND site_id = ? AND organization_id = ?
-          LIMIT 1
-        `, [candidate, siteId, site.organization_id])
-        if (!location) {
-          return jsonResponse({ error: 'Invalid locationId' }, { status: 400 })
-        }
-        locationId = candidate
-      }
+    const query = getQuery(event)
+    const locationId = queryValue(query.locationId)
+    if (locationId) {
+      const location = await queryFirst(db, `
+        SELECT id
+        FROM business_locations
+        WHERE id = ? AND site_id = ? AND organization_id = ?
+        LIMIT 1
+      `, [locationId, siteId, site.organization_id])
+      if (!location) return jsonResponse({ error: 'Invalid locationId' }, { status: 400 })
     }
 
     await assertResourceAccess(db, {
@@ -117,77 +87,111 @@ export default defineEventHandler(async (event) => {
       resourceLocationId: locationId,
     })
 
-    const categoryPart = formData.find(p => p.name === 'category')
+    const rawCategory = queryValue(query.category)
     let category: MediaCategory | null = null
-    if (categoryPart?.data) {
-      const candidate = Buffer.from(categoryPart.data).toString().trim()
-      if (candidate) {
-        if (!VALID_CATEGORIES.has(candidate)) return jsonResponse({ error: 'Invalid category' }, { status: 400 })
-        category = candidate as MediaCategory
-      }
+    if (rawCategory) {
+      if (!VALID_CATEGORIES.has(rawCategory)) return jsonResponse({ error: 'Invalid category' }, { status: 400 })
+      category = rawCategory as MediaCategory
     }
 
-    const posterPart = formData.find(part => part.name === 'poster' && part.data)
-    let poster: { buffer: ArrayBuffer; contentType: string; filename: string } | undefined
-
-    if (posterPart?.data) {
-      const posterDetectedContentType = sniffMediaMimeType(posterPart.data)
-      const posterDeclaredContentType = typeof posterPart.type === 'string'
-        ? posterPart.type.split(';', 1)[0]?.toLowerCase().trim() || ''
-        : ''
-      const posterFilename = sanitizeFilename(posterPart.filename || 'poster-image')
-      const posterSize = posterPart.data.byteLength
-
-      if (posterSize > MAX_POSTER_BYTES) {
-        return jsonResponse({ error: 'Poster image too large (max 10 MB)' }, { status: 413 })
-      }
-
-      if (!POSTER_IMAGE_MIME_TYPES.has(posterDetectedContentType)) {
-        return jsonResponse({ error: `Unsupported poster image type: ${posterDetectedContentType}` }, { status: 415 })
-      }
-
-      if (posterDeclaredContentType && posterDeclaredContentType !== posterDetectedContentType) {
-        return jsonResponse({ error: 'Poster file type mismatch' }, { status: 400 })
-      }
-
-      poster = { buffer: toArrayBuffer(posterPart.data), contentType: posterDetectedContentType, filename: posterFilename }
+    const contentLengthHeader = getHeader(event, 'content-length')
+    if (!contentLengthHeader) {
+      return jsonResponse({ error: 'Content-Length header required' }, { status: 411 })
+    }
+    if (!/^\d+$/.test(contentLengthHeader)) {
+      return jsonResponse({ error: 'Invalid Content-Length header' }, { status: 400 })
+    }
+    const contentLength = Number(contentLengthHeader)
+    if (!Number.isSafeInteger(contentLength) || contentLength <= 0) {
+      return jsonResponse({ error: 'Invalid Content-Length header' }, { status: 400 })
+    }
+    if (contentLength > MAX_VIDEO_BYTES) {
+      return jsonResponse({ error: 'File too large (max 50 MB)' }, { status: 413 })
     }
 
-    const kind = VIDEO_MIME_TYPES.has(contentType) ? 'video' : R2_IMAGE_MIME_TYPES.has(contentType) ? 'image' : 'file'
+    const declaredContentType = (getHeader(event, 'content-type') ?? '')
+      .split(';', 1)[0]
+      ?.toLowerCase()
+      .trim() ?? ''
+    if (!VIDEO_MIME_TYPES.has(declaredContentType)) {
+      return jsonResponse({ error: `Unsupported file type: ${declaredContentType || 'unknown'}` }, { status: 415 })
+    }
 
-    const uploaded = await uploadResolvedMediaToAssetStore({
-      db,
-      env,
-      siteId,
-      organizationId: site.organization_id,
-      userId: session.user.id,
-      buffer: toArrayBuffer(filePart.data),
-      contentType,
-      filename,
-      kind,
-      source: 'uploaded',
-      provider: 'cloudflare_r2',
-      locationId,
-      category,
-      fileSize,
-      poster,
-    })
+    const body = getRequestWebStream(event)
+    if (!body) return jsonResponse({ error: 'Video body required' }, { status: 400 })
+
+    const filename = sanitizeFilename(queryValue(query.filename) ?? undefined)
+    const assetId = crypto.randomUUID()
+    const r2Key = buildR2Key(siteId, assetId, filename)
+    const publicUrl = getR2Url(env, r2Key)
+    let stored = false
+
+    try {
+      const uploadedObject = await env.MEDIA_BUCKET.put(r2Key, body, {
+        httpMetadata: { contentType: declaredContentType },
+      })
+      stored = true
+
+      if (uploadedObject.size !== contentLength) {
+        throw createError({ statusCode: 400, statusMessage: 'Content-Length did not match the uploaded video' })
+      }
+
+      const signatureObject = await env.MEDIA_BUCKET.get(r2Key, {
+        range: { offset: 0, length: Math.min(SIGNATURE_BYTES, contentLength) },
+      })
+      if (!signatureObject) {
+        throw new Error('Uploaded video was not readable from R2')
+      }
+
+      const signature = new Uint8Array(await signatureObject.arrayBuffer())
+      const detectedContentType = sniffMediaMimeType(signature)
+      if (detectedContentType !== declaredContentType) {
+        throw createError({ statusCode: 400, statusMessage: 'File type mismatch' })
+      }
+
+      await createMediaAsset(db, {
+        id: assetId,
+        organization_id: site.organization_id,
+        site_id: siteId,
+        location_id: locationId,
+        kind: 'video',
+        provider: 'cloudflare_r2',
+        source: 'uploaded',
+        r2_key: r2Key,
+        public_url: publicUrl,
+        thumbnail_url: null,
+        mime_type: declaredContentType,
+        file_name: filename,
+        file_size: contentLength,
+        category,
+        status: 'active',
+        created_by_user_id: session.user.id,
+      })
+    } catch (uploadError) {
+      if (stored) {
+        try {
+          await env.MEDIA_BUCKET.delete(r2Key)
+        } catch (cleanupError) {
+          throw uploadAndCleanupError(uploadError, cleanupError)
+        }
+      }
+      throw uploadError
+    }
 
     return jsonResponse({
-      id: uploaded.assetId,
-      publicUrl: uploaded.publicUrl,
-      thumbnailUrl: uploaded.thumbnailUrl,
-      kind,
+      id: assetId,
+      publicUrl,
+      thumbnailUrl: null,
+      kind: 'video',
       status: 'active',
-      posterWarning: uploaded.posterWarning,
     })
   } catch (error) {
     rethrowHttpError(error)
     const normalizedError = error instanceof Error ? error : new Error('Unknown media upload error')
     console.error('media_upload_failed', { error: normalizedError.message, stack: normalizedError.stack })
     return jsonResponse({
-      error: 'Failed to upload media',
-      message: normalizedError.message
+      error: normalizedError instanceof AggregateError ? normalizedError.message : 'Failed to upload media',
+      message: normalizedError.message,
     }, { status: 500 })
   }
 })

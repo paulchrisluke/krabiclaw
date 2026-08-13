@@ -1,4 +1,4 @@
-import { getHeader, setResponseStatus } from "h3";
+import { getHeader } from "h3";
 import type { H3Event } from "h3";
 import {
   asMcpError,
@@ -56,14 +56,12 @@ function logMcpEventDetached(
     userAgent: input.userAgent ?? getHeader(event, "user-agent") ?? null,
     cfRayId: input.cfRayId ?? getHeader(event, "cf-ray") ?? null,
     sessionId: input.sessionId ?? getHeader(event, "mcp-session-id") ?? null,
-    deploymentVersion: input.deploymentVersion
-      ?? String(env.DEPLOYMENT_VERSION ?? env.CF_PAGES_COMMIT_SHA ?? env.GITHUB_SHA ?? "unknown"),
     catalogFingerprint: input.catalogFingerprint ?? TENANT_CATALOG_FINGERPRINT,
   };
   const logged = logMcpToolCallEvent(db, logInput);
   const waitUntil = getCloudflareWaitUntil(event);
   if (waitUntil) waitUntil(logged);
-  else logged.catch(() => {});
+  else void logged.catch(error => console.error("Failed to persist MCP telemetry:", error));
 }
 
 const TENANT_AUTH_DESCRIPTION = "Connect KrabiClaw to continue.";
@@ -152,12 +150,6 @@ export default defineEventHandler(async (event) => {
     const body = await readBody(event);
     requestEnvelope = safeMcpEnvelopeDetails(event, body);
 
-    // ChatGPT occasionally sends an empty-body health probe — ignore silently.
-    if (!body || (typeof body === "object" && Object.keys(body).length === 0)) {
-      setResponseStatus(event, 200);
-      return "";
-    }
-
     const request = readMcpRequest(event, body);
     requestId = request.id;
     requestMethod = request.method;
@@ -226,9 +218,10 @@ This entire flow runs within the current conversation — do not tell the user t
 
 **Videos:**
 - Ask the user to attach the video directly in ChatGPT with the paperclip.
-- Call upload_user_media({ site_id, file: <resolved ChatGPT file reference>, category, description }) once the host supplies the file reference. This is the only video upload tool.
+- Ask where the video should appear before uploading it. A video used as a hero or as the first item in an ordered placement needs a poster image; ask the user to attach that image too.
+- Call upload_user_media({ site_id, file: <resolved video reference>, poster_file: <resolved poster image reference>, category, description }) when the target requires a poster. For a non-cover video, omit poster_file.
 - Never call or mention upload widget tools. No tool whose name starts with "open_" and contains "upload" exists in this connector.
-- After upload_user_media returns asset_id/public_url, call set_media with the matching target_type such as home_hero, location_hero, or experience_media and the exact required entity id from a read tool. For ordered placements, preserve existing media by fetching the current entity first and sending the complete ordered asset_ids list.
+- After upload_user_media returns asset_id/public_url, call set_media with the matching target_type and the exact required entity id from a read tool. For ordered placements, preserve existing media by fetching the current entity first and sending the complete ordered asset_ids list.
 
 ## Choosing a content type
 KrabiClaw has three distinct content-creation tools — do not default to whichever one comes to mind first. Ask yourself whether the request is time-boxed, narrative, or a permanent offering:
@@ -379,13 +372,7 @@ Common workflows: update menus and items, create and publish site posts, triage 
         }
       });
 
-      const domains = (() => {
-        try {
-          return [...new Set(tools.map((t) => t._meta["krabiclaw/toolInfo"].domain))]
-        } catch {
-          return []
-        }
-      })()
+      const domains = [...new Set(tools.map((tool) => tool._meta["krabiclaw/toolInfo"].domain))]
       logMcpEventDetached(event, cfEnv.DB, {
         organizationId: siteCtx?.organizationId ?? null,
         siteId: siteCtx?.siteId ?? null,
@@ -475,8 +462,8 @@ Common workflows: update menus and items, create and publish site posts, triage 
 
       const isRender = isMcpRenderResponse(result);
       const structuredContent = isRender ? result.structuredContent : result;
-      const modelText = isRender && result.fallbackText
-        ? result.fallbackText
+      const modelText = isRender && result.modelText
+        ? result.modelText
         : JSON.stringify(structuredContent, null, 2);
 
       // Resolved once and reused for both telemetry and the cache-purge below.

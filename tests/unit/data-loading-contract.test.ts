@@ -3,6 +3,8 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import ts from 'typescript'
 
+import { MEDIA_UPLOAD_TIMEOUT_MS, mediaUploadSignal } from '../../utils/api-clients.ts'
+
 const parse = async (path: string) => {
   const text = await readFile(new URL(`../../${path}`, import.meta.url), 'utf8')
   return ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, path.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS)
@@ -126,4 +128,13 @@ test('dashboard fetch applies configured timeout per method', async () => {
       ts.isIdentifier(d.name) && d.name.text === 'MUTATION_TIMEOUT_MS',
     ),
   ), 'MUTATION_TIMEOUT_MS must be exported from api-clients.ts')
+})
+
+test('media uploads use one centralized deadline and preserve caller cancellation', () => {
+  assert.equal(MEDIA_UPLOAD_TIMEOUT_MS, 300_000)
+  const caller = new AbortController()
+  const signal = mediaUploadSignal(caller.signal)
+  assert.equal(signal.aborted, false)
+  caller.abort()
+  assert.equal(signal.aborted, true)
 })

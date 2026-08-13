@@ -79,7 +79,7 @@
             @change="handleMediaSelect"
           >
           <div class="mt-3 flex flex-wrap gap-3">
-            <button type="button" class="rounded-lg border border-dashed border-default px-4 py-3 text-sm text-muted hover:border-primary hover:text-default" :disabled="uploadingMedia" @click="mediaInput?.click()">
+            <button type="button" class="rounded-lg border border-dashed border-default px-4 py-3 text-sm text-muted hover:border-primary hover:text-default" :disabled="uploadingMedia || removingMediaAssetId !== null" @click="mediaInput?.click()">
               {{ uploadingMedia ? 'Uploading...' : 'Add media' }}
             </button>
             <div
@@ -89,7 +89,13 @@
             >
               <img v-if="item.previewUrl && item.kind === 'image'" :src="item.previewUrl" alt="" class="h-full w-full object-cover">
               <div v-else class="flex h-full w-full items-center justify-center text-xs text-muted">Video</div>
-              <button type="button" class="absolute right-1 top-1 rounded-full bg-default/90 px-1.5 text-xs" aria-label="Remove media" @click="removeMedia(item.assetId)">x</button>
+              <button
+                type="button"
+                class="absolute right-1 top-1 rounded-full bg-default/90 px-1.5 text-xs disabled:cursor-wait disabled:opacity-60"
+                :disabled="removingMediaAssetId !== null"
+                :aria-label="removingMediaAssetId === item.assetId ? 'Removing media' : 'Remove media'"
+                @click="removeMedia(item.assetId)"
+              >x</button>
             </div>
           </div>
           <p v-if="mediaError" class="mt-3 text-sm text-error">{{ mediaError }}</p>
@@ -98,7 +104,7 @@
         <p v-if="submitError" class="mt-4 text-sm text-error">{{ submitError }}</p>
 
         <div class="mt-8 flex flex-wrap items-center gap-3">
-          <SayaButton type="submit" :disabled="submitting">
+          <SayaButton type="submit" :disabled="submitting || removingMediaAssetId !== null">
             {{ submitting ? 'Submitting...' : 'Submit review' }}
           </SayaButton>
           <button type="button" class="text-sm text-muted underline-offset-4 hover:underline" @click="optOut">
@@ -111,6 +117,7 @@
 </template>
 
 <script setup lang="ts">
+import { REVIEW_VIDEO_MAX_BYTES, REVIEW_VIDEO_MAX_LABEL } from '~/config/media-limits'
 import { authClient } from '~/lib/auth-client'
 
 definePageMeta({ layout: 'saya' })
@@ -129,8 +136,10 @@ const submitError = ref('')
 const loadError = ref('')
 const mediaError = ref('')
 const uploadingMedia = ref(false)
+const removingMediaAssetId = ref<string | null>(null)
 const mediaInput = ref<HTMLInputElement | null>(null)
 const media = ref<Array<{ assetId: string; kind: 'image' | 'video'; previewUrl: string | null }>>([])
+const activeVideoUploads = new Set<AbortController>()
 const imageCount = computed(() => media.value.filter(item => item.kind === 'image').length)
 const videoCount = computed(() => media.value.filter(item => item.kind === 'video').length)
 
@@ -157,6 +166,13 @@ onMounted(async () => {
     } catch (error) {
       submitError.value = error instanceof Error ? error.message : 'Could not initialize the review session.'
     }
+  }
+})
+
+onBeforeUnmount(() => {
+  for (const controller of activeVideoUploads) controller.abort()
+  for (const item of media.value) {
+    if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
   }
 })
 
@@ -215,49 +231,142 @@ async function uploadImage(file: File) {
       && typeof value.assetId === 'string'
       && typeof value.uploadUrl === 'string',
   })
-  const form = new FormData()
-  form.append('file', file)
-  const uploaded = await fetch(upload.uploadUrl, { method: 'POST', body: form })
-  if (!uploaded.ok) throw new Error('Image upload failed.')
-  await publicApiMutation<{ id: string; publicUrl: string; thumbnailUrl: string }>(
-    `/api/public/review-requests/${requestId}/media/${upload.assetId}/confirm`,
-    {
-    method: 'POST',
-    body: { token: token.value },
-    validate: (value): value is { id: string; publicUrl: string; thumbnailUrl: string } =>
-      isRecord(value)
-      && typeof value.id === 'string'
-      && typeof value.publicUrl === 'string'
-      && typeof value.thumbnailUrl === 'string',
-    },
-  )
-  media.value.push({ assetId: upload.assetId, kind: 'image', previewUrl: URL.createObjectURL(file) })
+  try {
+    const form = new FormData()
+    form.append('file', file)
+    const uploaded = await fetch(upload.uploadUrl, {
+      method: 'POST',
+      body: form,
+      signal: mediaUploadSignal(),
+    })
+    if (!uploaded.ok) throw new Error('Image upload failed.')
+    await publicApiMutation<{ id: string; publicUrl: string; thumbnailUrl: string }>(
+      `/api/public/review-requests/${requestId}/media/${upload.assetId}/confirm`,
+      {
+        method: 'POST',
+        body: { token: token.value },
+        validate: (value): value is { id: string; publicUrl: string; thumbnailUrl: string } =>
+          isRecord(value)
+          && typeof value.id === 'string'
+          && typeof value.publicUrl === 'string'
+          && typeof value.thumbnailUrl === 'string',
+      },
+    )
+    media.value.push({ assetId: upload.assetId, kind: 'image', previewUrl: URL.createObjectURL(file) })
+  } catch (error) {
+    try {
+      await discardReviewMedia(requestId, upload.assetId)
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], 'Image upload and cleanup failed.')
+    }
+    throw error
+  }
 }
 
 async function uploadVideo(file: File) {
   const requestId = requestData.value?.request?.id
   if (!requestId) return
-  if (file.size > 250 * 1024 * 1024) throw new Error('Videos must be under 250 MB.')
-  const form = new FormData()
-  form.append('token', token.value)
-  form.append('file', file)
-  const uploaded = await publicApiMutation<{ assetId: string }>(`/api/public/review-requests/${requestId}/media/upload`, {
-    method: 'POST',
-    body: form,
-    validate: (value): value is { assetId: string } =>
-      isRecord(value) && typeof value.assetId === 'string',
-  })
-  media.value.push({ assetId: uploaded.assetId, kind: 'video', previewUrl: null })
+  if (file.size > REVIEW_VIDEO_MAX_BYTES) throw new Error(`Videos must be ${REVIEW_VIDEO_MAX_LABEL} or smaller.`)
+
+  const controller = new AbortController()
+  activeVideoUploads.add(controller)
+  try {
+    const response = await fetch(`/api/public/review-requests/${encodeURIComponent(requestId)}/media/upload`, {
+      method: 'POST',
+      headers: {
+        'content-type': file.type,
+        'x-file-name': encodeURIComponent(file.name),
+        'x-review-token': token.value,
+      },
+      body: file,
+      cache: 'no-store',
+      credentials: 'same-origin',
+      redirect: 'error',
+      signal: mediaUploadSignal(controller.signal),
+    })
+
+    let payload: unknown
+    try {
+      payload = await response.json()
+    } catch (error) {
+      throw normalizeApiError({
+        statusCode: 502,
+        message: 'API response did not match its contract',
+        response,
+        data: {},
+        cause: error,
+      })
+    }
+
+    if (!response.ok) {
+      throw normalizeApiError({ statusCode: response.status, response, data: payload })
+    }
+    if (
+      !isRecord(payload)
+      || typeof payload.assetId !== 'string'
+      || typeof payload.mediaId !== 'string'
+      || typeof payload.publicUrl !== 'string'
+      || payload.thumbnailUrl !== null
+      || payload.kind !== 'video'
+      || payload.status !== 'pending'
+    ) {
+      throw normalizeApiError({
+        statusCode: 502,
+        message: 'API response did not match its contract',
+        response,
+        data: isRecord(payload) ? payload : {},
+      })
+    }
+
+    media.value.push({ assetId: payload.assetId, kind: 'video', previewUrl: null })
+  } catch (error) {
+    throw normalizeApiError(error, 'Video upload failed.')
+  } finally {
+    activeVideoUploads.delete(controller)
+  }
 }
 
-function removeMedia(assetId: string) {
+async function removeMedia(assetId: string) {
+  if (removingMediaAssetId.value) return
+  const requestId = requestData.value?.request?.id
   const item = media.value.find(entry => entry.assetId === assetId)
-  if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl)
-  media.value = media.value.filter(entry => entry.assetId !== assetId)
+  if (!requestId || !item) return
+
+  mediaError.value = ''
+  removingMediaAssetId.value = assetId
+  try {
+    await ensureCustomerSession()
+    await discardReviewMedia(requestId, assetId)
+
+    if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
+    media.value = media.value.filter(entry => entry.assetId !== assetId)
+  } catch (error) {
+    mediaError.value = error instanceof Error
+      ? error.message
+      : 'Could not remove this media. Please try again.'
+  } finally {
+    removingMediaAssetId.value = null
+  }
+}
+
+function discardReviewMedia(requestId: string, assetId: string) {
+  return publicApiMutation<{ deleted: true; assetId: string }>(
+    `/api/public/review-requests/${encodeURIComponent(requestId)}/media/${encodeURIComponent(assetId)}`,
+    {
+      method: 'DELETE',
+      body: { token: token.value },
+      validate: (value): value is { deleted: true; assetId: string } =>
+        isRecord(value) && value.deleted === true && value.assetId === assetId,
+    },
+  )
 }
 
 async function submitReview() {
   submitError.value = ''
+  if (removingMediaAssetId.value) {
+    submitError.value = 'Wait for the media removal to finish before submitting.'
+    return
+  }
   if (content.value.trim().length < 10) {
     submitError.value = 'Review text must be at least 10 characters.'
     return

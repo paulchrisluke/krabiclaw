@@ -537,8 +537,8 @@ export async function createContentDocumentWithBlocks(
   }
 }
 
-export async function publishCurrentContentRevision(db: DbClient, ownerType: ContentDocumentOwnerType, ownerId: string) {
-  const document = await getContentDocumentByOwner(db, ownerType, ownerId)
+export async function publishCurrentPlatformDocRevision(db: DbClient, ownerId: string) {
+  const document = await getContentDocumentByOwner(db, 'platform_doc', ownerId)
   if (!document?.draft_revision_id) return null
   const revision = await queryFirst<Pick<ContentRevisionRow, 'body_markdown'> | null>(
     db,
@@ -557,66 +557,12 @@ export async function publishCurrentContentRevision(db: DbClient, ownerType: Con
       params: [document.draft_revision_id, now, document.id],
     },
   ]
-  if (ownerType === 'platform_blog' || ownerType === 'tenant_blog') {
-    queries.push({
-      query: 'UPDATE blog_posts SET body = ?, updated_at = ? WHERE id = ?',
-      params: [revision.body_markdown, now, ownerId],
-    })
-  } else if (ownerType === 'platform_doc') {
-    queries.push({
-      query: 'UPDATE platform_docs SET body = ?, updated_at = ? WHERE id = ?',
-      params: [revision.body_markdown, now, ownerId],
-    })
-  }
+  queries.push({
+    query: 'UPDATE platform_docs SET body = ?, updated_at = ? WHERE id = ?',
+    params: [revision.body_markdown, now, ownerId],
+  })
   await executeBatch(db, queries)
   return { ...document, published_revision_id: document.draft_revision_id, updated_at: now }
-}
-
-export async function publishContentDocumentRevision(db: DbClient, documentId: string) {
-  const document = await getContentDocumentById(db, documentId)
-  if (!document) notFound('Content document not found')
-  if (!document.draft_revision_id) badRequest('Content document has no draft revision')
-
-  const revision = await queryFirst<Pick<ContentRevisionRow, 'id' | 'body_markdown'> | null>(
-    db,
-    `SELECT id, body_markdown
-     FROM content_revisions
-     WHERE id = ? AND document_id = ?
-     LIMIT 1`,
-    [document.draft_revision_id, document.id],
-  )
-  if (!revision) notFound('Content revision not found')
-
-  const now = new Date().toISOString()
-  const queries: { query: string; params: unknown[] }[] = [
-    {
-      query: 'UPDATE content_revisions SET published_at = COALESCE(published_at, ?) WHERE id = ? AND document_id = ?',
-      params: [now, revision.id, document.id],
-    },
-    {
-      query: 'UPDATE content_documents SET published_revision_id = ?, updated_at = ? WHERE id = ?',
-      params: [revision.id, now, document.id],
-    },
-  ]
-
-  if (document.owner_type === 'platform_blog' || document.owner_type === 'tenant_blog') {
-    queries.push({
-      query: `UPDATE blog_posts
-        SET body = ?, status = 'published', published_at = COALESCE(published_at, ?), updated_at = ?
-        WHERE id = ?`,
-      params: [revision.body_markdown, now, now, document.owner_id],
-    })
-  } else if (document.owner_type === 'platform_doc') {
-    queries.push({
-      query: `UPDATE platform_docs
-        SET body = ?, status = 'published', published_at = COALESCE(published_at, ?), updated_at = ?
-        WHERE id = ?`,
-      params: [revision.body_markdown, now, now, document.owner_id],
-    })
-  }
-
-  await executeBatch(db, queries)
-  return { success: true, document_id: document.id, revision_id: revision.id, body_markdown: revision.body_markdown }
 }
 
 export async function unpublishContentDocument(db: DbClient, ownerType: ContentDocumentOwnerType, ownerId: string) {

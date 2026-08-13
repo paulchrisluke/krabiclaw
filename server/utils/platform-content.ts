@@ -2,9 +2,12 @@ import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbCl
 import {
   createContentDocumentWithBlocks,
   deleteContentDocumentForOwner,
-  publishCurrentContentRevision,
+  publishCurrentPlatformDocRevision,
   getContentEditorSnapshot,
   getPublishedContentSnapshot,
+  markdownToContentBlocks,
+  prepareContentDocumentBlocksReplacement,
+  prepareContentDocumentWithBlocks,
   replaceContentDocumentBlocks,
   renderContentBlocksToMarkdown,
   syncContentDocumentFromMarkdown,
@@ -66,25 +69,48 @@ const BLOG_UPDATE_MUTATION_FIELDS: Array<keyof PlatformBlogUpdateInput> = [
   'featured_image_asset_id',
   'social_image_asset_id',
   'visibility',
-  'scheduled_for',
   'slug',
   'redirect_old_slug',
   'reset_slug_override',
   'content_blocks',
-  'publish',
-  'unpublish',
   'site_author_id',
 ]
 
 function parseStringArray(value: unknown): string[] {
-  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string')
-  if (typeof value !== 'string' || !value) return []
-  try {
-    const parsed = JSON.parse(value) as unknown
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []
-  } catch {
-    return []
+  if (value === null || value === undefined || value === '') return []
+  if (Array.isArray(value)) {
+    if (value.some(item => typeof item !== 'string')) {
+      throw createError({ statusCode: 500, statusMessage: 'Blog tags contain a non-string value' })
+    }
+    return value as string[]
   }
+  if (typeof value !== 'string') {
+    throw createError({ statusCode: 500, statusMessage: 'Blog tags are not valid JSON' })
+  }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(value) as unknown
+  } catch {
+    throw createError({ statusCode: 500, statusMessage: 'Blog tags are not valid JSON' })
+  }
+  if (!Array.isArray(parsed) || parsed.some(item => typeof item !== 'string')) {
+    throw createError({ statusCode: 500, statusMessage: 'Blog tags are not an array of strings' })
+  }
+  return parsed as string[]
+}
+
+export function parseBlogEditorThemeTokens(value: string | null | undefined): ApiRecord {
+  if (value === null || value === undefined) return {}
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(value) as unknown
+  } catch {
+    throw createError({ statusCode: 500, statusMessage: 'Blog editor theme tokens are not valid JSON' })
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw createError({ statusCode: 500, statusMessage: 'Blog editor theme tokens must be a JSON object' })
+  }
+  return parsed as ApiRecord
 }
 
 export const PLATFORM_DOC_CATEGORIES = ['Getting Started', 'Menu Management', 'Theme Customization', 'SEO & Marketing', 'Integrations', 'Advanced'] as const
@@ -119,7 +145,7 @@ async function syncDocContentDocument(
       label: input.publish ? 'Published markdown body' : 'Draft markdown body',
       publish: Boolean(input.publish),
     })
-  } else if (input.publish) await publishCurrentContentRevision(db, 'platform_doc', docId)
+  } else if (input.publish) await publishCurrentPlatformDocRevision(db, docId)
   if (input.unpublish) await unpublishContentDocument(db, 'platform_doc', docId)
 }
 
@@ -253,8 +279,6 @@ export interface PlatformBlogCreateInput extends PlatformContentNavInput {
   featured_image_asset_id?: string | null
   social_image_asset_id?: string | null
   visibility?: 'public' | 'unlisted'
-  scheduled_for?: string | null
-  publish?: boolean
   site_author_id?: string | null
 }
 
@@ -271,16 +295,50 @@ export interface PlatformBlogUpdateInput extends PlatformContentNavInput {
   featured_image_asset_id?: string | null
   social_image_asset_id?: string | null
   visibility?: 'public' | 'unlisted'
-  scheduled_for?: string | null
   slug?: string | null
   redirect_old_slug?: boolean
   reset_slug_override?: boolean
   content_blocks?: Array<ContentBlockInput & { id?: string }>
   expected_document_updated_at?: string
   expected_updated_at?: string
-  publish?: boolean
-  unpublish?: boolean
   site_author_id?: string | null
+}
+
+export interface PlatformBlogLifecycleInput {
+  action: 'publish' | 'unpublish'
+  expected_updated_at: string
+  expected_document_updated_at: string
+  scheduled_for?: string | null
+}
+
+export interface PlatformBlogLifecycleState {
+  id: string
+  status: 'draft' | 'published' | 'scheduled'
+  published_at: string | null
+  scheduled_for: string | null
+  updated_at: string
+  content_document_updated_at: string
+}
+
+export function parsePlatformBlogLifecycleInput(body: unknown, action: PlatformBlogLifecycleInput['action']): PlatformBlogLifecycleInput {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) badRequest('Request body must be a valid object')
+  const record = body as Record<string, unknown>
+  const allowed = action === 'publish'
+    ? new Set(['expected_updated_at', 'expected_document_updated_at', 'scheduled_for'])
+    : new Set(['expected_updated_at', 'expected_document_updated_at'])
+  const unknownField = Object.keys(record).find(key => !allowed.has(key))
+  if (unknownField) badRequest(`Unknown request field: ${unknownField}`)
+  if (typeof record.expected_updated_at !== 'string' || !record.expected_updated_at.trim()) badRequest('expected_updated_at is required')
+  if (typeof record.expected_document_updated_at !== 'string' || !record.expected_document_updated_at.trim()) badRequest('expected_document_updated_at is required')
+  if (record.scheduled_for !== undefined && record.scheduled_for !== null && typeof record.scheduled_for !== 'string') {
+    badRequest('scheduled_for must be a string or null')
+  }
+  return {
+    action,
+    expected_updated_at: record.expected_updated_at,
+    expected_document_updated_at: record.expected_document_updated_at,
+    ...(action === 'publish' ? { scheduled_for: record.scheduled_for as string | null | undefined } : {}),
+  }
 }
 
 export interface PlatformDocCreateInput extends PlatformStructuredContentInput, PlatformContentNavInput, PlatformDocNavGroupInput {
@@ -935,18 +993,26 @@ async function syncStructuredContent(
   contentId: string,
   input: PlatformStructuredContentInput,
 ) {
+  const replacements = await resolveStructuredContentReplacements(db, contentType, contentId, input)
+  if (replacements) await replaceContentComponents(db, contentType, contentId, replacements)
+}
+
+async function resolveStructuredContentReplacements(
+  db: D1Database,
+  contentType: PlatformContentType,
+  contentId: string,
+  input: PlatformStructuredContentInput,
+): Promise<PlatformComponentReplacement[] | null> {
   const hasConvenienceFields = isStructuredConvenienceFieldDefined(input)
   if (input.components !== undefined && hasConvenienceFields) {
     badRequest('Use either components or convenience structured-content fields, not both')
   }
 
   if (input.components !== undefined) {
-    const replacements = await normalizeFullComponents(db, input.components)
-    await replaceContentComponents(db, contentType, contentId, replacements)
-    return
+    return await normalizeFullComponents(db, input.components)
   }
 
-  if (!hasConvenienceFields) return
+  if (!hasConvenienceFields) return null
 
   const existing = await listContentComponents(db, contentType, contentId)
   const byType = new Map<PlatformContentComponentType, PlatformContentComponent>(existing.map(component => [component.type, component]))
@@ -1054,7 +1120,7 @@ async function syncStructuredContent(
     })
   }
 
-  await replaceContentComponents(db, contentType, contentId, replacements)
+  return replacements
 }
 
 function attachComponents<T extends Record<string, unknown>, C>(record: T, components: C[]) {
@@ -1074,10 +1140,7 @@ function attachPublished(record: ApiRecord, published: boolean) {
 function normalizeNavVisibility<T extends Record<string, unknown>>(record: T) {
   const normalized = { ...record } as T & { tags?: string[]; tags_json?: unknown }
   if ('tags_json' in record) {
-    const tags = typeof record.tags_json === 'string'
-      ? (() => { try { return JSON.parse(record.tags_json) as string[] } catch { return [] } })()
-      : []
-    normalized.tags = tags
+    normalized.tags = parseStringArray(record.tags_json)
     delete normalized.tags_json
   }
   if (!('hide_from_nav' in record)) return normalized
@@ -1333,6 +1396,22 @@ function rejectLegacyBlogContentFields(input: object) {
   if (legacy) badRequest(`${legacy} is not writable for blogs; use content_blocks`)
 }
 
+export function assertDraftOnlyBlogCreate(input: object) {
+  const lifecycleField = ['publish', 'unpublish', 'scheduled_for']
+    .find(field => Object.prototype.hasOwnProperty.call(input, field))
+  if (lifecycleField) {
+    badRequest(`${lifecycleField} is not writable when creating a blog post; create the draft, then use the publish operation`)
+  }
+}
+
+function rejectBlogUpdateLifecycleFields(input: object) {
+  const lifecycleField = ['publish', 'unpublish', 'scheduled_for']
+    .find(field => Object.prototype.hasOwnProperty.call(input, field))
+  if (lifecycleField) {
+    badRequest(`${lifecycleField} is not writable through a blog update; use the publish or unpublish operation`)
+  }
+}
+
 function validateDocCommon(input: Partial<PlatformDocCreateInput>) {
   normalizeBlankToNull(input)
   validateNavMetadata(input)
@@ -1474,7 +1553,7 @@ export async function resolveContentComponentsMedia(db: DbClient, components: Pl
 
 export async function listPlatformBlogPosts(db: DbClient, status?: string | null, siteId: string | null = null) {
   let sql = `SELECT
-      p.id, p.title, p.slug, p.excerpt, p.category, p.status, p.visibility, p.scheduled_for,
+      p.id, p.title, p.slug, p.excerpt, p.category, p.tags_json, p.status, p.visibility, p.scheduled_for,
       p.seo_title, p.seo_description, p.seo_keywords, p.canonical_url, p.robots,
       p.nav_section, p.nav_title, p.nav_order, p.nav_section_order, p.hide_from_nav, p.featured_order,
       p.featured_image_asset_id, ma.public_url AS featured_image_public_url, ma.kind AS featured_image_kind,
@@ -1541,13 +1620,12 @@ export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, si
      WHERE site_id = ? AND template_slug = ? AND status = 'active'
      LIMIT 1
   `, [siteId, editorTemplate.slug]) : null
-  let editorThemeTokens: ApiRecord = {}
-  try { editorThemeTokens = editorThemeTokenRow?.tokens_json ? JSON.parse(editorThemeTokenRow.tokens_json) as ApiRecord : {} } catch { editorThemeTokens = {} }
+  const editorThemeTokens = parseBlogEditorThemeTokens(editorThemeTokenRow?.tokens_json)
   const socialImage = await resolveBlogSocialImage(db, {
     siteId,
     explicitAssetId: typeof post.social_image_asset_id === 'string' ? post.social_image_asset_id : null,
     legacyAssetId: typeof post.featured_image_asset_id === 'string' ? post.featured_image_asset_id : null,
-    blocks: contentDocument?.blocks ?? null,
+    blocks: contentDocument.blocks,
   })
   return {
     ...attachComponents(contentReviewUrls(attachFeaturedImage(attachPublished(post, Boolean(post.published_at))), 'blog', siteId, publicPath, context), components),
@@ -1603,6 +1681,7 @@ export async function createPlatformBlogPost(
   scope: BlogScope = {},
 ) {
   rejectLegacyBlogContentFields(input)
+  assertDraftOnlyBlogCreate(input)
   if (!input.title?.trim()) badRequest('title is required')
   const isTenant = Boolean(scope.site_id)
   validateBlogCommon(input, isTenant)
@@ -1619,12 +1698,7 @@ export async function createPlatformBlogPost(
   const id = crypto.randomUUID()
   const slugBase = normalizeSlugFromTitle(input.title, 'post')
   const now = new Date().toISOString()
-  let scheduledFor: string | null = null
-  try { scheduledFor = parseScheduledFor(input.scheduled_for) } catch (error) { badRequest((error as Error).message) }
-  if (scheduledFor && new Date(scheduledFor).getTime() <= Date.now()) badRequest('scheduled_for must be in the future')
   if (input.visibility && !['public', 'unlisted'].includes(input.visibility)) badRequest('visibility must be public or unlisted')
-  const publishStatus = scheduledFor ? 'scheduled' : input.publish ? 'published' : 'draft'
-  const publishedAt = input.publish && !scheduledFor ? now : null
   const canonicalBlocks = await normalizeCanonicalBlogBlocks(db, input, siteId)
   const canonicalBody = renderCanonicalBlogBody(canonicalBlocks)
 
@@ -1651,9 +1725,9 @@ export async function createPlatformBlogPost(
           input.nav_section_order != null ? Number(input.nav_section_order) : null,
           normalizeHideFromNav(input.hide_from_nav) ?? 0,
           input.featured_order != null ? Number(input.featured_order) : null,
-          publishStatus,
+          'draft',
           input.visibility ?? 'public',
-          scheduledFor,
+          null,
           null,
           input.seo_title ?? null,
           input.seo_description ?? null,
@@ -1664,39 +1738,27 @@ export async function createPlatformBlogPost(
           input.social_image_asset_id ?? null,
           authorId,
           input.site_author_id ?? null,
-          publishedAt,
-          publishedAt,
+          null,
+          null,
           now,
           now,
         ],
       }
 
-      // scheduled_revision_id references content_documents.draft_revision_id
-      // via subquery (not a value we have yet — writeRevisionFromBlocks
-      // generates the revision id internally) so this stays in the same
-      // atomic batch as everything else instead of a follow-up call.
       const ownerType = blogContentOwnerType(siteId)
       await createContentDocumentWithBlocks(db, ownerType, id, canonicalBlocks, {
         bodyMarkdown: canonicalBody,
         createdBy: authorId,
-        label: input.publish && !scheduledFor ? 'Published canonical blocks' : 'Draft canonical blocks',
-        publish: Boolean(input.publish && !scheduledFor),
+        label: 'Draft canonical blocks',
+        publish: false,
         additionalQueriesBefore: [blogPostInsert],
-        additionalQueriesAfter: scheduledFor
-          ? [{
-              query: `UPDATE blog_posts SET scheduled_revision_id = (
-                SELECT draft_revision_id FROM content_documents WHERE owner_type = ? AND owner_id = ?
-              ) WHERE id = ?`,
-              params: [ownerType, id, id],
-            }]
-          : undefined,
       })
       const post = await getPlatformBlogPost(db, id, siteId)
       return {
         success: true,
         id,
         slug,
-        published_at: publishedAt,
+        published_at: null,
         admin_edit_url: post.admin_edit_url,
         edit_url: post.edit_url,
         public_path: post.public_path,
@@ -1713,6 +1775,168 @@ export async function createPlatformBlogPost(
   throw createError({ statusCode: 500, statusMessage: 'Failed to create post' })
 }
 
+export async function updatePlatformBlogLifecycle(
+  db: D1Database,
+  postIdOrSlug: string,
+  input: PlatformBlogLifecycleInput,
+  siteId: string | null = null,
+): Promise<PlatformBlogLifecycleState> {
+  if (!input.expected_updated_at?.trim()) badRequest('expected_updated_at is required')
+  if (!input.expected_document_updated_at?.trim()) badRequest('expected_document_updated_at is required')
+  if (input.action === 'unpublish' && input.scheduled_for !== undefined) {
+    badRequest('scheduled_for is only valid when publishing')
+  }
+
+  let scheduledFor: string | null = null
+  if (input.action === 'publish') {
+    try { scheduledFor = parseScheduledFor(input.scheduled_for) } catch (error) { badRequest((error as Error).message) }
+    if (scheduledFor && new Date(scheduledFor).getTime() <= Date.now()) badRequest('scheduled_for must be in the future')
+  }
+
+  type LifecycleSource = {
+    id: string
+    updated_at: string
+    document_id: string | null
+    draft_revision_id: string | null
+    document_updated_at: string | null
+  }
+  const rows = await queryAll<LifecycleSource>(db, `
+    SELECT p.id, p.updated_at,
+           d.id AS document_id,
+           d.draft_revision_id,
+           d.updated_at AS document_updated_at
+      FROM blog_posts p
+      LEFT JOIN content_documents d
+        ON d.owner_type = ? AND d.owner_id = p.id
+     WHERE (p.id = ? OR p.slug = ?)
+       AND ${siteId ? 'p.site_id = ?' : 'p.site_id IS NULL'}
+     LIMIT 2
+  `, siteId
+    ? [blogContentOwnerType(siteId), postIdOrSlug, postIdOrSlug, siteId]
+    : [blogContentOwnerType(siteId), postIdOrSlug, postIdOrSlug])
+  if (rows.length === 0) notFound('Post not found')
+  if (rows.length > 1) badRequest('Ambiguous platform content identifier; use the row id.')
+  const source = rows[0]!
+  if (source.updated_at !== input.expected_updated_at) {
+    throw createError({ statusCode: 409, statusMessage: 'Blog post was updated by another writer' })
+  }
+  if (!source.document_id || !source.draft_revision_id || !source.document_updated_at) {
+    throw createError({ statusCode: 500, statusMessage: 'Blog content document is missing its draft revision' })
+  }
+  if (source.document_updated_at !== input.expected_document_updated_at) {
+    throw createError({ statusCode: 409, statusMessage: 'Content document was updated by another writer' })
+  }
+
+  const sourceTimestamp = Date.parse(source.updated_at)
+  const documentTimestamp = Date.parse(source.document_updated_at)
+  const committedAt = new Date(Math.max(
+    Date.now(),
+    Number.isFinite(sourceTimestamp) ? sourceTimestamp + 1 : 0,
+    Number.isFinite(documentTimestamp) ? documentTimestamp + 1 : 0,
+  )).toISOString()
+  const rowParams: ApiValue[] = []
+  let rowAssignments: string
+  if (input.action === 'publish' && scheduledFor) {
+    rowAssignments = `scheduled_for = ?,
+      scheduled_revision_id = (SELECT draft_revision_id FROM content_documents WHERE id = ?),
+      published_at = NULL,
+      status = 'scheduled',
+      updated_at = ?`
+    rowParams.push(scheduledFor, source.document_id, committedAt)
+  } else {
+    rowAssignments = `body = (
+        SELECT r.body_markdown
+          FROM content_documents d
+          JOIN content_revisions r ON r.id = d.draft_revision_id AND r.document_id = d.id
+         WHERE d.id = ?
+      ),
+      scheduled_for = NULL,
+      scheduled_revision_id = NULL,
+      published_at = ${input.action === 'publish' ? '?' : 'NULL'},
+      ${input.action === 'publish' ? 'first_published_at = COALESCE(first_published_at, ?),' : ''}
+      status = '${input.action === 'publish' ? 'published' : 'draft'}',
+      updated_at = ?`
+    rowParams.push(source.document_id)
+    if (input.action === 'publish') rowParams.push(committedAt, committedAt)
+    rowParams.push(committedAt)
+  }
+
+  const queries: BatchQuery[] = [
+    {
+      query: `INSERT INTO content_blocks (id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at)
+        SELECT ?, ?, NULL, '__blog_lifecycle_concurrency_guard__', 0, NULL, '{}', ?, ?
+         WHERE NOT EXISTS (SELECT 1 FROM blog_posts WHERE id = ? AND updated_at = ?)
+            OR NOT EXISTS (
+              SELECT 1 FROM content_documents
+               WHERE id = ? AND updated_at = ? AND draft_revision_id = ?
+            )`,
+      params: [
+        crypto.randomUUID(),
+        source.document_id,
+        committedAt,
+        committedAt,
+        source.id,
+        input.expected_updated_at,
+        source.document_id,
+        input.expected_document_updated_at,
+        source.draft_revision_id,
+      ],
+    },
+    {
+      query: `UPDATE blog_posts SET ${rowAssignments} WHERE id = ? AND updated_at = ?`,
+      params: [...rowParams, source.id, input.expected_updated_at],
+    },
+  ]
+  if (input.action === 'publish' && !scheduledFor) {
+    queries.push(
+      {
+        query: `UPDATE content_revisions
+          SET published_at = COALESCE(published_at, ?)
+          WHERE id = (SELECT draft_revision_id FROM content_documents WHERE id = ?)
+            AND document_id = ?`,
+        params: [committedAt, source.document_id, source.document_id],
+      },
+      {
+        query: 'UPDATE content_documents SET published_revision_id = draft_revision_id, updated_at = ? WHERE id = ?',
+        params: [committedAt, source.document_id],
+      },
+    )
+  } else if (input.action === 'unpublish') {
+    queries.push({
+      query: 'UPDATE content_documents SET published_revision_id = NULL, updated_at = ? WHERE id = ?',
+      params: [committedAt, source.document_id],
+    })
+  }
+
+  try {
+    await executeBatch(db, queries)
+  } catch (error) {
+    const latest = await queryFirst<{ updated_at: string; document_updated_at: string | null; draft_revision_id: string | null } | null>(db, `
+      SELECT p.updated_at, d.updated_at AS document_updated_at, d.draft_revision_id
+        FROM blog_posts p
+        LEFT JOIN content_documents d ON d.id = ?
+       WHERE p.id = ? LIMIT 1
+    `, [source.document_id, source.id])
+    if (!latest) notFound('Post not found')
+    if (latest.updated_at !== input.expected_updated_at) {
+      throw createError({ statusCode: 409, statusMessage: 'Blog post was updated by another writer' })
+    }
+    if (latest.document_updated_at !== input.expected_document_updated_at || latest.draft_revision_id !== source.draft_revision_id) {
+      throw createError({ statusCode: 409, statusMessage: 'Content document was updated by another writer' })
+    }
+    throw error
+  }
+
+  return {
+    id: source.id,
+    status: scheduledFor ? 'scheduled' : input.action === 'publish' ? 'published' : 'draft',
+    published_at: input.action === 'publish' && !scheduledFor ? committedAt : null,
+    scheduled_for: scheduledFor,
+    updated_at: committedAt,
+    content_document_updated_at: scheduledFor ? source.document_updated_at : committedAt,
+  }
+}
+
 export async function updatePlatformBlogPost(
   db: D1Database,
   postIdOrSlug: string,
@@ -1720,6 +1944,7 @@ export async function updatePlatformBlogPost(
   siteId: string | null = null,
 ) {
   rejectLegacyBlogContentFields(input)
+  rejectBlogUpdateLifecycleFields(input)
   if (!BLOG_UPDATE_MUTATION_FIELDS.some(field => input[field] !== undefined)) {
     badRequest('At least one blog mutation field is required')
   }
@@ -1751,12 +1976,6 @@ export async function updatePlatformBlogPost(
   const params: ApiValue[] = [now]
 
   if (input.visibility !== undefined && !['public', 'unlisted'].includes(input.visibility)) badRequest('visibility must be public or unlisted')
-  let scheduledFor: string | null | undefined
-  if (input.scheduled_for !== undefined) {
-    try { scheduledFor = parseScheduledFor(input.scheduled_for) } catch (error) { badRequest((error as Error).message) }
-    if (scheduledFor && new Date(scheduledFor).getTime() <= Date.now()) badRequest('scheduled_for must be in the future')
-  }
-
   if (input.title !== undefined) {
     if (!input.title?.trim()) badRequest('title cannot be blank')
     // Published URLs are durable identifiers. A headline edit must not silently
@@ -1802,24 +2021,8 @@ export async function updatePlatformBlogPost(
   }
 
   const fields: Array<keyof Omit<PlatformBlogUpdateInput,
-    | 'publish'
-    | 'unpublish'
     | 'title'
     | 'hide_from_nav'
-    | 'faq_items'
-    | 'faq_label'
-    | 'faq_status'
-    | 'faq_render_enabled'
-    | 'faq_schema_enabled'
-    | 'how_to_steps'
-    | 'how_to_estimated_time'
-    | 'how_to_tool_items'
-    | 'how_to_supply_items'
-    | 'how_to_label'
-    | 'how_to_status'
-    | 'how_to_render_enabled'
-    | 'how_to_schema_enabled'
-    | 'components'
     | 'slug'
     | 'redirect_old_slug'
     | 'reset_slug_override'
@@ -1859,52 +2062,11 @@ export async function updatePlatformBlogPost(
     params.push(normalizeHideFromNav(input.hide_from_nav) ?? 0)
   }
 
-  if (input.publish && input.unpublish) badRequest('Cannot publish and unpublish simultaneously')
-  if (input.publish) {
-    if (scheduledFor) {
-      updates.push('scheduled_for = ?', 'published_at = NULL', "status = 'scheduled'")
-      params.push(scheduledFor)
-      if (!normalizedBlocks) {
-        const scheduledDocument = await getContentEditorSnapshot(db, blogContentOwnerType(siteId), postId)
-        if (!scheduledDocument?.document.draft_revision_id) badRequest('Cannot schedule a post without a draft content revision')
-        updates.push('scheduled_revision_id = ?')
-        params.push(scheduledDocument.document.draft_revision_id)
-      }
-    } else {
-      updates.push('scheduled_for = NULL', 'scheduled_revision_id = NULL', 'published_at = ?', 'first_published_at = COALESCE(first_published_at, ?)', "status = 'published'")
-      params.push(now, now)
-    }
-  }
   if (input.social_image_asset_id !== undefined && input.social_image_asset_id) {
     await ensureBlogFeaturedImageAssetExists(db, input.social_image_asset_id, 'social_image_asset_id', siteId)
   }
-  if (input.unpublish) {
-    updates.push('published_at = NULL', 'scheduled_for = NULL', 'scheduled_revision_id = NULL', "status = 'draft'")
-  } else if (input.scheduled_for !== undefined && !input.publish) {
-    if (scheduledFor) {
-      updates.push('scheduled_for = ?', 'published_at = NULL', "status = 'scheduled'")
-      params.push(scheduledFor)
-      if (!normalizedBlocks) {
-        const scheduledDocument = await getContentEditorSnapshot(db, blogContentOwnerType(siteId), postId)
-        if (!scheduledDocument?.document.draft_revision_id) badRequest('Cannot schedule a post without a draft content revision')
-        updates.push('scheduled_revision_id = ?')
-        params.push(scheduledDocument.document.draft_revision_id)
-      }
-    } else {
-      updates.push('scheduled_for = NULL', 'scheduled_revision_id = NULL')
-      if (current.status === 'scheduled') {
-        updates.push('published_at = NULL', "status = 'draft'")
-      }
-    }
-  }
 
-  if (!normalizedBlocks && (input.publish || input.unpublish)) {
-    contentDocument = await getContentEditorSnapshot(db, blogContentOwnerType(siteId), postId)
-    if (!contentDocument) throw createError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
-    normalizedBlocks = await normalizeEditorContentBlocks(db, contentDocument.blocks, siteId)
-  }
-
-  if (normalizedBlocks && (current.status !== 'published' || input.publish || input.unpublish)) {
+  if (normalizedBlocks && current.status !== 'published') {
     updates.push('body = ?')
     params.push(renderCanonicalBlogBody(normalizedBlocks))
   }
@@ -1912,6 +2074,7 @@ export async function updatePlatformBlogPost(
   params.push(postId)
   if (input.expected_updated_at) params.push(input.expected_updated_at)
 
+  let blogMutationApplied = false
   try {
     const rowUpdate = {
       query: `UPDATE blog_posts SET ${updates.join(', ')} WHERE id = ?${input.expected_updated_at ? ' AND updated_at = ?' : ''}`,
@@ -1922,35 +2085,17 @@ export async function updatePlatformBlogPost(
         query: 'INSERT INTO blog_posts SELECT * FROM blog_posts WHERE id = ? AND updated_at != ?',
         params: [postId, input.expected_updated_at],
       }, rowUpdate] : [rowUpdate]
-      const after: BatchQuery[] = []
-      if (scheduledFor && (input.publish || input.scheduled_for !== undefined)) {
-        after.push({
-          query: `UPDATE blog_posts SET scheduled_revision_id = (
-            SELECT draft_revision_id FROM content_documents WHERE owner_type = ? AND owner_id = ?
-          ) WHERE id = ?`,
-          params: [blogContentOwnerType(siteId), postId, postId],
-        })
-      } else if (input.publish || input.unpublish) {
-        after.push({ query: 'UPDATE blog_posts SET scheduled_revision_id = NULL WHERE id = ?', params: [postId] })
-      }
-      if (input.unpublish) {
-        after.push({
-          query: 'UPDATE content_documents SET published_revision_id = NULL WHERE owner_type = ? AND owner_id = ?',
-          params: [blogContentOwnerType(siteId), postId],
-        })
-      }
       await replaceContentDocumentBlocks(db, blogContentOwnerType(siteId), postId, normalizedBlocks, {
         expected_document_updated_at: input.expected_document_updated_at ?? contentDocument.document.updated_at,
         label: 'Editor autosave',
-        publish: Boolean(input.publish && !scheduledFor),
         additionalQueriesBefore: before,
-        additionalQueriesAfter: after,
       })
     } else {
       const post = await queryFirst<ApiRecord | null>(db, `${rowUpdate.query} RETURNING id`, rowUpdate.params)
       if (!post && input.expected_updated_at) throw createError({ statusCode: 409, statusMessage: 'Blog post was updated by another writer' })
       if (!post) notFound('Post not found')
     }
+    blogMutationApplied = true
 
     if (requestedSlug && requestedSlug !== current?.slug && current?.first_published_at && input.redirect_old_slug !== false) {
       await createBlogRedirect(db, postId, siteId, current.slug)
@@ -1967,6 +2112,12 @@ export async function updatePlatformBlogPost(
       post: updatedPost,
     }
   } catch (err) {
+    if (!blogMutationApplied && input.expected_updated_at) {
+      const latest = await queryFirst<{ updated_at: string } | null>(db, 'SELECT updated_at FROM blog_posts WHERE id = ? LIMIT 1', [postId])
+      if (latest && latest.updated_at !== input.expected_updated_at) {
+        throw createError({ statusCode: 409, statusMessage: 'Blog post was updated by another writer' })
+      }
+    }
     if (isUniqueConstraintError(err, 'blog_posts')) badRequest('Slug already in use')
     throw err
   }
@@ -2142,11 +2293,23 @@ export async function createPlatformDoc(
         await syncDocContentDocument(db, id, input, authorId)
       } catch (syncErr) {
         try {
-          await deleteContentDocumentForOwner(db, 'platform_doc', id)
-          await execute(db, 'DELETE FROM platform_docs WHERE id = ?', [id])
-          await replaceContentComponents(db, 'doc', id, [])
+          await executeBatch(db, [
+            {
+              query: 'DELETE FROM content_documents WHERE owner_type = ? AND owner_id = ?',
+              params: ['platform_doc', id],
+            },
+            { query: 'DELETE FROM platform_docs WHERE id = ?', params: [id] },
+            {
+              query: 'DELETE FROM platform_content_components WHERE content_type = ? AND content_id = ?',
+              params: ['doc', id],
+            },
+          ])
         } catch (cleanupErr) {
-          console.error('Failed to clean up platform doc after create rollback:', cleanupErr)
+          throw new AggregateError(
+            [syncErr, cleanupErr],
+            'Platform doc creation failed and rollback cleanup also failed',
+            { cause: syncErr },
+          )
         }
         throw syncErr
       }
@@ -2262,26 +2425,89 @@ export async function updatePlatformDoc(
     params.push('draft')
   }
 
-  params.push(docId)
+  const componentReplacements = await resolveStructuredContentReplacements(db, 'doc', docId, input)
+  const contentSnapshot = input.body !== undefined || input.publish || input.unpublish
+    ? await getContentEditorSnapshot(db, 'platform_doc', docId)
+    : null
+
+  if (input.body === undefined && input.publish && contentSnapshot?.document.draft_revision_id) {
+    updates.push(`body = (
+      SELECT body_markdown
+        FROM content_revisions
+       WHERE id = ? AND document_id = ?
+    )`)
+    params.push(contentSnapshot.document.draft_revision_id, contentSnapshot.document.id)
+  }
+
+  const rowUpdate: BatchQuery = {
+    query: `UPDATE platform_docs SET ${updates.join(', ')} WHERE id = ?`,
+    params: [...params, docId],
+  }
+  const mutationQueries: BatchQuery[] = [rowUpdate]
+  if (componentReplacements) {
+    mutationQueries.push(...buildContentComponentReplacementQueries('doc', docId, componentReplacements))
+  }
 
   try {
-    const doc = await queryFirst<ApiRecord | null>(db, `
-      UPDATE platform_docs
-       SET ${updates.join(', ')}
-       WHERE id = ?
-       RETURNING id`, params)
-    if (!doc) notFound('Doc not found')
+    if (input.body !== undefined) {
+      const preservedStructuredBlocks = (contentSnapshot?.blocks ?? [])
+        .filter(block => block.type !== 'heading' && block.type !== 'markdown')
+        .map(block => ({
+          id: block.id,
+          parent_block_id: block.parent_block_id,
+          type: block.type,
+          level: block.level,
+          data: block.data,
+        }))
+      const canonicalBlocks = [...markdownToContentBlocks(input.body), ...preservedStructuredBlocks]
+        .map((block, position) => ({ ...block, position }))
 
-    const priorDoc = await getPlatformDoc(db, docId)
-    try {
-      await syncStructuredContent(db, 'doc', docId, input)
-      await syncDocContentDocument(db, docId, input)
-    } catch (err) {
-      await syncStructuredContent(db, 'doc', docId, {
-        components: priorDoc?.components ?? []
-      })
-      throw err
+      if (contentSnapshot) {
+        const prepared = prepareContentDocumentBlocksReplacement(contentSnapshot.document, canonicalBlocks, {
+          expected_document_updated_at: contentSnapshot.document.updated_at,
+          label: input.publish ? 'Published markdown body' : 'Draft markdown body',
+          publish: Boolean(input.publish),
+          additionalQueriesBefore: mutationQueries,
+          additionalQueriesAfter: input.unpublish
+            ? [{
+                query: 'UPDATE content_documents SET published_revision_id = NULL, updated_at = ? WHERE id = ?',
+                params: [now, contentSnapshot.document.id],
+              }]
+            : undefined,
+        })
+        await executeBatch(db, prepared.queries)
+      } else {
+        const prepared = prepareContentDocumentWithBlocks('platform_doc', docId, canonicalBlocks, {
+          bodyMarkdown: input.body,
+          label: input.publish ? 'Published markdown body' : 'Draft markdown body',
+          publish: Boolean(input.publish),
+          additionalQueriesBefore: mutationQueries,
+        })
+        await executeBatch(db, prepared.queries)
+      }
+    } else {
+      if (input.publish && contentSnapshot?.document.draft_revision_id) {
+        mutationQueries.push(
+          {
+            query: `UPDATE content_revisions
+              SET published_at = COALESCE(published_at, ?)
+              WHERE id = ? AND document_id = ?`,
+            params: [now, contentSnapshot.document.draft_revision_id, contentSnapshot.document.id],
+          },
+          {
+            query: 'UPDATE content_documents SET published_revision_id = draft_revision_id, updated_at = ? WHERE id = ?',
+            params: [now, contentSnapshot.document.id],
+          },
+        )
+      } else if (input.unpublish && contentSnapshot) {
+        mutationQueries.push({
+          query: 'UPDATE content_documents SET published_revision_id = NULL, updated_at = ? WHERE id = ?',
+          params: [now, contentSnapshot.document.id],
+        })
+      }
+      await executeBatch(db, mutationQueries)
     }
+
     const updatedDoc = await getPlatformDoc(db, docId)
     return {
       success: true,

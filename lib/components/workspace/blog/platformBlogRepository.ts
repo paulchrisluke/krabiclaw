@@ -1,4 +1,4 @@
-import type { BlogPostRepository, BlogPost, PlatformBlogCreateInput, PlatformBlogUpdateInput } from './types'
+import type { BlogLifecycleState, BlogPostRepository, BlogPost, PlatformBlogCreateInput, PlatformBlogUpdateInput } from './types'
 
 export function platformBlogRepository(): BlogPostRepository {
   const isBlogPost = (value: unknown): value is BlogPost =>
@@ -12,6 +12,16 @@ export function platformBlogRepository(): BlogPostRepository {
     isRecord(value) && typeof value.id === 'string' && isBlogPost(value.post)
   const isSuccess = (value: unknown): value is { success: true } =>
     isRecord(value) && value.success === true
+  const isLifecycleState = (value: unknown): value is BlogLifecycleState =>
+    isRecord(value)
+    && typeof value.id === 'string'
+    && ['draft', 'published', 'scheduled'].includes(String(value.status))
+    && (value.published_at === null || typeof value.published_at === 'string')
+    && (value.scheduled_for === null || typeof value.scheduled_for === 'string')
+    && typeof value.updated_at === 'string'
+    && typeof value.content_document_updated_at === 'string'
+  const isLifecycleResponse = (value: unknown): value is { success: true; lifecycle: BlogLifecycleState } =>
+    isRecord(value) && value.success === true && isLifecycleState(value.lifecycle)
   return {
     listUrl: '/admin/blog',
     editUrl: postId => `/admin/blog/${postId}`,
@@ -48,20 +58,22 @@ export function platformBlogRepository(): BlogPostRepository {
       await applicationFetch(`/api/admin/blog/posts/${postId}`, { method: 'DELETE', validate: isSuccess })
     },
 
-    async publish(postId: string): Promise<void> {
-      await applicationFetch(`/api/admin/blog/posts/${postId}`, {
-        method: 'PATCH',
-        body: { publish: true },
-        validate: isPostResponse,
+    async publish(postId: string, input): Promise<BlogLifecycleState> {
+      const response = await applicationFetch<{ success: true; lifecycle: BlogLifecycleState }>(`/api/admin/blog/posts/${postId}/publish`, {
+        method: 'POST',
+        body: input,
+        validate: isLifecycleResponse,
       })
+      return response.lifecycle
     },
 
-    async unpublish(postId: string): Promise<void> {
-      await applicationFetch(`/api/admin/blog/posts/${postId}`, {
-        method: 'PATCH',
-        body: { unpublish: true },
-        validate: isPostResponse,
+    async unpublish(postId: string, input): Promise<BlogLifecycleState> {
+      const response = await applicationFetch<{ success: true; lifecycle: BlogLifecycleState }>(`/api/admin/blog/posts/${postId}/unpublish`, {
+        method: 'POST',
+        body: input,
+        validate: isLifecycleResponse,
       })
+      return response.lifecycle
     },
   }
 }

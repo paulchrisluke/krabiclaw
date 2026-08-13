@@ -23,29 +23,45 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Check Pottery House + platform public routes
+      - name: Check paid client + platform public routes
         shell: bash
         run: |
           set -euo pipefail
-          pottery_hosts=("https://pottery-house.krabiclaw.com")
-          pottery_routes=("/" "/experiences" "/experiences/pottery-wheel-class" "/about" "/contact")
+          check_route() {
+            local url="$1"
+            local expected_origin="$2"
+            local result code effective_url title
+            result=$(curl -L --connect-timeout 10 --max-time 30 -s -o /tmp/page.html -w "%{http_code} %{url_effective}" "${url}")
+            read -r code effective_url <<< "${result}"
+            title=$(grep -o '<title>.*</title>' /tmp/page.html | head -n1 | sed -E 's#</?title>##g' || true)
+            echo "${url} -> ${code} ${effective_url} | ${title:-<no-title>}"
+            [[ "${code}" -lt 400 ]] || (echo "Route failed: ${url}" && exit 1)
+            [[ "${effective_url}" == "${expected_origin}" || "${effective_url}" == "${expected_origin}/"* ]] || \
+              (echo "Wrong final origin: expected ${expected_origin}, got ${effective_url}" && exit 1)
+          }
 
-          for host in "${pottery_hosts[@]}"; do
-            echo "== ${host} =="
-            for route in "${pottery_routes[@]}"; do
-              url="${host}${route}"
-              code=$(curl -L --connect-timeout 10 --max-time 30 -s -o /tmp/page.html -w "%{http_code}" "${url}")
-              title=$(grep -o '<title>.*</title>' /tmp/page.html | head -n1 | sed -E 's#</?title>##g' || true)
-              echo "${route} -> ${code} | ${title:-<no-title>}"
-              [[ "${code}" -lt 400 ]] || (echo "Route failed: ${url}" && exit 1)
-            done
+          pottery_origin="https://www.potteryhousekrabi.com"
+          for route in "/" "/experiences" "/experiences/pottery-wheel-class" "/about" "/contact"; do
+            check_route "${pottery_origin}${route}" "${pottery_origin}"
           done
+          check_route "https://pottery-house.krabiclaw.com/" "${pottery_origin}"
+
+          kikuzuki_origin="https://www.kikuzuki-thailand.com"
+          for route in "/" "/menu" "/locations" "/reservations"; do
+            check_route "${kikuzuki_origin}${route}" "${kikuzuki_origin}"
+          done
+          check_route "https://kikuzuki-thailand.com/" "${kikuzuki_origin}"
+          check_route "https://kikuzuki-krabi-thailand.krabiclaw.com/" "${kikuzuki_origin}"
+
+          ncls_origin="https://www.northcarolinalegalservices.org"
+          for route in "/" "/services" "/pricing" "/contact"; do
+            check_route "${ncls_origin}${route}" "${ncls_origin}"
+          done
+          check_route "https://northcarolinalegalservices.org/" "${ncls_origin}"
+          check_route "https://ncls.krabiclaw.com/" "${ncls_origin}"
 
           for url in "https://krabiclaw.com/" "https://krabiclaw.com/blog"; do
-            code=$(curl -L --connect-timeout 10 --max-time 30 -s -o /tmp/page.html -w "%{http_code}" "${url}")
-            title=$(grep -o '<title>.*</title>' /tmp/page.html | head -n1 | sed -E 's#</?title>##g' || true)
-            echo "${url} -> ${code} | ${title:-<no-title>}"
-            [[ "${code}" -lt 400 ]] || (echo "Route failed: ${url}" && exit 1)
+            check_route "${url}" "https://krabiclaw.com"
           done
 
   prod-auth-canary:

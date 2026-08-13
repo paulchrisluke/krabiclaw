@@ -31,6 +31,8 @@ test('tenant MCP exposes draft and approved publish blog workflows', () => {
   assert.match(publish, /replace_blog_content/)
   assert.match(publish, /publish_blog_post/)
   assert.match(publish, /document_updated_at/)
+  assert.match(publish, /expected_updated_at/)
+  assert.match(publish, /Do not reuse the tokens from the earlier read/)
   assert.match(publish, /choosing-a-family-lawyer/)
   assert.match(publish, /Approved body/)
 })
@@ -71,6 +73,30 @@ test('tenant blog prompts mention only fields accepted by strict tenant blog sch
   for (const field of ['post_id', 'content_blocks', 'expected_document_updated_at']) {
     assert.ok(Object.hasOwn(replaceProperties, field), `${field} should be accepted by replace_blog_content`)
   }
+
+  const publishProperties = blogTool('publish_blog_post').inputSchema.properties as Record<string, unknown>
+  for (const field of ['post_id', 'expected_updated_at', 'expected_document_updated_at']) {
+    assert.ok(Object.hasOwn(publishProperties, field), `${field} should be accepted by publish_blog_post`)
+    assert.match(publish, new RegExp(`\\b${field}\\b`), `${field} should be documented in the publish prompt`)
+  }
+})
+
+test('tenant blog lifecycle has one token-checked tool path', () => {
+  const createProperties = blogTool('create_blog_post').inputSchema.properties as Record<string, unknown>
+  assert.equal(Object.hasOwn(createProperties, 'publish'), false)
+  assert.equal(Object.hasOwn(createProperties, 'scheduled_for'), false)
+
+  for (const name of ['publish_blog_post', 'unpublish_blog_post']) {
+    const tool = blogTool(name)
+    assert.deepEqual(tool.inputSchema.required, ['post_id', 'expected_updated_at', 'expected_document_updated_at'])
+  }
+
+  for (const name of ['update_blog_post', 'update_blog_metadata']) {
+    const properties = blogTool(name).inputSchema.properties as Record<string, unknown>
+    assert.equal(Object.hasOwn(properties, 'publish'), false)
+    assert.equal(Object.hasOwn(properties, 'unpublish'), false)
+    assert.equal(Object.hasOwn(properties, 'scheduled_for'), false)
+  }
 })
 
 test('tenant blog read and mutation output schemas expose only canonical content blocks and one token', () => {
@@ -82,6 +108,7 @@ test('tenant blog read and mutation output schemas expose only canonical content
     assert.equal(Object.hasOwn(schema.properties, 'body'), false)
     assert.equal(Object.hasOwn(schema.properties, 'components'), false)
     assert.equal(Object.hasOwn(schema.properties, 'content_document'), false)
+    assert.equal(schema.properties.document_updated_at.type, 'string')
     assert.equal(schema.additionalProperties, false)
   }
   for (const schema of [blogPostSummaryObject]) {

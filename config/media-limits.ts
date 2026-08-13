@@ -1,0 +1,2 @@
+export const REVIEW_VIDEO_MAX_BYTES = 100_000_000
+export const REVIEW_VIDEO_MAX_LABEL = '100 MB'

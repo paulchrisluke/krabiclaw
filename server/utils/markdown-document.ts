@@ -49,7 +49,7 @@ export function assertMarkdownSize(byteLength: number): void {
 /** Strictly decodes UTF-8, throwing a clear error instead of silently
  *  replacing invalid byte sequences with U+FFFD (which would corrupt the
  *  document without any visible signal). */
-export function decodeMarkdownText(bytes: ArrayBuffer): string {
+export function decodeMarkdownText(bytes: ArrayBuffer | Uint8Array<ArrayBuffer>): string {
   try {
     return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
   } catch {

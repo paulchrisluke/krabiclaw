@@ -1,8 +1,8 @@
 import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
-import { queryFirst } from '~/server/db'
+import { executeBatch, queryFirst } from '~/server/db'
 import { buildImageUrl, hasCloudflareImagesConfig } from '~/server/utils/cloudflare-images'
-import { activateMediaAsset, getMediaAsset } from '~/server/utils/media-asset-manager'
+import { getMediaAsset } from '~/server/utils/media-asset-manager'
 import { getReviewRequestByToken } from '~/server/utils/review-requests'
 
 export default defineEventHandler(async (event) => {
@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
   const sessionUser = session?.user as ({ id?: string } | undefined)
   if (!sessionUser?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const body = await readBody(event).catch(() => ({})) as ApiRecord
+  const body = await readBody<ApiRecord>(event)
   const token = cleanString(body.token, 300)
   if (!token) return jsonResponse({ error: 'Token required' }, { status: 400 })
 
@@ -43,8 +43,42 @@ export default defineEventHandler(async (event) => {
 
   const publicUrl = buildImageUrl(env, asset.cloudflare_image_id, 'public')
   const thumbnailUrl = buildImageUrl(env, asset.cloudflare_image_id, 'thumbnail')
-  const activated = await activateMediaAsset(db, assetId, result.context.site_id, { public_url: publicUrl, thumbnail_url: thumbnailUrl })
-  if (!activated) return jsonResponse({ error: 'Asset already confirmed' }, { status: 409 })
+  const eventId = crypto.randomUUID()
+  const now = new Date().toISOString()
+  const [, activation] = await executeBatch(db, [
+    {
+      query: `
+        INSERT INTO site_events (
+          id, organization_id, site_id, location_id, actor_id,
+          event_type, entity_type, entity_id, metadata, created_at
+        )
+        SELECT ?, ?, ?, ?, ?, 'media.uploaded', 'media_asset', ?, ?, ?
+        FROM media_assets
+        WHERE id = ? AND site_id = ? AND status = 'pending'
+      `,
+      params: [
+        eventId,
+        result.context.organization_id,
+        result.context.site_id,
+        result.context.location_id,
+        sessionUser.id,
+        assetId,
+        JSON.stringify({ kind: 'image', provider: 'cloudflare_images', source: 'uploaded', status: 'active' }),
+        now,
+        assetId,
+        result.context.site_id,
+      ],
+    },
+    {
+      query: `
+        UPDATE media_assets
+        SET status = 'active', public_url = ?, thumbnail_url = ?, updated_at = ?
+        WHERE id = ? AND site_id = ? AND status = 'pending'
+      `,
+      params: [publicUrl, thumbnailUrl, now, assetId, result.context.site_id],
+    },
+  ])
+  if (Number(activation?.meta?.changes ?? 0) !== 1) return jsonResponse({ error: 'Asset already confirmed' }, { status: 409 })
 
   return jsonResponse({ id: assetId, publicUrl, thumbnailUrl, status: 'pending' })
 })

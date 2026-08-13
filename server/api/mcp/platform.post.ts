@@ -1,4 +1,4 @@
-import { getHeader, setResponseStatus } from 'h3'
+import { getHeader } from 'h3'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import {
   asMcpError,
@@ -32,7 +32,6 @@ const PLATFORM_AUTH_REQUIRED_TEXT = 'Authentication required: connect the KrabiC
 const PLATFORM_MCP_TOOL_DOMAIN = 'platform_admin'
 const PLATFORM_KNOWLEDGE_MUTATION_TOOLS = new Set([
   'create_platform_blog_post',
-  'update_platform_blog_post',
   'update_platform_blog_metadata',
   'replace_platform_blog_content',
   'publish_platform_blog_post',
@@ -46,7 +45,6 @@ const PLATFORM_KNOWLEDGE_MUTATION_TOOLS = new Set([
   'append_content_block',
   'replace_content_block',
   'delete_content_block',
-  'publish_content_revision',
 ])
 const PLATFORM_CATALOG_FINGERPRINT = catalogFingerprint(PLATFORM_PUBLIC_MCP_TOOLS)
 
@@ -88,13 +86,11 @@ function logPlatformMcpEventDetached(
     userAgent: input.userAgent ?? getHeader(event, 'user-agent') ?? null,
     cfRayId: input.cfRayId ?? getHeader(event, 'cf-ray') ?? null,
     sessionId: input.sessionId ?? getHeader(event, 'mcp-session-id') ?? null,
-    deploymentVersion: input.deploymentVersion
-      ?? String(env.DEPLOYMENT_VERSION ?? env.CF_PAGES_COMMIT_SHA ?? env.GITHUB_SHA ?? 'unknown'),
     catalogFingerprint: input.catalogFingerprint ?? PLATFORM_CATALOG_FINGERPRINT,
   })
   const waitUntil = getCloudflareWaitUntil(event)
   if (waitUntil) waitUntil(logPromise)
-  else logPromise.catch(() => {})
+  else void logPromise.catch(error => console.error('Failed to persist platform MCP telemetry:', error))
 }
 
 export default defineEventHandler(async (event) => {
@@ -131,11 +127,6 @@ export default defineEventHandler(async (event) => {
     }
 
     const body = await readBody(event)
-    if (!body || (typeof body === 'object' && Object.keys(body).length === 0)) {
-      setResponseStatus(event, 200)
-      return ''
-    }
-
     const request = readMcpRequest(event, body)
     requestId = request.id
     requestMethod = request.method
@@ -308,11 +299,6 @@ export default defineEventHandler(async (event) => {
         status: 'success',
         httpStatus: 200,
         oauthClientId: callUser.oauthClientId ?? null,
-        compatibilityAliasUsed: toolName === 'update_platform_blog_post',
-        compatibilityToolName: toolName === 'update_platform_blog_post' ? toolName : null,
-        replacementToolNames: toolName === 'update_platform_blog_post'
-          ? ['update_platform_blog_metadata', 'replace_platform_blog_content']
-          : null,
         durationMs: Date.now() - toolStart,
       })
 

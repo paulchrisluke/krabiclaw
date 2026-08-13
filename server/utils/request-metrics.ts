@@ -16,6 +16,7 @@ export interface RequestDataMetrics {
 
 const metricsByEvent = new WeakMap<H3Event, RequestDataMetrics>()
 const databaseByEvent = new WeakMap<H3Event, D1Database>()
+const databaseTargets = new WeakMap<D1Database, D1Database>()
 const statementTargets = new WeakMap<object, { target: object; query: string }>()
 const SLOW_D1_QUERY_MS = 1000
 
@@ -232,7 +233,12 @@ export function instrumentD1(event: H3Event, database: D1Database): D1Database {
     },
   }) as D1Database
   databaseByEvent.set(event, proxy)
+  databaseTargets.set(proxy, database)
   return proxy
+}
+
+export function unwrapInstrumentedD1(database: D1Database): D1Database {
+  return databaseTargets.get(database) ?? database
 }
 
 export function finalizeRequestMetrics(

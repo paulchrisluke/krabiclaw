@@ -162,7 +162,7 @@ export async function handleMenusTools(ctx: McpExecutorContext): Promise<unknown
           site.organizationId,
           site.siteId,
           requiredString(createMenuItemArgs, "menu_id"),
-          omit(createMenuItemArgs, ["menu_id", "price"]) as never,
+          omit(createMenuItemArgs, ["menu_id"]) as never,
           site.userId,
         );
       const createItemContext = await mutationContextPayload(site, {
@@ -230,10 +230,13 @@ export async function handleMenusTools(ctx: McpExecutorContext): Promise<unknown
       }> = [];
 
       for (const item of items) {
-        const itemRecord =
+        const rawItemRecord =
           item && typeof item === "object"
             ? (item as Record<string, unknown>)
             : null;
+        const itemRecord = rawItemRecord
+          ? normalizeMenuItemArgs(rawItemRecord, { requireSection: false })
+          : null;
         const name = itemRecord ? toolString(itemRecord, "name", 200)?.trim() : "";
         if (!itemRecord || !name) {
           skipped.push({ name: "", reason: "missing_name" });
@@ -278,7 +281,7 @@ export async function handleMenusTools(ctx: McpExecutorContext): Promise<unknown
             site.organizationId,
             site.siteId,
             menuId,
-            omit(createMenuItemArgs, ["price"]) as never,
+            createMenuItemArgs as never,
             site.userId,
           );
           existingKeys.add(
@@ -313,7 +316,10 @@ export async function handleMenusTools(ctx: McpExecutorContext): Promise<unknown
       const unchanged: Array<{ id: string; name: string }> = [];
       const skipped: Array<{ name: string; reason: string; item_id?: string }> = [];
 
-      for (const itemRecord of items) {
+      for (const rawItemRecord of items) {
+        const itemRecord = normalizeMenuItemArgs(rawItemRecord, {
+          requireSection: false,
+        });
         const name = toolString(itemRecord, "name", 200)?.trim();
         const match = findMenuItemMatch(itemRecord, workingItems);
 
@@ -363,7 +369,7 @@ export async function handleMenusTools(ctx: McpExecutorContext): Promise<unknown
             site.organizationId,
             site.siteId,
             menuId,
-            omit(createMenuItemArgs, ["price"]) as never,
+            createMenuItemArgs as never,
             site.userId,
           );
           workingItems.push(createdItem);
@@ -429,7 +435,7 @@ export async function handleMenusTools(ctx: McpExecutorContext): Promise<unknown
           site.organizationId,
           site.siteId,
           requiredString(updateMenuItemArgs, "menu_item_id"),
-          omit(updateMenuItemArgs, ["menu_item_id", "price"]) as never,
+          omit(updateMenuItemArgs, ["menu_item_id"]) as never,
           site.userId,
         );
       const updateItemContext = await mutationContextPayload(site, {

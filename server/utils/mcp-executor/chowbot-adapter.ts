@@ -14,8 +14,14 @@
 import { hasSiteEntitlement } from '~/server/utils/billing'
 import { roleSatisfies, type McpToolRole } from '~/server/utils/mcp-auth'
 import { getMcpTool } from '~/server/utils/mcp-tools'
+import { validateArguments } from '~/server/utils/mcp-tool-validation'
 import { DOMAIN_HANDLERS } from './index'
-import { NOT_HANDLED, humanizeEntitlement, type McpExecutorContext } from './shared'
+import {
+  NOT_HANDLED,
+  humanizeEntitlement,
+  validateRequiredArguments,
+  type McpExecutorContext,
+} from './shared'
 
 export interface ChowbotExecutorSite {
   db: D1Database
@@ -78,6 +84,13 @@ export async function runMcpExecutorToolForChowbot(
   }
 
   try {
+    const scopedArgs = {
+      ...args,
+      site_id: site.siteId,
+    }
+    validateArguments(tool.inputSchema, scopedArgs)
+    validateRequiredArguments(tool.inputSchema, scopedArgs)
+
     if (!roleSatisfies(site.role, tool.minimumRole)) {
       return { error: `Your role does not have permission to use ${toolName}.` }
     }
@@ -91,7 +104,7 @@ export async function runMcpExecutorToolForChowbot(
 
     const ctx: McpExecutorContext = {
       toolName,
-      args,
+      args: scopedArgs,
       site: {
         env: site.env,
         db: site.db,

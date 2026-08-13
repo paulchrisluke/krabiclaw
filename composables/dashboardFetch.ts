@@ -35,7 +35,7 @@ async function executeApiFetch<T>(
         ...fetchOptions,
         headers,
         retry: 0,
-        timeout: method === 'GET' ? DASHBOARD_READ_TIMEOUT_MS : MUTATION_TIMEOUT_MS,
+        timeout: fetchOptions.timeout ?? (method === 'GET' ? DASHBOARD_READ_TIMEOUT_MS : MUTATION_TIMEOUT_MS),
       } as never)
       if (!validate(value)) {
         throw new ApiClientError('API response did not match its contract', 502, 'INVALID_API_RESPONSE', null)

@@ -9,6 +9,7 @@ import {
   NCLS_ARTICLE_SLUGS,
 } from './blawby-parity-config.mjs'
 import { isNonIndexableHost } from '../server/utils/seo-policy.ts'
+import { isPreviewContext } from '../server/utils/tenant-hosts.ts'
 
 const DEFAULT_ROUTES = [
   '/',
@@ -92,12 +93,6 @@ function resolveUrl(base, route) {
     throw new Error(`Route escapes verification origin: ${route}`)
   }
   return resolved.toString()
-}
-
-function isPreviewContext(hostname) {
-  if (hostname === 'workers.dev' || hostname.endsWith('.workers.dev')) return true
-  if (/^(?:staging|preview)\.[^.]+\.[^.]+$/.test(hostname)) return true
-  return false
 }
 
 function normalizeTenantBaseUrl(rawUrl, tenantSlug) {

@@ -255,9 +255,7 @@ async function uploadSelectedFile(file: File, poster: File | null = null, existi
       description: result.kind === 'video' ? 'Video uploaded' : 'Photo uploaded',
       color: 'success'
     })
-    if (result.posterWarning) {
-      toast.add({ title: 'Video uploaded without a poster image', description: result.posterWarning, color: 'warning' })
-    } else if (result.kind === 'video' && !poster) {
+    if (result.kind === 'video' && !poster) {
       toast.add({
         title: 'Video uploaded without a poster image',
         description: 'Without a poster, this video may appear blank while it loads.',

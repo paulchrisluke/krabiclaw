@@ -8,12 +8,22 @@ import {
   expectHealthyPage,
   setupTenantHeaders,
 } from './helpers'
-import { kikuzukiTestBaseUrl, kikuzukiTestExtraHeaders } from './test-env'
+import {
+  KIKUZUKI_CANONICAL_URL,
+  NCLS_CANONICAL_URL,
+  POTTERY_HOUSE_CANONICAL_URL,
+  kikuzukiTestBaseUrl,
+  kikuzukiTestExtraHeaders,
+  testBaseUrl,
+} from './test-env'
+
+const isProductionRun = ['krabiclaw.com', 'www.krabiclaw.com'].includes(new URL(testBaseUrl()).hostname)
 
 const journeys = [
   {
     name: 'Pottery House',
     baseURL: potteryHouseBaseURL,
+    productionBaseURL: POTTERY_HOUSE_CANONICAL_URL,
     headers: potteryHouseExtraHeaders,
     shell: '.tenant-layout',
     themeVariable: '--saya-bg',
@@ -23,6 +33,7 @@ const journeys = [
   {
     name: 'Kikuzuki',
     baseURL: kikuzukiTestBaseUrl(),
+    productionBaseURL: KIKUZUKI_CANONICAL_URL,
     headers: kikuzukiTestExtraHeaders(),
     shell: '.tenant-layout',
     themeVariable: '--saya-bg',
@@ -32,6 +43,7 @@ const journeys = [
   {
     name: 'North Carolina Legal Services',
     baseURL: blawbyBaseURL,
+    productionBaseURL: NCLS_CANONICAL_URL,
     headers: blawbyExtraHeaders,
     shell: '.blawby-shell',
     themeVariable: '--blawby-bg',
@@ -51,12 +63,21 @@ function collectFirstPartyErrors(page: Page, baseURL: string) {
   return errors
 }
 
+function expectFinalOrigin(page: Page, baseURL: string, journeyName: string) {
+  expect(new URL(page.url()).origin, `${journeyName} final origin`).toBe(new URL(baseURL).origin)
+}
+
 test('deployed tenant home navigation keeps real content and styles', async ({ page }) => {
   for (const journey of journeys) {
+    if (isProductionRun) {
+      expect(journey.baseURL, `${journey.name} production URL`).toBe(journey.productionBaseURL)
+      expect(journey.headers, `${journey.name} production headers`).toEqual({})
+    }
     await setupTenantHeaders(page, journey.baseURL, journey.headers)
     const errors = collectFirstPartyErrors(page, journey.baseURL)
     const response = await page.goto(`${journey.baseURL}/`, { waitUntil: 'load' })
     expect(response?.status(), journey.name).toBeLessThan(400)
+    expectFinalOrigin(page, journey.baseURL, journey.name)
     await expect(page.locator(journey.shell)).toBeVisible()
     await expect(page.locator(journey.shell)).not.toHaveCSS(journey.themeVariable, '')
 
@@ -65,6 +86,7 @@ test('deployed tenant home navigation keeps real content and styles', async ({ p
     await link.click()
 
     await expect(page).toHaveURL(new RegExp(`${journey.link}/?$`))
+    expectFinalOrigin(page, journey.baseURL, journey.name)
     await expect(page.locator('main')).toBeVisible()
     await expect(page.locator('main')).toContainText(journey.content)
     await expect(page.locator(journey.shell)).not.toHaveCSS(journey.themeVariable, '')

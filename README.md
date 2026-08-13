@@ -116,15 +116,12 @@ ulimit -n 65536
 Deployment follows the branches in `.github/workflows/ci.yml`:
 
 1. Pull requests deploy the isolated preview Worker and run representative E2E.
-2. Merges to `staging` apply staging migrations, deploy the staging Worker, and
+2. Merges to `staging` deploy the staging Worker, apply staging migrations, and
    run the full Playwright suite.
-3. A reviewed `staging` to `main` merge applies production migrations, deploys
-   the production Worker, and runs read-only production browser smoke.
+3. A reviewed `staging` to `main` merge deploys the production Worker, applies
+   production migrations, and runs read-only production browser smoke.
 
-The package exposes no staging or production deploy, migration, seed, or
-rollback aliases. CI invokes native Wrangler commands only in the matching
-branch job. There are no custom Worker version IDs, candidate traffic splits,
-baseline manifests, or nightly release lanes. See
+CI invokes native Wrangler commands only in the matching branch job. See
 [docs/operations/release-flow.md](docs/operations/release-flow.md).
 
 The **Zaraz GA4 Backfill Plan** workflow is read-only and accepts only preview or

@@ -1,7 +1,7 @@
 // Site-wide chrome is a stable SSR resource keyed only by tenant and locale.
 // Route-specific content is loaded separately so client navigation cannot
 // replace the persistent header/footer state with another route's request.
-import { usePublicPageUrl, usePublicResourceKey, type PublicPageRequest } from "~/composables/usePublicPageRequest";
+import { buildPublicPageUrl, usePublicResourceKey, type PublicPageRequest } from "~/composables/usePublicPageRequest";
 import {
   isPublicShellPayload,
   type PublicShellPayload as SiteShellPayload,
@@ -36,7 +36,7 @@ export const useSiteShellState = () => {
   }));
 
   const key = computed(() => usePublicResourceKey('shell', entityId.value, params.value));
-  const url = computed(() => usePublicPageUrl(siteId, params.value, 'shell'));
+  const url = computed(() => buildPublicPageUrl(siteId, params.value, route, 'shell'));
 
   let data: Ref<SiteShellPayload | undefined>
   let error: Ref<Error | null>

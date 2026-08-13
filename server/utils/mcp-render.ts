@@ -1,16 +1,16 @@
 export interface McpStructuredResponse {
   __mcpStructuredResponse: true
   structuredContent: unknown
-  fallbackText?: string
+  modelText?: string
   privateMeta?: Record<string, unknown>
 }
 
 export function renderStructuredResponse(
   structuredContent: unknown,
-  fallbackText?: string,
+  modelText?: string,
   privateMeta?: Record<string, unknown>,
 ): McpStructuredResponse {
-  return { __mcpStructuredResponse: true, structuredContent, fallbackText, privateMeta }
+  return { __mcpStructuredResponse: true, structuredContent, modelText, privateMeta }
 }
 
 export function isMcpRenderResponse(value: unknown): value is McpStructuredResponse {

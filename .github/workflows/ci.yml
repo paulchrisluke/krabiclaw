@@ -30,7 +30,7 @@ jobs:
       - run: yarn install --frozen-lockfile
       - run: yarn quality
       - run: yarn test:unit
-      - run: yarn mcp:compat
+      - run: yarn mcp:catalog
       - run: yarn lint:seeds
       - run: yarn lint:migrations
       - run: yarn lint:tool-parity
@@ -72,6 +72,20 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Build preview Worker
         run: yarn build
+      - name: Check pre-provisioned preview secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx wrangler secret list --env preview --format json > "$RUNNER_TEMP/preview-secrets.json"
+          for secret_name in STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET PREVIEW_SECRET E2E_DEV_ROUTE_SECRET EMAIL_REPLY_SECRET EMAIL_INBOUND_SECRET; do
+            jq -e --arg name "$secret_name" '.. | objects | select((.name? // .key?) == $name)' "$RUNNER_TEMP/preview-secrets.json" >/dev/null
+          done
+      - name: Deploy preview Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy --env preview --strict
       - name: Migrate preview database
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -95,20 +109,6 @@ jobs:
           node --experimental-strip-types scripts/generate-kikuzuki-seed.ts --preview --stdout >> /tmp/preview-seed.sql
           node --experimental-strip-types scripts/generate-blawby-ci-seed.ts --stdout >> /tmp/preview-seed.sql
           npx wrangler d1 execute DB --env preview --remote --file /tmp/preview-seed.sql
-      - name: Check pre-provisioned preview secrets
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          npx wrangler secret list --env preview --format json > "$RUNNER_TEMP/preview-secrets.json"
-          for secret_name in STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET PREVIEW_SECRET E2E_DEV_ROUTE_SECRET EMAIL_REPLY_SECRET EMAIL_INBOUND_SECRET; do
-            jq -e --arg name "$secret_name" '.. | objects | select((.name? // .key?) == $name)' "$RUNNER_TEMP/preview-secrets.json" >/dev/null
-          done
-      - name: Deploy preview Worker
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx wrangler deploy --env preview --old-asset-ttl 600 --strict
       - name: Run required representative browser coverage
         run: yarn test:e2e:representative
       - name: Upload Playwright report
@@ -145,8 +145,8 @@ jobs:
       E2E_ALLOW_DEV_ROUTES: "true"
       E2E_DEV_ROUTE_SECRET: ${{ secrets.E2E_DEV_ROUTE_SECRET_STAGING }}
       MCP_DEV_LOGIN: "1"
-      MCP_CIMD_CLIENT_URL: https://krabiclaw-preview.paulchrisluke.workers.dev/api/auth/oauth2/test-client-metadata
-      MCP_PRIVATE_CIMD_CLIENT_URL: https://krabiclaw-preview.paulchrisluke.workers.dev/api/auth/oauth2/test-private-client-metadata
+      MCP_CIMD_CLIENT_URL: https://staging.krabiclaw.com/api/auth/oauth2/test-client-metadata
+      MCP_PRIVATE_CIMD_CLIENT_URL: https://staging.krabiclaw.com/api/auth/oauth2/test-private-client-metadata
       PLAYWRIGHT_PREVIEW_URL: https://staging.krabiclaw.com
       PLAYWRIGHT_WORKERS: "1"
     steps:
@@ -161,6 +161,11 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Build staging Worker
         run: yarn build
+      - name: Deploy staging Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy --env staging --strict
       - name: Apply staging migrations
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -171,11 +176,6 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: node --experimental-strip-types scripts/reset-e2e-artifacts.ts --staging
-      - name: Deploy staging Worker
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx wrangler deploy --env staging --old-asset-ttl 600 --strict
       - name: Run OAuth bearer MCP smoke
         run: yarn test:mcp
       - name: Run full staging E2E suite
@@ -225,16 +225,16 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Build production Worker
         run: yarn build
+      - name: Deploy production Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy --strict
       - name: Apply production migrations
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler d1 migrations apply DB --remote
-      - name: Deploy production Worker
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx wrangler deploy --old-asset-ttl 600 --strict
       - name: Run read-only production browser smoke
         run: yarn test:e2e:public-rendering
       - name: Refresh production search index

@@ -1,8 +1,5 @@
 <template>
-  <div
-    class="flex h-screen flex-col overflow-hidden bg-muted text-highlighted"
-    :data-transfer-onboarding-hydrated="hydrated ? 'true' : 'false'"
-  >
+  <div class="flex h-screen flex-col overflow-hidden bg-muted text-highlighted">
 
     <!-- Body: wizard left, preview right. Single column with vertical scroll
          below sm so the wizard pane (min 24rem) never gets hard-clipped by
@@ -13,6 +10,7 @@
       style="grid-template-rows: minmax(0, 1fr)"
     >
       <TransferOnboardingWizard
+        :interactive="hydrated"
         :site-id="siteId"
         :org-slug="orgSlug"
         :site-slug="subdomain"

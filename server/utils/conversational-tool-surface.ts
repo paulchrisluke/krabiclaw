@@ -105,12 +105,6 @@ function stripExternalChannelsFromProperties(properties: Record<string, unknown>
     description: 'Channels to publish to. Defaults to ["site"]. Social publishing is currently managed from the dashboard.',
   }
   if ('channels' in next) next.channels = siteOnlyArray
-  if ('targets' in next) {
-    next.targets = {
-      ...siteOnlyArray,
-      description: 'Deprecated alias for channels. Only ["site"] is available on the conversational surface.',
-    }
-  }
   return next
 }
 

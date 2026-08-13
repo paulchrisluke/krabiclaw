@@ -1,6 +1,7 @@
 import type { McpExecutorContext } from './shared'
 import { deleteMediaAsset, listMediaAssets, updateMediaAssetMetadata } from '~/server/utils/media-asset-manager'
 import { hasCloudflareImagesConfig } from '~/server/utils/cloudflare-images'
+import { MAX_POSTER_BYTES } from '~/server/utils/media-mime'
 import { uploadResolvedMediaToAssetStore } from '~/server/utils/media-upload'
 import { setMediaPlacement, type MediaPlacementTarget } from '~/server/utils/media-placement'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
@@ -60,17 +61,23 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         : null;
 
       const resolved = await resolveUserUploadedMediaFile(fileReference);
+      if (posterReference && resolved.kind !== "video") {
+        throw mcpProtocolError(
+          MCP_ERROR.invalidParams,
+          "poster_file is only valid when file is a video.",
+        );
+      }
 
       const provider = resolved.kind === "image"
         ? resolveImageUploadProvider(resolved.contentType, site.env)
         : resolved.kind === "file" ? "cloudflare_r2" : undefined;
 
-      let poster: { buffer: ArrayBuffer; contentType: string; filename: string } | undefined;
+      let poster: { buffer: Uint8Array<ArrayBuffer>; contentType: string; filename: string } | undefined;
       if (resolved.kind === "video" && posterReference) {
         if (!hasCloudflareImagesConfig(site.env)) {
           throw new Error("Cloudflare Images not configured");
         }
-        const posterResolved = await resolveUserUploadedMediaFile(posterReference);
+        const posterResolved = await resolveUserUploadedMediaFile(posterReference, MAX_POSTER_BYTES);
         if (posterResolved.kind !== "image") {
           throw mcpProtocolError(
             MCP_ERROR.invalidParams,
@@ -80,6 +87,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         poster = posterResolved;
       }
 
+      const context = await mutationContextPayload(site);
       const uploaded = await uploadResolvedMediaToAssetStore({
         db: site.db,
         env: site.env as never,
@@ -103,11 +111,12 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         public_url: uploaded.publicUrl,
         thumbnail_url: uploaded.thumbnailUrl,
         kind: resolved.kind,
-        poster_warning: uploaded.posterWarning,
         next_step: resolved.kind === "file"
           ? "Upload complete. Call analyze_document with this asset_id to summarize it or answer questions grounded in it."
-          : "Upload complete. This asset is in the media library but not assigned yet. Call set_media with this asset_id and the desired target.",
-        context: await mutationContextPayload(site),
+          : resolved.kind === "video" && !uploaded.thumbnailUrl
+            ? "Upload complete. This video is in the media library but cannot be assigned as a cover or hero until it has a poster thumbnail."
+            : "Upload complete. This asset is in the media library but not assigned yet. Call set_media with this asset_id and the desired target.",
+        context,
       };
     }
     case "update_media_asset": {
@@ -121,6 +130,9 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
           category: (optionalString(args, "category") as never) ?? undefined,
         },
       );
+      if (!updated) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, "Media asset not found.");
+      }
       return {
         updated,
         context: await mutationContextPayload(site, {
@@ -128,7 +140,8 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         }),
       };
     }
-    case "delete_media_asset":
+    case "delete_media_asset": {
+      const context = await mutationContextPayload(site);
       await deleteMediaAsset(
         site.db,
         site.env,
@@ -136,7 +149,8 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         site.siteId,
         site.userId,
       );
-      return { deleted: true, context: await mutationContextPayload(site) };
+      return { deleted: true, context };
+    }
     case "import_menu_from_media": {
       const { extractMenuFromMediaAsset } =
         await import("~/server/utils/chowbot-media");

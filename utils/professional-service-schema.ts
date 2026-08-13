@@ -100,7 +100,7 @@ export type ProfessionalServiceRecipe =
 
 export interface ProfessionalServiceSchemaInput {
   recipe: ProfessionalServiceRecipe
-  /** Canonical origin, e.g. https://ncls.krabiclaw.com — must be the tenant's own canonical origin, not the platform's. */
+  /** Canonical origin, e.g. https://www.northcarolinalegalservices.org — must be the tenant's own canonical origin, not the platform's. */
   origin: string
   org: ProfessionalServiceOrgIdentity
   /** Absolute or site-relative URL of the current page. */

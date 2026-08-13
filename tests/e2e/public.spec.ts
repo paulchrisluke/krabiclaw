@@ -307,7 +307,7 @@ test.describe('platform public site', () => {
     await expect(page.locator('body')).toContainText('North Carolina Legal Services')
 
     const iframeSrc = await page.locator('iframe').first().getAttribute('src')
-    expect(iframeSrc).toBe('https://ncls.krabiclaw.com')
+    expect(iframeSrc).toBe('https://www.northcarolinalegalservices.org')
 
     await expectHealthyPage(page, errors)
   })

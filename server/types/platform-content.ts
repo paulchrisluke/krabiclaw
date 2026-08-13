@@ -34,13 +34,15 @@ export interface PlatformBlogPostRequestBody extends PlatformContentNavRequestBo
   expected_updated_at?: string
   excerpt?: string
   category?: string
+  tags?: string[] | null
+  seo_title?: string | null
   seo_description?: string
   seo_keywords?: string
   canonical_url?: string
   robots?: string
   featured_image_asset_id?: string
-  publish?: boolean
-  unpublish?: boolean
+  social_image_asset_id?: string | null
+  visibility?: 'public' | 'unlisted'
 }
 
 export interface PlatformDocRequestBody extends PlatformStructuredContentRequestBody, PlatformContentNavRequestBody {
