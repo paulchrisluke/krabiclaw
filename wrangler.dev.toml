@@ -1,0 +1,52 @@
+name = "krabiclaw-local"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat_v2"]
+
+# Nuxt's getPlatformProxy integration creates a bindings-only surrogate Worker
+# and does not load workers/app-entry.ts. Keep application-owned Durable Objects
+# in wrangler.toml; this file contains only bindings the Nuxt dev proxy can host.
+[vars]
+CF_SAAS_CNAME_TARGET = "customers.krabiclaw.com"
+BETTER_AUTH_URL = "http://localhost:3000"
+NUXT_PUBLIC_PLATFORM_DOMAIN = "http://localhost:3000"
+NUXT_PUBLIC_FREE_SITE_DOMAIN = "http://localhost:3000"
+NUXT_PUBLIC_APP_NAME = "KrabiClaw"
+NUXT_PUBLIC_SITE_URL = "http://localhost:3000"
+NUXT_PUBLIC_HELP_URL = "http://localhost:3000/help"
+NUXT_PUBLIC_WHATSAPP_NUMBER = "16197200000"
+AI_SEARCH_NAMESPACE = "default"
+AI_SEARCH_INSTANCE_ID = "krabiclaw-platform-knowledge"
+GA4_MEASUREMENT_ID = "G-NJ1BSP9BYG"
+EMAIL_DELIVERY_MODE = "log_only"
+WHATSAPP_DELIVERY_MODE = "log_only"
+DISCORD_DELIVERY_MODE = "log_only"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "krabiclaw-db"
+database_id = "0d0cd133-1914-48b1-b010-8fe574fede0c"
+migrations_dir = "migrations"
+remote = false
+
+[[queues.producers]]
+binding = "GUEST_DELIVERY_QUEUE"
+queue = "krabiclaw-guest-delivery"
+
+[[r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "krabiclaw-media"
+remote = false
+
+[[kv_namespaces]]
+binding = "SITE_CACHE"
+id = "7fadf142e35745d6becbd486a337ab2f2"
+remote = false
+
+[ai]
+binding = "AI"
+remote = false
+
+[[ai_search_namespaces]]
+binding = "AI_SEARCH"
+namespace = "default"
+remote = true

@@ -283,12 +283,12 @@ export const usePublicPageKey = (
   params: PublicPageRequest,
 ) => usePublicResourceKey('page', siteId, params)
 
-export const usePublicPageUrl = (
+export const buildPublicPageUrl = (
   siteId: string | null | undefined,
   params: PublicPageRequest,
+  route: { path: string; params: Record<string, unknown> },
   resourceKind: 'shell' | 'page' = 'page',
 ) => {
-  const route = useRoute()
   const qs = new URLSearchParams();
   if (params.page) qs.set("page", params.page);
   if (params.location) qs.set("location", params.location);

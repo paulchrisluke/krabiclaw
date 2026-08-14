@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Locations">
         <template #leading>
-          <DashboardSidebarCollapseButton />
+          <DashboardNavbarLeading />
         </template>
         <template #trailing>
           <UButton

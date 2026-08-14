@@ -3,8 +3,8 @@
  * Post-deploy smoke test for a KrabiClaw tenant site.
  *
  * Usage:
- *   node scripts/client-verify.mjs --url https://pottery-house.krabiclaw.com --vertical experience
- *   node scripts/client-verify.mjs --url https://pottery-house.krabiclaw.com --vertical experience \
+ *   node scripts/client-verify.mjs --url https://www.potteryhousekrabi.com --vertical experience
+ *   node scripts/client-verify.mjs --url https://www.potteryhousekrabi.com --vertical experience \
  *     --site-id site-pottery-house --slug pottery-house-krabi
  *
  * With --slug, writes reports to client-imports/<slug>/:

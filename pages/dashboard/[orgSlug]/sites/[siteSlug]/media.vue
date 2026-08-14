@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Media library">
         <template #leading>
-          <DashboardSidebarCollapseButton />
+          <DashboardNavbarLeading />
         </template>
       </UDashboardNavbar>
     </template>
@@ -397,9 +397,7 @@ async function uploadFile(file: File, poster: File | null = null) {
     const result = await upload(file, { poster })
     if (!result) return
     toast.add({ title: 'File uploaded', icon: 'i-lucide-circle-check', color: 'success' })
-    if (result.posterWarning) {
-      toast.add({ title: 'Video uploaded without a poster image', description: result.posterWarning, color: 'warning' })
-    } else if (result.kind === 'video' && !poster) {
+    if (result.kind === 'video' && !poster) {
       toast.add({
         title: 'Video uploaded without a poster image',
         description: 'Without a poster, this video may appear blank while it loads.',

@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { credentialSession } from './utils/e2e-auth.mjs'
+
 const BASE_URL = (process.argv.includes('--base-url')
   ? process.argv[process.argv.indexOf('--base-url') + 1]
   : process.env.MCP_BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '')
@@ -30,24 +32,10 @@ async function getAuthHeaders() {
     return { authorization: `Bearer ${process.env.MCP_BEARER_TOKEN}` }
   }
 
-  if (!isLocal && process.env.MCP_DEV_LOGIN !== '1') {
-    throw new Error('Set MCP_BEARER_TOKEN for remote checks, or MCP_DEV_LOGIN=1 for a local tunnel.')
+  if (!isLocal && process.env.MCP_CREDENTIAL_LOGIN !== '1') {
+    throw new Error('Set MCP_BEARER_TOKEN for remote checks, or MCP_CREDENTIAL_LOGIN=1 for a credentialed tunnel.')
   }
-
-  const url = new URL('/api/dev/login', BASE_URL)
-  if (USER_ID) {
-    url.searchParams.set('userId', USER_ID)
-  } else if (!SITE_ID) {
-    url.searchParams.set('userId', `mcp-ops-${Date.now()}`)
-  }
-
-  const headers = {}
-  if (process.env.E2E_DEV_ROUTE_SECRET) headers['x-dev-route-secret'] = process.env.E2E_DEV_ROUTE_SECRET
-
-  const res = await fetch(url, { headers, redirect: 'manual' })
-  const cookie = res.headers.get('set-cookie')?.split(';')[0]
-  if (!cookie) throw new Error(`Dev login did not return a session cookie. Status: ${res.status}`)
-  return { cookie }
+  return credentialSession(BASE_URL, { userId: USER_ID || 'user-e2e-mcp-owner-c' })
 }
 
 async function mcp(headers, name, args = {}) {
@@ -164,23 +152,12 @@ async function main() {
   const initialPricedItem = initialReadItems.find(item => item.id === menuItemId)
   expectValue('created menu item has initial price amount', moneyEquals(initialPricedItem?.price_amount, 12.50), initialPricedItem)
 
-  const aliasedMenuItem = await mcp(headers, 'create_menu_item', {
-    site_id: siteId,
-    menu_id: menuId,
-    section: 'Mains',
-    name: 'MCP Alias Curry',
-    price: '14.25',
-  })
-  expectStatus('create_menu_item with legacy price alias succeeds', aliasedMenuItem)
-  const aliasedMenuItemId = data(aliasedMenuItem.body)?.id
-  expectValue('create_menu_item with legacy price alias returns item id', Boolean(aliasedMenuItemId), aliasedMenuItem.body)
-
   const batchedMenuItems = await mcp(headers, 'add_menu_items_batch', {
     site_id: siteId,
     menu_id: menuId,
     items: [
       { section: 'Shots', name: 'B-52', price_amount: '7' },
-      { section: 'Shots', name: 'Lemon Drop', price: '8' },
+      { section: 'Shots', name: 'Lemon Drop', price_amount: '8' },
       { section: 'Shots', name: 'B-52', price_amount: '7' },
     ],
   })
@@ -205,9 +182,6 @@ async function main() {
   expectValue('get_menu preserves location_id', data(menuRead.body)?.menu?.location_id === locationId, data(menuRead.body))
   const pricedItem = readItems.find(item => item.id === menuItemId)
   expectValue('updated menu item has new price amount', moneyEquals(pricedItem?.price_amount, 13), pricedItem)
-  const aliasedItem = readItems.find(item => item.id === aliasedMenuItemId)
-  expectValue('legacy price alias is normalized to price_amount', moneyEquals(aliasedItem?.price_amount, 14.25), aliasedItem)
-
   const menuDelete = await mcp(headers, 'delete_menu', { site_id: siteId, menu_id: menuId })
   expectStatus('delete_menu succeeds', menuDelete)
   expectValue('delete_menu returns deleted true', data(menuDelete.body)?.deleted === true, menuDelete.body)

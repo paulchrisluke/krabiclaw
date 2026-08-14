@@ -121,7 +121,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
             ? `Call get_blog_post with post_id "${reference}" and use its voice, terminology, structure, and SEO field usage as the primary reference.`
             : "Call get_blog_post for the 1-2 most relevant published articles and infer the tenant's established voice and terminology; do not copy KrabiClaw platform voice or invent a generic brand voice.",
           `Draft a complete block-structured article about "${topic}"${keyword ? ` targeting "${keyword}"` : ""}. Use ordered heading, markdown, image, FAQ, How-To, callout, and divider blocks as appropriate. Markdown blocks require editor_mode "rich" for visual-editor-safe prose or "source" for tables/raw HTML. Include category, a short deduplicated tags list, excerpt, seo_title, seo_description, seo_keywords, and robots.`,
-          "Present the full article and computed fields for explicit approval. Do not create or publish yet. After approval, call create_blog_post with content_blocks and without publish so the writer can review the returned admin_edit_url. Publish only when explicitly requested.",
+          "Present the full article and computed fields for explicit approval. Do not create or publish yet. After approval, call create_blog_post with content_blocks so the writer can review the returned admin_edit_url. Publish only when explicitly requested, using the separate dual-token publish_blog_post operation.",
         ].join(" "),
       };
     }
@@ -135,7 +135,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
           `Call get_blog_post with post_id "${identifier}", convert this writer-approved body into the complete canonical content_blocks array, and call replace_blog_content with post.document_updated_at as expected_document_updated_at: ${body}`,
           "Preserve existing category, navigation, tags, and structural blocks unless the approved content requires changing them.",
           notes ? `Additional instructions: ${notes}` : "",
-          `Immediately after the replacement succeeds, call publish_blog_post with post_id "${identifier}". Report the public_url and admin_edit_url.`,
+          `Immediately after the replacement succeeds, call publish_blog_post with post_id "${identifier}", expected_updated_at from the returned post.updated_at, and expected_document_updated_at from the returned post.document_updated_at. Do not reuse the tokens from the earlier read. Report the public_url and admin_edit_url.`,
         ].filter(Boolean).join(" "),
       };
     }
@@ -164,7 +164,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
             ? `If none exists, call create_menu with name "${menuName}".`
             : "If none exists, call create_menu with a sensible name based on the business.",
           `Parse the following into individual menu items (name, section, price, and description where given), then call add_menu_items_batch with all of them in one call rather than creating items one at a time: ${itemsDescription}`,
-          "If the user has photos or videos for any dish, offer to attach them after the items are created, then place them with set_media using target type menu_item_media — do not block creating the menu on having media.",
+          "If the user has photos or videos for any dish, offer to attach them after the items are created, then place them with set_media using target_type menu_item_media and the exact menu_item_id — do not block creating the menu on having media.",
           "Report back the menu name and the items that were added.",
         ].join(" "),
       };
@@ -178,7 +178,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
         text: [
           `Call create_post with this body: ${body}`,
           postType ? `Use post_type "${postType}".` : "",
-          "If the user has supplied or approved media for this post, create the post first, then use set_media with target type post_image for the selected cover asset.",
+          "If the user has supplied or approved media for this post, create the post first, then use set_media with target_type post_image and the exact post_id for the selected cover asset.",
           channels
             ? `If media is supplied or approved, call publish_post with channels [${channels}] only after set_media succeeds; otherwise immediately after create_post succeeds. Do not stop to describe the publish step instead of executing it.`
             : "If media is supplied or approved, call publish_post only after set_media succeeds; otherwise immediately after create_post succeeds. publish_post defaults to the site channel. Do not stop to describe the publish step instead of executing it.",
@@ -193,7 +193,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
         text: [
           `Based on this description, call create_experience with a sensible title, tagline, body, and any of price_amount/duration_minutes/max_capacity/time_slots that are implied or stated: ${description}`,
           "Use a status appropriate to whether this should go live immediately or stay as a draft — ask the user if it's not obvious.",
-          "If the user has media ready, call set_media after creation with target type experience_media and the complete ordered asset_ids list.",
+          "If the user has media ready, call set_media after creation with target_type experience_media, the exact experience_id, and the complete ordered asset_ids list.",
           "Report back what was created, its current status, and the live URL when one is available.",
         ].join(" "),
       };
@@ -229,7 +229,7 @@ export function renderMcpPrompt(name: string, args: Record<string, string>): { d
           "If the user hasn't already attached photos in this conversation, ask them to attach the photos they want to add directly in ChatGPT.",
           "For each attached photo, inspect it visually first, then ask the user (or infer from context) where it should go: the homepage main photo, a specific location's main photo, the about/story section, a menu item, an experience, or a post.",
           "Confirm the target site and placement with the user before uploading anything.",
-          "After confirmation, call upload_user_media with file (the resolved ChatGPT file reference for the attachment) or file_id for each photo, then call set_media with the matching target type. For ordered targets such as experience_media, first call the read tool, merge each uploaded asset into the existing ordered media ids, then assign the complete asset_ids list.",
+          "After confirmation, call upload_user_media exactly once for each confirmed attachment with file set to its resolved ChatGPT file reference. Upload every confirmed photo before reporting any of them as placed, then call set_media with the matching target_type and exact entity id returned by a read tool. Never switch to a bare file_id or invent a download URL. For ordered placements such as experience_media, first call the read tool, merge each uploaded asset into the existing ordered media ids, then assign the complete asset_ids list.",
           "Reply confirming exactly where each photo was placed.",
         ].join(" "),
       };

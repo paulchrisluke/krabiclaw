@@ -52,8 +52,8 @@ Related workflow helpers:
 - Canonical MCP generated-image contracts are split by source:
   - ChatGPT native image-generation output: `save_generated_image_file({ site_id, attachment_id, prompt })`
   - Raw base64 from a non-native image source: `save_generated_image({ site_id, image_data_base64, prompt })`
-- For user-attached ChatGPT images, use `upload_user_photo({ site_id, file, category, description })` and pass the attachment via the `file` argument so ChatGPT can rewrite the local mounted path into an authorized file reference before KrabiClaw receives it.
-- `upload_user_media({ site_id, file, poster_file?, category, description })` is the canonical generic upload path for both images and videos — the content type is auto-detected from the file bytes. `upload_user_photo` remains a thin, image-only back-compat wrapper over the same underlying upload utility.
+- `upload_user_media({ site_id, file, poster_file?, category, description })` is the only user-attachment upload path. Pass the resolved native ChatGPT file argument; the content type is detected from the file bytes.
+- One `upload_user_media` call performs one download attempt. If ChatGPT attachment delivery fails, stop and ask the user to attach the file again. Do not retry with a bare file ID, fabricate a download URL, or switch transports.
 - ChatGPT MCP uploads use native file attachments. There are no upload widget tools in the connector; no tool whose name starts with `open_` and contains `upload` exists.
 - Do not bypass the ChatGPT file-argument rewrite by fabricating `download_url` objects or inventing attachment transport.
 - Prefer business-level image workflows over generic file handoff when the user intent is domain-specific:
@@ -62,7 +62,6 @@ Related workflow helpers:
   - `set_media` uses explicit targets for `/about` and `/` story images because each page has its own `story.image` content field — they commonly point at the same asset, but the page is never inferred
 - MCP tools should be coarse-grained and business-level:
   - `get_site_media_assets`
-  - `upload_user_photo`
   - `upload_user_media`
   - `update_media_asset`
   - `delete_media_asset`

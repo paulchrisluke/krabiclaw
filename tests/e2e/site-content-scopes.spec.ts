@@ -1,10 +1,8 @@
 import { expect, test } from '@playwright/test'
 import { tenantExtraHeaders } from './helpers'
 import { loginAs } from './helpers/auth'
-import { devLoginHeaders } from './test-env'
 
-const OWNER_USER_ID = 'user-demo'
-const ORGANIZATION_ID = 'org-demo'
+const OWNER_USER_ID = 'user-e2e-demo-owner'
 const SITE_ID = 'site-demo'
 const LOCATION_ID = 'loc-demo'
 
@@ -98,12 +96,7 @@ test.describe('site-level Q&A and owner-entered reviews', () => {
       const publicBody = await publicList.json() as { reviews: Array<{ id: string; verified: boolean }> }
       expect(publicBody.reviews.find(review => review.id === reviewId)?.verified).toBe(false)
 
-      const editorMember = await request.post(`${baseURL}/api/dev/test-member`, {
-        headers: devLoginHeaders(),
-        data: { role: 'editor', organizationId: ORGANIZATION_ID },
-      })
-      const editorBody = await editorMember.json() as { user: { id: string } }
-      await loginAs(request, baseURL!, editorBody.user.id)
+      await loginAs(request, baseURL!, 'user-e2e-demo-editor')
       const editorCreate = await request.post(`${baseURL}/api/editor/sites/${SITE_ID}/reviews`, {
         headers: tenantExtraHeaders,
         data: payload,

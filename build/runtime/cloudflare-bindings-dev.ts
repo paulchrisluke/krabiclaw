@@ -53,20 +53,16 @@ async function createPlatformProxy() {
     configPath?: string
     persistDir?: string
     environment?: string
-    envFiles?: string[]
     remoteBindings?: boolean
   } | undefined
-  const envFiles = Array.isArray(wrangler?.envFiles) ? wrangler.envFiles : []
   const proxyOptions: {
     configPath?: string
     persist?: { path: string }
     environment?: string
-    envFiles?: string[]
     remoteBindings?: boolean
   } = {
     configPath: wrangler?.configPath,
     persist: { path: wrangler?.persistDir || '.wrangler/state/v3' },
-    envFiles,
     remoteBindings: wrangler?.remoteBindings,
   }
 

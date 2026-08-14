@@ -6,7 +6,7 @@ import { AGENT_GUIDANCE_REVIEW_RESPONSE_SCHEMA, RESOLVED_AGENT_GUIDANCE_SCHEMA }
 import { AGENT_SKILL_TOOLS } from '../../server/utils/mcp-tools/agent-skills.ts'
 import { getMcpTool } from '../../server/utils/mcp-tools/index.ts'
 import { getPlatformMcpTool, PLATFORM_PUBLIC_MCP_TOOLS } from '../../server/utils/platform-mcp-tools.ts'
-import { validateNoUnknownTopLevelArguments } from '../../server/utils/mcp-tool-validation.ts'
+import { validateArguments } from '../../server/utils/mcp-tool-validation.ts'
 
 function tenantTool(name: string) {
   const tool = AGENT_SKILL_TOOLS.find(candidate => candidate.name === name)
@@ -81,14 +81,14 @@ test('blog guidance review passes a minimal canonical content_blocks draft', asy
 })
 
 test('guidance tool schemas are strict at the MCP boundary', () => {
-  assert.throws(() => validateNoUnknownTopLevelArguments(
+  assert.throws(() => validateArguments(
     tenantTool('resolve_agent_guidance').inputSchema,
     { site_id: 'site_1', task: 'blog.write', unexpected: true },
   ), /Unknown argument: unexpected/)
 
   const platformTool = getPlatformMcpTool('review_platform_agent_guidance_candidate')
   assert.ok(platformTool)
-  assert.throws(() => validateNoUnknownTopLevelArguments(
+  assert.throws(() => validateArguments(
     platformTool.inputSchema,
     { task: 'image.generate', candidate_type: 'image_brief', candidate: {}, raw_base64: 'nope' },
   ), /Unknown argument: raw_base64/)

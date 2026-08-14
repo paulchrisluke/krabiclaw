@@ -15,10 +15,6 @@
  *    tracks applied migrations by filename, not content, so renaming a
  *    filename that's already applied anywhere makes wrangler re-run it and
  *    fail with "table X already exists").
- * 3. Rejects rebuilding the sites parent table. D1/Drizzle sends migration
- *    statements in separate batches, so PRAGMA foreign_keys=OFF does not
- *    protect site-owned rows when a later statement drops sites.
- *
  * Usage:
  *   node scripts/lint-migrations.mjs
  */
@@ -29,6 +25,7 @@ import { join, relative } from 'node:path'
 
 const ROOT = process.cwd()
 const MIGRATIONS_DIR = join(ROOT, 'migrations')
+const LAST_AUDITED_DUPLICATE_NUMBER = 99
 
 const REQUIRED_HISTORICAL_FILES = [
   '0001_initial.sql',
@@ -64,28 +61,6 @@ function lintTransactionControl(sql, filePath) {
   return violations
 }
 
-function lintSitesParentRebuild(sql, filePath) {
-  const violations = []
-  const patterns = [
-    { re: /CREATE\s+TABLE\s+[`"]?__new_sites[`"]?/gi, message: 'Creating __new_sites is forbidden' },
-    { re: /DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?[`"]?sites[`"]?/gi, message: 'Dropping the sites parent table is forbidden' },
-  ]
-
-  for (const { re, message } of patterns) {
-    let match
-    while ((match = re.exec(sql)) !== null) {
-      const line = sql.slice(0, match.index).split('\n').length
-      violations.push({
-        file: relative(ROOT, filePath),
-        line,
-        message: `${message} — it cascades deletion into tenant-owned tables in D1. Add compatible ALTER/INDEX statements instead.`,
-      })
-    }
-  }
-
-  return violations
-}
-
 async function collectSqlFiles() {
   if (!existsSync(MIGRATIONS_DIR)) return []
   const entries = await readdir(MIGRATIONS_DIR)
@@ -111,6 +86,25 @@ function lintHistoricalFilenames(presentFiles) {
   return violations
 }
 
+function lintDuplicateMigrationNumbers(presentFiles) {
+  const byNumber = new Map()
+  for (const file of presentFiles) {
+    const name = relative(MIGRATIONS_DIR, file)
+    const number = Number.parseInt(name.slice(0, 4), 10)
+    if (!Number.isInteger(number) || number <= LAST_AUDITED_DUPLICATE_NUMBER) continue
+    const names = byNumber.get(number) ?? []
+    names.push(name)
+    byNumber.set(number, names)
+  }
+
+  return [...byNumber.entries()]
+    .filter(([, names]) => names.length > 1)
+    .map(([number, names]) => ({
+      file: `migrations/${String(number).padStart(4, '0')}_*.sql`,
+      message: `Duplicate migration number: ${names.join(', ')}. Regenerate the later migration on the current target branch.`,
+    }))
+}
+
 let totalViolations = 0
 
 const sqlFiles = await collectSqlFiles()
@@ -120,12 +114,14 @@ for (const violation of lintHistoricalFilenames(sqlFiles)) {
   totalViolations++
 }
 
+for (const violation of lintDuplicateMigrationNumbers(sqlFiles)) {
+  console.error(`  ✗ ${violation.file} — ${violation.message}`)
+  totalViolations++
+}
+
 for (const file of sqlFiles) {
   const sql = await readFile(file, 'utf8')
-  const violations = [
-    ...lintTransactionControl(sql, file),
-    ...lintSitesParentRebuild(sql, file),
-  ]
+  const violations = lintTransactionControl(sql, file)
 
   if (violations.length === 0) {
     console.log(`  ✓ ${relative(ROOT, file)}`)

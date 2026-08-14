@@ -7,6 +7,7 @@ import {
   getPlatformHosts,
   hostnameOf,
   isPlatformHost,
+  isPreviewContext,
   normalizeHost,
   type TenantHostEnv,
 } from '../../server/utils/tenant-hosts.ts'
@@ -107,8 +108,7 @@ test('isPlatformHost recognizes the deployed *.pages.dev preview host', () => {
 
 test('isPlatformHost recognizes deployed CI preview Worker hosts on workers.dev', () => {
   assert.equal(isPlatformHost('krabiclaw-preview.paulchrisluke.workers.dev', prodEnv), true)
-  assert.equal(isPlatformHost('ci-pr-1234567890-krabiclaw-preview.paulchrisluke.workers.dev', prodEnv), true)
-  assert.equal(isPlatformHost('5a91b33e-krabiclaw-preview.paulchrisluke.workers.dev', prodEnv), true)
+  assert.equal(isPlatformHost('ci-pr-1234567890-krabiclaw-preview.paulchrisluke.workers.dev', prodEnv), false)
   assert.equal(isPlatformHost('some-other-worker.paulchrisluke.workers.dev', prodEnv), false)
 })
 
@@ -120,6 +120,21 @@ test('getFreeSiteDomain normalizes the configured domain and strips its port', (
 
 test('getFreeSiteDomain falls back to krabiclaw.com when unconfigured', () => {
   assert.equal(getFreeSiteDomain({}), 'krabiclaw.com')
+})
+
+test('shared local and deployed test hosts use explicit tenant headers instead of nested hostnames', () => {
+  assert.equal(isPreviewContext('localhost'), true)
+  assert.equal(isPreviewContext('localhost:3000'), true)
+  assert.equal(isPreviewContext('127.0.0.1:3000'), true)
+  assert.equal(isPreviewContext('local.krabiclaw.com'), true)
+  assert.equal(isPreviewContext('LOCAL.KRABICLAW.COM'), true)
+  assert.equal(isPreviewContext('local.krabiclaw.com.'), true)
+  assert.equal(isPreviewContext('demo.local.krabiclaw.com'), false)
+  assert.equal(isPreviewContext('preview.krabiclaw.com'), true)
+  assert.equal(isPreviewContext('staging.krabiclaw.com'), true)
+  assert.equal(isPreviewContext('preview.customer.com'), false)
+  assert.equal(isPreviewContext('ci-pr-1234567890-krabiclaw-preview.paulchrisluke.workers.dev'), false)
+  assert.equal(isPreviewContext('some-other-worker.paulchrisluke.workers.dev'), false)
 })
 
 test('deriveSubdomain matches a subdomain of the configured platform domain', () => {

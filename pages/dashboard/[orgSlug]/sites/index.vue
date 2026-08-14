@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Sites">
         <template #leading>
-          <DashboardSidebarCollapseButton />
+          <DashboardNavbarLeading />
         </template>
         <template #trailing>
           <UButton v-if="canManageOrganization" icon="i-lucide-plus" label="Add site" size="sm" color="primary" variant="soft" :to="`/dashboard/${orgSlug}/sites/new`" />

@@ -1,6 +1,13 @@
 export const PUBLIC_READ_TIMEOUT_MS = 6_000
 export const DASHBOARD_READ_TIMEOUT_MS = 8_000
-export const MUTATION_TIMEOUT_MS = 15_000
+// Shared deadline for non-upload public and dashboard mutations.
+export const MUTATION_TIMEOUT_MS = 30_000
+export const MEDIA_UPLOAD_TIMEOUT_MS = 300_000
+
+export function mediaUploadSignal(callerSignal?: AbortSignal): AbortSignal {
+  const deadline = AbortSignal.timeout(MEDIA_UPLOAD_TIMEOUT_MS)
+  return callerSignal ? AbortSignal.any([callerSignal, deadline]) : deadline
+}
 
 export class ApiClientError extends Error {
   readonly statusCode: number

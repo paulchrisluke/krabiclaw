@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Testimonials">
         <template #leading>
-          <DashboardSidebarCollapseButton />
+          <DashboardNavbarLeading />
         </template>
         <template #trailing>
           <UButton icon="i-lucide-refresh-cw" color="neutral" variant="ghost" :loading="pending" aria-label="Refresh testimonials" @click="refresh()" />

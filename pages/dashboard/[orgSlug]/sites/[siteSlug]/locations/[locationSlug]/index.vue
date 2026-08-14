@@ -2,7 +2,7 @@
   <UDashboardPanel id="location-overview">
     <template #header>
       <UDashboardNavbar :title="location?.title || 'Location Overview'">
-        <template #leading><DashboardSidebarCollapseButton /></template>
+        <template #leading><DashboardNavbarLeading :detail-to="locationsBase" detail-label="Locations" /></template>
         <template #right>
           <UButton icon="i-lucide-settings" color="neutral" variant="outline" :to="`${locationBase}/settings`">Settings</UButton>
         </template>
@@ -138,6 +138,7 @@ const dashboardLocation = useDashboardLocation()
 const siteId = await useDashboardSiteId()
 const locationId = computed(() => dashboardLocation.currentLocationId.value ?? '')
 const locationBase = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations/${String(route.params.locationSlug)}`)
+const locationsBase = computed(() => `/dashboard/${String(route.params.orgSlug)}/sites/${String(route.params.siteSlug)}/locations`)
 const location = ref<LocationOverview | null>(null)
 const menus = ref<ApiRecord[]>([])
 const inboxSummary = ref<InboxSummary>({ openThreads: 0, unreadThreads: 0 })

@@ -654,7 +654,6 @@ export const media_assets = sqliteTable("media_assets", {
 	created_by_user_id: text().references(() => user.id, { onDelete: "set null" } ),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
-	delete_pending_at: text(),
 	// No Drizzle index() here: idx_media_assets_site (site_id, status, created_at DESC) and
 	// idx_media_assets_location (location_id, status, created_at DESC WHERE location_id IS NOT
 	// NULL) already cover this table's real query patterns - they were hand-authored in the
@@ -2062,11 +2061,7 @@ export const mcp_tool_call_events = sqliteTable("mcp_tool_call_events", {
 	oauth_client_id_hash: text(),
 	user_agent: text(),
 	cf_ray_id: text(),
-	deployment_version: text(),
 	catalog_fingerprint: text(),
-	compatibility_alias_used: integer(),
-	compatibility_tool_name: text(),
-	replacement_tool_names: text(),
 	unknown_tool_name: text(),
 	duration_ms: integer(),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
@@ -2078,7 +2073,6 @@ export const mcp_tool_call_events = sqliteTable("mcp_tool_call_events", {
 	index("idx_mcp_tool_call_events_method_created").on(table.method, table.created_at),
 	index("idx_mcp_tool_call_events_session").on(table.session_id_hash, table.created_at),
 	index("idx_mcp_tool_call_events_unknown").on(table.unknown_tool_name, table.created_at),
-	index("idx_mcp_tool_call_events_compat").on(table.compatibility_tool_name, table.created_at),
 ]);
 
 export const site_transfer_requests = sqliteTable("site_transfer_requests", {
@@ -2302,15 +2296,6 @@ export const themes = sqliteTable("themes", {
 	status: text().default("active"),
 	created_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 	updated_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
-});
-
-export const token_exchange_cache = sqliteTable("token_exchange_cache", {
-	code: text().primaryKey(),
-	state: text().default("pending").notNull(),
-	response_body: text().default("").notNull(),
-	http_status: integer().default(0).notNull(),
-	created_at: text().notNull(),
-	expires_at: text().notNull(),
 });
 
 export const user = sqliteTable("user", {

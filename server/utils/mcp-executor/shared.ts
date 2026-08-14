@@ -1,7 +1,3 @@
-// AUTO-SPLIT from the former monolithic mcp-executor.ts. Shared helpers and
-// the per-tool-call context type used across domain-scoped tool-call
-// handlers. Each domain file imports its own domain-specific dependencies
-// directly rather than through this module.
 import { createError, type H3Event } from "h3";
 import { queryFirst } from "~/server/db";
 import { assertSafeDownloadUrl } from "~/server/utils/platform-mcp-executor";
@@ -254,7 +250,7 @@ export function assignmentForGeneratedTarget(
     case "logo":
       return {
         assignTool: "set_media",
-        assignArgs: { site_id: siteId, target: { type: "site_logo" }, asset_ids: [] },
+        assignArgs: { site_id: siteId, target_type: "site_logo", asset_ids: [] },
         title: "Logo Concepts",
         subtitle: "Choose the mark that feels most like the brand.",
         useLabel: `Use as logo${forSite}`,
@@ -263,7 +259,7 @@ export function assignmentForGeneratedTarget(
     case "home_hero":
       return {
         assignTool: "set_media",
-        assignArgs: { site_id: siteId, target: { type: "home_hero" }, asset_ids: [] },
+        assignArgs: { site_id: siteId, target_type: "home_hero", asset_ids: [] },
         title: "Homepage Hero Images",
         subtitle: "Choose the image that best sets the tone for the homepage.",
         useLabel: `Use as homepage hero${forSite}`,
@@ -272,7 +268,7 @@ export function assignmentForGeneratedTarget(
     case "about_story_image":
       return {
         assignTool: "set_media",
-        assignArgs: { site_id: siteId, target: { type: "about_story_image" }, asset_ids: [] },
+        assignArgs: { site_id: siteId, target_type: "about_story_image", asset_ids: [] },
         title: "Story Images",
         subtitle: "Choose the image that best tells the brand story on the About page.",
         useLabel: `Use as About story image${forSite}`,
@@ -281,7 +277,7 @@ export function assignmentForGeneratedTarget(
     case "home_story_image":
       return {
         assignTool: "set_media",
-        assignArgs: { site_id: siteId, target: { type: "home_story_image" }, asset_ids: [] },
+        assignArgs: { site_id: siteId, target_type: "home_story_image", asset_ids: [] },
         title: "Story Images",
         subtitle: "Choose the image that best tells the brand story on the homepage.",
         useLabel: `Use as homepage story image${forSite}`,
@@ -291,7 +287,7 @@ export function assignmentForGeneratedTarget(
       const locationId = requiredString(args, "location_id");
       return {
         assignTool: "set_media",
-        assignArgs: { site_id: siteId, target: { type: "location_hero", location_id: locationId }, asset_ids: [] },
+        assignArgs: { site_id: siteId, target_type: "location_hero", location_id: locationId, asset_ids: [] },
         title: "Location Hero Images",
         subtitle: "Choose the image that best represents this location.",
         useLabel: `Use as location hero${forSite}`,
@@ -302,7 +298,7 @@ export function assignmentForGeneratedTarget(
       const postId = requiredString(args, "post_id");
       return {
         assignTool: "set_media",
-        assignArgs: { site_id: siteId, target: { type: "post_image", post_id: postId }, asset_ids: [] },
+        assignArgs: { site_id: siteId, target_type: "post_image", post_id: postId, asset_ids: [] },
         title: "Post Images",
         subtitle: "Choose the image that best fits this post.",
         useLabel: `Use for this post${forSite}`,
@@ -313,7 +309,7 @@ export function assignmentForGeneratedTarget(
       const menuItemId = requiredString(args, "menu_item_id");
       return {
         assignTool: "set_media",
-        assignArgs: { site_id: siteId, target: { type: "menu_item_media", menu_item_id: menuItemId }, asset_ids: [] },
+        assignArgs: { site_id: siteId, target_type: "menu_item_media", menu_item_id: menuItemId, asset_ids: [] },
         title: "Menu Item Media",
         subtitle: "Choose the media that best sells this item.",
         useLabel: `Use for this menu item${forSite}`,
@@ -324,7 +320,7 @@ export function assignmentForGeneratedTarget(
       const experienceId = requiredString(args, "experience_id");
       return {
         assignTool: "set_media",
-        assignArgs: { site_id: siteId, target: { type: "experience_media", experience_id: experienceId }, asset_ids: [] },
+        assignArgs: { site_id: siteId, target_type: "experience_media", experience_id: experienceId, asset_ids: [] },
         title: "Experience Media",
         subtitle: "Choose the media that best captures the experience.",
         useLabel: `Use for this experience${forSite}`,
@@ -487,126 +483,26 @@ export function toolFileReference(value: unknown, key: string): ToolFileReferenc
   };
 }
 
-async function fetchUploadedFileFromAiGateway(
-  fileId: string,
-  env: ApiRecord,
-  maxBytes: number,
-): Promise<{ buffer: ArrayBuffer; contentType: string; normalizedFileId: string }> {
-  const accountId = env.CF_ACCOUNT_ID as string | undefined;
-  const gatewayName = env.CF_GATEWAY_NAME as string | undefined;
-  const aigToken = env.CLOUDFLARE_API_TOKEN as string | undefined;
-
-  if (!accountId || !gatewayName || !aigToken) {
-    throw new Error(
-      "CF AI Gateway env vars not configured (CF_ACCOUNT_ID, CF_GATEWAY_NAME, CLOUDFLARE_API_TOKEN)",
-    );
-  }
-
-  const normalizedFileId = fileId
-    .trim()
-    .replace(/^sediment:\/\//i, "")
-    .replace(/^file:\/\//i, "")
-    .replace(/^\/+/, "");
-
-  if (!normalizedFileId || !/^[a-zA-Z0-9_-]+$/.test(normalizedFileId)) {
+async function fetchToolFile(file: ToolFileReference, timeoutMs: number): Promise<Response> {
+  const safeDownloadUrl = assertSafeDownloadUrl(file.download_url, `Attachment ${file.file_id}`);
+  try {
+    return await fetch(safeDownloadUrl, {
+      redirect: "manual",
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "unknown network error";
     throw mcpProtocolError(
       MCP_ERROR.invalidParams,
-      "file_id must be a valid uploaded file identifier.",
+      `Failed to download attachment ${file.file_id}: ${reason}`,
     );
   }
-
-  const url = `https://gateway.ai.cloudflare.com/v1/${accountId}/${gatewayName}/openai/v1/files/${normalizedFileId}/content`;
-  const response = await fetch(url, {
-    headers: { "cf-aig-authorization": `Bearer ${aigToken}` },
-    signal: AbortSignal.timeout(30_000),
-  });
-
-  if (!response.ok) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: `Failed to fetch uploaded file ${normalizedFileId} via AI Gateway: ${response.status}`,
-    });
-  }
-
-  const buffer = await readMediaBufferWithLimit(response, `File ${normalizedFileId}`, maxBytes);
-  const contentType = response.headers.get("content-type") ?? "application/octet-stream";
-  return { buffer, contentType, normalizedFileId };
-}
-
-export async function resolveUserUploadedImageFile(
-  fileId: string,
-  env: ApiRecord,
-): Promise<{ buffer: ArrayBuffer; contentType: string; filename: string }> {
-  const { buffer, contentType, normalizedFileId } = await fetchUploadedFileFromAiGateway(fileId, env, MAX_IMAGE_BYTES);
-
-  if (!contentType.startsWith("image/")) {
-    throw mcpProtocolError(
-      MCP_ERROR.invalidParams,
-      `File ${normalizedFileId} is not an image.`,
-    );
-  }
-
-  const bytes = new Uint8Array(buffer);
-  const detectedContentType = validateImageBuffer(
-    bytes,
-    `file ${normalizedFileId}`,
-  );
-  const filename = safeAttachmentFilename({ file_id: normalizedFileId }, detectedContentType);
-  return { buffer, contentType: detectedContentType, filename };
-}
-
-/**
- * file_id-only fallback for upload_user_media, mirroring
- * resolveUserUploadedImageFile's AI Gateway fetch but accepting video/* in
- * addition to image/*, using the same magic-byte sniffing as
- * resolveUserUploadedMediaFile rather than trusting the declared content type.
- */
-export async function resolveUserUploadedMediaFileById(
-  fileId: string,
-  env: ApiRecord,
-): Promise<ResolvedMediaFile> {
-  const { buffer, contentType, normalizedFileId } = await fetchUploadedFileFromAiGateway(fileId, env, MAX_VIDEO_BYTES);
-  const bytes = new Uint8Array(buffer);
-  const markdownType = resolveMarkdownMimeType(contentType);
-  if (markdownType) {
-    assertMarkdownSize(bytes.byteLength);
-    decodeMarkdownText(buffer);
-    return { buffer, contentType: markdownType, filename: safeAttachmentFilename({ file_id: normalizedFileId }, markdownType), kind: "file" };
-  }
-  if (bytes.byteLength < 64) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: `Invalid media payload from file ${normalizedFileId}: payload too small.`,
-    });
-  }
-
-  const sniffedContentType = sniffMediaMimeType(bytes);
-  const isVideo = VIDEO_MIME_TYPES.has(sniffedContentType);
-  const isImage = RESOLVED_MEDIA_IMAGE_TYPES.has(sniffedContentType);
-  if (!isVideo && !isImage) {
-    throw mcpProtocolError(
-      MCP_ERROR.invalidParams,
-      `File ${normalizedFileId} is not a supported image or video type.`,
-    );
-  }
-  if (isImage && bytes.byteLength > MAX_IMAGE_BYTES) {
-    throw createError({
-      statusCode: 413,
-      statusMessage: `Invalid image payload from file ${normalizedFileId}: payload exceeds ${MAX_IMAGE_BYTES} byte limit.`,
-    });
-  }
-
-  const filename = safeAttachmentFilename({ file_id: normalizedFileId }, sniffedContentType);
-  return { buffer, contentType: sniffedContentType, filename, kind: isVideo ? "video" : "image" };
 }
 
 export async function resolveGeneratedImageFile(
   file: ToolFileReference,
-): Promise<{ buffer: ArrayBuffer; contentType: string; filename: string }> {
-  const safeDownloadUrl = assertSafeDownloadUrl(file.download_url, `Attachment ${file.file_id}`);
-  const response = await fetch(safeDownloadUrl, {
-    signal: AbortSignal.timeout(15_000),
-  });
+): Promise<{ buffer: Uint8Array<ArrayBuffer>; contentType: string; filename: string }> {
+  const response = await fetchToolFile(file, 15_000);
   if (!response.ok) {
     throw createError({
       statusCode: 400,
@@ -625,8 +521,12 @@ export async function resolveGeneratedImageFile(
     );
   }
 
-  const buffer = await response.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
+  const buffer = await readMediaBufferWithLimit(
+    response,
+    `Attachment ${file.file_id}`,
+    MAX_IMAGE_BYTES,
+  );
+  const bytes = buffer;
   const detectedContentType = validateImageBuffer(
     bytes,
     `attachment ${file.file_id}`,
@@ -636,7 +536,7 @@ export async function resolveGeneratedImageFile(
 }
 
 export interface ResolvedMediaFile {
-  buffer: ArrayBuffer;
+  buffer: Uint8Array<ArrayBuffer>;
   contentType: string;
   filename: string;
   kind: "image" | "video" | "file";
@@ -648,9 +548,15 @@ async function readMediaBufferWithLimit(
   response: Response,
   label: string,
   maxBytes: number,
-): Promise<ArrayBuffer> {
-  const declaredLength = Number.parseInt(response.headers.get("content-length") ?? "", 10);
-  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+): Promise<Uint8Array<ArrayBuffer>> {
+  const contentLength = response.headers.get("content-length");
+  const declaredLength = contentLength === null
+    ? null
+    : /^\d+$/.test(contentLength) ? Number(contentLength) : Number.NaN;
+  if (declaredLength !== null && !Number.isSafeInteger(declaredLength)) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `${label} has an invalid content-length header.`);
+  }
+  if (declaredLength !== null && declaredLength > maxBytes) {
     throw mcpProtocolError(MCP_ERROR.invalidParams, `${label} exceeds the ${maxBytes} byte limit.`);
   }
 
@@ -659,11 +565,16 @@ async function readMediaBufferWithLimit(
     if (buffer.byteLength > maxBytes) {
       throw mcpProtocolError(MCP_ERROR.invalidParams, `${label} exceeds the ${maxBytes} byte limit.`);
     }
-    return buffer;
+    return new Uint8Array(buffer);
   }
 
   const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
+  const resizable = declaredLength === null;
+  const initialCapacity = resizable ? Math.min(64 * 1024, maxBytes) : declaredLength;
+  const buffer = resizable
+    ? new ArrayBuffer(initialCapacity, { maxByteLength: maxBytes })
+    : new ArrayBuffer(initialCapacity);
+  let bytes = new Uint8Array(buffer);
   let total = 0;
 
   try {
@@ -671,40 +582,39 @@ async function readMediaBufferWithLimit(
       const { done, value } = await reader.read();
       if (done) break;
       if (!value) continue;
-      total += value.byteLength;
-      if (total > maxBytes) {
+      if (total + value.byteLength > maxBytes) {
         await reader.cancel();
         throw mcpProtocolError(MCP_ERROR.invalidParams, `${label} exceeds the ${maxBytes} byte limit.`);
       }
-      chunks.push(value);
+      const requiredCapacity = total + value.byteLength;
+      if (!resizable && requiredCapacity > buffer.byteLength) {
+        await reader.cancel();
+        throw mcpProtocolError(MCP_ERROR.invalidParams, `${label} exceeded its content-length header.`);
+      }
+      if (resizable && requiredCapacity > buffer.byteLength) {
+        buffer.resize(Math.min(maxBytes, Math.max(requiredCapacity, buffer.byteLength * 2)));
+        bytes = new Uint8Array(buffer);
+      }
+      bytes.set(value, total);
+      total += value.byteLength;
     }
   } finally {
     reader.releaseLock();
   }
 
-  const merged = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    merged.set(chunk, offset);
-    offset += chunk.byteLength;
+  if (declaredLength !== null && total !== declaredLength) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, `${label} length did not match its content-length header.`);
   }
-  return merged.buffer;
+  if (resizable && buffer.byteLength !== total) buffer.resize(total);
+  return new Uint8Array(buffer);
 }
 
-/**
- * Resolves a ChatGPT file reference to raw bytes for either an image or a
- * video, using the same magic-byte sniffing as the dashboard's multipart
- * video/file upload route (server/utils/media-mime.ts) rather
- * than trusting the declared content type. Unlike resolveGeneratedImageFile,
- * this accepts video/* in addition to image/*.
- */
+/** Resolve a ChatGPT file reference and verify its type from its bytes. */
 export async function resolveUserUploadedMediaFile(
   file: ToolFileReference,
+  maxBytes = MAX_VIDEO_BYTES,
 ): Promise<ResolvedMediaFile> {
-  const safeDownloadUrl = assertSafeDownloadUrl(file.download_url, `Attachment ${file.file_id}`);
-  const response = await fetch(safeDownloadUrl, {
-    signal: AbortSignal.timeout(30_000),
-  });
+  const response = await fetchToolFile(file, 30_000);
   if (!response.ok) {
     throw createError({
       statusCode: 400,
@@ -715,9 +625,9 @@ export async function resolveUserUploadedMediaFile(
   const buffer = await readMediaBufferWithLimit(
     response,
     `Attachment ${file.file_id}`,
-    MAX_VIDEO_BYTES,
+    maxBytes,
   );
-  const bytes = new Uint8Array(buffer);
+  const bytes = buffer;
   const markdownType = resolveMarkdownMimeType(file.mime_type, file.file_name);
   if (markdownType) {
     assertMarkdownSize(bytes.byteLength);
@@ -745,7 +655,7 @@ export async function resolveUserUploadedMediaFile(
       `Attachment ${file.file_id} is not a supported image or video type.`,
     );
   }
-  if (isImage && bytes.byteLength > MAX_IMAGE_BYTES) {
+  if (isImage && bytes.byteLength > Math.min(MAX_IMAGE_BYTES, maxBytes)) {
     throw createError({
       statusCode: 413,
       statusMessage: `Invalid image payload from attachment ${file.file_id}: payload exceeds ${MAX_IMAGE_BYTES} byte limit.`,
@@ -761,78 +671,204 @@ export interface GoogleMapsSignals {
   lat: number | null;
   lng: number | null;
   rawId: string | null;
-  isHexCid: boolean;
   isChijId: boolean;
-  hasStrongSignals: boolean;
+}
+
+export interface GoogleMapsPlaceCandidate {
+  placeId?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+}
+
+export interface GoogleMapsPlaceResolution {
+  placeId: string;
+  resolvedUrl: string;
+  usedTextSearch: boolean;
+}
+
+interface GoogleMapsPlaceResolverDependencies {
+  resolveShortLink: (_url: string) => Promise<{ ok: boolean; url: string }>;
+  searchPlaces: (
+    _query: string,
+    _locationBias: { latitude: number; longitude: number },
+  ) => Promise<GoogleMapsPlaceCandidate[]>;
+}
+
+function validCoordinates(
+  lat: number | null | undefined,
+  lng: number | null | undefined,
+): { lat: number; lng: number } | null {
+  if (
+    typeof lat === "number" &&
+    Number.isFinite(lat) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    typeof lng === "number" &&
+    Number.isFinite(lng) &&
+    lng >= -180 &&
+    lng <= 180
+  ) {
+    return { lat, lng };
+  }
+  return null;
+}
+
+export async function resolveGoogleMapsPlace(
+  rawUrl: string,
+  dependencies: GoogleMapsPlaceResolverDependencies,
+): Promise<GoogleMapsPlaceResolution> {
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(rawUrl);
+  } catch {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, "Invalid Maps URL.");
+  }
+
+  if (!isAllowedGoogleMapsHost(parsedUrl.hostname)) {
+    throw mcpProtocolError(
+      MCP_ERROR.invalidParams,
+      "URL does not appear to be a Google Maps link. Please paste a google.com/maps or maps.app.goo.gl link.",
+    );
+  }
+
+  let resolvedUrl = parsedUrl.toString();
+  if (parsedUrl.hostname === "maps.app.goo.gl") {
+    let probe: { ok: boolean; url: string };
+    try {
+      probe = await dependencies.resolveShortLink(parsedUrl.toString());
+    } catch {
+      throw createError({
+        statusCode: 502,
+        statusMessage: "Google Maps link resolution failed.",
+      });
+    }
+
+    let resolvedHost: string;
+    try {
+      resolvedHost = new URL(probe.url).hostname;
+    } catch {
+      throw mcpProtocolError(
+        MCP_ERROR.invalidParams,
+        "The Google Maps share link did not resolve to a valid Google Maps place URL.",
+      );
+    }
+    if (!probe.ok || !isAllowedGoogleMapsHost(resolvedHost)) {
+      throw mcpProtocolError(
+        MCP_ERROR.invalidParams,
+        "The Google Maps share link did not resolve to a valid Google Maps place URL.",
+      );
+    }
+    resolvedUrl = probe.url;
+  }
+
+  const signals = extractGoogleMapsSignals(resolvedUrl);
+  if (signals.isChijId && signals.rawId) {
+    return {
+      placeId: signals.rawId,
+      resolvedUrl,
+      usedTextSearch: false,
+    };
+  }
+
+  if (!signals.nameHint) {
+    throw mcpProtocolError(
+      MCP_ERROR.invalidParams,
+      "Could not extract place details from that Maps URL. Try copying the full Google Maps URL from the address bar.",
+    );
+  }
+  const urlCoordinates = validCoordinates(signals.lat, signals.lng);
+  if (!urlCoordinates) {
+    throw mcpProtocolError(
+      MCP_ERROR.invalidParams,
+      "This URL does not contain valid location coordinates. Paste the full Google Maps URL from the address bar so the place can be identified precisely.",
+    );
+  }
+
+  const locationBias = {
+    latitude: urlCoordinates.lat,
+    longitude: urlCoordinates.lng,
+  };
+  let results: GoogleMapsPlaceCandidate[];
+  try {
+    results = await dependencies.searchPlaces(signals.nameHint, locationBias);
+  } catch (error) {
+    throw createError({
+      statusCode: 502,
+      statusMessage:
+        error instanceof Error ? error.message : "Google Places search failed.",
+    });
+  }
+
+  const candidate = results[0];
+  if (!candidate?.placeId) {
+    throw mcpProtocolError(
+      MCP_ERROR.invalidParams,
+      `Could not find "${signals.nameHint}" in Google Places. Try the full Maps URL from the address bar.`,
+    );
+  }
+  const candidateCoordinates = validCoordinates(candidate.lat, candidate.lng);
+  if (!candidateCoordinates) {
+    throw mcpProtocolError(
+      MCP_ERROR.invalidParams,
+      `The top search result for "${signals.nameHint}" did not include valid coordinates and could not be verified against the Maps URL.`,
+    );
+  }
+
+  const distanceKm = haversineKm(
+    locationBias.latitude,
+    locationBias.longitude,
+    candidateCoordinates.lat,
+    candidateCoordinates.lng,
+  );
+  if (distanceKm > 5) {
+    throw mcpProtocolError(
+      MCP_ERROR.invalidParams,
+      `The top search result for "${signals.nameHint}" is ${Math.round(distanceKm)} km from the location in that URL. Paste the full Google Maps URL from the address bar so the exact place can be identified.`,
+    );
+  }
+
+  return {
+    placeId: candidate.placeId,
+    resolvedUrl,
+    usedTextSearch: true,
+  };
 }
 
 export function extractGoogleMapsSignals(resolvedUrl: string): GoogleMapsSignals {
   const rawIdMatch = resolvedUrl.match(/!1s([^!&]+)/);
-  const rawId = rawIdMatch ? decodeURIComponent(rawIdMatch[1]!) : null;
-  const isHexCid = rawId ? /^0x[0-9a-f]+:0x[0-9a-f]+$/i.test(rawId) : false;
+  let rawId: string | null = null;
+  if (rawIdMatch?.[1]) {
+    try {
+      rawId = decodeURIComponent(rawIdMatch[1]);
+    } catch {
+      rawId = null;
+    }
+  }
   const isChijId = rawId ? /^ChIJ/.test(rawId) : false;
 
   const nameFromPath = resolvedUrl.match(/\/maps\/place\/([^/@?]+)/)?.[1];
-  const nameHint = nameFromPath
-    ? decodeURIComponent(nameFromPath.replace(/\+/g, " "))
-    : null;
+  let nameHint: string | null = null;
+  if (nameFromPath) {
+    try {
+      nameHint = decodeURIComponent(nameFromPath.replace(/\+/g, " "));
+    } catch {
+      nameHint = null;
+    }
+  }
 
   // !3d/!4d are the exact business coords; @ is the map viewport (less precise)
-  const lat3d = resolvedUrl.match(/!3d(-?[\d.]+)/)?.[1];
-  const lng4d = resolvedUrl.match(/!4d(-?[\d.]+)/)?.[1];
-  const viewportMatch = resolvedUrl.match(/@(-?[\d.]+),(-?[\d.]+)/);
+  const coordinatePattern = "-?\\d+(?:\\.\\d+)?";
+  const lat3d = resolvedUrl.match(new RegExp(`!3d(${coordinatePattern})`))?.[1];
+  const lng4d = resolvedUrl.match(new RegExp(`!4d(${coordinatePattern})`))?.[1];
+  const viewportMatch = resolvedUrl.match(
+    new RegExp(`@(${coordinatePattern}),(${coordinatePattern})`),
+  );
   const latRaw = lat3d ?? viewportMatch?.[1] ?? null;
   const lngRaw = lng4d ?? viewportMatch?.[2] ?? null;
   const lat = latRaw != null ? Number(latRaw) : null;
   const lng = lngRaw != null ? Number(lngRaw) : null;
 
-  const hasStrongSignals = lat != null && lng != null && (isChijId || isHexCid);
-
-  return { nameHint, lat, lng, rawId, isHexCid, isChijId, hasStrongSignals };
-}
-
-export interface ParsedHint {
-  name_hint?: string;
-  lat?: number;
-  lng?: number;
-  feature_id?: string;
-  internal_id?: string;
-  expected_country?: string;
-  expected_region?: string;
-}
-
-export interface MatchingPolicy {
-  allow_name_only_fallback: boolean;
-  require_coordinate_match: boolean;
-  max_distance_km: number;
-  prefer_backend_extraction: boolean;
-}
-
-export const DEFAULT_MATCHING_POLICY: MatchingPolicy = {
-  allow_name_only_fallback: false,
-  require_coordinate_match: true,
-  max_distance_km: 5,
-  prefer_backend_extraction: true,
-};
-
-export function resolveMatchingPolicy(raw: unknown): MatchingPolicy {
-  if (!raw || typeof raw !== "object") return DEFAULT_MATCHING_POLICY;
-  const p = raw as Partial<MatchingPolicy>;
-  return {
-    allow_name_only_fallback:
-      p.allow_name_only_fallback ??
-      DEFAULT_MATCHING_POLICY.allow_name_only_fallback,
-    require_coordinate_match:
-      p.require_coordinate_match ??
-      DEFAULT_MATCHING_POLICY.require_coordinate_match,
-    max_distance_km:
-      typeof p.max_distance_km === "number"
-        ? p.max_distance_km
-        : DEFAULT_MATCHING_POLICY.max_distance_km,
-    prefer_backend_extraction:
-      p.prefer_backend_extraction ??
-      DEFAULT_MATCHING_POLICY.prefer_backend_extraction,
-  };
+  return { nameHint, lat, lng, rawId, isChijId };
 }
 
 export function workspaceContextPayload(
@@ -1270,14 +1306,8 @@ export function normalizeMenuItemArgs(
   { requireSection }: { requireSection: boolean },
 ) {
   const normalized = { ...args };
-
-  if (
-    normalized.price_amount === undefined &&
-    normalized.price !== undefined &&
-    normalized.price !== null &&
-    normalized.price !== ""
-  ) {
-    normalized.price_amount = normalized.price;
+  if (Object.prototype.hasOwnProperty.call(normalized, "price")) {
+    throw mcpProtocolError(MCP_ERROR.invalidParams, "Unknown argument: price");
   }
 
   if (requireSection) {
@@ -1381,24 +1411,7 @@ export function normalizeChannelsInput(
   args: Record<string, unknown>,
 ): Array<"site" | "instagram" | "facebook"> {
   const rawChannels = args.channels;
-  const rawTargets = args.targets;
-
-  if (rawChannels !== undefined && rawTargets !== undefined) {
-    const normalizedChannels = normalizeChannelArray(rawChannels);
-    const normalizedTargets = normalizeChannelArray(rawTargets);
-    const channelSignature = [...normalizedChannels].sort().join(",");
-    const targetSignature = [...normalizedTargets].sort().join(",");
-    if (channelSignature !== targetSignature) {
-      throw mcpProtocolError(
-        MCP_ERROR.invalidParams,
-        "Provide either channels or targets, not conflicting values for both.",
-      );
-    }
-    return normalizedChannels;
-  }
-
   if (rawChannels !== undefined) return normalizeChannelArray(rawChannels);
-  if (rawTargets !== undefined) return normalizeChannelArray(rawTargets);
   return ["site"];
 }
 
@@ -1443,12 +1456,7 @@ export function assertDomainSuccess(result: {
 }
 
 export function normalizeSiteCreationData(data: Record<string, unknown>) {
-  const siteId =
-    typeof data.siteId === "string"
-      ? data.siteId
-      : typeof data.id === "string"
-        ? data.id
-        : "";
+  const siteId = typeof data.siteId === "string" ? data.siteId : "";
   if (!siteId.trim()) {
     throw mcpProtocolError(
       MCP_ERROR.invalidParams,
@@ -1457,9 +1465,7 @@ export function normalizeSiteCreationData(data: Record<string, unknown>) {
   }
   return {
     ...data,
-    id: siteId,
     siteId,
-    status: typeof data.status === "string" ? data.status : "active",
   };
 }
 

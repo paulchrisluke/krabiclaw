@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Work Queue">
         <template #leading>
-          <DashboardSidebarCollapseButton />
+          <DashboardNavbarLeading />
         </template>
         <template #trailing>
           <UButton color="neutral" variant="ghost" size="xs" :loading="workLoading" @click="loadWorkRequests">

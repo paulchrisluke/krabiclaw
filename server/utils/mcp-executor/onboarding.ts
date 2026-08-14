@@ -1,5 +1,4 @@
 import type { McpExecutorContext } from './shared'
-import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
 import { getPlatformDomain } from '~/server/utils/dashboard-notification-links'
 import { createPreviewToken } from '~/server/utils/preview-token'
 import { getFreeSiteDomain } from '~/server/utils/tenant-hosts'
@@ -7,7 +6,7 @@ import { getSiteForMcp } from '~/server/utils/mcp-workflows'
 import { uploadResolvedMediaToAssetStore } from '~/server/utils/media-upload'
 import { queryAll } from '~/server/db'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
-import { NOT_HANDLED, mutationContextPayload, optionalString, requiredString, resolveGeneratedImageFile, resolveGeneratedImageUpload, resolveImageUploadProvider, resolveUserUploadedImageFile, toolFileReference } from './shared'
+import { NOT_HANDLED, mutationContextPayload, optionalString, requiredString, resolveGeneratedImageFile, resolveGeneratedImageUpload, resolveImageUploadProvider, toolFileReference } from './shared'
 
 export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<unknown> {
   const { toolName, args, site } = ctx
@@ -130,50 +129,6 @@ export async function handleOnboardingTools(ctx: McpExecutorContext): Promise<un
         source: "generated",
         provider,
         altText: prompt ?? attachment.file_name ?? "AI-generated image attachment",
-      });
-
-      return {
-        assetId: uploaded.assetId,
-        publicUrl: uploaded.publicUrl,
-        thumbnailUrl: uploaded.thumbnailUrl,
-        context: await mutationContextPayload(site),
-      };
-    }
-    case "upload_user_photo": {
-      const description = optionalString(args, "description") ?? null;
-      const category = optionalString(args, "category") ?? null;
-      const fileReferenceValue = args.file;
-      const fileReference =
-        fileReferenceValue !== undefined
-          ? toolFileReference(fileReferenceValue, "file")
-          : null;
-      const fileId = optionalString(args, "file_id") ?? null;
-
-      if (!fileReference && !fileId) {
-        throw mcpProtocolError(
-          MCP_ERROR.invalidParams,
-          "upload_user_photo requires either file or file_id.",
-        );
-      }
-
-      const upload = fileReference
-        ? await resolveGeneratedImageFile(fileReference)
-        : await resolveUserUploadedImageFile(fileId!, site.env);
-      const provider = resolveImageUploadProvider(upload.contentType, site.env);
-      const uploaded = await uploadResolvedMediaToAssetStore({
-        db: site.db,
-        env: site.env as never,
-        siteId: site.siteId,
-        organizationId: site.organizationId,
-        userId: site.userId,
-        buffer: upload.buffer,
-        contentType: upload.contentType,
-        filename: upload.filename,
-        kind: "image",
-        source: "uploaded",
-        provider,
-        altText: description ?? fileReference?.file_name ?? fileId,
-        category: (category as never) ?? null,
       });
 
       return {

@@ -2,10 +2,12 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
-import { validateNoUnknownTopLevelArguments } from '../../server/utils/mcp-tool-validation.ts'
+import { validateArguments } from '../../server/utils/mcp-tool-validation.ts'
 import { MCP_ERROR } from '../../server/utils/mcp-protocol.ts'
-import { PLATFORM_INTERNAL_MCP_TOOLS, PLATFORM_MCP_TOOLS, PLATFORM_PUBLIC_MCP_TOOLS } from '../../server/utils/platform-mcp-tools.ts'
+import { getPlatformMcpTool, PLATFORM_INTERNAL_MCP_TOOLS, PLATFORM_MCP_TOOLS, PLATFORM_PUBLIC_MCP_TOOLS } from '../../server/utils/platform-mcp-tools.ts'
 import { BLOG_TOOLS } from '../../server/utils/mcp-tools/blog.ts'
+import { MEDIA_TOOLS } from '../../server/utils/mcp-tools/media.ts'
+import { MENUS_TOOLS } from '../../server/utils/mcp-tools/menus.ts'
 
 type ToolContract = {
   name: string
@@ -19,7 +21,7 @@ function tool(tools: readonly unknown[], name: string): ToolContract {
 }
 
 // Asserts both the message content and the MCP error code, so these tests
-// keep failing correctly if validateNoUnknownTopLevelArguments ever stops
+// keep failing correctly if validateArguments ever stops
 // throwing MCP_ERROR.invalidParams specifically (e.g. a refactor that starts
 // throwing a generic Error with a similar message would slip past a
 // message-only check).
@@ -30,10 +32,10 @@ function isInvalidParamsErrorContaining(text: string) {
     && (error as Error & { mcp?: { code?: number } }).mcp?.code === MCP_ERROR.invalidParams
 }
 
-test('validateNoUnknownTopLevelArguments rejects the exact 2026-07-22 incident payload against the new metadata tool', () => {
+test('validateArguments rejects the exact 2026-07-22 incident payload against the new metadata tool', () => {
   const metadataTool = tool(PLATFORM_MCP_TOOLS, 'update_platform_blog_metadata')
   assert.throws(
-    () => validateNoUnknownTopLevelArguments(metadataTool.inputSchema, {
+    () => validateArguments(metadataTool.inputSchema, {
       post_id: '7593c000-12cf-4ed4-ad06-e3ce3b73c4a7',
       title: 'Can AI Really Manage My Restaurant Website?',
       body: 'markdown content that was silently dropped',
@@ -47,27 +49,22 @@ test('validateNoUnknownTopLevelArguments rejects the exact 2026-07-22 incident p
   )
 })
 
-test('validateNoUnknownTopLevelArguments accepts a valid replace_platform_blog_content call', () => {
+test('validateArguments accepts a valid replace_platform_blog_content call', () => {
   const contentTool = tool(PLATFORM_MCP_TOOLS, 'replace_platform_blog_content')
-  assert.doesNotThrow(() => validateNoUnknownTopLevelArguments(contentTool.inputSchema, {
+  assert.doesNotThrow(() => validateArguments(contentTool.inputSchema, {
     post_id: 'post-1',
     expected_document_updated_at: '2026-07-22T00:00:00.000Z',
     content_blocks: [{ type: 'markdown', data: { markdown: 'Hello' } }],
   }))
 })
 
-test('validateNoUnknownTopLevelArguments accepts a metadata-only update_platform_blog_metadata call', () => {
+test('validateArguments accepts a metadata-only update_platform_blog_metadata call', () => {
   const metadataTool = tool(PLATFORM_MCP_TOOLS, 'update_platform_blog_metadata')
-  assert.doesNotThrow(() => validateNoUnknownTopLevelArguments(metadataTool.inputSchema, {
+  assert.doesNotThrow(() => validateArguments(metadataTool.inputSchema, {
     post_id: 'post-1',
     expected_updated_at: '2026-07-22T00:00:00.000Z',
     seo_description: 'Updated description only.',
   }))
-})
-
-test('update_platform_blog_post is hidden from discovery but retained in dispatch for stale catalogs', () => {
-  assert.equal(PLATFORM_MCP_TOOLS.some(t => t.name === 'update_platform_blog_post'), true)
-  assert.equal(PLATFORM_PUBLIC_MCP_TOOLS.some(t => t.name === 'update_platform_blog_post'), false)
 })
 
 test('update_platform_blog_metadata requires expected_updated_at and at least one metadata field beyond it', () => {
@@ -89,6 +86,8 @@ test('create_platform_blog_post requires a non-empty content_blocks array', () =
   const createTool = tool(PLATFORM_MCP_TOOLS, 'create_platform_blog_post')
   const properties = createTool.inputSchema.properties as Record<string, { minItems?: number }>
   assert.equal(properties.content_blocks?.minItems, 1)
+  assert.equal(Object.hasOwn(properties, 'publish'), false)
+  assert.equal(Object.hasOwn(properties, 'scheduled_for'), false)
 })
 
 test('PLATFORM_PUBLIC_MCP_TOOLS and PLATFORM_INTERNAL_MCP_TOOLS are disjoint and together form PLATFORM_MCP_TOOLS', () => {
@@ -96,32 +95,62 @@ test('PLATFORM_PUBLIC_MCP_TOOLS and PLATFORM_INTERNAL_MCP_TOOLS are disjoint and
   const internalNames = new Set(PLATFORM_INTERNAL_MCP_TOOLS.map(t => t.name))
   for (const name of internalNames) assert.equal(publicNames.has(name), false, `${name} should not be in both registries`)
   assert.equal(PLATFORM_MCP_TOOLS.length, PLATFORM_PUBLIC_MCP_TOOLS.length + PLATFORM_INTERNAL_MCP_TOOLS.length)
-  for (const name of ['get_content_document_outline', 'get_content_block', 'append_content_block', 'replace_content_block', 'delete_content_block', 'render_content_preview', 'publish_content_revision']) {
+  for (const name of ['get_content_document_outline', 'get_content_block', 'append_content_block', 'replace_content_block', 'delete_content_block', 'render_content_preview']) {
     assert.ok(internalNames.has(name), `${name} should be internal`)
+  }
+  assert.equal(getPlatformMcpTool('publish_content_revision'), null)
+})
+
+test('platform blog lifecycle tools require both exact concurrency tokens', () => {
+  for (const name of ['publish_platform_blog_post', 'unpublish_platform_blog_post']) {
+    const lifecycleTool = tool(PLATFORM_MCP_TOOLS, name)
+    assert.deepEqual(lifecycleTool.inputSchema.required, [
+      'post_id',
+      'expected_updated_at',
+      'expected_document_updated_at',
+    ])
+    assert.doesNotThrow(() => validateArguments(lifecycleTool.inputSchema, {
+      post_id: 'post-1',
+      expected_updated_at: '2026-07-22T00:00:00.000Z',
+      expected_document_updated_at: '2026-07-22T00:00:01.000Z',
+    }))
   }
 })
 
-test('validateNoUnknownTopLevelArguments accepts a minimal publish call', () => {
-  const publishPost = tool(PLATFORM_MCP_TOOLS, 'publish_platform_blog_post')
-  assert.doesNotThrow(() => validateNoUnknownTopLevelArguments(publishPost.inputSchema, {
-    post_id: 'post-1',
-  }))
-})
-
-test('validateNoUnknownTopLevelArguments is a no-op for schemas without additionalProperties: false', () => {
-  assert.doesNotThrow(() => validateNoUnknownTopLevelArguments(
+test('validateArguments permits unknown keys for schemas without additionalProperties: false', () => {
+  assert.doesNotThrow(() => validateArguments(
     { type: 'object', properties: { post_id: { type: 'string' } } },
     { post_id: 'post-1', anything_else: 'passes through unchanged' },
   ))
 })
 
-test('validateNoUnknownTopLevelArguments sorts multiple unknown keys deterministically', () => {
+test('validateArguments sorts multiple unknown keys deterministically', () => {
   assert.throws(
-    () => validateNoUnknownTopLevelArguments(
+    () => validateArguments(
       { type: 'object', additionalProperties: false, properties: { post_id: { type: 'string' } } },
       { post_id: 'post-1', zeta: 1, alpha: 2 },
     ),
     (error: unknown) => error instanceof Error && error.message === 'Unknown arguments: alpha, zeta' && (error as Error & { mcp?: { code?: number } }).mcp?.code === MCP_ERROR.invalidParams,
+  )
+})
+
+test('validateArguments rejects unknown fields in nested menu items and media references', () => {
+  const batch = tool(MENUS_TOOLS, 'add_menu_items_batch')
+  assert.throws(
+    () => validateArguments(batch.inputSchema, {
+      site_id: 'site-1',
+      menu_id: 'menu-1',
+      items: [{ section: 'Mains', name: 'Curry', prize_amount: 250 }],
+    }),
+    isInvalidParamsErrorContaining('items[0].prize_amount'),
+  )
+  assert.throws(
+    () => validateArguments(batch.inputSchema, {
+      site_id: 'site-1',
+      menu_id: 'menu-1',
+      items: [{ section: 'Mains', name: 'Curry', media: [{ asset_id: 'asset-1', url: 'ignored' }] }],
+    }),
+    isInvalidParamsErrorContaining('items[0].media[0].url'),
   )
 })
 
@@ -132,10 +161,10 @@ test('the tenant update_blog_post/create_blog_post schemas are strict (regressio
   }
 })
 
-test('validateNoUnknownTopLevelArguments rejects the tenant incident shape: update_blog_post called with body instead of content_blocks', () => {
+test('validateArguments rejects the tenant incident shape: update_blog_post called with body instead of content_blocks', () => {
   const updateBlogPost = tool(BLOG_TOOLS, 'update_blog_post')
   assert.throws(
-    () => validateNoUnknownTopLevelArguments(updateBlogPost.inputSchema, {
+    () => validateArguments(updateBlogPost.inputSchema, {
       site_id: 'site-1',
       post_id: 'post-1',
       expected_document_updated_at: '2026-07-22T00:00:00.000Z',
@@ -145,9 +174,9 @@ test('validateNoUnknownTopLevelArguments rejects the tenant incident shape: upda
   )
 })
 
-test('validateNoUnknownTopLevelArguments accepts a valid tenant update_blog_post call', () => {
+test('validateArguments accepts a valid tenant update_blog_post call', () => {
   const updateBlogPost = tool(BLOG_TOOLS, 'update_blog_post')
-  assert.doesNotThrow(() => validateNoUnknownTopLevelArguments(updateBlogPost.inputSchema, {
+  assert.doesNotThrow(() => validateArguments(updateBlogPost.inputSchema, {
     site_id: 'site-1',
     post_id: 'post-1',
     expected_document_updated_at: '2026-07-22T00:00:00.000Z',
@@ -172,30 +201,17 @@ test('tenant replace_blog_content requires content_blocks and expected_document_
   assert.equal(properties.content_blocks?.minItems, 1)
 })
 
-test('create_platform_blog_post/replace_platform_blog_content descriptions describe content_blocks, not the retired body/components/embed-tag authoring model', () => {
-  // Regression: SHARED_TOOL_DESCRIPTION_LINES told the model to send a flat
-  // `body` string plus a separate `components[]` array with {{component
-  // type="..."}} placeholder tags — an interface that predates content_blocks
-  // and no longer exists in either tool's inputSchema. That mismatch is the
-  // likely reason ChatGPT sessions kept sending `body`/`components` and
-  // getting silently ignored (update) or rejected (create) instead of using
-  // content_blocks, as documented in the 2026-07-22 incident.
+test('create_platform_blog_post/replace_platform_blog_content descriptions expose content_blocks authoring', () => {
   for (const name of ['create_platform_blog_post', 'replace_platform_blog_content']) {
     const definition = tool(PLATFORM_MCP_TOOLS, name) as ToolContract & { description: string }
     assert.ok(definition.description.includes('content_blocks'), `${name} description should mention content_blocks`)
-    assert.ok(!/\bcomponents\[\]/.test(definition.description), `${name} description should not reference the retired components[] shape`)
-    assert.ok(!definition.description.includes('embed tag'), `${name} description should not reference the retired embed-tag mechanism`)
-    assert.ok(!definition.description.includes('{{component'), `${name} description should not reference the retired {{component ...}} placeholder syntax`)
+    assert.ok(!/\bcomponents\[\]/.test(definition.description), `${name} description should not reference components[]`)
+    assert.ok(!definition.description.includes('embed tag'), `${name} description should not reference embed tags`)
+    assert.ok(!definition.description.includes('{{component'), `${name} description should not reference {{component ...}} syntax`)
   }
 })
 
-test('create_platform_doc/update_platform_doc descriptions describe the legacy body/components model, not content_blocks (regression: SHARED_TOOL_DESCRIPTION_LINES leaked blog-only guidance into doc descriptions)', () => {
-  // Regression: the doc tools' inputSchema never had content_blocks — they
-  // still take body + components[] — but PLATFORM_DOC_TOOL_DESCRIPTION was
-  // built from the same SHARED_TOOL_DESCRIPTION_LINES as the blog tools,
-  // which told the model content_blocks[] is "the only structured-content
-  // authoring shape" and to call get_platform_blog_post for a concurrency
-  // token, both wrong for docs.
+test('create_platform_doc/update_platform_doc descriptions expose body and components authoring', () => {
   for (const name of ['create_platform_doc', 'update_platform_doc']) {
     const definition = tool(PLATFORM_MCP_TOOLS, name) as ToolContract & { description: string }
     assert.ok(!definition.description.includes('content_blocks'), `${name} description should not mention content_blocks`)
@@ -204,14 +220,14 @@ test('create_platform_doc/update_platform_doc descriptions describe the legacy b
   }
 })
 
-test('the platform blog post projection schema does not require featured_image_asset_id (regression: stale required field never present in properties or emitted by the executor)', () => {
+test('the platform blog post projection schema does not require featured_image_asset_id', () => {
   const getPost = tool(PLATFORM_MCP_TOOLS, 'get_platform_blog_post') as ToolContract & {
     outputSchema: { properties: { post: { required: string[] } } }
   }
   assert.ok(!getPost.outputSchema.properties.post.required.includes('featured_image_asset_id'))
 })
 
-test('the platform blog post projection schema declares visibility (regression: update_platform_blog_metadata can write visibility but the canonical read/write response never surfaced it back)', () => {
+test('the platform blog post projection schema declares visibility', () => {
   const getPost = tool(PLATFORM_MCP_TOOLS, 'get_platform_blog_post') as ToolContract & {
     outputSchema: { properties: { post: { properties: Record<string, unknown>; required: string[] } } }
   }
@@ -219,7 +235,18 @@ test('the platform blog post projection schema declares visibility (regression: 
   assert.ok(getPost.outputSchema.properties.post.required.includes('visibility'))
 })
 
-test('update_platform_blog_metadata parses nullable SEO/media fields with a null-preserving parser, not one that silently converts null to undefined (regression: a request clearing canonical_url with null advanced the concurrency token but never actually cleared the column)', () => {
+test('the platform blog post projection exposes non-null document concurrency and scheduling state', () => {
+  const getPost = tool(PLATFORM_MCP_TOOLS, 'get_platform_blog_post') as ToolContract & {
+    outputSchema: { properties: { post: { properties: Record<string, { type?: unknown }>; required: string[] } } }
+  }
+  const post = getPost.outputSchema.properties.post
+  assert.equal(post.properties.document_updated_at?.type, 'string')
+  assert.ok(post.required.includes('document_updated_at'))
+  assert.deepEqual(post.properties.scheduled_for?.type, ['string', 'null'])
+  assert.ok(post.required.includes('scheduled_for'))
+})
+
+test('update_platform_blog_metadata preserves explicit null SEO/media fields', () => {
   const source = readFileSync(new URL('../../server/utils/platform-mcp-executor.ts', import.meta.url), 'utf8')
   const caseStart = source.indexOf("case 'update_platform_blog_metadata':")
   const caseEnd = source.indexOf("case 'replace_platform_blog_content':")
@@ -231,15 +258,28 @@ test('update_platform_blog_metadata parses nullable SEO/media fields with a null
   }
 })
 
-test('validateNoUnknownTopLevelArguments rejects prototype property names as unknown args, not treats them as allowed', () => {
+test('validateArguments rejects prototype property names as unknown args, not treats them as allowed', () => {
   // A naive `key in properties` check would incorrectly treat `constructor`/`toString`
   // as allowed (they're inherited from Object.prototype), even though the schema
   // never declared them. Object.keys()-based allow/reject lists must not have that gap.
   assert.throws(
-    () => validateNoUnknownTopLevelArguments(
+    () => validateArguments(
       { type: 'object', additionalProperties: false, properties: { post_id: { type: 'string' } } },
       { post_id: 'post-1', constructor: 'unexpected' },
     ),
     isInvalidParamsErrorContaining('constructor'),
   )
+})
+
+test('validateArguments enforces top-level anyOf mutation requirements', () => {
+  const updateMedia = tool(MEDIA_TOOLS, 'update_media_asset')
+  assert.throws(
+    () => validateArguments(updateMedia.inputSchema, { site_id: 'site-1', asset_id: 'asset-1' }),
+    isInvalidParamsErrorContaining('alt_text | location_id | category'),
+  )
+  assert.doesNotThrow(() => validateArguments(updateMedia.inputSchema, {
+    site_id: 'site-1',
+    asset_id: 'asset-1',
+    alt_text: 'Updated description',
+  }))
 })

@@ -1,5 +1,5 @@
 import type { McpToolDefinition } from './shared'
-import { chatgptFileInput, fileReferenceObject, generatedImagePickerOutputSchema, globalTool, siteTool, withToolAnnotations } from './shared'
+import { fileReferenceObject, generatedImagePickerOutputSchema, globalTool, siteTool, withToolAnnotations } from './shared'
 
 export const ONBOARDING_TOOLS: McpToolDefinition[] = [
   globalTool(withToolAnnotations({
@@ -12,31 +12,6 @@ export const ONBOARDING_TOOLS: McpToolDefinition[] = [
         type: 'object',
         properties: {
           maps_url: { type: 'string', description: 'Google Maps URL or short share link (maps.app.goo.gl or google.com/maps/place/...).' },
-          parsed_hint: {
-            type: 'object',
-            description: 'Optional, non-authoritative hints from LLM URL parsing. Backend always re-extracts independently and logs divergence >1 km.',
-            properties: {
-              name_hint: { type: 'string' },
-              lat: { type: 'number' },
-              lng: { type: 'number' },
-              feature_id: { type: 'string' },
-              internal_id: { type: 'string' },
-              expected_country: { type: 'string' },
-              expected_region: { type: 'string' },
-            },
-            additionalProperties: false,
-          },
-          matching_policy: {
-            type: 'object',
-            description: 'Controls how strictly the backend validates the Places API result. Defaults to strict coordinate matching.',
-            properties: {
-              allow_name_only_fallback: { type: 'boolean', description: 'If false (default), reject when no coordinates are available to bias the search.' },
-              require_coordinate_match: { type: 'boolean', description: 'If true (default), reject any Places result more than max_distance_km from URL coordinates.' },
-              max_distance_km: { type: 'number', description: 'Rejection threshold in km. Default 5.' },
-              prefer_backend_extraction: { type: 'boolean', description: 'If true (default), backend URL extraction takes precedence over parsed_hint.' },
-            },
-            additionalProperties: false,
-          },
         },
         required: ['maps_url'],
         additionalProperties: false,
@@ -149,35 +124,6 @@ export const ONBOARDING_TOOLS: McpToolDefinition[] = [
           assetId: { type: 'string' },
           publicUrl: { type: 'string' },
           thumbnailUrl: { type: 'string' },
-        },
-        required: ['assetId', 'publicUrl'],
-      },
-    }),
-  siteTool({
-      name: 'upload_user_photo',
-      description: 'Use this when the user wants to add their own photos or pictures to the site — "add photos", "upload my pictures", "use this image on my site". Image-only legacy path for a user-provided photo attached directly in the chat; upload_user_media is the newer generic path that also supports video. Only call this tool once the host has actually resolved a `file`/`file_id` value (this reliably happens for files sent through the explicit attach/paperclip control, not for an image the user merely pastes or drops inline into the message — you can see that image, but do not assume or invent a file/file_id value for it). This tool uploads the image into the site media library but does not place it on a page by itself. Do not send users to a KrabiClaw photo uploader or dashboard media-library upload from this MCP app. Do not pass raw local paths. Prefer the file argument over file_id when available. If you do not have a real resolved image reference, ask the user to attach the image with ChatGPT\'s paperclip. After upload succeeds, call set_media with the appropriate target and complete asset_ids state. For ordered targets such as experience_media, fetch the current entity first and append the uploaded asset to the existing ordered media list before assigning. Do NOT use save_generated_image_file for user uploads; that tool is only for ChatGPT native image_generation output.',
-      domain: 'onboarding',
-      minimumRole: 'editor',
-      confirmRequired: false,
-      inputSchema: {
-        file: chatgptFileInput,
-        file_id: { type: 'string', description: 'Resolved file identifier for a user-uploaded image (e.g. file_abc123). Prefer this when the host can supply it directly.' },
-        category: { type: 'string', enum: ['exterior', 'interior', 'food', 'menu', 'team', 'logo', 'blog', 'other'], description: 'What this photo will be used for.' },
-        description: { type: 'string', description: 'Description of the photo (stored as alt text).' },
-        oneOf: [
-          { required: ['file'] },
-          { required: ['file_id'] },
-        ],
-      },
-      required: [],
-      fileParams: ['file'],
-      outputSchema: {
-        type: 'object',
-        properties: {
-          assetId: { type: 'string' },
-          publicUrl: { type: 'string' },
-          thumbnailUrl: { type: 'string' },
-          nextStep: { type: 'string' },
         },
         required: ['assetId', 'publicUrl'],
       },

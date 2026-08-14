@@ -1,11 +1,11 @@
 import { expect, test } from '@playwright/test'
-import { isDeployedWorkerTarget } from './test-env'
 import { loginAs } from './helpers/auth'
 import { MCP_GROWTH_USER_ID } from './helpers/plan-fixtures'
 import { MCP_VERSION, MCP_GROWTH_SITE_ID, mcpRequest, mcpData, ensureSite, loginAsFreshMcpUser } from './helpers/mcp'
+import { devLoginHeaders } from './test-env'
 
-// Split out of mcp.spec.ts (media/asset workflow tests) — see helpers/mcp.ts
-// for why. This group covers the native ChatGPT attachment upload path.
+const MCP_VIDEO_ATTACHMENT_URL = 'https://media.krabiclaw.com/sites/site-demo/media/media-demo-pizza-prep-video.mp4'
+const MCP_VIDEO_POSTER_URL = 'https://imagedelivery.net/Frxyb2_d_vGyiaXhS5xqCg/0762ea49-0bd2-4cc8-1044-d6c9b1f00100/public'
 
 test.describe('stateless MCP server', () => {
   test('ChatGPT session exposes native media upload without widget launchers', async ({ request, baseURL }) => {
@@ -33,10 +33,45 @@ test.describe('stateless MCP server', () => {
       extraHeaders: { 'user-agent': 'openai-mcp/1.0.0' },
     })
     expect(tools.status()).toBe(200)
-    const toolsBody = await tools.json() as { result: { tools: Array<{ name: string, outputSchema?: Record<string, unknown>, _meta?: Record<string, unknown> }> } }
+    const toolsBody = await tools.json() as { result: { tools: Array<{ name: string, inputSchema?: { required?: string[], properties?: Record<string, unknown>, additionalProperties?: boolean }, outputSchema?: Record<string, unknown>, _meta?: Record<string, unknown> }> } }
     expect(toolsBody.result.tools.filter(tool => tool.name.startsWith('open_') && tool.name.includes('upload')).map(tool => tool.name)).toEqual([])
-    expect(toolsBody.result.tools.find(tool => tool.name === 'upload_user_media')).toBeTruthy()
+    expect(toolsBody.result.tools.find(tool => tool.name === 'upload_user_photo')).toBeUndefined()
+    const uploadTool = toolsBody.result.tools.find(tool => tool.name === 'upload_user_media')
+    expect(uploadTool?.inputSchema?.required).toEqual(['file'])
+    expect(uploadTool?.inputSchema?.properties?.file_id).toBeUndefined()
+    expect(uploadTool?.inputSchema?.properties?.poster_file).toBeDefined()
+    expect(uploadTool?.inputSchema?.additionalProperties).toBe(false)
+    expect(uploadTool?._meta?.['openai/fileParams']).toEqual(['file', 'poster_file'])
+    const setMediaTool = toolsBody.result.tools.find(tool => tool.name === 'set_media')
+    expect(setMediaTool?.inputSchema?.required).toEqual(['target_type', 'asset_ids'])
+    expect(setMediaTool?.inputSchema?.properties?.target).toBeUndefined()
+    expect(setMediaTool?.inputSchema?.additionalProperties).toBe(false)
     expect(toolsBody.result.tools.filter(tool => tool._meta?.ui || tool._meta?.['openai/outputTemplate'])).toEqual([])
+
+    const locations = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'list_locations',
+      args: { site_id: MCP_GROWTH_SITE_ID },
+    })
+    expect(locations.status()).toBe(200)
+    const locationId = mcpData<{ locations: Array<{ id: string }> }>(await locations.json()).locations[0]?.id
+    expect(locationId).toEqual(expect.any(String))
+
+    const mismatchedTarget = await mcpRequest(request, baseURL!, {
+      method: 'tools/call',
+      toolName: 'set_media',
+      siteId: MCP_GROWTH_SITE_ID,
+      args: {
+        site_id: MCP_GROWTH_SITE_ID,
+        target_type: 'home_hero',
+        location_id: locationId,
+        asset_ids: [],
+      },
+    })
+    expect(mismatchedTarget.status()).toBe(200)
+    const mismatchedTargetBody = await mismatchedTarget.json() as { result?: { isError?: boolean, content?: Array<{ text?: string }> } }
+    expect(mismatchedTargetBody.result?.isError).toBe(true)
+    expect(mismatchedTargetBody.result?.content?.[0]?.text).toContain('location_id cannot be used with target_type home_hero')
 
     const resources = await mcpRequest(request, baseURL!, { method: 'resources/list' })
     expect(resources.status()).toBe(200)
@@ -116,14 +151,9 @@ test.describe('stateless MCP server', () => {
     expect(reviewBody.review.findings.some(finding => finding.message.includes('file reference'))).toBe(true)
   })
 
-  test('native ChatGPT attachment upload produces an active, public, assignable video asset', async ({ request, baseURL }) => {
-    // The test fixture download_url points at this same app's own /api/mcp-test/tiny-video
-    // route. On deployed Cloudflare Workers this becomes a same-zone self-fetch and
-    // can fail independently of app logic. Real ChatGPT attachments use OpenAI-hosted
-    // download URLs, so deployed verification happens through the live connector.
-    test.skip(isDeployedWorkerTarget(baseURL!), 'Same-zone self-fetch of the tiny-video test fixture is not supported on deployed Cloudflare Workers')
+  test('ChatGPT-shaped video and poster attachments produce an active, public, assignable hero', async ({ request, baseURL }) => {
     test.setTimeout(90_000)
-    await loginAsFreshMcpUser(request, baseURL!)
+    await loginAsFreshMcpUser(request, baseURL!, 'media')
     const siteId = await ensureSite(request, baseURL!)
     let assetId = ''
 
@@ -135,30 +165,52 @@ test.describe('stateless MCP server', () => {
           site_id: siteId,
           category: 'other',
           file: {
-            download_url: `${baseURL}/api/mcp-test/tiny-video`,
+            download_url: MCP_VIDEO_ATTACHMENT_URL,
             file_id: 'sediment://file_widget_e2e_video',
+          },
+          poster_file: {
+            download_url: MCP_VIDEO_POSTER_URL,
+            file_id: 'sediment://file_widget_e2e_video_poster',
           },
         },
       })
       if (upload.status() !== 200) console.error(await upload.text())
       expect(upload.status()).toBe(200)
-      const uploaded = mcpData<{ asset_id: string; public_url: string; status: string; kind: string }>(await upload.json())
+      const uploaded = mcpData<{ asset_id: string; public_url: string; thumbnail_url: string | null; status: string; kind: string }>(await upload.json())
       expect(uploaded.status).toBe('active')
       expect(uploaded.kind).toBe('video')
       expect(uploaded.public_url).toContain('/sites/')
+      expect(uploaded.thumbnail_url).toContain('imagedelivery.net')
       assetId = uploaded.asset_id
+
+      const uploadedPath = new URL(uploaded.public_url).pathname
+      const mediaPath = uploadedPath.startsWith('/__media/') ? uploadedPath : `/__media${uploadedPath}`
+      const [videoDelivery, posterDelivery] = await Promise.all([
+        request.get(`${baseURL}${mediaPath}`, { headers: devLoginHeaders() }),
+        request.get(uploaded.thumbnail_url!),
+      ])
+      expect(videoDelivery.status()).toBe(200)
+      expect(videoDelivery.headers()['content-type']).toContain('video/mp4')
+      expect(posterDelivery.status()).toBe(200)
+      expect(posterDelivery.headers()['content-type']).toContain('image/')
 
       const assign = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
         toolName: 'set_media',
-        args: { site_id: siteId, target: { type: 'home_hero' }, asset_ids: [assetId] },
+        args: { site_id: siteId, target_type: 'home_hero', asset_ids: [assetId] },
       })
       if (assign.status() !== 200) console.error(await assign.text())
       expect(assign.status()).toBe(200)
+      const assigned = mcpData<{ ok: boolean; target: { type: string }; asset_ids: string[] }>(await assign.json())
+      expect(assigned.ok).toBe(true)
+      expect(assigned.target.type).toBe('home_hero')
+      expect(assigned.asset_ids).toEqual([assetId])
     } finally {
       if (assetId) {
-        await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'set_media', args: { site_id: siteId, target: { type: 'home_hero' }, asset_ids: [] } })
-        await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'delete_media_asset', args: { site_id: siteId, asset_id: assetId } })
+        const clear = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'set_media', args: { site_id: siteId, target_type: 'home_hero', asset_ids: [] } })
+        expect(mcpData<{ ok: boolean; cleared: boolean }>(await clear.json())).toMatchObject({ ok: true, cleared: true })
+        const remove = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'delete_media_asset', args: { site_id: siteId, asset_id: assetId } })
+        expect(mcpData<{ deleted: boolean }>(await remove.json()).deleted).toBe(true)
       }
     }
   })

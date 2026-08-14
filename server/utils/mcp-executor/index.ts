@@ -5,7 +5,7 @@ import { requireMcpSite, requireMcpUser } from '~/server/utils/mcp-auth'
 import { resolveMcpWorkspace } from '~/server/utils/mcp-context'
 import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 import { renderStructuredResponse } from '~/server/utils/mcp-render'
-import { validateNoUnknownTopLevelArguments } from '~/server/utils/mcp-tool-validation'
+import { validateArguments } from '~/server/utils/mcp-tool-validation'
 import { listSitesForUser } from '~/server/utils/mcp-workflows'
 import { hasSiteEntitlement } from '~/server/utils/billing'
 import { handleAgentSkillTools } from './agent-skills'
@@ -31,6 +31,7 @@ import {
   NOT_HANDLED,
   humanizeEntitlement,
   normalizeWorkspaceArguments,
+  resolveGoogleMapsPlace,
   validateRequiredArguments,
   workspaceContextPayload,
   workspaceLocationsPayload,
@@ -79,7 +80,7 @@ export async function executeMcpToolCall(
     );
   }
 
-  validateNoUnknownTopLevelArguments(tool.inputSchema, rawArguments);
+  validateArguments(tool.inputSchema, rawArguments);
 
   const normalizedArguments = await normalizeWorkspaceArguments(
     event,
@@ -245,151 +246,22 @@ export async function executeMcpToolCall(
 
     const rawUrl = requiredString(normalizedArguments, "maps_url");
 
-    let parsedUrl: URL;
-    try {
-      parsedUrl = new URL(rawUrl);
-    } catch {
-      throw mcpProtocolError(MCP_ERROR.invalidParams, "Invalid Maps URL.");
-    }
-
-    if (!isAllowedGoogleMapsHost(parsedUrl.hostname)) {
-      throw mcpProtocolError(
-        MCP_ERROR.invalidParams,
-        "URL does not appear to be a Google Maps link. Please paste a google.com/maps or maps.app.goo.gl link.",
-      );
-    }
-
-    const hint = (normalizedArguments.parsed_hint ?? null) as ParsedHint | null;
-    const policy = resolveMatchingPolicy(normalizedArguments.matching_policy);
-
-    // Resolve short URLs (maps.app.goo.gl).
-    // Use redirect:follow GET instead of redirect:manual HEAD —
-    // Cloudflare Workers blocks manual redirect fetches against goo.gl.
-    let resolvedUrl = parsedUrl.toString();
-    if (parsedUrl.hostname === "maps.app.goo.gl") {
-      try {
-        const probe = await fetch(parsedUrl.toString(), {
+    const { placeId } = await resolveGoogleMapsPlace(rawUrl, {
+      resolveShortLink: async (url) => {
+        const response = await fetch(url, {
           method: "GET",
           redirect: "follow",
           signal: AbortSignal.timeout(8000),
           headers: { "User-Agent": "Mozilla/5.0" },
         });
-        if (probe.url && isAllowedGoogleMapsHost(new URL(probe.url).hostname)) {
-          resolvedUrl = probe.url;
-        }
-      } catch {
-        /* keep original — will fall through to text search below */
-      }
-    }
-
-    // Backend is parser of record. Extract signals deterministically from the resolved URL.
-    const backendParsed = extractGoogleMapsSignals(resolvedUrl);
-
-    // If a hint was provided, warn when it diverges from backend extraction (>1 km).
-    // Hint is informational only — backend extraction takes precedence.
-    if (
-      hint?.lat != null &&
-      hint?.lng != null &&
-      backendParsed.lat != null &&
-      backendParsed.lng != null
-    ) {
-      const divergenceKm = haversineKm(
-        hint.lat,
-        hint.lng,
-        backendParsed.lat,
-        backendParsed.lng,
-      );
-      if (divergenceKm > 1) {
-        console.warn(
-          "[import_from_maps] parsed_hint diverges from backend extraction",
-          {
-            hint: { lat: hint.lat, lng: hint.lng },
-            backendParsed: { lat: backendParsed.lat, lng: backendParsed.lng },
-            divergenceKm: Math.round(divergenceKm * 10) / 10,
-          },
-        );
-      }
-    }
-
-    // Use backend extraction as authoritative. Fall back to hint only for fields the
-    // backend could not extract (e.g. a short link that failed to resolve).
-    const nameHint = backendParsed.nameHint ?? hint?.name_hint ?? null;
-    const lat = backendParsed.lat ?? (hint?.lat != null ? hint.lat : null);
-    const lng = backendParsed.lng ?? (hint?.lng != null ? hint.lng : null);
-    const { rawId, isHexCid, isChijId } = backendParsed;
-
-    let placeId: string | null = null;
-
-    if (isChijId) {
-      // Best case — proper ChIJ ID directly from URL
-      placeId = rawId;
-    } else if (isHexCid || !rawId) {
-      // Hex CID or no ID — resolve via coordinate-biased text search
-      if (!nameHint) {
-        throw mcpProtocolError(
-          MCP_ERROR.invalidParams,
-          "Could not extract place details from that Maps URL. Try copying the full Google Maps URL from the address bar.",
-        );
-      }
-      if (!policy.allow_name_only_fallback && lat == null) {
-        throw mcpProtocolError(
-          MCP_ERROR.invalidParams,
-          "This URL does not contain location coordinates. Paste the full Google Maps URL from the address bar so the place can be identified precisely.",
-        );
-      }
-      const locationBias =
-        lat != null && lng != null
-          ? { latitude: lat, longitude: lng }
-          : undefined;
-      let results;
-      try {
-        results = await searchPlaces(apiKey, nameHint, locationBias);
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Google Places search failed.";
-        throw createError({
-          statusCode: 502,
-          statusMessage: message,
-        });
-      }
-      await chargeFlatCreditsForUser(user, "google_places_search");
-      const candidate = results[0];
-      if (!candidate?.placeId) {
-        throw mcpProtocolError(
-          MCP_ERROR.invalidParams,
-          `Could not find "${nameHint}" in Google Places. Try the full Maps URL from the address bar.`,
-        );
-      }
-      if (
-        policy.require_coordinate_match &&
-        locationBias &&
-        candidate.lat != null &&
-        candidate.lng != null
-      ) {
-        const distKm = haversineKm(
-          locationBias.latitude,
-          locationBias.longitude,
-          candidate.lat,
-          candidate.lng,
-        );
-        if (distKm > policy.max_distance_km) {
-          throw mcpProtocolError(
-            MCP_ERROR.invalidParams,
-            `The top search result for "${nameHint}" is ${Math.round(distKm)} km from the location in that URL. Paste the full Google Maps URL from the address bar so the exact place can be identified.`,
-          );
-        }
-      }
-      placeId = candidate.placeId;
-    } else {
-      // Non-ChIJ, non-hex — try it directly; Places API will 404 if invalid
-      placeId = rawId;
-    }
-
-    if (!placeId)
-      throw mcpProtocolError(
-        MCP_ERROR.invalidParams,
-        "Could not resolve a place ID from that URL.",
-      );
+        return { ok: response.ok, url: response.url };
+      },
+      searchPlaces: async (query, locationBias) => {
+        const results = await searchPlaces(apiKey, query, locationBias);
+        await chargeFlatCreditsForUser(user, "google_places_search");
+        return results;
+      },
+    });
     let details;
     try {
       details = await getPlaceDetails(apiKey, placeId, true);
@@ -509,9 +381,11 @@ export async function executeMcpToolCall(
     }
 
     const picker = pickerConfigFromShowGeneratedImages(normalizedArguments, activeSiteName);
-    if (picker.assignTool === "set_media" && picker.assignArgs?.target && typeof picker.assignArgs.target === "object") {
-      const target = picker.assignArgs.target as { type?: unknown; menu_item_id?: unknown };
-      if (target.type === "menu_item_media" && typeof target.menu_item_id === "string" && activeSiteContext) {
+    if (picker.assignTool === "set_media" && picker.assignArgs) {
+      const assignArgs = picker.assignArgs;
+      const targetType = assignArgs.target_type;
+      const menuItemId = assignArgs.menu_item_id;
+      if (targetType === "menu_item_media" && typeof menuItemId === "string" && activeSiteContext) {
         const rows = await queryAll<{ asset_id: string }>(
           activeSiteContext.db,
           `
@@ -523,9 +397,9 @@ export async function executeMcpToolCall(
               AND m.organization_id = ? AND m.site_id = ?
             ORDER BY mim.sort_order ASC
           `,
-          [activeSiteContext.siteId, target.menu_item_id, activeSiteContext.organizationId, activeSiteContext.siteId],
+          [activeSiteContext.siteId, menuItemId, activeSiteContext.organizationId, activeSiteContext.siteId],
         );
-        picker.assignArgs.asset_ids = rows.map((row) => row.asset_id);
+        assignArgs.asset_ids = rows.map((row) => row.asset_id);
       }
     }
     const isDebug = normalizedArguments.debug === true;

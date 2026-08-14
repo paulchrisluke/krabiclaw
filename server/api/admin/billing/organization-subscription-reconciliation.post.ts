@@ -11,7 +11,6 @@ import {
   parseOrganizationSubscriptionReconciliationRequest,
   reconcileOrganizationSubscription,
 } from '~/server/utils/organization-subscription-reconciliation'
-import { readDeploymentProvenance } from '~/server/utils/deployment-provenance'
 import { OperatorSessionError } from '~/server/utils/operator-session'
 
 export default defineEventHandler(async (event) => {
@@ -36,17 +35,6 @@ export default defineEventHandler(async (event) => {
     // versa), even if the caller supplied a plausible account id.
     assertStripeProviderMode(env.STRIPE_SECRET_KEY, request.providerMode)
 
-    let provenance: { sourceSha: string; worker: { id: string } }
-    try {
-      provenance = readDeploymentProvenance(env.CF_VERSION_METADATA)
-    } catch {
-      throw new OrganizationSubscriptionReconciliationError(
-        'deployment_provenance_unavailable',
-        503,
-        'Immutable deployment provenance is unavailable or malformed.',
-      )
-    }
-
     const auth = createAuth(env)
     const authContext = await auth.$context
     const organizationAdapter = getOrgAdapter(authContext as Parameters<typeof getOrgAdapter>[0], {})
@@ -68,8 +56,6 @@ export default defineEventHandler(async (event) => {
       },
       request,
       actor,
-      sourceSha: provenance.sourceSha,
-      workerVersionId: provenance.worker.id,
       providerModeVerified: true,
     })
     return jsonResponse(report, { headers: { 'cache-control': 'no-store' } })

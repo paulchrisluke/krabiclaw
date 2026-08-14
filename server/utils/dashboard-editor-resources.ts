@@ -228,9 +228,13 @@ export async function loadDashboardMedia(
 
 export async function loadDashboardSettingsResource(
   event: H3Event,
-  options: { includeFacebook: boolean },
+  options: { includeFacebook: boolean; organizationSlug?: string; siteSlug?: string },
 ) {
-  const { env, db, organization, site } = await getDashboardContext(event, { requireSite: true })
+  const { env, db, organization, site } = await getDashboardContext(event, {
+    requireSite: true,
+    organizationSlug: options.organizationSlug,
+    siteSlug: options.siteSlug,
+  })
   if (!site) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
   await assertSiteWideAccess(db, {
     memberId: organization.memberId,

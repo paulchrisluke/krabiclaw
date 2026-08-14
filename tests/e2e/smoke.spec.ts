@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { collectPageErrors, expectHealthyPage, setupTenantHeaders, tenantBaseURL, tenantExtraHeaders } from './helpers'
-import { devLoginHeaders, devLoginUrl } from './test-env'
+import { loginAs } from './helpers/auth'
 
 test('platform home renders', async ({ page, baseURL }) => {
   const errors = collectPageErrors(page)
@@ -151,9 +151,8 @@ test.describe('representative tenant routes', () => {
   })
 })
 
-test('development login reaches dashboard context', async ({ request, baseURL }) => {
-  const login = await request.get(devLoginUrl(baseURL!, `e2e-smoke-${Date.now()}`), { headers: devLoginHeaders() })
-  expect(login.status()).toBeLessThan(400)
+test('credential login reaches dashboard context', async ({ request, baseURL }) => {
+  await loginAs(request, baseURL!, 'user-e2e-smoke')
   const context = await request.get(`${baseURL}/api/dashboard/context`)
   expect(context.status()).toBe(200)
 })

@@ -3,15 +3,23 @@
 ## Release and outage prevention
 
 The mandatory release, incident, migration-safety, and browser-verification
-contract for every new LLM conversation is [docs/operations/release-and-outage-prevention.md](docs/operations/release-and-outage-prevention.md).
-Read it before reviewing or changing user-facing code. In particular, green CI
-is not release approval: the exact deployed staging and production candidates
-must be opened in a real browser, route by route, and any unverified or broken
-route blocks promotion. During an outage, stabilize the known-good renderer or
-Worker before touching data; do not reseed or hand-mutate production to mask a
-renderer regression.
+contract for work that changes or releases user-facing code is
+[docs/operations/release-and-outage-prevention.md](docs/operations/release-and-outage-prevention.md).
+Green CI is not release approval. As soon as preview, staging, or production is
+deployed, verify the affected authenticated flows and tenant journeys in a real
+browser while the remaining CI jobs continue. Platform marketing checks never
+substitute for client-site or MCP verification. During an outage, stabilize the
+known-good renderer or Worker before touching data; do not reseed or hand-mutate
+production to mask a renderer regression.
 
 When an internal API returns errors, nulls, or malformed data, fix the API contract/source of truth first. Do not add frontend fallbacks, guards, or workaround logic unless the API behavior is intentionally nullable and documented.
+
+Application-owned fetch clients use `retry: 0` and centralized explicit
+timeouts. One logical resource load has one network attempt. SSR calls canonical
+server services directly rather than self-fetching. Errors remain errors and
+must not become empty success states. Delete disabled fallback and compatibility
+branches instead of retaining them for safety. A violation discovered in an
+affected path is not excused as pre-existing, out of scope, or high risk.
 
 ---
 
@@ -84,7 +92,7 @@ See `docs/adr/0021-better-auth-authorization-target.md`.
 
 ## Database Schema Workflow
 
-`server/db/schema.ts` (Drizzle ORM) is the **source of truth** for new schema changes. `migrations/0001_initial.sql` through `migrations/0007_*.sql` are historical, hand-authored, **already applied to every real environment (staging, production) and immutable** — never rename, edit, renumber, or re-squash them. From `0008` onward, migrations are _generated_ from `schema.ts` via `drizzle-kit generate` and applied via wrangler D1 migrations.
+`server/db/schema.ts` (Drizzle ORM) is the **source of truth** for new schema changes. `migrations/0001_initial.sql` through `migrations/0007_*.sql` are historical and hand-authored. From `0008` onward, migrations are generated from `schema.ts` via `drizzle-kit generate` and applied via Wrangler D1 migrations. Any migration applied to any shared environment is immutable by filename and content; never rename, edit, renumber, or re-squash it.
 
 **Why the split:** `wrangler d1 migrations apply` tracks applied migrations by **filename**, not content/checksum. An environment that already ran `0001_initial.sql`...`0007_*.sql` has those exact filenames recorded — it has no idea a squashed `0000_something.sql` is "the same" schema. Renaming/squashing history that's already applied anywhere makes wrangler treat the new file as unapplied and try to re-run it, immediately failing with `table X already exists`. There is no clever flag around this; the only safe move is to never touch an already-applied filename and always add new migrations with higher numbers.
 
@@ -101,6 +109,7 @@ See `docs/adr/0021-better-auth-authorization-target.md`.
 9. Any schema change must be checked against current server queries.
 10. Never define `d1_migrations` in `schema.ts`.
 11. After `db:generate`, wipe `.wrangler/state/v3/d1`, run `yarn schema:local`, then run the relevant seed command.
+12. `yarn lint:migrations` must pass before applying migrations. Never rebuild a referenced parent table with `DROP TABLE`; D1 may execute foreign-key actions even when generated SQL includes `PRAGMA foreign_keys=OFF`, clearing references or cascading child rows. An obsolete unreferenced table may be dropped in the same release after runtime references are removed and the migration passes local apply, schema comparison, and `PRAGMA foreign_key_check`. Do not retain inert compatibility tables as a release strategy.
 
 ### D1 does not support raw transactions
 
@@ -119,28 +128,32 @@ This has hit the same way at least three times: `pages/docs/[...segments].vue` (
 **`useRequestFetch()` alone is not reliable enough — it was tried first and escalated away from in both prior incidents.** The proven fix, currently live in `pages/blog/[category]/[slug].vue` and `pages/docs/[...segments].vue`, is to bypass the self-fetch entirely on the server: import the query logic as a plain server util function and call it directly against `cloudflareEnv(requestEvent).db`, inside `useAsyncData`:
 
 ```ts
-const requestEvent = useRequestEvent()
+const requestEvent = useRequestEvent();
 const { data } = await useAsyncData(key, async () => {
   if (import.meta.server) {
-    if (!requestEvent) return null
+    if (!requestEvent) return null;
     const [{ cloudflareEnv }, { getMyThing }] = await Promise.all([
-      import('~/server/utils/api-response'),
-      import('~/server/utils/my-domain-util'),
-    ])
-    const db = cloudflareEnv(requestEvent).db
-    if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
-    return await getMyThing(db, /* route params */)
+      import("~/server/utils/api-response"),
+      import("~/server/utils/my-domain-util"),
+    ]);
+    const db = cloudflareEnv(requestEvent).db;
+    if (!db)
+      throw createError({
+        statusCode: 500,
+        statusMessage: "Database not available",
+      });
+    return await getMyThing(db /* route params */);
   }
-  const response = await $fetch<ResponseType>('/api/public/...')
-  return response?.thing ?? null
-})
+  const response = await $fetch<ResponseType>("/api/public/...");
+  return response?.thing ?? null;
+});
 ```
 
 This requires the API route's query logic to live in an importable `server/utils/*.ts` function (not inline in the route handler) so both the route and the page's server-side branch call the same code — the API route becomes a thin wrapper around it. This also satisfies the "shared server/domain utilities" rule under Platform Strategy above: MCP/ChowBot/dashboard code paths that need the same record get the same function.
 
-- Any new page that does a **server-side detail fetch** (single-item route, not the shared bootstrap payload) to an internal API must use this pattern, not bare `useFetch(url, { server: true })` and not bare `useRequestFetch()` by itself.
-- `useBootstrap()` (`composables/useBootstrap.ts`) already implements the weaker `useRequestFetch()` mitigation for the shared per-site bootstrap payload, with a comment noting it hasn't reproduced the failure yet for that route's shape — reuse it instead of a bespoke fetch where the data is already covered by bootstrap, but treat it as unproven if a detail page built on the same idea starts failing.
-- Symptom to recognize: API works when hit directly (curl, Postman) and the index/list page for the same resource renders fine (because it goes through `useBootstrap()`), but the equivalent detail page silently shows a "not found" state in production only, and the failure doesn't reproduce in `nuxt dev`.
+- Any new page that does a **server-side detail fetch** (single-item route, not the shared public shell/page payload) to an internal API must use this pattern, not bare `useFetch(url, { server: true })` and not bare `useRequestFetch()` by itself.
+- Shared public shell/page data goes through `useSiteShellState()` / `usePublicPageData()` and `loadPublicResourcePayload()`. On SSR, `server/middleware/public-resource-provider.ts` calls the canonical server loaders directly with the request's Cloudflare bindings; on the client, the same composables call the `/api/public/sites/[siteId]/shell` and `/page` routes. Reuse this boundary instead of adding a bespoke bootstrap or self-fetch path.
+- Symptom to recognize: the direct API and shared shell/page loader work, but an equivalent detail page silently shows a "not found" state in production only because that detail page self-fetches and loses bindings; the failure often does not reproduce in `nuxt dev`.
 
 ---
 
@@ -219,49 +232,37 @@ The bodies in `server/utils/whatsapp.ts`'s `TEMPLATES` map must match approved t
 
 ## CI / E2E Architecture
 
-Three lanes exist:
+Three environment gates exist in `.github/workflows/ci.yml`:
 
 ### Required PR lane
 
-Runs immutable-SHA quality/unit/build jobs and may migrate, seed, and deploy
-only the isolated preview environment. The same `.output` artifact is reused
-for preview browser coverage; shared staging and production are never changed.
+Runs checks, builds for preview, and may migrate, seed, and deploy only the
+isolated preview environment. Shared staging and production are never changed
+by a PR. One representative browser suite runs against the deployed preview.
 
-### Full staging candidate lane
+### Staging lane
 
-Runs only by explicit dispatch. It owns one uninterrupted staging lock, one
-production build, one tagged Worker Version, migration/fixture evidence, the
-full browser matrix, and a 25-sample baseline/candidate comparison. It promotes
-only that verified version and then repeats the custom-domain browser gate.
+Runs on pushes to `staging`. It deploys the staging Worker normally, applies
+pending migrations, sweeps disposable E2E artifacts, and runs the full
+Playwright suite against `staging.krabiclaw.com`.
 
-### Production release lane
+### Production lane
 
-Runs as two explicit dispatches with the successful staging manifest and exact
-source SHA. `operation=preflight` is read-only and emits the production
-migration/build report. Only a later `operation=deploy` dispatch consuming that
-preflight run can reach migration, version upload, split rollout, and browser
-verification; the job also names the protected `production` environment.
-Pushes to `main` never deploy production.
+Runs on pushes to `main`. It deploys the production Worker normally, applies
+pending migrations, and runs read-only public browser smoke.
 
-Direct `yarn deploy` and staging/production Worker convenience commands are
-blocked. The exact contract is
-`docs/operations/release-candidate-contract.md`.
+The contract is `docs/operations/release-flow.md`.
 
 ### CI Environment Rules
 
 - Cloudflare credentials are scoped only to Cloudflare steps.
 - Never put `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_ACCOUNT_ID` in top-level job `env:`.
 - All E2E jobs require Stripe env vars.
-- Remote staging seeds must be idempotent.
-- Production browser verification must not include intentionally disabled paid customer domains.
-- `www.potteryhousekrabi.com` is intentionally disabled and excluded from production browser verification.
-- `pottery-house.krabiclaw.com` remains covered.
-
 ### Preview/Staging Data Lifecycle
 
 `env.preview` and `env.staging` in `wrangler.toml` must always declare their own `[triggers]` block (`crons = []` unless a job is deliberately scoped to that environment). Cron triggers are inherited from the top-level `[triggers]` block unless an environment overrides them — an env without its own `[triggers]` silently runs production's full cron schedule against its own database. This previously went unnoticed and drove preview/staging D1 "rows read" billing into the billions as scheduled tasks repeatedly scanned ever-growing E2E-generated data.
 
-Curated fixture data (Pottery House, Kikuzuki, demo seed, MCP plan fixtures) is reset on every seed run via `DELETE`-then-`INSERT` on fixed IDs — it never grows. Anything else E2E specs create must be swept by `scripts/reset-e2e-artifacts.ts`, which runs in both the required preview seed and the locked full staging-candidate seed. For it to catch what a spec creates:
+Curated fixture data (Pottery House, Kikuzuki, demo seed, MCP plan fixtures) is reset on every preview seed run via `DELETE`-then-`INSERT` on fixed IDs — it never grows. Anything else E2E specs create must be swept by `scripts/reset-e2e-artifacts.ts`, which runs before preview and staging browser coverage. For it to catch what a spec creates:
 
 - Any throwaway site/org (`POST /api/sites`, `tests/e2e/helpers/ensure-site.ts`, or an MCP `create_site` call) must use a `subdomain` containing `e2e-` — the sweep deletes the owning `organization` row, which cascades through every org-scoped table.
 - Any guest-facing row created against a persistent fixture site (bookings, contact submissions, reservations) must use an `...@playwright.example` guest email — there's no throwaway org to cascade from, so these are swept by that marker directly.
@@ -274,9 +275,12 @@ Do not add a new dev-only reset route or rely on Playwright `afterEach`/`afterAl
 
 Nuxt UI is the default for dashboard/admin surfaces. Saya public, high-traffic surfaces should avoid Nuxt UI interactive components when they affect every tenant page load.
 
-- Every `layout: 'dashboard'` page renders its own `UDashboardPanel` with a `#header` slot containing `UDashboardNavbar` (explicit `title`, `UDashboardSidebarCollapse` in `#leading`) and a `#body` slot for content. `UCard` is still the default content-grouping primitive inside `#body`.
-- Dashboard pages do not use `UPage`, `UPageBody`, or `UPageHeader` — that was the pre-issue-#316 pattern; the whole dashboard shell (`layouts/dashboard.vue` plus every page under `pages/dashboard/**` and `pages/admin/**`) was rewritten off it. See `docs/adr/0019-progressive-drill-in-dashboard-sidebar.md`.
-- `layout: 'editor'` pages (onboarding wizards, content editor, blog editor) are a separate, intentionally different case — they own their own full-screen chrome and do not use `UDashboardPanel` either.
+- Dashboard pages use:
+  - `UCard`
+  - `UPage`
+  - `UPageBody`
+- Dashboard pages do not use `UPageHeader`.
+- Dashboard page content goes directly in `UPageBody`.
 - Saya theme pages keep their raw layout shell and theme-specific components.
 - On `components/saya/**`, prefer native `<button>`, `<NuxtLink>`, `<a>`, Tailwind classes, and inline SVG for always-rendered header/footer paths.
 - Use `components/saya/SayaDropdown.vue` instead of `UDropdownMenu` on the Saya public surface.
@@ -347,7 +351,7 @@ yarn client:onboard \
   --maps-url "https://www.google.com/maps/place/Pottery+House+Krabi/..." \
   --maps-url "https://www.google.com/maps/place/Beachfront+Pottery+Krabi/..." \
   --images ./new-client-Pottery-House-Krabi \
-  --live-url https://pottery-house.krabiclaw.com \
+  --live-url https://www.potteryhousekrabi.com \
   --site-id site-pottery-house-krabi \
   --remote
 ```
@@ -374,8 +378,14 @@ Required pipeline:
 2. Human review of `client-imports/<slug>/`
 3. `client:import --approve`
 4. `client:import --apply`
-5. `client:verify`
-6. `client:deploy`
+5. `client:verify` against the local build
+6. Merge to `staging`; CI deploys and runs the full E2E suite
+7. Merge the verified staging release into `main`; CI deploys and runs production browser smoke
+8. `client:deploy --skip-seed` for final deployed client verification
+
+`client:deploy` never releases the Worker itself. The package exposes no direct
+staging or production deploy commands; client onboarding goes through the
+staging and production branch gates.
 
 If any step fails, fix the source of truth:
 

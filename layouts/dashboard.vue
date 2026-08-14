@@ -50,7 +50,7 @@
         collapsible
         class="hidden md:flex"
         :menu="{ close: false }"
-        :ui="{ root: 'bg-elevated', header: 'h-auto min-h-(--ui-header-height) items-start py-2.5', body: 'px-3 py-1', content: 'bg-elevated' }"
+        :ui="{ root: 'h-dvh min-h-0 max-h-dvh bg-elevated', header: 'h-auto min-h-(--ui-header-height) items-start py-2.5', body: 'min-h-0 overflow-y-auto px-3 py-1', content: 'bg-elevated' }"
       >
         <template #header="{ collapsed }">
           <DashboardScopeHeader :model="scopeHeaderModel" :collapsed="collapsed" />
@@ -67,6 +67,7 @@
               :collapsed="collapsed"
               :items="navigationItems"
               orientation="vertical"
+              :ui="{ link: 'hover:before:bg-accented/80 hover:text-highlighted before:transition-colors' }"
             />
           </div>
         </template>
@@ -86,17 +87,11 @@
     </UDashboardGroup>
 
     <div
-      v-if="mobileNavItems.length"
+      v-if="mobileNavItems.length && !isAccountRoute"
       class="fixed inset-x-0 bottom-3 z-40 flex justify-center px-3 md:hidden"
       data-testid="dashboard-mobile-nav"
     >
       <nav class="flex h-[52px] w-full max-w-[420px] items-center justify-around rounded-full border border-default bg-elevated px-2 shadow-[0_10px_24px_rgba(20,23,46,0.2)]">
-        <UDashboardSearchButton
-          v-if="scope !== 'organization'"
-          label="Search dashboard"
-          class="flex size-9 items-center justify-center rounded-full text-dimmed"
-          :ui="{ base: 'size-9 justify-center rounded-full px-0', label: 'sr-only' }"
-        />
         <UButton
           v-for="item in mobileNavItems"
           :key="item.key"
@@ -110,88 +105,8 @@
           :title="item.label"
           :class="item.active ? 'bg-primary/10 text-primary' : 'text-dimmed'"
         />
-        <UButton
-          v-if="scope !== 'organization'"
-          icon="i-lucide-ellipsis"
-          color="neutral"
-          variant="ghost"
-          size="sm"
-          square
-          aria-label="More"
-          title="More"
-          :class="mobileMoreOpen ? 'bg-primary/10 text-primary' : 'text-dimmed'"
-          @click="toggleMobileMore"
-        />
-        <UButton
-          v-if="scope !== 'organization'"
-          icon="i-lucide-bot"
-          color="neutral"
-          variant="ghost"
-          size="sm"
-          square
-          aria-label="ChowBot"
-          title="ChowBot"
-          class="text-dimmed"
-          @click="openChowBot"
-        />
+        <DashboardAccountMenu mobile-only />
       </nav>
-    </div>
-
-    <button
-      v-if="mobileMoreOpen"
-      type="button"
-      class="fixed inset-0 z-30 bg-black/30 md:hidden"
-      aria-label="Close navigation menu"
-      @click="mobileMoreOpen = false"
-    />
-    <div
-      v-if="mobileMoreOpen"
-      ref="mobileMoreSheetRef"
-      class="fixed inset-x-3 bottom-20 z-40 rounded-xl border border-default bg-elevated p-2 shadow-xl md:hidden"
-      data-testid="dashboard-mobile-more"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Dashboard navigation"
-      tabindex="-1"
-      @keydown="onMobileMoreKeydown"
-    >
-      <div class="max-h-[55vh] overflow-y-auto">
-        <div class="border-b border-default px-3 py-3">
-          <p class="truncate text-sm font-semibold text-highlighted">{{ sessionData?.user?.name || 'User' }}</p>
-          <p class="mt-0.5 truncate text-xs text-muted">{{ sessionData?.user?.email }}</p>
-        </div>
-        <NuxtLink
-          v-for="item in mobileMoreItems"
-          :key="item.to"
-          :to="item.to"
-          class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-highlighted hover:bg-muted"
-          @click="closeMobileMore"
-        >
-          <UIcon v-if="item.icon" :name="item.icon" class="size-4 text-muted" />
-          <span>{{ item.label }}</span>
-        </NuxtLink>
-        <div class="mt-2 border-t border-default pt-2">
-          <NuxtLink
-            v-for="item in mobileAccountItems"
-            :key="item.to"
-            :to="item.to"
-            class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-highlighted hover:bg-muted"
-            :target="item.target"
-            @click="closeMobileMore"
-          >
-            <UIcon :name="item.icon" class="size-4 text-muted" />
-            <span>{{ item.label }}</span>
-          </NuxtLink>
-          <button
-            type="button"
-            class="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-error hover:bg-error/10"
-            @click="handleMobileSignOut"
-          >
-            <UIcon name="i-lucide-log-out" class="size-4" />
-            <span>Log Out</span>
-          </button>
-        </div>
-      </div>
     </div>
 
     <BillingServiceUpsellModal />
@@ -203,6 +118,7 @@
 import ChowBot from '~/lib/components/workspace/dashboard/ChowBot.vue'
 import DashboardScopeHeader from '~/lib/components/workspace/dashboard/DashboardScopeHeader.vue'
 import type { DashboardScopeHeaderModel } from '~/lib/components/workspace/dashboard/DashboardScopeHeader.vue'
+import { dashboardAccountRouteQueryKey, dashboardOrganizationParentKey, dashboardScopeHeaderModelKey } from '~/lib/components/workspace/dashboard/dashboardScopeHeaderContext'
 import { authClient } from '~/lib/auth-client'
 import { useAuth } from '~/composables/useAuth'
 import { useAnalytics } from '~/composables/useAnalytics'
@@ -228,10 +144,9 @@ import '~/assets/css/dashboard.css'
 //   Site items must not leak into location scope and vice versa — this was a
 //   real bug here once, caused by checking "does siteBase/locationBase exist"
 //   instead of "does the manager's scope match the CURRENT scope".
-// - The parent ("← back") row is a normal UNavigationMenu item built from
-//   scopeHeaderModel.parent, not custom-styled markup living in the switcher
-//   header — this guarantees identical sizing/spacing to every other nav item
-//   by construction instead of hand-matching CSS.
+// - At md and above, the parent row is a normal UNavigationMenu item built from
+//   scopeHeaderModel.parent. Below md the same model is provided to
+//   DashboardNavbarLeading because the sidebar is hidden.
 // - New verticals/templates need zero changes here — add the combination to
 //   cmsCapabilityRegistry and nav/capabilities update automatically. A new
 //   manager id (not just a new vertical reusing existing ids) needs an entry
@@ -246,21 +161,17 @@ interface AuthOrganization {
 }
 
 const route = useRoute()
-const config = useRuntimeConfig()
+const _config = useRuntimeConfig()
 const sidebarCollapsed = useState<boolean>('dashboard-sidebar-collapsed', () => false)
-const { data: sessionData, refreshSession, signOut } = useAuth()
+const { data: sessionData, refreshSession, signOut: _signOut } = useAuth()
 const { trackDashboardVisited, setUserId } = useAnalytics()
 const toast = useToast()
 const stoppingImpersonation = ref(false)
 const { searchTerm: dashboardSearchTerm, loading: dashboardSearchLoading, groups: dashboardSearchGroups } = useDashboardSearch()
 const dashboard = useDashboardSite()
-const chowBot = useChowBot()
+const _chowBot = useChowBot()
 const platformTheme = usePlatformTheme()
 const organizationsState = authClient.useListOrganizations()
-const mobileMoreOpen = ref(false)
-const mobileMoreButtonElement = ref<HTMLElement | null>(null)
-const mobileMoreSheetRef = ref<HTMLElement | null>(null)
-const mobileMoreFocusReturn = ref<HTMLElement | null>(null)
 
 if (import.meta.client) {
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)')
@@ -347,6 +258,27 @@ const canManageOrganization = computed(() => ['owner', 'admin'].includes(organiz
 const dashboardLocation = useDashboardLocation()
 
 const organizations = computed<readonly AuthOrganization[]>(() => unref(organizationsState)?.data ?? [])
+const requestedAccountOrganizationSlug = computed(() => {
+  const slug = routeName.value.startsWith('dashboard-account') ? route.query.organization : null
+  return typeof slug === 'string' && /^[a-z0-9-]+$/.test(slug) ? slug : null
+})
+const requestedAccountOrganizationName = computed(() => {
+  const name = routeName.value.startsWith('dashboard-account') ? route.query.organizationName : null
+  return typeof name === 'string' && name.trim().length <= 100 ? name.trim() : null
+})
+const activeOrganizationId = computed(() => {
+  const session = sessionData.value?.session as { activeOrganizationId?: string | null } | undefined
+  return session?.activeOrganizationId ?? null
+})
+const accountOrganization = computed(() => organizations.value.find(org => org.slug === requestedAccountOrganizationSlug.value)
+  ?? organizations.value.find(org => org.id === activeOrganizationId.value)
+  ?? organizations.value[0]
+  ?? null)
+const accountRouteQuery = computed((): Record<string, string> => {
+  const target = accountOrganization.value
+  if (!target?.slug) return {}
+  return { organization: target.slug, organizationName: target.name }
+})
 const impersonatedBy = computed(() => {
   const session = sessionData.value?.session as { impersonatedBy?: string } | undefined
   return session?.impersonatedBy
@@ -371,6 +303,7 @@ const locationsBase = computed(() => siteBase.value ? `${siteBase.value}/locatio
 const currentLocationSlug = dashboardLocation.routeLocationSlug
 const locationBase = computed(() => locationsBase.value && currentLocationSlug.value ? `${locationsBase.value}/${currentLocationSlug.value}` : null)
 const routeName = computed(() => typeof route.name === 'string' ? route.name : '')
+const isAccountRoute = computed(() => routeName.value.startsWith('dashboard-account'))
 const isAdminRoute = computed(() => routeName.value.startsWith('admin'))
 const isConversationsRoute = computed(() => routeName.value.includes('conversations'))
 const showChowBot = computed(() => !isConversationsRoute.value
@@ -411,9 +344,9 @@ const scope = computed<'organization' | 'site' | 'location'>(() => {
   return 'organization'
 })
 
-// One reusable scope-header model, per issue #316's authoritative clarification:
-// the parent row is a visible, always-present part of this single component at
-// every scope — never a menu item, never a separate per-scope implementation.
+// One reusable scope-header model feeds both the desktop sidebar and the mobile
+// navbar leading control. Detail pages may override it with an explicit index
+// parent, but scope navigation never infers a parent from browser history.
 const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
   if (scope.value === 'site' || scope.value === 'location') {
     return {
@@ -535,7 +468,7 @@ function managerNavItems(group: NavGroupId) {
   return items
 }
 
-function managerAction(manager: CmsManagerCapability, href: string) {
+function _managerAction(manager: CmsManagerCapability, href: string) {
   return {
     label: manager.label,
     to: href,
@@ -544,7 +477,7 @@ function managerAction(manager: CmsManagerCapability, href: string) {
   }
 }
 
-function revenueLabel(item: ReturnType<typeof managerAction>) {
+function _revenueLabel(item: ReturnType<typeof _managerAction>) {
   if (item.feature === 'reservations') return 'Bookings'
   if (item.feature === 'services') return 'Schedule'
   return item.label
@@ -557,11 +490,10 @@ const organizationNavigationItems = computed(() => {
     { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${orgBase.value}/calendar` },
     { key: 'sites', label: 'Sites', icon: 'i-lucide-globe', to: `${orgBase.value}/sites` },
     { key: 'inbox', label: 'Inbox', icon: 'i-lucide-inbox', to: `${orgBase.value}/inbox` },
-    { key: 'menu', label: 'Menu', icon: 'i-lucide-menu', to: `${orgBase.value}/menu` },
   ]
 })
 
-const overviewGroup = computed(() => {
+const _overviewGroup = computed(() => {
   if (scope.value !== 'organization' || !orgBase.value) return []
   return organizationNavigationItems.value.map(({ key: _key, ...item }) => item)
 })
@@ -580,7 +512,7 @@ function parentNavItem() {
 // site correctly reads "Offices / Service Areas" instead of "Locations".
 const locationsNavLabel = computed(() => capabilities.value?.locationVocabulary === 'office/service area' ? 'Offices / Service Areas' : 'Locations')
 
-const siteOverviewGroup = computed(() => {
+const _siteOverviewGroup = computed(() => {
   if (scope.value !== 'site' || !siteBase.value) return []
   const items = [
     { label: 'Overview', icon: 'i-lucide-layout-dashboard', to: siteBase.value },
@@ -600,7 +532,7 @@ const siteOverviewGroup = computed(() => {
 // managerNavItems('Content'/'Reputation') (location.posts/location.photos/location.qa in
 // config/cms-registry.ts) so a location override can actually turn them off. Overview/Content/
 // Inbox/Settings stay here: universal chrome with no ProductFeature toggle.
-const locationOverviewGroup = computed(() => {
+const _locationOverviewGroup = computed(() => {
   if (scope.value !== 'location' || !locationBase.value) return []
   return [
     { label: 'Overview', icon: 'i-lucide-layout-dashboard', to: locationBase.value },
@@ -611,9 +543,9 @@ const locationOverviewGroup = computed(() => {
   ]
 })
 
-const parentGroup = computed(() => parentNavItem())
+const _parentGroup = computed(() => parentNavItem())
 
-const contentGroup = computed(() => {
+const _contentGroup = computed(() => {
   const items: { label: string; icon?: string; to?: string; type?: string }[] = []
   const managerItems = managerNavItems('Content')
   if (scope.value === 'site' && siteBase.value && canManageSite.value) {
@@ -627,17 +559,17 @@ const contentGroup = computed(() => {
   return items
 })
 
-const operateGroup = computed(() => {
+const _operateGroup = computed(() => {
   const items = managerNavItems('Operate')
   if (items.length === 0) return items
   return [{ label: 'Operate', type: 'label' }, ...items]
 })
-const reputationGroup = computed(() => {
+const _reputationGroup = computed(() => {
   const items = managerNavItems('Reputation')
   if (items.length === 0) return items
   return [{ label: 'Reputation', type: 'label' }, ...items]
 })
-const publishingGroup = computed(() => {
+const _publishingGroup = computed(() => {
   const items = managerNavItems('Publishing')
   if (items.length === 0) return items
   return [{ label: 'Publishing', type: 'label' }, ...items]
@@ -647,9 +579,9 @@ const settingsGroup = computed(() => {
   if (routeName.value.startsWith('dashboard-account')) {
     return [
       { label: 'Account', type: 'label' },
-      { label: 'Profile', icon: 'i-lucide-user', to: '/dashboard/account/profile' },
-      { label: 'Authentication', icon: 'i-lucide-shield', to: '/dashboard/account/authentication' },
-      { label: 'Billing Items', icon: 'i-lucide-receipt', to: '/dashboard/account/billing-items' },
+      { label: 'Profile', icon: 'i-lucide-user', to: { path: '/dashboard/account/profile', query: accountRouteQuery.value } },
+      { label: 'Authentication', icon: 'i-lucide-shield', to: { path: '/dashboard/account/authentication', query: accountRouteQuery.value } },
+      { label: 'Billing Items', icon: 'i-lucide-receipt', to: { path: '/dashboard/account/billing-items', query: accountRouteQuery.value } },
     ]
   }
   return []
@@ -669,162 +601,51 @@ const adminGroup = computed(() => [
 
 const navigationItems = computed(() => {
   if (isAdminRoute.value) return [adminGroup.value]
-  const groups: { label: string; icon?: string; to?: string; type?: string }[][] = []
-  if (parentGroup.value.length) groups.push(parentGroup.value)
-  if (overviewGroup.value.length) groups.push(overviewGroup.value)
-  if (siteOverviewGroup.value.length) groups.push(siteOverviewGroup.value)
-  if (locationOverviewGroup.value.length) groups.push(locationOverviewGroup.value)
-  if (contentGroup.value.length) groups.push(contentGroup.value)
-  if (operateGroup.value.length) groups.push(operateGroup.value)
-  if (reputationGroup.value.length) groups.push(reputationGroup.value)
-  if (publishingGroup.value.length) groups.push(publishingGroup.value)
-  if (settingsGroup.value.length) groups.push(settingsGroup.value)
-  return groups
+  if (routeName.value.startsWith('dashboard-account')) return [settingsGroup.value]
+  return [mobileNavItems.value.map(({ key: _key, active: _active, ...item }) => item)]
 })
+provide(dashboardScopeHeaderModelKey, scopeHeaderModel)
+provide(dashboardOrganizationParentKey, computed(() => {
+  const target = isAccountRoute.value ? accountOrganization.value : organization.value ?? accountOrganization.value
+  if (target) return { label: target.name, to: `/dashboard/${encodeURIComponent(target.slug)}` }
+  return requestedAccountOrganizationSlug.value
+    ? {
+        label: requestedAccountOrganizationName.value ?? requestedAccountOrganizationSlug.value,
+        to: `/dashboard/${encodeURIComponent(requestedAccountOrganizationSlug.value)}`,
+      }
+    : null
+}))
+provide(dashboardAccountRouteQueryKey, accountRouteQuery)
 
 interface DashboardMobileNavItem {
   key: string
   label: string
   icon: string
-  to: string
+  to?: string
   active?: boolean
 }
 
-function isActivePath(path: string) {
+function isActivePath(path?: string) {
+  if (!path) return false
   return route.path === path || route.path.startsWith(`${path}/`)
 }
 
-function firstManagerItem(feature: ProductFeature, managerScope = scope.value) {
-  const manager = capabilities.value?.managers.find(item => item.id === feature && item.scope === managerScope)
-  if (!manager) return null
-  const href = managerHref(manager)
-  return href ? managerAction(manager, href) : null
-}
-
-function firstLocationManagerItem(feature: ProductFeature) {
-  if (scope.value === 'site' && !canManageSite.value) return null
-  const location = dashboard.locations.value.find(item => item.is_primary) ?? dashboard.locations.value[0]
-  if (!vertical.value || !templateSlug.value || !locationsBase.value || !location?.slug) return null
-  let locationCapabilities: ReturnType<typeof resolveCmsCapabilities>
-  try {
-    locationCapabilities = resolveCmsCapabilities(vertical.value, templateSlug.value, {
-      site: parseCmsFeatureOverrideDelta(site.value?.feature_overrides),
-      location: parseCmsFeatureOverrideDelta(location.feature_overrides),
-    })
-  } catch {
-    return null
-  }
-  const manager = locationCapabilities.managers.find(item => item.id === feature && item.scope === 'location')
-  if (!manager) return null
-  const rel = manager.route.replace(/^:location\/?/, '')
-  const base = `${locationsBase.value}/${location.slug}`
-  return managerAction(manager, rel ? `${base}/${rel}` : base)
-}
-
-const mobileRevenueItem = computed<DashboardMobileNavItem | null>(() => {
-  if (scope.value === 'organization' && orgBase.value) {
-    return {
-      key: 'sites',
-      label: 'Sites',
-      icon: 'i-lucide-globe',
-      to: `${orgBase.value}/sites`,
-      active: isActivePath(`${orgBase.value}/sites`),
-    }
-  }
-
-  if (scope.value === 'location') {
-    const primary = firstManagerItem('menu', 'location')
-      ?? firstManagerItem('experiences', 'location')
-    if (!primary) return null
-    return {
-      key: 'primary',
-      label: primary.label,
-      icon: primary.icon,
-      to: primary.to,
-      active: isActivePath(primary.to),
-    }
-  }
-
-  if (scope.value !== 'site') return null
-  const revenue = firstManagerItem('ordering', 'site')
-    ?? firstManagerItem('services', 'site')
-    ?? firstLocationManagerItem('reservations')
-    ?? firstLocationManagerItem('experiences')
-  if (!revenue) return null
-  return {
-    key: 'revenue',
-    label: revenueLabel(revenue),
-    icon: revenue.icon,
-    to: revenue.to,
-    active: isActivePath(revenue.to),
-  }
-})
-
-const mobileHomeItem = computed<DashboardMobileNavItem | null>(() => {
-  const to = scope.value === 'location'
-    ? locationBase.value
-    : scope.value === 'site'
-      ? siteBase.value
-      : orgBase.value
-  if (!to) return null
-  return {
-    key: 'home',
-    label: 'Home',
-    icon: 'i-lucide-home',
-    to,
-    active: route.path === to,
-  }
-})
-
-const mobileInboxItem = computed<DashboardMobileNavItem | null>(() => {
-  if (scope.value === 'organization' && !canManageOrganization.value) return null
-  const to = scope.value === 'location'
-    ? locationBase.value ? `${locationBase.value}/inbox` : null
-    : scope.value === 'site'
-      ? siteBase.value ? `${siteBase.value}/inbox` : null
-      : orgBase.value ? `${orgBase.value}/activity` : null
-  if (!to) return null
-  return {
-    key: 'inbox',
-    label: scope.value === 'organization' ? 'Activity' : 'Inbox',
-    icon: scope.value === 'organization' ? 'i-lucide-activity' : 'i-lucide-inbox',
-    to,
-    active: isActivePath(to),
-  }
-})
-
-const mobileNavItems = computed<DashboardMobileNavItem[]>(() => [
-  ...(scope.value === 'organization'
-    ? organizationNavigationItems.value.map(item => ({ ...item, active: isActivePath(item.to) }))
-    : [mobileHomeItem.value, mobileInboxItem.value, mobileRevenueItem.value]
-      .filter((item): item is DashboardMobileNavItem => Boolean(item))),
-])
-
-const mobileMoreItems = computed(() => {
-  const seen = new Set<string>()
-  const items: { label: string; icon?: string; to: string }[] = []
-  const primaryTargets = new Set(mobileNavItems.value.map(item => item.to))
-
-  for (const group of navigationItems.value) {
-    for (const item of group) {
-      if (('type' in item && item.type === 'label') || !item.to || primaryTargets.has(item.to) || seen.has(item.to)) continue
-      seen.add(item.to)
-      items.push({ label: item.label, icon: item.icon, to: item.to })
-    }
-  }
-
-  return items
-})
-
-const mobileAccountItems = computed(() => [
-  { label: 'Account settings', icon: 'i-lucide-settings', to: '/dashboard/account/profile' },
-  { label: 'Authentication', icon: 'i-lucide-shield', to: '/dashboard/account/authentication' },
-  ...(config.public.helpUrl ? [{ label: 'Help', icon: 'i-lucide-circle-help', to: config.public.helpUrl as string, target: '_blank' }] : []),
-  { label: 'Docs', icon: 'i-lucide-book-open', to: '/docs' },
-])
-
-watch(() => route.fullPath, () => {
-  mobileMoreOpen.value = false
+const mobileNavItems = computed<DashboardMobileNavItem[]>(() => {
+  if (!orgBase.value) return []
+  const isOrganization = scope.value === 'organization'
+  const childrenTo = isOrganization ? `${orgBase.value}/sites` : siteBase.value
+  const inboxTo = isOrganization
+    ? `${orgBase.value}/inbox`
+    : scope.value === 'location' && locationBase.value
+      ? `${locationBase.value}/inbox`
+      : siteBase.value ? `${siteBase.value}/inbox` : undefined
+  const items: DashboardMobileNavItem[] = [
+    { key: 'today', label: 'Today', icon: 'i-lucide-sun', to: `${orgBase.value}/today` },
+    { key: 'calendar', label: 'Calendar', icon: 'i-lucide-calendar-days', to: `${orgBase.value}/calendar` },
+    { key: 'children', label: isOrganization ? 'Sites' : locationsNavLabel.value, icon: isOrganization ? 'i-lucide-globe' : 'i-lucide-map-pin', to: childrenTo ?? undefined },
+    { key: 'inbox', label: 'Inbox', icon: 'i-lucide-inbox', to: inboxTo },
+  ]
+  return items.map(item => ({ ...item, active: isActivePath(item.to) }))
 })
 
 watch(
@@ -848,85 +669,6 @@ watch(
     }
   },
 )
-
-watch(mobileMoreOpen, async (open) => {
-  if (open) {
-    mobileMoreFocusReturn.value = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : mobileMoreButtonElement.value
-    await nextTick()
-    const first = mobileMoreFocusableItems()[0]
-    if (first) first.focus()
-    else mobileMoreSheetRef.value?.focus()
-    return
-  }
-
-  await nextTick()
-  mobileMoreFocusReturn.value?.focus()
-  mobileMoreFocusReturn.value = null
-})
-
-function openChowBot() {
-  mobileMoreOpen.value = false
-  chowBot.open()
-}
-
-function toggleMobileMore(event: MouseEvent) {
-  mobileMoreButtonElement.value = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
-  mobileMoreOpen.value = !mobileMoreOpen.value
-}
-
-const mobileMoreFocusableSelector = [
-  'a[href]',
-  'button:not([disabled])',
-  'textarea:not([disabled])',
-  'input:not([disabled])',
-  'select:not([disabled])',
-  '[tabindex]:not([tabindex="-1"])',
-].join(',')
-
-function mobileMoreFocusableItems() {
-  if (!mobileMoreSheetRef.value) return []
-  return [...mobileMoreSheetRef.value.querySelectorAll<HTMLElement>(mobileMoreFocusableSelector)]
-    .filter(el => !el.hasAttribute('disabled') && el.getAttribute('aria-hidden') !== 'true')
-}
-
-function closeMobileMore() {
-  mobileMoreOpen.value = false
-}
-
-async function handleMobileSignOut() {
-  const redirect = route.fullPath
-  closeMobileMore()
-  await signOut()
-  await navigateTo({ path: '/login', query: { redirect } })
-}
-
-function onMobileMoreKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape') {
-    event.preventDefault()
-    closeMobileMore()
-    return
-  }
-
-  if (event.key !== 'Tab') return
-  const focusable = mobileMoreFocusableItems()
-  if (focusable.length === 0) {
-    event.preventDefault()
-    mobileMoreSheetRef.value?.focus()
-    return
-  }
-
-  const first = focusable[0]
-  const last = focusable[focusable.length - 1]
-  if (event.shiftKey && document.activeElement === first) {
-    event.preventDefault()
-    last?.focus()
-  } else if (!event.shiftKey && document.activeElement === last) {
-    event.preventDefault()
-    first?.focus()
-  }
-}
 
 // Load dashboard context during SSR so nav links render stable org-scoped routes.
 if ((routeName.value.startsWith('dashboard') || isAdminRoute.value) && !dashboard.state.value) {

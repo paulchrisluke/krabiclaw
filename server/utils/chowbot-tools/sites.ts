@@ -47,27 +47,10 @@ export const SITES_CHOWBOT_TOOLS: AiTool[] = [
   {
       name: "update_site_social",
       description:
-        "Set site-wide social media links, footer tagline, and brand contact emails. Pass only the fields to change; omit the rest.",
+        "Set site-wide brand contact emails. Social profiles are managed through the Links page. Pass only the fields to change; omit the rest.",
       input_schema: {
         type: "object",
         properties: {
-          facebook_url: {
-            type: "string",
-            description: "Full Facebook page URL. Empty string to clear.",
-          },
-          instagram_url: {
-            type: "string",
-            description: "Full Instagram profile URL. Empty string to clear.",
-          },
-          tiktok_url: {
-            type: "string",
-            description: "Full TikTok profile URL. Empty string to clear.",
-          },
-          footer_tagline: {
-            type: "string",
-            description:
-              "Short tagline shown in the site footer. Empty string to clear.",
-          },
           press_email: {
             type: "string",
             description:

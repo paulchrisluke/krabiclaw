@@ -1,6 +1,7 @@
 import type { McpExecutorContext } from './shared'
 import { deleteMediaAsset, listMediaAssets, updateMediaAssetMetadata } from '~/server/utils/media-asset-manager'
 import { hasCloudflareImagesConfig } from '~/server/utils/cloudflare-images'
+import { MAX_POSTER_BYTES } from '~/server/utils/media-mime'
 import { uploadResolvedMediaToAssetStore } from '~/server/utils/media-upload'
 import { setMediaPlacement, type MediaPlacementTarget } from '~/server/utils/media-placement'
 import { MCP_ERROR, mcpProtocolError } from '~/server/utils/mcp-protocol'
@@ -8,12 +9,10 @@ import { renderStructuredResponse } from '~/server/utils/mcp-render'
 import {
   NOT_HANDLED,
   mutationContextPayload,
-  objectRecord,
   optionalString,
   requiredString,
   resolveImageUploadProvider,
   resolveUserUploadedMediaFile,
-  resolveUserUploadedMediaFileById,
   toolFileReference,
 } from './shared'
 
@@ -21,7 +20,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
   const { toolName, args, site } = ctx
   switch (toolName) {
     case "set_media": {
-      const target = mediaPlacementTarget(objectRecord(args.target, "target"));
+      const target = mediaPlacementTarget(args);
       const assetIdsRaw = args.asset_ids;
       if (!Array.isArray(assetIdsRaw) || !assetIdsRaw.every((item): item is string => typeof item === "string")) {
         throw mcpProtocolError(MCP_ERROR.invalidParams, "asset_ids must be an array of strings.");
@@ -56,35 +55,29 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
       const description = optionalString(args, "description") ?? null;
       const category = optionalString(args, "category") ?? null;
       const fileReferenceValue = args.file;
-      const fileReference = fileReferenceValue !== undefined
-        ? toolFileReference(fileReferenceValue, "file")
-        : null;
-      const fileId = optionalString(args, "file_id") ?? null;
+      const fileReference = toolFileReference(fileReferenceValue, "file");
       const posterReference = args.poster_file !== undefined
         ? toolFileReference(args.poster_file, "poster_file")
         : null;
 
-      if (!fileReference && !fileId) {
+      const resolved = await resolveUserUploadedMediaFile(fileReference);
+      if (posterReference && resolved.kind !== "video") {
         throw mcpProtocolError(
           MCP_ERROR.invalidParams,
-          "upload_user_media requires either file or file_id.",
+          "poster_file is only valid when file is a video.",
         );
       }
-
-      const resolved = fileReference
-        ? await resolveUserUploadedMediaFile(fileReference)
-        : await resolveUserUploadedMediaFileById(fileId!, site.env);
 
       const provider = resolved.kind === "image"
         ? resolveImageUploadProvider(resolved.contentType, site.env)
         : resolved.kind === "file" ? "cloudflare_r2" : undefined;
 
-      let poster: { buffer: ArrayBuffer; contentType: string; filename: string } | undefined;
+      let poster: { buffer: Uint8Array<ArrayBuffer>; contentType: string; filename: string } | undefined;
       if (resolved.kind === "video" && posterReference) {
         if (!hasCloudflareImagesConfig(site.env)) {
           throw new Error("Cloudflare Images not configured");
         }
-        const posterResolved = await resolveUserUploadedMediaFile(posterReference);
+        const posterResolved = await resolveUserUploadedMediaFile(posterReference, MAX_POSTER_BYTES);
         if (posterResolved.kind !== "image") {
           throw mcpProtocolError(
             MCP_ERROR.invalidParams,
@@ -94,6 +87,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         poster = posterResolved;
       }
 
+      const context = await mutationContextPayload(site);
       const uploaded = await uploadResolvedMediaToAssetStore({
         db: site.db,
         env: site.env as never,
@@ -107,7 +101,7 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         source: "uploaded",
         provider,
         category: (category as never) ?? null,
-        altText: description ?? fileReference?.file_name ?? fileId,
+        altText: description ?? fileReference.file_name ?? fileReference.file_id,
         poster,
       });
 
@@ -117,11 +111,12 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         public_url: uploaded.publicUrl,
         thumbnail_url: uploaded.thumbnailUrl,
         kind: resolved.kind,
-        poster_warning: uploaded.posterWarning,
         next_step: resolved.kind === "file"
           ? "Upload complete. Call analyze_document with this asset_id to summarize it or answer questions grounded in it."
-          : "Upload complete. This asset is in the media library but not assigned yet. Call set_media with this asset_id and the desired target.",
-        context: await mutationContextPayload(site),
+          : resolved.kind === "video" && !uploaded.thumbnailUrl
+            ? "Upload complete. This video is in the media library but cannot be assigned as a cover or hero until it has a poster thumbnail."
+            : "Upload complete. This asset is in the media library but not assigned yet. Call set_media with this asset_id and the desired target.",
+        context,
       };
     }
     case "update_media_asset": {
@@ -135,6 +130,9 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
           category: (optionalString(args, "category") as never) ?? undefined,
         },
       );
+      if (!updated) {
+        throw mcpProtocolError(MCP_ERROR.invalidParams, "Media asset not found.");
+      }
       return {
         updated,
         context: await mutationContextPayload(site, {
@@ -142,7 +140,8 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         }),
       };
     }
-    case "delete_media_asset":
+    case "delete_media_asset": {
+      const context = await mutationContextPayload(site);
       await deleteMediaAsset(
         site.db,
         site.env,
@@ -150,7 +149,8 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         site.siteId,
         site.userId,
       );
-      return { deleted: true, context: await mutationContextPayload(site) };
+      return { deleted: true, context };
+    }
     case "import_menu_from_media": {
       const { extractMenuFromMediaAsset } =
         await import("~/server/utils/chowbot-media");
@@ -181,9 +181,26 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
 }
 
 function mediaPlacementTarget(raw: Record<string, unknown>): MediaPlacementTarget {
-  const type = requiredString(raw, "type") as MediaPlacementTarget["type"];
-  if (type === "site_logo" || type === "home_story_image" || type === "about_story_image") return { type };
-  if (type === "home_hero") return { type, location_id: optionalString(raw, "location_id") ?? null };
+  const type = requiredString(raw, "target_type") as MediaPlacementTarget["type"];
+  const entityIdKeys = ["location_id", "menu_item_id", "post_id", "experience_id"] as const;
+  const allowedEntityId = type === "location_hero"
+    ? "location_id"
+    : type === "menu_item_media"
+      ? "menu_item_id"
+      : type === "post_image" || type === "blog_post_image"
+        ? "post_id"
+        : type === "experience_media"
+          ? "experience_id"
+          : undefined;
+  const unexpectedEntityIds = entityIdKeys.filter(key => key !== allowedEntityId && raw[key] !== undefined);
+  if (unexpectedEntityIds.length > 0) {
+    throw mcpProtocolError(
+      MCP_ERROR.invalidParams,
+      `${unexpectedEntityIds.join(", ")} cannot be used with target_type ${type}.`,
+    );
+  }
+
+  if (type === "site_logo" || type === "home_story_image" || type === "about_story_image" || type === "home_hero") return { type };
   if (type === "location_hero") return { type, location_id: requiredString(raw, "location_id") };
   if (type === "menu_item_media") return { type, menu_item_id: requiredString(raw, "menu_item_id") };
   if (type === "post_image") return { type, post_id: requiredString(raw, "post_id") };

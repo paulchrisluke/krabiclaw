@@ -33,9 +33,9 @@ function loadEnvFile(filename) {
   }
 }
 
-const env = loadEnvFile('.env.production') || loadEnvFile('.env')
+const env = loadEnvFile('.env')
 if (!env) {
-  console.error('Could not load .env.production or .env')
+  console.error('Could not load .env')
   process.exit(1)
 }
 
@@ -135,7 +135,7 @@ const server = http.createServer(async (req, res) => {
     console.log(`  echo "${tokens.refresh_token}" | wrangler secret put GOOGLE_REFRESH_TOKEN --name krabiclaw`)
     console.log(`  # Update GitHub secret:`)
     console.log(`  gh secret set GOOGLE_REFRESH_TOKEN --body "${tokens.refresh_token}" --repo paulchrisluke/krabiclaw`)
-    console.log('\nAlso add GOOGLE_REFRESH_TOKEN=<value> to .env and .env.production\n')
+    console.log('\nAlso add GOOGLE_REFRESH_TOKEN=<value> to .env\n')
 
     server.close()
     process.exit(0)

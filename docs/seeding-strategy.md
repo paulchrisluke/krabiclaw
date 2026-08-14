@@ -9,7 +9,7 @@ Two sources of truth, one ephemeral execution format:
 3. **Generated SQL** — ephemeral apply artifact, never hand-maintained
 
 Schema DDL lives in `migrations/` and is applied by the environment's locked
-release workflow before candidate promotion. Seed data is entirely separate
+preview workflow before browser coverage. Seed data is entirely separate
 and never belongs in migration files.
 
 ---
@@ -75,19 +75,13 @@ Schema DDL only: `CREATE TABLE`, `ALTER TABLE`, index definitions. Applied autom
 
 ---
 
-## What belongs in the platform seed
-
-`seeds/seed-krabiclaw.sql` covers platform-level setup that is not tenant-specific: Stripe product data, platform blog content, admin user bootstrap. Applied once to a fresh environment, not regenerated from typed definitions.
-
----
-
 ## Tenant inventory
 
-| Tenant        | Typed definition                    | Generator                        | Flags                                              | CI-reproducible |
-| ------------- | ----------------------------------- | -------------------------------- | -------------------------------------------------- | --------------- |
-| Demo          | `seed-definitions/demo.ts`          | `generate-demo-seed.ts`          | `--local` / `--preview` / `--remote` / `--staging` | ✓               |
-| Pottery House | `seed-definitions/pottery-house.ts` | `generate-pottery-house-seed.ts` | `--local` / `--preview` / `--remote` / `--staging` | ✓               |
-| Kikuzuki      | `seed-definitions/kikuzuki.ts`      | `generate-kikuzuki-seed.ts`      | `--local` / `--preview` / `--staging` / `--remote` | ✓               |
+| Tenant        | Typed definition                    | Generator                        | Targets             | CI-reproducible |
+| ------------- | ----------------------------------- | -------------------------------- | ------------------- | --------------- |
+| Demo          | `seed-definitions/demo.ts`          | `generate-demo-seed.ts`          | local / PR preview  | ✓               |
+| Pottery House | `seed-definitions/pottery-house.ts` | `generate-pottery-house-seed.ts` | local / PR preview  | ✓               |
+| Kikuzuki      | `seed-definitions/kikuzuki.ts`      | `generate-kikuzuki-seed.ts`      | local / PR preview  | ✓               |
 
 All three tenants are on the typed fixture path. CI generates from source on every run — committed SQL files are never used as-is without regeneration.
 
@@ -106,32 +100,28 @@ As of June 11, 2026, the curated Demo and Pottery House fixtures have been norma
 - live tenant pages may still render `media.krabiclaw.com/...-thumb.webp` for video thumbnails; that is expected as long as the parent asset is a `cloudflare_r2` video row
 - repo-served tenant media under `public/` has been removed and must not be reintroduced for tenant content
 
-Historical backfill tooling:
-
-- one-off normalization scripts used for the June 11, 2026 backfill now live under `scripts/archive/`
-- they are archived reference tooling, not part of the normal seed or onboarding workflow
+Completed one-off backfill tooling is deleted. Migration history and Git retain
+the record; executable copies do not remain in the active repository.
 
 ---
 
 ## CI seeding
 
 Seeds run on every PR (preview) and once inside an explicitly dispatched,
-locked staging-candidate workflow. They are not conditional on file changes.
+preview workflow. They are not conditional on file changes.
 The generate scripts run first, so the `.ts` fixture is the actual source of
 truth in CI — not committed SQL or a push-triggered shared-staging loop.
 
 | Trigger           | Environment  | What runs                                                                      |
 | ----------------- | ------------ | ------------------------------------------------------------------------------ |
 | PR opened/updated | `preview`    | generate demo + pottery house → apply SQL; generate kikuzuki → apply ephemeral |
-| Locked full-candidate workflow | `staging` | same as above against staging D1, while holding `shared-staging-candidate` |
+| Push to `staging` | `staging` | migrations and E2E artifact sweep; persistent fixtures are not reseeded |
 | Push to `main`    | `production` | migrations only, no seed                                                       |
 
 Scripts:
 
 - `yarn seed:kikuzuki` — local D1
 - `yarn seed:kikuzuki:preview` — preview D1 (CI)
-- `yarn seed:kikuzuki:staging` — blocked outside the locked full-candidate workflow
-- `yarn seed:kikuzuki:remote` — blocked; production seeding is not a release operation
 
 ---
 
@@ -159,22 +149,21 @@ Kikuzuki and Pottery House currently live on the curated-fixture path (typed `se
 
 ### Why this matters
 
-Remote tenant seed aliases are blocked. The manifest-gated production workflow never
-calls a seed, and the locked full-candidate workflow is the only path that may
-run curated staging fixtures. `business_locations`, `media_assets`, `menus`,
-`sites`, and `site_domains` use `INSERT OR REPLACE` in the generated SQL, so a
-manual rerun would silently clobber client edits; the command guard prevents
-that accidental production path.
+Curated tenant seeds support local and preview databases only. Production and
+staging deployment jobs never seed curated client data. `business_locations`,
+`media_assets`, `menus`, `sites`, and `site_domains` use `INSERT OR REPLACE` in
+the generated SQL, so applying those fixtures to a client environment would
+silently clobber client edits.
 
-Preview and staging seeding (`generate-kikuzuki-seed.ts --preview` / `--staging` in CI) target `krabiclaw-db-preview` / `krabiclaw-db-staging` — separate databases from production — so they do not put a transferred tenant's real data at risk. Don't use `staging.krabiclaw.com` as a sandbox for the actual business owner once transferred, though: every explicitly dispatched full candidate resets its fixtures, so anything done there outside of E2E assertions is disposable.
+Preview seeding targets `krabiclaw-db-preview`, which is separate from production. Staging fixtures persist across deploys; only throwaway `e2e-` artifacts are swept before the staging suite.
 
 ### Steps to take at transfer time
 
-1. **Stop using `--remote` for this tenant.** Remove or guard the `--remote` branch in `scripts/generate-<tenant>-seed.ts` so it can't be run again by accident.
-2. **Pull the tenant out of CI seeding.** Delete its preview seed line from `.github/workflows/ci.yml` and staging seed line from `.github/workflows/ci-full.yml`. Continuing to reseed preview/staging with a fixture that no longer reflects the live site's real state is misleading, not just unnecessary.
-3. **Replace its E2E coverage.** Either retire the assertions that depended on the seeded fixture, point them at the pinned read-only production telemetry lane, or stand up a fresh synthetic tenant to cover the feature being tested (e.g. the second-location flow) without depending on a tenant that now has real client edits.
-4. **Archive, don't delete, the fixture.** Move `seed-definitions/<tenant>.ts` and `scripts/generate-<tenant>-seed.ts` under `scripts/archive/`-style historical reference (same treatment as the June 11, 2026 media backfill tooling) so the original recipe is preserved but nothing in the active workflow can re-run it.
-5. **Treat the tenant like any other client from this point on.** Future changes flow only through the dashboard/MCP/API. If you ever need to bulk-restore or clone its state, build a `client:import` manifest from the live site and use `client:replay` — never resurrect the old typed fixture.
+1. **Pull the tenant out of CI seeding.** Delete its preview seed line from `.github/workflows/ci.yml`. Continuing to reseed preview with a fixture that no longer reflects the live site's real state is misleading, not just unnecessary.
+2. **Replace its E2E coverage.** Either retire the assertions that depended on the seeded fixture, point them at the pinned read-only production telemetry lane, or stand up a fresh synthetic tenant to cover the feature being tested (e.g. the second-location flow) without depending on a tenant that now has real client edits.
+3. **Delete the fixture generator after handoff.** Git retains its history;
+   inactive executable copies do not stay in the active repository.
+4. **Treat the tenant like any other client from this point on.** Future changes flow only through the dashboard/MCP/API. If you ever need to bulk-restore or clone its state, build a `client:import` manifest from the live site and use `client:replay` — never resurrect the old typed fixture.
 
 ---
 
@@ -200,4 +189,3 @@ Demo, Pottery House, and Kikuzuki now all follow the same ephemeral model: typed
 - `migrations/` — schema DDL only, no data
 - `seeds/` — build outputs only, never edited directly; will be gitignored once clean
 - `public/` — never store tenant-specific source media here
-- `scripts/archive/` — historical migration/backfill tooling only, not active workflow entrypoints

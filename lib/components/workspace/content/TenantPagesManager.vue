@@ -2,7 +2,7 @@
   <UDashboardPanel id="tenant-pages-manager">
     <template #header>
       <UDashboardNavbar title="Pages">
-        <template #leading><DashboardSidebarCollapseButton /></template>
+        <template #leading><DashboardNavbarLeading /></template>
         <template #right>
           <UButton icon="i-lucide-plus" label="New page" :disabled="busy !== null || loading" @click="startNewPage" />
         </template>

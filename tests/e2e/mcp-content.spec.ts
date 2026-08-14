@@ -51,10 +51,11 @@ test.describe('stateless MCP server', () => {
         method: 'tools/call', toolName: 'get_site_media_assets', args: { site_id: siteId, kind: 'image' },
       })
       expect(mediaResponse.status()).toBe(200)
-      const mediaAssets = mcpData<{ assets: Array<{ id?: string, asset_id?: string, status?: string }> }>(await mediaResponse.json()).assets
-      const imageAsset = mediaAssets.find(asset => asset.status === 'active' && (asset.id ?? asset.asset_id))
+      const mediaAssets = mcpData<{ assets: Array<{ id: string, status: string }> }>(await mediaResponse.json()).assets
+      const imageAsset = mediaAssets.find(asset => asset.status === 'active')
       expect(imageAsset).toBeTruthy()
-      const imageAssetId = imageAsset!.id ?? imageAsset!.asset_id!
+      const imageAssetId = imageAsset!.id
+      expect(imageAssetId).toEqual(expect.any(String))
 
       const now = Date.now()
       const create = await mcpRequest(request, baseURL!, {
@@ -73,7 +74,7 @@ test.describe('stateless MCP server', () => {
       const placement = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
         toolName: 'set_media',
-        args: { site_id: siteId, target: { type: 'post_image', post_id: created.id }, asset_ids: [imageAssetId] },
+        args: { site_id: siteId, target_type: 'post_image', post_id: created.id, asset_ids: [imageAssetId] },
       })
       if (placement.status() !== 200) console.error(await placement.text())
       expect(placement.status()).toBe(200)
@@ -123,9 +124,8 @@ test.describe('stateless MCP server', () => {
     } finally {
       if (createdPostId) {
         const cleanup = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'delete_post', args: { site_id: siteId, post_id: createdPostId } })
-        if (cleanup.status() !== 200 || (await cleanup.json()).result?.isError) {
-          console.error(`Failed to clean up post ${createdPostId} on ${siteId}: status ${cleanup.status()}`)
-        }
+        expect(cleanup.status()).toBe(200)
+        expect(mcpData<{ deleted: boolean }>(await cleanup.json()).deleted).toBe(true)
       }
     }
   })
@@ -168,9 +168,8 @@ test.describe('stateless MCP server', () => {
     } finally {
       for (const postId of createdPostIds) {
         const cleanup = await mcpRequest(request, baseURL!, { method: 'tools/call', toolName: 'delete_post', args: { site_id: siteId, post_id: postId } })
-        if (cleanup.status() !== 200 || (await cleanup.json()).result?.isError) {
-          console.error(`Failed to clean up post ${postId} on ${siteId}: status ${cleanup.status()}`)
-        }
+        expect(cleanup.status()).toBe(200)
+        expect(mcpData<{ deleted: boolean }>(await cleanup.json()).deleted).toBe(true)
       }
     }
   })
@@ -236,7 +235,7 @@ test.describe('stateless MCP server', () => {
         },
       })
       expect(update.status()).toBe(200)
-      const updatedPost = mcpData<{ post: { document_updated_at: string; content_blocks: Array<{ type: string }> } }>(await update.json()).post
+      const updatedPost = mcpData<{ post: { updated_at: string; document_updated_at: string; content_blocks: Array<{ type: string }> } }>(await update.json()).post
       expect(updatedPost.document_updated_at).toEqual(expect.any(String))
       expect(updatedPost.document_updated_at).not.toBe(readPost.document_updated_at)
 
@@ -248,7 +247,12 @@ test.describe('stateless MCP server', () => {
 
       const publish = await mcpRequest(request, baseURL!, {
         method: 'tools/call', toolName: 'publish_blog_post',
-        args: { site_id: siteId, post_id: postId },
+        args: {
+          site_id: siteId,
+          post_id: postId,
+          expected_updated_at: updatedPost.updated_at,
+          expected_document_updated_at: updatedPost.document_updated_at,
+        },
       })
       expect(publish.status()).toBe(200)
       const published = mcpData<{ post: { status: string; public_url: string | null; content_blocks: Array<{ type: string; data: Record<string, unknown> }> } }>(await publish.json()).post

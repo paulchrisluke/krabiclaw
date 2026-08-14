@@ -7,6 +7,11 @@ import { fireSiteEventSafe } from '~/server/utils/site-events'
 type SqlBindValue = string | number | boolean | null
 type MediaProviderEnv = Parameters<typeof deleteImage>[0]
 
+interface MediaStorageReferenceState {
+  r2ReferencedElsewhere: boolean
+  cloudflareImageReferencedElsewhere: boolean
+}
+
 export interface MediaAsset {
   id: string
   organization_id: string
@@ -32,7 +37,6 @@ export interface MediaAsset {
   created_by_user_id: string | null
   created_at: string
   updated_at: string
-  delete_pending_at: string | null
 }
 
 export interface ResolvedMediaAsset {
@@ -395,12 +399,54 @@ export async function updateMediaAssetMetadata(
   return Number(result?.meta?.changes ?? 0) > 0
 }
 
-function cloudflareImageIdFromVariantUrl(env: MediaProviderEnv, url: string | null): string | null {
-  if (!url || !env.CLOUDFLARE_IMAGES_VARIANT_BASE) return null
-  const prefix = `${env.CLOUDFLARE_IMAGES_VARIANT_BASE.replace(/\/+$/, '')}/`
-  if (!url.startsWith(prefix)) return null
-  const imageId = url.slice(prefix.length).split('/')[0]?.trim()
-  return imageId || null
+function parseReferenceFlag(value: unknown, label: string): boolean {
+  if (value === 0 || value === false) return false
+  if (value === 1 || value === true) return true
+  throw new Error(`Invalid ${label} reference-check result`)
+}
+
+async function getMediaStorageReferenceState(
+  db: DbClient,
+  input: {
+    assetId: string
+    r2Key: string | null
+    cloudflareImageId: string | null
+  },
+): Promise<MediaStorageReferenceState> {
+  const row = await queryFirst<{
+    r2_referenced_elsewhere: number | boolean
+    cloudflare_image_referenced_elsewhere: number | boolean
+  }>(db, `
+    SELECT
+      (? IS NOT NULL AND EXISTS (
+        SELECT 1
+          FROM media_assets AS other_r2
+         WHERE other_r2.id != ?
+           AND other_r2.status != 'deleted'
+           AND other_r2.r2_key = ?
+      )) AS r2_referenced_elsewhere,
+      (? IS NOT NULL AND EXISTS (
+        SELECT 1
+          FROM media_assets AS other_image
+         WHERE other_image.id != ?
+           AND other_image.status != 'deleted'
+           AND other_image.cloudflare_image_id = ?
+      )) AS cloudflare_image_referenced_elsewhere
+  `, [
+    input.r2Key,
+    input.assetId,
+    input.r2Key,
+    input.cloudflareImageId,
+    input.assetId,
+    input.cloudflareImageId,
+  ])
+
+  if (!row) throw new Error(`Media storage reference check returned no result for asset ${input.assetId}`)
+
+  return {
+    r2ReferencedElsewhere: parseReferenceFlag(row.r2_referenced_elsewhere, 'R2'),
+    cloudflareImageReferencedElsewhere: parseReferenceFlag(row.cloudflare_image_referenced_elsewhere, 'Cloudflare Images'),
+  }
 }
 
 export async function replaceVideoPoster(
@@ -415,9 +461,9 @@ export async function replaceVideoPoster(
     contentType: string
   },
 ): Promise<string> {
-  const asset = await queryFirst<Pick<MediaAsset, 'id' | 'organization_id' | 'site_id' | 'location_id' | 'kind' | 'thumbnail_url'>>(
+  const asset = await queryFirst<Pick<MediaAsset, 'id' | 'organization_id' | 'site_id' | 'location_id' | 'kind' | 'cloudflare_image_id'>>(
     db,
-    `SELECT id, organization_id, site_id, location_id, kind, thumbnail_url
+    `SELECT id, organization_id, site_id, location_id, kind, cloudflare_image_id
        FROM media_assets
       WHERE id = ? AND site_id = ? AND status != 'deleted'
       LIMIT 1`,
@@ -430,8 +476,8 @@ export async function replaceVideoPoster(
   try {
     const result = await execute(
       db,
-      `UPDATE media_assets SET thumbnail_url = ?, updated_at = ? WHERE id = ? AND site_id = ? AND kind = 'video' AND status != 'deleted'`,
-      [uploaded.publicUrl, new Date().toISOString(), input.assetId, input.siteId],
+      `UPDATE media_assets SET cloudflare_image_id = ?, thumbnail_url = ?, updated_at = ? WHERE id = ? AND site_id = ? AND kind = 'video' AND status != 'deleted'`,
+      [uploaded.imageId, uploaded.publicUrl, new Date().toISOString(), input.assetId, input.siteId],
     )
     if (Number(result?.meta?.changes ?? 0) !== 1) {
       throw createError({ statusCode: 409, statusMessage: 'Poster update did not persist' })
@@ -440,26 +486,12 @@ export async function replaceVideoPoster(
     try {
       await deleteImage(env, uploaded.imageId)
     } catch (cleanupError) {
-      console.error('media_poster_upload_cleanup_failed', {
-        assetId: input.assetId,
-        imageId: uploaded.imageId,
-        error: cleanupError,
-      })
+      throw new AggregateError(
+        [error, cleanupError],
+        `Poster update failed for asset ${input.assetId}, and uploaded Cloudflare image ${uploaded.imageId} could not be deleted`,
+      )
     }
     throw error
-  }
-
-  const previousPosterImageId = cloudflareImageIdFromVariantUrl(env, asset.thumbnail_url)
-  if (previousPosterImageId && previousPosterImageId !== uploaded.imageId) {
-    try {
-      await deleteImage(env, previousPosterImageId)
-    } catch (cleanupError) {
-      console.error('media_poster_replace_cleanup_failed', {
-        assetId: input.assetId,
-        imageId: previousPosterImageId,
-        error: cleanupError,
-      })
-    }
   }
 
   await fireSiteEventSafe({
@@ -477,19 +509,40 @@ export async function replaceVideoPoster(
     },
   })
 
+  const previousPosterImageId = asset.cloudflare_image_id
+  if (previousPosterImageId && previousPosterImageId !== uploaded.imageId) {
+    let references: MediaStorageReferenceState
+    try {
+      references = await getMediaStorageReferenceState(db, {
+        assetId: input.assetId,
+        r2Key: null,
+        cloudflareImageId: previousPosterImageId,
+      })
+    } catch (referenceError) {
+      const detail = referenceError instanceof Error ? referenceError.message : String(referenceError)
+      throw new Error(
+        `Poster updated for asset ${input.assetId}, but references to previous Cloudflare image ${previousPosterImageId} could not be checked; the previous image was retained: ${detail}`,
+        { cause: referenceError },
+      )
+    }
+    if (references.cloudflareImageReferencedElsewhere) return uploaded.publicUrl
+
+    try {
+      await deleteImage(env, previousPosterImageId)
+    } catch (cleanupError) {
+      const detail = cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+      throw new Error(
+        `Poster updated for asset ${input.assetId}, but previous Cloudflare image ${previousPosterImageId} could not be deleted: ${detail}`,
+        { cause: cleanupError },
+      )
+    }
+  }
+
   return uploaded.publicUrl
 }
 
-/**
- * Soft-delete in DB and hard-delete from Cloudflare storage.
- *
- * `delete_pending_at` is stamped before attempting the Cloudflare Images/R2
- * delete and only cleared once that delete actually succeeds, so a failed
- * external delete leaves the asset in a retryable state (status untouched)
- * instead of being marked 'deleted' while the underlying file is still live.
- */
+/** Soft-delete in DB and delete each owned Cloudflare object once. */
 export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: string, siteId: string, deletedByUserId: string | null): Promise<void> {
-  const now = new Date().toISOString()
   const pendingAsset = await queryFirst<{
     id: string
     provider: MediaAsset['provider']
@@ -499,61 +552,46 @@ export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: 
     location_id: string | null
     created_by_user_id: string | null
   }>(db, `
-    UPDATE media_assets
-    SET delete_pending_at = ?, updated_at = ?
+    SELECT id, provider, cloudflare_image_id, r2_key, organization_id, location_id, created_by_user_id
+    FROM media_assets
     WHERE id = ? AND site_id = ? AND status != 'deleted'
-    RETURNING id, provider, cloudflare_image_id, r2_key, organization_id, location_id, created_by_user_id
-  `, [now, now, id, siteId]) ?? null
+  `, [id, siteId]) ?? null
 
-  if (!pendingAsset) return
-
-  const withRetry = async (
-    operation: () => Promise<void>,
-    context: Record<string, string | null>
-  ): Promise<void> => {
-    let lastError: Error | null = null
-    for (let attempt = 1; attempt <= 2; attempt += 1) {
-      try {
-        await operation()
-        return
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error('Unknown error')
-        if (attempt < 2) {
-          await new Promise((resolve) => setTimeout(resolve, 250 * attempt))
-        }
-      }
-    }
-
-    console.error('media_asset_external_delete_failed', {
-      ...context,
-      error: (lastError ?? new Error('Unknown error')).message
-    })
-
-    throw lastError ?? new Error('media_asset_external_delete_failed')
+  if (!pendingAsset) {
+    throw createError({ statusCode: 404, statusMessage: 'Media asset not found' })
   }
 
-  // If either delete throws, delete_pending_at stays set for a retry job to pick back up.
-  if (pendingAsset.provider === 'cloudflare_images' && pendingAsset.cloudflare_image_id) {
-    const cloudflareImageId = pendingAsset.cloudflare_image_id
-    await withRetry(() => deleteImage(env, cloudflareImageId), {
-      assetId: pendingAsset.id,
-      provider: pendingAsset.provider,
-      cloudflareImageId,
-    })
-  } else if (pendingAsset.provider === 'cloudflare_r2' && pendingAsset.r2_key) {
+  const references = await getMediaStorageReferenceState(db, {
+    assetId: pendingAsset.id,
+    r2Key: pendingAsset.r2_key,
+    cloudflareImageId: pendingAsset.cloudflare_image_id,
+  })
+
+  const deletions: Array<{ label: string; run: () => Promise<void> }> = []
+  if (pendingAsset.provider === 'cloudflare_r2' && pendingAsset.r2_key && !references.r2ReferencedElsewhere) {
     const r2Key = pendingAsset.r2_key
-    await withRetry(() => deleteFromR2(env, r2Key), {
-      assetId: pendingAsset.id,
-      provider: pendingAsset.provider,
-      r2Key,
-    })
+    deletions.push({ label: `R2 object ${r2Key}`, run: () => deleteFromR2(env, r2Key) })
+  }
+  if (pendingAsset.cloudflare_image_id && !references.cloudflareImageReferencedElsewhere) {
+    const imageId = pendingAsset.cloudflare_image_id
+    deletions.push({ label: `Cloudflare image ${imageId}`, run: () => deleteImage(env, imageId) })
+  }
+  const deletionResults = await Promise.allSettled(deletions.map(deletion => deletion.run()))
+  const failures = deletionResults.flatMap((result, index) => result.status === 'rejected'
+    ? [`${deletions[index]!.label}: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`]
+    : [])
+  if (failures.length > 0) {
+    throw new Error(`Media deletion failed: ${failures.join('; ')}`)
   }
 
-  await execute(db, `
+  const result = await execute(db, `
     UPDATE media_assets
-    SET status = 'deleted', delete_pending_at = NULL, updated_at = ?
-    WHERE id = ? AND site_id = ?
+    SET status = 'deleted', updated_at = ?
+    WHERE id = ? AND site_id = ? AND status != 'deleted'
   `, [new Date().toISOString(), pendingAsset.id, siteId])
+  if (Number(result?.meta?.changes ?? 0) !== 1) {
+    throw new Error(`Media asset ${pendingAsset.id} changed during deletion`)
+  }
 
   await fireSiteEventSafe({
     db,

@@ -143,29 +143,52 @@ test('dashboard page capability keys are all guardable registry manager keys', (
   }
 })
 
-test('dashboard layout derives capability-dependent navigation from managerNavItems only', () => {
+test('dashboard layout keeps content managers out of the primary navigation', () => {
   const layout = source('layouts/dashboard.vue')
-  assert.match(layout, /managerNavItems\('Content'\)/)
-  assert.match(layout, /managerNavItems\('Operate'\)/)
-  assert.match(layout, /managerNavItems\('Reputation'\)/)
-  assert.match(layout, /managerNavItems\('Publishing'\)/)
-  assert.match(layout, /resolveCmsCapabilities/)
-  assert.doesNotMatch(layout, /label:\s*['"](Menus|Orders|Reservations|Experiences|Professional services)['"]/)
+  assert.match(layout, /return \[mobileNavItems\.value\.map/)
+  assert.doesNotMatch(layout, /mobileRevenueItem|firstLocationManagerItem/)
 })
 
-test('responsive dashboard navigation keeps one canonical desktop sidebar with mobile parity affordances', () => {
+test('responsive dashboard navigation keeps one canonical desktop sidebar and one five-slot shape', () => {
   const layout = source('layouts/dashboard.vue')
   assert.equal((layout.match(/^\s*<UDashboardSidebar\b/gm) ?? []).length, 1)
   assert.match(layout, /data-testid="dashboard-mobile-nav"/)
   assert.match(layout, /mobileNavItems/)
-  assert.match(layout, /mobileMoreItems/)
-  assert.match(layout, /firstLocationManagerItem/)
-  assert.match(layout, /navigationItems\.value/)
+  assert.match(layout, /<DashboardAccountMenu mobile-only \/>/)
+  assert.match(layout, /mobileNavItems\.length && !isAccountRoute/)
+  assert.doesNotMatch(layout, /mobileMoreItems|dashboard-mobile-more|mobileRevenueItem/)
 })
 
-test('organization sidebar and mobile navigation share the requested item order', () => {
+test('account surfaces use the mobile index and row-based account design', () => {
+  const menu = source('lib/components/workspace/dashboard/DashboardAccountMenu.vue')
+  const profile = source('pages/dashboard/account/profile.vue')
+  const authentication = source('pages/dashboard/account/authentication.vue')
+  const billing = source('pages/dashboard/account/billing-items.vue')
+
+  assert.match(menu, /label: 'Profile'/)
+  assert.match(menu, /mobileOnly/)
+  assert.match(menu, /<UModal/)
+  assert.match(menu, /v-model:open="mobileOpen"/)
+  assert.doesNotMatch(menu, /role="dialog"/)
+  assert.match(profile, /editingRow/)
+  assert.match(profile, /class="profile-row/)
+  assert.doesNotMatch(authentication, /<UCard/)
+  assert.doesNotMatch(billing, /<UCard/)
+})
+
+test('mobile account avatar opens the shared sheet from the bottom nav and moves to the header on account pages', () => {
   const layout = source('layouts/dashboard.vue')
-  const labels = ['Today', 'Calendar', 'Sites', 'Inbox', 'Menu']
+  assert.match(layout, /<DashboardAccountMenu mobile-only \/>/)
+  assert.doesNotMatch(layout, /<NuxtLink :to="accountIndexTo"/)
+  assert.doesNotMatch(source('pages/dashboard/[orgSlug]/sites/[siteSlug]/index.vue'), /DashboardAccountMenu/)
+  for (const page of ['index.vue', 'profile.vue', 'authentication.vue', 'billing-items.vue']) {
+    assert.match(source(`pages/dashboard/account/${page}`), /<DashboardAccountMenu mobile-only class="md:hidden" \/>/)
+  }
+})
+
+test('organization, site, and location navigation share the requested item order', () => {
+  const layout = source('layouts/dashboard.vue')
+  const labels = ['Today', 'Calendar', 'Sites', 'Inbox']
   let previousIndex = -1
 
   for (const label of labels) {
@@ -174,9 +197,10 @@ test('organization sidebar and mobile navigation share the requested item order'
     previousIndex = index
   }
 
-  assert.match(layout, /overviewGroup[\s\S]*organizationNavigationItems\.value/)
-  assert.match(layout, /scope\.value === 'organization'[\s\S]*organizationNavigationItems\.value\.map/)
-  assert.match(layout, /icon: 'i-lucide-(sun|calendar-days|globe|inbox|menu)'/)
+  assert.match(layout, /label: isOrganization \? 'Sites' : locationsNavLabel\.value/)
+  assert.match(layout, /label: 'Today'.*to: `\$\{orgBase\.value\}\/today`/)
+  assert.match(layout, /label: 'Calendar'.*to: `\$\{orgBase\.value\}\/calendar`/)
+  assert.doesNotMatch(layout, /label: 'Menu'.*orgBase/)
 })
 
 test('organization switcher routes directly to canonical org slugs', () => {
@@ -202,6 +226,21 @@ test('organization, site, and location settings use separate page components', (
   assert.match(source('pages/dashboard/[orgSlug]/sites/[siteSlug]/settings.vue'), /SiteSettingsPage/)
   assert.match(source('pages/dashboard/[orgSlug]/sites/[siteSlug]/locations/[locationSlug]/settings.vue'), /id="location-settings"/)
   assert.match(source('pages/dashboard/[orgSlug]/sites/[siteSlug]/locations/[locationSlug]/index.vue'), /id="location-overview"/)
+})
+
+test('site overview is a preview-only edit index with pages, settings, and view-site access', () => {
+  const page = source('pages/dashboard/[orgSlug]/sites/[siteSlug]/index.vue')
+  const settings = source('lib/components/workspace/settings/SiteSettingsPage.vue')
+  assert.match(page, /My site/)
+  assert.match(page, /Site tour/)
+  assert.match(page, /Media library/)
+  assert.match(page, /View site/)
+  assert.match(page, /activeTab === 'site'/)
+  assert.doesNotMatch(page, /UChatPrompt|Recent Activity|map_embed_url/)
+  assert.match(settings, /saveSiteSettings\('brand'\)/)
+  assert.match(settings, /saveSiteSettings\('business'\)/)
+  assert.match(settings, /saveSiteSettings\('analytics'\)/)
+  assert.doesNotMatch(settings, /Business modules|URL structure|Footer tagline|Facebook URL|SEO title|SEO description/)
 })
 
 test('every experience mutation and availability route authorizes the experience location', () => {

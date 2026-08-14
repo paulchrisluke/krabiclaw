@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { loginAs } from './helpers/auth'
 
-const USER_ID = 'user-mcp-free'
+const USER_ID = 'user-e2e-free-owner'
 const SITE_ID = 'site-mcp-free'
 const BLOG_WRITE_STATEMENT_BUDGET = 35
 
@@ -11,6 +11,15 @@ function expectWriteBudget(response: { headers(): Record<string, string> }, maxS
   const batchCount = Number(headers['x-d1-batch-count'])
   expect(Number.isInteger(statementCount)).toBe(true)
   expect(Number.isInteger(batchCount)).toBe(true)
+  expect(statementCount).toBeLessThanOrEqual(maxStatements)
+  expect(batchCount).toBe(1)
+}
+
+function expectLifecycleBudget(response: { headers(): Record<string, string> }, maxStatements: number) {
+  const headers = response.headers()
+  const statementCount = Number(headers['x-d1-query-count'])
+  const batchCount = Number(headers['x-d1-batch-count'])
+  expect(Number.isInteger(statementCount)).toBe(true)
   expect(statementCount).toBeLessThanOrEqual(maxStatements)
   expect(batchCount).toBe(1)
 }
@@ -62,7 +71,7 @@ test.describe('canonical tenant blog lifecycle', () => {
       })
       expectWriteBudget(updated)
       expect(updated.status()).toBe(200)
-      const updatedBody = await updated.json() as { post: { content_document: { document: { updated_at: string }; blocks: Array<{ type: string }> } } }
+      const updatedBody = await updated.json() as { post: { updated_at: string; content_document: { document: { updated_at: string }; blocks: Array<{ type: string }> } } }
       expect(updatedBody.post.content_document.blocks.map(block => block.type)).toEqual(['heading', 'markdown', 'divider', 'how_to'])
       const updatedToken = updatedBody.post.content_document.document.updated_at
 
@@ -71,11 +80,36 @@ test.describe('canonical tenant blog lifecycle', () => {
       })
       expect(stale.status()).toBe(409)
 
-      const published = await request.patch(`${baseURL}/api/editor/sites/${SITE_ID}/blog/${postId}`, {
-        data: { publish: true, expected_updated_at: (updatedBody.post as { updated_at?: string }).updated_at },
+      const metadataUpdate = await request.patch(`${baseURL}/api/editor/sites/${SITE_ID}/blog/${postId}`, {
+        data: { excerpt: 'Concurrency token owner.', expected_updated_at: updatedBody.post.updated_at },
       })
-      expectWriteBudget(published)
+      expect(metadataUpdate.status()).toBe(200)
+      const metadataBody = await metadataUpdate.json() as { post: { updated_at: string } }
+
+      const rejectedLifecyclePatch = await request.patch(`${baseURL}/api/editor/sites/${SITE_ID}/blog/${postId}`, {
+        data: { publish: true, expected_updated_at: updatedBody.post.updated_at },
+      })
+      expect(rejectedLifecyclePatch.status()).toBe(400)
+      await expect(rejectedLifecyclePatch.json()).resolves.toMatchObject({ error: expect.stringContaining('publish operation') })
+
+      const published = await request.post(`${baseURL}/api/editor/sites/${SITE_ID}/blog/${postId}/publish`, {
+        data: {
+          expected_updated_at: metadataBody.post.updated_at,
+          expected_document_updated_at: updatedToken,
+          scheduled_for: null,
+        },
+      })
+      expectLifecycleBudget(published, 7)
       expect(published.status()).toBe(200)
+      const publishedBody = await published.json() as { success: true; lifecycle: { status: string; updated_at: string; content_document_updated_at: string } }
+      expect(publishedBody).toEqual({
+        success: true,
+        lifecycle: expect.objectContaining({
+          status: 'published',
+          updated_at: expect.any(String),
+          content_document_updated_at: expect.any(String),
+        }),
+      })
 
       const publicPost = await request.get(`${baseURL}/api/public/sites/${SITE_ID}/blog/${slug}`)
       expect(publicPost.status()).toBe(200)
@@ -84,7 +118,8 @@ test.describe('canonical tenant blog lifecycle', () => {
       expect(publicBody.post.content_blocks[1]?.data.markdown).toBe('Updated **visual** prose.')
 
       const editorAfterPublish = await request.get(`${baseURL}/api/editor/sites/${SITE_ID}/blog/${postId}`)
-      const editorAfterPublishBody = await editorAfterPublish.json() as { post: { content_document: { document: { updated_at: string } } } }
+      const editorAfterPublishBody = await editorAfterPublish.json() as { post: { content_document: { document: { updated_at: string; draft_revision_id: string; published_revision_id: string } } } }
+      expect(editorAfterPublishBody.post.content_document.document.published_revision_id).toBe(editorAfterPublishBody.post.content_document.document.draft_revision_id)
       const unpublishedDraftBlocks = updatedBlocks.map(block => block.type === 'markdown'
         ? { ...block, data: { ...block.data, markdown: 'Unpublished draft prose.' } }
         : block)
@@ -97,31 +132,45 @@ test.describe('canonical tenant blog lifecycle', () => {
       const stillPublishedBody = await stillPublished.json() as { post: { content_blocks: Array<{ type: string; data: Record<string, unknown> }> } }
       expect(stillPublishedBody.post.content_blocks[1]?.data.markdown).toBe('Updated **visual** prose.')
 
-      const republished = await request.patch(`${baseURL}/api/editor/sites/${SITE_ID}/blog/${postId}`, { data: { publish: true } })
-      expectWriteBudget(republished)
+      const draftUpdateBody = await draftUpdate.json() as { post: { updated_at: string; content_document: { document: { updated_at: string } } } }
+      const republished = await request.post(`${baseURL}/api/editor/sites/${SITE_ID}/blog/${postId}/publish`, {
+        data: {
+          expected_updated_at: draftUpdateBody.post.updated_at,
+          expected_document_updated_at: draftUpdateBody.post.content_document.document.updated_at,
+          scheduled_for: null,
+        },
+      })
+      expectLifecycleBudget(republished, 7)
       expect(republished.status()).toBe(200)
+      const republishedBodyState = await republished.json() as { lifecycle: { updated_at: string; content_document_updated_at: string } }
       const republishedPublic = await request.get(`${baseURL}/api/public/sites/${SITE_ID}/blog/${slug}`)
       const republishedBody = await republishedPublic.json() as { post: { content_blocks: Array<{ type: string; data: Record<string, unknown> }> } }
       expect(republishedBody.post.content_blocks[1]?.data.markdown).toBe('Unpublished draft prose.')
 
-      const unpublished = await request.post(`${baseURL}/api/editor/sites/${SITE_ID}/blog/${postId}/unpublish`)
-      expectWriteBudget(unpublished)
+      const unpublished = await request.post(`${baseURL}/api/editor/sites/${SITE_ID}/blog/${postId}/unpublish`, {
+        data: {
+          expected_updated_at: republishedBodyState.lifecycle.updated_at,
+          expected_document_updated_at: republishedBodyState.lifecycle.content_document_updated_at,
+        },
+      })
+      expectLifecycleBudget(unpublished, 6)
       expect(unpublished.status()).toBe(200)
       const hidden = await request.get(`${baseURL}/api/public/sites/${SITE_ID}/blog/${slug}`)
       expect(hidden.status()).toBe(404)
 
       const reopened = await request.get(`${baseURL}/api/editor/sites/${SITE_ID}/blog/${postId}`)
       expect(reopened.status()).toBe(200)
-      const reopenedBody = await reopened.json() as { post: { content_document: { document: { updated_at: string }; blocks: Array<{ type: string }> } } }
+      const reopenedBody = await reopened.json() as { post: { content_document: { document: { updated_at: string; published_revision_id: string | null }; blocks: Array<{ type: string }> } } }
       expect(reopenedBody.post.content_document.blocks.map(block => block.type)).toEqual(['heading', 'markdown', 'divider', 'how_to'])
       expect(reopenedBody.post.content_document.document.updated_at).not.toBe(updatedToken)
+      expect(reopenedBody.post.content_document.document.published_revision_id).toBeNull()
     } finally {
       if (postId) await request.delete(`${baseURL}/api/editor/sites/${SITE_ID}/blog/${postId}`)
     }
   })
 
   test('dashboard creates, edits, configures, publishes, and reopens canonical blocks', async ({ page, baseURL }) => {
-    test.setTimeout(60_000)
+    test.setTimeout(90_000)
     await loginAs(page.context().request, baseURL!, USER_ID)
     const title = `Dashboard block editor ${Date.now()}`
     let postId = ''
@@ -151,14 +200,35 @@ test.describe('canonical tenant blog lifecycle', () => {
       await expect(dialog).toBeHidden()
       await expect(page.getByRole('button', { name: 'Post settings' })).toBeFocused()
 
+      const publishResponsePromise = page.waitForResponse(response => response.url().endsWith(`/api/editor/sites/${SITE_ID}/blog/${postId}/publish`) && response.request().method() === 'POST')
       await page.getByRole('button', { name: 'Publish' }).click()
       await expect(page.getByText(/Published · Saved/)).toBeVisible()
+      expectLifecycleBudget(await publishResponsePromise, 7)
       await page.reload()
       await expect(page.getByRole('textbox', { name: 'Post title' })).toHaveValue(title)
       await expect(page.getByPlaceholder('Question')).toHaveValue('Does this round-trip?')
       await expect(page.getByPlaceholder('Answer')).toHaveValue('Yes, through one block document.')
+      const unpublishResponsePromise = page.waitForResponse(response => response.url().endsWith(`/api/editor/sites/${SITE_ID}/blog/${postId}/unpublish`) && response.request().method() === 'POST')
       await page.getByRole('button', { name: 'Unpublish' }).click()
       await expect(page.getByText(/Draft · Saved/)).toBeVisible()
+      expectLifecycleBudget(await unpublishResponsePromise, 6)
+
+      await page.getByRole('button', { name: 'Post settings' }).click()
+      const scheduleDialog = page.getByRole('dialog', { name: 'Post settings' })
+      await scheduleDialog.getByRole('combobox', { name: 'Publish timing' }).click()
+      await page.getByRole('option', { name: 'Scheduled', exact: true }).click()
+      const scheduledLocal = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 16)
+      await scheduleDialog.getByLabel('Scheduled for').fill(scheduledLocal)
+      await page.keyboard.press('Escape')
+      const scheduleResponsePromise = page.waitForResponse(response => response.url().endsWith(`/api/editor/sites/${SITE_ID}/blog/${postId}/publish`) && response.request().method() === 'POST')
+      await page.getByRole('button', { name: 'Publish' }).click()
+      await expect(page.getByText(/Scheduled · Saved/)).toBeVisible()
+      expectLifecycleBudget(await scheduleResponsePromise, 5)
+      const cancelScheduleResponsePromise = page.waitForResponse(response => response.url().endsWith(`/api/editor/sites/${SITE_ID}/blog/${postId}/unpublish`) && response.request().method() === 'POST')
+      await page.getByRole('button', { name: 'Unpublish' }).click()
+      await expect(page.getByText(/Draft · Saved/)).toBeVisible()
+      expectLifecycleBudget(await cancelScheduleResponsePromise, 6)
+
       const editorRead = await page.context().request.get(`${baseURL}/api/editor/sites/${SITE_ID}/blog/${postId}`)
       const editorBody = await editorRead.json() as { post: { slug: string } }
       const hidden = await page.context().request.get(`${baseURL}/api/public/sites/${SITE_ID}/blog/${editorBody.post.slug}`)

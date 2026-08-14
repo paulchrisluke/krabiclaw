@@ -40,9 +40,7 @@ export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event) as CloudflareEnv
   if (!env?.DB) throw createError({ statusCode: 503, message: 'Database unavailable' })
 
-  const cloudflareContext = event.context.cloudflare?.context
-  const waitUntil = cloudflareContext?.waitUntil?.bind(cloudflareContext)
-  const auth = createAuth(env, { waitUntil })
+  const auth = createAuth(env)
   
   try {
     const request = await normalizedAuthRequest(event)
@@ -79,9 +77,6 @@ export default defineEventHandler(async (event) => {
         event: 'auth_handler_failed',
         request_id: metrics.requestId,
         ray_id: getHeader(event, 'cf-ray') ?? null,
-        deployment_version: String(
-          env.DEPLOYMENT_VERSION ?? env.CF_PAGES_COMMIT_SHA ?? env.GITHUB_SHA ?? 'unknown',
-        ),
         route: safeRoute(event),
         method: event.node.req.method,
         duration_ms: Number((performance.now() - metrics.startedAt).toFixed(2)),

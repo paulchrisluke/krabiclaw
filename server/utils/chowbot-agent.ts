@@ -102,15 +102,6 @@ function toSqlText(value: ApiValue): string | null | undefined {
   return null;
 }
 
-function isValidHttpUrl(value: string): boolean {
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
 function getToolString(
   record: Record<string, unknown>,
   key: string,
@@ -719,24 +710,11 @@ async function executeTool(
 
     case "update_site_social": {
       type SocialKey =
-        | "social_facebook"
-        | "social_instagram"
-        | "social_tiktok"
-        | "footer_tagline"
         | "press_email"
         | "partnerships_email"
         | "catering_email"
         | "careers_email";
-      const urlKeys = new Set<SocialKey>([
-        "social_facebook",
-        "social_instagram",
-        "social_tiktok",
-      ]);
       const map: Array<[SocialKey, string | undefined]> = [
-        ["social_facebook", toSqlText(input.facebook_url) ?? undefined],
-        ["social_instagram", toSqlText(input.instagram_url) ?? undefined],
-        ["social_tiktok", toSqlText(input.tiktok_url) ?? undefined],
-        ["footer_tagline", toSqlText(input.footer_tagline) ?? undefined],
         ["press_email", toSqlText(input.press_email) ?? undefined],
         [
           "partnerships_email",
@@ -746,21 +724,12 @@ async function executeTool(
         ["careers_email", toSqlText(input.careers_email) ?? undefined],
       ];
       const updated: Record<string, string> = {};
-      const invalidFields: string[] = [];
       const normalizedEntries: Array<[SocialKey, string]> = [];
       for (const [key, value] of map) {
         if (value === undefined) continue;
         const trimmed = value.trim();
-        if (urlKeys.has(key) && trimmed && !isValidHttpUrl(trimmed)) {
-          invalidFields.push(key);
-          continue;
-        }
         normalizedEntries.push([key, trimmed]);
       }
-      if (invalidFields.length)
-        return {
-          error: `Invalid URL scheme for: ${invalidFields.join(", ")}. Only http/https are allowed.`,
-        };
       for (const [key, value] of normalizedEntries) {
         await setConfig(db, orgId, siteId, key, value);
         updated[key] = value;
@@ -1109,7 +1078,7 @@ ${SETUP_PREAMBLE}
 Site: ${siteName}
 Default menu currency: ${opts.defaultCurrency}
 Current page: ${currentPage}${locationId ? `\nCurrent location: ${locationName ?? locationId} (id: ${locationId})` : ""}
-${opts.pendingMedia ? `Pending WhatsApp media: asset_id ${opts.pendingMedia.assetId}. To place it on an existing site surface, call set_media with the appropriate explicit target and complete asset_ids state for ordered targets. If the user wants to import/extract menu items from it, call import_menu_from_media. If it is a Markdown document (.md/.markdown) and the user wants a summary, wants to ask a question about it, or wants information extracted from it, call analyze_document (pass their question, or omit it for a summary) — you can call this multiple times to answer follow-up questions about the same document. If the user wants to just save it to the library without assigning it, call resolve_pending_media with action=save_media. To discard, call resolve_pending_media with action=cancel. After using it in a tool call that assigns or imports it, also call resolve_pending_media with action=save_media to clear the pending state — do not clear it after analyze_document unless the user is done with the file. If the user's intent is unclear, ask one short clarifying question.` : ""}
+${opts.pendingMedia ? `Pending WhatsApp media: asset_id ${opts.pendingMedia.assetId}. To place it on an existing site surface, call set_media with the appropriate target_type, the exact entity id returned by a read tool when required, and complete asset_ids state for ordered placements. If the user wants to import/extract menu items from it, call import_menu_from_media. If it is a Markdown document (.md/.markdown) and the user wants a summary, wants to ask a question about it, or wants information extracted from it, call analyze_document (pass their question, or omit it for a summary) — you can call this multiple times to answer follow-up questions about the same document. If the user wants to just save it to the library without assigning it, call resolve_pending_media with action=save_media. To discard, call resolve_pending_media with action=cancel. After using it in a tool call that assigns or imports it, also call resolve_pending_media with action=save_media to clear the pending state — do not clear it after analyze_document unless the user is done with the file. If the user's intent is unclear, ask one short clarifying question.` : ""}
 
 Capabilities (always use tools — never say you can't do something the tools support):
 - Posts: list, create, update, delete, publish (standard/offer/event/update with CTA) — optionally location-scoped

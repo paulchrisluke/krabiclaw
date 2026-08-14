@@ -35,10 +35,6 @@ export default defineEventHandler(async (event) => {
   // Update each provided config key
   const configKeys: Array<keyof SiteConfig> = [
     'brand_color',
-    'social_facebook',
-    'social_instagram',
-    'social_tiktok',
-    'footer_tagline',
     'press_email',
     'partnerships_email',
     'catering_email',

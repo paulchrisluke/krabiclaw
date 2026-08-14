@@ -9,6 +9,7 @@ import {
   resolveBlogPublicPath,
   resolveBlogSeo,
   resolveSlugMutation,
+  scheduledLifecycleValue,
   SerializedSnapshotQueue,
   structuredComponentsFromBlocks,
   type EditorContentBlock,
@@ -44,8 +45,21 @@ test('social image and schema data derive from canonical blocks', () => {
 
 test('scheduled datetimes require an ISO-compatible value and preserve timezone instant', () => {
   assert.equal(parseScheduledFor('2026-07-20T09:00:00-05:00'), '2026-07-20T14:00:00.000Z')
+  assert.equal(parseScheduledFor('2026-07-20T14:00:00Z'), '2026-07-20T14:00:00.000Z')
   assert.equal(parseScheduledFor(null), null)
   assert.throws(() => parseScheduledFor('tomorrow morning'), /ISO 8601/)
+  assert.throws(() => parseScheduledFor('2026-07-20T14:00:00'), /timezone offset/)
+  assert.throws(() => parseScheduledFor('2026-07-20'), /timezone offset/)
+})
+
+test('editor scheduling requires a date and sends one explicit timezone-bearing lifecycle value', () => {
+  assert.equal(scheduledLifecycleValue('Now', ''), null)
+  assert.throws(() => scheduledLifecycleValue('Scheduled', ''), /required/)
+  assert.throws(() => scheduledLifecycleValue('Scheduled', 'not-a-date'), /invalid/)
+  const localValue = '2099-05-01T12:00'
+  const scheduled = scheduledLifecycleValue('Scheduled', localValue)
+  assert.match(scheduled, /Z$/)
+  assert.equal(Date.parse(scheduled), new Date(localValue).getTime())
 })
 
 test('new editors start with canonical editable prose and preserve complete block snapshots', () => {

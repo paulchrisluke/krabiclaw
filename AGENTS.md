@@ -3,13 +3,14 @@
 ## Release and outage prevention
 
 The mandatory release, incident, migration-safety, and browser-verification
-contract for every new LLM conversation is [docs/operations/release-and-outage-prevention.md](docs/operations/release-and-outage-prevention.md).
-Read it before reviewing or changing user-facing code. In particular, green CI
-is not release approval: the exact deployed staging and production candidates
-must be opened in a real browser, route by route, and any unverified or broken
-route blocks promotion. During an outage, stabilize the known-good renderer or
-Worker before touching data; do not reseed or hand-mutate production to mask a
-renderer regression.
+contract for work that changes or releases user-facing code is
+[docs/operations/release-and-outage-prevention.md](docs/operations/release-and-outage-prevention.md).
+Green CI is not release approval. As soon as preview, staging, or production is
+deployed, verify the affected authenticated flows and tenant journeys in a real
+browser while the remaining CI jobs continue. Platform marketing checks never
+substitute for client-site or MCP verification. During an outage, stabilize the
+known-good renderer or Worker before touching data; do not reseed or hand-mutate
+production to mask a renderer regression.
 
 When an internal API returns errors, nulls, or malformed data, fix the API contract/source of truth first. Do not add frontend fallbacks, guards, or workaround logic unless the API behavior is intentionally nullable and documented.
 
@@ -91,7 +92,7 @@ See `docs/adr/0021-better-auth-authorization-target.md`.
 
 ## Database Schema Workflow
 
-`server/db/schema.ts` (Drizzle ORM) is the **source of truth** for new schema changes. `migrations/0001_initial.sql` through `migrations/0007_*.sql` are historical, hand-authored, **already applied to every real environment (staging, production) and immutable** — never rename, edit, renumber, or re-squash them. From `0008` onward, migrations are _generated_ from `schema.ts` via `drizzle-kit generate` and applied via wrangler D1 migrations.
+`server/db/schema.ts` (Drizzle ORM) is the **source of truth** for new schema changes. `migrations/0001_initial.sql` through `migrations/0007_*.sql` are historical and hand-authored. From `0008` onward, migrations are generated from `schema.ts` via `drizzle-kit generate` and applied via Wrangler D1 migrations. Any migration applied to any shared environment is immutable by filename and content; never rename, edit, renumber, or re-squash it.
 
 **Why the split:** `wrangler d1 migrations apply` tracks applied migrations by **filename**, not content/checksum. An environment that already ran `0001_initial.sql`...`0007_*.sql` has those exact filenames recorded — it has no idea a squashed `0000_something.sql` is "the same" schema. Renaming/squashing history that's already applied anywhere makes wrangler treat the new file as unapplied and try to re-run it, immediately failing with `table X already exists`. There is no clever flag around this; the only safe move is to never touch an already-applied filename and always add new migrations with higher numbers.
 
@@ -108,7 +109,7 @@ See `docs/adr/0021-better-auth-authorization-target.md`.
 9. Any schema change must be checked against current server queries.
 10. Never define `d1_migrations` in `schema.ts`.
 11. After `db:generate`, wipe `.wrangler/state/v3/d1`, run `yarn schema:local`, then run the relevant seed command.
-12. `yarn migrate:check` must pass before applying migrations. Never rebuild a referenced parent table such as `media_assets` with `DROP TABLE`; D1 may execute foreign-key actions even when generated SQL includes `PRAGMA foreign_keys=OFF`, clearing references or cascading child rows. Use additive columns, indexes, or triggers. If a table rebuild is unavoidable, design and test an explicit relationship-preserving migration and recovery plan first.
+12. `yarn lint:migrations` must pass before applying migrations. Never rebuild a referenced parent table with `DROP TABLE`; D1 may execute foreign-key actions even when generated SQL includes `PRAGMA foreign_keys=OFF`, clearing references or cascading child rows. An obsolete unreferenced table may be dropped in the same release after runtime references are removed and the migration passes local apply, schema comparison, and `PRAGMA foreign_key_check`. Do not retain inert compatibility tables as a release strategy.
 
 ### D1 does not support raw transactions
 
@@ -150,9 +151,9 @@ const { data } = await useAsyncData(key, async () => {
 
 This requires the API route's query logic to live in an importable `server/utils/*.ts` function (not inline in the route handler) so both the route and the page's server-side branch call the same code — the API route becomes a thin wrapper around it. This also satisfies the "shared server/domain utilities" rule under Platform Strategy above: MCP/ChowBot/dashboard code paths that need the same record get the same function.
 
-- Any new page that does a **server-side detail fetch** (single-item route, not the shared bootstrap payload) to an internal API must use this pattern, not bare `useFetch(url, { server: true })` and not bare `useRequestFetch()` by itself.
-- `useBootstrap()` (`composables/useBootstrap.ts`) already implements the weaker `useRequestFetch()` mitigation for the shared per-site bootstrap payload, with a comment noting it hasn't reproduced the failure yet for that route's shape — reuse it instead of a bespoke fetch where the data is already covered by bootstrap, but treat it as unproven if a detail page built on the same idea starts failing.
-- Symptom to recognize: API works when hit directly (curl, Postman) and the index/list page for the same resource renders fine (because it goes through `useBootstrap()`), but the equivalent detail page silently shows a "not found" state in production only, and the failure doesn't reproduce in `nuxt dev`.
+- Any new page that does a **server-side detail fetch** (single-item route, not the shared public shell/page payload) to an internal API must use this pattern, not bare `useFetch(url, { server: true })` and not bare `useRequestFetch()` by itself.
+- Shared public shell/page data goes through `useSiteShellState()` / `usePublicPageData()` and `loadPublicResourcePayload()`. On SSR, `server/middleware/public-resource-provider.ts` calls the canonical server loaders directly with the request's Cloudflare bindings; on the client, the same composables call the `/api/public/sites/[siteId]/shell` and `/page` routes. Reuse this boundary instead of adding a bespoke bootstrap or self-fetch path.
+- Symptom to recognize: the direct API and shared shell/page loader work, but an equivalent detail page silently shows a "not found" state in production only because that detail page self-fetches and loses bindings; the failure often does not reproduce in `nuxt dev`.
 
 ---
 
@@ -231,286 +232,37 @@ The bodies in `server/utils/whatsapp.ts`'s `TEMPLATES` map must match approved t
 
 ## CI / E2E Architecture
 
-### Validation policy
+Three environment gates exist in `.github/workflows/ci.yml`:
 
-Do not add one test per review comment. Map each defect to the lowest-level
-shared invariant that would have prevented it, and add or update one owning
-test there. Add an E2E test only when the behavior crosses routing, SSR,
-hydration, browser cancellation, or multiple independent resources.
+### Required PR lane
 
-During implementation:
-- Run focused tests for changed modules.
-- Do not rerun the full suite after each individual fix.
-- Do not run multi-sample benchmarks during the editing loop.
+Runs checks, builds for preview, and may migrate, seed, and deploy only the
+isolated preview environment. Shared staging and production are never changed
+by a PR. One representative browser suite runs against the deployed preview.
 
-Production builds require the heap configured by `yarn build`.
-Run `yarn build` once after focused validation. Do not run `nuxi build`
-directly or retry a failed default-heap build. Scheduled jobs are dispatched by
-the Cloudflare `scheduled()` handler; do not re-enable Nitro's experimental task
-registry. Reuse one `.output` artifact for all assertions in the corresponding
-validation pass.
+### Staging lane
 
-Required on each relevant PR push:
-- Typecheck and lint.
-- Impacted unit/integration tests.
-- Representative E2E tests only.
-- Deterministic request, query, payload, retry, and SSR-call budgets.
-- One production build in parallel.
-- Target required CI wall-clock duration: 10 minutes or less.
+Runs on pushes to `staging`. It deploys the staging Worker normally, applies
+pending migrations, sweeps disposable E2E artifacts, and runs the full
+Playwright suite against `staging.krabiclaw.com`.
 
-Run the exhaustive suite only nightly, manually, or when the PR is marked
-merge-ready:
-- Full browser and route matrix.
-- Full E2E suite.
-- Long-running database integration coverage.
-- Comparative performance benchmarks.
+### Production lane
 
-Performance policy:
-- PR smoke benchmark: 3-5 samples for affected representative journeys.
-- Final merge-ready comparison: 20-30 samples, run once against base and head
-  under the same fixture, cache state, environment, and runner.
-- Do not report p99 from 30 samples.
-- Use production telemetry or at least 100 samples for meaningful tail
-  percentiles.
-- Deterministic request/query/payload budgets remain blocking on every
-  performance-sensitive PR.
+Runs on pushes to `main`. It deploys the production Worker normally, applies
+pending migrations, and runs read-only public browser smoke.
 
-The final report must identify:
-- Tests added.
-- Existing tests reused.
-- Redundant tests removed or consolidated.
-- Focused validation results.
-- Full validation results, only when the full lane was run.
-- Benchmark results, only when the benchmark lane was run.
-
-Do not claim that a benchmark was executed when only a source-code contract
-test or static assertion was run.
-
-### Three CI lanes
-
-#### 1. Focused development lane: target under 2 minutes
-
-Run after each implementation batch:
-
-- Tests directly covering changed modules.
-- Typecheck for affected workspace/package where supported.
-- Focused lint.
-- No full browser matrix.
-- No repeated performance sampling.
-- No production build after every individual review item.
-
-The LLM should run this lane repeatedly while working.
-
-Workflow: `.github/workflows/ci-dev.yml`
-
-#### 2. Required PR lane: target under 8–10 minutes wall-clock
-
-Run jobs in parallel:
-
-- Full typecheck and lint.
-- Impacted unit and integration tests.
-- A small set of representative E2E tests.
-- Deterministic request, query, and payload budgets.
-- One production build, in its own parallel job.
-
-Do not run every template, every dashboard page, every browser, and every benchmark sample on every push.
-
-Workflow: `.github/workflows/ci.yml`
-
-#### 3. Full validation lane: merge-ready, manual, or nightly
-
-Run only when the PR is marked ready, given a performance label, or on schedule:
-
-- Full E2E suite.
-- All supported browser/template combinations.
-- Complete production build variants.
-- Long-running D1 integration tests.
-- Comparative performance benchmark.
-- Flake and retry analysis.
-
-This lane can take 20–30 minutes without blocking every development iteration.
-
-Workflow: `.github/workflows/ci-full.yml`
-
-### Replace repeated tests with invariant-owned tests
-
-Each invariant should have one primary test at the lowest useful layer.
-
-#### 1. API attempt semantics
-
-One `api-clients` suite should verify:
-
-- `retry: 0`.
-- Central timeout.
-- Runtime response validation.
-- Caller cancellation.
-- Browser-only coalescing.
-- Null and primitive error normalization.
-- Explicit empty-mutation response support.
-
-Individual pages do not each need another test proving `retry: 0`.
-
-#### 2. Explicit dashboard scope
-
-One server-level authorization suite should verify:
-
-- Requested organization A never resolves to active organization B.
-- Missing or inaccessible explicit scope fails.
-- Unscoped discovery can still use the intended unscoped behavior.
-
-Support, Q&A, activity, and other pages do not each need duplicate authorization matrices unless they contain separate authorization logic.
-
-#### 3. No own-origin SSR requests
-
-Instrument the internal request boundary once. Render one representative dashboard route and one public route. Assert zero app-owned HTTP calls during SSR.
-
-A single instrumentation test is stronger and cheaper than separate source-text tests for activity, support, Q&A, onboarding, and every future page.
-
-#### 4. Public route ownership
-
-One focused A → B → C E2E test should cover:
-
-- A resolves after B mounts.
-- A rejects after B mounts.
-- B resolves after C mounts.
-- Only C can update loading and error state.
-
-This does not need to be repeated for every public page.
-
-#### 5. Public data query budgets
-
-Keep two integration fixtures:
-
-- A simple localized public page.
-- An experience route with multiple experiences and locations.
-
-Assert deterministic statement counts and constant query growth. Do not run dozens of wall-clock samples to verify query-count behavior.
-
-#### 6. DTO validation
-
-Pass actual published and draft service results through the shared runtime schemas. Avoid separate shallow validator tests in each consuming composable.
-
-### Tests that should not be added
-
-Do not add dedicated tests solely for:
-
-- Removing a non-null assertion.
-- Correcting comments or documentation.
-- Replacing one import with the canonical service.
-- A simple null guard already covered by a shared transport test.
-- Type-only corrections enforced by TypeScript.
-- Every page that adopts the same shared API client.
-- Source-code syntax already enforced by lint or architecture guards.
-
-A regression test is appropriate when the defect changes observable behavior, authorization, request count, state ownership, SSR behavior, or data integrity.
-
-### Replace AST contract tests with cheaper enforcement
-
-Current source-parsing tests are weak because they verify syntax rather than behavior.
-
-Use a single fast lint or repository guard for static prohibitions such as:
-
-- Raw `$fetch` inside scoped dashboard components.
-- `retry` values other than zero in canonical clients.
-- Universal imports from `server/**`.
-- Known own-origin SSR request patterns.
-- `.catch(() => {})` in designated data-loading paths.
-- Module-global SSR in-flight maps.
-
-Use behavioral tests for:
-
-- Actual number of requests.
-- Actual response validation.
-- Actual cancellation.
-- Actual D1 statements.
-- Actual hydration duplication.
-
-Do not test the same requirement statically and behaviorally unless the static guard prevents a broad architectural regression at negligible cost.
-
-### Revised benchmark expectations
-
-Thirty samples should not run on every push.
-
-Use three levels:
-
-#### PR smoke benchmark
-
-Run only when performance-sensitive paths change:
-
-- 3–5 samples.
-- One simple public route.
-- One heavy public route.
-- One representative dashboard journey.
-- Fixed fixture, cache state, runner, and environment.
-- Compare base and head on the same worker.
-
-This detects catastrophic regressions. It is not intended to produce stable tail percentiles.
-
-#### Final comparative benchmark
-
-Run once when the PR is merge-ready:
-
-- 20–30 samples per selected journey.
-- Base and head interleaved or run under equivalent conditions.
-- Report median, a reasonable upper percentile, errors, request count, query count, payload bytes, and cache state.
-- Store the report as a CI artifact rather than committing a new report after every revision.
-
-#### Production or scheduled telemetry
-
-Use this for meaningful p95 and p99 measurements.
-
-A 30-sample benchmark contains only `30 × 0.01 = 0.3` expected observations in the worst one percent. A reported p99 from 30 samples is effectively an unstable maximum, not a reliable percentile. Remove p99 from the 30-sample PR requirement. Use production telemetry or at least roughly 100 observations for tail-percentile reporting.
-
-### Deterministic metrics should remain merge-blocking
-
-These are cheap and stable enough to run on each relevant PR:
-
-- Automatic attempts per logical request.
-- Requests per navigation.
-- Own-origin SSR request count.
-- Hydration duplicate request count.
-- D1 statement count.
-- Rows read.
-- Response bytes.
-- Shell and page payload size.
-- Query-count growth as fixture size increases.
-- Cache hit/miss behavior.
-- Malformed-response handling.
-
-Wall-clock metrics such as TTFB, LCP, and INP should use comparative thresholds because CI timing is noisy. A practical gate should require both a relative and absolute regression, for example greater than 15% and greater than 50 ms, rather than failing on a small percentage change in a very fast operation.
-
-### Minimal merge-blocking suite for this PR
-
-The required behavioral coverage can be reduced to:
-
-1. API client invariant suite.
-2. Dashboard explicit-scope authorization suite.
-3. Published and draft public DTO contract suite.
-4. Public A → B → C ownership/cancellation E2E.
-5. One dashboard SSR/hydration request-count integration test.
-6. One public SSR/navigation request-count integration test.
-7. Simple-page D1 budget test.
-8. Experience-route constant-query-growth test.
-9. One final production build.
-10. One final comparative benchmark job.
-
-Activity, Q&A, support, guest inbox, onboarding, Lobby, and Saya still need functional coverage where their behavior is unique, but they should not each duplicate the shared transport, timeout, retry, schema, and SSR-boundary tests.
+The contract is `docs/operations/release-flow.md`.
 
 ### CI Environment Rules
 
 - Cloudflare credentials are scoped only to Cloudflare steps.
 - Never put `CLOUDFLARE_API_TOKEN` or `CLOUDFLARE_ACCOUNT_ID` in top-level job `env:`.
 - All E2E jobs require Stripe env vars.
-- Remote staging seeds must be idempotent.
-- Production browser verification must not include intentionally disabled paid customer domains.
-- `www.potteryhousekrabi.com` is intentionally disabled and excluded from production browser verification.
-- `pottery-house.krabiclaw.com` remains covered.
-
 ### Preview/Staging Data Lifecycle
 
 `env.preview` and `env.staging` in `wrangler.toml` must always declare their own `[triggers]` block (`crons = []` unless a job is deliberately scoped to that environment). Cron triggers are inherited from the top-level `[triggers]` block unless an environment overrides them — an env without its own `[triggers]` silently runs production's full cron schedule against its own database. This previously went unnoticed and drove preview/staging D1 "rows read" billing into the billions as scheduled tasks repeatedly scanned ever-growing E2E-generated data.
 
-Curated fixture data (Pottery House, Kikuzuki, demo seed, MCP plan fixtures) is reset on every seed run via `DELETE`-then-`INSERT` on fixed IDs — it never grows. Anything else E2E specs create must be swept by `scripts/reset-e2e-artifacts.ts`, which runs as part of both the required preview seed and the locked full staging-candidate seed. For it to catch what a spec creates:
+Curated fixture data (Pottery House, Kikuzuki, demo seed, MCP plan fixtures) is reset on every preview seed run via `DELETE`-then-`INSERT` on fixed IDs — it never grows. Anything else E2E specs create must be swept by `scripts/reset-e2e-artifacts.ts`, which runs before preview and staging browser coverage. For it to catch what a spec creates:
 
 - Any throwaway site/org (`POST /api/sites`, `tests/e2e/helpers/ensure-site.ts`, or an MCP `create_site` call) must use a `subdomain` containing `e2e-` — the sweep deletes the owning `organization` row, which cascades through every org-scoped table.
 - Any guest-facing row created against a persistent fixture site (bookings, contact submissions, reservations) must use an `...@playwright.example` guest email — there's no throwaway org to cascade from, so these are swept by that marker directly.
@@ -599,7 +351,7 @@ yarn client:onboard \
   --maps-url "https://www.google.com/maps/place/Pottery+House+Krabi/..." \
   --maps-url "https://www.google.com/maps/place/Beachfront+Pottery+Krabi/..." \
   --images ./new-client-Pottery-House-Krabi \
-  --live-url https://pottery-house.krabiclaw.com \
+  --live-url https://www.potteryhousekrabi.com \
   --site-id site-pottery-house-krabi \
   --remote
 ```
@@ -626,14 +378,14 @@ Required pipeline:
 2. Human review of `client-imports/<slug>/`
 3. `client:import --approve`
 4. `client:import --apply`
-5. `client:verify` against the local candidate
-6. Run **CI (Full Validation Lane)** for the exact source SHA
-7. Merge the reviewed staging release into `main`; the production workflow deploys that exact main SHA automatically
-8. `client:deploy --skip-seed --skip-deploy` for final deployed client verification
+5. `client:verify` against the local build
+6. Merge to `staging`; CI deploys and runs the full E2E suite
+7. Merge the verified staging release into `main`; CI deploys and runs production browser smoke
+8. `client:deploy --skip-seed` for final deployed client verification
 
-`client:deploy` never releases the Worker itself. Direct staging/production
-deploy commands are blocked so client onboarding cannot bypass the immutable
-candidate and production approval chain.
+`client:deploy` never releases the Worker itself. The package exposes no direct
+staging or production deploy commands; client onboarding goes through the
+staging and production branch gates.
 
 If any step fails, fix the source of truth:
 

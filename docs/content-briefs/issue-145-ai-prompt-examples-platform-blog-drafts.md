@@ -564,7 +564,7 @@ Restaurant draft coverage:
 
 - Site setup and previews: `import_from_maps`, `create_site`, `show_site_preview`, `finish_my_site_setup`
 - Page content: `get_page_fields`, `update_page_content`, `update_home_hero`, `improve_my_homepage`
-- Media placement: `upload_user_photo`, `get_site_media_assets`, `set_media`
+- Media placement: `upload_user_media`, `get_site_media_assets`, `set_media`
 - Menu workflows: `list_menus`, `get_menu`, `create_menu`, `update_menu`, `create_menu_item`, `add_menu_items_batch`, `update_menu_item`, `rename_menu_section`, `delete_menu_section`, `reorder_menu_items`, `import_menu_from_media`
 - Locations: `list_locations`, `create_location`, `update_location`, `copy_location_batch`
 - Posts and social: `create_post`, `update_post`, `set_media`, `publish_post`; Facebook connection tools require Growth
@@ -582,7 +582,7 @@ Experience draft coverage:
 - Site setup and previews: `import_from_maps`, `create_site`, `show_site_preview`, `finish_my_site_setup`
 - Experience listings: `list_experiences`, `get_experience`, `create_experience`, `update_experience`, `set_up_experience`
 - Structured booking page fields: `create_experience` and `update_experience` fields for title, tagline, body, highlights, included items, what to bring, meeting point, cancellation policy, price, duration, capacity, schedule, status, and media
-- Experience media: `upload_user_photo`, `get_site_media_assets`, `set_media`
+- Experience media: `upload_user_media`, `get_site_media_assets`, `set_media`
 - Bookings: `list_experience_bookings`, `update_experience_booking`, `triage_inbox`
 - Page content: `get_page_fields`, `update_page_content`, `update_home_hero`, `improve_my_homepage`
 - Locations/meeting points: `list_locations`, `create_location`, `update_location`, `copy_location_batch`

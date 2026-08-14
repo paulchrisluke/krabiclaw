@@ -180,10 +180,6 @@ export interface OrganizationSubscriptionReconciliationReport {
     actor: string
     direct: true
   }
-  source: {
-    sourceSha: string | null
-    workerVersionId: string | null
-  }
   request: OrganizationSubscriptionReconciliationRequest
   provider: {
     mode: OrganizationReconciliationProviderMode
@@ -230,7 +226,6 @@ export type OrganizationReconciliationErrorCode =
   | 'invalid_request'
   | 'provider_mode_mismatch'
   | 'provider_configuration_missing'
-  | 'deployment_provenance_unavailable'
   | 'organization_not_found'
 
 export class OrganizationSubscriptionReconciliationError extends Error {
@@ -847,8 +842,6 @@ function hasOrderedPeriod(periodStart: string | null, periodEnd: string | null):
   return Number.isFinite(start) && Number.isFinite(end) && start < end
 }
 
-const SOURCE_SHA_PATTERN = /^[0-9a-f]{40}$/u
-const WORKER_VERSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u
 
 function addDrift(
   drifts: OrganizationReconciliationDrift[],
@@ -1365,7 +1358,6 @@ function reportSnapshot(report: Omit<OrganizationSubscriptionReconciliationRepor
   return {
     schemaVersion: report.schemaVersion,
     kind: report.kind,
-    source: report.source,
     request: report.request,
     provider: report.provider,
     betterAuth: report.betterAuth,
@@ -1384,8 +1376,6 @@ export interface ReconcileOrganizationSubscriptionOptions {
   organization: OrganizationReconciliationOrganization
   request: OrganizationSubscriptionReconciliationRequest
   actor: string
-  sourceSha?: string | null
-  workerVersionId?: string | null
   providerModeVerified?: boolean
   now?: Date
   loadPlans?: StripePlanLoader
@@ -1402,19 +1392,6 @@ export async function reconcileOrganizationSubscription(
   const request = options.request
   const drifts: OrganizationReconciliationDrift[] = []
   const localEvidence = emptyLocalEvidence()
-  const source = {
-    sourceSha: options.sourceSha ?? null,
-    workerVersionId: options.workerVersionId ?? null,
-  }
-  if (
-    !source.sourceSha
-    || !SOURCE_SHA_PATTERN.test(source.sourceSha)
-    || !source.workerVersionId
-    || !WORKER_VERSION_ID_PATTERN.test(source.workerVersionId)
-  ) {
-    addDrift(drifts, 'deployment_provenance_invalid', 'blocked', 'deployment', 'Immutable source SHA and Worker version metadata are unavailable or malformed.')
-  }
-  const provenanceVerified = !drifts.some(drift => drift.code === 'deployment_provenance_invalid')
   const providerModeVerified = options.providerModeVerified ?? false
   if (!providerModeVerified) {
     addDrift(drifts, 'provider_mode_unverified', 'blocked', 'stripe.key', 'Stripe provider mode was not verified before the provider read.')
@@ -1490,7 +1467,7 @@ export async function reconcileOrganizationSubscription(
   ].filter((value): value is string => Boolean(value)))].sort()
   let account: Stripe.Account | null = null
   let accountRequestError = false
-  if (providerModeVerified && provenanceVerified && organizationIdentityMatches) {
+  if (providerModeVerified && organizationIdentityMatches) {
     try {
       account = await options.stripe.accounts.retrieve(null) as unknown as Stripe.Account
     } catch {
@@ -1513,7 +1490,7 @@ export async function reconcileOrganizationSubscription(
   let metadataSearchResolved = false
   let metadataSearchEvidenceValid = true
   let metadataSearchSubscriptionIds = new Set<string>()
-  if (!accountRequestError && accountVerified && providerModeVerified && provenanceVerified && organizationIdentityMatches) {
+  if (!accountRequestError && accountVerified && providerModeVerified && organizationIdentityMatches) {
     try {
       const [customerSearch, subscriptionSearch] = await Promise.all([
         searchOrganizationCustomers(options.stripe, request.organizationId),
@@ -1821,7 +1798,6 @@ export async function reconcileOrganizationSubscription(
   const reportWithoutHash: Omit<OrganizationSubscriptionReconciliationReport, 'reportSha256' | 'capturedAt' | 'operator'> = {
     schemaVersion: 1,
     kind: 'organization-subscription-reconciliation',
-    source,
     request,
     provider: {
       mode: request.providerMode,

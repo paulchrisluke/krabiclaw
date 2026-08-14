@@ -2,10 +2,7 @@
   <UDashboardPanel id="site-settings">
     <template #header>
       <UDashboardNavbar title="Site Settings">
-        <template #leading><DashboardSidebarCollapseButton /></template>
-        <template #right>
-          <UButton icon="i-lucide-check" :loading="saving" @click="saveSiteSettings">Save changes</UButton>
-        </template>
+        <template #leading><DashboardNavbarLeading /></template>
       </UDashboardNavbar>
     </template>
 
@@ -15,7 +12,7 @@
       </div>
       <UAlert v-else-if="loadError" color="error" variant="soft" icon="i-lucide-triangle-alert" :description="loadError" />
       <div v-else class="mx-auto max-w-5xl space-y-6">
-        <UCard>
+        <UCard id="brand">
           <template #header>
             <div>
               <h2 class="font-semibold text-highlighted">Brand</h2>
@@ -29,70 +26,48 @@
             <UFormField label="Brand color"><UInput v-model="form.brand_color" placeholder="#0f766e" /></UFormField>
             <UFormField label="Brand description" class="sm:col-span-2"><UTextarea v-model="form.brand_description" :rows="4" /></UFormField>
           </div>
+          <template #footer><div class="flex justify-end"><UButton icon="i-lucide-check" :loading="savingGroup === 'brand'" @click="saveSiteSettings('brand')">Save brand</UButton></div></template>
+        </UCard>
+
+        <UCard>
+          <NuxtLink :to="`/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}/domains`" class="group flex items-center justify-between gap-4">
+            <div>
+              <h2 class="font-semibold text-highlighted">Domains</h2>
+              <p class="mt-1 text-sm text-muted">Connect and verify the public address for this site.</p>
+            </div>
+            <UIcon name="i-lucide-chevron-right" class="size-5 text-muted transition group-hover:translate-x-0.5" />
+          </NuxtLink>
         </UCard>
 
         <UCard>
           <template #header>
             <div>
-              <h2 class="font-semibold text-highlighted">Navigation and Footer</h2>
-              <p class="mt-1 text-sm text-muted">Site-wide URL, social, and footer defaults.</p>
+              <h2 class="font-semibold text-highlighted">Business information</h2>
+              <p class="mt-1 text-sm text-muted">Shared operating defaults for this site.</p>
             </div>
           </template>
           <div class="grid gap-5 sm:grid-cols-2">
-            <UFormField label="URL structure">
-              <USelect v-model="form.url_structure" :items="URL_STRUCTURE_OPTIONS" value-key="value" label-key="label" />
-            </UFormField>
-            <UFormField label="Footer tagline"><UInput v-model="form.footer_tagline" /></UFormField>
-            <UFormField label="Facebook URL"><UInput v-model="form.social_facebook" type="url" /></UFormField>
-            <UFormField label="Instagram URL"><UInput v-model="form.social_instagram" type="url" /></UFormField>
-            <UFormField label="TikTok URL"><UInput v-model="form.social_tiktok" type="url" /></UFormField>
             <UFormField label="Default currency">
               <USelect v-model="form.default_currency" :items="CURRENCY_OPTIONS" value-key="value" label-key="label" />
             </UFormField>
           </div>
+          <template #footer><div class="flex justify-end"><UButton icon="i-lucide-check" :loading="savingGroup === 'business'" @click="saveSiteSettings('business')">Save business information</UButton></div></template>
         </UCard>
 
         <UCard>
           <template #header>
             <div>
-              <h2 class="font-semibold text-highlighted">SEO and Analytics</h2>
-              <p class="mt-1 text-sm text-muted">Defaults applied across site pages unless a page overrides them.</p>
+              <h2 class="font-semibold text-highlighted">Analytics</h2>
+              <p class="mt-1 text-sm text-muted">Search and analytics connections for the published site.</p>
             </div>
           </template>
           <div class="grid gap-5 sm:grid-cols-2">
-            <UFormField label="SEO title"><UInput v-model="form.seo_title" /></UFormField>
             <UFormField label="Canonical URL"><UInput v-model="form.canonical_url" type="url" /></UFormField>
-            <UFormField label="SEO description" class="sm:col-span-2"><UTextarea v-model="form.seo_description" :rows="3" /></UFormField>
             <UFormField label="Robots"><UInput v-model="form.robots" placeholder="index,follow" /></UFormField>
             <UFormField label="Google Analytics measurement ID"><UInput v-model="form.google_analytics_measurement_id" placeholder="G-XXXXXXXXXX" /></UFormField>
             <UFormField label="Google site verification"><UInput v-model="form.google_site_verification" /></UFormField>
           </div>
-        </UCard>
-
-        <UCard>
-          <template #header>
-            <div class="flex items-center justify-between gap-3">
-              <div>
-                <h2 class="font-semibold text-highlighted">Business modules</h2>
-                <p class="mt-1 text-sm text-muted">Does this business support these? Content managers (Blog, Q&amp;A, Reviews, Posts, Photos, Media) are always available and aren't listed here — only real product modules are toggleable.</p>
-              </div>
-              <UBadge v-if="verticalLabel" color="neutral" variant="soft" :label="`Vertical: ${verticalLabel}`" />
-            </div>
-          </template>
-          <div v-if="toggleableFeatures.length" class="grid gap-3 sm:grid-cols-2">
-            <UCheckbox
-              v-for="feature in toggleableFeatures"
-              :key="feature"
-              v-model="enabledFeatureSet[feature]"
-              :label="FEATURE_LABELS[feature] ?? feature"
-            />
-          </div>
-          <p v-else class="text-sm text-muted">No toggleable modules for this site's template.</p>
-          <template #footer>
-            <div class="flex justify-end">
-              <UButton color="neutral" variant="outline" :loading="savingFeatures" @click="saveFeatures">Save modules</UButton>
-            </div>
-          </template>
+          <template #footer><div class="flex justify-end"><UButton icon="i-lucide-check" :loading="savingGroup === 'analytics'" @click="saveSiteSettings('analytics')">Save analytics</UButton></div></template>
         </UCard>
 
         <UCard>
@@ -141,29 +116,13 @@
 
 <script setup lang="ts">
 import { CURRENCY_OPTIONS, DEFAULT_CURRENCY, isCurrencyCode, type CurrencyCode } from '~/shared/currencies'
-import type { ProductFeature } from '~/config/cms-registry'
 
 const dashboardApi = useDashboardApi()
-const FEATURE_LABELS: Partial<Record<ProductFeature, string>> = {
-  menu: 'Menu',
-  reservations: 'Reservations',
-  ordering: 'Online ordering',
-  experiences: 'Experiences',
-  services: 'Services',
-}
 
 // The vertical isn't editable here (or anywhere yet — see config/cms-registry.ts and
 // utils/vertical-copy.ts's SiteVertical; there's no update path for sites.vertical once a site
 // is created), but it silently decides which features default on and which labels apply, so it
 // needs to be visible next to the toggles that depend on it rather than left implicit.
-const VERTICAL_LABELS: Record<string, string> = {
-  restaurant: 'Restaurant',
-  experience: 'Experience',
-  professional_service: 'Professional Service',
-  // Raw DB storage alias for professional_service (see dashboard-context.ts's DashboardSiteRow
-  // comment / utils/vertical-copy.ts's normalizeVertical) — shown as a plain string otherwise.
-  service: 'Professional Service',
-}
 
 interface SiteSettingsResponse {
   brand_name?: string | null
@@ -172,20 +131,10 @@ interface SiteSettingsResponse {
   contact_email?: string | null
   brand_color?: string | null
   default_currency?: string | null
-  url_structure?: 'location_subdirectories' | 'brand_pages'
-  social_facebook?: string | null
-  social_instagram?: string | null
-  social_tiktok?: string | null
-  footer_tagline?: string | null
-  seo_title?: string | null
-  seo_description?: string | null
   canonical_url?: string | null
   robots?: string | null
   google_analytics_measurement_id?: string | null
   google_site_verification?: string | null
-  toggleable_features?: readonly ProductFeature[]
-  effective_features?: readonly ProductFeature[]
-  default_features?: readonly ProductFeature[]
 }
 
 interface FacebookConnectionStatus {
@@ -205,9 +154,6 @@ const isSettingsResponse = (
   && (value.settings.default_currency === undefined
     || value.settings.default_currency === null
     || typeof value.settings.default_currency === 'string')
-  && (value.settings.toggleable_features === undefined
-    || (Array.isArray(value.settings.toggleable_features)
-      && value.settings.toggleable_features.every(feature => typeof feature === 'string')))
 
 const isNotificationsResponse = (
   value: unknown,
@@ -228,16 +174,13 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 const dashboard = useDashboardSite()
+if (!dashboard.state.value) await dashboard.refresh()
 const siteId = await useDashboardSiteId()
 const loading = ref(true)
-const saving = ref(false)
+const savingGroup = ref<'brand' | 'business' | 'analytics' | null>(null)
 const loadError = ref<string | null>(null)
 const savingNotifications = ref(false)
-const savingFeatures = ref(false)
 const connectingFacebook = ref(false)
-const toggleableFeatures = ref<ProductFeature[]>([])
-const enabledFeatureSet = reactive<Partial<Record<ProductFeature, boolean>>>({})
-const defaultFeatures = ref<ProductFeature[]>([])
 const notificationChannels = ref<string[]>(['email'])
 const whatsappPhone = ref('')
 const facebookConnection = ref<FacebookConnectionStatus | null>(null)
@@ -245,22 +188,12 @@ const facebookConnection = ref<FacebookConnectionStatus | null>(null)
 const form = reactive({
   brand_name: '', brand_description: '', logo_url: '', contact_email: '', brand_color: '',
   default_currency: DEFAULT_CURRENCY as CurrencyCode,
-  url_structure: 'location_subdirectories' as 'location_subdirectories' | 'brand_pages',
-  social_facebook: '', social_instagram: '', social_tiktok: '', footer_tagline: '',
-  seo_title: '', seo_description: '', canonical_url: '', robots: '',
+  canonical_url: '', robots: '',
   google_analytics_measurement_id: '', google_site_verification: '',
 })
 
-const URL_STRUCTURE_OPTIONS = [
-  { label: 'Location subdirectories', value: 'location_subdirectories' },
-  { label: 'Brand pages', value: 'brand_pages' },
-]
 const CHANNEL_OPTIONS = [{ label: 'Email', value: 'email' }, { label: 'WhatsApp', value: 'whatsapp' }]
 const hasFacebookAccess = computed(() => dashboard.site.value?.plan === 'growth')
-const verticalLabel = computed(() => {
-  const vertical = dashboard.site.value?.vertical
-  return vertical ? VERTICAL_LABELS[vertical] ?? vertical : null
-})
 
 function errorMessage(error: unknown, fallback: string) {
   if (error && typeof error === 'object' && 'data' in error) {
@@ -277,23 +210,10 @@ function fillForm(settings: SiteSettingsResponse) {
   form.contact_email = settings.contact_email ?? ''
   form.brand_color = settings.brand_color ?? ''
   form.default_currency = isCurrencyCode(settings.default_currency) ? settings.default_currency : DEFAULT_CURRENCY
-  form.url_structure = settings.url_structure ?? 'location_subdirectories'
-  form.social_facebook = settings.social_facebook ?? ''
-  form.social_instagram = settings.social_instagram ?? ''
-  form.social_tiktok = settings.social_tiktok ?? ''
-  form.footer_tagline = settings.footer_tagline ?? ''
-  form.seo_title = settings.seo_title ?? ''
-  form.seo_description = settings.seo_description ?? ''
   form.canonical_url = settings.canonical_url ?? ''
   form.robots = settings.robots ?? ''
   form.google_analytics_measurement_id = settings.google_analytics_measurement_id ?? ''
   form.google_site_verification = settings.google_site_verification ?? ''
-  toggleableFeatures.value = [...(settings.toggleable_features ?? [])]
-  defaultFeatures.value = [...(settings.default_features ?? [])]
-  const effective = new Set(settings.effective_features ?? [])
-  // Only ever read through toggleableFeatures (see the template's v-for and saveFeatures'
-  // filter), so a stale key from a previous load is harmless — no need to clear the object first.
-  for (const feature of toggleableFeatures.value) enabledFeatureSet[feature] = effective.has(feature)
 }
 
 interface SettingsPageResource {
@@ -320,6 +240,8 @@ const {
     const { loadDashboardSettingsResource } = await import('~/server/utils/dashboard-editor-resources')
     return await loadDashboardSettingsResource(requestEvent, {
       includeFacebook: hasFacebookAccess.value,
+      organizationSlug: String(route.params.orgSlug),
+      siteSlug: String(route.params.siteSlug),
     })
   }
   const [settings, notifications, facebook] = await Promise.all([
@@ -373,51 +295,28 @@ async function load() {
   }
 }
 
-async function saveSiteSettings() {
+async function saveSiteSettings(group: 'brand' | 'business' | 'analytics') {
   const requestedSiteSlug = route.params.siteSlug
-  saving.value = true
+  savingGroup.value = group
+  const body = group === 'brand'
+    ? { brand_name: form.brand_name, brand_description: form.brand_description, logo_url: form.logo_url, contact_email: form.contact_email, brand_color: form.brand_color }
+    : group === 'business'
+      ? { default_currency: form.default_currency }
+      : { canonical_url: form.canonical_url, robots: form.robots, google_analytics_measurement_id: form.google_analytics_measurement_id, google_site_verification: form.google_site_verification }
   try {
     const response = await dashboardApi<{ success: boolean; settings: SiteSettingsResponse }>('/api/dashboard/settings', {
       method: 'PATCH',
-      body: { ...form },
+      body,
       validate: isSettingsResponse,
     })
     if (route.params.siteSlug !== requestedSiteSlug) return
     fillForm(response.settings)
-    toast.add({ description: 'Site settings saved', color: 'success' })
+    toast.add({ description: `${group === 'brand' ? 'Brand' : group === 'business' ? 'Business information' : 'Analytics'} saved`, color: 'success' })
     await dashboard.refresh()
   } catch (error) {
     toast.add({ description: errorMessage(error, 'Failed to save site settings'), color: 'error' })
   } finally {
-    saving.value = false
-  }
-}
-
-async function saveFeatures() {
-  const requestedSiteSlug = route.params.siteSlug
-  savingFeatures.value = true
-  try {
-    // Delta against the vertical's own defaults, not the previously saved state — this is what
-    // lets a future default addition still reach this site (config/cms-registry.ts). Collapses to
-    // `null` (no override at all) when the checked set exactly matches the defaults, rather than
-    // persisting a redundant no-op delta.
-    const defaultSet = new Set(defaultFeatures.value)
-    const enabled = toggleableFeatures.value.filter(feature => enabledFeatureSet[feature] && !defaultSet.has(feature))
-    const disabled = defaultFeatures.value.filter(feature => !enabledFeatureSet[feature])
-    const featureOverrides = enabled.length === 0 && disabled.length === 0 ? null : { enabled, disabled }
-    const response = await dashboardApi<{ success: boolean; settings: SiteSettingsResponse }>('/api/dashboard/settings', {
-      method: 'PATCH',
-      body: { feature_overrides: featureOverrides },
-      validate: isSettingsResponse,
-    })
-    if (route.params.siteSlug !== requestedSiteSlug) return
-    fillForm(response.settings)
-    toast.add({ description: 'Business modules saved', color: 'success' })
-    await dashboard.refresh()
-  } catch (error) {
-    toast.add({ description: errorMessage(error, 'Failed to save business modules'), color: 'error' })
-  } finally {
-    savingFeatures.value = false
+    savingGroup.value = null
   }
 }
 

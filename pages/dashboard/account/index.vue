@@ -3,27 +3,23 @@
     <template #header>
       <UDashboardNavbar title="Account">
         <template #leading>
-          <DashboardSidebarCollapseButton />
+          <DashboardNavbarLeading back-to-organization />
+        </template>
+        <template #right>
+          <DashboardAccountMenu mobile-only class="md:hidden" />
         </template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
-      <div class="max-w-4xl space-y-4">
-        <UCard v-for="item in items" :key="item.to" variant="soft">
-          <NuxtLink :to="item.to" class="flex items-center justify-between gap-4">
-            <div class="flex items-center gap-4">
-              <div class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-                <UIcon :name="item.icon" class="size-5 text-highlighted" />
-              </div>
-              <div>
-                <p class="font-medium text-highlighted">{{ item.label }}</p>
-                <p class="text-sm text-muted">{{ item.description }}</p>
-              </div>
+      <div class="w-full max-w-[var(--ws-page-narrow,45rem)] border-t border-default">
+          <NuxtLink v-for="item in items" :key="item.label" :to="item.to" class="flex min-h-[var(--ws-row-min-height,66px)] items-center justify-between gap-4 border-b border-default py-[15px]">
+            <div class="flex items-center gap-3.5">
+              <UIcon :name="item.icon" class="size-5 shrink-0 text-muted" />
+              <p class="text-[14.5px] font-semibold text-highlighted">{{ item.label }}</p>
             </div>
             <UIcon name="i-lucide-chevron-right" class="size-4 text-dimmed" />
           </NuxtLink>
-        </UCard>
       </div>
     </template>
   </UDashboardPanel>
@@ -33,9 +29,14 @@
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Account | KrabiClaw', robots: 'noindex, nofollow' })
 
-const items = [
-  { label: 'Profile', description: 'Your name, avatar, and personal account details.', icon: 'i-lucide-user', to: '/dashboard/account/profile' },
-  { label: 'Authentication', description: 'Sign-in methods: email, Google, WhatsApp.', icon: 'i-lucide-shield', to: '/dashboard/account/authentication' },
-  { label: 'Billing Items', description: 'Personal-account billing and payment history.', icon: 'i-lucide-receipt', to: '/dashboard/account/billing-items' },
-]
+const route = useRoute()
+const organizationQuery = computed(() => ({
+  ...(typeof route.query.organization === 'string' ? { organization: route.query.organization } : {}),
+  ...(typeof route.query.organizationName === 'string' ? { organizationName: route.query.organizationName } : {}),
+}))
+const items = computed(() => [
+  { label: 'Profile', icon: 'i-lucide-user', to: { path: '/dashboard/account/profile', query: organizationQuery.value } },
+  { label: 'Authentication', icon: 'i-lucide-shield', to: { path: '/dashboard/account/authentication', query: organizationQuery.value } },
+  { label: 'Billing Items', icon: 'i-lucide-receipt', to: { path: '/dashboard/account/billing-items', query: organizationQuery.value } },
+])
 </script>

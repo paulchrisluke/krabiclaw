@@ -7,6 +7,7 @@ import {
   MCP_PROTOCOL_VERSION,
   mcpProtocolError,
   negotiatedMcpProtocolVersion,
+  parseMcpToolCallArguments,
   readMcpRequest,
   SUPPORTED_PROTOCOL_VERSIONS,
 } from '../../server/utils/mcp-protocol.ts'
@@ -96,6 +97,22 @@ test('readMcpRequest rejects an explicitly unsupported protocol version', () => 
       params: {},
     }),
     /Unsupported MCP protocol version: 2026-07-28/,
+  )
+})
+
+test('parseMcpToolCallArguments accepts only the canonical nested arguments envelope', () => {
+  assert.deepEqual(parseMcpToolCallArguments({ name: 'get_current_user' }), {})
+  assert.deepEqual(
+    parseMcpToolCallArguments({ name: 'get_site', arguments: { site_id: 'site-1' } }),
+    { site_id: 'site-1' },
+  )
+  assert.throws(
+    () => parseMcpToolCallArguments({ name: 'get_site', site_id: 'site-1' }),
+    /must be nested under params\.arguments/,
+  )
+  assert.throws(
+    () => parseMcpToolCallArguments({ name: 'get_site', arguments: [] }),
+    /arguments must be an object/,
   )
 })
 

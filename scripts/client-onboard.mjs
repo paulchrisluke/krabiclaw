@@ -306,7 +306,7 @@ if (existsSync(reportPath)) {
 }
 if (!REMOTE) {
   console.log(`\n  To deploy and verify production:`)
-  console.log('    Run "CI (Full Validation Lane)", then the protected "Production release (manifest-gated)" workflow')
+  console.log('    Merge through staging to main; CI deploys and verifies each environment')
   console.log(`    yarn client:verify --url https://${SLUG}.krabiclaw.com --vertical ${VERTICAL} --site-id ${siteId} --slug ${SLUG}`)
 }
 console.log(hr('═'))

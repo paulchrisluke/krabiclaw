@@ -63,6 +63,8 @@
             <div v-if="error" role="alert" class="rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">{{ error }}</div>
 
             <AuthGoogleAuthButton :loading="loading || authLoading" @activate="handleGoogleSignIn" />
+            <WhatsAppAuthButton :disabled="loading || authLoading" @activate="showPhone = !showPhone" />
+            <AuthPhoneOtpForm v-if="showPhone" verify-label="Verify and sign in" @verified="finishOAuthPhoneSignIn" />
 
             <!-- Divider -->
             <div class="flex items-center gap-3 py-1">
@@ -79,13 +81,6 @@
               <PlatformButton variant="outline" block :loading="resendingVerification" @click="resendVerification">Resend verification</PlatformButton>
             </div>
 
-            <div class="flex items-center gap-3 py-1">
-              <div class="flex-1 h-px bg-default" />
-              <span class="text-[12px] text-dimmed uppercase tracking-[0.18em]">or</span>
-              <div class="flex-1 h-px bg-default" />
-            </div>
-
-            <AuthPhoneOtpForm verify-label="Verify and sign in" @verified="finishOAuthPhoneSignIn" />
           </div>
         </div>
 
@@ -101,6 +96,7 @@
 </template>
 
 <script setup>
+import WhatsAppAuthButton from '~/components/auth/WhatsAppAuthButton.vue'
 import { oauthContinuationDestination } from '~/shared/auth/oauth-login'
 
 definePageMeta({ layout: 'standalone', auth: false })
@@ -142,6 +138,7 @@ onMounted(async () => {
 
 // ── Existing session state ────────────────────────────────────────────────────
 const loading = ref(false)
+const showPhone = ref(false)
 const accountInitial = computed(() =>
   (existingSession.value?.name || existingSession.value?.email || '?').charAt(0).toUpperCase()
 )

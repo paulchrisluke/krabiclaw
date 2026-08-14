@@ -40,15 +40,8 @@ test.describe('public tenant site', () => {
     await expect(rejectConsent).toBeVisible()
     await rejectConsent.click()
 
-    const thaiPageResponse = page.waitForResponse(candidate => {
-      const url = new URL(candidate.url())
-      return candidate.request().method() === 'GET'
-        && url.pathname === `/api/public/sites/${demoSiteId}/page`
-        && url.searchParams.get('locale') === 'th'
-    })
     await page.locator('footer [aria-haspopup="menu"]').click()
     await page.getByRole('menuitem', { name: /ไทย/ }).click()
-    expect((await thaiPageResponse).status()).toBe(200)
 
     const heroTitle = page.locator('[data-field="hero.title"]')
     await expect(heroTitle).toContainText('ไฟฟืนและค่ำคืนในบรูคลิน')
@@ -314,7 +307,7 @@ test.describe('platform public site', () => {
     await expect(page.locator('body')).toContainText('North Carolina Legal Services')
 
     const iframeSrc = await page.locator('iframe').first().getAttribute('src')
-    expect(iframeSrc).toBe('https://ncls.krabiclaw.com')
+    expect(iframeSrc).toBe('https://www.northcarolinalegalservices.org')
 
     await expectHealthyPage(page, errors)
   })

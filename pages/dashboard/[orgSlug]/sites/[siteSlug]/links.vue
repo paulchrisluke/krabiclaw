@@ -3,7 +3,7 @@
     <template #header>
       <UDashboardNavbar title="Links page">
         <template #leading>
-          <DashboardSidebarCollapseButton />
+          <DashboardNavbarLeading />
         </template>
         <template #right>
           <div class="flex items-center gap-2">

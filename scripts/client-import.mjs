@@ -615,12 +615,12 @@ ON CONFLICT(id) DO UPDATE SET name = excluded.name;
 INSERT INTO sites (
   id, organization_id, theme_id, theme, slug, subdomain,
   brand_name, brand_description,
-  status, plan, onboarding_status, url_structure,
+  status, plan, onboarding_status,
   default_currency, vertical, content_source, media_source
 ) VALUES (
   '${siteId}', '${orgId}', 'saya-theme-v1', 'saya', '${SLUG}', '${SLUG}',
   '${brandName.replace(/'/g, "''")}', NULL,
-  'active', 'free', 'active', 'location_subdirectories',
+  'active', 'free', 'active',
   'THB', '${VERTICAL}', 'google_maps', 'client_photos'
 ) ON CONFLICT(id) DO UPDATE SET
   brand_name = excluded.brand_name,
@@ -1315,8 +1315,7 @@ Next steps:
   4. Apply:    yarn client:import --slug ${SLUG} --apply${ALLOW_STOCK ? " --allow-stock" : ""}
   5. Verify:   yarn client:verify --url http://localhost:3000 --vertical ${VERTICAL} --site-id site-${SLUG} --slug ${SLUG}
   6. Release + verify prod:
-               Run "CI (Full Validation Lane)", then the protected
-               "Production release (manifest-gated)" workflow.
+               Merge through staging to main; CI deploys and verifies each environment.
                yarn client:verify --url https://${SLUG}.krabiclaw.com --vertical ${VERTICAL} --site-id site-${SLUG} --slug ${SLUG}
 
   Or use the onboard wrapper (steps 1-5 in one command):

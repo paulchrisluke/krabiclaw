@@ -4,7 +4,6 @@ import { execSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { execWithRetry } from './wrangler-retry.ts'
 import {
   renderCompiledDemoContentBlock,
   renderCompiledDemoTenantPagesBlock,
@@ -84,8 +83,8 @@ VALUES (${sqlValue(orgId)}, ${sqlValue(name)}, ${sqlValue(slug)}, unixepoch());
 INSERT INTO member (id, organizationId, userId, role, createdAt)
 VALUES (${sqlValue(`member-${orgId}`)}, ${sqlValue(orgId)}, ${sqlValue(userId)}, 'owner', unixepoch());
 
-INSERT OR REPLACE INTO sites (id, organization_id, theme_id, theme, slug, subdomain, brand_name, status, plan, onboarding_status, source_locale, default_currency, url_structure, vertical, created_at, updated_at)
-VALUES (${sqlValue(siteId)}, ${sqlValue(orgId)}, 'saya-theme-v1', 'saya', ${sqlValue(slug)}, ${sqlValue(slug)}, ${sqlValue(name)}, 'active', ${sqlValue(plan)}, 'active', 'en', 'THB', 'location_subdirectories', 'restaurant', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT OR REPLACE INTO sites (id, organization_id, theme_id, theme, slug, subdomain, brand_name, status, plan, onboarding_status, source_locale, default_currency, vertical, created_at, updated_at)
+VALUES (${sqlValue(siteId)}, ${sqlValue(orgId)}, 'saya-theme-v1', 'saya', ${sqlValue(slug)}, ${sqlValue(slug)}, ${sqlValue(name)}, 'active', ${sqlValue(plan)}, 'active', 'en', 'THB', 'restaurant', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 INSERT OR REPLACE INTO site_locales
   (id, organization_id, site_id, locale, label, is_source, status, fallback_enabled)
@@ -114,32 +113,21 @@ ${tenantPages}`
 }
 
 const isStdout = process.argv.includes('--stdout')
-const isRemote = process.argv.includes('--remote')
-const isStaging = process.argv.includes('--staging')
 const isPreview = process.argv.includes('--preview')
 
-if (isStaging && process.env.KRABICLAW_RELEASE_CONTEXT !== 'ci-full-staging') {
-  console.error('Direct staging seeding is disabled; use the locked CI (Full Validation Lane).')
-  process.exit(1)
-}
-if (isRemote) {
-  console.error('Direct production seeding is disabled; production release workflows never run fixture seeds.')
+if (process.argv.includes('--remote') || process.argv.includes('--staging')) {
+  console.error('This seed supports only local and preview databases.')
   process.exit(1)
 }
 
-if ([isRemote, isStaging, isPreview].filter(Boolean).length > 1) {
-  console.error('Only one of --remote, --staging, or --preview may be provided.')
-  process.exit(1)
-}
-
-const envFlag = isStaging ? '--env staging' : isPreview ? '--env preview' : isRemote ? '' : '--local'
-const remoteFlag = isRemote || isStaging || isPreview ? '--remote' : ''
+const envFlag = isPreview ? '--env preview' : '--local'
+const remoteFlag = isPreview ? '--remote' : ''
 
 const sql = `-- Demo seed for local development - Saya theme showcase
 -- Ephemeral: generated from seed-definitions/demo.ts
 -- Preview at: http://demo.localhost:3000
 -- Production at: https://demo.krabiclaw.com
--- Destructive for demo-owned rows: safe to re-run with yarn seed:local or yarn seed:remote --confirm-production
+-- Destructive for demo-owned rows: safe to re-run locally or against preview.
 
 PRAGMA foreign_keys = ON;
 
@@ -231,7 +219,7 @@ if (isStdout) {
     writeFileSync(sqlPath, sql, 'utf8')
     const cmd = `npx wrangler d1 execute DB ${envFlag} ${remoteFlag} --file "${sqlPath}"`.trim()
     console.log(`[seed:demo] Applying: ${cmd}`)
-    await execWithRetry(() => execSync(cmd, { stdio: 'inherit' }), 'seed:demo')
+    execSync(cmd, { stdio: 'inherit' })
     console.log('[seed:demo] Done.')
   } finally {
     rmSync(dir, { recursive: true, force: true })

@@ -251,6 +251,7 @@ test('site creation activates the organization before any site write', async () 
     },
   )
   assert.equal(result.status, 500)
+  assert.equal(result.data.error, 'activation failed')
   assert.equal(activated, true)
   assert.equal(executedQueries.some(query => /INSERT\s+INTO\s+sites/i.test(query)), false)
 })

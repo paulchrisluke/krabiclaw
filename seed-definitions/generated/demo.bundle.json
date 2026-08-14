@@ -14,7 +14,6 @@
     "status": "active",
     "plan": "free",
     "onboardingStatus": "active",
-    "urlStructure": "location_subdirectories",
     "primaryLocationId": "loc-demo",
     "contactEmail": "hello@emberandslice.example",
     "defaultCurrency": "USD",

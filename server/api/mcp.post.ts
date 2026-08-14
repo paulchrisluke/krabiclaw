@@ -1,4 +1,4 @@
-import { getHeader, setResponseStatus } from "h3";
+import { getHeader } from "h3";
 import type { H3Event } from "h3";
 import {
   asMcpError,
@@ -56,14 +56,12 @@ function logMcpEventDetached(
     userAgent: input.userAgent ?? getHeader(event, "user-agent") ?? null,
     cfRayId: input.cfRayId ?? getHeader(event, "cf-ray") ?? null,
     sessionId: input.sessionId ?? getHeader(event, "mcp-session-id") ?? null,
-    deploymentVersion: input.deploymentVersion
-      ?? String(env.DEPLOYMENT_VERSION ?? env.CF_PAGES_COMMIT_SHA ?? env.GITHUB_SHA ?? "unknown"),
     catalogFingerprint: input.catalogFingerprint ?? TENANT_CATALOG_FINGERPRINT,
   };
   const logged = logMcpToolCallEvent(db, logInput);
   const waitUntil = getCloudflareWaitUntil(event);
   if (waitUntil) waitUntil(logged);
-  else logged.catch(() => {});
+  else void logged.catch(error => console.error("Failed to persist MCP telemetry:", error));
 }
 
 const TENANT_AUTH_DESCRIPTION = "Connect KrabiClaw to continue.";
@@ -152,12 +150,6 @@ export default defineEventHandler(async (event) => {
     const body = await readBody(event);
     requestEnvelope = safeMcpEnvelopeDetails(event, body);
 
-    // ChatGPT occasionally sends an empty-body health probe — ignore silently.
-    if (!body || (typeof body === "object" && Object.keys(body).length === 0)) {
-      setResponseStatus(event, 200);
-      return "";
-    }
-
     const request = readMcpRequest(event, body);
     requestId = request.id;
     requestMethod = request.method;
@@ -209,7 +201,7 @@ Whenever an image is needed (hero, logo, post thumbnail, menu photo, experience 
 3. Call image_generation natively with model gpt-image-1 or gpt-image-2 and the reviewed prompt tailored to the business.
 4. Immediately call save_generated_image_file({ site_id, attachment_id: <file reference from image_generation_call>, prompt }). Pass the file reference — never extract or forward the base64 from image_generation_call.result, that will be blocked by safety checks.
 5. Call show_generated_images with the assetId and publicUrl returned by save_generated_image_file.
-6. After the user approves, assign with set_media using the appropriate target (for example site_logo, home_hero, home_story_image, about_story_image, location_hero, menu_item_media, post_image, blog_post_image, or experience_media).
+6. After the user approves, assign with set_media using the appropriate top-level target_type (for example site_logo, home_hero, home_story_image, about_story_image, location_hero, menu_item_media, post_image, blog_post_image, or experience_media) and the exact entity id returned by a read tool when that placement requires one.
 7. If the user wants changes, revise the brief and repeat from step 2 so review_agent_guidance_candidate approves every changed image brief before image_generation or saving.
 
 This entire flow runs within the current conversation — do not tell the user to leave the app or use a different context.
@@ -220,15 +212,16 @@ This entire flow runs within the current conversation — do not tell the user t
 3. If the intended use is obvious, describe it briefly and ask the user to confirm the target site, the target placement, and that the attached image should be used.
 4. Do not upload media, assign an image, publish, or overwrite anything until the user explicitly confirms.
 5. After confirmation, call upload_user_media({ site_id, file: <resolved ChatGPT file reference for the attachment>, category, description }). This is the only tool for a user-provided photo — there is no separate "open upload" tool for images.
-6. The file argument is the primary contract. Pass the ChatGPT attachment through the file field and let the host rewrite it into an authorized file reference for KrabiClaw. Do not fabricate download URLs, wrap fake file objects, or suggest an in-app photo uploader.
-7. After upload_user_media returns asset_id/public_url, call set_media with the target and complete asset_ids state. For ordered targets such as experience_media, first call the matching read tool, append or reorder the asset IDs, and pass the complete ordered list.
+6. The file argument is the only contract. Pass the ChatGPT attachment through the file field and let the host rewrite it into an authorized file reference for KrabiClaw. Do not pass a bare file_id, fabricate download URLs, wrap fake file objects, or suggest an in-app photo uploader. If attachment delivery fails, stop and ask the user to attach it again; do not try a second transport.
+7. After upload_user_media returns asset_id/public_url, call set_media with target_type, the exact required entity id from a read tool, and complete asset_ids state. For ordered placements such as experience_media, first call the matching read tool, append or reorder the asset IDs, and pass the complete ordered list.
 8. Reply with the exact site, placement, asset_id, and public_url that were updated.
 
 **Videos:**
 - Ask the user to attach the video directly in ChatGPT with the paperclip.
-- Call upload_user_media({ site_id, file: <resolved ChatGPT file reference>, category, description }) once the host supplies the file reference. This is the only video upload tool.
+- Ask where the video should appear before uploading it. A video used as a hero or as the first item in an ordered placement needs a poster image; ask the user to attach that image too.
+- Call upload_user_media({ site_id, file: <resolved video reference>, poster_file: <resolved poster image reference>, category, description }) when the target requires a poster. For a non-cover video, omit poster_file.
 - Never call or mention upload widget tools. No tool whose name starts with "open_" and contains "upload" exists in this connector.
-- After upload_user_media returns asset_id/public_url, call set_media with the matching target such as home_hero, location_hero, or experience_media. For ordered targets, preserve existing media by fetching the current entity first and sending the complete ordered asset_ids list.
+- After upload_user_media returns asset_id/public_url, call set_media with the matching target_type and the exact required entity id from a read tool. For ordered placements, preserve existing media by fetching the current entity first and sending the complete ordered asset_ids list.
 
 ## Choosing a content type
 KrabiClaw has three distinct content-creation tools — do not default to whichever one comes to mind first. Ask yourself whether the request is time-boxed, narrative, or a permanent offering:
@@ -379,13 +372,7 @@ Common workflows: update menus and items, create and publish site posts, triage 
         }
       });
 
-      const domains = (() => {
-        try {
-          return [...new Set(tools.map((t) => t._meta["krabiclaw/toolInfo"].domain))]
-        } catch {
-          return []
-        }
-      })()
+      const domains = [...new Set(tools.map((tool) => tool._meta["krabiclaw/toolInfo"].domain))]
       logMcpEventDetached(event, cfEnv.DB, {
         organizationId: siteCtx?.organizationId ?? null,
         siteId: siteCtx?.siteId ?? null,
@@ -475,8 +462,8 @@ Common workflows: update menus and items, create and publish site posts, triage 
 
       const isRender = isMcpRenderResponse(result);
       const structuredContent = isRender ? result.structuredContent : result;
-      const modelText = isRender && result.fallbackText
-        ? result.fallbackText
+      const modelText = isRender && result.modelText
+        ? result.modelText
         : JSON.stringify(structuredContent, null, 2);
 
       // Resolved once and reused for both telemetry and the cache-purge below.

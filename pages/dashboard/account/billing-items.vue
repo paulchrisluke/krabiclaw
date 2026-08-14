@@ -3,40 +3,33 @@
     <template #header>
       <UDashboardNavbar title="Billing Items">
         <template #leading>
-          <DashboardSidebarCollapseButton />
+          <DashboardNavbarLeading :detail-to="accountIndexTo" detail-label="Account" />
         </template>
+        <template #right><DashboardAccountMenu mobile-only class="md:hidden" /></template>
       </UDashboardNavbar>
     </template>
 
     <template #body>
-      <div class="max-w-4xl space-y-10">
+      <div class="w-full max-w-[var(--ws-page-narrow,45rem)]">
         
         <!-- Personal Section -->
-        <section class="space-y-4">
-          <h3 class="text-xl font-semibold text-highlighted">Personal</h3>
+        <section>
+          <h3 class="mb-3 text-[15px] font-bold text-highlighted">Personal</h3>
 
-          <UCard variant="soft">
-            <div class="flex items-center justify-between">
+          <div class="border-y border-default py-[18px]">
+            <div class="flex min-h-8 items-center justify-between gap-4">
               <div class="flex items-center gap-3">
-                <UIcon name="i-lucide-user" class="size-6 text-muted" />
-                <span class="font-medium text-highlighted">{{ sessionData?.user?.name }} Account</span>
+                <UIcon name="i-lucide-user" class="size-5 text-muted" />
+                <span class="text-sm font-semibold text-highlighted">{{ sessionData?.user?.name }}</span>
                 <UBadge color="neutral" variant="soft" size="sm" class="rounded-full px-2">Free</UBadge>
               </div>
+              <NuxtLink to="/pricing" class="account-action">View plans</NuxtLink>
             </div>
-            <template #footer>
-              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <p class="text-sm text-muted">To manage your personal plan, visit your account's Billing and Usage settings page.</p>
-                <UButton v-if="orgSettings.billing.value" color="neutral" variant="soft" size="sm" :to="orgSettings.billing.value">
-                  View All Plans
-                </UButton>
-              </div>
-            </template>
-          </UCard>
+          </div>
         </section>
 
-        <!-- Sites Section -->
-        <section class="space-y-4">
-          <h3 class="text-xl font-semibold text-highlighted">Sites</h3>
+        <section class="mt-[34px]">
+          <h3 class="mb-3 text-[15px] font-bold text-highlighted">Organizations</h3>
 
           <div v-if="status === 'pending'" class="space-y-4">
             <USkeleton v-for="i in 2" :key="i" class="h-32 w-full rounded-lg" />
@@ -50,15 +43,15 @@
           </div>
 
           <div v-else-if="!billingItems || billingItems.length === 0" class="text-sm text-muted">
-            You are not a member of any sites.
+            You are not a member of any organizations.
           </div>
 
-          <div v-else class="space-y-6">
-            <UCard v-for="item in billingItems" :key="item.organization.id" variant="soft">
-              <div class="flex items-center justify-between">
+          <div v-else class="divide-y divide-default border-y border-default">
+            <NuxtLink v-for="item in billingItems" :key="item.organization.id" :to="`/dashboard/${item.organization.slug}/settings/billing`" class="flex min-h-[var(--ws-row-min-height,66px)] w-full items-center justify-between gap-4 py-[18px] text-left">
+              <div class="flex min-w-0 items-center justify-between gap-4">
                 <div class="flex items-center gap-3">
                   <UAvatar :src="item.organization.logo || undefined" :alt="item.organization.name" :ui="{ root: 'rounded-md' }" size="sm" />
-                  <span class="font-medium text-highlighted">{{ item.organization.name }}</span>
+                  <span class="truncate font-medium text-highlighted">{{ item.organization.name }}</span>
                   <UBadge color="primary" variant="soft" size="sm" class="rounded-full px-2 capitalize">
                     {{ item.billing.plan }}
                   </UBadge>
@@ -67,15 +60,8 @@
                   </UBadge>
                 </div>
               </div>
-              <template #footer>
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <p class="text-sm text-muted">Visit {{ item.organization.name }}'s billing settings for details.</p>
-                  <UButton color="neutral" variant="soft" size="sm" @click="goToWorkspaceBilling(item.organization.slug)">
-                    View Billing Settings
-                  </UButton>
-                </div>
-              </template>
-            </UCard>
+              <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0 text-dimmed" />
+            </NuxtLink>
           </div>
         </section>
 
@@ -91,9 +77,15 @@ import { useAuth } from '~/composables/useAuth'
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Billing Items | KrabiClaw Dashboard', robots: 'noindex, nofollow' })
 
-const orgSettings = useOrgSettings()
 const { data: sessionData } = useAuth()
-const router = useRouter()
+const route = useRoute()
+const accountIndexTo = computed(() => ({
+  path: '/dashboard/account',
+  query: {
+    ...(typeof route.query.organization === 'string' ? { organization: route.query.organization } : {}),
+    ...(typeof route.query.organizationName === 'string' ? { organizationName: route.query.organizationName } : {}),
+  },
+}))
 const requestEvent = useRequestEvent()
 
 interface BillingItem {
@@ -146,7 +138,8 @@ const { data: billingItems, status, error, refresh } = await useAsyncData(
   }
 )
 
-const goToWorkspaceBilling = async (orgSlug: string) => {
-  await router.push(`/dashboard/${orgSlug}/settings/billing`)
-}
 </script>
+
+<style scoped>
+.account-action { flex-shrink: 0; font-size: 13.5px; font-weight: 600; color: var(--ui-text-highlighted); text-decoration: underline; text-underline-offset: 3px; }
+</style>

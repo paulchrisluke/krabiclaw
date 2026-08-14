@@ -84,9 +84,9 @@ function sectionWith(source, name, text) {
 
 async function cloudflare(endpoint, options = {}) {
   const token = process.env.CLOUDFLARE_API_TOKEN
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID || process.env.CF_ACCOUNT_ID
+  const accountId = process.env.CF_ACCOUNT_ID
   if (!token || !accountId) {
-    throw new Error('CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are required')
+    throw new Error('CLOUDFLARE_API_TOKEN and CF_ACCOUNT_ID are required')
   }
 
   const controller = new AbortController()
@@ -101,7 +101,10 @@ async function cloudflare(endpoint, options = {}) {
         ...options.headers,
       },
     })
-    const body = await response.json().catch(() => ({}))
+    const body = await response.json()
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      throw new Error(`Cloudflare API returned an invalid response for ${endpoint}`)
+    }
     if (!response.ok || body.success === false) {
       throw new Error(body.errors?.[0]?.message || `HTTP ${response.status}`)
     }
@@ -115,7 +118,7 @@ async function cloudflare(endpoint, options = {}) {
 }
 
 async function listQueues() {
-  if (!process.env.CLOUDFLARE_API_TOKEN || !(process.env.CLOUDFLARE_ACCOUNT_ID || process.env.CF_ACCOUNT_ID)) {
+  if (!process.env.CLOUDFLARE_API_TOKEN || !process.env.CF_ACCOUNT_ID) {
     const { stdout } = await execFileAsync('wrangler', ['queues', 'list'])
     return REQUIRED_QUEUES.filter(queueName => stdout.includes(queueName)).map(queueName => ({ queue_name: queueName }))
   }
@@ -140,7 +143,7 @@ async function ensureQueue(queueName, existingNames) {
     return
   }
 
-  if (!process.env.CLOUDFLARE_API_TOKEN || !(process.env.CLOUDFLARE_ACCOUNT_ID || process.env.CF_ACCOUNT_ID)) {
+  if (!process.env.CLOUDFLARE_API_TOKEN || !process.env.CF_ACCOUNT_ID) {
     await execFileAsync('wrangler', ['queues', 'create', queueName])
   }
   else {

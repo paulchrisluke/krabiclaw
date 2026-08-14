@@ -9,7 +9,7 @@ type EmailDeliveryEnv = {
 // Fails closed: an unset/blank/invalid EMAIL_DELIVERY_MODE must never fall through to
 // real sends. Production is the only environment that should send real email, and it does
 // so by setting EMAIL_DELIVERY_MODE="provider" explicitly in wrangler.toml's top-level
-// [vars] — every other environment (local dev's .env.example, preview, staging) either sets
+// [vars] — every other environment (local dev, preview, staging) either sets
 // "log_only" explicitly or is protected by this default if the var is ever missing.
 // See the 2026-07 incident: this used to default to 'provider', so any environment that
 // forgot to set the var (or a local .env with a real RESEND_API_KEY) sent real Resend email
@@ -18,11 +18,8 @@ type EmailDeliveryEnv = {
 export function getEmailDeliveryMode(env: EmailDeliveryEnv | null | undefined | unknown): EmailDeliveryMode {
   // `nuxt dev` reads wrangler.toml's top-level [vars] — the same block
   // `wrangler deploy` (no --env) uses for production — so a local dev session
-  // silently inherits EMAIL_DELIVERY_MODE=provider unless .dev.vars happens to
-  // override it. That override has drifted/gone missing before (see the 2026-07
-  // incident note below) and burned real Resend sends to e2e/admin-notification
-  // addresses with localhost links. Hard-stop it at the code level instead of
-  // trusting every developer's .dev.vars to have the right line.
+  // inherits EMAIL_DELIVERY_MODE=provider from the production config. Hard-stop
+  // local development at the code level instead of depending on local config.
   if (import.meta.dev) return 'log_only'
   const mode = typeof env === 'object' && env !== null && 'EMAIL_DELIVERY_MODE' in env
     ? (env as { EMAIL_DELIVERY_MODE?: string }).EMAIL_DELIVERY_MODE

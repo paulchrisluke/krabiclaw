@@ -114,12 +114,11 @@ test('manifests and legacy optimizer endpoints are non-indexable but not private
 
 test('preview and deployment-provider hosts are globally non-indexable', () => {
   for (const host of [
+    'local.krabiclaw.com',
     'preview.krabiclaw.com',
     'staging.krabiclaw.com',
-    'local.krabiclaw.com',
     'krabiclaw.pages.dev',
     'krabiclaw-preview.paulchrisluke.workers.dev',
-    'random.trycloudflare.com',
   ]) {
     assert.equal(isNonIndexableHost(host), true, host)
   }

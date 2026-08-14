@@ -23,6 +23,10 @@ export interface AiTool {
     type: 'object'
     properties: ApiRecord
     required?: string[]
+    anyOf?: ApiRecord[]
+    oneOf?: ApiRecord[]
+    allOf?: ApiRecord[]
+    additionalProperties?: boolean
   }
 }
 

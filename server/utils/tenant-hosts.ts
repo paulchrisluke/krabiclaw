@@ -9,11 +9,8 @@ export interface TenantHostEnv {
 
 const PAGES_DEV_HOST = 'krabiclaw.pages.dev'
 
-// CI deploys real preview Workers to `<alias-or-version>-krabiclaw-preview.<account-subdomain>.workers.dev`
-// (see [env.preview] in wrangler.toml and the e2e-smoke job in ci.yml) and runs
-// Playwright straight against that live edge URL — same shape of problem as
-// PAGES_DEV_HOST above, just for `wrangler versions upload --preview-alias`.
-const WORKERS_DEV_PREVIEW_HOST_PATTERN = /^(?:[a-z0-9-]+-)?krabiclaw-preview\.[a-z0-9-]+\.workers\.dev$/
+// CI runs Playwright against the one preview Worker's canonical workers.dev host.
+const WORKERS_DEV_PREVIEW_HOST_PATTERN = /^krabiclaw-preview\.[a-z0-9-]+\.workers\.dev$/
 
 // Strip protocol, path, and port so config values (which may be
 // full URLs like "https://krabiclaw.com" or "http://localhost:3000") compare
@@ -66,15 +63,15 @@ export function isPlatformHost(host: string, env: TenantHostEnv): boolean {
   return getPlatformHosts(env).includes(hostname)
 }
 
-// Returns true for hosts where x-preview-tenant header carries tenant identity
-// because subdomain routing is unavailable (wildcard TLS cert only covers one
-// subdomain level, so demo.preview.krabiclaw.com or demo.staging.krabiclaw.com
-// won't handshake). Applies to workers.dev, staging.*, and preview.* hosts.
+// Returns true for shared hosts where x-preview-tenant carries tenant identity
+// because the request cannot use a tenant hostname. This includes local
+// workerd, the named local tunnel, preview, and staging.
 export function isPreviewContext(host: string): boolean {
-  const hostname = hostnameOf(host)
-  if (hostname.endsWith('.workers.dev')) return true
-  if (/^(?:staging|preview)\.[^.]+\.[^.]+$/.test(hostname)) return true
-  return false
+  const hostname = hostnameOf(host).toLowerCase().replace(/\.$/, '')
+  if (hostname === 'localhost' || hostname === '127.0.0.1') return true
+  if (hostname === 'local.krabiclaw.com') return true
+  if (hostname === 'preview.krabiclaw.com' || hostname === 'staging.krabiclaw.com') return true
+  return WORKERS_DEV_PREVIEW_HOST_PATTERN.test(hostname)
 }
 
 // The domain that free-tier subdomains (e.g. "demo.krabiclaw.com") are minted

@@ -1,12 +1,13 @@
 import { expect, test, type Dialog } from '@playwright/test'
-import { collectPageErrors, setupTenantHeaders } from './helpers'
-import { dashboardOrgHeaders, devLoginHeaders, devLoginUrl } from './test-env'
+import { collectPageErrors } from './helpers'
+import { loginAsPage } from './helpers/auth'
+import { dashboardOrgHeaders } from './test-env'
 
 test.describe('dashboard functional smoke', () => {
-  test('dev login opens the owner dashboard', async ({ page, baseURL }) => {
+  test('credential login opens the owner dashboard', async ({ page, baseURL }) => {
     const errors = collectPageErrors(page)
-    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
-    const login = await page.goto(devLoginUrl(baseURL!), { waitUntil: 'load' })
+    await loginAsPage(page, baseURL!)
+    const login = await page.goto(`${baseURL}/api/post-login`, { waitUntil: 'load' })
     expect(login?.status()).toBeLessThan(400)
     await expect(page).toHaveURL(/\/dashboard/)
     await expect(page.locator('body')).toContainText(/Sites|Let's build your site/)
@@ -21,12 +22,8 @@ test.describe('dashboard functional smoke', () => {
   test('owner can open core dashboard pages for their org', async ({ page, baseURL }) => {
     test.setTimeout(60_000)
     const errors = collectPageErrors(page)
-    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
     const suffix = Date.now()
-    const userId = `e2e-dashboard-org-pages-${suffix}`
-    const login = await page.goto(devLoginUrl(baseURL!, userId), { waitUntil: 'load' })
-    expect(login?.status()).toBeLessThan(400)
-    await expect(page).toHaveURL(/\/dashboard/)
+    await loginAsPage(page, baseURL!, 'user-e2e-dashboard-org-pages')
 
     const createSiteRes = await page.request.post(`${baseURL}/api/sites`, {
       data: {
@@ -61,6 +58,96 @@ test.describe('dashboard functional smoke', () => {
     expect(nonHydrationErrors).toEqual([])
   })
 
+  test('organization Today and Calendar render agenda data, navigate months, and filter kinds', async ({ page, baseURL }) => {
+    test.setTimeout(90_000)
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await loginAsPage(page, baseURL!, 'user-e2e-pottery-owner')
+
+    const agendaItem = (overrides: Record<string, unknown> = {}) => ({
+      id: 'reservation:e2e-agenda-reservation',
+      kind: 'reservation',
+      startsAt: '2026-08-13T02:00:00.000Z',
+      endsAt: null,
+      dayKey: '2026-08-13',
+      timeZone: 'Asia/Bangkok',
+      showTimeZone: false,
+      title: 'Agenda Guest',
+      subtitle: '2 guests',
+      status: 'new',
+      siteId: 'site-pottery-house',
+      locationId: 'loc-pottery-house',
+      locationTitle: 'Pottery House Krabi',
+      to: '/dashboard/pottery-house-krabi/sites/pottery-house/conversations/thread-e2e-agenda',
+      ...overrides,
+    })
+    const metadata = {
+      availableKinds: ['reservation', 'experience_booking', 'post', 'thread'],
+      sites: [{ id: 'site-pottery-house', label: 'Pottery House Krabi', slug: 'pottery-house' }],
+      locations: [{ id: 'loc-pottery-house', siteId: 'site-pottery-house', title: 'Pottery House Krabi' }],
+    }
+
+    await page.route('**/api/dashboard/today', async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items: [agendaItem()], attention: [],
+          counts: { reservations: 1, experienceBookings: 0, threadsNeedingAttention: 0, posts: 0 },
+          ...metadata, resolvedAt: '2026-08-13T03:00:00.000Z',
+        }),
+      })
+    })
+    await page.goto(`${baseURL}/dashboard/pottery-house-krabi`, { waitUntil: 'networkidle' })
+    await page.getByRole('link', { name: 'Today', exact: true }).first().click()
+    await expect(page).toHaveURL(/\/dashboard\/pottery-house-krabi\/today$/)
+    await expect(page.getByRole('navigation', { name: "Today's metrics" })).toContainText('Reservations')
+    const scheduleLink = page.getByRole('link', { name: /Agenda Guest/ })
+    await expect(scheduleLink).toBeVisible()
+    await expect(scheduleLink).toHaveAttribute('href', '/dashboard/pottery-house-krabi/sites/pottery-house/conversations/thread-e2e-agenda')
+
+    let agendaRequestCount = 0
+    await page.route('**/api/dashboard/agenda?**', async route => {
+      agendaRequestCount += 1
+      const requestUrl = new URL(route.request().url())
+      const from = requestUrl.searchParams.get('from')!
+      const kind = requestUrl.searchParams.get('kinds')
+      const itemKind = kind === 'post' ? 'post' : 'reservation'
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items: [agendaItem({
+            id: `${itemKind}:${agendaRequestCount}`,
+            kind: itemKind,
+            dayKey: from,
+            startsAt: `${from}T02:00:00.000Z`,
+            title: `${itemKind === 'post' ? 'Post' : 'Reservation'} month ${agendaRequestCount}`,
+          })],
+          ...metadata,
+        }),
+      })
+    })
+    await page.getByRole('link', { name: 'Calendar', exact: true }).first().click()
+    await expect(page).toHaveURL(/\/dashboard\/pottery-house-krabi\/calendar$/)
+    await expect(page.getByText(/Reservation month/).first()).toBeVisible()
+    const monthHeading = page.getByRole('heading', { level: 2 }).first()
+    const firstMonthLabel = await monthHeading.textContent()
+    await page.getByRole('button', { name: 'Next month' }).click()
+    await expect(monthHeading).not.toHaveText(firstMonthLabel ?? '')
+    await expect(page.getByText(/Reservation month 2/).first()).toBeVisible()
+
+    await page.getByRole('combobox', { name: 'Kind' }).click()
+    await page.getByRole('option', { name: 'Post', exact: true }).click()
+    await expect(page.getByText(/Post month 3/).first()).toBeVisible()
+    expect(agendaRequestCount).toBeGreaterThanOrEqual(3)
+
+    await page.setViewportSize({ width: 390, height: 844 })
+    await expect(page.getByTestId('calendar-month-grid')).toBeHidden()
+    await expect(page.getByTestId('calendar-mobile-list')).toBeVisible()
+    await expect(page.getByTestId('calendar-mobile-list').getByRole('link', { name: /Post month 3/ })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Back to Pottery House Krabi' })).toBeVisible()
+  })
+
   test('Pages manager runs one typed-block and custom-page lifecycle tracer journey', async ({ page, baseURL }) => {
     test.setTimeout(240_000)
     const applicationErrors: string[] = []
@@ -68,8 +155,7 @@ test.describe('dashboard functional smoke', () => {
     page.on('console', message => {
       if (message.type() === 'error') applicationErrors.push(`console: ${message.text()}`)
     })
-    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
-    await page.goto(devLoginUrl(baseURL!, 'user-mcp-growth'), { waitUntil: 'load' })
+    await loginAsPage(page, baseURL!, 'user-e2e-growth-owner')
 
     const response = await page.goto(`${baseURL}/dashboard/mcp-growth-fixture/sites/mcp-growth-fixture/pages`, { waitUntil: 'domcontentloaded' })
     expect(response?.status()).toBe(200)
@@ -205,7 +291,7 @@ test.describe('dashboard functional smoke', () => {
 
     const currentPagesUrl = page.url()
     const routeLeaveDialog = page.waitForEvent('dialog').then(dialog => dialog.dismiss())
-    await page.getByRole('link', { name: 'Media library', exact: true }).click()
+    await page.locator('[id^="dashboard-sidebar"]').getByRole('link', { name: 'Today', exact: true }).click()
     await routeLeaveDialog
     await expect(page).toHaveURL(currentPagesUrl)
     await expect(page.getByRole('heading', { name: pageTitle, exact: true })).toBeVisible()
@@ -406,8 +492,7 @@ test.describe('dashboard functional smoke', () => {
 
   test('Pages manager keeps the newest selection when page responses finish out of order', async ({ page, baseURL }) => {
     test.setTimeout(90_000)
-    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
-    await page.goto(devLoginUrl(baseURL!, 'user-mcp-growth'), { waitUntil: 'load' })
+    await loginAsPage(page, baseURL!, 'user-e2e-growth-owner')
 
     const response = await page.goto(`${baseURL}/dashboard/mcp-growth-fixture/sites/mcp-growth-fixture/pages`, { waitUntil: 'domcontentloaded' })
     expect(response?.status()).toBe(200)
@@ -459,9 +544,7 @@ test.describe('dashboard functional smoke', () => {
 
   test('canonical account, organization, site, and location routes render with responsive navigation', async ({ page, baseURL }) => {
     test.setTimeout(90_000)
-    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
-    const login = await page.goto(devLoginUrl(baseURL!, 'user-pottery-house'), { waitUntil: 'load' })
-    expect(login?.status()).toBeLessThan(400)
+    await loginAsPage(page, baseURL!, 'user-e2e-pottery-owner')
 
     const routes = [
       ['/dashboard/account/profile', 'Profile'],
@@ -492,7 +575,7 @@ test.describe('dashboard functional smoke', () => {
     await expect(page.getByRole('dialog')).toBeVisible()
     await page.keyboard.press('Escape')
     await page.getByTestId('dashboard-account-menu-button').click()
-    await expect(page.getByText('Account settings', { exact: true })).toBeVisible()
+    await expect(page.getByText('Profile', { exact: true })).toBeVisible()
     await expect(page.getByText('Platform Status', { exact: true })).toBeVisible()
     await page.keyboard.press('Escape')
     await page.getByRole('button', { name: 'Collapse sidebar' }).click()
@@ -501,8 +584,11 @@ test.describe('dashboard functional smoke', () => {
     await page.setViewportSize({ width: 390, height: 844 })
     await page.reload({ waitUntil: 'load' })
     await expect(page.locator('[data-sidebar-control-ready]')).toHaveAttribute('data-sidebar-control-ready', 'true')
-    await page.getByRole('button', { name: 'Open sidebar' }).first().click()
-    await expect(page.getByRole('link', { name: 'Locations', exact: true })).toBeVisible()
+    const mobileNavigation = page.getByTestId('dashboard-mobile-nav').getByRole('navigation')
+    await expect(mobileNavigation).toBeVisible()
+    await expect(mobileNavigation.getByRole('link', { name: 'Today', exact: true })).toBeVisible()
+    await expect(mobileNavigation.getByRole('link', { name: 'Calendar', exact: true })).toBeVisible()
+    await expect(mobileNavigation.getByRole('link', { name: 'Locations', exact: true })).toBeVisible()
 
     expect((await page.request.get(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/new`)).status()).toBe(404)
     expect((await page.request.patch(`${baseURL}/api/dashboard/location-preference`, {
@@ -516,17 +602,7 @@ test.describe('dashboard functional smoke', () => {
 
   test('site-wide manager reaches its site workspace but not organization settings', async ({ page, baseURL }) => {
     test.setTimeout(60_000)
-    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
-    await page.goto(devLoginUrl(baseURL!, 'user-pottery-house'), { waitUntil: 'load' })
-
-    const memberResponse = await page.request.post(`${baseURL}/api/dev/test-member`, {
-      headers: devLoginHeaders(),
-      data: { role: 'editor', organizationId: 'org-pottery-house', name: 'E2E Site Manager' },
-    })
-    expect(memberResponse.status()).toBe(200)
-    const member = await memberResponse.json() as { user: { id: string } }
-
-    await page.goto(devLoginUrl(baseURL!, member.user.id), { waitUntil: 'load' })
+    await loginAsPage(page, baseURL!, 'user-e2e-pottery-editor')
     const siteSettings = await page.goto(`${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/settings`, { waitUntil: 'load' })
     expect(siteSettings?.status()).toBeLessThan(400)
     await expect(page.getByText('Site Settings', { exact: true }).first()).toBeVisible()
@@ -537,8 +613,7 @@ test.describe('dashboard functional smoke', () => {
 
   test('capability-gated manager routes 404 when the vertical does not expose them, and resolve when it does', async ({ page, baseURL }) => {
     test.setTimeout(60_000)
-    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
-    await page.goto(devLoginUrl(baseURL!, 'user-pottery-house'), { waitUntil: 'load' })
+    await loginAsPage(page, baseURL!, 'user-e2e-pottery-owner')
 
     // Pottery House is an experience/saya site, not a restaurant (config/cms-registry.ts
     // verticalDefaultFeatures — verified against the live seed via `yarn seed:pottery-local`,
@@ -579,8 +654,7 @@ test.describe('dashboard functional smoke', () => {
 
   test('location experiences page distinguishes populated, empty, and failed list states', async ({ page, baseURL }) => {
     test.setTimeout(60_000)
-    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
-    await page.goto(devLoginUrl(baseURL!, 'user-pottery-house'), { waitUntil: 'load' })
+    await loginAsPage(page, baseURL!, 'user-e2e-pottery-owner')
 
     // The experiences page fetches its list via a direct server-side call during
     // SSR (see loadDashboardLocationExperiences in dashboard-editor-resources.ts),
@@ -595,7 +669,7 @@ test.describe('dashboard functional smoke', () => {
     // point falls through to the anchor's plain href and forces a hard reload
     // (bypassing the mock again). 'networkidle' waits out that gap reliably.
     const overviewUrl = `${baseURL}/dashboard/pottery-house-krabi/sites/pottery-house/locations/krabi`
-    const experiencesLink = page.locator('[id^="dashboard-sidebar"]').getByRole('link', { name: 'Experiences' })
+    const experiencesLink = page.getByRole('link', { name: 'Experiences', exact: true })
 
     // The route mock must be registered before the overview page loads, not
     // after — NuxtLink eagerly prefetches its target route's data as soon as
@@ -637,28 +711,32 @@ test.describe('dashboard functional smoke', () => {
 
   test('site media library distinguishes empty and failed list states', async ({ page, baseURL }) => {
     test.setTimeout(60_000)
-    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
-    await page.goto(devLoginUrl(baseURL!, 'user-kikuzuki'), { waitUntil: 'load' })
+    await loginAsPage(page, baseURL!, 'user-e2e-kikuzuki-owner')
 
     // Same SSR-direct-service constraint as the experiences page above (see the
     // comment there) — media.vue fetches via loadDashboardMedia during SSR, so
     // the mock must be hit through an in-app SPA transition, not a URL nav.
-    const settingsUrl = `${baseURL}/dashboard/kikuzuki-krabi-thailand/sites/kikuzuki-krabi-thailand/settings`
-    const mediaLink = page.locator('[id^="dashboard-sidebar"]').getByRole('link', { name: 'Media library' })
+    const overviewUrl = `${baseURL}/dashboard/kikuzuki-krabi-thailand/sites/kikuzuki-krabi-thailand`
+    const mediaLink = page.getByRole('link').filter({ hasText: 'Media library' })
 
     await page.route('**/api/editor/sites/site-kikuzuki/media?**', async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ media: [] }) })
     })
-    await page.goto(settingsUrl, { waitUntil: 'networkidle' })
+    await page.goto(overviewUrl, { waitUntil: 'networkidle' })
     await mediaLink.click()
     await expect(page).toHaveURL(/\/media$/)
     await expect(page.getByText('No media yet')).toBeVisible()
     await page.unroute('**/api/editor/sites/site-kikuzuki/media?**')
 
     await page.route('**/api/editor/sites/site-kikuzuki/media?**', async (route) => {
+      const url = new URL(route.request().url())
+      if (url.searchParams.get('limit') === '6') {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ media: [] }) })
+        return
+      }
       await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Test failure' }) })
     })
-    await page.goto(settingsUrl, { waitUntil: 'networkidle' })
+    await page.goto(overviewUrl, { waitUntil: 'networkidle' })
     await mediaLink.click()
     await expect(page).toHaveURL(/\/media$/)
     await expect(page.getByText('No media yet')).toBeHidden()
@@ -667,16 +745,16 @@ test.describe('dashboard functional smoke', () => {
 
   test('blog posts list distinguishes empty and failed list states', async ({ page, baseURL }) => {
     test.setTimeout(60_000)
-    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
-    await page.goto(devLoginUrl(baseURL!, 'user-kikuzuki'), { waitUntil: 'load' })
+    await loginAsPage(page, baseURL!, 'user-e2e-kikuzuki-owner')
 
-    const settingsUrl = `${baseURL}/dashboard/kikuzuki-krabi-thailand/sites/kikuzuki-krabi-thailand/settings`
-    const blogLink = page.locator('[id^="dashboard-sidebar"]').getByRole('link', { name: 'Blog posts' })
+    const overviewUrl = `${baseURL}/dashboard/kikuzuki-krabi-thailand/sites/kikuzuki-krabi-thailand`
+    const blogLink = page.getByRole('link').filter({ hasText: /^Blog/ })
 
     await page.route('**/api/editor/sites/site-kikuzuki/blog/posts', async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ posts: [] }) })
     })
-    await page.goto(settingsUrl, { waitUntil: 'networkidle' })
+    await page.goto(overviewUrl, { waitUntil: 'networkidle' })
+    await page.getByRole('button', { name: 'Pages', exact: true }).click()
     await blogLink.click()
     await expect(page).toHaveURL(/\/blog$/)
     await expect(page.getByText('No blog posts yet. Create your first post to get started.')).toBeVisible()
@@ -685,7 +763,8 @@ test.describe('dashboard functional smoke', () => {
     await page.route('**/api/editor/sites/site-kikuzuki/blog/posts', async (route) => {
       await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Test failure' }) })
     })
-    await page.goto(settingsUrl, { waitUntil: 'networkidle' })
+    await page.goto(overviewUrl, { waitUntil: 'networkidle' })
+    await page.getByRole('button', { name: 'Pages', exact: true }).click()
     await blogLink.click()
     await expect(page).toHaveURL(/\/blog$/)
     await expect(page.getByText('No blog posts yet. Create your first post to get started.')).toBeHidden()
@@ -694,11 +773,10 @@ test.describe('dashboard functional smoke', () => {
 
   test('location menu distinguishes empty and failed list states', async ({ page, baseURL }) => {
     test.setTimeout(60_000)
-    await setupTenantHeaders(page, baseURL!, devLoginHeaders() || {})
-    await page.goto(devLoginUrl(baseURL!, 'user-kikuzuki'), { waitUntil: 'load' })
+    await loginAsPage(page, baseURL!, 'user-e2e-kikuzuki-owner')
 
     const overviewUrl = `${baseURL}/dashboard/kikuzuki-krabi-thailand/sites/kikuzuki-krabi-thailand/locations/kikuzuki-japanese-robatayaki-izakaya`
-    const menuLink = page.locator('[id^="dashboard-sidebar"]').getByRole('link', { name: 'Menus' })
+    const menuLink = page.getByRole('link', { name: 'Menu', exact: true })
 
     await page.route('**/api/editor/sites/site-kikuzuki/menus?**', async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, menus: [] }) })

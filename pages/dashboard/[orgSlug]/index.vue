@@ -2,6 +2,7 @@
   <UDashboardPanel id="org-overview">
     <template #header>
       <UDashboardNavbar title="Your sites">
+        <template #leading><DashboardNavbarLeading /></template>
         <template #right>
           <UButton
             v-if="canManageOrganization"

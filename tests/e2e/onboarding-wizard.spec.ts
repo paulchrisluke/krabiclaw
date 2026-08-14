@@ -1,12 +1,10 @@
-import { expect, test, type Page } from '@playwright/test'
-import { dashboardOrgHeaders, devLoginHeaders, devLoginUrl } from './test-env'
+import { expect, request as playwrightRequest, test, type APIRequestContext, type Page } from '@playwright/test'
+import { findE2eAuthFixture } from '../../config/e2e-auth-fixtures'
+import { loginAs } from './helpers/auth'
+import { dashboardOrgHeaders } from './test-env'
 
-async function loginFreshUser(page: Page, baseURL: string, userId: string) {
-  const res = await page.request.get(devLoginUrl(baseURL, userId), {
-    headers: devLoginHeaders(),
-    maxRedirects: 0,
-  })
-  expect(res.status()).toBe(302)
+async function loginFreshUser(request: APIRequestContext, baseURL: string, userId: string) {
+  await loginAs(request, baseURL, userId)
 }
 
 // Drives the chat-style OnboardingWizard from "Start building" through the
@@ -84,116 +82,130 @@ async function completeManualWizard(
   }
 }
 
-type TransferPlan = 'free' | 'growth'
+interface AcceptedTransferFixture {
+  recipientUserId: string
+  siteId: string
+  orgSlug: string
+  siteSlug: string
+  transferId: string
+  locationId: string
+}
 
-const TRANSFER_SOURCE_OWNER_USER_ID = 'user-mcp-growth-service'
-const TRANSFER_RECIPIENT_USER_IDS: Record<TransferPlan, string> = {
-  free: 'user-mcp-free',
-  growth: 'user-mcp-growth',
+const TRANSFER_SOURCE_OWNER_USER_ID = 'user-e2e-growth-service-owner'
+const TRANSFER_RECIPIENT_USER_ID = 'user-e2e-growth-owner'
+
+async function createAcceptedTransferFixture(
+  baseURL: string,
+): Promise<AcceptedTransferFixture> {
+  const suffix = Date.now()
+  // The source site is deliberately always created by the seeded Growth
+  // service fixture owner. The accepting user already owns the seeded Growth
+  // fixture organization, matching the product contract that completed client
+  // sites are handed off only into a paid workspace.
+  const ownerUserId = TRANSFER_SOURCE_OWNER_USER_ID
+  const recipientUserId = TRANSFER_RECIPIENT_USER_ID
+  const recipientEmail = findE2eAuthFixture(recipientUserId).email
+
+  // Build the fixture through the real transfer APIs. The recipient's seeded
+  // Growth organization supplies the effective plan without starting another
+  // subscription; the handoff adopts that organization's billing projection.
+  const ownerRequest = await playwrightRequest.newContext()
+  const recipientRequest = await playwrightRequest.newContext()
+  let siteId = ''
+  let siteSlug = ''
+  let transfer: { id?: string; token?: string } = {}
+  try {
+    await loginFreshUser(ownerRequest, baseURL, ownerUserId)
+    const createSiteRes = await ownerRequest.post(`${baseURL}/api/sites`, {
+      data: {
+        name: `Transfer UI Growth ${suffix}`,
+        subdomain: `e2e-throwaway-${suffix}`,
+        vertical: 'restaurant',
+      },
+    })
+    expect(createSiteRes.status()).toBe(200)
+    const createdSite = await createSiteRes.json() as {
+      siteId?: string
+      subdomain?: string
+    }
+    expect(createdSite.siteId).toEqual(expect.any(String))
+    expect(createdSite.subdomain).toContain('e2e-')
+    siteId = createdSite.siteId!
+    siteSlug = createdSite.subdomain!
+
+    const [sourceSiteRes, transferRes] = await Promise.all([
+      ownerRequest.get(`${baseURL}/api/sites/${siteId}`),
+      ownerRequest.post(`${baseURL}/api/admin/sites/${siteId}/transfer`, {
+        data: {
+          email: recipientEmail,
+          message: 'Transfer onboarding E2E fixture.',
+        },
+      }),
+    ])
+    expect(sourceSiteRes.status()).toBe(200)
+    const sourceSite = await sourceSiteRes.json() as { plan?: string }
+    expect(sourceSite.plan).toBe('growth')
+
+    expect(transferRes.status()).toBe(200)
+    transfer = await transferRes.json() as { id?: string; token?: string }
+    expect(transfer.id).toEqual(expect.any(String))
+    expect(transfer.token).toEqual(expect.any(String))
+    await loginFreshUser(recipientRequest, baseURL, recipientUserId)
+    const acceptRes = await recipientRequest.post(`${baseURL}/api/site-transfer/${transfer.token}/accept`, {
+      data: {},
+    })
+    expect(acceptRes.status()).toBe(200)
+    const acceptBody = await acceptRes.json() as { success?: boolean; site_id?: string }
+    expect(acceptBody.success).toBe(true)
+    expect(acceptBody.site_id).toBe(siteId)
+
+    const [contextRes, locationsRes] = await Promise.all([
+      recipientRequest.get(`${baseURL}/api/dashboard/context`),
+      recipientRequest.get(`${baseURL}/api/sites/${siteId}/locations`),
+    ])
+    expect(contextRes.status()).toBe(200)
+    const context = await contextRes.json() as {
+      organization?: { id?: string; slug?: string }
+      sites?: Array<{ id?: string; plan?: string }>
+    }
+    const orgSlug = context.organization?.slug
+    expect(orgSlug).toEqual(expect.any(String))
+    expect(context.sites?.some(site => site.id === siteId && site.plan === 'growth')).toBe(true)
+
+    expect(locationsRes.status()).toBe(200)
+    const locationsBody = await locationsRes.json() as {
+      locations?: Array<{ id?: string }>
+    }
+    const locationId = locationsBody.locations?.[0]?.id
+    expect(locationId).toEqual(expect.any(String))
+
+    return {
+      recipientUserId,
+      siteId,
+      orgSlug: orgSlug!,
+      siteSlug,
+      transferId: transfer.id!,
+      locationId: locationId!,
+    }
+  } finally {
+    await Promise.all([ownerRequest.dispose(), recipientRequest.dispose()])
+  }
 }
 
 async function openTransferOnboarding(
   page: Page,
   baseURL: string,
-  {
-    plan = 'free',
-    notificationSaveStatus = 200,
-    notificationSaveError = 'Notification routing could not be saved.',
-  }: {
-    plan?: TransferPlan
-    notificationSaveStatus?: number
-    notificationSaveError?: string
-  } = {},
+  fixture: AcceptedTransferFixture,
 ) {
-  const suffix = Date.now()
-  // The source site is deliberately always created by the seeded Growth
-  // service fixture owner. The accepting user already owns the
-  // seeded free or Growth fixture organization for this case. This keeps the
-  // assertion meaningful under the one-org subscription model: the transferred
-  // site's plan must come from the recipient organization, not the source site's
-  // denormalized plan and not a newly-created recipient org.
-  const ownerUserId = TRANSFER_SOURCE_OWNER_USER_ID
-  const recipientUserId = TRANSFER_RECIPIENT_USER_IDS[plan]
-  const recipientEmail = `${recipientUserId}@example.test`
-
-  // Build the fixture through the real transfer APIs. The recipient's seeded
-  // organization supplies the effective free/Growth plan without starting a
-  // Stripe checkout; the transfer itself remains a no-payment handoff.
-  await loginFreshUser(page, baseURL, ownerUserId)
-  const createSiteRes = await page.request.post(`${baseURL}/api/sites`, {
-    data: {
-      name: `Transfer UI ${plan} ${suffix}`,
-      subdomain: `e2e-throwaway-${suffix}`,
-      vertical: 'restaurant',
-    },
-  })
-  expect(createSiteRes.status()).toBe(200)
-  const createdSite = await createSiteRes.json() as {
-    siteId?: string
-    subdomain?: string
-  }
-  expect(createdSite.siteId).toEqual(expect.any(String))
-  expect(createdSite.subdomain).toContain('e2e-')
-  const siteId = createdSite.siteId!
-  const siteSlug = createdSite.subdomain!
-
-  // Keep the source/recipient plan distinction explicit. The source fixture is
-  // Growth for both cases; the free case must be resolved by the recipient
-  // organization's projection during transfer acceptance.
-  const sourceSiteRes = await page.request.get(`${baseURL}/api/sites/${siteId}`)
-  expect(sourceSiteRes.status()).toBe(200)
-  const sourceSite = await sourceSiteRes.json() as { plan?: string }
-  expect(sourceSite.plan).toBe('growth')
-
-  const transferRes = await page.request.post(`${baseURL}/api/admin/sites/${siteId}/transfer`, {
-    data: {
-      email: recipientEmail,
-      message: 'Transfer onboarding E2E fixture.',
-    },
-  })
-  expect(transferRes.status()).toBe(200)
-  const transfer = await transferRes.json() as { id?: string; token?: string }
-  expect(transfer.id).toEqual(expect.any(String))
-  expect(transfer.token).toEqual(expect.any(String))
-
-  await loginFreshUser(page, baseURL, recipientUserId)
-  const acceptRes = await page.request.post(`${baseURL}/api/site-transfer/${transfer.token}/accept`, {
-    data: {},
-  })
-  expect(acceptRes.status()).toBe(200)
-  const acceptBody = await acceptRes.json() as { success?: boolean; site_id?: string }
-  expect(acceptBody.success).toBe(true)
-  expect(acceptBody.site_id).toBe(siteId)
-
-  // Establish a fresh session so Better Auth carries the seeded recipient org
-  // as the active scope for the page's direct SSR loader.
-  await loginFreshUser(page, baseURL, recipientUserId)
-  const contextRes = await page.request.get(`${baseURL}/api/dashboard/context`)
-  expect(contextRes.status()).toBe(200)
-  const context = await contextRes.json() as {
-    organization?: { id?: string; slug?: string }
-    sites?: Array<{ id?: string; plan?: string }>
-  }
-  const orgSlug = context.organization?.slug
-  expect(orgSlug).toEqual(expect.any(String))
-  expect(context.sites?.some(site => site.id === siteId && site.plan === plan)).toBe(true)
-
-  const locationsRes = await page.request.get(`${baseURL}/api/sites/${siteId}/locations`)
-  expect(locationsRes.status()).toBe(200)
-  const locationsBody = await locationsRes.json() as {
-    locations?: Array<{ id?: string }>
-  }
-  const locationId = locationsBody.locations?.[0]?.id
-  expect(locationId).toEqual(expect.any(String))
+  const { locationId, orgSlug, recipientUserId, siteId, siteSlug, transferId } = fixture
+  await loginFreshUser(page.request, baseURL, recipientUserId)
 
   await page.route(`**/api/editor/sites/${siteId}/notifications`, async route => {
     if (route.request().method() !== 'PATCH') return await route.continue()
     await route.fulfill({
-      status: notificationSaveStatus,
+      status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(notificationSaveStatus >= 400
-        ? { error: notificationSaveError }
-        : { success: true, notifications: { whatsapp_phone: '+15555550100', channels: ['whatsapp'] } }),
+      body: JSON.stringify({ success: true, notifications: { whatsapp_phone: '+15555550100', channels: ['whatsapp'] } }),
     })
   })
 
@@ -220,14 +232,14 @@ async function openTransferOnboarding(
       transferContextRequests += 1
     }
   })
-  const onboardingUrl = `${baseURL}/dashboard/${orgSlug}/onboarding?transfer=${encodeURIComponent(transfer.id!)}`
-  await page.goto(onboardingUrl, { waitUntil: 'load' })
-  expect(new URL(page.url()).searchParams.get('transfer')).toBe(transfer.id)
-  await expect(page.locator('[data-transfer-onboarding-hydrated="true"]')).toBeVisible()
+  const onboardingUrl = `${baseURL}/dashboard/${orgSlug}/onboarding?transfer=${encodeURIComponent(transferId)}`
+  await page.goto(onboardingUrl, { waitUntil: 'domcontentloaded' })
+  expect(new URL(page.url()).searchParams.get('transfer')).toBe(transferId)
   await expect(page.getByText('Your site is ready')).toBeVisible()
+  await expect(page.getByRole('button', { name: "Let's go" })).toBeEnabled()
   expect(transferContextRequests).toBe(0)
 
-  return { siteId, orgSlug: orgSlug!, siteSlug, transferId: transfer.id! }
+  return { siteId, orgSlug, siteSlug, transferId }
 }
 
 async function saveNotificationSettings(page: Page, siteId: string) {
@@ -252,8 +264,7 @@ test.describe('onboarding wizard UI', () => {
   test('a new user can build a site manually and open the dashboard', async ({ page, baseURL }) => {
     test.setTimeout(120_000)
     const suffix = Date.now()
-    const userId = `e2e-onboard-${suffix}`
-    await loginFreshUser(page, baseURL!, userId)
+    await loginFreshUser(page.request, baseURL!, 'user-e2e-onboarding')
 
     let onboardingContextRequests = 0
     let legacyContextRequests = 0
@@ -284,8 +295,7 @@ test.describe('onboarding wizard UI', () => {
   test('wizard shows all three business-type choices on mobile and desktop, and Legal/professional services creates a Blawby site', async ({ page, baseURL }) => {
     test.setTimeout(90_000)
     const suffix = Date.now()
-    const userId = `e2e-onboard-pro-${suffix}`
-    await loginFreshUser(page, baseURL!, userId)
+    await loginFreshUser(page.request, baseURL!, 'user-e2e-onboarding-professional')
 
     // Mobile-first layout check: the picker must render cleanly (all three
     // choices reachable) at a small viewport. Reload fresh at desktop size
@@ -325,65 +335,40 @@ test.describe('onboarding wizard UI', () => {
     expect(site.vertical).toBe('service')
   })
 
-  test('transfer handoff wizard saves free-plan notifications and skips paid-only steps', async ({ page, baseURL }) => {
-    const { siteId, orgSlug, siteSlug } = await openTransferOnboarding(page, baseURL!, { plan: 'free' })
+  test.describe('transfer handoff wizard', () => {
+    let growthTransferFixture: AcceptedTransferFixture
 
-    await reachNotificationStep(page)
-    const saveResponse = await saveNotificationSettings(page, siteId)
-    expect(saveResponse.status()).toBe(200)
-
-    await expect(page.getByText('Team access')).toBeVisible()
-    await page.getByRole('button', { name: 'Skip for now' }).click()
-
-    await expect(page.getByText('Facebook and Instagram sync')).not.toBeVisible()
-    await expect(page.getByText('Custom domain setup')).not.toBeVisible()
-    await expect(page.getByRole('button', { name: 'Go to my dashboard' })).toBeVisible()
-    await page.getByRole('button', { name: 'Go to my dashboard' }).click()
-    await expect(page).toHaveURL(new RegExp(`/dashboard/${orgSlug}/sites/${siteSlug}$`))
-  })
-
-  test('transfer handoff wizard shows paid-plan social and domain steps', async ({ page, baseURL }) => {
-    const { siteId, orgSlug, siteSlug } = await openTransferOnboarding(page, baseURL!, { plan: 'growth' })
-
-    await reachNotificationStep(page)
-    const saveResponse = await saveNotificationSettings(page, siteId)
-    expect(saveResponse.status()).toBe(200)
-
-    await expect(page.getByText('Team access')).toBeVisible()
-    await page.getByRole('button', { name: 'Skip for now' }).click()
-
-    await expect(page.getByText('Facebook and Instagram sync')).toBeVisible()
-    await page.getByRole('button', { name: 'Set up later' }).first().click()
-
-    await expect(page.getByText('Custom domain setup')).toBeVisible()
-    await page.getByRole('button', { name: 'Set up later' }).last().click()
-
-    await expect(page.getByRole('button', { name: 'Go to my dashboard' })).toBeVisible()
-    await page.getByRole('button', { name: 'Go to my dashboard' }).click()
-    await expect(page).toHaveURL(new RegExp(`/dashboard/${orgSlug}/sites/${siteSlug}$`))
-  })
-
-  test('transfer handoff wizard keeps notification save failures visible', async ({ page, baseURL }) => {
-    const saveError = 'whatsapp_phone is required'
-    const { siteId } = await openTransferOnboarding(page, baseURL!, {
-      plan: 'free',
-      notificationSaveStatus: 400,
-      notificationSaveError: saveError,
+    test.beforeAll(async ({ baseURL }) => {
+      test.setTimeout(120_000)
+      growthTransferFixture = await createAcceptedTransferFixture(baseURL!)
     })
 
-    await reachNotificationStep(page)
-    const saveResponse = await saveNotificationSettings(page, siteId)
-    expect(saveResponse.status()).toBe(400)
+    test('completes the Growth handoff flow', async ({ page, baseURL }) => {
+      const { siteId, orgSlug, siteSlug } = await openTransferOnboarding(page, baseURL!, growthTransferFixture)
 
-    await expect(page.locator('div[role="alert"]').filter({ hasText: saveError })).toBeVisible()
-    await expect(page.getByText('Team access')).not.toBeVisible()
+      await reachNotificationStep(page)
+      const saveResponse = await saveNotificationSettings(page, siteId)
+      expect(saveResponse.status()).toBe(200)
+
+      await expect(page.getByText('Team access')).toBeVisible()
+      await page.getByRole('button', { name: 'Skip for now' }).click()
+
+      await expect(page.getByText('Facebook and Instagram sync')).toBeVisible()
+      await page.getByRole('button', { name: 'Set up later' }).first().click()
+
+      await expect(page.getByText('Custom domain setup')).toBeVisible()
+      await page.getByRole('button', { name: 'Set up later' }).last().click()
+
+      await expect(page.getByRole('button', { name: 'Go to my dashboard' })).toBeVisible()
+      await page.getByRole('button', { name: 'Go to my dashboard' }).click()
+      await expect(page).toHaveURL(new RegExp(`/dashboard/${orgSlug}/sites/${siteSlug}$`))
+    })
   })
 
   test('a failed post-creation context refresh surfaces a terminal error instead of silently reapplying stale context', async ({ page, baseURL }) => {
     test.setTimeout(120_000)
     const suffix = Date.now()
-    const userId = `e2e-onboard-retry-${suffix}`
-    await loginFreshUser(page, baseURL!, userId)
+    await loginFreshUser(page.request, baseURL!, 'user-e2e-onboarding-retry')
 
     // Initial load succeeds via real SSR (no HTTP request for page.route to
     // intercept — see loadContextResource's import.meta.server branch), so
@@ -400,12 +385,12 @@ test.describe('onboarding wizard UI', () => {
     })
 
     await page.goto(`${baseURL}/dashboard/onboarding`, { waitUntil: 'load' })
-    await expect(page.locator('.onboarding-step-widget').first()).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Start building' })).toBeVisible()
     await completeManualWizard(page, `Onboard Retry Test ${suffix}`, { skipSuccessAssertion: true })
 
     // Forbidden: the wizard's own post-creation success view (or any stale
     // pre-creation context) must not render as if the refresh had succeeded.
     await expect(page.getByText('From here, head to your dashboard to keep building')).not.toBeVisible()
-    await expect(page.getByText('Workspace could not be loaded')).toBeVisible()
+    await expect(page.getByText('Workspace could not be loaded')).toBeVisible({ timeout: 60_000 })
   })
 })

@@ -1,6 +1,5 @@
 import { expect, test, request as playwrightRequest, type APIRequestContext } from '@playwright/test'
-import { devLoginHeaders } from './test-env'
-import { loginAs } from './helpers/auth'
+import { inviteAndAcceptMember, loginAs } from './helpers/auth'
 import { MCP_FREE_USER_ID } from './helpers/plan-fixtures'
 import { mcpRequest, ensureSite, getSiteOrg, loginAsFreshMcpUser } from './helpers/mcp'
 
@@ -11,18 +10,17 @@ import { mcpRequest, ensureSite, getSiteOrg, loginAsFreshMcpUser } from './helpe
 
 test.describe('stateless MCP server', () => {
   test('site-scoped tool visibility follows current roles', async ({ request, baseURL }) => {
-    await loginAsFreshMcpUser(request, baseURL!)
+    test.setTimeout(60_000)
+    await loginAsFreshMcpUser(request, baseURL!, 'visibility')
     const siteId = await ensureSite(request, baseURL!)
     const organizationId = await getSiteOrg(request, baseURL!, siteId)
-
-    const editorCreate = await request.post(`${baseURL}/api/dev/test-member`, {
-      headers: devLoginHeaders(),
-      data: { role: 'editor', organizationId },
+    const editor = await inviteAndAcceptMember(request, baseURL!, {
+      userId: 'user-e2e-mcp-editor-a',
+      organizationId,
+      role: 'editor',
+      siteId,
     })
-    expect(editorCreate.status()).toBe(200)
-    const editorBody = await editorCreate.json() as { user: { id: string } }
-
-    await loginAs(request, baseURL!, editorBody.user.id)
+    await loginAs(request, baseURL!, editor.id)
 
     const listForSite = await mcpRequest(request, baseURL!, {
       method: 'tools/list',
@@ -36,7 +34,7 @@ test.describe('stateless MCP server', () => {
   })
 
   test('site-scoped tools/list fails closed for inaccessible site ids', async ({ request, baseURL }) => {
-    await loginAsFreshMcpUser(request, baseURL!)
+    await loginAsFreshMcpUser(request, baseURL!, 'inaccessible')
 
     const wrongSiteTools = await mcpRequest(request, baseURL!, {
       method: 'tools/list',
@@ -56,7 +54,7 @@ test.describe('stateless MCP server', () => {
   })
 
   test('wrong-site MCP tool calls fail', async ({ request, baseURL }) => {
-    await loginAsFreshMcpUser(request, baseURL!)
+    await loginAsFreshMcpUser(request, baseURL!, 'wrong-site')
 
     const wrongSite = await mcpRequest(request, baseURL!, {
       method: 'tools/call',
@@ -107,9 +105,9 @@ test.describe('stateless MCP server', () => {
 
     test.beforeAll(async ({ baseURL }) => {
       sharedRequest = await playwrightRequest.newContext()
-      await loginAsFreshMcpUser(sharedRequest, baseURL!)
+      await loginAsFreshMcpUser(sharedRequest, baseURL!, 'cross-a')
       siteA = await ensureSite(sharedRequest, baseURL!)
-      await loginAsFreshMcpUser(sharedRequest, baseURL!)
+      await loginAsFreshMcpUser(sharedRequest, baseURL!, 'cross-b')
       siteB = await ensureSite(sharedRequest, baseURL!)
     })
 
@@ -156,7 +154,7 @@ test.describe('stateless MCP server', () => {
   // creation, owner reply, editor member creation, editor login, tools/list,
   // editor reply) so each scenario gets its own independent timeout budget.
   test('owner reply to a missing review returns an error through MCP', async ({ request, baseURL }) => {
-    await loginAsFreshMcpUser(request, baseURL!)
+    await loginAsFreshMcpUser(request, baseURL!, 'owner-reply')
     const siteId = await ensureSite(request, baseURL!)
 
     const ownerReply = await mcpRequest(request, baseURL!, {
@@ -170,17 +168,16 @@ test.describe('stateless MCP server', () => {
 
   test('an editor cannot see or use reply_to_review through MCP', async ({ request, baseURL }) => {
     test.setTimeout(60_000)
-    await loginAsFreshMcpUser(request, baseURL!)
+    await loginAsFreshMcpUser(request, baseURL!, 'editor-owner')
     const siteId = await ensureSite(request, baseURL!)
     const organizationId = await getSiteOrg(request, baseURL!, siteId)
-
-    const editorCreate = await request.post(`${baseURL}/api/dev/test-member`, {
-      headers: devLoginHeaders(),
-      data: { role: 'editor', organizationId },
+    const editor = await inviteAndAcceptMember(request, baseURL!, {
+      userId: 'user-e2e-mcp-editor-b',
+      organizationId,
+      role: 'editor',
+      siteId,
     })
-    expect(editorCreate.status()).toBe(200)
-    const editorBody = await editorCreate.json() as { user: { id: string } }
-    await loginAs(request, baseURL!, editorBody.user.id)
+    await loginAs(request, baseURL!, editor.id)
 
     const editorTools = await mcpRequest(request, baseURL!, {
       method: 'tools/list',

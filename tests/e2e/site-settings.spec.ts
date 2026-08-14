@@ -1,13 +1,10 @@
 import { expect, test } from '@playwright/test'
 import type { APIRequestContext } from '@playwright/test'
-import { devLoginHeaders, devLoginUrl } from './test-env'
+import { loginAs } from './helpers/auth'
+import { devLoginHeaders } from './test-env'
 
 async function loginAsOwner(request: APIRequestContext, baseURL: string, userId: string) {
-  const ownerLogin = await request.get(devLoginUrl(baseURL, userId), {
-    headers: devLoginHeaders(),
-    maxRedirects: 0,
-  })
-  expect(ownerLogin.status()).toBe(302)
+  await loginAs(request, baseURL, userId)
 }
 
 async function ensureSite(request: APIRequestContext, baseURL: string, siteId: string | null) {
@@ -34,8 +31,7 @@ test.describe('site settings', () => {
   test('rename rollback preserves original brand and subdomain when provisioning fails', async ({ request, baseURL }) => {
     test.setTimeout(60_000)
 
-    const userId = `e2e-site-settings-rollback-${Date.now()}`
-    await loginAsOwner(request, baseURL!, userId)
+    await loginAsOwner(request, baseURL!, 'user-e2e-site-settings')
 
     const contextRes = await request.get(`${baseURL}/api/dashboard/context`)
     expect(contextRes.status()).toBe(200)

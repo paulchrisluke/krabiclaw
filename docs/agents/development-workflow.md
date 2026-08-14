@@ -16,7 +16,7 @@ deployed browser gate or the incident rules in that document.
 - Do not merge without explicit user approval.
 - Do not treat a green check run as browser validation. For renderer, migration,
   CMS, public-route, auth, billing, or other user-visible changes, the exact
-  deployed candidate must pass the full applicable browser matrix before
+  deployed release must pass the full applicable browser matrix before
   promotion. A missing, timed-out, blank, broken-media, or partially inspected
   route is unverified and blocks release.
 
@@ -29,23 +29,6 @@ deployed browser gate or the incident rules in that document.
 - When CodeRabbit or CI reports actionable feedback, address it in the same worktree, push once the fix is coherent, then do one immediate status check again.
 - Treat CodeRabbit rate limiting as a blocked/pending review state, never as success. A status like "review rate limited" means the review did not happen yet, usually because too many PRs or commits are competing for CodeRabbit at once.
 - When CodeRabbit is rate limited, do not push empty commits or ask for manual re-reviews. Reduce the active review queue where possible, wait for the cooldown window, then check once after about 20 minutes.
-
-### CI scope
-
-- PR preview smoke is intentionally small: deploy the real preview Worker, then
-  exercise the platform page, representative tenant SSR/hydration, one public
-  write, data-loading budgets, and dashboard context.
-- Do not append full MCP, client-fixture, billing, SEO, notification, or
-  dashboard workflow suites to every PR push. Run the focused suite locally
-  when changing that workflow; exhaustive browser coverage remains available
-  through the scheduled/manual full-regression workflow.
-- Staging runs the core smoke plus the focused dashboard or billing smoke when
-  those paths changed. It does not fan out into every subsystem suite.
-- Three-to-five-sample browser smoke is for performance-sensitive PRs;
-  twenty-to-thirty samples are release-only comparative evidence. Do not report
-  p99 from a 30-sample run or repeat benchmarks during editing.
-- Keep deterministic retry, request-count, query-count, payload, SSR self-fetch,
-  and response-contract checks fast enough to remain mandatory.
 
 ## Local Dependencies
 
@@ -111,35 +94,35 @@ Do this before the first local browser/E2E run in a new worktree. Do not skip to
 
 ```bash
 yarn install --frozen-lockfile
-yarn schema:local
-yarn seed:local
+yarn test:e2e:local tests/e2e/smoke.spec.ts
 ```
 
 What each step prevents:
 
 - `yarn install --frozen-lockfile`: avoids false failures such as `Cannot find package 'drizzle-orm'`.
-- `yarn schema:local`: creates current local D1 tables. Without it, Better Auth initialization can 500 on routes like `/api/dev/login` with `no such table: oauthResource`.
-- `yarn seed:local`: inserts required local fixtures such as `saya-theme-v1`. Without it, flows like MCP `create_site` can fail with foreign-key errors when inserting a site.
+- `yarn test:e2e:local`: applies the local schema, clears disposable E2E
+  artifacts, seeds curated sites and verified synthetic Better Auth
+  credentials, builds the production Worker, and runs it in local workerd.
 
 If a browser test fails in a fresh worktree, check these setup symptoms first:
 
-- `Process from config.webServer was not able to start`: run the same `yarn dev` command visibly and read the startup error.
-- `/api/dev/login` returns 500 with `oauthResource`: local schema has not been applied.
+- `Process from config.webServer was not able to start`: run
+  `yarn e2e:local:server --port 3000` visibly and read the startup error.
+- Better Auth reports `Invalid origin: http://krabiclaw.com` for a localhost
+  request: Wrangler was started without the local-upstream override and derived
+  its upstream from the production route.
+- Better Auth returns `Failed to decrypt private key`: the local Worker and D1
+  JWKS used different `BETTER_AUTH_SECRET` values. Use one Wrangler-native
+  `.dev.vars` or `.env` value.
 - MCP `create_site` returns `Failed to create site` and server logs show a foreign-key failure for `saya-theme-v1`: local seed has not been applied.
 - Nuxt says it cannot bind `localhost` even when no process is listening: rerun the same dev/browser command outside the sandbox with approval. A sandbox socket failure is not product evidence.
 
-For MCP-focused local browser validation after the setup above:
+For a focused local browser run:
 
 ```bash
-NUXT_PUBLIC_PLATFORM_DOMAIN=http://localhost:3000 \
-NUXT_PUBLIC_FREE_SITE_DOMAIN=http://localhost:3000 \
-NUXT_PUBLIC_APP_NAME=KrabiClaw \
-PREVIEW_SECRET=ci-preview-secret \
-E2E_DEV_ROUTE_SECRET=ci-dev-route-secret \
-EMAIL_DELIVERY_MODE=log_only \
-WHATSAPP_DELIVERY_MODE=log_only \
 PLAYWRIGHT_WORKERS=1 \
-npx playwright test tests/e2e/mcp-owner-tools.spec.ts --project=chromium --workers=1 --grep "exact test name"
+yarn test:e2e:local tests/e2e/onboarding-wizard.spec.ts \
+  --project=chromium --workers=1 --grep "exact test name"
 ```
 
 For dashboard, billing, or auth flows that touch Stripe-backed routes, also require the Stripe test values before running:
@@ -182,28 +165,17 @@ Do not summarize a PR as validated, ready, or safe to merge when browser validat
 
 ## Local E2E Environment
 
-Fresh worktrees usually do not have a local `.env`. Nuxt validates required public runtime vars at startup, and editor preview endpoints require `PREVIEW_SECRET`. If Playwright times out waiting for `/api/dev/ready`, start the same dev command visibly before assuming the browser test is broken.
-
-For local Playwright runs that use dev login routes, editor previews, dashboard pages, or billing/auth flows, first run the Fresh Worktree Browser Setup above. Then export the local-safe values and real Stripe test values in the same command so Playwright's `webServer` child receives them:
+Local Playwright uses the production Worker build, local D1, and seeded Better
+Auth credentials. Run the repository command instead of loading `.env` inside
+Playwright or starting Nuxt's dev server:
 
 ```bash
-: "${STRIPE_SECRET_KEY:?Set STRIPE_SECRET_KEY to a Stripe test secret before dashboard E2E}"
-: "${STRIPE_WEBHOOK_SECRET:?Set STRIPE_WEBHOOK_SECRET to a Stripe test webhook secret before dashboard E2E}"
-: "${NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:?Set NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY to a Stripe test publishable key before dashboard E2E}"
-
-NUXT_PUBLIC_PLATFORM_DOMAIN=http://localhost:3000 \
-NUXT_PUBLIC_FREE_SITE_DOMAIN=http://localhost:3000 \
-NUXT_PUBLIC_APP_NAME=KrabiClaw \
-STRIPE_SECRET_KEY="$STRIPE_SECRET_KEY" \
-STRIPE_WEBHOOK_SECRET="$STRIPE_WEBHOOK_SECRET" \
-NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="$NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY" \
-PREVIEW_SECRET=ci-preview-secret \
-E2E_ALLOW_DEV_ROUTES=true \
-E2E_DEV_ROUTE_SECRET=ci-dev-route-secret \
-EMAIL_DELIVERY_MODE=log_only \
-WHATSAPP_DELIVERY_MODE=log_only \
-npx playwright test tests/e2e/example.spec.ts --project=chromium --workers=1
+yarn test:e2e:local tests/e2e/example.spec.ts --project=chromium --workers=1
 ```
+
+Wrangler loads the repository's native local variable source for Worker
+bindings. The launcher supplies only explicit local URLs and log-only delivery
+modes; it does not parse or mutate `.env` from Playwright.
 
 If an authenticated dashboard E2E reaches the right page but API calls return 500, check the response body before changing UI selectors. Missing local env such as `PREVIEW_SECRET` is a setup issue, not an app contract failure.
 

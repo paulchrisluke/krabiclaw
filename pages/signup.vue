@@ -5,6 +5,8 @@
     <div v-if="error" role="alert" class="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-500">{{ error }}</div>
     <div class="space-y-3">
       <AuthGoogleAuthButton :loading="loading" @activate="googleSignup" />
+      <WhatsAppAuthButton :disabled="loading" @activate="showPhone = !showPhone" />
+      <AuthPhoneOtpForm v-if="showPhone" default-country="TH" verify-label="Verify and create account" @verified="whatsAppSignupComplete" />
       <div class="flex items-center gap-3 py-1">
         <div class="h-px flex-1 bg-default" /><span class="text-xs uppercase tracking-widest text-dimmed">or</span><div class="h-px flex-1 bg-default" />
       </div>
@@ -15,6 +17,7 @@
 </template>
 
 <script setup lang="ts">
+import WhatsAppAuthButton from '~/components/auth/WhatsAppAuthButton.vue'
 import { buildPostLoginUrl, validatedInternalPath } from '~/shared/auth/return-target'
 
 definePageMeta({ layout: 'access', auth: false })
@@ -33,6 +36,7 @@ const verificationCallback = computed(() => {
   return url.toString()
 })
 const { loading, error, signInWithGoogle } = useAuthOperation()
+const showPhone = ref(false)
 
 async function googleSignup() {
   await signInWithGoogle(postLoginUrl.value)
@@ -49,5 +53,10 @@ async function emailSignupComplete(email: string) {
       ...(redirect.value ? { redirect: redirect.value } : {}),
     },
   })
+}
+
+function whatsAppSignupComplete() {
+  trackSignUp('whatsapp')
+  window.location.href = postLoginUrl.value
 }
 </script>

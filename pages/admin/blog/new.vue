@@ -2,8 +2,8 @@
   <BlogPostEditor
     :repository="repository"
     title="New Blog Post"
-    back-url="/admin"
-    back-label="Admin"
+    back-url="/admin/blog"
+    back-label="Posts"
     :is-edit="false"
   />
 </template>
