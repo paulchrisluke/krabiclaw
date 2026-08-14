@@ -301,15 +301,9 @@ const activeSocials = computed(() =>
 )
 const locations = computed(() =>
   props.locations.map((loc: PublicLocation) => {
-    let phone = loc.phone
-    // Fallback if placeholder-like
-    if (!phone || phone.includes('example.com')) {
-      phone = props.site?.config?.phone || null
-    }
     const closure = getActiveSpecialClosure(loc.special_hours, loc.timezone)
     return {
       ...loc,
-      phone,
       hoursToday: closure ? 'Temporarily closed' : (loc.googleBusinessHours ? getTodayGoogleHours(loc.googleBusinessHours) : null)
     }
   })

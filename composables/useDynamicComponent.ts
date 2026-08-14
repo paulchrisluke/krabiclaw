@@ -1,15 +1,22 @@
 // Composable for dynamic component rendering in Saya theme
 import { getVueComponent, isValidComponent } from '~/utils/vue-component-resolver'
 
+export function resolveDynamicComponent(componentName: string | null | undefined) {
+  const resolved = getVueComponent(componentName)
+  if (!resolved) {
+    throw new Error(`Saya content component is not registered: "${componentName ?? ''}"`)
+  }
+  return resolved
+}
+
 export function useDynamicComponent() {
   /**
-   * Resolves a component identifier to a Vue component with fallback
+   * Resolves a component identifier to a registered Vue component
    * @param componentName - The component identifier from the database
-   * @returns The Vue component name or the fallback component name
+   * @returns The registered Vue component name
    */
   const resolveComponent = (componentName: string | null | undefined) => {
-    const resolved = getVueComponent(componentName)
-    return resolved || 'SayaContentBlockFallback'
+    return resolveDynamicComponent(componentName)
   }
 
   /**

@@ -244,11 +244,6 @@ export interface PublicBlawbyShellData {
   offeringLinks: PublicOfferingLink[]
 }
 
-export interface PublicBlawbyCriticalHomeData {
-  shell: PublicBlawbyShellData
-  page: PublicTenantPage
-}
-
 export interface PublicBlawbyData {
   offerings: PublicOffering[]
   tenantPages: PublicTenantPage[]

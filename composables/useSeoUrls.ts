@@ -2,7 +2,7 @@ import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 // truncateForSeo now lives in utils/social-metadata.ts (#259's canonical contract module) —
 // both are Nuxt auto-import directories, so it must only be defined in one place.
 
-export const SHARED_OG_IMAGE_PATH = '/og-image-v2.png'
+export const SHARED_OG_IMAGE_PATH = '/og-image-render.png?template=platform&title=KrabiClaw&description=Platform&siteName=KrabiClaw'
 
 export function resolveSeoUrl(value: string | null | undefined, origin: string) {
   const target = value?.trim() || SHARED_OG_IMAGE_PATH
@@ -40,8 +40,8 @@ export function useSharedOgImage(value?: MaybeRefOrGetter<string | null | undefi
 
 /**
  * og:image for tenant pages that don't have a page-specific photo (About, Contact, Q&A, etc).
- * Falls back through the same chain as the saya layout: site og_image_url → first
- * location's hero photo → logo → the generic platform placeholder.
+ * Uses an explicit page image, then the site's configured social asset, then a location
+ * hero photo, then the site's logo, and finally the generated platform card.
  */
 export function useTenantOgImage(value?: MaybeRefOrGetter<string | null | undefined>) {
   const { config, locations } = useSiteShellState()

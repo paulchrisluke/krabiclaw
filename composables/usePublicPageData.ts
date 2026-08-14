@@ -1,9 +1,8 @@
 // Route content and persistent site chrome are separate public resources. Route
 // consumers select their datasets from the validated route response.
 //
-// Non-home routes still SSR their complete route payload. The homepage uses a
-// critical shell/hero resource for the first document and loads the remaining
-// route collections after that document has painted.
+// Every route consumes its validated public payload directly. The shared shell
+// and route loaders keep persistent chrome and route content on one contract.
 //
 // Usage (in a page):
 //   const { getField, getHero, photosList, qaList, ... } = await usePublicPageData()

@@ -1,3 +1,4 @@
+import { createError } from 'h3'
 import { queryFirst, type DbClient } from '~/server/db'
 import { getConfig } from '~/server/utils/site-config'
 
@@ -6,7 +7,6 @@ export interface SiteLocaleState {
   sourceLocale: string
   effectiveLocale: string
   isSourceLocale: boolean
-  fallbackEnabled: boolean
 }
 
 const LOCALE_RE = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})?$/i
@@ -46,26 +46,27 @@ export async function resolveSiteLocale(
       sourceLocale,
       effectiveLocale: sourceLocale,
       isSourceLocale: true,
-      fallbackEnabled: true,
     }
   }
 
-  const localeRow = await queryFirst<{
-    status: string
-    fallback_enabled: number | boolean | null
-  }>(db, `
-    SELECT status, fallback_enabled
+  const localeRow = await queryFirst<{ status: string }>(db, `
+    SELECT status
     FROM site_locales
     WHERE organization_id = ? AND site_id = ? AND locale = ?
     LIMIT 1
   `, [site.organization_id, site.id, requested])
 
-  const isPublished = localeRow?.status === 'published'
+  if (localeRow?.status !== 'published') {
+    throw createError({
+      statusCode: 404,
+      statusMessage: `Locale ${requested} is not published for this site`,
+    })
+  }
+
   return {
     requestedLocale: requested,
     sourceLocale,
-    effectiveLocale: isPublished ? requested : sourceLocale,
-    isSourceLocale: !isPublished,
-    fallbackEnabled: localeRow ? Boolean(localeRow.fallback_enabled) : true,
+    effectiveLocale: requested,
+    isSourceLocale: false,
   }
 }

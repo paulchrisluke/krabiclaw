@@ -37,9 +37,7 @@
                 <NuxtLink :to="`/blog?tags[]=${encodeURIComponent(tag)}`" class="text-white no-underline">{{ tag }}</NuxtLink>
               </template>
             </h3>
-            <BlogArticleView :title="post.title" :excerpt="post.excerpt" category="Article" :published-at="post.published_at" :updated-at="hasUpdatedDate ? post.updated_at : null" :author-name="post.author_name" :author-image="post.author_image" :site-name="identity.brand_name" :media-url="post.social_image?.public_url || post.featured_image?.public_url" media-kind="image" :blocks="post.content_blocks" template="blawby">
-              <template #legacy-body><div class="prose min-w-full"><BlawbyRichText :content="body" unstyled class="contents" /></div></template>
-            </BlogArticleView>
+            <BlogArticleView :title="post.title" :excerpt="post.excerpt" category="Article" :published-at="post.published_at" :updated-at="hasUpdatedDate ? post.updated_at : null" :author-name="post.author_name" :author-image="post.author_image" :site-name="identity.brand_name" :media-url="post.social_image?.public_url || post.featured_image?.public_url" media-kind="image" :blocks="post.content_blocks" template="blawby" />
             <p v-if="compliance?.disclaimer" class="mt-8 text-sm italic text-gray-500">{{ compliance.disclaimer }}</p>
           </div>
 
@@ -81,7 +79,6 @@
 import PlatformCommandSearchModal from '~/components/platform/search/PlatformCommandSearchModal.vue'
 import PlatformCommandSearchTrigger from '~/components/platform/search/PlatformCommandSearchTrigger.vue'
 import PlatformDrawer from '~/components/platform/PlatformDrawer.vue'
-import { stripLeadingTitleHeading } from '~/utils/markdown'
 import { findTenantPageBlock } from '~/utils/tenant-page-blocks'
 
 const { isBlawby } = usePublicTemplate()
@@ -94,6 +91,9 @@ const slug = String(useRoute().params.slug || '')
 const { data, error } = await useBlawbyRoute('article', slug)
 if (error.value) throw error.value
 if (!data.value.post) throw createError({ statusCode: 404, statusMessage: 'Article not found', fatal: true })
+if (!Array.isArray(data.value.post.content_blocks) || data.value.post.content_blocks.length === 0) {
+  throw createError({ statusCode: 500, statusMessage: 'Published article content is missing its canonical blocks' })
+}
 
 const { identity, consultation, compliance } = await useBlawbyShell()
 const org = useBlawbyOrgIdentity(identity, compliance)
@@ -103,7 +103,6 @@ const ctaBlock = computed(() => {
   if (!page) return null
   return findTenantPageBlock(page.blocks, 'consultation_cta', 'contact_cta')
 })
-const body = computed(() => stripLeadingTitleHeading(post.value.body || '', post.value.title))
 const displayTags = computed(() => post.value.tags.slice(1))
 const hasUpdatedDate = computed(() => Boolean(post.value.updated_at && post.value.updated_at !== post.value.published_at))
 const relatedPosts = computed(() => data.value.posts.filter(item => item.slug !== slug).slice(0, 3))

@@ -17,6 +17,23 @@ test('resolvePublicTemplate treats professional_service as Blawby', () => {
   assert.equal(template.layout, 'blawby')
 })
 
+test('resolvePublicTemplate rejects theme and vertical mismatches', () => {
+  assert.equal(resolvePublicTemplate({ themeId: 'saya-theme-v1', vertical: 'restaurant' }).slug, 'saya')
+  assert.equal(resolvePublicTemplate({ themeId: 'blawby-theme-v1', vertical: 'professional_service' }).slug, 'blawby')
+  assert.throws(
+    () => resolvePublicTemplate({ themeId: 'blawby-theme-v1', vertical: 'restaurant' }),
+    /no compatible template/,
+  )
+  assert.throws(
+    () => resolvePublicTemplate({ themeId: 'saya-theme-v1', vertical: 'professional_service' }),
+    /no compatible template/,
+  )
+  assert.throws(
+    () => resolvePublicTemplate({ theme: 'saya', themeId: 'blawby-theme-v1', vertical: 'restaurant' }),
+    /no compatible template/,
+  )
+})
+
 test('Blawby sitemap exact paths stay aligned with the registered policy routes', () => {
   assert.deepEqual(publicTemplateRegistry.blawby.sitemap.exactPaths, [
     '/',

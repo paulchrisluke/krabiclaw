@@ -648,25 +648,7 @@ export async function getActiveMenu(
     return loadPublishedMenuById(db, organizationId, siteId, brandMenu, locale);
   }
 
-  // Sites with only location-scoped menus (no brand-level menu) still need a
-  // default to show on non-location pages, so fall back to the primary
-  // (or first) active location's published menu.
-  const fallbackLocationMenu = await queryFirst<Record<string, unknown>>(
-    db,
-    `
-    SELECT m.id, m.organization_id, m.site_id, m.location_id, m.name, m.description, m.status, m.section_order,
-           m.created_at, m.updated_at, m.created_by, m.updated_by
-    FROM menus m
-    JOIN business_locations bl ON bl.id = m.location_id
-    WHERE m.organization_id = ? AND m.site_id = ? AND m.status = 'published' AND bl.status = 'active'
-    ORDER BY bl.is_primary DESC, bl.title ASC
-    LIMIT 1
-  `,
-    [organizationId, siteId],
-  );
-
-  if (!fallbackLocationMenu) return null;
-  return loadPublishedMenuById(db, organizationId, siteId, fallbackLocationMenu, locale);
+  return null;
 }
 
 // Get public menu item by slug

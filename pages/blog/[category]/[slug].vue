@@ -13,33 +13,7 @@
     <article>
       <DocsBreadcrumb :crumbs="breadcrumbs" />
 
-      <BlogArticleView :title="post.title" :excerpt="post.excerpt" :category="post.category" :published-at="post.published_at" :updated-at="wasUpdated ? post.updated_at : null" :author-name="post.author_name || 'KrabiClaw'" :author-image="post.author_image" site-name="KrabiClaw" :media-url="postMedia.url" :media-kind="postMedia.isVideo ? 'video' : 'image'" :read-minutes="readTime" :blocks="post.content_blocks" template="platform">
-      <template #legacy-body><div ref="articleBodyRef" class="space-y-14">
-        <template v-for="(block, blockIndex) in renderedBlocks" :key="`block-${blockIndex}`">
-          <!-- eslint-disable vue/no-v-html -->
-          <div
-            v-if="block.kind === 'html'"
-            class="prose prose-lg max-w-none
-                   prose-headings:text-default prose-headings:font-bold
-                   prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-h4:text-base
-                   prose-p:leading-relaxed prose-p:text-muted
-                   prose-a:text-(--kc-teal) prose-a:no-underline hover:prose-a:underline
-                   prose-strong:text-default
-                   prose-li:text-muted
-                   prose-hr:border-default
-                   prose-blockquote:border-l-(--kc-teal) prose-blockquote:text-muted"
-            v-html="block.html"
-          />
-          <!-- eslint-enable vue/no-v-html -->
-
-          <component
-            :is="resolveContentComponent(block.type)"
-            v-else
-            v-bind="block.props"
-          />
-        </template>
-      </div></template>
-      </BlogArticleView>
+      <BlogArticleView :title="post.title" :excerpt="post.excerpt" :category="post.category" :published-at="post.published_at" :updated-at="wasUpdated ? post.updated_at : null" :author-name="post.author_name || 'KrabiClaw'" :author-image="post.author_image" site-name="KrabiClaw" :media-url="postMedia.url" :media-kind="postMedia.isVideo ? 'video' : 'image'" :read-minutes="readTime" :blocks="post.content_blocks" template="platform" />
 
       <div class="mt-16 flex items-center justify-between gap-6 border-t border-default pt-8">
         <div class="flex items-center gap-4">
@@ -74,11 +48,11 @@
 </template>
 
 <script setup lang="ts">
-import { renderMarkdownToHtml, sanitizeHtmlForSsr, stripLeadingTitleHeading } from '~/utils/markdown'
+import { renderMarkdownToHtml, sanitizeHtmlForSsr } from '~/utils/markdown'
 import { useContentPageSchema } from '~/composables/useContentPageSchema'
 import { blogCategoryToSlug, getBlogPostPath, slugToBlogCategory } from '~/utils/blog-categories'
-import { buildContentBlocks, normalizeContentComponent, type ContentComponent } from '~/utils/content-blocks'
-import { resolveContentComponent } from '~/utils/content-component-resolver'
+import { structuredComponentsFromBlocks } from '~/utils/blog-editor'
+import type { ContentComponent } from '~/utils/content-blocks'
 import { loadDomPurify } from '~/utils/dom-purify-loader'
 
 const DOMPurify = import.meta.client ? await loadDomPurify() : { sanitize: sanitizeHtmlForSsr }
@@ -185,35 +159,18 @@ watch(error, (newError) => {
 })
 
 const post = computed(() => data.value?.post ?? null)
+if (!Array.isArray(post.value?.content_blocks) || post.value.content_blocks.length === 0) {
+  throw createError({ statusCode: 500, statusMessage: 'Published blog content is missing its canonical blocks' })
+}
 const authorSubtitle = computed(() => post.value?.author_subtitle || '')
 
-function renderMarkdown(markdown: string) {
-  return DOMPurify.sanitize(renderMarkdownToHtml(markdown || ''))
-}
-
-const hasExplicitEmbeds = computed(() => /\{\{\s*component\s+type\s*=/.test(post.value?.body ?? ''))
-const renderedBlocks = computed(() => {
-  const blocks = buildContentBlocks(stripLeadingTitleHeading(post.value?.body ?? '', post.value?.title), post.value?.components ?? [], renderMarkdown)
-  if (hasExplicitEmbeds.value) return blocks
-
-  const fallbackBlocks = (post.value?.components ?? [])
-    .map(component => normalizeContentComponent(component, renderMarkdown))
-    .filter((component): component is NonNullable<ReturnType<typeof normalizeContentComponent>> => Boolean(component))
-    .map(component => ({ kind: 'component' as const, type: component.type, props: component.props, component: component.source }))
-
-  return [...blocks, ...fallbackBlocks]
-})
-const tocHtml = computed(() => renderedBlocks.value
-  .filter(block => block.kind === 'html')
-  .map(block => block.html)
+const tocHtml = computed(() => (post.value?.content_blocks ?? [])
+  .filter(block => block.type === 'markdown')
+  .map(block => DOMPurify.sanitize(renderMarkdownToHtml(String(block.data.markdown || ''))))
   .join('\n'))
 
-const articleBodyRef = ref<HTMLElement | null>(null)
-useCopyableCodeBlocks(articleBodyRef, renderedBlocks)
 const renderableComponents = computed(() =>
-  renderedBlocks.value
-    .filter((block): block is Extract<typeof block, { kind: 'component' }> => block.kind === 'component')
-    .map(block => block.component),
+  structuredComponentsFromBlocks(post.value?.content_blocks ?? []),
 )
 
 const readTime = computed(() => {

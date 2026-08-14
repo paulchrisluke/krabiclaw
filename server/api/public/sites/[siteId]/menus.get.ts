@@ -44,15 +44,6 @@ export default defineEventHandler(async (event) => {
     if (!locationId) {
       if (site.primary_location_id) {
         locationId = site.primary_location_id
-      } else {
-        const primaryLocation = await queryFirst<{ id: string }>(db, `
-          SELECT id
-          FROM business_locations
-          WHERE site_id = ? AND status = 'active'
-          ORDER BY is_primary DESC, created_at ASC
-          LIMIT 1
-        `, [siteId])
-        locationId = primaryLocation?.id
       }
     }
 
@@ -93,6 +84,6 @@ export default defineEventHandler(async (event) => {
     console.error('Failed to get public menu:', error)
     return jsonResponse({ 
       error: 'Failed to get menu' 
-    }, { status: 500 })
+    }, { status: error && typeof error === 'object' && 'statusCode' in error && typeof error.statusCode === 'number' ? error.statusCode : 500 })
   }
 })

@@ -42,7 +42,6 @@
     >
       <template #image-editor="slotProps"><slot name="image-editor" v-bind="slotProps" /></template>
     </BlogArticleRenderer>
-    <slot v-else name="legacy-body" />
     <slot name="footer" />
   </article>
 </template>
