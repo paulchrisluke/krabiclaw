@@ -495,19 +495,7 @@ export async function getPublishedTenantPage(db: DbClient, siteId: string, path:
     "   AND json_extract(r.snapshot_json, '$.metadata.locale') = v.locale",
     "   AND json_extract(r.snapshot_json, '$.metadata.path') = ? LIMIT 1",
   ].join('\n'), [siteId, candidateLocale, normalizedPath])
-  let row = await selectPublished(resolvedLocale)
-  if (!row && locale?.trim()) {
-    const fallback = await queryFirst<{ locale: string } | null>(db, `
-      SELECT source.locale
-        FROM site_locales requested
-        JOIN site_locales source ON source.site_id = requested.site_id AND source.is_source = 1
-       WHERE requested.site_id = ? AND requested.locale = ?
-         AND requested.status IN ('active', 'published')
-         AND requested.fallback_enabled = 1
-       LIMIT 1
-    `, [siteId, resolvedLocale])
-    if (fallback?.locale && fallback.locale !== resolvedLocale) row = await selectPublished(fallback.locale)
-  }
+  const row = await selectPublished(resolvedLocale)
   if (!row || !row.draft_document_id) return null
   const document = await getContentDocumentByOwner(db, 'tenant_page', row.variant_id)
   const revision = await queryFirst<{ snapshot_json: string } | null>(db, `
@@ -561,19 +549,7 @@ export async function resolvePublishedTenantPageIdentity(
        AND json_extract(r.snapshot_json, '$.metadata.path') = ?
      LIMIT 1
   `, [siteId, candidateLocale, normalizedPath])
-  let page = await selectPublished(resolvedLocale)
-  if (!page && locale?.trim()) {
-    const fallback = await queryFirst<{ locale: string } | null>(db, `
-      SELECT source.locale
-        FROM site_locales requested
-        JOIN site_locales source ON source.site_id = requested.site_id AND source.is_source = 1
-       WHERE requested.site_id = ? AND requested.locale = ?
-         AND requested.status IN ('active', 'published')
-         AND requested.fallback_enabled = 1
-       LIMIT 1
-    `, [siteId, resolvedLocale])
-    if (fallback?.locale && fallback.locale !== resolvedLocale) page = await selectPublished(fallback.locale)
-  }
+  const page = await selectPublished(resolvedLocale)
   return page
 }
 

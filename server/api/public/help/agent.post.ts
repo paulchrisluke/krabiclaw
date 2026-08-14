@@ -63,23 +63,6 @@ function buildClarifyingReply() {
   ].join('\n')
 }
 
-function buildFallbackReply(message: string, results: Array<{ title: string; path: string; snippet: string }>) {
-  if (!results.length) {
-    return `I couldn't find a confident public answer for "${message}" in the current docs or blog.\n\nIf you want, send the details to support and the team can follow up by email.`
-  }
-
-  const lines = results.slice(0, 3).map(result =>
-    `- [${result.title}](${result.path}) — ${result.snippet}`,
-  )
-  return [
-    'Here are the most relevant public resources I found:',
-    '',
-    ...lines,
-    '',
-    'If these do not solve it, send the details to support and we will follow up by email.',
-  ].join('\n')
-}
-
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.db
@@ -136,7 +119,7 @@ export default defineEventHandler(async (event) => {
       escalate: false,
       topic: topic || null,
       summary: null as string | null,
-      answer: lowIntentOpening ? buildClarifyingReply() : buildFallbackReply(message, results),
+      answer: lowIntentOpening ? buildClarifyingReply() : null,
     }
 
     if (!lowIntentOpening) {
@@ -171,11 +154,16 @@ export default defineEventHandler(async (event) => {
         const parsedOutput = parseAgentEnvelope(aiOutput)
         parsed = {
           ...parsedOutput,
-          answer: parsedOutput.answer ?? buildFallbackReply(message, results),
+          answer: parsedOutput.answer,
         }
       } catch (error) {
-        console.warn('Public help agent falling back to deterministic search response:', error)
+        console.error('Public help agent failed:', error)
+        return jsonResponse({ error: 'Support assistant unavailable' }, { status: 502 })
       }
+    }
+
+    if (!parsed.answer) {
+      return jsonResponse({ error: 'Support assistant returned no answer' }, { status: 502 })
     }
 
     const shouldEscalate = !lowIntentOpening && (parsed.escalate || shouldForceEscalation(message))

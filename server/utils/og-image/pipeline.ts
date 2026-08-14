@@ -1,5 +1,4 @@
 import type { H3Event } from 'h3'
-import ogImageFallbackBase64 from '~/server/assets/og-image-fallback'
 import type { OgImageRenderPayload } from '~/utils/social-metadata'
 import { computeOgImageCacheKey } from '~/utils/social-metadata'
 import { renderOgImagePng } from './render.ts'
@@ -10,14 +9,13 @@ const KV_KEY_PREFIX = 'og-image:v1:'
 // without needing that wiring immediately; revisit if editors report stale previews.
 const KV_TTL_SECONDS = 60 * 60 * 24 * 30
 
-export type OgImageSource = 'cache' | 'generated' | 'fallback'
+export type OgImageSource = 'cache' | 'generated'
 
 export interface OgImagePipelineResult {
   bytes: Uint8Array
   contentType: string
   cacheKey: string
   source: OgImageSource
-  fallbackReason?: 'renderer_error'
 }
 
 export interface ResolveOgImageDeps {
@@ -35,32 +33,7 @@ function getBindings(event: H3Event): OgImageBindings {
   return (event.context.cloudflare?.env as OgImageBindings | undefined) ?? {}
 }
 
-function base64ToUint8Array(base64: string): Uint8Array {
-  const binary = atob(base64)
-  return Uint8Array.from(binary, character => character.charCodeAt(0))
-}
-
-let cachedFallbackBytes: Uint8Array | null = null
-function getFallbackBytes(): Uint8Array {
-  if (!cachedFallbackBytes) cachedFallbackBytes = base64ToUint8Array(ogImageFallbackBase64)
-  return cachedFallbackBytes
-}
-
-export function createFallbackOgImageResult(payload: OgImageRenderPayload): OgImagePipelineResult {
-  return {
-    bytes: getFallbackBytes(),
-    contentType: 'image/png',
-    cacheKey: computeOgImageCacheKey(payload),
-    source: 'fallback',
-  }
-}
-
-/**
- * The one image-generation/fallback/cache/response pipeline every OG image request goes
- * through (#259). Order: KV cache hit → render via satori+resvg (cached in KV on success)
- * → static shared fallback image if rendering throws. Never lets a broken render surface
- * as a 500 — a generic but valid card is always better than a missing/broken og:image.
- */
+/** The one image-generation/cache/response pipeline every OG image request goes through. */
 export async function resolveOgImage(
   event: H3Event,
   payload: OgImageRenderPayload,
@@ -99,7 +72,6 @@ export async function resolveOgImage(
       cacheKey,
       error: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack } : String(error),
     })
+    throw error
   }
-
-  return { ...createFallbackOgImageResult(payload), fallbackReason: 'renderer_error' }
 }

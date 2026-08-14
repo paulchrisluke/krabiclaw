@@ -37,7 +37,6 @@
       </div>
     </section>
 
-    <template v-if="routeData">
     <section v-if="services" class="relative bg-(--blawby-bg) pb-14 pt-14 sm:pb-20 sm:pt-14 lg:pb-14" data-parity-section="services">
       <div class="blawby-container relative z-20">
         <BlawbySectionHeading
@@ -82,28 +81,19 @@
       :featured-url="ctaFeaturedSrc"
       @click="trackConsultation('cta_section', String(ctaBlock.url || consultation.schedule_path))"
     />
-    </template>
-    <section v-else-if="routeError" class="blawby-container py-16 text-center" data-testid="blawby-home-content-error">
-      <p role="alert" class="text-sm text-gray-500">Homepage content could not be loaded.</p>
-    </section>
-    <section v-else class="blawby-container space-y-8 py-16" data-testid="blawby-home-content-loading" aria-busy="true">
-      <div class="h-8 w-48 animate-pulse rounded bg-slate-200" />
-      <div class="grid gap-6 md:grid-cols-3">
-        <div v-for="index in 3" :key="index" class="h-48 rounded-2xl bg-slate-200 animate-pulse" />
-      </div>
-    </section>
   </div>
 </template>
 
 <script setup lang="ts">
-const critical = await useBlawbyCriticalHome()
-const { data, error: routeError } = await useBlawbyRoute('home', null, { server: true, lazy: false })
-const { identity, consultation, compliance } = critical
+const { data, error } = await useBlawbyDocument('home', null, { server: true, lazy: false })
+if (error.value) throw error.value
+if (!data.value?.route.page) throw createError({ statusCode: 404, statusMessage: 'Homepage content not found' })
+const identity = computed(() => data.value!.shell.identity)
+const consultation = computed(() => data.value!.shell.consultation)
+const compliance = computed(() => data.value!.shell.compliance)
 const org = useBlawbyOrgIdentity(identity, compliance)
-const criticalPage = computed(() => critical.data.value.page)
-const routeData = computed(() => data.value)
-
-if (!criticalPage.value) throw createError({ statusCode: 404, statusMessage: 'Homepage content not found' })
+const criticalPage = computed(() => data.value!.route.page!)
+const routeData = computed(() => data.value!.route)
 
 function block(type: string): ApiRecord | null {
   const canonicalType = {

@@ -406,8 +406,8 @@ async function getPostMediaByPostIds(db: DbClient, postIds: string[]) {
   return byPost
 }
 
-function publicMediaFromRows(rows: PostMediaItem[] | undefined, fallback?: PublishedPostRow | Post): PublicPostMedia[] {
-  const media = (rows ?? [])
+function publicMediaFromRows(rows: PostMediaItem[] | undefined): PublicPostMedia[] {
+  return (rows ?? [])
     .filter((row) => row.public_url && (row.kind === 'image' || row.kind === 'video'))
     .map((row) => ({
       id: row.id,
@@ -421,17 +421,6 @@ function publicMediaFromRows(rows: PostMediaItem[] | undefined, fallback?: Publi
       width: row.width ?? null,
       height: row.height ?? null,
     }))
-  if (media.length > 0 || !fallback?.public_url || (fallback.kind !== 'image' && fallback.kind !== 'video')) return media
-  return [{
-    mediaAssetId: fallback.image_asset_id ?? undefined,
-    url: fallback.public_url,
-    thumbnailUrl: fallback.thumbnail_url ?? null,
-    kind: fallback.kind === 'video' ? 'video' : 'image',
-    role: 'cover',
-    alt: fallback.title ?? null,
-    width: 'width' in fallback ? fallback.width ?? null : null,
-    height: 'height' in fallback ? fallback.height ?? null : null,
-  }]
 }
 
 function attachPostPublicFields<T extends Post>(
@@ -441,7 +430,7 @@ function attachPostPublicFields<T extends Post>(
 ): T {
   const slug = post.slug ?? post.id
   const publicPath = postPublicPath(slug)
-  const media = publicMediaFromRows(mediaRows, post)
+  const media = publicMediaFromRows(mediaRows)
   return {
     ...post,
     slug,
@@ -455,7 +444,7 @@ function attachPostPublicFields<T extends Post>(
 function formatPublishedPost(row: PublishedPostRow, mediaRows: PostMediaItem[] | undefined, origin: string | null): PublishedPostSummary {
   const slug = row.slug ?? row.id
   const publicPath = postPublicPath(slug)
-  const media = publicMediaFromRows(mediaRows, row)
+  const media = publicMediaFromRows(mediaRows)
   return {
     id: row.id,
     slug,

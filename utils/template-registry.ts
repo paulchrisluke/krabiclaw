@@ -57,26 +57,23 @@ export function resolvePublicTemplate(input: {
   themeId?: string | null
   vertical?: string | null
 }): PublicTemplateDefinition {
-  const theme = String(input.theme ?? '').toLowerCase()
-  const themeId = String(input.themeId ?? '').toLowerCase()
-  const vertical = String(input.vertical ?? '').toLowerCase()
+  const theme = String(input.theme ?? '').trim().toLowerCase()
+  const themeId = String(input.themeId ?? '').trim().toLowerCase()
+  const vertical = String(input.vertical ?? '').trim().toLowerCase()
 
-  // Registry-driven: matches against each definition's own themeId/slug/verticals
-  // instead of a hardcoded per-template if-chain, so a third template only needs
-  // a new publicTemplateRegistry entry — no change here.
-  const match = Object.values(publicTemplateRegistry).find((definition) =>
-    definition.themeId.toLowerCase() === themeId ||
-    definition.slug === theme ||
-    definition.verticals.includes(vertical),
+  if (!theme && !themeId && !vertical) {
+    throw new Error('resolvePublicTemplate() requires a theme, themeId, or vertical selector.')
+  }
+
+  const definitions = Object.values(publicTemplateRegistry)
+  const match = definitions.find((definition) =>
+    (!theme || definition.slug === theme) &&
+    (!themeId || definition.themeId.toLowerCase() === themeId) &&
+    (!vertical || definition.verticals.includes(vertical)),
   )
 
   if (!match) {
-    // Only two templates exist and their `verticals` lists cover every value
-    // ALL_VERTICALS enumerates, so a real site should always match one. Landing
-    // here means the theme/themeId/vertical inputs didn't match anything —
-    // a real data gap, not a state to paper over by silently rendering the
-    // wrong template.
-    throw new Error(`resolvePublicTemplate() found no match for theme="${theme}" themeId="${themeId}" vertical="${vertical}".`)
+    throw new Error(`resolvePublicTemplate() found no compatible template for theme="${theme}" themeId="${themeId}" vertical="${vertical}".`)
   }
   return match
 }
@@ -89,12 +86,8 @@ export function isBlawbyTemplate(input: {
   return resolvePublicTemplate(input).slug === 'blawby'
 }
 
-// Stricter than isBlawbyTemplate/resolvePublicTemplate's OR-based dispatch
-// match: the public Blawby API routes are a security gate, not just a
-// rendering-path decision, so they require BOTH a supported vertical AND
-// the exact blawby-theme-v1 theme_id — a site with vertical='service' but
-// some other theme_id should not pass. Shared here instead of duplicated
-// inline across server/api/public/sites/[siteId]/blawby*.get.ts.
+// The public Blawby API routes are a security gate, not just a rendering-path
+// decision, so they require both a supported vertical and the exact theme id.
 export function siteSupportsBlawbyTemplate(input: {
   vertical?: string | null
   themeId?: string | null

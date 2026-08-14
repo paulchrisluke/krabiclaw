@@ -51,9 +51,7 @@ useHead(() => ({
     : [],
 }))
 
-const { identity, navigation, consultation, compliance, themeTokens, offeringLinks } = isHome.value
-  ? await useBlawbyCriticalHome()
-  : await useBlawbyShell()
+const { identity, navigation, consultation, compliance, themeTokens, offeringLinks } = await useBlawbyShell()
 provide('blawby-schema-context', { identity, compliance })
 const hydrated = ref(false)
 onMounted(() => { hydrated.value = true })

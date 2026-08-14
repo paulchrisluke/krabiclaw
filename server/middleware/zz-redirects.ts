@@ -67,28 +67,6 @@ async function resolveTenantRedirectForRequest(event: H3Event) {
   `, [siteId, locale, path])
   if (localeRedirect) return localeRedirect
 
-  if (locale !== source.locale) {
-    const fallback = await queryFirst<{ fallback_enabled: number } | null>(db, `
-      SELECT fallback_enabled FROM site_locales
-       WHERE site_id = ? AND locale = ? AND status IN ('active', 'published')
-       LIMIT 1
-    `, [siteId, locale])
-    if (fallback?.fallback_enabled === 1) {
-      const sourcePage = await queryFirst<{ id: string } | null>(db, `
-        SELECT id FROM tenant_page_variants
-         WHERE site_id = ? AND locale = ? AND published_path = ?
-           AND status = 'published' AND published_revision_id IS NOT NULL
-         LIMIT 1
-      `, [siteId, source.locale, path])
-      if (sourcePage) return null
-      return await queryFirst<{ toPath: string | null; statusCode: number | null; behavior: string } | null>(db, `
-        SELECT to_path AS toPath, status_code AS statusCode, behavior
-          FROM tenant_redirects
-         WHERE site_id = ? AND locale = ? AND from_path = ?
-         LIMIT 1
-      `, [siteId, source.locale, path])
-    }
-  }
   return null
 }
 

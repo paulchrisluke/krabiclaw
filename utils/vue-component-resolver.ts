@@ -9,8 +9,6 @@ const COMPONENT_REGISTRY: Record<string, string> = {
   'SayaHomeHero': 'SayaHomeHero',
   'SayaHeader': 'SayaHeader',
   'SayaLogoMark': 'SayaLogoMark',
-  'SayaContentBlockFallback': 'SayaContentBlockFallback',
-
   // Below the fold - Lazy load JS!
   'SayaLocationsGrid': 'LazySayaLocationsGrid',
   'SayaReviews': 'LazySayaReviews',
