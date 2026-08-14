@@ -39,7 +39,7 @@
         </section>
 
         <ClientOnly>
-          <PublicHelpChatIsland />
+          <PublicHelpChowBot />
         </ClientOnly>
       </div>
     </main>
@@ -49,13 +49,12 @@
 </template>
 
 <script setup lang="ts">
-import { defineAsyncComponent } from 'vue'
+import PublicHelpChowBot from '~/components/platform/PublicHelpChowBot.vue'
 import { PUBLIC_SUPPORT_FAQ_ENTRIES, PUBLIC_SUPPORT_ROUTE_CARDS } from '~/utils/public-support'
 
 definePageMeta({ layout: 'standalone' })
 
 const routeCards = PUBLIC_SUPPORT_ROUTE_CARDS
-const PublicHelpChatIsland = defineAsyncComponent(() => import('~/components/platform/PublicHelpChowBot.vue'))
 
 usePlatformPageSeo({
   path: '/help',
