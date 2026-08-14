@@ -283,6 +283,7 @@
 <script setup lang="ts">
 const dashboardApi = useDashboardApi()
 import { TIMEZONE_OPTIONS } from '~/utils/timezone'
+import { getErrorMessage } from '~/utils/errors'
 import { toggleableModulesForScope, type ProductFeature } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import type { SiteVertical } from '~/utils/vertical-copy'
@@ -467,19 +468,6 @@ const openingHours = ref<DayHours[]>(WEEKDAYS.map(day => ({
   openTime: '09:00',
   closeTime: '22:00'
 })))
-
-function getErrorMessage(error: unknown, fallback: string): string {
-  if (error && typeof error === 'object') {
-    const data = (error as Record<string, unknown>).data
-    if (data && typeof data === 'object') {
-      const errorMessage = (data as Record<string, unknown>).error
-      if (typeof errorMessage === 'string' && errorMessage) return errorMessage
-    }
-    const message = (error as Record<string, unknown>).message
-    if (typeof message === 'string' && message) return message
-  }
-  return fallback
-}
 
 function fillDetailsForm(loc: BusinessLocation) {
   detailsForm.title = loc.title

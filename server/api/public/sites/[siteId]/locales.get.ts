@@ -1,13 +1,12 @@
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { listSiteLocales, type SiteLocale } from '~/server/utils/site-locales'
+import { listSiteLocales } from '~/server/utils/site-locales'
 
 interface PublicLocale {
   code: string
   display_name: string | null
   is_source: boolean
   status: 'draft' | 'published' | 'disabled'
-  fallback_enabled: boolean
 }
 
 export default defineEventHandler(async (event) => {
@@ -35,7 +34,6 @@ export default defineEventHandler(async (event) => {
       display_name: locale.label,
       is_source: locale.is_source,
       status: locale.status,
-      fallback_enabled: locale.fallback_enabled,
     }))
 
   return jsonResponse({

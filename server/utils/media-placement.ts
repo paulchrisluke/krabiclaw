@@ -12,6 +12,7 @@ import {
 import { getTenantPageForEditorByPath, updateTenantPageDraft } from '~/server/utils/tenant-pages'
 import { materializeTenantFavicon } from '~/server/utils/favicon-derivative'
 import { deleteFromR2 } from '~/server/utils/cloudflare-r2'
+import { syncPostCoverMedia } from '~/server/utils/post-management'
 
 export type MediaPlacementTarget =
   | { type: 'site_logo' }
@@ -266,6 +267,7 @@ export async function setMediaPlacement(db: DbClient, input: SetMediaPlacementIn
       if (!updateResult?.success || Number(updateResult.meta?.changes ?? 0) === 0) {
         throw createError({ statusCode: 404, statusMessage: 'Post not found' })
       }
+      await syncPostCoverMedia(db, input.organizationId, input.siteId, input.target.post_id, assetId)
       const post = await queryFirst<{ location_id: string | null; updated_at: string | null }>(db, `
         SELECT location_id, updated_at
           FROM posts

@@ -240,20 +240,20 @@ const operationsDocs = computed(() =>
   ).slice(0, 4),
 )
 
-function findDocPathBySlug(slug: string, fallback = '/docs') {
-  return docsWithCategorySlug.value.find(doc => doc.slug === slug)?.path || fallback
+function findDocPathBySlug(slug: string) {
+  return docsWithCategorySlug.value.find(doc => doc.slug === slug)?.path ?? null
 }
 
-function findFirstDocPathForCategories(categories: string[], fallback = '/docs') {
-  return docsWithCategorySlug.value.find(doc => categories.includes(doc.category || ''))?.path || fallback
+function findFirstDocPathForCategories(categories: string[]) {
+  return docsWithCategorySlug.value.find(doc => categories.includes(doc.category || ''))?.path ?? null
 }
 
 const quickLinks = computed(() => [
   { label: 'Start your site', to: findDocPathBySlug('getting-started-with-krabiclaw'), icon: 'zap' },
-  { label: 'Edit and publish', to: findFirstDocPathForCategories(['Menu Management', 'Theme Customization'], findDocPathBySlug('mcp-setup')), icon: 'pencil' },
+  { label: 'Edit and publish', to: findFirstDocPathForCategories(['Menu Management', 'Theme Customization']), icon: 'pencil' },
   { label: 'Manage operations', to: findFirstDocPathForCategories(['Integrations', 'Advanced']), icon: 'settings' },
   { label: 'Explore guides', to: '/docs', icon: 'book' },
-])
+].filter((item): item is { label: string; to: string; icon: string } => Boolean(item.to)))
 
 const relatedResources = computed(() => [
   {
@@ -271,7 +271,7 @@ const relatedResources = computed(() => [
     to: findDocPathBySlug('mcp-setup'),
     description: 'Connect KrabiClaw in ChatGPT and start editing through conversation.',
   },
-])
+].filter((resource): resource is { title: string; to: string; description: string } => Boolean(resource.to)))
 
 usePlatformPageSeo({
   path: '/docs',

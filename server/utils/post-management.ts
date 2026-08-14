@@ -343,7 +343,7 @@ function postMediaInsertQueries(
   }))
 }
 
-async function syncPostCoverMedia(
+export async function syncPostCoverMedia(
   db: DbClient,
   organizationId: string,
   siteId: string,
@@ -359,14 +359,6 @@ async function syncPostCoverMedia(
   )
 
   if (!coverAssetId) return
-
-  // Check if cover with same media_asset_id already exists to avoid unique index conflict
-  const existingCover = await queryFirst<{ id: string }>(
-    db,
-    `SELECT id FROM post_media WHERE post_id = ? AND media_asset_id = ? AND role = 'cover' LIMIT 1`,
-    [postId, coverAssetId],
-  )
-  if (existingCover) return
 
   const now = new Date().toISOString()
   await execute(

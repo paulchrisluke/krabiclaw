@@ -87,7 +87,6 @@ async function navigateAndAssertAuthoritative(page: Page, opts: {
 
   await page.goto(`${tenantBaseURL}${opts.fromPath}`, { waitUntil: 'load' })
   await expect(page.locator('body')).toContainText(opts.beforeText)
-  await page.waitForLoadState('networkidle')
   const link = page.locator(`a[href="${opts.linkHref}"]`).first()
   await expect(link).toBeVisible()
   await expect(link).toHaveAttribute('href', opts.linkHref)

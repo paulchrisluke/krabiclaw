@@ -222,12 +222,9 @@ export function buildOgImageUrl(origin: string, payload: OgImageRenderPayload): 
 }
 
 /**
- * The image-side fallback chain: explicit override always wins; otherwise every page
- * gets a template-aware generated 1200×630 card (hero photo as composited background,
- * title/description/brand overlay) rather than a raw hero image or logo at the wrong
- * aspect ratio. The generated route itself falls back to the shared static asset if
- * rendering fails (see server/utils/og-image/pipeline.ts) — that safety net is internal
- * to the route and never needs to be encoded here.
+ * Explicit overrides take precedence; otherwise every page gets a template-aware
+ * generated 1200×630 card (hero photo as composited background, title/description/brand
+ * overlay) rather than a raw hero image or logo at the wrong aspect ratio.
  */
 export function resolveSocialOgImage(input: SocialPageMetadataInput, origin: string): SocialImageSource {
   if (input.ogImageOverride?.url) {

@@ -10,7 +10,8 @@ Multi-tenant restaurant SaaS. Nuxt 4 + Cloudflare Pages + D1.
 
 | Command | What it does |
 |---|---|
-| `yarn dev` | Dev server (localhost:3000) with local Cloudflare bindings for D1/R2/KV and tenant subdomain routing on `*.localhost`. |
+| `yarn dev` | Nuxt development server for platform/UI work at `http://localhost:3000`. |
+| `yarn dev:worker --port 3000` | Run the built production Worker locally with the required Cloudflare bindings, local upstream, and tenant preview configuration. |
 | `yarn build` | Production build → `.output/` |
 | `yarn db:generate` | Generate a new `migrations/*.sql` file from `server/db/schema.ts` |
 | `yarn schema:local` | Apply pending `migrations/*.sql` to local D1 |
@@ -76,11 +77,20 @@ yarn dev
 
 App at `http://localhost:3000`.
 
-For browser tests, use the production Worker locally instead of Nuxt's dev
-server:
+For browser verification, use the production Worker locally instead of Nuxt's
+development server. The repository launcher is required; do not invoke raw
+`wrangler dev`, because it can derive the upstream from the production route
+and rewrite local `Host` and `Origin` headers.
 
 ```bash
 yarn test:e2e:local tests/e2e/smoke.spec.ts
+```
+
+For a manually running built Worker:
+
+```bash
+yarn build
+yarn dev:worker --port 3000
 ```
 
 Playwright applies the local D1 schema, clears disposable E2E artifacts, seeds
@@ -91,10 +101,13 @@ bypass route is involved.
 
 Tenant sites use the same shared-host routing contract as preview and staging:
 the browser targets `localhost` and the test helper supplies
-`x-preview-tenant` for the selected fixture. This avoids relying on wildcard
-localhost DNS behavior that differs across browsers and Wrangler versions.
+`x-preview-tenant` for the selected fixture. This is the authoritative local
+browser path; do not rely on direct `*.localhost` navigation for Worker browser
+verification.
 
 ```text
+http://localhost:3000/                  (x-preview-tenant: ncls)
+http://localhost:3000/services          (x-preview-tenant: ncls)
 http://localhost:3000/experiences       (x-preview-tenant: pottery-house)
 http://localhost:3000/reservations      (x-preview-tenant: kikuzuki-krabi-thailand)
 ```

@@ -134,6 +134,8 @@ definePageMeta({ layout: 'saya' })
 
 const { siteId, draftId, site } = useTenantSite()
 if (!siteId && !draftId) throw createError({ statusCode: 404 })
+const { isBlawby } = usePublicTemplate()
+if (isBlawby.value) throw createError({ statusCode: 404 })
 
 const restaurantName = computed(() => (site as ApiValue)?.brand_name || (site as ApiValue)?.title || 'Menu')
 

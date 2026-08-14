@@ -197,8 +197,8 @@ export interface TemplateMarketingMetadata {
    * No `ogImage` override is set on the /templates/[slug] page, so each
    * detail page gets a real per-template 1200x630 card generated on the
    * fly by the shared `platform` renderer (server/utils/og-image/renderers/
-   * platform.ts) from this title/description — see the resolveSocialOgImage
-   * fallback chain in utils/social-metadata.ts. This is the same pattern
+   * platform.ts) from this title/description through the shared resolveSocialOgImage
+   * composer. This is the same pattern
    * pages/index.vue and pages/about.vue already use for their platform
    * branch; do not build a bespoke image pipeline here.
    */

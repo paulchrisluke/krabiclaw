@@ -139,6 +139,8 @@ const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
 const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
+const { isBlawby } = usePublicTemplate()
+if (isBlawby.value) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
 const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')

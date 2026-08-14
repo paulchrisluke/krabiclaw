@@ -103,6 +103,13 @@ test.describe('Blawby NCLS public site', () => {
     })
   }
 
+  test('service sites reject Saya menu routes', async ({ request }) => {
+    const response = await request.get(`${blawbyBaseURL}/menu`, {
+      headers: blawbyExtraHeaders,
+    })
+    expect(response.status()).toBe(404)
+  })
+
   test('donation page uses the approved Stripe destination for buttons and schema', async ({ page, context }) => {
     await context.route(`${approvedDonationUrl}**`, route => route.fulfill({ status: 204, body: '' }))
     await page.goto(`${blawbyBaseURL}/donate`, { waitUntil: 'load' })
