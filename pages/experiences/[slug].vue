@@ -658,13 +658,9 @@ useHead({
             .filter((url): url is string => Boolean(url)),
         ]
 
-        // Use price_amount (canonical numeric) directly; fall back to parsing price string for legacy rows
-        const priceNum = val.price_amount != null
-          ? val.price_amount
-          : (() => {
-              const raw = val.price ? parseFloat(val.price.replace(/[^0-9.]/g, '')) : NaN
-              return Number.isFinite(raw) ? raw : null
-            })()
+        // Use price_amount, the canonical numeric field. Text prices such as "Ask us"
+        // are intentionally not emitted as numeric structured data.
+        const priceNum = val.price_amount ?? null
 
         // ISO 8601 duration from duration_minutes (e.g. 90 → PT1H30M)
         const duration = val.duration_minutes != null

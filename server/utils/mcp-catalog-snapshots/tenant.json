@@ -1,6 +1,6 @@
 {
   "surface": "tenant",
-  "fingerprint": "sha256:4bd5c5b2e8ef9f6f3c9b0e13c71ace135d26120fae360e36da020171aed935d8",
+  "fingerprint": "sha256:f5ede7adbcadfa1666e08ebb1840123cd3f7872ee01e1b649515bfd1655b9695",
   "tools": [
     {
       "name": "add_menu_items_batch",
@@ -15348,10 +15348,6 @@
       "inputSchema": {
         "additionalProperties": true,
         "properties": {
-          "fallback_enabled": {
-            "description": "Whether to fall back to the source locale for untranslated fields. Defaults to true.",
-            "type": "boolean"
-          },
           "is_source": {
             "description": "Mark this as the site's source locale. Forces status to published.",
             "type": "boolean"

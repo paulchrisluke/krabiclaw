@@ -273,6 +273,8 @@ import type { MenuItem } from '~/server/types/menu'
 
 const route = useRoute()
 const { site } = useTenantSite()
+const { isBlawby } = usePublicTemplate()
+if (!site || isBlawby.value) throw createError({ statusCode: 404 })
 const siteName = computed(() => site?.brand_name || 'KrabiClaw')
 
 interface Review {

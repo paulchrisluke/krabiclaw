@@ -372,11 +372,10 @@ const featuredContentLinkTarget = computed(() => {
   return locationExperienceHref.value
 })
 
-// Contact fallbacks
+// Contact details are location-owned; missing or placeholder values stay absent.
 const displayPhone = computed(() => {
   const p = location.value?.phone
-  if (p && !p.includes('example.com')) return p
-  return (site as ApiValue)?.config?.phone || null
+  return p && !p.includes('example.com') ? p : null
 })
 const dialablePhone = computed(() => displayPhone.value?.replace(/[^\d+]/g, '') ?? '')
 const displayEmail = computed(() => {
