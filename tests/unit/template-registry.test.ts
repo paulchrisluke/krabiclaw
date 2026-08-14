@@ -17,6 +17,13 @@ test('resolvePublicTemplate treats professional_service as Blawby', () => {
   assert.equal(template.layout, 'blawby')
 })
 
+test('resolvePublicTemplate rejects an empty selector request', () => {
+  assert.throws(
+    () => resolvePublicTemplate({}),
+    /requires a theme, themeId, or vertical selector/,
+  )
+})
+
 test('resolvePublicTemplate rejects theme and vertical mismatches', () => {
   assert.equal(resolvePublicTemplate({ themeId: 'saya-theme-v1', vertical: 'restaurant' }).slug, 'saya')
   assert.equal(resolvePublicTemplate({ themeId: 'blawby-theme-v1', vertical: 'professional_service' }).slug, 'blawby')

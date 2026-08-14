@@ -57,9 +57,13 @@ export function resolvePublicTemplate(input: {
   themeId?: string | null
   vertical?: string | null
 }): PublicTemplateDefinition {
-  const theme = String(input.theme ?? '').toLowerCase()
-  const themeId = String(input.themeId ?? '').toLowerCase()
-  const vertical = String(input.vertical ?? '').toLowerCase()
+  const theme = String(input.theme ?? '').trim().toLowerCase()
+  const themeId = String(input.themeId ?? '').trim().toLowerCase()
+  const vertical = String(input.vertical ?? '').trim().toLowerCase()
+
+  if (!theme && !themeId && !vertical) {
+    throw new Error('resolvePublicTemplate() requires a theme, themeId, or vertical selector.')
+  }
 
   const definitions = Object.values(publicTemplateRegistry)
   const match = definitions.find((definition) =>
