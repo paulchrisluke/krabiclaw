@@ -67,8 +67,8 @@ function expectFinalOrigin(page: Page, baseURL: string, journeyName: string) {
   expect(new URL(page.url()).origin, `${journeyName} final origin`).toBe(new URL(baseURL).origin)
 }
 
-test('deployed tenant home navigation keeps real content and styles', async ({ page }) => {
-  for (const journey of journeys) {
+for (const journey of journeys) {
+  test(`${journey.name} deployed home navigation keeps real content and styles`, async ({ page }) => {
     if (isProductionRun) {
       expect(journey.baseURL, `${journey.name} production URL`).toBe(journey.productionBaseURL)
       expect(journey.headers, `${journey.name} production headers`).toEqual({})
@@ -91,5 +91,5 @@ test('deployed tenant home navigation keeps real content and styles', async ({ p
     await expect(page.locator('main')).toContainText(journey.content)
     await expect(page.locator(journey.shell)).not.toHaveCSS(journey.themeVariable, '')
     await expectHealthyPage(page, errors)
-  }
-})
+  })
+}
