@@ -110,7 +110,9 @@ If a browser test fails in a fresh worktree, check these setup symptoms first:
   `yarn e2e:local:server --port 3000` visibly and read the startup error.
 - Better Auth reports `Invalid origin: http://krabiclaw.com` for a localhost
   request: Wrangler was started without the local-upstream override and derived
-  its upstream from the production route.
+  its upstream from the production route. Stop that process and restart with
+  `yarn dev:worker --port 3000`; do not repair this by changing application auth
+  allowlists or by adding a production-origin override to `.env`.
 - Better Auth returns `Failed to decrypt private key`: the local Worker and D1
   JWKS used different `BETTER_AUTH_SECRET` values. Use one Wrangler-native
   `.dev.vars` or `.env` value.
@@ -180,6 +182,20 @@ modes; it does not parse or mutate `.env` from Playwright.
 If an authenticated dashboard E2E reaches the right page but API calls return 500, check the response body before changing UI selectors. Missing local env such as `PREVIEW_SECRET` is a setup issue, not an app contract failure.
 
 If Nuxt or Playwright cannot bind a local loopback port in the sandbox, verify no process is listening on that port, then rerun the exact same command with approval/outside the sandbox before declaring the E2E blocked. A sandbox socket failure is not evidence of a product regression.
+
+For manual browser inspection after a build, use the same Worker launcher that
+Playwright uses:
+
+```bash
+yarn build
+yarn dev:worker --port 3000
+```
+
+Local tenant identity is carried by `x-preview-tenant` on the shared
+`localhost` origin. For example, Blawby uses `x-preview-tenant: ncls` and its
+menu routes are expected to return 404 because the service vertical has no
+Saya menu module. The launcher's `--local-upstream localhost:3000` and explicit
+local URL variables are required for this header-based resolution to work.
 
 ## Review Hygiene
 
