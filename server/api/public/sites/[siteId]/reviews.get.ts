@@ -11,3 +11,5 @@ export default defineEventHandler(async (event) => {
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
   return jsonResponse({ reviews: await listSiteReviews(db, siteId, { publishedOnly: true }) })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

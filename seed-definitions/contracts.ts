@@ -67,7 +67,6 @@ export interface CuratedSiteLocaleDefinition {
   label: string
   isSource: boolean
   status: 'draft' | 'published' | 'disabled'
-  fallbackEnabled: boolean
 }
 
 export interface CuratedSiteDomainDefinition {

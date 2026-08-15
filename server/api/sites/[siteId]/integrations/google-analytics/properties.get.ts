@@ -52,3 +52,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to load Google account data. Try reconnecting.' }, { status: 502 })
   }
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

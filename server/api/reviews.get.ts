@@ -19,3 +19,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ reviews: results ?? [] })
 })
+import { defineEventHandler } from 'h3'
+import { getRequestURL } from 'h3'

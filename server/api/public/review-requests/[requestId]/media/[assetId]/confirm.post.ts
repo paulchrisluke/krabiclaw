@@ -82,3 +82,6 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ id: assetId, publicUrl, thumbnailUrl, status: 'pending' })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'
+import { readBody } from 'h3'

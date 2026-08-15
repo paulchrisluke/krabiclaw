@@ -1,6 +1,6 @@
 import type { SitemapUrlInput } from '#sitemap/types'
 import { getRequestURL } from 'h3'
-import { defineNitroPlugin } from 'nitropack/runtime'
+import { definePlugin } from 'nitro'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { isNonIndexableHost, PLATFORM_SITEMAP_ROUTES } from '~/server/utils/seo-policy'
@@ -37,7 +37,7 @@ function addUniqueEntries(target: SitemapUrlInput[], entries: SitemapEntry[]) {
   }
 }
 
-export default defineNitroPlugin((nitroApp) => {
+export default definePlugin((nitroApp) => {
   // Runtime endpoint sources are intentionally discarded. They are fetched as
   // synthetic internal requests, which do not inherit the original tenant
   // context or Cloudflare bindings. The input hook below works on the real

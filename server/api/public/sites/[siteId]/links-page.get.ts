@@ -14,3 +14,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ success: true, ...linksPage })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

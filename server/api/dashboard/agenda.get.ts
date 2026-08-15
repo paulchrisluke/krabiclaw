@@ -26,3 +26,4 @@ export default defineEventHandler(async (event) => {
   })
   return jsonResponse(finalizeRequestMetrics(event, 'dashboard-agenda', payload))
 })
+import { defineEventHandler } from 'h3'

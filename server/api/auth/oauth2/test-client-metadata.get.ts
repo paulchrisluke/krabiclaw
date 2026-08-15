@@ -17,3 +17,4 @@ export default defineEventHandler((event) => {
     scope: 'openid offline_access tenant',
   }
 })
+import { defineEventHandler } from 'h3'

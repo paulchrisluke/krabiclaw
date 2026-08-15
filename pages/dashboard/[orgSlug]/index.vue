@@ -53,7 +53,7 @@
                 <NuxtImg
                   v-if="site.preview_image_url"
                   :src="site.preview_image_url"
-                  :alt="`${site.brand_name ?? site.subdomain ?? 'Site'} preview`"
+                  :alt="`${site.brand_name ?? site.subdomain ?? site.id} preview`"
                   class="size-full object-cover transition duration-300 group-hover:scale-[1.02]"
                   loading="lazy"
                 />
@@ -71,9 +71,9 @@
               </div>
 
               <div class="mt-4 min-w-0">
-                <h2 class="truncate text-base font-semibold text-highlighted">{{ site.brand_name ?? site.subdomain ?? 'Untitled site' }}</h2>
+                <h2 class="truncate text-base font-semibold text-highlighted">{{ site.brand_name ?? site.subdomain ?? site.id }}</h2>
                 <p class="mt-1 truncate text-sm text-muted">
-                  {{ verticalLabel(site.vertical) }} · {{ site.subdomain ? `${site.subdomain}.krabiclaw.com` : 'Setup in progress' }}
+                  {{ verticalLabel(site.vertical) }} · {{ site.subdomain || 'Setup in progress' }}
                 </p>
               </div>
             </UCard>

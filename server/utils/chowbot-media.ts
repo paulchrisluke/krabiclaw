@@ -195,19 +195,24 @@ export async function extractMenuFromMediaAsset(
     return { menuId: null, count: 0, warning: parsed.warning ?? 'No items detected in the image.', creditsRemaining: charged.newBalance }
   }
 
-  const menu = await createMenu(db, opts.organizationId, opts.siteId, { name: opts.menuName ?? 'Imported Menu' }, opts.userId)
+  const menuName = opts.menuName?.trim()
+  if (!menuName) throw new Error('menu_name is required when importing a menu')
+  const menu = await createMenu(db, opts.organizationId, opts.siteId, { name: menuName }, opts.userId)
   const createdItems: string[] = []
   try {
     for (const item of extractedItems as ApiValue[]) {
       const priceAmount = item.price_amount ?? item.price
+      const section = typeof item.section === 'string' ? item.section.trim().slice(0, 100) : ''
+      const name = typeof item.name === 'string' ? item.name.trim().slice(0, 200) : ''
+      if (!section || !name) throw new Error('AI menu items require section and name')
       const created = await createMenuItem(
         db,
         opts.organizationId,
         opts.siteId,
         menu.id,
         {
-          section: String(item.section || 'Menu').slice(0, 100),
-          name: String(item.name || '').slice(0, 200),
+          section,
+          name,
           description: item.description ? String(item.description).slice(0, 500) : undefined,
           price_amount: priceAmount !== null && priceAmount !== undefined ? String(priceAmount).slice(0, 50) : undefined,
         },

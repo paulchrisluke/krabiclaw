@@ -77,3 +77,5 @@ export default defineEventHandler(async (event) => {
     domainSyncInFlight.delete(domainId)
   }
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

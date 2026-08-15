@@ -40,15 +40,6 @@ interface LocationRow {
   foodpanda_url: string | null
 }
 
-const parseJson = (raw: string | null): JsonValue => {
-  if (!raw) return null
-  try {
-    return JSON.parse(raw) as JsonValue
-  } catch {
-    return null
-  }
-}
-
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   
@@ -109,7 +100,7 @@ export default defineEventHandler(async (event) => {
         id: location.id,
         slug: location.slug,
         title: location.title,
-        address: parseJson(location.address),
+        address: location.address ? JSON.parse(location.address) : null,
         phone: location.phone,
         website_url: location.website_url,
         maps_url: location.maps_url,
@@ -123,7 +114,7 @@ export default defineEventHandler(async (event) => {
         }),
         latitude: location.latitude,
         longitude: location.longitude,
-        opening_hours: parseJson(location.opening_hours),
+        opening_hours: location.opening_hours ? JSON.parse(location.opening_hours) : null,
         rating: location.rating,
         review_count: location.review_count,
         is_primary: Boolean(location.is_primary),
@@ -153,3 +144,5 @@ export default defineEventHandler(async (event) => {
     }, { status: 500 })
   }
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

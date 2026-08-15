@@ -19,3 +19,5 @@ export default defineEventHandler(async (event) => {
   const conversations = await listConversations(db, siteId, session.user.id)
   return jsonResponse({ success: true, conversations })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

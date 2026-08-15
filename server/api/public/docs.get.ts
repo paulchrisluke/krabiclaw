@@ -14,3 +14,4 @@ export default defineEventHandler(async (event) => {
     return apiErrorResponse(event, 503, 'DOCS_UNAVAILABLE', 'Documentation data is temporarily unavailable')
   }
 })
+import { defineEventHandler } from 'h3'

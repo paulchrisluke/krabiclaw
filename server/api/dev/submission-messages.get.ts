@@ -78,3 +78,6 @@ export default defineEventHandler(async (event) => {
   }))
   return jsonResponse({ messages })
 })
+import { defineEventHandler } from 'h3'
+import { getHeader } from 'h3'
+import { getQuery } from 'h3'

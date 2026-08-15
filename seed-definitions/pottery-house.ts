@@ -54,7 +54,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       label: 'English',
       isSource: true,
       status: 'published',
-      fallbackEnabled: true,
     },
     {
       id: 'locale::org-pottery-house::site-pottery-house::th',
@@ -62,7 +61,6 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
       label: 'ไทย',
       isSource: false,
       status: 'published',
-      fallbackEnabled: true,
     },
   ],
   siteDomains: [
@@ -895,7 +893,6 @@ export function renderCompiledPotteryHouseCoreSeedBlock(): string {
       sqlValue(entry.label),
       sqlValue(entry.isSource),
       sqlValue(entry.status),
-      sqlValue(entry.fallbackEnabled),
     ].join(', ')})`)
     .join(',\n')
 
@@ -949,7 +946,7 @@ VALUES
 ${siteConfigRows};
 
 INSERT OR REPLACE INTO site_locales
-  (id, organization_id, site_id, locale, label, is_source, status, fallback_enabled)
+  (id, organization_id, site_id, locale, label, is_source, status)
 VALUES
 ${siteLocaleRows};
 

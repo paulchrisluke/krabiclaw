@@ -16,6 +16,8 @@ import { createReservationCancelToken, hashReservationCancelToken } from '~/serv
 import { deleteCustomerIfUnlinked, findOrCreateCustomer, recordCustomerBooking } from '~/server/utils/customers'
 import { getAuthSession } from '~/server/utils/auth'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
+import { experienceBookingAdapter } from '~/server/domain/guest-threads/adapters/experience-booking'
+import { ensureGuestThread } from '~/server/domain/guest-threads/repository'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -42,16 +44,25 @@ export default defineEventHandler(async (event) => {
 
   const guestName = cleanString(body.guest_name, 100)
   const guestEmail = cleanString(body.guest_email, 254)
-  let guestPhone = cleanString(body.guest_phone, 30)
+  const guestPhone = cleanString(body.guest_phone, 30)
+  let normalizedGuestPhone: string | null = null
   if (guestPhone) {
     const parsedPhone = parsePhone(guestPhone, { defaultCountry: 'TH' })
-    if (parsedPhone.valid && parsedPhone.e164) guestPhone = parsedPhone.e164
-    // else: fall back to the raw value — guest-facing field, don't hard-reject.
+    if (!parsedPhone.valid || !parsedPhone.e164) {
+      return jsonResponse({ error: 'A valid phone number is required.' }, { status: 400 })
+    }
+    normalizedGuestPhone = parsedPhone.e164
   }
   const bookingDate = cleanString(body.booking_date, 10)
   const timeSlot = cleanString(body.time_slot, 5)
   const notes = cleanString(body.notes, 1000)
-  const partySize = Math.min(Math.max(1, Number.parseInt(String(body.party_size || 1), 10)), 99)
+  const partySizeValue = typeof body.party_size === 'number' || typeof body.party_size === 'string'
+    ? Number(body.party_size)
+    : Number.NaN
+  if (!Number.isInteger(partySizeValue) || partySizeValue < 1 || partySizeValue > 99) {
+    return jsonResponse({ error: 'Party size must be a whole number between 1 and 99.' }, { status: 400 })
+  }
+  const partySize = partySizeValue
 
   if (!guestName) return jsonResponse({ error: 'Name is required' }, { status: 400 })
   if (!guestEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail)) {
@@ -136,7 +147,7 @@ export default defineEventHandler(async (event) => {
     siteId,
     name: guestName,
     email: guestEmail,
-    phone: guestPhone || null,
+    phone: normalizedGuestPhone,
     source: 'experience_booking',
     bookingAt: `${bookingDate}T${timeSlot}:00`,
     userId,
@@ -151,7 +162,7 @@ export default defineEventHandler(async (event) => {
     location_id: experience.location_id,
     guest_name: guestName,
     guest_email: guestEmail,
-    guest_phone: guestPhone || null,
+    guest_phone: normalizedGuestPhone,
     party_size: partySize,
     booking_date: bookingDate,
     time_slot: timeSlot,
@@ -187,6 +198,8 @@ export default defineEventHandler(async (event) => {
     },
   })
 
+  await ensureGuestThread(db, experienceBookingAdapter, booking.id, { publishEnv: env })
+
   try {
     const { contactPhone, contactEmail } = await resolveLocationContact(db, siteId, experience.location_id)
     const platformDomain = getPlatformDomain(env)
@@ -200,7 +213,7 @@ export default defineEventHandler(async (event) => {
       bookingId: booking.id,
       guestName,
       email: guestEmail,
-      guestPhone,
+      guestPhone: normalizedGuestPhone,
       experienceTitle: experience.title,
       bookingDate,
       timeSlot,
@@ -239,3 +252,6 @@ export default defineEventHandler(async (event) => {
     policy_summary: renderBookingPolicySummary(policy, locale),
   }, { status: 201 })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'
+import { readBody } from 'h3'

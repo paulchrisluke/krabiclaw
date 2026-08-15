@@ -23,3 +23,6 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: message }, { status: message.includes('not found') ? 404 : 400 })
   }
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'
+import { readBody } from 'h3'

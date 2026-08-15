@@ -153,7 +153,6 @@ export const kikuzukiFixture: CuratedSiteDefinition = {
       label: 'English',
       isSource: true,
       status: 'published',
-      fallbackEnabled: true,
     },
   ],
   siteDomains: [
@@ -644,7 +643,6 @@ export function renderKikuzukiCoreSeedBlock(): string {
       sqlValue(entry.label),
       sqlValue(entry.isSource),
       sqlValue(entry.status),
-      sqlValue(entry.fallbackEnabled),
     ].join(', ')})`)
     .join(',\n')
 
@@ -696,7 +694,7 @@ VALUES
 ${siteConfigRows};
 
 INSERT OR REPLACE INTO site_locales
-  (id, organization_id, site_id, locale, label, is_source, status, fallback_enabled)
+  (id, organization_id, site_id, locale, label, is_source, status)
 VALUES
 ${siteLocaleRows};
 

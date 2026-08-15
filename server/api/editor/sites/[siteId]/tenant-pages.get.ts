@@ -10,3 +10,5 @@ export default defineEventHandler(async (event) => {
   const pages = await listTenantPages(db, siteId)
   return jsonResponse(pages.filter(page => page.status === 'published').map(page => ({ path: page.published_path, title: page.title })))
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

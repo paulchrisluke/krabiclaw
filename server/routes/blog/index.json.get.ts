@@ -24,3 +24,4 @@ export default defineEventHandler(async (event) => {
     : buildPlatformBlogLinkEntries(posts ?? [], origin)
   return jsonResponse(buildBlogIndexJson(entries))
 })
+import { defineEventHandler } from 'h3'

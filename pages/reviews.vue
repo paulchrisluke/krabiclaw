@@ -83,7 +83,7 @@ const hasMore = computed(() => visibleCount.value < allReviews.value.length)
 const remaining = computed(() => allReviews.value.length - visibleCount.value)
 function loadMore() { visibleCount.value += PAGE_SIZE }
 
-const siteName = computed(() => site?.brand_name || googleBusiness.value?.business?.title || 'Our Site')
+const siteName = computed(() => site?.brand_name?.trim() || googleBusiness.value?.business?.title?.trim() || '')
 
 useTenantSocialMetadata(() => ({
   path: '/reviews',

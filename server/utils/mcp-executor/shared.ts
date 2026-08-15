@@ -933,7 +933,8 @@ export function resolveSitePublicOrigin(
   if (subdomain) {
     const baseDomain = env?.NUXT_PUBLIC_FREE_SITE_DOMAIN
       ? env.NUXT_PUBLIC_FREE_SITE_DOMAIN.replace(/^https?:\/\//, '').replace(/\/$/, '')
-      : 'krabiclaw.com';
+      : '';
+    if (!baseDomain) throw new Error('NUXT_PUBLIC_FREE_SITE_DOMAIN is required')
     return `https://${subdomain}.${baseDomain}`;
   }
 

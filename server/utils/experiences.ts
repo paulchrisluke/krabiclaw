@@ -109,23 +109,17 @@ interface ExperienceRow {
 function parseRow(row: ExperienceRow): Experience {
   const parseStringArray = (value: string | null): string[] => {
     if (!value) return []
-    try {
-      const parsed = JSON.parse(value)
-      if (!Array.isArray(parsed)) return []
-      return parsed.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
-    } catch {
-      return []
+    const parsed = JSON.parse(value)
+    if (!Array.isArray(parsed) || !parsed.every((item): item is string => typeof item === 'string')) {
+      throw new Error('Stored experience list field is not a string array')
     }
+    return parsed.map(item => item.trim())
   }
 
   let time_slots: string[] | null = null
-  if (row.time_slots) {
-    try { time_slots = JSON.parse(row.time_slots) } catch { time_slots = null }
-  }
+  if (row.time_slots) time_slots = JSON.parse(row.time_slots)
   let recurring_slots: RecurringSlots | null = null
-  if (row.recurring_slots) {
-    try { recurring_slots = JSON.parse(row.recurring_slots) } catch { recurring_slots = null }
-  }
+  if (row.recurring_slots) recurring_slots = JSON.parse(row.recurring_slots)
   return {
     ...row,
     status: row.status as Experience['status'],

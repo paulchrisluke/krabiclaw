@@ -4,6 +4,8 @@ import { queryFirst } from '~/server/db'
 import { markBookingCompleted } from '~/server/utils/review-requests'
 import { assertResourceAccess } from '~/server/utils/member-access'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
+import { getGuestThreadBySubmission, updateThreadProjection } from '~/server/domain/guest-threads/repository'
+import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -37,6 +39,13 @@ export default defineEventHandler(async (event) => {
 
   const completed = await markBookingCompleted(db, 'experience_booking', bookingId, 'manual')
   if (!completed) return jsonResponse({ error: 'Only confirmed bookings can be completed' }, { status: 400 })
+  const thread = await getGuestThreadBySubmission(db, 'experience_booking', bookingId)
+  if (thread) {
+    await updateThreadProjection(db, thread.id, {})
+    await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'thread.changed' })
+  }
 
   return jsonResponse({ completed: true, booking_id: bookingId })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

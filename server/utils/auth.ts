@@ -148,6 +148,9 @@ export interface CloudflareEnv {
   DISCORD_DELIVERY_MODE?: string
   DISCORD_WEBHOOK_URL?: string
   MEDIA_BUCKET?: R2Bucket
+  GUEST_THREAD_COMMANDS?: DurableObjectNamespace
+  GUEST_INBOX_HUBS?: DurableObjectNamespace
+  GUEST_DELIVERY_QUEUE?: Queue
   db?: ReturnType<typeof createDb>
   [key: string]: ApiValue
 }
@@ -209,7 +212,8 @@ export function createAuth(env: CloudflareEnv) {
   if (cached) return cached as ReturnType<typeof betterAuth>
 
   const db = d1 === env.DB && env.db ? env.db : createDb(d1)
-  const authBaseUrl = (env.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
+  const authBaseUrl = env.BETTER_AUTH_URL?.replace(/\/$/, '')
+  if (!authBaseUrl) throw new Error('BETTER_AUTH_URL is required')
   const stripeClient = createStripeClient(env.STRIPE_SECRET_KEY ?? 'sk_test_placeholder')
   const loadStripePlans = createStripePlanLoader(stripeClient, env)
 

@@ -6,3 +6,4 @@ export default defineEventHandler(async (event) => {
   const payload = await loadDashboardOnboardingContext(event)
   return jsonResponse(finalizeRequestMetrics(event, 'dashboard-onboarding-context', payload))
 })
+import { defineEventHandler } from 'h3'

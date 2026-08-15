@@ -122,7 +122,7 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
-    await $fetch('/api/contact', {
+    await $fetch<unknown, string, { method: 'POST'; body: Record<string, unknown> }>('/api/contact', {
       method: 'POST',
       body: {
         name: form.value.name.trim(),

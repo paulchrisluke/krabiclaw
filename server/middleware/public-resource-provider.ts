@@ -34,3 +34,4 @@ export default defineEventHandler((event) => {
   }
   event.context.publicResourceProvider = provider
 })
+import { defineEventHandler } from 'h3'

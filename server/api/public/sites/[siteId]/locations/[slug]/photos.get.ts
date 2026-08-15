@@ -43,3 +43,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ photos })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

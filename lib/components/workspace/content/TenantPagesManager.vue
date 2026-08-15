@@ -45,7 +45,7 @@
           <div class="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p class="text-sm text-muted">{{ selected.id ? selected.path : 'New page' }}</p>
-              <h2 class="text-2xl font-semibold text-highlighted">{{ selected.title || 'Untitled page' }}</h2>
+              <h2 class="text-2xl font-semibold text-highlighted">{{ selected.title }}</h2>
             </div>
             <div class="flex flex-wrap gap-2">
               <UButton v-if="selected.id && selected.status !== 'published'" color="success" variant="soft" :loading="busy === 'publish'" :disabled="busy !== null" @click="publish">Publish</UButton>

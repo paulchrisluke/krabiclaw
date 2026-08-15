@@ -6,7 +6,7 @@ import { calculateMapEmbedUrl } from '~/server/utils/google-places'
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const slug = getRouterParam(event, 'slug')
-  const runtimeConfig = useRuntimeConfig(event)
+  const runtimeConfig = useRuntimeConfig()
   const DEFAULT_CURRENCY = runtimeConfig.defaultCurrency
   
   if (!siteId || !slug) {
@@ -137,3 +137,5 @@ export default defineEventHandler(async (event) => {
     }, { status: 500 })
   }
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

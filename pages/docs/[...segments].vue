@@ -100,6 +100,7 @@
 </template>
 
 <script setup lang="ts">
+import { shallowRef } from 'vue'
 import { renderMarkdownToHtml, sanitizeHtmlForSsr, stripLeadingTitleHeading } from '~/utils/markdown'
 import { useContentPageSchema } from '~/composables/useContentPageSchema'
 import { categoryToSlug, slugToCategory } from '~/utils/docs-categories'
@@ -265,7 +266,7 @@ const tocHtml = computed(() => contentBlocks.value
   .map(block => block.html)
   .join('\n'))
 
-const articleBodyRef = ref<HTMLElement | null>(null)
+const articleBodyRef = shallowRef<Element | null>(null)
 useCopyableCodeBlocks(articleBodyRef, contentBlocks)
 const renderedComponents = computed(() => {
   return contentBlocks.value

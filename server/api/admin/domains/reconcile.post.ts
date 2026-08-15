@@ -21,3 +21,4 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: normalizedError.message || 'Failed to reconcile domains' }, { status: 500 })
   }
 })
+import { defineEventHandler } from 'h3'

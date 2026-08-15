@@ -177,37 +177,6 @@ export interface PlaceDetailsSnapshot {
   }>
 }
 
-const DRAFT_MENU_SECTIONS: Partial<Record<SiteVertical, Array<[string, string, string, string, number]>>> = {
-  restaurant: [
-    ['Starter', 'Sample Starter', 'starter', 'A delicious way to begin. Update this with your actual starter.', 8],
-    ['Starter', 'Soup of the Day', 'soup', 'Ask your server. Made fresh daily.', 7],
-    ['Mains', 'House Special', 'house-special', 'Your signature dish goes here. Update with name, description, and price.', 18],
-    ['Mains', 'Chef\'s Recommendation', 'chefs-rec', 'The dish your team is most proud of.', 20],
-    ['Mains', 'Vegetarian Option', 'vegetarian', 'A plant-based option for every menu.', 15],
-    ['Desserts', 'Dessert of the Day', 'dessert', 'Ask your server what is on today.', 7],
-    ['Drinks', 'House Lemonade', 'lemonade', 'Made fresh each morning.', 4],
-    ['Drinks', 'Soft Drink', 'soft-drink', 'Pepsi, Diet Pepsi, or lemonade.', 3],
-  ],
-}
-
-const DRAFT_QA: Partial<Record<SiteVertical, Array<[string, string, number]>>> = {
-  restaurant: [
-    ['Do you take reservations?', 'Yes — you can book a table through our reservations page or call us directly.', 1],
-    ['Do you have vegetarian or vegan options?', 'Yes, we have vegetarian options on the menu. Ask your server about vegan modifications.', 2],
-    ['Is there parking nearby?', 'Yes — there is parking available nearby. See our contact page for directions.', 3],
-  ],
-  experience: [
-    ['How do I book a class?', 'You can book a class or session directly from our experiences page.', 1],
-    ['What should I bring?', 'Comfortable clothes and an open mind. We provide all the materials and tools needed.', 2],
-    ['Is there parking nearby?', 'Yes — there is parking available nearby. See our contact page for directions.', 3],
-  ],
-  professional_service: [
-    ['How do I request a consultation?', 'You can request a consultation through our contact page or by reaching out directly.', 1],
-    ['What services do you offer?', 'Update this with the services or practice areas your organization provides.', 2],
-    ['How can I get in touch?', 'See our contact page for phone, email, and office details.', 3],
-  ],
-}
-
 function slugify(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'site'
 }
@@ -267,185 +236,29 @@ function asPlaceSnapshot(place: DraftPlaceSource): PlaceDetailsSnapshot {
   }
 }
 
-// Per-vertical hero/CTA/story copy. professional_service gets its own explicit
-// branch — no dining/class language, no invented practice areas, plain
-// clearly-editable placeholders instead.
-const DRAFT_CONTENT_COPY: Record<SiteVertical, {
-  heroSubtitle: (_name: string) => string
-  ctaTitle: string
-  aboutCta: string
-  storyBody: (_name: string) => string
-  journeyBody: (_name: string) => string
-}> = {
-  restaurant: {
-    heroSubtitle: name => `${name} is built around generous food, warm service, and a room that feels easy to return to.`,
-    ctaTitle: 'Come hungry.',
-    aboutCta: 'Come dine with us',
-    storyBody: name => `${name} started with a simple idea: make the food we love, serve it with care, and keep the welcome honest.\n\nToday, that same idea guides every part of the restaurant, from the first prep list of the morning to the last table of the night.`,
-    journeyBody: name => `${name} is a neighbourhood restaurant focused on doing a small number of things exceptionally well.\n\nAdd the milestones that shaped your restaurant: where you started, what changed along the way, and what guests can expect when they walk through the door.`,
-  },
-  experience: {
-    heroSubtitle: name => `${name} is built around hands-on learning, skilled instruction, and a space that invites you to try something new.`,
-    ctaTitle: 'Book a class.',
-    aboutCta: 'Book a class',
-    storyBody: name => `${name} started with a simple idea: share a skill, build a community, and make the process enjoyable from start to finish.\n\nToday, that same idea shapes every class, workshop, and session we offer.`,
-    journeyBody: name => `${name} is a hands-on studio focused on doing a small number of things exceptionally well.\n\nAdd the milestones that shaped your studio: where you started, what changed along the way, and what guests can expect when they arrive.`,
-  },
-  professional_service: {
-    heroSubtitle: name => `${name} is built around clear guidance, responsive service, and a team clients can rely on.`,
-    ctaTitle: 'Talk with our team.',
-    aboutCta: 'Talk with our team',
-    storyBody: name => `${name} started with a simple idea: offer dependable, professional service and keep clients informed every step of the way.\n\nAdd your organization's own story here — who you serve, how you work, and what clients can expect when they reach out.`,
-    journeyBody: name => `${name} is a professional-service organization focused on doing right by the people it serves.\n\nAdd the milestones that shaped your organization: where you started, what changed along the way, and what clients can expect when they get in touch. Replace this placeholder with your own services or practice areas — none are assumed here.`,
-  },
-}
-
 function buildDraftContent(
-  brandName: string,
-  vertical: SiteVertical,
+  _brandName: string,
+  _vertical: SiteVertical,
   heroImageUrl: string | null,
   heroThumbnailUrl: string | null,
   heroHeadline: string | null,
   heroDescription: string | null,
 ): DraftContentRecord[] {
-  const updatedAt = nowIso()
-  const copy = DRAFT_CONTENT_COPY[vertical] ?? DRAFT_CONTENT_COPY.restaurant
-  const baseHeroSubtitle = copy.heroSubtitle(brandName)
-  const ctaTitle = copy.ctaTitle
-  const aboutCta = copy.aboutCta
-  const storyBody = copy.storyBody(brandName)
-  const journeyBody = copy.journeyBody(brandName)
-
-  return [
-    {
-      page: 'home',
-      field: 'hero',
-      content: null,
-      value: null,
-      type: 'text',
-      hero_title: heroHeadline || brandName,
-      hero_subtitle: heroDescription || baseHeroSubtitle,
-      hero_public_url: heroImageUrl,
-      hero_kind: heroImageUrl ? 'image' : null,
-      thumbnail_url: heroThumbnailUrl,
-      component: null,
-      updated_at: updatedAt,
-    },
-    {
-      page: 'home',
-      field: 'cta.title',
-      content: ctaTitle,
-      value: ctaTitle,
-      type: 'text',
-      hero_title: null,
-      hero_subtitle: null,
-      hero_public_url: null,
-      hero_kind: null,
-      thumbnail_url: null,
-      component: null,
-      updated_at: updatedAt,
-    },
-    {
-      page: 'about',
-      field: 'hero',
-      content: null,
-      value: null,
-      type: 'text',
-      hero_title: 'About Us',
-      hero_subtitle: baseHeroSubtitle,
-      hero_public_url: null,
-      hero_kind: null,
-      thumbnail_url: null,
-      component: null,
-      updated_at: updatedAt,
-    },
-    {
-      // No stock photo: SayaBrandStory already renders a clean single-column
-      // layout with no image rather than a broken/empty image block.
-      page: 'about',
-      field: 'story.image',
-      content: null,
-      value: null,
-      type: 'media',
-      hero_title: null,
-      hero_subtitle: null,
-      hero_public_url: null,
-      hero_kind: null,
-      thumbnail_url: null,
-      component: null,
-      updated_at: updatedAt,
-    },
-    {
-      page: 'about',
-      field: 'story.headline',
-      content: 'Our Story',
-      value: 'Our Story',
-      type: 'text',
-      hero_title: null,
-      hero_subtitle: null,
-      hero_public_url: null,
-      hero_kind: null,
-      thumbnail_url: null,
-      component: null,
-      updated_at: updatedAt,
-    },
-    {
-      page: 'about',
-      field: 'story.body',
-      content: storyBody,
-      value: storyBody,
-      type: 'text',
-      hero_title: null,
-      hero_subtitle: null,
-      hero_public_url: null,
-      hero_kind: null,
-      thumbnail_url: null,
-      component: null,
-      updated_at: updatedAt,
-    },
-    {
-      page: 'about',
-      field: 'journey.title',
-      content: 'Our Journey',
-      value: 'Our Journey',
-      type: 'text',
-      hero_title: null,
-      hero_subtitle: null,
-      hero_public_url: null,
-      hero_kind: null,
-      thumbnail_url: null,
-      component: null,
-      updated_at: updatedAt,
-    },
-    {
-      page: 'about',
-      field: 'journey.body',
-      content: journeyBody,
-      value: journeyBody,
-      type: 'text',
-      hero_title: null,
-      hero_subtitle: null,
-      hero_public_url: null,
-      hero_kind: null,
-      thumbnail_url: null,
-      component: null,
-      updated_at: updatedAt,
-    },
-    {
-      page: 'about',
-      field: 'cta.title',
-      content: aboutCta,
-      value: aboutCta,
-      type: 'text',
-      hero_title: null,
-      hero_subtitle: null,
-      hero_public_url: null,
-      hero_kind: null,
-      thumbnail_url: null,
-      component: null,
-      updated_at: updatedAt,
-    },
-  ]
+  if (!heroHeadline && !heroDescription && !heroImageUrl) return []
+  return [{
+    page: 'home',
+    field: 'hero',
+    content: null,
+    value: null,
+    type: 'text',
+    hero_title: heroHeadline,
+    hero_subtitle: heroDescription,
+    hero_public_url: heroImageUrl,
+    hero_kind: heroImageUrl ? 'image' : null,
+    thumbnail_url: heroThumbnailUrl,
+    component: null,
+    updated_at: nowIso(),
+  }]
 }
 
 export function buildOnboardingDraftPayload(input: {
@@ -463,35 +276,13 @@ export function buildOnboardingDraftPayload(input: {
   const uploadedHero = input.brandDraft?.heroImage ?? null
   const uploadedLogo = input.brandDraft?.logoImage ?? null
   const heroImageUrl = uploadedHero?.publicUrl ?? placeSnapshot?.photos[0]?.photoUri ?? null
-  const locationHeroImageUrl = uploadedHero?.publicUrl ?? placeSnapshot?.photos[1]?.photoUri ?? heroImageUrl
+  const locationHeroImageUrl = uploadedHero?.publicUrl ?? placeSnapshot?.photos[1]?.photoUri ?? null
   const heroThumbnailUrl = uploadedHero?.thumbnailUrl ?? heroImageUrl
   const locationSlug = slugify(brandName) || 'main'
   const locationId = 'draft-location-main'
 
-  const description = input.vertical === 'professional_service'
-    ? `${brandName} is a professional-service organization focused on clear guidance and responsive client service.`
-    : input.vertical === 'experience'
-      ? `${brandName} is a hands-on studio focused on creating memorable experiences and helping guests learn something new.`
-      : `${brandName} is a welcoming place focused on great food, warm service, and the details guests remember.`
-
-  const menuTemplate = DRAFT_MENU_SECTIONS[input.vertical]
-  const menu: DraftMenuRecord | null = menuTemplate
-    ? {
-        id: draftUid('menu'),
-        name: 'Menu',
-        status: 'published',
-        items: menuTemplate.map(([section, itemName, itemSlug, itemDescription, price], index) => ({
-          id: draftUid('menu-item'),
-          section,
-          name: itemName,
-          slug: itemSlug,
-          description: itemDescription,
-          price_amount: price,
-          available: true,
-          sort_order: index,
-        })),
-      }
-    : null
+  const description = null
+  const menu: DraftMenuRecord | null = null
 
   const reviews = (placeSnapshot?.reviews ?? [])
     .filter(review => typeof review.rating === 'number' && review.rating > 0)
@@ -509,27 +300,8 @@ export function buildOnboardingDraftPayload(input: {
       created_at: review.publishedAt,
     }))
 
-  const qa = (DRAFT_QA[input.vertical] ?? DRAFT_QA.restaurant ?? []).map(([question, answer, sortOrder]) => ({
-    id: draftUid('qa'),
-    question,
-    answer,
-    answer_author: brandName,
-    sort_order: sortOrder,
-  }))
-
-  const postBody = input.vertical === 'professional_service'
-    ? 'We just launched our new site — you can now learn about our services and get in touch with our team. More updates coming soon.'
-    : input.vertical === 'experience'
-      ? 'We just launched our new site — you can now browse what we offer, check our hours, and get in touch. More updates coming soon.'
-      : 'We just launched our new site — you can now browse our full menu, check our hours, and book a table online. More updates coming soon.'
-
-  const posts: DraftPostRecord[] = [{
-    id: draftUid('post'),
-    title: 'Welcome to our new website',
-    body: postBody,
-    status: 'published',
-    published_at: nowIso(),
-  }]
+  const qa: DraftQaRecord[] = []
+  const posts: DraftPostRecord[] = []
 
   const brandColor = input.brandDraft?.brandColor?.trim() || null
   const heroHeadline = input.brandDraft?.heroHeadline?.trim() || null
@@ -594,10 +366,9 @@ export function buildOnboardingDraftPayload(input: {
 
 export function parseOnboardingDraftPayload(raw: string): OnboardingDraftPayload {
   const parsed = JSON.parse(raw) as OnboardingDraftPayload
-  if (!parsed || parsed.version !== 1) {
+  if (!parsed || parsed.version !== 1 || !parsed.preview || !parsed.preview.draftMedia) {
     throw new Error('Unsupported onboarding draft payload')
   }
-  parsed.preview.draftMedia ??= { logo: null, hero: null }
   return parsed
 }
 

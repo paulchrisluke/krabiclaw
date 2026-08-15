@@ -32,6 +32,7 @@ import {
   humanizeEntitlement,
   normalizeWorkspaceArguments,
   resolveGoogleMapsPlace,
+  resolveSitePublicOrigin,
   validateRequiredArguments,
   workspaceContextPayload,
   workspaceLocationsPayload,
@@ -115,7 +116,11 @@ export async function executeMcpToolCall(
       name: s.brand_name ?? s.slug,
       subdomain: s.subdomain,
       orgSlug: s.slug,
-      publicUrl: s.subdomain ? `https://${s.subdomain}.krabiclaw.com` : null,
+      publicUrl: resolveSitePublicOrigin({
+        public_url: typeof s.public_url === 'string' ? s.public_url : null,
+        custom_domain: typeof s.custom_domain === 'string' ? s.custom_domain : null,
+        subdomain: typeof s.subdomain === 'string' ? s.subdomain : null,
+      }, user.env),
       status: s.status ?? "draft",
       active: s.id === workspace.site?.id,
     }));

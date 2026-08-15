@@ -3,7 +3,7 @@
 // only issues a single-use, time-limited verification email distinct from Better
 // Auth's own signup verification. See
 // docs/adr/0017-guest-account-model-separate-from-tenant-org-membership.md.
-import { readBody } from 'h3'
+import { createError, readBody } from 'h3'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { createClaimRequest, getClaimSiteDisplayName } from '~/server/utils/guest-claims'
@@ -37,7 +37,9 @@ export default defineEventHandler(async (event) => {
 
   const siteName = (await getClaimSiteDisplayName(db, customerId))?.trim() || 'your service provider'
 
-  const platformDomain = (env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'krabiclaw.com').replace(/^https?:\/\//, '').replace(/\/$/, '')
+  const configuredPlatformDomain = env.NUXT_PUBLIC_PLATFORM_DOMAIN?.trim()
+  if (!configuredPlatformDomain) throw createError({ statusCode: 500, statusMessage: 'NUXT_PUBLIC_PLATFORM_DOMAIN is required' })
+  const platformDomain = configuredPlatformDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')
   const verifyUrl = `https://${platformDomain}/account/claims/verify?token=${result.rawToken}`
 
   try {
@@ -58,3 +60,4 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ ok: true, claimId: result.claimId })
 })
+import { defineEventHandler } from 'h3'

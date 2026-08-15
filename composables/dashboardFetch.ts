@@ -1,8 +1,13 @@
 import type { FetchOptions } from 'ofetch'
 
-type DashboardFetchOptions<T> = FetchOptions & {
+type DashboardFetchOptions<T> = Omit<FetchOptions, 'method'> & {
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   validate: Validator<T>
   coalesceKey?: string
+}
+
+type DashboardRequestOptions = Omit<FetchOptions, 'method'> & {
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 }
 
 export interface DashboardRequestScope {
@@ -27,16 +32,18 @@ async function executeApiFetch<T>(
   options: DashboardFetchOptions<T>,
   headers: Headers,
 ): Promise<T> {
-  const method = String(options.method ?? 'GET').toUpperCase()
-  const { validate, coalesceKey, ...fetchOptions } = options
+  const method = options.method ?? 'GET'
+  const { validate, coalesceKey, method: _method, ...fetchOptions } = options
   const run = async () => {
     try {
-      const value = await $fetch<unknown>(request as never, {
+      const requestOptions: DashboardRequestOptions = {
         ...fetchOptions,
+        method,
         headers,
         retry: 0,
         timeout: fetchOptions.timeout ?? (method === 'GET' ? DASHBOARD_READ_TIMEOUT_MS : MUTATION_TIMEOUT_MS),
-      } as never)
+      }
+      const value = await $fetch<unknown, string, DashboardRequestOptions>(request, requestOptions)
       if (!validate(value)) {
         throw new ApiClientError('API response did not match its contract', 502, 'INVALID_API_RESPONSE', null)
       }

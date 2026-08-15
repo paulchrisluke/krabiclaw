@@ -4,15 +4,6 @@ import { getAuthSession } from '~/server/utils/auth'
 import { assertLocationAccess } from '~/server/utils/member-access'
 import { queryFirst } from '~/server/db'
 
-const parseJson = (value: ApiValue) => {
-  if (!value || typeof value !== 'string') return null
-  try {
-    return JSON.parse(value)
-  } catch {
-    return null
-  }
-}
-
 interface SiteRow {
   id: string
   organization_id: string
@@ -112,9 +103,9 @@ export default defineEventHandler(async (event) => {
       success: true,
       location: {
         ...location,
-        address: parseJson(location.address),
-        opening_hours: parseJson(location.opening_hours),
-        categories: parseJson(location.categories),
+        address: location.address ? JSON.parse(location.address) : null,
+        opening_hours: location.opening_hours ? JSON.parse(location.opening_hours) : null,
+        categories: location.categories ? JSON.parse(location.categories) : null,
         is_primary: Boolean(location.is_primary)
       }
     })
@@ -124,3 +115,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to get business location' }, { status: 500 })
   }
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

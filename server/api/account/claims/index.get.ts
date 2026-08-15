@@ -10,3 +10,4 @@ export default defineEventHandler(async (event) => {
   if (result.status === 'unauthenticated') return jsonResponse({ error: 'Authentication required' }, { status: 401 })
   return jsonResponse({ claimable: result.data })
 })
+import { defineEventHandler } from 'h3'

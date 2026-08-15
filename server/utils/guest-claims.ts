@@ -92,14 +92,18 @@ export async function findClaimableCustomersForEmail(
     ORDER BY c.last_booking_at DESC
   `, [emailNormalized])
 
-  return (rows ?? []).map((row) => ({
-    customerId: row.id,
-    organizationId: row.organization_id,
-    organizationName: row.organization_name,
-    siteId: row.site_id,
-    siteName: row.site_name ?? 'Site',
-    lastBookingAt: row.last_booking_at,
-  }))
+  return (rows ?? []).map((row) => {
+    const siteName = row.site_name?.trim()
+    if (!siteName) throw new Error(`Customer ${row.id} has no site identity`)
+    return {
+      customerId: row.id,
+      organizationId: row.organization_id,
+      organizationName: row.organization_name,
+      siteId: row.site_id,
+      siteName,
+      lastBookingAt: row.last_booking_at,
+    }
+  })
 }
 
 // Step 1 of the explicit claim: the signed-in user selects one candidate customer
@@ -301,17 +305,21 @@ export async function listLinkedCustomersForUser(db: DbClient, userId: string): 
   const reservationCountByCustomer = new Map((reservationCounts ?? []).map((row) => [row.customer_id, row.count]))
   const experienceCountByCustomer = new Map((experienceCounts ?? []).map((row) => [row.customer_id, row.count]))
 
-  return rows.map((row) => ({
-    customerId: row.id,
-    organizationId: row.organization_id,
-    organizationName: row.organization_name,
-    siteId: row.site_id,
-    siteName: row.site_name ?? 'Site',
-    loyaltyPointsBalance: row.loyalty_points_balance,
-    lastBookingAt: row.last_booking_at,
-    upcomingReservationCount: reservationCountByCustomer.get(row.id) ?? 0,
-    upcomingExperienceBookingCount: experienceCountByCustomer.get(row.id) ?? 0,
-  }))
+  return rows.map((row) => {
+    const siteName = row.site_name?.trim()
+    if (!siteName) throw new Error(`Customer ${row.id} has no site identity`)
+    return {
+      customerId: row.id,
+      organizationId: row.organization_id,
+      organizationName: row.organization_name,
+      siteId: row.site_id,
+      siteName,
+      loyaltyPointsBalance: row.loyalty_points_balance,
+      lastBookingAt: row.last_booking_at,
+      upcomingReservationCount: reservationCountByCustomer.get(row.id) ?? 0,
+      upcomingExperienceBookingCount: experienceCountByCustomer.get(row.id) ?? 0,
+    }
+  })
 }
 
 // Display name for the site a candidate customer row belongs to — used to name
@@ -325,7 +333,9 @@ export async function getClaimSiteDisplayName(db: DbClient, customerId: string):
     WHERE c.id = ?
     LIMIT 1
   `, [customerId])
-  return site?.brand_name || site?.slug || 'this site'
+  const siteName = site?.brand_name?.trim() || site?.slug?.trim()
+  if (!siteName) throw new Error(`Customer ${customerId} has no site identity`)
+  return siteName
 }
 
 // Used by the post-login router to decide "operator dashboard" vs "guest surface"

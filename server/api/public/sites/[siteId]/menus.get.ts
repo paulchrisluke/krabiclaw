@@ -87,3 +87,6 @@ export default defineEventHandler(async (event) => {
     }, { status: error && typeof error === 'object' && 'statusCode' in error && typeof error.statusCode === 'number' ? error.statusCode : 500 })
   }
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'
+import { getRouterParam } from 'h3'

@@ -5,6 +5,8 @@ import { markBookingCompleted, type ReviewBookingType } from '~/server/utils/rev
 import { sendReviewRequestForBooking } from '~/server/utils/review-request-delivery'
 import { defineScheduledTask } from '~/server/utils/scheduled-task'
 import { collectScheduledPaidRows } from '~/server/utils/scheduled-billing-access'
+import { getGuestThreadBySubmission, updateThreadProjection } from '~/server/domain/guest-threads/repository'
+import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 
 interface ReviewRequestTaskContext {
   cloudflare?: { env?: ApiRecord }
@@ -77,7 +79,7 @@ function nowComparableMs(timezone: string): number {
   return localComparableMs(`${get('year')}-${get('month')}-${get('day')}`, `${get('hour')}:${get('minute')}`)
 }
 
-async function autoCompleteReservations(db: D1Database): Promise<number> {
+async function autoCompleteReservations(db: D1Database, env: ApiRecord): Promise<number> {
   const rows = await collectScheduledPaidRows((limit, offset) => queryAll<AutoCompleteRow>(db, `
       SELECT rs.id, rs.organization_id, rs.site_id, rs.location_id,
              rs.date AS booking_date, rs.time AS time_slot, NULL AS duration_minutes,
@@ -100,13 +102,20 @@ async function autoCompleteReservations(db: D1Database): Promise<number> {
     const timezone = await resolveLocationTimezone(db, row.organization_id, row.site_id, row.location_id)
     const dueAt = localComparableMs(row.booking_date, row.time_slot) + 3 * 3_600_000
     if (nowComparableMs(timezone) >= dueAt) {
-      if (await markBookingCompleted(db, 'reservation', row.id, 'auto')) completed += 1
+      if (await markBookingCompleted(db, 'reservation', row.id, 'auto')) {
+        completed += 1
+        const thread = await getGuestThreadBySubmission(db, 'reservation', row.id)
+        if (thread) {
+          await updateThreadProjection(db, thread.id, {})
+          await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'thread.changed' })
+        }
+      }
     }
   }
   return completed
 }
 
-async function autoCompleteExperienceBookings(db: D1Database): Promise<number> {
+async function autoCompleteExperienceBookings(db: D1Database, env: ApiRecord): Promise<number> {
   const rows = await collectScheduledPaidRows((limit, offset) => queryAll<AutoCompleteRow>(db, `
       SELECT eb.id, eb.organization_id, eb.site_id, eb.location_id,
              eb.booking_date, eb.time_slot, e.duration_minutes,
@@ -131,7 +140,14 @@ async function autoCompleteExperienceBookings(db: D1Database): Promise<number> {
     const durationMs = (row.duration_minutes ?? 360) * 60_000
     const dueAt = localComparableMs(row.booking_date, row.time_slot) + durationMs
     if (nowComparableMs(timezone) >= dueAt) {
-      if (await markBookingCompleted(db, 'experience_booking', row.id, 'auto')) completed += 1
+      if (await markBookingCompleted(db, 'experience_booking', row.id, 'auto')) {
+        completed += 1
+        const thread = await getGuestThreadBySubmission(db, 'experience_booking', row.id)
+        if (thread) {
+          await updateThreadProjection(db, thread.id, {})
+          await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'thread.changed' })
+        }
+      }
     }
   }
   return completed
@@ -207,8 +223,8 @@ export default defineScheduledTask({
     }
     if (!db) throw new Error('DB is required')
 
-    const reservationsCompleted = await autoCompleteReservations(db)
-    const experiencesCompleted = await autoCompleteExperienceBookings(db)
+    const reservationsCompleted = await autoCompleteReservations(db, env)
+    const experiencesCompleted = await autoCompleteExperienceBookings(db, env)
     const first = await sendDue(db, env, 'first')
     const reminders = await sendDue(db, env, 'reminder')
 

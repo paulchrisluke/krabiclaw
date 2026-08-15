@@ -16,3 +16,6 @@ export default defineEventHandler(async (event) => {
   )
   return jsonResponse(finalizeRequestMetrics(event, 'public-page', payload))
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'
+import { getRouterParam } from 'h3'

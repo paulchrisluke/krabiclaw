@@ -189,7 +189,7 @@
                 <UBadge v-if="category" color="neutral" variant="soft">{{ category }}</UBadge>
                 <span v-if="publishedAt">{{ formattedPublishedAt }}</span>
               </div>
-              <h2 class="text-xl font-semibold leading-tight text-highlighted">{{ title || 'Untitled post' }}</h2>
+              <h2 class="text-xl font-semibold leading-tight text-highlighted">{{ title }}</h2>
               <p v-if="excerpt" class="text-sm leading-6 text-muted">{{ excerpt }}</p>
               <p class="whitespace-pre-line text-sm leading-6 text-default">{{ body || 'Start writing to preview the post.' }}</p>
             </div>

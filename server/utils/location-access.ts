@@ -11,6 +11,7 @@ export interface SiteAccessRow {
   organization_slug: string
   brand_name: string | null
   subdomain: string | null
+  public_url: string | null
   status: string
   onboarding_status: string | null
   member_id: string
@@ -29,7 +30,7 @@ export async function loadMemberSiteRow(db: DbClient, siteId: string, userId: st
   // the scope check inside assertSiteWideAccess/assertLocationAccess/
   // assertSiteContextAccess (isScopedRole/isOrganizationWideRole both false).
   return await queryFirst<SiteAccessRow>(db, `
-    SELECT s.id, s.organization_id, o.slug AS organization_slug, s.brand_name, s.subdomain, s.status, s.onboarding_status,
+    SELECT s.id, s.organization_id, o.slug AS organization_slug, s.brand_name, s.subdomain, s.public_url, s.status, s.onboarding_status,
            om.id AS member_id, om.role AS member_role
     FROM sites s
     JOIN organization o ON o.id = s.organization_id

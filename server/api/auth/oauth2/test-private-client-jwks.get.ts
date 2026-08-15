@@ -16,3 +16,4 @@ export default defineEventHandler((event) => {
     }],
   }
 })
+import { defineEventHandler } from 'h3'

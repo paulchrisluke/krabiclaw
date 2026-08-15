@@ -23,12 +23,9 @@ interface NotificationRow {
 
 function parsePayload(payload: string | null): Record<string, unknown> | null {
   if (!payload) return null
-  try {
-    const parsed = JSON.parse(payload)
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null
-  } catch {
-    return null
-  }
+  const parsed = JSON.parse(payload)
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Stored notification payload is invalid')
+  return parsed as Record<string, unknown>
 }
 
 export default defineEventHandler(async (event) => {
@@ -60,3 +57,4 @@ export default defineEventHandler(async (event) => {
     unread_count: Number(count?.count ?? 0),
   })
 })
+import { defineEventHandler } from 'h3'

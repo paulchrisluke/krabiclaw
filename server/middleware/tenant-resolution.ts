@@ -1,7 +1,7 @@
 // Tenant resolution middleware for KrabiClaw SaaS
 // Determines if request is for platform or tenant site
 
-import { defineEventHandler, getRequestURL, getHeader, type H3Event } from "h3";
+import { createError, defineEventHandler, getRequestURL, getHeader, type H3Event } from "h3";
 import { queryFirst } from "~/server/db";
 import { TENANT_TYPES, type TenantType } from "~/utils/tenant-routing";
 import { cloudflareEnv, isInternalSelfFetch } from "../utils/api-response";
@@ -14,6 +14,7 @@ import {
 import { verifyScopedPreviewToken } from "../utils/preview-token";
 import { isPlatformPath } from "~/utils/platform-routes";
 import { parseOnboardingDraftPayload } from "~/server/utils/onboarding-drafts";
+import { resolvePublicTemplate } from "~/utils/template-registry";
 
 interface TenantSiteRow {
   id: string;
@@ -35,6 +36,20 @@ function setTenantType(event: H3Event, tenantType: TenantType) {
 
 function normalizedPath(pathname: string) {
   return pathname === "/" ? "/" : pathname.replace(/\/$/, "");
+}
+
+function requireTenantMetadata(site: Pick<TenantSiteRow, 'theme_id' | 'vertical' | 'brand_name'>, source: string) {
+  const themeId = site.theme_id?.trim()
+  const vertical = site.vertical?.trim()
+  const brandName = site.brand_name?.trim()
+  if (!themeId || !vertical || !brandName) {
+    throw createError({
+      statusCode: 500,
+      statusMessage: `Tenant ${source} is missing canonical identity or template metadata`,
+      data: { code: 'TENANT_METADATA_INCOMPLETE' },
+    })
+  }
+  return { themeId, vertical, brandName }
 }
 
 export default defineEventHandler(async (event) => {
@@ -87,9 +102,10 @@ export default defineEventHandler(async (event) => {
           [tenantDomain],
         );
         if (site) {
+          const metadata = requireTenantMetadata(site, site.id)
           event.context.siteId = site.id;
           event.context.organizationId = site.organization_id;
-          event.context.themeId = site.theme_id;
+          event.context.themeId = metadata.themeId;
           event.context.onboardingStatus = site.onboarding_status;
           setTenantType(event, TENANT_TYPES.TENANT);
           event.context.tenantHost = host.split(":")[0];
@@ -99,11 +115,11 @@ export default defineEventHandler(async (event) => {
           // localhost or production tenant host and break CI navigation.
           event.context.canonicalDomain = host.split(":")[0];
           event.context.site = {
-            brand_name: site.brand_name || null,
+            brand_name: metadata.brandName,
             logo_url: site.logo_url || null,
             logo_mime_type: site.logo_mime_type || null,
             favicon_url: site.favicon_url || null,
-            vertical: site.vertical || "restaurant",
+            vertical: metadata.vertical,
           };
           return;
         }
@@ -149,17 +165,18 @@ export default defineEventHandler(async (event) => {
         [previewSiteId],
       );
       if (previewSite) {
+        const metadata = requireTenantMetadata(previewSite, previewSite.id)
         event.context.siteId = previewSite.id;
         event.context.organizationId = previewSite.organization_id;
-        event.context.themeId = previewSite.theme_id;
+        event.context.themeId = metadata.themeId;
         event.context.onboardingStatus = previewSite.onboarding_status;
         setTenantType(event, TENANT_TYPES.TENANT);
         event.context.site = {
-          brand_name: previewSite.brand_name || null,
+          brand_name: metadata.brandName,
           logo_url: previewSite.logo_url || null,
           logo_mime_type: previewSite.logo_mime_type || null,
           favicon_url: previewSite.favicon_url || null,
-          vertical: previewSite.vertical || "restaurant",
+          vertical: metadata.vertical,
         };
         return;
       }
@@ -202,15 +219,19 @@ export default defineEventHandler(async (event) => {
         );
         if (isAuthorized) {
           const payload = parseOnboardingDraftPayload(previewDraft.payload_json);
+          const template = resolvePublicTemplate({ vertical: previewDraft.vertical });
+          if (!template) {
+            throw createError({ statusCode: 500, statusMessage: 'Draft preview has no supported template', data: { code: 'DRAFT_TEMPLATE_MISSING' } })
+          }
           event.context.draftId = previewDraft.id;
           setTenantType(event, TENANT_TYPES.TENANT);
-          event.context.themeId = "saya-theme-v1";
+          event.context.themeId = template.themeId;
           event.context.onboardingStatus = "active";
           event.context.site = {
             brand_name: previewDraft.name || null,
             logo_url: payload.preview.config.logo_url || null,
             favicon_url: null,
-            vertical: previewDraft.vertical || "restaurant",
+            vertical: previewDraft.vertical,
           };
           return;
         }
@@ -234,19 +255,20 @@ export default defineEventHandler(async (event) => {
 
   // If site found, handle based on onboarding status
   if (site) {
+    const metadata = requireTenantMetadata(site, site.id)
     event.context.siteId = site.id;
     event.context.organizationId = site.organization_id;
-    event.context.themeId = site.theme_id;
+    event.context.themeId = metadata.themeId;
     event.context.onboardingStatus = site.onboarding_status;
     setTenantType(event, TENANT_TYPES.TENANT);
     event.context.tenantHost = host.split(":")[0];
     event.context.canonicalDomain = site.canonical_domain || null;
     event.context.site = {
-      brand_name: site.brand_name || null,
+      brand_name: metadata.brandName,
       logo_url: site.logo_url || null,
       logo_mime_type: site.logo_mime_type || null,
       favicon_url: site.favicon_url || null,
-      vertical: site.vertical || "restaurant",
+      vertical: metadata.vertical,
     };
     return;
   }

@@ -11,3 +11,4 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ managedServiceEnabled: isManagedServiceEnabled(env) });
 });
+import { defineEventHandler } from 'h3'

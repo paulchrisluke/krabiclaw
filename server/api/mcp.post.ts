@@ -1,4 +1,4 @@
-import { getHeader } from "h3";
+import { createError, getHeader } from "h3";
 import type { H3Event } from "h3";
 import {
   asMcpError,
@@ -112,9 +112,8 @@ export default defineEventHandler(async (event) => {
   let requestToolArgs: Record<string, unknown> | undefined;
   let requestEnvelope: ReturnType<typeof safeMcpEnvelopeDetails> | null = null;
   const cfEnv = cloudflareEnv(event);
-  const baseUrl = (
-    cfEnv.BETTER_AUTH_URL ?? "https://krabiclaw.com"
-  ).replace(/\/$/, "");
+  const baseUrl = cfEnv.BETTER_AUTH_URL?.replace(/\/$/, "");
+  if (!baseUrl) throw createError({ statusCode: 500, statusMessage: "BETTER_AUTH_URL is required" });
   const tenantAuthOptions = {
     audiences: [`${baseUrl}/api/mcp`],
     requiredScopes: ["tenant"],
@@ -595,3 +594,5 @@ Common workflows: update menus and items, create and publish site posts, triage 
     });
   }
 });
+import { defineEventHandler } from 'h3'
+import { readBody } from 'h3'

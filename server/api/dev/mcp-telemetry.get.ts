@@ -69,3 +69,5 @@ export default defineEventHandler(async (event) => {
   const events = await queryAll(db, sql, binds)
   return jsonResponse({ events: events ?? [] })
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'

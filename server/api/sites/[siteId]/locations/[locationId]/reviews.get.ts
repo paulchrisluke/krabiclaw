@@ -23,14 +23,11 @@ export default defineEventHandler(async (event) => {
 
   const safeParsePhotoUrls = (photoUrls: unknown): string[] => {
     if (typeof photoUrls !== 'string' || !photoUrls.trim()) return []
-    try {
-      const parsed = JSON.parse(photoUrls)
-      return Array.isArray(parsed)
-        ? parsed.map(item => typeof item === 'string' ? item.trim() : '').filter(Boolean)
-        : []
-    } catch {
-      return []
+    const parsed = JSON.parse(photoUrls)
+    if (!Array.isArray(parsed) || !parsed.every(item => typeof item === 'string')) {
+      throw new Error('Stored review photo URLs are invalid')
     }
+    return parsed.map(item => item.trim()).filter(Boolean)
   }
 
   const reviews = (results ?? []).map((review: ApiValue) => ({
@@ -40,3 +37,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ success: true, reviews })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

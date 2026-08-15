@@ -342,3 +342,4 @@ export function respondToMcpError(
 
   return sendMcpErrorResponse(event, { id: input.requestId, error: mcpError })
 }
+import { readBody } from 'h3'

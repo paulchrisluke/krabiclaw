@@ -44,3 +44,4 @@ export default defineEventHandler(async (event) => {
     resolvedAt: now.toISOString(),
   }))
 })
+import { defineEventHandler } from 'h3'

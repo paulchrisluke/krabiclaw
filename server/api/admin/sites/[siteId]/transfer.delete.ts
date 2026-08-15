@@ -80,3 +80,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ cancelled: true, custom_domains_deleted: result.customDomainsDeleted })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

@@ -36,3 +36,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to fetch posts' }, { status: 500 })
   }
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

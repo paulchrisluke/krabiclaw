@@ -16,3 +16,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ posts: await listPlatformBlogPosts(db, status) })
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'

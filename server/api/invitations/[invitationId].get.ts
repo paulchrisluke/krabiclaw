@@ -130,3 +130,6 @@ export default defineEventHandler(async (event) => {
     preferredSiteRequested: Boolean(preferredSiteId),
   })
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'
+import { getRouterParam } from 'h3'

@@ -119,26 +119,25 @@ function slugify(name: string): string {
     .trim()
     .replace(/[\s-]+/g, "-");
 
-  // Return fallback if slug is empty (e.g., non-ASCII only names)
-  if (!slug) {
-    return `untitled-${Date.now().toString(36)}`;
-  }
+  if (!slug) return `item-${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`
 
   return slug;
 }
 
 export function parseStringArray(value: unknown): string[] {
   if (Array.isArray(value))
-    return value.filter((item): item is string => typeof item === "string");
-  if (typeof value !== "string" || !value) return [];
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed)
-      ? parsed.filter((item): item is string => typeof item === "string")
-      : [];
-  } catch {
-    return [];
-  }
+    return value.map((item, index) => {
+      if (typeof item !== "string") throw new Error(`String array item ${index} is invalid`)
+      return item
+    });
+  if (value == null || value === '') return []
+  if (typeof value !== "string") throw new Error('Expected a JSON string array')
+  const parsed = JSON.parse(value)
+  if (!Array.isArray(parsed)) throw new Error('Expected a JSON string array')
+  return parsed.map((item, index) => {
+    if (typeof item !== "string") throw new Error(`String array item ${index} is invalid`)
+    return item
+  })
 }
 
 export function normalizeSectionOrder(sections: unknown): string[] {
@@ -604,7 +603,7 @@ async function loadPublishedMenuById(
   );
 }
 
-// Get active menu for a scope (brand or location)
+// Get the active menu owned by the requested scope.
 export async function getActiveMenu(
   db: DbClient,
   organizationId: string,
@@ -612,7 +611,6 @@ export async function getActiveMenu(
   locationId?: string | null,
   locale?: string,
 ): Promise<MenuWithItems | null> {
-  // First try to get location-specific menu
   if (locationId) {
     const locationMenu = await queryFirst<Record<string, unknown>>(
       db,
@@ -626,12 +624,11 @@ export async function getActiveMenu(
       [organizationId, siteId, locationId],
     );
 
-    if (locationMenu) {
-      return loadPublishedMenuById(db, organizationId, siteId, locationMenu, locale);
-    }
+    return locationMenu
+      ? loadPublishedMenuById(db, organizationId, siteId, locationMenu, locale)
+      : null;
   }
 
-  // Fall back to brand/default menu (no location_id)
   const brandMenu = await queryFirst<Record<string, unknown>>(
     db,
     `

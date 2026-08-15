@@ -166,3 +166,6 @@ export default defineEventHandler(async (event) => {
     ...(Object.keys(socialErrors).length > 0 ? { socialErrors } : {}),
   })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'
+import { readBody } from 'h3'

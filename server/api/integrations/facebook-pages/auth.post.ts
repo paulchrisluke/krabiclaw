@@ -27,3 +27,5 @@ export default defineEventHandler(async (event) => {
   const authUrl = getFacebookAuthUrl(env, state)
   return jsonResponse({ success: true, authUrl })
 })
+import { defineEventHandler } from 'h3'
+import { readBody } from 'h3'

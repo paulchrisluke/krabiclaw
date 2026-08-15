@@ -129,10 +129,12 @@
 </template>
 
 <script setup lang="ts">
+import { getErrorMessage } from '~/utils/errors'
 import GuestThreadConversation, { type GuestThreadEntryMessage } from '~/components/conversation/GuestThreadConversation.vue'
 import { parseCmsFeatureOverrideDelta, resolveCmsCapabilities, type ProductFeature } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
+import { useGuestInboxSocket, type GuestInboxSocketEvent } from '~/composables/useGuestInboxSocket'
 
 const props = defineProps<{
   scope: 'site' | 'location'
@@ -273,8 +275,25 @@ const replyAttemptDraft = ref<string | null>(null)
 const operationAttemptKeys = ref<Record<string, string>>({})
 const retryAttemptKeys = ref<Record<string, string>>({})
 
+const inboxSocket = useGuestInboxSocket({
+  siteId,
+  onEvent: (event: GuestInboxSocketEvent) => {
+    if (event.siteId !== siteId) return
+    if (isDetailMode.value && event.threadId === props.threadId) {
+      void refreshThread(event.threadId)
+    } else if (!isDetailMode.value) {
+      void loadThreads()
+    }
+  },
+  onReconnect: () => {
+    if (isDetailMode.value && props.threadId) void refreshThread(props.threadId)
+    else void loadThreads()
+  },
+})
+
 onMounted(() => {
   inboxHydrated.value = true
+  inboxSocket.connect()
 })
 
 const conversationEntries = computed<GuestThreadEntryMessage[]>(() => (selectedDetail.value?.entries ?? []).map(entry => ({

@@ -30,3 +30,5 @@ export default defineEventHandler(async () => {
     return jsonResponse({ error: 'Failed to load docs' }, { status: 500 })
   }
 })
+import { defineEventHandler } from 'h3'
+import { useStorage } from 'nitro/storage'

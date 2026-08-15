@@ -4,7 +4,7 @@
 //   ?datasets=content,menu   include only the named route capabilities
 // All inline D1 queries run in a single executeBatch() call.
 import { executeBatch, queryFirst, type BatchQuery } from "~/server/db";
-import { getHeader, setHeader, type H3Event } from "h3";
+import { createError, getHeader, setHeader, type H3Event } from "h3";
 import { cloudflareEnv } from "~/server/utils/api-response";
 import { calculateMapEmbedUrl } from "~/server/utils/google-places";
 import {
@@ -139,15 +139,6 @@ interface PublicPageLoadOptions {
   signal?: AbortSignal
 }
 
-const parseJson = (raw: string | null) => {
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-};
-
 function canonicalTenantPagePath(page: string | null, locationSlug: string | null): string | null {
   if (!page) return null
   if (page === 'home') return '/'
@@ -206,49 +197,39 @@ function tenantPageToContentRows(page: PublicTenantPage): SiteContent[] {
 function parseExperienceRow(row: Record<string, unknown>): Experience {
   const parseStringArr = (value: unknown): string[] => {
     if (typeof value === "string" && value) {
-      try {
-        const parsed = JSON.parse(value);
-        return Array.isArray(parsed)
-          ? parsed.filter(
-              (item): item is string =>
-                typeof item === "string" && item.trim().length > 0,
-            )
-          : [];
-      } catch {
-        return [];
+      const parsed = JSON.parse(value)
+      if (!Array.isArray(parsed) || !parsed.every((item): item is string => typeof item === "string")) {
+        throw createError({ statusCode: 500, statusMessage: 'Stored experience string array is invalid', data: { code: 'INVALID_STORED_CONTENT' } })
       }
+      return parsed.filter(item => item.trim().length > 0)
     }
     if (Array.isArray(value)) {
-      return value.filter((item): item is string => typeof item === "string");
+      if (!value.every((item): item is string => typeof item === "string")) {
+        throw createError({ statusCode: 500, statusMessage: 'Stored experience string array is invalid', data: { code: 'INVALID_STORED_CONTENT' } })
+      }
+      return value
     }
-    return [];
+    if (value == null || value === '') return []
+    throw createError({ statusCode: 500, statusMessage: 'Stored experience string array is invalid', data: { code: 'INVALID_STORED_CONTENT' } })
   };
 
   const isStringArray = (value: unknown): value is string[] =>
     Array.isArray(value) && value.every((item) => typeof item === "string");
 
   let time_slots: string[] | null = null;
-  if (row.time_slots && typeof row.time_slots === "string") {
-    try {
-      const parsed = JSON.parse(row.time_slots);
-      time_slots = isStringArray(parsed) ? parsed : null;
-    } catch {
-      time_slots = null;
-    }
+  if (row.time_slots != null && row.time_slots !== '') {
+    const parsed = JSON.parse(String(row.time_slots));
+    if (!isStringArray(parsed)) throw createError({ statusCode: 500, statusMessage: 'Stored experience time slots are invalid', data: { code: 'INVALID_STORED_CONTENT' } })
+    time_slots = parsed;
   }
 
   let recurring_slots: Partial<Record<string, string[]>> | null = null;
-  if (row.recurring_slots && typeof row.recurring_slots === "string") {
-    try {
-      const parsed = JSON.parse(row.recurring_slots);
-      recurring_slots =
-        parsed && typeof parsed === "object" && !Array.isArray(parsed) &&
-        Object.values(parsed).every(isStringArray)
-          ? (parsed as Partial<Record<string, string[]>>)
-          : null;
-    } catch {
-      recurring_slots = null;
+  if (row.recurring_slots != null && row.recurring_slots !== '') {
+    const parsed = JSON.parse(String(row.recurring_slots));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || !Object.values(parsed).every(isStringArray)) {
+      throw createError({ statusCode: 500, statusMessage: 'Stored experience recurring slots are invalid', data: { code: 'INVALID_STORED_CONTENT' } })
     }
+    recurring_slots = parsed as Partial<Record<string, string[]>>
   }
 
   return {
@@ -727,18 +708,10 @@ async function loadPublicPageSource(
 
     let selectedMenuRow: Record<string, unknown> | null = null;
 
-    const primaryLoc =
-      (locRows.results ?? []).find((l) => l.is_primary) ??
-      (locRows.results ?? [])[0] ??
-      null;
-    const effectiveLocationId = locationId ?? primaryLoc?.id ?? null;
-
-    if (effectiveLocationId) {
+    if (locationId) {
       selectedMenuRow =
-        menuRows.find((m) => m.location_id === effectiveLocationId) ?? null;
-    }
-
-    if (!selectedMenuRow) {
+        menuRows.find((m) => m.location_id === locationId) ?? null;
+    } else {
       selectedMenuRow =
         menuRows.find(
           (m) => m.location_id === null || m.location_id === undefined,
@@ -892,11 +865,14 @@ async function loadPublicPageSource(
     const heroKind = loc.hero_kind as string | null;
     const ogImagePublicUrl = loc.og_image_public_url as string | null;
 
+    const address = loc.address as string | null
+    const openingHours = loc.opening_hours as string | null
+    const specialHours = loc.special_hours as string | null
     return {
       id: loc.id,
       slug: loc.slug,
       title: loc.title,
-      address: parseJson(loc.address as string | null),
+      address: address ? JSON.parse(address) : null,
       phone: loc.phone,
       email: (loc.email as string | null) ?? null,
       website_url: loc.website_url,
@@ -911,8 +887,8 @@ async function loadPublicPageSource(
       }),
       latitude: loc.latitude,
       longitude: loc.longitude,
-      opening_hours: parseJson(loc.opening_hours as string | null),
-      special_hours: parseJson(loc.special_hours as string | null),
+      opening_hours: openingHours ? JSON.parse(openingHours) : null,
+      special_hours: specialHours ? JSON.parse(specialHours) : null,
       timezone: loc.timezone || null,
       rating: loc.rating,
       review_count: loc.review_count,
@@ -995,15 +971,7 @@ async function loadPublicPageSource(
     : null;
   const fullReviews = (fullReviewRows?.results ?? []).map((r) => ({
     ...r,
-    photo_urls: r.photo_urls
-      ? (() => {
-          try {
-            return JSON.parse(r.photo_urls as string);
-          } catch {
-            return [];
-          }
-        })()
-      : [],
+    photo_urls: r.photo_urls ? JSON.parse(r.photo_urls as string) : [],
   }));
   const aggregateLocation = locationForAggregate ? {
     rating: typeof locationForAggregate.rating === 'number' ? locationForAggregate.rating : null,

@@ -15,3 +15,5 @@ export default defineEventHandler(async (event) => {
   if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
   return jsonResponse({ post })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

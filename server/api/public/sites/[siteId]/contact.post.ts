@@ -4,6 +4,8 @@ import { notifyContactSubmitted } from '~/server/utils/notifications'
 import { fireSiteEventSafe } from '~/server/utils/site-events'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { resolveContactSubmissionAssignment } from '~/server/utils/contact-assignment'
+import { contactAdapter } from '~/server/domain/guest-threads/adapters/contact'
+import { ensureGuestThread } from '~/server/domain/guest-threads/repository'
 
 const VALID_SUBJECTS = ['general', 'press', 'partnerships', 'catering', 'careers']
 
@@ -93,6 +95,8 @@ export default defineEventHandler(async (event) => {
     },
   })
 
+  await ensureGuestThread(db, contactAdapter, id, { publishEnv: env })
+
   try {
     await notifyContactSubmitted(env, db, {
       organizationId: site.organization_id,
@@ -122,3 +126,6 @@ export default defineEventHandler(async (event) => {
     message: 'Your message has been sent. We will be in touch soon.',
   }, { status: 201 })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'
+import { readBody } from 'h3'

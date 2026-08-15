@@ -9,3 +9,4 @@ export default defineEventHandler(async (event) => {
   if (result.status === 'unauthenticated') return jsonResponse({ allowed: false }, { status: 401 })
   return jsonResponse({ allowed: result.allowed })
 })
+import { defineEventHandler } from 'h3'

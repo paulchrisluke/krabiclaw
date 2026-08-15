@@ -61,3 +61,6 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: error instanceof Error ? error.message : 'Failed to load booking policy' }, { status: 400 })
   }
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'
+import { getRouterParam } from 'h3'

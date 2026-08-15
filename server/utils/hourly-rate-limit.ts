@@ -64,3 +64,4 @@ export async function incrementHourlyRateLimit(
   const count = Number(row?.count ?? NaN)
   return Number.isFinite(count) && count <= limit
 }
+import { getHeader } from 'h3'

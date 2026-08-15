@@ -87,3 +87,6 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to save selection. Try again.' }, { status: 502 })
   }
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'
+import { readBody } from 'h3'

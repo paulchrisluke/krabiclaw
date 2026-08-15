@@ -47,3 +47,4 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to fetch analytics' }, { status: 500 })
   }
 })
+import { defineEventHandler } from 'h3'

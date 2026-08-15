@@ -71,7 +71,8 @@ export default defineEventHandler(async (event) => {
   const prompt = body.prompt?.trim()
   if (!prompt) return jsonResponse({ error: 'prompt is required' }, { status: 400 })
 
-  const restaurantName = (site.brand_name as string | null) ?? 'the restaurant'
+  const restaurantName = typeof site.brand_name === 'string' ? site.brand_name.trim() : ''
+  if (!restaurantName) throw createError({ statusCode: 500, statusMessage: 'Site brand name is not configured' })
   const userContent: ApiRecord[] = []
 
   if (body.image_base64 && body.image_mime) {
@@ -155,3 +156,6 @@ export default defineEventHandler(async (event) => {
     credits: { charged: creditsCharged, remaining: newBalance },
   })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'
+import { readBody } from 'h3'

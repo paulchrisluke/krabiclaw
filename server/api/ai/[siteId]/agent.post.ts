@@ -38,6 +38,8 @@ export default defineEventHandler(async (event) => {
 
   const site = await getSiteForMember(db, siteId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
+  const siteName = site.brand_name?.trim()
+  if (!siteName) return jsonResponse({ error: 'Site brand name is not configured' }, { status: 500 })
 
   let body: AgentBody
   try { body = await readBody(event) } catch {
@@ -97,7 +99,7 @@ export default defineEventHandler(async (event) => {
         userId: session.user.id,
         memberId: site.member_id,
         userRole: site.role,
-        siteName: site.brand_name ?? 'your site',
+        siteName,
         defaultCurrency,
         messages,
         currentPage: body.currentPage ?? 'dashboard',
@@ -142,3 +144,8 @@ export default defineEventHandler(async (event) => {
 
   return sendStream(event, readable)
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'
+import { readBody } from 'h3'
+import { sendStream } from 'h3'
+import { setResponseHeader } from 'h3'

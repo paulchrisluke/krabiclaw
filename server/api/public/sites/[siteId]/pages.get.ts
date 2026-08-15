@@ -36,3 +36,6 @@ export default defineEventHandler(async (event) => {
     return apiErrorResponse(event, typed.statusCode ?? 500, 'TENANT_PAGE_LOOKUP_FAILED', typed.statusMessage ?? 'Tenant page lookup failed')
   }
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'
+import { getRouterParam } from 'h3'

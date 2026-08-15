@@ -30,3 +30,5 @@ export default defineEventHandler(async (event) => {
 
   return textResponse(renderTenantBlogMarkdown(post, resolvePublicOrigin(event)), {}, 'text/markdown; charset=utf-8')
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

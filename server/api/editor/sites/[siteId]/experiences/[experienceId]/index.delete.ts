@@ -25,3 +25,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ deleted: true })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

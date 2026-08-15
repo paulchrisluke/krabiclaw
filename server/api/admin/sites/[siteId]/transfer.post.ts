@@ -1,4 +1,5 @@
 // POST /api/admin/sites/[siteId]/transfer — initiate a site transfer to a new owner
+import { createError } from 'h3'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { createAuth, getAuthSession } from '~/server/utils/auth'
 import { executeBatch, queryAll, queryFirst, type BatchQuery } from '~/server/db'
@@ -236,7 +237,8 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to initiate site transfer due to a database error.' }, { status: 500 })
   }
 
-  const platformDomain = normalizeHost(env.NUXT_PUBLIC_PLATFORM_DOMAIN) || 'krabiclaw.com'
+  const platformDomain = normalizeHost(env.NUXT_PUBLIC_PLATFORM_DOMAIN)
+  if (!platformDomain) throw createError({ statusCode: 500, statusMessage: 'NUXT_PUBLIC_PLATFORM_DOMAIN is required' })
   const transferUrl = `https://${platformDomain}/transfer/${token}`
   const siteName = site.brand_name ?? siteId
 
@@ -254,6 +256,7 @@ export default defineEventHandler(async (event) => {
         siteName,
         initiatorName,
         transferUrl,
+        platformDomain,
         domain: invitedDomain ?? null,
         planLabel: resolvedPlanLabel,
         personalMessage: body.message?.trim() || null,
@@ -296,3 +299,6 @@ export default defineEventHandler(async (event) => {
     requires_payment: requiresPayment,
   })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'
+import { readBody } from 'h3'

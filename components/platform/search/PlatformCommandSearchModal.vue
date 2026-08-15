@@ -346,7 +346,7 @@ async function runSearch() {
   const requestId = ++requestSequence
   loading.value = true
   try {
-    const response = await $fetch<SearchResponse>('/api/public/search', {
+    const response = await $fetch<SearchResponse, string, { query: Record<string, string> }>('/api/public/search', {
       query: {
         q: normalized,
         surface: props.surface,

@@ -1,4 +1,4 @@
-import { getHeader } from 'h3'
+import { createError, getHeader } from 'h3'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import {
   asMcpError,
@@ -95,7 +95,8 @@ function logPlatformMcpEventDetached(
 
 export default defineEventHandler(async (event) => {
   const env = cloudflareEnv(event)
-  const baseUrl = (env.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
+  const baseUrl = env.BETTER_AUTH_URL?.replace(/\/$/, '')
+  if (!baseUrl) throw createError({ statusCode: 500, statusMessage: 'BETTER_AUTH_URL is required' })
   const platformAdminAuthOptions = {
     // aud claim, bound to the `resource` param ChatGPT sends at /authorize, is the
     // real per-surface boundary, so forbiddenScopes isn't used here.
@@ -340,3 +341,5 @@ export default defineEventHandler(async (event) => {
     })
   }
 })
+import { defineEventHandler } from 'h3'
+import { readBody } from 'h3'

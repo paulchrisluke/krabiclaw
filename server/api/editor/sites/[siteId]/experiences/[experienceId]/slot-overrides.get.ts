@@ -26,3 +26,6 @@ export default defineEventHandler(async (event) => {
   const overrides = await listSlotOverrides(db, siteId, experienceId, { fromDate, toDate })
   return jsonResponse({ overrides })
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'
+import { getRouterParam } from 'h3'

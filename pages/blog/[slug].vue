@@ -164,7 +164,7 @@ const { blogList, config } = await usePublicPageData()
 const allPosts = computed(() => (blogList.value ?? []) as unknown as TenantBlogPost[])
 const { categories } = useTenantBlogNav(allPosts)
 const relatedPosts = computed(() => allPosts.value.filter(item => item.slug !== post.value?.slug).slice(0, 4))
-const siteName = computed(() => site?.brand_name || 'Our Site')
+const siteName = computed(() => site?.brand_name?.trim() ?? '')
 const authorName = computed(() => post.value?.author_name?.trim() || siteName.value)
 const readTime = computed(() => {
   const words = (post.value?.body ?? '')

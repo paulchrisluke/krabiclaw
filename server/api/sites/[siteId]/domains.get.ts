@@ -31,3 +31,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ success: true, ...payload, siteId })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

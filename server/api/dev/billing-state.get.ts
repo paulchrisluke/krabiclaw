@@ -99,3 +99,5 @@ export default defineEventHandler(async (event) => {
     webhook_events: webhookEvents ?? [],
   })
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'

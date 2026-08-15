@@ -93,3 +93,4 @@ export default defineEventHandler(async (event) => {
     brand_color: brandColor
   })
 })
+import { getRouterParam } from 'h3'

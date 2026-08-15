@@ -34,3 +34,5 @@ export default defineEventHandler(async (event) => {
     },
   })
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'

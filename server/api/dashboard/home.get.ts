@@ -22,3 +22,4 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ organization, site, ...home })
 })
+import { defineEventHandler } from 'h3'

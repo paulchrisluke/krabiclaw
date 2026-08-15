@@ -10,3 +10,4 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ requests })
 })
+import { defineEventHandler } from 'h3'

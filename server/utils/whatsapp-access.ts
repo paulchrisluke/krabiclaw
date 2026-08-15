@@ -31,6 +31,7 @@ export async function sendWhatsAppAccessInvitation(
     FROM sites s JOIN organization o ON o.id = s.organization_id
     WHERE s.id = ? AND s.organization_id = ? LIMIT 1
   `, [target.siteId, target.organizationId])
+  if (!site?.name?.trim()) throw new Error('Site name is required to send a WhatsApp access invitation')
   const invitationPath = `${encodeURIComponent(target.invitationId)}?siteId=${encodeURIComponent(target.siteId)}`
   const result = await sendWhatsAppNotification(env, db, {
     organizationId: target.organizationId,
@@ -38,7 +39,7 @@ export async function sendWhatsAppAccessInvitation(
     locationId: target.locationId,
     toPhone: target.phone,
     template: 'dashboard_access_invitation',
-    vars: { site_name: site?.name || 'your site', invitation_path: invitationPath },
+    vars: { site_name: site.name, invitation_path: invitationPath },
     relatedSubmissionType: 'invitation',
     relatedSubmissionId: target.invitationId,
   })

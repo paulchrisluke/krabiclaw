@@ -25,3 +25,5 @@ export default defineEventHandler(async (event) => {
     return apiErrorResponse(event, 503, 'DOC_UNAVAILABLE', 'Documentation data is temporarily unavailable')
   }
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

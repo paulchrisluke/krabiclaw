@@ -22,6 +22,7 @@ import { getAdapter } from '~/server/domain/guest-threads/adapters/registry'
 import { executeGuestThreadOperation } from '~/server/domain/guest-threads/operations'
 import { appendEntry } from '~/server/domain/guest-threads/entries'
 import { nextConversationState } from '~/server/domain/guest-threads/state-machine'
+import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import { notifyGuestThreadReply } from '~/server/utils/notifications'
 import { findSubmissionByPhone } from '~/server/utils/submission-messages'
 import { isAuthorizedWhatsAppRecipient, resolveMemberId, teamAccessPredicate } from '~/server/utils/member-access'
@@ -89,7 +90,8 @@ interface UserRow {
 }
 
 function platformLoginUrl(env: ApiRecord): string {
-  const raw = String(env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'https://krabiclaw.com').trim()
+  const raw = String(env.NUXT_PUBLIC_PLATFORM_DOMAIN || '').trim()
+  if (!raw) throw new Error('NUXT_PUBLIC_PLATFORM_DOMAIN is required')
   const origin = /^https?:\/\//i.test(raw) ? raw.replace(/\/$/, '') : `https://${raw.replace(/\/$/, '')}`
   return `${origin}/login`
 }
@@ -219,7 +221,7 @@ async function runChowBotAndReply(
     userId: string
     memberId: string
     userRole?: string
-    siteName: string | null
+    siteName: string
     pendingMedia: { assetId: string; siteId: string } | null
   }
 ) {
@@ -237,7 +239,7 @@ async function runChowBotAndReply(
     userId: opts.userId,
     memberId: opts.memberId,
     userRole: opts.userRole,
-    siteName: opts.siteName ?? 'your site',
+    siteName: opts.siteName,
     defaultCurrency: site?.default_currency || 'THB',
     messages,
     currentPage: 'whatsapp',
@@ -535,6 +537,7 @@ async function routeManagerWhatsAppMessage(
         : { ok: false as const, status: 404 as const, reason: 'thread_not_found' as const }
       await clearPending()
       if (result.ok) {
+        await publishGuestInboxThreadEvent(env, db, { threadId: result.thread.id, type: 'thread.changed' })
         await sendWhatsAppText(env, opts.toPhone, REPLY_SENT_CONFIRMATION)
       } else {
         await sendWhatsAppText(env, opts.toPhone, buildReplyFailedMessage(result.reason))
@@ -708,6 +711,11 @@ async function handleManagerChowBotMessage(
     await reply(null, env, toPhone, 'That site is no longer available. Reply again to choose a site.')
     return
   }
+  const siteName = site.brand_name?.trim()
+  if (!siteName) {
+    await reply(null, env, toPhone, 'This site is missing its configured brand name. Update the site identity before using ChowBot.')
+    return
+  }
 
   if (selectedSiteFromList && message.type === 'text' && /^\d+$/.test(text)) {
     await upsertChannelState(db, {
@@ -719,7 +727,7 @@ async function handleManagerChowBotMessage(
       pendingConfirmation: null,
       lastInboundId: message.id,
     })
-    await reply(null, env, toPhone, `ChowBot is now connected to ${site.brand_name ?? site.id}. What should we work on?`)
+    await reply(null, env, toPhone, `ChowBot is now connected to ${siteName}. What should we work on?`)
     return
   }
 
@@ -787,7 +795,7 @@ async function handleManagerChowBotMessage(
         userId: user.id,
         memberId: site.member_id,
         userRole: site.role,
-        siteName: site.brand_name,
+        siteName,
         pendingMedia: { assetId: asset.id, siteId: site.id },
       })
       return
@@ -817,7 +825,7 @@ async function handleManagerChowBotMessage(
       organizationId: site.organization_id,
       siteId: site.id,
       userRole: site.role,
-      siteName: site.brand_name,
+      siteName,
       pendingMedia,
     })
   } catch (err) {
@@ -871,6 +879,7 @@ async function handleMessage(db: D1Database, env: ApiRecord, message: WhatsAppMe
           if (entry.created) {
             const conversationState = nextConversationState(thread.conversation_state, { type: 'inbound_guest_message' })
             await updateThreadProjection(db, thread.id, { conversationState })
+            await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'entry.appended' })
 
             const source = await adapter.loadSource({ db }, match.submissionId)
             if (source) {
@@ -1035,7 +1044,11 @@ export default defineEventHandler(async (event) => {
   }
 
   let payload: WhatsAppPayload = {}
-  try { payload = rawBody ? JSON.parse(rawBody) : {} } catch { payload = {} }
+  try {
+    payload = rawBody ? JSON.parse(rawBody) : {}
+  } catch {
+    return jsonResponse({ error: 'Malformed JSON payload' }, { status: 400 })
+  }
   const messages = inboundMessages(payload)
   const statuses = inboundStatuses(payload)
 
@@ -1048,3 +1061,6 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ success: true })
 })
+import { defineEventHandler } from 'h3'
+import { getHeader } from 'h3'
+import { readRawBody } from 'h3'

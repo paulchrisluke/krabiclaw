@@ -1,4 +1,4 @@
-import { defineComponent, h, type PropType } from 'vue'
+import { defineComponent, h } from 'vue'
 import { EText } from 'vue-email'
 import EmailShell from '../layouts/EmailShell'
 
@@ -8,7 +8,7 @@ export default defineComponent({
     inviterName: { type: String, required: true },
     role: { type: String, required: true },
     inviteUrl: { type: String, required: true },
-    platformDomain: { type: String as PropType<string | null>, default: null },
+    platformDomain: { type: String, required: true },
   },
   setup(props) {
     return () => h(EmailShell, {
@@ -17,7 +17,7 @@ export default defineComponent({
       ctaUrl: props.inviteUrl,
       ctaText: 'Accept invitation',
       footerNote: "Didn't expect this? You can safely ignore it — the invitation will simply expire.",
-      platformDomain: props.platformDomain || 'krabiclaw.com',
+      platformDomain: props.platformDomain,
     }, () => [
       h(EText, { style: 'margin:0;font-size:15px;color:#52525b;line-height:1.6' }, () => [
         h('strong', { style: 'color:#18181b' }, props.inviterName),

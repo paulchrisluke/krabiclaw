@@ -8,3 +8,4 @@ export default defineEventHandler((event) => {
 
   return sendRedirect(event, '/tenant.webmanifest', 302)
 })
+import { defineEventHandler } from 'h3'

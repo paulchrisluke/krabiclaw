@@ -178,3 +178,6 @@ export default defineEventHandler(async (event) => {
     ...(whatsappSyncWarning ? { warning: whatsappSyncWarning } : {}),
   }, { status: whatsappSyncWarning ? 207 : result.status })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'
+import { readBody } from 'h3'

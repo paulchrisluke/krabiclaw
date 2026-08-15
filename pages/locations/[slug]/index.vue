@@ -319,7 +319,7 @@ const locationIndexCopy = computed(() => getVerticalCopy((site as ApiValue)?.ver
 if (!siteId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
+const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
 
 // Bootstrap: location + all locations + page content + menu + reviews + posts — 1 SSR call
 const {

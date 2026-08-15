@@ -73,3 +73,5 @@ export default defineEventHandler(async (event) => {
     domains: domains ?? [],
   })
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'

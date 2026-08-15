@@ -356,7 +356,7 @@ const scopeHeaderModel = computed<DashboardScopeHeaderModel>(() => {
         ? { label: siteLabel.value, to: siteBase.value }
         : orgBase.value ? { label: organizationLabel.value, to: orgBase.value } : null,
       peers: sites.value.map((s) => ({
-        label: s.brand_name ?? s.subdomain ?? 'Site',
+        label: s.brand_name ?? s.subdomain ?? s.id,
         icon: 'i-lucide-globe',
         active: s.subdomain === activeSiteSlug.value,
         to: orgBase.value && s.subdomain ? `${orgBase.value}/sites/${s.subdomain}` : undefined

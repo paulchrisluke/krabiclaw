@@ -9,6 +9,7 @@ import { getAdapter } from '~/server/domain/guest-threads/adapters/registry'
 import { ensureGuestThread, updateThreadProjection } from '~/server/domain/guest-threads/repository'
 import { appendEntry } from '~/server/domain/guest-threads/entries'
 import { nextConversationState } from '~/server/domain/guest-threads/state-machine'
+import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 import { notifyGuestThreadReply } from '~/server/utils/notifications'
 
 const enc = new TextEncoder()
@@ -87,6 +88,7 @@ export default defineEventHandler(async (event) => {
   if (entry.created) {
     const conversationState = nextConversationState(thread.conversation_state, { type: 'inbound_guest_message' })
     await updateThreadProjection(db, thread.id, { conversationState })
+    await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'entry.appended' })
 
     const source = await adapter.loadSource({ db }, body.submissionId)
     if (source) {
@@ -109,3 +111,6 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ received: true, replyTo, messageId })
 })
+import { defineEventHandler } from 'h3'
+import { getHeader } from 'h3'
+import { readBody } from 'h3'

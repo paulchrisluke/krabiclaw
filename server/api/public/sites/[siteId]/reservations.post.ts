@@ -14,10 +14,9 @@ import { fireSiteEventSafe } from '~/server/utils/site-events'
 import { getAuthSession } from '~/server/utils/auth'
 import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT as IP_HOURLY_LIMIT, getClientIp, hashClientIp, hashIdentifier, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { parsePhone } from '~/utils/phone'
+import { reservationAdapter } from '~/server/domain/guest-threads/adapters/reservation'
+import { ensureGuestThread } from '~/server/domain/guest-threads/repository'
 
-// Fallback used only when a location has no structured opening_hours (e.g. Google Places imports,
-// which store hours as free-text weekday descriptions that can't be parsed into slots).
-const FALLBACK_TIMES = ['10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00']
 const VALID_GUESTS = ['1','2','3','4','5','6','7','8+']
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/
 
@@ -40,8 +39,7 @@ export default defineEventHandler(async (event) => {
   if (phone) {
     const parsedPhone = parsePhone(phone, { defaultCountry: 'TH' })
     if (parsedPhone.valid && parsedPhone.e164) phone = parsedPhone.e164
-    // else: fall back to the raw value — this is a guest-facing form field, not an
-    // identity path, so an unparseable phone shouldn't block the reservation.
+    else return jsonResponse({ error: 'Please enter a valid phone number.' }, { status: 400 })
   }
   const date       = cleanString(body.date, 10)
   const time       = cleanString(body.time, 5)
@@ -64,12 +62,14 @@ export default defineEventHandler(async (event) => {
   if (!VALID_GUESTS.includes(guests))
     return jsonResponse({ error: 'Please choose a valid party size.' }, { status: 400 })
 
-  const site = await queryFirst<{ id: string; organization_id: string; brand_name?: string | null; public_url?: string | null; subdomain?: string | null }>(
+  const site = await queryFirst<{ id: string; organization_id: string; brand_name?: string | null; public_url?: string | null }>(
     db,
-    'SELECT id, organization_id, brand_name, public_url, subdomain FROM sites WHERE id = ? AND status = ? LIMIT 1',
+    'SELECT id, organization_id, brand_name, public_url FROM sites WHERE id = ? AND status = ? LIMIT 1',
     [siteId, 'active'],
   )
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
+  const siteBaseUrl = site.public_url?.trim().replace(/\/$/, '')
+  if (!siteBaseUrl) return jsonResponse({ error: 'Site public URL is not configured' }, { status: 500 })
 
   // Location is always required — there is no site shape where a reservation isn't tied to a
   // specific room/location, so this never silently falls back to a "primary" or first location.
@@ -88,18 +88,17 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Please choose a valid future date.' }, { status: 400 })
 
   let parsedHours: unknown = null
-  let parseFailed = false
   if (location.opening_hours) {
     try {
       parsedHours = JSON.parse(location.opening_hours)
     } catch {
-      parseFailed = true
+      return jsonResponse({ error: 'Location hours configuration is invalid. Please contact support.' }, { status: 500 })
     }
   }
-  if (parseFailed) {
+  if (!isStructuredOpeningHours(parsedHours)) {
     return jsonResponse({ error: 'Location hours configuration is invalid. Please contact support.' }, { status: 500 })
   }
-  const validTimes = (isStructuredOpeningHours(parsedHours) ? generateReservationTimes(parsedHours, date) : FALLBACK_TIMES)
+  const validTimes = generateReservationTimes(parsedHours, date)
     .filter((slot) => !isTimeSlotInPast(date, slot, reservationTimezone))
   if (!validTimes.includes(time))
     return jsonResponse({ error: 'Please choose a valid time — this location is closed at that time.' }, { status: 400 })
@@ -108,18 +107,16 @@ export default defineEventHandler(async (event) => {
   // skipped entirely (party size stays null) when the location has no max_capacity, matching
   // getReservationSlotAvailability's unlimited-capacity behavior (remaining === null).
   let partySizeForCapacityCheck: number | null = null
-  if (isStructuredOpeningHours(parsedHours)) {
-    const availability = await getReservationSlotAvailability(db, siteId, { id: resolvedLocationId, max_capacity: location.max_capacity, opening_hours: parsedHours }, date, reservationTimezone)
-    const slotAvailability = availability.find((s) => s.time_slot === time)
-    if (slotAvailability?.is_closed) {
-      return jsonResponse({ error: 'This time is closed for booking.' }, { status: 409 })
-    }
-    const partySize = guests === '8+' ? 8 : Number.parseInt(guests, 10)
-    if (slotAvailability && slotAvailability.remaining !== null && partySize > slotAvailability.remaining) {
-      return jsonResponse({ error: `Only ${Math.max(slotAvailability.remaining, 0)} spot(s) left at this time.` }, { status: 409 })
-    }
-    if (location.max_capacity != null) partySizeForCapacityCheck = partySize
+  const availability = await getReservationSlotAvailability(db, siteId, { id: resolvedLocationId, max_capacity: location.max_capacity, opening_hours: parsedHours }, date, reservationTimezone)
+  const slotAvailability = availability.find((s) => s.time_slot === time)
+  if (slotAvailability?.is_closed) {
+    return jsonResponse({ error: 'This time is closed for booking.' }, { status: 409 })
   }
+  const partySize = guests === '8+' ? 8 : Number.parseInt(guests, 10)
+  if (slotAvailability && slotAvailability.remaining !== null && partySize > slotAvailability.remaining) {
+    return jsonResponse({ error: `Only ${Math.max(slotAvailability.remaining, 0)} spot(s) left at this time.` }, { status: 409 })
+  }
+  if (location.max_capacity != null) partySizeForCapacityCheck = partySize
 
   const id = crypto.randomUUID()
   const clientIp = getClientIp(event)
@@ -160,8 +157,8 @@ export default defineEventHandler(async (event) => {
   // Single atomic statement: the capacity re-check and the insert happen in one SQL statement
   // (D1/SQLite guarantees single-statement atomicity even without BEGIN/COMMIT support) so a
   // concurrent request can't slip in
-  // between a separate read and write. When partySizeForCapacityCheck is null (no max_capacity,
-  // or unstructured hours), the WHERE clause is unconditionally true and the insert always runs.
+  // between a separate read and write. When partySizeForCapacityCheck is null because the
+  // location has no max_capacity, the WHERE clause is unconditionally true.
   const insertResult = await execute(db, `
     INSERT INTO reservation_submissions (
       id, organization_id, site_id, customer_id, name, email, phone, date, time, guests, requests, ip_hash,
@@ -228,9 +225,10 @@ export default defineEventHandler(async (event) => {
     },
   })
 
+  await ensureGuestThread(db, reservationAdapter, id, { publishEnv: env })
+
   // Build absolute cancel URL for the confirmation email
-  const siteBaseUrl = site.public_url?.replace(/\/$/, '') || (site.subdomain ? `https://${site.subdomain}.krabiclaw.com` : null)
-  const cancelUrl = siteBaseUrl ? `${siteBaseUrl}/reservations/cancel?id=${id}#${cancellation.token}` : null
+  const cancelUrl = `${siteBaseUrl}/reservations/cancel?id=${id}#${cancellation.token}`
 
   // Resolve contact info — location-specific when available, site-level fallback
   const { contactPhone, contactEmail } = await resolveLocationContact(db, siteId, resolvedLocationId)
@@ -282,3 +280,6 @@ export default defineEventHandler(async (event) => {
     policy_summary: policy.id ? renderBookingPolicySummary(policy, locale) : null,
   }, { status: 201 })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'
+import { readBody } from 'h3'

@@ -689,14 +689,12 @@ export async function deleteContentField(
 
 function safeJson(value: unknown) {
   if (typeof value !== "string" || !value.trim()) return null;
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
+  return JSON.parse(value)
 }
 
 function safeJsonArray(value: unknown) {
   const parsed = safeJson(value);
-  return Array.isArray(parsed) ? parsed : [];
+  if (parsed == null) return []
+  if (!Array.isArray(parsed)) throw new Error('Stored JSON array is invalid')
+  return parsed
 }

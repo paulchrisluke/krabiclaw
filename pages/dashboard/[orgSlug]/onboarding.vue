@@ -19,7 +19,7 @@
         :locations="locations"
         :plan="plan"
         :owner-phone="ownerPhone"
-        :vertical="siteVertical"
+        :vertical="requiredSiteVertical"
         @done="finish"
       />
       <OnboardingPreviewPane
@@ -29,7 +29,7 @@
         :selected-page="selectedPage"
         site-status="live"
         :site-domain="siteDomain"
-        :vertical="siteVertical"
+        :vertical="requiredSiteVertical"
         @select-page="selectedPage = $event"
         @select-location="selectedLocationId = $event"
       />
@@ -106,8 +106,8 @@ const loadError = ref(false)
 const paymentPending = ref(false)
 const hydrated = ref(false)
 const siteId = ref('')
-const siteName = ref('Your Site')
-const siteVertical = ref<SiteVertical>('restaurant')
+const siteName = ref('')
+const siteVertical = ref<SiteVertical | null>(null)
 const subdomain = ref('')
 const plan = ref('free')
 const ownerPhone = ref<string | null>(null)
@@ -117,12 +117,18 @@ const selectedPage = ref('home')
 
 const platformHostname = computed(() => {
   const domain = config.public.freeSiteDomain as string
+  if (!domain?.trim()) throw createError({ statusCode: 500, statusMessage: 'Free-site domain is not configured' })
   return domain.replace(/^https?:\/\//, '')
 })
 
 const siteDomain = computed(() =>
   subdomain.value ? `${subdomain.value}.${platformHostname.value}` : ''
 )
+
+const requiredSiteVertical = computed<SiteVertical>(() => {
+  if (!siteVertical.value) throw createError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
+  return siteVertical.value
+})
 
 const previewLocations = computed(() =>
   locations.value.map(l => ({ id: l.id, slug: l.slug, title: l.title, is_primary: l.is_primary }))
@@ -133,7 +139,8 @@ const selectedLocation = computed(() =>
 )
 
 const platformBase = computed(() => {
-  const base = ((config.public.platformDomain || config.public.freeSiteDomain) as string).replace(/\/$/, '')
+  const base = String(config.public.platformDomain || '').trim().replace(/\/$/, '')
+  if (!base) throw createError({ statusCode: 500, statusMessage: 'Platform domain is not configured' })
   return `${base}/preview/site/${siteId.value}`
 })
 
@@ -157,8 +164,8 @@ function resetTransferContextState() {
   loadError.value = false
   paymentPending.value = false
   siteId.value = ''
-  siteName.value = 'Your Site'
-  siteVertical.value = 'restaurant'
+  siteName.value = ''
+  siteVertical.value = null
   subdomain.value = ''
   plan.value = 'free'
   ownerPhone.value = null
@@ -174,8 +181,12 @@ function applyTransferContext(ctx: TransferOnboardingContext) {
     return
   }
   if (ctx.site) {
+    if (!ctx.site.brand_name?.trim() || !ctx.site.vertical) {
+      loadError.value = true
+      return
+    }
     siteId.value = ctx.site.id
-    siteName.value = ctx.site.brand_name ?? 'Your Site'
+    siteName.value = ctx.site.brand_name.trim()
     siteVertical.value = normalizeVertical(ctx.site.vertical) as SiteVertical
     subdomain.value = ctx.site.subdomain ?? ''
     plan.value = ctx.site.plan ?? 'free'

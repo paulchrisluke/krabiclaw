@@ -53,3 +53,4 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 502, statusMessage: 'Failed to retrieve payment method' })
   }
 })
+import { defineEventHandler } from 'h3'

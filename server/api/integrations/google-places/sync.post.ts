@@ -61,3 +61,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: err instanceof Error ? err.message : 'Sync failed' }, { status: 502 })
   }
 })
+import { defineEventHandler } from 'h3'
+import { readBody } from 'h3'

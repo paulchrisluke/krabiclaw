@@ -86,3 +86,5 @@ export default defineEventHandler(async (event) => {
     recent_errors: recentErrors ?? [],
   });
 });
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'

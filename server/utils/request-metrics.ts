@@ -333,7 +333,7 @@ export function flushRequestMetrics(event: H3Event, responseBody?: unknown) {
   const metrics = metricsByEvent.get(event)
   if (!metrics) return
 
-  // The afterResponse hook is logging only; setting headers here causes
+  // The response hook is logging only; setting headers here causes
   // ERR_HTTP_HEADERS_SENT in Nitro.
   if (metrics.resources.size === 0 && responseBody !== undefined) {
     const serialized = typeof responseBody === 'string'

@@ -4,6 +4,8 @@ import { notifyReservationCancelled } from '~/server/utils/notifications'
 import { hashReservationCancelToken, readBearerToken } from '~/server/utils/reservation-cancel-token'
 import { getClientIp, hashClientIp, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 import { fireSiteEventSafe } from '~/server/utils/site-events'
+import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
+import { getGuestThreadBySubmission, updateThreadProjection } from '~/server/domain/guest-threads/repository'
 
 const IP_HOURLY_LIMIT = 20
 const RESERVATION_HOURLY_LIMIT = 5
@@ -115,6 +117,12 @@ export default defineEventHandler(async (event) => {
     },
   })
 
+  const thread = await getGuestThreadBySubmission(db, 'reservation', reservationId)
+  if (thread) {
+    await updateThreadProjection(db, thread.id, {})
+    await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'thread.changed' })
+  }
+
   const site = await queryFirst<{ brand_name?: string | null }>(
     db,
     'SELECT brand_name FROM sites WHERE id = ? LIMIT 1',
@@ -152,3 +160,6 @@ export default defineEventHandler(async (event) => {
     message: 'Reservation cancelled successfully'
   })
 })
+import { defineEventHandler } from 'h3'
+import { getHeader } from 'h3'
+import { getRouterParam } from 'h3'

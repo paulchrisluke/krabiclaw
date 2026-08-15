@@ -56,3 +56,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ success: true, manifest: result.manifest })
 })
+import { defineEventHandler } from 'h3'
+import { readBody } from 'h3'

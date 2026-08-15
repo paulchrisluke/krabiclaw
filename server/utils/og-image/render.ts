@@ -18,7 +18,8 @@ function resolveLogoDataUri(logoUrl: string | null | undefined): Promise<string 
   if (logoUrl) {
     try {
       const url = new URL(logoUrl)
-      const platformDomain = process.env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'krabiclaw.com'
+      const platformDomain = process.env.NUXT_PUBLIC_PLATFORM_DOMAIN
+      if (!platformDomain) return fetchImageAsDataUri(logoUrl, { timeoutMs: 4000 })
       const platformOrigin = platformDomain.startsWith('http') ? platformDomain : `https://${platformDomain}`
       if (url.pathname === '/krabi-claw-logo.png' && url.origin === new URL(platformOrigin).origin) {
         return Promise.resolve(`data:image/png;base64,${platformLogoBase64}`)

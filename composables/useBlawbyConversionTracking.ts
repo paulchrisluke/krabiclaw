@@ -34,7 +34,7 @@ function sendNativeConversion(siteId: string, payload: BlawbyConversionPayload) 
     const blob = new Blob([body], { type: 'application/json' })
     if (navigator.sendBeacon(endpoint, blob)) return
   }
-  void $fetch(endpoint, { method: 'POST', body: payload }).catch(() => {})
+  void $fetch<void, string, { method: 'POST'; body: BlawbyConversionPayload }>(endpoint, { method: 'POST', body: payload }).catch(() => {})
 }
 
 function loadGtmOnInteraction(containerId: string) {

@@ -30,3 +30,4 @@ export default defineEventHandler(async (event) => {
     return apiErrorResponse(event, 502, 'BILLING_ITEMS_LOAD_FAILED', 'Billing items could not be loaded')
   }
 })
+import { defineEventHandler } from 'h3'

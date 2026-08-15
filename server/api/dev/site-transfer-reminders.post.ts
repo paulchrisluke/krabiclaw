@@ -39,3 +39,4 @@ export default defineEventHandler(async (event) => {
   const result = await processSiteTransferReminders(env, db, { force: true })
   return jsonResponse(result)
 })
+import { defineEventHandler } from 'h3'

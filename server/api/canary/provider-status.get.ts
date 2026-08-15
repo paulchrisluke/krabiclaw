@@ -21,3 +21,4 @@ export default defineEventHandler(async (event) => {
   const ok = whatsapp.ok && resend.ok
   return jsonResponse({ ok, whatsapp, resend }, { status: ok ? 200 : 503 })
 })
+import { defineEventHandler } from 'h3'

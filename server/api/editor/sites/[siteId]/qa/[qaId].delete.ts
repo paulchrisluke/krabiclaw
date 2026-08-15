@@ -11,3 +11,6 @@ export default defineEventHandler(async (event) => {
   const result = await deleteQa(db, { organizationId: site.organization_id, siteId, locationId: null, pagePath }, qaId)
   return jsonResponse(result.data, { status: result.status })
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'
+import { getRouterParam } from 'h3'

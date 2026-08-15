@@ -27,3 +27,5 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 500, message: 'Failed to resolve dashboard destination' })
   }
 })
+import { defineEventHandler } from 'h3'
+import { sendRedirect } from 'h3'

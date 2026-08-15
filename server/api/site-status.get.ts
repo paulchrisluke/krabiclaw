@@ -47,3 +47,4 @@ export default defineEventHandler(async (event) => {
     }, { status: 500 })
   }
 })
+import { defineEventHandler } from 'h3'

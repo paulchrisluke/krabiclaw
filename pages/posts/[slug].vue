@@ -56,7 +56,7 @@ const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => site?.brand_name || 'KrabiClaw')
+const siteName = computed(() => site?.brand_name?.trim() ?? '')
 const postBrand = computed(() => ({
   name: siteName.value,
   logoUrl: site?.logo_url || null,

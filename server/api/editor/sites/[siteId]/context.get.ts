@@ -6,3 +6,5 @@ export default defineEventHandler(async (event) => {
   if (!siteId) throw createError({ statusCode: 400, statusMessage: 'Site ID is required' })
   return jsonResponse(await loadDashboardEditorContext(event, siteId))
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

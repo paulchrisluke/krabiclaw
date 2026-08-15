@@ -7,3 +7,4 @@ export default defineEventHandler(async (event) => {
   const { members, invitations } = await getOrganizationMembersData(db, organization.id)
   return jsonResponse({ members, invitations })
 })
+import { defineEventHandler } from 'h3'

@@ -82,3 +82,5 @@ export default defineEventHandler(async (event) => {
     return new Response(null, { status: 302, headers: { Location: await connectionRedirect('error') } })
   }
 })
+import { defineEventHandler } from 'h3'
+import { getRequestURL } from 'h3'

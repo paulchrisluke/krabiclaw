@@ -7,3 +7,4 @@ export default defineEventHandler((event) => {
     height: 512,
   })
 })
+import { defineEventHandler } from 'h3'

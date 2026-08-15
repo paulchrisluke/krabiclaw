@@ -13,3 +13,4 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ unread_count: Number(row?.count ?? 0) })
 })
+import { defineEventHandler } from 'h3'

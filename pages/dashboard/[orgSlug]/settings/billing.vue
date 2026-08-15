@@ -53,7 +53,7 @@
               <div class="min-w-0">
                 <p class="text-sm font-medium text-highlighted truncate">{{ s.brandName ?? s.subdomain }}</p>
                 <p class="text-xs text-muted">
-                  {{ s.subdomain }}.krabiclaw.com
+                  {{ s.subdomain }}
                   <span v-if="s.currentPeriodEnd"> · Renews {{ formatDate(s.currentPeriodEnd) }}</span>
                 </p>
               </div>

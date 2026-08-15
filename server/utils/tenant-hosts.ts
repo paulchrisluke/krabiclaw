@@ -27,16 +27,10 @@ export function hostnameOf(host: string): string {
   return host?.split(':')[0] || ''
 }
 
-// "localhost" / "krabiclaw.com" are platform routes regardless of how
-// NUXT_PUBLIC_FREE_SITE_DOMAIN is configured.
-// This mirrors the hardcoded 'krabiclaw.com' fallback in
-// server/utils/domains.ts platformDomainCandidates.
 export function getPlatformHosts(env: TenantHostEnv): string[] {
   return Array.from(new Set([
     'localhost',
     '127.0.0.1',
-    'krabiclaw.com',
-    'www.krabiclaw.com',
     normalizeHost(env.NUXT_PUBLIC_FREE_SITE_DOMAIN),
     normalizeHost(env.NUXT_PUBLIC_PLATFORM_DOMAIN),
   ].filter((value): value is string => Boolean(value))))
@@ -74,11 +68,10 @@ export function isPreviewContext(host: string): boolean {
   return WORKERS_DEV_PREVIEW_HOST_PATTERN.test(hostname)
 }
 
-// The domain that free-tier subdomains (e.g. "demo.krabiclaw.com") are minted
-// under. Falls back to 'krabiclaw.com' when unconfigured, matching
-// platformDomainCandidates in server/utils/domains.ts.
 export function getFreeSiteDomain(env: TenantHostEnv): string {
-  return normalizeHost(env.NUXT_PUBLIC_FREE_SITE_DOMAIN) || 'krabiclaw.com'
+  const domain = normalizeHost(env.NUXT_PUBLIC_FREE_SITE_DOMAIN)
+  if (!domain) throw new Error('NUXT_PUBLIC_FREE_SITE_DOMAIN is required')
+  return domain
 }
 
 // Derives the subdomain label to look up in site_domains for a given

@@ -6,3 +6,5 @@ export default defineEventHandler(async (event) => {
   if (!postId) throw createError({ statusCode: 400, statusMessage: 'Post ID required' })
   return jsonResponse(await loadDashboardAdminBlogPost(event, postId))
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

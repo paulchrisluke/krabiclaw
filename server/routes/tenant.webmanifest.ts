@@ -9,7 +9,8 @@ export default defineEventHandler((event) => {
     favicon_url?: string | null
   } | undefined
 
-  const brandName = site?.brand_name?.trim() || 'KrabiClaw'
+  const brandName = site?.brand_name?.trim() || ''
+  if (!brandName) throw createError({ statusCode: 500, statusMessage: 'Tenant brand name is not configured' })
 
   setHeader(event, 'x-robots-tag', 'noindex, nofollow, noarchive')
   setHeader(event, 'content-type', 'application/manifest+json')
@@ -43,3 +44,4 @@ export default defineEventHandler((event) => {
     scope: '/',
   }
 })
+import { defineEventHandler } from 'h3'

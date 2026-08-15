@@ -9,7 +9,7 @@
 // for dashboard editors, who see edits reflected immediately today because
 // there's no cache in front of bootstrap at all yet.
 //
-// Covering all dashboard routes from one afterResponse hook (instead of a
+// Covering all dashboard routes from one response hook (instead of a
 // call added to every mutating route file) relies on event.context.params
 // being populated by Nitro's router before dispatch — the same object this
 // hook receives, and the same field every one of those route files already
@@ -21,19 +21,19 @@
 // its tools only touch site_id IS NULL platform-scoped rows, which the public
 // resource endpoints' tenant-scoped queries (WHERE site_id = ?) never read.
 
-import { getResponseStatus } from 'h3'
 import type { H3Event } from 'h3'
 import type { DbClient } from '~/server/db'
 import { drainPublicResourceCacheInvalidations } from '~/server/utils/public-resource-cache'
+import { definePlugin } from 'nitro'
 
 const EDITOR_SITES_PREFIX = '/api/editor/sites/'
 
-export default defineNitroPlugin((nitroApp) => {
-  nitroApp.hooks.hook('afterResponse', async (event: H3Event) => {
+export default definePlugin((nitroApp) => {
+  nitroApp.hooks.hook('response', async (response, event: H3Event) => {
     if (event.method === 'GET' || event.method === 'HEAD') return
     if (!event.path.startsWith(EDITOR_SITES_PREFIX)) return
 
-    const status = getResponseStatus(event)
+    const status = response.status
     if (status < 200 || status >= 300) return
 
     const siteId = event.context.params?.siteId
@@ -47,7 +47,7 @@ export default defineNitroPlugin((nitroApp) => {
     const kv = runtimeEnv?.SITE_CACHE
     if (!kv || !runtimeEnv?.DB) return
 
-    // Awaited inline rather than scheduled via waitUntil — afterResponse hooks
+    // Awaited inline rather than scheduled via waitUntil — response hooks
     // run after the client has already received the response, but leaving this
     // detached let the request be considered "done" by CI/tests before KV was
     // actually cleared. Awaiting here doesn't block the client (response is

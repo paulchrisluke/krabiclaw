@@ -16,7 +16,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
       allowed = result.status === 'ok' && result.allowed
     }
   } else {
-    const access = await $fetch<{ allowed?: boolean }>('/api/account/access').catch(() => null)
+    const access = await $fetch<{ allowed?: boolean }, string>('/api/account/access').catch(() => null)
     allowed = Boolean(access?.allowed)
   }
 

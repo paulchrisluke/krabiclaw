@@ -16,7 +16,8 @@ export default defineEventHandler(async (event) => {
   const origin = resolvePublicOrigin(event)
   const isTenant = event.context.tenantType === 'tenant'
   const siteId = isTenant ? String(event.context.siteId || '') : ''
-  const siteName = String(event.context.site?.brand_name || 'Site')
+  const siteName = event.context.site?.brand_name?.trim() || ''
+  if (isTenant && siteId && !siteName) throw createError({ statusCode: 500, statusMessage: 'Tenant brand name is not configured' })
   const posts = isTenant && siteId
     ? await listPublishedTenantBlogPostsForLlm(db, siteId)
     : await listPublishedPlatformBlogPostsForLlm(db)
@@ -29,3 +30,4 @@ export default defineEventHandler(async (event) => {
     authorName: siteName,
   } : {}))
 })
+import { defineEventHandler } from 'h3'

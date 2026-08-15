@@ -22,3 +22,4 @@ export default defineEventHandler(async (event) => {
 
   return result.bytes
 })
+import { defineEventHandler } from 'h3'

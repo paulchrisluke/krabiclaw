@@ -1,14 +1,14 @@
 name = "krabiclaw"
-main = "workers/app-entry.ts"
+main = ".output/server/index.mjs"
 compatibility_date = "2024-11-01"
-compatibility_flags = ["nodejs_compat_v2", "global_fetch_strictly_public"]
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 
 [assets]
 directory = ".output/public"
 
 [triggers]
-# Every expression is dispatched by workers/app-entry.ts. Keep this list in
-# sync with SCHEDULED_TASKS in server/scheduled-tasks.ts.
+# Every expression is dispatched through Nitro's cloudflare:scheduled hook.
+# Keep this list in sync with SCHEDULED_TASKS in server/scheduled-tasks.ts.
 crons = ["*/5 * * * *", "*/2 * * * *", "*/10 * * * *", "0 3 * * *", "0 4 * * *", "0 0 * * SUN", "0 * * * *"]
 
 [[routes]]

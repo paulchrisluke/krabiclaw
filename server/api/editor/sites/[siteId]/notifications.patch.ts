@@ -32,3 +32,6 @@ export default defineEventHandler(async (event) => {
   const notifications = await updateNotificationsSettings(db, site.organization_id, siteId, body.whatsapp_phone?.trim(), body.channels, env, getHeaders(event) as HeadersInit)
   return jsonResponse({ success: true, notifications })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'
+import { readBody } from 'h3'

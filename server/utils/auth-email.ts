@@ -14,7 +14,9 @@ export interface AuthEmailEnv {
 }
 
 function platformDomain(env: AuthEmailEnv): string {
-  return (env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'krabiclaw.com')
+  const configured = env.NUXT_PUBLIC_PLATFORM_DOMAIN?.trim()
+  if (!configured) throw new Error('NUXT_PUBLIC_PLATFORM_DOMAIN is required')
+  return configured
     .replace(/^https?:\/\//, '')
     .replace(/\/$/, '')
 }

@@ -113,7 +113,8 @@ async function verifyBearerToken(
   db: D1Database,
   options: RequireMcpUserOptions,
 ): Promise<McpUserContext> {
-  const baseUrl = (env.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
+  const baseUrl = env.BETTER_AUTH_URL?.replace(/\/$/, '')
+  if (!baseUrl) throw createError({ statusCode: 500, statusMessage: 'BETTER_AUTH_URL is required' })
   const tokenFingerprint = (await sha256Base64Url(token)).slice(0, 12)
 
   const audiences = options.audiences?.length
@@ -236,7 +237,8 @@ async function verifyBearerToken(
 }
 
 async function getAuthJwks(event: H3Event, env: CloudflareEnv): Promise<JSONWebKeySet | undefined> {
-  const baseUrl = (env.BETTER_AUTH_URL ?? 'https://krabiclaw.com').replace(/\/$/, '')
+  const baseUrl = env.BETTER_AUTH_URL?.replace(/\/$/, '')
+  if (!baseUrl) throw createError({ statusCode: 500, statusMessage: 'BETTER_AUTH_URL is required' })
   const response = await createAuth(env).handler(new Request(`${baseUrl}/api/auth/jwks`, {
     method: 'GET',
     headers: getHeaders(event) as HeadersInit,

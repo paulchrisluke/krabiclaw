@@ -318,7 +318,7 @@ const props = withDefaults(defineProps<{
   post: SayaPostDetailPost
   brand?: SayaPostBrand
 }>(), {
-  brand: () => ({ name: 'KrabiClaw', logoUrl: null }),
+  brand: () => ({ name: '', logoUrl: null }),
 })
 
 defineSlots<{
@@ -329,7 +329,7 @@ const { t } = useI18n()
 const { formatDate } = useLocaleDate()
 
 const brand = computed(() => ({
-  name: props.brand.name || 'KrabiClaw',
+  name: props.brand.name,
   logoUrl: props.brand.logoUrl || null,
 }))
 const brandInitial = computed(() => brand.value.name.trim().charAt(0).toUpperCase() || 'K')

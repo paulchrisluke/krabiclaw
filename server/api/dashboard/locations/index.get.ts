@@ -4,3 +4,4 @@ import { listDashboardLocationsResource } from '~/server/utils/dashboard-locatio
 export default defineEventHandler(async (event) => {
   return jsonResponse(await listDashboardLocationsResource(event))
 })
+import { defineEventHandler } from 'h3'

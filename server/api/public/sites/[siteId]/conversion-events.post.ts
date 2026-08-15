@@ -102,3 +102,7 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ success: true, id: result.id }, { status: 201 })
 })
+import { defineEventHandler } from 'h3'
+import { getHeader } from 'h3'
+import { getRouterParam } from 'h3'
+import { readBody } from 'h3'

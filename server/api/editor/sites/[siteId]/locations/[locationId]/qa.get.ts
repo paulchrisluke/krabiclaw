@@ -8,3 +8,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse(await loadDashboardLocationQa(event, siteId, locationId))
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

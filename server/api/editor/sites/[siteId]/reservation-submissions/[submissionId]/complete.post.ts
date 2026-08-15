@@ -3,6 +3,8 @@ import { getAuthSession } from '~/server/utils/auth'
 import { queryFirst } from '~/server/db'
 import { markBookingCompleted } from '~/server/utils/review-requests'
 import { assertResourceAccess } from '~/server/utils/member-access'
+import { getGuestThreadBySubmission, updateThreadProjection } from '~/server/domain/guest-threads/repository'
+import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -36,6 +38,13 @@ export default defineEventHandler(async (event) => {
 
   const completed = await markBookingCompleted(db, 'reservation', submissionId, 'manual')
   if (!completed) return jsonResponse({ error: 'Reservation could not be completed' }, { status: 400 })
+  const thread = await getGuestThreadBySubmission(db, 'reservation', submissionId)
+  if (thread) {
+    await updateThreadProjection(db, thread.id, {})
+    await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'thread.changed' })
+  }
 
   return jsonResponse({ completed: true, submission_id: submissionId })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

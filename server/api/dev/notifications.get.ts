@@ -64,3 +64,6 @@ export default defineEventHandler(async (event) => {
   const rows = await queryAll(db, sql, binds)
   return jsonResponse({ notifications: rows ?? [] })
 })
+import { defineEventHandler } from 'h3'
+import { getHeader } from 'h3'
+import { getQuery } from 'h3'

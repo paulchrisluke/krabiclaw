@@ -11,15 +11,6 @@ export interface PublicShellQueryIndexes {
   locales: number
 }
 
-function parseJson(raw: string | null) {
-  if (!raw) return null
-  try {
-    return JSON.parse(raw)
-  } catch {
-    return null
-  }
-}
-
 export function appendPublicShellQueries(
   queries: BatchQuery[],
   organizationId: string,
@@ -85,7 +76,7 @@ export function buildPublicShellPayload(
       id: location.id,
       slug: location.slug,
       title: location.title,
-      address: parseJson(location.address as string | null),
+      address: location.address ? JSON.parse(String(location.address)) : null,
       phone: location.phone,
       email: location.email ?? null,
       website_url: location.website_url,
@@ -100,8 +91,8 @@ export function buildPublicShellPayload(
       }),
       latitude: location.latitude,
       longitude: location.longitude,
-      opening_hours: parseJson(location.opening_hours as string | null),
-      special_hours: parseJson(location.special_hours as string | null),
+      opening_hours: location.opening_hours ? JSON.parse(String(location.opening_hours)) : null,
+      special_hours: location.special_hours ? JSON.parse(String(location.special_hours)) : null,
       timezone: location.timezone ?? null,
       rating: location.rating,
       review_count: location.review_count,
@@ -176,7 +167,7 @@ export function buildPublicShellPayload(
         ? {
             title: primary.title,
             city: primary.city,
-            storefrontAddress: parseJson(primary.address as string | null),
+            storefrontAddress: primary.address ? JSON.parse(String(primary.address)) : null,
             phoneNumbers: primary.phone ? [{ phoneNumber: primary.phone }] : [],
             websiteUri: primary.website_url,
             mapsUri: primary.maps_url,

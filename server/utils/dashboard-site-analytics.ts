@@ -102,15 +102,15 @@ function normalizeCountryCode(value: unknown): string {
   return /^[A-Z]{2}$/.test(code) ? code : 'XX'
 }
 
-function normalizeReferrer(value: unknown, siteSubdomain: string | null): string {
+function normalizeReferrer(value: unknown, sitePublicUrl: string | null): string {
   const raw = String(value || '').trim()
   if (!raw) return 'Direct'
 
   try {
     const url = new URL(raw)
     const host = url.hostname.replace(/^www\./, '')
-    const freeHost = siteSubdomain ? `${siteSubdomain}.krabiclaw.com` : ''
-    if (siteSubdomain && (host === freeHost || host === `${siteSubdomain}.localhost`)) return 'Internal'
+    const configuredHost = sitePublicUrl ? new URL(sitePublicUrl).hostname.replace(/^www\./, '') : ''
+    if (configuredHost && host === configuredHost) return 'Internal'
     return host || 'Direct'
   } catch {
     return 'Direct'
@@ -382,7 +382,7 @@ export async function loadDashboardSiteAnalytics(
       LIMIT 200
     `, [siteId, startIso, endIso])
     for (const row of referrerRows) {
-      const source = normalizeReferrer(row.referrer, site.subdomain)
+      const source = normalizeReferrer(row.referrer, site.public_url)
       referrerMap.set(source, (referrerMap.get(source) || 0) + toNumber(row.views))
     }
     const referrers: ReferrerBreakdown[] = Array.from(referrerMap.entries())

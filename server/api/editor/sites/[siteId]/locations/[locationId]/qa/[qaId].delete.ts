@@ -12,3 +12,5 @@ export default defineEventHandler(async (event) => {
   const result = await deleteLocationQa(db, siteId, locationId, qaId)
   return jsonResponse(result.data, { status: result.status })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

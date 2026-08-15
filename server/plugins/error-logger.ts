@@ -1,4 +1,6 @@
-export default defineNitroPlugin((nitroApp) => {
+import { definePlugin } from 'nitro'
+
+export default definePlugin((nitroApp) => {
   nitroApp.hooks.hook('error', async (error, { event: _event }) => {
     // A 404 here is routinely a scanner bot probing for .env/wp-admin/phpinfo
     // paths, not a real server fault — logging every one at error severity

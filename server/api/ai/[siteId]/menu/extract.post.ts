@@ -6,7 +6,7 @@
 // Multipart fields:
 //   file        — required, image file (JPEG/PNG/WEBP/GIF) or first page of a PDF rendered to image
 //   menuId      — optional, existing menu to append to; creates a new one if omitted
-//   menuName    — optional, name for a newly created menu (default: "Imported Menu")
+//   menuName    — required when menuId is omitted, name for a newly created menu
 
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
@@ -50,6 +50,8 @@ export default defineEventHandler(async (event) => {
   }
 
   const env = cloudflareEnv(event)
+  const platformOrigin = env.NUXT_PUBLIC_PLATFORM_DOMAIN
+  if (!platformOrigin) return jsonResponse({ error: 'NUXT_PUBLIC_PLATFORM_DOMAIN is required' }, { status: 500 })
   const db = env.DB
 
   if (!db) {
@@ -237,7 +239,10 @@ export default defineEventHandler(async (event) => {
   if (!menuId) {
     // A brand-new menu created here has no location — it's always site-wide.
     await assertSiteWideAccess(db, principal)
-    const menuName = (formData.get('menuName') as string | null)?.trim() || 'Imported Menu'
+    const menuName = (formData.get('menuName') as string | null)?.trim()
+    if (!menuName) {
+      return jsonResponse({ error: 'menuName is required when creating a menu.' }, { status: 400 })
+    }
     const newMenu = await createMenu(db, orgId, siteId, { name: menuName }, session.user.id)
     menuId = newMenu.id
     menuCreatedInThisRequest = true
@@ -250,14 +255,17 @@ export default defineEventHandler(async (event) => {
   try {
     for (const item of validItems as ApiValue[]) {
       const priceAmount = item.price_amount ?? item.price
+      const section = typeof item.section === 'string' ? item.section.trim().slice(0, 100) : ''
+      const name = typeof item.name === 'string' ? item.name.trim().slice(0, 200) : ''
+      if (!section || !name) throw createError({ statusCode: 422, statusMessage: 'AI menu items require section and name' })
       const created = await createMenuItem(
         db,
         orgId,
         siteId!,
         menuId!,
         {
-          section: String(item.section || 'Menu').slice(0, 100),
-          name: String(item.name || '').slice(0, 200),
+          section,
+          name,
           description: item.description ? String(item.description).slice(0, 500) : undefined,
           price_amount: priceAmount ? String(priceAmount).slice(0, 50) : undefined,
         },
@@ -299,7 +307,7 @@ export default defineEventHandler(async (event) => {
       template: 'ai_action_complete',
       vars: {
         action_summary: `${createdItems.length} menu item${createdItems.length === 1 ? '' : 's'} extracted and added to menu`,
-        preview_url: `${env.NUXT_PUBLIC_PLATFORM_DOMAIN ?? 'https://krabiclaw.com'}/dashboard/${orgSlug}/menu`,
+        preview_url: `${platformOrigin}/dashboard/${orgSlug}/menu`,
       },
     }).catch(console.error)
 
@@ -312,7 +320,7 @@ export default defineEventHandler(async (event) => {
         template: 'low_credits',
         vars: {
           credits_remaining: String(newBalance),
-          upgrade_url: `${env.NUXT_PUBLIC_PLATFORM_DOMAIN ?? 'https://krabiclaw.com'}/dashboard/${orgSlug}/settings/billing`,
+          upgrade_url: `${platformOrigin}/dashboard/${orgSlug}/settings/billing`,
         },
       }).catch(console.error)
     }
@@ -326,3 +334,6 @@ export default defineEventHandler(async (event) => {
     credits: { charged: creditsCharged, remaining: newBalance },
   }, { status: 201 })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'
+import { readFormData } from 'h3'

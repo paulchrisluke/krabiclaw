@@ -34,3 +34,6 @@ export default defineEventHandler(async (event) => {
     return apiErrorResponse(event, statusCode, code, message)
   }
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'
+import { getRouterParam } from 'h3'

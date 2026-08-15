@@ -289,10 +289,10 @@ VALUES
 UPDATE sites SET primary_location_id = ${sqlValue(LOCATION_ID)} WHERE id = ${sqlValue(SITE_ID)};
 
 INSERT INTO site_locales
-  (id, organization_id, site_id, locale, label, is_source, status, fallback_enabled, created_at, updated_at)
+  (id, organization_id, site_id, locale, label, is_source, status, created_at, updated_at)
 VALUES
   ('locale-ncls-ci-en', ${sqlValue(ORGANIZATION_ID)}, ${sqlValue(SITE_ID)}, 'en', 'English', 1,
-   'published', 1, ${sqlValue(SEEDED_AT)}, ${sqlValue(SEEDED_AT)});
+   'published', ${sqlValue(SEEDED_AT)}, ${sqlValue(SEEDED_AT)});
 
 INSERT INTO site_domains
   (id, organization_id, site_id, domain, type, role, status, dns_status, created_at, updated_at)

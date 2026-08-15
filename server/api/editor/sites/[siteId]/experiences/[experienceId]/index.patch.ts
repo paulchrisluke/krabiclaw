@@ -121,3 +121,6 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ experience })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'
+import { readBody } from 'h3'

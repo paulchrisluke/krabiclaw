@@ -10,3 +10,5 @@ export default defineEventHandler(async (event) => {
   const payload = await loadDashboardContext(event, { afterTransfer })
   return jsonResponse(finalizeRequestMetrics(event, 'dashboard-context', payload))
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'

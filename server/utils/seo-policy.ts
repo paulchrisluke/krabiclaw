@@ -127,7 +127,7 @@ export function resolveRuntimeSeoSiteConfig(input: {
   if (input.tenantType === TENANT_TYPES.PLATFORM) {
     return {
       name: 'KrabiClaw',
-      url: indexable ? 'https://krabiclaw.com' : input.origin,
+      url: input.origin,
       indexable,
     }
   }

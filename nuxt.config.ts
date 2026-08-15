@@ -3,7 +3,6 @@ import { createRequire } from 'node:module'
 import { getIcons } from '@iconify/utils'
 import { visualizer } from 'rollup-plugin-visualizer'
 import { DEFAULT_CURRENCY, isCurrencyCode } from './shared/currencies'
-import cloudflareDevModule from './build/cloudflare-dev-module'
 
 const configuredDefaultCurrency = process.env.DEFAULT_CURRENCY?.toUpperCase()
 
@@ -135,7 +134,6 @@ function publicSurfaceCssPlugin() {
 export default defineNuxtConfig({
   ignore: ['**/.worktrees/**', '**/.claude/**'],
   modules: [
-    cloudflareDevModule,
     '@nuxt/scripts',
     '@nuxtjs/robots',
     '@nuxtjs/sitemap',
@@ -473,17 +471,8 @@ export default defineNuxtConfig({
   // Nitro configuration for Cloudflare deployment
   nitro: {
     preset: 'cloudflare-module',
-    cloudflareDev: {
-      // Force deterministic binding discovery in CI/dev.
-      configPath: './wrangler.dev.toml',
-      persistDir: '.wrangler/state/v3',
-      silent: true,
-    },
     devServer: {
       watch: ['server']
-    },
-    externals: {
-      inline: ['@opentelemetry/api']
     },
     // Leave the resolved WASM import for Wrangler, which uploads .wasm as a precompiled
     // module. Nitro's Rollup pass cannot parse the binary, and Workers cannot compile raw

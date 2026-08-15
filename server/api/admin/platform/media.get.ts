@@ -24,3 +24,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to load media' }, { status: 500 })
   }
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'

@@ -16,3 +16,5 @@ export default defineEventHandler(async (event) => {
   })
   return jsonResponse(finalizeRequestMetrics(event, 'dashboard-events', payload))
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'

@@ -1633,7 +1633,7 @@ export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, si
     content_document: contentDocument,
     editor_template: editorTemplate?.slug ?? 'platform',
     editor_theme_tokens: editorThemeTokens,
-    editor_site_name: siteId ? editorTheme?.brand_name || 'Our Site' : 'KrabiClaw',
+    editor_site_name: siteId ? (editorTheme?.brand_name || '') : 'KrabiClaw',
     editor_brand_color: editorTheme?.brand_color ?? null,
     social_image: socialImage,
   }

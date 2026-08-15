@@ -52,3 +52,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: statusMessage }, { status: statusCode })
   }
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'

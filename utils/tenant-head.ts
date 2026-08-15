@@ -1,10 +1,8 @@
-type HeadLink = {
-  key: string
-  rel: string
-  href: string
-  type?: string
-  sizes?: string
-}
+type HeadLink =
+  | { key: string; rel: 'icon'; href: string; type?: string; sizes?: string }
+  | { key: string; rel: 'shortcut icon'; href: string; type?: string; sizes?: string }
+  | { key: string; rel: 'apple-touch-icon'; href: string; type?: string; sizes?: string }
+  | { key: string; rel: 'manifest'; href: string; type?: string; sizes?: string }
 
 export interface TenantHeadLinkOptions {
   isPlatform: boolean

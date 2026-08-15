@@ -223,11 +223,9 @@ function normalizeSearchResults(
     const display = (() => {
       const raw = typeof metadata.display === 'string' ? metadata.display : ''
       if (!raw) return {}
-      try {
-        return JSON.parse(raw) as Record<string, unknown>
-      } catch {
-        return {}
-      }
+      const parsed = JSON.parse(raw)
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Search metadata.display must be an object')
+      return parsed as Record<string, unknown>
     })()
     const id = String(metadata.record_id ?? chunk.item.key ?? chunk.id)
     const title = typeof display.title === 'string' && display.title.trim()
@@ -416,7 +414,7 @@ export async function buildTenantBlogDocuments(db: DbClient): Promise<PlatformKn
   `)
 
   return (posts ?? []).map((post) => {
-    const tags = (() => { try { return JSON.parse(post.tags_json || '[]') as string[] } catch { return [] } })()
+    const tags = post.tags_json ? JSON.parse(post.tags_json) as string[] : []
     const snippet = truncateSnippet(post.excerpt || post.seo_description || post.body || post.title)
     const body = [
       post.title,
@@ -839,9 +837,8 @@ export async function searchPublicResources(
       if (!options.siteId || !env.db || (typeFilter && typeFilter !== 'blog')) {
         return [] as TenantBlogSearchRow[]
       }
-      try {
-        const likePattern = `%${escapeLikePattern(normalized)}%`
-        return await queryAll<TenantBlogSearchRow>(
+      const likePattern = `%${escapeLikePattern(normalized)}%`
+      return await queryAll<TenantBlogSearchRow>(
           env.db,
           `SELECT id, title, slug, body, excerpt, category, seo_description, seo_keywords
            FROM blog_posts
@@ -868,10 +865,7 @@ export async function searchPublicResources(
             likePattern,
             candidateLimit,
           ],
-        )
-      } catch {
-        return [] as TenantBlogSearchRow[]
-      }
+      )
     })(),
   ])
 

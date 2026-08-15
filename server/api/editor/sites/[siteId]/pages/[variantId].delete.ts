@@ -18,3 +18,6 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: error instanceof Error ? error.message : 'Unable to delete tenant page' }, { status: 400 })
   }
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'
+import { getRouterParam } from 'h3'

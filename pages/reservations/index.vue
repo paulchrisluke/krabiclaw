@@ -434,7 +434,7 @@ useBreadcrumbSchema([
   { name: 'Reservations', url: `/reservations` }
 ])
 
-const brandName = computed(() => (site as ApiValue)?.brand_name || (site as ApiValue)?.title || 'Our Site')
+const brandName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
 const primaryLocationSocialImage = computed(() => {
   const primary = locations.value[0]
   if (!primary) return null
@@ -459,7 +459,7 @@ useSchemaOrg([
   ({
     '@context': 'https://schema.org',
     '@type': getBusinessSchemaTypes((site as ApiValue)?.vertical),
-    name: (site as ApiValue)?.brand_name || (site as ApiValue)?.title || 'Our Site',
+    name: brandName.value,
     url: requestUrl.origin,
     reservationUrl: `${requestUrl.origin}/reservations`,
     potentialAction: {

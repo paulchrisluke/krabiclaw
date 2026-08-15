@@ -69,7 +69,7 @@ if (isPlatform) throw createError({ statusCode: 404, statusMessage: 'Page not fo
 
 const { locale, t } = useI18n()
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
+const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
 const expCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
 
 const {

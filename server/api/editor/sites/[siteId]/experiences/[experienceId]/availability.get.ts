@@ -42,3 +42,6 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ timezone, dates })
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'
+import { getRouterParam } from 'h3'

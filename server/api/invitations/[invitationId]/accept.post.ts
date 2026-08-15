@@ -187,3 +187,6 @@ export default defineEventHandler(async (event) => {
     role: invitation.role ?? 'member',
   })
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'
+import { getRouterParam } from 'h3'

@@ -56,7 +56,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
     const result = await resolveAccountAccessForEvent(event)
     allowed = result.status === 'ok' && result.allowed
   } else {
-    const access = await $fetch<{ allowed?: unknown }>('/api/account/access')
+    const access = await $fetch<{ allowed?: unknown }, string>('/api/account/access')
     allowed = requireAllowedResponse(access, 'Dashboard access response was malformed')
   }
 
@@ -98,7 +98,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
         capabilityKey,
       })
     } else {
-      const result = await $fetch<{ allowed?: unknown }>('/api/dashboard/route-capability', {
+      const result = await $fetch<{ allowed?: unknown }, string>('/api/dashboard/route-capability', {
         query: { orgSlug: organizationSlug, siteSlug, locationSlug: locationSlug ?? undefined, key: capabilityKey },
       })
       capabilityAllowed = requireAllowedResponse(result, 'Dashboard capability response was malformed')

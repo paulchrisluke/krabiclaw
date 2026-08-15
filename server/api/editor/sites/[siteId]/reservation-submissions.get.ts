@@ -38,3 +38,6 @@ export default defineEventHandler(async (event) => {
   const submissions = await listReservationSubmissions(db, siteId, { locationId })
   return jsonResponse({ submissions })
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'
+import { getRouterParam } from 'h3'

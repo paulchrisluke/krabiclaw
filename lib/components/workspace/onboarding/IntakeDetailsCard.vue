@@ -168,7 +168,7 @@ const phoneTouched = ref(false)
 const countryCode = ref('US')
 const hydratingStoredPhone = ref(false)
 
-const { data: phoneCodes, status, execute } = useLazyFetch<PhoneCode[]>('/api/phone-codes.json', {
+const { data: phoneCodes, status, execute } = useLazyFetch<PhoneCode[], unknown, string>('/api/phone-codes.json', {
   key: 'api-phone-codes',
   immediate: false,
 })

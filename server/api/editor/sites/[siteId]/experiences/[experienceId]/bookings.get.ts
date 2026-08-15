@@ -54,3 +54,6 @@ export default defineEventHandler(async (event) => {
   const bookings = await listExperienceBookings(db, siteId, experienceId, { locationId })
   return jsonResponse({ bookings })
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'
+import { getRouterParam } from 'h3'

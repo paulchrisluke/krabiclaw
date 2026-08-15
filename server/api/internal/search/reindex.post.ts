@@ -23,3 +23,4 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to rebuild platform knowledge index', detail }, { status: 500 })
   }
 })
+import { defineEventHandler } from 'h3'

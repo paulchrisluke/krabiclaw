@@ -6,7 +6,7 @@ const CHECK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
 // Markdown bodies are rendered server-side via v-html, so code blocks aren't
 // real Vue components — copy buttons have to be injected into the live DOM
 // after each render rather than declared in the template.
-export function useCopyableCodeBlocks(containerRef: Ref<HTMLElement | null | undefined>, trigger: Ref<unknown>) {
+export function useCopyableCodeBlocks(containerRef: Ref<Element | null | undefined>, trigger: Ref<unknown>) {
   function enhance() {
     if (!import.meta.client) return
     const container = containerRef.value

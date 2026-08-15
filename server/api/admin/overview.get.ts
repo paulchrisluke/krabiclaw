@@ -72,3 +72,4 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: message }, { status: statusCode })
   }
 })
+import { defineEventHandler } from 'h3'

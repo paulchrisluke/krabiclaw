@@ -40,9 +40,7 @@ export default defineEventHandler(async (event) => {
 
       case "active": {
         const env = cloudflareEnv(event);
-        const freeDomain = env.NUXT_PUBLIC_FREE_SITE_DOMAIN
-          ? platformHostname(env)
-          : "krabiclaw.com";
+        const freeDomain = platformHostname(env);
         const canonicalIsCustom =
           event.context.canonicalDomain &&
           !event.context.canonicalDomain.endsWith(`.${freeDomain}`);

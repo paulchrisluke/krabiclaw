@@ -10,3 +10,5 @@ export default defineEventHandler(async (event) => {
   const payload = await loadDashboardGuestThread(event, siteId, threadId)
   return jsonResponse(finalizeRequestMetrics(event, 'dashboard-guest-thread', payload))
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

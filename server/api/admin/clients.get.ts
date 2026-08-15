@@ -218,3 +218,4 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ clients: resolvedClients.map(({ _organization_created_at: _createdAt, ...client }) => client) })
 })
+import { defineEventHandler } from 'h3'

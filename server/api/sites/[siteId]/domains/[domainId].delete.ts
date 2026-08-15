@@ -42,3 +42,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: normalizedError.message || 'Failed to delete domain' }, { status: 500 })
   }
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

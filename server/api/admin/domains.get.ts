@@ -49,3 +49,4 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ success: true, domains: domains || [], events: events || [] })
 })
+import { defineEventHandler } from 'h3'

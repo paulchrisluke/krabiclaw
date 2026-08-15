@@ -18,14 +18,12 @@ import type { PublicOfferingSummary } from '~/types/blawby'
 
 withDefaults(defineProps<{
   offerings: PublicOfferingSummary[]
-  title?: string
-  accent?: string
+  title: string
+  accent: string
   description?: string
   decorationUrl?: string | null
   paritySection?: string
 }>(), {
-  title: 'Our',
-  accent: 'Services',
   description: '',
   decorationUrl: null,
   paritySection: 'services',

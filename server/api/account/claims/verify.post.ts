@@ -29,3 +29,4 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ ok: true, customerId: result.customerId })
 })
+import { defineEventHandler } from 'h3'

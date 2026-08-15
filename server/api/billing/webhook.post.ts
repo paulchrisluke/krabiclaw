@@ -26,3 +26,4 @@ export default defineEventHandler(async (event) => {
     body,
   }))
 })
+import { defineEventHandler } from 'h3'

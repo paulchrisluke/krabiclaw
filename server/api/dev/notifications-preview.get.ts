@@ -8,3 +8,4 @@ export default defineEventHandler(async () => {
 
   return jsonResponse({ previews: await getNotificationCopyPreviews() })
 })
+import { defineEventHandler } from 'h3'

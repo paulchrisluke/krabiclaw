@@ -184,3 +184,5 @@ export default defineEventHandler(async (event) => {
     site_subdomain: row.subdomain,
   })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

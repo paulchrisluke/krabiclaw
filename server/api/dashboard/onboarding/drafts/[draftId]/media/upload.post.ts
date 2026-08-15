@@ -155,3 +155,6 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to upload draft media' }, { status: 503 })
   }
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'
+import { readMultipartFormData } from 'h3'

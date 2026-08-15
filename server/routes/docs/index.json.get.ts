@@ -15,3 +15,4 @@ export default defineEventHandler(async (event) => {
   const docs = await listPublishedPlatformDocsForLlm(db)
   return jsonResponse(buildDocsIndexJson(buildPlatformDocLinkEntries(docs ?? [], origin)))
 })
+import { defineEventHandler } from 'h3'

@@ -124,3 +124,5 @@ export default defineEventHandler(async (event) => {
     );
   }
 });
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

@@ -104,3 +104,4 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ success: true })
 })
+import { defineEventHandler } from 'h3'

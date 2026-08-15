@@ -12,6 +12,7 @@ import type {
 } from '~/server/domain/guest-threads/types'
 import { requireSiteAccess } from '~/server/utils/location-access'
 import { assertMemberScope } from '~/server/utils/member-access'
+import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 
 export interface DashboardGuestThreadListQuery {
   locationId?: string | null
@@ -63,7 +64,7 @@ export async function loadDashboardGuestThread(
   siteId: string,
   threadId: string,
 ) {
-  const { db, site } = await requireSiteAccess(event, siteId, 'context')
+  const { db, env, site } = await requireSiteAccess(event, siteId, 'context')
   const thread = await getGuestThreadById(db, threadId, siteId)
   if (!thread) {
     throw createError({ statusCode: 404, statusMessage: 'Thread not found' })
@@ -83,7 +84,10 @@ export async function loadDashboardGuestThread(
 
   try {
     const latest = detail.entries[detail.entries.length - 1]
-    if (latest) await advanceMemberCursor(db, threadId, site.member_id, latest.id)
+    if (latest) {
+      await advanceMemberCursor(db, threadId, site.member_id, latest.id)
+      await publishGuestInboxThreadEvent(env, db, { threadId, type: 'read-state.changed' })
+    }
   } catch (error) {
     console.error('advance_member_cursor_failed', {
       threadId,

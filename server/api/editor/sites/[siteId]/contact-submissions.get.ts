@@ -19,3 +19,5 @@ export default defineEventHandler(async (event) => {
   const submissions = await listContactSubmissions(db, siteId, { locationIds })
   return jsonResponse({ submissions })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

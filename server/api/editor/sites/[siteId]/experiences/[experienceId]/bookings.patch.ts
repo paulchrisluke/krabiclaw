@@ -3,6 +3,8 @@ import { getAuthSession } from '~/server/utils/auth'
 import { updateBookingStatus } from '~/server/utils/experiences'
 import { assertResourceAccess } from '~/server/utils/member-access'
 import { queryFirst } from '~/server/db'
+import { getGuestThreadBySubmission, updateThreadProjection } from '~/server/domain/guest-threads/repository'
+import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -45,5 +47,13 @@ export default defineEventHandler(async (event) => {
 
   const ok = await updateBookingStatus(db, siteId, experienceId, body.booking_id, body.status as 'pending' | 'confirmed' | 'cancelled')
   if (!ok) return jsonResponse({ error: 'Booking not found' }, { status: 404 })
+  const thread = await getGuestThreadBySubmission(db, 'experience_booking', body.booking_id)
+  if (thread) {
+    await updateThreadProjection(db, thread.id, {})
+    await publishGuestInboxThreadEvent(env, db, { threadId: thread.id, type: 'thread.changed' })
+  }
   return jsonResponse({ updated: true })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'
+import { readBody } from 'h3'

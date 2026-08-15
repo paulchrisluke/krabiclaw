@@ -32,3 +32,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ allowed })
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'

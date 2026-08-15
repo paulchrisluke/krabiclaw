@@ -94,3 +94,5 @@ export default defineEventHandler(async (event) => {
     })
   }
 })
+import { defineEventHandler } from 'h3'
+import { toWebRequest } from 'h3'

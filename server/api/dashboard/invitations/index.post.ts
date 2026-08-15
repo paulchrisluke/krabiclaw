@@ -163,3 +163,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ success: true, invitationId, reused: Boolean(existing) })
 })
+import { defineEventHandler } from 'h3'
+import { readBody } from 'h3'

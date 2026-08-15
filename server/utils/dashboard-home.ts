@@ -45,26 +45,22 @@ export interface DashboardHomeData {
 }
 
 function safeJsonParse(value: string): unknown {
-  try {
-    return JSON.parse(value)
-  } catch {
-    return null
-  }
+  return JSON.parse(value)
 }
 
 function parseLocationAddress(value: string | null): { addressLines?: string[] } | null {
   if (!value) return null
   const parsed = safeJsonParse(value)
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Stored location address is invalid')
   const address = parsed as { addressLines?: unknown; streetAddress?: unknown }
   if (Array.isArray(address.addressLines) && address.addressLines.every(line => typeof line === 'string')) {
     return { addressLines: address.addressLines }
   }
-  if (address.addressLines !== undefined) return null
+  if (address.addressLines !== undefined) throw new Error('Stored location address lines are invalid')
   if (typeof address.streetAddress === 'string' && address.streetAddress.trim()) {
     return { addressLines: [address.streetAddress.trim()] }
   }
-  return {}
+  throw new Error('Stored location address is missing address lines')
 }
 
 // Shared by server/api/dashboard/home.get.ts and the dashboard home page's SSR

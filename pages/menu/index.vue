@@ -28,8 +28,7 @@
 
       <!-- Empty state -->
       <div v-if="!hasMenu" class="mx-auto max-w-xl px-4 py-24 text-center sm:px-6">
-        <div class="saya-display saya-italic text-3xl text-default mb-4">Menu coming soon.</div>
-        <p class="text-sm text-muted mb-6">Our menu is being prepared. Check back soon.</p>
+        <div class="saya-display saya-italic text-3xl text-default mb-4">No menu published.</div>
         <SayaButton v-if="hasExperiences" to="/experiences">
           View experiences
         </SayaButton>
@@ -137,7 +136,7 @@ if (!siteId && !draftId) throw createError({ statusCode: 404 })
 const { isBlawby } = usePublicTemplate()
 if (isBlawby.value) throw createError({ statusCode: 404 })
 
-const restaurantName = computed(() => (site as ApiValue)?.brand_name || (site as ApiValue)?.title || 'Menu')
+const restaurantName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
 
 const { menu: pageMenu, menuItemsBySection, pending, locations, config: pageConfig, hasExperiences } = await usePublicPageData()
 

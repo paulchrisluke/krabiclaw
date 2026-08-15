@@ -35,3 +35,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ helpful: true, helpfulCount: updated?.helpful_count ?? (review.helpful_count ?? 0) + 1 })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

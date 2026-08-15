@@ -11,3 +11,5 @@ export default defineEventHandler(async (event) => {
   const notifications = await getNotificationsSettings(db, site.organization_id, siteId)
   return jsonResponse({ success: true, notifications })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

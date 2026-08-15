@@ -12,3 +12,6 @@ export default defineEventHandler(async (event) => {
   const pagePath = typeof getQuery(event).page_path === 'string' ? String(getQuery(event).page_path) : null
   return jsonResponse({ qa: pagePath ? await listPageQa(db, siteId, pagePath, true) : await listQa(db, siteId, null, true) })
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'
+import { getRouterParam } from 'h3'

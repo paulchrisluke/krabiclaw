@@ -20,3 +20,5 @@ export default defineEventHandler(async (event) => {
   const organizations = await searchOrganizationsForInvite(db, q)
   return jsonResponse({ organizations })
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'

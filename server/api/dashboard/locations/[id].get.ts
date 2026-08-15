@@ -23,3 +23,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ success: true, location: parseLocationPayload(location), ...capabilitySummary })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

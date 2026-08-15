@@ -18,3 +18,5 @@ export default defineEventHandler(async (event) => {
     items: result.items,
   })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

@@ -1,6 +1,6 @@
 import { createError, getRequestURL, sendStream, setHeader, sendRedirect, type H3Event } from 'h3'
 import { sanitizeUrl } from '~/utils/sanitize'
-import type { TenantHostEnv } from '~/server/utils/tenant-hosts'
+import { isPlatformHost, type TenantHostEnv } from '~/server/utils/tenant-hosts'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
 import { getR2KeyFromPublicUrl } from '~/server/utils/cloudflare-r2'
@@ -32,12 +32,7 @@ export function isPlatformAssetUrl(url: string | null | undefined, env?: TenantH
     if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
       const parsed = new URL(trimmed)
       const host = parsed.hostname
-      const isPlatformDomain =
-        host === 'krabiclaw.com' ||
-        host === 'www.krabiclaw.com' ||
-        host === 'localhost' ||
-        host === '127.0.0.1' ||
-        (env?.NUXT_PUBLIC_PLATFORM_DOMAIN && parsed.origin === env.NUXT_PUBLIC_PLATFORM_DOMAIN)
+      const isPlatformDomain = isPlatformHost(host, env ?? {})
 
       if (isPlatformDomain) {
         return /^\/(?:favicon|apple-touch-icon|platform\/)/.test(parsed.pathname)

@@ -18,3 +18,5 @@ export default defineEventHandler(async (event) => {
   const experiences = await attachAvailabilitySummaries(db, site.organization_id, siteId, experiencesRaw)
   return jsonResponse({ experiences })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

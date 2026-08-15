@@ -19,3 +19,5 @@ export default defineEventHandler(async (event) => {
 
   return textResponse(renderPlatformDocMarkdown(doc, resolvePublicOrigin(event)), {}, 'text/markdown; charset=utf-8')
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

@@ -7,3 +7,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse(await loadDashboardSiteLocales(event, siteId))
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

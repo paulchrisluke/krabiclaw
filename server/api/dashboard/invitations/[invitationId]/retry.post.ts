@@ -92,3 +92,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: error instanceof Error ? error.message : 'Failed to resend the WhatsApp invitation' }, { status: 502 })
   }
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

@@ -42,3 +42,5 @@ export default defineEventHandler(async (event) => {
     locales: publicLocales,
   })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

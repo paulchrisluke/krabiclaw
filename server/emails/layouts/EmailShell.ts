@@ -41,13 +41,11 @@ export default defineComponent({
     ctaUrl: { type: String },
     ctaText: { type: String },
     footerNote: { type: String },
-    platformDomain: { type: String, default: 'krabiclaw.com' },
+    platformDomain: { type: String, required: true },
   },
   setup(props, { slots }) {
     const year = new Date().getFullYear()
-    const logoUrl = props.platformDomain
-      ? `https://${props.platformDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')}/krabi-claw-logo.png`
-      : 'https://krabiclaw.com/krabi-claw-logo.png'
+    const logoUrl = `https://${props.platformDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')}/krabi-claw-logo.png`
     return () => h(EHtml, { lang: 'en', dir: 'ltr' }, () => [
       h(EHead, null, () => [
         h('meta', { name: 'color-scheme', content: 'light dark' }),

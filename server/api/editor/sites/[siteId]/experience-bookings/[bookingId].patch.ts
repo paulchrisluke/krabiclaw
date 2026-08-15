@@ -11,6 +11,7 @@ import { queryFirst } from '~/server/db'
 import { experienceBookingAdapter } from '~/server/domain/guest-threads/adapters/experience-booking'
 import { ensureGuestThread } from '~/server/domain/guest-threads/repository'
 import { executeGuestThreadOperation } from '~/server/domain/guest-threads/operations'
+import { publishGuestInboxEvent } from '~/server/cloudflare/guest-inbox-events'
 
 const STATUS_TO_ACTION = {
   confirmed: 'confirm',
@@ -72,5 +73,18 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Booking update failed' }, { status: 400 })
   }
 
+  await publishGuestInboxEvent(env, {
+    eventId: crypto.randomUUID(),
+    type: 'thread.changed',
+    siteId,
+    locationId: outcome.thread.location_id,
+    threadId: outcome.thread.id,
+    threadVersion: outcome.thread.version,
+    occurredAt: new Date().toISOString(),
+  })
+
   return jsonResponse({ updated: true })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'
+import { readBody } from 'h3'

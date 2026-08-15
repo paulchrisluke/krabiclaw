@@ -10,3 +10,6 @@ export default defineEventHandler(async (event) => {
     endDate: typeof query.endDate === 'string' ? query.endDate : undefined,
   }))
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'
+import { getRouterParam } from 'h3'

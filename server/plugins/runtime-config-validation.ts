@@ -1,4 +1,6 @@
-export default defineNitroPlugin(() => {
+import { definePlugin } from 'nitro'
+
+export default definePlugin(() => {
   const config = useRuntimeConfig()
   
   // Required public environment variables

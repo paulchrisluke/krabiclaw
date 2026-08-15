@@ -52,7 +52,6 @@ export const demoFixture: CuratedSiteDefinition = {
       label: 'English',
       isSource: true,
       status: 'published',
-      fallbackEnabled: true,
     },
     {
       id: 'locale::org-demo::site-demo::th',
@@ -60,7 +59,6 @@ export const demoFixture: CuratedSiteDefinition = {
       label: 'ไทย',
       isSource: false,
       status: 'published',
-      fallbackEnabled: true,
     },
   ],
   siteDomains: [
@@ -1348,7 +1346,6 @@ export function renderCompiledDemoCoreSeedBlock(): string {
       sqlValue(entry.label),
       sqlValue(entry.isSource),
       sqlValue(entry.status),
-      sqlValue(entry.fallbackEnabled),
     ].join(', ')})`)
     .join(',\n')
 
@@ -1399,7 +1396,7 @@ VALUES
 ${siteConfigRows};
 
 INSERT OR REPLACE INTO site_locales
-  (id, organization_id, site_id, locale, label, is_source, status, fallback_enabled)
+  (id, organization_id, site_id, locale, label, is_source, status)
 VALUES
 ${siteLocaleRows};
 

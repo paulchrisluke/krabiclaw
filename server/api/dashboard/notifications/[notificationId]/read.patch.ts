@@ -23,3 +23,4 @@ export default defineEventHandler(async (event) => {
   `, [notificationId, access.userId, new Date().toISOString()])
   return jsonResponse({ success: true })
 })
+import { defineEventHandler } from 'h3'

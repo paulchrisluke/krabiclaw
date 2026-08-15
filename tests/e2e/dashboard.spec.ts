@@ -163,7 +163,7 @@ test.describe('dashboard functional smoke', () => {
     await expect(page.getByText('Blocks', { exact: true })).toBeVisible()
 
     const localeResponse = await page.request.post(`${baseURL}/api/editor/sites/site-mcp-growth/locales`, {
-      data: { locale: 'th', label: 'Thai', status: 'published', fallback_enabled: true },
+      data: { locale: 'th', label: 'Thai', status: 'published' },
     })
     expect(localeResponse.status()).toBe(200)
     await page.reload({ waitUntil: 'domcontentloaded' })

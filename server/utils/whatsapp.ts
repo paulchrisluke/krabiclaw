@@ -173,7 +173,7 @@ const TEMPLATES: Record<
       {
         type: 'body',
         parameters: [
-          { type: 'text', text: cleanTemplateText(v.site_name, 'your site', 120) },
+          { type: 'text', text: cleanTemplateText(v.site_name, '', 120) },
         ],
       },
       {
@@ -193,7 +193,7 @@ const TEMPLATES: Record<
       {
         type: 'header',
         parameters: [
-          { type: 'text', text: cleanTemplateText(v.site_name, 'your site', 60) },
+          { type: 'text', text: cleanTemplateText(v.site_name, '', 60) },
         ],
       },
       {

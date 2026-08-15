@@ -28,3 +28,4 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to list AI Search items', detail, elapsedMs: Date.now() - startedAt }, { status: 500 })
   }
 })
+import { defineEventHandler } from 'h3'

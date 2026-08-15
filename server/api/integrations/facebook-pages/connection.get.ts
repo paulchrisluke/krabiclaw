@@ -23,3 +23,5 @@ export default defineEventHandler(async (event) => {
     created_at: connection.created_at,
   })
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'

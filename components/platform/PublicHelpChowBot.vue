@@ -160,6 +160,10 @@ async function submitMessage(message: string) {
       suggestedLinks?: HelpCitation[]
       followUpPrompts?: string[]
       escalation?: HelpEscalation | null
+    }, string, {
+      method: 'POST'
+      body: { message: string; history: Array<{ role: 'user' | 'assistant'; content: string }> }
+      signal: AbortSignal
     }>('/api/public/help/agent', {
       method: 'POST',
       body: {

@@ -11,3 +11,6 @@ export default defineEventHandler(async (event) => {
   const payload = await loadPublicDraftShell(event, draftId, query)
   return jsonResponse(finalizeRequestMetrics(event, 'public-draft-shell', payload))
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'
+import { getRouterParam } from 'h3'

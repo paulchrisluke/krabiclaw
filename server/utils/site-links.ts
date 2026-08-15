@@ -93,9 +93,9 @@ function requiredString(value: unknown, maxLength: number, field: string) {
   return cleaned
 }
 
-function normalizeStatus(value: unknown, fallback: LinkPageStatus): LinkPageStatus {
+function normalizeStatus(value: unknown): LinkPageStatus {
   const status = cleanString(value as ApiValue, 30)
-  if (!status) return fallback
+  if (!status) throw new SiteLinksValidationError('Links page status is required.')
   if (!LINK_PAGE_STATUSES.includes(status as LinkPageStatus)) {
     throw new SiteLinksValidationError('Links page status must be draft, published, or archived.')
   }
@@ -103,7 +103,8 @@ function normalizeStatus(value: unknown, fallback: LinkPageStatus): LinkPageStat
 }
 
 function normalizeItemStatus(value: unknown): LinkItemStatus {
-  const status = cleanString(value as ApiValue, 30) || 'active'
+  const status = cleanString(value as ApiValue, 30)
+  if (!status) throw new SiteLinksValidationError('Link status is required.')
   if (!LINK_ITEM_STATUSES.includes(status as LinkItemStatus)) {
     throw new SiteLinksValidationError('Link status must be active or hidden.')
   }
@@ -144,34 +145,50 @@ export function validateLinkDestination(value: unknown): string {
 }
 
 function mapPage(row: ApiRecord): SiteLinksPage {
+  const required = (value: unknown, field: string) => {
+    if (typeof value !== 'string' || !value.trim()) throw new SiteLinksValidationError(`Stored links page ${field} is invalid.`)
+    return value
+  }
+  const status = required(row.status, 'status')
+  const robots = required(row.robots, 'robots')
+  if (!LINK_PAGE_STATUSES.includes(status as LinkPageStatus)) throw new SiteLinksValidationError('Stored links page status is invalid.')
+  if (!ROBOTS_DIRECTIVES.includes(robots as LinkPageRobots)) throw new SiteLinksValidationError('Stored links page robots directive is invalid.')
   return {
-    id: String(row.id),
-    organization_id: String(row.organization_id),
-    site_id: String(row.site_id),
-    path: String(row.path || '/links'),
-    title: String(row.title || 'Links'),
-    status: (LINK_PAGE_STATUSES.includes(row.status as LinkPageStatus) ? row.status : 'draft') as LinkPageStatus,
-    robots: (ROBOTS_DIRECTIVES.includes(row.robots as LinkPageRobots) ? row.robots : 'noindex,follow') as LinkPageRobots,
+    id: required(row.id, 'id'),
+    organization_id: required(row.organization_id, 'organization_id'),
+    site_id: required(row.site_id, 'site_id'),
+    path: required(row.path, 'path'),
+    title: required(row.title, 'title'),
+    status: status as LinkPageStatus,
+    robots: robots as LinkPageRobots,
     seo_title: typeof row.seo_title === 'string' ? row.seo_title : null,
     seo_description: typeof row.seo_description === 'string' ? row.seo_description : null,
-    created_at: String(row.created_at || ''),
-    updated_at: String(row.updated_at || ''),
+    created_at: required(row.created_at, 'created_at'),
+    updated_at: required(row.updated_at, 'updated_at'),
     updated_by: typeof row.updated_by === 'string' ? row.updated_by : null,
   }
 }
 
 function mapItem(row: ApiRecord): SiteLinkItem {
+  const required = (value: unknown, field: string) => {
+    if (typeof value !== 'string' || !value.trim()) throw new SiteLinksValidationError(`Stored link ${field} is invalid.`)
+    return value
+  }
+  const status = required(row.status, 'status')
+  if (!LINK_ITEM_STATUSES.includes(status as LinkItemStatus)) throw new SiteLinksValidationError('Stored link status is invalid.')
+  const sortOrder = Number(row.sort_order)
+  if (!Number.isInteger(sortOrder)) throw new SiteLinksValidationError('Stored link sort order is invalid.')
   return {
-    id: String(row.id),
-    organization_id: String(row.organization_id),
-    site_id: String(row.site_id),
-    link_page_id: String(row.link_page_id),
-    label: String(row.label || ''),
-    destination: String(row.destination || ''),
-    sort_order: Number(row.sort_order ?? 0),
-    status: (LINK_ITEM_STATUSES.includes(row.status as LinkItemStatus) ? row.status : 'active') as LinkItemStatus,
-    created_at: String(row.created_at || ''),
-    updated_at: String(row.updated_at || ''),
+    id: required(row.id, 'id'),
+    organization_id: required(row.organization_id, 'organization_id'),
+    site_id: required(row.site_id, 'site_id'),
+    link_page_id: required(row.link_page_id, 'link_page_id'),
+    label: required(row.label, 'label'),
+    destination: required(row.destination, 'destination'),
+    sort_order: sortOrder,
+    status: status as LinkItemStatus,
+    created_at: required(row.created_at, 'created_at'),
+    updated_at: required(row.updated_at, 'updated_at'),
     updated_by: typeof row.updated_by === 'string' ? row.updated_by : null,
   }
 }
@@ -263,7 +280,7 @@ export async function upsertLinksPage(db: DbClient, input: {
   const current = await getLinksPage(db, input.siteId)
   const pageId = current.page?.id || idWith('linkpage')
   const title = requiredString(input.page.title, 160, 'Title')
-  const status = normalizeStatus(input.page.status, current.page?.status ?? 'draft')
+  const status = normalizeStatus(input.page.status ?? current.page?.status)
   const robots = normalizeRobots(input.page.robots)
 
   const normalizedItems = input.items.map((item, index) => {

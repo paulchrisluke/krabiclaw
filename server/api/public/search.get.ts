@@ -81,3 +81,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to search public resources' }, { status: 500 })
   }
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'

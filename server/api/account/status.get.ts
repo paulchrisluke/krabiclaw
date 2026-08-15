@@ -16,3 +16,4 @@ export default defineEventHandler(async (event) => {
   const isGuest = await userHasLinkedCustomers(db, session.user.id).catch(() => false)
   return jsonResponse({ isGuest })
 })
+import { defineEventHandler } from 'h3'

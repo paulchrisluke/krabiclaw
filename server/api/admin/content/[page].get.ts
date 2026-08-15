@@ -31,3 +31,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ ...row, exists: true })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

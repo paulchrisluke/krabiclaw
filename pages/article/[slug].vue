@@ -52,10 +52,11 @@
       </div>
 
       <BlawbyConsultationCta
-        :title="String(ctaBlock?.title || 'Get started today')"
+        v-if="ctaBlock && ctaBlock.title && ctaBlock.label && (consultation.external_url || ctaBlock.url)"
+        :title="String(ctaBlock?.title || '')"
         :description="optionalString(ctaBlock?.description)"
-        :label="String(ctaBlock?.label || consultation.cta_label)"
-        :destination="consultation.external_url || String(ctaBlock?.url || consultation.schedule_path)"
+        :label="String(ctaBlock?.label || '')"
+        :destination="consultation.external_url || String(ctaBlock?.url || '')"
         :background-url="assetUrl(ctaBlock?.background)"
         :featured-url="assetUrl(ctaBlock?.featured)"
         @click="trackConsultation"
@@ -113,7 +114,7 @@ const articlePath = computed(() => `/article/${post.value.slug}`)
 const resolvedSeo = computed(() => resolveBlogSeo({
   title: post.value.title, seoTitle: post.value.seo_title, excerpt: post.value.excerpt,
   seoDescription: post.value.seo_description, slug: post.value.slug, canonicalUrl: post.value.canonical_url,
-  baseUrl: requestURL.origin, publicPath: articlePath.value, siteName: identity.value.brand_name || 'Professional services',
+  baseUrl: requestURL.origin, publicPath: articlePath.value, siteName: identity.value.brand_name,
   robots: post.value.visibility === 'unlisted' ? 'noindex,follow' : post.value.robots,
 }))
 const { trackConsultationClick } = useBlawbyConversionTracking(consultation)
@@ -137,7 +138,7 @@ const { canonicalUrl } = useTenantSocialMetadata(() => ({
   author: post.value.author_name || null,
   publishedAt: post.value.published_at || null,
   brand: {
-    siteName: identity.value.brand_name || 'Professional services',
+    siteName: identity.value.brand_name,
     logoUrl: identity.value.logo_url || null,
     faviconUrl: identity.value.favicon_url || null,
   },

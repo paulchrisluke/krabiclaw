@@ -29,3 +29,6 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Documentation not found' }, { status: 404 })
   }
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'
+import { useStorage } from 'nitro/storage'

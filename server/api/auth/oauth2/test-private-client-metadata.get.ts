@@ -20,3 +20,4 @@ export default defineEventHandler((event) => {
     jwks_uri: `${origin}/api/auth/oauth2/test-private-client-jwks`,
   }
 })
+import { defineEventHandler } from 'h3'

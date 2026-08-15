@@ -21,3 +21,6 @@ export default defineEventHandler(async (event) => {
     scopes_supported: ['offline_access', 'platform_admin'],
   })
 })
+import { defineEventHandler } from 'h3'
+import { setResponseHeader } from 'h3'
+import { setResponseHeaders } from 'h3'

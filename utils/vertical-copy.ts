@@ -51,9 +51,6 @@ type VerticalCopy = {
   latelyKicker: string
   ourStoryKicker: string
   readMoreCta: string
-  brandStoryPlaceholder: string
-  brandStoryDescription: string
-  addStoryCta: string
   reviewsKicker: string
   guestReviewsLabel: string
   whatGuestsSayLabel: string
@@ -173,9 +170,6 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       latelyKicker: "Lately",
       ourStoryKicker: "Our story",
       readMoreCta: "Read more →",
-      brandStoryPlaceholder: "Your brand story goes here.",
-      brandStoryDescription: "Two or three sentences about your brand — what you do, how you do it, why it matters.",
-      addStoryCta: "Add your story in the dashboard →",
       reviewsKicker: "Reviews",
       guestReviewsLabel: "Guest reviews & ratings.",
       whatGuestsSayLabel: "What your guests say.",
@@ -293,9 +287,6 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       latelyKicker: "Lately",
       ourStoryKicker: "Our story",
       readMoreCta: "Read more →",
-      brandStoryPlaceholder: "Your brand story goes here.",
-      brandStoryDescription: "Two or three sentences about your brand — what you do, how you do it, why it matters.",
-      addStoryCta: "Add your story in the dashboard →",
       reviewsKicker: "Reviews",
       guestReviewsLabel: "Guest reviews & ratings.",
       whatGuestsSayLabel: "What your guests say.",
@@ -415,9 +406,6 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       latelyKicker: "ล่าสุด",
       ourStoryKicker: "เรื่องราวของเรา",
       readMoreCta: "อ่านต่อ →",
-      brandStoryPlaceholder: "เรื่องราวแบรนด์ของคุณอยู่ที่นี่",
-      brandStoryDescription: "สองสามประโยคเกี่ยวกับแบรนด์ของคุณ — คุณทำอะไร ทำอย่างไร และทำไมถึงสำคัญ",
-      addStoryCta: "เพิ่มเรื่องราวในแดชบอร์ด →",
       reviewsKicker: "รีวิว",
       guestReviewsLabel: "รีวิวและคะแนนจากแขก",
       whatGuestsSayLabel: "สิ่งที่แขกพูดถึง",
@@ -535,9 +523,6 @@ const registry: Record<LocaleCode, Partial<Record<SiteVertical, VerticalCopy>>> 
       latelyKicker: "ล่าสุด",
       ourStoryKicker: "เรื่องราวของเรา",
       readMoreCta: "อ่านต่อ →",
-      brandStoryPlaceholder: "เรื่องราวแบรนด์ของคุณอยู่ที่นี่",
-      brandStoryDescription: "สองสามประโยคเกี่ยวกับแบรนด์ของคุณ — คุณทำอะไร ทำอย่างไร และทำไมถึงสำคัญ",
-      addStoryCta: "เพิ่มเรื่องราวในแดชบอร์ด →",
       reviewsKicker: "รีวิว",
       guestReviewsLabel: "รีวิวและคะแนนจากแขก",
       whatGuestsSayLabel: "สิ่งที่แขกพูดถึง",
@@ -617,11 +602,11 @@ registry.en.professional_service = {
   poweredByTagline: "professional-service sites that stay current",
   aboutImageAlt: "About our organization",
   ctaTitle: "Talk with our team.",
-  ctaRoute: "/schedule",
+  ctaRoute: "",
   contactSubtitle:
     "For a consultation or service question, use the form below or choose a direct contact option.",
   contactSubjectCatering: "Services",
-  reserveCta: "Book a consultation",
+  reserveCta: "",
   reservationPageKicker: "Consultations",
   reservationFormTitle: "Request a Consultation",
   reservationRequestButton: "Request Consultation",
@@ -659,9 +644,6 @@ registry.en.professional_service = {
   latelyKicker: "Latest",
   ourStoryKicker: "About",
   readMoreCta: "Read more",
-  brandStoryPlaceholder: "Your organization story goes here.",
-  brandStoryDescription: "Two or three sentences about the people you serve, what you do, and why it matters.",
-  addStoryCta: "Add your story in the dashboard",
   reviewsKicker: "Reviews",
   guestReviewsLabel: "Client reviews and ratings.",
   whatGuestsSayLabel: "What clients say.",
@@ -676,7 +658,7 @@ registry.en.professional_service = {
   onlineOrderingNotAvailable: "Online booking not available",
   wedLoveToSeeYou: "We would be glad to hear from you.",
   orderKicker: "Consultation",
-  orderHeroTitle: "Book a consultation",
+  orderHeroTitle: "",
   preferReservation: "Prefer to",
   grabLabel: "External booking",
   uberEatsLabel: "External booking",
@@ -705,7 +687,7 @@ registry.en.professional_service = {
   selectLocationLabel: "Select an office",
   chooseLocationLabel: "Please choose an office or contact point.",
   oneGuestLabel: "1 person",
-  seoOrderDescription: (_name: string) => `Book a consultation with ${_name}.`,
+  seoOrderDescription: (_name: string) => "",
   confirmationMessage: (_guests: number | string, _guestLabel: string, _date: string, _time: string) =>
     `We have received your consultation request for ${_guests} ${_guestLabel} on ${_date} at ${_time}.`,
   confirmSoonLabel: (_word: string) => `Our team will follow up about your ${_word} shortly.`,

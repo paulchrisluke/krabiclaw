@@ -21,3 +21,5 @@ export default defineEventHandler((event) => {
 
   return new Response(challenge, { headers: { 'content-type': 'text/plain; charset=utf-8' } })
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'

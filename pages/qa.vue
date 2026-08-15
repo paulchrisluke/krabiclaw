@@ -29,7 +29,7 @@ const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
 const { googleBusiness, qaList, locations, config } = await usePublicPageData()
-const siteName = computed(() => site?.brand_name || googleBusiness.value?.business?.title || 'Our Site')
+const siteName = computed(() => site?.brand_name?.trim() || googleBusiness.value?.business?.title?.trim() || '')
 
 useTenantSocialMetadata(() => ({
   path: '/qa',

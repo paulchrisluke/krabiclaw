@@ -266,7 +266,8 @@ if (!template) {
 }
 
 const config = useRuntimeConfig()
-const platformHostname = config.public.freeSiteDomain?.replace(/^https?:\/\//, '') || 'krabiclaw.com'
+const platformHostname = config.public.freeSiteDomain?.replace(/^https?:\/\//, '').replace(/\/$/, '')
+if (!platformHostname) throw createError({ statusCode: 500, statusMessage: 'NUXT_PUBLIC_FREE_SITE_DOMAIN is required' })
 const isDemoPreviewOpen = ref(false)
 const previewDialogRef = ref<HTMLElement | null>(null)
 const closePreviewButtonRef = ref<HTMLButtonElement | null>(null)

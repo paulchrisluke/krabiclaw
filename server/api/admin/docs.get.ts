@@ -16,3 +16,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ docs: await listPlatformDocs(db, status) })
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'

@@ -80,3 +80,4 @@ export default defineEventHandler(async (event) => {
     )
   }
 })
+import { defineEventHandler } from 'h3'

@@ -16,3 +16,6 @@ export default defineEventHandler(async (event) => {
   const posts = await getPublishedPosts(db, siteId, env, limit, locationId)
   return jsonResponse({ success: true, posts })
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'
+import { getRouterParam } from 'h3'

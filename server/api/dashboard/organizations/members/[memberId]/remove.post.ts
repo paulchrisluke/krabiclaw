@@ -98,3 +98,6 @@ export default defineEventHandler(async (event) => {
   // `user` row.
   return jsonResponse({ success: true, clearedAssignments })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'
+import { readBody } from 'h3'

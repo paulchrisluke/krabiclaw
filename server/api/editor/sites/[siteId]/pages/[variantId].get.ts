@@ -10,3 +10,5 @@ export default defineEventHandler(async (event) => {
   const page = await getTenantPageById(db, variantId, { siteId, organizationId: site.organization_id })
   return jsonResponse({ page })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

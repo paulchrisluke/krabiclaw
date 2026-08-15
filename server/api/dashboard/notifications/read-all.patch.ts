@@ -15,3 +15,4 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ success: true, unread_count: 0 })
 })
+import { defineEventHandler } from 'h3'

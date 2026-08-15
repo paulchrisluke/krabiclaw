@@ -1,4 +1,4 @@
-import type { TaskEvent } from 'nitropack/types'
+import type { TaskEvent } from 'nitro/types'
 
 type ScheduledTaskEnvironment = ApiRecord
 
@@ -20,7 +20,7 @@ export type ScheduledTaskName =
 
 type TaskLoader = () => Promise<{ default: ScheduledTaskDefinition }>
 
-/** The single source of truth for cron-to-task dispatch in the Worker. */
+/** The single source of truth for cron-to-task dispatch in Nitro's scheduled hook. */
 export const SCHEDULED_TASKS: Readonly<Record<string, readonly ScheduledTaskName[]>> = {
   '*/5 * * * *': ['blog-scheduled-publish'],
   '*/2 * * * *': ['public-resource-cache-invalidation'],
@@ -58,7 +58,8 @@ export interface ScheduledTaskRunOptions {
  * Execute all jobs mapped to a Cloudflare cron expression.
  *
  * Each job is isolated so one failing integration does not prevent its peers
- * from running, matching Nitro's previous scheduled-task behavior.
+ * from running while the native Cloudflare scheduled hook remains the only
+ * Worker event entrypoint.
  */
 export async function runScheduledTasks(
   cron: string,

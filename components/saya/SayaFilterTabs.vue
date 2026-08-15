@@ -21,6 +21,7 @@
 </template>
 
 <script setup lang="ts">
+import { shallowRef } from 'vue'
 interface Tab {
   key: string
   label: string
@@ -38,7 +39,7 @@ const emit = defineEmits<{
   'height': [value: number]
 }>()
 
-const tabsRef = ref<HTMLElement | null>(null)
+const tabsRef = shallowRef<Element | null>(null)
 let observer: IntersectionObserver | null = null
 let timeoutId: ReturnType<typeof setTimeout> | null = null
 
@@ -67,7 +68,7 @@ function setupObserver() {
 
   const sections = props.tabs
     .map(t => t.sectionId ? document.getElementById(t.sectionId) : null)
-    .filter(Boolean) as HTMLElement[]
+    .filter(Boolean) as Element[]
 
   if (sections.length > 0) {
     const targetRatios = new Map<string, number>()

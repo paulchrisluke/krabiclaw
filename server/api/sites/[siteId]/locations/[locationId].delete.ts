@@ -26,3 +26,5 @@ export default defineEventHandler(async (event) => {
     locationId,
   }, { status: result.status })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

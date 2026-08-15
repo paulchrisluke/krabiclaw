@@ -40,3 +40,4 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to build corpus' }, { status: 500 })
   }
 })
+import { defineEventHandler } from 'h3'

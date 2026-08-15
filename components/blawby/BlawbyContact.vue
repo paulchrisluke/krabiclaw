@@ -1,6 +1,6 @@
 <template>
   <div data-parity-root>
-    <BlawbyPageHero :title="heroTitle" :description="heroDescription" variant="contact" />
+    <BlawbyPageHero v-if="heroTitle || heroDescription" :title="heroTitle" :description="heroDescription" variant="contact" />
     <BlawbyShieldDivider variant="contact" />
 
     <section class="bg-white py-24 sm:py-32" data-parity-section="contact">
@@ -8,7 +8,7 @@
         <div class="mx-auto max-w-2xl space-y-16 divide-y divide-gray-100 lg:mx-0 lg:max-w-none">
           <div class="grid grid-cols-1 gap-x-8 gap-y-10 lg:grid-cols-3">
             <div>
-              <h2 class="blawby-display text-3xl font-bold text-[var(--blawby-primary)]">{{ contactBlock?.title || 'Get in touch' }}</h2>
+              <h2 v-if="contactBlock?.title" class="blawby-display text-3xl font-bold text-[var(--blawby-primary)]">{{ contactBlock.title }}</h2>
               <p class="mt-4 leading-7 text-[var(--blawby-primary)]/80">{{ contactBlock?.description }}</p>
             </div>
             <div class="grid grid-cols-1 gap-6 sm:grid-cols-1 lg:col-span-2 lg:gap-8">
@@ -45,11 +45,11 @@
     <BlawbyFaqSection :items="routeData.qa" :decoration-url="assetUrl(qaBlock?.decoration)" />
     <BlawbyReviewsSection :reviews="routeData.reviews" />
     <BlawbyConsultationCta
-      v-if="ctaBlock"
-      :title="String(ctaBlock.title || 'Get started today')"
+      v-if="ctaBlock && ctaBlock.title && ctaBlock.label && ctaBlock.url"
+      :title="String(ctaBlock.title || '')"
       :description="optionalString(ctaBlock.description)"
-      :label="String(ctaBlock.label || consultation.cta_label)"
-      :destination="String(ctaBlock.url || consultation.schedule_path)"
+      :label="String(ctaBlock.label || '')"
+      :destination="String(ctaBlock.url || '')"
       :background-url="assetUrl(ctaBlock.background)"
       :featured-url="assetUrl(ctaBlock.featured)"
       @click="trackConsultation"
@@ -85,7 +85,7 @@ const heroBlock = computed(() => block('page_hero'))
 const contactBlock = computed(() => block('contact_cards'))
 const ctaBlock = computed(() => block('consultation_cta'))
 const qaBlock = computed(() => block('qa'))
-const heroTitle = computed(() => String(heroBlock.value?.title || page.value?.title || 'Contact Us'))
+const heroTitle = computed(() => String(heroBlock.value?.title || page.value?.title || ''))
 const heroDescription = computed(() => Array.isArray(heroBlock.value?.description) ? heroBlock.value.description.join('\n\n') : String(heroBlock.value?.description || page.value?.summary || ''))
 const contactCards = computed(() => Array.isArray(contactBlock.value?.cardsContent) ? contactBlock.value.cardsContent.map(String) : [])
 const submitting = ref(false)
@@ -107,12 +107,11 @@ async function submitContact() {
     try {
       setContactConfirmation({
         siteId,
-        siteName: identity.value.brand_name || 'North Carolina Legal Services',
+        siteName: identity.value.brand_name,
         guestName: form.name,
         subject: form.subject,
       })
     } catch {
-      // The confirmation page intentionally has a generic fallback.
     }
     await navigateTo('/contact/confirmed')
   } catch (error) {
@@ -128,7 +127,7 @@ function trackConsultation() {
 }
 
 useSeoMeta({
-  title: computed(() => page.value?.seo_title || `Contact | ${identity.value.brand_name || 'Professional services'}`),
+  title: computed(() => page.value?.seo_title || `Contact | ${identity.value.brand_name}`),
   description: computed(() => page.value?.seo_description || page.value?.summary || ''),
 })
 const canonicalUrl = useSeoUrl(() => '/contact')

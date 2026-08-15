@@ -40,3 +40,5 @@ export default defineEventHandler(async (event) => {
   await deletePost(db, site.organization_id, siteId, postId)
   return jsonResponse({ success: true })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

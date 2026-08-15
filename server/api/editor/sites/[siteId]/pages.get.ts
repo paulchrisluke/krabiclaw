@@ -9,3 +9,6 @@ export default defineEventHandler(async (event) => {
   const locale = getQuery(event).locale
   return jsonResponse({ pages: await listTenantPages(db, siteId, { locale: typeof locale === 'string' ? locale : null }) })
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'
+import { getRouterParam } from 'h3'

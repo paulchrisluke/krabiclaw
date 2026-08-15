@@ -38,16 +38,14 @@
       "locale": "en",
       "label": "English",
       "isSource": true,
-      "status": "published",
-      "fallbackEnabled": true
+      "status": "published"
     },
     {
       "id": "locale::org-demo::site-demo::th",
       "locale": "th",
       "label": "ไทย",
       "isSource": false,
-      "status": "published",
-      "fallbackEnabled": true
+      "status": "published"
     }
   ],
   "siteDomains": [

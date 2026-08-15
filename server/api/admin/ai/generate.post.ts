@@ -54,3 +54,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'AI generation failed. Please try again.' }, { status: 502 })
   }
 })
+import { defineEventHandler } from 'h3'
+import { readBody } from 'h3'

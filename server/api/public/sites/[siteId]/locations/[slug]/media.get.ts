@@ -26,3 +26,6 @@ export default defineEventHandler(async (event) => {
   const assets = await listMediaAssets(db, siteId, { locationId: location.id, kind, limit: 100 })
   return jsonResponse({ media: assets })
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'
+import { getRouterParam } from 'h3'

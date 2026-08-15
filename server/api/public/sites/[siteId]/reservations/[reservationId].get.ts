@@ -40,3 +40,6 @@ export default defineEventHandler(async (event) => {
     reservation
   })
 })
+import { defineEventHandler } from 'h3'
+import { getHeader } from 'h3'
+import { getRouterParam } from 'h3'

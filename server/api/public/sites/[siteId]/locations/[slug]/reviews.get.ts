@@ -52,3 +52,5 @@ export default defineEventHandler(async (event) => {
     reviews,
   })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

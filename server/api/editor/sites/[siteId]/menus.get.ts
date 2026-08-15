@@ -77,3 +77,6 @@ export default defineEventHandler(async (event) => {
     }, { status: 500 })
   }
 })
+import { defineEventHandler } from 'h3'
+import { getQuery } from 'h3'
+import { getRouterParam } from 'h3'

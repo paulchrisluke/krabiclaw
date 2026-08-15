@@ -10,6 +10,7 @@ import { nextConversationState } from './state-machine'
 import type { AnyGuestThreadSourceAdapter, GuestThreadCommandRow, GuestThreadRow } from './types'
 
 const COMMAND_PENDING_LEASE_MS = 2 * 60_000
+export const GUEST_THREAD_ACTIONS = new Set(['confirm', 'cancel', 'complete', 'resolve', 'reopen', 'reply', 'retry_delivery'])
 
 export type OperationOutcome =
   | { ok: true; thread: GuestThreadRow; availableActions: string[] }
@@ -179,7 +180,8 @@ async function storeCommandResult(
 
 async function getSiteBrandName(db: DbClient, siteId: string): Promise<string> {
   const row = await queryFirst<{ brand_name: string | null }>(db, `SELECT brand_name FROM sites WHERE id = ? LIMIT 1`, [siteId])
-  return row?.brand_name || 'KrabiClaw'
+  if (!row?.brand_name?.trim()) throw new Error(`Site ${siteId} has no configured brand name`)
+  return row.brand_name.trim()
 }
 
 function operationSubject(action: string, fromName: string): string {
@@ -467,6 +469,7 @@ async function executeReply(
   })
 
   await advanceMemberCursor(db, thread.id, input.actorMemberId, messageEntry.id)
+  await updateThreadProjection(db, thread.id, {})
 
   const refreshedThread = await getGuestThreadById(db, thread.id, thread.site_id)
   const availableActions = adapter.listAvailableActions(source)

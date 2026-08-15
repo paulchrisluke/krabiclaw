@@ -18,3 +18,4 @@ export default defineEventHandler(async (event) => {
   const orgId = organization.id
   return jsonResponse(await getOrganizationCreditsResource(db, orgId))
 })
+import { defineEventHandler } from 'h3'

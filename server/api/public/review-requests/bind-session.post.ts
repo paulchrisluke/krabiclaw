@@ -92,3 +92,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ success: true, requestId: result.request.id })
 })
+import { defineEventHandler } from 'h3'
+import { readBody } from 'h3'

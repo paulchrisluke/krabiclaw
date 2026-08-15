@@ -6,11 +6,7 @@ import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { assertDashboardPathPermission, assertMemberSiteAccess, isOrganizationWideRole } from '~/server/utils/member-access'
 
 function safeJsonParse(value: string): unknown {
-  try {
-    return JSON.parse(value)
-  } catch {
-    return null
-  }
+  return JSON.parse(value)
 }
 
 // business_locations.address is written exclusively as { addressLines: string[] }
@@ -21,9 +17,9 @@ function safeJsonParse(value: string): unknown {
 function parseLocationAddress(value: string | null): { addressLines: string[] } | null {
   if (!value) return null
   const parsed = safeJsonParse(value)
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Stored location address is invalid')
   const addressLines = (parsed as Record<string, unknown>).addressLines
-  if (!Array.isArray(addressLines) || !addressLines.every(line => typeof line === 'string')) return null
+  if (!Array.isArray(addressLines) || !addressLines.every(line => typeof line === 'string')) throw new Error('Stored location address lines are invalid')
   return { addressLines }
 }
 

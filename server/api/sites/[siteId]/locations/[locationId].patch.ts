@@ -2,26 +2,7 @@ import { jsonResponse } from '~/server/utils/api-response'
 import { updateLocation, type UpdateLocationInput } from '~/server/utils/location-management'
 import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
 import { requireLocationAccess } from '~/server/utils/location-access'
-
-function parseLocationPayload<T>(value: T) {
-  const location = value as Record<string, unknown>
-  const parseJson = (field: string) => {
-    const raw = location[field]
-    if (typeof raw !== 'string' || !raw) return raw ?? null
-    try {
-      return JSON.parse(raw)
-    } catch {
-      return null
-    }
-  }
-
-  return {
-    ...location,
-    address: parseJson('address'),
-    opening_hours: parseJson('opening_hours'),
-    is_primary: Boolean(location.is_primary),
-  }
-}
+import { parseLocationPayload } from '~/server/utils/location-payload'
 
 export default defineEventHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
@@ -87,3 +68,6 @@ export default defineEventHandler(async (event) => {
     location: location ? parseLocationPayload(location) : null,
   }, { status: result.status })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'
+import { readBody } from 'h3'

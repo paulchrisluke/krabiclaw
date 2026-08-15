@@ -454,12 +454,9 @@ function tokenQuantity(inputTokens: number, outputTokens: number, id: string): n
 
 function parseMetadata(value: string | null): Record<string, unknown> | null {
   if (typeof value !== 'string' || !value.trim()) return null
-  try {
-    const parsed: unknown = JSON.parse(value)
-    return isRecord(parsed) ? parsed : null
-  } catch {
-    return null
-  }
+  const parsed: unknown = JSON.parse(value)
+  if (!isRecord(parsed)) throw new Error('Stored legacy usage metadata is invalid')
+  return parsed
 }
 
 function stableJson(value: unknown): string {

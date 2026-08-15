@@ -22,3 +22,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ success: true, ...(await getProfessionalServiceContent(db, siteId)) })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

@@ -8,3 +8,5 @@ export default defineEventHandler(async (event) => {
   const { db } = await requireSiteAccess(event, siteId)
   return jsonResponse({ reviews: await listSiteReviews(db, siteId) })
 })
+import { defineEventHandler } from 'h3'
+import { getRouterParam } from 'h3'

@@ -141,3 +141,6 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ success: true, orgId, orgSlug, inviteUrl, email, restaurantName })
 })
+import { defineEventHandler } from 'h3'
+import { getRequestURL } from 'h3'
+import { readBody } from 'h3'
