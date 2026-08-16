@@ -48,7 +48,7 @@ export async function setupTenantHeaders(page: Page, baseURL: string, headers: R
   })
 }
 
-export function collectPageErrors(page: Page) {
+export function collectPageErrors(page: Page, options: { failOnAllWarnings?: boolean } = {}) {
   const errors: string[] = []
   const warnFailurePatterns = [
     'Hydration completed but contains mismatches.',
@@ -81,7 +81,9 @@ export function collectPageErrors(page: Page) {
     }
     if (message.type() === 'warning') {
       const isAllowlisted = warnAllowlistPatterns.some(pattern => text.includes(pattern))
-      if (!isAllowlisted && warnFailurePatterns.some(pattern => text.includes(pattern))) {
+      if (options.failOnAllWarnings) {
+        errors.push(`Browser warning: ${decoratedText}`)
+      } else if (!isAllowlisted && warnFailurePatterns.some(pattern => text.includes(pattern))) {
         errors.push(`Vue warn: ${decoratedText}`)
       }
     }

@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext } from '@playwright/test'
+import { expect, test, type APIRequestContext, type CDPSession } from '@playwright/test'
 import { collectPageErrors, tenantBaseURL } from './helpers'
 import { loginAsPage } from './helpers/auth'
 import { devLoginHeaders } from './test-env'
@@ -9,6 +9,7 @@ const demoExperience = demoFixture.experiences[0]!
 const demoOrgSlug = demoFixture.site.slug
 const demoSiteSlug = demoFixture.site.subdomain
 const demoLocationSlug = demoFixture.locations[0]!.slug
+const hydrationMismatchWarning = 'Hydration completed but contains mismatches.'
 
 const devHeaders = () => devLoginHeaders() ?? {}
 
@@ -85,6 +86,26 @@ async function waitForReplyNotification(
   }
 
   throw new Error(`Timed out waiting for notification template ${template}`)
+}
+
+function waitForInboxWebSocketHandshake(cdp: CDPSession, siteId: string) {
+  const requestIds = new Set<string>()
+  return new Promise<number>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error(`Timed out waiting for the authenticated inbox WebSocket handshake for ${siteId}`))
+    }, 10_000)
+
+    cdp.on('Network.webSocketCreated', (event) => {
+      if (event.url.includes(`/api/dashboard/sites/${encodeURIComponent(siteId)}/guest-inbox/socket`)) {
+        requestIds.add(event.requestId)
+      }
+    })
+    cdp.on('Network.webSocketHandshakeResponseReceived', (event) => {
+      if (!requestIds.has(event.requestId)) return
+      clearTimeout(timeout)
+      resolve(event.response.status)
+    })
+  })
 }
 
 test.describe('reply threading', () => {
@@ -266,12 +287,16 @@ test.describe('reply threading', () => {
     expect(ownerNotificationPayload.deep_link).toContain(`/dashboard/${demoOrgSlug}/sites/${demoSiteSlug}/locations/${demoLocationSlug}/inbox/`)
     expect(ownerNotificationPayload.deep_link).not.toContain('?thread=')
 
-    const errors = collectPageErrors(page)
+    const errors = collectPageErrors(page, { failOnAllWarnings: true })
     await loginAsPage(page, baseURL!, 'user-e2e-demo-owner')
 
+    const cdp = await page.context().newCDPSession(page)
+    await cdp.send('Network.enable')
+    const inboxWebSocketHandshake = waitForInboxWebSocketHandshake(cdp, demoSiteId)
     const inboxUrl = `${baseURL}/dashboard/${demoOrgSlug}/sites/${demoSiteSlug}/locations/${demoLocationSlug}/inbox`
     const inboxResponse = await page.goto(inboxUrl, { waitUntil: 'load' })
     expect(inboxResponse?.status()).toBeLessThan(400)
+    await expect(inboxWebSocketHandshake).resolves.toBe(101)
 
     await expect(page.locator('body')).toContainText('Inbox')
     const threadLink = page.getByRole('link', { name: /Owner Reply Flow Test/ }).first()
@@ -310,6 +335,10 @@ test.describe('reply threading', () => {
     )
     expect(messages.some((row) => row.body === replyBody)).toBe(true)
 
+    expect(
+      errors.filter(error => error.includes(hydrationMismatchWarning)),
+      `Authenticated dashboard hydration warning: ${hydrationMismatchWarning}`,
+    ).toEqual([])
     expect(errors).toEqual([])
   })
 })
