@@ -319,12 +319,7 @@ test.describe('reply threading', () => {
     const sendReplyButton = page.getByRole('button', { name: 'Send reply' })
     await expect(sendReplyButton).toBeVisible()
     await expect(sendReplyButton).toBeEnabled()
-    const sendReplyBox = await sendReplyButton.boundingBox()
-    expect(sendReplyBox).not.toBeNull()
-    await page.mouse.click(
-      sendReplyBox!.x + sendReplyBox!.width / 2,
-      sendReplyBox!.y + sendReplyBox!.height / 2,
-    )
+    await sendReplyButton.click()
 
     await expect(page.locator('body')).toContainText('Reply sent')
     await expect(page.locator('body')).toContainText(replyBody)
