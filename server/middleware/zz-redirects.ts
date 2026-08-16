@@ -1,5 +1,6 @@
 // SEO 301 redirects for legacy legal URLs
-import { createError, defineEventHandler, getMethod, getRequestHeader, getRequestURL, sendRedirect, setResponseHeader, type H3Event } from 'h3'
+import { defineHandler, HTTPError, type H3Event } from 'nitro';
+import {    redirect, setResponseHeader } from 'nitro/h3';
 import { queryAll, queryFirst } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { isBlawbyTemplate } from '~/utils/template-registry'
@@ -31,9 +32,9 @@ async function resolveTenantRedirectForRequest(event: H3Event) {
   if (!siteId) return null
   const db = cloudflareEnv(event).db
   if (!db) return null
-  const url = getRequestURL(event)
+  const url = event.url
   const path = url.pathname === '/' ? '/' : url.pathname.replace(/\/$/, '')
-  const requestedLocale = url.searchParams.get('locale')?.trim() || getRequestHeader(event, 'x-tenant-locale')?.trim() || null
+  const requestedLocale = url.searchParams.get('locale')?.trim() || (event.req.headers.get('x-tenant-locale'))?.trim() || null
   const source = await queryFirst<{ locale: string } | null>(db, `
     SELECT COALESCE((SELECT locale FROM site_locales WHERE site_id = ? AND is_source = 1 LIMIT 1), source_locale) AS locale
       FROM sites WHERE id = ? LIMIT 1
@@ -74,8 +75,8 @@ function safeDecodePathSegment(value: string) {
   try { return decodeURIComponent(value) } catch { return null }
 }
 
-export default defineEventHandler(async (event) => {
-  const url = getRequestURL(event)
+export default defineHandler(async (event) => {
+  const url = event.url
   const normalizedPathname = url.pathname === '/' ? '/' : url.pathname.replace(/\/$/, '')
 
   // The MCP connector URL is meant for ChatGPT's "Connect" flow, but people
@@ -85,21 +86,21 @@ export default defineEventHandler(async (event) => {
   // they still reach server/api/mcp.post.ts.
   if (
     normalizedPathname === '/api/mcp' &&
-    getMethod(event) === 'GET' &&
-    (getRequestHeader(event, 'accept') ?? '').includes('text/html')
+    event.req.method === 'GET' &&
+    ((event.req.headers.get('accept')) ?? '').includes('text/html')
   ) {
-    return sendRedirect(event, '/docs/integrations/mcp-setup', 302)
+    return redirect('/docs/integrations/mcp-setup', 302)
   }
 
   if (event.context.tenantType === TENANT_TYPES.PLATFORM && PLATFORM_GONE_PATHS.has(normalizedPathname)) {
-    throw createError({ statusCode: 410, statusMessage: 'Gone' })
+    throw new HTTPError({ statusCode: 410, statusMessage: 'Gone' })
   }
 
   const target = redirects[normalizedPathname]
   if (target) {
     const targetWithParams = `${target}${url.search}${url.hash}`
     // Permanent redirect for SEO
-    return sendRedirect(event, targetWithParams, 301)
+    return redirect(targetWithParams, 301)
   }
 
   const tenantRedirect = (event.context.tenantRedirect as {
@@ -109,7 +110,7 @@ export default defineEventHandler(async (event) => {
   } | null | undefined) ?? await resolveTenantRedirectForRequest(event)
   if (event.context.tenantType === TENANT_TYPES.TENANT && tenantRedirect) {
     if (tenantRedirect.behavior === 'gone') {
-      throw createError({ statusCode: 410, statusMessage: 'Gone' })
+      throw new HTTPError({ statusCode: 410, statusMessage: 'Gone' })
     }
     if (tenantRedirect.behavior === 'noindex') {
       setResponseHeader(event, 'x-robots-tag', 'noindex, nofollow')
@@ -125,7 +126,7 @@ export default defineEventHandler(async (event) => {
         }
       })()
       if (!isLocalTarget && !isApprovedMediaTarget) {
-        throw createError({ statusCode: 500, statusMessage: 'Invalid tenant redirect target' })
+        throw new HTTPError({ statusCode: 500, statusMessage: 'Invalid tenant redirect target' })
       }
       const statusCode = [301, 302, 307, 308].includes(tenantRedirect.statusCode ?? 0)
         ? tenantRedirect.statusCode!
@@ -138,14 +139,14 @@ export default defineEventHandler(async (event) => {
             external.hash = url.hash
             return external.toString()
           })()
-      return sendRedirect(event, target, statusCode)
+      return redirect(target, statusCode)
     }
   }
 
   // Durable blog slugs are separate from tenant-page redirects because they
   // are scoped to blog_posts and must work on both Saya (/blog) and Blawby
   // (/article) route surfaces.
-  if (getMethod(event) === 'GET') {
+  if (event.req.method === 'GET') {
     const tenantMatch = normalizedPathname.match(/^\/(?:blog|article)\/([^/]+)$/)
     if (tenantMatch && event.context.tenantType === TENANT_TYPES.TENANT && event.context.siteId) {
       const db = cloudflareEnv(event).db
@@ -156,7 +157,12 @@ export default defineEventHandler(async (event) => {
             SELECT p.slug FROM blog_post_redirects r JOIN blog_posts p ON p.id = r.post_id
              WHERE r.site_id = ? AND p.site_id = ? AND r.old_slug = ? AND p.status = 'published' LIMIT 1
           `, [event.context.siteId, event.context.siteId, oldSlug])
-          if (redirected) return sendRedirect(event, `${tenantBlogPostPath(event.context.site ?? null, redirected.slug)}${url.search}${url.hash}`, 301)
+          if (redirected) {
+            return redirect(`${tenantBlogPostPath({
+              ...(event.context.site ?? {}),
+              themeId: event.context.themeId as string | null | undefined,
+            }, redirected.slug)}${url.search}${url.hash}`, 301)
+          }
         } catch (error) {
           console.error('Tenant blog redirect lookup failed', error)
         }
@@ -173,7 +179,7 @@ export default defineEventHandler(async (event) => {
              WHERE r.site_id IS NULL AND p.site_id IS NULL AND r.old_slug = ? AND p.status = 'published' LIMIT 1
           `, [oldSlug])
           const category = blogCategoryToSlug(redirected?.category)
-          if (redirected && category) return sendRedirect(event, `/blog/${category}/${encodeURIComponent(redirected.slug)}${url.search}${url.hash}`, 301)
+          if (redirected && category) return redirect(`/blog/${category}/${encodeURIComponent(redirected.slug)}${url.search}${url.hash}`, 301)
         } catch (error) {
           console.error('Platform blog redirect lookup failed', error)
         }
@@ -185,10 +191,11 @@ export default defineEventHandler(async (event) => {
   // Only run if tenant data is available (set by tenant-resolution middleware)
   // Use 302 (temporary) since the single-location condition can change over time
   const isTenantRequest = normalizedPathname === '/' && event.context.tenantType === TENANT_TYPES.TENANT && event.context.siteId
+  const site = event.context.site as { theme?: string | null; vertical?: string | null } | undefined
   const isBlawbyTenant = isTenantRequest && isBlawbyTemplate({
-    theme: event.context.site?.theme,
-    themeId: event.context.themeId,
-    vertical: event.context.site?.vertical,
+    theme: site?.theme,
+    themeId: event.context.themeId as string | null | undefined,
+    vertical: site?.vertical,
   })
 
   if (isTenantRequest && !isBlawbyTenant) {
@@ -203,7 +210,7 @@ export default defineEventHandler(async (event) => {
         if (locations.length === 1) {
           const singleLoc = locations[0]
           if (singleLoc && singleLoc.slug) {
-            return sendRedirect(event, `/locations/${singleLoc.slug}`, 302)
+            return redirect(`/locations/${singleLoc.slug}`, 302)
           }
         }
       } catch (err) {

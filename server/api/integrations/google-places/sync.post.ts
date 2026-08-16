@@ -6,7 +6,7 @@ import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cac
 import { queryFirst } from '~/server/db'
 import { requireRequestedLocationAccess } from '~/server/utils/location-access'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const body = await readBody(event).catch(() => ({})) as { siteId?: string; locationId?: string }
   const { locationId } = body
   if (!locationId) return jsonResponse({ error: 'locationId is required' }, { status: 400 })
@@ -33,33 +33,18 @@ export default defineEventHandler(async (event) => {
 
   try {
     const { place, reviewsUpserted } = await syncPlaceToLocation(
-      db,
-      apiKey,
-      site.organization_id,
-      site.id,
-      locationId,
-      location.google_place_id
+      db, apiKey, site.organization_id, site.id, locationId, location.google_place_id
     )
     await chargeFlatCredits(db, site.organization_id, { siteId: site.id, action: 'google_places_details' })
     await purgePublicResourceCacheSafe(env, site.id)
 
     return jsonResponse({
-      success: true,
-      syncedAt: new Date().toISOString(),
-      reviewsUpserted,
-      place: {
-        name: place.name,
-        phone: place.phone,
-        rating: place.rating,
-        ratingCount: place.ratingCount,
-        openingHours: place.openingHours,
-        city: place.city,
-      },
-    })
+      success: true, syncedAt: new Date().toISOString(), reviewsUpserted, place: {
+        name: place.name, phone: place.phone, rating: place.rating, ratingCount: place.ratingCount, openingHours: place.openingHours, city: place.city, }, })
   } catch (err) {
     console.error('Google Places sync failed:', err)
     return jsonResponse({ error: err instanceof Error ? err.message : 'Sync failed' }, { status: 502 })
   }
 })
-import { defineEventHandler } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { readBody } from 'nitro/h3';

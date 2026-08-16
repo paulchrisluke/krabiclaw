@@ -1,5 +1,6 @@
 import { getOrgAdapter } from 'better-auth/plugins'
-import { defineEventHandler, readBody, setResponseHeader } from 'h3'
+import { defineHandler } from 'nitro';
+import { readBody, setResponseHeader } from 'nitro/h3';
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { createAuth, getAuthSession } from '~/server/utils/auth'
 import {
@@ -24,7 +25,7 @@ function noStore(body: unknown, status?: number): Response {
   })
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   setResponseHeader(event, 'cache-control', 'no-store')
   const env = cloudflareEnv(event)
   const db = env.DB

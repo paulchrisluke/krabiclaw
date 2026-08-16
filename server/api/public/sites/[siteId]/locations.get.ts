@@ -40,7 +40,7 @@ interface LocationRow {
   foodpanda_url: string | null
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   
   if (!siteId) {
@@ -78,12 +78,7 @@ export default defineEventHandler(async (event) => {
       hero_kind: string | null
       thumbnail_url: string | null
     }>(db, `
-      SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.website_url, bl.maps_url,
-             bl.latitude, bl.longitude, bl.opening_hours, bl.rating, bl.review_count,
-             bl.is_primary, bl.status, bl.last_synced_at,
-             bl.city, bl.neighborhood, bl.grab_url, bl.uber_eats_url, bl.foodpanda_url,
-             bl.hero_media_asset_id,
-             ma.public_url AS hero_public_url, ma.kind AS hero_kind, ma.thumbnail_url
+      SELECT bl.id, bl.slug, bl.title, bl.address, bl.phone, bl.website_url, bl.maps_url, bl.latitude, bl.longitude, bl.opening_hours, bl.rating, bl.review_count, bl.is_primary, bl.status, bl.last_synced_at, bl.city, bl.neighborhood, bl.grab_url, bl.uber_eats_url, bl.foodpanda_url, bl.hero_media_asset_id, ma.public_url AS hero_public_url, ma.kind AS hero_kind, ma.thumbnail_url
       FROM business_locations bl
       LEFT JOIN media_assets ma ON bl.hero_media_asset_id = ma.id AND ma.status = 'active'
         AND ma.organization_id = bl.organization_id AND ma.site_id = bl.site_id
@@ -97,44 +92,14 @@ export default defineEventHandler(async (event) => {
       const public_url = (location.hero_public_url || null) as string | null
       const kind = public_url ? location.hero_kind : null
       return {
-        id: location.id,
-        slug: location.slug,
-        title: location.title,
-        address: location.address ? JSON.parse(location.address) : null,
-        phone: location.phone,
-        website_url: location.website_url,
-        maps_url: location.maps_url,
-        map_embed_url: calculateMapEmbedUrl({
-          title: location.title,
-          maps_url: location.maps_url,
-          latitude: location.latitude,
-          longitude: location.longitude,
-          address: location.address,
-          city: location.city
-        }),
-        latitude: location.latitude,
-        longitude: location.longitude,
-        opening_hours: location.opening_hours ? JSON.parse(location.opening_hours) : null,
-        rating: location.rating,
-        review_count: location.review_count,
-        is_primary: Boolean(location.is_primary),
-        status: location.status,
-        public_url,
-        kind,
-        hero_public_url: public_url,
-        thumbnail_url: location.thumbnail_url,
-        city: location.city,
-        neighborhood: location.neighborhood || null,
-        grab_url: location.grab_url || null,
-        uber_eats_url: location.uber_eats_url || null,
-        foodpanda_url: location.foodpanda_url || null
+        id: location.id, slug: location.slug, title: location.title, address: location.address ? JSON.parse(location.address) : null, phone: location.phone, website_url: location.website_url, maps_url: location.maps_url, map_embed_url: calculateMapEmbedUrl({
+          title: location.title, maps_url: location.maps_url, latitude: location.latitude, longitude: location.longitude, address: location.address, city: location.city
+        }), latitude: location.latitude, longitude: location.longitude, opening_hours: location.opening_hours ? JSON.parse(location.opening_hours) : null, rating: location.rating, review_count: location.review_count, is_primary: Boolean(location.is_primary), status: location.status, public_url, kind, hero_public_url: public_url, thumbnail_url: location.thumbnail_url, city: location.city, neighborhood: location.neighborhood || null, grab_url: location.grab_url || null, uber_eats_url: location.uber_eats_url || null, foodpanda_url: location.foodpanda_url || null
       }
     })
     
     return jsonResponse({
-      success: true,
-      locations: parsedLocations,
-      count: parsedLocations.length
+      success: true, locations: parsedLocations, count: parsedLocations.length
     })
     
   } catch (error) {
@@ -144,5 +109,5 @@ export default defineEventHandler(async (event) => {
     }, { status: 500 })
   }
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

@@ -1,11 +1,12 @@
+import { HTTPError, defineHandler  } from 'nitro';
+
 import { jsonResponse } from '~/server/utils/api-response'
 import { getNotificationCopyPreviews } from '~/server/utils/notifications'
 
-export default defineEventHandler(async () => {
+export default defineHandler(async () => {
   if (!import.meta.dev) {
-    throw createError({ statusCode: 404, statusMessage: 'Not found' })
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Not found' })
   }
 
   return jsonResponse({ previews: await getNotificationCopyPreviews() })
 })
-import { defineEventHandler } from 'h3'

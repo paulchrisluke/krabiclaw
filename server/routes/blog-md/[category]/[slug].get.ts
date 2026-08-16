@@ -1,11 +1,8 @@
 import { cloudflareEnv, textResponse } from '~/server/utils/api-response'
 import {
-  getPublishedPlatformBlogPostBySlug,
-  renderPlatformBlogMarkdown,
-  resolvePublicOrigin,
-} from '~/server/utils/platform-llm'
+  getPublishedPlatformBlogPostBySlug, renderPlatformBlogMarkdown, resolvePublicOrigin, } from '~/server/utils/platform-llm'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const category = getRouterParam(event, 'category')
   const slugParam = getRouterParam(event, 'slug')
   if (!category || !slugParam?.endsWith('.md')) return textResponse('Post not found\n', { status: 404 })
@@ -22,5 +19,5 @@ export default defineEventHandler(async (event) => {
 
   return textResponse(renderPlatformBlogMarkdown(post, resolvePublicOrigin(event), category), {}, 'text/markdown; charset=utf-8')
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

@@ -1,4 +1,7 @@
-import { getHeader, setHeader, type H3Event } from 'h3'
+import { HTTPError } from 'nitro';
+
+import type { H3Event } from 'nitro';
+import {  setHeader } from 'nitro/h3';
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { executeBatch, type BatchQuery } from '~/server/db'
 import { buildPublicResourceCacheKey, getPublicResourceCache, putPublicResourceCache } from '~/server/utils/public-resource-cache'
@@ -27,19 +30,19 @@ export async function loadPublicShellSource(
   const mutateHeaders = options.mutateResponseHeaders ?? true
   const env = cloudflareEnv(event)
   const db = env.DB
-  if (!db) throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
+  if (!db) throw new HTTPError({ statusCode: 503, statusMessage: 'Database unavailable' })
 
   const token = typeof query.token === 'string' ? query.token : null
   const locale = typeof query.locale === 'string' ? query.locale : undefined
   if (locale !== undefined && !/^[a-z]{2}(-[A-Z]{2})?$/.test(locale)) {
-    throw createError({ statusCode: 400, statusMessage: 'Invalid public shell locale' })
+    throw new HTTPError({ statusCode: 400, statusMessage: 'Invalid public shell locale' })
   }
   const previewAuthorized = Boolean(
     token && env.PREVIEW_SECRET
       ? await verifyPreviewToken(String(env.PREVIEW_SECRET), siteId, token)
       : false,
   )
-  const host = getHeader(event, 'host') ?? ''
+  const host = (event.req.headers.get('host')) ?? ''
   const useCache = !previewAuthorized && !isPreviewContext(host)
   const cacheKey = buildPublicResourceCacheKey(siteId, {
     contract: 'shell',

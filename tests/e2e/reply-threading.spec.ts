@@ -310,7 +310,6 @@ test.describe('reply threading', () => {
     )
     expect(messages.some((row) => row.body === replyBody)).toBe(true)
 
-    const appErrors = errors.filter((error) => !error.includes('Hydration completed but contains mismatches.'))
-    expect(appErrors).toEqual([])
+    expect(errors).toEqual([])
   })
 })

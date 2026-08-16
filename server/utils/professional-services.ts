@@ -1,5 +1,5 @@
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
-import { createError } from 'h3'
+import { HTTPError } from 'nitro';
 import { listPageQa } from '~/server/utils/location-qa'
 import { listSiteReviews } from '~/server/utils/site-reviews'
 import { getPublishedSiteBlogPost } from '~/server/utils/platform-content'
@@ -33,7 +33,7 @@ function asBoolean(value: unknown) {
 
 function requiredText(value: unknown, field: string): string {
   if (typeof value === 'string' && value.trim()) return value.trim()
-  throw createError({ statusCode: 500, statusMessage: `Stored ${field} is missing`, data: { code: 'INVALID_STORED_CONTENT', field } })
+  throw new HTTPError({ statusCode: 500, statusMessage: `Stored ${field} is missing`, data: { code: 'INVALID_STORED_CONTENT', field } })
 }
 
 type OfferingRow = ApiRecord & {
@@ -76,7 +76,7 @@ function mapOfferingRow(row: OfferingRow, mediaById: Map<string, ApiRecord>): Pu
   const rawFeatures = row.features ? JSON.parse(row.features) as ApiRecord[] : []
   const features: PublicOfferingFeature[] = rawFeatures.map((feature, index) => {
     if (!feature || typeof feature !== 'object' || Array.isArray(feature)) {
-      throw createError({ statusCode: 500, statusMessage: `Stored offering ${row.id}.features[${index}] is invalid`, data: { code: 'INVALID_STORED_CONTENT' } })
+      throw new HTTPError({ statusCode: 500, statusMessage: `Stored offering ${row.id}.features[${index}] is invalid`, data: { code: 'INVALID_STORED_CONTENT' } })
     }
     const record = feature as ApiRecord
     return {
@@ -287,13 +287,13 @@ export async function getPublicConsultationSettings(db: DbClient, siteId: string
      LIMIT 1
   `, [siteId])
 
-  if (!row) throw createError({ statusCode: 500, statusMessage: 'Professional-service consultation settings are missing', data: { code: 'CONSULTATION_SETTINGS_MISSING' } })
+  if (!row) throw new HTTPError({ statusCode: 500, statusMessage: 'Professional-service consultation settings are missing', data: { code: 'CONSULTATION_SETTINGS_MISSING' } })
   const metadata = row.metadata_json ? JSON.parse(row.metadata_json) as ApiRecord : {}
   const ctaLabel = requiredText(row.cta_label, 'consultation.cta_label')
   const schedulePath = requiredText(row.schedule_path, 'consultation.schedule_path')
   const confirmationPath = requiredText(row.confirmation_path, 'consultation.confirmation_path')
   if (row.mode !== 'native_disabled' && row.mode !== 'external_url') {
-    throw createError({ statusCode: 500, statusMessage: 'Professional-service consultation mode is invalid', data: { code: 'INVALID_STORED_CONTENT' } })
+    throw new HTTPError({ statusCode: 500, statusMessage: 'Professional-service consultation mode is invalid', data: { code: 'INVALID_STORED_CONTENT' } })
   }
 
   return {
@@ -468,14 +468,14 @@ export async function resolvePublicBlawbyDocumentOrThrow(
 ): Promise<{ success: true; shell: PublicBlawbyShellData; route: PublicBlawbyRouteData }> {
   const document = await getPublicBlawbyDocumentData(db, siteId, recipe, options)
   if (!document) {
-    throw createError({
+    throw new HTTPError({
       statusCode: 404,
       statusMessage: 'Blawby is not enabled for this site',
       data: { code: 'BLAWBY_NOT_ENABLED' },
     })
   }
   if (!hasPublicBlawbyRouteContent(document.route)) {
-    throw createError({
+    throw new HTTPError({
       statusCode: 404,
       statusMessage: 'Route content not found',
       data: { code: 'BLAWBY_ROUTE_NOT_FOUND' },

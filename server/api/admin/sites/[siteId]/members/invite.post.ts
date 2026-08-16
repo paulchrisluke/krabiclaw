@@ -3,7 +3,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { execute, queryFirst } from '~/server/db'
 import { platformPermissionJsonResponse } from '~/server/utils/platform-admin-users'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -64,12 +64,7 @@ export default defineEventHandler(async (event) => {
   if (existingInvite) {
     if (!resend) {
       return jsonResponse({
-        success: false,
-        reason: 'already_invited',
-        invitationId: existingInvite.id,
-        inviteUrl: `${getRequestURL(event).origin}/accept-invitation/${existingInvite.id}?siteId=${encodeURIComponent(site.id)}`,
-        existingRole: existingInvite.role ?? 'member',
-      }, { status: 409 })
+        success: false, reason: 'already_invited', invitationId: existingInvite.id, inviteUrl: `${event.url.origin}/accept-invitation/${existingInvite.id}?siteId=${encodeURIComponent(site.id)}`, existingRole: existingInvite.role ?? 'member', }, { status: 409 })
     }
 
     // Resend: update existing invitation without changing its ID
@@ -80,18 +75,7 @@ export default defineEventHandler(async (event) => {
     `, [role, session.user.id, expiresAt, existingInvite.id])
 
     return jsonResponse({
-      success: true,
-      invitationId: existingInvite.id,
-      inviteUrl: `${getRequestURL(event).origin}/accept-invitation/${existingInvite.id}?siteId=${encodeURIComponent(site.id)}`,
-      email,
-      role,
-      organizationId: site.organization_id,
-      organizationSlug: site.org_slug,
-      organizationName: site.org_name,
-      siteId: site.id,
-      siteSubdomain: site.subdomain,
-      resent: true,
-    })
+      success: true, invitationId: existingInvite.id, inviteUrl: `${event.url.origin}/accept-invitation/${existingInvite.id}?siteId=${encodeURIComponent(site.id)}`, email, role, organizationId: site.organization_id, organizationSlug: site.org_slug, organizationName: site.org_name, siteId: site.id, siteSubdomain: site.subdomain, resent: true, })
   }
 
   // Check for expired or non-pending invites that can be replaced
@@ -119,20 +103,7 @@ export default defineEventHandler(async (event) => {
   `, [invitationId, site.organization_id, email, role, expiresAt, session.user.id, Math.floor(Date.now() / 1000)])
 
   return jsonResponse({
-    success: true,
-    invitationId,
-    inviteUrl: `${getRequestURL(event).origin}/accept-invitation/${invitationId}?siteId=${encodeURIComponent(site.id)}`,
-    email,
-    role,
-    organizationId: site.organization_id,
-    organizationSlug: site.org_slug,
-    organizationName: site.org_name,
-    siteId: site.id,
-    siteSubdomain: site.subdomain,
-    resent: false,
-  })
+    success: true, invitationId, inviteUrl: `${event.url.origin}/accept-invitation/${invitationId}?siteId=${encodeURIComponent(site.id)}`, email, role, organizationId: site.organization_id, organizationSlug: site.org_slug, organizationName: site.org_name, siteId: site.id, siteSubdomain: site.subdomain, resent: false, })
 })
-import { defineEventHandler } from 'h3'
-import { getRequestURL } from 'h3'
-import { getRouterParam } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import {  getRouterParam , readBody  } from 'nitro/h3';

@@ -3,7 +3,7 @@ import { getGoogleAnalyticsAuthUrl } from '~/server/utils/google-analytics'
 import { signOAuthState } from '~/server/utils/encryption'
 import { requireSiteAccess } from '~/server/utils/location-access'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) {
     return jsonResponse({ error: 'Site ID is required' }, { status: 400 })
@@ -13,10 +13,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     const statePayload = {
-      siteId: site.id,
-      organizationId: site.organization_id,
-      userId: session.user.id,
-      timestamp: Date.now()
+      siteId: site.id, organizationId: site.organization_id, userId: session.user.id, timestamp: Date.now()
     }
 
     const hmacSecret = env.CONNECTOR_TOKEN_ENCRYPTION_KEY as string | undefined
@@ -34,5 +31,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: message }, { status: 500 })
   }
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

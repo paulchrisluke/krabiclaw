@@ -1,14 +1,11 @@
+import { HTTPError, defineHandler  } from 'nitro';
+
 // POST /api/site-transfer/[token]/accept — authenticated: accept and execute a site transfer
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { createAuth, getAuthSession } from '~/server/utils/auth'
 import { execute, queryFirst } from '~/server/db'
 import {
-  completePaidSiteTransfer,
-  executeSiteTransfer,
-  isTransferCheckoutPending,
-  isTransferClaimSentinel,
-  newTransferClaimSentinel,
-} from '~/server/utils/site-transfer'
+  completePaidSiteTransfer, executeSiteTransfer, isTransferCheckoutPending, isTransferClaimSentinel, newTransferClaimSentinel, } from '~/server/utils/site-transfer'
 import { createOrganizationForSite, findOldestOwnedOrganization } from '~/server/utils/site-creation'
 import { getStripe, getPriceIdForPlan } from '~/server/utils/billing'
 import { getOrganizationBillingProjection } from '~/server/utils/organization-billing'
@@ -50,9 +47,7 @@ function assertOrganizationStripeCustomer(customer: Stripe.Customer, organizatio
 }
 
 function checkoutSessionIsReusable(
-  session: Stripe.Checkout.Session,
-  expected: CheckoutSessionExpectation,
-): session is Stripe.Checkout.Session & { url: string } {
+  session: Stripe.Checkout.Session, expected: CheckoutSessionExpectation, ): session is Stripe.Checkout.Session & { url: string } {
   if (
     session.status !== 'open'
     || typeof session.url !== 'string'
@@ -64,15 +59,7 @@ function checkoutSessionIsReusable(
 
   const metadata = session.metadata ?? {}
   const expectedMetadata: Record<string, string> = {
-    type: 'site_transfer',
-    referenceId: expected.organizationId,
-    organization_id: expected.organizationId,
-    plan: expected.plan,
-    transfer_request_id: expected.transferId,
-    transfer_site_id: expected.siteId,
-    transfer_claiming_user_id: expected.userId,
-    transfer_claiming_organization_id: expected.organizationId,
-  }
+    type: 'site_transfer', referenceId: expected.organizationId, organization_id: expected.organizationId, plan: expected.plan, transfer_request_id: expected.transferId, transfer_site_id: expected.siteId, transfer_claiming_user_id: expected.userId, transfer_claiming_organization_id: expected.organizationId, }
   const expectedMetadataEntries = Object.entries(expectedMetadata)
   if (
     Object.keys(metadata).length !== expectedMetadataEntries.length
@@ -93,9 +80,7 @@ function isStripeResourceMissing(error: unknown): boolean {
 }
 
 async function expireCheckoutSessionExactly(
-  stripe: ReturnType<typeof getStripe>,
-  checkoutSessionId: string,
-): Promise<void> {
+  stripe: ReturnType<typeof getStripe>, checkoutSessionId: string, ): Promise<void> {
   let expireError: unknown = null
   try {
     const expired = await stripe.checkout.sessions.expire(checkoutSessionId)
@@ -135,7 +120,7 @@ function hasActiveOrganizationSubscription(projection: Awaited<ReturnType<typeof
     && ['active', 'trialing', 'past_due', 'processing', 'pending'].includes(status)
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const token = getRouterParam(event, 'token')
   if (!token) return jsonResponse({ error: 'Token required' }, { status: 400 })
 
@@ -188,13 +173,8 @@ export default defineEventHandler(async (event) => {
     claiming_organization_id: string | null
     payment_completed_at: string | null
   }>(
-    db,
-    `SELECT id, site_id, from_organization_id, to_email, status,
-            invited_plan, invited_coupon, invited_interval, requires_payment, stripe_checkout_session_id,
-            claiming_user_id, claiming_organization_id, payment_completed_at
-     FROM site_transfer_requests WHERE token = ? LIMIT 1`,
-    [token],
-  )
+    db, `SELECT id, site_id, from_organization_id, to_email, status, invited_plan, invited_coupon, invited_interval, requires_payment, stripe_checkout_session_id, claiming_user_id, claiming_organization_id, payment_completed_at
+     FROM site_transfer_requests WHERE token = ? LIMIT 1`, [token], )
 
   if (!transfer) return jsonResponse({ error: 'Transfer not found' }, { status: 404 })
 
@@ -206,8 +186,7 @@ export default defineEventHandler(async (event) => {
   // original request will either release the sentinel or persist Checkout.
   if (transfer.status === 'pending' && claiming) {
     return jsonResponse({
-      error: 'This handoff is already being accepted. Retry after the current attempt finishes.',
-    }, { status: 409 })
+      error: 'This handoff is already being accepted. Retry after the current attempt finishes.', }, { status: 409 })
   }
 
   // A real stored Checkout is reusable only by its exact claimant/org. A
@@ -215,8 +194,7 @@ export default defineEventHandler(async (event) => {
   // must be reissued by an operator rather than risking a duplicate charge.
   if (transfer.status === 'pending' && transfer.stripe_checkout_session_id && !checkoutPending) {
     return jsonResponse({
-      error: 'This handoff has an unowned Checkout session. Ask an operator to reissue it.',
-    }, { status: 409 })
+      error: 'This handoff has an unowned Checkout session. Ask an operator to reissue it.', }, { status: 409 })
   }
 
   if (transfer.status !== 'pending') {
@@ -238,27 +216,20 @@ export default defineEventHandler(async (event) => {
         await completePaidSiteTransfer(env, db, transfer.id)
       } catch (error) {
         console.error('accepted_site_transfer_completion_retry_failed', {
-          transferId: transfer.id,
-          siteId: transfer.site_id,
-          error,
-        })
+          transferId: transfer.id, siteId: transfer.site_id, error, })
         return jsonResponse({ error: 'Failed to complete this site handoff. Please retry.' }, { status: 500 })
       }
       return jsonResponse({ success: true, site_id: transfer.site_id })
     }
     return jsonResponse(
-      { error: `Transfer is already ${transfer.status}` },
-      { status: 410 },
-    )
+      { error: `Transfer is already ${transfer.status}` }, { status: 410 }, )
   }
 
   // Only the intended Better Auth account may accept. Platform control-plane
   // access must not become implicit tenant ownership.
   if (userEmail !== transfer.to_email.toLowerCase()) {
     return jsonResponse(
-      { error: `This transfer was sent to ${transfer.to_email}. Please sign in with that account.` },
-      { status: 403 },
-    )
+      { error: `This transfer was sent to ${transfer.to_email}. Please sign in with that account.` }, { status: 403 }, )
   }
 
   const hasInvitedPlan = transfer.invited_plan !== null
@@ -268,15 +239,13 @@ export default defineEventHandler(async (event) => {
   if (requiresPayment) {
     if (!hasInvitedPlan || !transfer.invited_plan) {
       return jsonResponse({
-        error: 'This handoff is missing a supported billing plan. Ask the sender to reissue it with Growth.',
-      }, { status: 409 })
+        error: 'This handoff is missing a supported billing plan. Ask the sender to reissue it with Growth.', }, { status: 409 })
     }
     try {
       validatedPlan = assertNewSalePlan(transfer.invited_plan)
     } catch {
       return jsonResponse({
-        error: 'This handoff uses an unsupported billing plan. Ask the sender to reissue it with Growth.',
-      }, { status: 409 })
+        error: 'This handoff uses an unsupported billing plan. Ask the sender to reissue it with Growth.', }, { status: 409 })
     }
   }
 
@@ -288,8 +257,7 @@ export default defineEventHandler(async (event) => {
     : existingOwnerOrganizationId
   if (checkoutPending && (!toOrgId || transfer.claiming_user_id !== userId)) {
     return jsonResponse({
-      error: 'This handoff is reserved for another recipient. Retry from the invited account.',
-    }, { status: 409 })
+      error: 'This handoff is reserved for another recipient. Retry from the invited account.', }, { status: 409 })
   }
   if (toOrgId && !await isCurrentOrganizationOwner(toOrgId)) {
     return jsonResponse({ error: 'You no longer own the organization reserved for this handoff.' }, { status: 409 })
@@ -304,8 +272,7 @@ export default defineEventHandler(async (event) => {
     `, [userId, toOrgId, claimSentinel, transfer.id])
     if ((claim.meta?.changes ?? 0) !== 1) {
       return jsonResponse({
-        error: 'This handoff is already being accepted. Retry after the current attempt finishes.',
-      }, { status: 409 })
+        error: 'This handoff is already being accepted. Retry after the current attempt finishes.', }, { status: 409 })
     }
   }
 
@@ -315,10 +282,7 @@ export default defineEventHandler(async (event) => {
   if (!toOrgId) {
     try {
       toOrgId = (await createOrganizationForSite(
-        env,
-        userId,
-        session.user.name || session.user.email || 'My Business',
-      )).organizationId
+        env, userId, session.user.name || session.user.email || 'My Business', )).organizationId
       const orgClaim = await execute(db, `
         UPDATE site_transfer_requests
         SET claiming_organization_id = ?
@@ -347,14 +311,10 @@ export default defineEventHandler(async (event) => {
         `, [transfer.id, claimSentinel])
       } catch (cleanupError) {
         console.error('transfer_recipient_organization_claim_cleanup_failed', {
-          transferId: transfer.id,
-          cleanupError,
-        })
+          transferId: transfer.id, cleanupError, })
       }
       console.error('transfer_recipient_organization_create_failed', {
-        transferId: transfer.id,
-        error,
-      })
+        transferId: transfer.id, error, })
       return jsonResponse({ error: 'Failed to prepare the recipient organization. Please retry.' }, { status: 500 })
     }
   }
@@ -413,8 +373,7 @@ export default defineEventHandler(async (event) => {
   if (requiresPayment) {
     if (!validatedPlan) {
       return jsonResponse({
-        error: 'This handoff is missing a supported billing plan. Ask the sender to reissue it with Growth.',
-      }, { status: 409 })
+        error: 'This handoff is missing a supported billing plan. Ask the sender to reissue it with Growth.', }, { status: 409 })
     }
 
     // Billing is organization-scoped. An entitled recipient already has the
@@ -425,10 +384,7 @@ export default defineEventHandler(async (event) => {
       recipientBilling = await getOrganizationBillingProjection(db, toOrgId)
     } catch (error) {
       console.error('transfer_recipient_billing_projection_failed', {
-        transferId: transfer.id,
-        organizationId: toOrgId,
-        error,
-      })
+        transferId: transfer.id, organizationId: toOrgId, error, })
       await releaseClaim()
       return jsonResponse({ error: 'Recipient billing state is unavailable. Please retry.' }, { status: 503 })
     }
@@ -436,8 +392,7 @@ export default defineEventHandler(async (event) => {
       if (recipientBilling.effectivePlan !== 'growth') {
         await releaseClaim()
         return jsonResponse({
-          error: 'Your existing subscription needs attention before this handoff can be completed.',
-        }, { status: 409 })
+          error: 'Your existing subscription needs attention before this handoff can be completed.', }, { status: 409 })
       }
       try {
         if (!await assertClaimHeld()) {
@@ -447,25 +402,12 @@ export default defineEventHandler(async (event) => {
         // paused-domain snapshot has been restored. If the external saga
         // fails, the same claimant can retry through the accepted branch.
         await executeSiteTransfer(
-          db,
-          transfer.site_id,
-          transfer.from_organization_id,
-          toOrgId,
-          transfer.id,
-          userId,
-          {
-            expectedCheckoutSessionId: activeClaimSessionId,
-            expectedClaimingUserId: userId,
-            expectedClaimingOrganizationId: toOrgId,
-          },
-        )
+          db, transfer.site_id, transfer.from_organization_id, toOrgId, transfer.id, userId, {
+            expectedCheckoutSessionId: activeClaimSessionId, expectedClaimingUserId: userId, expectedClaimingOrganizationId: toOrgId, }, )
         await completePaidSiteTransfer(env, db, transfer.id)
       } catch (error) {
         console.error('entitled_site_transfer_completion_failed', {
-          transferId: transfer.id,
-          siteId: transfer.site_id,
-          error,
-        })
+          transferId: transfer.id, siteId: transfer.site_id, error, })
         await releaseClaim()
         return jsonResponse({ error: 'Failed to complete this site handoff. Please retry.' }, { status: 500 })
       }
@@ -498,11 +440,8 @@ export default defineEventHandler(async (event) => {
       const orgAdapter = await organizationAdapter()
       const organization = await orgAdapter.findOrganizationById(toOrgId)
       const billingRow = await queryFirst<{ stripe_customer_id: string | null }>(
-        db,
-        `SELECT stripe_customer_id FROM organization_billing WHERE organization_id = ? LIMIT 1`,
-        [toOrgId],
-      )
-      if (!organization) throw createError({ statusCode: 404, statusMessage: 'Organization not found' })
+        db, `SELECT stripe_customer_id FROM organization_billing WHERE organization_id = ? LIMIT 1`, [toOrgId], )
+      if (!organization) throw new HTTPError({ statusCode: 404, statusMessage: 'Organization not found' })
       const organizationStripeCustomerId = typeof (organization as unknown as { stripeCustomerId?: unknown }).stripeCustomerId === 'string'
         ? (organization as unknown as { stripeCustomerId: string }).stripeCustomerId.trim()
         : ''
@@ -510,13 +449,10 @@ export default defineEventHandler(async (event) => {
         ? billingRow.stripe_customer_id.trim()
         : ''
       const orgRow = {
-        name: organization.name,
-        slug: organization.slug,
-        // Better Auth owns the organization Stripe customer. The app-owned
+        name: organization.name, slug: organization.slug, // Better Auth owns the organization Stripe customer. The app-owned
         // projection is retained only as a compatibility fallback for rows
         // created before the organization field was populated.
-        stripe_customer_id: organizationStripeCustomerId || projectedStripeCustomerId || null,
-      }
+        stripe_customer_id: organizationStripeCustomerId || projectedStripeCustomerId || null, }
 
       let customerId = orgRow.stripe_customer_id
       let staleCustomerId: string | null = null
@@ -540,16 +476,9 @@ export default defineEventHandler(async (event) => {
       if (!customerId) {
         if (!userEmail) throw new Error('User email required to create Stripe customer')
         const customer = await stripe.customers.create({
-          email: userEmail,
-          name: orgRow.name,
-          metadata: {
-            organizationId: toOrgId,
-            customerType: 'organization',
-            organization_id: toOrgId,
-          },
-        }, {
-          idempotencyKey: transferCustomerIdempotencyKey(toOrgId, staleCustomerId),
-        })
+          email: userEmail, name: orgRow.name, metadata: {
+            organizationId: toOrgId, customerType: 'organization', organization_id: toOrgId, }, }, {
+          idempotencyKey: transferCustomerIdempotencyKey(toOrgId, staleCustomerId), })
         customerId = customer.id
       }
 
@@ -557,12 +486,9 @@ export default defineEventHandler(async (event) => {
       // not write the Better Auth organization table through app-owned SQL.
       if (organizationStripeCustomerId !== customerId) {
         const updateOrganization = orgAdapter.updateOrganization as unknown as (
-          _organizationId: string,
-          _data: { stripeCustomerId: string },
-        ) => Promise<unknown>
+          _organizationId: string, _data: { stripeCustomerId: string }, ) => Promise<unknown>
         const updatedOrganization = await updateOrganization(toOrgId, {
-          stripeCustomerId: customerId,
-        })
+          stripeCustomerId: customerId, })
         if (!updatedOrganization) throw new Error('Failed to persist Stripe customer on recipient organization')
       }
 
@@ -570,24 +496,15 @@ export default defineEventHandler(async (event) => {
         return jsonResponse({ error: 'This handoff was cancelled while it was being accepted.' }, { status: 409 })
       }
 
-      const origin = getRequestURL(event).origin
+      const origin = event.url.origin
       const slug = encodeURIComponent(orgRow.slug)
       const sessionExpectation: CheckoutSessionExpectation = {
-        transferId: transfer.id,
-        siteId: transfer.site_id,
-        customerId,
-        organizationId: toOrgId,
-        userId,
-        plan: validatedPlan,
-        priceId,
-      }
+        transferId: transfer.id, siteId: transfer.site_id, customerId, organizationId: toOrgId, userId, plan: validatedPlan, priceId, }
 
       if (checkoutPending && transfer.stripe_checkout_session_id) {
         try {
           const existingSession = await stripe.checkout.sessions.retrieve(
-            transfer.stripe_checkout_session_id,
-            { expand: ['line_items.data.price'] },
-          )
+            transfer.stripe_checkout_session_id, { expand: ['line_items.data.price'] }, )
           if (checkoutSessionIsReusable(existingSession, sessionExpectation)) {
             if (!await assertClaimHeld()) {
               return jsonResponse({ error: 'This handoff was cancelled while its Checkout was being checked.' }, { status: 409 })
@@ -637,31 +554,10 @@ export default defineEventHandler(async (event) => {
       }
 
       const checkoutParams: Parameters<typeof stripe.checkout.sessions.create>[0] = {
-        customer: customerId,
-        mode: 'subscription',
-        line_items: [{ price: priceId, quantity: 1 }],
-        client_reference_id: toOrgId,
-        success_url: `${origin}/dashboard/${slug}/onboarding?new=true&transfer=${encodeURIComponent(transfer.id)}`,
-        cancel_url: `${origin}/dashboard/${slug}/onboarding?new=true&payment=cancelled&transfer=${encodeURIComponent(transfer.id)}`,
-        metadata: {
-          type: 'site_transfer',
-          referenceId: toOrgId,
-          organization_id: toOrgId,
-          plan: validatedPlan,
-          transfer_request_id: transfer.id,
-          transfer_site_id: transfer.site_id,
-          transfer_claiming_user_id: userId,
-          transfer_claiming_organization_id: toOrgId,
-        },
-        subscription_data: {
+        customer: customerId, mode: 'subscription', line_items: [{ price: priceId, quantity: 1 }], client_reference_id: toOrgId, success_url: `${origin}/dashboard/${slug}/onboarding?new=true&transfer=${encodeURIComponent(transfer.id)}`, cancel_url: `${origin}/dashboard/${slug}/onboarding?new=true&payment=cancelled&transfer=${encodeURIComponent(transfer.id)}`, metadata: {
+          type: 'site_transfer', referenceId: toOrgId, organization_id: toOrgId, plan: validatedPlan, transfer_request_id: transfer.id, transfer_site_id: transfer.site_id, transfer_claiming_user_id: userId, transfer_claiming_organization_id: toOrgId, }, subscription_data: {
           metadata: {
-            referenceId: toOrgId,
-            organization_id: toOrgId,
-            plan: validatedPlan,
-            transfer_request_id: transfer.id,
-          },
-        },
-      }
+            referenceId: toOrgId, organization_id: toOrgId, plan: validatedPlan, transfer_request_id: transfer.id, }, }, }
 
       if (transfer.invited_coupon) {
         checkoutParams.discounts = [{ coupon: transfer.invited_coupon }]
@@ -673,14 +569,10 @@ export default defineEventHandler(async (event) => {
       checkoutCreateStarted = true
       const checkoutSession = await stripe.checkout.sessions.create(checkoutParams, {
           idempotencyKey: transferCheckoutIdempotencyKey(
-            transfer.id,
-            previousCheckoutSessionId,
-          ),
-      })
+            transfer.id, previousCheckoutSessionId, ), })
       checkoutCreateResponseReceived = true
       // Capture any real provider ID before validating the rest of the
-      // response. A malformed response can still represent a created,
-      // payable session that must be expired or quarantined exactly.
+      // response. A malformed response can still represent a created, // payable session that must be expired or quarantined exactly.
       if (typeof checkoutSession?.id === 'string' && checkoutSession.id.trim().length > 0) {
         createdCheckoutSessionId = checkoutSession.id
       }
@@ -718,10 +610,7 @@ export default defineEventHandler(async (event) => {
           claimHeld = await assertClaimHeld()
         } catch (claimError) {
           console.error('transfer_checkout_claim_state_unknown', {
-            transferId: transfer.id,
-            checkoutSessionId: createdCheckoutSessionId,
-            error: claimError,
-          })
+            transferId: transfer.id, checkoutSessionId: createdCheckoutSessionId, error: claimError, })
         }
 
         // A zero-row persistence CAS can mean another request already bound
@@ -738,10 +627,7 @@ export default defineEventHandler(async (event) => {
                 checkoutExpired = expired.status === 'expired'
               } catch (expireError) {
                 console.error('transfer_checkout_expire_after_persistence_failure', {
-                  transferId: transfer.id,
-                  checkoutSessionId: createdCheckoutSessionId,
-                  error: expireError,
-                })
+                  transferId: transfer.id, checkoutSessionId: createdCheckoutSessionId, error: expireError, })
               }
 
               // Expiration can race a successful payment. Only a follow-up read
@@ -752,19 +638,13 @@ export default defineEventHandler(async (event) => {
                   checkoutExpired = latest.status === 'expired'
                 } catch (latestError) {
                   console.error('transfer_checkout_expiration_state_unknown', {
-                    transferId: transfer.id,
-                    checkoutSessionId: createdCheckoutSessionId,
-                    error: latestError,
-                  })
+                    transferId: transfer.id, checkoutSessionId: createdCheckoutSessionId, error: latestError, })
                 }
               }
             }
           } catch (retrieveError) {
             console.error('transfer_checkout_retrieve_after_persistence_failure', {
-              transferId: transfer.id,
-              checkoutSessionId: createdCheckoutSessionId,
-              error: retrieveError,
-            })
+              transferId: transfer.id, checkoutSessionId: createdCheckoutSessionId, error: retrieveError, })
           }
         }
 
@@ -813,20 +693,14 @@ export default defineEventHandler(async (event) => {
           }
         } catch (quarantineError) {
           console.error('transfer_checkout_quarantine_failed', {
-            transferId: transfer.id,
-            checkoutSessionId: createdCheckoutSessionId,
-            error: quarantineError,
-          })
+            transferId: transfer.id, checkoutSessionId: createdCheckoutSessionId, error: quarantineError, })
         }
         if (!quarantined) {
           console.error('transfer_checkout_quarantine_unproven', {
-            transferId: transfer.id,
-            checkoutSessionId: createdCheckoutSessionId,
-          })
+            transferId: transfer.id, checkoutSessionId: createdCheckoutSessionId, })
         }
         return jsonResponse({
-          error: 'Checkout was created but its state could not be safely reconciled. Ask an operator to reconcile it before retrying.',
-        }, { status: 503 })
+          error: 'Checkout was created but its state could not be safely reconciled. Ask an operator to reconcile it before retrying.', }, { status: 503 })
       } else if (checkoutCreateStarted && !checkoutCreateResponseReceived) {
         // Stripe may have accepted an idempotent create while the response
         // was lost. Keep the sentinel fenced rather than risking a duplicate;
@@ -843,18 +717,8 @@ export default defineEventHandler(async (event) => {
       return jsonResponse({ error: 'This handoff was cancelled while it was being accepted.' }, { status: 409 })
     }
     await executeSiteTransfer(
-      db,
-      transfer.site_id,
-      transfer.from_organization_id,
-      toOrgId,
-      transfer.id,
-      userId,
-      {
-        expectedCheckoutSessionId: activeClaimSessionId,
-        expectedClaimingUserId: userId,
-        expectedClaimingOrganizationId: toOrgId,
-      },
-    )
+      db, transfer.site_id, transfer.from_organization_id, toOrgId, transfer.id, userId, {
+        expectedCheckoutSessionId: activeClaimSessionId, expectedClaimingUserId: userId, expectedClaimingOrganizationId: toOrgId, }, )
   } catch (error) {
     await releaseClaim()
     throw error
@@ -862,7 +726,4 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ success: true, site_id: transfer.site_id })
 })
-import { defineEventHandler } from 'h3'
-import { getRequestURL } from 'h3'
-import { getRouterParam } from 'h3'
-import { readBody } from 'h3'
+import {  getRouterParam , readBody  } from 'nitro/h3';

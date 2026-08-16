@@ -4,7 +4,8 @@
 //   ?datasets=content,menu   include only the named route capabilities
 // All inline D1 queries run in a single executeBatch() call.
 import { executeBatch, queryFirst, type BatchQuery } from "~/server/db";
-import { createError, getHeader, setHeader, type H3Event } from "h3";
+import { HTTPError, type H3Event } from 'nitro';
+import {  setHeader } from 'nitro/h3';
 import { cloudflareEnv } from "~/server/utils/api-response";
 import { calculateMapEmbedUrl } from "~/server/utils/google-places";
 import {
@@ -139,10 +140,12 @@ interface PublicPageLoadOptions {
   signal?: AbortSignal
 }
 
-function canonicalTenantPagePath(page: string | null, locationSlug: string | null): string | null {
+function canonicalTenantPagePath(page: string | null): string | null {
   if (!page) return null
   if (page === 'home') return '/'
-  if (page === 'location') return locationSlug ? `/locations/${locationSlug}` : null
+  // Location detail routes are backed by the canonical business_locations row
+  // and their route datasets. They are not tenant-page variants, so do not
+  // require a CMS page record for a valid location.
   if (page === 'locations') return '/locations'
   if (['about', 'contact', 'reservations', 'order', 'qa', 'reviews', 'posts', 'experiences', 'photos', 'menu', 'blog'].includes(page)) return `/${page}`
   return null
@@ -199,18 +202,18 @@ function parseExperienceRow(row: Record<string, unknown>): Experience {
     if (typeof value === "string" && value) {
       const parsed = JSON.parse(value)
       if (!Array.isArray(parsed) || !parsed.every((item): item is string => typeof item === "string")) {
-        throw createError({ statusCode: 500, statusMessage: 'Stored experience string array is invalid', data: { code: 'INVALID_STORED_CONTENT' } })
+        throw new HTTPError({ statusCode: 500, statusMessage: 'Stored experience string array is invalid', data: { code: 'INVALID_STORED_CONTENT' } })
       }
       return parsed.filter(item => item.trim().length > 0)
     }
     if (Array.isArray(value)) {
       if (!value.every((item): item is string => typeof item === "string")) {
-        throw createError({ statusCode: 500, statusMessage: 'Stored experience string array is invalid', data: { code: 'INVALID_STORED_CONTENT' } })
+        throw new HTTPError({ statusCode: 500, statusMessage: 'Stored experience string array is invalid', data: { code: 'INVALID_STORED_CONTENT' } })
       }
       return value
     }
     if (value == null || value === '') return []
-    throw createError({ statusCode: 500, statusMessage: 'Stored experience string array is invalid', data: { code: 'INVALID_STORED_CONTENT' } })
+    throw new HTTPError({ statusCode: 500, statusMessage: 'Stored experience string array is invalid', data: { code: 'INVALID_STORED_CONTENT' } })
   };
 
   const isStringArray = (value: unknown): value is string[] =>
@@ -219,7 +222,7 @@ function parseExperienceRow(row: Record<string, unknown>): Experience {
   let time_slots: string[] | null = null;
   if (row.time_slots != null && row.time_slots !== '') {
     const parsed = JSON.parse(String(row.time_slots));
-    if (!isStringArray(parsed)) throw createError({ statusCode: 500, statusMessage: 'Stored experience time slots are invalid', data: { code: 'INVALID_STORED_CONTENT' } })
+    if (!isStringArray(parsed)) throw new HTTPError({ statusCode: 500, statusMessage: 'Stored experience time slots are invalid', data: { code: 'INVALID_STORED_CONTENT' } })
     time_slots = parsed;
   }
 
@@ -227,7 +230,7 @@ function parseExperienceRow(row: Record<string, unknown>): Experience {
   if (row.recurring_slots != null && row.recurring_slots !== '') {
     const parsed = JSON.parse(String(row.recurring_slots));
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || !Object.values(parsed).every(isStringArray)) {
-      throw createError({ statusCode: 500, statusMessage: 'Stored experience recurring slots are invalid', data: { code: 'INVALID_STORED_CONTENT' } })
+      throw new HTTPError({ statusCode: 500, statusMessage: 'Stored experience recurring slots are invalid', data: { code: 'INVALID_STORED_CONTENT' } })
     }
     recurring_slots = parsed as Partial<Record<string, string[]>>
   }
@@ -255,7 +258,7 @@ async function loadPublicPageSource(
   const mutateResponseHeaders = options.mutateResponseHeaders ?? true;
   const env = cloudflareEnv(event);
   const db = env.DB;
-  if (!db) throw createError({ statusCode: 503, statusMessage: "Database unavailable" });
+  if (!db) throw new HTTPError({ statusCode: 503, statusMessage: "Database unavailable" });
 
   const rawToken = typeof query.token === "string" ? query.token : null;
   let isPreviewAuthorized = false;
@@ -317,7 +320,7 @@ async function loadPublicPageSource(
   const allInputsValid = areDatasetsValid && isValidLocale && isValidPage &&
     isValidLocation && isValidExperience && isValidBlogSlug;
   if (!allInputsValid) {
-    throw createError({ statusCode: 400, statusMessage: "Invalid public page query" });
+    throw new HTTPError({ statusCode: 400, statusMessage: "Invalid public page query" });
   }
 
   // Read-through KV cache for the D1 batch below. Skipped for preview-authorized
@@ -327,7 +330,7 @@ async function loadPublicPageSource(
   // hosts, whose D1 gets reseeded on every CI push —
   // a 60s-old cached response could serve pre-reseed content into a fresh E2E run.
   // Also skipped if any query input is invalid to prevent unbounded cache entries.
-  const host = getHeader(event, "host") ?? "";
+  const host = (event.req.headers.get("host")) ?? "";
   const usePageCache = !isPreviewAuthorized && !isPreviewContext(host) && allInputsValid;
   const cacheKey = buildPublicResourceCacheKey(siteId, {
     contract: 'page',
@@ -686,7 +689,7 @@ async function loadPublicPageSource(
       ? (batchResults[idxQa] as { results: Record<string, unknown>[] })
       : { results: [] as Record<string, unknown>[] };
   const sourceLocale = site.source_locale;
-  const canonicalPath = requestedDatasets.has('content') ? canonicalTenantPagePath(page, locationSlug) : null
+  const canonicalPath = requestedDatasets.has('content') ? canonicalTenantPagePath(page) : null
   const tenantPage = canonicalPath
     ? await getPublicTenantPageForPath(db, siteId, canonicalPath, { locale, preview: isPreviewAuthorized })
     : null
@@ -708,9 +711,10 @@ async function loadPublicPageSource(
 
     let selectedMenuRow: Record<string, unknown> | null = null;
 
-    if (locationId) {
+    const menuLocationId = locationId ?? site.primary_location_id;
+    if (menuLocationId) {
       selectedMenuRow =
-        menuRows.find((m) => m.location_id === locationId) ?? null;
+        menuRows.find((m) => m.location_id === menuLocationId) ?? null;
     } else {
       selectedMenuRow =
         menuRows.find(
@@ -928,7 +932,7 @@ async function loadPublicPageSource(
   const needsReservationPolicies = requestedDatasets.has('reservationPolicies');
   const needsExperiencePolicies = requestedDatasets.has('experiencePolicies');
   if ((needsReservationPolicies || needsExperiencePolicies) && !locale && !sourceLocale) {
-    throw createError({
+    throw new HTTPError({
       statusCode: 500,
       statusMessage: 'Site source locale is not configured',
     });

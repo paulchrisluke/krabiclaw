@@ -1,7 +1,7 @@
-import { defineEventHandler } from 'h3'
+import { defineHandler } from 'nitro';
 import { assertDevRouteAllowed } from '~/server/utils/dev-route-auth'
 
-export default defineEventHandler((event) => {
+export default defineHandler((event) => {
   assertDevRouteAllowed(event)
 
   return new Response(null, { status: 200 })

@@ -3,7 +3,7 @@ import { apiErrorResponse, cloudflareEnv, jsonResponse } from '~/server/utils/ap
 import { getPublishedPlatformDoc } from '~/server/utils/platform-content'
 import { slugToCategory } from '~/utils/docs-categories'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const categorySlug = getRouterParam(event, 'category')
   const slug = getRouterParam(event, 'slug')
   if (!categorySlug || !slug) return apiErrorResponse(event, 400, 'DOC_PARAMS_REQUIRED', 'Documentation category and slug are required')
@@ -25,5 +25,5 @@ export default defineEventHandler(async (event) => {
     return apiErrorResponse(event, 503, 'DOC_UNAVAILABLE', 'Documentation data is temporarily unavailable')
   }
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

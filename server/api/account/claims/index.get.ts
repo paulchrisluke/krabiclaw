@@ -4,10 +4,10 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { resolveClaimableCustomersForEvent } from '~/server/utils/account-surface'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const result = await resolveClaimableCustomersForEvent(event)
   if (result.status === 'db_unavailable') return jsonResponse({ error: 'Database not available' }, { status: 500 })
   if (result.status === 'unauthenticated') return jsonResponse({ error: 'Authentication required' }, { status: 401 })
   return jsonResponse({ claimable: result.data })
 })
-import { defineEventHandler } from 'h3'
+import { defineHandler } from 'nitro';

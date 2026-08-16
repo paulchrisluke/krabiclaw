@@ -6,6 +6,7 @@ type JsonResult = { body: Record<string, unknown>; status: number }
 type TestEvent = {
   params: { requestId: string }
   headers: Record<string, string>
+  req: { headers: Headers; body: ReadableStream<Uint8Array> }
   body: ReadableStream<Uint8Array>
 }
 
@@ -54,7 +55,7 @@ const mediaBucket = {
   },
 }
 
-mock.module('h3', {
+mock.module('nitro/h3', {
   namedExports: {
     createError: (input: { statusCode: number; statusMessage: string }) => Object.assign(
       new Error(input.statusMessage),
@@ -62,6 +63,7 @@ mock.module('h3', {
     ),
     getHeader: (event: TestEvent, name: string) => event.headers[name.toLowerCase()],
     getRequestWebStream: (event: TestEvent) => event.body,
+    getRouterParam: (event: TestEvent, name: string) => event.params[name as 'requestId'],
   },
 })
 
@@ -161,16 +163,20 @@ function event(overrides: Partial<TestEvent> = {}): TestEvent {
       controller.close()
     },
   })
+  const headers = {
+    'content-length': String(mp4Signature.byteLength),
+    'content-type': 'video/mp4',
+    'x-file-name': encodeURIComponent('visit clip.mp4'),
+    'x-review-token': 'review-token',
+    ...overrides.headers,
+  }
   return {
     params: { requestId: 'request-1' },
-    headers: {
-      'content-length': String(mp4Signature.byteLength),
-      'content-type': 'video/mp4',
-      'x-file-name': encodeURIComponent('visit clip.mp4'),
-      'x-review-token': 'review-token',
-    },
+    headers,
+    req: { headers: new Headers(headers), body },
     body,
     ...overrides,
+    req: overrides.req ?? { headers: new Headers(headers), body },
   }
 }
 

@@ -6,7 +6,7 @@ import { isDemoOrg } from '~/server/utils/demo'
 import { queryFirst } from '~/server/db'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const localeParam = getRouterParam(event, 'locale')
   const locale = normalizeLocale(localeParam)
@@ -40,5 +40,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: error instanceof Error ? error.message : 'Failed to delete locale' }, { status: 400 })
   }
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

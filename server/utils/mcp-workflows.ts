@@ -1,3 +1,5 @@
+import { HTTPError } from 'nitro';
+
 import { contentRegistry } from "~/config/content-registry";
 import { resolveSiteCmsCapabilities } from "~/server/utils/cms-capabilities";
 import {
@@ -64,16 +66,16 @@ async function assertSiteContentPage(
     WHERE id = ? AND organization_id = ?
     LIMIT 1
   `, [siteId, organizationId]);
-  if (!site) throw createError({ statusCode: 404, statusMessage: `Site "${siteId}" was not found.` });
+  if (!site) throw new HTTPError({ statusCode: 404, statusMessage: `Site "${siteId}" was not found.` });
   const { vertical, template, capabilities: capability } = resolveSiteCmsCapabilities(site.vertical, site.theme_id, {
     siteEnabledFeatures: site.feature_overrides,
   });
   const pageCapability = capability.pages.find(candidate => candidate.id === page);
   if (!pageCapability) {
-    throw createError({ statusCode: 400, statusMessage: `Page "${page}" is not available for ${vertical}/${template}.` });
+    throw new HTTPError({ statusCode: 400, statusMessage: `Page "${page}" is not available for ${vertical}/${template}.` });
   }
   if (pageCapability.editor !== "tenant_pages") {
-    throw createError({ statusCode: 400, statusMessage: `Page "${page}" is owned by the ${pageCapability.editor} editor.` });
+    throw new HTTPError({ statusCode: 400, statusMessage: `Page "${page}" is owned by the ${pageCapability.editor} editor.` });
   }
   return pageCapability;
 }
@@ -398,13 +400,13 @@ export async function listWorkRequestsForOrganization(
 
 async function resolveTenantPagePath(db: DbClient, siteId: string, page: string, locationId?: string) {
   if (page === 'location') {
-    if (!locationId) throw createError({ statusCode: 400, statusMessage: 'Location pages require an explicit location_id.' })
+    if (!locationId) throw new HTTPError({ statusCode: 400, statusMessage: 'Location pages require an explicit location_id.' })
     const location = await queryFirst<{ slug: string }>(db, 'SELECT slug FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1', [locationId, siteId])
-    if (!location) throw createError({ statusCode: 404, statusMessage: 'Location not found.' })
+    if (!location) throw new HTTPError({ statusCode: 404, statusMessage: 'Location not found.' })
     return `/locations/${location.slug}`
   }
   const path = contentRegistry[page]?.path
-  if (!path) throw createError({ statusCode: 400, statusMessage: `Page "${page}" is not registered as a tenant page.` })
+  if (!path) throw new HTTPError({ statusCode: 400, statusMessage: `Page "${page}" is not registered as a tenant page.` })
   return path
 }
 
@@ -423,13 +425,13 @@ export async function updatePageContent(
   },
   actorId?: string | null,
 ) {
-  const locationId = input.location_id ?? undefined;
+  const locationId = input.location_id;
   const pageDefinition = await assertSiteContentPage(db, organizationId, siteId, input.page);
   if (pageDefinition.scope === "location" && !locationId) {
-    throw createError({ statusCode: 400, statusMessage: `Page "${input.page}" requires an explicit location_id.` });
+    throw new HTTPError({ statusCode: 400, statusMessage: `Page "${input.page}" requires an explicit location_id.` });
   }
   if (pageDefinition.scope === "site" && locationId) {
-    throw createError({ statusCode: 400, statusMessage: `Page "${input.page}" is site-scoped and does not accept location_id.` });
+    throw new HTTPError({ statusCode: 400, statusMessage: `Page "${input.page}" is site-scoped and does not accept location_id.` });
   }
   if (locationId) {
     const location = await queryFirst<{ id: string }>(db, `
@@ -437,15 +439,15 @@ export async function updatePageContent(
       WHERE id = ? AND organization_id = ? AND site_id = ?
       LIMIT 1
     `, [locationId, organizationId, siteId]);
-    if (!location) throw createError({ statusCode: 404, statusMessage: `Location "${locationId}" is not owned by site "${siteId}".` });
+    if (!location) throw new HTTPError({ statusCode: 404, statusMessage: `Location "${locationId}" is not owned by site "${siteId}".` });
   }
 
-  if (pageDefinition.editor !== "tenant_pages") throw createError({ statusCode: 410, statusMessage: 'Page authoring is available through the canonical Pages manager and complete block snapshots.' });
+  if (pageDefinition.editor !== "tenant_pages") throw new HTTPError({ statusCode: 410, statusMessage: 'Page authoring is available through the canonical Pages manager and complete block snapshots.' });
   if (!Array.isArray(input.changes.blocks)) {
-    throw createError({ statusCode: 400, statusMessage: 'Tenant page updates must provide the canonical blocks array.' });
+    throw new HTTPError({ statusCode: 400, statusMessage: 'Tenant page updates must provide the canonical blocks array.' });
   }
   const { getTenantPageForEditorByPath, updateTenantPageDraft } = await import('~/server/utils/tenant-pages');
-  const canonicalPath = await resolveTenantPagePath(db, siteId, input.page, locationId);
+  const canonicalPath = await resolveTenantPagePath(db, siteId, input.page, locationId ?? undefined);
   const page = await getTenantPageForEditorByPath(db, siteId, canonicalPath);
   const incomingBlockIds = new Set(
     (input.changes.blocks as unknown[])
@@ -471,7 +473,7 @@ export async function updatePageContent(
       : ''
     const expectedToken = buildTenantPageReplacementConfirmationToken(page.document.updated_at, removedBlockIds)
     if (expectedDocumentUpdatedAt !== page.document.updated_at || requestedRemovedIds.join(',') !== [...removedBlockIds].sort().join(',') || confirmationToken !== expectedToken) {
-      throw createError({
+      throw new HTTPError({
         statusCode: 409,
         statusMessage: `Complete block replacement would remove ${removedBlockIds.length} existing block(s). Confirm with expected_document_updated_at="${page.document.updated_at}", removed_block_ids=${JSON.stringify([...removedBlockIds].sort())}, confirmation_token="${expectedToken}".`,
       })
@@ -529,10 +531,10 @@ export async function getEditorContent(
 ) {
   const pageDefinition = await assertSiteContentPage(db, organizationId, siteId, page);
   if (pageDefinition.scope === "location" && !locationId) {
-    throw createError({ statusCode: 400, statusMessage: `Page "${page}" requires an explicit location_id.` });
+    throw new HTTPError({ statusCode: 400, statusMessage: `Page "${page}" requires an explicit location_id.` });
   }
   if (pageDefinition.scope === "site" && locationId) {
-    throw createError({ statusCode: 400, statusMessage: `Page "${page}" is site-scoped and does not accept location_id.` });
+    throw new HTTPError({ statusCode: 400, statusMessage: `Page "${page}" is site-scoped and does not accept location_id.` });
   }
   if (locationId) {
     const location = await queryFirst<{ id: string }>(db, `
@@ -540,10 +542,10 @@ export async function getEditorContent(
       WHERE id = ? AND organization_id = ? AND site_id = ?
       LIMIT 1
     `, [locationId, organizationId, siteId]);
-    if (!location) throw createError({ statusCode: 404, statusMessage: `Location "${locationId}" is not owned by site "${siteId}".` });
+    if (!location) throw new HTTPError({ statusCode: 404, statusMessage: `Location "${locationId}" is not owned by site "${siteId}".` });
   }
 
-  if (pageDefinition.editor !== "tenant_pages") throw createError({ statusCode: 410, statusMessage: 'Page authoring is available through the canonical Pages manager.' });
+  if (pageDefinition.editor !== "tenant_pages") throw new HTTPError({ statusCode: 410, statusMessage: 'Page authoring is available through the canonical Pages manager.' });
   const { getTenantPageForEditorByPath } = await import('~/server/utils/tenant-pages');
   const canonicalPath = await resolveTenantPagePath(db, siteId, page, locationId);
   const canonicalPage = await getTenantPageForEditorByPath(db, siteId, canonicalPath);
@@ -573,7 +575,7 @@ export async function updateHomeHero(
     location_id?: string | null;
   },
 ) {
-  if (input.location_id) throw createError({ statusCode: 400, statusMessage: 'The canonical home page is site-scoped; update a location page for location-specific content.' })
+  if (input.location_id) throw new HTTPError({ statusCode: 400, statusMessage: 'The canonical home page is site-scoped; update a location page for location-specific content.' })
   const { getTenantPageForEditorByPath, updateTenantPageDraft } = await import('~/server/utils/tenant-pages')
   const page = await getTenantPageForEditorByPath(db, siteId, '/')
   const blocks = page.blocks.map(block => block.type === 'hero'
@@ -684,7 +686,7 @@ export async function deleteContentField(
   actorId?: string | null,
 ) {
   void db; void organizationId; void siteId; void input; void actorId
-  throw createError({ statusCode: 410, statusMessage: 'Field-based page deletion has been removed. Delete a block in the Pages manager and save the complete draft.' });
+  throw new HTTPError({ statusCode: 410, statusMessage: 'Field-based page deletion has been removed. Delete a block in the Pages manager and save the complete draft.' });
 }
 
 function safeJson(value: unknown) {

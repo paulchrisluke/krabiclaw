@@ -1,4 +1,5 @@
-import { setResponseHeader, type H3Event } from 'h3'
+import type { H3Event } from 'nitro';
+import { setResponseHeader } from 'nitro/h3';
 import { purgeSiteKvCache } from '~/server/utils/edge-cache'
 
 export function quoteChallengeValue(value: string) {
@@ -107,7 +108,7 @@ export function describeMcpAuthTelemetryError(
 
 export function getCloudflareWaitUntil(event: H3Event): ((_promise: Promise<unknown>) => void) | undefined {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const ctx = (event.context.cloudflare as any)?.context as { waitUntil?: (_p: Promise<unknown>) => void } | undefined
+  const ctx = (event.runtime?.cloudflare as any)?.context as { waitUntil?: (_p: Promise<unknown>) => void } | undefined
   return ctx?.waitUntil?.bind(ctx)
 }
 

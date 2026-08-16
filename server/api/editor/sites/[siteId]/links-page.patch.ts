@@ -2,7 +2,7 @@ import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { requireSiteAccess } from '~/server/utils/location-access'
 import { SiteLinksValidationError, upsertLinksPage, type LinkItemUpdateInput, type LinksPageUpdateInput } from '~/server/utils/site-links'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
 
@@ -17,12 +17,7 @@ export default defineEventHandler(async (event) => {
       return jsonResponse({ error: 'Invalid links page payload' }, { status: 400 })
     }
     const result = await upsertLinksPage(db, {
-      organizationId: site.organization_id,
-      siteId,
-      page: body.page ?? {},
-      items: body.items,
-      updatedBy: session.user.id,
-    })
+      organizationId: site.organization_id, siteId, page: body.page ?? {}, items: body.items, updatedBy: session.user.id, })
     return jsonResponse(result)
   } catch (error) {
     rethrowHttpError(error)
@@ -33,6 +28,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Unable to save links page' }, { status: 500 })
   }
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam, readBody  } from 'nitro/h3';

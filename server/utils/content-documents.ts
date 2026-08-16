@@ -1,3 +1,5 @@
+import { HTTPError } from 'nitro';
+
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '../db/index.ts'
 
 export type ContentDocumentOwnerType = 'platform_blog' | 'platform_doc' | 'tenant_blog' | 'tenant_page'
@@ -74,11 +76,11 @@ const VALID_BLOCK_TYPES: readonly ContentBlockType[] = ['heading', 'markdown', '
 const HEADING_RE = /^(#{1,6})\s+(.+?)\s*$/
 
 function badRequest(message: string): never {
-  throw createError({ statusCode: 400, statusMessage: message })
+  throw new HTTPError({ statusCode: 400, statusMessage: message })
 }
 
 function notFound(message: string): never {
-  throw createError({ statusCode: 404, statusMessage: message })
+  throw new HTTPError({ statusCode: 404, statusMessage: message })
 }
 
 function assertBlockType(type: string): ContentBlockType {
@@ -97,7 +99,7 @@ function parseBlockData(row: Pick<ContentBlockRow, 'data_json' | 'id' | 'type'>)
   try {
     return asObject(JSON.parse(row.data_json) as unknown, `content block ${row.id} data`)
   } catch (error) {
-    throw createError({
+    throw new HTTPError({
       statusCode: 500,
       statusMessage: `Content block ${row.id} has malformed data_json`,
       cause: error,
@@ -360,11 +362,11 @@ async function writeRevisionFromBlocks(
     if (opts.expectedDocument) {
       const current = await getContentDocumentById(db, opts.expectedDocument.id)
       if (!current || current.updated_at !== opts.expectedDocument.updatedAt) {
-        throw createError({ statusCode: 409, statusMessage: 'Content document was updated by another writer', cause: error })
+        throw new HTTPError({ statusCode: 409, statusMessage: 'Content document was updated by another writer', cause: error })
       }
     }
     if (opts.expectedBlock) {
-      throw createError({ statusCode: 409, statusMessage: 'Content block was updated by another writer', cause: error })
+      throw new HTTPError({ statusCode: 409, statusMessage: 'Content block was updated by another writer', cause: error })
     }
     throw error
   }
@@ -415,7 +417,7 @@ export async function syncContentDocumentFromMarkdown(
     publish: opts.publish,
   })
   const currentDocument = await getContentDocumentById(db, document.id)
-  if (!currentDocument) throw createError({ statusCode: 500, statusMessage: 'Content document disappeared after synchronization' })
+  if (!currentDocument) throw new HTTPError({ statusCode: 500, statusMessage: 'Content document disappeared after synchronization' })
   return { document: currentDocument, ...revision }
 }
 
@@ -444,7 +446,7 @@ export async function syncContentDocumentFromBlocks(
     publish: opts.publish,
   })
   const currentDocument = await getContentDocumentById(db, document.id)
-  if (!currentDocument) throw createError({ statusCode: 500, statusMessage: 'Content document disappeared after synchronization' })
+  if (!currentDocument) throw new HTTPError({ statusCode: 500, statusMessage: 'Content document disappeared after synchronization' })
   return { document: currentDocument, ...revision }
 }
 
@@ -528,7 +530,7 @@ export async function createContentDocumentWithBlocks(
   const prepared = prepareContentDocumentWithBlocks(ownerType, ownerId, blocks, opts)
   await executeBatch(db, prepared.queries)
   const currentDocument = await getContentDocumentById(db, prepared.document.id)
-  if (!currentDocument) throw createError({ statusCode: 500, statusMessage: 'Content document disappeared after synchronization' })
+  if (!currentDocument) throw new HTTPError({ statusCode: 500, statusMessage: 'Content document disappeared after synchronization' })
   return {
     document: currentDocument,
     revision_id: prepared.revision_id,
@@ -686,7 +688,7 @@ export async function replaceContentBlock(
 ) {
   const current = await getContentBlock(db, blockId)
   if (current.updated_at !== input.expected_updated_at) {
-    throw createError({ statusCode: 409, statusMessage: 'Content block was updated by another writer' })
+    throw new HTTPError({ statusCode: 409, statusMessage: 'Content block was updated by another writer' })
   }
   const document = await getContentDocumentById(db, current.document_id)
   if (!document) notFound('Content document not found')
@@ -715,7 +717,7 @@ export async function deleteContentBlock(
 ) {
   const current = await getContentBlock(db, blockId)
   if (current.updated_at !== input.expected_updated_at) {
-    throw createError({ statusCode: 409, statusMessage: 'Content block was updated by another writer' })
+    throw new HTTPError({ statusCode: 409, statusMessage: 'Content block was updated by another writer' })
   }
   const document = await getContentDocumentById(db, current.document_id)
   if (!document) notFound('Content document not found')
@@ -785,7 +787,7 @@ export async function getPublishedContentSnapshot(db: DbClient, ownerType: Conte
     }
     return (parsed as { blocks: ContentBlockSnapshot[] }).blocks
   } catch {
-    throw createError({ statusCode: 500, statusMessage: 'Published content revision is malformed' })
+    throw new HTTPError({ statusCode: 500, statusMessage: 'Published content revision is malformed' })
   }
 }
 
@@ -799,7 +801,7 @@ export async function replaceContentDocumentBlocks(
   const document = await getContentDocumentByOwner(db, ownerType, ownerId)
   if (!document) notFound('Content document not found')
   if (document.updated_at !== opts.expected_document_updated_at) {
-    throw createError({ statusCode: 409, statusMessage: 'Content document was updated by another writer' })
+    throw new HTTPError({ statusCode: 409, statusMessage: 'Content document was updated by another writer' })
   }
   const snapshots = blocks.map((block, index) => ({
     id: typeof (block as ContentBlockInput & { id?: unknown }).id === 'string'
@@ -847,7 +849,7 @@ export function prepareContentDocumentBlocksReplacement(
   },
 ) {
   if (document.updated_at !== opts.expected_document_updated_at) {
-    throw createError({ statusCode: 409, statusMessage: 'Content document was updated by another writer' })
+    throw new HTTPError({ statusCode: 409, statusMessage: 'Content document was updated by another writer' })
   }
   const snapshots = blocks.map((block, index) => ({
     id: typeof (block as ContentBlockInput & { id?: unknown }).id === 'string'
@@ -885,7 +887,7 @@ export async function replacePublishedContentDocumentBlocks(
   const document = await getContentDocumentByOwner(db, ownerType, ownerId)
   if (!document) notFound('Content document not found')
   if (document.updated_at !== opts.expected_document_updated_at) {
-    throw createError({ statusCode: 409, statusMessage: 'Content document was updated by another writer' })
+    throw new HTTPError({ statusCode: 409, statusMessage: 'Content document was updated by another writer' })
   }
   const snapshots = blocks.map((block, index) => ({
     id: typeof block.id === 'string' ? block.id : undefined,

@@ -1,3 +1,5 @@
+import { HTTPError, defineHandler  } from 'nitro';
+
 import { apiErrorResponse, cloudflareEnv, jsonResponse } from '../../utils/api-response'
 import { getRequestDataMetrics } from '../../utils/request-metrics'
 import { BillingPlansError, getCachedPlans, type Plan, type PlanPrice, type PlanLimits, type EnvWithSiteCache } from '../../utils/billing-plans'
@@ -6,7 +8,7 @@ import { BillingPlansError, getCachedPlans, type Plan, type PlanPrice, type Plan
 export type { Plan, PlanPrice, PlanLimits }
 export { getCachedPlans }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
 
   if (!env.STRIPE_SECRET_KEY) {
@@ -25,19 +27,10 @@ export default defineEventHandler(async (event) => {
     const requestId = getRequestDataMetrics(event).requestId
     const message = planError.message
     setHeader(event, 'x-request-id', requestId)
-    throw createError({
-      statusCode: planError.statusCode,
-      statusMessage: message,
-      data: {
+    throw new HTTPError({
+      statusCode: planError.statusCode, statusMessage: message, data: {
         error: {
-          code: planError.code,
-          message,
-          requestId,
-        },
-      },
-      cause: planError,
-    })
+          code: planError.code, message, requestId, }, }, cause: planError, })
   }
 })
-import { defineEventHandler } from 'h3'
-import { setHeader } from 'h3'
+import { setHeader } from 'nitro/h3';

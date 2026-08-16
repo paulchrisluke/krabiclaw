@@ -1,19 +1,20 @@
 // PATCH /api/editor/sites/[siteId]/settings
 // Update site settings including brand color theme
-import { jsonResponse } from '~/server/utils/api-response'
+import { jsonResponse, readRequiredBody } from '~/server/utils/api-response'
 import { deleteConfig, setConfig, type SiteConfig } from '~/server/utils/site-config'
 import { removeTenantZarazAnalytics, syncTenantZarazAnalytics } from '~/server/utils/zaraz-analytics'
 import { resolveColor } from '~/utils/color-utils'
-import { defineEventHandler, readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import {  getRouterParam  } from 'nitro/h3';
 import { requireSiteAccess } from '~/server/utils/location-access'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) {
     return jsonResponse({ error: 'siteId required' }, { status: 400 })
   }
 
-  const body = await readBody<Record<string, unknown>>(event)
+  const body = await readRequiredBody<Record<string, unknown>>(event)
   const { env, db, site } = await requireSiteAccess(event, siteId)
 
   const organizationId = site.organization_id
@@ -34,15 +35,7 @@ export default defineEventHandler(async (event) => {
 
   // Update each provided config key
   const configKeys: Array<keyof SiteConfig> = [
-    'brand_color',
-    'press_email',
-    'partnerships_email',
-    'catering_email',
-    'careers_email',
-    'google_analytics_measurement_id',
-    'google_site_verification',
-    'default_timezone',
-  ]
+    'brand_color', 'press_email', 'partnerships_email', 'catering_email', 'careers_email', 'google_analytics_measurement_id', 'google_site_verification', 'default_timezone', ]
 
   if (
     body.default_timezone !== undefined &&
@@ -88,9 +81,6 @@ export default defineEventHandler(async (event) => {
   }
 
   return jsonResponse({
-    success: true,
-    updated: true,
-    brand_color: brandColor
+    success: true, updated: true, brand_color: brandColor
   })
 })
-import { getRouterParam } from 'h3'

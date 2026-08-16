@@ -1,11 +1,8 @@
 import { cloudflareEnv, textResponse } from '~/server/utils/api-response'
 import {
-  getPublishedTenantBlogPostBySlug,
-  renderTenantBlogMarkdown,
-  resolvePublicOrigin,
-} from '~/server/utils/platform-llm'
+  getPublishedTenantBlogPostBySlug, renderTenantBlogMarkdown, resolvePublicOrigin, } from '~/server/utils/platform-llm'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   if (event.context.tenantType !== 'tenant' || !event.context.siteId) {
     return textResponse('Post not found\n', { status: 404 })
   }
@@ -16,8 +13,7 @@ export default defineEventHandler(async (event) => {
     typeof slugParam === 'string' && slugParam.trim()
       ? slugParam
       : pathMatch?.[1]
-      ?? '',
-  ).trim()
+      ?? '', ).trim()
   const slug = rawSlug.endsWith('.md') ? rawSlug.slice(0, -'.md'.length) : rawSlug
   if (!slug) return textResponse('Post not found\n', { status: 404 })
 
@@ -30,5 +26,5 @@ export default defineEventHandler(async (event) => {
 
   return textResponse(renderTenantBlogMarkdown(post, resolvePublicOrigin(event)), {}, 'text/markdown; charset=utf-8')
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

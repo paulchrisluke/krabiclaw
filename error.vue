@@ -4,7 +4,7 @@
       <img src="/krabi-claw-logo.png" alt="KrabiClaw Logo" class="h-8 mb-6 mx-auto">
 
       <p class="text-sm font-medium text-dimmed uppercase tracking-[0.18em] mb-2">
-        Error {{ error.statusCode }}
+        Error {{ errorStatusCode }}
       </p>
       <h1 class="text-2xl font-bold text-default tracking-tight mb-2">
         {{ isNotFound ? "Page not found" : "Something went wrong" }}
@@ -35,7 +35,8 @@ const props = defineProps({
 })
 
 const isDev = import.meta.dev
-const isNotFound = computed(() => props.error?.statusCode === 404)
+const errorStatusCode = computed(() => props.error?.statusCode ?? props.error?.status ?? 500)
+const isNotFound = computed(() => errorStatusCode.value === 404)
 
 // Tenant-resolution middleware still runs before app.vue throws, so `site` is
 // populated whenever the host resolved to a real tenant (e.g. a 500 on a known

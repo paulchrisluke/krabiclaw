@@ -53,6 +53,7 @@
 </template>
 
 <script setup lang="ts">
+import { $fetch } from 'ofetch'
 import { getBookingConfirmation, type BookingConfirmation as BookingConfirmationData } from '~/composables/useBookingHandoff'
 import BookingConfirmation from '~/components/booking/BookingConfirmation.vue'
 import { fmt12Hour } from '~/shared/reservation-hours'

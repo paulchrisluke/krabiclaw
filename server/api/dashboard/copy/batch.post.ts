@@ -5,10 +5,9 @@ import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { copyLocationBatch, type CopyBatchInput, type CopyEntityType } from '~/server/utils/copy-paste'
 
 const VALID_ENTITY_TYPES: CopyEntityType[] = [
-  'menus', 'menu_items', 'media_assets', 'reviews', 'location_qa', 'experiences',
-]
+  'menus', 'menu_items', 'media_assets', 'reviews', 'location_qa', 'experiences', ]
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const { env, db, organization, site, userId } = await getDashboardContext(event, { requireSite: true })
   if (!site) {
     return jsonResponse({ error: 'No site found. Complete onboarding first.' }, { status: 400 })
@@ -36,19 +35,8 @@ export default defineEventHandler(async (event) => {
   }
 
   const result = await copyLocationBatch(
-    env,
-    db,
-    organization.id,
-    site.id,
-    userId,
-    {
-      source_location_id: body.source_location_id,
-      target_location_id: typeof body.target_location_id === 'string' ? body.target_location_id : undefined,
-      new_location: body.new_location,
-      entities: body.entities,
-      field_overrides: body.field_overrides,
-    },
-  )
+    env, db, organization.id, site.id, userId, {
+      source_location_id: body.source_location_id, target_location_id: typeof body.target_location_id === 'string' ? body.target_location_id : undefined, new_location: body.new_location, entities: body.entities, field_overrides: body.field_overrides, }, )
 
   if (!result.success) {
     return jsonResponse({ error: result.error ?? 'Failed to copy location data' }, { status: 400 })
@@ -56,5 +44,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ success: true, manifest: result.manifest })
 })
-import { defineEventHandler } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { readBody } from 'nitro/h3';

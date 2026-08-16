@@ -1,5 +1,5 @@
 import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
-import { createError } from 'h3'
+import { HTTPError } from 'nitro';
 import { tenantBlogPostPath } from '~/utils/tenant-blog-route'
 import type { ContentBlockSnapshot } from '~/server/utils/content-documents'
 
@@ -135,7 +135,7 @@ export async function createBlogRedirect(db: D1Database, postId: string, siteId:
      WHERE p.id = ? AND ((? IS NULL AND p.site_id IS NULL) OR p.site_id = ?)`,
   [crypto.randomUUID(), oldSlug, new Date().toISOString(), postId, siteId, siteId])
   if (Number(result.meta.changes ?? 0) === 0) {
-    throw createError({ statusCode: 400, statusMessage: 'Blog redirect scope must match its post' })
+    throw new HTTPError({ statusCode: 400, statusMessage: 'Blog redirect scope must match its post' })
   }
 }
 

@@ -2,7 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { addPlatformAdminUser, adminHeadersForEvent, authAdminApi, platformPermissionError, requirePlatformEventPermission } from '~/server/utils/platform-admin-users'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -26,5 +26,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: message }, { status: statusCode })
   }
 })
-import { defineEventHandler } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { readBody } from 'nitro/h3';

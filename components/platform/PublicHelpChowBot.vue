@@ -79,6 +79,7 @@
 </template>
 
 <script setup lang="ts">
+import { $fetch } from 'ofetch'
 import ChowBotConversation from '~/components/chowbot/ChowBotConversation.vue'
 import { marked } from 'marked'
 import { sanitizeHtmlForSsr } from '~/utils/markdown'
@@ -160,10 +161,6 @@ async function submitMessage(message: string) {
       suggestedLinks?: HelpCitation[]
       followUpPrompts?: string[]
       escalation?: HelpEscalation | null
-    }, string, {
-      method: 'POST'
-      body: { message: string; history: Array<{ role: 'user' | 'assistant'; content: string }> }
-      signal: AbortSignal
     }>('/api/public/help/agent', {
       method: 'POST',
       body: {

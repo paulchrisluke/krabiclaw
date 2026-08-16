@@ -1,7 +1,9 @@
 // Tenant resolution middleware for KrabiClaw SaaS
 // Determines if request is for platform or tenant site
 
-import { createError, defineEventHandler, getRequestURL, getHeader, type H3Event } from "h3";
+import { HTTPError, defineHandler  } from 'nitro';
+import type { H3Event } from 'nitro';
+import { } from 'nitro/h3';
 import { queryFirst } from "~/server/db";
 import { TENANT_TYPES, type TenantType } from "~/utils/tenant-routing";
 import { cloudflareEnv, isInternalSelfFetch } from "../utils/api-response";
@@ -43,7 +45,7 @@ function requireTenantMetadata(site: Pick<TenantSiteRow, 'theme_id' | 'vertical'
   const vertical = site.vertical?.trim()
   const brandName = site.brand_name?.trim()
   if (!themeId || !vertical || !brandName) {
-    throw createError({
+    throw new HTTPError({
       statusCode: 500,
       statusMessage: `Tenant ${source} is missing canonical identity or template metadata`,
       data: { code: 'TENANT_METADATA_INCOMPLETE' },
@@ -52,7 +54,7 @@ function requireTenantMetadata(site: Pick<TenantSiteRow, 'theme_id' | 'vertical'
   return { themeId, vertical, brandName }
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   // Nested self-fetches (i18n/icon/internal API calls during SSR) never carry
   // tenant context downstream handlers rely on — the real inbound request
   // already resolved tenant type/host before triggering these. Skip the DB
@@ -61,19 +63,19 @@ export default defineEventHandler(async (event) => {
     return;
   }
 
-  const url = getRequestURL(event);
+  const url = event.url;
   const tenantPath = normalizedPath(url.pathname);
   // Public site APIs carry an explicit site ID and resolve that site through
   // their canonical service. Host-based tenant resolution would duplicate the
   // same database lookup without adding an authorization boundary.
   if (tenantPath.startsWith("/api/public/sites/")) return;
-  const host = getHeader(event, "host") || "";
+  const host = (event.req.headers.get("host")) || "";
   const env = cloudflareEnv(event);
 
   // Shared local, preview, and staging hosts carry tenant identity in a header.
   // Production custom domains never match this host boundary.
   if (isPreviewContext(host)) {
-    const previewSlug = getHeader(event, "x-preview-tenant");
+    const previewSlug = (event.req.headers.get("x-preview-tenant"));
     if (previewSlug && /^[a-z0-9-]+$/.test(previewSlug)) {
       const db = env.db;
       if (db) {
@@ -221,7 +223,7 @@ export default defineEventHandler(async (event) => {
           const payload = parseOnboardingDraftPayload(previewDraft.payload_json);
           const template = resolvePublicTemplate({ vertical: previewDraft.vertical });
           if (!template) {
-            throw createError({ statusCode: 500, statusMessage: 'Draft preview has no supported template', data: { code: 'DRAFT_TEMPLATE_MISSING' } })
+            throw new HTTPError({ statusCode: 500, statusMessage: 'Draft preview has no supported template', data: { code: 'DRAFT_TEMPLATE_MISSING' } })
           }
           event.context.draftId = previewDraft.id;
           setTenantType(event, TENANT_TYPES.TENANT);

@@ -336,6 +336,7 @@
 </template>
 
 <script setup lang="ts">
+import { $fetch } from 'ofetch'
 import { setBookingConfirmation } from '~/composables/useBookingHandoff'
 import { getActiveSpecialClosure, formatClosureMessage } from '~/utils/formatters'
 import { formatMoneyAmount, isSaleActive } from '~/shared/money'

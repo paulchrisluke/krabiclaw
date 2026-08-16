@@ -7,7 +7,7 @@ import { assertResourceAccess } from '~/server/utils/member-access'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
 import type { ReorderMenuItemsRequest } from '~/server/types/menu'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const menuId = getRouterParam(event, 'menuId')
   const body = await readBody(event) as ReorderMenuItemsRequest
@@ -59,12 +59,7 @@ export default defineEventHandler(async (event) => {
     }
 
     await assertResourceAccess(db, {
-      memberId: site.member_id,
-      role: site.member_role,
-      organizationId: site.organization_id,
-      siteId,
-      resourceLocationId: existingMenu.location_id,
-    })
+      memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: existingMenu.location_id, })
 
     // Validate that all items belong to this menu
     const itemIds = body.items.map(item => item.id)
@@ -76,7 +71,7 @@ export default defineEventHandler(async (event) => {
 
     const existingItems = await queryAll(db, `
       SELECT id FROM menu_items
-      WHERE id IN (${itemIds.map(() => '?').join(',')}) AND menu_id = ?
+      WHERE id IN (${itemIds.map(() => '?').join(', ')}) AND menu_id = ?
     `, [...itemIds, menuId])
 
     if (existingItems.length !== itemIds.length) {
@@ -88,10 +83,7 @@ export default defineEventHandler(async (event) => {
     await reorderMenuItems(db, site.organization_id, siteId, menuId, body.items)
     
     return jsonResponse({
-      success: true,
-      message: 'Menu items reordered successfully',
-      siteId,
-      menuId
+      success: true, message: 'Menu items reordered successfully', siteId, menuId
     })
     
   } catch (error) {
@@ -105,6 +97,5 @@ export default defineEventHandler(async (event) => {
     }, { status: 500 })
   }
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam, readBody  } from 'nitro/h3';

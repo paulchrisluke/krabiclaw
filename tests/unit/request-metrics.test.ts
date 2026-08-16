@@ -14,6 +14,8 @@ function completedRedirectEvent() {
   let setHeaderCalls = 0
   const event = {
     path: '/tenant-icon',
+    url: new URL('https://example.test/tenant-icon'),
+    req: new Request('https://example.test/tenant-icon'),
     node: {
       req: { headers: {} },
       res: {
@@ -32,7 +34,7 @@ function completedRedirectEvent() {
   return { event, getSetHeaderCalls: () => setHeaderCalls }
 }
 
-test('completed redirects remain valid metrics records without late header writes or error logs', () => {
+test('completed redirects remain valid metrics records without late header writes or error logs', async () => {
   const { event, getSetHeaderCalls } = completedRedirectEvent()
   const metrics = getRequestDataMetrics(event)
   const errors: unknown[][] = []
@@ -44,7 +46,7 @@ test('completed redirects remain valid metrics records without late header write
 
   try {
     finalizeTrackedRequestMetrics(event, '<!DOCTYPE html>')
-    flushRequestMetrics(event, '<!DOCTYPE html>')
+    await flushRequestMetrics(event, new Response('<!DOCTYPE html>', { status: 302 }))
   } finally {
     console.error = originalError
     console.info = originalInfo
@@ -58,10 +60,40 @@ test('completed redirects remain valid metrics records without late header write
   assert.match(String(records[0]?.[1]), /"status":302/)
 })
 
+test('WebSocket handshakes are recorded without cloning the 101 response', async () => {
+  const { event } = completedRedirectEvent()
+  event.path = '/api/dashboard/sites/site-demo/guest-inbox/socket'
+  event.url = new URL('https://example.test/api/dashboard/sites/site-demo/guest-inbox/socket')
+  event.req = new Request(event.url)
+  getRequestDataMetrics(event)
+  const records: unknown[][] = []
+  const originalInfo = console.info
+  console.info = (...args: unknown[]) => records.push(args)
+
+  try {
+    const websocketResponse = {
+      status: 101,
+      headers: new Headers(),
+      clone() {
+        throw new Error('WebSocket handshake responses cannot be cloned')
+      },
+    } as unknown as Response
+    await flushRequestMetrics(event, websocketResponse)
+  } finally {
+    console.info = originalInfo
+  }
+
+  assert.equal(records.length, 1)
+  assert.match(String(records[0]?.[1]), /"status":101/)
+})
+
 test('D1 failures retain the nested provider cause without logging bound values', async () => {
   const { event } = completedRedirectEvent()
   event.path = '/api/auth/oauth2/token'
-  event.node.req.headers = { 'cf-ray': 'test-ray-SIN' }
+  event.url = new URL('https://example.test/api/auth/oauth2/token')
+  event.req = new Request('https://example.test/api/auth/oauth2/token', {
+    headers: { 'cf-ray': 'test-ray-SIN' },
+  })
   const cause = new Error('D1 DB is overloaded. Requests queued for too long.')
   const failure = new Error(
     'Failed query: SELECT * FROM oauthResource\nparams: customer-secret-first-line\ncustomer-secret-second-line',
@@ -127,6 +159,10 @@ test('D1 telemetry failures do not replace the query failure', async () => {
 test('D1 batch failure telemetry identifies statements without bound values', async () => {
   const { event } = completedRedirectEvent()
   event.path = '/api/auth/oauth2/token?code=customer-secret'
+  event.url = new URL('https://example.test/api/auth/oauth2/token?code=customer-secret')
+  event.req = new Request('https://example.test/api/auth/oauth2/token?code=customer-secret', {
+    headers: { 'cf-ray': 'test-ray-SIN' },
+  })
   const failure = new Error('batch failed')
   const database = {
     prepare() {

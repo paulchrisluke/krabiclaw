@@ -1,4 +1,4 @@
-import { definePlugin } from 'nitro'
+import { definePlugin } from 'nitro';
 import { publishPendingGuestDeliveryOutbox } from '~/server/domain/guest-threads/outbox-publisher'
 import { createDb } from '~/server/db'
 import { runScheduledTasks } from '~/server/scheduled-tasks'

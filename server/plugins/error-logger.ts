@@ -1,4 +1,4 @@
-import { definePlugin } from 'nitro'
+import { definePlugin } from 'nitro';
 
 export default definePlugin((nitroApp) => {
   nitroApp.hooks.hook('error', async (error, { event: _event }) => {

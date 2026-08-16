@@ -2,7 +2,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { execute, queryFirst } from '~/server/db'
 import { getClientIp, hashClientIp, incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const slug = getRouterParam(event, 'slug')
   const reviewId = getRouterParam(event, 'reviewId')
@@ -27,13 +27,12 @@ export default defineEventHandler(async (event) => {
 
   const updated = await queryFirst<{ helpful_count: number }>(db, `
     UPDATE reviews
-    SET helpful_count = COALESCE(helpful_count, 0) + 1,
-        updated_at = ?
+    SET helpful_count = COALESCE(helpful_count, 0) + 1, updated_at = ?
     WHERE id = ?
     RETURNING helpful_count
   `, [new Date().toISOString(), reviewId])
 
   return jsonResponse({ helpful: true, helpfulCount: updated?.helpful_count ?? (review.helpful_count ?? 0) + 1 })
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

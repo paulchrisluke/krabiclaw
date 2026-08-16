@@ -103,6 +103,7 @@
 </template>
 
 <script setup lang="ts">
+import { $fetch } from 'ofetch'
 import PlatformSearchGlyph, { PLATFORM_SEARCH_GLYPHS } from '~/components/platform/search/PlatformSearchGlyph.vue'
 import type { PlatformSearchGlyphName } from '~/components/platform/search/PlatformSearchGlyph.vue'
 import type { ComponentPublicInstance } from 'vue'
@@ -346,7 +347,7 @@ async function runSearch() {
   const requestId = ++requestSequence
   loading.value = true
   try {
-    const response = await $fetch<SearchResponse, string, { query: Record<string, string> }>('/api/public/search', {
+    const response = await $fetch<SearchResponse>('/api/public/search', {
       query: {
         q: normalized,
         surface: props.surface,

@@ -4,7 +4,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getActiveMenu } from '~/server/utils/menu-management'
 import { resolveSiteLocale } from '~/server/utils/site-i18n'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const query = getQuery(event)
   let locationId = typeof query.locationId === 'string' ? query.locationId : undefined
@@ -48,37 +48,15 @@ export default defineEventHandler(async (event) => {
     }
 
     const menu = await getActiveMenu(
-      db,
-      site.organization_id,
-      siteId,
-      locationId,
-      localeState.isSourceLocale ? undefined : localeState.effectiveLocale,
-    )
+      db, site.organization_id, siteId, locationId, localeState.isSourceLocale ? undefined : localeState.effectiveLocale, )
     
     if (!menu) {
       return jsonResponse({
-        success: true,
-        menu: null,
-        message: 'No menu available for this scope',
-        siteId,
-        locationId,
-        locale: localeState.effectiveLocale,
-        requestedLocale: localeState.requestedLocale,
-        sourceLocale: localeState.sourceLocale,
-        currency: site.default_currency || 'THB',
-      })
+        success: true, menu: null, message: 'No menu available for this scope', siteId, locationId, locale: localeState.effectiveLocale, requestedLocale: localeState.requestedLocale, sourceLocale: localeState.sourceLocale, currency: site.default_currency || 'THB', })
     }
 
     return jsonResponse({
-      success: true,
-      menu,
-      siteId,
-      locationId,
-      locale: localeState.effectiveLocale,
-      requestedLocale: localeState.requestedLocale,
-      sourceLocale: localeState.sourceLocale,
-      currency: site.default_currency || 'THB',
-    })
+      success: true, menu, siteId, locationId, locale: localeState.effectiveLocale, requestedLocale: localeState.requestedLocale, sourceLocale: localeState.sourceLocale, currency: site.default_currency || 'THB', })
     
   } catch (error) {
     console.error('Failed to get public menu:', error)
@@ -87,6 +65,6 @@ export default defineEventHandler(async (event) => {
     }, { status: error && typeof error === 'object' && 'statusCode' in error && typeof error.statusCode === 'number' ? error.statusCode : 500 })
   }
 })
-import { defineEventHandler } from 'h3'
-import { getQuery } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getQuery } from 'nitro/h3';
+import { getRouterParam } from 'nitro/h3';

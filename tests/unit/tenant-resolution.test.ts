@@ -121,18 +121,11 @@ test('named local tunnel resolves x-preview-tenant through the registered subdom
   }
   const event = {
     path: '/',
+    url: new URL('http://local.krabiclaw.com/'),
     context: {},
-    node: {
-      req: {
-        method: 'GET',
-        url: '/',
-        headers: {
-          host: 'local.krabiclaw.com',
-          'x-preview-tenant': 'pottery-house',
-        },
-      },
-      res: {},
-    },
+    req: new Request('http://local.krabiclaw.com/', {
+      headers: { host: 'local.krabiclaw.com', 'x-preview-tenant': 'pottery-house' },
+    }),
   } as unknown as H3Event
 
   await tenantResolution(event)

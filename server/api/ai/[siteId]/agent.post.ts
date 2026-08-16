@@ -1,14 +1,10 @@
 // POST /api/ai/[siteId]/agent
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { cloudflareEnv, jsonResponse, readRequiredBody } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { hasCredits } from '~/server/utils/ai-credits'
 import { createChowBotStream, runChowBot, type ChowBotIncomingMessage, type ChowBotRunEvent } from '~/server/utils/chowbot-agent'
 import {
-  createMessage,
-  getOrCreateConversation,
-  getRecentAgentMessages,
-  getSiteForMember,
-} from '~/server/utils/chowbot-conversations'
+  createMessage, getOrCreateConversation, getRecentAgentMessages, getSiteForMember, } from '~/server/utils/chowbot-conversations'
 
 interface AgentBody {
   conversationId?: string | null
@@ -25,7 +21,7 @@ function latestUserText(body: AgentBody): string {
   return content
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
 
@@ -42,7 +38,7 @@ export default defineEventHandler(async (event) => {
   if (!siteName) return jsonResponse({ error: 'Site brand name is not configured' }, { status: 500 })
 
   let body: AgentBody
-  try { body = await readBody(event) } catch {
+  try { body = await readRequiredBody<AgentBody>(event) } catch {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
 
@@ -57,27 +53,13 @@ export default defineEventHandler(async (event) => {
   if (!creditOk) return jsonResponse({ error: 'No AI credits remaining.' }, { status: 402 })
 
   const conversation = await getOrCreateConversation(db, {
-    conversationId: body.conversationId ?? null,
-    organizationId: site.organization_id,
-    siteId,
-    userId: session.user.id,
-    firstMessage: userText,
-    activeChannel: 'dashboard',
-    selectedLocationId: typeof body.locationId === 'string' ? body.locationId : null,
-  })
+    conversationId: body.conversationId ?? null, organizationId: site.organization_id, siteId, userId: session.user.id, firstMessage: userText, activeChannel: 'dashboard', selectedLocationId: typeof body.locationId === 'string' ? body.locationId : null, })
 
   const sessionCreditOk = await hasCredits(db, site.organization_id, conversation.id)
   if (!sessionCreditOk) return jsonResponse({ error: 'AI session quota reached.' }, { status: 402 })
 
   await createMessage(db, {
-    conversationId: conversation.id,
-    organizationId: site.organization_id,
-    siteId,
-    userId: session.user.id,
-    role: 'user',
-    channel: 'dashboard',
-    content: userText,
-  }, session.user.id)
+    conversationId: conversation.id, organizationId: site.organization_id, siteId, userId: session.user.id, role: 'user', channel: 'dashboard', content: userText, }, session.user.id)
 
   const messages = await getRecentAgentMessages(db, conversation.id, siteId, session.user.id)
   const defaultCurrency = site.default_currency || 'THB'
@@ -92,60 +74,25 @@ export default defineEventHandler(async (event) => {
   const readable = createChowBotStream(async (push) => {
     try {
       await runChowBot({
-        db,
-        env,
-        orgId: site.organization_id,
-        siteId,
-        userId: session.user.id,
-        memberId: site.member_id,
-        userRole: site.role,
-        siteName,
-        defaultCurrency,
-        messages,
-        currentPage: body.currentPage ?? 'dashboard',
-        locationId: typeof body.locationId === 'string' ? body.locationId : null,
-        sessionId: conversation.id,
-        onEvent: async (ev) => {
+        db, env, orgId: site.organization_id, siteId, userId: session.user.id, memberId: site.member_id, userRole: site.role, siteName, defaultCurrency, messages, currentPage: body.currentPage ?? 'dashboard', locationId: typeof body.locationId === 'string' ? body.locationId : null, sessionId: conversation.id, onEvent: async (ev) => {
           if (ev.type === 'text') assistantText = ev.content ?? ''
           if (ev.type === 'done') finalEvent = ev
           await push({ ...ev, conversationId: conversation.id } as ChowBotRunEvent & { conversationId: string })
-        },
-      })
+        }, })
 
       await createMessage(db, {
-        conversationId: conversation.id,
-        organizationId: site.organization_id,
-        siteId,
-        userId: session.user.id,
-        role: 'assistant',
-        channel: 'dashboard',
-        content: assistantText,
-        toolCalls: finalEvent?.toolCalls ?? [],
-      }, session.user.id)
+        conversationId: conversation.id, organizationId: site.organization_id, siteId, userId: session.user.id, role: 'assistant', channel: 'dashboard', content: assistantText, toolCalls: finalEvent?.toolCalls ?? [], }, session.user.id)
     } catch (error) {
       console.error('[agent] Error processing request:', error)
       await createMessage(db, {
-        conversationId: conversation.id,
-        organizationId: site.organization_id,
-        siteId,
-        userId: session.user.id,
-        role: 'assistant',
-        channel: 'dashboard',
-        content: 'Something went wrong while processing your request.',
-        status: 'failed',
-        error: 'Something went wrong.',
-      }, session.user.id)
+        conversationId: conversation.id, organizationId: site.organization_id, siteId, userId: session.user.id, role: 'assistant', channel: 'dashboard', content: 'Something went wrong while processing your request.', status: 'failed', error: 'Something went wrong.', }, session.user.id)
       await push({
-        type: 'error',
-        message: 'Something went wrong while processing your request.'
+        type: 'error', message: 'Something went wrong while processing your request.'
       })
     }
   })
 
   return sendStream(event, readable)
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
-import { readBody } from 'h3'
-import { sendStream } from 'h3'
-import { setResponseHeader } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam,  sendStream , setResponseHeader  } from 'nitro/h3';

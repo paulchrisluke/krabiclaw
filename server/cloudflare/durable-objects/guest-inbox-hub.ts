@@ -54,10 +54,7 @@ function isGuestInboxEvent(value: unknown): value is GuestInboxEvent {
 export class GuestInboxHubObject extends DurableObject<GuestInboxHubEnv> {
   constructor(ctx: DurableObjectState, env: GuestInboxHubEnv) {
     super(ctx, env)
-    this.ctx.setWebSocketAutoResponse({
-      request: 'ping',
-      response: 'pong',
-    })
+    this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'))
   }
 
   override async fetch(request: Request): Promise<Response> {

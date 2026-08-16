@@ -5,7 +5,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { deleteMenu } from '~/server/utils/menu-management'
 import { assertResourceAccess } from '~/server/utils/member-access'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const menuId = getRouterParam(event, 'menuId')
   
@@ -64,20 +64,12 @@ export default defineEventHandler(async (event) => {
     }
 
     await assertResourceAccess(db, {
-      memberId: site.member_id,
-      role: site.member_role,
-      organizationId: site.organization_id,
-      siteId,
-      resourceLocationId: existingMenu.location_id,
-    })
+      memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: existingMenu.location_id, })
 
     await deleteMenu(db, site.organization_id, siteId, menuId)
 
     return jsonResponse({
-      success: true,
-      message: 'Menu deleted successfully',
-      siteId,
-      menuId
+      success: true, message: 'Menu deleted successfully', siteId, menuId
     })
 
   } catch (error) {
@@ -88,5 +80,5 @@ export default defineEventHandler(async (event) => {
     }, { status: 500 })
   }
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

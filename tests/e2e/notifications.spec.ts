@@ -116,7 +116,7 @@ test.describe('notification records — restaurant reservation (demo site)', () 
         data: {
           name: 'Playwright Reservation Test',
           email: guestEmail,
-          phone: '+15555550199',
+          phone: '+14155552671',
           date: futureDate,
           time: '19:00',
           guests: '2',
@@ -185,7 +185,7 @@ test.describe('notification records — restaurant reservation (demo site)', () 
         data: {
           name: 'Playwright Cancel Test',
           email: guestEmail,
-          phone: '+15555550200',
+          phone: '+14155552672',
           date: futureDate,
           time: '18:00',
           guests: '1',

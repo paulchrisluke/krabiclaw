@@ -21,25 +21,28 @@
 // its tools only touch site_id IS NULL platform-scoped rows, which the public
 // resource endpoints' tenant-scoped queries (WHERE site_id = ?) never read.
 
-import type { H3Event } from 'h3'
+import type { HTTPEvent } from 'nitro/h3'
 import type { DbClient } from '~/server/db'
 import { drainPublicResourceCacheInvalidations } from '~/server/utils/public-resource-cache'
-import { definePlugin } from 'nitro'
+import { definePlugin } from 'nitro';
 
 const EDITOR_SITES_PREFIX = '/api/editor/sites/'
 
 export default definePlugin((nitroApp) => {
-  nitroApp.hooks.hook('response', async (response, event: H3Event) => {
-    if (event.method === 'GET' || event.method === 'HEAD') return
-    if (!event.path.startsWith(EDITOR_SITES_PREFIX)) return
+  nitroApp.hooks.hook('response', async (response, event: HTTPEvent) => {
+    const request = event.req
+    const path = new URL(request.url).pathname
+    if (request.method === 'GET' || request.method === 'HEAD') return
+    if (!path.startsWith(EDITOR_SITES_PREFIX)) return
 
     const status = response.status
     if (status < 200 || status >= 300) return
 
-    const siteId = event.context.params?.siteId
+    const params = request.context?.params
+    const siteId = params && typeof params === 'object' && 'siteId' in params && typeof params.siteId === 'string' ? params.siteId : undefined
     if (!siteId) return
 
-    const runtimeEnv = event.context.cloudflare?.env as {
+    const runtimeEnv = request.runtime?.cloudflare?.env as {
       DB?: DbClient
       SITE_CACHE?: KVNamespace
       NUXT_PUBLIC_FREE_SITE_DOMAIN?: string

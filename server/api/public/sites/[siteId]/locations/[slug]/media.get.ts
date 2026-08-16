@@ -4,7 +4,7 @@ import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { listMediaAssets } from '~/server/utils/media-asset-manager'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const slug = getRouterParam(event, 'slug')
   if (!siteId || !slug) return jsonResponse({ error: 'Missing params' }, { status: 400 })
@@ -14,10 +14,7 @@ export default defineEventHandler(async (event) => {
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
   const location = await queryFirst<{ id: string }>(
-    db,
-    `SELECT id FROM business_locations WHERE site_id = ? AND slug = ? AND status = 'active' LIMIT 1`,
-    [siteId, slug],
-  )
+    db, `SELECT id FROM business_locations WHERE site_id = ? AND slug = ? AND status = 'active' LIMIT 1`, [siteId, slug], )
   if (!location) return jsonResponse({ error: 'Location not found' }, { status: 404 })
 
   const query = getQuery(event)
@@ -26,6 +23,6 @@ export default defineEventHandler(async (event) => {
   const assets = await listMediaAssets(db, siteId, { locationId: location.id, kind, limit: 100 })
   return jsonResponse({ media: assets })
 })
-import { defineEventHandler } from 'h3'
-import { getQuery } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getQuery } from 'nitro/h3';
+import { getRouterParam } from 'nitro/h3';

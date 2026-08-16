@@ -1,23 +1,13 @@
-import { createError, getHeader } from "h3";
-import type { H3Event } from "h3";
-import {
-  asMcpError,
-  mcpSuccess,
-  MCP_ERROR,
-  negotiatedMcpProtocolVersion,
-  parseMcpToolCallArguments,
-  readMcpRequest,
-} from "~/server/utils/mcp-protocol";
+import { HTTPError, defineHandler  } from 'nitro';
+import {  readBody  } from 'nitro/h3';
+import type { H3Event } from "nitro";
+import { asMcpError, mcpSuccess, MCP_ERROR, negotiatedMcpProtocolVersion, parseMcpToolCallArguments, readMcpRequest, } from "~/server/utils/mcp-protocol";
 import { catalogFingerprint, catalogMeta } from "~/server/utils/mcp-catalog";
 import { mcpHttpStatusForError } from "~/server/utils/mcp-http-response";
 import { executeMcpToolCall } from "~/server/utils/mcp-executor";
 import { isMcpRenderResponse } from "~/server/utils/mcp-render";
 import {
-  getActiveEntitlements,
-  getVisibleSiteContext,
-  requireMcpUser,
-  roleSatisfies,
-} from "~/server/utils/mcp-auth";
+  getActiveEntitlements, getVisibleSiteContext, requireMcpUser, roleSatisfies, } from "~/server/utils/mcp-auth";
 import { MCP_PUBLIC_TOOLS, MCP_TOOLS } from "~/server/utils/mcp-tools";
 import { MCP_PROMPTS, renderMcpPrompt } from "~/server/utils/mcp-prompts";
 import { cloudflareEnv } from "~/server/utils/api-response";
@@ -26,17 +16,9 @@ import { purgeSiteKvCache } from "~/server/utils/edge-cache";
 import { purgePublicResourceCacheSafe } from "~/server/utils/public-resource-cache";
 import { schedulePlatformKnowledgeIndexRebuild } from "~/server/utils/platform-search-rebuild";
 import {
-  assertConversationalToolEnabled,
-  filterConversationalTools,
-  normalizeMcpToolForConversationalSurface,
-} from "~/server/utils/conversational-tool-surface";
+  assertConversationalToolEnabled, filterConversationalTools, normalizeMcpToolForConversationalSurface, } from "~/server/utils/conversational-tool-surface";
 import {
-  dispatchStandardMcpMethod,
-  respondToMcpError,
-  resolveMissingMcpCredential,
-  unsupportedMcpMethodError,
-  type McpToolMeta,
-} from "~/server/utils/mcp-runtime";
+  dispatchStandardMcpMethod, respondToMcpError, resolveMissingMcpCredential, unsupportedMcpMethodError, type McpToolMeta, } from "~/server/utils/mcp-runtime";
 import { getCloudflareWaitUntil, isMcpMutatingTool } from "~/server/utils/mcp-route-helpers";
 import { logMcpToolCallEvent } from "~/server/utils/mcp-telemetry";
 import { describeErrorForTelemetry } from "~/server/utils/error-telemetry";
@@ -44,20 +26,11 @@ const TENANT_CATALOG_FINGERPRINT = catalogFingerprint(MCP_PUBLIC_TOOLS);
 
 // Fires a telemetry write without ever blocking or failing the MCP response.
 function logMcpEventDetached(
-  event: Parameters<typeof getCloudflareWaitUntil>[0],
-  db: D1Database | undefined,
-  input: Parameters<typeof logMcpToolCallEvent>[1],
-) {
+  event: Parameters<typeof getCloudflareWaitUntil>[0], db: D1Database | undefined, input: Parameters<typeof logMcpToolCallEvent>[1], ) {
   if (!db) return;
   const env = cloudflareEnv(event);
   const logInput = {
-    env,
-    ...input,
-    userAgent: input.userAgent ?? getHeader(event, "user-agent") ?? null,
-    cfRayId: input.cfRayId ?? getHeader(event, "cf-ray") ?? null,
-    sessionId: input.sessionId ?? getHeader(event, "mcp-session-id") ?? null,
-    catalogFingerprint: input.catalogFingerprint ?? TENANT_CATALOG_FINGERPRINT,
-  };
+    env, ...input, userAgent: input.userAgent ?? (event.req.headers.get("user-agent")) ?? null, cfRayId: input.cfRayId ?? (event.req.headers.get("cf-ray")) ?? null, sessionId: input.sessionId ?? (event.req.headers.get("mcp-session-id")) ?? null, catalogFingerprint: input.catalogFingerprint ?? TENANT_CATALOG_FINGERPRINT, };
   const logged = logMcpToolCallEvent(db, logInput);
   const waitUntil = getCloudflareWaitUntil(event);
   if (waitUntil) waitUntil(logged);
@@ -87,24 +60,10 @@ function safeMcpEnvelopeDetails(event: H3Event, body: unknown) {
     ? record._meta as Record<string, unknown>
     : null;
   return {
-    ray_id: getHeader(event, "cf-ray") ?? null,
-    user_agent: getHeader(event, "user-agent") ?? null,
-    content_type: getHeader(event, "content-type") ?? null,
-    content_length: getHeader(event, "content-length") ?? null,
-    body_kind: body === null ? "null" : Array.isArray(body) ? "array" : typeof body,
-    envelope_keys: record ? Object.keys(record).sort() : [],
-    params_keys: params ? Object.keys(params).sort() : [],
-    meta_keys: meta ? Object.keys(meta).sort() : [],
-    has_id: Boolean(record && Object.hasOwn(record, "id")),
-    jsonrpc_type: typeof record?.jsonrpc,
-    method_type: typeof record?.method,
-    header_method: getHeader(event, "mcp-method") ?? null,
-    has_header_version: Boolean(getHeader(event, "mcp-protocol-version")),
-    has_header_name: Boolean(getHeader(event, "mcp-name")),
-  };
+    ray_id: (event.req.headers.get("cf-ray")) ?? null, user_agent: (event.req.headers.get("user-agent")) ?? null, content_type: (event.req.headers.get("content-type")) ?? null, content_length: (event.req.headers.get("content-length")) ?? null, body_kind: body === null ? "null" : Array.isArray(body) ? "array" : typeof body, envelope_keys: record ? Object.keys(record).sort() : [], params_keys: params ? Object.keys(params).sort() : [], meta_keys: meta ? Object.keys(meta).sort() : [], has_id: Boolean(record && Object.hasOwn(record, "id")), jsonrpc_type: typeof record?.jsonrpc, method_type: typeof record?.method, header_method: (event.req.headers.get("mcp-method")) ?? null, has_header_version: Boolean((event.req.headers.get("mcp-protocol-version"))), has_header_name: Boolean((event.req.headers.get("mcp-name"))), };
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const requestStartedAt = Date.now();
   let requestId: string | number | null | undefined;
   let requestMethod: string | undefined;
@@ -113,20 +72,12 @@ export default defineEventHandler(async (event) => {
   let requestEnvelope: ReturnType<typeof safeMcpEnvelopeDetails> | null = null;
   const cfEnv = cloudflareEnv(event);
   const baseUrl = cfEnv.BETTER_AUTH_URL?.replace(/\/$/, "");
-  if (!baseUrl) throw createError({ statusCode: 500, statusMessage: "BETTER_AUTH_URL is required" });
+  if (!baseUrl) throw new HTTPError({ statusCode: 500, statusMessage: "BETTER_AUTH_URL is required" });
   const tenantAuthOptions = {
-    audiences: [`${baseUrl}/api/mcp`],
-    requiredScopes: ["tenant"],
-  };
+    audiences: [`${baseUrl}/api/mcp`], requiredScopes: ["tenant"], };
   const runtimeDeps = {
-    authOptions: tenantAuthOptions,
-    resourceMetadataUrl,
-    authDescription: TENANT_AUTH_DESCRIPTION,
-    authRequiredText: TENANT_AUTH_REQUIRED_TEXT,
-    logEvent: (evt: typeof event, fields: Record<string, unknown>) =>
-      logMcpEventDetached(evt, cfEnv.DB, fields as unknown as Parameters<typeof logMcpToolCallEvent>[1]),
-    resolveToolMeta: resolveTenantToolMeta,
-  };
+    authOptions: tenantAuthOptions, resourceMetadataUrl, authDescription: TENANT_AUTH_DESCRIPTION, authRequiredText: TENANT_AUTH_REQUIRED_TEXT, logEvent: (evt: typeof event, fields: Record<string, unknown>) =>
+      logMcpEventDetached(evt, cfEnv.DB, fields as unknown as Parameters<typeof logMcpToolCallEvent>[1]), resolveToolMeta: resolveTenantToolMeta, };
   try {
     // Return 401 with WWW-Authenticate before any protocol parsing so OAuth
     // clients (e.g. ChatGPT) can discover the authorization server on first touch.
@@ -137,12 +88,7 @@ export default defineEventHandler(async (event) => {
       requestMethod = missingCredential.requestMethod;
       requestToolName = missingCredential.requestToolName;
       console.warn("[MCP_AUTH]", JSON.stringify({
-        event: "credential_missing",
-        ray_id: getHeader(event, "cf-ray") ?? null,
-        user_agent: getHeader(event, "user-agent") ?? null,
-        mcp_method: requestMethod ?? null,
-        tool_name: requestToolName ?? null,
-      }));
+        event: "credential_missing", ray_id: (event.req.headers.get("cf-ray")) ?? null, user_agent: (event.req.headers.get("user-agent")) ?? null, mcp_method: requestMethod ?? null, tool_name: requestToolName ?? null, }));
       return missingCredential.response;
     }
 
@@ -158,16 +104,9 @@ export default defineEventHandler(async (event) => {
       : undefined;
 
     if (import.meta.dev) {
-      event.node.res.once("finish", () => {
+      event.runtime?.node?.res?.once("finish", () => {
         console.info("[MCP_REQUEST]", JSON.stringify({
-          method: requestMethod ?? null,
-          request_id: requestId ?? null,
-          status: event.node.res.statusCode,
-          duration_ms: Date.now() - requestStartedAt,
-          content_length: event.node.res.getHeader("content-length") ?? null,
-          ray_id: getHeader(event, "cf-ray") ?? null,
-          user_agent: getHeader(event, "user-agent") ?? null,
-        }));
+          method: requestMethod ?? null, request_id: requestId ?? null, status: event.runtime?.node?.res?.statusCode, duration_ms: Date.now() - requestStartedAt, content_length: event.runtime?.node?.res?.getHeader("content-length") ?? null, ray_id: (event.req.headers.get("cf-ray")) ?? null, user_agent: (event.req.headers.get("user-agent")) ?? null, }));
       });
     }
 
@@ -176,20 +115,9 @@ export default defineEventHandler(async (event) => {
       const user = await requireMcpUser(event, tenantAuthOptions);
       const protocolVersion = negotiatedMcpProtocolVersion(request);
       logMcpEventDetached(event, cfEnv.DB, {
-        userId: user.userId,
-        requestId: request.id,
-        method: request.method,
-        status: "success",
-        httpStatus: 200,
-        protocolVersion,
-        oauthClientId: user.oauthClientId ?? null,
-      });
+        userId: user.userId, requestId: request.id, method: request.method, status: "success", httpStatus: 200, protocolVersion, oauthClientId: user.oauthClientId ?? null, });
       return mcpSuccess(request.id, {
-        protocolVersion,
-        capabilities: { tools: {}, resources: {}, prompts: {} },
-        serverInfo: { name: "krabiclaw-mcp", version: "phase-5" },
-        _meta: catalogMeta(MCP_PUBLIC_TOOLS),
-        instructions: `KrabiClaw — manage your restaurant or business website through this connection.
+        protocolVersion, capabilities: { tools: {}, resources: {}, prompts: {} }, serverInfo: { name: "krabiclaw-mcp", version: "phase-5" }, _meta: catalogMeta(MCP_PUBLIC_TOOLS), instructions: `KrabiClaw — manage your restaurant or business website through this connection.
 
 ## Image work — applies at any point in the conversation
 Whenever an image is needed (hero, logo, post thumbnail, menu photo, experience cover, story image, or any content section):
@@ -275,33 +203,22 @@ When a public-facing tool result includes \`view_url\` or \`public_url\`, includ
 
 All other tools require a site_id obtained from get_workspace_context, list_sites, or create_site. Never guess, invent, derive, or pass through site IDs from URLs/domains. Use get_current_user when the user asks which account is connected.
 
-Common workflows: update menus and items, create and publish site posts, triage contact and reservation submissions, update page content directly, upload media, reply to reviews, manage experiences and bookings, and generate or replace images for any content section. Manual locale management is available through the locale tools. Social publishing, domains, and priority-support requests are shown only when connector eligibility enables them; otherwise direct the user to the dashboard.`,
-      });
+Common workflows: update menus and items, create and publish site posts, triage contact and reservation submissions, update page content directly, upload media, reply to reviews, manage experiences and bookings, and generate or replace images for any content section. Manual locale management is available through the locale tools. Social publishing, domains, and priority-support requests are shown only when connector eligibility enables them; otherwise direct the user to the dashboard.`, });
     }
 
     const standardResponse = await dispatchStandardMcpMethod(event, request, runtimeDeps, {
       resources: {
-        list: [],
-        read: (uri: string) => {
+        list: [], read: (uri: string) => {
           throw mcpProtocolError(MCP_ERROR.invalidParams, `Unknown MCP app resource: ${uri}`);
-        },
-      },
-      prompts: { list: MCP_PROMPTS, render: renderMcpPrompt },
-      discover: {
-        serverName: "krabiclaw-mcp",
-        serverVersion: "phase-5",
-        instructions:
-          "KrabiClaw MCP. Call get_workspace_context at the start of every conversation. site_id must be an internal id from get_workspace_context/list_sites/create_site, never a URL/domain/subdomain/name. Native ChatGPT attachments upload only through upload_user_media; never call stale open_*upload widget tools. If no active site is set yet, call list_sites, let the user choose, then persist it with set_workspace_context before mutating tools.",
-      },
-    });
+        }, }, prompts: { list: MCP_PROMPTS, render: renderMcpPrompt }, discover: {
+        serverName: "krabiclaw-mcp", serverVersion: "phase-5", instructions:
+          "KrabiClaw MCP. Call get_workspace_context at the start of every conversation. site_id must be an internal id from get_workspace_context/list_sites/create_site, never a URL/domain/subdomain/name. Native ChatGPT attachments upload only through upload_user_media; never call stale open_*upload widget tools. If no active site is set yet, call list_sites, let the user choose, then persist it with set_workspace_context before mutating tools.", }, });
     if (standardResponse !== undefined) return standardResponse;
 
     if (request.method === "tools/list") {
       const user = await requireMcpUser(event, tenantAuthOptions);
       const hasSiteIdParam = Object.prototype.hasOwnProperty.call(
-        request.params ?? {},
-        "site_id",
-      );
+        request.params ?? {}, "site_id", );
       const siteId =
         typeof request.params?.site_id === "string"
           ? request.params.site_id.trim()
@@ -317,18 +234,11 @@ Common workflows: update menus and items, create and publish site posts, triage 
         ? [
             ...new Set(
               visibleSurfaceTools.map((t) => t.requiredEntitlement).filter(
-                Boolean,
-              ) as string[],
-            ),
-          ]
+                Boolean, ) as string[], ), ]
         : [];
       const activeEntitlements = siteCtx
         ? await getActiveEntitlements(
-            user.db,
-            siteCtx.organizationId,
-            entitlementKeys,
-            siteCtx.siteId,
-          )
+            user.db, siteCtx.organizationId, entitlementKeys, siteCtx.siteId, )
         : new Set<string>();
 
       const tools = visibleSurfaceTools.filter((tool) => {
@@ -347,42 +257,19 @@ Common workflows: update menus and items, create and publish site posts, triage 
         return true;
       }).map((tool) => {
         const baseTool = {
-          name: tool.name,
-          description: tool.description,
-          inputSchema: tool.inputSchema,
-          _meta: {
-            securitySchemes: tool.securitySchemes,
-            "krabiclaw/toolInfo": {
-              domain: tool.domain,
-              minimumRole: tool.minimumRole,
-              confirmRequired: tool.confirmRequired,
-            },
-            ...(tool.fileParams?.length
+          name: tool.name, description: tool.description, inputSchema: tool.inputSchema, _meta: {
+            securitySchemes: tool.securitySchemes, "krabiclaw/toolInfo": {
+              domain: tool.domain, minimumRole: tool.minimumRole, confirmRequired: tool.confirmRequired, }, ...(tool.fileParams?.length
               ? { "openai/fileParams": tool.fileParams }
-              : {}),
-          },
-        }
+              : {}), }, }
 
         return {
-          ...baseTool,
-          outputSchema: tool.outputSchema,
-          annotations: tool.annotations,
-          securitySchemes: tool.securitySchemes,
-        }
+          ...baseTool, outputSchema: tool.outputSchema, annotations: tool.annotations, securitySchemes: tool.securitySchemes, }
       });
 
       const domains = [...new Set(tools.map((tool) => tool._meta["krabiclaw/toolInfo"].domain))]
       logMcpEventDetached(event, cfEnv.DB, {
-        organizationId: siteCtx?.organizationId ?? null,
-        siteId: siteCtx?.siteId ?? null,
-        userId: user.userId,
-        requestId: request.id,
-        method: request.method,
-        result: { count: tools.length, domains },
-        status: "success",
-        httpStatus: 200,
-        oauthClientId: user.oauthClientId ?? null,
-      });
+        organizationId: siteCtx?.organizationId ?? null, siteId: siteCtx?.siteId ?? null, userId: user.userId, requestId: request.id, method: request.method, result: { count: tools.length, domains }, status: "success", httpStatus: 200, oauthClientId: user.oauthClientId ?? null, });
 
       return mcpSuccess(request.id, { tools, _meta: catalogMeta(MCP_PUBLIC_TOOLS) });
     }
@@ -408,44 +295,11 @@ Common workflows: update menus and items, create and publish site posts, triage 
         if (mcpErr.kind === "protocol") {
           const telemetryErrorMessage = describeErrorForTelemetry(toolError);
           logMcpEventDetached(event, cfEnv.DB, {
-            userId: mcpUser.userId,
-            organizationId: mcpUser.activeOrganizationId ?? null,
-            siteId: null,
-            requestId: request.id,
-            method: request.method,
-            toolName,
-            toolDomain: toolDef?.domain ?? null,
-            isMutating: false,
-            arguments: rawArgs,
-            status: "error",
-            errorCode: mcpErr.code,
-            errorMessage: telemetryErrorMessage,
-            httpStatus: 200,
-            jsonrpcErrorCode: mcpErr.code,
-            jsonrpcErrorMessage: telemetryErrorMessage,
-            unknownToolName: toolName || null,
-            oauthClientId: mcpUser.oauthClientId ?? null,
-            durationMs: Date.now() - toolStartedAt,
-          });
+            userId: mcpUser.userId, organizationId: mcpUser.activeOrganizationId ?? null, siteId: null, requestId: request.id, method: request.method, toolName, toolDomain: toolDef?.domain ?? null, isMutating: false, arguments: rawArgs, status: "error", errorCode: mcpErr.code, errorMessage: telemetryErrorMessage, httpStatus: 200, jsonrpcErrorCode: mcpErr.code, jsonrpcErrorMessage: telemetryErrorMessage, unknownToolName: toolName || null, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
           return sendMcpErrorResponse(event, { id: request.id, error: mcpErr });
         }
         logMcpEventDetached(event, cfEnv.DB, {
-          userId: mcpUser.userId,
-          organizationId: mcpUser.activeOrganizationId ?? null,
-          siteId: null,
-          requestId: request.id,
-          method: request.method,
-          toolName,
-          toolDomain: toolDef?.domain ?? null,
-          isMutating: isMcpMutatingTool(toolDef),
-          arguments: rawArgs,
-          status: "error",
-          errorCode: mcpErr.code,
-          errorMessage: describeErrorForTelemetry(toolError),
-          httpStatus: 200,
-          oauthClientId: mcpUser.oauthClientId ?? null,
-          durationMs: Date.now() - toolStartedAt,
-        });
+          userId: mcpUser.userId, organizationId: mcpUser.activeOrganizationId ?? null, siteId: null, requestId: request.id, method: request.method, toolName, toolDomain: toolDef?.domain ?? null, isMutating: isMcpMutatingTool(toolDef), arguments: rawArgs, status: "error", errorCode: mcpErr.code, errorMessage: describeErrorForTelemetry(toolError), httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
         // Any other tool-execution failure (including a plain `throw new
         // Error(...)` from a business-rule guard, which asMcpError falls
         // back to classifying as kind:'transport') must still resolve as a
@@ -454,9 +308,7 @@ Common workflows: update menus and items, create and publish site posts, triage 
         // can act on a raw 401 (see resolveMissingMcpCredential). Confirmed
         // Tool business-rule failures must stay inside the MCP error envelope.
         return mcpSuccess(request.id, {
-          isError: true,
-          content: [{ type: "text", text: mcpErr.message }],
-        });
+          isError: true, content: [{ type: "text", text: mcpErr.message }], });
       }
 
       const isRender = isMcpRenderResponse(result);
@@ -482,21 +334,7 @@ Common workflows: update menus and items, create and publish site posts, triage 
           : null;
 
       logMcpEventDetached(event, cfEnv.DB, {
-        userId: mcpUser.userId,
-        organizationId: mcpUser.activeOrganizationId ?? null,
-        siteId: resolvedSiteId,
-        requestId: request.id,
-        method: request.method,
-        toolName,
-        toolDomain: toolDef?.domain ?? null,
-        isMutating: isMcpMutatingTool(toolDef),
-        arguments: rawArgs,
-        result: structuredContent,
-        status: "success",
-        httpStatus: 200,
-        oauthClientId: mcpUser.oauthClientId ?? null,
-        durationMs: Date.now() - toolStartedAt,
-      });
+        userId: mcpUser.userId, organizationId: mcpUser.activeOrganizationId ?? null, siteId: resolvedSiteId, requestId: request.id, method: request.method, toolName, toolDomain: toolDef?.domain ?? null, isMutating: isMcpMutatingTool(toolDef), arguments: rawArgs, result: structuredContent, status: "success", httpStatus: 200, oauthClientId: mcpUser.oauthClientId ?? null, durationMs: Date.now() - toolStartedAt, });
 
       // After any mutating tool call, purge KV HTML cache for the site so the
       // next browser load gets fresh SSR HTML with the correct /_nuxt/ asset hashes.
@@ -525,12 +363,9 @@ Common workflows: update menus and items, create and publish site posts, triage 
           if (kv && db) {
             // Look up all active hostnames for this site (subdomain + custom domains)
             const purgeAsync = queryAll<{ domain: string }>(
-              db,
-              `SELECT domain FROM site_domains
+              db, `SELECT domain FROM site_domains
                  WHERE site_id = ? AND status = 'active'
-                 LIMIT 20`,
-              [siteId],
-            )
+                 LIMIT 20`, [siteId], )
               .then((results) => {
                 const hostnames = (results ?? []).map((r) => r.domain)
                 if (hostnames.length > 0) {
@@ -556,17 +391,11 @@ Common workflows: update menus and items, create and publish site posts, triage 
       }
 
       return mcpSuccess(request.id, {
-        isError: false,
-        structuredContent,
-        content: [
-          { type: "text", text: modelText },
-        ],
-        ...(isRender && result.privateMeta
+        isError: false, structuredContent, content: [
+          { type: "text", text: modelText }, ], ...(isRender && result.privateMeta
           ? {
-              _meta: result.privateMeta,
-            }
-          : {}),
-      });
+              _meta: result.privateMeta, }
+          : {}), });
     }
 
     throw unsupportedMcpMethodError(request.method);
@@ -575,24 +404,9 @@ Common workflows: update menus and items, create and publish site posts, triage 
     const toolCallPermissionError = requestMethod === "tools/call" && mcpError.kind === "forbidden";
     const mappedStatus = toolCallPermissionError ? 200 : mcpHttpStatusForError(mcpError);
     console.error("[MCP_ERROR]", JSON.stringify({
-      status: mappedStatus,
-      code: mcpError.code,
-      message: mcpError.message,
-      method: requestMethod ?? null,
-      tool: requestToolName ?? null,
-      request_id: requestId ?? null,
-      ...(mcpError.code === MCP_ERROR.invalidRequest || mcpError.code === MCP_ERROR.invalidParams ? { envelope: requestEnvelope ?? safeMcpEnvelopeDetails(event, undefined) } : {}),
-    }));
+      status: mappedStatus, code: mcpError.code, message: mcpError.message, method: requestMethod ?? null, tool: requestToolName ?? null, request_id: requestId ?? null, ...(mcpError.code === MCP_ERROR.invalidRequest || mcpError.code === MCP_ERROR.invalidParams ? { envelope: requestEnvelope ?? safeMcpEnvelopeDetails(event, undefined) } : {}), }));
     if (mappedStatus >= 500 && error instanceof Error) console.error(error.stack ?? error.message);
     return respondToMcpError(event, error, {
-      requestId,
-      requestMethod,
-      requestToolName,
-      requestToolArgs,
-      baseUrl,
-      ...runtimeDeps,
-    });
+      requestId, requestMethod, requestToolName, requestToolArgs, baseUrl, ...runtimeDeps, });
   }
 });
-import { defineEventHandler } from 'h3'
-import { readBody } from 'h3'

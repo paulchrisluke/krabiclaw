@@ -18,7 +18,7 @@ const PAYLOAD: OgImageRenderPayload = {
 }
 
 function fakeEvent(env: Record<string, unknown>) {
-  return { context: { cloudflare: { env } } } as unknown as Parameters<typeof resolveOgImage>[0]
+  return { runtime: { cloudflare: { env } } } as unknown as Parameters<typeof resolveOgImage>[0]
 }
 
 const wasmBytes = await readFile(path.join(repoRoot, 'node_modules/@resvg/resvg-wasm/index_bg.wasm'))

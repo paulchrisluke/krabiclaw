@@ -14,12 +14,9 @@ import { executeGuestThreadOperation } from '~/server/domain/guest-threads/opera
 import { publishGuestInboxEvent } from '~/server/cloudflare/guest-inbox-events'
 
 const STATUS_TO_ACTION = {
-  confirmed: 'confirm',
-  cancelled: 'cancel',
-  completed: 'complete',
-} as const
+  confirmed: 'confirm', cancelled: 'cancel', completed: 'complete', } as const
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const submissionId = getRouterParam(event, 'submissionId')
   if (!siteId || !submissionId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
@@ -38,12 +35,7 @@ export default defineEventHandler(async (event) => {
   if (!submission) return jsonResponse({ error: 'Reservation not found' }, { status: 404 })
 
   await assertResourceAccess(db, {
-    memberId: site.member_id,
-    role: site.member_role,
-    organizationId: site.organization_id,
-    siteId,
-    resourceLocationId: submission.location_id,
-  })
+    memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: submission.location_id, })
 
   const body = await readBody(event) as { status?: unknown }
   const status = cleanString(body.status, 20)
@@ -55,14 +47,7 @@ export default defineEventHandler(async (event) => {
   const thread = await ensureGuestThread(db, reservationAdapter, submissionId)
 
   const outcome = await executeGuestThreadOperation(db, {
-    threadId: thread.id,
-    siteId,
-    action,
-    actorUserId: session.user.id,
-    actorMemberId: site.member_id,
-    env,
-    idempotencyKey: `editor:reservation:${submissionId}:${submission.status}:${submission.updated_at}:${action}`,
-  })
+    threadId: thread.id, siteId, action, actorUserId: session.user.id, actorMemberId: site.member_id, env, idempotencyKey: `editor:reservation:${submissionId}:${submission.status}:${submission.updated_at}:${action}`, })
 
   if (!outcome.ok) {
     if (outcome.reason === 'thread_not_found' || outcome.reason === 'source_not_found') {
@@ -75,17 +60,9 @@ export default defineEventHandler(async (event) => {
   }
 
   await publishGuestInboxEvent(env, {
-    eventId: crypto.randomUUID(),
-    type: 'thread.changed',
-    siteId,
-    locationId: outcome.thread.location_id,
-    threadId: outcome.thread.id,
-    threadVersion: outcome.thread.version,
-    occurredAt: new Date().toISOString(),
-  })
+    eventId: crypto.randomUUID(), type: 'thread.changed', siteId, locationId: outcome.thread.location_id, threadId: outcome.thread.id, threadVersion: outcome.thread.version, occurredAt: new Date().toISOString(), })
 
   return jsonResponse({ updated: true, submission_id: submissionId, status })
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam, readBody  } from 'nitro/h3';

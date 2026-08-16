@@ -15,6 +15,7 @@
 </template>
 
 <script setup>
+import { $fetch } from 'ofetch'
 definePageMeta({ layout: 'account', middleware: 'account' })
 
 const route = useRoute()

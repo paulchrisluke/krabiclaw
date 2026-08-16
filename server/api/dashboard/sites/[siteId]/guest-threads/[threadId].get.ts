@@ -2,7 +2,7 @@ import { jsonResponse } from '~/server/utils/api-response'
 import { loadDashboardGuestThread } from '~/server/utils/dashboard-guest-threads'
 import { finalizeRequestMetrics } from '~/server/utils/request-metrics'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const threadId = getRouterParam(event, 'threadId')
   if (!siteId || !threadId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
@@ -10,5 +10,5 @@ export default defineEventHandler(async (event) => {
   const payload = await loadDashboardGuestThread(event, siteId, threadId)
   return jsonResponse(finalizeRequestMetrics(event, 'dashboard-guest-thread', payload))
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

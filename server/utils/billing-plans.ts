@@ -360,7 +360,7 @@ export async function fetchStripeProducts(
       tagline: product.description ?? '',
       highlighted: meta.highlighted === 'true',
       badge: meta.badge || undefined,
-      image: product.images?.[0] ?? undefined,
+      image: product.images?.[0],
       prices: prices.sort((a, b) => {
         const rank: Record<string, number> = { month: 0, year: 1 }
         return (rank[a.interval] ?? 0) - (rank[b.interval] ?? 0)

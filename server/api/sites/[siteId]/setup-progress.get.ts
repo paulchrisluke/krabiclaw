@@ -25,7 +25,7 @@ export interface SetupProgress {
   public_url: string | null
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
 
   if (!siteId) {
@@ -51,11 +51,7 @@ export default defineEventHandler(async (event) => {
     }
 
     await assertSiteWideAccess(db, {
-      memberId: siteAccess.member_id,
-      role: siteAccess.member_role,
-      organizationId: siteAccess.organization_id,
-      siteId,
-    })
+      memberId: siteAccess.member_id, role: siteAccess.member_role, organizationId: siteAccess.organization_id, siteId, })
 
     const site = await queryFirst<{
       id: string
@@ -70,9 +66,7 @@ export default defineEventHandler(async (event) => {
       status: string
       last_published_at: string | null
     }>(db, `
-      SELECT s.id, s.organization_id, o.slug AS organization_slug, s.brand_name, s.brand_description,
-             s.logo_url, s.contact_email, s.subdomain, s.public_url,
-             s.status, s.last_published_at
+      SELECT s.id, s.organization_id, o.slug AS organization_slug, s.brand_name, s.brand_description, s.logo_url, s.contact_email, s.subdomain, s.public_url, s.status, s.last_published_at
       FROM sites s
       JOIN organization o ON o.id = s.organization_id
       WHERE s.id = ? AND s.organization_id = ?
@@ -156,85 +150,27 @@ export default defineEventHandler(async (event) => {
 
     const steps: SetupStep[] = [
       {
-        id: 'site_created',
-        label: 'Site created',
-        description: 'Your restaurant site and subdomain are live.',
-        done: true,
-        required: true
-      },
-      {
-        id: 'primary_location',
-        label: 'Primary location added',
-        description: 'Add your restaurant\'s physical location so guests can find you.',
-        done: hasPrimaryLocation,
-        required: true,
-        action_url: `${locationsBase}/new`
-      },
-      {
-        id: 'location_address',
-        label: 'Location address',
-        description: 'A full address enables the map on your contact page.',
-        done: hasAddress,
-        required: true,
-        action_url: locationBase ? `${locationBase}/settings` : `${locationsBase}/new`
-      },
-      {
-        id: 'opening_hours',
-        label: 'Opening hours',
-        description: 'Guests need to know when you\'re open.',
-        done: hasHours,
-        required: true,
-        action_url: locationBase ? `${locationBase}/settings` : `${locationsBase}/new`
-      },
-      {
-        id: 'menu_items',
-        label: 'Menu — at least 5 items',
-        description: 'Add menu items so guests know what to expect.',
-        done: hasFiveMenuItems,
-        required: true,
-        action_url: locationBase
+        id: 'site_created', label: 'Site created', description: 'Your restaurant site and subdomain are live.', done: true, required: true
+      }, {
+        id: 'primary_location', label: 'Primary location added', description: 'Add your restaurant\'s physical location so guests can find you.', done: hasPrimaryLocation, required: true, action_url: `${locationsBase}/new`
+      }, {
+        id: 'location_address', label: 'Location address', description: 'A full address enables the map on your contact page.', done: hasAddress, required: true, action_url: locationBase ? `${locationBase}/settings` : `${locationsBase}/new`
+      }, {
+        id: 'opening_hours', label: 'Opening hours', description: 'Guests need to know when you\'re open.', done: hasHours, required: true, action_url: locationBase ? `${locationBase}/settings` : `${locationsBase}/new`
+      }, {
+        id: 'menu_items', label: 'Menu — at least 5 items', description: 'Add menu items so guests know what to expect.', done: hasFiveMenuItems, required: true, action_url: locationBase
           ? `${locationBase}/menu`
           : `${locationsBase}/new`
-      },
-      {
-        id: 'logo',
-        label: 'Logo',
-        description: 'Upload your logo for a polished look across your site.',
-        done: hasLogo,
-        required: false,
-        action_url: `${siteBase}/settings`
-      },
-      {
-        id: 'brand_description',
-        label: 'Brand description',
-        description: 'A short tagline used in SEO and your homepage.',
-        done: hasBrandDescription,
-        required: false,
-        action_url: `${siteBase}/settings`
-      },
-      {
-        id: 'photos',
-        label: 'At least 3 photos',
-        description: 'Photos bring your restaurant to life.',
-        done: hasPhotos,
-        required: false,
-        action_url: locationBase ? `${locationBase}/photos` : `${locationsBase}/new`
-      },
-      {
-        id: 'about_page',
-        label: 'About page content',
-        description: 'Tell your story — where you came from, what makes you special.',
-        done: hasAboutPage,
-        required: false,
-        action_url: `${siteBase}/pages`
-      },
-      {
-        id: 'contact_email',
-        label: 'Contact email',
-        description: 'Let guests reach you directly from your website.',
-        done: hasContactEmail,
-        required: false,
-        action_url: `${siteBase}/settings`
+      }, {
+        id: 'logo', label: 'Logo', description: 'Upload your logo for a polished look across your site.', done: hasLogo, required: false, action_url: `${siteBase}/settings`
+      }, {
+        id: 'brand_description', label: 'Brand description', description: 'A short tagline used in SEO and your homepage.', done: hasBrandDescription, required: false, action_url: `${siteBase}/settings`
+      }, {
+        id: 'photos', label: 'At least 3 photos', description: 'Photos bring your restaurant to life.', done: hasPhotos, required: false, action_url: locationBase ? `${locationBase}/photos` : `${locationsBase}/new`
+      }, {
+        id: 'about_page', label: 'About page content', description: 'Tell your story — where you came from, what makes you special.', done: hasAboutPage, required: false, action_url: `${siteBase}/pages`
+      }, {
+        id: 'contact_email', label: 'Contact email', description: 'Let guests reach you directly from your website.', done: hasContactEmail, required: false, action_url: `${siteBase}/settings`
       }
     ]
 
@@ -242,13 +178,7 @@ export default defineEventHandler(async (event) => {
     const recommendedSteps = steps.filter(s => !s.required)
 
     const progress: SetupProgress = {
-      steps,
-      required_complete: requiredSteps.filter(s => s.done).length,
-      required_total: requiredSteps.length,
-      recommended_complete: recommendedSteps.filter(s => s.done).length,
-      recommended_total: recommendedSteps.length,
-      can_publish: requiredSteps.every(s => s.done),
-      public_url: site.public_url
+      steps, required_complete: requiredSteps.filter(s => s.done).length, required_total: requiredSteps.length, recommended_complete: recommendedSteps.filter(s => s.done).length, recommended_total: recommendedSteps.length, can_publish: requiredSteps.every(s => s.done), public_url: site.public_url
     }
 
     return jsonResponse({ success: true, progress })
@@ -258,5 +188,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to get setup progress' }, { status: 500 })
   }
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

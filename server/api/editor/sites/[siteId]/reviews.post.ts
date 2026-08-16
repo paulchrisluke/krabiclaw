@@ -3,7 +3,7 @@ import { requireSiteAccess } from '~/server/utils/location-access'
 import { assertOrganizationAccess } from '~/server/utils/member-access'
 import { createOwnerEnteredSiteReview } from '~/server/utils/site-reviews'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
   const { db, session, site } = await requireSiteAccess(event, siteId, 'context')
@@ -14,15 +14,11 @@ export default defineEventHandler(async (event) => {
   }
   try {
     const result = await createOwnerEnteredSiteReview(db, {
-      organizationId: site.organization_id,
-      siteId,
-      enteredByUserId: session.user.id,
-    }, body as never)
+      organizationId: site.organization_id, siteId, enteredByUserId: session.user.id, }, body as never)
     return jsonResponse(result, { status: 201 })
   } catch (error) {
     return jsonResponse({ error: error instanceof Error ? error.message : 'Review creation failed' }, { status: 400 })
   }
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam, readBody  } from 'nitro/h3';

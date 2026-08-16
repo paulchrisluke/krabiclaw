@@ -1,9 +1,9 @@
-import { jsonResponse } from '~/server/utils/api-response'
+import { jsonResponse, readRequiredBody } from '~/server/utils/api-response'
 import { getExperienceById, resolveEffectiveTimeSlots, upsertSlotOverride } from '~/server/utils/experiences'
 import { requireSiteAccess } from '~/server/utils/location-access'
 import { assertResourceAccess } from '~/server/utils/member-access'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const experienceId = getRouterParam(event, 'experienceId')
   if (!siteId || !experienceId) return jsonResponse({ error: 'siteId and experienceId required' }, { status: 400 })
@@ -12,15 +12,10 @@ export default defineEventHandler(async (event) => {
   const experience = await getExperienceById(db, siteId, experienceId)
   if (!experience) return jsonResponse({ error: 'Experience not found' }, { status: 404 })
   await assertResourceAccess(db, {
-    memberId: site.member_id,
-    role: site.member_role,
-    organizationId: site.organization_id,
-    siteId,
-    resourceLocationId: experience.location_id,
-  })
+    memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: experience.location_id, })
 
   let body: Record<string, ApiValue>
-  try { body = await readBody(event) } catch { return jsonResponse({ error: 'Invalid request body' }, { status: 400 }) }
+  try { body = await readRequiredBody<Record<string, ApiValue>>(event) } catch { return jsonResponse({ error: 'Invalid request body' }, { status: 400 }) }
 
   const overrideDate = String(body.override_date ?? '')
   const timeSlot = String(body.time_slot ?? '')
@@ -56,22 +51,10 @@ export default defineEventHandler(async (event) => {
   }
 
   const override = await upsertSlotOverride(
-    db,
-    site.organization_id,
-    siteId,
-    experienceId,
-    {
-      override_date: overrideDate,
-      time_slot: timeSlot,
-      status,
-      capacity_override: capacityOverride,
-      note: body.note ? String(body.note).trim() : null,
-    },
-    session.user.id,
-  )
+    db, site.organization_id, siteId, experienceId, {
+      override_date: overrideDate, time_slot: timeSlot, status, capacity_override: capacityOverride, note: body.note ? String(body.note).trim() : null, }, session.user.id, )
 
   return jsonResponse({ override }, { status: 201 })
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam  } from 'nitro/h3';

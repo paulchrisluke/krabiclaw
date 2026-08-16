@@ -1,24 +1,20 @@
-import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
+import { jsonResponse, readRequiredBody, rethrowHttpError } from '~/server/utils/api-response'
 import { requireTenantPageWriteAccess } from '~/server/utils/tenant-pages-api'
 import { createTenantPage } from '~/server/utils/tenant-pages'
+import type { TenantPageEditorInput } from '~/server/utils/tenant-pages'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
   const { db, site, userId } = await requireTenantPageWriteAccess(event, siteId)
   try {
-    const body = await readBody(event)
+    const body = await readRequiredBody<TenantPageEditorInput>(event)
     return jsonResponse(await createTenantPage(db, {
-      organizationId: site.organization_id,
-      siteId,
-      userId,
-      data: body,
-    }), { status: 201 })
+      organizationId: site.organization_id, siteId, userId, data: body, }), { status: 201 })
   } catch (error) {
     rethrowHttpError(error)
     return jsonResponse({ error: error instanceof Error ? error.message : 'Invalid tenant page' }, { status: 400 })
   }
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam  } from 'nitro/h3';

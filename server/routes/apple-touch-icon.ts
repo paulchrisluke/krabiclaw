@@ -1,10 +1,7 @@
 import { handleFaviconRequest } from '~/server/utils/tenant-favicon'
 
-export default defineEventHandler((event) => {
+export default defineHandler((event) => {
   return handleFaviconRequest(event, {
-    platformFileName: 'apple-touch-icon.png',
-    width: 180,
-    height: 180,
-  })
+    platformFileName: 'apple-touch-icon.png', width: 180, height: 180, })
 })
-import { defineEventHandler } from 'h3'
+import { defineHandler } from 'nitro';

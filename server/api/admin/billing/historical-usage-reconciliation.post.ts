@@ -3,14 +3,9 @@ import { createAuth, getAuthSession } from '~/server/utils/auth'
 import { platformPermissionJsonResponse } from '~/server/utils/platform-admin-users'
 import { getOrgAdapter } from 'better-auth/plugins'
 import {
-  applyHistoricalUsageReconciliation,
-  assertHistoricalUsageReconciliationOperatorSession,
-  HistoricalUsageReconciliationError,
-  parseHistoricalUsageReconciliationRequest,
-  previewHistoricalUsageReconciliation,
-} from '~/server/utils/historical-usage-reconciliation'
+  applyHistoricalUsageReconciliation, assertHistoricalUsageReconciliationOperatorSession, HistoricalUsageReconciliationError, parseHistoricalUsageReconciliationRequest, previewHistoricalUsageReconciliation, } from '~/server/utils/historical-usage-reconciliation'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -37,13 +32,7 @@ export default defineEventHandler(async (event) => {
       throw new HistoricalUsageReconciliationError('invalid_request', 400, 'Apply requires expectedStateSha256 and approvalToken.')
     }
     const result = await applyHistoricalUsageReconciliation(
-      db,
-      env.BETTER_AUTH_SECRET,
-      request.input,
-      actor,
-      request.expectedStateSha256,
-      request.approvalToken,
-    )
+      db, env.BETTER_AUTH_SECRET, request.input, actor, request.expectedStateSha256, request.approvalToken, )
     return jsonResponse(result)
   } catch (error) {
     if (error instanceof HistoricalUsageReconciliationError) {
@@ -52,5 +41,5 @@ export default defineEventHandler(async (event) => {
     throw error
   }
 })
-import { defineEventHandler } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { readBody } from 'nitro/h3';

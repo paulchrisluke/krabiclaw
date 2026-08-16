@@ -2,7 +2,7 @@ import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { listSiteReviews } from '~/server/utils/site-reviews'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
   const db = cloudflareEnv(event).db
@@ -11,5 +11,5 @@ export default defineEventHandler(async (event) => {
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
   return jsonResponse({ reviews: await listSiteReviews(db, siteId, { publishedOnly: true }) })
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

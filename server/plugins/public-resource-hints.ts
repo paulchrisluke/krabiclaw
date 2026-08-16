@@ -1,6 +1,6 @@
-import { getHeader, getRequestURL, type H3Event } from 'h3'
+import type { HTTPEvent } from 'nitro/h3';
 import { publicSurfaceStylesheetForRequest } from '~/utils/public-surface-hints'
-import { definePlugin } from 'nitro'
+import { definePlugin } from 'nitro';
 
 const PRIVATE_ROUTE_PREFIXES = [
   '/dashboard',
@@ -14,20 +14,23 @@ const PRIVATE_ROUTE_PREFIXES = [
   '/oauth/',
 ]
 
-const isPrivateRoute = (event: H3Event) =>
-  PRIVATE_ROUTE_PREFIXES.some(prefix => event.path === prefix || event.path.startsWith(`${prefix}/`))
+const isPrivateRoute = (path: string) =>
+  PRIVATE_ROUTE_PREFIXES.some(prefix => path === prefix || path.startsWith(`${prefix}/`))
 
-function addStylesheetPreload(response: Response, event: H3Event) {
+function addStylesheetPreload(response: Response, event: HTTPEvent) {
+  const request = event.req
+  const path = new URL(request.url).pathname
   if (import.meta.dev) return
-  if (event.method !== 'GET' || isPrivateRoute(event)) return
-  if (!getHeader(event, 'accept')?.includes('text/html')) return
+  if (request.method !== 'GET' || isPrivateRoute(path)) return
+  if (!request.headers.get('accept')?.includes('text/html')) return
 
-  const pathname = getRequestURL(event).pathname
+  const context = (request.context ?? {}) as Record<string, unknown>
+  const site = context.site as { vertical?: string | null } | undefined
   const href = publicSurfaceStylesheetForRequest({
-    pathname,
-    tenantType: event.context.tenantType,
-    themeId: event.context.themeId,
-    vertical: event.context.site?.vertical,
+    pathname: path,
+    tenantType: context.tenantType as string | undefined,
+    themeId: context.themeId as string | undefined,
+    vertical: site?.vertical,
   })
   if (!href) return
 
@@ -35,7 +38,7 @@ function addStylesheetPreload(response: Response, event: H3Event) {
 }
 
 export default definePlugin((nitroApp) => {
-  nitroApp.hooks.hook('response', (response, event: H3Event) => {
+  nitroApp.hooks.hook('response', (response, event: HTTPEvent) => {
     addStylesheetPreload(response, event)
   })
 })

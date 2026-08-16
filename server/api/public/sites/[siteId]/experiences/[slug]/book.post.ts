@@ -1,4 +1,4 @@
-import { cloudflareEnv, jsonResponse, cleanString } from '~/server/utils/api-response'
+import { cloudflareEnv, jsonResponse, cleanString, readRequiredBody } from '~/server/utils/api-response'
 import { isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
 import { getExperienceBySlug, createExperienceBookingClaimingCapacity, resolveEffectiveTimeSlots, getSlotAvailability, resolveExperienceTimezone } from '~/server/utils/experiences'
 import { isDateBeforeTimezoneToday, isTimeSlotInPast } from '~/server/utils/site-config'
@@ -19,7 +19,7 @@ import { DEFAULT_EMAIL_DAILY_LIMIT as EMAIL_DAILY_LIMIT, DEFAULT_IP_HOURLY_LIMIT
 import { experienceBookingAdapter } from '~/server/domain/guest-threads/adapters/experience-booking'
 import { ensureGuestThread } from '~/server/domain/guest-threads/repository'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const slug = getRouterParam(event, 'slug')
   if (!siteId || !slug) return jsonResponse({ error: 'siteId and slug required' }, { status: 400 })
@@ -40,7 +40,7 @@ export default defineEventHandler(async (event) => {
   }
 
   let body: Record<string, ApiValue>
-  try { body = await readBody(event) } catch { return jsonResponse({ error: 'Invalid request body' }, { status: 400 }) }
+  try { body = await readRequiredBody<Record<string, ApiValue>>(event) } catch { return jsonResponse({ error: 'Invalid request body' }, { status: 400 }) }
 
   const guestName = cleanString(body.guest_name, 100)
   const guestEmail = cleanString(body.guest_email, 254)
@@ -83,10 +83,7 @@ export default defineEventHandler(async (event) => {
 
   if (experience.location_id) {
     const location = await queryFirst<{ special_hours: string | null; timezone: string | null }>(
-      db,
-      `SELECT special_hours, timezone FROM business_locations WHERE id = ? LIMIT 1`,
-      [experience.location_id],
-    )
+      db, `SELECT special_hours, timezone FROM business_locations WHERE id = ? LIMIT 1`, [experience.location_id], )
     if (location?.special_hours) {
       const [year, month, day] = bookingDate.split('-').map(Number) as [number, number, number]
       const closure = getActiveSpecialClosure(location.special_hours, location.timezone, { year, month, day })
@@ -126,7 +123,7 @@ export default defineEventHandler(async (event) => {
   const ipHash = await hashClientIp(clientIp)
   const emailHash = await hashIdentifier(guestEmail)
 
-  const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
+  const e2eOverride = env.E2E_ALLOW_DEV_ROUTES === 'true'
   if (!import.meta.dev && !e2eOverride) {
     const hourWindow = Math.floor(Date.now() / 3_600_000)
     const today = new Date().toISOString().split('T')[0]
@@ -143,36 +140,11 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   const userId = session?.user?.id || null
   const customerInput = {
-    organizationId: site.organization_id,
-    siteId,
-    name: guestName,
-    email: guestEmail,
-    phone: normalizedGuestPhone,
-    source: 'experience_booking',
-    bookingAt: `${bookingDate}T${timeSlot}:00`,
-    userId,
-  } as const
+    organizationId: site.organization_id, siteId, name: guestName, email: guestEmail, phone: normalizedGuestPhone, source: 'experience_booking', bookingAt: `${bookingDate}T${timeSlot}:00`, userId, } as const
   const customer = await findOrCreateCustomer(db, customerInput)
 
   const booking = await createExperienceBookingClaimingCapacity(db, {
-    experience_id: experience.id,
-    organization_id: site.organization_id,
-    site_id: siteId,
-    customer_id: customer.id,
-    location_id: experience.location_id,
-    guest_name: guestName,
-    guest_email: guestEmail,
-    guest_phone: normalizedGuestPhone,
-    party_size: partySize,
-    booking_date: bookingDate,
-    time_slot: timeSlot,
-    status: 'pending',
-    notes: notes || null,
-    ip_hash: ipHash,
-    cancellation_token_hash: cancellationTokenHash,
-    cancellation_token_expires_at: cancellation.expiresAt,
-    capacity: slotCapacity,
-  })
+    experience_id: experience.id, organization_id: site.organization_id, site_id: siteId, customer_id: customer.id, location_id: experience.location_id, guest_name: guestName, guest_email: guestEmail, guest_phone: normalizedGuestPhone, party_size: partySize, booking_date: bookingDate, time_slot: timeSlot, status: 'pending', notes: notes || null, ip_hash: ipHash, cancellation_token_hash: cancellationTokenHash, cancellation_token_expires_at: cancellation.expiresAt, capacity: slotCapacity, })
   // The capacity check above and this insert aren't atomic with each other —
   // another request can claim the last spot in between. createExperienceBookingClaimingCapacity
   // re-checks capacity as part of the insert itself, so this is the authoritative guard.
@@ -183,20 +155,8 @@ export default defineEventHandler(async (event) => {
   await recordCustomerBooking(db, customer.id, customerInput)
 
   await fireSiteEventSafe({
-    db,
-    organizationId: site.organization_id,
-    siteId,
-    locationId: experience.location_id,
-    eventType: 'experience.booking_received',
-    entityType: 'experience_booking',
-    entityId: booking.id,
-    metadata: {
-      experience_id: experience.id,
-      booking_date: bookingDate,
-      time_slot: timeSlot,
-      party_size: partySize,
-    },
-  })
+    db, organizationId: site.organization_id, siteId, locationId: experience.location_id, eventType: 'experience.booking_received', entityType: 'experience_booking', entityId: booking.id, metadata: {
+      experience_id: experience.id, booking_date: bookingDate, time_slot: timeSlot, party_size: partySize, }, })
 
   await ensureGuestThread(db, experienceBookingAdapter, booking.id, { publishEnv: env })
 
@@ -206,38 +166,14 @@ export default defineEventHandler(async (event) => {
     const siteBaseUrl = site.public_url?.replace(/\/$/, '') || (site.subdomain ? `https://${site.subdomain}.${platformDomain}` : null)
     const cancelUrl = siteBaseUrl ? `${siteBaseUrl}/experiences/cancel?id=${booking.id}#${cancellation.token}` : null
     await notifyExperienceBookingCreated(env, db, {
-      organizationId: site.organization_id,
-      siteId,
-      siteName: site.brand_name,
-      locationId: experience.location_id,
-      bookingId: booking.id,
-      guestName,
-      email: guestEmail,
-      guestPhone: normalizedGuestPhone,
-      experienceTitle: experience.title,
-      bookingDate,
-      timeSlot,
-      partySize,
-      notes: notes || null,
-      cancelUrl,
-      contactPhone,
-      contactEmail,
-    })
+      organizationId: site.organization_id, siteId, siteName: site.brand_name, locationId: experience.location_id, bookingId: booking.id, guestName, email: guestEmail, guestPhone: normalizedGuestPhone, experienceTitle: experience.title, bookingDate, timeSlot, partySize, notes: notes || null, cancelUrl, contactPhone, contactEmail, })
   } catch (error) {
     console.error('experience_booking_notification_failed', {
-      organizationId: site.organization_id,
-      siteId,
-      bookingId: booking.id,
-      error: error instanceof Error ? error.message : String(error),
-    })
+      organizationId: site.organization_id, siteId, bookingId: booking.id, error: error instanceof Error ? error.message : String(error), })
   }
 
   const policy = await resolveBookingPolicy(db, {
-    siteId,
-    policyType: 'experience',
-    locationId: experience.location_id,
-    experienceId: experience.id,
-  })
+    siteId, policyType: 'experience', locationId: experience.location_id, experienceId: experience.id, })
 
   const requestedLocale = cleanString(body.locale, 10)
   const locale = requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale)
@@ -245,13 +181,8 @@ export default defineEventHandler(async (event) => {
     : await getSourceLocale(db, site.organization_id, siteId)
 
   return jsonResponse({
-    success: true,
-    booking_id: booking.id,
-    cancellation_token: cancellation.token,
-    message: `Your booking request for ${experience.title} on ${bookingDate} at ${fmt12Hour(timeSlot)} has been received. We'll confirm shortly.`,
-    policy_summary: renderBookingPolicySummary(policy, locale),
-  }, { status: 201 })
+    success: true, booking_id: booking.id, cancellation_token: cancellation.token, message: `Your booking request for ${experience.title} on ${bookingDate} at ${fmt12Hour(timeSlot)} has been received. We'll confirm shortly.`, policy_summary: renderBookingPolicySummary(policy, locale), }, { status: 201 })
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';
+import { readBody } from 'nitro/h3';

@@ -9,11 +9,11 @@ import { getGuestThreadBySubmission, updateThreadProjection } from '~/server/dom
 const IP_HOURLY_LIMIT = 20
 const BOOKING_HOURLY_LIMIT = 5
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const bookingId = getRouterParam(event, 'bookingId')
 
-  const token = readBearerToken(getHeader(event, 'authorization'))
+  const token = readBearerToken((event.req.headers.get('authorization')))
   if (!siteId || !bookingId || !token) {
     return jsonResponse({ error: 'Missing required parameters' }, { status: 400 })
   }
@@ -49,8 +49,7 @@ export default defineEventHandler(async (event) => {
     location_id: string | null
     status: 'pending' | 'confirmed'
   }>(
-    db,
-    `
+    db, `
     SELECT organization_id, site_id, guest_name, guest_email, guest_phone, booking_date, time_slot, party_size, location_id, status
     FROM experience_bookings
     WHERE id = ?
@@ -60,9 +59,7 @@ export default defineEventHandler(async (event) => {
       AND cancellation_token_expires_at > ?
       AND status IN ('pending', 'confirmed')
     LIMIT 1
-  `,
-    [bookingId, siteId, tokenHash, now],
-  )
+  `, [bookingId, siteId, tokenHash, now], )
 
   if (!cancellable) {
     return jsonResponse({ error: 'Booking not found or already cancelled' }, { status: 404 })
@@ -81,8 +78,7 @@ export default defineEventHandler(async (event) => {
     location_id: string | null
     experience_title: string
   }>(
-    db,
-    `
+    db, `
     UPDATE experience_bookings
     SET status = 'cancelled', cancellation_token_used_at = ?
     WHERE id = ?
@@ -91,11 +87,8 @@ export default defineEventHandler(async (event) => {
       AND cancellation_token_used_at IS NULL
       AND cancellation_token_expires_at > ?
       AND status IN ('pending', 'confirmed')
-    RETURNING organization_id, site_id, guest_name, guest_email, guest_phone, booking_date, time_slot, party_size, notes, location_id,
-      (SELECT title FROM experiences WHERE id = experience_bookings.experience_id) AS experience_title
-  `,
-    [now, bookingId, siteId, tokenHash, now],
-  )
+    RETURNING organization_id, site_id, guest_name, guest_email, guest_phone, booking_date, time_slot, party_size, notes, location_id, (SELECT title FROM experiences WHERE id = experience_bookings.experience_id) AS experience_title
+  `, [now, bookingId, siteId, tokenHash, now], )
 
   if (!booking) {
     return jsonResponse({ error: 'Booking not found or already cancelled' }, { status: 404 })
@@ -108,42 +101,22 @@ export default defineEventHandler(async (event) => {
   }
 
   const site = await queryFirst<{ brand_name?: string | null }>(
-    db,
-    'SELECT brand_name FROM sites WHERE id = ? LIMIT 1',
-    [siteId],
-  )
+    db, 'SELECT brand_name FROM sites WHERE id = ? LIMIT 1', [siteId], )
 
   try {
     await notifyExperienceBookingCancelled(env, db, {
-      organizationId: booking.organization_id,
-      siteId: booking.site_id,
-      siteName: site?.brand_name,
-      locationId: booking.location_id,
-      bookingId,
-      guestName: booking.guest_name,
-      email: booking.guest_email,
-      guestPhone: booking.guest_phone,
-      experienceTitle: booking.experience_title,
-      bookingDate: booking.booking_date,
-      timeSlot: booking.time_slot,
-      partySize: booking.party_size,
-      notes: booking.notes,
-      wasConfirmed: cancellable.status === 'confirmed'
+      organizationId: booking.organization_id, siteId: booking.site_id, siteName: site?.brand_name, locationId: booking.location_id, bookingId, guestName: booking.guest_name, email: booking.guest_email, guestPhone: booking.guest_phone, experienceTitle: booking.experience_title, bookingDate: booking.booking_date, timeSlot: booking.time_slot, partySize: booking.party_size, notes: booking.notes, wasConfirmed: cancellable.status === 'confirmed'
     })
   } catch (error) {
     console.error('experience_booking_cancellation_notification_failed', {
-      organizationId: booking.organization_id,
-      siteId: booking.site_id,
-      bookingId,
-      error: error instanceof Error ? error.message : String(error)
+      organizationId: booking.organization_id, siteId: booking.site_id, bookingId, error: error instanceof Error ? error.message : String(error)
     })
   }
 
   return jsonResponse({
-    success: true,
-    message: 'Booking cancelled successfully'
+    success: true, message: 'Booking cancelled successfully'
   })
 })
-import { defineEventHandler } from 'h3'
-import { getHeader } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getHeader } from 'nitro/h3';
+import { getRouterParam } from 'nitro/h3';

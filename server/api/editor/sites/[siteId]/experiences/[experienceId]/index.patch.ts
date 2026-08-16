@@ -1,4 +1,4 @@
-import { jsonResponse } from '~/server/utils/api-response'
+import { jsonResponse, readRequiredBody } from '~/server/utils/api-response'
 import { updateExperience } from '~/server/utils/experiences'
 import { InvalidFieldError, stringArrayOrNull } from '~/server/utils/validation-helpers'
 import { queryFirst } from '~/server/db'
@@ -29,7 +29,7 @@ function normalizeExperienceMedia(value: unknown): Array<{ asset_id: string }> |
   })
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const experienceId = getRouterParam(event, 'experienceId')
   if (!siteId || !experienceId) return jsonResponse({ error: 'siteId and experienceId required' }, { status: 400 })
@@ -38,15 +38,11 @@ export default defineEventHandler(async (event) => {
   const existing = await queryFirst<{ location_id: string }>(db, 'SELECT location_id FROM experiences WHERE id = ? AND site_id = ? LIMIT 1', [experienceId, siteId])
   if (!existing) return jsonResponse({ error: 'Experience not found' }, { status: 404 })
   const principal = {
-    memberId: site.member_id,
-    role: site.member_role,
-    organizationId: site.organization_id,
-    siteId,
-  }
+    memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, }
   await assertResourceAccess(db, { ...principal, resourceLocationId: existing.location_id })
 
   let body: Record<string, ApiValue>
-  try { body = await readBody(event) } catch { return jsonResponse({ error: 'Invalid request body' }, { status: 400 }) }
+  try { body = await readRequiredBody<Record<string, ApiValue>>(event) } catch { return jsonResponse({ error: 'Invalid request body' }, { status: 400 }) }
 
   const updates: Record<string, ApiValue> = {}
   if ('title' in body) updates.title = String(body.title).trim()
@@ -121,6 +117,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ experience })
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam  } from 'nitro/h3';

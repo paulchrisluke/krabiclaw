@@ -12,7 +12,7 @@ export interface GuestInboxSocketEvent {
 
 interface GuestInboxSocketOptions {
   siteId: string
-  onEvent: (event: GuestInboxSocketEvent) => void
+  onEvent: (_event: GuestInboxSocketEvent) => void
   onReconnect: () => void
 }
 

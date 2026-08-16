@@ -54,8 +54,7 @@ test.describe('dashboard functional smoke', () => {
       await expect(page.locator('body')).not.toContainText('wrong link sando')
     }
 
-    const nonHydrationErrors = errors.filter((err) => !err.includes('Hydration completed but contains mismatches.'))
-    expect(nonHydrationErrors).toEqual([])
+    expect(errors).toEqual([])
   })
 
   test('organization Today and Calendar render agenda data, navigate months, and filter kinds', async ({ page, baseURL }) => {

@@ -5,7 +5,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { userHasLinkedCustomers } from '~/server/utils/guest-claims'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ isGuest: false })
@@ -16,4 +16,4 @@ export default defineEventHandler(async (event) => {
   const isGuest = await userHasLinkedCustomers(db, session.user.id).catch(() => false)
   return jsonResponse({ isGuest })
 })
-import { defineEventHandler } from 'h3'
+import { defineHandler } from 'nitro';

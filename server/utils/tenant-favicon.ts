@@ -1,4 +1,6 @@
-import { createError, getRequestURL, sendStream, setHeader, sendRedirect, type H3Event } from 'h3'
+import { HTTPError } from 'nitro';
+import type { H3Event } from 'nitro';
+import {  sendStream, setHeader, sendRedirect } from 'nitro/h3';
 import { sanitizeUrl } from '~/utils/sanitize'
 import { isPlatformHost, type TenantHostEnv } from '~/server/utils/tenant-hosts'
 import { cloudflareEnv } from '~/server/utils/api-response'
@@ -9,7 +11,7 @@ import { isNonIndexableHost } from '~/server/utils/seo-policy'
 const PREVIEW_CACHE_CONTROL = 'private, no-store, max-age=0'
 
 function setFaviconCacheControl(event: H3Event, cacheControl: string) {
-  const hostname = getRequestURL(event).hostname
+  const hostname = event.url.hostname
   setHeader(event, 'cache-control', isNonIndexableHost(hostname) ? PREVIEW_CACHE_CONTROL : cacheControl)
 }
 
@@ -90,9 +92,9 @@ export interface FaviconOptions {
 async function serveR2Favicon(event: H3Event, env: ApiRecord, url: string) {
   const key = getR2KeyFromPublicUrl(env, url)
   if (!key) return null
-  if (!env.MEDIA_BUCKET) throw createError({ statusCode: 503, statusMessage: 'Media storage unavailable' })
+  if (!env.MEDIA_BUCKET) throw new HTTPError({ statusCode: 503, statusMessage: 'Media storage unavailable' })
   const object = await env.MEDIA_BUCKET.get(key)
-  if (!object) throw createError({ statusCode: 404, statusMessage: 'Tenant favicon not found' })
+  if (!object) throw new HTTPError({ statusCode: 404, statusMessage: 'Tenant favicon not found' })
   setHeader(event, 'content-type', object.httpMetadata?.contentType || 'image/png')
   setHeader(event, 'content-length', object.size)
   setHeader(event, 'etag', object.etag)
@@ -107,15 +109,15 @@ async function proxyFavicon(event: H3Event, url: string) {
     signal: AbortSignal.timeout(10_000),
   })
   if (!response.ok || !response.body) {
-    throw createError({ statusCode: 502, statusMessage: `Tenant favicon source failed (${response.status})` })
+    throw new HTTPError({ statusCode: 502, statusMessage: `Tenant favicon source failed (${response.status})` })
   }
   const responseType = response.headers.get('content-type')?.split(';', 1)[0]?.trim() || ''
   if (!responseType.startsWith('image/')) {
-    throw createError({ statusCode: 502, statusMessage: 'Tenant favicon source returned a non-image response' })
+    throw new HTTPError({ statusCode: 502, statusMessage: 'Tenant favicon source returned a non-image response' })
   }
   setHeader(event, 'content-type', responseType)
   const length = response.headers.get('content-length')
-  if (length) setHeader(event, 'content-length', Number(length))
+  if (length) setHeader(event, 'content-length', length)
   setFaviconCacheControl(event, 'public, max-age=3600, stale-while-revalidate=86400')
   return sendStream(event, response.body)
 }
@@ -146,7 +148,7 @@ export async function handleFaviconRequest(event: H3Event, options: FaviconOptio
 
   if (options.returnSvg) {
     if (!sourceUrl) {
-      throw createError({ statusCode: 404, statusMessage: 'Tenant favicon not configured' })
+      throw new HTTPError({ statusCode: 404, statusMessage: 'Tenant favicon not configured' })
     }
     const svg = getTenantFaviconSvg(sourceUrl)
     setHeader(event, 'content-type', 'image/svg+xml')
@@ -161,10 +163,10 @@ export async function handleFaviconRequest(event: H3Event, options: FaviconOptio
         const target = getCloudflareImageVariantUrl(sourceUrl, options.width, options.height, options.format || 'webp')
         return proxyFavicon(event, target)
       }
-      throw createError({ statusCode: 422, statusMessage: 'Tenant favicon is not managed media' })
+      throw new HTTPError({ statusCode: 422, statusMessage: 'Tenant favicon is not managed media' })
     }
     return proxyFavicon(event, sourceUrl)
   }
 
-  throw createError({ statusCode: 404, statusMessage: 'Tenant favicon not configured' })
+  throw new HTTPError({ statusCode: 404, statusMessage: 'Tenant favicon not configured' })
 }

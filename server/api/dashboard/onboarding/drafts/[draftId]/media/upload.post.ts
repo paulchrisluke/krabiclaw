@@ -25,7 +25,7 @@ function toArrayBuffer(data: Uint8Array): ArrayBuffer {
   return copy
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   try {
     const draftId = String(getRouterParam(event, 'draftId') || '').trim()
     if (!draftId) return jsonResponse({ error: 'Draft id is required' }, { status: 400 })
@@ -83,15 +83,7 @@ export default defineEventHandler(async (event) => {
     const filename = sanitizeFilename(filePart.filename)
     const uploaded = await uploadImageBuffer(env, toArrayBuffer(filePart.data), filename, contentType)
     const image: DraftUploadedImage = {
-      draftAssetId: crypto.randomUUID(),
-      cloudflareImageId: uploaded.imageId,
-      publicUrl: uploaded.publicUrl,
-      thumbnailUrl: uploaded.thumbnailUrl,
-      mimeType: contentType,
-      fileName: filename,
-      fileSize,
-      category: target === 'logo' ? 'logo' : 'other',
-    }
+      draftAssetId: crypto.randomUUID(), cloudflareImageId: uploaded.imageId, publicUrl: uploaded.publicUrl, thumbnailUrl: uploaded.thumbnailUrl, mimeType: contentType, fileName: filename, fileSize, category: target === 'logo' ? 'logo' : 'other', }
 
     let currentUpdatedAt = draft.updated_at
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -139,9 +131,7 @@ export default defineEventHandler(async (event) => {
       `, [JSON.stringify(payload), updatedAt, draftId, session.user.id, currentUpdatedAt])
       if ((result.meta?.changes ?? 0) > 0) {
         return jsonResponse({
-          success: true,
-          image,
-        })
+          success: true, image, })
       }
     }
     return jsonResponse({ error: 'Failed to upload draft media' }, { status: 409 })
@@ -149,12 +139,9 @@ export default defineEventHandler(async (event) => {
     rethrowHttpError(error)
     const normalized = error instanceof Error ? error : new Error('Unknown draft media upload error')
     console.error('onboarding_draft_media_upload_failed', {
-      error: normalized.message,
-      stack: normalized.stack,
-    })
+      error: normalized.message, stack: normalized.stack, })
     return jsonResponse({ error: 'Failed to upload draft media' }, { status: 503 })
   }
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
-import { readMultipartFormData } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam, readMultipartFormData  } from 'nitro/h3';

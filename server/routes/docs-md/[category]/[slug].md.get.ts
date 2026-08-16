@@ -1,11 +1,8 @@
 import { cloudflareEnv, textResponse } from '~/server/utils/api-response'
 import {
-  getPublishedPlatformDocBySlug,
-  renderPlatformDocMarkdown,
-  resolvePublicOrigin,
-} from '~/server/utils/platform-llm'
+  getPublishedPlatformDocBySlug, renderPlatformDocMarkdown, resolvePublicOrigin, } from '~/server/utils/platform-llm'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const category = getRouterParam(event, 'category')
   const slug = getRouterParam(event, 'slug')
   if (!category || !slug) return textResponse('Documentation not found\n', { status: 404 })
@@ -19,5 +16,5 @@ export default defineEventHandler(async (event) => {
 
   return textResponse(renderPlatformDocMarkdown(doc, resolvePublicOrigin(event)), {}, 'text/markdown; charset=utf-8')
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

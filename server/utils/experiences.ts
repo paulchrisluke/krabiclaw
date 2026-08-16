@@ -1,3 +1,5 @@
+import { HTTPError } from 'nitro';
+
 import { resolveLocationTimezone, isTimeSlotInPast } from '~/server/utils/site-config'
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { fireSiteEventSafe } from '~/server/utils/site-events'
@@ -264,7 +266,7 @@ export interface CreateExperienceInput {
 
 function assertExperienceStatus(value: unknown, fieldName: string): ExperienceStatus {
   if (typeof value !== 'string' || !EXPERIENCE_STATUSES.includes(value as ExperienceStatus)) {
-    throw createError({
+    throw new HTTPError({
       statusCode: 400,
       statusMessage: `${fieldName} must be one of: ${EXPERIENCE_STATUSES.join(', ')}`,
     })
@@ -275,7 +277,7 @@ function assertExperienceStatus(value: unknown, fieldName: string): ExperienceSt
 function assertFiniteNonNegative(value: number | null | undefined, field: string): void {
   if (value == null) return
   if (!Number.isFinite(value) || value < 0) {
-    throw createError({ statusCode: 400, statusMessage: `${field} must be a finite non-negative number` })
+    throw new HTTPError({ statusCode: 400, statusMessage: `${field} must be a finite non-negative number` })
   }
 }
 
@@ -283,26 +285,26 @@ function assertFiniteNonNegative(value: number | null | undefined, field: string
 function assertRecurringSlots(value: RecurringSlots | null | undefined): RecurringSlots | null {
   if (value == null) return null
   if (typeof value !== 'object' || Array.isArray(value)) {
-    throw createError({ statusCode: 400, statusMessage: 'recurring_slots must be an object keyed by weekday name' })
+    throw new HTTPError({ statusCode: 400, statusMessage: 'recurring_slots must be an object keyed by weekday name' })
   }
   let total = 0
   for (const key of Object.keys(value)) {
     if (!WEEKDAY_NAMES.includes(key as WeekdayName)) {
-      throw createError({ statusCode: 400, statusMessage: `recurring_slots key "${key}" must be one of: ${WEEKDAY_NAMES.join(', ')}` })
+      throw new HTTPError({ statusCode: 400, statusMessage: `recurring_slots key "${key}" must be one of: ${WEEKDAY_NAMES.join(', ')}` })
     }
     const slots = (value as Record<string, unknown>)[key]
     if (!Array.isArray(slots)) {
-      throw createError({ statusCode: 400, statusMessage: `recurring_slots.${key} must be an array of "HH:MM" strings` })
+      throw new HTTPError({ statusCode: 400, statusMessage: `recurring_slots.${key} must be an array of "HH:MM" strings` })
     }
     for (const slot of slots) {
       if (typeof slot !== 'string' || !TIME_SLOT_PATTERN.test(slot)) {
-        throw createError({ statusCode: 400, statusMessage: `recurring_slots.${key} contains an invalid time slot: ${String(slot)}` })
+        throw new HTTPError({ statusCode: 400, statusMessage: `recurring_slots.${key} contains an invalid time slot: ${String(slot)}` })
       }
     }
     total += slots.length
   }
   if (total > MAX_TOTAL_SLOTS) {
-    throw createError({ statusCode: 400, statusMessage: `recurring_slots may not exceed ${MAX_TOTAL_SLOTS} total time slots` })
+    throw new HTTPError({ statusCode: 400, statusMessage: `recurring_slots may not exceed ${MAX_TOTAL_SLOTS} total time slots` })
   }
   return value
 }
@@ -330,10 +332,10 @@ export function resolveEffectiveTimeSlots(experience: Experience, dateStr: strin
  */
 export function generateSlots(startTime: string, endTime: string, intervalMinutes: number): string[] {
   if (!TIME_SLOT_PATTERN.test(startTime) || !TIME_SLOT_PATTERN.test(endTime)) {
-    throw createError({ statusCode: 400, statusMessage: 'start and end times must be in "HH:MM" format' })
+    throw new HTTPError({ statusCode: 400, statusMessage: 'start and end times must be in "HH:MM" format' })
   }
   if (!Number.isInteger(intervalMinutes) || intervalMinutes < 5 || intervalMinutes > 240) {
-    throw createError({ statusCode: 400, statusMessage: 'interval_minutes must be an integer between 5 and 240' })
+    throw new HTTPError({ statusCode: 400, statusMessage: 'interval_minutes must be an integer between 5 and 240' })
   }
   const toMinutes = (t: string) => {
     const [h, m] = t.split(':').map(Number) as [number, number]
@@ -342,7 +344,7 @@ export function generateSlots(startTime: string, endTime: string, intervalMinute
   const start = toMinutes(startTime)
   const end = toMinutes(endTime)
   if (end < start) {
-    throw createError({ statusCode: 400, statusMessage: 'end time must not be before start time' })
+    throw new HTTPError({ statusCode: 400, statusMessage: 'end time must not be before start time' })
   }
   const slots: string[] = []
   for (let t = start; t <= end; t += intervalMinutes) {
@@ -350,7 +352,7 @@ export function generateSlots(startTime: string, endTime: string, intervalMinute
     const m = (t % 60).toString().padStart(2, '0')
     slots.push(`${h}:${m}`)
     if (slots.length > MAX_TOTAL_SLOTS) {
-      throw createError({ statusCode: 400, statusMessage: `interval is too small — generated more than ${MAX_TOTAL_SLOTS} slots` })
+      throw new HTTPError({ statusCode: 400, statusMessage: `interval is too small — generated more than ${MAX_TOTAL_SLOTS} slots` })
     }
   }
   return slots
@@ -377,7 +379,7 @@ export async function createExperience(
   userId: string,
 ): Promise<Experience> {
   if (!input.location_id) {
-    throw createError({ statusCode: 400, statusMessage: 'location_id is required' })
+    throw new HTTPError({ statusCode: 400, statusMessage: 'location_id is required' })
   }
   assertFiniteNonNegative(input.price_amount, 'price_amount')
   assertFiniteNonNegative(input.compare_at_price_amount, 'compare_at_price_amount')
@@ -552,7 +554,7 @@ export async function updateExperience(
   if (input.featured_sort_order !== undefined) { sets.push('featured_sort_order = ?'); params.push(input.featured_sort_order) }
   if (input.location_id !== undefined) {
     if (!input.location_id) {
-      throw createError({ statusCode: 400, statusMessage: 'location_id cannot be cleared' })
+      throw new HTTPError({ statusCode: 400, statusMessage: 'location_id cannot be cleared' })
     }
     sets.push('location_id = ?')
     params.push(input.location_id)
@@ -965,7 +967,7 @@ export interface SlotAvailability {
 
 function assertDateStr(value: string, field: string): void {
   if (!DATE_PATTERN.test(value)) {
-    throw createError({ statusCode: 400, statusMessage: `${field} must be in "YYYY-MM-DD" format` })
+    throw new HTTPError({ statusCode: 400, statusMessage: `${field} must be in "YYYY-MM-DD" format` })
   }
   // Parse and validate the actual date values
   const parts = value.split('-')
@@ -977,19 +979,19 @@ function assertDateStr(value: string, field: string): void {
   const day = parseInt(dayStr, 10)
 
   if (month < 1 || month > 12) {
-    throw createError({ statusCode: 400, statusMessage: `${field} has invalid month: must be between 1 and 12` })
+    throw new HTTPError({ statusCode: 400, statusMessage: `${field} has invalid month: must be between 1 and 12` })
   }
 
   // Check if the day is valid for the given month and year
   const daysInMonth = new Date(year, month, 0).getDate()
   if (day < 1 || day > daysInMonth) {
-    throw createError({ statusCode: 400, statusMessage: `${field} has invalid day: must be between 1 and ${daysInMonth} for the given month and year` })
+    throw new HTTPError({ statusCode: 400, statusMessage: `${field} has invalid day: must be between 1 and ${daysInMonth} for the given month and year` })
   }
 
   // Verify the date is actually valid by constructing it and checking if components match
   const date = new Date(year, month - 1, day)
   if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
-    throw createError({ statusCode: 400, statusMessage: `${field} is not a valid date` })
+    throw new HTTPError({ statusCode: 400, statusMessage: `${field} is not a valid date` })
   }
 }
 
@@ -1035,17 +1037,17 @@ export async function upsertSlotOverride(
 ): Promise<SlotOverride> {
   assertDateStr(input.override_date, 'override_date')
   if (!TIME_SLOT_PATTERN.test(input.time_slot)) {
-    throw createError({ statusCode: 400, statusMessage: 'time_slot must be in "HH:MM" format' })
+    throw new HTTPError({ statusCode: 400, statusMessage: 'time_slot must be in "HH:MM" format' })
   }
   if (input.status !== 'closed' && input.status !== 'open') {
-    throw createError({ statusCode: 400, statusMessage: 'status must be "closed" or "open"' })
+    throw new HTTPError({ statusCode: 400, statusMessage: 'status must be "closed" or "open"' })
   }
   assertFiniteNonNegative(input.capacity_override, 'capacity_override')
 
   // Verify that the experience belongs to the provided site
   const experience = await queryFirst<{ id: string }>(db, `SELECT id FROM experiences WHERE id = ? AND site_id = ? LIMIT 1`, [experienceId, siteId])
   if (!experience) {
-    throw createError({ statusCode: 404, statusMessage: 'Experience not found or does not belong to this site' })
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Experience not found or does not belong to this site' })
   }
 
   const now = new Date().toISOString()

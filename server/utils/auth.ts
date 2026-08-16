@@ -7,8 +7,7 @@ import { oauthProvider } from '@better-auth/oauth-provider'
 import type { SchemaClient, Scope } from '@better-auth/oauth-provider'
 import { cimd } from '@better-auth/cimd'
 import type { GenericEndpointContext } from '@better-auth/core'
-import { toWebRequest } from 'h3'
-import type { H3Event } from 'h3'
+import type { H3Event } from 'nitro';
 import { createDb, execute, schema } from '~/server/db'
 import { linkAnonymousCustomerToUser } from '~/server/utils/customers'
 import { sendWhatsAppOtp } from '~/server/utils/whatsapp'
@@ -192,7 +191,7 @@ function trustedOriginsForAuth(env: CloudflareEnv): string[] | ((_request?: Requ
     if (origin) origins.add(origin)
   }
   if (import.meta.dev) {
-    const port = process.env.PORT || '3000'
+    const port = env.PORT || '3000'
     origins.add(`http://localhost:${port}`)
     origins.add(`http://127.0.0.1:${port}`)
     origins.add(`http://*.localhost:${port}`)
@@ -418,7 +417,7 @@ export function createAuth(env: CloudflareEnv) {
         },
       }),
       cimd({
-        allowLoopback: import.meta.dev,
+        allowLoopback: import.meta.dev || env.E2E_ALLOW_DEV_ROUTES === 'true',
         onClientCreated: normalizeCimdClientAuthentication,
         onClientRefreshed: normalizeCimdClientAuthentication,
       }),
@@ -559,6 +558,6 @@ export function createAuth(env: CloudflareEnv) {
 
 export async function getAuthSession(event: H3Event, env: CloudflareEnv): Promise<Awaited<ReturnType<ReturnType<typeof createAuth>['api']['getSession']>>> {
   return createAuth(env).api.getSession({
-    headers: toWebRequest(event).headers,
+    headers: event.req.headers,
   })
 }

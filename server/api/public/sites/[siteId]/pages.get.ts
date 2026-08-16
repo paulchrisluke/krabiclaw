@@ -3,7 +3,7 @@ import { apiErrorResponse, cloudflareEnv, jsonResponse } from '~/server/utils/ap
 import { verifyPreviewToken } from '~/server/utils/preview-token'
 import { getPublicTenantPageForPath, listCanonicalTenantPages } from '~/server/utils/public-tenant-pages'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return apiErrorResponse(event, 400, 'SITE_ID_REQUIRED', 'Site ID is required')
   const env = cloudflareEnv(event)
@@ -36,6 +36,6 @@ export default defineEventHandler(async (event) => {
     return apiErrorResponse(event, typed.statusCode ?? 500, 'TENANT_PAGE_LOOKUP_FAILED', typed.statusMessage ?? 'Tenant page lookup failed')
   }
 })
-import { defineEventHandler } from 'h3'
-import { getQuery } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getQuery } from 'nitro/h3';
+import { getRouterParam } from 'nitro/h3';

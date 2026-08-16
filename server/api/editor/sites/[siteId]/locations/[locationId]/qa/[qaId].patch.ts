@@ -5,7 +5,7 @@ import { updateLocationQa } from '~/server/utils/mcp-workflows'
 import { assertLocationAccess } from '~/server/utils/member-access'
 import { queryFirst } from '~/server/db'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const locationId = getRouterParam(event, 'locationId')
   const qaId = getRouterParam(event, 'qaId')
@@ -44,19 +44,12 @@ export default defineEventHandler(async (event) => {
 
   try {
     const result = await updateLocationQa(db, site.organization_id, siteId, locationId, qaId, {
-      question: body.question !== undefined ? cleanString(body.question, 500) : undefined,
-      answer: body.answer !== undefined ? cleanString(body.answer, 2000) : undefined,
-      question_author: body.question_author !== undefined ? cleanString(body.question_author, 120) : undefined,
-      is_owner_answer: body.is_owner_answer,
-      status: body.status !== undefined ? cleanString(body.status, 20) : undefined,
-      sort_order: body.sort_order,
-    })
+      question: body.question !== undefined ? cleanString(body.question, 500) : undefined, answer: body.answer !== undefined ? cleanString(body.answer, 2000) : undefined, question_author: body.question_author !== undefined ? cleanString(body.question_author, 120) : undefined, is_owner_answer: body.is_owner_answer, status: body.status !== undefined ? cleanString(body.status, 20) : undefined, sort_order: body.sort_order, })
     return jsonResponse(result)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Q&A update failed'
     return jsonResponse({ error: message }, { status: message.includes('not found') ? 404 : 400 })
   }
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam, readBody  } from 'nitro/h3';

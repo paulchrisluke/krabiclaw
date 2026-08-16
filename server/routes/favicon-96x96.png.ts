@@ -1,10 +1,7 @@
 import { handleFaviconRequest } from '~/server/utils/tenant-favicon'
 
-export default defineEventHandler((event) => {
+export default defineHandler((event) => {
   return handleFaviconRequest(event, {
-    platformFileName: 'favicon-96x96.png',
-    width: 96,
-    height: 96,
-  })
+    platformFileName: 'favicon-96x96.png', width: 96, height: 96, })
 })
-import { defineEventHandler } from 'h3'
+import { defineHandler } from 'nitro';

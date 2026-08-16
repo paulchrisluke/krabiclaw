@@ -49,6 +49,7 @@
 </template>
 
 <script setup lang="ts">
+import { $fetch } from 'ofetch'
 import { FORM_INPUT_CLASS } from '~/utils/form-constants'
 
 const props = withDefaults(defineProps<{
@@ -122,7 +123,7 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
-    await $fetch<unknown, string, { method: 'POST'; body: Record<string, unknown> }>('/api/contact', {
+    await $fetch<unknown>('/api/contact', {
       method: 'POST',
       body: {
         name: form.value.name.trim(),

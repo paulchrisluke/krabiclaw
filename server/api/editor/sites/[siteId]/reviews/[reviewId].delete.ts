@@ -3,7 +3,7 @@ import { requireSiteAccess } from '~/server/utils/location-access'
 import { assertOrganizationAccess } from '~/server/utils/member-access'
 import { deleteOwnerEnteredSiteReview } from '~/server/utils/site-reviews'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const reviewId = getRouterParam(event, 'reviewId')
   if (!siteId || !reviewId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
@@ -11,13 +11,11 @@ export default defineEventHandler(async (event) => {
   assertOrganizationAccess(site.member_role)
   try {
     return jsonResponse(await deleteOwnerEnteredSiteReview(db, {
-      organizationId: site.organization_id,
-      siteId,
-    }, reviewId))
+      organizationId: site.organization_id, siteId, }, reviewId))
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Review deletion failed'
     return jsonResponse({ error: message }, { status: message.includes('not found') ? 404 : 400 })
   }
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

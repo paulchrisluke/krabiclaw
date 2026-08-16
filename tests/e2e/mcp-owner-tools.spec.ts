@@ -118,7 +118,7 @@ test.describe('stateless MCP server', () => {
       data: {
         name: 'MCP Reservation',
         email: `mcp-res-${Date.now()}@example.test`,
-        phone: '+15555550199',
+        phone: '+14155552673',
         date: '2030-01-15',
         time: '19:00',
         guests: '2',

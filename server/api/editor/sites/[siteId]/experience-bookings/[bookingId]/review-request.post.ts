@@ -4,7 +4,7 @@ import { queryFirst } from '~/server/db'
 import { sendReviewRequestForBooking } from '~/server/utils/review-request-delivery'
 import { assertResourceAccess } from '~/server/utils/member-access'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const bookingId = getRouterParam(event, 'bookingId')
   if (!siteId || !bookingId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
@@ -27,12 +27,7 @@ export default defineEventHandler(async (event) => {
   if (!booking) return jsonResponse({ error: 'Booking not found or access denied' }, { status: 404 })
 
   await assertResourceAccess(db, {
-    memberId: booking.member_id,
-    role: booking.member_role,
-    organizationId: booking.organization_id,
-    siteId,
-    resourceLocationId: booking.location_id,
-  })
+    memberId: booking.member_id, role: booking.member_role, organizationId: booking.organization_id, siteId, resourceLocationId: booking.location_id, })
 
   const body = await readBody(event).catch(() => ({})) as { kind?: string }
   const kind = body.kind === 'reminder' ? 'reminder' : 'first'
@@ -40,6 +35,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse(result, { status: result.sent ? 200 : 502 })
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam, readBody  } from 'nitro/h3';

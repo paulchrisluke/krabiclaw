@@ -75,7 +75,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: "22.19.0"
+          node-version: "24.18.1"
           cache: yarn
       - run: yarn install --frozen-lockfile
       - run: npx playwright install --with-deps chromium
@@ -109,7 +109,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: "22.19.0"
+          node-version: "24.18.1"
           cache: yarn
       - run: yarn install --frozen-lockfile
       - name: Run production notification canary

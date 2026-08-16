@@ -34,9 +34,9 @@
 import DocsHeader from '~/components/platform/DocsHeader.vue'
 import PlatformDrawer from '~/components/platform/PlatformDrawer.vue'
 import PlatformCommandSearchModal from '~/components/platform/search/PlatformCommandSearchModal.vue'
-import platformStylesheet from '~/assets/css/platform-entry.css?url'
+import '~/assets/css/platform-entry.css'
 
-const platformStylesheetHref = new URL(platformStylesheet, 'http://nuxt.local').pathname
+const platformStylesheetHref = '/_nuxt/surfaces/platform.css'
 
 const mobileNavOpen = ref(false)
 

@@ -94,6 +94,7 @@
 </template>
 
 <script setup lang="ts">
+import { $fetch } from 'ofetch'
 import { completeVerifiedInvitation } from '~/shared/auth/invitation-activation'
 import { buildLoginUrl } from '~/shared/auth/return-target'
 
@@ -179,7 +180,7 @@ function invitationQuerySuffix(): string {
 
 onMounted(async () => {
   try {
-    const result = await $fetch<InvitationInfo | { status: 'accepted'; redirectTo: string }, string>(`/api/invitations/${invitationId}${invitationQuerySuffix()}`)
+    const result = await $fetch<InvitationInfo | { status: 'accepted'; redirectTo: string }>(`/api/invitations/${invitationId}${invitationQuerySuffix()}`)
     // Idempotent re-visit of an already-accepted invitation (see
     // server/api/invitations/[invitationId].get.ts): the current session is
     // already the accepted member, so skip straight to the destination
@@ -204,7 +205,7 @@ async function acceptInvitation() {
   accepting.value = true
   acceptError.value = null
   try {
-    const result = await $fetch<{ success: boolean; redirectTo: string }, string>(`/api/invitations/${invitationId}/accept${invitationQuerySuffix()}`, {
+    const result = await $fetch<{ success: boolean; redirectTo: string }>(`/api/invitations/${invitationId}/accept${invitationQuerySuffix()}`, {
       method: 'POST',
     })
     accepted.value = true

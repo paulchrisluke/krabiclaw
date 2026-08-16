@@ -1,9 +1,9 @@
 import { randomBytes } from 'node:crypto'
 import { defineConfig, devices } from '@playwright/test'
 
-const port = Number(process.env.PORT || 3000)
 const previewUrl = process.env.PLAYWRIGHT_PREVIEW_URL
-const baseURL = previewUrl || `http://localhost:${port}`
+const port = 3000
+const baseURL = previewUrl || 'http://localhost:3000'
 const localPrepared = process.env.PLAYWRIGHT_LOCAL_PREPARED === 'true'
 
 if (!previewUrl && !process.env.E2E_TEST_PASSWORD) {

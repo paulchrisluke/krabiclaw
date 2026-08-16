@@ -1,6 +1,6 @@
 import type { SitemapUrlInput } from '#sitemap/types'
-import { getRequestURL } from 'h3'
-import { definePlugin } from 'nitro'
+
+import { definePlugin } from 'nitro';
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { isNonIndexableHost, PLATFORM_SITEMAP_ROUTES } from '~/server/utils/seo-policy'
@@ -48,7 +48,7 @@ export default definePlugin((nitroApp) => {
 
   nitroApp.hooks.hook('sitemap:input', async (ctx) => {
     const event = ctx.event
-    const hostname = getRequestURL(event).hostname
+    const hostname = event.url.hostname
     if (isNonIndexableHost(hostname)) {
       ctx.urls.length = 0
       return

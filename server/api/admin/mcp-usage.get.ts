@@ -3,7 +3,7 @@ import { cloudflareEnv, jsonResponse } from "~/server/utils/api-response";
 import { queryAll } from "~/server/db";
 import { platformPermissionJsonResponse } from "~/server/utils/platform-admin-users";
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event);
   const db = env.DB;
   if (!db)
@@ -22,28 +22,20 @@ export default defineEventHandler(async (event) => {
 
   const [topTools, failuresByTool, blockedTools, bySite, recentErrors] = await Promise.all([
     queryAll(db, `
-      SELECT tool_name, tool_domain, COUNT(*) AS calls,
-        SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS successes,
-        SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS errors,
-        ROUND(AVG(duration_ms), 0) AS avg_duration_ms
+      SELECT tool_name, tool_domain, COUNT(*) AS calls, SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS successes, SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS errors, ROUND(AVG(duration_ms), 0) AS avg_duration_ms
       FROM mcp_tool_call_events e
       WHERE method = 'tools/call' AND created_at >= ? ${siteFilter}
       GROUP BY tool_name, tool_domain
       ORDER BY calls DESC
       LIMIT 50
-    `, [since, ...siteParam]),
-
-    queryAll(db, `
-      SELECT tool_name, error_code, error_message, COUNT(*) AS occurrences,
-        MAX(created_at) AS last_seen
+    `, [since, ...siteParam]), queryAll(db, `
+      SELECT tool_name, error_code, error_message, COUNT(*) AS occurrences, MAX(created_at) AS last_seen
       FROM mcp_tool_call_events e
       WHERE method = 'tools/call' AND status = 'error' AND created_at >= ? ${siteFilter}
       GROUP BY tool_name, error_code, error_message
       ORDER BY occurrences DESC
       LIMIT 50
-    `, [since, ...siteParam]),
-
-    queryAll(db, `
+    `, [since, ...siteParam]), queryAll(db, `
       SELECT tool_name, COUNT(*) AS occurrences, MAX(created_at) AS last_seen
       FROM mcp_tool_call_events e
       WHERE method = 'tools/call' AND status IN ('blocked', 'auth_required')
@@ -51,12 +43,8 @@ export default defineEventHandler(async (event) => {
       GROUP BY tool_name
       ORDER BY occurrences DESC
       LIMIT 50
-    `, [since, ...siteParam]),
-
-    queryAll(db, `
-      SELECT e.site_id, s.brand_name, s.subdomain, o.name AS org_name,
-        COUNT(*) AS calls,
-        SUM(CASE WHEN e.status = 'error' THEN 1 ELSE 0 END) AS errors
+    `, [since, ...siteParam]), queryAll(db, `
+      SELECT e.site_id, s.brand_name, s.subdomain, o.name AS org_name, COUNT(*) AS calls, SUM(CASE WHEN e.status = 'error' THEN 1 ELSE 0 END) AS errors
       FROM mcp_tool_call_events e
       LEFT JOIN sites s ON s.id = e.site_id
       LEFT JOIN organization o ON o.id = s.organization_id
@@ -64,27 +52,16 @@ export default defineEventHandler(async (event) => {
       GROUP BY e.site_id
       ORDER BY calls DESC
       LIMIT 50
-    `, [since, ...siteParam]),
-
-    queryAll(db, `
-      SELECT id, tool_name, tool_domain, status, error_code, error_message,
-        site_id, user_id, duration_ms, created_at
+    `, [since, ...siteParam]), queryAll(db, `
+      SELECT id, tool_name, tool_domain, status, error_code, error_message, site_id, user_id, duration_ms, created_at
       FROM mcp_tool_call_events e
       WHERE method = 'tools/call' AND status != 'success' AND created_at >= ? ${siteFilter}
       ORDER BY created_at DESC
       LIMIT 50
-    `, [since, ...siteParam]),
-  ]);
+    `, [since, ...siteParam]), ]);
 
   return jsonResponse({
-    range_days: days,
-    site_id: siteId,
-    top_tools: topTools ?? [],
-    failures_by_tool: failuresByTool ?? [],
-    blocked_or_auth_required: blockedTools ?? [],
-    by_site: bySite ?? [],
-    recent_errors: recentErrors ?? [],
-  });
+    range_days: days, site_id: siteId, top_tools: topTools ?? [], failures_by_tool: failuresByTool ?? [], blocked_or_auth_required: blockedTools ?? [], by_site: bySite ?? [], recent_errors: recentErrors ?? [], });
 });
-import { defineEventHandler } from 'h3'
-import { getQuery } from 'h3'
+import { defineHandler } from 'nitro';
+import { getQuery } from 'nitro/h3';

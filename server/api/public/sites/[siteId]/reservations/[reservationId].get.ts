@@ -2,10 +2,10 @@ import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { hashReservationCancelToken, readBearerToken } from '~/server/utils/reservation-cancel-token'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const reservationId = getRouterParam(event, 'reservationId')
-  const token = readBearerToken(getHeader(event, 'authorization'))
+  const token = readBearerToken((event.req.headers.get('authorization')))
 
   if (!siteId || !reservationId || !token) {
     return jsonResponse({ error: 'Missing required parameters' }, { status: 400 })
@@ -17,8 +17,7 @@ export default defineEventHandler(async (event) => {
 
   const tokenHash = await hashReservationCancelToken(token)
   const reservation = await queryFirst(
-    db,
-    `
+    db, `
     SELECT name, date, time, guests, status, location_id
     FROM reservation_submissions
     WHERE id = ?
@@ -27,19 +26,16 @@ export default defineEventHandler(async (event) => {
       AND cancellation_token_used_at IS NULL
       AND cancellation_token_expires_at > ?
     LIMIT 1
-  `,
-    [reservationId, siteId, tokenHash, new Date().toISOString()],
-  )
+  `, [reservationId, siteId, tokenHash, new Date().toISOString()], )
 
   if (!reservation) {
     return jsonResponse({ error: 'Reservation not found' }, { status: 404 })
   }
 
   return jsonResponse({
-    success: true,
-    reservation
+    success: true, reservation
   })
 })
-import { defineEventHandler } from 'h3'
-import { getHeader } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getHeader } from 'nitro/h3';
+import { getRouterParam } from 'nitro/h3';

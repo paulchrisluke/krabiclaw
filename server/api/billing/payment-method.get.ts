@@ -1,3 +1,5 @@
+import { HTTPError, defineHandler  } from 'nitro';
+
 // GET /api/billing/payment-method
 // Returns the org's default saved payment method (card brand, last4, expiry) or null.
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
@@ -7,7 +9,7 @@ import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
 import { queryFirst } from '~/server/db'
 import type Stripe from 'stripe'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -21,16 +23,14 @@ export default defineEventHandler(async (event) => {
   await requireBillingAccess(env, db, organization.id, session.user.id)
 
   const billing = await queryFirst<{ stripe_customer_id: string | null }>(
-    db, 'SELECT stripe_customer_id FROM organization_billing WHERE organization_id = ? LIMIT 1', [organization.id],
-  )
+    db, 'SELECT stripe_customer_id FROM organization_billing WHERE organization_id = ? LIMIT 1', [organization.id], )
 
   if (!billing?.stripe_customer_id) return jsonResponse({ card: null })
 
   try {
     const stripe = getStripe(env)
     const customer = await stripe.customers.retrieve(billing.stripe_customer_id, {
-      expand: ['invoice_settings.default_payment_method'],
-    }) as Stripe.Customer
+      expand: ['invoice_settings.default_payment_method'], }) as Stripe.Customer
 
     const pm = customer.invoice_settings?.default_payment_method
     if (!pm || typeof pm === 'string' || pm.type !== 'card' || !pm.card) {
@@ -39,18 +39,11 @@ export default defineEventHandler(async (event) => {
 
     return jsonResponse({
       card: {
-        brand: pm.card.brand,
-        last4: pm.card.last4,
-        exp_month: pm.card.exp_month,
-        exp_year: pm.card.exp_year,
-      }
+        brand: pm.card.brand, last4: pm.card.last4, exp_month: pm.card.exp_month, exp_year: pm.card.exp_year, }
     })
   } catch (error) {
     console.error('Failed to retrieve billing payment method', {
-      organizationId: organization.id,
-      error,
-    })
-    throw createError({ statusCode: 502, statusMessage: 'Failed to retrieve payment method' })
+      organizationId: organization.id, error, })
+    throw new HTTPError({ statusCode: 502, statusMessage: 'Failed to retrieve payment method' })
   }
 })
-import { defineEventHandler } from 'h3'

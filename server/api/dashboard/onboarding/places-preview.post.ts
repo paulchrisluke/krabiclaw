@@ -21,7 +21,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { getPlaceDetailsByUrl, getPlaceDetails, PlaceDetailsError } from '~/server/utils/google-places'
 import { incrementHourlyRateLimit } from '~/server/utils/hourly-rate-limit'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -40,11 +40,7 @@ export default defineEventHandler(async (event) => {
   if (!import.meta.dev) {
     const hourWindow = Math.floor(Date.now() / 3_600_000)
     const rateLimitOk = await incrementHourlyRateLimit(
-      db,
-      `rate:places-preview:user:${session.user.id}:${hourWindow}`,
-      20,
-      3_600_000,
-    )
+      db, `rate:places-preview:user:${session.user.id}:${hourWindow}`, 20, 3_600_000, )
     if (!rateLimitOk) {
       return jsonResponse({ error: 'Too many requests. Please try again later.' }, { status: 429 })
     }
@@ -58,26 +54,12 @@ export default defineEventHandler(async (event) => {
   } catch (err) {
     const statusCode = err instanceof PlaceDetailsError ? err.statusCode : 502
     return jsonResponse({
-      error: err instanceof Error ? err.message : 'Could not fetch place details. Try again.',
-    }, { status: statusCode })
+      error: err instanceof Error ? err.message : 'Could not fetch place details. Try again.', }, { status: statusCode })
   }
 
   return jsonResponse({
-    success: true,
-    preview: {
-      placeId: place.placeId,
-      name: place.name,
-      address: place.formattedAddress,
-      city: place.city,
-      phone: place.phone,
-      mapsUrl: place.mapsUrl,
-      websiteUrl: place.websiteUrl,
-      rating: place.rating,
-      ratingCount: place.ratingCount,
-      openingHours: place.openingHours,
-      photos: place.photos.slice(0, 10),
-    },
-  })
+    success: true, preview: {
+      placeId: place.placeId, name: place.name, address: place.formattedAddress, city: place.city, phone: place.phone, mapsUrl: place.mapsUrl, websiteUrl: place.websiteUrl, rating: place.rating, ratingCount: place.ratingCount, openingHours: place.openingHours, photos: place.photos.slice(0, 10), }, })
 })
-import { defineEventHandler } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { readBody } from 'nitro/h3';

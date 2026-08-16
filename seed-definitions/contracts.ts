@@ -25,6 +25,7 @@ export interface CuratedSiteDefinition extends CuratedSiteIdentity {
     primaryLocationId: string
     contactEmail: string | null
     contactPhone?: string | null
+    publicUrl: string
     defaultCurrency: string
     vertical: 'restaurant' | 'experience' | 'service' | 'professional_service'
     contentSource: 'generated' | 'imported' | 'manual' | 'google_maps'

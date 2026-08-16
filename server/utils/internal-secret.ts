@@ -1,4 +1,5 @@
-import { getHeader, type H3Event } from 'h3'
+import type { H3Event } from 'nitro';
+
 import type { CloudflareEnv } from '~/server/utils/auth'
 
 // Shared constant-time secret comparison for internal, secret-gated routes
@@ -42,8 +43,8 @@ export async function validateInternalRequest(event: H3Event, env: CloudflareEnv
     return { ok: false, status: 500, error: 'PLATFORM_SEARCH_REINDEX_SECRET is not configured' }
   }
 
-  const providedSecret = getHeader(event, 'x-krabiclaw-search-secret')
-    ?? getHeader(event, 'authorization')?.replace(/^Bearer\s+/i, '')
+  const providedSecret = (event.req.headers.get('x-krabiclaw-search-secret'))
+    ?? (event.req.headers.get('authorization'))?.replace(/^Bearer\s+/i, '')
     ?? ''
 
   if (!(await secretsMatch(expectedSecret, providedSecret))) {

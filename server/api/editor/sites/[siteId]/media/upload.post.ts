@@ -1,4 +1,5 @@
-import { createError, getHeader, getQuery, getRequestWebStream } from 'h3'
+import { HTTPError, defineHandler  } from 'nitro';
+import {  getQuery,  getRouterParam  } from 'nitro/h3';
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
@@ -33,12 +34,10 @@ function errorMessage(error: unknown): string {
 
 function uploadAndCleanupError(uploadError: unknown, cleanupError: unknown): AggregateError {
   return new AggregateError(
-    [uploadError, cleanupError],
-    `Video upload failed: ${errorMessage(uploadError)}; R2 cleanup failed: ${errorMessage(cleanupError)}`,
-  )
+    [uploadError, cleanupError], `Video upload failed: ${errorMessage(uploadError)}; R2 cleanup failed: ${errorMessage(cleanupError)}`, )
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   try {
     const siteId = getRouterParam(event, 'siteId')
     if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
@@ -52,10 +51,7 @@ export default defineEventHandler(async (event) => {
     if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
     const site = await queryFirst<{ organization_id: string }>(
-      db,
-      `SELECT organization_id FROM sites WHERE id = ? LIMIT 1`,
-      [siteId],
-    )
+      db, `SELECT organization_id FROM sites WHERE id = ? LIMIT 1`, [siteId], )
     if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
     const membership = await queryFirst<{ userId: string; member_id: string; member_role: string }>(db, `
@@ -80,12 +76,7 @@ export default defineEventHandler(async (event) => {
     }
 
     await assertResourceAccess(db, {
-      memberId: membership.member_id,
-      role: membership.member_role,
-      organizationId: site.organization_id,
-      siteId,
-      resourceLocationId: locationId,
-    })
+      memberId: membership.member_id, role: membership.member_role, organizationId: site.organization_id, siteId, resourceLocationId: locationId, })
 
     const rawCategory = queryValue(query.category)
     let category: MediaCategory | null = null
@@ -94,7 +85,7 @@ export default defineEventHandler(async (event) => {
       category = rawCategory as MediaCategory
     }
 
-    const contentLengthHeader = getHeader(event, 'content-length')
+    const contentLengthHeader = (event.req.headers.get('content-length'))
     if (!contentLengthHeader) {
       return jsonResponse({ error: 'Content-Length header required' }, { status: 411 })
     }
@@ -109,7 +100,7 @@ export default defineEventHandler(async (event) => {
       return jsonResponse({ error: 'File too large (max 50 MB)' }, { status: 413 })
     }
 
-    const declaredContentType = (getHeader(event, 'content-type') ?? '')
+    const declaredContentType = ((event.req.headers.get('content-type')) ?? '')
       .split(';', 1)[0]
       ?.toLowerCase()
       .trim() ?? ''
@@ -117,7 +108,7 @@ export default defineEventHandler(async (event) => {
       return jsonResponse({ error: `Unsupported file type: ${declaredContentType || 'unknown'}` }, { status: 415 })
     }
 
-    const body = getRequestWebStream(event)
+    const body = event.req.body
     if (!body) return jsonResponse({ error: 'Video body required' }, { status: 400 })
 
     const filename = sanitizeFilename(queryValue(query.filename) ?? undefined)
@@ -128,17 +119,15 @@ export default defineEventHandler(async (event) => {
 
     try {
       const uploadedObject = await env.MEDIA_BUCKET.put(r2Key, body, {
-        httpMetadata: { contentType: declaredContentType },
-      })
+        httpMetadata: { contentType: declaredContentType }, })
       stored = true
 
       if (uploadedObject.size !== contentLength) {
-        throw createError({ statusCode: 400, statusMessage: 'Content-Length did not match the uploaded video' })
+        throw new HTTPError({ statusCode: 400, statusMessage: 'Content-Length did not match the uploaded video' })
       }
 
       const signatureObject = await env.MEDIA_BUCKET.get(r2Key, {
-        range: { offset: 0, length: Math.min(SIGNATURE_BYTES, contentLength) },
-      })
+        range: { offset: 0, length: Math.min(SIGNATURE_BYTES, contentLength) }, })
       if (!signatureObject) {
         throw new Error('Uploaded video was not readable from R2')
       }
@@ -146,27 +135,11 @@ export default defineEventHandler(async (event) => {
       const signature = new Uint8Array(await signatureObject.arrayBuffer())
       const detectedContentType = sniffMediaMimeType(signature)
       if (detectedContentType !== declaredContentType) {
-        throw createError({ statusCode: 400, statusMessage: 'File type mismatch' })
+        throw new HTTPError({ statusCode: 400, statusMessage: 'File type mismatch' })
       }
 
       await createMediaAsset(db, {
-        id: assetId,
-        organization_id: site.organization_id,
-        site_id: siteId,
-        location_id: locationId,
-        kind: 'video',
-        provider: 'cloudflare_r2',
-        source: 'uploaded',
-        r2_key: r2Key,
-        public_url: publicUrl,
-        thumbnail_url: null,
-        mime_type: declaredContentType,
-        file_name: filename,
-        file_size: contentLength,
-        category,
-        status: 'active',
-        created_by_user_id: session.user.id,
-      })
+        id: assetId, organization_id: site.organization_id, site_id: siteId, location_id: locationId, kind: 'video', provider: 'cloudflare_r2', source: 'uploaded', r2_key: r2Key, public_url: publicUrl, thumbnail_url: null, mime_type: declaredContentType, file_name: filename, file_size: contentLength, category, status: 'active', created_by_user_id: session.user.id, })
     } catch (uploadError) {
       if (stored) {
         try {
@@ -179,21 +152,12 @@ export default defineEventHandler(async (event) => {
     }
 
     return jsonResponse({
-      id: assetId,
-      publicUrl,
-      thumbnailUrl: null,
-      kind: 'video',
-      status: 'active',
-    })
+      id: assetId, publicUrl, thumbnailUrl: null, kind: 'video', status: 'active', })
   } catch (error) {
     rethrowHttpError(error)
     const normalizedError = error instanceof Error ? error : new Error('Unknown media upload error')
     console.error('media_upload_failed', { error: normalizedError.message, stack: normalizedError.stack })
     return jsonResponse({
-      error: normalizedError instanceof AggregateError ? normalizedError.message : 'Failed to upload media',
-      message: normalizedError.message,
-    }, { status: 500 })
+      error: normalizedError instanceof AggregateError ? normalizedError.message : 'Failed to upload media', message: normalizedError.message, }, { status: 500 })
   }
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'

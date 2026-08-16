@@ -9,11 +9,11 @@
         :alt="title" fetchpriority="high" decoding="async"
         class="absolute inset-0 h-full w-full object-cover"
       />
-      <NuxtImg
+      <img
         v-else-if="image"
         :src="image" :alt="title"
         class="absolute inset-0 h-full w-full object-cover"
-        fetchpriority="high" preload format="webp"
+        fetchpriority="high" decoding="async"
       />
 
       <!-- Deferred video: not in SSR, opacity-0 until canplay -->

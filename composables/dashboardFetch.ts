@@ -1,12 +1,13 @@
 import type { FetchOptions } from 'ofetch'
+import { $fetch } from 'ofetch'
 
-type DashboardFetchOptions<T> = Omit<FetchOptions, 'method'> & {
+type DashboardFetchOptions<T> = Omit<FetchOptions<'json'>, 'method'> & {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   validate: Validator<T>
   coalesceKey?: string
 }
 
-type DashboardRequestOptions = Omit<FetchOptions, 'method'> & {
+type DashboardRequestOptions = Omit<FetchOptions<'json'>, 'method'> & {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 }
 
@@ -43,7 +44,7 @@ async function executeApiFetch<T>(
         retry: 0,
         timeout: fetchOptions.timeout ?? (method === 'GET' ? DASHBOARD_READ_TIMEOUT_MS : MUTATION_TIMEOUT_MS),
       }
-      const value = await $fetch<unknown, string, DashboardRequestOptions>(request, requestOptions)
+      const value = await $fetch<unknown>(request, requestOptions)
       if (!validate(value)) {
         throw new ApiClientError('API response did not match its contract', 502, 'INVALID_API_RESPONSE', null)
       }

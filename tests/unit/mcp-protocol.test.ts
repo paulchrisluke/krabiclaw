@@ -40,11 +40,7 @@ test('negotiatedMcpProtocolVersion falls back to the current server revision', (
 
 test('readMcpRequest defaults missing protocol version to the current server revision', () => {
   const event = {
-    node: {
-      req: {
-        headers: {},
-      },
-    },
+    req: new Request('http://localhost/api/mcp', { headers: {} }),
   } as unknown as Parameters<typeof readMcpRequest>[0]
   const request = readMcpRequest(event, {
     jsonrpc: '2.0',
@@ -63,11 +59,7 @@ test('readMcpRequest defaults missing protocol version to the current server rev
 
 test('readMcpRequest defaults notification requests without protocol metadata to the current server revision', () => {
   const event = {
-    node: {
-      req: {
-        headers: {},
-      },
-    },
+    req: new Request('http://localhost/api/mcp', { headers: {} }),
   } as unknown as Parameters<typeof readMcpRequest>[0]
   const request = readMcpRequest(event, {
     jsonrpc: '2.0',
@@ -81,13 +73,9 @@ test('readMcpRequest defaults notification requests without protocol metadata to
 
 test('readMcpRequest rejects an explicitly unsupported protocol version', () => {
   const event = {
-    node: {
-      req: {
-        headers: {
-          'mcp-protocol-version': '2026-07-28',
-        },
-      },
-    },
+    req: new Request('http://localhost/api/mcp', {
+      headers: { 'mcp-protocol-version': '2026-07-28' },
+    }),
   } as unknown as Parameters<typeof readMcpRequest>[0]
 
   assert.throws(

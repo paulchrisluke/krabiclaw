@@ -1,4 +1,5 @@
-import { definePlugin } from 'nitro'
+import { definePlugin } from 'nitro';
+import { useRuntimeConfig } from 'nitro/runtime-config'
 
 export default definePlugin(() => {
   const config = useRuntimeConfig()

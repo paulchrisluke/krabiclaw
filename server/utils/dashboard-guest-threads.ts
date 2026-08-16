@@ -1,4 +1,6 @@
-import type { H3Event } from 'h3'
+import { HTTPError } from 'nitro';
+
+import type { H3Event } from 'nitro'
 import { getGuestThreadDetail } from '~/server/domain/guest-threads/detail'
 import {
   getGuestThreadById,
@@ -67,7 +69,7 @@ export async function loadDashboardGuestThread(
   const { db, env, site } = await requireSiteAccess(event, siteId, 'context')
   const thread = await getGuestThreadById(db, threadId, siteId)
   if (!thread) {
-    throw createError({ statusCode: 404, statusMessage: 'Thread not found' })
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Thread not found' })
   }
   await assertMemberScope(db, {
     memberId: site.member_id,
@@ -79,7 +81,7 @@ export async function loadDashboardGuestThread(
 
   const detail = await getGuestThreadDetail(db, threadId, siteId, site.member_id)
   if (!detail) {
-    throw createError({ statusCode: 404, statusMessage: 'Thread not found' })
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Thread not found' })
   }
 
   try {

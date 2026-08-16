@@ -160,6 +160,7 @@
 </template>
 
 <script setup lang="ts">
+import { $fetch } from 'ofetch'
 definePageMeta({ layout: 'platform', auth: true })
 
 type Preview = {
@@ -173,15 +174,7 @@ type Preview = {
   text: string
 }
 
-const mode = ref<'preview' | 'logs'>('preview')
-const loading = ref(false)
-const loadingPreview = ref(false)
-const error = ref('')
-const previews = ref<Preview[]>([])
-const previewAudience = ref<'all' | 'owner' | 'guest'>('all')
-const previewChannel = ref<'all' | 'email' | 'whatsapp'>('all')
-const reviewPreset = ref<'owner-email' | 'guest-email' | 'owner-whatsapp' | 'guest-whatsapp' | 'all'>('owner-email')
-const rows = ref<Array<{
+type NotificationRow = {
   id: string
   organization_id: string | null
   site_id: string | null
@@ -196,7 +189,17 @@ const rows = ref<Array<{
   error: string | null
   sent_at: string | null
   created_at: string
-}>>([])
+}
+
+const mode = ref<'preview' | 'logs'>('preview')
+const loading = ref(false)
+const loadingPreview = ref(false)
+const error = ref('')
+const previews = ref<Preview[]>([])
+const previewAudience = ref<'all' | 'owner' | 'guest'>('all')
+const previewChannel = ref<'all' | 'email' | 'whatsapp'>('all')
+const reviewPreset = ref<'owner-email' | 'guest-email' | 'owner-whatsapp' | 'guest-whatsapp' | 'all'>('owner-email')
+const rows = ref<NotificationRow[]>([])
 
 const filters = ref({
   organizationId: 'org-demo',
@@ -342,11 +345,14 @@ const filteredPreviews = computed(() => {
   })
 })
 
-const { data: previewData, error: previewError, refresh: refreshPreviews, pending: pendingPreviews } = await useFetch<{ previews: Preview[] }>('/api/dev/notifications-preview', {
-  default: () => ({ previews: [] }),
-  server: true,
-  lazy: false,
-})
+const { data: previewData, error: previewError, refresh: refreshPreviews, pending: pendingPreviews } = await useAsyncData(
+  'notification-copy-previews',
+  () => $fetch<{ previews: Preview[] }>('/api/dev/notifications-preview'),
+  {
+    default: () => ({ previews: [] }),
+    server: false,
+  },
+)
 
 watchEffect(() => {
   loadingPreview.value = pendingPreviews.value
@@ -375,7 +381,7 @@ async function load() {
     if (filters.value.template.trim()) query.template = filters.value.template.trim()
     if (filters.value.since.trim()) query.since = filters.value.since.trim()
 
-    const res = await $fetch<{ notifications: typeof rows.value }>('/api/dev/notifications', { query })
+    const res = await $fetch('/api/dev/notifications', { query }) as { notifications: NotificationRow[] }
     rows.value = res.notifications || []
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load notifications'

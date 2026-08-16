@@ -6,7 +6,7 @@ import { assertResourceAccess } from '~/server/utils/member-access'
 import { getGuestThreadBySubmission, updateThreadProjection } from '~/server/domain/guest-threads/repository'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const submissionId = getRouterParam(event, 'submissionId')
   if (!siteId || !submissionId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
@@ -29,12 +29,7 @@ export default defineEventHandler(async (event) => {
   if (!submission) return jsonResponse({ error: 'Reservation not found or access denied' }, { status: 404 })
 
   await assertResourceAccess(db, {
-    memberId: submission.member_id,
-    role: submission.member_role,
-    organizationId: submission.organization_id,
-    siteId,
-    resourceLocationId: submission.location_id,
-  })
+    memberId: submission.member_id, role: submission.member_role, organizationId: submission.organization_id, siteId, resourceLocationId: submission.location_id, })
 
   const completed = await markBookingCompleted(db, 'reservation', submissionId, 'manual')
   if (!completed) return jsonResponse({ error: 'Reservation could not be completed' }, { status: 400 })
@@ -46,5 +41,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ completed: true, submission_id: submissionId })
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

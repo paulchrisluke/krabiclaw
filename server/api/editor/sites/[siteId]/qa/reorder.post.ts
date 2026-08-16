@@ -2,7 +2,7 @@ import { jsonResponse } from '~/server/utils/api-response'
 import { reorderQa } from '~/server/utils/location-qa'
 import { requireSiteAccess } from '~/server/utils/location-access'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
   const { db, site } = await requireSiteAccess(event, siteId)
@@ -13,16 +13,11 @@ export default defineEventHandler(async (event) => {
     : []
   try {
     return jsonResponse(await reorderQa(db, {
-      organizationId: site.organization_id,
-      siteId,
-      locationId: null,
-      pagePath,
-    }, updates))
+      organizationId: site.organization_id, siteId, locationId: null, pagePath, }, updates))
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Q&A reorder failed'
     return jsonResponse({ error: message }, { status: message.includes('scope') ? 404 : 400 })
   }
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam, readBody  } from 'nitro/h3';

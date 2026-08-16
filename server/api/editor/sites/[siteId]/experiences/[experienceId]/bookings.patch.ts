@@ -1,4 +1,4 @@
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { cloudflareEnv, jsonResponse, readRequiredBody } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { updateBookingStatus } from '~/server/utils/experiences'
 import { assertResourceAccess } from '~/server/utils/member-access'
@@ -6,7 +6,7 @@ import { queryFirst } from '~/server/db'
 import { getGuestThreadBySubmission, updateThreadProjection } from '~/server/domain/guest-threads/repository'
 import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const experienceId = getRouterParam(event, 'experienceId')
   if (!siteId || !experienceId) return jsonResponse({ error: 'siteId and experienceId required' }, { status: 400 })
@@ -19,12 +19,9 @@ export default defineEventHandler(async (event) => {
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
   const site = await queryFirst<{ id: string; organization_id: string; member_id: string; member_role: string }>(
-    db,
-    `SELECT s.id, s.organization_id, m.id AS member_id, m.role AS member_role FROM sites s
+    db, `SELECT s.id, s.organization_id, m.id AS member_id, m.role AS member_role FROM sites s
        JOIN member m ON m.organizationId = s.organization_id
-       WHERE s.id = ? AND m.userId = ? LIMIT 1`,
-    [siteId, session.user.id],
-  )
+       WHERE s.id = ? AND m.userId = ? LIMIT 1`, [siteId, session.user.id], )
 
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
@@ -32,15 +29,10 @@ export default defineEventHandler(async (event) => {
   if (!experience) return jsonResponse({ error: 'Experience not found' }, { status: 404 })
 
   await assertResourceAccess(db, {
-    memberId: site.member_id,
-    role: site.member_role,
-    organizationId: site.organization_id,
-    siteId,
-    resourceLocationId: experience.location_id,
-  })
+    memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: experience.location_id, })
 
   let body: { booking_id?: string; status?: string }
-  try { body = await readBody(event) } catch { return jsonResponse({ error: 'Invalid body' }, { status: 400 }) }
+  try { body = await readRequiredBody<{ booking_id?: string; status?: string }>(event) } catch { return jsonResponse({ error: 'Invalid body' }, { status: 400 }) }
   if (!body.booking_id || !['pending', 'confirmed', 'cancelled'].includes(body.status ?? '')) {
     return jsonResponse({ error: 'booking_id and valid status required' }, { status: 400 })
   }
@@ -54,6 +46,5 @@ export default defineEventHandler(async (event) => {
   }
   return jsonResponse({ updated: true })
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam  } from 'nitro/h3';

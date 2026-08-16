@@ -50,12 +50,13 @@
           >
             <UCard :ui="{ body: 'p-0 sm:p-0' }" class="bg-transparent shadow-none ring-0">
               <div class="relative aspect-[4/3] overflow-hidden rounded-2xl border border-default bg-elevated shadow-sm transition group-hover:-translate-y-0.5 group-hover:shadow-lg">
-                <NuxtImg
+                <img
                   v-if="site.preview_image_url"
                   :src="site.preview_image_url"
                   :alt="`${site.brand_name ?? site.subdomain ?? site.id} preview`"
                   class="size-full object-cover transition duration-300 group-hover:scale-[1.02]"
                   loading="lazy"
+                  decoding="async"
                 />
                 <div v-else class="flex size-full items-center justify-center bg-muted">
                   <span class="text-6xl font-semibold text-dimmed">{{ siteInitial(site) }}</span>

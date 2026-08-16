@@ -1,4 +1,5 @@
 import type { FetchOptions } from 'ofetch'
+import { $fetch } from 'ofetch'
 
 export const PUBLIC_READ_TIMEOUT_MS = 6_000
 export const DASHBOARD_READ_TIMEOUT_MS = 8_000
@@ -38,7 +39,7 @@ export class ApiClientError extends Error {
 
 export type Validator<T> = (value: unknown) => value is T
 type ApiMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
-type ApiRequestOptions = Omit<FetchOptions, 'method'> & { method?: ApiMethod }
+type ApiRequestOptions = Omit<FetchOptions<'json'>, 'method'> & { method?: ApiMethod }
 
 const inFlightReads = new Map<string, Promise<unknown>>()
 
@@ -115,7 +116,7 @@ async function request<T>(
         retry: 0,
         timeout: options.timeout,
       }
-      const value = await $fetch<unknown, string, ApiRequestOptions>(url, requestOptions)
+      const value = await $fetch<unknown>(url, requestOptions)
       if (!options.validate(value)) {
         throw new ApiClientError('API response did not match its contract', 502, 'INVALID_API_RESPONSE', null)
       }

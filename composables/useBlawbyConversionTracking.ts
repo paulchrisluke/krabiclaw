@@ -2,6 +2,7 @@ import type { PublicConsultationSettings } from '~/types/blawby'
 import type { SiteConversionEventName } from '~/utils/site-conversion-events'
 import type { MaybeRefOrGetter } from 'vue'
 import { toValue } from 'vue'
+import { $fetch } from 'ofetch'
 
 declare global {
   interface Window {
@@ -34,7 +35,7 @@ function sendNativeConversion(siteId: string, payload: BlawbyConversionPayload) 
     const blob = new Blob([body], { type: 'application/json' })
     if (navigator.sendBeacon(endpoint, blob)) return
   }
-  void $fetch<void, string, { method: 'POST'; body: BlawbyConversionPayload }>(endpoint, { method: 'POST', body: payload }).catch(() => {})
+  void $fetch(endpoint, { method: 'POST', body: payload }).catch(() => {})
 }
 
 function loadGtmOnInteraction(containerId: string) {

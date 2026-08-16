@@ -117,7 +117,14 @@ export async function seedNewSite(
   }> = []
   for (const [page, definition] of templatePages) {
     const rows = pageRows.get(page) ?? [];
-    const blocks: Array<{ id: string; type: string; position: number; data: Record<string, unknown> }> = [];
+    const blocks: Array<{ id: string; type: string; position: number; data: Record<string, unknown> }> = [
+      {
+        id: uid('block'),
+        type: 'hero',
+        position: 0,
+        data: { title: null, subtitle: null },
+      },
+    ];
     for (const [field, content, type] of rows.map(row => [row[1], row[2], row[3]] as const)) {
       if (field === 'hero.title' || field === 'hero.subtitle') continue;
       blocks.push({

@@ -1,10 +1,10 @@
-import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { cleanString, cloudflareEnv, jsonResponse, readRequiredBody } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { executeBatch, queryFirst } from '~/server/db'
 import { deleteImage, hasCloudflareImagesConfig, requestImageUpload } from '~/server/utils/cloudflare-images'
 import { getReviewRequestByToken } from '~/server/utils/review-requests'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const requestId = getRouterParam(event, 'requestId')
   if (!requestId) return jsonResponse({ error: 'requestId required' }, { status: 400 })
 
@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
   const sessionUser = session?.user as ({ id?: string; isAnonymous?: boolean } | undefined)
   if (!sessionUser?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const body = await readBody<ApiRecord>(event)
+  const body = await readRequiredBody<ApiRecord>(event)
   const token = cleanString(body.token, 300)
   const kind = cleanString(body.kind, 20)
   const filename = cleanString(body.filename, 255)
@@ -51,55 +51,22 @@ export default defineEventHandler(async (event) => {
       {
         query: `
           INSERT INTO media_assets (
-            id, organization_id, site_id, location_id, kind, provider, source,
-            cloudflare_image_id, file_name, category, status, created_by_user_id,
-            created_at, updated_at
+            id, organization_id, site_id, location_id, kind, provider, source, cloudflare_image_id, file_name, category, status, created_by_user_id, created_at, updated_at
           ) VALUES (?, ?, ?, ?, 'image', 'cloudflare_images', 'uploaded', ?, ?, 'other', 'pending', ?, ?, ?)
-        `,
-        params: [
-          assetId,
-          result.context.organization_id,
-          result.context.site_id,
-          result.context.location_id,
-          imageId,
-          filename,
-          sessionUser.id,
-          now,
-          now,
-        ],
-      },
-      {
+        `, params: [
+          assetId, result.context.organization_id, result.context.site_id, result.context.location_id, imageId, filename, sessionUser.id, now, now, ], }, {
         query: `
           INSERT INTO review_media (
             id, review_request_id, customer_id, media_asset_id, kind, sort_order, status, created_at, updated_at
           ) VALUES (?, ?, ?, ?, 'image', ?, 'pending', ?, ?)
-        `,
-        params: [
-          mediaLinkId,
-          requestId,
-          result.request.customer_id,
-          assetId,
-          Number(existingCount?.count ?? 0),
-          now,
-          now,
-        ],
-      },
-      {
+        `, params: [
+          mediaLinkId, requestId, result.request.customer_id, assetId, Number(existingCount?.count ?? 0), now, now, ], }, {
         query: `
           UPDATE review_requests
-          SET user_id = COALESCE(user_id, ?),
-              anonymous_user_id = COALESCE(anonymous_user_id, ?),
-              updated_at = ?
+          SET user_id = COALESCE(user_id, ?), anonymous_user_id = COALESCE(anonymous_user_id, ?), updated_at = ?
           WHERE id = ?
-        `,
-        params: [
-          sessionUser.isAnonymous ? null : sessionUser.id,
-          sessionUser.isAnonymous ? sessionUser.id : null,
-          now,
-          requestId,
-        ],
-      },
-    ])
+        `, params: [
+          sessionUser.isAnonymous ? null : sessionUser.id, sessionUser.isAnonymous ? sessionUser.id : null, now, requestId, ], }, ])
 
     return jsonResponse({ assetId, mediaId: mediaLinkId, uploadUrl: upload.uploadUrl, imageId })
   } catch (error) {
@@ -108,14 +75,12 @@ export default defineEventHandler(async (event) => {
         await deleteImage(env, imageId)
       } catch (cleanupError) {
         throw new AggregateError(
-          [error, cleanupError],
-          `Review image upload setup failed: ${error instanceof Error ? error.message : String(error)}; Cloudflare Images cleanup failed: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
-        )
+          [error, cleanupError], `Review image upload setup failed: ${error instanceof Error ? error.message : String(error)}; Cloudflare Images cleanup failed: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`, )
       }
     }
     throw error
   }
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';
+import { readBody } from 'nitro/h3';

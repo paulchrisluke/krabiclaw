@@ -2,14 +2,13 @@
 import { cloudflareEnv, jsonResponse } from '../utils/api-response'
 import { execute } from '~/server/db'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
 
   if (!db) {
     return jsonResponse({
-      status: 'error',
-      reason: 'Database binding missing'
+      status: 'error', reason: 'Database binding missing'
     }, { status: 500 })
   }
 
@@ -22,9 +21,8 @@ export default defineEventHandler(async (event) => {
   } catch (err) {
     console.error('Health check database query failed:', err)
     return jsonResponse({
-      status: 'error',
-      reason: err instanceof Error ? err.message : String(err)
+      status: 'error', reason: err instanceof Error ? err.message : String(err)
     }, { status: 500 })
   }
 })
-import { defineEventHandler } from 'h3'
+import { defineHandler } from 'nitro';

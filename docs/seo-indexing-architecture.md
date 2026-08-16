@@ -49,7 +49,7 @@ The same classifications are consumed by runtime middleware, sitemap generation,
 
 ## Sitemap contract
 
-`@nuxtjs/sitemap` serves the canonical `/sitemap.xml` endpoint. Its configuration in `nuxt.config.ts` sets `excludeAppSources: true`, disabling every automatic page, route-rule, prerender, i18n, and content source.
+`@nuxtjs/sitemap` serves the canonical `/sitemap.xml` endpoint. Its configuration in `nuxt.config.ts` sets `excludeAppSources: true`, disabling every automatic page, route-rule, prerender, and content source.
 
 `server/plugins/sitemap.ts` owns the complete URL inventory through the module's `sitemap:input` Nitro hook. The hook runs on the original sitemap request event, preserving the resolved host, tenant context, and Cloudflare database bindings. Runtime endpoint sources are cleared in `sitemap:sources`; synthetic self-fetch endpoints are not used.
 

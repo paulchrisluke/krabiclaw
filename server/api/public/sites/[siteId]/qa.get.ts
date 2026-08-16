@@ -2,7 +2,7 @@ import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { listPageQa, listQa } from '~/server/utils/location-qa'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
   const db = cloudflareEnv(event).db
@@ -12,6 +12,6 @@ export default defineEventHandler(async (event) => {
   const pagePath = typeof getQuery(event).page_path === 'string' ? String(getQuery(event).page_path) : null
   return jsonResponse({ qa: pagePath ? await listPageQa(db, siteId, pagePath, true) : await listQa(db, siteId, null, true) })
 })
-import { defineEventHandler } from 'h3'
-import { getQuery } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getQuery } from 'nitro/h3';
+import { getRouterParam } from 'nitro/h3';

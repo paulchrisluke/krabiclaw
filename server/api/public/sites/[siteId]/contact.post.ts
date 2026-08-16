@@ -9,7 +9,7 @@ import { ensureGuestThread } from '~/server/domain/guest-threads/repository'
 
 const VALID_SUBJECTS = ['general', 'press', 'partnerships', 'catering', 'careers']
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
 
@@ -38,10 +38,7 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Please choose a valid subject.' }, { status: 400 })
 
   const site = await queryFirst<{ id: string; organization_id: string; brand_name?: string | null; vertical?: string | null; theme_id?: string | null }>(
-    db,
-    'SELECT id, organization_id, brand_name, vertical, theme_id FROM sites WHERE id = ? AND status = ? LIMIT 1',
-    [siteId, 'active'],
-  )
+    db, 'SELECT id, organization_id, brand_name, vertical, theme_id FROM sites WHERE id = ? AND status = ? LIMIT 1', [siteId, 'active'], )
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
   const requiresConsent = site.theme_id === 'blawby-theme-v1' || site.vertical === 'professional_service' || site.vertical === 'service'
   const consentAcknowledged = body.consent === true
@@ -50,10 +47,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const assignment = await resolveContactSubmissionAssignment(db, {
-    siteId,
-    locationId: locationIdInput || null,
-    experienceId: experienceIdInput || null,
-  })
+    siteId, locationId: locationIdInput || null, experienceId: experienceIdInput || null, })
   if (assignment.error) return jsonResponse({ error: assignment.error }, { status: 400 })
   const { assignedLocationId, experience } = assignment
 
@@ -62,7 +56,7 @@ export default defineEventHandler(async (event) => {
   const ipHash = await hashClientIp(clientIp)
 
   // Rate limiting (skipped in dev so local work and E2E can submit repeatedly)
-  const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
+  const e2eOverride = env.E2E_ALLOW_DEV_ROUTES === 'true'
   if (!import.meta.dev && !e2eOverride) {
     const hourWindow = Math.floor(Date.now() / 3_600_000)
     const today = new Date().toISOString().split('T')[0]
@@ -82,50 +76,23 @@ export default defineEventHandler(async (event) => {
   `, [id, site.organization_id, siteId, assignedLocationId, name, email, subject || null, message, consentAt, ipHash, experience?.id ?? null])
 
   await fireSiteEventSafe({
-    db,
-    organizationId: site.organization_id,
-    siteId,
-    eventType: 'contact.created',
-    entityType: 'contact_submission',
-    entityId: id,
-    locationId: assignedLocationId,
-    metadata: {
-      subject: subject || null,
-      location_id: assignedLocationId,
-    },
-  })
+    db, organizationId: site.organization_id, siteId, eventType: 'contact.created', entityType: 'contact_submission', entityId: id, locationId: assignedLocationId, metadata: {
+      subject: subject || null, location_id: assignedLocationId, }, })
 
   await ensureGuestThread(db, contactAdapter, id, { publishEnv: env })
 
   try {
     await notifyContactSubmitted(env, db, {
-      organizationId: site.organization_id,
-      siteId,
-      locationId: assignedLocationId,
-      siteName: site.brand_name,
-      contactId: id,
-      guestName: name,
-      email,
-      subject: subject || null,
-      message,
-      consentAcknowledged,
-      experienceId: experience?.id ?? null,
-      experienceTitle: experience?.title ?? null,
-    })
+      organizationId: site.organization_id, siteId, locationId: assignedLocationId, siteName: site.brand_name, contactId: id, guestName: name, email, subject: subject || null, message, consentAcknowledged, experienceId: experience?.id ?? null, experienceTitle: experience?.title ?? null, })
   } catch (error) {
     console.error('contact_notification_failed', {
-      organizationId: site.organization_id,
-      siteId,
-      contactId: id,
-      error: error instanceof Error ? error.message : String(error)
+      organizationId: site.organization_id, siteId, contactId: id, error: error instanceof Error ? error.message : String(error)
     })
   }
 
   return jsonResponse({
-    success: true,
-    message: 'Your message has been sent. We will be in touch soon.',
-  }, { status: 201 })
+    success: true, message: 'Your message has been sent. We will be in touch soon.', }, { status: 201 })
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';
+import { readBody } from 'nitro/h3';

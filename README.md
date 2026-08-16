@@ -50,8 +50,8 @@ submission paths send for real in production.
 yarn install
 ```
 
-Nuxt 5 requires Node.js 22.19.0 or newer. Use the exact version declared by
-the repository before installing dependencies.
+The repository uses Node.js 24.18.1. Use the exact version declared in
+`.nvmrc` before installing dependencies.
 
 ### 2. Environment
 

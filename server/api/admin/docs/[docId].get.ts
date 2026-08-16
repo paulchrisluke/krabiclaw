@@ -9,7 +9,7 @@ function auditLog(action: string, payload: ApiRecord) {
   console.info('[audit]', { action, timestamp: new Date().toISOString(), ...payload })
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const docId = getRouterParam(event, 'docId')
   if (!docId) return jsonResponse({ error: 'Doc ID required' }, { status: 400 })
 
@@ -23,8 +23,7 @@ export default defineEventHandler(async (event) => {
   const permissionDenied = await platformPermissionJsonResponse(event, env, { platform: ['content'] })
   if (permissionDenied) {
     auditLog('admin_read_denied', {
-      user: anonymizeId(session.user.email, env),
-      docId
+      user: anonymizeId(session.user.email, env), docId
     })
     return permissionDenied
   }
@@ -32,16 +31,13 @@ export default defineEventHandler(async (event) => {
   try {
     const doc = await getPlatformDoc(db, docId)
     auditLog('admin_read_doc', {
-      user: anonymizeId(session.user.email, env),
-      docId,
-      docSlug: doc.slug
+      user: anonymizeId(session.user.email, env), docId, docSlug: doc.slug
     })
     return jsonResponse({ doc })
   } catch (err) {
     if (typeof (err as { statusCode?: unknown })?.statusCode === 'number' && Number((err as { statusCode: number }).statusCode) === 404) {
       auditLog('admin_read_not_found', {
-        user: anonymizeId(session.user.email, env),
-        docId
+        user: anonymizeId(session.user.email, env), docId
       })
       return jsonResponse({ error: 'Doc not found' }, { status: 404 })
     }
@@ -49,5 +45,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to load doc' }, { status: 500 })
   }
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

@@ -19,6 +19,25 @@ mock.module('../../server/utils/mcp-auth.ts', {
   },
 })
 
+mock.module('nitro/h3', {
+  namedExports: {
+    getHeader: (event: { req: Request }, name: string) => event.req.headers.get(name),
+    readBody: async (event: unknown) => {
+      const reader = (globalThis as { readBody?: (_input: unknown) => Promise<unknown> }).readBody
+      if (reader) return reader(event)
+      const request = (event as { req: Request }).req
+      const text = await request.text()
+      return text ? JSON.parse(text) : undefined
+    },
+    setResponseHeader: (event: { _responseHeaders: Record<string, string> }, name: string, value: string) => {
+      event._responseHeaders[name.toLowerCase()] = value
+    },
+    setResponseStatus: (event: { node: { res: { statusCode: number } } }, status: number) => {
+      event.node.res.statusCode = status
+    },
+  },
+})
+
 const {
   dispatchStandardMcpMethod,
   resolveMissingMcpCredential,
@@ -30,6 +49,8 @@ const { mcpProtocolError, MCP_ERROR, readMcpRequest } = await import('../../serv
 function fakeEvent(headers: Record<string, string> = {}) {
   const responseHeaders: Record<string, string> = {}
   return {
+    req: new Request('http://localhost/api/mcp', { headers }),
+    runtime: { cloudflare: { env: {} } },
     node: {
       req: { headers },
       res: {

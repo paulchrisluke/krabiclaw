@@ -6,10 +6,10 @@ import { getClientIp, hashClientIp, incrementHourlyRateLimit } from '~/server/ut
 const IP_HOURLY_LIMIT = 20
 const BOOKING_HOURLY_LIMIT = 5
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const bookingId = getRouterParam(event, 'bookingId')
-  const token = readBearerToken(getHeader(event, 'authorization'))
+  const token = readBearerToken((event.req.headers.get('authorization')))
 
   if (!siteId || !bookingId || !token) {
     return jsonResponse({ error: 'Missing required parameters' }, { status: 400 })
@@ -33,10 +33,8 @@ export default defineEventHandler(async (event) => {
 
   const tokenHash = await hashReservationCancelToken(token)
   const booking = await queryFirst(
-    db,
-    `
-    SELECT eb.guest_name AS name, eb.booking_date AS date, eb.time_slot AS time, eb.party_size AS guests,
-      eb.status, eb.location_id, e.title AS experience_title
+    db, `
+    SELECT eb.guest_name AS name, eb.booking_date AS date, eb.time_slot AS time, eb.party_size AS guests, eb.status, eb.location_id, e.title AS experience_title
     FROM experience_bookings eb
     JOIN experiences e ON e.id = eb.experience_id
     WHERE eb.id = ?
@@ -45,19 +43,16 @@ export default defineEventHandler(async (event) => {
       AND eb.cancellation_token_used_at IS NULL
       AND eb.cancellation_token_expires_at > ?
     LIMIT 1
-  `,
-    [bookingId, siteId, tokenHash, new Date().toISOString()],
-  )
+  `, [bookingId, siteId, tokenHash, new Date().toISOString()], )
 
   if (!booking) {
     return jsonResponse({ error: 'Booking not found' }, { status: 404 })
   }
 
   return jsonResponse({
-    success: true,
-    booking
+    success: true, booking
   })
 })
-import { defineEventHandler } from 'h3'
-import { getHeader } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getHeader } from 'nitro/h3';
+import { getRouterParam } from 'nitro/h3';

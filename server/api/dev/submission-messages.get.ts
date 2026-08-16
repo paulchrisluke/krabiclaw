@@ -1,3 +1,5 @@
+import { HTTPError, defineHandler  } from 'nitro';
+
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { queryAll } from '~/server/db'
 
@@ -16,22 +18,22 @@ function timingSafeEqualText(a: string, b: string): boolean {
   return diff === 0
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
+  const env = cloudflareEnv(event)
   const devMode = import.meta.dev
-  const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
+  const e2eOverride = env.E2E_ALLOW_DEV_ROUTES === 'true'
   if (!devMode && !e2eOverride) {
-    throw createError({ statusCode: 404, statusMessage: 'Not found' })
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Not found' })
   }
 
   if (!devMode && e2eOverride) {
-    const expected = process.env.E2E_DEV_ROUTE_SECRET || ''
-    const provided = getHeader(event, 'x-dev-route-secret') || ''
+    const expected = env.E2E_DEV_ROUTE_SECRET || ''
+    const provided = (event.req.headers.get('x-dev-route-secret')) || ''
     if (!expected || !provided || !timingSafeEqualText(provided, expected)) {
-      throw createError({ statusCode: 404, statusMessage: 'Not found' })
+      throw new HTTPError({ statusCode: 404, statusMessage: 'Not found' })
     }
   }
 
-  const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
@@ -48,8 +50,7 @@ export default defineEventHandler(async (event) => {
   // guest_threads so specs that only know the source submission type/id (not the
   // thread id) can still filter, the same way the old submission_messages table did.
   let sql = `
-    SELECT e.id, gt.submission_type, gt.submission_id, e.organization_id, e.site_id,
-           e.actor_kind, e.channel, e.body, e.actor_user_id, e.external_id, e.occurred_at, e.created_at
+    SELECT e.id, gt.submission_type, gt.submission_id, e.organization_id, e.site_id, e.actor_kind, e.channel, e.body, e.actor_user_id, e.external_id, e.occurred_at, e.created_at
     FROM guest_thread_entries e
     JOIN guest_threads gt ON gt.id = e.thread_id
     WHERE e.kind = 'message'
@@ -73,11 +74,7 @@ export default defineEventHandler(async (event) => {
 
   const rows = await queryAll<{ actor_kind: string }>(db, sql, binds)
   const messages = (rows ?? []).map(row => ({
-    ...row,
-    direction: row.actor_kind === 'guest' ? 'in' : 'out',
-  }))
+    ...row, direction: row.actor_kind === 'guest' ? 'in' : 'out', }))
   return jsonResponse({ messages })
 })
-import { defineEventHandler } from 'h3'
-import { getHeader } from 'h3'
-import { getQuery } from 'h3'
+import {  getQuery  } from 'nitro/h3';

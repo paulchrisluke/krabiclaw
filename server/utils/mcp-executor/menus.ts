@@ -80,7 +80,7 @@ export async function handleMenusTools(ctx: McpExecutorContext): Promise<unknown
           site.db,
           site.organizationId,
           site.siteId,
-          optionalString(args, "location_id") ?? undefined,
+          optionalString(args, "location_id"),
         ),
       };
     case "get_menu":

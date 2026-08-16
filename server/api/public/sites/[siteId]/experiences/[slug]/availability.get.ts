@@ -5,7 +5,7 @@ import { queryFirst } from '~/server/db'
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const MAX_DAYS = PUBLIC_BOOKING_WINDOW_DAYS
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const slug = getRouterParam(event, 'slug')
   if (!siteId || !slug) return jsonResponse({ error: 'siteId and slug required' }, { status: 400 })
@@ -50,6 +50,6 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ timezone, dates })
 })
-import { defineEventHandler } from 'h3'
-import { getQuery } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getQuery } from 'nitro/h3';
+import { getRouterParam } from 'nitro/h3';

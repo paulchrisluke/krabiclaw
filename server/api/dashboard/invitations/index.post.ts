@@ -7,7 +7,7 @@ import { notifyOrganizationInvited } from '~/server/utils/notifications'
 
 const ALLOWED_INVITATION_ROLES = new Set(['member', 'admin', 'editor', 'owner'])
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const { env, db, session, organization } = await getDashboardContext(event, { requireSite: false })
   if (!isOrganizationWideRole(organization.role)) {
     return jsonResponse({ error: 'Only owners and admins can invite organization members' }, { status: 403 })
@@ -80,14 +80,10 @@ export default defineEventHandler(async (event) => {
   const expiresAt = nowSeconds + 48 * 60 * 60
   const statements: BatchQuery[] = existing
     ? [{
-        query: `UPDATE invitation SET expiresAt = ? WHERE id = ? AND status = 'pending'`,
-        params: [expiresAt, invitationId],
-      }]
+        query: `UPDATE invitation SET expiresAt = ? WHERE id = ? AND status = 'pending'`, params: [expiresAt, invitationId], }]
     : [{
         query: `INSERT INTO invitation (id, organizationId, email, role, status, expiresAt, inviterId, createdAt)
-                VALUES (?, ?, ?, ?, 'pending', ?, ?, ?)`,
-        params: [invitationId, organization.id, email, role, expiresAt, session.user.id, nowSeconds],
-      }]
+                VALUES (?, ?, ?, ?, 'pending', ?, ?, ?)`, params: [invitationId, organization.id, email, role, expiresAt, session.user.id, nowSeconds], }]
 
   if (role === 'editor') {
     const existingScopes = existing
@@ -100,9 +96,7 @@ export default defineEventHandler(async (event) => {
       statements.push({
         query: `INSERT INTO invitation_access_scope
                   (id, invitation_id, organization_id, site_id, location_id, grant_source, created_at)
-                VALUES (?, ?, ?, ?, ?, 'manual', ?)`,
-        params: [crypto.randomUUID(), invitationId, organization.id, siteId, locationId, new Date().toISOString()],
-      })
+                VALUES (?, ?, ?, ?, ?, 'manual', ?)`, params: [crypto.randomUUID(), invitationId, organization.id, siteId, locationId, new Date().toISOString()], })
     }
   }
 
@@ -113,9 +107,7 @@ export default defineEventHandler(async (event) => {
     await executeBatch(db, statements)
   } catch (error) {
     console.error('dashboard_invitation_create_failed', {
-      organizationId: organization.id,
-      error: error instanceof Error ? error.message : String(error),
-    })
+      organizationId: organization.id, error: error instanceof Error ? error.message : String(error), })
     return jsonResponse({ error: 'Failed to create the invitation' }, { status: 500 })
   }
 
@@ -128,15 +120,7 @@ export default defineEventHandler(async (event) => {
 
   if (!existing && eventSiteId) {
     await fireSiteEventSafe({
-      db,
-      organizationId: organization.id,
-      siteId: eventSiteId,
-      actorId: session.user.id,
-      eventType: 'member.invited',
-      entityType: 'invitation',
-      entityId: invitationId,
-      metadata: { role },
-    })
+      db, organizationId: organization.id, siteId: eventSiteId, actorId: session.user.id, eventType: 'member.invited', entityType: 'invitation', entityId: invitationId, metadata: { role }, })
   }
 
   // Not wrapped in the batch above: this is a Resend network call, not a D1
@@ -146,22 +130,13 @@ export default defineEventHandler(async (event) => {
   // won't have gotten an email and can be resent one.
   if (eventSiteId) {
     await notifyOrganizationInvited(env, db, {
-      organizationId: organization.id,
-      siteId: eventSiteId,
-      invitationId,
-      email,
-      role,
-      organizationName: organization.name,
-      inviterName: session.user.name || session.user.email,
-    }).catch((error) => {
+      organizationId: organization.id, siteId: eventSiteId, invitationId, email, role, organizationName: organization.name, inviterName: session.user.name || session.user.email, }).catch((error) => {
       console.error('dashboard_invitation_email_failed', {
-        invitationId,
-        error: error instanceof Error ? error.message : String(error),
-      })
+        invitationId, error: error instanceof Error ? error.message : String(error), })
     })
   }
 
   return jsonResponse({ success: true, invitationId, reused: Boolean(existing) })
 })
-import { defineEventHandler } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { readBody } from 'nitro/h3';

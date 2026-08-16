@@ -85,6 +85,7 @@ mock.module('../../server/utils/domains.ts', {
     deleteCustomDomain: async () => {
       deleteDomainCalls += 1
     },
+    platformDomain: () => 'krabiclaw.com',
   },
 })
 

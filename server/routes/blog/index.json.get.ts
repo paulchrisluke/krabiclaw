@@ -1,14 +1,8 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import {
-  buildBlogIndexJson,
-  buildTenantBlogLinkEntries,
-  buildPlatformBlogLinkEntries,
-  listPublishedTenantBlogPostsForLlm,
-  listPublishedPlatformBlogPostsForLlm,
-  resolvePublicOrigin,
-} from '~/server/utils/platform-llm'
+  buildBlogIndexJson, buildTenantBlogLinkEntries, buildPlatformBlogLinkEntries, listPublishedTenantBlogPostsForLlm, listPublishedPlatformBlogPostsForLlm, resolvePublicOrigin, } from '~/server/utils/platform-llm'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.db
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -24,4 +18,4 @@ export default defineEventHandler(async (event) => {
     : buildPlatformBlogLinkEntries(posts ?? [], origin)
   return jsonResponse(buildBlogIndexJson(entries))
 })
-import { defineEventHandler } from 'h3'
+import { defineHandler } from 'nitro';

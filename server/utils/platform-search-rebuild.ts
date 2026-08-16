@@ -1,4 +1,4 @@
-import type { H3Event } from 'h3'
+import type { H3Event } from 'nitro'
 import { createDb, type DbClient } from '~/server/db'
 import type { CloudflareEnv } from '~/server/utils/auth'
 import { rebuildPlatformKnowledgeIndex } from '~/server/utils/public-search'
@@ -34,7 +34,7 @@ export function schedulePlatformKnowledgeIndexRebuild(
   const guarded = run.catch((error) => {
     console.error(`Failed to rebuild platform knowledge index after ${context}:`, error)
   })
-  const executionContext = event.context.cloudflare?.context
+  const executionContext = event.runtime?.cloudflare?.context
   if (executionContext) {
     executionContext.waitUntil(guarded)
   } else {

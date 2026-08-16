@@ -40,7 +40,7 @@ export async function handleSitesTools(ctx: McpExecutorContext): Promise<unknown
         unknown
       >;
       delete updates.logo_asset_id;
-      const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true';
+      const e2eOverride = site.env.E2E_ALLOW_DEV_ROUTES === 'true';
       const result = await updateSiteSettingsFields(
         site.db,
         site.env,

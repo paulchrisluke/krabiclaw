@@ -104,15 +104,12 @@ async function submitContact() {
       validate: (value): value is { success: true } => isRecord(value) && value.success === true,
     })
     trackContactSubmit()
-    try {
-      setContactConfirmation({
-        siteId,
-        siteName: identity.value.brand_name,
-        guestName: form.name,
-        subject: form.subject,
-      })
-    } catch {
-    }
+    setContactConfirmation({
+      siteId,
+      siteName: identity.value.brand_name,
+      guestName: form.name,
+      subject: form.subject,
+    })
     await navigateTo('/contact/confirmed')
   } catch (error) {
     const fetchError = error as { data?: { error?: string; message?: string; statusMessage?: string } }

@@ -2,7 +2,7 @@ import { jsonResponse } from '~/server/utils/api-response'
 import { requireSiteAccess } from '~/server/utils/location-access'
 import { defaultLinksPage, getLinksPage } from '~/server/utils/site-links'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
 
@@ -11,12 +11,7 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({
     page: result.page ?? defaultLinksPage({
-      organizationId: site.organization_id,
-      siteId,
-      brandName: site.brand_name,
-    }),
-    items: result.items,
-  })
+      organizationId: site.organization_id, siteId, brandName: site.brand_name, }), items: result.items, })
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

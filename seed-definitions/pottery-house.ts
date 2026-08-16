@@ -37,6 +37,7 @@ export const potteryHouseFixture: CuratedSiteDefinition = {
     primaryLocationId: 'loc-pottery-house',
     contactEmail: null,
     contactPhone: '+66817794877',
+    publicUrl: 'https://www.potteryhousekrabi.com',
     defaultCurrency: 'THB',
     vertical: 'experience',
     contentSource: 'google_maps',
@@ -914,7 +915,7 @@ export function renderCompiledPotteryHouseCoreSeedBlock(): string {
 -- Pottery House Krabi core generated from the curated fixture contract.
 INSERT OR REPLACE INTO sites (
   id, organization_id, theme_id, theme, slug, subdomain,
-  brand_name, brand_description,
+  public_url, brand_name, brand_description,
   status, plan, onboarding_status, primary_location_id,
   contact_email, contact_phone, default_currency, vertical, content_source, media_source,
   logo_asset_id, og_image_asset_id
@@ -925,6 +926,7 @@ INSERT OR REPLACE INTO sites (
   ${sqlValue(site.theme)},
   ${sqlValue(site.slug)},
   ${sqlValue(site.subdomain)},
+  ${sqlValue(site.publicUrl)},
   ${sqlValue(site.brandName)},
   ${sqlValue(site.brandDescription)},
   ${sqlValue(site.status)},
@@ -1066,7 +1068,7 @@ export function renderCompiledPotteryHouseExperiencesBlock(): string {
       sqlValue(experience.priceAmount),
       sqlValue(experience.durationMinutes),
       sqlValue(experience.maxCapacity),
-      sqlJson(experience.timeSlots.length > 0 ? experience.timeSlots : null),
+      experience.timeSlots.length > 0 ? sqlJson(experience.timeSlots) : 'NULL',
       'NULL',
       sqlValue(experience.availableNote),
       sqlValue(experience.status),

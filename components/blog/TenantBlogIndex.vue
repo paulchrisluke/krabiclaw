@@ -77,12 +77,16 @@ const props = withDefaults(defineProps<{
   perPage: 9,
 })
 
+const activeCategory = ref<string | null>(null)
+const currentPage = ref(1)
+
 // Featured post: an explicit featured_order wins (lower = more prominent,
 // same COALESCE(featured_order, 999999) convention the platform blog and the
 // backing queries already use), falling back to the most recently published
-// post when nothing is explicitly marked.
+// post when nothing is explicitly marked. Category filters show only matching
+// articles, so the featured card is hidden while a filter is active.
 const featuredPost = computed(() => {
-  if (!props.posts.length) return null
+  if (activeCategory.value !== null || !props.posts.length) return null
   return [...props.posts].sort((a, b) => {
     const orderA = a.featured_order ?? 999999
     const orderB = b.featured_order ?? 999999
@@ -92,9 +96,6 @@ const featuredPost = computed(() => {
     return dateB - dateA
   })[0]
 })
-
-const activeCategory = ref<string | null>(null)
-const currentPage = ref(1)
 
 const remainingPosts = computed(() => props.posts.filter(post => post.id !== featuredPost.value?.id))
 const postsRef = computed(() => remainingPosts.value)

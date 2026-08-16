@@ -2,14 +2,9 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { platformPermissionJsonResponse } from '~/server/utils/platform-admin-users'
 import { getAuthSession } from '~/server/utils/auth'
 import {
-  applyStripeDeadLetterRequeue,
-  assertStripeDeadLetterOperatorSession,
-  parseStripeDeadLetterRequeueRequest,
-  previewStripeDeadLetterRequeue,
-  StripeDeadLetterRequeueError,
-} from '~/server/utils/stripe-dead-letter-requeue'
+  applyStripeDeadLetterRequeue, assertStripeDeadLetterOperatorSession, parseStripeDeadLetterRequeueRequest, previewStripeDeadLetterRequeue, StripeDeadLetterRequeueError, } from '~/server/utils/stripe-dead-letter-requeue'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -27,19 +22,10 @@ export default defineEventHandler(async (event) => {
     }
     if (!request.expectedStateSha256 || !request.approvalToken) {
       throw new StripeDeadLetterRequeueError(
-        'invalid_request',
-        400,
-        'Apply requires expectedStateSha256 and approvalToken.',
-      )
+        'invalid_request', 400, 'Apply requires expectedStateSha256 and approvalToken.', )
     }
     const result = await applyStripeDeadLetterRequeue(
-      db,
-      env.BETTER_AUTH_SECRET,
-      request.input,
-      actor,
-      request.expectedStateSha256,
-      request.approvalToken,
-    )
+      db, env.BETTER_AUTH_SECRET, request.input, actor, request.expectedStateSha256, request.approvalToken, )
     return jsonResponse(result)
   } catch (error) {
     if (error instanceof StripeDeadLetterRequeueError) {
@@ -48,5 +34,5 @@ export default defineEventHandler(async (event) => {
     throw error
   }
 })
-import { defineEventHandler } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { readBody } from 'nitro/h3';

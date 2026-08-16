@@ -177,6 +177,7 @@ interface LinkItem { id: string; label: string; destination: string; status: str
 
 const dashboardApi = useDashboardApi()
 const dashboard = useDashboardSite()
+const requestEvent = useRequestEvent()
 if (!dashboard.state.value) await dashboard.refresh()
 const siteId = dashboard.siteId.value
 if (!siteId) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
@@ -195,9 +196,27 @@ const vertical = computed(() => {
 })
 const capabilities = computed(() => resolveCmsCapabilities(vertical.value, template.value, { site: parseCmsFeatureOverrideDelta(dashboard.site.value?.feature_overrides) }))
 
-const { data: home, pending } = await useAsyncData(`site-index-home-${siteId}`, () => dashboardApi<HomeResponse>('/api/dashboard/home', {
-  validate: (value): value is HomeResponse => isRecord(value) && Array.isArray(value.locations) && isRecord(value.operations),
-}))
+const { data: home, pending } = await useAsyncData(`site-index-home-${siteId}`, async (_nuxtApp, { signal }) => {
+  if (import.meta.server) {
+    if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+    const organization = dashboard.organization.value
+    if (!organization) throw createError({ statusCode: 403, statusMessage: 'Dashboard organization unavailable' })
+    const [{ cloudflareEnv }, { getDashboardHomeData }] = await Promise.all([
+      import('~/server/utils/api-response'),
+      import('~/server/utils/dashboard-home'),
+    ])
+    const db = cloudflareEnv(requestEvent).db
+    if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+    return await getDashboardHomeData(db, organization.id, siteId, {
+      memberId: organization.memberId,
+      role: organization.role,
+    })
+  }
+  return await dashboardApi<HomeResponse>('/api/dashboard/home', {
+    signal,
+    validate: (value): value is HomeResponse => isRecord(value) && Array.isArray(value.locations) && isRecord(value.operations),
+  })
+})
 const { data: supporting, pending: supportingPending, error } = await useAsyncData(`site-index-support-${siteId}`, async () => {
   const [settingsResponse, pagesResponse, mediaResponse, linksResponse] = await Promise.all([
     dashboardApi<{ settings: Settings }>('/api/dashboard/settings', { validate: (value): value is { settings: Settings } => isRecord(value) && isRecord(value.settings) }),

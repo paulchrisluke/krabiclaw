@@ -1,4 +1,6 @@
-import { createError, getHeaders, type H3Event } from 'h3'
+import { HTTPError } from 'nitro';
+import type { H3Event } from 'nitro';
+
 import type { UserWithRole } from 'better-auth/plugins/admin'
 import { jsonResponse } from '~/server/utils/api-response'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
@@ -47,7 +49,7 @@ export interface PlatformAdminUserList {
 }
 
 export function adminHeadersForEvent(event: H3Event): HeadersInit {
-  return getHeaders(event) as HeadersInit
+  return Object.fromEntries(event.req.headers.entries()) as HeadersInit
 }
 
 export function authAdminApi(env: CloudflareEnv): AdminApi {
@@ -136,7 +138,7 @@ function throwHttpError(error: unknown, fallbackMessage: string): never {
     })
   }
 
-  throw createError({
+  throw new HTTPError({
     statusCode,
     statusMessage: errorMessage(error, fallbackMessage),
   })
@@ -161,7 +163,7 @@ export async function requirePlatformPermission(
       headers,
     })
     if (!result.success) {
-      throw createError({ statusCode: 403, statusMessage: 'Platform admin access required' })
+      throw new HTTPError({ statusCode: 403, statusMessage: 'Platform admin access required' })
     }
   } catch (error) {
     throwHttpError(error, 'Platform admin access required')
@@ -244,12 +246,12 @@ export async function addPlatformAdminUser(
 ): Promise<{ action: 'created' | 'promoted'; email: string }> {
   const email = input.email.trim().toLowerCase()
   const name = input.name?.trim()
-  if (!email) throw createError({ statusCode: 400, statusMessage: 'Email is required' })
+  if (!email) throw new HTTPError({ statusCode: 400, statusMessage: 'Email is required' })
 
   const existing = await findUserByEmail(authApi, headers, email)
   if (existing) {
     if (hasPlatformAdminPermission(existing.role)) {
-      throw createError({ statusCode: 409, statusMessage: 'This user is already an admin' })
+      throw new HTTPError({ statusCode: 409, statusMessage: 'This user is already an admin' })
     }
     try {
       await authApi.setRole({

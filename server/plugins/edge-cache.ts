@@ -1,10 +1,10 @@
 // KV-based SSR HTML cache — populate after each page response.
 
-import { getHeader } from 'h3'
-import type { H3Event } from 'h3'
+
+import type { HTTPEvent } from 'nitro/h3'
 import { buildHtmlCacheKey } from '~/server/utils/edge-cache'
 import { isPreviewContext } from '~/server/utils/tenant-hosts'
-import { definePlugin } from 'nitro'
+import { definePlugin } from 'nitro';
 
 const SKIP_PREFIXES = [
   '/api/', '/dashboard', '/admin', '/auth/',
@@ -23,22 +23,24 @@ type CloudflareEnvContext = {
 }
 
 export default definePlugin((nitroApp) => {
-  nitroApp.hooks.hook('response', async (response, event: H3Event) => {
+  nitroApp.hooks.hook('response', async (response, event: HTTPEvent) => {
+    const request = event.req
+    const path = new URL(request.url).pathname
     if (response.status !== 200) return
-    if (event.method !== 'GET') return
+    if (request.method !== 'GET') return
 
-    if (event.path.includes('?')) return
-    if (SKIP_PREFIXES.some(p => event.path.startsWith(p))) return
+    if (request.url.includes('?')) return
+    if (SKIP_PREFIXES.some(p => path.startsWith(p))) return
 
     // Use Cloudflare runtime request headers for cookies and host (more reliable on cloudflare_module)
-    const cfRequest = (event.context.cloudflare as CloudflareRequestContext | undefined)?.request
+    const cfRequest = (request.runtime?.cloudflare as CloudflareRequestContext | undefined)?.request
 
     // Skip KV writes on preview/staging — same reason as the read-path skip in
     // 00.edge-cache.ts: stale HTML survives redeploys and references wrong asset hashes.
-    const writeHost = cfRequest?.headers.get('host') ?? getHeader(event, 'host') ?? ''
+    const writeHost = cfRequest?.headers.get('host') ?? request.headers.get('host') ?? ''
     const writeHostname = writeHost.split(':')[0] ?? writeHost
     if (isPreviewContext(writeHostname)) return
-    const cookieHeader = cfRequest?.headers.get('cookie') ?? getHeader(event, 'cookie') ?? ''
+    const cookieHeader = cfRequest?.headers.get('cookie') ?? request.headers.get('cookie') ?? ''
     if (cookieHeader.includes(SESSION_COOKIE)) return
 
     // Only skip caching when a Set-Cookie carries the real auth session — the
@@ -59,7 +61,7 @@ export default definePlugin((nitroApp) => {
     const key = buildHtmlCacheKey(event)
     if (!key) return
 
-    const kv = (event.context.cloudflare?.env as CloudflareEnvContext | undefined)?.SITE_CACHE
+    const kv = (request.runtime?.cloudflare?.env as CloudflareEnvContext | undefined)?.SITE_CACHE
     if (!kv) {
       console.warn('[edge-cache] SITE_CACHE KV not available')
       return

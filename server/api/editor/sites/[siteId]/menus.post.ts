@@ -7,7 +7,7 @@ import { assertResourceAccess } from '~/server/utils/member-access'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
 import type { CreateMenuRequest } from '~/server/types/menu'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const body = await readBody(event) as CreateMenuRequest
   
@@ -46,12 +46,7 @@ export default defineEventHandler(async (event) => {
 
     const targetLocationId = body.locationId || null
     await assertResourceAccess(db, {
-      memberId: site.member_id,
-      role: site.member_role,
-      organizationId: site.organization_id,
-      siteId,
-      resourceLocationId: targetLocationId,
-    })
+      memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: targetLocationId, })
 
     // Check if menu already exists for this scope
     const existingMenu = await queryFirst(db, `
@@ -69,9 +64,7 @@ export default defineEventHandler(async (event) => {
     const menu = await createMenu(db, site.organization_id, siteId, body, session.user.id)
     
     return jsonResponse({
-      success: true,
-      menu,
-      siteId
+      success: true, menu, siteId
     }, { status: 201 })
     
   } catch (error) {
@@ -82,6 +75,5 @@ export default defineEventHandler(async (event) => {
     }, { status: 500 })
   }
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam, readBody  } from 'nitro/h3';

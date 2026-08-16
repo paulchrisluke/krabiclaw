@@ -17,10 +17,10 @@ import { parsePhone } from '~/utils/phone'
 import { reservationAdapter } from '~/server/domain/guest-threads/adapters/reservation'
 import { ensureGuestThread } from '~/server/domain/guest-threads/repository'
 
-const VALID_GUESTS = ['1','2','3','4','5','6','7','8+']
+const VALID_GUESTS = ['1', '2', '3', '4', '5', '6', '7', '8+']
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
 
@@ -63,10 +63,7 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Please choose a valid party size.' }, { status: 400 })
 
   const site = await queryFirst<{ id: string; organization_id: string; brand_name?: string | null; public_url?: string | null }>(
-    db,
-    'SELECT id, organization_id, brand_name, public_url FROM sites WHERE id = ? AND status = ? LIMIT 1',
-    [siteId, 'active'],
-  )
+    db, 'SELECT id, organization_id, brand_name, public_url FROM sites WHERE id = ? AND status = ? LIMIT 1', [siteId, 'active'], )
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
   const siteBaseUrl = site.public_url?.trim().replace(/\/$/, '')
   if (!siteBaseUrl) return jsonResponse({ error: 'Site public URL is not configured' }, { status: 500 })
@@ -77,10 +74,7 @@ export default defineEventHandler(async (event) => {
   const resolvedLocationId = locationId
 
   const location = await queryFirst<{ title: string | null; opening_hours: string | null; max_capacity: number | null }>(
-    db,
-    'SELECT title, opening_hours, max_capacity FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1',
-    [resolvedLocationId, siteId],
-  )
+    db, 'SELECT title, opening_hours, max_capacity FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1', [resolvedLocationId, siteId], )
   if (!location) return jsonResponse({ error: 'location_id must reference a location on this site' }, { status: 400 })
 
   const reservationTimezone = await resolveLocationTimezone(db, site.organization_id, siteId, resolvedLocationId)
@@ -127,7 +121,7 @@ export default defineEventHandler(async (event) => {
 
   // Rate limiting (skipped in dev so local work and E2E can submit repeatedly) — runs before
   // customer creation so a rate-limited request never leaves behind an orphaned customer row.
-  const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
+  const e2eOverride = env.E2E_ALLOW_DEV_ROUTES === 'true'
   if (!import.meta.dev && !e2eOverride) {
     const hourWindow = Math.floor(Date.now() / 3_600_000)
     const today = new Date().toISOString().split('T')[0]
@@ -143,15 +137,7 @@ export default defineEventHandler(async (event) => {
   const userId = session?.user?.id || null
 
   const customerInput = {
-    organizationId: site.organization_id,
-    siteId,
-    name,
-    email,
-    phone,
-    source: 'reservation',
-    bookingAt: `${date}T${time}:00`,
-    userId,
-  } as const
+    organizationId: site.organization_id, siteId, name, email, phone, source: 'reservation', bookingAt: `${date}T${time}:00`, userId, } as const
   const customer = await findOrCreateCustomer(db, customerInput)
 
   // Single atomic statement: the capacity re-check and the insert happen in one SQL statement
@@ -161,8 +147,7 @@ export default defineEventHandler(async (event) => {
   // location has no max_capacity, the WHERE clause is unconditionally true.
   const insertResult = await execute(db, `
     INSERT INTO reservation_submissions (
-      id, organization_id, site_id, customer_id, name, email, phone, date, time, guests, requests, ip_hash,
-      cancellation_token_hash, cancellation_token_expires_at, location_id
+      id, organization_id, site_id, customer_id, name, email, phone, date, time, guests, requests, ip_hash, cancellation_token_hash, cancellation_token_expires_at, location_id
     )
     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
     WHERE ? IS NULL OR (
@@ -173,28 +158,7 @@ export default defineEventHandler(async (event) => {
       ), 0) + ? <= ?
     )
   `, [
-    id,
-    site.organization_id,
-    siteId,
-    customer.id,
-    name,
-    email,
-    phone,
-    date,
-    time,
-    guests,
-    requests || null,
-    ipHash,
-    cancellationTokenHash,
-    cancellation.expiresAt,
-    resolvedLocationId,
-    partySizeForCapacityCheck,
-    resolvedLocationId,
-    date,
-    time,
-    partySizeForCapacityCheck,
-    location.max_capacity,
-  ])
+    id, site.organization_id, siteId, customer.id, name, email, phone, date, time, guests, requests || null, ipHash, cancellationTokenHash, cancellation.expiresAt, resolvedLocationId, partySizeForCapacityCheck, resolvedLocationId, date, time, partySizeForCapacityCheck, location.max_capacity, ])
 
   if (!insertResult?.meta?.changes) {
     if (customer.created) await deleteCustomerIfUnlinked(db, customer.id)
@@ -211,19 +175,8 @@ export default defineEventHandler(async (event) => {
   `, [`${date}T${time}:00`, new Date().toISOString(), customer.id])
 
   await fireSiteEventSafe({
-    db,
-    organizationId: site.organization_id,
-    siteId,
-    locationId: resolvedLocationId,
-    eventType: 'reservation.created',
-    entityType: 'reservation_submission',
-    entityId: id,
-    metadata: {
-      date,
-      time,
-      guests,
-    },
-  })
+    db, organizationId: site.organization_id, siteId, locationId: resolvedLocationId, eventType: 'reservation.created', entityType: 'reservation_submission', entityId: id, metadata: {
+      date, time, guests, }, })
 
   await ensureGuestThread(db, reservationAdapter, id, { publishEnv: env })
 
@@ -235,37 +188,15 @@ export default defineEventHandler(async (event) => {
 
   try {
     await notifyReservationCreated(env, db, {
-      organizationId: site.organization_id,
-      siteId,
-      siteName: site.brand_name,
-      locationId: resolvedLocationId,
-      locationName: location.title,
-      reservationId: id,
-      guestName: name,
-      email,
-      phone,
-      date,
-      time,
-      guests,
-      requests,
-      cancelUrl,
-      contactPhone,
-      contactEmail,
-    })
+      organizationId: site.organization_id, siteId, siteName: site.brand_name, locationId: resolvedLocationId, locationName: location.title, reservationId: id, guestName: name, email, phone, date, time, guests, requests, cancelUrl, contactPhone, contactEmail, })
   } catch (error) {
     console.error('reservation_notification_failed', {
-      organizationId: site.organization_id,
-      siteId,
-      reservationId: id,
-      error: error instanceof Error ? error.message : String(error)
+      organizationId: site.organization_id, siteId, reservationId: id, error: error instanceof Error ? error.message : String(error)
     })
   }
 
   const policy = await resolveBookingPolicy(db, {
-    siteId,
-    policyType: 'reservation',
-    locationId: resolvedLocationId,
-  })
+    siteId, policyType: 'reservation', locationId: resolvedLocationId, })
 
   const requestedLocale = cleanString(body.locale, 10)
   const locale = requestedLocale && /^[a-z]{2}(-[A-Z]{2})?$/.test(requestedLocale)
@@ -273,13 +204,8 @@ export default defineEventHandler(async (event) => {
     : await getSourceLocale(db, site.organization_id, siteId)
 
   return jsonResponse({
-    success: true,
-    id,
-    cancellationToken: cancellation.token,
-    message: 'Your reservation request has been received. We will confirm shortly.',
-    policy_summary: policy.id ? renderBookingPolicySummary(policy, locale) : null,
-  }, { status: 201 })
+    success: true, id, cancellationToken: cancellation.token, message: 'Your reservation request has been received. We will confirm shortly.', policy_summary: policy.id ? renderBookingPolicySummary(policy, locale) : null, }, { status: 201 })
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';
+import { readBody } from 'nitro/h3';

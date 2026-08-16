@@ -4,7 +4,7 @@ import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cac
 import { requireSiteAccess } from '~/server/utils/location-access'
 import { parseLocationPayload } from '~/server/utils/location-payload'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) {
     return jsonResponse({ error: 'Site ID is required' }, { status: 400 })
@@ -36,27 +36,8 @@ export default defineEventHandler(async (event) => {
     : Number(body.review_count)
 
   const result = await createLocation(
-    env,
-    db,
-    site.organization_id,
-    siteId,
-    {
-      title: body?.title ?? '',
-      slug: body?.slug ?? null,
-      address: body?.address ? JSON.stringify(body.address) : null,
-      city: body?.city ?? null,
-      phone: body?.phone ?? null,
-      website_url: body?.website_url ?? null,
-      maps_url: body?.maps_url ?? null,
-      description: body?.description ?? null,
-      google_place_id: body?.google_place_id ?? null,
-      rating,
-      review_count: reviewCount,
-      opening_hours: (body?.opening_hours || null) as CreateLocationInput['opening_hours'],
-      is_primary: body?.is_primary === true,
-    },
-    session.user.id,
-  )
+    env, db, site.organization_id, siteId, {
+      title: body?.title ?? '', slug: body?.slug ?? null, address: body?.address ? JSON.stringify(body.address) : null, city: body?.city ?? null, phone: body?.phone ?? null, website_url: body?.website_url ?? null, maps_url: body?.maps_url ?? null, description: body?.description ?? null, google_place_id: body?.google_place_id ?? null, rating, review_count: reviewCount, opening_hours: (body?.opening_hours || null) as CreateLocationInput['opening_hours'], is_primary: body?.is_primary === true, }, session.user.id, )
 
   if (result.status >= 400) {
     return jsonResponse(result.data, { status: result.status })
@@ -65,10 +46,7 @@ export default defineEventHandler(async (event) => {
 
   const location = (result.data as { location?: unknown }).location
   return jsonResponse({
-    success: true,
-    location: location ? parseLocationPayload(location) : null,
-  }, { status: result.status })
+    success: true, location: location ? parseLocationPayload(location) : null, }, { status: result.status })
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam, readBody  } from 'nitro/h3';

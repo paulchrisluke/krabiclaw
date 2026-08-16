@@ -1,3 +1,5 @@
+import { HTTPError } from 'nitro';
+
 import { execute, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { addMemberResourceAccess, isOperationalRole, isOrganizationWideRole } from '~/server/utils/member-access'
 import type { CloudflareEnv } from '~/server/utils/auth'
@@ -62,7 +64,7 @@ export async function ensureWhatsAppRecipientAccess(
 
   if (existing?.memberId && existing.role) {
     if (!isOperationalRole(existing.role)) {
-      throw createError({ statusCode: 409, statusMessage: `Existing member role ${existing.role} cannot receive operational notifications` })
+      throw new HTTPError({ statusCode: 409, statusMessage: `Existing member role ${existing.role} cannot receive operational notifications` })
     }
     if (!isOrganizationWideRole(existing.role)) {
       await addMemberResourceAccess(db, {

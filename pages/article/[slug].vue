@@ -1,7 +1,7 @@
 <template>
   <NuxtLayout name="blawby">
     <div v-if="post" data-parity-root>
-      <div class="mx-auto max-w-7xl px-6 pb-12 pt-12 sm:pb-16 lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10 lg:px-8" data-parity-section="article-content">
+      <div class="mx-auto max-w-7xl px-6 pb-12 pt-20 sm:pb-16 lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10 lg:px-8 lg:pt-12" data-parity-section="article-content">
         <!--
           Sidebar is removed from the mobile document flow entirely (`hidden lg:block`), not
           just visually collapsed — it used to render above the article on mobile with no
@@ -98,6 +98,8 @@ if (!Array.isArray(data.value.post.content_blocks) || data.value.post.content_bl
 
 const { identity, consultation, compliance } = await useBlawbyShell()
 const org = useBlawbyOrgIdentity(identity, compliance)
+const { data: blogIndexData, error: blogIndexError } = await useBlawbyRoute('blog')
+if (blogIndexError.value) throw blogIndexError.value
 const post = computed(() => data.value.post!)
 const ctaBlock = computed(() => {
   const page = data.value.page
@@ -107,7 +109,7 @@ const ctaBlock = computed(() => {
 const displayTags = computed(() => post.value.tags.slice(1))
 const hasUpdatedDate = computed(() => Boolean(post.value.updated_at && post.value.updated_at !== post.value.published_at))
 const relatedPosts = computed(() => data.value.posts.filter(item => item.slug !== slug).slice(0, 3))
-const { categories } = useTenantBlogNav(computed(() => data.value.posts))
+const { categories } = useTenantBlogNav(computed(() => blogIndexData.value.posts))
 const browseTopicsOpen = ref(false)
 const requestURL = useRequestURL()
 const articlePath = computed(() => `/article/${post.value.slug}`)

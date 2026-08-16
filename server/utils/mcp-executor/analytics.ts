@@ -1,6 +1,6 @@
 import type { McpExecutorContext } from './shared'
 import { aggregateAnalyticsForRange } from '~/server/utils/analytics'
-import { createError } from 'h3'
+import { HTTPError } from 'nitro';
 import { queryAll } from '~/server/db'
 import { NOT_HANDLED, getDateString, optionalString } from './shared'
 
@@ -17,7 +17,7 @@ export async function handleAnalyticsTools(ctx: McpExecutorContext): Promise<unk
         !/^\d{4}-\d{2}-\d{2}$/.test(startDate) ||
         !/^\d{4}-\d{2}-\d{2}$/.test(endDate)
       ) {
-        throw createError({
+        throw new HTTPError({
           statusCode: 400,
           statusMessage: "Dates must be YYYY-MM-DD format",
         });
@@ -28,13 +28,13 @@ export async function handleAnalyticsTools(ctx: McpExecutorContext): Promise<unk
           / (1000 * 60 * 60 * 24),
       );
       if (daySpan < 0) {
-        throw createError({
+        throw new HTTPError({
           statusCode: 400,
           statusMessage: "start_date must not be after end_date",
         });
       }
       if (daySpan > MAX_ANALYTICS_DAYS) {
-        throw createError({
+        throw new HTTPError({
           statusCode: 400,
           statusMessage: `Date range exceeds maximum of ${MAX_ANALYTICS_DAYS} days (requested: ${daySpan} days)`,
         });

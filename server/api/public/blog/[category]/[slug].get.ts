@@ -3,7 +3,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getPublishedPlatformBlogPost } from '~/server/utils/platform-content'
 import { slugToBlogCategory } from '~/utils/blog-categories'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const categorySlug = getRouterParam(event, 'category')
   const slug = getRouterParam(event, 'slug')
   if (!categorySlug || !slug) return jsonResponse({ error: 'Category and slug required' }, { status: 400 })
@@ -20,5 +20,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ post })
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

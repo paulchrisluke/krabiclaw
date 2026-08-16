@@ -1,11 +1,11 @@
 // Step 2 of the explicit guest claim flow: the user has clicked the emailed
 // claim-verification link. Only this call actually sets customers.user_id.
-import { readBody } from 'h3'
+import { readBody } from 'nitro/h3';
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { verifyClaimToken } from '~/server/utils/guest-claims'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -29,4 +29,4 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ ok: true, customerId: result.customerId })
 })
-import { defineEventHandler } from 'h3'
+import { defineHandler } from 'nitro';

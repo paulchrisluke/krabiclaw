@@ -2,7 +2,7 @@ import { assertDevRouteAllowed } from '~/server/utils/dev-route-auth'
 import { executeMcpToolCall } from '~/server/utils/mcp-executor'
 import { isMcpRenderResponse } from '~/server/utils/mcp-render'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   assertDevRouteAllowed(event)
 
   const body = await readBody(event) as {
@@ -21,5 +21,5 @@ export default defineEventHandler(async (event) => {
 
   return { result }
 })
-import { defineEventHandler } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { readBody } from 'nitro/h3';

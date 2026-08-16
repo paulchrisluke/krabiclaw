@@ -2,7 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getPublishedSiteBlogPost } from '~/server/utils/platform-content'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const slug = getRouterParam(event, 'slug')
   if (!siteId || !slug) return jsonResponse({ error: 'Site ID and slug required' }, { status: 400 })
@@ -15,5 +15,5 @@ export default defineEventHandler(async (event) => {
   if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
   return jsonResponse({ post })
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

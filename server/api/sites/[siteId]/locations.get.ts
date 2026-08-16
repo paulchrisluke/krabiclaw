@@ -5,7 +5,7 @@ import { assertSiteWideAccess } from '~/server/utils/member-access'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
 import { queryAll } from '~/server/db'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   
   if (!siteId) {
@@ -45,14 +45,7 @@ export default defineEventHandler(async (event) => {
 
     // Get business locations
     const locations = await queryAll<ApiValue>(db, `
-      SELECT bl.id, bl.slug, bl.title, bl.address, bl.city, bl.phone, bl.notification_phone,
-             bl.website_url, bl.maps_url, bl.latitude, bl.longitude,
-             bl.opening_hours, bl.description, bl.short_description, bl.email, bl.price_level,
-             bl.facebook_url, bl.instagram_url, bl.tiktok_url, bl.google_place_id,
-             bl.grab_url, bl.uber_eats_url, bl.foodpanda_url,
-             bl.rating, bl.review_count, bl.is_primary, bl.status,
-             bl.last_synced_at,
-             bl.hero_media_asset_id, ma.public_url, ma.thumbnail_url, ma.kind
+      SELECT bl.id, bl.slug, bl.title, bl.address, bl.city, bl.phone, bl.notification_phone, bl.website_url, bl.maps_url, bl.latitude, bl.longitude, bl.opening_hours, bl.description, bl.short_description, bl.email, bl.price_level, bl.facebook_url, bl.instagram_url, bl.tiktok_url, bl.google_place_id, bl.grab_url, bl.uber_eats_url, bl.foodpanda_url, bl.rating, bl.review_count, bl.is_primary, bl.status, bl.last_synced_at, bl.hero_media_asset_id, ma.public_url, ma.thumbnail_url, ma.kind
       FROM business_locations bl
       LEFT JOIN media_assets ma ON bl.hero_media_asset_id = ma.id AND ma.status = 'active'
         AND ma.organization_id = bl.organization_id AND ma.site_id = bl.site_id
@@ -62,15 +55,11 @@ export default defineEventHandler(async (event) => {
 
     // Parse JSON fields
     const parsedLocations = (locations || []).map((location: ApiValue) => ({
-      ...location,
-      address: location.address ? JSON.parse(location.address) : null,
-      opening_hours: location.opening_hours ? JSON.parse(location.opening_hours) : null
+      ...location, address: location.address ? JSON.parse(location.address) : null, opening_hours: location.opening_hours ? JSON.parse(location.opening_hours) : null
     }))
     
     return jsonResponse({
-      success: true,
-      locations: parsedLocations,
-      count: parsedLocations.length
+      success: true, locations: parsedLocations, count: parsedLocations.length
     })
     
   } catch (error) {
@@ -81,5 +70,5 @@ export default defineEventHandler(async (event) => {
     }, { status: 500 })
   }
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

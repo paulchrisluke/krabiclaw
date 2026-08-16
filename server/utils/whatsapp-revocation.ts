@@ -1,3 +1,5 @@
+import { HTTPError } from 'nitro';
+
 // Configuration-led and member-led WhatsApp access revocation (issue #293
 // Sections G and H).
 //
@@ -284,7 +286,7 @@ export async function clearOrReassignAssignments(
   if (assignments.length === 0) return { cleared: [] }
 
   if (options.action === 'reassign') {
-    throw createError({
+    throw new HTTPError({
       statusCode: 501,
       statusMessage: 'Reassigning WhatsApp assignments to another manager is not implemented yet. Clear this member’s assignments and configure the new number directly.',
     })

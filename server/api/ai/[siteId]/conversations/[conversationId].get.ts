@@ -2,7 +2,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getConversation, getSiteForMember, listMessages } from '~/server/utils/chowbot-conversations'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   try {
     const siteId = getRouterParam(event, 'siteId')
     const conversationId = getRouterParam(event, 'conversationId')
@@ -34,20 +34,12 @@ export default defineEventHandler(async (event) => {
 
     const messages = await listMessages(db, conversationId, siteId, session.user.id, rawLimit, rawOffset)
     return jsonResponse({
-      success: true,
-      conversation,
-      messages,
-      pagination: {
-        limit: rawLimit,
-        offset: rawOffset,
-        count: messages.length,
-      },
-    })
+      success: true, conversation, messages, pagination: {
+        limit: rawLimit, offset: rawOffset, count: messages.length, }, })
   } catch (error) {
     console.error('Error fetching conversation:', error)
     return jsonResponse({ error: 'Internal server error' }, { status: 500 })
   }
 })
-import { defineEventHandler } from 'h3'
-import { getQuery } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getQuery, getRouterParam  } from 'nitro/h3';

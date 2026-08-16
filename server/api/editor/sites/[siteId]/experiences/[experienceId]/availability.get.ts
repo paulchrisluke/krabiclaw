@@ -6,7 +6,7 @@ import { assertResourceAccess } from '~/server/utils/member-access'
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const MAX_DAYS = DASHBOARD_MANAGEMENT_WINDOW_DAYS
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const experienceId = getRouterParam(event, 'experienceId')
   if (!siteId || !experienceId) return jsonResponse({ error: 'siteId and experienceId required' }, { status: 400 })
@@ -22,12 +22,7 @@ export default defineEventHandler(async (event) => {
   const experience = await getExperienceById(db, siteId, experienceId)
   if (!experience) return jsonResponse({ error: 'Experience not found' }, { status: 404 })
   await assertResourceAccess(db, {
-    memberId: site.member_id,
-    role: site.member_role,
-    organizationId: site.organization_id,
-    siteId,
-    resourceLocationId: experience.location_id,
-  })
+    memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: experience.location_id, })
 
   const timezone = await resolveExperienceTimezone(db, site.organization_id, siteId, experience)
 
@@ -42,6 +37,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ timezone, dates })
 })
-import { defineEventHandler } from 'h3'
-import { getQuery } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getQuery, getRouterParam  } from 'nitro/h3';

@@ -10,11 +10,11 @@ import { getGuestThreadBySubmission, updateThreadProjection } from '~/server/dom
 const IP_HOURLY_LIMIT = 20
 const RESERVATION_HOURLY_LIMIT = 5
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const reservationId = getRouterParam(event, 'reservationId')
 
-  const token = readBearerToken(getHeader(event, 'authorization'))
+  const token = readBearerToken((event.req.headers.get('authorization')))
   if (!siteId || !reservationId || !token) {
     return jsonResponse({ error: 'Missing required parameters' }, { status: 400 })
   }
@@ -50,8 +50,7 @@ export default defineEventHandler(async (event) => {
     location_id: string | null
     status: 'new' | 'confirmed'
   }>(
-    db,
-    `
+    db, `
     SELECT organization_id, site_id, name, email, phone, date, time, guests, location_id, status
     FROM reservation_submissions
     WHERE id = ?
@@ -61,9 +60,7 @@ export default defineEventHandler(async (event) => {
       AND cancellation_token_expires_at > ?
       AND status IN ('new', 'confirmed')
     LIMIT 1
-  `,
-    [reservationId, siteId, tokenHash, now],
-  )
+  `, [reservationId, siteId, tokenHash, now], )
 
   if (!cancellable) {
     return jsonResponse({ error: 'Reservation not found or already cancelled' }, { status: 404 })
@@ -82,8 +79,7 @@ export default defineEventHandler(async (event) => {
     location_id: string | null
     location_name: string | null
   }>(
-    db,
-    `
+    db, `
     UPDATE reservation_submissions
     SET status = 'cancelled', cancellation_token_used_at = ?
     WHERE id = ?
@@ -92,30 +88,16 @@ export default defineEventHandler(async (event) => {
       AND cancellation_token_used_at IS NULL
       AND cancellation_token_expires_at > ?
       AND status IN ('new', 'confirmed')
-    RETURNING organization_id, site_id, name, email, phone, date, time, guests, requests, location_id,
-      (SELECT title FROM business_locations WHERE id = reservation_submissions.location_id) AS location_name
-  `,
-    [now, reservationId, siteId, tokenHash, now],
-  )
+    RETURNING organization_id, site_id, name, email, phone, date, time, guests, requests, location_id, (SELECT title FROM business_locations WHERE id = reservation_submissions.location_id) AS location_name
+  `, [now, reservationId, siteId, tokenHash, now], )
 
   if (!reservation) {
     return jsonResponse({ error: 'Reservation not found or already cancelled' }, { status: 404 })
   }
 
   await fireSiteEventSafe({
-    db,
-    organizationId: reservation.organization_id,
-    siteId: reservation.site_id,
-    locationId: reservation.location_id,
-    eventType: 'reservation.cancelled',
-    entityType: 'reservation_submission',
-    entityId: reservationId,
-    metadata: {
-      date: reservation.date,
-      time: reservation.time,
-      guests: reservation.guests,
-    },
-  })
+    db, organizationId: reservation.organization_id, siteId: reservation.site_id, locationId: reservation.location_id, eventType: 'reservation.cancelled', entityType: 'reservation_submission', entityId: reservationId, metadata: {
+      date: reservation.date, time: reservation.time, guests: reservation.guests, }, })
 
   const thread = await getGuestThreadBySubmission(db, 'reservation', reservationId)
   if (thread) {
@@ -124,42 +106,22 @@ export default defineEventHandler(async (event) => {
   }
 
   const site = await queryFirst<{ brand_name?: string | null }>(
-    db,
-    'SELECT brand_name FROM sites WHERE id = ? LIMIT 1',
-    [siteId],
-  )
+    db, 'SELECT brand_name FROM sites WHERE id = ? LIMIT 1', [siteId], )
 
   try {
     await notifyReservationCancelled(env, db, {
-      organizationId: reservation.organization_id,
-      siteId: reservation.site_id,
-      siteName: site?.brand_name,
-      locationId: reservation.location_id,
-      locationName: reservation.location_name,
-      reservationId,
-      guestName: reservation.name,
-      email: reservation.email,
-      phone: reservation.phone,
-      date: reservation.date,
-      time: reservation.time,
-      guests: reservation.guests,
-      requests: reservation.requests,
-      wasConfirmed: cancellable.status === 'confirmed'
+      organizationId: reservation.organization_id, siteId: reservation.site_id, siteName: site?.brand_name, locationId: reservation.location_id, locationName: reservation.location_name, reservationId, guestName: reservation.name, email: reservation.email, phone: reservation.phone, date: reservation.date, time: reservation.time, guests: reservation.guests, requests: reservation.requests, wasConfirmed: cancellable.status === 'confirmed'
     })
   } catch (error) {
     console.error('reservation_cancellation_notification_failed', {
-      organizationId: reservation.organization_id,
-      siteId: reservation.site_id,
-      reservationId,
-      error: error instanceof Error ? error.message : String(error)
+      organizationId: reservation.organization_id, siteId: reservation.site_id, reservationId, error: error instanceof Error ? error.message : String(error)
     })
   }
 
   return jsonResponse({
-    success: true,
-    message: 'Reservation cancelled successfully'
+    success: true, message: 'Reservation cancelled successfully'
   })
 })
-import { defineEventHandler } from 'h3'
-import { getHeader } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getHeader } from 'nitro/h3';
+import { getRouterParam } from 'nitro/h3';

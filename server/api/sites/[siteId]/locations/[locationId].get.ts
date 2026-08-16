@@ -45,7 +45,7 @@ interface LocationRow {
   updated_at: string
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const locationId = getRouterParam(event, 'locationId')
 
@@ -80,14 +80,7 @@ export default defineEventHandler(async (event) => {
     await assertLocationAccess(db, { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, locationId })
 
     const location = await queryFirst<LocationRow>(db, `
-      SELECT bl.id, bl.slug, bl.title, bl.address, bl.city, bl.phone,
-             bl.website_url, bl.maps_url, bl.latitude, bl.longitude, bl.opening_hours,
-             bl.categories, bl.description, bl.short_description, bl.email, bl.price_level,
-             bl.facebook_url, bl.instagram_url, bl.tiktok_url, bl.google_place_id,
-             bl.rating, bl.review_count, bl.is_primary, bl.status,
-             bl.last_synced_at,
-             bl.hero_media_asset_id, bl.created_at, bl.updated_at,
-             ma.public_url, ma.thumbnail_url, ma.kind
+      SELECT bl.id, bl.slug, bl.title, bl.address, bl.city, bl.phone, bl.website_url, bl.maps_url, bl.latitude, bl.longitude, bl.opening_hours, bl.categories, bl.description, bl.short_description, bl.email, bl.price_level, bl.facebook_url, bl.instagram_url, bl.tiktok_url, bl.google_place_id, bl.rating, bl.review_count, bl.is_primary, bl.status, bl.last_synced_at, bl.hero_media_asset_id, bl.created_at, bl.updated_at, ma.public_url, ma.thumbnail_url, ma.kind
       FROM business_locations bl
       LEFT JOIN media_assets ma ON bl.hero_media_asset_id = ma.id AND ma.status = 'active'
         AND ma.organization_id = bl.organization_id AND ma.site_id = bl.site_id
@@ -100,13 +93,8 @@ export default defineEventHandler(async (event) => {
     }
 
     return jsonResponse({
-      success: true,
-      location: {
-        ...location,
-        address: location.address ? JSON.parse(location.address) : null,
-        opening_hours: location.opening_hours ? JSON.parse(location.opening_hours) : null,
-        categories: location.categories ? JSON.parse(location.categories) : null,
-        is_primary: Boolean(location.is_primary)
+      success: true, location: {
+        ...location, address: location.address ? JSON.parse(location.address) : null, opening_hours: location.opening_hours ? JSON.parse(location.opening_hours) : null, categories: location.categories ? JSON.parse(location.categories) : null, is_primary: Boolean(location.is_primary)
       }
     })
   } catch (error) {
@@ -115,5 +103,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to get business location' }, { status: 500 })
   }
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

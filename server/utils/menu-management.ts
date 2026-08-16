@@ -1,4 +1,4 @@
-import { createError } from "h3";
+import { HTTPError } from 'nitro';
 import type {
   Menu,
   MenuItem,
@@ -105,7 +105,7 @@ async function assertValidMenuLocation(
   );
 
   if (!location?.id) {
-    throw createError({
+    throw new HTTPError({
       statusCode: 404,
       statusMessage: "Location not found for this site",
     });
@@ -847,7 +847,7 @@ export async function createMenuItem(
     `SELECT id FROM menus WHERE id = ? AND organization_id = ? AND site_id = ? LIMIT 1`,
     [menuId, organizationId, siteId],
   );
-  if (!menuOwner) throw createError({ statusCode: 404, statusMessage: "Menu not found" });
+  if (!menuOwner) throw new HTTPError({ statusCode: 404, statusMessage: "Menu not found" });
   assertValidSaleWindow(item.sale_starts_at, item.sale_ends_at);
   await validateMediaAsset(db, organizationId, siteId, item.og_image_asset_id, "image", "og_image_asset_id");
 

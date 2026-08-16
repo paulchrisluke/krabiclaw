@@ -1,17 +1,13 @@
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { cloudflareEnv, jsonResponse, readRequiredBody } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getPost, publishPost } from '~/server/utils/post-management'
 import {
-  getFacebookPagesConnection,
-  publishToPage,
-  getLinkedInstagramAccount,
-  publishToInstagram,
-} from '~/server/utils/facebook-pages'
+  getFacebookPagesConnection, publishToPage, getLinkedInstagramAccount, publishToInstagram, } from '~/server/utils/facebook-pages'
 import { execute, queryFirst } from '~/server/db'
 import { loadMemberSiteRow } from '~/server/utils/location-access'
 import { assertResourceAccess } from '~/server/utils/member-access'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const postId = getRouterParam(event, 'postId')
   if (!siteId || !postId) return jsonResponse({ error: 'Site ID and Post ID required' }, { status: 400 })
@@ -23,7 +19,7 @@ export default defineEventHandler(async (event) => {
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const body = await readBody(event)
+  const body = await readRequiredBody<{ channels?: Array<'site' | 'instagram' | 'facebook'> }>(event)
   const channels: Array<'site' | 'instagram' | 'facebook'> =
     body?.channels ?? ['site']
 
@@ -37,12 +33,7 @@ export default defineEventHandler(async (event) => {
   `, [postId, site.organization_id, siteId])
   if (!postScope) return jsonResponse({ error: 'Post not found' }, { status: 404 })
   await assertResourceAccess(db, {
-    memberId: site.member_id,
-    role: site.member_role,
-    organizationId: site.organization_id,
-    siteId,
-    resourceLocationId: postScope.location_id,
-  })
+    memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: postScope.location_id, })
 
   const post = await publishPost(db, site.organization_id, siteId, postId, channels, env)
   if (!post) return jsonResponse({ error: 'Post not found' }, { status: 404 })
@@ -88,10 +79,7 @@ export default defineEventHandler(async (event) => {
       let imageUrl: string | null = null
       if (post.image_asset_id) {
         const asset = await queryFirst<{ public_url: string | null }>(
-          db,
-          `SELECT public_url FROM media_assets WHERE id = ? AND status = 'active' LIMIT 1`,
-          [post.image_asset_id],
-        )
+          db, `SELECT public_url FROM media_assets WHERE id = ? AND status = 'active' LIMIT 1`, [post.image_asset_id], )
         imageUrl = asset?.public_url ?? null
       }
 
@@ -135,9 +123,7 @@ export default defineEventHandler(async (event) => {
               `, [msg, postId])
             } else {
               const igResult = await publishToInstagram(pageToken, igUserId, {
-                caption: post.body,
-                imageUrl,
-              })
+                caption: post.body, imageUrl, })
               await execute(db, `
                 UPDATE post_channel_jobs
                 SET status = 'published', provider_post_id = ?, published_at = ?
@@ -161,11 +147,7 @@ export default defineEventHandler(async (event) => {
   const updatedPost = await getPost(db, site.organization_id, siteId, postId, env)
 
   return jsonResponse({
-    success: true,
-    post: updatedPost,
-    ...(Object.keys(socialErrors).length > 0 ? { socialErrors } : {}),
-  })
+    success: true, post: updatedPost, ...(Object.keys(socialErrors).length > 0 ? { socialErrors } : {}), })
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam  } from 'nitro/h3';

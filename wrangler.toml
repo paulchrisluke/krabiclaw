@@ -1,10 +1,16 @@
 name = "krabiclaw"
 main = ".output/server/index.mjs"
 compatibility_date = "2024-11-01"
-compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
+compatibility_flags = ["nodejs_compat_v2", "global_fetch_strictly_public"]
 
 [assets]
 directory = ".output/public"
+
+[dev]
+host = "localhost:3000"
+port = 3000
+local_protocol = "http"
+upstream_protocol = "http"
 
 [triggers]
 # Every expression is dispatched through Nitro's cloudflare:scheduled hook.
@@ -115,7 +121,7 @@ remote = false
 
 [ai]
 binding = "AI"
-remote = false
+remote = true
 
 [[ai_search_namespaces]]
 binding = "AI_SEARCH"
@@ -210,7 +216,7 @@ remote = false
 
 [env.preview.ai]
 binding = "AI"
-remote = false
+remote = true
 
 [[env.preview.ai_search_namespaces]]
 binding = "AI_SEARCH"
@@ -294,7 +300,7 @@ remote = false
 
 [env.staging.ai]
 binding = "AI"
-remote = false
+remote = true
 
 [[env.staging.ai_search_namespaces]]
 binding = "AI_SEARCH"

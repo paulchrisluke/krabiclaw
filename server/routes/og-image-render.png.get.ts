@@ -1,4 +1,4 @@
-import { getQuery, setHeader } from 'h3'
+import { getQuery, setHeader } from 'nitro/h3';
 import { parseOgImageQuery } from '~/utils/social-metadata'
 import { resolveOgImage } from '~/server/utils/og-image/pipeline'
 
@@ -8,13 +8,13 @@ import { resolveOgImage } from '~/server/utils/og-image/pipeline'
  * override supplied by the page itself. Root-level path (not under /api/) so social-platform
  * crawlers aren't affected by @nuxt/robots' default /api/** disallow rule.
  */
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const query = getQuery(event) as Record<string, string | string[] | undefined>
   const payload = parseOgImageQuery(query)
   const result = await resolveOgImage(event, payload)
 
   setHeader(event, 'Content-Type', result.contentType)
-  setHeader(event, 'Content-Length', result.bytes.byteLength)
+  setHeader(event, 'Content-Length', String(result.bytes.byteLength))
   setHeader(event, 'Cache-Control', 'public, max-age=3600, s-maxage=31536000, immutable')
   setHeader(event, 'ETag', `"${result.cacheKey}"`)
   setHeader(event, 'X-Content-Type-Options', 'nosniff')
@@ -22,4 +22,4 @@ export default defineEventHandler(async (event) => {
 
   return result.bytes
 })
-import { defineEventHandler } from 'h3'
+import { defineHandler } from 'nitro';

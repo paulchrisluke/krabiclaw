@@ -100,14 +100,13 @@ The public surfaces also had a concrete first-paint bug: their layouts imported
 entry CSS as a client-side module side effect. SSR could therefore deliver the
 complete HTML without a surface stylesheet in the document head. The browser
 painted default fonts, colors, and layout until hydration loaded the layout
-chunk. Platform, Saya, and Blawby now import their entry CSS as `?url` and add
+chunk. Platform, Saya, and Blawby now import one compiled surface stylesheet and add
 the URL through `useHead`, so SSR emits the stylesheet link while the CSS stays
 surface-scoped. Home routes additionally use stable `*-home.css` files and a
 critical inline shell. A Vite output plugin rewrites these CSS assets to stable
 paths such as `/_nuxt/surfaces/platform.css`,
-`/_nuxt/surfaces/platform-home.css`, `/_nuxt/surfaces/saya.css`,
-`/_nuxt/surfaces/saya-home.css`, `/_nuxt/surfaces/blawby.css`, and
-`/_nuxt/surfaces/blawby-home.css` in both the client output and server
+`/_nuxt/surfaces/platform.css`, `/_nuxt/surfaces/saya.css`, and
+`/_nuxt/surfaces/blawby.css` in both the client output and server
 references.
 The existing postbuild step rewrites Nuxt's serialized client preload manifest
 after Nitro generates it and makes the generated resource-hint renderer skip
@@ -158,9 +157,9 @@ local Worker measurements for this build are:
 
 | Surface | Browser navigation | HTML body | Server `total` | Surface stylesheet |
 | --- | ---: | ---: | ---: | --- |
-| Platform `/` | 64 ms | 32,285 B | 13 ms | `platform-home.css` |
+| Platform `/` | 64 ms | 32,285 B | 13 ms | `platform.css` |
 | Saya `/about` (`demo.localhost`) | 246 ms | 10,728 B | 29 ms | `saya.css` |
-| Blawby `/` (`ncls.localhost`) | 166 ms | 71,615 B | 170 ms | `blawby-home.css` |
+| Blawby `/` (`ncls.localhost`) | 166 ms | 71,615 B | 170 ms | `blawby.css` |
 
 These are local browser navigation measurements, not Lighthouse FCP/LCP and not
 the release gate. They verify the shared response contract: the correct surface

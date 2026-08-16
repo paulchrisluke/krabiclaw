@@ -4,9 +4,9 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import { resolveAccountAccessForEvent } from '~/server/utils/route-access'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const result = await resolveAccountAccessForEvent(event)
   if (result.status === 'unauthenticated') return jsonResponse({ allowed: false }, { status: 401 })
   return jsonResponse({ allowed: result.allowed })
 })
-import { defineEventHandler } from 'h3'
+import { defineHandler } from 'nitro';

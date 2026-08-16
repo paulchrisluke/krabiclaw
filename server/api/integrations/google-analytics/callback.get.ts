@@ -1,16 +1,17 @@
+import { defineHandler } from 'nitro';
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { exchangeGoogleAnalyticsCode, storeGoogleAnalyticsConnection } from '~/server/utils/google-analytics'
 import { verifyOAuthState } from '~/server/utils/encryption'
 import { getDashboardSiteRouteContext } from '~/server/utils/dashboard-redirects'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
 
   if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
     return new Response('Missing Google Analytics OAuth configuration.', { status: 500 })
   }
 
-  const url = getRequestURL(event)
+  const url = event.url
   const code = url.searchParams.get('code')
   const state = url.searchParams.get('state')
 
@@ -65,15 +66,7 @@ export default defineEventHandler(async (event) => {
     }
 
     await storeGoogleAnalyticsConnection(env, {
-      organization_id: organizationId,
-      site_id: siteId,
-      connected_by_user_id: userId,
-      provider_account_email: userInfo.email,
-      encrypted_access_token: tokenData.accessToken,
-      encrypted_refresh_token: tokenData.refreshToken,
-      scopes: tokenData.scope,
-      expires_at: new Date(Date.now() + tokenData.expiresIn * 1000).toISOString(),
-      status: 'active'
+      organization_id: organizationId, site_id: siteId, connected_by_user_id: userId, provider_account_email: userInfo.email, encrypted_access_token: tokenData.accessToken, encrypted_refresh_token: tokenData.refreshToken, scopes: tokenData.scope, expires_at: new Date(Date.now() + tokenData.expiresIn * 1000).toISOString(), status: 'active'
     })
 
     return new Response(null, { status: 302, headers: { Location: await connectionRedirect('connected') } })
@@ -82,5 +75,3 @@ export default defineEventHandler(async (event) => {
     return new Response(null, { status: 302, headers: { Location: await connectionRedirect('error') } })
   }
 })
-import { defineEventHandler } from 'h3'
-import { getRequestURL } from 'h3'

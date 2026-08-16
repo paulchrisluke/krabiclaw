@@ -26,15 +26,13 @@
 <script setup lang="ts">
 import ConsentBanner from '~/components/ConsentBanner.vue'
 import blawbyCriticalCss from '~/assets/css/blawby-critical.css?raw'
-import blawbyStylesheet from '~/assets/css/blawby-entry.css?url'
-import blawbyHomeStylesheet from '~/assets/css/blawby-home-entry.css?url'
+import '~/assets/css/blawby-entry.css'
 
 const route = useRoute()
 const isHome = computed(() => route.path === '/' || /^\/preview\/site\/[^/]+\/?$/.test(route.path))
-const blawbyStylesheetHref = new URL(blawbyStylesheet, 'http://nuxt.local').pathname
-const blawbyHomeStylesheetHref = new URL(blawbyHomeStylesheet, 'http://nuxt.local').pathname
+const blawbyStylesheetHref = '/_nuxt/surfaces/blawby.css'
 const blawbyStylesheetForRoute = computed(() => {
-  return isHome.value ? blawbyHomeStylesheetHref : blawbyStylesheetHref
+  return blawbyStylesheetHref
 })
 
 useHead(() => ({

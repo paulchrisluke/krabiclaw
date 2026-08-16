@@ -3,7 +3,7 @@ import { requireBlogAccess } from "~/server/utils/blog-access";
 import { deleteSiteAuthor } from "~/server/utils/platform-content";
 import { httpErrorDetails } from "~/server/utils/http-error";
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, "siteId");
   const authorId = getRouterParam(event, "authorId");
 
@@ -25,5 +25,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: message }, { status: statusCode });
   }
 });
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

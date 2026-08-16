@@ -7,7 +7,7 @@
 // strands the org without a working invitation — see the ordering comment
 // below.
 // See issue #293 Section A.4.
-import { getHeaders } from 'h3'
+
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { createAuth } from '~/server/utils/auth'
 import { execute } from '~/server/db'
@@ -24,7 +24,7 @@ interface CancelInvitationApi {
   }): Promise<Response>
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const invitationId = String(getRouterParam(event, 'invitationId') || '').trim()
   if (!invitationId) return jsonResponse({ error: 'Invitation id is required' }, { status: 400 })
 
@@ -76,12 +76,7 @@ export default defineEventHandler(async (event) => {
   try {
     for (const scope of invitation.scopes) {
       const access = await ensureWhatsAppRecipientAccess(env, db, {
-        organizationId: organization.id,
-        siteId: scope.site_id,
-        locationId: scope.location_id,
-        phone: newPhone,
-        inviterUserId: session.user.id,
-      })
+        organizationId: organization.id, siteId: scope.site_id, locationId: scope.location_id, phone: newPhone, inviterUserId: session.user.id, })
       if (access.status === 'invitation_pending' && access.invitationId) {
         newInvitationIds.push(access.invitationId)
         if (access.shouldDeliverInvitation) {
@@ -95,12 +90,7 @@ export default defineEventHandler(async (event) => {
       const primaryInvitationId = newInvitationIds[0]
       if (primaryInvitationId) {
         await sendWhatsAppAccessInvitation(env, db, {
-          organizationId: organization.id,
-          siteId: deliveryScope.site_id,
-          locationId: deliveryScope.location_id,
-          phone: newPhone,
-          invitationId: primaryInvitationId,
-        })
+          organizationId: organization.id, siteId: deliveryScope.site_id, locationId: deliveryScope.location_id, phone: newPhone, invitationId: primaryInvitationId, })
       }
     }
   } catch (error) {
@@ -110,10 +100,7 @@ export default defineEventHandler(async (event) => {
     for (const newId of newInvitationIds) {
       try {
         const cancelResponse = await cancelApi.cancelInvitation({
-          body: { invitationId: newId },
-          headers: getHeaders(event) as HeadersInit,
-          asResponse: true,
-        })
+          body: { invitationId: newId }, headers: Object.fromEntries(event.req.headers.entries()) as HeadersInit, asResponse: true, })
         if (cancelResponse.ok) {
           await execute(db, `DELETE FROM invitation_access_scope WHERE invitation_id = ?`, [newId])
         }
@@ -127,16 +114,12 @@ export default defineEventHandler(async (event) => {
 
   // Replacement is confirmed active — cancel the old invitation now. If this
   // fails after retrying, the replacement itself is still fully working; the
-  // old invitation is just left pending (its phone number is already stale,
-  // so it grants no additional access) and can be retried separately, rather
+  // old invitation is just left pending (its phone number is already stale, // so it grants no additional access) and can be retried separately, rather
   // than reporting the whole operation as failed.
   const cancelOldInvitation = async (): Promise<boolean> => {
     try {
       const response = await cancelApi.cancelInvitation({
-        body: { invitationId },
-        headers: getHeaders(event) as HeadersInit,
-        asResponse: true,
-      })
+        body: { invitationId }, headers: Object.fromEntries(event.req.headers.entries()) as HeadersInit, asResponse: true, })
       if (!response.ok) {
         console.error('whatsapp_invitation_replace_cancel_old_failed', { invitationId, status: response.status })
         return false
@@ -153,12 +136,7 @@ export default defineEventHandler(async (event) => {
   if (!cancelledOld) cancelledOld = await cancelOldInvitation()
 
   return jsonResponse({
-    success: true,
-    invitationId: newInvitationIds[0] || null,
-    oldInvitationCancelled: cancelledOld,
-    ...(cancelledOld ? {} : { warning: 'The replacement is active, but the previous invitation could not be cancelled automatically. Retry cancelling it separately.' }),
-  })
+    success: true, invitationId: newInvitationIds[0] || null, oldInvitationCancelled: cancelledOld, ...(cancelledOld ? {} : { warning: 'The replacement is active, but the previous invitation could not be cancelled automatically. Retry cancelling it separately.' }), })
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam, readBody  } from 'nitro/h3';

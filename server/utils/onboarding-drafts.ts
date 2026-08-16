@@ -185,10 +185,6 @@ function nowIso() {
   return new Date().toISOString()
 }
 
-function draftUid(prefix: string) {
-  return `draft-${prefix}-${crypto.randomUUID()}`
-}
-
 function isUniqueConstraintError(error: unknown) {
   const messages: string[] = []
   let current: unknown = error

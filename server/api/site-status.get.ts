@@ -2,7 +2,7 @@
 import { cloudflareEnv, jsonResponse } from '../utils/api-response'
 import { queryFirst } from '~/server/db'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   
@@ -36,8 +36,7 @@ export default defineEventHandler(async (event) => {
     }
 
     return jsonResponse({
-      status: 'ready',
-      onboarding_status: site.onboarding_status
+      status: 'ready', onboarding_status: site.onboarding_status
     })
 
   } catch (error) {
@@ -47,4 +46,4 @@ export default defineEventHandler(async (event) => {
     }, { status: 500 })
   }
 })
-import { defineEventHandler } from 'h3'
+import { defineHandler } from 'nitro';

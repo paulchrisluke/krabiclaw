@@ -26,6 +26,7 @@ mock.module('../../server/utils/domains.ts', {
   namedExports: {
     createCustomDomainPair: async () => undefined,
     deleteCustomDomain: async () => undefined,
+    platformDomain: () => 'krabiclaw.com',
   },
 })
 mock.module('../../server/utils/site-transfer-notifications.ts', {

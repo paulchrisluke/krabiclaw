@@ -1,8 +1,6 @@
 import { jsonResponse } from '~/server/utils/api-response'
 import {
-  getGoogleAnalyticsAccessToken,
-  getGoogleAnalyticsConnection,
-  getGa4MeasurementId
+  getGoogleAnalyticsAccessToken, getGoogleAnalyticsConnection, getGa4MeasurementId
 } from '~/server/utils/google-analytics'
 import { deleteConfig, setConfig } from '~/server/utils/site-config'
 import { execute } from '~/server/db'
@@ -15,7 +13,7 @@ interface SelectBody {
   search_console_site_url?: string | null
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) {
     return jsonResponse({ error: 'Site ID is required' }, { status: 400 })
@@ -46,8 +44,7 @@ export default defineEventHandler(async (event) => {
 
     await execute(db, `
       UPDATE google_analytics_connections
-      SET ga4_property_id = ?, ga4_property_name = ?, ga4_measurement_id = ?,
-          search_console_site_url = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      SET ga4_property_id = ?, ga4_property_name = ?, ga4_measurement_id = ?, search_console_site_url = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
       WHERE id = ?
     `, [ga4PropertyId, ga4PropertyName, measurementId, searchConsoleSiteUrl, connection.id])
 
@@ -70,10 +67,7 @@ export default defineEventHandler(async (event) => {
     try {
       if (measurementId) {
         await syncTenantZarazAnalytics(env, db, {
-          siteId: site.id,
-          organizationId: site.organization_id,
-          measurementId,
-        })
+          siteId: site.id, organizationId: site.organization_id, measurementId, })
       } else {
         await removeTenantZarazAnalytics(env, db, site.id)
       }
@@ -87,6 +81,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to save selection. Try again.' }, { status: 502 })
   }
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam, readBody  } from 'nitro/h3';

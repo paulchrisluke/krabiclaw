@@ -1,7 +1,7 @@
 import { apiErrorResponse, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getPublishedPostBySlug } from '~/server/utils/post-management'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const slug = getRouterParam(event, 'slug')
   if (!siteId || !slug) return apiErrorResponse(event, 400, 'POST_PARAMS_REQUIRED', 'Site ID and post slug are required')
@@ -15,5 +15,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ success: true, post })
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

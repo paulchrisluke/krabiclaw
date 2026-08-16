@@ -5,13 +5,10 @@ import { platformPermissionJsonResponse } from '~/server/utils/platform-admin-us
 import { execute, queryAll } from '~/server/db'
 import { getOrganizationBillingProjection } from '~/server/utils/organization-billing'
 import {
-  completePaidSiteTransfer,
-  executeSiteTransfer,
-  newTransferClaimSentinel,
-} from '~/server/utils/site-transfer'
+  completePaidSiteTransfer, executeSiteTransfer, newTransferClaimSentinel, } from '~/server/utils/site-transfer'
 import { resolveTransferRecipientOrganizationsForEvent } from '~/server/utils/site-transfer-recipient'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'siteId required' }, { status: 400 })
 
@@ -45,8 +42,7 @@ export default defineEventHandler(async (event) => {
     stripe_checkout_session_id: string | null
     payment_completed_at: string | null
   }>(db, `
-    SELECT id, site_id, from_organization_id, to_email, status, requires_payment,
-           claiming_user_id, claiming_organization_id, stripe_checkout_session_id, payment_completed_at
+    SELECT id, site_id, from_organization_id, to_email, status, requires_payment, claiming_user_id, claiming_organization_id, stripe_checkout_session_id, payment_completed_at
     FROM site_transfer_requests
     WHERE site_id = ?
       AND (
@@ -99,8 +95,7 @@ export default defineEventHandler(async (event) => {
 
     if (billingProjection.effectivePlan === 'free') {
       return jsonResponse({
-        error: 'This transfer requires payment. The recipient must have an active billing subscription before the transfer can proceed.',
-      }, { status: 402 })
+        error: 'This transfer requires payment. The recipient must have an active billing subscription before the transfer can proceed.', }, { status: 402 })
     }
   }
 
@@ -126,28 +121,15 @@ export default defineEventHandler(async (event) => {
   try {
     if (!acceptedPaymentPending) {
       await executeSiteTransfer(
-        db,
-        transfer.site_id,
-        transfer.from_organization_id,
-        organizationId,
-        transfer.id,
-        recipientUserId,
-        {
-          expectedCheckoutSessionId: claimSentinel,
-          expectedClaimingUserId: recipientUserId,
-          expectedClaimingOrganizationId: organizationId,
-        },
-      )
+        db, transfer.site_id, transfer.from_organization_id, organizationId, transfer.id, recipientUserId, {
+          expectedCheckoutSessionId: claimSentinel, expectedClaimingUserId: recipientUserId, expectedClaimingOrganizationId: organizationId, }, )
     }
     if (transfer.requires_payment === 1) {
       await completePaidSiteTransfer(env, db, transfer.id)
     }
   } catch (error) {
     console.error('force_accept_site_transfer_completion_failed', {
-      transferId: transfer.id,
-      siteId: transfer.site_id,
-      error,
-    })
+      transferId: transfer.id, siteId: transfer.site_id, error, })
     if (claimSentinel) {
       try {
         await execute(db, `
@@ -159,22 +141,14 @@ export default defineEventHandler(async (event) => {
         `, [transfer.id, claimSentinel, recipientUserId, organizationId])
       } catch (cleanupError) {
         console.error('force_accept_site_transfer_claim_cleanup_failed', {
-          transferId: transfer.id,
-          siteId: transfer.site_id,
-          cleanupError,
-        })
+          transferId: transfer.id, siteId: transfer.site_id, cleanupError, })
       }
     }
     return jsonResponse({ error: 'Failed to complete this site handoff. Please retry.' }, { status: 500 })
   }
 
   return jsonResponse({
-    success: true,
-    site_id: transfer.site_id,
-    transferred_to_org: organizationId,
-    to_email: transfer.to_email,
-  })
+    success: true, site_id: transfer.site_id, transferred_to_org: organizationId, to_email: transfer.to_email, })
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam, readBody  } from 'nitro/h3';

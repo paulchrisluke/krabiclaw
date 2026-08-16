@@ -1,4 +1,5 @@
-import { createError, type H3Event } from 'h3'
+import { HTTPError } from 'nitro';
+import type { H3Event } from 'nitro';
 import { isIP } from 'node:net'
 import { mcpProtocolError, MCP_ERROR } from '~/server/utils/mcp-protocol'
 import { validateArguments } from '~/server/utils/mcp-tool-validation'
@@ -657,8 +658,10 @@ export async function executePlatformMcpToolCall(
     throw mcpProtocolError(MCP_ERROR.invalidParams, `Unknown tool: ${toolName}`, { unknownToolName: toolName }, 'protocol')
   }
 
-  const authBaseUrl = event.context.cloudflare?.env?.BETTER_AUTH_URL?.replace(/\/$/, '')
-  if (!authBaseUrl) throw createError({ statusCode: 500, statusMessage: 'BETTER_AUTH_URL is required' })
+  const authBaseUrl = typeof (event.runtime?.cloudflare?.env as Record<string, unknown> | undefined)?.BETTER_AUTH_URL === 'string'
+    ? ((event.runtime?.cloudflare?.env as Record<string, unknown>).BETTER_AUTH_URL as string).replace(/\/$/, '')
+    : undefined
+  if (!authBaseUrl) throw new HTTPError({ statusCode: 500, statusMessage: 'BETTER_AUTH_URL is required' })
   const user = await requireMcpUser(event, {
     // audiences (aud claim) + requirePlatformAdmin (DB role) are the real
     // boundary here, matching server/api/mcp/platform.post.ts.

@@ -1,4 +1,4 @@
-import { definePlugin } from 'nitro'
+import { definePlugin } from 'nitro';
 import type { MessageBatch } from '@cloudflare/workers-types'
 import { processGuestDelivery, type GuestDeliveryWorkerEnv } from '~/server/cloudflare/guest-delivery-queue'
 import type { GuestDeliveryQueueMessage } from '~/server/domain/guest-threads/outbox-publisher'

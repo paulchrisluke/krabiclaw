@@ -2,7 +2,7 @@ import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-res
 import { executeBatch } from '~/server/db'
 import { getReviewRequestByToken } from '~/server/utils/review-requests'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -21,8 +21,7 @@ export default defineEventHandler(async (event) => {
   await executeBatch(db, [
     {
       query: `UPDATE customers
-        SET review_request_opted_out_at = COALESCE(review_request_opted_out_at, ?),
-            updated_at = ?
+        SET review_request_opted_out_at = COALESCE(review_request_opted_out_at, ?), updated_at = ?
         WHERE id = ?
           AND organization_id = ?
           AND site_id = ?
@@ -39,28 +38,10 @@ export default defineEventHandler(async (event) => {
               AND rr.revoked_at IS NULL
               AND rr.submitted_at IS NULL
               AND rr.expires_at > ?
-          )`,
-      params: [
-        now,
-        now,
-        result.request.customer_id,
-        result.context.organization_id,
-        result.context.site_id,
-        result.request.id,
-        result.request.token_hash,
-        result.context.organization_id,
-        result.context.site_id,
-        result.request.booking_type,
-        result.request.booking_id,
-        now,
-      ],
-    },
-    {
-      query: `SELECT CASE WHEN changes() = 1 THEN NULL ELSE json(?) END`,
-      params: ['review opt-out lost its request-state guard'],
-    },
-  ])
+          )`, params: [
+        now, now, result.request.customer_id, result.context.organization_id, result.context.site_id, result.request.id, result.request.token_hash, result.context.organization_id, result.context.site_id, result.request.booking_type, result.request.booking_id, now, ], }, {
+      query: `SELECT CASE WHEN changes() = 1 THEN NULL ELSE json(?) END`, params: ['review opt-out lost its request-state guard'], }, ])
   return jsonResponse({ optedOut: true })
 })
-import { defineEventHandler } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { readBody } from 'nitro/h3';

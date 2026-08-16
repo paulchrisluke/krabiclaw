@@ -4,11 +4,10 @@ import { getDashboardContext } from "~/server/utils/dashboard-context";
 import { createWorkRequest } from "~/server/utils/work-request-management";
 import { fireSiteEventSafe, resolvePrimarySiteForEvent } from "~/server/utils/site-events";
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event);
   const { db, organization, site, userId } = await getDashboardContext(event, {
-    requireSite: false,
-  });
+    requireSite: false, });
 
   const body = (await readBody(event).catch(() => ({}))) as {
     type?: string;
@@ -28,30 +27,17 @@ export default defineEventHandler(async (event) => {
         ? "whatsapp"
         : "dashboard";
   const result = await createWorkRequest(env, db, organization.id, site?.id ?? null, {
-    type,
-    title: title ?? "",
-    description,
-    priority: body.priority,
-    source,
-  });
+    type, title: title ?? "", description, priority: body.priority, source, });
 
   if (result.status === 201 && "id" in result.data) {
     const eventSiteId = site?.id ?? (await resolvePrimarySiteForEvent(db, organization.id));
     if (eventSiteId) {
       await fireSiteEventSafe({
-        db,
-        organizationId: organization.id,
-        siteId: eventSiteId,
-        actorId: userId,
-        eventType: "work_request.created",
-        entityType: "work_request",
-        entityId: result.data.id,
-        metadata: { type, priority: body.priority ?? "normal", source },
-      });
+        db, organizationId: organization.id, siteId: eventSiteId, actorId: userId, eventType: "work_request.created", entityType: "work_request", entityId: result.data.id, metadata: { type, priority: body.priority ?? "normal", source }, });
     }
   }
 
   return jsonResponse(result.data, { status: result.status });
 });
-import { defineEventHandler } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { readBody } from 'nitro/h3';

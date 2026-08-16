@@ -1,5 +1,5 @@
 // POST /api/admin/content/[page] - Update platform page content
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { cloudflareEnv, jsonResponse, readRequiredBody } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { platformPermissionJsonResponse } from '~/server/utils/platform-admin-users'
 import { execute } from '~/server/db'
@@ -7,7 +7,7 @@ import { execute } from '~/server/db'
 import { ALLOWED_PLATFORM_CONTENT_PAGES } from '~/utils/platform-content-pages'
 const MAX_CONTENT_LENGTH = 1_000_000
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const page = getRouterParam(event, 'page')
   if (!page) return jsonResponse({ error: 'Page required' }, { status: 400 })
   if (!ALLOWED_PLATFORM_CONTENT_PAGES.includes(page)) return jsonResponse({ error: 'Invalid page' }, { status: 400 })
@@ -23,7 +23,7 @@ export default defineEventHandler(async (event) => {
   if (permissionDenied) return permissionDenied
 
   let body: { content?: string }
-  try { body = await readBody(event) } catch {
+  try { body = await readRequiredBody<{ content?: string }>(event) } catch {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
 
@@ -51,6 +51,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ success: true, page, updated_at: now })
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
-import { readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam  } from 'nitro/h3';

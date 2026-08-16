@@ -4,7 +4,7 @@ import { queryFirst } from '~/server/db'
 import { getDirectBookingPolicy, renderBookingPolicySummary, resolveBookingPolicy, validateBookingPolicyScope, type BookingPolicyScopeType, type BookingPolicyType } from '~/server/utils/booking-policies'
 import { assertResourceAccess } from '~/server/utils/member-access'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID is required' }, { status: 400 })
 
@@ -16,15 +16,12 @@ export default defineEventHandler(async (event) => {
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
   const site = await queryFirst<{ id: string; organization_id: string; member_id: string; member_role: string }>(
-    db,
-    `SELECT s.id, s.organization_id, om.id AS member_id, om.role AS member_role
+    db, `SELECT s.id, s.organization_id, om.id AS member_id, om.role AS member_role
      FROM sites s
      JOIN organization o ON s.organization_id = o.id
      JOIN member om ON o.id = om.organizationId
      WHERE s.id = ? AND om.userId = ?
-     LIMIT 1`,
-    [siteId, session.user.id],
-  )
+     LIMIT 1`, [siteId, session.user.id], )
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
   const query = getQuery(event)
@@ -52,15 +49,10 @@ export default defineEventHandler(async (event) => {
     const direct = await getDirectBookingPolicy(db, { siteId, policyType, scopeType, locationId, experienceId })
     const resolved = await resolveBookingPolicy(db, { siteId, policyType, locationId, experienceId })
     return jsonResponse({
-      success: true,
-      policy: direct,
-      resolved_policy: resolved,
-      summary: resolved.id ? renderBookingPolicySummary(resolved, locale) : null,
-    })
+      success: true, policy: direct, resolved_policy: resolved, summary: resolved.id ? renderBookingPolicySummary(resolved, locale) : null, })
   } catch (error) {
     return jsonResponse({ error: error instanceof Error ? error.message : 'Failed to load booking policy' }, { status: 400 })
   }
 })
-import { defineEventHandler } from 'h3'
-import { getQuery } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getQuery, getRouterParam  } from 'nitro/h3';

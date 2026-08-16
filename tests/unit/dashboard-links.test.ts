@@ -64,14 +64,13 @@ test('buildDashboardUrl rejects organizationId fallback for slug-routed dashboar
   }
 })
 
-test('buildDashboardUrl falls back to the default platform domain when env is unset', () => {
-  const url = buildDashboardUrl({
+test('buildDashboardUrl rejects missing platform domain configuration', () => {
+  assert.throws(() => buildDashboardUrl({
     env: {},
     organizationId: 'org_123',
     organizationSlug: 'pottery-house',
     siteSlug: 'site-a',
-  }, 'site.domains')
-  assert.equal(url, 'https://krabiclaw.com/dashboard/pottery-house/sites/site-a/domains')
+  }, 'site.domains'), /NUXT_PUBLIC_PLATFORM_DOMAIN is required/)
 })
 
 test('site destinations reject missing site context', () => {

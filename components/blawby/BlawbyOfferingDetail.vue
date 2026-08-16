@@ -119,7 +119,11 @@ const { identity, consultation, compliance } = await useBlawbyShell()
 const org = useBlawbyOrgIdentity(identity, compliance)
 const activeMedia = ref(0)
 const activeFeature = ref(0)
-const tabRefs = ref<Array<HTMLButtonElement | null>>([])
+interface FocusableTab {
+  focus: () => void
+}
+
+const tabRefs = ref<Array<FocusableTab | null>>([])
 const gallery = computed(() => {
   const media = [...offering.value.media]
   if (!media.length && offering.value.hero_image_url) media.push({ id: 'hero', url: offering.value.hero_image_url, kind: 'image', alt_text: offering.value.name, width: null, height: null })
@@ -155,7 +159,11 @@ const validOfferingQa = computed(() => offeringQa.value.flatMap((item) => {
 }))
 
 function setTabRef(element: unknown, index: number) {
-  tabRefs.value[index] = element as HTMLButtonElement | null
+  if (element && typeof element === 'object' && 'focus' in element && typeof element.focus === 'function') {
+    tabRefs.value[index] = element as FocusableTab
+  } else {
+    tabRefs.value[index] = null
+  }
 }
 
 function onTabKeydown(event: KeyboardEvent) {

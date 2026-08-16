@@ -155,6 +155,7 @@
 </template>
 
 <script setup lang="ts">
+import { $fetch } from 'ofetch'
 import BookingContactForm from '@/components/booking/BookingContactForm.vue'
 import BookingLocationStep from '@/components/booking/BookingLocationStep.vue'
 import BookingModal from '@/components/booking/BookingModal.vue'

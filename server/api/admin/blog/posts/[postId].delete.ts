@@ -5,7 +5,7 @@ import { platformPermissionJsonResponse } from '~/server/utils/platform-admin-us
 import { deletePlatformBlogPost } from '~/server/utils/platform-content'
 import { schedulePlatformKnowledgeIndexRebuild } from '~/server/utils/platform-search-rebuild'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const postId = getRouterParam(event, 'postId')
   if (!postId) return jsonResponse({ error: 'Post ID required' }, { status: 400 })
 
@@ -30,5 +30,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: message }, { status: statusCode })
   }
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

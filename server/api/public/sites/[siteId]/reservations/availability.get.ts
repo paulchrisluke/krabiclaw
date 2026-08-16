@@ -6,7 +6,7 @@ import { queryFirst } from '~/server/db'
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const MAX_DAYS = 14
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'siteId required' }, { status: 400 })
 
@@ -29,10 +29,7 @@ export default defineEventHandler(async (event) => {
   if (!site) return jsonResponse({ error: 'Site not found' }, { status: 404 })
 
   const location = await queryFirst<{ id: string; max_capacity: number | null; opening_hours: string | null }>(
-    db,
-    `SELECT id, max_capacity, opening_hours FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1`,
-    [locationId, siteId],
-  )
+    db, `SELECT id, max_capacity, opening_hours FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1`, [locationId, siteId], )
   if (!location) return jsonResponse({ error: 'Location not found' }, { status: 404 })
 
   let parsedHours: unknown = null
@@ -58,6 +55,6 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ timezone, dates })
 })
-import { defineEventHandler } from 'h3'
-import { getQuery } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getQuery } from 'nitro/h3';
+import { getRouterParam } from 'nitro/h3';

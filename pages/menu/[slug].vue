@@ -234,6 +234,7 @@
 </template>
 
 <script setup lang="ts">
+import { $fetch } from 'ofetch'
 definePageMeta({ layout: 'saya' })
 import AppBreadcrumb from '~/components/ui/AppBreadcrumb.vue'
 import { formatMoneyAmount, isSaleActive } from '~/shared/money'

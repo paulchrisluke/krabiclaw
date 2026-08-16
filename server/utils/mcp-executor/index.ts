@@ -1,4 +1,6 @@
-import type { H3Event } from 'h3'
+import { HTTPError } from 'nitro';
+
+import type { H3Event } from 'nitro'
 import { queryAll, queryFirst } from '~/server/db'
 import { getMcpTool } from '~/server/utils/mcp-tools'
 import { requireMcpSite, requireMcpUser } from '~/server/utils/mcp-auth'
@@ -158,7 +160,7 @@ export async function executeMcpToolCall(
     );
 
     if (!currentUser) {
-      throw createError({
+      throw new HTTPError({
         statusCode: 404,
         statusMessage: "Current user not found",
       });
@@ -275,7 +277,7 @@ export async function executeMcpToolCall(
         error instanceof PlaceDetailsError || error instanceof Error
           ? error.message
           : "Google Places detail lookup failed.";
-      throw createError({
+      throw new HTTPError({
         statusCode: 502,
         statusMessage: message,
       });
@@ -491,7 +493,7 @@ export async function executeMcpToolCall(
       tool.requiredEntitlement,
     ))
   ) {
-    throw createError({
+    throw new HTTPError({
       statusCode: 403,
       statusMessage: `${humanizeEntitlement(tool.requiredEntitlement)} is not enabled for this site.`,
     });

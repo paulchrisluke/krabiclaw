@@ -1,3 +1,5 @@
+import { HTTPError, defineHandler  } from 'nitro';
+
 // Dev-only endpoint for E2E test notification verification
 // Returns notification records matching query params. 404 in production.
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
@@ -17,22 +19,22 @@ function timingSafeEqualText(a: string, b: string): boolean {
   return diff === 0
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
+  const env = cloudflareEnv(event)
   const devMode = import.meta.dev
-  const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
+  const e2eOverride = env.E2E_ALLOW_DEV_ROUTES === 'true'
   if (!devMode && !e2eOverride) {
-    throw createError({ statusCode: 404, statusMessage: 'Not found' })
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Not found' })
   }
 
   if (!devMode && e2eOverride) {
-    const expected = process.env.E2E_DEV_ROUTE_SECRET || ''
-    const provided = getHeader(event, 'x-dev-route-secret') || ''
+    const expected = env.E2E_DEV_ROUTE_SECRET || ''
+    const provided = (event.req.headers.get('x-dev-route-secret')) || ''
     if (!expected || !provided || !timingSafeEqualText(provided, expected)) {
-      throw createError({ statusCode: 404, statusMessage: 'Not found' })
+      throw new HTTPError({ statusCode: 404, statusMessage: 'Not found' })
     }
   }
 
-  const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
@@ -64,6 +66,4 @@ export default defineEventHandler(async (event) => {
   const rows = await queryAll(db, sql, binds)
   return jsonResponse({ notifications: rows ?? [] })
 })
-import { defineEventHandler } from 'h3'
-import { getHeader } from 'h3'
-import { getQuery } from 'h3'
+import {  getQuery  } from 'nitro/h3';

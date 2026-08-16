@@ -1,3 +1,5 @@
+import { HTTPError } from 'nitro';
+
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import {
   createContentDocumentWithBlocks,
@@ -80,21 +82,21 @@ function parseStringArray(value: unknown): string[] {
   if (value === null || value === undefined || value === '') return []
   if (Array.isArray(value)) {
     if (value.some(item => typeof item !== 'string')) {
-      throw createError({ statusCode: 500, statusMessage: 'Blog tags contain a non-string value' })
+      throw new HTTPError({ statusCode: 500, statusMessage: 'Blog tags contain a non-string value' })
     }
     return value as string[]
   }
   if (typeof value !== 'string') {
-    throw createError({ statusCode: 500, statusMessage: 'Blog tags are not valid JSON' })
+    throw new HTTPError({ statusCode: 500, statusMessage: 'Blog tags are not valid JSON' })
   }
   let parsed: unknown
   try {
     parsed = JSON.parse(value) as unknown
   } catch {
-    throw createError({ statusCode: 500, statusMessage: 'Blog tags are not valid JSON' })
+    throw new HTTPError({ statusCode: 500, statusMessage: 'Blog tags are not valid JSON' })
   }
   if (!Array.isArray(parsed) || parsed.some(item => typeof item !== 'string')) {
-    throw createError({ statusCode: 500, statusMessage: 'Blog tags are not an array of strings' })
+    throw new HTTPError({ statusCode: 500, statusMessage: 'Blog tags are not an array of strings' })
   }
   return parsed as string[]
 }
@@ -105,10 +107,10 @@ export function parseBlogEditorThemeTokens(value: string | null | undefined): Ap
   try {
     parsed = JSON.parse(value) as unknown
   } catch {
-    throw createError({ statusCode: 500, statusMessage: 'Blog editor theme tokens are not valid JSON' })
+    throw new HTTPError({ statusCode: 500, statusMessage: 'Blog editor theme tokens are not valid JSON' })
   }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw createError({ statusCode: 500, statusMessage: 'Blog editor theme tokens must be a JSON object' })
+    throw new HTTPError({ statusCode: 500, statusMessage: 'Blog editor theme tokens must be a JSON object' })
   }
   return parsed as ApiRecord
 }
@@ -403,11 +405,11 @@ interface PlatformComponentReplacement extends PlatformComponentMetadataInput {
 }
 
 function badRequest(message: string): never {
-  throw createError({ statusCode: 400, statusMessage: message })
+  throw new HTTPError({ statusCode: 400, statusMessage: message })
 }
 
 function notFound(message: string): never {
-  throw createError({ statusCode: 404, statusMessage: message })
+  throw new HTTPError({ statusCode: 404, statusMessage: message })
 }
 
 // Lets every blog/doc tool accept either the row id or its public slug, so a
@@ -1294,7 +1296,7 @@ export async function getPublishedPlatformBlogPost(db: DbClient, category: strin
   if (!post) return null
 
   const contentBlocks = await getPublishedContentSnapshot(db, 'platform_blog', String(post.id))
-  if (!contentBlocks) throw createError({ statusCode: 500, statusMessage: 'Published blog content revision is missing' })
+  if (!contentBlocks) throw new HTTPError({ statusCode: 500, statusMessage: 'Published blog content revision is missing' })
   const components = structuredComponentsFromBlocks(contentBlocks)
   const socialImage = await resolveBlogSocialImage(db, { siteId: null, explicitAssetId: post.social_image_asset_id as string | null, legacyAssetId: post.featured_image_asset_id as string | null, blocks: contentBlocks })
 
@@ -1603,7 +1605,7 @@ export async function getPlatformBlogPost(db: DbClient, postIdOrSlug: string, si
   )
   if (!post) notFound('Post not found')
   const contentDocument = await getContentEditorSnapshot(db, blogContentOwnerType(siteId), postId)
-  if (!contentDocument) throw createError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
+  if (!contentDocument) throw new HTTPError({ statusCode: 500, statusMessage: 'Blog content document is missing' })
   const components = structuredComponentsFromBlocks(contentDocument.blocks)
   const slug = typeof post.slug === 'string' ? post.slug : ''
   const publicPath = siteId && slug ? await resolveTenantBlogPostPath(db, siteId, slug) : null
@@ -1667,7 +1669,7 @@ export async function getPublishedSiteBlogPost(db: DbClient, siteId: string, slu
   if (!post) return null
 
   const contentBlocks = await getPublishedContentSnapshot(db, 'tenant_blog', String(post.id))
-  if (!contentBlocks) throw createError({ statusCode: 500, statusMessage: 'Published blog content revision is missing' })
+  if (!contentBlocks) throw new HTTPError({ statusCode: 500, statusMessage: 'Published blog content revision is missing' })
   const components = structuredComponentsFromBlocks(contentBlocks)
   const socialImage = await resolveBlogSocialImage(db, { siteId, explicitAssetId: post.social_image_asset_id as string | null, legacyAssetId: post.featured_image_asset_id as string | null, blocks: contentBlocks })
 
@@ -1772,7 +1774,7 @@ export async function createPlatformBlogPost(
     }
   }
 
-  throw createError({ statusCode: 500, statusMessage: 'Failed to create post' })
+  throw new HTTPError({ statusCode: 500, statusMessage: 'Failed to create post' })
 }
 
 export async function updatePlatformBlogLifecycle(
@@ -1818,13 +1820,13 @@ export async function updatePlatformBlogLifecycle(
   if (rows.length > 1) badRequest('Ambiguous platform content identifier; use the row id.')
   const source = rows[0]!
   if (source.updated_at !== input.expected_updated_at) {
-    throw createError({ statusCode: 409, statusMessage: 'Blog post was updated by another writer' })
+    throw new HTTPError({ statusCode: 409, statusMessage: 'Blog post was updated by another writer' })
   }
   if (!source.document_id || !source.draft_revision_id || !source.document_updated_at) {
-    throw createError({ statusCode: 500, statusMessage: 'Blog content document is missing its draft revision' })
+    throw new HTTPError({ statusCode: 500, statusMessage: 'Blog content document is missing its draft revision' })
   }
   if (source.document_updated_at !== input.expected_document_updated_at) {
-    throw createError({ statusCode: 409, statusMessage: 'Content document was updated by another writer' })
+    throw new HTTPError({ statusCode: 409, statusMessage: 'Content document was updated by another writer' })
   }
 
   const sourceTimestamp = Date.parse(source.updated_at)
@@ -1919,10 +1921,10 @@ export async function updatePlatformBlogLifecycle(
     `, [source.document_id, source.id])
     if (!latest) notFound('Post not found')
     if (latest.updated_at !== input.expected_updated_at) {
-      throw createError({ statusCode: 409, statusMessage: 'Blog post was updated by another writer' })
+      throw new HTTPError({ statusCode: 409, statusMessage: 'Blog post was updated by another writer' })
     }
     if (latest.document_updated_at !== input.expected_document_updated_at || latest.draft_revision_id !== source.draft_revision_id) {
-      throw createError({ statusCode: 409, statusMessage: 'Content document was updated by another writer' })
+      throw new HTTPError({ statusCode: 409, statusMessage: 'Content document was updated by another writer' })
     }
     throw error
   }
@@ -1954,7 +1956,7 @@ export async function updatePlatformBlogPost(
   const current = await queryFirst<{ category: string | null; title: string; slug: string; status: string; published_at: string | null; first_published_at: string | null; slug_manually_overridden: number; updated_at: string }>(db, 'SELECT category, title, slug, status, published_at, first_published_at, slug_manually_overridden, updated_at FROM blog_posts WHERE id = ? LIMIT 1', [postId])
   if (!current) notFound('Post not found')
   if (input.expected_updated_at && current.updated_at !== input.expected_updated_at) {
-    throw createError({ statusCode: 409, statusMessage: 'Blog post was updated by another writer' })
+    throw new HTTPError({ statusCode: 409, statusMessage: 'Blog post was updated by another writer' })
   }
   let normalizedBlocks: Array<ContentBlockInput & { id?: string }> | null = null
   let contentDocument: Awaited<ReturnType<typeof getContentEditorSnapshot>> = null
@@ -1962,7 +1964,7 @@ export async function updatePlatformBlogPost(
     if (!input.expected_document_updated_at) badRequest('expected_document_updated_at is required with content_blocks')
     contentDocument = await getContentEditorSnapshot(db, blogContentOwnerType(siteId), postId)
     if (!contentDocument || contentDocument.document.updated_at !== input.expected_document_updated_at) {
-      throw createError({ statusCode: 409, statusMessage: 'Content document was updated by another writer' })
+      throw new HTTPError({ statusCode: 409, statusMessage: 'Content document was updated by another writer' })
     }
     normalizedBlocks = await normalizeEditorContentBlocks(db, input.content_blocks, siteId)
   }
@@ -2092,7 +2094,7 @@ export async function updatePlatformBlogPost(
       })
     } else {
       const post = await queryFirst<ApiRecord | null>(db, `${rowUpdate.query} RETURNING id`, rowUpdate.params)
-      if (!post && input.expected_updated_at) throw createError({ statusCode: 409, statusMessage: 'Blog post was updated by another writer' })
+      if (!post && input.expected_updated_at) throw new HTTPError({ statusCode: 409, statusMessage: 'Blog post was updated by another writer' })
       if (!post) notFound('Post not found')
     }
     blogMutationApplied = true
@@ -2115,7 +2117,7 @@ export async function updatePlatformBlogPost(
     if (!blogMutationApplied && input.expected_updated_at) {
       const latest = await queryFirst<{ updated_at: string } | null>(db, 'SELECT updated_at FROM blog_posts WHERE id = ? LIMIT 1', [postId])
       if (latest && latest.updated_at !== input.expected_updated_at) {
-        throw createError({ statusCode: 409, statusMessage: 'Blog post was updated by another writer' })
+        throw new HTTPError({ statusCode: 409, statusMessage: 'Blog post was updated by another writer' })
       }
     }
     if (isUniqueConstraintError(err, 'blog_posts')) badRequest('Slug already in use')
@@ -2333,7 +2335,7 @@ export async function createPlatformDoc(
     }
   }
 
-  throw createError({ statusCode: 500, statusMessage: 'Failed to create doc' })
+  throw new HTTPError({ statusCode: 500, statusMessage: 'Failed to create doc' })
 }
 
 export async function updatePlatformDoc(

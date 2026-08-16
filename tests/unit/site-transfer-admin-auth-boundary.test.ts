@@ -81,7 +81,7 @@ test.beforeEach(() => {
 })
 
 function invoke() {
-  return cancelHandler({ params: { siteId: 'site-source' } })
+  return cancelHandler({ context: { params: { siteId: 'site-source' } } })
 }
 
 test('a platform operator without exact tenant membership cannot cancel a transfer', async () => {

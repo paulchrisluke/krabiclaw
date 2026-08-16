@@ -111,7 +111,7 @@ test.after(() => {
 
 test('billing endpoint returns exact owned recipient organization options without Better Auth SQL', async () => {
   resolverCalls.length = 0
-  const result = await handler({ params: { orgId: 'org-source' } })
+  const result = await handler({ context: { params: { orgId: 'org-source' } } })
 
   assert.equal(result.status, 200)
   assert.deepEqual(resolverCalls, ['recipient@example.com'])

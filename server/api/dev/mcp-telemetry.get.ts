@@ -2,7 +2,7 @@ import { assertDevRouteAllowed } from '~/server/utils/dev-route-auth'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { queryAll } from '~/server/db'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   assertDevRouteAllowed(event)
 
   const env = cloudflareEnv(event)
@@ -19,24 +19,7 @@ export default defineEventHandler(async (event) => {
 
   let sql = `
     SELECT
-      id,
-      organization_id,
-      site_id,
-      location_id,
-      user_id,
-      mcp_surface,
-      request_id,
-      method,
-      tool_name,
-      tool_domain,
-      is_mutating,
-      arguments_summary_json,
-      result_summary_json,
-      status,
-      error_code,
-      error_message,
-      duration_ms,
-      created_at
+      id, organization_id, site_id, location_id, user_id, mcp_surface, request_id, method, tool_name, tool_domain, is_mutating, arguments_summary_json, result_summary_json, status, error_code, error_message, duration_ms, created_at
     FROM mcp_tool_call_events
     WHERE 1 = 1
   `
@@ -69,5 +52,5 @@ export default defineEventHandler(async (event) => {
   const events = await queryAll(db, sql, binds)
   return jsonResponse({ events: events ?? [] })
 })
-import { defineEventHandler } from 'h3'
-import { getQuery } from 'h3'
+import { defineHandler } from 'nitro';
+import { getQuery } from 'nitro/h3';

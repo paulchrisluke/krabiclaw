@@ -2,7 +2,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { getSiteForMember, listConversations } from '~/server/utils/chowbot-conversations'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
 
@@ -19,5 +19,5 @@ export default defineEventHandler(async (event) => {
   const conversations = await listConversations(db, siteId, session.user.id)
   return jsonResponse({ success: true, conversations })
 })
-import { defineEventHandler } from 'h3'
-import { getRouterParam } from 'h3'
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

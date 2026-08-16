@@ -2,11 +2,11 @@
 import { cloudflareEnv, jsonResponse } from '../utils/api-response'
 import { getAuthSession } from '../utils/auth'
 import { DEMO_ORG_ID } from '../utils/demo'
-import { defineEventHandler } from 'h3'
+import { defineHandler } from 'nitro';
 import { queryAll } from '~/server/db'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   
