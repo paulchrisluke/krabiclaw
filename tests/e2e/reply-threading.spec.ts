@@ -261,8 +261,10 @@ test.describe('reply threading', () => {
     const guestEmail = `owner-reply-${Date.now()}@playwright.example`
     const replyBody = `Thanks for your reservation. We have you down for 7:00 PM. Ref ${Date.now()}`
 
-    const createRes = await request.post(`${tenantBaseURL}/api/public/sites/${demoSiteId}/reservations`, {
-      data: {
+    const createRes = await fetch(`${tenantBaseURL}/api/public/sites/${demoSiteId}/reservations`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
         name: 'Owner Reply Flow Test',
         email: guestEmail,
         phone: '+14155552673',
@@ -271,9 +273,10 @@ test.describe('reply threading', () => {
         guests: '2',
         requests: 'Window seat if possible',
         location_id: 'loc-demo',
-      },
+      }),
+      signal: AbortSignal.timeout(30_000),
     })
-    expect(createRes.status()).toBe(201)
+    expect(createRes.status).toBe(201)
     const createBody = await createRes.json() as { id: string }
 
     const ownerNotifications = await waitForReplyNotification(
