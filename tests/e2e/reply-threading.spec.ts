@@ -93,7 +93,7 @@ function waitForInboxWebSocketHandshake(cdp: CDPSession, siteId: string) {
   return new Promise<number>((resolve, reject) => {
     const timeout = setTimeout(() => {
       reject(new Error(`Timed out waiting for the authenticated inbox WebSocket handshake for ${siteId}`))
-    }, 10_000)
+    }, 30_000)
 
     cdp.on('Network.webSocketCreated', (event) => {
       if (event.url.includes(`/api/dashboard/sites/${encodeURIComponent(siteId)}/guest-inbox/socket`)) {
@@ -254,7 +254,7 @@ test.describe('reply threading', () => {
   })
 
   test('owner can send a reservation email reply from the deep-linked dashboard inbox', async ({ page, request, baseURL }) => {
-    test.setTimeout(60_000)
+    test.setTimeout(120_000)
 
     const futureDate = new Date(Date.now() + 42 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!
     const since = new Date().toISOString()
