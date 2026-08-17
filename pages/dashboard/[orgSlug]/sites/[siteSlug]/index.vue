@@ -36,7 +36,7 @@
           />
         </div>
 
-        <div v-if="pending || supportingPending" class="space-y-4">
+        <div v-if="!mounted || pending || supportingPending" class="space-y-4">
           <USkeleton v-for="index in 6" :key="index" class="h-36 rounded-2xl" />
         </div>
 
@@ -178,6 +178,10 @@ interface LinkItem { id: string; label: string; destination: string; status: str
 const dashboardApi = useDashboardApi()
 const dashboard = useDashboardSite()
 const requestEvent = useRequestEvent()
+const mounted = ref(false)
+onMounted(() => {
+  mounted.value = true
+})
 if (!dashboard.state.value) await dashboard.refresh()
 const siteId = dashboard.siteId.value
 if (!siteId) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
