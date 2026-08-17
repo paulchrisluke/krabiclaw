@@ -52,7 +52,9 @@ Production deploys and client imports that write `blog_posts` directly do **not*
   the production branch deployment job. Its result is retained with the
   production release evidence; direct deploy commands cannot invoke it.
 - Production CI (`.github/workflows/ci.yml`) syncs the `PLATFORM_SEARCH_REINDEX_SECRET` repo secret and runs a blocking "Rebuild AI Search index (production)" step. A failed production rebuild fails the deploy job instead of silently leaving production search stale.
-- Preview and staging deploys intentionally do not rebuild AI Search. Their deploy and smoke-test health is independent of indexing the non-production fixture corpus.
+- Preview deploys intentionally do not rebuild AI Search. Staging deploys rebuild
+  the environment-specific index after deterministic fixture provisioning and
+  fail before browser coverage if the public search endpoint is unavailable.
 
 Any new script that writes `blog_posts`, `platform_docs`, or NCLS/Blawby-style tenant blog fixtures directly (bypassing the admin/MCP write paths) must either call `POST /api/internal/search/reindex` itself or be followed by `yarn ai-search:sync` in whatever deploy/CI step runs it.
 
