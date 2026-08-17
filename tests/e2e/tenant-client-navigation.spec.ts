@@ -3,10 +3,10 @@
 // content while its own page fetch is still in flight. See
 // composables/usePublicPageData.ts and composables/useSiteShell.ts for the fix.
 //
-// The page XHR is deliberately delayed via route interception so the
-// race window is wide enough to observe deterministically — on unthrottled
-// local/CI networks the fetch can resolve fast enough that a regression
-// wouldn't reliably show up otherwise.
+// The page XHR is deliberately delayed via route interception so the race
+// window is wide enough to observe deterministically — on unthrottled local/CI
+// networks it can resolve fast enough that a regression wouldn't reliably show
+// up otherwise.
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import {
@@ -64,7 +64,7 @@ async function navigateAndAssertAuthoritative(page: Page, opts: {
   let navigationStarted = false
   await page.route('**/api/public/sites/*/page*', async (route) => {
     if (!navigationStarted) {
-      await route.continue()
+      await route.fallback()
       return
     }
     const url = new URL(route.request().url())
@@ -77,19 +77,25 @@ async function navigateAndAssertAuthoritative(page: Page, opts: {
       url.searchParams.get('page') !== expectedPage
       || (expectedSlug && ![url.searchParams.get('experience'), url.searchParams.get('location')].includes(expectedSlug))
     ) {
-      await route.continue()
+      await route.fallback()
       return
     }
     markPageRequestPaused()
     await pageRequestPaused
-    await route.continue()
+    await route.fallback()
   })
 
   await page.goto(`${tenantBaseURL}${opts.fromPath}`, { waitUntil: 'load' })
   await expect(page.locator('body')).toContainText(opts.beforeText)
+  for (const forbidden of opts.forbiddenTexts) {
+    await expect(page.locator('main')).not.toContainText(forbidden)
+  }
   const link = page.locator(`a[href="${opts.linkHref}"]`).first()
   await expect(link).toBeVisible()
   await expect(link).toHaveAttribute('href', opts.linkHref)
+  await page.waitForFunction(() => Boolean(
+    (document.querySelector('#__nuxt') as (Element & { __vue_app__?: unknown }) | null)?.__vue_app__,
+  ))
   // Dispatch the click without Playwright waiting for navigation completion;
   // the behavior under test is specifically the state before data completes.
   navigationStarted = true
@@ -106,6 +112,9 @@ async function navigateAndAssertAuthoritative(page: Page, opts: {
   releasePageRequest()
   await expect(page.locator('main[data-route-shell]')).toHaveAttribute('data-route-shell', opts.linkHref)
   await expect(page.locator('body')).toContainText(opts.afterText)
+  for (const forbidden of opts.forbiddenTexts) {
+    await expect(page.locator('main')).not.toContainText(forbidden)
+  }
   expectNoHydrationOrScopeErrors(errors)
 }
 

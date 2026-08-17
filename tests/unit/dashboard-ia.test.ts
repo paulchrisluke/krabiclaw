@@ -176,6 +176,14 @@ test('account surfaces use the mobile index and row-based account design', () =>
   assert.doesNotMatch(billing, /<UCard/)
 })
 
+test('account menu defers session-owned avatar text until client hydration', () => {
+  const menu = source('lib/components/workspace/dashboard/DashboardAccountMenu.vue')
+  assert.match(menu, /const hydrated = ref\(false\)/)
+  assert.match(menu, /renderedUser = computed\(\(\) => hydrated\.value \? sessionData\.value\?\.user \?\? null : null\)/)
+  assert.match(menu, /onMounted\(\(\) => \{\s*hydrated\.value = true/)
+  assert.doesNotMatch(menu, /:avatar="\{ src: sessionData\?\.user/)
+})
+
 test('mobile account avatar opens the shared sheet from the bottom nav and moves to the header on account pages', () => {
   const layout = source('layouts/dashboard.vue')
   assert.match(layout, /<DashboardAccountMenu mobile-only \/>/)
