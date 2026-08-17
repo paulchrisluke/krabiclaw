@@ -186,6 +186,12 @@ jobs:
           } >> "$GITHUB_ENV"
       - name: Build staging Worker
         run: yarn build
+      - name: Sync staging search reindex secret
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PLATFORM_SEARCH_REINDEX_SECRET: ${{ secrets.PLATFORM_SEARCH_REINDEX_SECRET }}
+        run: printf '%s' "$PLATFORM_SEARCH_REINDEX_SECRET" | npx wrangler secret put PLATFORM_SEARCH_REINDEX_SECRET --env staging
       - name: Deploy staging Worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
