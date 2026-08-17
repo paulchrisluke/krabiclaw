@@ -1,5 +1,5 @@
 import type Stripe from 'stripe'
-import { createError } from 'h3'
+import { HTTPError } from 'nitro';
 import { executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
 import { betterAuthTimestampToIso } from '~/server/utils/better-auth-timestamps'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
@@ -214,9 +214,9 @@ export async function requireBillingAccess(
     userId,
     organizationId,
   })
-  if (!membership) throw createError({ statusCode: 403, statusMessage: 'Access denied: Not a member of this organization' })
+  if (!membership) throw new HTTPError({ statusCode: 403, statusMessage: 'Access denied: Not a member of this organization' })
   if (!await hasBillingUpdatePermission(organizationId, String(membership.role))) {
-    throw createError({ statusCode: 403, statusMessage: 'Access denied: Only owners can manage billing' })
+    throw new HTTPError({ statusCode: 403, statusMessage: 'Access denied: Only owners can manage billing' })
   }
 }
 

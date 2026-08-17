@@ -6,7 +6,7 @@ import { PUBLIC_SEARCH_TYPES, type PublicSearchTypeFilter } from '~/server/utils
 
 const IP_HOURLY_LIMIT = 120
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const query = getQuery(event)
   const q = typeof query.q === 'string' ? query.q : ''
   const type = typeof query.type === 'string' ? query.type : 'all'
@@ -45,11 +45,7 @@ export default defineEventHandler(async (event) => {
       const clientIp = getClientIp(event)
       const hourWindow = Math.floor(Date.now() / 3_600_000)
       const rateLimitOk = await incrementHourlyRateLimit(
-        db,
-        `rate:public-search:ip:${await hashClientIp(clientIp)}:${hourWindow}`,
-        IP_HOURLY_LIMIT,
-        3_600_000,
-      )
+        db, `rate:public-search:ip:${await hashClientIp(clientIp)}:${hourWindow}`, IP_HOURLY_LIMIT, 3_600_000, )
       if (!rateLimitOk) {
         return jsonResponse({ error: 'Too many requests. Please try again later.' }, { status: 429 })
       }
@@ -63,21 +59,15 @@ export default defineEventHandler(async (event) => {
     }
 
     const results = await searchPublicResources(env, q, {
-      type: type as PublicSearchTypeFilter,
-      surface: surface as 'public' | 'docs' | 'blog' | 'dashboard' | 'help' | 'chowbot' | 'tenant_blog',
-      limit: 10,
-      siteId: isTenantRequest && surface === 'tenant_blog' ? String(event.context.siteId) : null,
-      dashboardContext: requiresDashboardAuth
+      type: type as PublicSearchTypeFilter, surface: surface as 'public' | 'docs' | 'blog' | 'dashboard' | 'help' | 'chowbot' | 'tenant_blog', limit: 10, siteId: isTenantRequest && surface === 'tenant_blog' ? String(event.context.siteId) : null, dashboardContext: requiresDashboardAuth
         ? {
-            orgSlug: orgSlug || null,
-            siteSlug: siteSlug || null,
-            locationSlug: locationSlug || null,
-          }
-        : undefined,
-    })
+            orgSlug: orgSlug || null, siteSlug: siteSlug || null, locationSlug: locationSlug || null, }
+        : undefined, })
     return jsonResponse({ query: q, surface, results })
   } catch (error) {
     console.error('Failed to run public search:', error)
     return jsonResponse({ error: 'Failed to search public resources' }, { status: 500 })
   }
 })
+import { defineHandler } from 'nitro';
+import { getQuery } from 'nitro/h3';

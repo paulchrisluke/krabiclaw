@@ -1,4 +1,7 @@
-import { getHeader, type H3Event } from 'h3'
+
+
+import type { H3Event } from 'nitro';
+
 
 export const MCP_PROTOCOL_VERSION = '2025-11-25'
 export const SUPPORTED_PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'] as const
@@ -47,9 +50,9 @@ export function readMcpRequest(event: H3Event, body: unknown): McpRpcRequest {
   }
 
   const request = body as McpRpcRequest
-  const headerMethod = getHeader(event, 'mcp-method')
-  const headerVersion = getHeader(event, 'mcp-protocol-version')
-  const headerName = getHeader(event, 'mcp-name')
+  const headerMethod = (event.req.headers.get('mcp-method'))
+  const headerVersion = (event.req.headers.get('mcp-protocol-version'))
+  const headerName = (event.req.headers.get('mcp-name'))
 
   const method = request.method ?? headerMethod ?? metaString(request, 'io.modelcontextprotocol/method')
   if (!method) {
@@ -149,7 +152,7 @@ export function asMcpError(error: unknown): McpErrorShape {
   }
 
   // Business-logic validation shared between REST dashboard routes and MCP
-  // tool executors (e.g. server/utils/experiences.ts) throws h3's createError
+  // tool executors (e.g. server/utils/experiences.ts) throws h3's HTTPError
   // with statusCode 400/404 rather than mcpProtocolError, since it has no MCP
   // awareness. Treat those as tool execution failures so tools/call converts
   // them to isError:true results instead of leaking raw HTTP errors.

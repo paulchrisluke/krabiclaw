@@ -4,7 +4,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { listReservationSubmissions } from '~/server/utils/mcp-workflows'
 import { queryFirst } from '~/server/db'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
   const env = cloudflareEnv(event)
@@ -14,11 +14,8 @@ export default defineEventHandler(async (event) => {
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
   const site = await queryFirst(
-    db,
-    `SELECT s.organization_id FROM sites s JOIN member m ON s.organization_id = m.organizationId
-     WHERE s.id = ? AND m.userId = ? LIMIT 1`,
-    [siteId, session.user.id],
-  )
+    db, `SELECT s.organization_id FROM sites s JOIN member m ON s.organization_id = m.organizationId
+     WHERE s.id = ? AND m.userId = ? LIMIT 1`, [siteId, session.user.id], )
   if (!site) return jsonResponse({ error: 'Access denied' }, { status: 403 })
 
   const query = getQuery(event)
@@ -28,13 +25,12 @@ export default defineEventHandler(async (event) => {
 
   if (locationId) {
     const location = await queryFirst<{ id: string }>(
-      db,
-      `SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1`,
-      [locationId, siteId],
-    )
+      db, `SELECT id FROM business_locations WHERE id = ? AND site_id = ? LIMIT 1`, [locationId, siteId], )
     if (!location) return jsonResponse({ error: 'location_id must reference a location on this site' }, { status: 400 })
   }
 
   const submissions = await listReservationSubmissions(db, siteId, { locationId })
   return jsonResponse({ submissions })
 })
+import { defineHandler } from 'nitro';
+import { getQuery, getRouterParam  } from 'nitro/h3';

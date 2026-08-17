@@ -1,28 +1,26 @@
 // PATCH /api/editor/sites/[siteId]/reviews/[reviewId]
 // Allows owners/admins to set owner_reply, change status (approve/hide)
-import { jsonResponse } from '~/server/utils/api-response'
+import { jsonResponse, readRequiredBody } from '~/server/utils/api-response'
 import { requireSiteAccess } from '~/server/utils/location-access'
 import { assertOrganizationAccess } from '~/server/utils/member-access'
 import { replyToReview } from '~/server/utils/review-management'
 import { execute } from '~/server/db'
 import { updateOwnerEnteredSiteReview } from '~/server/utils/site-reviews'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const reviewId = getRouterParam(event, 'reviewId')
 
   const { db, site } = await requireSiteAccess(event, siteId!, 'context')
   assertOrganizationAccess(site.member_role)
 
-  const body = await readBody(event)
+  const body = await readRequiredBody<ApiRecord>(event)
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
 
   const ownerEntryFields = [
-    'author_name', 'rating', 'title', 'content', 'collection_method',
-    'original_review_date', 'original_reference', 'publication_authorized',
-  ]
+    'author_name', 'rating', 'title', 'content', 'collection_method', 'original_review_date', 'original_reference', 'publication_authorized', ]
   const hasOwnerEntryFields = ownerEntryFields.some(field => field in body)
   if (hasOwnerEntryFields && 'owner_reply' in body) {
     return jsonResponse({ error: 'owner_reply cannot be combined with owner-entered review fields in the same request' }, { status: 400 })
@@ -73,3 +71,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ updated: true })
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam  } from 'nitro/h3';

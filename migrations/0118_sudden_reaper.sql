@@ -1,0 +1,1 @@
+ALTER TABLE `site_locales` DROP COLUMN `fallback_enabled`;

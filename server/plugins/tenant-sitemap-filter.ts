@@ -1,8 +1,9 @@
-import type { H3Event } from 'h3'
+import type { H3Event } from 'nitro'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { queryAll, type DbClient } from '~/server/db'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { TENANT_TYPES } from '~/utils/tenant-routing'
+import { definePlugin } from 'nitro';
 
 function pathFromLoc(input: unknown) {
   const loc = typeof input === 'string'
@@ -37,14 +38,14 @@ function isAllowedTenantPath(event: H3Event, path: string, publishedPaths: Set<s
   const site = event.context.site as { theme?: string | null; vertical?: string | null } | undefined
   const template = resolvePublicTemplate({
     theme: site?.theme,
-    themeId: event.context.themeId,
+    themeId: event.context.themeId as string | null | undefined,
     vertical: site?.vertical,
   })
   const exactPaths = new Set(template.sitemap.exactPaths)
   return publishedPaths.has(path) || exactPaths.has(path) || template.sitemap.dynamicPrefixes.some(prefix => path.startsWith(prefix))
 }
 
-export default defineNitroPlugin((nitroApp) => {
+export default definePlugin((nitroApp) => {
   const filterTenantUrls = async <T>(ctx: { event: H3Event; urls: T[] }) => {
     if (ctx.event.context.tenantType !== TENANT_TYPES.TENANT) return
     const env = cloudflareEnv(ctx.event)

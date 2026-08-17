@@ -5,7 +5,7 @@ import { publicSurfaceStylesheetForRequest } from '../../utils/public-surface-hi
 test('public document stylesheet preload follows the owning surface and route', () => {
   assert.equal(
     publicSurfaceStylesheetForRequest({ pathname: '/', tenantType: 'platform' }),
-    '/_nuxt/surfaces/platform-home.css',
+    '/_nuxt/surfaces/platform.css',
   )
   assert.equal(
     publicSurfaceStylesheetForRequest({ pathname: '/about', tenantType: 'platform' }),
@@ -18,7 +18,7 @@ test('public document stylesheet preload follows the owning surface and route', 
       themeId: 'saya-theme-v1',
       vertical: 'experience',
     }),
-    '/_nuxt/surfaces/saya-home.css',
+    '/_nuxt/surfaces/saya.css',
   )
   assert.equal(
     publicSurfaceStylesheetForRequest({

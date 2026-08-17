@@ -1,5 +1,6 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
-import { createError, getHeader } from 'h3'
+import { HTTPError, defineHandler  } from 'nitro';
+import {  readBody  } from 'nitro/h3';
 
 const textEncoder = new TextEncoder()
 
@@ -28,19 +29,19 @@ async function hmacHex(secret: string, payload: string): Promise<string> {
   return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const devMode = import.meta.dev
   const e2eOverride = env.E2E_ALLOW_DEV_ROUTES === 'true'
   if (!devMode && !e2eOverride) {
-    throw createError({ statusCode: 404, statusMessage: 'Not found' })
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Not found' })
   }
 
   if (!devMode && e2eOverride) {
     const expectedSecret = env.E2E_DEV_ROUTE_SECRET || ''
-    const providedSecret = getHeader(event, 'x-dev-route-secret') || ''
+    const providedSecret = (event.req.headers.get('x-dev-route-secret')) || ''
     if (!expectedSecret || !providedSecret || !timingSafeEqualText(providedSecret, expectedSecret)) {
-      throw createError({ statusCode: 403, statusMessage: 'Forbidden' })
+      throw new HTTPError({ statusCode: 403, statusMessage: 'Forbidden' })
     }
   }
 

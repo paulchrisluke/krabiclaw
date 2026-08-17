@@ -1,9 +1,11 @@
+import { HTTPError, defineHandler  } from 'nitro';
+
 // POST /api/ai/[siteId]/posts/generate
 // Accepts a text prompt and optional base64 image.
 // Calls Claude via CF AI Gateway and returns generated post content (title + body).
 // Does NOT save — the client saves via POST /api/editor/sites/[siteId]/posts.
 
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { cloudflareEnv, jsonResponse, readRequiredBody } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { callAiGateway, imageBlock, textBlock } from '~/server/utils/ai-gateway'
 import { hasCredits, chargeCredits } from '~/server/utils/ai-credits'
@@ -18,7 +20,7 @@ Return a JSON object with exactly two keys:
 
 Return ONLY valid JSON. No markdown, no explanation.`
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
 
@@ -48,7 +50,7 @@ export default defineEventHandler(async (event) => {
   }
 
   let body: { prompt?: string; image_base64?: string; image_mime?: string }
-  try { body = await readBody(event) } catch {
+  try { body = await readRequiredBody<{ prompt?: string; image_base64?: string; image_mime?: string }>(event) } catch {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
 
@@ -71,7 +73,8 @@ export default defineEventHandler(async (event) => {
   const prompt = body.prompt?.trim()
   if (!prompt) return jsonResponse({ error: 'prompt is required' }, { status: 400 })
 
-  const restaurantName = (site.brand_name as string | null) ?? 'the restaurant'
+  const restaurantName = typeof site.brand_name === 'string' ? site.brand_name.trim() : ''
+  if (!restaurantName) throw new HTTPError({ statusCode: 500, statusMessage: 'Site brand name is not configured' })
   const userContent: ApiRecord[] = []
 
   if (body.image_base64 && body.image_mime) {
@@ -96,10 +99,7 @@ export default defineEventHandler(async (event) => {
   let aiResponse
   try {
     aiResponse = await callAiGateway(env, [{ role: 'user', content: userContent }], {
-      system: SYSTEM,
-      maxTokens: 512,
-      metadata: { org_id: orgId, site_id: siteId, action: 'post_generate' },
-    })
+      system: SYSTEM, maxTokens: 512, metadata: { org_id: orgId, site_id: siteId, action: 'post_generate' }, })
   } catch {
     return jsonResponse({ error: 'AI generation failed. Please try again.' }, { status: 502 })
   }
@@ -108,14 +108,7 @@ export default defineEventHandler(async (event) => {
   let newBalance = 0
   try {
     const charged = await chargeCredits(db, orgId, {
-      siteId,
-      sessionId: session.session.id,
-      action: 'post_generate',
-      model: 'claude-sonnet-4-6',
-      inputTokens: aiResponse.usage.input_tokens,
-      outputTokens: aiResponse.usage.output_tokens,
-      cfGatewayLogId: aiResponse.cfLogId,
-    })
+      siteId, sessionId: session.session.id, action: 'post_generate', model: 'claude-sonnet-4-6', inputTokens: aiResponse.usage.input_tokens, outputTokens: aiResponse.usage.output_tokens, cfGatewayLogId: aiResponse.cfLogId, })
     creditsCharged = charged.creditsCharged
     newBalance = charged.newBalance
   } catch (err) {
@@ -150,8 +143,6 @@ export default defineEventHandler(async (event) => {
   }
 
   return jsonResponse({
-    success: true,
-    generated: { title: parsed.title ?? null, body: parsed.body ?? '' },
-    credits: { charged: creditsCharged, remaining: newBalance },
-  })
+    success: true, generated: { title: parsed.title ?? null, body: parsed.body ?? '' }, credits: { charged: creditsCharged, remaining: newBalance }, })
 })
+import { getRouterParam  } from 'nitro/h3';

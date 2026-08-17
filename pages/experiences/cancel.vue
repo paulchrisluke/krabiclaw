@@ -71,6 +71,7 @@
 </template>
 
 <script setup lang="ts">
+import { $fetch } from 'ofetch'
 definePageMeta({ layout: 'saya' })
 
 const { t } = useI18n()
@@ -81,13 +82,13 @@ const { siteId } = useTenantSite()
 const bookingId = computed(() => route.query.id as string)
 const token = computed(() => route.hash ? route.hash.substring(1) : '')
 
-const { data: bookingData, pending } = await useFetch(
-  () => `/api/public/sites/${siteId}/experiences/bookings/${bookingId.value}`,
-  {
-    headers: { Authorization: `Bearer ${token.value}` },
-    key: `cancel-xp-booking-${bookingId.value}`,
-    immediate: !!bookingId.value && !!token.value
-  }
+const { data: bookingData, pending } = await useAsyncData<ApiRecord>(
+  `cancel-xp-booking-${bookingId.value}`,
+  () => $fetch<ApiRecord>(
+    `/api/public/sites/${siteId}/experiences/bookings/${bookingId.value}`,
+    { headers: { Authorization: `Bearer ${token.value}` } },
+  ),
+  { immediate: !!bookingId.value && !!token.value },
 )
 
 const booking = computed(() => (bookingData as ApiValue).value?.booking || null)

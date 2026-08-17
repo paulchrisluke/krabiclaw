@@ -183,6 +183,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '~/utils/formatters'
 import { getErrorMessage } from '~/utils/errors'
 
 definePageMeta({ layout: 'dashboard' })

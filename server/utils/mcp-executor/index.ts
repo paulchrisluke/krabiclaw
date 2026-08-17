@@ -1,4 +1,6 @@
-import type { H3Event } from 'h3'
+import { HTTPError } from 'nitro';
+
+import type { H3Event } from 'nitro'
 import { queryAll, queryFirst } from '~/server/db'
 import { getMcpTool } from '~/server/utils/mcp-tools'
 import { requireMcpSite, requireMcpUser } from '~/server/utils/mcp-auth'
@@ -32,6 +34,7 @@ import {
   humanizeEntitlement,
   normalizeWorkspaceArguments,
   resolveGoogleMapsPlace,
+  resolveSitePublicOrigin,
   validateRequiredArguments,
   workspaceContextPayload,
   workspaceLocationsPayload,
@@ -115,7 +118,11 @@ export async function executeMcpToolCall(
       name: s.brand_name ?? s.slug,
       subdomain: s.subdomain,
       orgSlug: s.slug,
-      publicUrl: s.subdomain ? `https://${s.subdomain}.krabiclaw.com` : null,
+      publicUrl: resolveSitePublicOrigin({
+        public_url: typeof s.public_url === 'string' ? s.public_url : null,
+        custom_domain: typeof s.custom_domain === 'string' ? s.custom_domain : null,
+        subdomain: typeof s.subdomain === 'string' ? s.subdomain : null,
+      }, user.env),
       status: s.status ?? "draft",
       active: s.id === workspace.site?.id,
     }));
@@ -153,7 +160,7 @@ export async function executeMcpToolCall(
     );
 
     if (!currentUser) {
-      throw createError({
+      throw new HTTPError({
         statusCode: 404,
         statusMessage: "Current user not found",
       });
@@ -270,7 +277,7 @@ export async function executeMcpToolCall(
         error instanceof PlaceDetailsError || error instanceof Error
           ? error.message
           : "Google Places detail lookup failed.";
-      throw createError({
+      throw new HTTPError({
         statusCode: 502,
         statusMessage: message,
       });
@@ -486,7 +493,7 @@ export async function executeMcpToolCall(
       tool.requiredEntitlement,
     ))
   ) {
-    throw createError({
+    throw new HTTPError({
       statusCode: 403,
       statusMessage: `${humanizeEntitlement(tool.requiredEntitlement)} is not enabled for this site.`,
     });

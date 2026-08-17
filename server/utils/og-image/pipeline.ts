@@ -1,4 +1,4 @@
-import type { H3Event } from 'h3'
+import type { H3Event } from 'nitro'
 import type { OgImageRenderPayload } from '~/utils/social-metadata'
 import { computeOgImageCacheKey } from '~/utils/social-metadata'
 import { renderOgImagePng } from './render.ts'
@@ -23,6 +23,7 @@ export interface ResolveOgImageDeps {
 }
 
 interface OgImageBindings {
+  NUXT_PUBLIC_PLATFORM_DOMAIN?: string
   SITE_CACHE?: {
     get(_key: string, _type: 'arrayBuffer'): Promise<ArrayBuffer | null>
     put(_key: string, _value: ArrayBuffer, _options?: { expirationTtl?: number }): Promise<void>
@@ -30,7 +31,7 @@ interface OgImageBindings {
 }
 
 function getBindings(event: H3Event): OgImageBindings {
-  return (event.context.cloudflare?.env as OgImageBindings | undefined) ?? {}
+  return (event.runtime?.cloudflare?.env as OgImageBindings | undefined) ?? {}
 }
 
 /** The one image-generation/cache/response pipeline every OG image request goes through. */
@@ -54,7 +55,9 @@ export async function resolveOgImage(
   }
 
   try {
-    const bytes = await (deps.render ?? renderOgImagePng)(payload, {})
+    const bytes = await (deps.render ?? renderOgImagePng)(payload, {
+      platformDomain: (event.runtime?.cloudflare?.env as OgImageBindings | undefined)?.NUXT_PUBLIC_PLATFORM_DOMAIN,
+    })
     if (SITE_CACHE) {
       try {
         const activeBytes = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer

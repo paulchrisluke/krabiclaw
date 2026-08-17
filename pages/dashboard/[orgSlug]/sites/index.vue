@@ -35,14 +35,14 @@
                 <img
                   v-if="s.preview_image_url"
                   :src="s.preview_image_url"
-                  :alt="`${s.brand_name ?? s.subdomain ?? 'Site'} preview`"
+                  :alt="`${s.brand_name ?? s.subdomain ?? s.id} preview`"
                   class="size-full object-cover"
                 >
                 <span v-else class="text-lg font-semibold text-muted">{{ (s.brand_name ?? s.subdomain ?? 'S').charAt(0).toUpperCase() }}</span>
               </div>
               <div class="min-w-0 flex-1">
-                <p class="truncate text-sm font-semibold text-highlighted">{{ s.brand_name ?? s.subdomain ?? 'Untitled site' }}</p>
-                <p class="truncate text-xs text-muted">{{ s.subdomain ? `${s.subdomain}.krabiclaw.com` : 'Setup in progress' }}</p>
+                <p class="truncate text-sm font-semibold text-highlighted">{{ s.brand_name ?? s.subdomain ?? s.id }}</p>
+                <p class="truncate text-xs text-muted">{{ s.subdomain || 'Setup in progress' }}</p>
                 <div class="mt-2 flex flex-wrap gap-2">
                   <UBadge :label="formatSiteVertical(s.vertical)" color="neutral" variant="soft" size="xs" />
                   <UBadge

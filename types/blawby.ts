@@ -25,7 +25,7 @@ export interface PublicOffering {
   schema_type: string | null
   seo_title: string | null
   seo_description: string | null
-  canonical_path: string | null
+  canonical_path: string
   status: string
   sort_order: number
   featured: boolean
@@ -223,14 +223,14 @@ export interface PublicNavigationItem {
 }
 
 export interface PublicBlawbyIdentity {
-  brand_name: string | null
+  brand_name: string
   brand_description: string | null
   logo_url: string | null
   favicon_url: string | null
   phone: string | null
   banner_content: string | null
   banner_dismissible: boolean
-  /** The site's primary business_locations row's address, if any — org-level fallback address for the schema.org graph. */
+  /** The site's primary business_locations row's address, when publicly configured. */
   primary_location_address_street: string | null
   primary_location_address_locality: string | null
 }

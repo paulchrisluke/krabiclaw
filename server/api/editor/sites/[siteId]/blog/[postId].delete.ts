@@ -5,22 +5,18 @@ import { deletePlatformBlogPost } from "~/server/utils/platform-content";
 import { httpErrorDetails } from "~/server/utils/http-error";
 import { assertSiteWideAccess } from "~/server/utils/member-access";
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, "siteId");
   const postId = getRouterParam(event, "postId");
 
   if (!siteId || Array.isArray(siteId)) {
     return jsonResponse(
-      { error: "Site ID is required" },
-      { status: 400 },
-    );
+      { error: "Site ID is required" }, { status: 400 }, );
   }
 
   if (!postId || Array.isArray(postId)) {
     return jsonResponse(
-      { error: "Post ID is required" },
-      { status: 400 },
-    );
+      { error: "Post ID is required" }, { status: 400 }, );
   }
 
   const env = cloudflareEnv(event);
@@ -28,18 +24,14 @@ export default defineEventHandler(async (event) => {
 
   if (!db) {
     return jsonResponse(
-      { error: "Database not available" },
-      { status: 500 },
-    );
+      { error: "Database not available" }, { status: 500 }, );
   }
 
   const session = await getAuthSession(event, env);
 
   if (!session?.user?.id) {
     return jsonResponse(
-      { error: "Authentication required" },
-      { status: 401 },
-    );
+      { error: "Authentication required" }, { status: 401 }, );
   }
 
   try {
@@ -49,31 +41,22 @@ export default defineEventHandler(async (event) => {
       member_id: string;
       member_role: string;
     }>(
-      db,
-      `
+      db, `
       SELECT s.id, s.organization_id, m.id AS member_id, m.role AS member_role
       FROM sites s
       JOIN organization o ON s.organization_id = o.id
       JOIN member m ON o.id = m.organizationId
       WHERE s.id = ? AND m.userId = ?
       LIMIT 1
-    `,
-      [siteId, session.user.id],
-    );
+    `, [siteId, session.user.id], );
 
     if (!site) {
       return jsonResponse(
-        { error: "Site not found or access denied" },
-        { status: 404 },
-      );
+        { error: "Site not found or access denied" }, { status: 404 }, );
     }
 
     await assertSiteWideAccess(db, {
-      memberId: site.member_id,
-      role: site.member_role,
-      organizationId: site.organization_id,
-      siteId,
-    });
+      memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, });
 
     await deletePlatformBlogPost(db, postId, siteId);
 
@@ -82,8 +65,8 @@ export default defineEventHandler(async (event) => {
     console.error("Failed to delete blog post:", error);
     const { message, statusCode } = httpErrorDetails(error, "Failed to delete blog post");
     return jsonResponse(
-      { error: message },
-      { status: statusCode },
-    );
+      { error: message }, { status: statusCode }, );
   }
 });
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

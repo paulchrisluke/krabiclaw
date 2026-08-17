@@ -30,16 +30,16 @@ interface BlogNavCategory {
 }
 
 export function useBlogNav() {
-  const { data, pending, error } = useFetch<{ posts: PublicBlogPost[] }>('/api/public/blog')
+  const { data, pending, error } = useFetch<{ posts: PublicBlogPost[] }, unknown, string>('/api/public/blog')
 
-  const posts = computed(() => data.value?.posts || [])
+  const posts = computed<PublicBlogPost[]>(() => data.value?.posts ?? [])
 
   const categories = computed<BlogNavCategory[]>(() => {
     const eligible = posts.value
       .filter(post => post.category && blogCategoryToSlug(post.category) && !post.hide_from_nav)
-      .map(post => ({ ...post, _categorySlug: blogCategoryToSlug(post.category!)! }))
+    .map(post => ({ ...post, _categorySlug: blogCategoryToSlug(post.category!)! }))
 
-    const groups = groupItemsByNavSection(
+    const groups = groupItemsByNavSection<typeof eligible[number]>(
       eligible,
       (post) => post.nav_section?.trim() || post.category!,
       Object.keys(BLOG_CATEGORY_SLUGS),

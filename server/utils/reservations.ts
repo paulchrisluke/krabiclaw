@@ -1,3 +1,5 @@
+import { HTTPError } from 'nitro';
+
 // Reservation slot overrides & capacity — mirrors the experience-booking capacity model in
 // server/utils/experiences.ts (experience_slot_overrides / getSlotAvailability), scoped to a
 // business_locations reservation instead of an experience, so both booking flows share one
@@ -11,14 +13,14 @@ const TIME_SLOT_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/
 
 function assertDateStr(value: string, field: string): void {
   if (!DATE_PATTERN.test(value)) {
-    throw createError({ statusCode: 400, statusMessage: `${field} must be in "YYYY-MM-DD" format` })
+    throw new HTTPError({ statusCode: 400, statusMessage: `${field} must be in "YYYY-MM-DD" format` })
   }
 }
 
 function assertFiniteNonNegative(value: number | null | undefined, field: string): void {
   if (value === null || value === undefined) return
   if (!Number.isFinite(value) || value < 0) {
-    throw createError({ statusCode: 400, statusMessage: `${field} must be a non-negative number` })
+    throw new HTTPError({ statusCode: 400, statusMessage: `${field} must be a non-negative number` })
   }
 }
 
@@ -87,10 +89,10 @@ export async function upsertReservationSlotOverride(
 ): Promise<ReservationSlotOverride> {
   assertDateStr(input.override_date, 'override_date')
   if (!TIME_SLOT_PATTERN.test(input.time_slot)) {
-    throw createError({ statusCode: 400, statusMessage: 'time_slot must be in "HH:MM" format' })
+    throw new HTTPError({ statusCode: 400, statusMessage: 'time_slot must be in "HH:MM" format' })
   }
   if (input.status !== 'closed' && input.status !== 'open') {
-    throw createError({ statusCode: 400, statusMessage: 'status must be "closed" or "open"' })
+    throw new HTTPError({ statusCode: 400, statusMessage: 'status must be "closed" or "open"' })
   }
   assertFiniteNonNegative(input.capacity_override, 'capacity_override')
 
@@ -100,7 +102,7 @@ export async function upsertReservationSlotOverride(
     [locationId, siteId],
   )
   if (!location) {
-    throw createError({ statusCode: 404, statusMessage: 'Location not found or does not belong to this site' })
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Location not found or does not belong to this site' })
   }
 
   const now = new Date().toISOString()

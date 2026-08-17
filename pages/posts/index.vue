@@ -46,7 +46,7 @@ const postsCopy = computed(() => getVerticalCopy(site?.vertical, locale.value))
 
 const { googleBusiness, locations, config } = await usePublicPageData()
 const googlePosts = computed(() => googleBusiness.value?.posts || [])
-const siteName = computed(() => site?.brand_name || googleBusiness.value?.business?.title || 'Our Site')
+const siteName = computed(() => site?.brand_name?.trim() || googleBusiness.value?.business?.title?.trim() || '')
 
 // Progressive reveal — 6 at a time
 const PAGE_SIZE = 6

@@ -7,7 +7,7 @@ import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
 import { getOrganizationBillingStatus } from '~/server/utils/billing'
 import { loadOrganizationSiteSummaries } from '~/server/utils/billing-site-resource'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -17,14 +17,13 @@ export default defineEventHandler(async (event) => {
 
   const query = getQuery(event)
   const organization = await resolveRequestedOrganization(event, db, session.user.id, {
-    explicitOrganizationId: typeof query.organizationId === 'string' ? query.organizationId : null,
-  })
+    explicitOrganizationId: typeof query.organizationId === 'string' ? query.organizationId : null, })
   if (!organization) return jsonResponse({ error: 'No organization found' }, { status: 404 })
   const organizationId = organization.id
   const billingStatus = await getOrganizationBillingStatus(env, db, organizationId)
 
   return jsonResponse({
-    success: true,
-    sites: await loadOrganizationSiteSummaries(db, organizationId, billingStatus),
-  })
+    success: true, sites: await loadOrganizationSiteSummaries(db, organizationId, billingStatus), })
 })
+import { defineHandler } from 'nitro';
+import { getQuery } from 'nitro/h3';

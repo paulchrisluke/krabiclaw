@@ -82,21 +82,13 @@
         </NuxtLink>
       </div>
 
-      <!-- Empty / placeholder state -->
+      <!-- Empty state -->
       <div v-else>
-        <div class="grid gap-8 md:grid-cols-2">
-          <div v-for="loc in placeholders" :key="loc.title" class="overflow-hidden border border-dashed border-default">
-            <div class="aspect-16/10 flex items-center justify-center bg-muted">
-              <SayaIcon name="map-pin" class="size-10 text-muted" />
-            </div>
-            <div class="p-8 pb-9">
-              <p v-if="loc.city" class="saya-eyebrow mb-3 text-muted">{{ loc.city }}</p>
-              <div class="saya-display saya-italic text-4xl text-muted leading-none">{{ loc.title }}</div>
-              <p class="mt-5 text-sm leading-relaxed text-muted">{{ loc.address }}</p>
-            </div>
-          </div>
+        <div class="border border-dashed border-default px-8 py-16 text-center">
+          <SayaIcon name="map-pin" class="mx-auto size-10 text-muted" />
+          <p class="mt-4 text-sm text-muted">No locations are published yet.</p>
         </div>
-        <div v-if="isAuthenticated" class="mt-12 text-center">
+        <div v-if="isAuthenticated" class="mt-8 text-center">
           <SayaButton to="/dashboard">
             {{ locationsCopy.connectGoogleLocationsCta }}
           </SayaButton>
@@ -125,12 +117,7 @@ function formatAddress(address: AddressInput) {
   return [address.addressLines?.[0], address.locality, address.administrativeArea, address.postalCode].filter(Boolean).join(', ')
 }
 
-const placeholders = computed(() => [
-  { title: locationsCopy.value.mainDiningRoomLabel, city: 'Krabi', address: locationsCopy.value.connectGoogleAddressNote },
-  { title: locationsCopy.value.secondLocationLabel, city: 'Coming Soon', address: locationsCopy.value.additionalLocationsNote }
-])
-
-const siteName = computed(() => unref(site)?.brand_name || 'KrabiClaw')
+const siteName = computed(() => unref(site)?.brand_name || '')
 
 useTenantSocialMetadata(() => ({
   path: '/locations',

@@ -13,7 +13,7 @@ function boundedMetadata(value: unknown): ApiRecord | null {
   return serialized.length <= 4000 ? value as ApiRecord : null
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'siteId required' }, { status: 400 })
 
@@ -67,10 +67,7 @@ export default defineEventHandler(async (event) => {
 
     ctaDestination = link.destination
     metadata = {
-      link_item_id: link.id,
-      link_label: link.label,
-      position: Number(link.sort_order ?? 0) + 1,
-    }
+      link_item_id: link.id, link_label: link.label, position: Number(link.sort_order ?? 0) + 1, }
     body.page_type = 'links'
     body.page_path = link.page_path
   }
@@ -79,26 +76,15 @@ export default defineEventHandler(async (event) => {
   const ipHash = clientIp ? await hashClientIp(clientIp) : null
   const hourWindow = new Date().toISOString().slice(0, 13)
   const rateLimitOk = await incrementHourlyRateLimit(
-    db,
-    `rate:conversion:${siteId}:ip:${ipHash ?? 'unknown'}:${hourWindow}`,
-    import.meta.dev ? 1000 : CONVERSION_IP_HOURLY_LIMIT,
-    HOUR_MS,
-  )
+    db, `rate:conversion:${siteId}:ip:${ipHash ?? 'unknown'}:${hourWindow}`, import.meta.dev ? 1000 : CONVERSION_IP_HOURLY_LIMIT, HOUR_MS, )
   if (!rateLimitOk) return jsonResponse({ error: 'Too many events. Please try again later.' }, { status: 429 })
 
   const result = await recordSiteConversionEvent(db, {
-    organizationId: site.organization_id,
-    siteId,
-    eventName: eventName as SiteConversionEventName,
-    pageType: cleanString(body.page_type, 80) || null,
-    pagePath: cleanString(body.page_path, 300) || null,
-    pageLocation: cleanString(body.page_location, 500) || null,
-    ctaDestination,
-    tenant: cleanString(body.tenant, 200) || null,
-    metadata,
-    ipHash,
-    userAgent: cleanString(getHeader(event, 'user-agent'), 500) || null,
-  })
+    organizationId: site.organization_id, siteId, eventName: eventName as SiteConversionEventName, pageType: cleanString(body.page_type, 80) || null, pagePath: cleanString(body.page_path, 300) || null, pageLocation: cleanString(body.page_location, 500) || null, ctaDestination, tenant: cleanString(body.tenant, 200) || null, metadata, ipHash, userAgent: cleanString((event.req.headers.get('user-agent')), 500) || null, })
 
   return jsonResponse({ success: true, id: result.id }, { status: 201 })
 })
+import { defineHandler } from 'nitro';
+import { getHeader } from 'nitro/h3';
+import { getRouterParam } from 'nitro/h3';
+import { readBody } from 'nitro/h3';

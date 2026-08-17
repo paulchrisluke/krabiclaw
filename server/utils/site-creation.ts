@@ -285,12 +285,9 @@ export async function createOrganizationForSite(env: CloudflareEnv, userId: stri
 function organizationMetadata(value: unknown): Record<string, unknown> {
   if (isMetadataRecord(value)) return { ...value }
   if (typeof value !== 'string') return {}
-  try {
-    const parsed: unknown = JSON.parse(value)
-    return isMetadataRecord(parsed) ? { ...parsed } : {}
-  } catch {
-    return {}
-  }
+  const parsed: unknown = JSON.parse(value)
+  if (!isMetadataRecord(parsed)) throw new Error('Stored organization metadata is invalid')
+  return { ...parsed }
 }
 
 function isMetadataRecord(value: unknown): value is Record<string, unknown> {

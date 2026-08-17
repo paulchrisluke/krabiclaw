@@ -221,7 +221,7 @@ function normalizeDetail(place: RawPlace): Omit<PlaceDetails, 'photos'> & { rawP
     openingHours: place.regularOpeningHours?.weekdayDescriptions ?? null,
     reviews: (place.reviews ?? []).map(r => ({
       reviewId: r.name ?? '',
-      authorName: r.authorAttribution?.displayName ?? 'Anonymous',
+      authorName: r.authorAttribution?.displayName ?? '',
       authorPhotoUrl: r.authorAttribution?.photoUri ?? null,
       rating: Math.round(r.rating ?? 0),
       text: r.text?.text ?? null,

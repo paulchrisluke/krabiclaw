@@ -30,3 +30,4 @@ export async function readPlatformMcpResource(uri: string): Promise<{ uri: strin
 
   return { uri: resource.uri, mimeType: resource.mimeType, text }
 }
+import { useStorage } from 'nitro/storage'

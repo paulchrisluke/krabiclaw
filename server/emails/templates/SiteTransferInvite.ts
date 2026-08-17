@@ -8,6 +8,7 @@ export default defineComponent({
     siteName: { type: String, required: true },
     initiatorName: { type: String, required: true },
     transferUrl: { type: String, required: true },
+    platformDomain: { type: String, required: true },
     domain: { type: String as PropType<string | null>, default: null },
     planLabel: { type: String as PropType<string | null>, default: null },
     personalMessage: { type: String as PropType<string | null>, default: null },
@@ -19,6 +20,7 @@ export default defineComponent({
       ctaUrl: props.transferUrl,
       ctaText: 'Claim your website',
       footerNote: "Didn't expect this? You can safely ignore it — nothing will happen.",
+      platformDomain: props.platformDomain,
     }, () => [
       h(EText, { style: 'margin:0;font-size:15px;color:#52525b;line-height:1.6' }, () => [
         h('strong', { style: 'color:#18181b' }, props.initiatorName),

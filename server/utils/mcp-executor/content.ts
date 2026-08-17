@@ -1,3 +1,5 @@
+import { HTTPError } from 'nitro';
+
 import type { McpExecutorContext } from './shared'
 import { applyBookingPolicyPatch, getDirectBookingPolicy, renderBookingPolicySummary, resolveBookingPolicy, upsertBookingPolicy, validateBookingPolicyPatch, validateBookingPolicyScope, type BookingPolicyScopeType, type BookingPolicyType } from '~/server/utils/booking-policies'
 import { buildTenantPageReplacementConfirmationToken, getEditorContent, updateHomeHero, updatePageContent } from '~/server/utils/mcp-workflows'
@@ -85,7 +87,7 @@ function assertTenantPageReplacementConfirmed(
   const confirmationToken = typeof args.confirmation_token === 'string' ? args.confirmation_token : ''
   const expectedToken = buildTenantPageReplacementConfirmationToken(page.document.updated_at, removedBlockIds)
   if (expectedDocumentUpdatedAt !== page.document.updated_at || requestedRemovedIds.join(',') !== removedBlockIds.join(',') || confirmationToken !== expectedToken) {
-    throw createError({
+    throw new HTTPError({
       statusCode: 409,
       statusMessage: `Complete block replacement would remove ${removedBlockIds.length} existing block(s). Confirm with expected_document_updated_at="${page.document.updated_at}", removed_block_ids=${JSON.stringify(removedBlockIds)}, confirmation_token="${expectedToken}".`,
     })

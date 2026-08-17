@@ -5,7 +5,7 @@ import { platformPermissionJsonResponse } from '~/server/utils/platform-admin-us
 import { deletePlatformDoc } from '~/server/utils/platform-content'
 import { schedulePlatformKnowledgeIndexRebuild } from '~/server/utils/platform-search-rebuild'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const docId = getRouterParam(event, 'docId')
   if (!docId) return jsonResponse({ error: 'Doc ID required' }, { status: 400 })
 
@@ -30,3 +30,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: message }, { status: statusCode })
   }
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

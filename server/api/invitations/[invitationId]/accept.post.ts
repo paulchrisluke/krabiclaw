@@ -1,4 +1,4 @@
-import { appendResponseHeader, getHeaders } from 'h3'
+import { appendResponseHeader,  getQuery , getRouterParam  } from 'nitro/h3';
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { createAuth, getAuthSession } from '~/server/utils/auth'
 import { execute, queryAll, queryFirst } from '~/server/db'
@@ -14,7 +14,7 @@ interface AcceptInvitationApi {
   }): Promise<Response>
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const invitationId = String(getRouterParam(event, 'invitationId') || '').trim()
   if (!invitationId) return jsonResponse({ error: 'Invitation id is required' }, { status: 400 })
 
@@ -66,11 +66,7 @@ export default defineEventHandler(async (event) => {
       ? orgSites.find(site => site.id === preferredSiteId) ?? null
       : null
     return buildInvitationRedirectUrl({
-      orgSlug,
-      preferredSite,
-      fallbackSites: orgSites,
-      bypassOnboardingGate: isPhoneInvitationEmail(invitation.email),
-    })
+      orgSlug, preferredSite, fallbackSites: orgSites, bypassOnboardingGate: isPhoneInvitationEmail(invitation.email), })
   }
 
   // Idempotent double-submit / stale-tab guard: if this invitation was already
@@ -84,12 +80,7 @@ export default defineEventHandler(async (event) => {
     `, [invitation.organizationId, session.user.id])
     if (acceptedMember) {
       return jsonResponse({
-        success: true,
-        alreadyAccepted: true,
-        redirectTo: await resolveRedirectTo(),
-        organizationId: invitation.organizationId,
-        role: invitation.role ?? 'member',
-      })
+        success: true, alreadyAccepted: true, redirectTo: await resolveRedirectTo(), organizationId: invitation.organizationId, role: invitation.role ?? 'member', })
     }
     return jsonResponse({ error: 'This invitation was already accepted by a different account.' }, { status: 410 })
   }
@@ -118,17 +109,11 @@ export default defineEventHandler(async (event) => {
   let response: Response
   try {
     response = await acceptApi.acceptInvitation({
-      body: { invitationId },
-      headers: getHeaders(event) as HeadersInit,
-      asResponse: true,
-    })
+      body: { invitationId }, headers: Object.fromEntries(event.req.headers.entries()) as HeadersInit, asResponse: true, })
   } catch (error) {
     const normalizedError = error instanceof Error ? error : new Error('Unknown network error')
     console.error('accept_invitation_request_failed', {
-      invitationId,
-      userId: session.user.id,
-      error: normalizedError.message,
-    })
+      invitationId, userId: session.user.id, error: normalizedError.message, })
     return jsonResponse({ error: 'Failed to accept invitation' }, { status: 502 })
   }
 
@@ -153,12 +138,7 @@ export default defineEventHandler(async (event) => {
   if (pendingScopes.length > 0) {
     for (const scope of pendingScopes) {
       await addMemberResourceAccess(db, {
-        env,
-        userId: session.user.id,
-        organizationId: scope.organization_id,
-        siteId: scope.site_id,
-        locationId: scope.location_id,
-      })
+        env, userId: session.user.id, organizationId: scope.organization_id, siteId: scope.site_id, locationId: scope.location_id, })
     }
     await execute(db, `DELETE FROM invitation_access_scope WHERE invitation_id = ?`, [invitationId])
   }
@@ -181,9 +161,6 @@ export default defineEventHandler(async (event) => {
   const redirectTo = await resolveRedirectTo()
 
   return jsonResponse({
-    success: true,
-    redirectTo,
-    organizationId: invitation.organizationId,
-    role: invitation.role ?? 'member',
-  })
+    success: true, redirectTo, organizationId: invitation.organizationId, role: invitation.role ?? 'member', })
 })
+import { defineHandler } from 'nitro';

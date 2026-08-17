@@ -1,4 +1,6 @@
-import type { H3Event } from 'h3'
+import { HTTPError } from 'nitro';
+
+import type { H3Event } from 'nitro'
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
@@ -52,7 +54,7 @@ export async function loadOnboardingChecklist(
   querySiteId?: string,
 ): Promise<OnboardingChecklist> {
   const db = cloudflareEnv(event).DB
-  if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+  if (!db) throw new HTTPError({ statusCode: 500, statusMessage: 'Database not available' })
 
   let siteId: string
   let brandName: string | null = null
@@ -118,7 +120,7 @@ export async function loadOnboardingChecklist(
     LIMIT 1
   `, [siteId])
 
-  if (!row) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
+  if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
   const vertical = normalizeVertical(row.vertical)
   const heroIsReal = row.hero_placeholder !== null
     ? row.hero_placeholder === 'false'

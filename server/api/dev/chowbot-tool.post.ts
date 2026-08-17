@@ -1,11 +1,12 @@
-import { defineEventHandler, readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { readBody } from 'nitro/h3';
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { executeChowBotToolForTest, type ChowBotIncomingMessage } from '~/server/utils/chowbot-agent'
 import { getSiteForMember } from '~/server/utils/chowbot-conversations'
 import { assertDevRouteAllowed } from '~/server/utils/dev-route-auth'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   assertDevRouteAllowed(event)
 
   const env = cloudflareEnv(event)

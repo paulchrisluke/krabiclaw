@@ -4,6 +4,7 @@ interface DashboardOrganization {
   slug: string
   logo: string | null
   role: string
+  memberId: string
 }
 
 interface DashboardSite {
@@ -63,6 +64,7 @@ const isDashboardOrganization = (value: unknown): value is DashboardOrganization
   && typeof value.slug === 'string'
   && (value.logo === null || typeof value.logo === 'string')
   && typeof value.role === 'string'
+  && typeof value.memberId === 'string'
 
 const isDashboardSite = (value: unknown): value is DashboardSite =>
   isRecord(value)

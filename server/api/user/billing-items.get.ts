@@ -3,7 +3,7 @@ import { apiErrorResponse, cloudflareEnv, jsonResponse } from '../../utils/api-r
 import { getAuthSession } from '~/server/utils/auth'
 import { getUserBillingItems } from '../../utils/billing'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
 
@@ -21,8 +21,7 @@ export default defineEventHandler(async (event) => {
     const billingItems = await getUserBillingItems(env, db, session.user.id)
 
     return jsonResponse({
-      success: true,
-      items: billingItems
+      success: true, items: billingItems
     })
 
   } catch (error) {
@@ -30,3 +29,4 @@ export default defineEventHandler(async (event) => {
     return apiErrorResponse(event, 502, 'BILLING_ITEMS_LOAD_FAILED', 'Billing items could not be loaded')
   }
 })
+import { defineHandler } from 'nitro';

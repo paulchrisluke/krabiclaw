@@ -1,6 +1,6 @@
 <template>
   <div v-if="variant === 'compact'" class="bg-elevated p-8">
-    <div class="mb-3 flex gap-1" role="img" :aria-label="$t('saya.reviews.stars_aria', { rating: review.rating })">
+    <div class="mb-3 flex gap-1" role="img" :aria-label="t('saya.reviews.stars_aria', { rating: review.rating })">
       <SayaIcon
         v-for="s in 5"
         :key="s"
@@ -36,7 +36,7 @@
             v-if="review.source === 'google_places'"
             class="inline-flex items-center rounded-full border border-default px-2 py-0.5 text-xs font-medium text-muted"
           >
-            {{ $t('saya.reviews_page.via_google') }}
+            {{ t('saya.reviews_page.via_google') }}
           </span>
           <span
             v-if="review.locationTitle"
@@ -46,7 +46,7 @@
           </span>
         </div>
         <div class="mt-1 flex items-center gap-2">
-          <div class="flex gap-0.5" role="img" :aria-label="$t('saya.reviews.stars_aria', { rating: review.rating })">
+          <div class="flex gap-0.5" role="img" :aria-label="t('saya.reviews.stars_aria', { rating: review.rating })">
             <SayaIcon
               v-for="s in 5"
               :key="s"
@@ -73,6 +73,10 @@
 </template>
 
 <script setup lang="ts">
+import { getInitials } from '~/utils/formatters'
+
+const { t } = useI18n()
+
 defineProps<{
   review: {
     id?: string | number

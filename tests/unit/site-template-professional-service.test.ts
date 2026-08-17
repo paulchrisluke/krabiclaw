@@ -89,7 +89,7 @@ test('seedNewSite professional_service copy has no restaurant/experience leakage
     const wordBoundary = new RegExp(`\\b${banned}\\b`, 'i')
     assert.ok(!wordBoundary.test(haystack), `expected professional_service seed copy to omit "${banned}"`)
   }
-  assert.ok(haystack.includes('talk with our team'))
+  assert.doesNotMatch(haystack, /talk with our team/)
   const reservedTemplatePages = createdTenantPages as Array<{ data?: { path?: string; pageType?: string } }>
   for (const path of ['/services', '/pricing', '/donate', '/schedule']) {
     const page = reservedTemplatePages.find(candidate => candidate.data?.path === path)
@@ -97,7 +97,7 @@ test('seedNewSite professional_service copy has no restaurant/experience leakage
   }
 })
 
-test('seedNewSite still seeds a menu for restaurant (regression guard)', async () => {
+test('seedNewSite does not fabricate menu content for restaurant either', async () => {
   capturedBatches.length = 0
   createdTenantPages.length = 0
   await seedNewSite({} as never, {
@@ -109,5 +109,5 @@ test('seedNewSite still seeds a menu for restaurant (regression guard)', async (
 
   const batch = capturedBatches[0]!
   const menuInserts = batch.filter(b => /INSERT[\s\S]*INTO menus\b/i.test(b.query))
-  assert.ok(menuInserts.length > 0, 'expected restaurant seeding to still create a menu')
+  assert.equal(menuInserts.length, 0, 'expected restaurant seeding to leave menu content canonical and owner-supplied')
 })

@@ -1,8 +1,10 @@
+import { HTTPError } from 'nitro';
+
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { queryFirst, type DbClient } from '~/server/db'
 import { assertLocationAccess, assertSiteContextAccess, assertSiteWideAccess } from '~/server/utils/member-access'
-import type { H3Event } from 'h3'
+import type { H3Event } from 'nitro';
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 
 export interface SiteAccessRow {
@@ -11,6 +13,7 @@ export interface SiteAccessRow {
   organization_slug: string
   brand_name: string | null
   subdomain: string | null
+  public_url: string | null
   status: string
   onboarding_status: string | null
   member_id: string
@@ -29,7 +32,7 @@ export async function loadMemberSiteRow(db: DbClient, siteId: string, userId: st
   // the scope check inside assertSiteWideAccess/assertLocationAccess/
   // assertSiteContextAccess (isScopedRole/isOrganizationWideRole both false).
   return await queryFirst<SiteAccessRow>(db, `
-    SELECT s.id, s.organization_id, o.slug AS organization_slug, s.brand_name, s.subdomain, s.status, s.onboarding_status,
+    SELECT s.id, s.organization_id, o.slug AS organization_slug, s.brand_name, s.subdomain, s.public_url, s.status, s.onboarding_status,
            om.id AS member_id, om.role AS member_role
     FROM sites s
     JOIN organization o ON o.id = s.organization_id
@@ -48,13 +51,13 @@ export async function loadMemberSiteRow(db: DbClient, siteId: string, userId: st
 export async function requireLocationAccess(event: H3Event, siteId: string, locationId: string) {
   const env = cloudflareEnv(event)
   const db = env.DB
-  if (!db) throw createError({ statusCode: 500, message: 'Database not available' })
+  if (!db) throw new HTTPError({ statusCode: 500, message: 'Database not available' })
 
   const session = await getAuthSession(event, env)
-  if (!session?.user?.id) throw createError({ statusCode: 401, message: 'Authentication required' })
+  if (!session?.user?.id) throw new HTTPError({ statusCode: 401, message: 'Authentication required' })
 
   const site = await loadMemberSiteRow(db, siteId, session.user.id)
-  if (!site) throw createError({ statusCode: 404, message: 'Site not found or access denied' })
+  if (!site) throw new HTTPError({ statusCode: 404, message: 'Site not found or access denied' })
 
   await assertLocationAccess(db, {
     memberId: site.member_id,
@@ -72,7 +75,7 @@ export async function requireLocationAccess(event: H3Event, siteId: string, loca
   `, [locationId, site.organization_id, siteId])
 
   if (!location) {
-    throw createError({ statusCode: 404, message: 'Location not found' })
+    throw new HTTPError({ statusCode: 404, message: 'Location not found' })
   }
 
   return { env, db, session, site, location }
@@ -97,13 +100,13 @@ export async function requireSiteAccess(
 ) {
   const env = cloudflareEnv(event)
   const db = env.DB
-  if (!db) throw createError({ statusCode: 500, message: 'Database not available' })
+  if (!db) throw new HTTPError({ statusCode: 500, message: 'Database not available' })
 
   const session = await getAuthSession(event, env)
-  if (!session?.user?.id) throw createError({ statusCode: 401, message: 'Authentication required' })
+  if (!session?.user?.id) throw new HTTPError({ statusCode: 401, message: 'Authentication required' })
 
   const site = await loadMemberSiteRow(db, siteId, session.user.id)
-  if (!site) throw createError({ statusCode: 404, message: 'Site not found or access denied' })
+  if (!site) throw new HTTPError({ statusCode: 404, message: 'Site not found or access denied' })
 
   const principal = { memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId }
   if (accessClass === 'context') {
@@ -120,7 +123,7 @@ export async function requireRequestedSiteWideAccess(event: H3Event, explicitSit
 
   const context = await getDashboardContext(event, { requireSite: true })
   if (!context.organization || !context.site) {
-    throw createError({ statusCode: 404, message: 'Site not found or access denied' })
+    throw new HTTPError({ statusCode: 404, message: 'Site not found or access denied' })
   }
   await assertSiteWideAccess(context.db, {
     memberId: context.organization.memberId,
@@ -146,7 +149,7 @@ export async function requireRequestedLocationAccess(event: H3Event, locationId:
 
   const context = await getDashboardContext(event, { requireSite: true })
   if (!context.organization || !context.site) {
-    throw createError({ statusCode: 404, message: 'Site not found or access denied' })
+    throw new HTTPError({ statusCode: 404, message: 'Site not found or access denied' })
   }
   await assertLocationAccess(context.db, {
     memberId: context.organization.memberId,
@@ -160,7 +163,7 @@ export async function requireRequestedLocationAccess(event: H3Event, locationId:
     WHERE id = ? AND organization_id = ? AND site_id = ?
     LIMIT 1
   `, [locationId, context.organization.id, context.site.id])
-  if (!location) throw createError({ statusCode: 404, message: 'Location not found' })
+  if (!location) throw new HTTPError({ statusCode: 404, message: 'Location not found' })
 
   return {
     env: context.env,

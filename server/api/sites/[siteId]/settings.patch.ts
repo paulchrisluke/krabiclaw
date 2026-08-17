@@ -3,7 +3,8 @@ import { jsonResponse } from '~/server/utils/api-response'
 import { isDemoOrg } from '~/server/utils/demo'
 import { updateSiteSettingsFields } from '~/server/utils/site-settings'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
-import { createError, getHeader, getRouterParam, readBody } from 'h3'
+import { HTTPError, defineHandler  } from 'nitro';
+import {  getRouterParam, readBody } from 'nitro/h3';
 import { requireSiteAccess } from '~/server/utils/location-access'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
 
@@ -20,10 +21,10 @@ function timingSafeEqualText(a: string, b: string): boolean {
   return diff === 0
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const body = await readBody(event) as UpdateSiteSettingsRequest
-  const forceSubdomainRegistrationFailure = getHeader(event, 'x-e2e-force-subdomain-failure') === 'true'
+  const forceSubdomainRegistrationFailure = (event.req.headers.get('x-e2e-force-subdomain-failure')) === 'true'
   
   if (!siteId) {
     return jsonResponse({ 
@@ -40,11 +41,11 @@ export default defineEventHandler(async (event) => {
   const { env, db, session, site } = await requireSiteAccess(event, siteId)
 
   if (forceSubdomainRegistrationFailure) {
-    const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
-    const expectedSecret = process.env.E2E_DEV_ROUTE_SECRET || ''
-    const providedSecret = getHeader(event, 'x-dev-route-secret') || ''
+    const e2eOverride = env.E2E_ALLOW_DEV_ROUTES === 'true'
+    const expectedSecret = env.E2E_DEV_ROUTE_SECRET || ''
+    const providedSecret = (event.req.headers.get('x-dev-route-secret')) || ''
     if (!e2eOverride || !expectedSecret || !providedSecret || !timingSafeEqualText(providedSecret, expectedSecret)) {
-      throw createError({ statusCode: 403, statusMessage: 'Forbidden' })
+      throw new HTTPError({ statusCode: 403, statusMessage: 'Forbidden' })
     }
   }
 
@@ -56,13 +57,7 @@ export default defineEventHandler(async (event) => {
     }
 
     const result = await updateSiteSettingsFields(
-      db,
-      env,
-      siteId,
-      site.organization_id,
-      body,
-      session.user.id,
-      { forceSubdomainRegistrationFailure }
+      db, env, siteId, site.organization_id, body, session.user.id, { forceSubdomainRegistrationFailure }
     )
 
     return jsonResponse(result.data, { status: result.status })

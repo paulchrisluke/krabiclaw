@@ -71,10 +71,9 @@ test('public layouts use the shared SSR surface stylesheet contract', () => {
     ['blawby', 'blawby-entry', 'blawbyStylesheet', 'blawbyStylesheetForRoute'],
   ] as const
 
-  for (const [layoutName, sourceName, stylesheetBinding, hrefBinding] of layouts) {
+  for (const [layoutName, sourceName, _stylesheetBinding, hrefBinding] of layouts) {
     const layout = readFileSync(`layouts/${layoutName}.vue`, 'utf8')
-    assert.match(layout, new RegExp(`import ${stylesheetBinding} from '~\\/assets\\/css\\/${sourceName}\\.css\\?url`))
-    assert.match(layout, new RegExp(`new URL\\((?:${stylesheetBinding}|stylesheet), 'http:\\/\\/nuxt\\.local'\\)\\.pathname`))
+    assert.match(layout, new RegExp(`import ['\"]~\\/assets\\/css\\/${sourceName}\\.css['\"]`))
     assert.match(layout, /useHead\([\s\S]*rel: 'stylesheet'/)
     assert.match(layout, new RegExp(`href: ${hrefBinding}`))
   }
@@ -92,8 +91,7 @@ test('Blawby theme is a dedicated semantic Nuxt UI token scope', () => {
   assert.doesNotMatch(baseCss, /@import "\.\/blawby\.css";/)
   assert.match(layout, /class="[^"]*\bblawby-shell\b[^"]*\bblawby-theme\b[^"]*"/)
   assert.match(layout, /bg-default text-default/)
-  assert.match(layout, /import blawbyStylesheet from '~\/assets\/css\/blawby-entry\.css\?url'/)
-  assert.match(layout, /const blawbyStylesheetHref = new URL\(blawbyStylesheet, 'http:\/\/nuxt\.local'\)\.pathname/)
+  assert.ok(layout.includes("import '~/assets/css/blawby-entry.css'"))
   assert.match(layout, /rel: 'stylesheet'/)
   assert.match(layout, /href: blawbyStylesheetForRoute/)
   assert.doesNotMatch(layout, /'--blawby-(?:bg|surface|primary|accent|border|ink)'/)

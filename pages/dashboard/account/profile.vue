@@ -140,6 +140,7 @@
 </template>
 
 <script setup lang="ts">
+import { getInitials } from '~/utils/formatters'
 // -nocheck
 import { authClient } from '~/lib/auth-client'
 import { useAuth } from '~/composables/useAuth'

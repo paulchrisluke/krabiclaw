@@ -1,4 +1,4 @@
-import { cleanString, cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { cleanString, cloudflareEnv, jsonResponse, readRequiredBody } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { execute, queryFirst, type DbClient } from '~/server/db'
 import { deleteMediaAsset } from '~/server/utils/media-asset-manager'
@@ -11,19 +11,15 @@ interface ReviewMediaDeleteState {
 }
 
 async function getReviewMediaDeleteState(
-  db: DbClient,
-  input: {
+  db: DbClient, input: {
     requestId: string
     assetId: string
     customerId: string
     siteId: string
-  },
-): Promise<ReviewMediaDeleteState | null> {
+  }, ): Promise<ReviewMediaDeleteState | null> {
   return await queryFirst<ReviewMediaDeleteState>(db, `
     SELECT
-      rm.id,
-      rm.status AS link_status,
-      ma.status AS media_asset_status
+      rm.id, rm.status AS link_status, ma.status AS media_asset_status
     FROM review_media rm
     JOIN media_assets ma ON ma.id = rm.media_asset_id
     WHERE rm.review_request_id = ?
@@ -36,7 +32,7 @@ async function getReviewMediaDeleteState(
   `, [input.requestId, input.assetId, input.customerId, input.siteId]) ?? null
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const requestId = getRouterParam(event, 'requestId')
   const assetId = getRouterParam(event, 'assetId')
   if (!requestId || !assetId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
@@ -49,7 +45,7 @@ export default defineEventHandler(async (event) => {
   const sessionUser = session?.user as ({ id?: string } | undefined)
   if (!sessionUser?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
 
-  const body = await readBody<ApiRecord>(event)
+  const body = await readRequiredBody<ApiRecord>(event)
   const token = cleanString(body.token, 300)
   if (!token) return jsonResponse({ error: 'Token required' }, { status: 400 })
 
@@ -62,11 +58,7 @@ export default defineEventHandler(async (event) => {
   if (!sessionOwnsRequest) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
 
   let link = await getReviewMediaDeleteState(db, {
-    requestId,
-    assetId,
-    customerId: result.request.customer_id,
-    siteId: result.context.site_id,
-  })
+    requestId, assetId, customerId: result.request.customer_id, siteId: result.context.site_id, })
   if (!link) return jsonResponse({ error: 'Review media not found' }, { status: 404 })
   const reviewMediaId = link.id
   if (link.link_status === 'deleted' && link.media_asset_status === 'deleted') {
@@ -86,22 +78,13 @@ export default defineEventHandler(async (event) => {
           AND review_id IS NULL
           AND status = 'pending'
       `, [
-        new Date().toISOString(),
-        reviewMediaId,
-        requestId,
-        assetId,
-        result.request.customer_id,
-      ])
+        new Date().toISOString(), reviewMediaId, requestId, assetId, result.request.customer_id, ])
       if (Number(claim?.meta?.changes ?? 0) === 1) {
         claimedPendingLink = true
         link = { ...link, link_status: 'deleted' }
       } else {
         link = await getReviewMediaDeleteState(db, {
-          requestId,
-          assetId,
-          customerId: result.request.customer_id,
-          siteId: result.context.site_id,
-        })
+          requestId, assetId, customerId: result.request.customer_id, siteId: result.context.site_id, })
         if (!link) return jsonResponse({ error: 'Review media not found' }, { status: 404 })
       }
     }
@@ -114,11 +97,7 @@ export default defineEventHandler(async (event) => {
         // request was in flight. Only the scoped row's persisted state can turn
         // that failure into an idempotent success.
         link = await getReviewMediaDeleteState(db, {
-          requestId,
-          assetId,
-          customerId: result.request.customer_id,
-          siteId: result.context.site_id,
-        })
+          requestId, assetId, customerId: result.request.customer_id, siteId: result.context.site_id, })
         if (link?.media_asset_status !== 'deleted') {
           if (claimedPendingLink) {
             try {
@@ -139,20 +118,10 @@ export default defineEventHandler(async (event) => {
                       AND ma.status != 'deleted'
                   )
               `, [
-                new Date().toISOString(),
-                reviewMediaId,
-                requestId,
-                assetId,
-                result.request.customer_id,
-                result.context.site_id,
-              ])
+                new Date().toISOString(), reviewMediaId, requestId, assetId, result.request.customer_id, result.context.site_id, ])
               if (Number(rollback?.meta?.changes ?? 0) !== 1) {
                 const persisted = await getReviewMediaDeleteState(db, {
-                  requestId,
-                  assetId,
-                  customerId: result.request.customer_id,
-                  siteId: result.context.site_id,
-                })
+                  requestId, assetId, customerId: result.request.customer_id, siteId: result.context.site_id, })
                 if (persisted?.link_status === 'deleted' && persisted.media_asset_status === 'deleted') {
                   link = persisted
                 } else if (persisted?.link_status !== 'pending') {
@@ -161,9 +130,7 @@ export default defineEventHandler(async (event) => {
               }
             } catch (rollbackError) {
               throw new AggregateError(
-                [error, rollbackError],
-                `Review media provider deletion failed, and ${reviewMediaId} could not be restored for retry`,
-              )
+                [error, rollbackError], `Review media provider deletion failed, and ${reviewMediaId} could not be restored for retry`, )
             }
           }
           if (link?.media_asset_status !== 'deleted') throw error
@@ -181,19 +148,10 @@ export default defineEventHandler(async (event) => {
         AND review_id IS NULL
         AND status IN ('pending', 'deleted')
     `, [
-      new Date().toISOString(),
-      reviewMediaId,
-      requestId,
-      assetId,
-      result.request.customer_id,
-    ])
+      new Date().toISOString(), reviewMediaId, requestId, assetId, result.request.customer_id, ])
     if (Number(finalize?.meta?.changes ?? 0) !== 1) {
       const persisted = await getReviewMediaDeleteState(db, {
-        requestId,
-        assetId,
-        customerId: result.request.customer_id,
-        siteId: result.context.site_id,
-      })
+        requestId, assetId, customerId: result.request.customer_id, siteId: result.context.site_id, })
       if (persisted?.link_status !== 'deleted' || persisted.media_asset_status !== 'deleted') {
         throw new Error(`Review media ${reviewMediaId} changed during deletion`)
       }
@@ -203,12 +161,11 @@ export default defineEventHandler(async (event) => {
   } catch (error) {
     const normalizedError = error instanceof Error ? error : new Error('Unknown review media deletion error')
     console.error('review_media_delete_failed', {
-      requestId,
-      assetId,
-      error: normalizedError.message,
-    })
+      requestId, assetId, error: normalizedError.message, })
     return jsonResponse({
-      error: 'Could not remove this media. It is still listed, so please try again.',
-    }, { status: 500 })
+      error: 'Could not remove this media. It is still listed, so please try again.', }, { status: 500 })
   }
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';
+import { readBody } from 'nitro/h3';

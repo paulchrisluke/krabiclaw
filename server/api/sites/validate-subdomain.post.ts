@@ -1,4 +1,5 @@
-import { defineEventHandler, readBody } from 'h3'
+import { defineHandler } from 'nitro';
+import { readBody } from 'nitro/h3';
 import { queryFirst } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
@@ -20,7 +21,7 @@ function validateSubdomainFormat(subdomain: string): { valid: boolean; reason?: 
   return { valid: true }
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ available: false, message: 'Database not available' }, { status: 500 })

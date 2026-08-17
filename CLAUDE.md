@@ -322,21 +322,9 @@ When you fix a bug caused by an unverified/incorrect API usage, do not leave a c
 
 ## Saya Empty States
 
-Saya components never render a blank section or skeleton-only placeholder when content is missing.
-
-- Core sections show filled examples:
-  - Menu
-  - Experiences
-  - Locations
-- Supplementary sections use low-key empty states:
-  - Posts
-  - Reviews
-  - Q&A
-- `config/saya-empty-states.ts` is the source of truth.
-- `components/saya/SayaEmptyExample.vue` renders example cards.
-- `components/saya/SayaMcpHint.vue` renders owner-only ChowBot prompt hints in dashboard edit mode.
-- `config/content-registry.ts` `defaultValue` values must be generic and vertical-neutral.
-- Never leak demo tenant identity into tenant fallback copy.
+Saya public sections render only validated tenant content. Missing tenant content
+is omitted or shown as an explicit empty/error state; fabricated example cards and
+tenant fallback copy are not rendered.
 
 ---
 

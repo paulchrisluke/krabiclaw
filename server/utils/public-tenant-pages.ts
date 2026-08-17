@@ -1,4 +1,4 @@
-import { createError } from 'h3'
+import { HTTPError } from 'nitro';
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { listPageQa } from '~/server/utils/location-qa'
 import { listSiteReviews } from '~/server/utils/site-reviews'
@@ -68,7 +68,7 @@ async function hydrateBlocks(db: DbClient, siteId: string, pagePath: string, blo
          WHERE site_id = ? AND status = 'active' AND id IN (${Array.from(locationIds).map(() => '?').join(',')})
       `, [siteId, ...locationIds])
     : []
-  if (locations.length !== locationIds.size) throw createError({ statusCode: 500, statusMessage: 'Tenant page references an unavailable location' })
+  if (locations.length !== locationIds.size) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page references an unavailable location' })
   const [qaRows, reviewRows, postRows] = await Promise.all([
     hasQaSource ? listPageQa(db, siteId, pagePath, true) : Promise.resolve([]),
     hasReviewSource ? listSiteReviews(db, siteId, { publishedOnly: true }) : Promise.resolve([]),
@@ -86,7 +86,7 @@ async function hydrateBlocks(db: DbClient, siteId: string, pagePath: string, blo
       try {
         const ids = JSON.parse(offering.media_asset_ids) as unknown
         if (Array.isArray(ids)) for (const id of ids) if (typeof id === 'string' && id.trim()) assetIds.add(id)
-      } catch { throw createError({ statusCode: 500, statusMessage: `Offering ${offering.id} has malformed media references` }) }
+      } catch { throw new HTTPError({ statusCode: 500, statusMessage: `Offering ${offering.id} has malformed media references` }) }
     }
   }
   for (const location of locations) if (location.hero_media_asset_id) assetIds.add(location.hero_media_asset_id)
@@ -100,11 +100,11 @@ async function hydrateBlocks(db: DbClient, siteId: string, pagePath: string, blo
   const media = new Map(rows.map(row => [row.id, row]))
   for (const id of assetIds) {
     const asset = media.get(id)
-    if (!asset?.public_url) throw createError({ statusCode: 500, statusMessage: `Tenant page media asset ${id} is unavailable` })
+    if (!asset?.public_url) throw new HTTPError({ statusCode: 500, statusMessage: `Tenant page media asset ${id} is unavailable` })
   }
   const offeringById = new Map(offerings.map(item => [item.id, item]))
   const selectedOfferings = new Map(Array.from(offeringIds).map(id => [id, offeringById.get(id)] as const))
-  if ([...selectedOfferings.values()].some(offering => !offering)) throw createError({ statusCode: 500, statusMessage: 'Tenant page references an unavailable offering' })
+  if ([...selectedOfferings.values()].some(offering => !offering)) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page references an unavailable offering' })
   const locationById = new Map(locations.map(item => [item.id, item]))
   const qaItems = qaRows.map(row => ({ id: String(row.id), title: String(row.question), description: typeof row.answer === 'string' ? row.answer : undefined }))
   const reviewItems = (reviewRows as Array<Record<string, unknown>>).map(row => ({
@@ -119,7 +119,7 @@ async function hydrateBlocks(db: DbClient, siteId: string, pagePath: string, blo
     description: post.excerpt || undefined,
     url: post.canonical_url || `/article/${post.slug}`,
     label: 'Read more',
-    image_url: post.featured_image_asset_id ? (media.get(post.featured_image_asset_id)?.public_url ?? undefined) : undefined,
+    image_url: post.featured_image_asset_id ? (media.get(post.featured_image_asset_id)?.public_url) : undefined,
   }))
   return publicBlocks.map(block => {
     const data = { ...block.data }
@@ -134,14 +134,14 @@ async function hydrateBlocks(db: DbClient, siteId: string, pagePath: string, blo
     if (Array.isArray(data.asset_ids)) {
       data.images = data.asset_ids.map(value => {
         const asset = typeof value === 'string' ? media.get(value) : null
-        if (!asset?.public_url) throw createError({ statusCode: 500, statusMessage: 'Tenant page gallery media is unavailable' })
+        if (!asset?.public_url) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page gallery media is unavailable' })
         return { id: value, url: asset.public_url, thumbnail_url: asset.thumbnail_url, kind: asset.kind, alt: asset.alt_text }
       })
     }
     if (block.type === 'offering_grid' && Array.isArray(data.offering_ids)) {
       data.items = data.offering_ids.map(id => {
         const offering = typeof id === 'string' ? selectedOfferings.get(id) : undefined
-        if (!offering) throw createError({ statusCode: 500, statusMessage: 'Tenant page offering reference is unavailable' })
+        if (!offering) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page offering reference is unavailable' })
         const imageId = offering.thumbnail_asset_id ?? offering.hero_image_asset_id
         return {
           id: offering.id,
@@ -149,21 +149,21 @@ async function hydrateBlocks(db: DbClient, siteId: string, pagePath: string, blo
           description: offering.summary || offering.short_description || offering.body || undefined,
           url: offering.canonical_path || `/services/${offering.slug}`,
           label: offering.label ? 'Learn more' : undefined,
-          image_url: imageId ? (media.get(imageId)?.public_url ?? undefined) : undefined,
+          image_url: imageId ? (media.get(imageId)?.public_url) : undefined,
         }
       })
     }
     if (block.type === 'location_grid' && Array.isArray(data.location_ids)) {
       data.items = data.location_ids.map(id => {
         const location = typeof id === 'string' ? locationById.get(id) : undefined
-        if (!location) throw createError({ statusCode: 500, statusMessage: 'Tenant page location reference is unavailable' })
+        if (!location) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page location reference is unavailable' })
         return {
           id: location.id,
           title: location.title,
           description: location.short_description || location.description || undefined,
           url: `/locations/${location.slug}`,
           label: 'View location',
-          image_url: location.hero_media_asset_id ? (media.get(location.hero_media_asset_id)?.public_url ?? undefined) : undefined,
+          image_url: location.hero_media_asset_id ? (media.get(location.hero_media_asset_id)?.public_url) : undefined,
         }
       })
     }
@@ -176,7 +176,7 @@ async function hydrateBlocks(db: DbClient, siteId: string, pagePath: string, blo
           description: offering.summary || offering.short_description || offering.body || undefined,
           url: offering.canonical_path || `/services/${offering.slug}`,
           label: 'Learn more',
-          image_url: imageId ? (media.get(imageId)?.public_url ?? undefined) : undefined,
+          image_url: imageId ? (media.get(imageId)?.public_url) : undefined,
         }
       })
     }
@@ -231,7 +231,7 @@ async function resolveVariantId(db: DbClient, siteId: string, path: string, loca
      ORDER BY v.locale ASC
      LIMIT 1
   `, [siteId, path, path, locale ?? null, locale ?? null])
-  if (!row) throw createError({ statusCode: 404, statusMessage: 'Tenant page not found' })
+  if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Tenant page not found' })
   return row.id
 }
 

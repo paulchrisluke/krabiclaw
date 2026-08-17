@@ -10,6 +10,7 @@ import type {
   ListGuestThreadsOptions,
 } from './types'
 import { formatOperationalStatusLabel } from './status-labels'
+import { publishGuestInboxThreadEvent, type GuestInboxPublicationEnv } from '~/server/cloudflare/guest-inbox-events'
 
 export async function getGuestThreadBySubmission(
   db: DbClient,
@@ -47,6 +48,7 @@ export async function ensureGuestThread(
   db: DbClient,
   adapter: AnyGuestThreadSourceAdapter,
   submissionId: string,
+  options: { publishEnv?: GuestInboxPublicationEnv } = {},
 ): Promise<GuestThreadRow> {
   const existing = await getGuestThreadBySubmission(db, adapter.type, submissionId)
   const source = await adapter.loadSource({ db }, submissionId)
@@ -58,8 +60,11 @@ export async function ensureGuestThread(
     if ((existing.location_id ?? null) !== (summary.locationId ?? null)) {
       const now = new Date().toISOString()
       await execute(db, `
-        UPDATE guest_threads SET location_id = ?, updated_at = ? WHERE id = ?
+        UPDATE guest_threads SET location_id = ?, version = version + 1, updated_at = ? WHERE id = ?
       `, [summary.locationId, now, existing.id])
+      if (options.publishEnv) {
+        await publishGuestInboxThreadEvent(options.publishEnv, db, { threadId: existing.id, type: 'thread.changed' })
+      }
       return { ...existing, location_id: summary.locationId, updated_at: now }
     }
     return existing
@@ -126,6 +131,9 @@ export async function ensureGuestThread(
 
   const created = await getGuestThreadById(db, threadId)
   if (!created) throw new Error('Failed to load guest thread')
+  if (options.publishEnv) {
+    await publishGuestInboxThreadEvent(options.publishEnv, db, { threadId: created.id, type: 'thread.created' })
+  }
   return created
 }
 
@@ -327,7 +335,7 @@ export async function updateThreadProjection(
   update: { operationalStatus?: string; conversationState?: ConversationState },
 ): Promise<void> {
   const now = new Date().toISOString()
-  const sets: string[] = ['updated_at = ?']
+  const sets: string[] = ['version = version + 1', 'updated_at = ?']
   const params: Array<string | null> = [now]
 
   if (update.operationalStatus !== undefined) {

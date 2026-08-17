@@ -1,4 +1,4 @@
-import { jsonResponse } from '~/server/utils/api-response'
+import { jsonResponse, readRequiredBody } from '~/server/utils/api-response'
 import { execute, queryFirst } from '~/server/db'
 import { setCanonicalDomain } from '~/server/utils/domains'
 import { requireSiteAccess } from '~/server/utils/location-access'
@@ -19,12 +19,12 @@ interface SiteDomainRow {
   created_at: string
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const domainId = getRouterParam(event, 'domainId')
   let body: DomainPatchBody
   try {
-    body = await readBody<DomainPatchBody>(event)
+    body = await readRequiredBody<DomainPatchBody>(event)
   } catch {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
@@ -131,13 +131,10 @@ export default defineEventHandler(async (event) => {
   } catch (error) {
     const normalizedError = error instanceof Error ? error : new Error('Unknown error')
     console.error('domain_update_failed', {
-      siteId,
-      domainId,
-      userId: session.user.id,
-      body,
-      error: normalizedError.message,
-      stack: normalizedError.stack || null
+      siteId, domainId, userId: session.user.id, body, error: normalizedError.message, stack: normalizedError.stack || null
     })
     return jsonResponse({ error: 'Failed to update domain' }, { status: 500 })
   }
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam  } from 'nitro/h3';

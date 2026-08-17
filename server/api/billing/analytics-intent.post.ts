@@ -1,13 +1,12 @@
+import { HTTPError, defineHandler  } from 'nitro';
+
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { queryFirst } from '~/server/db'
 import { getAuthSession } from '~/server/utils/auth'
 import { getOrganizationBillingStatus, getStripe, requireBillingAccess } from '~/server/utils/billing'
 import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
 import {
-  buildStripeSubscriptionMetadata,
-  isStripeGa4IntentAction,
-  type StripeGa4IntentAction,
-} from '~/shared/stripe-ga4'
+  buildStripeSubscriptionMetadata, isStripeGa4IntentAction, type StripeGa4IntentAction, } from '~/shared/stripe-ga4'
 import { recordStripeGa4Intent } from '~/server/utils/stripe-ga4-intents'
 
 interface AnalyticsIntentRequest {
@@ -31,13 +30,8 @@ function optionalString(value: unknown, maxLength = 255): string | null {
 }
 
 async function updateStripeAttribution(
-  env: ReturnType<typeof cloudflareEnv>,
-  organizationId: string,
-  userId: string,
-  body: AnalyticsIntentRequest,
-  action: StripeGa4IntentAction,
-): Promise<void> {
-  if (!env.STRIPE_SECRET_KEY) throw createError({ statusCode: 503, statusMessage: 'Stripe not configured' })
+  env: ReturnType<typeof cloudflareEnv>, organizationId: string, userId: string, body: AnalyticsIntentRequest, action: StripeGa4IntentAction, ): Promise<void> {
+  if (!env.STRIPE_SECRET_KEY) throw new HTTPError({ statusCode: 503, statusMessage: 'Stripe not configured' })
   const subscriptionId = optionalString(body.subscriptionId)
   const stripe = getStripe(env)
   const subscription = subscriptionId
@@ -50,10 +44,7 @@ async function updateStripeAttribution(
           FROM organization_billing WHERE organization_id = ? LIMIT 1
       `, [organizationId]))?.stripeCustomerId ?? null
   const contextMetadata: Record<string, string> = buildStripeSubscriptionMetadata(action, {
-    gaClientId: optionalString(body.gaClientId),
-    gaSessionId: optionalString(body.gaSessionId, 64),
-    gaSessionCapturedAt: body.gaSessionCapturedAt,
-  }, userId, optionalString(body.previousPriceId), optionalString(body.newPriceId))
+    gaClientId: optionalString(body.gaClientId), gaSessionId: optionalString(body.gaSessionId, 64), gaSessionCapturedAt: body.gaSessionCapturedAt, }, userId, optionalString(body.previousPriceId), optionalString(body.newPriceId))
   if (action !== 'initial_subscription') {
     contextMetadata.pending_change_type = action
     contextMetadata.pending_user_id = userId
@@ -64,27 +55,22 @@ async function updateStripeAttribution(
 
   if (subscription) {
     await stripe.subscriptions.update(subscription.id, {
-      metadata: { ...subscription.metadata, ...contextMetadata },
-    })
+      metadata: { ...subscription.metadata, ...contextMetadata }, })
   }
   if (customerId) {
     const customer = await stripe.customers.retrieve(customerId)
     if (!customer.deleted) {
       await stripe.customers.update(customerId, {
         metadata: {
-          ...customer.metadata,
-          user_id: userId,
-          ...(contextMetadata.ga_client_id ? { ga_client_id: contextMetadata.ga_client_id } : {}),
-        },
-      })
+          ...customer.metadata, user_id: userId, ...(contextMetadata.ga_client_id ? { ga_client_id: contextMetadata.ga_client_id } : {}), }, })
     }
   }
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const body = await readBody<AnalyticsIntentRequest>(event)
   const env = cloudflareEnv(event)
-  if (!env.DB) throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
+  if (!env.DB) throw new HTTPError({ statusCode: 503, statusMessage: 'Database unavailable' })
 
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) return jsonResponse({ error: 'Authentication required' }, { status: 401 })
@@ -99,8 +85,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const organization = await resolveRequestedOrganization(event, env.DB, session.user.id, {
-    explicitOrganizationId: body.organizationId,
-  })
+    explicitOrganizationId: body.organizationId, })
   if (!organization) return jsonResponse({ error: 'Organization not found' }, { status: 404 })
   try {
     await requireBillingAccess(env, env.DB, organization.id, session.user.id)
@@ -139,18 +124,7 @@ export default defineEventHandler(async (event) => {
 
   await updateStripeAttribution(env, organization.id, session.user.id, body, action)
   const intent = await recordStripeGa4Intent(env.DB, {
-    organizationId: organization.id,
-    userId: session.user.id,
-    stripeSubscriptionId: subscriptionId,
-    action,
-    siteId: body.siteId,
-    clientId,
-    sessionId,
-    sessionCapturedAt,
-    previousPriceId: optionalString(body.previousPriceId),
-    newPriceId: optionalString(body.newPriceId),
-    effectiveTiming: body.effectiveTiming,
-    source: body.source ?? 'browser',
-  })
+    organizationId: organization.id, userId: session.user.id, stripeSubscriptionId: subscriptionId, action, siteId: body.siteId, clientId, sessionId, sessionCapturedAt, previousPriceId: optionalString(body.previousPriceId), newPriceId: optionalString(body.newPriceId), effectiveTiming: body.effectiveTiming, source: body.source ?? 'browser', })
   return jsonResponse({ success: true, intentId: intent.id })
 })
+import { readBody } from 'nitro/h3';

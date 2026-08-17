@@ -103,7 +103,9 @@ async function sendEmail(
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
   const dashboardUrl = safeDashboardUrl(opts.dashboardUrl)
-  const platformDomain = (env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'krabiclaw.com').replace(/^https?:\/\//, '').replace(/\/$/, '')
+  const configuredPlatformDomain = env.NUXT_PUBLIC_PLATFORM_DOMAIN?.trim()
+  if (!configuredPlatformDomain) throw new Error('NUXT_PUBLIC_PLATFORM_DOMAIN is required')
+  const platformDomain = configuredPlatformDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')
   const { html, text } = await useRender(DomainUpdate, { props: { title: opts.title, message: opts.message, domain: opts.domain, status: opts.status, dashboardUrl, platformDomain } })
 
   let response: Response

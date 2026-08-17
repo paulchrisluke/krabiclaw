@@ -266,7 +266,9 @@ if (!template) {
 }
 
 const config = useRuntimeConfig()
-const platformHostname = config.public.freeSiteDomain?.replace(/^https?:\/\//, '') || 'krabiclaw.com'
+const requestUrl = useRequestURL()
+const platformHostname = config.public.freeSiteDomain?.replace(/^https?:\/\//, '').replace(/\/$/, '')
+if (!platformHostname) throw createError({ statusCode: 500, statusMessage: 'NUXT_PUBLIC_FREE_SITE_DOMAIN is required' })
 const isDemoPreviewOpen = ref(false)
 const previewDialogRef = ref<HTMLElement | null>(null)
 const closePreviewButtonRef = ref<HTMLButtonElement | null>(null)
@@ -280,8 +282,11 @@ const isNclsShowcase = template.slug === 'blawby'
 // always has. Blawby's demoUrl is the literal NCLS-approved production URL.
 const demoUrl = computed(() => {
   if (template.demoUrl) return template.demoUrl
-  return import.meta.dev
-    ? 'http://demo.localhost:3000'
+  const isLocalOrigin = requestUrl.hostname === 'localhost'
+    || requestUrl.hostname === '127.0.0.1'
+    || requestUrl.hostname.endsWith('.localhost')
+  return isLocalOrigin
+    ? requestUrl.origin
     : `https://demo.${platformHostname}`
 })
 

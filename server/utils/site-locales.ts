@@ -113,13 +113,12 @@ export async function upsertSiteLocale(
   batch.push({
     query: `
       INSERT INTO site_locales
-        (id, organization_id, site_id, locale, label, is_source, status, fallback_enabled, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+        (id, organization_id, site_id, locale, label, is_source, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(organization_id, site_id, locale) DO UPDATE SET
         label = excluded.label,
         is_source = excluded.is_source,
         status = excluded.status,
-        fallback_enabled = 0,
         updated_at = excluded.updated_at
     `,
     params: [

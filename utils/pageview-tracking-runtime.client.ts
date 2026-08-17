@@ -1,6 +1,7 @@
 // Client-side pageview tracking for SPA route changes on public tenant
 // (Saya) pages and platform pages (krabiclaw.com itself).
 import { isPlatformPath } from '~/utils/platform-routes'
+import type { Ref } from 'vue'
 
 export function registerPageviewTracking() {
   const route = useRoute()
@@ -16,8 +17,9 @@ export function registerPageviewTracking() {
   if (!isTenant && !isPlatform) return
   if (isTenant && !siteId) return
 
-  const { $i18n } = useNuxtApp()
-  const trackingIdentity = () => isTenant ? { siteId, locale: $i18n.locale.value } : { platform: true }
+  const { $appLocale } = useNuxtApp() as { $appLocale?: Ref<string> }
+  if (!$appLocale) throw new Error('Application locale provider is unavailable')
+  const trackingIdentity = () => isTenant ? { siteId, locale: $appLocale.value } : { platform: true }
   const router = useRouter()
   let pageEnteredAt = Date.now()
   let currentPath = router.currentRoute.value.path

@@ -6,9 +6,8 @@ export function publicSurfaceStylesheetForRequest(input: {
   themeId?: string | null
   vertical?: string | null
 }): string | null {
-  const isHome = input.pathname === '/'
   if (input.tenantType === 'platform') {
-    return isHome ? '/_nuxt/surfaces/platform-home.css' : '/_nuxt/surfaces/platform.css'
+    return '/_nuxt/surfaces/platform.css'
   }
   if (input.tenantType !== 'tenant') return null
 
@@ -17,10 +16,10 @@ export function publicSurfaceStylesheetForRequest(input: {
     vertical: input.vertical,
   })
   if (template.slug === 'blawby') {
-    return isHome ? '/_nuxt/surfaces/blawby-home.css' : '/_nuxt/surfaces/blawby.css'
+    return '/_nuxt/surfaces/blawby.css'
   }
   if (template.slug === 'saya') {
-    return isHome ? '/_nuxt/surfaces/saya-home.css' : '/_nuxt/surfaces/saya.css'
+    return '/_nuxt/surfaces/saya.css'
   }
   throw new Error(`Unsupported public template "${template.slug}".`)
 }

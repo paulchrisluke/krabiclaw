@@ -1,7 +1,7 @@
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getPublicLinksPage } from '~/server/utils/site-links'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'siteId required' }, { status: 400 })
 
@@ -14,3 +14,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ success: true, ...linksPage })
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

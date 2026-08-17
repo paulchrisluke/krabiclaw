@@ -1,4 +1,6 @@
-import type { H3Event } from 'h3'
+import { HTTPError } from 'nitro';
+
+import type { H3Event } from 'nitro'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { queryFirst } from '~/server/db'
 import { parseOnboardingDraftPayload } from '~/server/utils/onboarding-drafts'
@@ -12,20 +14,20 @@ async function loadDraftPreviewSource(
 ) {
   options.signal?.throwIfAborted()
   const draftId = String(draftIdInput || '').trim()
-  if (!draftId) throw createError({ statusCode: 400, statusMessage: 'draftId required' })
+  if (!draftId) throw new HTTPError({ statusCode: 400, statusMessage: 'draftId required' })
 
   const env = cloudflareEnv(event)
   const db = env.DB
-  if (!db) throw createError({ statusCode: 503, statusMessage: 'Database unavailable' })
+  if (!db) throw new HTTPError({ statusCode: 503, statusMessage: 'Database unavailable' })
 
   const rawToken = typeof token === 'string' ? token : null
   if (!rawToken || !env.PREVIEW_SECRET) {
-    throw createError({ statusCode: 401, statusMessage: 'Preview token required' })
+    throw new HTTPError({ statusCode: 401, statusMessage: 'Preview token required' })
   }
 
   const isPreviewAuthorized = await verifyScopedPreviewToken(String(env.PREVIEW_SECRET), 'draft', draftId, rawToken)
   options.signal?.throwIfAborted()
-  if (!isPreviewAuthorized) throw createError({ statusCode: 403, statusMessage: 'Preview token invalid' })
+  if (!isPreviewAuthorized) throw new HTTPError({ statusCode: 403, statusMessage: 'Preview token invalid' })
 
   const row = await queryFirst<{ payload_json: string }>(db, `
     SELECT payload_json
@@ -35,7 +37,7 @@ async function loadDraftPreviewSource(
   `, [draftId])
   options.signal?.throwIfAborted()
 
-  if (!row) throw createError({ statusCode: 404, statusMessage: 'Draft not found' })
+  if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Draft not found' })
   return parseOnboardingDraftPayload(row.payload_json)
 }
 
@@ -89,7 +91,7 @@ export async function loadPublicDraftPage(
     'order', 'qa', 'reviews', 'posts', 'experiences', 'photos', 'menu', 'blog',
   ])
   if (!supportedPages.has(page)) {
-    throw createError({ statusCode: 400, statusMessage: 'Unsupported draft preview page' })
+    throw new HTTPError({ statusCode: 400, statusMessage: 'Unsupported draft preview page' })
   }
   const locationSlug = typeof query.location === 'string' ? query.location : null
   const experienceSlug = typeof query.experience === 'string' ? query.experience : null
@@ -105,13 +107,13 @@ export async function loadPublicDraftPage(
     'reservationPolicies', 'experiencePolicies',
   ])
   if ([...requestedDatasets].some(dataset => !supportedDatasets.has(dataset))) {
-    throw createError({ statusCode: 400, statusMessage: 'Unsupported draft preview dataset' })
+    throw new HTTPError({ statusCode: 400, statusMessage: 'Unsupported draft preview dataset' })
   }
   if (page === 'experiences' || experienceSlug) {
-    throw createError({ statusCode: 422, statusMessage: 'Draft preview does not contain experience records' })
+    throw new HTTPError({ statusCode: 422, statusMessage: 'Draft preview does not contain experience records' })
   }
   if (page === 'blog' || requestedDatasets.has('blog') || requestedDatasets.has('blogPost')) {
-    throw createError({ statusCode: 422, statusMessage: 'Draft preview does not contain blog records' })
+    throw new HTTPError({ statusCode: 422, statusMessage: 'Draft preview does not contain blog records' })
   }
 
   const primaryLocation = payload.preview.locations[0] ?? null
@@ -119,7 +121,7 @@ export async function loadPublicDraftPage(
     ? payload.preview.locations.find(location => location.slug === locationSlug) ?? null
     : primaryLocation
   if (locationSlug && !resolvedLocation) {
-    throw createError({ statusCode: 404, statusMessage: 'Draft location not found' })
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Draft location not found' })
   }
 
   const shell = buildDraftShellPayload(payload)

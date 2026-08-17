@@ -10,7 +10,7 @@
 // loses Cloudflare bindings" rule) so the route and the page can never drift on
 // the D1 binding name or auth/visibility rules the way they previously did
 // (env.db vs env.DB).
-import type { H3Event } from 'h3'
+import type { H3Event } from 'nitro'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import {

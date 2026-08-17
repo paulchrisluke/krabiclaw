@@ -61,7 +61,8 @@ export async function drainPublicResourceCacheInvalidations(
         SELECT subdomain, custom_domain FROM sites WHERE id = ? LIMIT 1
       `, [row.site_id])
       const site = sites[0]
-      const freeSiteDomain = normalizeHost(options.freeSiteDomain) || 'krabiclaw.com'
+      const freeSiteDomain = normalizeHost(options.freeSiteDomain)
+      if (!freeSiteDomain) throw new Error('NUXT_PUBLIC_FREE_SITE_DOMAIN is required')
       const hostnames = new Set<string>(domains.map(domain => domain.domain))
       if (site?.subdomain) hostnames.add(`${site.subdomain}.${freeSiteDomain}`)
       if (site?.custom_domain) hostnames.add(site.custom_domain)

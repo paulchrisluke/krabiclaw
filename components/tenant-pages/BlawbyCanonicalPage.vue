@@ -8,7 +8,7 @@
       <BlawbyServicesSection v-if="servicesBlock" v-bind="servicesProps" :offerings="offerings" />
       <BlawbyFaqSection :items="faqs" :decoration-url="faqDecoration" />
       <BlawbyReviewsSection :reviews="reviews" :description="reviewsDescription" />
-      <BlawbyConsultationCta v-if="ctaBlock" v-bind="ctaProps" />
+      <BlawbyConsultationCta v-if="ctaBlock && ctaProps.title && ctaProps.label && ctaProps.destination" v-bind="ctaProps" />
     </template>
 
     <template v-else-if="page.path === '/pricing'">
@@ -17,7 +17,7 @@
       <BlawbyPricingSection :plans="pricingPlans" :calculator="pricingCalculator" />
       <BlawbyFaqSection :items="faqs" :decoration-url="faqDecoration" />
       <BlawbyServicesSection v-if="servicesBlock" v-bind="servicesProps" :offerings="offerings" />
-      <BlawbyConsultationCta v-if="ctaBlock" v-bind="ctaProps" />
+      <BlawbyConsultationCta v-if="ctaBlock && ctaProps.title && ctaProps.label && ctaProps.destination" v-bind="ctaProps" />
     </template>
 
     <template v-else-if="page.path === '/donate'">
@@ -44,7 +44,7 @@
       <section v-if="legalBodyBlocks.length" class="blawby-container mx-auto max-w-4xl bg-white py-8 text-gray-900" data-parity-section="legal-body">
         <TenantPageRichTextBlock v-for="bodyBlock in legalBodyBlocks" :key="bodyBlock.id" :block="bodyBlock" :page-title="page.title" />
       </section>
-      <BlawbyConsultationCta v-if="ctaBlock" v-bind="ctaProps" />
+      <BlawbyConsultationCta v-if="ctaBlock && ctaProps.title && ctaProps.label && ctaProps.destination" v-bind="ctaProps" />
     </template>
   </div>
 </template>
@@ -100,7 +100,7 @@ const teamPeople = computed(() => arrayRecords(teamBlock.value?.data.people).map
 
 const impactBlock = computed(() => block('feature_grid', data => data.section === 'donation' && Array.isArray(data.items)))
 const impactProps = computed(() => ({
-  title: stringValue(impactBlock.value?.data.title) || 'Our Impact in Numbers',
+  title: stringValue(impactBlock.value?.data.title),
   description: stringValue(impactBlock.value?.data.description) || null,
   additionalDescription: stringValue(impactBlock.value?.data.additionalDescription) || null,
   statistics: arrayRecords(impactBlock.value?.data.items).map(item => ({ value: stringValue(item.value), label: stringValue(item.title) })).filter(item => item.value && item.label),
@@ -120,8 +120,8 @@ const offerings = computed<PublicOfferingSummary[]>(() => arrayRecords(servicesB
   featured: false,
 })).filter(item => item.id && item.name && item.slug))
 const servicesProps = computed(() => ({
-  title: stringValue(servicesBlock.value?.data.title) || 'Our',
-  accent: stringValue(servicesBlock.value?.data.accent) || 'Services',
+  title: stringValue(servicesBlock.value?.data.title),
+  accent: stringValue(servicesBlock.value?.data.accent),
   description: stringValue(servicesBlock.value?.data.description),
   decorationUrl: assetUrl(servicesBlock.value?.data.decoration),
 }))
@@ -172,17 +172,17 @@ const donationTiers = computed(() => arrayRecords(donationBlock.value?.data.tier
   title: stringValue(tier.title),
   description: stringValue(tier.description),
   featured: tier.featured === true,
-  icon: stringValue(tier.icon) || 'ScaleIcon',
-})).filter(tier => tier.amount > 0 && tier.title))
+  icon: stringValue(tier.icon),
+})).filter(tier => tier.amount > 0 && tier.title && tier.icon))
 const supportBlock = computed(() => block('callout', data => Boolean(data.title || data.body || data.buttons)))
 const supportButtons = computed(() => arrayRecords(supportBlock.value?.data.buttons).map(button => ({ label: stringValue(button.label), url: stringValue(button.url) })).filter(button => button.label && button.url))
 
 const ctaBlock = computed(() => block('contact_cta'))
 const ctaProps = computed(() => ({
-  title: stringValue(ctaBlock.value?.data.title) || 'Get started today',
+  title: stringValue(ctaBlock.value?.data.title),
   description: stringValue(ctaBlock.value?.data.description) || null,
-  label: stringValue(ctaBlock.value?.data.label) || 'Contact us',
-  destination: stringValue(ctaBlock.value?.data.url) || '/contact',
+  label: stringValue(ctaBlock.value?.data.label),
+  destination: stringValue(ctaBlock.value?.data.url),
   backgroundUrl: assetUrl(ctaBlock.value?.data.background),
   featuredUrl: assetUrl(ctaBlock.value?.data.featured),
 }))

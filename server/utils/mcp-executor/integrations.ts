@@ -1,6 +1,6 @@
 import type { McpExecutorContext } from './shared'
 import { buildDashboardUrl } from '~/server/utils/dashboard-links'
-import { createError } from 'h3'
+import { HTTPError } from 'nitro';
 import { getFacebookPages, getFacebookPagesConnection, getPageInfo, publishToPage, storeFacebookPagesConnection, syncPageInfoToLocation } from '~/server/utils/facebook-pages'
 import { hasSiteEntitlement } from '~/server/utils/billing'
 import { NOT_HANDLED, mutationContextPayload, optionalString, requiredString } from './shared'
@@ -34,7 +34,7 @@ export async function handleIntegrationsTools(ctx: McpExecutorContext): Promise<
         "managed_service",
       );
       if (!allowed) {
-        throw createError({
+        throw new HTTPError({
           statusCode: 403,
           statusMessage:
             "Facebook publishing requires Growth.",
@@ -46,13 +46,13 @@ export async function handleIntegrationsTools(ctx: McpExecutorContext): Promise<
         site.siteId,
       );
       if (!connection)
-        throw createError({
+        throw new HTTPError({
           statusCode: 404,
           statusMessage:
             "No Facebook connection found. Connect Facebook from the dashboard first.",
         });
       if (!connection.facebook_page_id || !connection.encrypted_page_token) {
-        throw createError({
+        throw new HTTPError({
           statusCode: 400,
           statusMessage:
             "No Facebook Page selected. Sync a page from the dashboard first.",
@@ -81,7 +81,7 @@ export async function handleIntegrationsTools(ctx: McpExecutorContext): Promise<
         "managed_service",
       );
       if (!allowed) {
-        throw createError({
+        throw new HTTPError({
           statusCode: 403,
           statusMessage:
             "Facebook sync requires Growth.",
@@ -93,7 +93,7 @@ export async function handleIntegrationsTools(ctx: McpExecutorContext): Promise<
         site.siteId,
       );
       if (!connection)
-        throw createError({
+        throw new HTTPError({
           statusCode: 404,
           statusMessage:
             "No Facebook connection found. Connect Facebook from the dashboard first.",
@@ -107,7 +107,7 @@ export async function handleIntegrationsTools(ctx: McpExecutorContext): Promise<
         const pages = await getFacebookPages(connection.encrypted_user_token);
         const selected = pages.find((p) => p.id === requestedPageId);
         if (!selected)
-          throw createError({
+          throw new HTTPError({
             statusCode: 404,
             statusMessage: "Page not found in this connection.",
           });
@@ -124,7 +124,7 @@ export async function handleIntegrationsTools(ctx: McpExecutorContext): Promise<
       }
 
       if (!pageToken || !pageId) {
-        throw createError({
+        throw new HTTPError({
           statusCode: 400,
           statusMessage:
             "No Facebook Page selected. Pass page_id or sync a page from the dashboard first.",

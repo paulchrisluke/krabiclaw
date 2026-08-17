@@ -45,16 +45,13 @@ import ConsentBanner from '~/components/ConsentBanner.vue'
 import { resolveLocationExperienceHref } from '~/utils/experience-navigation'
 import { getPreviewSubpath } from '~/composables/usePublicPageRequest'
 import sayaCriticalCss from '~/assets/css/saya-critical.css?raw'
-import sayaStylesheet from '~/assets/css/saya-entry.css?url'
-import sayaHomeStylesheet from '~/assets/css/saya-home-entry.css?url'
+import '~/assets/css/saya-entry.css'
 
 const route = useRoute()
 const isHome = computed(() => route.path === '/' || getPreviewSubpath(route.path) === '/')
-const sayaStylesheetHref = new URL(sayaStylesheet, 'http://nuxt.local').pathname
-const sayaHomeStylesheetHref = new URL(sayaHomeStylesheet, 'http://nuxt.local').pathname
+const sayaStylesheetHref = '/_nuxt/surfaces/saya.css'
 const sayaStylesheetForRoute = computed(() => {
-  const isHome = route.path === '/' || getPreviewSubpath(route.path) === '/'
-  return isHome ? sayaHomeStylesheetHref : sayaStylesheetHref
+  return sayaStylesheetHref
 })
 
 useHead(() => {

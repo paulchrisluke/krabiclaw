@@ -27,9 +27,9 @@
           </div>
           <div data-blawby-critical-hero-actions class="w-full lg:w-2/5">
             <div class="mt-10 flex justify-start gap-x-6 min-[1920px]:mt-16 min-[2560px]:mt-20">
-              <BlawbyButton :to="heroDestination" class="gap-2" @click="trackConsultation('hero', heroDestination)">
+              <BlawbyButton v-if="heroDestination && hero.label" :to="heroDestination" class="gap-2" @click="trackConsultation('hero', heroDestination)">
                 <svg class="size-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.5 4.5h9A4.5 4.5 0 0 1 21 9v3a4.5 4.5 0 0 1-4.5 4.5h-4.86L7.2 20.2a.75.75 0 0 1-1.2-.6v-3.35A4.5 4.5 0 0 1 3 12V9a4.5 4.5 0 0 1 4.5-4.5Z" /></svg>
-                {{ hero.label || consultation.cta_label }}
+                {{ hero.label }}
               </BlawbyButton>
             </div>
           </div>
@@ -37,7 +37,7 @@
       </div>
     </section>
 
-    <section v-if="services" class="relative bg-(--blawby-bg) pb-14 pt-14 sm:pb-20 sm:pt-14 lg:pb-14" data-parity-section="services">
+    <section v-if="services && routeData.offerings.length && (services.title || services.accent || services.description)" class="relative bg-(--blawby-bg) pb-14 pt-14 sm:pb-20 sm:pt-14 lg:pb-14" data-parity-section="services">
       <div class="blawby-container relative z-20">
         <BlawbySectionHeading
           :title="String(services.title || '')"
@@ -72,14 +72,14 @@
     </div>
 
     <BlawbyConsultationCta
-      v-if="ctaBlock"
-      :title="String(ctaBlock.title || 'Get started today')"
+      v-if="ctaBlock && ctaBlock.title && ctaBlock.label && ctaBlock.url"
+      :title="String(ctaBlock.title || '')"
       :description="asOptionalString(ctaBlock.description)"
-      :label="String(ctaBlock.label || consultation.cta_label)"
-      :destination="String(ctaBlock.url || consultation.schedule_path)"
+      :label="String(ctaBlock.label || '')"
+      :destination="String(ctaBlock.url || '')"
       :background-url="ctaBackgroundSrc"
       :featured-url="ctaFeaturedSrc"
-      @click="trackConsultation('cta_section', String(ctaBlock.url || consultation.schedule_path))"
+      @click="trackConsultation('cta_section', String(ctaBlock.url || ''))"
     />
   </div>
 </template>
@@ -121,14 +121,6 @@ function block(type: string): ApiRecord | null {
     data.label = data.cta_label ?? data.label
     data.url = data.cta_url ?? data.url
   }
-  if (type === 'video_feature' && !Array.isArray(data.features)) {
-    data.features = Array.isArray(data.items)
-      ? data.items.map(item => ({
-          name: typeof item === 'object' && item ? (item as ApiRecord).title : '',
-          desc: typeof item === 'object' && item ? (item as ApiRecord).description : '',
-        }))
-      : []
-  }
   return data
 }
 
@@ -157,9 +149,9 @@ const servicesDecorationSrc = servicesDecoration
 const qaDecorationSrc = computed(() => assetUrl(qaBlock.value?.decoration))
 const ctaBackgroundSrc = computed(() => assetUrl(ctaBlock.value?.background))
 const ctaFeaturedSrc = computed(() => assetUrl(ctaBlock.value?.featured))
-const heroDestination = computed(() => String(hero.value.url || consultation.value.schedule_path))
+const heroDestination = computed(() => String(hero.value.url || ''))
 const heroTitle = computed(() => {
-  const title = String(hero.value.title || identity.value.brand_name || '')
+  const title = String(hero.value.title || '')
   const accent = String(hero.value.accent || '')
   const index = accent ? title.indexOf(accent) : -1
   return index >= 0

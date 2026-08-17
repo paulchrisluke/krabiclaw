@@ -3,7 +3,7 @@ import { jsonResponse } from '~/server/utils/api-response'
 
 const INTERNAL_DOCS = new Set(['billing-architecture'])
 
-export default defineEventHandler(async () => {
+export default defineHandler(async () => {
   try {
     const storage = useStorage('assets:docs')
     const keys = await storage.getKeys()
@@ -17,9 +17,7 @@ export default defineEventHandler(async () => {
           const titleMatch = content?.match(/^#\s+(.+)$/m)
           const slug = key.replace('.md', '')
           return {
-            slug,
-            title: titleMatch ? titleMatch[1] : slug,
-            file: key
+            slug, title: titleMatch ? titleMatch[1] : slug, file: key
           }
         })
     )
@@ -30,3 +28,5 @@ export default defineEventHandler(async () => {
     return jsonResponse({ error: 'Failed to load docs' }, { status: 500 })
   }
 })
+import { defineHandler } from 'nitro';
+import { useStorage } from 'nitro/storage'

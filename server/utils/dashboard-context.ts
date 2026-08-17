@@ -1,16 +1,14 @@
-import type { H3Event } from 'h3'
-import { getHeader } from 'h3'
+import { HTTPError } from 'nitro';
+
+import type { H3Event } from 'nitro'
+
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { queryAll, queryFirst, type DbClient } from '~/server/db'
 import { assertDashboardPathPermission, assertMemberSiteAccess, isOrganizationWideRole } from '~/server/utils/member-access'
 
 function safeJsonParse(value: string): unknown {
-  try {
-    return JSON.parse(value)
-  } catch {
-    return null
-  }
+  return JSON.parse(value)
 }
 
 // business_locations.address is written exclusively as { addressLines: string[] }
@@ -21,9 +19,9 @@ function safeJsonParse(value: string): unknown {
 function parseLocationAddress(value: string | null): { addressLines: string[] } | null {
   if (!value) return null
   const parsed = safeJsonParse(value)
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Stored location address is invalid')
   const addressLines = (parsed as Record<string, unknown>).addressLines
-  if (!Array.isArray(addressLines) || !addressLines.every(line => typeof line === 'string')) return null
+  if (!Array.isArray(addressLines) || !addressLines.every(line => typeof line === 'string')) throw new Error('Stored location address lines are invalid')
   return { addressLines }
 }
 
@@ -165,7 +163,7 @@ export async function resolveRequestedOrganization(
   userId: string,
   options: ResolveOrganizationOptions = {}
 ): Promise<DashboardOrganizationRow | null> {
-  const organizationSlug = options.organizationSlug ?? getHeader(event, 'x-dashboard-org-slug')
+  const organizationSlug = options.organizationSlug ?? (event.req.headers.get('x-dashboard-org-slug'))
   const explicitOrganizationId = options.explicitOrganizationId ?? null
 
   const headerOrg = organizationSlug
@@ -180,7 +178,7 @@ export async function resolveRequestedOrganization(
 
   if (explicitOrganizationId) {
     if (headerOrg && headerOrg.id !== explicitOrganizationId) {
-      throw createError({
+      throw new HTTPError({
         statusCode: 400,
         message: 'Organization context conflict: the requested organization does not match the current dashboard context.',
       })
@@ -261,12 +259,12 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
   const db = env.DB
 
   if (!db) {
-    throw createError({ statusCode: 503, message: 'Database not available' })
+    throw new HTTPError({ statusCode: 503, message: 'Database not available' })
   }
 
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) {
-    throw createError({ statusCode: 401, message: 'Authentication required' })
+    throw new HTTPError({ statusCode: 401, message: 'Authentication required' })
   }
 
   // Session-wide activeOrganizationId is only ever considered when this specific
@@ -296,8 +294,8 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
         site: null,
       }
     }
-    const hasHeader = Boolean(options.organizationSlug ?? getHeader(event, 'x-dashboard-org-slug'))
-    throw createError({
+    const hasHeader = Boolean(options.organizationSlug ?? (event.req.headers.get('x-dashboard-org-slug')))
+    throw new HTTPError({
       statusCode: hasHeader ? 404 : 400,
       message: hasHeader
         ? 'Organization not found'
@@ -316,10 +314,10 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
   // selected yet" rather than a client error — only callers that need a site
   // get the hard 400.
   const siteId = options.siteId ?? null
-  const siteSlug = options.siteSlug ?? getHeader(event, 'x-dashboard-site-slug')
+  const siteSlug = options.siteSlug ?? (event.req.headers.get('x-dashboard-site-slug'))
 
   if (!siteId && !siteSlug && options.requireSite !== false) {
-    throw createError({ statusCode: 400, message: 'Site slug is required. Use /dashboard/{orgSlug}/sites/{siteSlug} routes.' })
+    throw new HTTPError({ statusCode: 400, message: 'Site slug is required. Use /dashboard/{orgSlug}/sites/{siteSlug} routes.' })
   }
 
   const site = siteId
@@ -343,7 +341,7 @@ export async function getDashboardContext(event: H3Event, options: DashboardCont
         : null
 
   if (!site && options.requireSite !== false) {
-    throw createError({ statusCode: 404, message: 'Site not found' })
+    throw new HTTPError({ statusCode: 404, message: 'Site not found' })
   }
 
   if (site) {
@@ -404,7 +402,7 @@ export async function listOrganizationSites(db: DbClient, organizationId: string
 export async function getDashboardSite(event: H3Event) {
   const context = await getDashboardContext(event, { requireSite: true })
   if (!context.site) {
-    throw createError({ statusCode: 404, message: 'Site not found' })
+    throw new HTTPError({ statusCode: 404, message: 'Site not found' })
   }
   return {
     ...context,
@@ -424,12 +422,12 @@ export async function getDashboardLocationContext(event: H3Event, locationId: st
   const db = env.DB
 
   if (!db) {
-    throw createError({ statusCode: 503, message: 'Database not available' })
+    throw new HTTPError({ statusCode: 503, message: 'Database not available' })
   }
 
   const session = await getAuthSession(event, env)
   if (!session?.user?.id) {
-    throw createError({ statusCode: 401, message: 'Authentication required' })
+    throw new HTTPError({ statusCode: 401, message: 'Authentication required' })
   }
 
   const row = await queryFirst<DashboardLocationContextRow & {
@@ -450,7 +448,7 @@ export async function getDashboardLocationContext(event: H3Event, locationId: st
   `, [locationId, session.user.id])
 
   if (!row) {
-    throw createError({ statusCode: 404, message: 'Location not found' })
+    throw new HTTPError({ statusCode: 404, message: 'Location not found' })
   }
 
   const organization = {

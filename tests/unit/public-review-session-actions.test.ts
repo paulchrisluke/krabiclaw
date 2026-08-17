@@ -137,6 +137,16 @@ const previousGlobals = {
   defineEventHandler: globalThis.defineEventHandler,
   readBody: globalThis.readBody,
 }
+
+mock.module('nitro/h3', {
+  namedExports: {
+    readBody: async () => {
+      if (state.readError) throw state.readError
+      return state.body
+    },
+  },
+})
+
 globalThis.defineEventHandler = (handler: unknown) => handler
 globalThis.readBody = async () => {
   if (state.readError) throw state.readError

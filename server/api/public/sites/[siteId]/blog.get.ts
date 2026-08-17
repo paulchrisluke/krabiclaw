@@ -3,7 +3,7 @@ import { queryAll } from '~/server/db'
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { attachFeaturedImageFromBareJoin } from '~/server/utils/platform-content'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'Site ID required' }, { status: 400 })
 
@@ -13,13 +13,7 @@ export default defineEventHandler(async (event) => {
 
   const sql = `
     SELECT
-      p.id, p.title, p.slug, p.excerpt, p.category, p.seo_description, p.seo_keywords, p.canonical_url, p.robots, p.published_at, p.updated_at,
-      u.name AS author_name,
-      p.featured_image_asset_id,
-      ma.public_url,
-      ma.kind,
-      ma.width,
-      ma.height
+      p.id, p.title, p.slug, p.excerpt, p.category, p.seo_description, p.seo_keywords, p.canonical_url, p.robots, p.published_at, p.updated_at, u.name AS author_name, p.featured_image_asset_id, ma.public_url, ma.kind, ma.width, ma.height
     FROM blog_posts p
     LEFT JOIN user u ON u.id = p.author_id
     LEFT JOIN media_assets ma ON ma.id = p.featured_image_asset_id AND ma.status = 'active'
@@ -36,3 +30,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to fetch posts' }, { status: 500 })
   }
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

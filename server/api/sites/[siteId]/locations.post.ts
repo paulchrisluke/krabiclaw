@@ -2,28 +2,9 @@ import { jsonResponse } from '~/server/utils/api-response'
 import { createLocation, type CreateLocationInput } from '~/server/utils/location-management'
 import { purgePublicResourceCacheSafe } from '~/server/utils/public-resource-cache'
 import { requireSiteAccess } from '~/server/utils/location-access'
+import { parseLocationPayload } from '~/server/utils/location-payload'
 
-function parseLocationPayload<T>(value: T) {
-  const location = value as Record<string, unknown>
-  const parseJson = (field: string) => {
-    const raw = location[field]
-    if (typeof raw !== 'string' || !raw) return raw ?? null
-    try {
-      return JSON.parse(raw)
-    } catch {
-      return null
-    }
-  }
-
-  return {
-    ...location,
-    address: parseJson('address'),
-    opening_hours: parseJson('opening_hours'),
-    is_primary: Boolean(location.is_primary),
-  }
-}
-
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) {
     return jsonResponse({ error: 'Site ID is required' }, { status: 400 })
@@ -55,27 +36,8 @@ export default defineEventHandler(async (event) => {
     : Number(body.review_count)
 
   const result = await createLocation(
-    env,
-    db,
-    site.organization_id,
-    siteId,
-    {
-      title: body?.title ?? '',
-      slug: body?.slug ?? null,
-      address: body?.address ? JSON.stringify(body.address) : null,
-      city: body?.city ?? null,
-      phone: body?.phone ?? null,
-      website_url: body?.website_url ?? null,
-      maps_url: body?.maps_url ?? null,
-      description: body?.description ?? null,
-      google_place_id: body?.google_place_id ?? null,
-      rating,
-      review_count: reviewCount,
-      opening_hours: (body?.opening_hours || null) as CreateLocationInput['opening_hours'],
-      is_primary: body?.is_primary === true,
-    },
-    session.user.id,
-  )
+    env, db, site.organization_id, siteId, {
+      title: body?.title ?? '', slug: body?.slug ?? null, address: body?.address ? JSON.stringify(body.address) : null, city: body?.city ?? null, phone: body?.phone ?? null, website_url: body?.website_url ?? null, maps_url: body?.maps_url ?? null, description: body?.description ?? null, google_place_id: body?.google_place_id ?? null, rating, review_count: reviewCount, opening_hours: (body?.opening_hours || null) as CreateLocationInput['opening_hours'], is_primary: body?.is_primary === true, }, session.user.id, )
 
   if (result.status >= 400) {
     return jsonResponse(result.data, { status: result.status })
@@ -84,7 +46,7 @@ export default defineEventHandler(async (event) => {
 
   const location = (result.data as { location?: unknown }).location
   return jsonResponse({
-    success: true,
-    location: location ? parseLocationPayload(location) : null,
-  }, { status: result.status })
+    success: true, location: location ? parseLocationPayload(location) : null, }, { status: result.status })
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam, readBody  } from 'nitro/h3';

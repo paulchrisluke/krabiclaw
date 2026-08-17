@@ -5,7 +5,7 @@ import { deleteCustomDomain } from '~/server/utils/domains'
 import { notifyDomainLifecycle } from '~/server/utils/domain-notifications'
 import { buildDashboardUrl } from '~/server/utils/dashboard-links'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const domainId = getRouterParam(event, 'domainId')
   if (!siteId || !domainId) return jsonResponse({ error: 'Site ID and domain ID are required' }, { status: 400 })
@@ -23,18 +23,8 @@ export default defineEventHandler(async (event) => {
   try {
     await deleteCustomDomain(env, db, domainId, site.member_role as 'owner' | 'admin' | 'editor', session.user.id)
     await notifyDomainLifecycle(env, db, {
-      organizationId: site.organization_id,
-      siteId,
-      domain: domain.domain,
-      status: 'deleted',
-      title: `Domain deleted: ${domain.domain}`,
-      message: `${domain.domain} has been removed from KrabiClaw.`,
-      dashboardUrl: buildDashboardUrl({
-        env,
-        organizationId: site.organization_id,
-        organizationSlug: site.organization_slug ?? undefined,
-        subdomain: site.subdomain,
-      }, 'site.domains')
+      organizationId: site.organization_id, siteId, domain: domain.domain, status: 'deleted', title: `Domain deleted: ${domain.domain}`, message: `${domain.domain} has been removed from KrabiClaw.`, dashboardUrl: buildDashboardUrl({
+        env, organizationId: site.organization_id, organizationSlug: site.organization_slug, subdomain: site.subdomain, }, 'site.domains')
     })
     return jsonResponse({ success: true })
   } catch (error) {
@@ -42,3 +32,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: normalizedError.message || 'Failed to delete domain' }, { status: 500 })
   }
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

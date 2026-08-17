@@ -1,4 +1,4 @@
-import { createError } from 'h3'
+import { HTTPError } from 'nitro';
 import { Resvg } from '@resvg/resvg-wasm'
 import type { InitInput } from '@resvg/resvg-wasm'
 import { getR2KeyFromPublicUrl, getR2Url, uploadToR2 } from '~/server/utils/cloudflare-r2'
@@ -35,11 +35,11 @@ function cloudflareSquareSourceUrl(sourceUrl: string): string {
 async function readBoundedResponse(response: Response): Promise<ArrayBuffer> {
   const declaredLength = Number(response.headers.get('content-length') || 0)
   if (declaredLength > MAX_SOURCE_BYTES) {
-    throw createError({ statusCode: 413, statusMessage: 'Logo exceeds the 10 MB favicon source limit' })
+    throw new HTTPError({ statusCode: 413, statusMessage: 'Logo exceeds the 10 MB favicon source limit' })
   }
   const bytes = await response.arrayBuffer()
   if (bytes.byteLength > MAX_SOURCE_BYTES) {
-    throw createError({ statusCode: 413, statusMessage: 'Logo exceeds the 10 MB favicon source limit' })
+    throw new HTTPError({ statusCode: 413, statusMessage: 'Logo exceeds the 10 MB favicon source limit' })
   }
   return bytes
 }
@@ -48,16 +48,16 @@ async function loadSource(env: ApiRecord, sourceUrl: string): Promise<{ bytes: A
   const r2Key = getR2KeyFromPublicUrl(env, sourceUrl)
   if (r2Key) {
     const object = await mediaBucket(env).get(r2Key)
-    if (!object) throw createError({ statusCode: 422, statusMessage: 'Logo media object is missing' })
+    if (!object) throw new HTTPError({ statusCode: 422, statusMessage: 'Logo media object is missing' })
     if (object.size > MAX_SOURCE_BYTES) {
-      throw createError({ statusCode: 413, statusMessage: 'Logo exceeds the 10 MB favicon source limit' })
+      throw new HTTPError({ statusCode: 413, statusMessage: 'Logo exceeds the 10 MB favicon source limit' })
     }
     const type = object.httpMetadata?.contentType?.split(';', 1)[0]?.trim().toLowerCase() || ''
     return { bytes: await object.arrayBuffer(), contentType: type }
   }
 
   if (!isCloudflareImagesUrl(sourceUrl)) {
-    throw createError({ statusCode: 422, statusMessage: 'Site logos must use managed KrabiClaw media' })
+    throw new HTTPError({ statusCode: 422, statusMessage: 'Site logos must use managed KrabiClaw media' })
   }
 
   const response = await fetch(cloudflareSquareSourceUrl(sourceUrl), {
@@ -66,7 +66,7 @@ async function loadSource(env: ApiRecord, sourceUrl: string): Promise<{ bytes: A
     signal: AbortSignal.timeout(15_000),
   })
   if (!response.ok) {
-    throw createError({ statusCode: 422, statusMessage: `Could not read the uploaded logo (${response.status})` })
+    throw new HTTPError({ statusCode: 422, statusMessage: `Could not read the uploaded logo (${response.status})` })
   }
   return { bytes: await readBoundedResponse(response), contentType: contentType(response.headers) }
 }
@@ -114,7 +114,7 @@ export async function normalizeFaviconSourceToPng(
   deps: FaviconNormalizationDeps = {},
 ): Promise<Uint8Array> {
   if (!SUPPORTED_SOURCE_TYPES.has(sourceType)) {
-    throw createError({ statusCode: 415, statusMessage: `Unsupported logo type for favicon: ${sourceType || 'unknown'}` })
+    throw new HTTPError({ statusCode: 415, statusMessage: `Unsupported logo type for favicon: ${sourceType || 'unknown'}` })
   }
   if (sourceType === 'image/webp') {
     const webpDecoderWasmModule = deps.webpDecoderWasmModule ?? (await import('@jsquash/webp/codec/dec/webp_dec.wasm')).default
@@ -124,7 +124,7 @@ export async function normalizeFaviconSourceToPng(
       webpDecoderWasmModule,
       pngEncoderWasmModule,
     })
-    if (!png) throw createError({ statusCode: 422, statusMessage: 'Could not convert the uploaded logo to PNG' })
+    if (!png) throw new HTTPError({ statusCode: 422, statusMessage: 'Could not convert the uploaded logo to PNG' })
     const pngBuffer = png.buffer.slice(png.byteOffset, png.byteOffset + png.byteLength) as ArrayBuffer
     return renderEmbeddedSourceToPng(pngBuffer, 'image/png', deps)
   }

@@ -1,4 +1,6 @@
-import type { H3Event } from 'h3'
+import { HTTPError } from 'nitro';
+
+import type { H3Event } from 'nitro'
 import { queryAll } from '~/server/db'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { isOrganizationWideRole } from '~/server/utils/member-access'
@@ -28,7 +30,7 @@ export async function listDashboardLocationsResource(
     organizationSlug: scope.organizationSlug,
     siteSlug: scope.siteSlug,
   })
-  if (!site) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
+  if (!site) throw new HTTPError({ statusCode: 404, statusMessage: 'Site not found' })
   const scoped = !isOrganizationWideRole(organization.role)
   const locations = await queryAll<DashboardLocationResource>(db, `
     SELECT id, slug, title, city, is_primary, status, address, phone, email,

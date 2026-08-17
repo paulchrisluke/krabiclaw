@@ -160,6 +160,7 @@
 </template>
 
 <script setup lang="ts">
+import { cfImageVariant } from '~/utils/cf-image'
 import { defaultModuleFeaturesForVertical, parseCmsFeatureOverrideDelta, resolveCmsCapabilities, templateCapabilityCatalog, type ProductFeature } from '~/config/cms-registry'
 import { resolvePublicTemplate } from '~/utils/template-registry'
 import { normalizeVertical, type SiteVertical } from '~/utils/vertical-copy'
@@ -176,6 +177,7 @@ interface LinkItem { id: string; label: string; destination: string; status: str
 
 const dashboardApi = useDashboardApi()
 const dashboard = useDashboardSite()
+const requestEvent = useRequestEvent()
 if (!dashboard.state.value) await dashboard.refresh()
 const siteId = dashboard.siteId.value
 if (!siteId) throw createError({ statusCode: 404, statusMessage: 'Site not found' })
@@ -184,15 +186,37 @@ const activeTab = ref<'site' | 'pages'>('site')
 const tabs = [{ label: 'My site', value: 'site' as const }, { label: 'Pages', value: 'pages' as const }]
 const siteDashboardPath = computed(() => `/dashboard/${route.params.orgSlug}/sites/${route.params.siteSlug}`)
 const locationsPath = computed(() => `${siteDashboardPath.value}/locations`)
-const siteName = computed(() => dashboard.site.value?.brand_name || 'My site')
+const siteName = computed(() => dashboard.site.value?.brand_name ?? '')
 const canManageSite = computed(() => dashboard.siteAccess.value !== 'location')
 const template = computed(() => resolvePublicTemplate({ vertical: dashboard.site.value?.vertical }).slug)
-const vertical = computed(() => normalizeVertical(dashboard.site.value?.vertical || 'restaurant') as SiteVertical)
+const vertical = computed(() => {
+  const raw = dashboard.site.value?.vertical
+  if (!raw) throw createError({ statusCode: 500, statusMessage: 'Site vertical is not configured' })
+  return normalizeVertical(raw) as SiteVertical
+})
 const capabilities = computed(() => resolveCmsCapabilities(vertical.value, template.value, { site: parseCmsFeatureOverrideDelta(dashboard.site.value?.feature_overrides) }))
 
-const { data: home, pending } = await useAsyncData(`site-index-home-${siteId}`, () => dashboardApi<HomeResponse>('/api/dashboard/home', {
-  validate: (value): value is HomeResponse => isRecord(value) && Array.isArray(value.locations) && isRecord(value.operations),
-}))
+const { data: home, pending } = await useAsyncData(`site-index-home-${siteId}`, async (_nuxtApp, { signal }) => {
+  if (import.meta.server) {
+    if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+    const organization = dashboard.organization.value
+    if (!organization) throw createError({ statusCode: 403, statusMessage: 'Dashboard organization unavailable' })
+    const [{ cloudflareEnv }, { getDashboardHomeData }] = await Promise.all([
+      import('~/server/utils/api-response'),
+      import('~/server/utils/dashboard-home'),
+    ])
+    const db = cloudflareEnv(requestEvent).db
+    if (!db) throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+    return await getDashboardHomeData(db, organization.id, siteId, {
+      memberId: organization.memberId,
+      role: organization.role,
+    })
+  }
+  return await dashboardApi<HomeResponse>('/api/dashboard/home', {
+    signal,
+    validate: (value): value is HomeResponse => isRecord(value) && Array.isArray(value.locations) && isRecord(value.operations),
+  })
+})
 const { data: supporting, pending: supportingPending, error } = await useAsyncData(`site-index-support-${siteId}`, async () => {
   const [settingsResponse, pagesResponse, mediaResponse, linksResponse] = await Promise.all([
     dashboardApi<{ settings: Settings }>('/api/dashboard/settings', { validate: (value): value is { settings: Settings } => isRecord(value) && isRecord(value.settings) }),
@@ -218,15 +242,15 @@ const tourLocations = computed(() => {
 })
 const openSiteTasks = computed(() => settings.value?.custom_domain_status === 'active' ? 0 : 1)
 const brandCover = computed(() => locations.value.find(item => item.is_primary)?.hero_url || media.value[0]?.public_url || '')
-const siteDomain = computed(() => dashboard.site.value?.custom_domain || dashboard.site.value?.public_url || (dashboard.site.value?.subdomain ? `${dashboard.site.value.subdomain}.krabiclaw.com` : 'Domain not connected'))
-const publicSiteUrl = computed(() => dashboard.site.value?.public_url || (dashboard.site.value?.subdomain ? `https://${dashboard.site.value.subdomain}.krabiclaw.com` : ''))
+const siteDomain = computed(() => dashboard.site.value?.custom_domain || dashboard.site.value?.public_url || '')
+const publicSiteUrl = computed(() => dashboard.site.value?.public_url || '')
 const siteType = computed(() => `${vertical.value.replaceAll('_', ' ')} · ${template.value} theme`)
 const mediaSummary = computed(() => media.value.length ? `${media.value.length}${media.value.length === 6 ? '+' : ''} photos` : 'No media yet')
 const heroContent = computed(() => JSON.stringify(homePage.value?.blocks ?? []))
-function heroValue(key: 'title' | 'subtitle', fallback: string) { const match = heroContent.value.match(new RegExp(`"${key}"\\s*:\\s*"([^"]+)"`)); return match?.[1] || fallback }
+function heroValue(key: 'title' | 'subtitle') { const match = heroContent.value.match(new RegExp(`"${key}"\\s*:\\s*"([^"]+)"`)); return match?.[1] || '' }
 const heroCards = computed(() => [
-  { label: 'Title', value: heroValue('title', siteName.value), italic: false },
-  { label: 'Description', value: heroValue('subtitle', settings.value?.brand_description || 'Add the opening description for your home page'), italic: true },
+  { label: 'Title', value: heroValue('title'), italic: false },
+  { label: 'Description', value: heroValue('subtitle'), italic: true },
 ])
 
 const pageIcons: Record<string, string> = { '/': 'i-lucide-house', '/about': 'i-lucide-info', '/contact': 'i-lucide-mail', '/menu': 'i-lucide-utensils', '/order': 'i-lucide-shopping-bag', '/reservations': 'i-lucide-calendar-check', '/experiences': 'i-lucide-ticket', '/services': 'i-lucide-briefcase', '/pricing': 'i-lucide-badge-dollar-sign', '/donate': 'i-lucide-heart-handshake', '/schedule': 'i-lucide-calendar-days', '/blog': 'i-lucide-newspaper' }

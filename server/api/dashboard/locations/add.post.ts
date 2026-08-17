@@ -18,8 +18,7 @@ function slugify(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'location'
 }
 
-// Normalize to canonical E.164 at this write boundary (issue #293 Section D),
-// mirroring server/api/dashboard/locations/[id].patch.ts — this create path
+// Normalize to canonical E.164 at this write boundary (issue #293 Section D), // mirroring server/api/dashboard/locations/[id].patch.ts — this create path
 // previously stored the raw trimmed input, which silently broke the E.164
 // comparisons ensureWhatsAppRecipientAccess/isAuthorizedWhatsAppRecipient rely on.
 function normalizeNotificationPhone(raw: unknown): { ok: true; value: string | null } | { ok: false; error: string } {
@@ -40,32 +39,22 @@ function normalizeNotificationPhone(raw: unknown): { ok: true; value: string | n
 // — provisioning access for the new number, with scope recalculation as a
 // no-op since there's nothing to revoke yet.
 async function provisionLocationWhatsAppAccess(
-  env: SetupEnv,
-  db: DbClient,
-  opts: { organizationId: string; siteId: string; locationId: string; phone: string; inviterUserId: string },
-): Promise<void> {
+  env: SetupEnv, db: DbClient, opts: { organizationId: string; siteId: string; locationId: string; phone: string; inviterUserId: string }, ): Promise<void> {
   await syncLocationWhatsAppAccess(env, db, {
-    organizationId: opts.organizationId,
-    siteId: opts.siteId,
-    locationId: opts.locationId,
-    previousPhone: null,
-    newPhone: opts.phone,
-    inviterUserId: opts.inviterUserId,
-  })
+    organizationId: opts.organizationId, siteId: opts.siteId, locationId: opts.locationId, previousPhone: null, newPhone: opts.phone, inviterUserId: opts.inviterUserId, })
 }
 
 async function uniqueLocationSlug(db: DbClient, siteId: string, base: string): Promise<string> {
   for (let i = 0; i < 20; i++) {
     const slug = i === 0 ? base : `${base}-${i + 1}`
     const existing = await queryFirst<{ id: string }>(
-      db, 'SELECT id FROM business_locations WHERE site_id = ? AND slug = ? LIMIT 1', [siteId, slug],
-    )
+      db, 'SELECT id FROM business_locations WHERE site_id = ? AND slug = ? LIMIT 1', [siteId, slug], )
     if (!existing) return slug
   }
   return `${base}-${crypto.randomUUID().slice(0, 8)}`
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -82,11 +71,7 @@ export default defineEventHandler(async (event) => {
   const siteId = site.id as string
   const organizationId = organization?.id as string
   await assertSiteWideAccess(db, {
-    memberId: organization.memberId,
-    role: organization.role,
-    organizationId,
-    siteId,
-  })
+    memberId: organization.memberId, role: organization.role, organizationId, siteId, })
 
   const body = await readBody(event) as {
     mapsUrl?: unknown
@@ -118,24 +103,8 @@ export default defineEventHandler(async (event) => {
     const slug = await uniqueLocationSlug(db, siteId, baseSlug)
 
     const result = await createLocation(
-      env as SetupEnv,
-      db,
-      organizationId,
-      siteId,
-      {
-        title: typeof details?.name === 'string' && details.name.trim() ? details.name.trim() : name,
-        slug,
-        city: typeof details?.city === 'string' && details.city.trim() ? details.city.trim() : null,
-        address: typeof details?.address === 'string' && details.address.trim() ? details.address.trim() : null,
-        phone: typeof details?.phone === 'string' && details.phone.trim() ? details.phone.trim() : null,
-        website_url: typeof details?.websiteUrl === 'string' && details.websiteUrl.trim() ? details.websiteUrl.trim() : null,
-        opening_hours: typeof details?.openingHours === 'string' && details.openingHours.trim() ? details.openingHours.trim() : null,
-        notification_phone: notificationPhone.value,
-        timezone: typeof details?.timezone === 'string' && details.timezone.trim() ? details.timezone.trim() : null,
-        is_primary: typeof details?.isPrimary === 'boolean' ? details.isPrimary : false,
-      },
-      session.user.id,
-    )
+      env as SetupEnv, db, organizationId, siteId, {
+        title: typeof details?.name === 'string' && details.name.trim() ? details.name.trim() : name, slug, city: typeof details?.city === 'string' && details.city.trim() ? details.city.trim() : null, address: typeof details?.address === 'string' && details.address.trim() ? details.address.trim() : null, phone: typeof details?.phone === 'string' && details.phone.trim() ? details.phone.trim() : null, website_url: typeof details?.websiteUrl === 'string' && details.websiteUrl.trim() ? details.websiteUrl.trim() : null, opening_hours: typeof details?.openingHours === 'string' && details.openingHours.trim() ? details.openingHours.trim() : null, notification_phone: notificationPhone.value, timezone: typeof details?.timezone === 'string' && details.timezone.trim() ? details.timezone.trim() : null, is_primary: typeof details?.isPrimary === 'boolean' ? details.isPrimary : false, }, session.user.id, )
 
     if (result.status !== 200 && result.status !== 201) {
       return jsonResponse({ error: (result.data as { error?: string }).error ?? 'Could not add location.' }, { status: result.status })
@@ -143,12 +112,7 @@ export default defineEventHandler(async (event) => {
     const createdLocationId = (result.data as { location?: { id: string } }).location?.id
     if (notificationPhone.value && createdLocationId) {
       await provisionLocationWhatsAppAccess(env as SetupEnv, db, {
-        organizationId,
-        siteId,
-        locationId: createdLocationId,
-        phone: notificationPhone.value,
-        inviterUserId: session.user.id,
-      })
+        organizationId, siteId, locationId: createdLocationId, phone: notificationPhone.value, inviterUserId: session.user.id, })
     }
     await purgePublicResourceCacheSafe(env, siteId)
 
@@ -189,26 +153,13 @@ export default defineEventHandler(async (event) => {
     }
   } catch (err) {
     return jsonResponse({
-      error: err instanceof Error ? err.message : 'Could not fetch place details. Try again.',
-    }, { status: 502 })
+      error: err instanceof Error ? err.message : 'Could not fetch place details. Try again.', }, { status: 502 })
   }
 
   if (previewOnly) {
     return jsonResponse({
-      success: true,
-      preview: {
-        placeId: place.placeId,
-        name: place.name,
-        address: place.formattedAddress,
-        city: place.city,
-        phone: place.phone,
-        mapsUrl: place.mapsUrl,
-        websiteUrl: place.websiteUrl,
-        rating: place.rating,
-        ratingCount: place.ratingCount,
-        openingHours: place.openingHours,
-      },
-    })
+      success: true, preview: {
+        placeId: place.placeId, name: place.name, address: place.formattedAddress, city: place.city, phone: place.phone, mapsUrl: place.mapsUrl, websiteUrl: place.websiteUrl, rating: place.rating, ratingCount: place.ratingCount, openingHours: place.openingHours, }, })
   }
 
   const notificationPhone = normalizeNotificationPhone(details?.notificationPhone)
@@ -225,40 +176,20 @@ export default defineEventHandler(async (event) => {
   const slug = await uniqueLocationSlug(db, siteId, baseSlug)
 
   const result = await createLocation(
-    env as SetupEnv,
-    db,
-    organizationId,
-    siteId,
-    {
-      title: typeof details?.name === 'string' && details.name.trim() ? details.name.trim() : place.name,
-      slug,
-      phone: typeof details?.phone === 'string' && details.phone.trim()
+    env as SetupEnv, db, organizationId, siteId, {
+      title: typeof details?.name === 'string' && details.name.trim() ? details.name.trim() : place.name, slug, phone: typeof details?.phone === 'string' && details.phone.trim()
         ? details.phone.trim()
-        : place.phone ?? null,
-      city: typeof details?.city === 'string' && details.city.trim()
+        : place.phone ?? null, city: typeof details?.city === 'string' && details.city.trim()
         ? details.city.trim()
-        : place.city ?? null,
-      maps_url: place.mapsUrl ?? null,
-      google_place_id: place.placeId,
-      website_url: typeof details?.websiteUrl === 'string' && details.websiteUrl.trim()
+        : place.city ?? null, maps_url: place.mapsUrl ?? null, google_place_id: place.placeId, website_url: typeof details?.websiteUrl === 'string' && details.websiteUrl.trim()
         ? details.websiteUrl.trim()
-        : place.websiteUrl ?? null,
-      address: typeof details?.address === 'string' && details.address.trim()
+        : place.websiteUrl ?? null, address: typeof details?.address === 'string' && details.address.trim()
         ? details.address.trim()
-        : null,
-      opening_hours: typeof details?.openingHours === 'string' && details.openingHours.trim()
+        : null, opening_hours: typeof details?.openingHours === 'string' && details.openingHours.trim()
         ? details.openingHours.trim()
-        : place.openingHours ?? null,
-      rating: place.rating ?? null,
-      review_count: place.ratingCount ?? null,
-      notification_phone: notificationPhone.value,
-      timezone: typeof details?.timezone === 'string' && details.timezone.trim()
+        : place.openingHours ?? null, rating: place.rating ?? null, review_count: place.ratingCount ?? null, notification_phone: notificationPhone.value, timezone: typeof details?.timezone === 'string' && details.timezone.trim()
         ? details.timezone.trim()
-        : null,
-      is_primary: typeof details?.isPrimary === 'boolean' ? details.isPrimary : false,
-    },
-    session.user.id,
-  )
+        : null, is_primary: typeof details?.isPrimary === 'boolean' ? details.isPrimary : false, }, session.user.id, )
 
   if (result.status !== 200 && result.status !== 201) {
     return jsonResponse({ error: (result.data as { error?: string }).error ?? 'Could not add location.' }, { status: result.status })
@@ -267,12 +198,7 @@ export default defineEventHandler(async (event) => {
   const locationId = (result.data as { location?: { id: string } }).location?.id
   if (notificationPhone.value && locationId) {
     await provisionLocationWhatsAppAccess(env as SetupEnv, db, {
-      organizationId,
-      siteId,
-      locationId,
-      phone: notificationPhone.value,
-      inviterUserId: session.user.id,
-    })
+      organizationId, siteId, locationId, phone: notificationPhone.value, inviterUserId: session.user.id, })
   }
   if (locationId) {
     const now = new Date().toISOString()
@@ -281,17 +207,10 @@ export default defineEventHandler(async (event) => {
       try {
         await execute(db, `
           INSERT OR IGNORE INTO reviews
-            (id, organization_id, site_id, location_id, google_review_id,
-             author_name, reviewer_photo_url, rating, content,
-             status, source, created_at, updated_at)
+            (id, organization_id, site_id, location_id, google_review_id, author_name, reviewer_photo_url, rating, content, status, source, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'published', 'google_places', ?, ?)
         `, [
-          `${siteId}-${review.reviewId.replace(/\//g, '-')}`,
-          organizationId, siteId, locationId,
-          review.reviewId, review.authorName, review.authorPhotoUrl,
-          review.rating, review.text,
-          review.publishedAt ?? now, now,
-        ])
+          `${siteId}-${review.reviewId.replace(/\//g, '-')}`, organizationId, siteId, locationId, review.reviewId, review.authorName, review.authorPhotoUrl, review.rating, review.text, review.publishedAt ?? now, now, ])
       } catch { /* non-fatal */ }
     }
   }
@@ -305,9 +224,7 @@ export default defineEventHandler(async (event) => {
   }
 
   return jsonResponse({
-    success: true,
-    siteId,
-    locationSlug: slug,
-    orgSlug: orgRow.slug,
-  })
+    success: true, siteId, locationSlug: slug, orgSlug: orgRow.slug, })
 })
+import { defineHandler } from 'nitro';
+import { readBody } from 'nitro/h3';

@@ -1,7 +1,7 @@
-import { execute, executeBatch, queryAll, queryFirst, type DbClient } from '~/server/db'
+import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import { fireSiteEventSafe } from '~/server/utils/site-events'
 import { normalizePostSlug, postPublicPath } from '~/utils/post-slugs'
-import { platformHostnameFallback, type DomainEnv } from '~/server/utils/domains'
+import { platformHostname, type DomainEnv } from '~/server/utils/domains'
 
 export { normalizePostSlug, postPublicPath }
 
@@ -243,7 +243,7 @@ async function resolveSitePublicOrigin(db: DbClient, siteId: string, env: Domain
   const publicUrl = site?.public_url?.trim().replace(/\/$/, '')
   if (publicUrl) return publicUrl
   const subdomain = site?.subdomain?.trim()
-  return subdomain ? `https://${subdomain}.${platformHostnameFallback(env)}` : null
+  return subdomain ? `https://${subdomain}.${platformHostname(env)}` : null
 }
 
 async function allocatePostSlug(db: DbClient, siteId: string, source: string, excludePostId?: string) {
@@ -352,23 +352,23 @@ export async function syncPostCoverMedia(
 ) {
   if (coverAssetId) await requireActiveMediaAsset(db, organizationId, siteId, coverAssetId, 'image_asset_id')
 
-  await execute(
-    db,
-    `DELETE FROM post_media WHERE post_id = ? AND organization_id = ? AND site_id = ? AND role = 'cover'`,
-    [postId, organizationId, siteId],
-  )
-
-  if (!coverAssetId) return
-
   const now = new Date().toISOString()
-  await execute(
-    db,
-    `
-      INSERT INTO post_media (id, organization_id, site_id, post_id, media_asset_id, role, sort_order, caption, alt_text, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, 'cover', 0, NULL, NULL, ?, ?)
-    `,
-    [crypto.randomUUID(), organizationId, siteId, postId, coverAssetId, now, now],
-  )
+  const queries: BatchQuery[] = [{
+    query: `DELETE FROM post_media WHERE post_id = ? AND organization_id = ? AND site_id = ? AND role = 'cover'`,
+    params: [postId, organizationId, siteId],
+  }]
+
+  if (coverAssetId) {
+    queries.push({
+      query: `
+        INSERT INTO post_media (id, organization_id, site_id, post_id, media_asset_id, role, sort_order, caption, alt_text, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, 'cover', 0, NULL, NULL, ?, ?)
+      `,
+      params: [crypto.randomUUID(), organizationId, siteId, postId, coverAssetId, now, now],
+    })
+  }
+
+  await executeBatch(db, queries)
 }
 
 async function getPostMediaByPostIds(db: DbClient, postIds: string[]) {

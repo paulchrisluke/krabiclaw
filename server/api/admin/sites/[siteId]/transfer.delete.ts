@@ -5,7 +5,7 @@ import { queryFirst } from '~/server/db'
 import { cancelPendingSiteTransfer } from '~/server/utils/site-transfer'
 import { getOrgAdapter } from 'better-auth/plugins'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'siteId required' }, { status: 400 })
 
@@ -32,9 +32,7 @@ export default defineEventHandler(async (event) => {
     const auth = createAuth(env)
     const context = await auth.$context
     const member = await getOrgAdapter(
-      context as Parameters<typeof getOrgAdapter>[0],
-      {},
-    ).findMemberByOrgId({ userId, organizationId: site.organization_id })
+      context as Parameters<typeof getOrgAdapter>[0], {}, ).findMemberByOrgId({ userId, organizationId: site.organization_id })
     const memberRecord = member && typeof member === 'object'
       ? member as { userId?: unknown; organizationId?: unknown; role?: unknown }
       : null
@@ -65,10 +63,7 @@ export default defineEventHandler(async (event) => {
     result = await cancelPendingSiteTransfer(env, db, transfer.id)
   } catch (error) {
     console.error('site_transfer_cancellation_failed', {
-      transferId: transfer.id,
-      siteId,
-      error,
-    })
+      transferId: transfer.id, siteId, error, })
     return jsonResponse({ error: 'The handoff could not be cancelled safely. Retry after provider reconciliation.' }, { status: 502 })
   }
   if (!result.cancelled) {
@@ -80,3 +75,5 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ cancelled: true, custom_domains_deleted: result.customDomainsDeleted })
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

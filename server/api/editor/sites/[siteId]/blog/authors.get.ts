@@ -3,7 +3,7 @@ import { requireBlogAccess } from "~/server/utils/blog-access";
 import { listSiteAuthors } from "~/server/utils/platform-content";
 import { httpErrorDetails } from "~/server/utils/http-error";
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, "siteId");
 
   if (!siteId || Array.isArray(siteId)) {
@@ -20,3 +20,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: message }, { status: statusCode });
   }
 });
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

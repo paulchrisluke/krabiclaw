@@ -15,7 +15,7 @@ interface MediaAssetSiteRow {
   location_id: string | null
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const assetId = getRouterParam(event, 'assetId')
   if (!siteId || !assetId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
@@ -30,21 +30,14 @@ export default defineEventHandler(async (event) => {
   const site = await loadMemberSiteRow(db, siteId, session.user.id)
   if (!site) return jsonResponse({ error: 'Site not found or access denied' }, { status: 404 })
 
-  const asset = await queryFirst<MediaAssetSiteRow>(db,
-    `SELECT id, site_id, organization_id, location_id FROM media_assets WHERE id = ? LIMIT 1`,
-    [assetId]
+  const asset = await queryFirst<MediaAssetSiteRow>(db, `SELECT id, site_id, organization_id, location_id FROM media_assets WHERE id = ? LIMIT 1`, [assetId]
   )
   if (!asset) return jsonResponse({ error: 'Asset not found' }, { status: 404 })
   if (asset.site_id !== siteId) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
 
   try {
     await assertResourceAccess(db, {
-      memberId: site.member_id,
-      role: site.member_role,
-      organizationId: site.organization_id,
-      siteId,
-      resourceLocationId: asset.location_id,
-    })
+      memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: asset.location_id, })
 
     await deleteMediaAsset(db, env, assetId, siteId, session.user.id)
     return jsonResponse({ deleted: true })
@@ -53,11 +46,10 @@ export default defineEventHandler(async (event) => {
     const normalizedError = error instanceof Error ? error : new Error('Unknown error')
     const hashedUserId = anonymizeId(session.user.id, env)
     console.error('media_delete_failed', {
-      siteId,
-      assetId,
-      hashedUserId,
-      error: normalizedError.message
+      siteId, assetId, hashedUserId, error: normalizedError.message
     })
     throw error
   }
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

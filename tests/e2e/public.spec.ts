@@ -73,7 +73,7 @@ test.describe('public tenant site', () => {
       data: {
         name: 'Token Cancel Test',
         email: `cancel-${Date.now()}@example.com`,
-        phone: '+15555550123',
+        phone: '+14155552674',
         date: '2030-05-17',
         time: '19:00',
         guests: '2',

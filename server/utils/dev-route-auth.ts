@@ -1,5 +1,6 @@
-import { createError, getHeader, getRequestHost } from 'h3'
-import type { H3Event } from 'h3'
+import { HTTPError } from 'nitro';
+import {  getRequestHost } from 'nitro/h3';
+import type { H3Event } from 'nitro'
 import { isPreviewContext } from '~/server/utils/tenant-hosts'
 
 const textEncoder = new TextEncoder()
@@ -42,15 +43,18 @@ function normalizeHostname(host: string): string {
 
 export function assertDevRouteAllowed(event: H3Event) {
   const devMode = import.meta.dev
-  const e2eOverride = process.env.E2E_ALLOW_DEV_ROUTES === 'true'
+  const runtimeEnv = event.runtime?.cloudflare?.env as Record<string, unknown> | undefined
+  const e2eOverride = runtimeEnv?.E2E_ALLOW_DEV_ROUTES === 'true'
   const allowDevRoute = devMode || e2eOverride
   if (!allowDevRoute) {
-    throw createError({ statusCode: 404, statusMessage: 'Not found' })
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Not found' })
   }
 
   const hostname = normalizeHostname(getRequestHost(event) || '')
-  const expectedSecret = process.env.E2E_DEV_ROUTE_SECRET || ''
-  const providedSecret = getHeader(event, 'x-dev-route-secret') || ''
+  const expectedSecret = typeof runtimeEnv?.E2E_DEV_ROUTE_SECRET === 'string'
+    ? runtimeEnv.E2E_DEV_ROUTE_SECRET
+    : ''
+  const providedSecret = (event.req.headers.get('x-dev-route-secret')) || ''
 
   // In plain localhost dev, keep the current convenience behavior. But once a
   // dev server is exposed through a real host (e.g. local tunnel for ChatGPT
@@ -58,28 +62,29 @@ export function assertDevRouteAllowed(event: H3Event) {
   // /api/dev/* routes are not publicly reachable.
   if (devMode && !isLocalHost(hostname)) {
     if (!expectedSecret || !providedSecret || !timingSafeEqualText(providedSecret, expectedSecret)) {
-      throw createError({ statusCode: 403, statusMessage: 'Forbidden' })
+      throw new HTTPError({ statusCode: 403, statusMessage: 'Forbidden' })
     }
   }
 
   if (!devMode && e2eOverride) {
     if (!expectedSecret || !providedSecret || !timingSafeEqualText(providedSecret, expectedSecret)) {
-      throw createError({ statusCode: 403, statusMessage: 'Forbidden' })
+      throw new HTTPError({ statusCode: 403, statusMessage: 'Forbidden' })
     }
 
     if (!isLocalHost(hostname) && !isPreviewContext(hostname)) {
-      throw createError({ statusCode: 404, statusMessage: 'Not found' })
+      throw new HTTPError({ statusCode: 404, statusMessage: 'Not found' })
     }
   }
 }
 
 export function assertE2eFixtureEnabled(event: H3Event) {
-  if (!import.meta.dev && process.env.E2E_ALLOW_DEV_ROUTES !== 'true') {
-    throw createError({ statusCode: 404, statusMessage: 'Not found' })
+  const runtimeEnv = event.runtime?.cloudflare?.env as Record<string, unknown> | undefined
+  if (!import.meta.dev && runtimeEnv?.E2E_ALLOW_DEV_ROUTES !== 'true') {
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Not found' })
   }
 
   const hostname = normalizeHostname(getRequestHost(event) || '')
   if (!isLocalHost(hostname) && !isPreviewContext(hostname)) {
-    throw createError({ statusCode: 404, statusMessage: 'Not found' })
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Not found' })
   }
 }

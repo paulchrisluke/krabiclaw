@@ -2,6 +2,7 @@ import type { PublicConsultationSettings } from '~/types/blawby'
 import type { SiteConversionEventName } from '~/utils/site-conversion-events'
 import type { MaybeRefOrGetter } from 'vue'
 import { toValue } from 'vue'
+import { $fetch } from 'ofetch'
 
 declare global {
   interface Window {

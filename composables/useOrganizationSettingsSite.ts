@@ -6,7 +6,7 @@ export function useOrganizationSettingsSite() {
   const siteOptions = computed(() => dashboard.sites.value
     .filter((site) => Boolean(site.subdomain))
     .map((site) => ({
-      label: site.brand_name ?? site.subdomain ?? 'Site',
+      label: site.brand_name ?? site.subdomain ?? site.id,
       value: site.subdomain as string,
     })))
 

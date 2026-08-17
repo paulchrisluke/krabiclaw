@@ -1,4 +1,4 @@
-import { createError } from 'h3'
+import { HTTPError } from 'nitro';
 import { executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
 import {
   createContentDocumentWithBlocks,
@@ -135,15 +135,15 @@ const RESERVED_PREFIXES = [
 ]
 
 function badRequest(message: string): never {
-  throw createError({ statusCode: 400, statusMessage: message })
+  throw new HTTPError({ statusCode: 400, statusMessage: message })
 }
 
 function notFound(message: string): never {
-  throw createError({ statusCode: 404, statusMessage: message })
+  throw new HTTPError({ statusCode: 404, statusMessage: message })
 }
 
 function conflict(message: string): never {
-  throw createError({ statusCode: 409, statusMessage: message })
+  throw new HTTPError({ statusCode: 409, statusMessage: message })
 }
 
 function asString(value: unknown, field: string, required = false): string | null {
@@ -160,7 +160,7 @@ function parseSnapshot(value: string): { metadata: TenantPageSnapshotMetadata; b
   try {
     parsed = JSON.parse(value)
   } catch (error) {
-    throw createError({ statusCode: 500, statusMessage: 'Tenant page revision is malformed', cause: error })
+    throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page revision is malformed', cause: error })
   }
   const snapshot = validateTenantPageSnapshot(parsed)
   return { metadata: snapshot.metadata, blocks: snapshot.blocks }
@@ -187,7 +187,7 @@ async function assertTenantPageSupport(db: DbClient, organizationId: string, sit
   const pageType = input.pageType ?? 'custom'
   if (!TENANT_PAGE_TYPES.includes(pageType)) badRequest('pageType is invalid')
   if (pageType === 'custom' && options.checkCustomPageEntitlement !== false && !(await hasSiteEntitlement(db, siteId, 'custom_pages'))) {
-    throw createError({ statusCode: 402, statusMessage: 'Custom tenant pages require the Growth plan or higher' })
+    throw new HTTPError({ statusCode: 402, statusMessage: 'Custom tenant pages require the Growth plan or higher' })
   }
   const recipe = input.recipe?.trim() || null
   if (pageType === 'recipe' && !recipe) badRequest('recipe is required for recipe pages')
@@ -306,7 +306,7 @@ async function resolveLocale(db: DbClient, siteId: string, locale?: string | nul
     'SELECT COALESCE((SELECT locale FROM site_locales WHERE site_id = ? AND is_source = 1 LIMIT 1), source_locale) AS locale FROM sites WHERE id = ? LIMIT 1',
     [siteId, siteId],
   )
-  if (!row?.locale) throw createError({ statusCode: 500, statusMessage: 'Source locale is not configured for this site' })
+  if (!row?.locale) throw new HTTPError({ statusCode: 500, statusMessage: 'Source locale is not configured for this site' })
   return row.locale
 }
 
@@ -474,9 +474,9 @@ export async function listTenantPages(db: DbClient, siteId: string, opts: { loca
 export async function getTenantPageForEditor(db: DbClient, variantId: string, scope?: TenantPageScope): Promise<TenantPageDto> {
   const row = await getVariantRow(db, variantId, scope)
   if (!row) notFound('Tenant page variant not found')
-  if (!row.draft_document_id) throw createError({ statusCode: 500, statusMessage: 'Tenant page has no content document' })
+  if (!row.draft_document_id) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page has no content document' })
   const document = await getContentDocumentById(db, row.draft_document_id)
-  if (!document) throw createError({ statusCode: 500, statusMessage: 'Tenant page content document not found' })
+  if (!document) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page content document not found' })
   const snapshot = await getContentEditorSnapshot(db, 'tenant_page', variantId)
   return pageDto(row, document, (snapshot?.blocks ?? []) as TenantPageBlock[])
 }
@@ -502,7 +502,7 @@ export async function getPublishedTenantPage(db: DbClient, siteId: string, path:
     SELECT snapshot_json FROM content_revisions
     WHERE id = ? AND document_id = ? LIMIT 1
   `, [row.published_revision_id, document?.id ?? null])
-  if (!document || !revision) throw createError({ statusCode: 500, statusMessage: 'Published tenant page content is unavailable' })
+  if (!document || !revision) throw new HTTPError({ statusCode: 500, statusMessage: 'Published tenant page content is unavailable' })
   const snapshot = parseSnapshot(revision.snapshot_json)
   const identity = await canonicalTenantPageIdentity(db, row, {
     pageType: snapshot.metadata.pageType as TenantPageType,
@@ -738,7 +738,7 @@ export async function applyOnboardingTenantPages(
       continue
     }
     if (!row.document_id || !row.document_created_at || !row.document_updated_at) {
-      throw createError({ statusCode: 500, statusMessage: 'Tenant page content document not found' })
+      throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page content document not found' })
     }
 
     const effectiveData: TenantPageEditorInput = {
@@ -919,9 +919,9 @@ export async function createTenantPage(db: DbClient, input: { organizationId: st
 export async function updateTenantPageDraft(db: DbClient, variantId: string, input: { userId: string | null; data: TenantPageEditorInput; scope: TenantPageScope }) {
   const row = await getVariantRow(db, variantId, input.scope)
   if (!row) notFound('Tenant page variant not found')
-  if (!row.draft_document_id) throw createError({ statusCode: 500, statusMessage: 'Tenant page has no content document' })
+  if (!row.draft_document_id) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page has no content document' })
   const document = await getContentDocumentById(db, row.draft_document_id)
-  if (!document) throw createError({ statusCode: 500, statusMessage: 'Tenant page content document not found' })
+  if (!document) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page content document not found' })
   if (!input.data.expectedDocumentUpdatedAt || document.updated_at !== input.data.expectedDocumentUpdatedAt) conflict('Tenant page draft was updated by another writer')
   const identity = await canonicalTenantPageIdentity(db, row, {
     pageType: input.data.pageType,
@@ -995,12 +995,12 @@ interface TenantPageLifecycleInput {
 export async function publishTenantPage(db: DbClient, variantId: string, input: TenantPageLifecycleInput) {
   const row = await getVariantRow(db, variantId, input.scope)
   if (!row) notFound('Tenant page variant not found')
-  if (!row.draft_document_id) throw createError({ statusCode: 500, statusMessage: 'Tenant page has no content document' })
+  if (!row.draft_document_id) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page has no content document' })
   const document = await getContentDocumentById(db, row.draft_document_id)
   if (!document?.draft_revision_id) badRequest('Tenant page has no draft revision')
   if (document.updated_at !== input.expectedDocumentUpdatedAt) conflict('Tenant page draft was updated by another writer')
   const revision = await queryFirst<{ snapshot_json: string } | null>(db, 'SELECT snapshot_json FROM content_revisions WHERE id = ? AND document_id = ? LIMIT 1', [document.draft_revision_id, document.id])
-  if (!revision) throw createError({ statusCode: 500, statusMessage: 'Tenant page draft revision is unavailable' })
+  if (!revision) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page draft revision is unavailable' })
   const snapshot = parseSnapshot(revision.snapshot_json)
   if (snapshot.metadata.locale !== row.locale) badRequest('Tenant page draft locale does not match its variant')
   const identity = await canonicalTenantPageIdentity(db, row, {
@@ -1090,9 +1090,9 @@ export async function publishTenantPage(db: DbClient, variantId: string, input: 
 export async function unpublishTenantPage(db: DbClient, variantId: string, input: TenantPageLifecycleInput) {
   const row = await getVariantRow(db, variantId, input.scope)
   if (!row) notFound('Tenant page variant not found')
-  if (!row.draft_document_id) throw createError({ statusCode: 500, statusMessage: 'Tenant page has no content document' })
+  if (!row.draft_document_id) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page has no content document' })
   const document = await getContentDocumentById(db, row.draft_document_id)
-  if (!document) throw createError({ statusCode: 500, statusMessage: 'Tenant page content document not found' })
+  if (!document) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page content document not found' })
   if (document.updated_at !== input.expectedDocumentUpdatedAt) conflict('Tenant page draft was updated by another writer')
   const now = new Date().toISOString()
   await executeBatch(db, [
@@ -1108,9 +1108,9 @@ export async function unpublishTenantPage(db: DbClient, variantId: string, input
 export async function archiveTenantPage(db: DbClient, variantId: string, input: TenantPageLifecycleInput & { replacementPath?: string | null; gone?: boolean }) {
   const row = await getVariantRow(db, variantId, input.scope)
   if (!row) notFound('Tenant page variant not found')
-  if (!row.draft_document_id) throw createError({ statusCode: 500, statusMessage: 'Tenant page has no content document' })
+  if (!row.draft_document_id) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page has no content document' })
   const document = await getContentDocumentById(db, row.draft_document_id)
-  if (!document) throw createError({ statusCode: 500, statusMessage: 'Tenant page content document not found' })
+  if (!document) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page content document not found' })
   if (document.updated_at !== input.expectedDocumentUpdatedAt) conflict('Tenant page draft was updated by another writer')
   const compliance = await queryFirst<{ privacy_page_id: string | null; terms_page_id: string | null; notice_page_id: string | null } | null>(db, `
     SELECT privacy_page_id, terms_page_id, notice_page_id FROM tenant_compliance
@@ -1178,9 +1178,9 @@ export async function archiveTenantPage(db: DbClient, variantId: string, input: 
 export async function restoreTenantPage(db: DbClient, variantId: string, input: TenantPageLifecycleInput) {
   const row = await getVariantRow(db, variantId, input.scope)
   if (!row) notFound('Tenant page variant not found')
-  if (!row.draft_document_id) throw createError({ statusCode: 500, statusMessage: 'Tenant page has no content document' })
+  if (!row.draft_document_id) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page has no content document' })
   const document = await getContentDocumentById(db, row.draft_document_id)
-  if (!document) throw createError({ statusCode: 500, statusMessage: 'Tenant page content document not found' })
+  if (!document) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page content document not found' })
   if (document.updated_at !== input.expectedDocumentUpdatedAt) conflict('Tenant page draft was updated by another writer')
   const now = new Date().toISOString()
   await executeBatch(db, [
@@ -1196,9 +1196,9 @@ export async function restoreTenantPage(db: DbClient, variantId: string, input: 
 export async function deleteTenantPage(db: DbClient, variantId: string, input: { expectedDocumentUpdatedAt: string; scope: TenantPageScope }) {
   const row = await getVariantRow(db, variantId, input.scope)
   if (!row) notFound('Tenant page variant not found')
-  if (!row.draft_document_id) throw createError({ statusCode: 500, statusMessage: 'Tenant page has no content document' })
+  if (!row.draft_document_id) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page has no content document' })
   const document = await getContentDocumentById(db, row.draft_document_id)
-  if (!document) throw createError({ statusCode: 500, statusMessage: 'Tenant page content document not found' })
+  if (!document) throw new HTTPError({ statusCode: 500, statusMessage: 'Tenant page content document not found' })
   if (document.updated_at !== input.expectedDocumentUpdatedAt) conflict('Tenant page draft was updated by another writer')
   if (tenantPageHasPublicationHistory({
     ever_published: row.ever_published,

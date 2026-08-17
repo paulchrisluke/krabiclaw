@@ -71,6 +71,7 @@
 </template>
 
 <script setup lang="ts">
+import { $fetch } from 'ofetch'
 definePageMeta({ layout: 'saya' })
 
 const { t } = useI18n()
@@ -81,13 +82,13 @@ const { siteId } = useTenantSite()
 const resId = computed(() => route.query.id as string)
 const token = computed(() => route.hash ? route.hash.substring(1) : '')
 
-const { data: resData, pending } = await useFetch(
-  () => `/api/public/sites/${siteId}/reservations/${resId.value}`,
-  {
-    headers: { Authorization: `Bearer ${token.value}` },
-    key: `cancel-res-${resId.value}`,
-    immediate: !!resId.value && !!token.value
-  }
+const { data: resData, pending } = await useAsyncData<ApiRecord>(
+  `cancel-res-${resId.value}`,
+  () => $fetch<ApiRecord>(
+    `/api/public/sites/${siteId}/reservations/${resId.value}`,
+    { headers: { Authorization: `Bearer ${token.value}` } },
+  ),
+  { immediate: !!resId.value && !!token.value },
 )
 
 const reservation = computed(() => (resData as ApiValue).value?.reservation || null)

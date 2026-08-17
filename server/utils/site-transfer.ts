@@ -1,12 +1,12 @@
 import {
   createCustomDomainPair,
   deleteCustomDomain,
+  platformDomain,
   type DomainEnv,
 } from '~/server/utils/domains'
 import { rootDomainForPair } from '~/server/utils/domain-shared'
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery } from '~/server/db'
 import { notifySiteTransferReminder } from '~/server/utils/site-transfer-notifications'
-import { normalizeHost } from '~/server/utils/tenant-hosts'
 import {
   validateOrganizationBillingProjection,
   type OrganizationBillingProjectionRow,
@@ -1277,7 +1277,7 @@ export async function processSiteTransferReminders(
       siteId: transfer.site_id,
       toEmail: transfer.to_email,
       siteName: transfer.site_name || transfer.site_id,
-      transferUrl: `https://${normalizeHost(env.NUXT_PUBLIC_PLATFORM_DOMAIN) || 'krabiclaw.com'}/transfer/${transfer.token}`,
+      transferUrl: `https://${platformDomain(env)}/transfer/${transfer.token}`,
       invitedPlan: transfer.invited_plan,
       invitedDomain: transfer.invited_domain,
       daysPending,

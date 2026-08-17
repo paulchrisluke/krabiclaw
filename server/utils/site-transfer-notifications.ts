@@ -189,7 +189,9 @@ export async function notifySiteTransferReminder(
     growth: 'Growth ($49/mo)',
   }
 
-  const platformDomain = (env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'krabiclaw.com').replace(/^https?:\/\//, '').replace(/\/$/, '')
+  const configuredPlatformDomain = env.NUXT_PUBLIC_PLATFORM_DOMAIN?.trim()
+  if (!configuredPlatformDomain) throw new Error('NUXT_PUBLIC_PLATFORM_DOMAIN is required')
+  const platformDomain = configuredPlatformDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')
   const { html, text } = await useRender(SiteTransferReminder, {
     props: {
       siteName: opts.siteName,

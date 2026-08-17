@@ -179,7 +179,7 @@ const { siteId, site } = useTenantSite()
 if (!siteId) throw createError({ statusCode: 404 })
 
 const slug = computed(() => String(route.params.slug))
-const siteName = computed(() => (site as ApiValue)?.brand_name || 'KrabiClaw')
+const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
 
 const { location, reviewsAggregate, reviewsList, pending, config } = await usePublicPageData()
 const { formatDate } = useLocaleDate()

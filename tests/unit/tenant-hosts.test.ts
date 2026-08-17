@@ -44,15 +44,16 @@ test('hostnameOf strips the port from a Host header', () => {
   assert.equal(hostnameOf(''), '')
 })
 
-test('getPlatformHosts always includes localhost, loopback and the documented production domains', () => {
-  // Routing contract: localhost / krabiclaw.com are platform routes.
-  for (const env of [prodEnv, localEnv, {}]) {
+test('getPlatformHosts includes loopback and only explicitly configured domains', () => {
+  for (const env of [prodEnv, localEnv]) {
     const hosts = getPlatformHosts(env)
     assert.ok(hosts.includes('localhost'))
     assert.ok(hosts.includes('127.0.0.1'))
-    assert.ok(hosts.includes('krabiclaw.com'))
-    assert.ok(hosts.includes('www.krabiclaw.com'))
+    assert.ok(hosts.includes(normalizeHost(env.NUXT_PUBLIC_FREE_SITE_DOMAIN)))
+    assert.ok(hosts.includes(normalizeHost(env.NUXT_PUBLIC_PLATFORM_DOMAIN)))
+    assert.equal(hosts.includes('www.krabiclaw.com'), false)
   }
+  assert.deepEqual(getPlatformHosts({}), ['localhost', '127.0.0.1'])
 })
 
 test('getPlatformHosts folds the configured domains in without duplicates', () => {
@@ -65,8 +66,7 @@ test('getPlatformHtmlCacheHosts covers all platform host cache prefixes', () => 
     'krabiclaw.com',
     'localhost',
     '127.0.0.1',
-    'www.krabiclaw.com',
-  ])
+])
 })
 
 test('isPlatformHost recognizes localhost and loopback with and without a port', () => {
@@ -81,15 +81,14 @@ test('isPlatformHost recognizes localhost and loopback with and without a port',
 test('isPlatformHost recognizes the configured platform domain with and without a port', () => {
   assert.equal(isPlatformHost('krabiclaw.com', prodEnv), true)
   assert.equal(isPlatformHost('krabiclaw.com:443', prodEnv), true)
-  assert.equal(isPlatformHost('www.krabiclaw.com', prodEnv), true)
-  assert.equal(isPlatformHost('www.krabiclaw.com:443', prodEnv), true)
+  assert.equal(isPlatformHost('www.krabiclaw.com', prodEnv), false)
+  assert.equal(isPlatformHost('www.krabiclaw.com:443', prodEnv), false)
 })
 
-test('isPlatformHost treats krabiclaw.com as a platform host even when NUXT_PUBLIC_FREE_SITE_DOMAIN points elsewhere (e.g. local/CI)', () => {
-  // The routing contract requires this to hold
-  // regardless of how the free-site domain is configured for the environment.
-  assert.equal(isPlatformHost('krabiclaw.com', localEnv), true)
-  assert.equal(isPlatformHost('www.krabiclaw.com', localEnv), true)
+test('isPlatformHost does not recognize an unconfigured production host', () => {
+  const env = { ...localEnv, NUXT_PUBLIC_PLATFORM_DOMAIN: 'http://localhost:3000' }
+  assert.equal(isPlatformHost('krabiclaw.com', env), false)
+  assert.equal(isPlatformHost('www.krabiclaw.com', env), false)
 })
 
 test('isPlatformHost rejects unrelated external hosts and tenant custom domains', () => {
@@ -118,8 +117,8 @@ test('getFreeSiteDomain normalizes the configured domain and strips its port', (
   assert.equal(getFreeSiteDomain(portedCustomEnv), 'myapp.example.com')
 })
 
-test('getFreeSiteDomain falls back to krabiclaw.com when unconfigured', () => {
-  assert.equal(getFreeSiteDomain({}), 'krabiclaw.com')
+test('getFreeSiteDomain rejects an unconfigured domain', () => {
+  assert.throws(() => getFreeSiteDomain({}), /NUXT_PUBLIC_FREE_SITE_DOMAIN is required/)
 })
 
 test('shared local and deployed test hosts use explicit tenant headers instead of nested hostnames', () => {

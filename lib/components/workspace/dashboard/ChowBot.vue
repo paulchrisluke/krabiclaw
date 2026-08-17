@@ -210,6 +210,7 @@ import type { SiteVertical } from '~/utils/vertical-copy'
 import { isSiteCreationResponse } from '~/utils/site-creation-response'
 
 const dashboardApi = useDashboardApi()
+const runtimeConfig = useRuntimeConfig()
 const props = defineProps<{ embedded?: boolean; setupMode?: boolean }>()
 const setupMode = computed(() => Boolean(props.setupMode))
 
@@ -326,7 +327,7 @@ function normalizeSubdomain(value: string) {
 }
 
 function setupPromptForSource() {
-  const businessWord = setupVertical.value === 'experience' ? 'experience' : 'restaurant'
+  const businessWord = setupVertical.value === 'experience' ? 'experience' : setupVertical.value === 'restaurant' ? 'restaurant' : 'business'
   if (setupSource.value === 'google') {
     return `Help me start from my Google Maps listing. I want to set up locations, hours, and ${businessWord} details.`
   }
@@ -404,7 +405,7 @@ async function handleSetupMessage(text: string) {
       { role: 'user', content: text.trim() },
       {
         role: 'assistant',
-        content: `Got it. I can use **${setupSubdomain.value}.krabiclaw.com** for the site address. Reply **yes** to use that, or type a different address.`,
+        content: `Got it. I can use **${setupSubdomain.value}.${String(runtimeConfig.public.freeSiteDomain || '').replace('https://', '').replace('http://', '')}** for the site address. Reply **yes** to use that, or type a different address.`,
       },
     ]
     return
@@ -434,6 +435,7 @@ async function handleSetupMessage(text: string) {
   creatingRestaurant.value = true
 
   try {
+    if (!setupVertical.value) throw new Error('Choose a site type before creating the workspace')
     const validation = await dashboardApi<{ available: boolean; message?: string }>('/api/sites/validate-subdomain', {
       method: 'POST',
       body: { subdomain: requestedSubdomain },
@@ -454,7 +456,7 @@ async function handleSetupMessage(text: string) {
       body: {
         name: setupRestaurantName.value,
         subdomain: requestedSubdomain,
-        vertical: setupVertical.value ?? 'restaurant',
+        vertical: setupVertical.value,
       },
       validate: isSiteCreationResponse,
     })
@@ -566,7 +568,7 @@ const processFile = async (file: File, caption = '') => {
   try {
     const formData = new FormData()
     formData.append('file', file)
-    if (caption) formData.append('menuName', caption)
+    formData.append('menuName', caption || file.name.replace(/\.[^.]+$/, '').trim())
 
     const res = await dashboardApi<{
       success: boolean

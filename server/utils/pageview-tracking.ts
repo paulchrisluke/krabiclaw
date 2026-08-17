@@ -4,8 +4,8 @@
 // Cookie contract (canonical — anonymous, not Better Auth):
 //   kc_visitor_id — long-lived anonymous device ID, 2yr TTL, HttpOnly, SameSite=Lax
 //   kc_session_id — short-lived visit ID, 30min sliding TTL, HttpOnly, SameSite=Lax
-import { getCookie, getHeader, setCookie } from 'h3'
-import type { H3Event } from 'h3'
+import { getCookie,  setCookie } from 'nitro/h3';
+import type { H3Event } from 'nitro'
 import type { AppDb } from '~/server/db'
 import { execute, queryFirst } from '~/server/db'
 import { resolvePublishedTenantPageIdentity as resolveCanonicalTenantPageIdentity } from '~/server/utils/tenant-pages'
@@ -63,14 +63,14 @@ interface CloudflareGeo {
 
 export function getCloudflareGeo(event: H3Event): CloudflareGeo {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const cfReq = (event.context.cloudflare as any)?.request as (Request & { cf?: CloudflareGeo }) | undefined
+  const cfReq = (event.runtime?.cloudflare as any)?.request as (Request & { cf?: CloudflareGeo }) | undefined
   const cf = cfReq?.cf
   if (cf) {
     return { country: cf.country, region: cf.region, city: cf.city }
   }
 
   // Fallback for environments where the raw request isn't exposed (e.g. local dev).
-  const country = getHeader(event, 'cf-ipcountry')
+  const country = (event.req.headers.get('cf-ipcountry'))
   return country && country !== 'XX' ? { country } : {}
 }
 

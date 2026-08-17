@@ -8,7 +8,7 @@ import { loadMemberSiteRow } from '~/server/utils/location-access'
 import { normalizePriceAmount } from '~/shared/money'
 import type { UpdateMenuItemRequest } from '~/server/types/menu'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const rawSiteId = getRouterParam(event, 'siteId')
   const rawMenuId = getRouterParam(event, 'menuId')
   const rawItemId = getRouterParam(event, 'itemId')
@@ -83,12 +83,7 @@ export default defineEventHandler(async (event) => {
     }
 
     await assertResourceAccess(db, {
-      memberId: site.member_id,
-      role: site.member_role,
-      organizationId: site.organization_id,
-      siteId,
-      resourceLocationId: existingMenu.location_id,
-    })
+      memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: existingMenu.location_id, })
 
     if (body.price_amount !== undefined && body.price_amount !== null && String(body.price_amount).trim() !== '' && !normalizePriceAmount(body.price_amount)) {
       return jsonResponse({ error: 'Invalid price amount' }, { status: 400 })
@@ -101,11 +96,7 @@ export default defineEventHandler(async (event) => {
     const menuItem = await updateMenuItem(db, site.organization_id, siteId, itemId, body, session.user.id)
     
     return jsonResponse({
-      success: true,
-      menuItem,
-      siteId,
-      menuId,
-      itemId
+      success: true, menuItem, siteId, menuId, itemId
     })
     
   } catch (error) {
@@ -116,3 +107,5 @@ export default defineEventHandler(async (event) => {
     }, { status: 500 })
   }
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam, readBody  } from 'nitro/h3';

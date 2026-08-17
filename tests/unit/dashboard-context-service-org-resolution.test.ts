@@ -104,7 +104,9 @@ const { loadDashboardContext } = await import('../../server/utils/dashboard-cont
 
 function fakeEvent(headers: Record<string, string> = {}, path = '/api/dashboard/context') {
   return {
-    node: { req: { headers } },
+    req: new Request(`http://localhost${path}`, { headers }),
+    context: {},
+    url: new URL(`http://localhost${path}`),
     path,
   } as unknown as Parameters<typeof loadDashboardContext>[0]
 }

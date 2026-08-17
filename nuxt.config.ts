@@ -3,7 +3,6 @@ import { createRequire } from 'node:module'
 import { getIcons } from '@iconify/utils'
 import { visualizer } from 'rollup-plugin-visualizer'
 import { DEFAULT_CURRENCY, isCurrencyCode } from './shared/currencies'
-import cloudflareDevModule from './build/cloudflare-dev-module'
 
 const configuredDefaultCurrency = process.env.DEFAULT_CURRENCY?.toUpperCase()
 
@@ -48,11 +47,8 @@ const publicHtmlCacheHeaders = isNonProductionDeployment
 
 const publicSurfaceCssPaths = {
   'platform-entry': 'surfaces/platform.css',
-  'platform-home-entry': 'surfaces/platform-home.css',
-  'saya-home-entry': 'surfaces/saya-home.css',
-  'saya-entry': 'surfaces/saya.css',
-  'blawby-home-entry': 'surfaces/blawby-home.css',
-  'blawby-entry': 'surfaces/blawby.css',
+  'saya': 'surfaces/saya.css',
+  'blawby': 'surfaces/blawby.css',
 } as const
 
 function escapeRegExp(value: string) {
@@ -64,7 +60,7 @@ function surfaceCssAssetPath(fileName: string) {
   if (!basename) return null
 
   for (const [sourceName, targetPath] of Object.entries(publicSurfaceCssPaths)) {
-    const sourcePattern = new RegExp(`^${escapeRegExp(sourceName)}\\.[A-Za-z0-9_-]+\\.css$`)
+    const sourcePattern = new RegExp(`^${escapeRegExp(sourceName)}(?:\\.[A-Za-z0-9_-]+)?\\.css$`)
     if (sourcePattern.test(basename)) {
       return targetPath
     }
@@ -73,76 +69,21 @@ function surfaceCssAssetPath(fileName: string) {
   return null
 }
 
-function rewriteSurfaceCssReferences(code: string) {
-  for (const [sourceName, targetPath] of Object.entries(publicSurfaceCssPaths)) {
-    const sourcePattern = escapeRegExp(sourceName)
-    const hashPattern = '[A-Za-z0-9_-]+'
-    code = code
-      .replace(new RegExp(`/_nuxt/(?:assets/)?surfaces/${sourcePattern}\\.${hashPattern}\\.css`, 'g'), `/_nuxt/${targetPath}`)
-      .replace(new RegExp(`/_nuxt/${sourcePattern}\\.${hashPattern}\\.css`, 'g'), `/_nuxt/${targetPath}`)
-      .replace(new RegExp(`(^|[^A-Za-z0-9_/-])assets/surfaces/${sourcePattern}\\.${hashPattern}\\.css`, 'g'), `$1${targetPath}`)
-      .replace(new RegExp(`(^|[^A-Za-z0-9_/-])${sourcePattern}\\.${hashPattern}\\.css`, 'g'), `$1${targetPath}`)
-  }
-
-  return code
-}
-
-function publicSurfaceCssPlugin() {
-  return {
-    name: 'krabiclaw-public-surface-css-paths',
-    enforce: 'post' as const,
-    generateBundle(_options: unknown, bundle: Record<string, {
-      type: string
-      fileName: string
-      code?: string
-      source?: string | Uint8Array
-    }>) {
-      const renamedEntries: Array<[string, {
-        type: string
-        fileName: string
-        code?: string
-        source?: string | Uint8Array
-      }]> = []
-
-      for (const [fileName, asset] of Object.entries(bundle)) {
-        const targetPath = surfaceCssAssetPath(fileName)
-        if (!targetPath) {
-          renamedEntries.push([fileName, asset])
-          continue
-        }
-
-        asset.fileName = `_nuxt/${targetPath}`
-        renamedEntries.push([asset.fileName, asset])
-      }
-
-      for (const fileName of Object.keys(bundle)) {
-        Reflect.deleteProperty(bundle, fileName)
-      }
-
-      for (const [fileName, asset] of renamedEntries) {
-        bundle[fileName] = asset
-      }
-
-      for (const asset of Object.values(bundle)) {
-        if (asset.type !== 'chunk' || !asset.code) continue
-
-        asset.code = rewriteSurfaceCssReferences(asset.code)
-      }
-    },
-  }
+function publicSurfaceCssAssetFileName(assetInfo: { name?: string; fileName?: string }) {
+  const fileName = assetInfo.name || assetInfo.fileName || ''
+  return surfaceCssAssetPath(fileName)
+    ? `_nuxt/${surfaceCssAssetPath(fileName)}`
+    : '_nuxt/assets/[name]-[hash][extname]'
 }
 
 export default defineNuxtConfig({
   ignore: ['**/.worktrees/**', '**/.claude/**'],
   modules: [
-    cloudflareDevModule,
     '@nuxt/scripts',
     '@nuxtjs/robots',
     '@nuxtjs/sitemap',
     'nuxt-schema-org',
-    '@nuxtjs/i18n',
     '@nuxt/ui',
-    '@nuxt/image',
   ],
 
   ui: {
@@ -188,15 +129,24 @@ export default defineNuxtConfig({
   compatibilityDate: '2024-11-01',
 
   experimental: {
+    // Nuxt 5 consumes this runtime option before the current schema exposes it.
+    // @ts-expect-error Nuxt 5 native Nitro mode is required for this Worker.
+    nitroViteEnvironment: false,
     defaults: {
       nuxtLink: {
         prefetch: false,
       },
     },
   },
+  imports: {
+    transform: {
+      include: [/node_modules[\\/]@nuxt[\\/]icon[\\/]/],
+    },
+  },
   debug: false,
   devtools: { enabled: false },
   icon: {
+    provider: 'none',
     fallbackToApi: false,
     // Nuxt UI's own internal default icons (UChatPromptSubmit's arrowUp, etc.)
     // are resolved from appConfig.ui.icons dynamically, not as static name=""
@@ -207,9 +157,13 @@ export default defineNuxtConfig({
     // tight for that round-trip in local dev; bump it so it resolves instead
     // of silently failing to render.
     fetchTimeout: 5000,
-    serverBundle: {
-      collections: [
-        'lucide',
+    serverBundle: false,
+    clientBundle: {
+      scan: true,
+      icons: [
+        'lucide:menu',
+        'lucide:panel-left-close',
+        'lucide:panel-left-open',
       ],
     },
     customCollections: [
@@ -235,6 +189,11 @@ export default defineNuxtConfig({
   vite: {
     build: {
       modulePreload: false,
+      rollupOptions: {
+        output: {
+          assetFileNames: publicSurfaceCssAssetFileName,
+        },
+      },
     },
     server: {
       watch: {
@@ -246,9 +205,12 @@ export default defineNuxtConfig({
 
   // Bundle analysis is opt-in and client-only; it has no runtime effect.
   hooks: {
+    'nitro:config'(nitroConfig) {
+      nitroConfig.handlers = nitroConfig.handlers?.filter(
+        handler => handler.route !== '/api/_nuxt_icon/:collection',
+      )
+    },
     'vite:extendConfig'(viteConfig, { isClient }) {
-      viteConfig.plugins?.push(publicSurfaceCssPlugin())
-
       if (analyzeBundle && isClient) {
         viteConfig.plugins?.push(visualizer({
           filename: process.env.PERF_BUNDLE_ANALYZE_OUT || 'bundle-analysis.html',
@@ -270,36 +232,6 @@ export default defineNuxtConfig({
 
   schemaOrg: {
     defaults: false,
-  },
-
-  // i18n Configuration
-  i18n: {
-    langDir: 'locales',  // relative to i18n/ (module default is restructureDir: 'i18n')
-    // lazy: true,  // not supported in this @nuxtjs/i18n version — locale files still split by route
-    locales: [
-      { code: 'en',    name: 'English',    language: 'en-US', dir: 'ltr', file: 'en.json' },
-      { code: 'th',    name: 'ไทย',        language: 'th-TH', dir: 'ltr', file: 'th.json' },
-    ],
-    defaultLocale: 'en',
-    strategy: 'no_prefix',
-    detectBrowserLanguage: false,
-    // @nuxtjs/i18n defaults runtimeOnly to false — surprising, since the
-    // underlying @intlify/unplugin-vue-i18n itself defaults it to true.
-    // Aliases vue-i18n to its runtime-only build in production, dropping
-    // the full compiler vue-i18n itself doesn't need since messages are
-    // static JSON compiled at build time.
-    //
-    // bundle.dropMessageCompiler was also tried (attributed as ~7.5KB gzip
-    // in the entry bundle) but is NOT enabled here — verified it breaks SSR
-    // for at least one real translation key (`saya.header.menu` on
-    // /dev/perf-text?mode=text-with-i18n rendered an empty <div id="__nuxt">
-    // with no thrown error), while simpler top-level keys elsewhere (e.g.
-    // pages/about.vue) kept working. That inconsistency — some keys silently
-    // failing SSR while others don't — makes it unsafe to ship without a
-    // much deeper audit of every real locale key against every real page.
-    bundle: {
-      runtimeOnly: true,
-    },
   },
 
   // Crawler guidance. Runtime X-Robots-Tag middleware remains the authoritative
@@ -464,8 +396,8 @@ export default defineNuxtConfig({
     '/login':        { headers: { 'cache-control': 'no-store', 'x-frame-options': 'DENY', 'content-security-policy': "frame-ancestors 'none'" } },
     '/links':        { headers: { 'cache-control': 'private, no-store' } },
 
-    // Public pages — detectBrowserLanguage is disabled so / is safe to cache in production.
-    // Explicit '/' rule overrides any cache-control the i18n module injects internally.
+    // Public pages are safe to cache at the HTML layer.
+    // The explicit '/' rule keeps the homepage policy visible and deliberate.
     '/':   { headers: publicHtmlCacheHeaders },
     '/**': { headers: publicHtmlCacheHeaders },
   },
@@ -473,17 +405,11 @@ export default defineNuxtConfig({
   // Nitro configuration for Cloudflare deployment
   nitro: {
     preset: 'cloudflare-module',
-    cloudflareDev: {
-      // Force deterministic binding discovery in CI/dev.
-      configPath: './wrangler.dev.toml',
-      persistDir: '.wrangler/state/v3',
-      silent: true,
+    cloudflare: {
+      deployConfig: false,
     },
     devServer: {
       watch: ['server']
-    },
-    externals: {
-      inline: ['@opentelemetry/api']
     },
     // Leave the resolved WASM import for Wrangler, which uploads .wasm as a precompiled
     // module. Nitro's Rollup pass cannot parse the binary, and Workers cannot compile raw

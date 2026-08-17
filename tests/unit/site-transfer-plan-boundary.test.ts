@@ -177,6 +177,14 @@ mock.module('../../server/utils/api-response.ts', {
   },
 })
 
+mock.module('nitro/h3', {
+  namedExports: {
+    getRequestURL: () => new URL('https://app.example'),
+    getRouterParam: (event: { context: { params: Record<string, string> } }, name: string) => event.context.params[name],
+    readBody: async () => ({}),
+  },
+})
+
 mock.module('../../server/utils/auth.ts', {
   namedExports: {
     getAuthSession: async () => ({ user: { id: 'user-recipient', email: sessionEmail, name: 'Recipient' } }),
@@ -390,11 +398,17 @@ test.beforeEach(() => {
 })
 
 function acceptEvent() {
-  return { params: { token: 'transfer-token' } }
+  return {
+    context: { params: { token: 'transfer-token' } },
+    url: new URL('https://app.example/transfer/transfer-token'),
+  }
 }
 
 function getEvent() {
-  return { params: { token: 'transfer-token' } }
+  return {
+    context: { params: { token: 'transfer-token' } },
+    url: new URL('https://app.example/transfer/transfer-token'),
+  }
 }
 
 test('accept rejects retired and unknown plans before organization or provider access', async () => {

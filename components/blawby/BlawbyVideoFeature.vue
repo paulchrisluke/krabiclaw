@@ -45,6 +45,7 @@
 </template>
 
 <script setup lang="ts">
+import { shallowRef } from 'vue'
 const props = defineProps<{
   title: string
   accent?: string | null
@@ -54,7 +55,7 @@ const props = defineProps<{
   images: Array<{ url: string; alt?: string | null }>
 }>()
 
-const videoFrame = ref<HTMLElement | null>(null)
+const videoFrame = shallowRef<Element | null>(null)
 const showVideo = ref(false)
 let videoObserver: IntersectionObserver | null = null
 

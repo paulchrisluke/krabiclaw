@@ -23,7 +23,7 @@ function sanitizeFilename(raw: string | undefined): string {
   return sanitized || 'upload'
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -39,7 +39,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // Check Content-Length before parsing multipart to avoid memory exhaustion
-  const contentLengthHeader = getHeader(event, 'content-length')
+  const contentLengthHeader = (event.req.headers.get('content-length'))
   if (!contentLengthHeader) {
     return jsonResponse({ error: 'Content-Length header required' }, { status: 413 })
   }
@@ -81,21 +81,7 @@ export default defineEventHandler(async (event) => {
     await ensurePlatformMediaScope(db)
     const assetId = crypto.randomUUID()
     await createMediaAsset(db, {
-      id: assetId,
-      organization_id: PLATFORM_MEDIA_ORG_ID,
-      site_id: PLATFORM_MEDIA_SITE_ID,
-      kind: 'image',
-      provider: 'cloudflare_images',
-      source: 'uploaded',
-      cloudflare_image_id: uploaded.imageId,
-      public_url: uploaded.publicUrl,
-      thumbnail_url: uploaded.thumbnailUrl,
-      alt_text: altText,
-      mime_type: contentType,
-      file_name: filename,
-      status: 'active',
-      created_by_user_id: session.user.id,
-    })
+      id: assetId, organization_id: PLATFORM_MEDIA_ORG_ID, site_id: PLATFORM_MEDIA_SITE_ID, kind: 'image', provider: 'cloudflare_images', source: 'uploaded', cloudflare_image_id: uploaded.imageId, public_url: uploaded.publicUrl, thumbnail_url: uploaded.thumbnailUrl, alt_text: altText, mime_type: contentType, file_name: filename, status: 'active', created_by_user_id: session.user.id, })
 
     const asset = (await listPlatformMediaAssets(db, { id: assetId, limit: 1 }))[0] ?? null
     if (!asset) return jsonResponse({ error: 'Uploaded media asset was not found after creation' }, { status: 500 })
@@ -113,3 +99,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to upload media' }, { status: 500 })
   }
 })
+import { defineHandler } from 'nitro';
+import {  readMultipartFormData  } from 'nitro/h3';

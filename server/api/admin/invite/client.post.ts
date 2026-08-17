@@ -11,7 +11,7 @@ function slugify(str: string) {
   return str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48)
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -37,35 +37,25 @@ export default defineEventHandler(async (event) => {
   const expiresAt = now + 7 * 24 * 60 * 60
   const invitationId = crypto.randomUUID()
 
-  // Attach-to-existing-org path: org already provisioned (e.g. client:import --apply),
-  // it just has no owner yet. Skip org creation entirely — only insert the invitation.
+  // Attach-to-existing-org path: org already provisioned (e.g. client:import --apply), // it just has no owner yet. Skip org creation entirely — only insert the invitation.
   if (existingOrgId || existingOrgSlug) {
     const org = await queryFirst<{ id: string; name: string; slug: string }>(
-      db,
-      existingOrgId
+      db, existingOrgId
         ? 'SELECT id, name, slug FROM organization WHERE id = ? LIMIT 1'
-        : 'SELECT id, name, slug FROM organization WHERE slug = ? LIMIT 1',
-      [existingOrgId || existingOrgSlug],
-    )
+        : 'SELECT id, name, slug FROM organization WHERE slug = ? LIMIT 1', [existingOrgId || existingOrgSlug], )
     if (!org) return jsonResponse({ error: 'Organization not found' }, { status: 404 })
 
     // Prevent creating a duplicate/conflicting owner: if the org already has an owner
     // member, this endpoint is not a re-invite/transfer flow — fail loudly instead.
     const existingOwner = await queryFirst<{ id: string }>(
-      db,
-      `SELECT id FROM member WHERE organizationId = ? AND role = 'owner' LIMIT 1`,
-      [org.id],
-    )
+      db, `SELECT id FROM member WHERE organizationId = ? AND role = 'owner' LIMIT 1`, [org.id], )
     if (existingOwner) {
       return jsonResponse({ error: 'Organization already has an owner' }, { status: 409 })
     }
 
     // Check if there's already a pending owner invitation for this organization
     const existingPendingInvitation = await queryFirst<{ id: string }>(
-      db,
-      `SELECT id FROM invitation WHERE organizationId = ? AND role = 'owner' AND status = 'pending' LIMIT 1`,
-      [org.id],
-    )
+      db, `SELECT id FROM invitation WHERE organizationId = ? AND role = 'owner' AND status = 'pending' LIMIT 1`, [org.id], )
     if (existingPendingInvitation) {
       return jsonResponse({ error: 'Organization already has a pending owner invitation' }, { status: 409 })
     }
@@ -84,17 +74,11 @@ export default defineEventHandler(async (event) => {
       throw error
     }
 
-    const origin = getRequestURL(event).origin
+    const origin = event.url.origin
     const inviteUrl = `${origin}/accept-invitation/${invitationId}`
 
     return jsonResponse({
-      success: true,
-      orgId: org.id,
-      orgSlug: org.slug,
-      inviteUrl,
-      email,
-      restaurantName: restaurantName || org.name,
-    })
+      success: true, orgId: org.id, orgSlug: org.slug, inviteUrl, email, restaurantName: restaurantName || org.name, })
   }
 
   // Net-new-client path: create org + invitation together (unchanged behavior).
@@ -124,20 +108,16 @@ export default defineEventHandler(async (event) => {
   // Atomic: an invitation without its organization (or vice versa) is orphaned state.
   await executeBatch(db, [
     {
-      query: `INSERT INTO organization (id, name, slug, createdAt) VALUES (?, ?, ?, ?)`,
-      params: [orgId, restaurantName, orgSlug, now],
-    },
-    {
+      query: `INSERT INTO organization (id, name, slug, createdAt) VALUES (?, ?, ?, ?)`, params: [orgId, restaurantName, orgSlug, now], }, {
       query: `
         INSERT INTO invitation (id, organizationId, email, role, status, expiresAt, inviterId, createdAt)
         VALUES (?, ?, ?, 'owner', 'pending', ?, ?, ?)
-      `,
-      params: [invitationId, orgId, email, expiresAt, session.user.id, now],
-    },
-  ])
+      `, params: [invitationId, orgId, email, expiresAt, session.user.id, now], }, ])
 
-  const origin = getRequestURL(event).origin
+  const origin = event.url.origin
   const inviteUrl = `${origin}/accept-invitation/${invitationId}`
 
   return jsonResponse({ success: true, orgId, orgSlug, inviteUrl, email, restaurantName })
 })
+import { defineHandler } from 'nitro';
+import {  readBody  } from 'nitro/h3';

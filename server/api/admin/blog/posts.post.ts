@@ -1,5 +1,6 @@
+import { defineHandler } from 'nitro';
 // POST /api/admin/blog/posts - Create platform blog post
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { cloudflareEnv, jsonResponse, readRequiredBody } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { platformPermissionJsonResponse } from '~/server/utils/platform-admin-users'
 import { assertDraftOnlyBlogCreate, createPlatformBlogPost } from '~/server/utils/platform-content'
@@ -8,7 +9,7 @@ import { schedulePlatformKnowledgeIndexRebuild } from '~/server/utils/platform-s
 
 import type { PlatformBlogPostRequestBody } from '~/server/types/platform-content'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -20,7 +21,7 @@ export default defineEventHandler(async (event) => {
   if (permissionDenied) return permissionDenied
 
   let body: PlatformBlogPostRequestBody
-  try { body = await readBody(event) } catch {
+  try { body = await readRequiredBody<PlatformBlogPostRequestBody>(event) } catch {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
 

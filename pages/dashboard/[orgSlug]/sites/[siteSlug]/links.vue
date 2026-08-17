@@ -105,7 +105,7 @@
                     class="flex min-h-12 items-center rounded-lg border border-default bg-default px-3 py-2 text-center"
                   >
                     <span class="min-w-0 flex-1">
-                      <span class="block truncate text-sm font-medium text-highlighted">{{ item.label || 'Untitled link' }}</span>
+                      <span class="block truncate text-sm font-medium text-highlighted">{{ item.label }}</span>
                     </span>
                   </div>
                   <p v-if="activePreviewItems.length === 0" class="text-center text-sm text-muted">No active links to preview.</p>
@@ -223,7 +223,7 @@ const dirty = computed(() => savedSnapshot.value !== serializeState())
 const editorReady = computed(() => mounted.value && !pending.value)
 const activePreviewItems = computed(() => items.value.filter(item => item.status === 'active'))
 const publicLinksUrl = computed(() => {
-  const base = dashboard.site.value?.public_url || (dashboard.site.value?.subdomain ? `https://${dashboard.site.value.subdomain}.krabiclaw.com` : '')
+  const base = dashboard.site.value?.public_url || ''
   return base ? `${base.replace(/\/+$/, '')}/links` : ''
 })
 

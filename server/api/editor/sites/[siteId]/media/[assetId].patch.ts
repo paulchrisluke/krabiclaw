@@ -16,7 +16,7 @@ interface MediaAssetSiteRow {
 
 const VALID_CATEGORIES = new Set(['exterior', 'interior', 'food', 'menu', 'team', 'other'])
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const assetId = getRouterParam(event, 'assetId')
   if (!siteId || !assetId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
@@ -33,10 +33,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     const asset = await queryFirst<MediaAssetSiteRow>(
-      db,
-      `SELECT id, site_id, organization_id, location_id FROM media_assets WHERE id = ? LIMIT 1`,
-      [assetId],
-    )
+      db, `SELECT id, site_id, organization_id, location_id FROM media_assets WHERE id = ? LIMIT 1`, [assetId], )
     if (!asset) return jsonResponse({ error: 'Asset not found' }, { status: 404 })
     if (asset.site_id !== siteId) return jsonResponse({ error: 'Forbidden' }, { status: 403 })
 
@@ -95,11 +92,10 @@ export default defineEventHandler(async (event) => {
     rethrowHttpError(error)
     const normalizedError = error instanceof Error ? error : new Error('Unknown error')
     console.error('media_patch_failed', {
-      siteId,
-      assetId,
-      userId: session.user.id,
-      error: normalizedError.message
+      siteId, assetId, userId: session.user.id, error: normalizedError.message
     })
     return jsonResponse({ error: 'Failed to update media asset' }, { status: 500 })
   }
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam, readBody  } from 'nitro/h3';

@@ -2,7 +2,7 @@ import { jsonResponse } from '~/server/utils/api-response'
 import { deleteLocationQa } from '~/server/utils/location-qa'
 import { requireLocationAccess } from '~/server/utils/location-access'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const locationId = getRouterParam(event, 'locationId')
   const qaId = getRouterParam(event, 'qaId')
@@ -12,3 +12,5 @@ export default defineEventHandler(async (event) => {
   const result = await deleteLocationQa(db, siteId, locationId, qaId)
   return jsonResponse(result.data, { status: result.status })
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

@@ -45,7 +45,7 @@
     <BlawbyReviewsSection :reviews="routeData.reviews" />
     <BlawbyScheduleRedirect
       v-if="scheduleCta"
-      :title="String(scheduleCta.title || 'Request a Legal Consultation')"
+      :title="String(scheduleCta.title || '')"
       :description="String(scheduleCta.description || '')"
       :price-line="optionalString(scheduleCta.priceLine)"
       :notice="optionalString(scheduleCta.notice)"
@@ -121,7 +121,7 @@ function trackConsultation(pageType: string, destination: string) {
 }
 
 useSeoMeta({
-  title: computed(() => page.value.seo_title || `Consultation | ${identity.value.brand_name || 'Professional services'}`),
+  title: computed(() => page.value.seo_title || `Consultation | ${identity.value.brand_name}`),
   description: computed(() => page.value.seo_description || page.value.summary || ''),
 })
 const canonicalUrl = useSeoUrl(() => '/schedule')

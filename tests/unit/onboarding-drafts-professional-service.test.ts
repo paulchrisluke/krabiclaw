@@ -61,7 +61,7 @@ test('professional_service draft copy contains no restaurant/experience leakage'
   }
 })
 
-test('professional_service draft uses consultation/services placeholders, not invented legal claims', () => {
+test('professional_service draft leaves owner content empty instead of inventing consultation/services copy', () => {
   const payload = buildOnboardingDraftPayload({
     name: 'Acme Legal Group',
     vertical: 'professional_service',
@@ -70,11 +70,10 @@ test('professional_service draft uses consultation/services placeholders, not in
   })
 
   const aboutCta = payload.preview.content.find(row => row.page === 'about' && row.field === 'cta.title')
-  assert.equal(aboutCta?.content, 'Talk with our team')
+  assert.equal(aboutCta, undefined)
 
   const qaQuestions = payload.preview.qa.map(q => q.question)
-  assert.ok(qaQuestions.some(q => /consultation/i.test(q)))
-  assert.ok(qaQuestions.some(q => /services/i.test(q)))
+  assert.deepEqual(qaQuestions, [])
 
   // No invented practice areas (e.g. "family law", "immigration") — only
   // clearly-editable generic placeholders.
@@ -84,14 +83,14 @@ test('professional_service draft uses consultation/services placeholders, not in
   assert.ok(!haystack.includes('north carolina legal services'))
 })
 
-test('restaurant and experience drafts are unchanged (still get a menu / experiences flag respectively)', () => {
+test('restaurant and experience drafts keep vertical flags without fabricated menu content', () => {
   const restaurantPayload = buildOnboardingDraftPayload({
     name: 'Test Cafe',
     vertical: 'restaurant',
     place: null,
     details: baseDetails,
   })
-  assert.ok(restaurantPayload.preview.menu, 'expected restaurant draft to include a sample menu')
+  assert.equal(restaurantPayload.preview.menu, null)
   assert.equal(restaurantPayload.preview.hasExperiences, false)
 
   const experiencePayload = buildOnboardingDraftPayload({

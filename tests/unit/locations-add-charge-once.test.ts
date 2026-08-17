@@ -53,7 +53,7 @@ test('locations/add.post.ts charges google_places_search (when used) after the p
 })
 
 test('the previewOnly response is returned before any chargeFlatCredits call in source order', () => {
-  const previewReturnIndex = routeSource.indexOf('return jsonResponse({\n      success: true,\n      preview:')
+  const previewReturnIndex = routeSource.indexOf('preview: {')
   assert.ok(previewReturnIndex >= 0, 'expected the preview-only success response in the route')
   const firstChargeIndex = routeSource.indexOf('chargeFlatCredits(')
   assert.ok(firstChargeIndex >= 0, 'expected at least one chargeFlatCredits call')

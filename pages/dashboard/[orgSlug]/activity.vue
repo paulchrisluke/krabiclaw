@@ -78,6 +78,7 @@
 </template>
 
 <script setup lang="ts">
+import { getErrorMessage } from '~/utils/errors'
 const dashboardApi = useDashboardApi()
 const route = useRoute()
 definePageMeta({ layout: 'dashboard' })

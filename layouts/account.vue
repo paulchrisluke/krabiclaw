@@ -22,9 +22,9 @@
 
 <script setup>
 import { authClient } from '~/lib/auth-client'
-import platformStylesheet from '~/assets/css/platform-entry.css?url'
+import '~/assets/css/platform-entry.css'
 
-const platformStylesheetHref = new URL(platformStylesheet, 'http://nuxt.local').pathname
+const platformStylesheetHref = '/_nuxt/surfaces/platform.css'
 
 useHead({
   link: [{ rel: 'stylesheet', href: platformStylesheetHref }],

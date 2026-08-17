@@ -1,5 +1,6 @@
+import { defineHandler } from 'nitro';
 // POST /api/admin/ai/generate - ChowBot for platform content
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { cloudflareEnv, jsonResponse, readRequiredBody } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { platformPermissionJsonResponse } from '~/server/utils/platform-admin-users'
 import { callAiGateway } from '~/server/utils/ai-gateway'
@@ -10,7 +11,7 @@ const SYSTEM = `You are a helpful AI assistant for KrabiClaw, a restaurant websi
 Help generate content for the KrabiClaw platform website, including blog posts, help articles, and marketing copy.
 Keep responses concise, professional, and friendly.`
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   
   const session = await getAuthSession(event, env)
@@ -20,7 +21,7 @@ export default defineEventHandler(async (event) => {
   if (permissionDenied) return permissionDenied
 
   let body: { prompt?: string }
-  try { body = await readBody(event) } catch {
+  try { body = await readRequiredBody<{ prompt?: string }>(event) } catch {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
 
@@ -34,10 +35,7 @@ export default defineEventHandler(async (event) => {
     const aiResponse = await callAiGateway(env, [
       { role: 'user', content: prompt }
     ], {
-      system: SYSTEM,
-      maxTokens: 2048,
-      metadata: { action: 'platform_content_generation' },
-    })
+      system: SYSTEM, maxTokens: 2048, metadata: { action: 'platform_content_generation' }, })
 
     const contentBlock = aiResponse.content.find((b) => b.type === 'text')
     const content = contentBlock?.text || ''
@@ -46,10 +44,7 @@ export default defineEventHandler(async (event) => {
   } catch (err) {
     const error = err instanceof Error ? err : new Error(String(err))
     console.error('AI generation failed', {
-      userId: session.user.id,
-      promptLength: prompt.length,
-      error: error.message,
-      stack: error.stack
+      userId: session.user.id, promptLength: prompt.length, error: error.message, stack: error.stack
     })
     return jsonResponse({ error: 'AI generation failed. Please try again.' }, { status: 502 })
   }

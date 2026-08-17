@@ -1,9 +1,9 @@
-import { getQuery } from 'h3'
+import { getQuery } from 'nitro/h3';
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { queryAll } from '~/server/db'
 import { platformPermissionJsonResponse } from '~/server/utils/platform-admin-users'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -49,3 +49,4 @@ export default defineEventHandler(async (event) => {
 
   return jsonResponse({ success: true, domains: domains || [], events: events || [] })
 })
+import { defineHandler } from 'nitro';

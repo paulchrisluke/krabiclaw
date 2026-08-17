@@ -39,6 +39,7 @@
 </template>
 
 <script setup>
+import { $fetch } from 'ofetch'
 definePageMeta({ layout: 'account', middleware: 'account' })
 
 // Server-side detail fetch bypasses the internal self-fetch entirely.

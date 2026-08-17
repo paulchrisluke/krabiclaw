@@ -1,12 +1,9 @@
-import type { H3Event } from 'h3'
-import { flushRequestMetrics, finalizeTrackedRequestMetrics } from '~/server/utils/request-metrics'
+import type { HTTPEvent } from 'nitro/h3'
+import { flushRequestMetrics } from '~/server/utils/request-metrics'
+import { definePlugin } from 'nitro';
 
-export default defineNitroPlugin((nitroApp) => {
-  nitroApp.hooks.hook('beforeResponse', (event, response) => {
-    finalizeTrackedRequestMetrics(event, response?.body)
-  })
-
-  nitroApp.hooks.hook('afterResponse', (event: H3Event, response?: { body?: unknown }) => {
-    flushRequestMetrics(event, response?.body)
+export default definePlugin((nitroApp) => {
+  nitroApp.hooks.hook('response', async (response, event: HTTPEvent) => {
+    await flushRequestMetrics(event, response)
   })
 })

@@ -146,8 +146,11 @@ describe('Tenant Favicon – Unit Tests', () => {
       assert.equal(isPlatformAssetUrl('/apple-touch-icon.png'), true)
     })
 
-    test('krabiclaw.com favicon paths are classified as platform assets', () => {
-      assert.equal(isPlatformAssetUrl('https://krabiclaw.com/favicon.ico'), true)
+    test('configured platform favicon paths are classified as platform assets', () => {
+      assert.equal(isPlatformAssetUrl('https://krabiclaw.com/favicon.ico', {
+        NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://krabiclaw.com',
+      }), true)
+      assert.equal(isPlatformAssetUrl('https://krabiclaw.com/favicon.ico'), false)
     })
 
     test('external customer-hosted favicon URLs are NOT classified as platform assets', () => {

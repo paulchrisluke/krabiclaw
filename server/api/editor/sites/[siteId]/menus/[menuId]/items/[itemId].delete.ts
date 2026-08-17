@@ -6,7 +6,7 @@ import { assertResourceAccess } from "~/server/utils/member-access";
 import { loadMemberSiteRow } from "~/server/utils/location-access";
 import { queryFirst } from "~/server/db";
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, "siteId");
   const menuId = getRouterParam(event, "menuId");
   const itemId = getRouterParam(event, "itemId");
@@ -14,10 +14,7 @@ export default defineEventHandler(async (event) => {
   if (!siteId || !menuId || !itemId) {
     return jsonResponse(
       {
-        error: "Site ID, menu ID, and item ID are required",
-      },
-      { status: 400 },
-    );
+        error: "Site ID, menu ID, and item ID are required", }, { status: 400 }, );
   }
 
   const env = cloudflareEnv(event);
@@ -26,10 +23,7 @@ export default defineEventHandler(async (event) => {
   if (!db) {
     return jsonResponse(
       {
-        error: "Database not available",
-      },
-      { status: 500 },
-    );
+        error: "Database not available", }, { status: 500 }, );
   }
 
   // Get authenticated user
@@ -38,10 +32,7 @@ export default defineEventHandler(async (event) => {
   if (!session?.user?.id) {
     return jsonResponse(
       {
-        error: "Authentication required",
-      },
-      { status: 401 },
-    );
+        error: "Authentication required", }, { status: 401 }, );
   }
 
   try {
@@ -50,77 +41,51 @@ export default defineEventHandler(async (event) => {
     if (!site) {
       return jsonResponse(
         {
-          error: "Site not found or access denied",
-        },
-        { status: 404 },
-      );
+          error: "Site not found or access denied", }, { status: 404 }, );
     }
 
     // Check if menu exists and belongs to this site
     const existingMenu = await queryFirst<{ id: string; location_id: string | null }>(
-      db,
-      `
+      db, `
       SELECT id, location_id FROM menus
       WHERE id = ? AND organization_id = ? AND site_id = ?
       LIMIT 1
-    `,
-      [menuId, site.organization_id, siteId],
-    );
+    `, [menuId, site.organization_id, siteId], );
 
     if (!existingMenu) {
       return jsonResponse(
         {
-          error: "Menu not found",
-        },
-        { status: 404 },
-      );
+          error: "Menu not found", }, { status: 404 }, );
     }
 
     // Check if menu item exists and belongs to this menu
     const existingItem = await queryFirst(
-      db,
-      `
+      db, `
       SELECT id FROM menu_items
       WHERE id = ? AND menu_id = ?
       LIMIT 1
-    `,
-      [itemId, menuId],
-    );
+    `, [itemId, menuId], );
 
     if (!existingItem) {
       return jsonResponse(
         {
-          error: "Menu item not found",
-        },
-        { status: 404 },
-      );
+          error: "Menu item not found", }, { status: 404 }, );
     }
 
     await assertResourceAccess(db, {
-      memberId: site.member_id,
-      role: site.member_role,
-      organizationId: site.organization_id,
-      siteId,
-      resourceLocationId: existingMenu.location_id,
-    });
+      memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: existingMenu.location_id, });
 
     await deleteMenuItem(db, itemId, site.organization_id, siteId);
 
     return jsonResponse({
-      success: true,
-      message: "Menu item deleted successfully",
-      siteId,
-      menuId,
-      itemId,
-    });
+      success: true, message: "Menu item deleted successfully", siteId, menuId, itemId, });
   } catch (error) {
     rethrowHttpError(error);
     console.error("Failed to delete menu item:", error);
     return jsonResponse(
       {
-        error: "Failed to delete menu item",
-      },
-      { status: 500 },
-    );
+        error: "Failed to delete menu item", }, { status: 500 }, );
   }
 });
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

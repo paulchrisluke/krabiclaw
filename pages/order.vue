@@ -8,7 +8,7 @@
           <h1 class="text-2xl font-bold text-default">{{ orderCopy.onlineOrderingNotAvailable }}</h1>
           <p class="mt-2 text-muted">{{ orderCopy.wedLoveToSeeYou }}</p>
         </div>
-        <SayaButton :to="orderCopy.ctaRoute" size="lg">{{ orderCopy.reserveCta }}</SayaButton>
+        <SayaButton v-if="orderCopy.ctaRoute && orderCopy.reserveCta" :to="orderCopy.ctaRoute" size="lg">{{ orderCopy.reserveCta }}</SayaButton>
       </div>
 
       <template v-else>
@@ -63,7 +63,7 @@
             </div>
           </div>
 
-          <p class="mt-16 text-sm text-muted">
+          <p v-if="orderCopy.ctaRoute && orderCopy.reserveCta" class="mt-16 text-sm text-muted">
             {{ orderCopy.preferReservation }} {{ orderCopy.reservationWord }}?
             <NuxtLink :to="orderCopy.ctaRoute" class="font-medium text-default underline-offset-4 hover:underline">{{ orderCopy.reserveCta }} →</NuxtLink>
           </p>
@@ -99,10 +99,10 @@ const hasOrderLinks = computed(() => orderableLocations.value.length > 0)
 
 useTenantSocialMetadata(() => ({
   path: '/order',
-  title: `Order Online | ${site?.brand_name || 'Our Site'}`,
-  description: orderCopy.value.seoOrderDescription(site?.brand_name || 'Our Site'),
+  title: `Order Online | ${site?.brand_name?.trim() ?? ''}`,
+  description: orderCopy.value.seoOrderDescription(site?.brand_name?.trim() ?? ''),
   brand: {
-    siteName: site?.brand_name || 'Our Site',
+    siteName: site?.brand_name?.trim() ?? '',
     logoUrl: config.value?.logo_url || null,
     faviconUrl: config.value?.favicon_url || null,
     primaryColor: config.value?.brand_color || null,

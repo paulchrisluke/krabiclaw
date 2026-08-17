@@ -1,10 +1,8 @@
 import { getOrgAdapter } from 'better-auth/plugins'
 import { createAuth, type CloudflareEnv } from '~/server/utils/auth'
 import {
-  adminHeadersForEvent,
-  authAdminApi,
-} from '~/server/utils/platform-admin-users'
-import type { H3Event } from 'h3'
+  adminHeadersForEvent, authAdminApi, } from '~/server/utils/platform-admin-users'
+import type { H3Event } from 'nitro';
 
 export type TransferRecipientResolutionStatus =
   | 'missing'

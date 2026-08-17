@@ -2,22 +2,18 @@ import { jsonResponse } from "~/server/utils/api-response";
 import { loadDashboardBlogPost } from '~/server/utils/dashboard-editor-resources'
 import { httpErrorDetails } from "~/server/utils/http-error";
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, "siteId");
   const postId = getRouterParam(event, "postId");
 
   if (!siteId || Array.isArray(siteId)) {
     return jsonResponse(
-      { error: "Site ID is required" },
-      { status: 400 },
-    );
+      { error: "Site ID is required" }, { status: 400 }, );
   }
 
   if (!postId || Array.isArray(postId)) {
     return jsonResponse(
-      { error: "Post ID is required" },
-      { status: 400 },
-    );
+      { error: "Post ID is required" }, { status: 400 }, );
   }
 
   try {
@@ -26,8 +22,8 @@ export default defineEventHandler(async (event) => {
     console.error("Failed to get blog post:", error);
     const { message, statusCode } = httpErrorDetails(error, "Failed to get blog post");
     return jsonResponse(
-      { error: message },
-      { status: statusCode },
-    );
+      { error: message }, { status: statusCode }, );
   }
 });
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

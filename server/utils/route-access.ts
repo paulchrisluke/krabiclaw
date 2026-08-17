@@ -3,7 +3,7 @@
 // (per the nested SSR self-fetch boundary) so route
 // middleware never has to go through useRequestFetch()'s internal self-fetch just to
 // answer a question the request event can resolve directly.
-import type { H3Event } from 'h3'
+import type { H3Event } from 'nitro'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { requirePlatformEventPermission } from '~/server/utils/platform-admin-users'

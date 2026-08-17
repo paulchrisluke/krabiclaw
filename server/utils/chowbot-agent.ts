@@ -263,7 +263,7 @@ async function executeTool(
       // location when the model omits location_id (MCP always requires it explicit).
       return runMcpExecutorToolForChowbot(executorSite, "create_menu", {
         ...input,
-        location_id: input.location_id ?? ctx.locationId ?? undefined,
+        location_id: input.location_id ?? ctx.locationId,
       });
     }
 
@@ -554,7 +554,7 @@ async function executeTool(
       // location when the model omits location_id.
       return runMcpExecutorToolForChowbot(executorSite, "get_reservation_inquiries", {
         ...input,
-        location_id: input.location_id ?? ctx.locationId ?? undefined,
+        location_id: input.location_id ?? ctx.locationId,
       });
     }
 
@@ -582,7 +582,7 @@ async function executeTool(
       const targetLocationId =
         typeof input.location_id === "string" && input.location_id.trim()
           ? input.location_id.trim()
-          : (ctx.locationId ?? undefined);
+          : (ctx.locationId);
       return runMcpExecutorToolForChowbot(executorSite, "get_page_fields", {
         page,
         location_id: targetLocationId,
@@ -599,7 +599,7 @@ async function executeTool(
       const targetLocationId =
         typeof input.location_id === "string" && input.location_id.trim()
           ? input.location_id.trim()
-          : (ctx.locationId ?? undefined);
+          : (ctx.locationId);
       return runMcpExecutorToolForChowbot(executorSite, "update_page_content", {
         page,
         changes,
@@ -823,7 +823,7 @@ async function executeTool(
       // location when the model omits location_id.
       return runMcpExecutorToolForChowbot(executorSite, "list_experience_bookings", {
         ...input,
-        location_id: input.location_id ?? ctx.locationId ?? undefined,
+        location_id: input.location_id ?? ctx.locationId,
       });
     }
 
@@ -872,7 +872,7 @@ async function executeTool(
       const capacityOverride = input.capacity_override !== undefined && input.capacity_override !== null
         ? Number(input.capacity_override)
         : undefined;
-      const note = toSqlText(input.note) ?? undefined;
+      const note = toSqlText(input.note);
       const result = await upsertSlotOverride(db, orgId, siteId, experienceId, {
         override_date: date,
         time_slot: timeSlot,
@@ -888,9 +888,9 @@ async function executeTool(
       const experienceId = toSqlText(input.experience_id);
       if (!experienceId)
         return { error: "experience_id is required" };
-      const from = toSqlText(input.from) ?? undefined;
-      const to = toSqlText(input.to) ?? undefined;
-      const overrides = await listSlotOverrides(db, siteId, experienceId, { fromDate: from, toDate: to });
+      const from = toSqlText(input.from);
+      const to = toSqlText(input.to);
+      const overrides = await listSlotOverrides(db, siteId, experienceId, { fromDate: from ?? undefined, toDate: to ?? undefined });
       return { overrides };
     }
 

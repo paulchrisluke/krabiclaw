@@ -146,16 +146,22 @@ export function platformHostname(env: DomainEnv): string {
   return domain.replace(/^https?:\/\//, '').replace(/\/$/, '')
 }
 
+export function platformDomain(env: DomainEnv): string {
+  const domain = env.NUXT_PUBLIC_PLATFORM_DOMAIN
+  if (!domain) throw new Error('NUXT_PUBLIC_PLATFORM_DOMAIN is required')
+  return domain.replace(/^https?:\/\//, '').replace(/\/$/, '')
+}
+
 function platformDomainCandidates(env: DomainEnv): string[] {
   const values = [
     env.NUXT_PUBLIC_FREE_SITE_DOMAIN,
     env.NUXT_PUBLIC_PLATFORM_DOMAIN,
-    'krabiclaw.com'
   ]
-
-  return values
+  const domains = values
     .filter((value): value is string => Boolean(value))
     .map((value) => value.replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase())
+  if (domains.length === 0) throw new Error('NUXT_PUBLIC_FREE_SITE_DOMAIN or NUXT_PUBLIC_PLATFORM_DOMAIN is required')
+  return domains
 }
 
 export function platformAnalyticsHostnames(env: DomainEnv): string[] {
@@ -164,12 +170,6 @@ export function platformAnalyticsHostnames(env: DomainEnv): string[] {
     if (hostname.split('.').length === 2) hostnames.add(`www.${hostname}`)
   }
   return Array.from(hostnames).sort()
-}
-
-// Non-throwing variant of platformHostname for callers building a best-effort fallback URL
-// (e.g. a tenant subdomain link) where an unconfigured env should not break the response.
-export function platformHostnameFallback(env: DomainEnv): string {
-  return platformDomainCandidates(env)[0]!
 }
 
 export function validateCustomDomain(env: DomainEnv, domain: string): { valid: boolean; reason?: string } {

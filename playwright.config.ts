@@ -1,9 +1,9 @@
 import { randomBytes } from 'node:crypto'
 import { defineConfig, devices } from '@playwright/test'
 
-const port = Number(process.env.PORT || 3000)
 const previewUrl = process.env.PLAYWRIGHT_PREVIEW_URL
-const baseURL = previewUrl || `http://localhost:${port}`
+const port = 3000
+const baseURL = previewUrl || 'http://localhost:3000'
 const localPrepared = process.env.PLAYWRIGHT_LOCAL_PREPARED === 'true'
 
 if (!previewUrl && !process.env.E2E_TEST_PASSWORD) {
@@ -36,8 +36,8 @@ export default defineConfig({
   // local D1 fixtures, build the production Worker, and run it in workerd.
   webServer: previewUrl ? undefined : {
     command: localPrepared
-      ? `corepack yarn dev:worker --port ${port}`
-      : `corepack yarn e2e:local:server --port ${port}`,
+      ? `corepack yarn wrangler dev .output/server/index.mjs --assets .output/public --local --port ${port}`
+      : `corepack yarn e2e:local:prepare && corepack yarn wrangler dev .output/server/index.mjs --assets .output/public --local --port ${port}`,
     url: `http://localhost:${port}/`,
     reuseExistingServer: !process.env.CI,
     timeout: localPrepared ? 180_000 : 600_000,

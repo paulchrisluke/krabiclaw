@@ -3,14 +3,11 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { queryFirst } from '~/server/db'
 import { getStripe } from '~/server/utils/billing'
 import {
-  assertGrowthStripeCatalogPrices,
-  resolveStripeCatalogPrice,
-  selectStripeCatalogPrice,
-} from '~/server/utils/stripe-catalog'
+  assertGrowthStripeCatalogPrices, resolveStripeCatalogPrice, selectStripeCatalogPrice, } from '~/server/utils/stripe-catalog'
 import { assertNewSalePlan, type NewSalePlanId } from '~/shared/billing-model'
 import type Stripe from 'stripe'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const token = getRouterParam(event, 'token')
   if (!token) return jsonResponse({ error: 'Token required' }, { status: 400 })
 
@@ -34,16 +31,10 @@ export default defineEventHandler(async (event) => {
     slug: string
     subdomain: string | null
   }>(
-    db,
-    `SELECT r.id, r.site_id, r.to_email, r.status, r.message,
-            r.invited_plan, r.invited_coupon, r.invited_interval, r.invited_domain,
-            r.requires_payment, r.custom_domains_removed_at,
-            s.brand_name, s.slug, s.subdomain
+    db, `SELECT r.id, r.site_id, r.to_email, r.status, r.message, r.invited_plan, r.invited_coupon, r.invited_interval, r.invited_domain, r.requires_payment, r.custom_domains_removed_at, s.brand_name, s.slug, s.subdomain
      FROM site_transfer_requests r
      JOIN sites s ON s.id = r.site_id
-     WHERE r.token = ? LIMIT 1`,
-    [token],
-  )
+     WHERE r.token = ? LIMIT 1`, [token], )
 
   if (!row) return jsonResponse({ error: 'Transfer not found' }, { status: 404 })
 
@@ -55,8 +46,7 @@ export default defineEventHandler(async (event) => {
   const requiresPayment = row.requires_payment === 1 || hasInvitedPlan
   if (requiresPayment && !row.invited_plan) {
     return jsonResponse({
-      error: 'This handoff is missing a supported billing plan. Ask the sender to reissue it with Growth.',
-    }, { status: 409 })
+      error: 'This handoff is missing a supported billing plan. Ask the sender to reissue it with Growth.', }, { status: 409 })
   }
 
   let validatedPlan: NewSalePlanId | null = null
@@ -65,8 +55,7 @@ export default defineEventHandler(async (event) => {
       validatedPlan = assertNewSalePlan(row.invited_plan)
     } catch {
       return jsonResponse({
-        error: 'This handoff uses a retired or unsupported billing plan. Ask the sender to reissue it with Growth.',
-      }, { status: 409 })
+        error: 'This handoff uses a retired or unsupported billing plan. Ask the sender to reissue it with Growth.', }, { status: 409 })
     }
   }
 
@@ -94,10 +83,7 @@ export default defineEventHandler(async (event) => {
     let productsStartingAfter: string | undefined
     do {
       const page = await stripe.products.list({
-        active: true,
-        limit: 100,
-        ...(productsStartingAfter ? { starting_after: productsStartingAfter } : {}),
-      })
+        active: true, limit: 100, ...(productsStartingAfter ? { starting_after: productsStartingAfter } : {}), })
       products.push(...page.data)
       productsStartingAfter = page.has_more ? page.data.at(-1)?.id : undefined
     } while (productsStartingAfter)
@@ -106,11 +92,7 @@ export default defineEventHandler(async (event) => {
     let pricesStartingAfter: string | undefined
     do {
       const page = await stripe.prices.list({
-        active: true,
-        type: 'recurring',
-        limit: 100,
-        ...(pricesStartingAfter ? { starting_after: pricesStartingAfter } : {}),
-      })
+        active: true, type: 'recurring', limit: 100, ...(pricesStartingAfter ? { starting_after: pricesStartingAfter } : {}), })
       prices.push(...page.data)
       pricesStartingAfter = page.has_more ? page.data.at(-1)?.id : undefined
     } while (pricesStartingAfter)
@@ -134,8 +116,7 @@ export default defineEventHandler(async (event) => {
       } catch (error) {
         if ((error as { code?: string })?.code === 'resource_missing') {
           return jsonResponse({
-            error: 'This handoff discount is no longer available. Ask the sender to reissue it.',
-          }, { status: 409 })
+            error: 'This handoff discount is no longer available. Ask the sender to reissue it.', }, { status: 409 })
         }
         throw error
       }
@@ -149,38 +130,17 @@ export default defineEventHandler(async (event) => {
 
     if (monthPrice.unit_amount) {
       pricing_month = {
-        base_cents: monthPrice.unit_amount,
-        discounted_cents: applyDiscount(monthPrice.unit_amount),
-        coupon_duration,
-        coupon_duration_months,
-      }
+        base_cents: monthPrice.unit_amount, discounted_cents: applyDiscount(monthPrice.unit_amount), coupon_duration, coupon_duration_months, }
     }
 
     if (yearPrice?.unit_amount) {
       pricing_year = {
-        base_cents: yearPrice.unit_amount,
-        discounted_cents: applyDiscount(yearPrice.unit_amount),
-        coupon_duration,
-        coupon_duration_months,
-      }
+        base_cents: yearPrice.unit_amount, discounted_cents: applyDiscount(yearPrice.unit_amount), coupon_duration, coupon_duration_months, }
     }
   }
 
   return jsonResponse({
-    id: row.id,
-    site_id: row.site_id,
-    site_name: row.brand_name ?? row.slug,
-    to_email: row.to_email,
-    message: row.message,
-    invited_plan: row.invited_plan,
-    invited_coupon: row.invited_coupon,
-    invited_interval: invitedInterval,
-    pricing_month,
-    pricing_year,
-    invited_domain: row.invited_domain,
-    domain_active: !!row.invited_domain && !row.custom_domains_removed_at,
-    requires_payment: requiresPayment,
-    never_expires: true,
-    site_subdomain: row.subdomain,
-  })
+    id: row.id, site_id: row.site_id, site_name: row.brand_name ?? row.slug, to_email: row.to_email, message: row.message, invited_plan: row.invited_plan, invited_coupon: row.invited_coupon, invited_interval: invitedInterval, pricing_month, pricing_year, invited_domain: row.invited_domain, domain_active: !!row.invited_domain && !row.custom_domains_removed_at, requires_payment: requiresPayment, never_expires: true, site_subdomain: row.subdomain, })
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

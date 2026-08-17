@@ -1,10 +1,11 @@
-import { createError, type H3Event } from "h3";
+import { HTTPError } from 'nitro';
+import type { H3Event } from 'nitro';
 import { queryFirst } from "~/server/db";
 import { assertSafeDownloadUrl } from "~/server/utils/platform-mcp-executor";
 import { getMediaAsset } from "~/server/utils/media-asset-manager";
 import { generateSlots, type WeekdayName } from "~/server/utils/experiences";
 import type { getMcpTool } from "~/server/utils/mcp-tools";
-import { requireMcpUser, type requireMcpSite, type McpUserContext } from "~/server/utils/mcp-auth";
+import { requireMcpUser, type McpSiteContext, type McpUserContext } from "~/server/utils/mcp-auth";
 import { mcpProtocolError, MCP_ERROR } from "~/server/utils/mcp-protocol";
 import {
   resolveMcpWorkspace,
@@ -130,13 +131,13 @@ export function validateImageBuffer(
   sourceLabel: string,
 ): string {
   if (bytes.byteLength < 1024) {
-    throw createError({
+    throw new HTTPError({
       statusCode: 400,
       statusMessage: `Invalid image payload from ${sourceLabel}: payload too small.`,
     });
   }
   if (bytes.byteLength > MAX_IMAGE_BYTES) {
-    throw createError({
+    throw new HTTPError({
       statusCode: 413,
       statusMessage: `Invalid image payload from ${sourceLabel}: payload exceeds 20 MB limit.`,
     });
@@ -504,7 +505,7 @@ export async function resolveGeneratedImageFile(
 ): Promise<{ buffer: Uint8Array<ArrayBuffer>; contentType: string; filename: string }> {
   const response = await fetchToolFile(file, 15_000);
   if (!response.ok) {
-    throw createError({
+    throw new HTTPError({
       statusCode: 400,
       statusMessage: `Failed to download attachment ${file.file_id}: ${response.status}`,
     });
@@ -616,7 +617,7 @@ export async function resolveUserUploadedMediaFile(
 ): Promise<ResolvedMediaFile> {
   const response = await fetchToolFile(file, 30_000);
   if (!response.ok) {
-    throw createError({
+    throw new HTTPError({
       statusCode: 400,
       statusMessage: `Failed to download attachment ${file.file_id}: ${response.status}`,
     });
@@ -640,7 +641,7 @@ export async function resolveUserUploadedMediaFile(
     };
   }
   if (bytes.byteLength < 64) {
-    throw createError({
+    throw new HTTPError({
       statusCode: 400,
       statusMessage: `Invalid media payload from attachment ${file.file_id}: payload too small.`,
     });
@@ -656,7 +657,7 @@ export async function resolveUserUploadedMediaFile(
     );
   }
   if (isImage && bytes.byteLength > Math.min(MAX_IMAGE_BYTES, maxBytes)) {
-    throw createError({
+    throw new HTTPError({
       statusCode: 413,
       statusMessage: `Invalid image payload from attachment ${file.file_id}: payload exceeds ${MAX_IMAGE_BYTES} byte limit.`,
     });
@@ -737,7 +738,7 @@ export async function resolveGoogleMapsPlace(
     try {
       probe = await dependencies.resolveShortLink(parsedUrl.toString());
     } catch {
-      throw createError({
+      throw new HTTPError({
         statusCode: 502,
         statusMessage: "Google Maps link resolution failed.",
       });
@@ -792,7 +793,7 @@ export async function resolveGoogleMapsPlace(
   try {
     results = await dependencies.searchPlaces(signals.nameHint, locationBias);
   } catch (error) {
-    throw createError({
+    throw new HTTPError({
       statusCode: 502,
       statusMessage:
         error instanceof Error ? error.message : "Google Places search failed.",
@@ -933,7 +934,8 @@ export function resolveSitePublicOrigin(
   if (subdomain) {
     const baseDomain = env?.NUXT_PUBLIC_FREE_SITE_DOMAIN
       ? env.NUXT_PUBLIC_FREE_SITE_DOMAIN.replace(/^https?:\/\//, '').replace(/\/$/, '')
-      : 'krabiclaw.com';
+      : '';
+    if (!baseDomain) throw new Error('NUXT_PUBLIC_FREE_SITE_DOMAIN is required')
     return `https://${subdomain}.${baseDomain}`;
   }
 
@@ -1034,6 +1036,7 @@ export async function mutationContextPayload(
     db: D1Database;
     userId: string;
     siteId: string;
+    env?: { NUXT_PUBLIC_FREE_SITE_DOMAIN?: string };
   },
   options: {
     organizationId?: string | null;
@@ -1053,6 +1056,7 @@ export async function mutationContextPayload(
     workspace.organization,
     workspace.site,
     workspace.location,
+    site.env,
   );
 }
 
@@ -1448,7 +1452,7 @@ export function assertDomainSuccess(result: {
   data: Record<string, unknown>;
 }) {
   if (result.status < 400) return;
-  throw createError({
+  throw new HTTPError({
     statusCode: result.status,
     statusMessage: String(result.data.error ?? "Request failed"),
     data: result.data,
@@ -1484,6 +1488,6 @@ export interface McpExecutorContext {
   normalizedArguments?: Record<string, unknown>
   tool?: ReturnType<typeof getMcpTool>
   siteId?: string
-  site: Awaited<ReturnType<typeof requireMcpSite>>
+  site: McpSiteContext
   args: Record<string, unknown>
 }

@@ -336,6 +336,7 @@
 </template>
 
 <script setup lang="ts">
+import { $fetch } from 'ofetch'
 import { setBookingConfirmation } from '~/composables/useBookingHandoff'
 import { getActiveSpecialClosure, formatClosureMessage } from '~/utils/formatters'
 import { formatMoneyAmount, isSaleActive } from '~/shared/money'
@@ -352,7 +353,7 @@ const DOMPurify = useHtmlSanitizer()
 const route = useRoute()
 const slug = route.params.slug as string
 const { siteId, site } = useTenantSite()
-const siteName = computed(() => (site as ApiValue)?.brand_name || (site as ApiValue)?.name || 'KrabiClaw')
+const siteName = computed(() => String((site as ApiValue)?.brand_name ?? '').trim())
 const config = useRuntimeConfig()
 const siteUrl = config.public.siteUrl
 const { locale, t } = useI18n()

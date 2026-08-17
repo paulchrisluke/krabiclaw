@@ -14,7 +14,7 @@ interface SyncError extends Error {
   code?: string
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const domainId = getRouterParam(event, 'domainId')
   if (!domainId) return jsonResponse({ error: 'Domain ID is required' }, { status: 400 })
 
@@ -45,8 +45,7 @@ export default defineEventHandler(async (event) => {
     })
 
     const domain = await Promise.race([
-      syncDomainWithCloudflare(env, db, domainId, 'admin', session.user.id, controller.signal, { forceRevalidation: true }),
-      timeoutPromise
+      syncDomainWithCloudflare(env, db, domainId, 'admin', session.user.id, controller.signal, { forceRevalidation: true }), timeoutPromise
     ]).finally(() => {
       if (timeoutHandle) clearTimeout(timeoutHandle)
     })
@@ -57,9 +56,7 @@ export default defineEventHandler(async (event) => {
     const normalizedError = error instanceof Error ? error : new Error('Failed to sync domain')
     const message = normalizedError.message || 'Failed to sync domain'
     console.error('admin_domain_sync_failed', {
-      hashedUserId,
-      domainId,
-      error: message
+      hashedUserId, domainId, error: message
     })
 
     const errorCode = (normalizedError as SyncError).code
@@ -77,3 +74,5 @@ export default defineEventHandler(async (event) => {
     domainSyncInFlight.delete(domainId)
   }
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

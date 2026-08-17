@@ -778,6 +778,27 @@
       "when": 1786550492400,
       "tag": "0117_remarkable_william_stryker",
       "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "6",
+      "when": 1786694817536,
+      "tag": "0118_sudden_reaper",
+      "breakpoints": true
+    },
+    {
+      "idx": 119,
+      "version": "6",
+      "when": 1786695292016,
+      "tag": "0119_steep_goliath",
+      "breakpoints": true
+    },
+    {
+      "idx": 120,
+      "version": "6",
+      "when": 1786699270332,
+      "tag": "0120_red_captain_america",
+      "breakpoints": true
     }
   ]
 }

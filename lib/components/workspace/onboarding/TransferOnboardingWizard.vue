@@ -219,12 +219,12 @@ interface Props {
   // (see utils/vertical-copy.ts's normalizeVertical) — this component does
   // not itself talk to the DB-storage alias ('service'), so it must not
   // silently coerce anything it doesn't recognize to 'restaurant'.
-  vertical?: SiteVertical | null
+  vertical: SiteVertical
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<{ done: [] }>()
-const siteVertical = computed<SiteVertical>(() => props.vertical ?? 'restaurant')
+const siteVertical = computed<SiteVertical>(() => props.vertical)
 const transferStarterPrompt = computed(() => props.vertical === 'professional_service'
   ? 'Audit this imported site and help me improve it. Start with hero copy, brand story, missing photos, and any weak services pages.'
   : props.vertical === 'experience'

@@ -3,13 +3,14 @@
 // only issues a single-use, time-limited verification email distinct from Better
 // Auth's own signup verification. See
 // docs/adr/0017-guest-account-model-separate-from-tenant-org-membership.md.
-import { readBody } from 'h3'
+import { defineHandler, HTTPError } from 'nitro';
+import { readBody } from 'nitro/h3';
 import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'
 import { createClaimRequest, getClaimSiteDisplayName } from '~/server/utils/guest-claims'
 import { sendGuestClaimVerificationEmail } from '~/server/utils/auth-email'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -25,10 +26,7 @@ export default defineEventHandler(async (event) => {
   if (!customerId) return jsonResponse({ error: 'customerId is required' }, { status: 400 })
 
   const result = await createClaimRequest(db, {
-    customerId,
-    userId: session.user.id,
-    userEmail: session.user.email,
-  })
+    customerId, userId: session.user.id, userEmail: session.user.email, })
 
   if (!result.ok) {
     const status = result.reason === 'not_found' ? 404 : 409
@@ -37,22 +35,20 @@ export default defineEventHandler(async (event) => {
 
   const siteName = (await getClaimSiteDisplayName(db, customerId))?.trim() || 'your service provider'
 
-  const platformDomain = (env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'krabiclaw.com').replace(/^https?:\/\//, '').replace(/\/$/, '')
+  const configuredPlatformDomain = env.NUXT_PUBLIC_PLATFORM_DOMAIN?.trim()
+  if (!configuredPlatformDomain) throw new HTTPError({ statusCode: 500, statusMessage: 'NUXT_PUBLIC_PLATFORM_DOMAIN is required' })
+  const platformDomain = configuredPlatformDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')
   const verifyUrl = `https://${platformDomain}/account/claims/verify?token=${result.rawToken}`
 
   try {
     await sendGuestClaimVerificationEmail(env, {
-      email: session.user.email,
-      verifyUrl,
-      siteName,
-    })
+      email: session.user.email, verifyUrl, siteName, })
   } catch (error) {
     // The claim row already exists (pending, with a live token) — don't report
     // success when the user was never actually emailed a way to verify it.
     // Re-requesting the claim rotates the token and retries the send.
     console.error('guest_claim_email_failed', {
-      errorType: error instanceof Error ? error.name : 'UnknownError',
-    })
+      errorType: error instanceof Error ? error.name : 'UnknownError', })
     return jsonResponse({ error: 'Could not send the verification email. Please try again.' }, { status: 502 })
   }
 

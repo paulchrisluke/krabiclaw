@@ -5,7 +5,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { assertResourceAccess } from '~/server/utils/member-access'
 import { getMenus } from '~/server/utils/menu-management'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const locationId = getQuery(event).locationId as string | undefined
   
@@ -53,20 +53,12 @@ export default defineEventHandler(async (event) => {
     }
 
     await assertResourceAccess(db, {
-      memberId: site.member_id,
-      role: site.member_role,
-      organizationId: site.organization_id,
-      siteId,
-      resourceLocationId: locationId ?? null,
-    })
+      memberId: site.member_id, role: site.member_role, organizationId: site.organization_id, siteId, resourceLocationId: locationId ?? null, })
 
     const menus = await getMenus(db, site.organization_id, siteId, locationId)
     
     return jsonResponse({
-      success: true,
-      menus,
-      siteId,
-      locationId
+      success: true, menus, siteId, locationId
     })
     
   } catch (error) {
@@ -77,3 +69,5 @@ export default defineEventHandler(async (event) => {
     }, { status: 500 })
   }
 })
+import { defineHandler } from 'nitro';
+import { getQuery, getRouterParam  } from 'nitro/h3';

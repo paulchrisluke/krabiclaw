@@ -1,4 +1,6 @@
-import type { H3Event } from 'h3'
+import { HTTPError } from 'nitro';
+
+import type { H3Event } from 'nitro'
 import { getGuestThreadDetail } from '~/server/domain/guest-threads/detail'
 import {
   getGuestThreadById,
@@ -12,6 +14,7 @@ import type {
 } from '~/server/domain/guest-threads/types'
 import { requireSiteAccess } from '~/server/utils/location-access'
 import { assertMemberScope } from '~/server/utils/member-access'
+import { publishGuestInboxThreadEvent } from '~/server/cloudflare/guest-inbox-events'
 
 export interface DashboardGuestThreadListQuery {
   locationId?: string | null
@@ -63,10 +66,10 @@ export async function loadDashboardGuestThread(
   siteId: string,
   threadId: string,
 ) {
-  const { db, site } = await requireSiteAccess(event, siteId, 'context')
+  const { db, env, site } = await requireSiteAccess(event, siteId, 'context')
   const thread = await getGuestThreadById(db, threadId, siteId)
   if (!thread) {
-    throw createError({ statusCode: 404, statusMessage: 'Thread not found' })
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Thread not found' })
   }
   await assertMemberScope(db, {
     memberId: site.member_id,
@@ -78,12 +81,15 @@ export async function loadDashboardGuestThread(
 
   const detail = await getGuestThreadDetail(db, threadId, siteId, site.member_id)
   if (!detail) {
-    throw createError({ statusCode: 404, statusMessage: 'Thread not found' })
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Thread not found' })
   }
 
   try {
     const latest = detail.entries[detail.entries.length - 1]
-    if (latest) await advanceMemberCursor(db, threadId, site.member_id, latest.id)
+    if (latest) {
+      await advanceMemberCursor(db, threadId, site.member_id, latest.id)
+      await publishGuestInboxThreadEvent(env, db, { threadId, type: 'read-state.changed' })
+    }
   } catch (error) {
     console.error('advance_member_cursor_failed', {
       threadId,

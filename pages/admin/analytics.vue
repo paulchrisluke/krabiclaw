@@ -31,7 +31,7 @@
             >
               <div>
                 <p class="font-medium text-default">{{ site.brand_name || site.subdomain }}</p>
-                <p class="text-xs text-muted">{{ site.subdomain }}.krabiclaw.com</p>
+                <p class="text-xs text-muted">{{ site.subdomain }}</p>
               </div>
               <p class="text-xs text-muted">{{ formatDate(site.created_at) }}</p>
             </div>
@@ -43,6 +43,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatDate } from '~/utils/formatters'
 definePageMeta({ layout: 'dashboard' })
 useSeoMeta({ title: 'Analytics | KrabiClaw Admin', robots: 'noindex, nofollow' })
 

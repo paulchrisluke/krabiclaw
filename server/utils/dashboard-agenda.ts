@@ -242,7 +242,7 @@ export async function listAgenda(
   if (requestedKinds.has('experience_booking')) sourceQueries.push(queryAll(db, `${commonSelect('b', 'experience_booking', `b.booking_date AS local_date, b.time_slot AS local_time, NULL AS starts_at, NULL AS ends_at,
     b.guest_name AS title, printf('%d guests · %s', b.party_size, b.time_slot) AS subtitle, b.status`)} AND b.booking_date BETWEEN ? AND ?`, [...params(), query.from, query.to]))
   if (requestedKinds.has('post')) sourceQueries.push(queryAll(db, `${commonSelect('p', 'post', `NULL AS local_date, NULL AS local_time, CASE WHEN p.status = 'published' AND p.published_at IS NOT NULL THEN p.published_at ELSE COALESCE(p.scheduled_for, p.published_at, p.event_start) END AS starts_at, p.event_end AS ends_at,
-    COALESCE(NULLIF(p.title, ''), NULLIF(p.event_title, ''), 'Untitled post') AS title, p.post_type AS subtitle, p.status`)}
+    NULLIF(COALESCE(NULLIF(p.title, ''), NULLIF(p.event_title, '')), '') AS title, p.post_type AS subtitle, p.status`)}
     AND CASE WHEN p.status = 'published' AND p.published_at IS NOT NULL THEN p.published_at ELSE COALESCE(p.scheduled_for, p.published_at, p.event_start) END BETWEEN ? AND ?`, [...params(), broadFrom, broadTo]))
   if (requestedKinds.has('thread')) sourceQueries.push(queryAll(db, `${commonSelect('t', 'thread', `NULL AS local_date, NULL AS local_time, COALESCE(t.last_inbound_at, t.last_message_at, t.created_at) AS starts_at, NULL AS ends_at,
     t.guest_name AS title, t.submission_type AS subtitle, t.conversation_state AS status`)}

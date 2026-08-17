@@ -161,6 +161,7 @@
 </template>
 
 <script setup lang="ts">
+import { getErrorMessage } from '~/utils/errors'
 const dashboardApi = useDashboardApi()
 const dashboardScope = useDashboardRouteScope()
 definePageMeta({ layout: 'dashboard' })

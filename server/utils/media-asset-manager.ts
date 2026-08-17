@@ -1,4 +1,4 @@
-import { createError } from 'h3'
+import { HTTPError } from 'nitro';
 import { deleteImage, uploadImageBuffer } from './cloudflare-images'
 import { deleteFromR2 } from './cloudflare-r2'
 import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbClient } from '~/server/db'
@@ -64,13 +64,13 @@ export const MAX_ORDERED_MEDIA_ASSETS = 50
 
 export function toResolvedMediaAsset(row: MediaAsset): ResolvedMediaAsset {
   if (row.kind !== 'image' && row.kind !== 'video') {
-    throw createError({ statusCode: 400, statusMessage: `Media asset ${row.id} is not assignable image/video media` })
+    throw new HTTPError({ statusCode: 400, statusMessage: `Media asset ${row.id} is not assignable image/video media` })
   }
   if (!row.public_url) {
-    throw createError({ statusCode: 400, statusMessage: `Media asset ${row.id} does not have a public URL` })
+    throw new HTTPError({ statusCode: 400, statusMessage: `Media asset ${row.id} does not have a public URL` })
   }
   if (row.status !== 'active') {
-    throw createError({ statusCode: 400, statusMessage: `Media asset ${row.id} is not active` })
+    throw new HTTPError({ statusCode: 400, statusMessage: `Media asset ${row.id} is not active` })
   }
 
   return {
@@ -102,13 +102,13 @@ export async function hydrateMediaAssetRefs(
   const fieldName = input.fieldName ?? 'media'
   const ids = input.refs.map(ref => ref.asset_id?.trim()).filter(Boolean)
   if (input.refs.length > MAX_ORDERED_MEDIA_ASSETS) {
-    throw createError({ statusCode: 400, statusMessage: `${fieldName} accepts at most ${MAX_ORDERED_MEDIA_ASSETS} assets` })
+    throw new HTTPError({ statusCode: 400, statusMessage: `${fieldName} accepts at most ${MAX_ORDERED_MEDIA_ASSETS} assets` })
   }
   if (ids.length !== input.refs.length) {
-    throw createError({ statusCode: 400, statusMessage: `${fieldName} items must contain asset_id` })
+    throw new HTTPError({ statusCode: 400, statusMessage: `${fieldName} items must contain asset_id` })
   }
   if (new Set(ids).size !== ids.length) {
-    throw createError({ statusCode: 400, statusMessage: `${fieldName} cannot contain duplicate asset IDs` })
+    throw new HTTPError({ statusCode: 400, statusMessage: `${fieldName} cannot contain duplicate asset IDs` })
   }
   if (ids.length === 0) return []
 
@@ -122,22 +122,22 @@ export async function hydrateMediaAssetRefs(
   const byId = new Map((rows ?? []).map(row => [row.id, row]))
   const missing = ids.find(id => !byId.has(id))
   if (missing) {
-    throw createError({ statusCode: 400, statusMessage: `${fieldName} references an inactive or out-of-scope media asset: ${missing}` })
+    throw new HTTPError({ statusCode: 400, statusMessage: `${fieldName} references an inactive or out-of-scope media asset: ${missing}` })
   }
 
   const allowedKinds = input.allowedKinds ? new Set(input.allowedKinds) : null
   const resolved = ids.map((id) => {
     const row = byId.get(id)
-    if (!row) throw createError({ statusCode: 400, statusMessage: `${fieldName} references an inactive or out-of-scope media asset: ${id}` })
+    if (!row) throw new HTTPError({ statusCode: 400, statusMessage: `${fieldName} references an inactive or out-of-scope media asset: ${id}` })
     const asset = toResolvedMediaAsset(row)
     if (allowedKinds && !allowedKinds.has(asset.kind)) {
-      throw createError({ statusCode: 400, statusMessage: `${fieldName} asset ${id} must be ${Array.from(allowedKinds).join(' or ')}` })
+      throw new HTTPError({ statusCode: 400, statusMessage: `${fieldName} asset ${id} must be ${Array.from(allowedKinds).join(' or ')}` })
     }
     return asset
   })
 
   if (input.requireCoverPoster && resolved[0]?.kind === 'video' && !resolved[0].thumbnail_url) {
-    throw createError({ statusCode: 400, statusMessage: `${fieldName} cover video requires a poster thumbnail` })
+    throw new HTTPError({ statusCode: 400, statusMessage: `${fieldName} cover video requires a poster thumbnail` })
   }
 
   return resolved
@@ -469,8 +469,8 @@ export async function replaceVideoPoster(
       LIMIT 1`,
     [input.assetId, input.siteId],
   )
-  if (!asset) throw createError({ statusCode: 404, statusMessage: 'Asset not found' })
-  if (asset.kind !== 'video') throw createError({ statusCode: 400, statusMessage: 'Poster images can only be added to videos' })
+  if (!asset) throw new HTTPError({ statusCode: 404, statusMessage: 'Asset not found' })
+  if (asset.kind !== 'video') throw new HTTPError({ statusCode: 400, statusMessage: 'Poster images can only be added to videos' })
 
   const uploaded = await uploadImageBuffer(env, input.buffer, input.filename, input.contentType)
   try {
@@ -480,7 +480,7 @@ export async function replaceVideoPoster(
       [uploaded.imageId, uploaded.publicUrl, new Date().toISOString(), input.assetId, input.siteId],
     )
     if (Number(result?.meta?.changes ?? 0) !== 1) {
-      throw createError({ statusCode: 409, statusMessage: 'Poster update did not persist' })
+      throw new HTTPError({ statusCode: 409, statusMessage: 'Poster update did not persist' })
     }
   } catch (error) {
     try {
@@ -558,7 +558,7 @@ export async function deleteMediaAsset(db: DbClient, env: MediaProviderEnv, id: 
   `, [id, siteId]) ?? null
 
   if (!pendingAsset) {
-    throw createError({ statusCode: 404, statusMessage: 'Media asset not found' })
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Media asset not found' })
   }
 
   const references = await getMediaStorageReferenceState(db, {

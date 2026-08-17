@@ -1,15 +1,17 @@
 // Tenant routing middleware based on onboarding status
 // Routes tenant requests to appropriate pages
 
-import { createError, defineEventHandler, getHeader, getRequestURL, sendRedirect } from "h3";
+import { HTTPError, defineHandler  } from 'nitro';
+import { redirect } from 'nitro/h3';
+import type { H3Event } from 'nitro';
 import { cloudflareEnv } from "~/server/utils/api-response";
 import { platformHostname } from "~/server/utils/domains";
 import { TENANT_TYPES } from "~/utils/tenant-routing";
 
-export default defineEventHandler(async (event) => {
-  const tenantType = event.context.tenantType;
-  const onboardingStatus = event.context.onboardingStatus;
-  const url = getRequestURL(event);
+export default defineHandler(async (event) => {
+  const tenantType = event.context.tenantType as string | undefined;
+  const onboardingStatus = event.context.onboardingStatus as string | undefined;
+  const url = event.url;
   const pathname = url.pathname;
 
   // Only process tenant requests
@@ -23,7 +25,7 @@ export default defineEventHandler(async (event) => {
       return;
     }
 
-    throw createError({
+    throw new HTTPError({
       statusCode: 404,
       statusMessage: "Site Not Found",
     });
@@ -33,19 +35,17 @@ export default defineEventHandler(async (event) => {
   if (tenantType === TENANT_TYPES.TENANT) {
     switch (onboardingStatus) {
       case "pending":
-        return sendRedirect(event, "/tenant-setup-pending");
+        return redirect("/tenant-setup-pending", 302);
 
       case "failed":
-        return sendRedirect(event, "/tenant-setup-incomplete");
+        return redirect("/tenant-setup-incomplete", 302);
 
       case "active": {
         const env = cloudflareEnv(event);
-        const freeDomain = env.NUXT_PUBLIC_FREE_SITE_DOMAIN
-          ? platformHostname(env)
-          : "krabiclaw.com";
+        const freeDomain = platformHostname(env);
         const canonicalIsCustom =
           event.context.canonicalDomain &&
-          !event.context.canonicalDomain.endsWith(`.${freeDomain}`);
+          !String(event.context.canonicalDomain).endsWith(`.${freeDomain}`);
 
         const hostMismatch =
           canonicalIsCustom &&
@@ -57,8 +57,7 @@ export default defineEventHandler(async (event) => {
           event.context.canonicalDomain &&
           !pathname.startsWith("/api/")
         ) {
-          return sendRedirect(
-            event,
+          return redirect(
             `https://${event.context.canonicalDomain}${url.pathname}${url.search}`,
             301,
           );
@@ -73,7 +72,7 @@ export default defineEventHandler(async (event) => {
           return;
         }
 
-        throw createError({
+        throw new HTTPError({
           statusCode: 404,
           statusMessage: "Site Not Found",
         });
@@ -82,16 +81,16 @@ export default defineEventHandler(async (event) => {
 });
 
 function shouldRenderWithNuxtErrorPage(
-  event: Parameters<typeof defineEventHandler>[0] extends (_evt: infer T) => unknown ? T : never,
+  event: H3Event,
   pathname: string,
 ) {
   if (event.method !== "GET") return false;
   if (pathname.startsWith("/api/")) return false;
   if (pathname.startsWith("/_nuxt/") || pathname.startsWith("/assets/") || pathname.startsWith("/_ipx/")) return false;
 
-  const secFetchDest = getHeader(event, "sec-fetch-dest");
+  const secFetchDest = (event.req.headers.get("sec-fetch-dest"));
   if (secFetchDest === "document") return true;
 
-  const accept = getHeader(event, "accept") || "";
+  const accept = (event.req.headers.get("accept")) || "";
   return accept.includes("text/html");
 }

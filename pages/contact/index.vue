@@ -222,6 +222,7 @@
                       {{ t('saya.contact_page.directions') }}
                     </NuxtLink>
                     <NuxtLink
+                      v-if="vertCopy.ctaRoute && vertCopy.reservationExploreLabel"
                       :to="vertCopy.ctaRoute"
                       class="inline-flex items-center rounded-full border border-default px-5 py-2.5 text-[11px] font-medium uppercase tracking-widest text-default no-underline transition hover:bg-muted"
                     >
@@ -259,7 +260,7 @@ const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 import { FORM_INPUT_CLASS } from '~/utils/form-constants'
 const inputClass = FORM_INPUT_CLASS
 
-const businessName = computed(() => site?.brand_name || 'Our Business')
+const businessName = computed(() => site?.brand_name?.trim() ?? '')
 const isDraftPreview = computed(() => Boolean(draftId && !siteId))
 
 // ── Bootstrap: locations + config in one call ─────────────
@@ -390,7 +391,7 @@ const handleTenantContact = async () => {
 useTenantSocialMetadata(() => ({
   path: '/contact',
   title: `Contact | ${businessName.value}`,
-  description: 'Get in touch with our business.',
+  description: siteConfig.value?.brand_description || '',
   brand: {
     siteName: businessName.value,
     logoUrl: siteConfig.value?.logo_url || null,

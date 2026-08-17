@@ -214,7 +214,7 @@ const statusLabel = computed(() => post.value?.status === 'scheduled' ? 'Schedul
 const lifecycleLabel = computed(() => publishing.value ? 'Publishing…' : unpublishing.value ? 'Unpublishing…' : statusLabel.value)
 const generatedSlug = computed(() => normalizeBlogSlug(form.title))
 const resolvedExcerpt = computed(() => generatedExcerpt(blocks.value))
-const resolvedSiteName = computed(() => post.value?.editor_site_name || (props.siteId ? 'Our Site' : 'KrabiClaw'))
+const resolvedSiteName = computed(() => post.value?.editor_site_name || (props.siteId ? '' : 'KrabiClaw'))
 const resolvedAuthorName = computed(() => {
   const selected = authors.value.find(author => author.id === form.site_author_id)
   return selected?.name.trim() || post.value?.author_name?.trim() || resolvedSiteName.value

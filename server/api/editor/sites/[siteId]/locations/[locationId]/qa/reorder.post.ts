@@ -24,7 +24,7 @@ function parseUpdates(value: unknown): ReorderUpdate[] | null {
   return updates as ReorderUpdate[]
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const locationId = getRouterParam(event, 'locationId')
   if (!siteId || !locationId) return jsonResponse({ error: 'Missing params' }, { status: 400 })
@@ -65,3 +65,5 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: message }, { status: message.includes('not found') ? 404 : 400 })
   }
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam, readBody  } from 'nitro/h3';

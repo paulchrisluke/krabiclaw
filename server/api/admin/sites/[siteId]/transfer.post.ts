@@ -1,5 +1,7 @@
 // POST /api/admin/sites/[siteId]/transfer — initiate a site transfer to a new owner
-import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
+import { defineHandler, HTTPError } from 'nitro';
+
+import { cloudflareEnv, jsonResponse, readRequiredBody } from '~/server/utils/api-response'
 import { createAuth, getAuthSession } from '~/server/utils/auth'
 import { executeBatch, queryAll, queryFirst, type BatchQuery } from '~/server/db'
 import { hashEmail, isReservedTestDomain, shouldSendRealEmail } from '~/server/utils/email-delivery'
@@ -7,10 +9,7 @@ import { normalizeHost } from '~/server/utils/tenant-hosts'
 import { rootDomainForPair } from '~/server/utils/domain-shared'
 import { assertNewSalePlan, type NewSalePlanId } from '~/shared/billing-model'
 import {
-  buildTransferDomainSnapshot,
-  cancelPendingSiteTransfer,
-  serializeTransferDomainSnapshot,
-} from '~/server/utils/site-transfer'
+  buildTransferDomainSnapshot, cancelPendingSiteTransfer, serializeTransferDomainSnapshot, } from '~/server/utils/site-transfer'
 import { useRender } from 'vue-email'
 import SiteTransferInvite from '~/server/emails/templates/SiteTransferInvite'
 import { getOrgAdapter } from 'better-auth/plugins'
@@ -24,7 +23,7 @@ function generateToken(): string {
 }
 
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   if (!siteId) return jsonResponse({ error: 'siteId required' }, { status: 400 })
 
@@ -51,9 +50,7 @@ export default defineEventHandler(async (event) => {
     const auth = createAuth(env)
     const context = await auth.$context
     const member = await getOrgAdapter(
-      context as Parameters<typeof getOrgAdapter>[0],
-      {},
-    ).findMemberByOrgId({ userId, organizationId: site.organization_id })
+      context as Parameters<typeof getOrgAdapter>[0], {}, ).findMemberByOrgId({ userId, organizationId: site.organization_id })
     const memberRecord = member && typeof member === 'object'
       ? member as { userId?: unknown; organizationId?: unknown; role?: unknown }
       : null
@@ -70,7 +67,7 @@ export default defineEventHandler(async (event) => {
 
   let body: { email?: string; message?: string; plan?: unknown; coupon?: string; domain?: string; interval?: string }
   try {
-    body = await readBody(event)
+    body = await readRequiredBody<{ email?: string; message?: string; plan?: unknown; coupon?: string; domain?: string; interval?: string }>(event)
   } catch {
     return jsonResponse({ error: 'Invalid request body' }, { status: 400 })
   }
@@ -116,13 +113,10 @@ export default defineEventHandler(async (event) => {
     to_email: string
     custom_domains_removed_at: string | null
   }>(
-    db,
-    `SELECT id, to_email, custom_domains_removed_at
+    db, `SELECT id, to_email, custom_domains_removed_at
        FROM site_transfer_requests
       WHERE site_id = ? AND status = 'pending'
-      ORDER BY created_at ASC`,
-    [siteId],
-  )
+      ORDER BY created_at ASC`, [siteId], )
 
   const existingPending = (pendingTransfers || []).find(row => row.to_email.toLowerCase() === toEmail)
   if (existingPending) {
@@ -141,8 +135,7 @@ export default defineEventHandler(async (event) => {
         return jsonResponse({
           error: pendingTransfer.custom_domains_removed_at
             ? 'An existing transfer changed while its custom-domain cleanup was pending. Retry after it settles.'
-            : 'An existing transfer could not be safely cancelled. Retry after it settles.',
-        }, { status: 409 })
+            : 'An existing transfer could not be safely cancelled. Retry after it settles.', }, { status: 409 })
       }
       const remainingMarker = await queryFirst<{
         status: string
@@ -158,15 +151,11 @@ export default defineEventHandler(async (event) => {
       }
     } catch (error) {
       console.error('site_transfer_replacement_cleanup_failed', {
-        transferId: pendingTransfer.id,
-        siteId,
-        error,
-      })
+        transferId: pendingTransfer.id, siteId, error, })
       return jsonResponse({
         error: pendingTransfer.custom_domains_removed_at
           ? 'The existing transfer custom-domain cleanup is incomplete. Finish cleanup before replacing it.'
-          : 'The existing transfer could not be safely cancelled. Retry after it settles.',
-      }, { status: 409 })
+          : 'The existing transfer could not be safely cancelled. Retry after it settles.', }, { status: 409 })
     }
   }
 
@@ -193,32 +182,11 @@ export default defineEventHandler(async (event) => {
       query: `SELECT CASE WHEN EXISTS (
         SELECT 1 FROM site_transfer_requests
          WHERE site_id = ? AND status = 'pending'
-      ) THEN json(?) ELSE NULL END`,
-      params: [siteId, 'pending transfer appeared while the replacement was being prepared'],
-    },
-    {
+      ) THEN json(?) ELSE NULL END`, params: [siteId, 'pending transfer appeared while the replacement was being prepared'], }, {
       query: `INSERT INTO site_transfer_requests
-       (id, site_id, from_organization_id, to_email, token, status, initiated_by_user_id, message,
-        invited_plan, invited_coupon, invited_interval, invited_domain, requires_payment, created_at, custom_domains_snapshot)
-       VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      params: [
-        id,
-        siteId,
-        site.organization_id,
-        toEmail,
-        token,
-        userId,
-        body.message?.trim() ?? null,
-        invitedPlan,
-        invitedCoupon,
-        invitedInterval,
-        invitedDomain,
-        requiresPayment ? 1 : 0,
-        now.toISOString(),
-        customDomainsSnapshot,
-      ],
-    },
-  ]
+       (id, site_id, from_organization_id, to_email, token, status, initiated_by_user_id, message, invited_plan, invited_coupon, invited_interval, invited_domain, requires_payment, created_at, custom_domains_snapshot)
+       VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)`, params: [
+        id, siteId, site.organization_id, toEmail, token, userId, body.message?.trim() ?? null, invitedPlan, invitedCoupon, invitedInterval, invitedDomain, requiresPayment ? 1 : 0, now.toISOString(), customDomainsSnapshot, ], }, ]
 
   try {
     await executeBatch(db, batch)
@@ -236,7 +204,8 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to initiate site transfer due to a database error.' }, { status: 500 })
   }
 
-  const platformDomain = normalizeHost(env.NUXT_PUBLIC_PLATFORM_DOMAIN) || 'krabiclaw.com'
+  const platformDomain = normalizeHost(env.NUXT_PUBLIC_PLATFORM_DOMAIN)
+  if (!platformDomain) throw new HTTPError({ statusCode: 500, statusMessage: 'NUXT_PUBLIC_PLATFORM_DOMAIN is required' })
   const transferUrl = `https://${platformDomain}/transfer/${token}`
   const siteName = site.brand_name ?? siteId
 
@@ -244,55 +213,25 @@ export default defineEventHandler(async (event) => {
   if (env.RESEND_API_KEY || !shouldSendRealEmail(env)) {
     const initiatorName = (session.user as { name?: string }).name || session.user.email || 'Your web designer'
     const planLabel: Record<NewSalePlanId, string> = {
-      growth: 'Growth ($49/mo)',
-    }
+      growth: 'Growth ($49/mo)', }
     const discountNote = invitedCoupon ? ' — a discount has been applied automatically at checkout' : ''
     const resolvedPlanLabel = invitedPlan ? `${planLabel[invitedPlan] ?? invitedPlan}${discountNote}` : null
 
     useRender(SiteTransferInvite, {
       props: {
-        siteName,
-        initiatorName,
-        transferUrl,
-        domain: invitedDomain ?? null,
-        planLabel: resolvedPlanLabel,
-        personalMessage: body.message?.trim() || null,
-      },
-    }).then(({ html, text }) => {
+        siteName, initiatorName, transferUrl, platformDomain, domain: invitedDomain ?? null, planLabel: resolvedPlanLabel, personalMessage: body.message?.trim() || null, }, }).then(({ text }) => {
       if (shouldSendRealEmail(env)) {
         fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            from: 'KrabiClaw <hello@krabiclaw.com>',
-            to: [toEmail],
-            subject: `${initiatorName} just built your new website! 🎉`,
-            html,
-            text,
-          }),
-        }).catch((err) => console.error('transfer_invite_email_failed', err))
+          method: 'POST', headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify({
+            from: 'KrabiClaw <hello@krabiclaw.com>', to: [toEmail], subject: `${initiatorName} just built your new website! 🎉`, text, }), }).catch((err) => console.error('transfer_invite_email_failed', err))
       } else {
         console.info('email_delivery_log_only', {
-          recipient: hashEmail(toEmail),
-          siteId,
-          organizationId: site.organization_id,
-          template: 'site_transfer_invite',
-          subject: `${initiatorName} just built your new website! 🎉`,
-        })
+          recipient: hashEmail(toEmail), siteId, organizationId: site.organization_id, template: 'site_transfer_invite', subject: `${initiatorName} just built your new website! 🎉`, })
       }
     }).catch((err) => console.error('transfer_invite_email_render_failed', err))
   }
 
   return jsonResponse({
-    id,
-    token,
-    transfer_url: transferUrl,
-    to_email: toEmail,
-    site_name: siteName,
-    invited_plan: invitedPlan,
-    invited_coupon: invitedCoupon,
-    invited_interval: invitedInterval,
-    invited_domain: invitedDomain,
-    requires_payment: requiresPayment,
-  })
+    id, token, transfer_url: transferUrl, to_email: toEmail, site_name: siteName, invited_plan: invitedPlan, invited_coupon: invitedCoupon, invited_interval: invitedInterval, invited_domain: invitedDomain, requires_payment: requiresPayment, })
 })
+import { getRouterParam  } from 'nitro/h3';

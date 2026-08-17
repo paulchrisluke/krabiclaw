@@ -2,7 +2,7 @@ import { jsonResponse, rethrowHttpError } from '~/server/utils/api-response'
 import { requireTenantPageWriteAccess } from '~/server/utils/tenant-pages-api'
 import { deleteTenantPage } from '~/server/utils/tenant-pages'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const variantId = getRouterParam(event, 'variantId')
   if (!siteId || !variantId) return jsonResponse({ error: 'Site and page IDs are required' }, { status: 400 })
@@ -10,11 +10,11 @@ export default defineEventHandler(async (event) => {
   try {
     const query = getQuery(event)
     return jsonResponse(await deleteTenantPage(db, variantId, {
-      scope: { siteId, organizationId: site.organization_id },
-      expectedDocumentUpdatedAt: String(query.expectedDocumentUpdatedAt || ''),
-    }))
+      scope: { siteId, organizationId: site.organization_id }, expectedDocumentUpdatedAt: String(query.expectedDocumentUpdatedAt || ''), }))
   } catch (error) {
     rethrowHttpError(error)
     return jsonResponse({ error: error instanceof Error ? error.message : 'Unable to delete tenant page' }, { status: 400 })
   }
 })
+import { defineHandler } from 'nitro';
+import { getQuery, getRouterParam  } from 'nitro/h3';

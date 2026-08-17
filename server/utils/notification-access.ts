@@ -1,4 +1,4 @@
-import type { H3Event } from 'h3'
+import type { H3Event } from 'nitro'
 import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { isOrganizationWideRole } from '~/server/utils/member-access'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'

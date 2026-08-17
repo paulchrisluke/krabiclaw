@@ -9,6 +9,14 @@ test('platform home renders', async ({ page, baseURL }) => {
   await expectHealthyPage(page, errors)
 })
 
+test('local Worker serves the platform origin without host overrides', async ({ request, baseURL }) => {
+  test.skip(new URL(baseURL!).hostname !== 'localhost', 'This assertion targets the documented local Worker origin.')
+  expect(new URL(baseURL!).origin).toBe('http://localhost:3000')
+  const response = await request.get(`${baseURL}/help`)
+  expect(response.url()).toBe('http://localhost:3000/help')
+  expect(response.status()).toBeLessThan(500)
+})
+
 test('deployed platform home keeps the normal Nuxt runtime contract', async ({ page, baseURL }) => {
   test.skip(!baseURL?.includes('workers.dev') && !baseURL?.includes('staging.'), 'Requires a deployed Worker')
   const errors = collectPageErrors(page)
@@ -40,7 +48,12 @@ test.describe('standalone platform routes', () => {
       )
       expect(stylesheetHrefs).toContain('/_nuxt/surfaces/platform.css')
       expect(await page.locator('script[type="module"][src^="/_nuxt/"]').count()).toBeGreaterThan(0)
-      await expectHealthyPage(page, errors)
+      const expectedResourceErrors = path === '/accept-invitation/e2e-invalid-invitation'
+        ? ['/api/invitations/e2e-invalid-invitation']
+        : path === '/transfer/e2e-invalid-transfer'
+          ? ['/api/site-transfer/e2e-invalid-transfer']
+          : []
+      await expectHealthyPage(page, errors, expectedResourceErrors)
     })
   }
 })

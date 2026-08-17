@@ -9,7 +9,7 @@ export function useSchemaOrg(schema: MaybeRefOrGetter<ApiRecord | null | undefin
 
     return [
       {
-        type: 'application/ld+json',
+        type: 'application/ld+json' as const,
         innerHTML: serializeJsonLd(value),
       },
     ]

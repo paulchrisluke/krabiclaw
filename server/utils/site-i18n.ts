@@ -1,4 +1,4 @@
-import { createError } from 'h3'
+import { HTTPError } from 'nitro';
 import { queryFirst, type DbClient } from '~/server/db'
 import { getConfig } from '~/server/utils/site-config'
 
@@ -57,7 +57,7 @@ export async function resolveSiteLocale(
   `, [site.organization_id, site.id, requested])
 
   if (localeRow?.status !== 'published') {
-    throw createError({
+    throw new HTTPError({
       statusCode: 404,
       statusMessage: `Locale ${requested} is not published for this site`,
     })

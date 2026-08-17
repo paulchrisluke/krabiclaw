@@ -8,13 +8,9 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { validateInternalRequest } from '~/server/utils/internal-secret'
 import { buildPlatformKnowledgeDocuments } from '~/server/utils/public-search'
 import {
-  PLATFORM_KNOWLEDGE_FAQ_ENTRIES,
-  PLATFORM_KNOWLEDGE_ROUTE_ENTRIES,
-  PLATFORM_KNOWLEDGE_PAGE_ENTRIES,
-  PLATFORM_DASHBOARD_ROUTE_ENTRIES,
-} from '~/config/platform-knowledge'
+  PLATFORM_KNOWLEDGE_FAQ_ENTRIES, PLATFORM_KNOWLEDGE_ROUTE_ENTRIES, PLATFORM_KNOWLEDGE_PAGE_ENTRIES, PLATFORM_DASHBOARD_ROUTE_ENTRIES, } from '~/config/platform-knowledge'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   if (!env.db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
 
@@ -22,11 +18,7 @@ export default defineEventHandler(async (event) => {
   if (!validation.ok) return jsonResponse({ error: validation.error }, { status: validation.status })
 
   const staticCounts = {
-    faqEntries: PLATFORM_KNOWLEDGE_FAQ_ENTRIES.length,
-    routeEntries: PLATFORM_KNOWLEDGE_ROUTE_ENTRIES.length,
-    pageEntries: PLATFORM_KNOWLEDGE_PAGE_ENTRIES.length,
-    dashboardEntries: PLATFORM_DASHBOARD_ROUTE_ENTRIES.length,
-  }
+    faqEntries: PLATFORM_KNOWLEDGE_FAQ_ENTRIES.length, routeEntries: PLATFORM_KNOWLEDGE_ROUTE_ENTRIES.length, pageEntries: PLATFORM_KNOWLEDGE_PAGE_ENTRIES.length, dashboardEntries: PLATFORM_DASHBOARD_ROUTE_ENTRIES.length, }
 
   try {
     const baseRecords = await buildPlatformKnowledgeDocuments(env.db)
@@ -40,3 +32,4 @@ export default defineEventHandler(async (event) => {
     return jsonResponse({ error: 'Failed to build corpus' }, { status: 500 })
   }
 })
+import { defineHandler } from 'nitro';

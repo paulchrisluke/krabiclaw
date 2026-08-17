@@ -125,9 +125,9 @@ export async function handleMediaTools(ctx: McpExecutorContext): Promise<unknown
         requiredString(args, "asset_id"),
         site.siteId,
         {
-          alt_text: optionalString(args, "alt_text") ?? undefined,
-          location_id: optionalString(args, "location_id") ?? undefined,
-          category: (optionalString(args, "category") as never) ?? undefined,
+          alt_text: optionalString(args, "alt_text"),
+          location_id: optionalString(args, "location_id"),
+          category: (optionalString(args, "category") as never),
         },
       );
       if (!updated) {

@@ -6,7 +6,7 @@ import { resolveTransferRecipientOrganizationsForEvent } from '~/server/utils/si
 import { createAuth } from '~/server/utils/auth'
 import { getOrgAdapter } from 'better-auth/plugins'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const orgId = getRouterParam(event, 'orgId')
   if (!orgId) return jsonResponse({ error: 'orgId required' }, { status: 400 })
 
@@ -26,8 +26,7 @@ export default defineEventHandler(async (event) => {
     current_period_end: string | null
     cancel_at_period_end: number | null
   }>(db, `
-    SELECT s.id AS site_id, s.brand_name, ob.stripe_subscription_id, sb.plan, sb.status,
-           sb.current_period_end, sb.cancel_at_period_end
+    SELECT s.id AS site_id, s.brand_name, ob.stripe_subscription_id, sb.plan, sb.status, sb.current_period_end, sb.cancel_at_period_end
     FROM sites s
     LEFT JOIN organization_billing ob ON ob.organization_id = s.organization_id
     LEFT JOIN site_billing sb ON sb.site_id = s.id
@@ -49,8 +48,7 @@ export default defineEventHandler(async (event) => {
     current_period_end: string | null
     cancel_at_period_end: number | null
   }>(db, `
-    SELECT stripe_customer_id, stripe_subscription_id, plan, status,
-           current_period_end, cancel_at_period_end
+    SELECT stripe_customer_id, stripe_subscription_id, plan, status, current_period_end, cancel_at_period_end
     FROM organization_billing
     WHERE organization_id = ?
     LIMIT 1
@@ -68,9 +66,7 @@ export default defineEventHandler(async (event) => {
     created_at: string
     brand_name: string | null
   }>(db, `
-    SELECT r.id, r.site_id, r.to_email, r.invited_plan, r.invited_interval,
-           r.invited_domain, r.requires_payment, r.created_at,
-           s.brand_name
+    SELECT r.id, r.site_id, r.to_email, r.invited_plan, r.invited_interval, r.invited_domain, r.requires_payment, r.created_at, s.brand_name
     FROM site_transfer_requests r
     JOIN sites s ON s.id = r.site_id
     WHERE r.from_organization_id = ?
@@ -87,38 +83,11 @@ export default defineEventHandler(async (event) => {
     : null
 
   return jsonResponse({
-    org_name: organization.name,
-    org_slug: organization.slug,
-    stripe_customer_id: billing?.stripe_customer_id ?? null,
-    stripe_subscription_id: billing?.stripe_subscription_id ?? null,
-    plan: billing?.plan ?? null,
-    status: billing?.status ?? null,
-    current_period_end: billing?.current_period_end ?? null,
-    cancel_at_period_end: Boolean(billing?.cancel_at_period_end),
-    sites_billing: (sitesBilling ?? []).map(sb => ({
-      site_id: sb.site_id,
-      brand_name: sb.brand_name,
-      stripe_subscription_id: sb.stripe_subscription_id,
-      plan: sb.plan,
-      status: sb.status,
-      current_period_end: sb.current_period_end,
-      cancel_at_period_end: Boolean(sb.cancel_at_period_end),
-    })),
-    pending_transfer: transfer
+    org_name: organization.name, org_slug: organization.slug, stripe_customer_id: billing?.stripe_customer_id ?? null, stripe_subscription_id: billing?.stripe_subscription_id ?? null, plan: billing?.plan ?? null, status: billing?.status ?? null, current_period_end: billing?.current_period_end ?? null, cancel_at_period_end: Boolean(billing?.cancel_at_period_end), sites_billing: (sitesBilling ?? []).map(sb => ({
+      site_id: sb.site_id, brand_name: sb.brand_name, stripe_subscription_id: sb.stripe_subscription_id, plan: sb.plan, status: sb.status, current_period_end: sb.current_period_end, cancel_at_period_end: Boolean(sb.cancel_at_period_end), })), pending_transfer: transfer
       ? {
-          id: transfer.id,
-          site_id: transfer.site_id,
-          to_email: transfer.to_email,
-          invited_plan: transfer.invited_plan,
-          invited_interval: transfer.invited_interval ?? 'month',
-          invited_domain: transfer.invited_domain,
-          requires_payment: Boolean(transfer.requires_payment),
-          created_at: transfer.created_at,
-          brand_name: transfer.brand_name,
-          recipient_ready: recipientResolution?.status === 'ready',
-          recipient_resolution: recipientResolution?.status ?? 'missing',
-          recipient_organizations: recipientResolution?.organizations ?? [],
-        }
-      : null,
-  })
+          id: transfer.id, site_id: transfer.site_id, to_email: transfer.to_email, invited_plan: transfer.invited_plan, invited_interval: transfer.invited_interval ?? 'month', invited_domain: transfer.invited_domain, requires_payment: Boolean(transfer.requires_payment), created_at: transfer.created_at, brand_name: transfer.brand_name, recipient_ready: recipientResolution?.status === 'ready', recipient_resolution: recipientResolution?.status ?? 'missing', recipient_organizations: recipientResolution?.organizations ?? [], }
+      : null, })
 })
+import { defineHandler } from 'nitro';
+import { getRouterParam } from 'nitro/h3';

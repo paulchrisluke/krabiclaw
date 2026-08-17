@@ -48,7 +48,7 @@ export async function setupTenantHeaders(page: Page, baseURL: string, headers: R
   })
 }
 
-export function collectPageErrors(page: Page) {
+export function collectPageErrors(page: Page, options: { failOnAllWarnings?: boolean } = {}) {
   const errors: string[] = []
   const warnFailurePatterns = [
     'Hydration completed but contains mismatches.',
@@ -81,7 +81,9 @@ export function collectPageErrors(page: Page) {
     }
     if (message.type() === 'warning') {
       const isAllowlisted = warnAllowlistPatterns.some(pattern => text.includes(pattern))
-      if (!isAllowlisted && warnFailurePatterns.some(pattern => text.includes(pattern))) {
+      if (options.failOnAllWarnings) {
+        errors.push(`Browser warning: ${decoratedText}`)
+      } else if (!isAllowlisted && warnFailurePatterns.some(pattern => text.includes(pattern))) {
         errors.push(`Vue warn: ${decoratedText}`)
       }
     }
@@ -109,7 +111,7 @@ export function collectPageErrors(page: Page) {
   return errors
 }
 
-export async function expectHealthyPage(page: Page, errors: string[]) {
+export async function expectHealthyPage(page: Page, errors: string[], allowedErrors: string[] = []) {
   await expect(page.locator('body')).not.toContainText('Site Not Found')
   await expect(page.locator('body')).not.toContainText('Vite Error')
   // Catch post-hydration 500/404: error.vue renders the status code as <h1>.
@@ -120,6 +122,9 @@ export async function expectHealthyPage(page: Page, errors: string[]) {
   expect(h1Texts.some(text => /503/.test(text))).toBe(false)
   // Catch the custom error page copy
   await expect(page.locator('body')).not.toContainText('wrong link sando')
-  const appErrors = errors.filter(e => !THIRD_PARTY_CONSOLE_PATTERNS.some(p => e.includes(p)))
+  const appErrors = errors.filter(e =>
+    !THIRD_PARTY_CONSOLE_PATTERNS.some(p => e.includes(p))
+    && !allowedErrors.some(p => e.includes(p)),
+  )
   expect(appErrors).toEqual([])
 }

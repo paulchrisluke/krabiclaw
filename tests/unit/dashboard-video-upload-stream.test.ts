@@ -5,6 +5,7 @@ type JsonResult = { body: Record<string, unknown>; status: number }
 type TestEvent = {
   params: { siteId: string }
   headers: Record<string, string>
+  req: { headers: Headers; body: ReadableStream<Uint8Array> }
   query: Record<string, string>
   body: ReadableStream<Uint8Array>
 }
@@ -50,7 +51,7 @@ const mediaBucket = {
   },
 }
 
-mock.module('h3', {
+mock.module('nitro/h3', {
   namedExports: {
     createError: (input: { statusCode: number; statusMessage: string }) => Object.assign(
       new Error(input.statusMessage),
@@ -59,6 +60,8 @@ mock.module('h3', {
     getHeader: (event: TestEvent, name: string) => event.headers[name.toLowerCase()],
     getQuery: (event: TestEvent) => event.query,
     getRequestWebStream: (event: TestEvent) => event.body,
+    getRouterParam: (event: TestEvent, name: string) => event.params[name as 'siteId'],
+    readBody: async () => ({}),
   },
 })
 
@@ -153,12 +156,15 @@ function event(overrides: Partial<TestEvent> = {}): TestEvent {
       controller.close()
     },
   })
+  const headers = {
+    'content-length': String(mp4Signature.byteLength),
+    'content-type': 'video/mp4',
+    ...overrides.headers,
+  }
   return {
     params: { siteId: 'site-1' },
-    headers: {
-      'content-length': String(mp4Signature.byteLength),
-      'content-type': 'video/mp4',
-    },
+    headers,
+    req: { headers: new Headers(headers), body },
     query: {
       filename: 'clip.mp4',
       locationId: 'location-1',
@@ -166,6 +172,7 @@ function event(overrides: Partial<TestEvent> = {}): TestEvent {
     },
     body,
     ...overrides,
+    req: overrides.req ?? { headers: new Headers(headers), body },
   }
 }
 

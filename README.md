@@ -1,6 +1,6 @@
 # KrabiClaw
 
-Multi-tenant restaurant SaaS. Nuxt 4 + Cloudflare Pages + D1.
+Multi-tenant platform SaaS. Nuxt 5 nightly + Nitro 3 + Cloudflare Workers + D1.
 
 **Package manager: yarn only.** Never npm or pnpm.
 
@@ -11,7 +11,7 @@ Multi-tenant restaurant SaaS. Nuxt 4 + Cloudflare Pages + D1.
 | Command | What it does |
 |---|---|
 | `yarn dev` | Nuxt development server for platform/UI work at `http://localhost:3000`. |
-| `yarn dev:worker --port 3000` | Run the built production Worker locally with the required Cloudflare bindings, local upstream, and tenant preview configuration. |
+| `yarn wrangler dev .output/server/index.mjs --assets .output/public --local --port 3000` | Run the built Worker locally with Wrangler. |
 | `yarn build` | Production build → `.output/` |
 | `yarn db:generate` | Generate a new `migrations/*.sql` file from `server/db/schema.ts` |
 | `yarn schema:local` | Apply pending `migrations/*.sql` to local D1 |
@@ -50,6 +50,9 @@ submission paths send for real in production.
 yarn install
 ```
 
+The repository uses Node.js 24.18.1. Use the exact version declared in
+`.nvmrc` before installing dependencies.
+
 ### 2. Environment
 
 Copy `.env.example` to `.env` and fill in values. Required for local dev:
@@ -77,10 +80,9 @@ yarn dev
 
 App at `http://localhost:3000`.
 
-For browser verification, use the production Worker locally instead of Nuxt's
-development server. The repository launcher is required; do not invoke raw
-`wrangler dev`, because it can derive the upstream from the production route
-and rewrite local `Host` and `Origin` headers.
+For browser verification, use the generated Worker locally. Wrangler reads
+`.env` and `.dev.vars` using its
+documented local-development behavior.
 
 ```bash
 yarn test:e2e:local tests/e2e/smoke.spec.ts
@@ -90,7 +92,7 @@ For a manually running built Worker:
 
 ```bash
 yarn build
-yarn dev:worker --port 3000
+yarn wrangler dev .output/server/index.mjs --assets .output/public --local --port 3000
 ```
 
 Playwright applies the local D1 schema, clears disposable E2E artifacts, seeds
@@ -110,14 +112,6 @@ http://localhost:3000/                  (x-preview-tenant: ncls)
 http://localhost:3000/services          (x-preview-tenant: ncls)
 http://localhost:3000/experiences       (x-preview-tenant: pottery-house)
 http://localhost:3000/reservations      (x-preview-tenant: kikuzuki-krabi-thailand)
-```
-
-`yarn dev` now disables Wrangler remote bindings by default so tenant dev does not depend on a remote Workers AI proxy session. This matters because Wrangler otherwise tries to open a remote preview session for the `AI` binding before attaching local `DB`/R2/KV bindings; if that handshake times out, tenant hosts fall through to `Site Not Found` even when local D1 is seeded correctly.
-
-If you specifically need the old remote-binding behavior for AI debugging, opt back in per shell:
-
-```bash
-NUXT_CF_REMOTE_BINDINGS=true yarn dev
 ```
 
 ### Local ChatGPT MCP harness

@@ -4,7 +4,7 @@ import { getAuthSession } from '~/server/utils/auth'
 import { getOrganizationCreditsResource } from '~/server/utils/ai-credits'
 import { resolveRequestedOrganization } from '~/server/utils/dashboard-context'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -18,3 +18,4 @@ export default defineEventHandler(async (event) => {
   const orgId = organization.id
   return jsonResponse(await getOrganizationCreditsResource(db, orgId))
 })
+import { defineHandler } from 'nitro';

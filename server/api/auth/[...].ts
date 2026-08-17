@@ -1,32 +1,50 @@
 
+import { defineHandler } from 'nitro';
+import { getQuery } from 'nitro/h3';
 import { createAuth } from '~/server/utils/auth'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { parsePhoneOrThrow } from '~/utils/phone'
 import type { CloudflareEnv } from '~/server/utils/auth'
-import { getHeader, type H3Event } from 'h3'
+import { HTTPError, type H3Event } from 'nitro';
+
 import { errorChainForTelemetry } from '~/server/utils/error-telemetry'
 import { getRequestDataMetrics, safeRoute } from '~/server/utils/request-metrics'
 
 async function normalizedAuthRequest(event: H3Event): Promise<Request> {
-  const request = toWebRequest(event)
-  if (request.method !== 'POST') return request
+  const request = event.req
+  const requestUrl = new URL(request.url)
+  const query = getQuery(event)
+  for (const [key, value] of Object.entries(query)) {
+    if (requestUrl.searchParams.has(key)) continue
+    for (const item of Array.isArray(value) ? value : [value]) {
+      if (item !== undefined) requestUrl.searchParams.append(key, String(item))
+    }
+  }
+  const url = requestUrl.toString()
+  if (request.method !== 'POST') {
+    return new Request(url, { method: request.method, headers: request.headers })
+  }
 
-  const pathname = new URL(request.url).pathname
+  const pathname = requestUrl.pathname
   const shouldNormalizePhone = [
     '/api/auth/phone-number/send-otp',
     '/api/auth/phone-number/verify',
     '/api/auth/sign-in/phone-number',
   ].includes(pathname)
-  if (!shouldNormalizePhone) return request
+  if (!shouldNormalizePhone) {
+    return new Request(url, { method: request.method, headers: request.headers, body: request.body })
+  }
 
   const body = await request.clone().json().catch(() => null) as { phoneNumber?: unknown } | null
-  if (!body || typeof body.phoneNumber !== 'string') return request
+  if (!body || typeof body.phoneNumber !== 'string') {
+    return new Request(url, { method: request.method, headers: request.headers, body: request.body })
+  }
 
   const headers = new Headers(request.headers)
   headers.set('content-type', 'application/json')
   headers.delete('content-length')
 
-  return new Request(request.url, {
+  return new Request(url, {
     method: request.method,
     headers,
     body: JSON.stringify({
@@ -36,9 +54,9 @@ async function normalizedAuthRequest(event: H3Event): Promise<Request> {
   })
 }
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event) as CloudflareEnv
-  if (!env?.DB) throw createError({ statusCode: 503, message: 'Database unavailable' })
+  if (!env?.DB) throw new HTTPError({ statusCode: 503, message: 'Database unavailable' })
 
   const auth = createAuth(env)
   
@@ -76,9 +94,9 @@ export default defineEventHandler(async (event) => {
       console.error('[AUTH_HANDLER]', JSON.stringify({
         event: 'auth_handler_failed',
         request_id: metrics.requestId,
-        ray_id: getHeader(event, 'cf-ray') ?? null,
+        ray_id: (event.req.headers.get('cf-ray')) ?? null,
         route: safeRoute(event),
-        method: event.node.req.method,
+        method: event.req.method,
         duration_ms: Number((performance.now() - metrics.startedAt).toFixed(2)),
         statement_count: metrics.statementCount,
         d1_duration_ms: Number(metrics.d1DurationMs.toFixed(2)),
@@ -88,7 +106,7 @@ export default defineEventHandler(async (event) => {
       // Telemetry must never replace the auth response.
     }
     
-    throw createError({
+    throw new HTTPError({
       statusCode: 500,
       statusMessage: `Auth error: ${errorMessage}`
     })

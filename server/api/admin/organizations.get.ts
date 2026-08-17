@@ -6,7 +6,7 @@ import { cloudflareEnv, jsonResponse } from '~/server/utils/api-response'
 import { platformPermissionJsonResponse } from '~/server/utils/platform-admin-users'
 import { searchOrganizationsForInvite } from '~/server/utils/admin-org-search'
 
-export default defineEventHandler(async (event) => {
+export default defineHandler(async (event) => {
   const env = cloudflareEnv(event)
   const db = env.DB
   if (!db) return jsonResponse({ error: 'Database not available' }, { status: 500 })
@@ -20,3 +20,5 @@ export default defineEventHandler(async (event) => {
   const organizations = await searchOrganizationsForInvite(db, q)
   return jsonResponse({ organizations })
 })
+import { defineHandler } from 'nitro';
+import { getQuery } from 'nitro/h3';
