@@ -319,7 +319,15 @@ test.describe('reply threading', () => {
     const sendReplyButton = page.getByRole('button', { name: 'Send reply' })
     await expect(sendReplyButton).toBeVisible()
     await expect(sendReplyButton).toBeEnabled()
+    const replyResponsePromise = page.waitForResponse(
+      response => response.request().method() === 'POST'
+        && response.url().includes(`/api/dashboard/sites/${demoSiteId}/guest-threads/`)
+        && response.url().endsWith('/operations/reply'),
+      { timeout: 30_000 },
+    )
     await sendReplyButton.click()
+    const replyResponse = await replyResponsePromise
+    expect(replyResponse.status()).toBe(200)
 
     await expect(page.locator('body')).toContainText('Reply sent')
     await expect(page.locator('body')).toContainText(replyBody)
