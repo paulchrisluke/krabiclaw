@@ -1,4 +1,4 @@
-import { onBeforeUnmount, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 
 export interface GuestInboxSocketEvent {
   eventId: string
@@ -50,21 +50,38 @@ export function useGuestInboxSocket(options: GuestInboxSocketOptions) {
   let reconnectAttempt = 0
   let intentionallyClosed = false
 
+  function clearReconnectTimer() {
+    if (reconnectTimer) clearTimeout(reconnectTimer)
+    reconnectTimer = null
+  }
+
+  function scheduleReconnect() {
+    if (intentionallyClosed || reconnectTimer || !window.navigator.onLine) return
+    status.value = 'reconnecting'
+    const delay = Math.min(10_000, 500 * 2 ** Math.min(reconnectAttempt, 5))
+    reconnectAttempt += 1
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null
+      connect()
+    }, delay)
+  }
+
   function connect() {
     if (!import.meta.client || intentionallyClosed || socket?.readyState === WebSocket.OPEN || socket?.readyState === WebSocket.CONNECTING) return
     const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const url = `${scheme}//${window.location.host}/api/dashboard/sites/${encodeURIComponent(options.siteId)}/guest-inbox/socket`
     status.value = reconnectAttempt > 0 ? 'reconnecting' : 'connecting'
-    socket = new WebSocket(url)
+    const nextSocket = new WebSocket(url)
+    socket = nextSocket
 
-    socket.addEventListener('open', () => {
+    nextSocket.addEventListener('open', () => {
       const wasReconnect = reconnectAttempt > 0
       reconnectAttempt = 0
       status.value = 'open'
       if (wasReconnect) options.onReconnect()
     })
 
-    socket.addEventListener('message', (message) => {
+    nextSocket.addEventListener('message', (message) => {
       if (message.data === 'pong') return
       let parsed: unknown
       try {
@@ -82,36 +99,54 @@ export function useGuestInboxSocket(options: GuestInboxSocketOptions) {
       options.onEvent(event)
     })
 
-    socket.addEventListener('close', () => {
-      socket = null
+    nextSocket.addEventListener('close', () => {
+      if (socket === nextSocket) socket = null
       if (intentionallyClosed) {
         status.value = 'closed'
         return
       }
-      status.value = 'reconnecting'
-      const delay = Math.min(10_000, 500 * 2 ** Math.min(reconnectAttempt, 5))
-      reconnectAttempt += 1
-      reconnectTimer = setTimeout(() => {
-        reconnectTimer = null
-        connect()
-      }, delay)
+      scheduleReconnect()
     })
 
-    socket.addEventListener('error', () => {
-      socket?.close()
+    nextSocket.addEventListener('error', () => {
+      nextSocket.close()
     })
+  }
+
+  function handleOffline() {
+    if (intentionallyClosed) return
+    status.value = 'reconnecting'
+    reconnectAttempt = Math.max(reconnectAttempt, 1)
+    clearReconnectTimer()
+    const activeSocket = socket
+    socket = null
+    activeSocket?.close()
+  }
+
+  function handleOnline() {
+    if (intentionallyClosed) return
+    clearReconnectTimer()
+    connect()
   }
 
   function close() {
     intentionallyClosed = true
-    if (reconnectTimer) clearTimeout(reconnectTimer)
-    reconnectTimer = null
+    clearReconnectTimer()
     socket?.close(1000, 'Inbox closed')
     socket = null
     status.value = 'closed'
   }
 
-  onBeforeUnmount(close)
+  onMounted(() => {
+    window.addEventListener('offline', handleOffline)
+    window.addEventListener('online', handleOnline)
+  })
+
+  onBeforeUnmount(() => {
+    window.removeEventListener('offline', handleOffline)
+    window.removeEventListener('online', handleOnline)
+    close()
+  })
 
   return { status, connect, close }
 }

@@ -341,6 +341,25 @@ test.describe('reply threading', () => {
     )
     expect(messages.some((row) => row.body === replyBody)).toBe(true)
 
+    const reconnectHandshake = waitForInboxWebSocketHandshake(cdp, demoSiteId)
+    await page.evaluate(() => {
+      Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => false })
+      window.dispatchEvent(new Event('offline'))
+    })
+    await page.waitForTimeout(250)
+    const reconnectRefresh = page.waitForResponse(
+      response => response.request().method() === 'GET'
+        && response.url().includes(`/api/dashboard/sites/${demoSiteId}/guest-threads/`),
+      { timeout: 30_000 },
+    )
+    await page.evaluate(() => {
+      Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => true })
+      window.dispatchEvent(new Event('online'))
+    })
+    await expect(reconnectHandshake).resolves.toBe(101)
+    expect((await reconnectRefresh).status()).toBe(200)
+    await expect(page.locator('[data-guest-thread-inbox-hydrated="true"]')).toBeVisible()
+
     expect(
       errors.filter(error => error.includes(hydrationMismatchWarning)),
       `Authenticated dashboard hydration warning: ${hydrationMismatchWarning}`,

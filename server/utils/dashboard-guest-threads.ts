@@ -87,8 +87,10 @@ export async function loadDashboardGuestThread(
   try {
     const latest = detail.entries[detail.entries.length - 1]
     if (latest) {
-      await advanceMemberCursor(db, threadId, site.member_id, latest.id)
-      await publishGuestInboxThreadEvent(env, db, { threadId, type: 'read-state.changed' })
+      const advanced = await advanceMemberCursor(db, threadId, site.member_id, latest.id)
+      if (advanced) {
+        await publishGuestInboxThreadEvent(env, db, { threadId, type: 'read-state.changed' })
+      }
     }
   } catch (error) {
     console.error('advance_member_cursor_failed', {

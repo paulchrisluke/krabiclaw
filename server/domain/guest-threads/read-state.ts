@@ -24,12 +24,14 @@ export async function advanceMemberCursor(
   threadId: string,
   memberId: string,
   entryId: string | null,
-): Promise<void> {
+): Promise<boolean> {
   const now = new Date().toISOString()
   const entry = entryId
     ? await queryFirst<{ sequence: number }>(db, `SELECT sequence FROM guest_thread_entries WHERE id = ? AND thread_id = ? LIMIT 1`, [entryId, threadId])
     : await queryFirst<{ sequence: number }>(db, `SELECT COALESCE(MAX(sequence), 0) AS sequence FROM guest_thread_entries WHERE thread_id = ?`, [threadId])
   const sequence = entry?.sequence ?? 0
+  const current = await getMemberCursor(db, threadId, memberId)
+  if (current && current.last_read_sequence >= sequence) return false
   await execute(db, `
     INSERT INTO guest_thread_member_state (thread_id, member_id, last_read_entry_id, last_read_sequence, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?)
@@ -44,6 +46,7 @@ export async function advanceMemberCursor(
         ELSE guest_thread_member_state.updated_at
       END
   `, [threadId, memberId, entryId, sequence, now, now])
+  return true
 }
 
 /**
