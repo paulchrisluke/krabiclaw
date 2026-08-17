@@ -69,6 +69,12 @@ test('one CI workflow owns preview, staging, and production lifecycle gates', as
   assert.equal(jobs['deploy-production']?.if, "github.event_name == 'push' && github.ref == 'refs/heads/main'")
 })
 
+test('staging fixture validation permits absent time slots but rejects malformed stored values', async () => {
+  const provisioner = await repoFile('scripts/provision-staging-fixtures.ts')
+
+  assert.match(provisioner, /e\.time_slots IS NOT NULL[\s\S]*json_valid\(e\.time_slots\)[\s\S]*json_type\(e\.time_slots\) != 'array'/)
+})
+
 test('each environment uses one normal Worker deploy before contract migrations and browser verification', async () => {
   const jobs = await workflowJobs()
 

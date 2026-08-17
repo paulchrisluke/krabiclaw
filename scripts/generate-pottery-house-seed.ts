@@ -81,7 +81,9 @@ ${renderCompiledPotteryHouseBillingBlock()}
 `
 
 if (isStdout) {
-  process.stdout.write(sql)
+  await new Promise<void>((resolve, reject) => {
+    process.stdout.write(sql, error => error ? reject(error) : resolve())
+  })
   process.exit(0)
 }
 

@@ -123,6 +123,7 @@ const contractRows = d1Json<{
          (SELECT COUNT(*)
             FROM experiences e
            WHERE e.site_id = s.id
+             AND e.time_slots IS NOT NULL
              AND CASE
                    WHEN json_valid(e.time_slots) THEN json_type(e.time_slots) != 'array'
                    ELSE 1
@@ -148,7 +149,7 @@ for (const row of contractRows) {
     || row.invalid_experience_slots !== 0
     || row.missing_article_canonical !== 0
   ) {
-    throw new Error(`Staging fixture contract failed for ${row.site_id}`)
+    throw new Error(`Staging fixture contract failed for ${row.site_id}: ${JSON.stringify(row)}`)
   }
 }
 

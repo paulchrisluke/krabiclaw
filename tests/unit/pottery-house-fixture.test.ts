@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import Database from "better-sqlite3";
 
 import {
@@ -415,6 +416,16 @@ test("pottery house billing block includes ai credits and site billing state", (
   assert.match(sql, /managed/);
   assert.match(sql, /managed_service/);
   assert.match(sql, /google_places/);
+});
+
+test("pottery house stdout seed includes the complete billing block", () => {
+  const sql = execFileSync(
+    process.execPath,
+    ["--experimental-strip-types", "scripts/generate-pottery-house-seed.ts", "--stdout"],
+    { encoding: "utf8" },
+  );
+
+  assert.match(sql, /-- END GENERATED: pottery_billing\s*$/);
 });
 
 test("pottery house blog block includes the canonical published content snapshot", () => {
