@@ -42,6 +42,16 @@ test.describe('pottery house public site', () => {
     await expectHealthyPage(page, errors)
   })
 
+  test('experience-site reservation redirect preserves the selected locale', async ({ page }) => {
+    const errors = collectPageErrors(page, { failOnAllWarnings: true })
+    const response = await page.goto(`${potteryHouseBaseURL}/reservations?locale=th`, { waitUntil: 'load' })
+
+    expect(response?.status()).toBeLessThan(400)
+    await expect(page).toHaveURL(`${potteryHouseBaseURL}/experiences?locale=th`)
+    await expect(page.locator('html')).toHaveAttribute('lang', 'th')
+    await expectHealthyPage(page, errors)
+  })
+
   for (const route of routes) {
     test(`${route.path} renders without runtime errors`, async ({ page }) => {
       const errors = collectPageErrors(page)

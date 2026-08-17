@@ -175,6 +175,7 @@ function formatTitleItalics(text: string | null | undefined): string {
 definePageMeta({ layout: 'saya' })
 
 const { site, siteId } = useTenantSite()
+const route = useRoute()
 const { locale } = useI18n()
 const resCopy = computed(() => getVerticalCopy((site as ApiValue)?.vertical, locale.value))
 const { locations, config, getField, reservationPolicyByLocation } = await usePublicPageData()
@@ -187,7 +188,7 @@ const isExperienceSite = computed(() => (site as { vertical?: string | null } | 
 // not show this page.
 watch(isExperienceSite, (isExp) => {
   if (isExp) {
-    navigateTo('/experiences', { replace: true, redirectCode: 302 })
+    navigateTo({ path: '/experiences', query: route.query }, { replace: true, redirectCode: 302 })
   }
 }, { immediate: true })
 
