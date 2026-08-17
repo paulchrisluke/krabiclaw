@@ -1265,7 +1265,7 @@ VALUES (
   ${sqlValue(publishedAt)},
   ${sqlValue('Plan a group pottery workshop in Krabi for retreats, schools, and company events with Pottery House Krabi.')},
   ${sqlValue('pottery workshop krabi, group booking krabi, retreat activity krabi, team building pottery')},
-  NULL,
+  ${sqlValue('/blog/group-bookings-create-a-unique-pottery-experience-in-krabi')},
   ${sqlValue('index,follow')},
   0
 );

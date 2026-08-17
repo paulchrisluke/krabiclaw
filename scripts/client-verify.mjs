@@ -268,7 +268,7 @@ if (SITE_ID && (VERTICAL === "experience" || VERTICAL === "restaurant")) {
   info("── Slug route checks");
 
   const contentType = VERTICAL === "experience" ? "experiences" : "menu";
-  const apiPath = `/api/public/sites/${SITE_ID}/page?page=${contentType}`;
+  const apiPath = `/api/public/sites/${SITE_ID}/page?page=${contentType}&datasets=${contentType}`;
   const res = await get(apiPath);
 
   if (res.ok) {
@@ -414,10 +414,10 @@ if (SITE_ID) {
     else pass("No contact email in site config (allowed for WhatsApp-only contact setups)");
 
     const allJson = JSON.stringify(data);
-    if (allJson.includes("bamboo.chow@gmail.com") && VERTICAL !== "experience")
-      fail("Kikuzuki placeholder email found in production data");
-    if (allJson.includes("Ember & Slice"))
-      fail("Demo site data (Ember & Slice) found in production response");
+    if (allJson.includes("bamboo.chow@gmail.com") && SITE_ID !== "site-kikuzuki")
+      fail("Kikuzuki placeholder email found in another tenant response");
+    if (allJson.includes("Ember & Slice") && SITE_ID !== "site-demo")
+      fail("Demo site data (Ember & Slice) found in another tenant response");
 
     // Guard: static fallback phone must not be served
     if (allJson.includes("+66 81 270 2616") && !allJson.includes("bamboo")) {

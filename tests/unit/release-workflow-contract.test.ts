@@ -49,10 +49,6 @@ function stepIndex(job: WorkflowJob, name: string): number {
   return index
 }
 
-function hasStep(job: WorkflowJob, name: string): boolean {
-  return job.steps?.some(candidate => candidate.name === name) ?? false
-}
-
 function tomlSection(source: string, name: string): string {
   const header = `[${name}]`
   const start = source.indexOf(header)
@@ -93,8 +89,13 @@ test('each environment uses one normal Worker deploy before contract migrations 
     'npx wrangler deploy --env staging --strict',
   )
   assert.ok(stepIndex(jobs['e2e-staging']!, 'Deploy staging Worker') < stepIndex(jobs['e2e-staging']!, 'Apply staging migrations'))
-  assert.equal(hasStep(jobs['e2e-staging']!, 'Seed staging fixtures'), false)
-  assert.ok(stepIndex(jobs['e2e-staging']!, 'Sweep staging E2E artifacts') < stepIndex(jobs['e2e-staging']!, 'Run OAuth bearer MCP smoke'))
+  assert.equal(
+    stepRun(jobs['e2e-staging']!, 'Provision deterministic staging fixtures'),
+    'node --experimental-strip-types scripts/provision-staging-fixtures.ts --staging',
+  )
+  assert.ok(stepIndex(jobs['e2e-staging']!, 'Sweep staging E2E artifacts') < stepIndex(jobs['e2e-staging']!, 'Provision deterministic staging fixtures'))
+  assert.ok(stepIndex(jobs['e2e-staging']!, 'Provision deterministic staging fixtures') < stepIndex(jobs['e2e-staging']!, 'Provision staging Better Auth fixtures'))
+  assert.ok(stepIndex(jobs['e2e-staging']!, 'Provision staging Better Auth fixtures') < stepIndex(jobs['e2e-staging']!, 'Run OAuth bearer MCP smoke'))
   assert.equal(stepRun(jobs['e2e-staging']!, 'Run OAuth bearer MCP smoke'), 'yarn test:mcp')
   assert.equal(stepRun(jobs['e2e-staging']!, 'Run full staging E2E suite'), 'yarn test:e2e:full')
 

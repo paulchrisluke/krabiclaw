@@ -1714,7 +1714,7 @@ VALUES (
   ${sqlValue(publishedAt)},
   ${sqlValue('Behind the scenes at Ember & Slice: dough, oven rhythm, and the service details that shape our wood-fired pizza nights.')},
   ${sqlValue('wood-fired pizza, restaurant blog, brooklyn pizza, behind the scenes')},
-  NULL,
+  ${sqlValue('/blog/how-we-build-a-wood-fired-pizza-night')},
   ${sqlValue('index,follow')},
   0
 );

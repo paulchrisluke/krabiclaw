@@ -426,6 +426,7 @@ test("pottery house blog block includes the canonical published content snapshot
   assert.match(sql, /tenant_blog/);
   assert.match(sql, /blog-pottery-group-bookings/);
   assert.match(sql, /content-revision-pottery-group-bookings/);
+  assert.match(sql, /'\/blog\/group-bookings-create-a-unique-pottery-experience-in-krabi'/);
 });
 
 test("pottery house compiled media assets carry Cloudflare provider metadata for uploaded assets", () => {

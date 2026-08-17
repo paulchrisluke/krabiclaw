@@ -12,6 +12,7 @@ import {
   renderCompiledDemoMenuBlock,
   renderCompiledDemoQaBlock,
   renderCompiledDemoPostsBlock,
+  renderCompiledDemoBlogBlock,
   renderDemoExperienceSeedBlock,
   renderCompiledDemoContentBlock,
   renderCompiledDemoTenantPagesBlock,
@@ -213,6 +214,12 @@ test("demo posts block includes posts and channel jobs", () => {
   assert.match(sql, /INSERT OR IGNORE INTO posts/);
   assert.match(sql, /INSERT OR IGNORE INTO post_channel_jobs/);
   assert.match(sql, /Margherita Monday/);
+});
+
+test("demo blog block includes a canonical public path", () => {
+  const sql = renderCompiledDemoBlogBlock();
+
+  assert.match(sql, /'\/blog\/how-we-build-a-wood-fired-pizza-night'/);
 });
 
 test("demo content block delegates page composition to canonical tenant pages", () => {
