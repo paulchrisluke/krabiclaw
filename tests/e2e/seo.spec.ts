@@ -89,6 +89,16 @@ test.describe('tenant SEO contracts', () => {
     await expect(canonical).toHaveAttribute('href', `${new URL(tenantBaseURL).origin}/locations`)
   })
 
+  test('review detail canonicals retain the review identifier', async ({ page }) => {
+    const path = '/locations/brooklyn/reviews/rev-demo-1'
+    const response = await page.goto(`${tenantBaseURL}${path}`, { waitUntil: 'domcontentloaded' })
+    expect(response?.status()).toBeLessThan(400)
+
+    const canonical = page.locator('link[rel="canonical"]')
+    await expect(canonical).toHaveCount(1)
+    await expect(canonical).toHaveAttribute('href', `${new URL(tenantBaseURL).origin}${path}`)
+  })
+
   test('tenant structured data does not hardcode the platform origin', async ({ page }) => {
     const response = await page.goto(`${tenantBaseURL}/experiences`, { waitUntil: 'domcontentloaded' })
     expect(response?.status()).toBeLessThan(400)

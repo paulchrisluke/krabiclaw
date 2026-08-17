@@ -46,6 +46,17 @@ test.describe('public tenant site', () => {
     const heroTitle = page.locator('[data-field="hero.title"]')
     await expect(heroTitle).toContainText('ไฟฟืนและค่ำคืนในบรูคลิน')
     await expect(heroTitle).not.toContainText('Wood fire. Brooklyn nights.')
+    await expect(page.locator('html')).toHaveAttribute('lang', 'th')
+  })
+
+  test('hydrates a direct Thai locale URL with matching content and document language', async ({ page }) => {
+    const errors = collectPageErrors(page, { failOnAllWarnings: true })
+    const response = await page.goto(`${tenantBaseURL}/?locale=th`, { waitUntil: 'load' })
+    expect(response?.status()).toBeLessThan(400)
+    await expect(page.locator('[data-field="hero.title"]')).toContainText('ไฟฟืนและค่ำคืนในบรูคลิน')
+    await expect(page.locator('html')).toHaveAttribute('lang', 'th')
+    await page.waitForTimeout(250)
+    expect(errors).toEqual([])
   })
 
   for (const route of tenantRoutes) {

@@ -1,3 +1,5 @@
+import { normalizeAppLocale } from '~/utils/app-i18n'
+
 // Maps each public route to the exact page datasets it may request.
 //
 // Page type → SSR call mapping:
@@ -238,6 +240,13 @@ export function getPublicPageRequest(path: string): Omit<PublicPageRequest, "loc
 export const usePublicPageRequest = () => {
   const route = useRoute();
   const { locale } = useI18n();
+  const requestedLocale = normalizeAppLocale(route.query.locale)
+  if (requestedLocale && requestedLocale !== locale.value) locale.value = requestedLocale
+
+  watch(() => route.query.locale, (value) => {
+    const nextLocale = normalizeAppLocale(value)
+    if (nextLocale && nextLocale !== locale.value) locale.value = nextLocale
+  })
 
   return computed<PublicPageRequest>(() => {
     const previewSubpath = getPreviewSubpath(route.path)

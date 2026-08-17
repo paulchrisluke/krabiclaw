@@ -3,7 +3,7 @@
 </template>
 
 <script setup lang="ts">
-import LocationReviewsPage from '~/pages/locations/[slug]/reviews.vue'
+import LocationReviewsPage from '~/pages/locations/[slug]/reviews/index.vue'
 
 definePageMeta({
   layout: 'saya'

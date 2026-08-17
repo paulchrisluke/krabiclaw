@@ -48,6 +48,7 @@ import sayaCriticalCss from '~/assets/css/saya-critical.css?raw'
 import '~/assets/css/saya-entry.css'
 
 const route = useRoute()
+const { locale: activeLocale } = useI18n()
 const isHome = computed(() => route.path === '/' || getPreviewSubpath(route.path) === '/')
 const sayaStylesheetHref = '/_nuxt/surfaces/saya.css'
 const sayaStylesheetForRoute = computed(() => {
@@ -57,6 +58,7 @@ const sayaStylesheetForRoute = computed(() => {
 useHead(() => {
   const isHome = route.path === '/' || /^\/preview\/site\/[^/]+\/?$/.test(route.path)
   return {
+    htmlAttrs: { lang: activeLocale.value },
     link: [
       { rel: 'preconnect', href: 'https://imagedelivery.net' },
       { rel: 'preconnect', href: 'https://media.krabiclaw.com' },
