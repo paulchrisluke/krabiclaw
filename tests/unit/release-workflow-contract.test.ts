@@ -94,6 +94,10 @@ test('each environment uses one normal Worker deploy before contract migrations 
     'node --experimental-strip-types scripts/provision-staging-fixtures.ts --staging',
   )
   assert.ok(stepIndex(jobs['e2e-staging']!, 'Sweep staging E2E artifacts') < stepIndex(jobs['e2e-staging']!, 'Provision deterministic staging fixtures'))
+  assert.equal(
+    stepRun(jobs['e2e-staging']!, 'Sweep staging E2E artifacts'),
+    'node --experimental-strip-types scripts/reset-e2e-artifacts.ts --staging --older-than-hours=0',
+  )
   assert.ok(stepIndex(jobs['e2e-staging']!, 'Provision deterministic staging fixtures') < stepIndex(jobs['e2e-staging']!, 'Provision staging Better Auth fixtures'))
   assert.ok(stepIndex(jobs['e2e-staging']!, 'Provision staging Better Auth fixtures') < stepIndex(jobs['e2e-staging']!, 'Run OAuth bearer MCP smoke'))
   assert.equal(stepRun(jobs['e2e-staging']!, 'Run OAuth bearer MCP smoke'), 'yarn test:mcp')
