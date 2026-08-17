@@ -355,7 +355,11 @@ Common workflows: update menus and items, create and publish site posts, triage 
             // that reads public resources immediately after this mutation could still
             // see stale data.
             try {
-              await purgePublicResourceCacheSafe({ DB: env.db, SITE_CACHE: kv }, siteId)
+              await purgePublicResourceCacheSafe({
+                DB: env.db,
+                SITE_CACHE: kv,
+                NUXT_PUBLIC_FREE_SITE_DOMAIN: env.NUXT_PUBLIC_FREE_SITE_DOMAIN,
+              }, siteId)
             } catch (err: unknown) {
               console.warn("[mcp-cache-purge] public resource purge failed:", String(err))
             }
