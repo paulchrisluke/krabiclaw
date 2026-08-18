@@ -3,6 +3,7 @@ import test from 'node:test'
 import { readFileSync } from 'node:fs'
 
 const source = readFileSync(new URL('../../pages/dashboard/[orgSlug]/onboarding.vue', import.meta.url), 'utf8')
+const wizardSource = readFileSync(new URL('../../lib/components/workspace/onboarding/TransferOnboardingWizard.vue', import.meta.url), 'utf8')
 
 test('transfer onboarding owns one polling loop and cancels its pending wait on unmount', () => {
   assert.match(source, /let pollLoop: Promise<void> \| null = null/)
@@ -14,4 +15,11 @@ test('transfer onboarding owns one polling loop and cancels its pending wait on 
   assert.match(unmountBody, /resolvePollWait\?\.\(\)/)
   assert.match(source, /clearTimeout\(timer\)/)
   assert.match(source, /resolve\(false\)/)
+})
+
+test('transfer onboarding carries the authorized organization into the wizard without an SSR session self-fetch', () => {
+  assert.match(source, /:organization-id="organizationId"/)
+  assert.match(source, /organizationId\.value = ctx\.organization\.id/)
+  assert.doesNotMatch(wizardSource, /authClient\.useSession\(useFetch\)/)
+  assert.match(wizardSource, /organizationId: props\.organizationId/)
 })
