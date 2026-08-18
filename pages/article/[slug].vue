@@ -89,14 +89,16 @@ if (!isTenant) throw createError({ statusCode: 404 })
 definePageMeta({ layout: false })
 
 const slug = String(useRoute().params.slug || '')
-const { data, error } = await useBlawbyRoute('article', slug)
+const { data, error, shell } = await useBlawbyRoute('article', slug)
 if (error.value) throw error.value
 if (!data.value.post) throw createError({ statusCode: 404, statusMessage: 'Article not found', fatal: true })
 if (!Array.isArray(data.value.post.content_blocks) || data.value.post.content_blocks.length === 0) {
   throw createError({ statusCode: 500, statusMessage: 'Published article content is missing its canonical blocks' })
 }
 
-const { identity, consultation, compliance } = await useBlawbyShell()
+const identity = computed(() => shell.value.identity)
+const consultation = computed(() => shell.value.consultation)
+const compliance = computed(() => shell.value.compliance)
 const org = useBlawbyOrgIdentity(identity, compliance)
 const { data: blogIndexData, error: blogIndexError } = await useBlawbyRoute('blog')
 if (blogIndexError.value) throw blogIndexError.value

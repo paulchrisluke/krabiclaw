@@ -1,468 +1,79 @@
-import { test, mock } from 'node:test'
 import assert from 'node:assert/strict'
+import test from 'node:test'
 
-type Row = Record<string, unknown> & {
-  id?: unknown
-  document_id?: unknown
-  owner_type?: unknown
-  owner_id?: unknown
-  position?: number
-}
-type Store = {
-  contentDocuments: Row[]
-  contentBlocks: Row[]
-  contentRevisions: Row[]
-  blogPosts: Row[]
-  platformDocs: Row[]
-  beforeBatch?: (() => void) | null
-  documentWriteTimestamp?: string
-  failQueryMatching?: string | null
-  standaloneContentDocumentInserts?: number
-  batchCallCount?: number
-}
+import {
+  markdownToContentBlocks,
+  prepareContentDocumentBlocksReplacement,
+  prepareContentDocumentWithBlocks,
+  renderContentBlocksToMarkdown,
+} from '../../server/utils/content-documents.ts'
 
-function createStore(): Store {
-  return {
-    contentDocuments: [],
-    contentBlocks: [],
-    contentRevisions: [],
-    blogPosts: [],
-    platformDocs: [],
-  }
-}
+test('markdown content is represented directly as ordered current blocks', () => {
+  const blocks = markdownToContentBlocks('# Welcome\n\nCurrent body.\n\n## Details')
 
-Object.assign(globalThis, {
-  createError(input: { statusCode: number; statusMessage: string }) {
-    return Object.assign(new Error(input.statusMessage), input)
-  },
-})
-
-// Tracks whether the current execute() call is running inside executeBatch's
-// loop, so tests can assert that document creation goes through one batch
-// call and never a standalone top-level execute() (the bug that made the old
-// createPlatformBlogPost non-atomic: ensureContentDocument INSERTed outside
-// any batch).
-let insideExecuteBatch = false
-
-async function execute(db: Store, query: string, params: unknown[] = []) {
-  if (query.startsWith('INSERT INTO content_documents')) {
-    if (!insideExecuteBatch) db.standaloneContentDocumentInserts = (db.standaloneContentDocumentInserts ?? 0) + 1
-    const [id, owner_type, owner_id, created_at, updated_at] = params
-    db.contentDocuments.push({ id, owner_type, owner_id, draft_revision_id: null, published_revision_id: null, created_at, updated_at })
-    return { meta: { changes: 1 } }
-  }
-
-  if (query.startsWith('DELETE FROM content_blocks')) {
-    const [documentId] = params
-    db.contentBlocks = db.contentBlocks.filter(block => block.document_id !== documentId)
-    return { meta: { changes: 1 } }
-  }
-
-  if (query.startsWith('INSERT INTO content_blocks')) {
-    if (query.includes('__content_document_concurrency_guard__')) {
-      const [, , , , documentId, expectedUpdatedAt] = params
-      const current = db.contentDocuments.find(row => row.id === documentId && row.updated_at === expectedUpdatedAt)
-      if (!current) throw new Error('CHECK constraint failed: content_blocks_type_check')
-      return { meta: { changes: 0 } }
-    }
-    const [id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at] = params
-    db.contentBlocks.push({ id, document_id, parent_block_id, type, position: Number(position), level, data_json, created_at, updated_at })
-    return { meta: { changes: 1 } }
-  }
-
-  if (query.startsWith('UPDATE content_blocks SET updated_at = ? WHERE id = ? AND updated_at = ?')) {
-    const [updated_at, id, expected_updated_at] = params
-    const block = db.contentBlocks.find(row => row.id === id && row.updated_at === expected_updated_at)
-    if (block) Object.assign(block, { updated_at })
-    return { meta: { changes: block ? 1 : 0 } }
-  }
-
-  if (query.startsWith('INSERT INTO content_revisions')) {
-    const [id, document_id, snapshot_json, body_markdown, created_by, label, created_at, published_at] = params
-    db.contentRevisions.push({ id, document_id, snapshot_json, body_markdown, created_by, label, created_at, published_at })
-    return { meta: { changes: 1 } }
-  }
-
-  if (query.startsWith('UPDATE content_revisions SET published_at = COALESCE(published_at, ?)')) {
-    const [published_at, id, document_id] = params
-    const revision = db.contentRevisions.find(row => row.id === id && row.document_id === document_id)
-    if (revision) revision.published_at = revision.published_at ?? published_at
-    return { meta: { changes: revision ? 1 : 0 } }
-  }
-
-  if (query.startsWith('UPDATE content_documents SET draft_revision_id = ?, published_revision_id = ?')) {
-    const [draft_revision_id, published_revision_id, updated_at, id] = params
-    const document = db.contentDocuments.find(row => row.id === id)
-    if (document) Object.assign(document, { draft_revision_id, published_revision_id, updated_at: db.documentWriteTimestamp ?? updated_at })
-    return { meta: { changes: document ? 1 : 0 } }
-  }
-
-  if (query.startsWith('UPDATE content_documents SET draft_revision_id = ?')) {
-    const [draft_revision_id, updated_at, id] = params
-    const document = db.contentDocuments.find(row => row.id === id)
-    if (document) Object.assign(document, { draft_revision_id, updated_at: db.documentWriteTimestamp ?? updated_at })
-    return { meta: { changes: document ? 1 : 0 } }
-  }
-
-  if (query.startsWith('UPDATE content_documents SET published_revision_id = NULL')) {
-    const [updated_at, id] = params
-    const document = db.contentDocuments.find(row => row.id === id)
-    if (document) Object.assign(document, { published_revision_id: null, updated_at })
-    return { meta: { changes: document ? 1 : 0 } }
-  }
-
-  if (query.startsWith('UPDATE content_documents SET published_revision_id = ?')) {
-    const [published_revision_id, updated_at, id] = params
-    const document = db.contentDocuments.find(row => row.id === id)
-    if (document) Object.assign(document, { published_revision_id, updated_at })
-    return { meta: { changes: document ? 1 : 0 } }
-  }
-
-  if (query.startsWith('INSERT INTO blog_posts')) {
-    const [id] = params
-    db.blogPosts.push({ id, status: 'draft' })
-    return { meta: { changes: 1 } }
-  }
-
-  if (query.startsWith('UPDATE blog_posts SET scheduled_revision_id')) {
-    const [owner_type, owner_id, id] = params
-    const document = db.contentDocuments.find(row => row.owner_type === owner_type && row.owner_id === owner_id)
-    const post = db.blogPosts.find(row => row.id === id)
-    if (post) Object.assign(post, { scheduled_revision_id: document?.draft_revision_id ?? null })
-    return { meta: { changes: post ? 1 : 0 } }
-  }
-
-  if (query.includes('UPDATE blog_posts')) {
-    const [body, published_at, updated_at, id] = params
-    const post = db.blogPosts.find(row => row.id === id)
-    if (post) Object.assign(post, { body, status: 'published', published_at: post.published_at ?? published_at, updated_at })
-    return { meta: { changes: post ? 1 : 0 } }
-  }
-
-  if (query.includes('UPDATE platform_docs')) {
-    const [body, updated_at, id] = params
-    const doc = db.platformDocs.find(row => row.id === id)
-    if (doc) Object.assign(doc, { body, updated_at })
-    return { meta: { changes: doc ? 1 : 0 } }
-  }
-
-  throw new Error(`Unexpected execute query: ${query}`)
-}
-
-// Real D1 batches are all-or-nothing. This mock originally ran statements in
-// a plain sequential loop with no rollback, so a mid-batch throw left
-// whatever had already been pushed to the store — a real D1 batch would have
-// left nothing. Snapshot every table before the loop and restore on failure
-// so atomicity tests against this mock actually prove something.
-async function executeBatch(db: Store, queries: Array<{ query: string; params: unknown[] }>) {
-  const beforeBatch = db.beforeBatch
-  db.beforeBatch = null
-  beforeBatch?.()
-  db.batchCallCount = (db.batchCallCount ?? 0) + 1
-  const snapshot = {
-    contentDocuments: structuredClone(db.contentDocuments),
-    contentBlocks: structuredClone(db.contentBlocks),
-    contentRevisions: structuredClone(db.contentRevisions),
-    blogPosts: structuredClone(db.blogPosts),
-    platformDocs: structuredClone(db.platformDocs),
-  }
-  const results: Array<{ meta: { changes: number } }> = []
-  insideExecuteBatch = true
-  try {
-    for (const item of queries) {
-      if (db.failQueryMatching && item.query.includes(db.failQueryMatching)) {
-        throw new Error(`Forced failure for test: query matched "${db.failQueryMatching}"`)
-      }
-      results.push(await execute(db, item.query, item.params))
-    }
-  } catch (error) {
-    db.contentDocuments = snapshot.contentDocuments
-    db.contentBlocks = snapshot.contentBlocks
-    db.contentRevisions = snapshot.contentRevisions
-    db.blogPosts = snapshot.blogPosts
-    db.platformDocs = snapshot.platformDocs
-    throw error
-  } finally {
-    insideExecuteBatch = false
-  }
-  return results
-}
-
-async function queryFirst<T>(db: Store, query: string, params: unknown[] = []): Promise<T | null> {
-  if (query.includes('FROM content_documents') && query.includes('owner_type = ?')) {
-    const [owner_type, owner_id] = params
-    return (db.contentDocuments.find(row => row.owner_type === owner_type && row.owner_id === owner_id) ?? null) as T | null
-  }
-
-  if (query.includes('FROM content_documents') && query.includes('WHERE id = ?')) {
-    const [id] = params
-    return (db.contentDocuments.find(row => row.id === id) ?? null) as T | null
-  }
-
-  if (query.includes('FROM content_blocks') && query.includes('WHERE id = ?')) {
-    const [id] = params
-    return (db.contentBlocks.find(row => row.id === id) ?? null) as T | null
-  }
-
-  if (query.includes('FROM content_revisions') && query.includes('WHERE id = ?')) {
-    const [id, document_id] = params
-    return (db.contentRevisions.find(row => row.id === id && row.document_id === document_id) ?? null) as T | null
-  }
-
-  throw new Error(`Unexpected queryFirst query: ${query}`)
-}
-
-async function queryAll<T>(db: Store, query: string, params: unknown[] = []): Promise<T[]> {
-  if (query.includes('FROM content_blocks') && query.includes('WHERE document_id = ?')) {
-    const [document_id] = params
-    return db.contentBlocks
-      .filter(row => row.document_id === document_id)
-      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
-      .map(row => ({ ...row })) as T[]
-  }
-
-  throw new Error(`Unexpected queryAll query: ${query}`)
-}
-
-mock.module('../../server/db/index.ts', {
-  namedExports: { execute, executeBatch, queryAll, queryFirst },
-})
-
-const {
-  appendContentBlock,
-  createContentDocumentWithBlocks,
-  getContentOutline,
-  mergeLegacyBlogComponents,
-  publishCurrentPlatformDocRevision,
-  renderContentPreview,
-  replaceContentBlock,
-  replaceContentDocumentBlocks,
-  replacePublishedContentDocumentBlocks,
-  syncContentDocumentFromMarkdown,
-} = await import('../../server/utils/content-documents.ts')
-
-test('syncContentDocumentFromMarkdown creates blocks and a published revision', async () => {
-  const db = createStore()
-  db.documentWriteTimestamp = 'committed-document-token'
-  const d1 = db as unknown as D1Database
-  const result = await syncContentDocumentFromMarkdown(d1, {
-    ownerType: 'platform_blog',
-    ownerId: 'post-1',
-    bodyMarkdown: '# Intro\n\nWelcome.\n\n## Details\n\nMore copy.',
-    createdBy: 'user-1',
-    publish: true,
-  })
-
-  assert.equal(db.contentDocuments.length, 1)
-  assert.equal(db.contentRevisions.length, 1)
-  const document = db.contentDocuments[0]
-  assert.ok(document)
-  assert.equal(result.blocks.length, 4)
-  assert.deepEqual(result.blocks.map(block => block.type), ['heading', 'markdown', 'heading', 'markdown'])
-  assert.equal(result.blocks.find(block => block.type === 'markdown')?.data.editor_mode, 'source')
-  assert.equal(document.draft_revision_id, result.revision_id)
-  assert.equal(document.published_revision_id, result.revision_id)
-  assert.equal(result.document.updated_at, 'committed-document-token')
-  assert.equal(result.document.draft_revision_id, result.revision_id)
-  assert.equal(result.document.published_revision_id, result.revision_id)
-})
-
-test('createContentDocumentWithBlocks creates the document, owner row, blocks, and revision in exactly one batch call', async () => {
-  const db = createStore()
-  const d1 = db as unknown as D1Database
-  const blogPostInsert = {
-    query: 'INSERT INTO blog_posts (id, title) VALUES (?, ?)',
-    params: ['post-atomic-1', 'Atomic create test'],
-  }
-
-  const result = await createContentDocumentWithBlocks(d1, 'platform_blog', 'post-atomic-1', [
-    { type: 'heading', level: 2, data: { text: 'Intro', markdown: '## Intro' } },
-    { type: 'markdown', data: { markdown: 'Body copy.', editor_mode: 'source' } },
-  ], {
-    bodyMarkdown: '## Intro\n\nBody copy.',
-    createdBy: 'user-1',
-    publish: true,
-    additionalQueriesBefore: [blogPostInsert],
-  })
-
-  assert.equal(db.batchCallCount, 1, 'expected exactly one executeBatch call')
-  assert.equal(db.standaloneContentDocumentInserts ?? 0, 0, 'content_documents must be inserted inside the batch, not via a standalone execute() call')
-  assert.equal(db.blogPosts.length, 1)
-  assert.equal(db.blogPosts[0]?.id, 'post-atomic-1')
-  assert.equal(db.contentDocuments.length, 1)
-  assert.equal(db.contentDocuments[0]?.id, result.document.id)
-  assert.equal(db.contentBlocks.length, 2)
-  assert.equal(db.contentRevisions.length, 1)
-  assert.equal(result.document.draft_revision_id, result.revision_id)
-  assert.equal(result.document.published_revision_id, result.revision_id)
-})
-
-test('createContentDocumentWithBlocks leaves no trace of the document, owner row, blocks, or revision when the batch fails partway through', async () => {
-  const db = createStore()
-  const d1 = db as unknown as D1Database
-  const blogPostInsert = {
-    query: 'INSERT INTO blog_posts (id, title) VALUES (?, ?)',
-    params: ['post-atomic-2', 'Should not persist'],
-  }
-  // Force the failure on the content_revisions insert — after the document
-  // and blog_posts rows have already been added to the mock's tables inside
-  // the same batch loop, proving the snapshot/restore actually reverts
-  // earlier statements in the batch, not just the failing one.
-  db.failQueryMatching = 'INSERT INTO content_revisions'
-
-  await assert.rejects(() => createContentDocumentWithBlocks(d1, 'platform_blog', 'post-atomic-2', [
-    { type: 'markdown', data: { markdown: 'Body copy.', editor_mode: 'source' } },
-  ], {
-    bodyMarkdown: 'Body copy.',
-    additionalQueriesBefore: [blogPostInsert],
-  }))
-
-  assert.equal(db.batchCallCount, 1)
-  assert.equal(db.blogPosts.length, 0, 'blog_posts insert must be rolled back')
-  assert.equal(db.contentDocuments.length, 0, 'content_documents insert must be rolled back')
-  assert.equal(db.contentBlocks.length, 0, 'content_blocks inserts must be rolled back')
-  assert.equal(db.contentRevisions.length, 0)
-})
-
-test('divider blocks serialize as thematic breaks without disturbing structured blocks', async () => {
-  const db = createStore()
-  const d1 = db as unknown as D1Database
-  const initial = await syncContentDocumentFromMarkdown(d1, {
-    ownerType: 'tenant_blog', ownerId: 'post-divider', bodyMarkdown: 'Before',
-  })
-  await appendContentBlock(d1, initial.document.id, { type: 'divider', data: {} })
-  const preview = await renderContentPreview(d1, initial.document.id)
-  assert.match(preview.body_markdown, /Before\n\n---/)
-  assert.equal(preview.blocks.at(-1)?.type, 'divider')
-})
-
-test('block edits produce draft previews and reject stale replacement tokens', async () => {
-  const db = createStore()
-  const d1 = db as unknown as D1Database
-  const initial = await syncContentDocumentFromMarkdown(d1, {
-    ownerType: 'platform_doc',
-    ownerId: 'doc-1',
-    bodyMarkdown: '# Start\n\nOriginal body.',
-  })
-
-  const appended = await appendContentBlock(d1, initial.document.id, {
-    type: 'markdown',
-    data: { markdown: 'Appended body.' },
-  })
-
-  const outline = await getContentOutline(d1, initial.document.id)
-  assert.equal(outline.length, 3)
-  const firstBlock = outline[0]
-  assert.ok(firstBlock)
-  assert.equal(appended.blocks.at(-1)?.data.markdown, 'Appended body.')
-
-  const preview = await renderContentPreview(d1, initial.document.id)
-  assert.match(preview.body_markdown, /Appended body\./)
-
-  await assert.rejects(
-    () => replaceContentBlock(d1, firstBlock.id, {
-      expected_updated_at: 'stale',
-      data: { text: 'Changed' },
-    }),
-    (err: unknown) => typeof err === 'object' && err !== null && (err as { statusCode?: number }).statusCode === 409,
-  )
-
-  const replaced = await replaceContentBlock(d1, firstBlock.id, {
-    expected_updated_at: firstBlock.updated_at,
-    data: { text: 'Changed heading' },
-  })
-  assert.equal(replaced.blocks[0]?.id, firstBlock.id)
-
-  const updatedOutline = await getContentOutline(d1, initial.document.id)
-  assert.equal(updatedOutline[0]?.id, firstBlock.id)
-})
-
-test('publishCurrentPlatformDocRevision publishes the current draft for a platform doc', async () => {
-  const db = createStore()
-  const d1 = db as unknown as D1Database
-  db.platformDocs.push({ id: 'doc-1', body: 'old', updated_at: '' })
-  await syncContentDocumentFromMarkdown(d1, {
-    ownerType: 'platform_doc',
-    ownerId: 'doc-1',
-    bodyMarkdown: '# Draft\n\nNew body.',
-  })
-
-  await publishCurrentPlatformDocRevision(d1, 'doc-1')
-
-  const doc = db.platformDocs[0]
-  const document = db.contentDocuments[0]
-  assert.ok(doc)
-  assert.ok(document)
-  assert.match(String(doc.body), /New body\./)
-  assert.equal(document.published_revision_id, document.draft_revision_id)
-})
-
-test('legacy structured backfill replaces placeholders in place and reports duplicates and unmatched placeholders', () => {
-  const result = mergeLegacyBlogComponents([
-    { type: 'markdown', data: { markdown: 'Before\n\n{{component type="faq"}}\n\nMiddle\n\n{{component type="how_to"}}\n\nAfter' } },
-  ], [
-    { component_id: 'faq-1', type: 'faq', position: 1, data: { items: [{ question: 'Q', answer: 'A' }] } },
-    { component_id: 'faq-2', type: 'faq', position: 2, data: { items: [{ question: 'Q2', answer: 'A2' }] } },
+  assert.deepEqual(blocks.map(block => [block.type, block.position, block.level]), [
+    ['heading', 0, 1],
+    ['markdown', 1, null],
+    ['heading', 2, 2],
   ])
-
-  assert.deepEqual(result.blocks.map(block => block.type), ['markdown', 'faq', 'markdown', 'markdown', 'markdown'])
-  assert.equal(result.blocks.some(block => String(block.data.markdown || '').includes('{{component type="how_to"}}')), true)
-  assert.ok(result.findings.some(finding => finding.action === 'unmatched_placeholder'))
-  assert.ok(result.findings.some(finding => finding.action === 'duplicate'))
+  assert.equal(renderContentBlocksToMarkdown(blocks.map((block, index) => ({
+    id: `block-${index}`,
+    type: block.type,
+    position: block.position,
+    level: block.level,
+    data_json: JSON.stringify(block.data),
+  }))), '# Welcome\n\nCurrent body.\n\n## Details')
 })
 
-test('whole-document replacement rejects a stale token after every prior block id was replaced', async () => {
-  const db = createStore()
-  db.documentWriteTimestamp = 'initial-document-token'
-  const d1 = db as unknown as D1Database
-  const initial = await syncContentDocumentFromMarkdown(d1, {
-    ownerType: 'platform_blog', ownerId: 'post-race', bodyMarkdown: 'Original',
+test('document creation batches the owner, document, current blocks, and timestamp without revisions', () => {
+  const ownerInsert = { query: 'INSERT INTO owners (id) VALUES (?)', params: ['owner-1'] }
+  const prepared = prepareContentDocumentWithBlocks('tenant_page', 'variant-1', [
+    { id: 'block-1', type: 'hero', data: { title: 'Welcome' } },
+    { id: 'block-2', type: 'markdown', data: { markdown: 'Current body.' } },
+  ], {
+    documentId: 'document-1',
+    additionalQueriesBefore: [ownerInsert],
   })
-  const token = initial.document.updated_at
-  assert.equal(token, 'initial-document-token')
-  const revisionCount = db.contentRevisions.length
-  let reachedBatch = false
 
-  db.beforeBatch = () => {
-    reachedBatch = true
-    const document = db.contentDocuments[0]!
-    document.updated_at = 'newer-document-token'
-    db.contentBlocks = [{
-      id: 'replacement-id', document_id: document.id, parent_block_id: null,
-      type: 'markdown', position: 0, level: null, data_json: JSON.stringify({ markdown: 'Concurrent replacement' }),
-      created_at: '', updated_at: 'newer-block-token',
-    }]
-  }
-
-  await assert.rejects(
-    () => replaceContentDocumentBlocks(d1, 'platform_blog', 'post-race', [{ type: 'markdown', data: { markdown: 'Stale writer' } }], { expected_document_updated_at: token }),
-    (error: unknown) => typeof error === 'object' && error !== null && (error as { statusCode?: number }).statusCode === 409,
-  )
-  assert.equal(reachedBatch, true)
-  assert.equal(db.contentDocuments[0]?.updated_at, 'newer-document-token')
-  assert.equal(db.contentBlocks.length, 1)
-  assert.equal(db.contentBlocks[0]?.id, 'replacement-id')
-  assert.match(String(db.contentBlocks[0]?.data_json), /Concurrent replacement/)
-  assert.equal(db.contentRevisions.length, revisionCount)
+  assert.equal(prepared.document.id, 'document-1')
+  assert.equal(prepared.queries[0]?.query.startsWith('INSERT INTO content_documents'), true)
+  assert.deepEqual(prepared.queries[1], ownerInsert)
+  assert.equal(prepared.queries.some(item => item.query.includes('content_revisions')), false)
+  assert.equal(prepared.queries.filter(item => item.query.startsWith('INSERT INTO content_blocks')).length, 2)
+  assert.equal(prepared.queries.at(-1)?.query, 'UPDATE content_documents SET updated_at = ? WHERE id = ?')
 })
 
-test('published-snapshot backfill preserves a distinct unpublished draft', async () => {
-  const db = createStore()
-  const d1 = db as unknown as D1Database
-  const published = await syncContentDocumentFromMarkdown(d1, {
-    ownerType: 'platform_blog', ownerId: 'post-published', bodyMarkdown: 'Published prose', publish: true,
+test('whole-document replacement uses the document timestamp as an atomic concurrency guard', () => {
+  const prepared = prepareContentDocumentBlocksReplacement({
+    id: 'document-1',
+    owner_type: 'tenant_page',
+    owner_id: 'variant-1',
+    created_at: '2026-08-18T00:00:00.000Z',
+    updated_at: '2026-08-18T01:00:00.000Z',
+  }, [
+    { id: 'block-1', type: 'markdown', data: { markdown: 'Replacement.' } },
+  ], {
+    expected_document_updated_at: '2026-08-18T01:00:00.000Z',
+    additionalQueriesAfter: [{ query: 'UPDATE owners SET title = ? WHERE id = ?', params: ['Updated', 'owner-1'] }],
   })
-  await appendContentBlock(d1, published.document.id, { type: 'markdown', data: { markdown: 'Unpublished draft addition' } })
-  const document = db.contentDocuments[0]!
-  const draftRevisionId = document.draft_revision_id
-  const liveDraftIds = db.contentBlocks.map(block => block.id)
 
-  await replacePublishedContentDocumentBlocks(d1, 'platform_blog', 'post-published', [
-    { type: 'markdown', data: { markdown: 'Published prose' } },
-    { type: 'faq', data: { items: [{ question: 'Q', answer: 'A' }] } },
-  ], { expected_document_updated_at: String(document.updated_at) })
+  const guard = prepared.queries.find(item => item.query.includes('__content_document_concurrency_guard__'))
+  assert.ok(guard)
+  assert.deepEqual(guard.params?.slice(-2), ['document-1', '2026-08-18T01:00:00.000Z'])
+  assert.equal(prepared.queries.some(item => item.query.includes('content_revisions')), false)
+  assert.equal(prepared.queries.at(-1)?.query, 'UPDATE owners SET title = ? WHERE id = ?')
+})
 
-  assert.equal(document.draft_revision_id, draftRevisionId)
-  assert.notEqual(document.published_revision_id, published.revision_id)
-  assert.deepEqual(db.contentBlocks.map(block => block.id), liveDraftIds)
+test('whole-document replacement rejects a stale preflight timestamp before building writes', () => {
+  assert.throws(() => prepareContentDocumentBlocksReplacement({
+    id: 'document-1',
+    owner_type: 'tenant_page',
+    owner_id: 'variant-1',
+    created_at: '2026-08-18T00:00:00.000Z',
+    updated_at: '2026-08-18T02:00:00.000Z',
+  }, [], {
+    expected_document_updated_at: '2026-08-18T01:00:00.000Z',
+  }), (error: unknown) => Boolean(
+    error && typeof error === 'object' && (error as { statusCode?: number }).statusCode === 409,
+  ))
 })

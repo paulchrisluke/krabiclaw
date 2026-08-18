@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "0a6aa294-6288-4e75-92cb-2efc4e7c5448",
+  "id": "88b6c9c6-50fc-47a6-837f-0cddfa6fbcef",
   "prevId": "a20fb731-dc51-4a52-8202-eb79f78c666f",
   "tables": {
     "account": {
@@ -531,6 +531,14 @@
           "notNull": false,
           "autoincrement": false
         },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'draft'"
+        },
         "visibility": {
           "name": "visibility",
           "type": "text",
@@ -761,6 +769,10 @@
         "blog_posts_scope_check": {
           "name": "blog_posts_scope_check",
           "value": "(organization_id IS NULL AND site_id IS NULL) OR (organization_id IS NOT NULL AND site_id IS NOT NULL)"
+        },
+        "blog_posts_status_check": {
+          "name": "blog_posts_status_check",
+          "value": "status IN ('draft', 'published', 'scheduled', 'archived')"
         },
         "blog_posts_visibility_check": {
           "name": "blog_posts_visibility_check",
@@ -1058,181 +1070,6 @@
           "value": "policy_type != 'reservation' OR (scope_type = 'location' AND location_id IS NOT NULL AND experience_id IS NULL)"
         }
       }
-    },
-    "business_location_translations": {
-      "name": "business_location_translations",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "site_id": {
-          "name": "site_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "location_id": {
-          "name": "location_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "locale": {
-          "name": "locale",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "title": {
-          "name": "title",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "address": {
-          "name": "address",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "city": {
-          "name": "city",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "short_description": {
-          "name": "short_description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'draft'"
-        },
-        "source_hash": {
-          "name": "source_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "translated_at": {
-          "name": "translated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "reviewed_at": {
-          "name": "reviewed_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "business_location_translations_organization_id_site_id_location_id_locale_unique": {
-          "name": "business_location_translations_organization_id_site_id_location_id_locale_unique",
-          "columns": [
-            "organization_id",
-            "site_id",
-            "location_id",
-            "locale"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {
-        "business_location_translations_organization_id_organization_id_fk": {
-          "name": "business_location_translations_organization_id_organization_id_fk",
-          "tableFrom": "business_location_translations",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "business_location_translations_site_id_sites_id_fk": {
-          "name": "business_location_translations_site_id_sites_id_fk",
-          "tableFrom": "business_location_translations",
-          "tableTo": "sites",
-          "columnsFrom": [
-            "site_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "business_location_translations_location_id_business_locations_id_fk": {
-          "name": "business_location_translations_location_id_business_locations_id_fk",
-          "tableFrom": "business_location_translations",
-          "tableTo": "business_locations",
-          "columnsFrom": [
-            "location_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
     },
     "business_locations": {
       "name": "business_locations",
@@ -2721,109 +2558,6 @@
           "value": "owner_type IN ('platform_blog', 'platform_doc', 'tenant_blog', 'tenant_page')"
         }
       }
-    },
-    "content_revisions": {
-      "name": "content_revisions",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "document_id": {
-          "name": "document_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "snapshot_json": {
-          "name": "snapshot_json",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "body_markdown": {
-          "name": "body_markdown",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "label": {
-          "name": "label",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        },
-        "published_at": {
-          "name": "published_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "content_revisions_document_created_idx": {
-          "name": "content_revisions_document_created_idx",
-          "columns": [
-            "document_id",
-            "created_at"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "content_revisions_document_id_content_documents_id_fk": {
-          "name": "content_revisions_document_id_content_documents_id_fk",
-          "tableFrom": "content_revisions",
-          "tableTo": "content_documents",
-          "columnsFrom": [
-            "document_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "content_revisions_created_by_user_id_fk": {
-          "name": "content_revisions_created_by_user_id_fk",
-          "tableFrom": "content_revisions",
-          "tableTo": "user",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
     },
     "customer_claims": {
       "name": "customer_claims",
@@ -7607,209 +7341,6 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "menu_item_translations": {
-      "name": "menu_item_translations",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "site_id": {
-          "name": "site_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "menu_item_id": {
-          "name": "menu_item_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "locale": {
-          "name": "locale",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "section": {
-          "name": "section",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "allergens": {
-          "name": "allergens",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "ingredients": {
-          "name": "ingredients",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "dietary_notes": {
-          "name": "dietary_notes",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "preparation": {
-          "name": "preparation",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "serving_note": {
-          "name": "serving_note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'draft'"
-        },
-        "source_hash": {
-          "name": "source_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "translated_at": {
-          "name": "translated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "reviewed_at": {
-          "name": "reviewed_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "menu_item_translations_menu_item_id_idx": {
-          "name": "menu_item_translations_menu_item_id_idx",
-          "columns": [
-            "menu_item_id"
-          ],
-          "isUnique": false
-        },
-        "menu_item_translations_organization_id_site_id_menu_item_id_locale_unique": {
-          "name": "menu_item_translations_organization_id_site_id_menu_item_id_locale_unique",
-          "columns": [
-            "organization_id",
-            "site_id",
-            "menu_item_id",
-            "locale"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {
-        "menu_item_translations_organization_id_organization_id_fk": {
-          "name": "menu_item_translations_organization_id_organization_id_fk",
-          "tableFrom": "menu_item_translations",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "menu_item_translations_site_id_sites_id_fk": {
-          "name": "menu_item_translations_site_id_sites_id_fk",
-          "tableFrom": "menu_item_translations",
-          "tableTo": "sites",
-          "columnsFrom": [
-            "site_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "menu_item_translations_menu_item_id_menu_items_id_fk": {
-          "name": "menu_item_translations_menu_item_id_menu_items_id_fk",
-          "tableFrom": "menu_item_translations",
-          "tableTo": "menu_items",
-          "columnsFrom": [
-            "menu_item_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
     "menu_items": {
       "name": "menu_items",
       "columns": {
@@ -8090,174 +7621,6 @@
           "value": "source IN ('manual', 'template')"
         }
       }
-    },
-    "menu_translations": {
-      "name": "menu_translations",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "site_id": {
-          "name": "site_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "menu_id": {
-          "name": "menu_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "locale": {
-          "name": "locale",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "section_order": {
-          "name": "section_order",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'draft'"
-        },
-        "source_hash": {
-          "name": "source_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "translated_at": {
-          "name": "translated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "reviewed_at": {
-          "name": "reviewed_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "menu_translations_menu_id_idx": {
-          "name": "menu_translations_menu_id_idx",
-          "columns": [
-            "menu_id"
-          ],
-          "isUnique": false
-        },
-        "menu_translations_organization_id_site_id_menu_id_locale_unique": {
-          "name": "menu_translations_organization_id_site_id_menu_id_locale_unique",
-          "columns": [
-            "organization_id",
-            "site_id",
-            "menu_id",
-            "locale"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {
-        "menu_translations_organization_id_organization_id_fk": {
-          "name": "menu_translations_organization_id_organization_id_fk",
-          "tableFrom": "menu_translations",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "menu_translations_site_id_sites_id_fk": {
-          "name": "menu_translations_site_id_sites_id_fk",
-          "tableFrom": "menu_translations",
-          "tableTo": "sites",
-          "columnsFrom": [
-            "site_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "menu_translations_menu_id_menus_id_fk": {
-          "name": "menu_translations_menu_id_menus_id_fk",
-          "tableFrom": "menu_translations",
-          "tableTo": "menus",
-          "columnsFrom": [
-            "menu_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
     },
     "menus": {
       "name": "menus",
@@ -10249,8 +9612,8 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "onboarding_sessions": {
-      "name": "onboarding_sessions",
+    "onboarding_drafts": {
+      "name": "onboarding_drafts",
       "columns": {
         "id": {
           "name": "id",
@@ -10348,16 +9711,16 @@
         }
       },
       "indexes": {
-        "idx_onboarding_sessions_active_user_unique": {
-          "name": "idx_onboarding_sessions_active_user_unique",
+        "idx_onboarding_drafts_active_user_unique": {
+          "name": "idx_onboarding_drafts_active_user_unique",
           "columns": [
             "user_id"
           ],
           "isUnique": true,
           "where": "status = 'active'"
         },
-        "onboarding_sessions_user_id_idx": {
-          "name": "onboarding_sessions_user_id_idx",
+        "onboarding_drafts_user_id_idx": {
+          "name": "onboarding_drafts_user_id_idx",
           "columns": [
             "user_id"
           ],
@@ -10365,9 +9728,9 @@
         }
       },
       "foreignKeys": {
-        "onboarding_sessions_user_id_user_id_fk": {
-          "name": "onboarding_sessions_user_id_user_id_fk",
-          "tableFrom": "onboarding_sessions",
+        "onboarding_drafts_user_id_user_id_fk": {
+          "name": "onboarding_drafts_user_id_user_id_fk",
+          "tableFrom": "onboarding_drafts",
           "tableTo": "user",
           "columnsFrom": [
             "user_id"
@@ -10378,9 +9741,9 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "onboarding_sessions_organization_id_organization_id_fk": {
-          "name": "onboarding_sessions_organization_id_organization_id_fk",
-          "tableFrom": "onboarding_sessions",
+        "onboarding_drafts_organization_id_organization_id_fk": {
+          "name": "onboarding_drafts_organization_id_organization_id_fk",
+          "tableFrom": "onboarding_drafts",
           "tableTo": "organization",
           "columnsFrom": [
             "organization_id"
@@ -10391,9 +9754,9 @@
           "onDelete": "set null",
           "onUpdate": "no action"
         },
-        "onboarding_sessions_committed_site_id_sites_id_fk": {
-          "name": "onboarding_sessions_committed_site_id_sites_id_fk",
-          "tableFrom": "onboarding_sessions",
+        "onboarding_drafts_committed_site_id_sites_id_fk": {
+          "name": "onboarding_drafts_committed_site_id_sites_id_fk",
+          "tableFrom": "onboarding_drafts",
           "tableTo": "sites",
           "columnsFrom": [
             "committed_site_id"
@@ -10408,8 +9771,8 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {
-        "onboarding_sessions_status_check": {
-          "name": "onboarding_sessions_status_check",
+        "onboarding_drafts_status_check": {
+          "name": "onboarding_drafts_status_check",
           "value": "status IN ('active', 'committing', 'committed', 'failed')"
         }
       }
@@ -11811,181 +11174,6 @@
           "value": "role IN ('cover', 'gallery')"
         }
       }
-    },
-    "post_translations": {
-      "name": "post_translations",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "site_id": {
-          "name": "site_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "post_id": {
-          "name": "post_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "locale": {
-          "name": "locale",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "title": {
-          "name": "title",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "body": {
-          "name": "body",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "event_title": {
-          "name": "event_title",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "offer_terms": {
-          "name": "offer_terms",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'draft'"
-        },
-        "source_hash": {
-          "name": "source_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "translated_at": {
-          "name": "translated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "reviewed_at": {
-          "name": "reviewed_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
-        },
-        "updated_by": {
-          "name": "updated_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "post_translations_post_id_idx": {
-          "name": "post_translations_post_id_idx",
-          "columns": [
-            "post_id"
-          ],
-          "isUnique": false
-        },
-        "post_translations_organization_id_site_id_post_id_locale_unique": {
-          "name": "post_translations_organization_id_site_id_post_id_locale_unique",
-          "columns": [
-            "organization_id",
-            "site_id",
-            "post_id",
-            "locale"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {
-        "post_translations_organization_id_organization_id_fk": {
-          "name": "post_translations_organization_id_organization_id_fk",
-          "tableFrom": "post_translations",
-          "tableTo": "organization",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "post_translations_site_id_sites_id_fk": {
-          "name": "post_translations_site_id_sites_id_fk",
-          "tableFrom": "post_translations",
-          "tableTo": "sites",
-          "columnsFrom": [
-            "site_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "post_translations_post_id_posts_id_fk": {
-          "name": "post_translations_post_id_posts_id_fk",
-          "tableFrom": "post_translations",
-          "tableTo": "posts",
-          "columnsFrom": [
-            "post_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
     },
     "posts": {
       "name": "posts",
@@ -15620,14 +14808,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'draft'"
-        },
         "robots": {
           "name": "robots",
           "type": "text",
@@ -15682,11 +14862,10 @@
           ],
           "isUnique": true
         },
-        "site_link_pages_site_status_idx": {
-          "name": "site_link_pages_site_status_idx",
+        "site_link_pages_site_idx": {
+          "name": "site_link_pages_site_idx",
           "columns": [
-            "site_id",
-            "status"
+            "site_id"
           ],
           "isUnique": false
         },
@@ -15734,10 +14913,6 @@
         "site_link_pages_path_check": {
           "name": "site_link_pages_path_check",
           "value": "path LIKE '/%' AND path NOT LIKE '//%'"
-        },
-        "site_link_pages_status_check": {
-          "name": "site_link_pages_status_check",
-          "value": "status IN ('draft', 'published', 'archived')"
         },
         "site_link_pages_robots_check": {
           "name": "site_link_pages_robots_check",
@@ -16849,27 +16024,13 @@
           "name": "spent_at",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false,
           "default": "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))"
         }
       },
       "indexes": {},
-      "foreignKeys": {
-        "spent_subdomains_site_id_sites_id_fk": {
-          "name": "spent_subdomains_site_id_sites_id_fk",
-          "tableFrom": "spent_subdomains",
-          "tableTo": "sites",
-          "columnsFrom": [
-            "site_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
@@ -19470,12 +18631,10 @@
   "enums": {},
   "_meta": {
     "schemas": {},
-    "tables": {
-      "\"onboarding_drafts\"": "\"onboarding_sessions\"",
-      "\"tenant_navigation_items\"": "\"spent_subdomains\""
-    },
+    "tables": {},
     "columns": {
-      "\"menus\".\"status\"": "\"menus\".\"is_visible\""
+      "\"tenant_page_variants\".\"draft_document_id\"": "\"tenant_page_variants\".\"document_id\"",
+      "\"tenant_page_variants\".\"draft_path\"": "\"tenant_page_variants\".\"path\""
     }
   },
   "internal": {

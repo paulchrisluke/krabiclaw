@@ -5,7 +5,7 @@ export async function getTenantPages(db: DbClient, siteId: string): Promise<Arra
   const rows = await queryAll<{ path: string; title: string }>(db,
     `SELECT v.path AS path, v.title
      FROM tenant_page_variants v
-     WHERE v.site_id = ? AND v.(scheduled_for IS NULL OR scheduled_for <= datetime('now')) AND v.published_revision_id IS NOT NULL
+     WHERE v.site_id = ?
      ORDER BY v.title ASC`,
     [siteId],
   )

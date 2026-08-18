@@ -1133,6 +1133,7 @@ export const blog_posts = sqliteTable("blog_posts", {
 	robots: text(),
 }, (table) => [
 	check("blog_posts_scope_check", sql`(organization_id IS NULL AND site_id IS NULL) OR (organization_id IS NOT NULL AND site_id IS NOT NULL)`),
+	check("blog_posts_status_check", sql`status IN ('draft', 'published', 'scheduled', 'archived')`),
 	check("blog_posts_visibility_check", sql`visibility IN ('public', 'unlisted')`),
 	check("blog_posts_category_check", sql`site_id IS NOT NULL OR category IS NOT NULL`),
 	uniqueIndex("blog_posts_platform_slug_idx").on(table.slug).where(sql`site_id IS NULL`),
@@ -1820,9 +1821,9 @@ export const site_domains = sqliteTable("site_domains", {
 
 export const spent_subdomains = sqliteTable("spent_subdomains", {
 	domain: text().primaryKey(),
-	site_id: text().notNull().references(() => sites.id, { onDelete: "cascade" }),
+	site_id: text().notNull(),
 	successor_domain: text(),
-	spent_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+	spent_at: text().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`).notNull(),
 });
 
 export const site_entitlements = sqliteTable("site_entitlements", {

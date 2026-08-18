@@ -110,12 +110,14 @@
 </template>
 
 <script setup lang="ts">
-import type { PublicBlawbyRouteData, PublicSiteQa } from '~/types/blawby'
+import type { PublicBlawbyRouteData, PublicBlawbyShellData, PublicSiteQa } from '~/types/blawby'
 import { findTenantPageBlock } from '~/utils/tenant-page-blocks'
 
-const props = defineProps<{ routeData: PublicBlawbyRouteData }>()
+const props = defineProps<{ routeData: PublicBlawbyRouteData; shell: PublicBlawbyShellData }>()
 const offering = computed(() => props.routeData.offering!)
-const { identity, consultation, compliance } = await useBlawbyShell()
+const identity = computed(() => props.shell.identity)
+const consultation = computed(() => props.shell.consultation)
+const compliance = computed(() => props.shell.compliance)
 const org = useBlawbyOrgIdentity(identity, compliance)
 const activeMedia = ref(0)
 const activeFeature = ref(0)

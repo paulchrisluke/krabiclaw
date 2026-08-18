@@ -5,23 +5,10 @@ import { getDashboardContext } from '~/server/utils/dashboard-context'
 import { isDemoOrg } from '~/server/utils/demo'
 import { updateSiteSettingsFields } from '~/server/utils/site-settings'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
-import { HTTPError, defineHandler  } from 'nitro';
+import { defineHandler } from 'nitro'
 import {  readBody } from 'nitro/h3';
 import { assertSiteWideAccess } from '~/server/utils/member-access'
 import { hasPlatformEventPermission } from '~/server/utils/platform-admin-users'
-
-function timingSafeEqualText(a: string, b: string): boolean {
-  const left = new TextEncoder().encode(a)
-  const right = new TextEncoder().encode(b)
-  if (left.length !== right.length) {
-    let _noop = 0
-    for (let i = 0; i < left.length; i += 1) _noop |= left[i]!
-    return false
-  }
-  let diff = 0
-  for (let i = 0; i < left.length; i += 1) diff |= left[i]! ^ right[i]!
-  return diff === 0
-}
 
 export default defineHandler(async (event) => {
   const body = await readBody(event) as UpdateSiteSettingsRequest

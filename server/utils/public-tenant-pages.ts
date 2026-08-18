@@ -56,7 +56,7 @@ async function hydrateBlocks(db: DbClient, siteId: string, pagePath: string, blo
         SELECT id, name, label, summary, short_description, body, slug, canonical_path,
                thumbnail_asset_id, hero_image_asset_id, media_asset_ids
           FROM offerings
-         WHERE site_id = ? AND status = 'published'
+         WHERE site_id = ?
            ${hasOfferingSource ? '' : `AND id IN (${Array.from(offeringIds).map(() => '?').join(',')})`}
          ORDER BY sort_order ASC, name ASC
       `, [siteId, ...(hasOfferingSource ? [] : offeringIds)])
@@ -190,7 +190,7 @@ async function hydrateBlocks(db: DbClient, siteId: string, pagePath: string, blo
   })
 }
 
-function mapPage(page: TenantPageDto, blocks: TenantPageBlock[], preview: boolean): PublicTenantPage {
+function mapPage(page: TenantPageDto, blocks: TenantPageBlock[]): PublicTenantPage {
   return {
     id: page.id,
     path: page.path,
@@ -218,7 +218,7 @@ export async function getPublicTenantPageForPath(
     ? await getTenantPageForEditor(db, await resolveVariantId(db, siteId, path, options.locale))
     : await getPublishedTenantPage(db, siteId, path, options.locale)
   if (!page) return null
-  return mapPage(page, await hydrateBlocks(db, siteId, page.path, page.blocks), Boolean(options.preview))
+  return mapPage(page, await hydrateBlocks(db, siteId, page.path, page.blocks))
 }
 
 async function resolveVariantId(db: DbClient, siteId: string, path: string, locale?: string | null): Promise<string> {
@@ -229,7 +229,7 @@ async function resolveVariantId(db: DbClient, siteId: string, path: string, loca
        AND (? IS NULL OR v.locale = ?)
      ORDER BY v.locale ASC
      LIMIT 1
-  `, [siteId, path, path, locale ?? null, locale ?? null])
+  `, [siteId, path, locale ?? null, locale ?? null])
   if (!row) throw new HTTPError({ statusCode: 404, statusMessage: 'Tenant page not found' })
   return row.id
 }

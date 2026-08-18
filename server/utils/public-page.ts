@@ -17,8 +17,6 @@ import {
   mapMenu,
   mapMenuItem,
   sortMenuItems,
-  normalizeSectionOrder,
-  parseStringArray,
 } from "~/server/utils/menu-management";
 import { verifyPreviewToken } from "~/server/utils/preview-token";
 import { attachAvailabilitySummaries, type Experience } from "~/server/utils/experiences";
@@ -418,13 +416,13 @@ async function loadPublicPageSource(
   const shellIndexes = appendPublicShellQueries(batchStmts, orgId, siteId);
   if (needsLocations) idxLoc = shellIndexes.locations;
 
-  // Menu data for the requested scope (all published menus/items + translations)
+  // Menu data for the requested scope.
   if (includeMenu) {
     idxMenus = push(
-      `SELECT id, organization_id, site_id, location_id, name, description, status, section_order,
+      `SELECT id, organization_id, site_id, location_id, name, description, is_visible, section_order,
               created_at, updated_at, created_by, updated_by
        FROM menus
-       WHERE organization_id = ? AND site_id = ? AND status = 'published'`,
+       WHERE organization_id = ? AND site_id = ? AND is_visible = 1`,
       [orgId, siteId],
     );
 

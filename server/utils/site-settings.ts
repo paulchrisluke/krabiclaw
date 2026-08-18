@@ -1,5 +1,5 @@
 import { deleteConfig, getConfig, setConfig } from '~/server/utils/site-config'
-import { createSystemSubdomain } from '~/server/utils/domains'
+import { createSystemSubdomain, isSystemSubdomainSpent } from '~/server/utils/domains'
 import { removeTenantZarazAnalytics, syncTenantZarazAnalytics } from '~/server/utils/zaraz-analytics'
 import { isCurrencyCode } from '~/shared/currencies'
 import type { UpdateSiteSettingsRequest } from '~/server/types/site'
@@ -498,6 +498,7 @@ export async function updateSiteSettingsFields(
         LIMIT 1
       `, [subdomain, siteId])
       if (existing) continue
+      if (await isSystemSubdomainSpent(env, db, subdomain)) continue
 
       try {
         return await attemptSiteUpdate(

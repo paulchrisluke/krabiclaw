@@ -20,7 +20,7 @@ test('product-model guard rejects misleading signup-wallet copy only in active r
 
     const violations = collectProductModelViolations(root)
     assert.equal(violations.length, 1)
-    assert.match(violations[0] ?? '', /server\/utils\/active\.ts/)
+    assert.match(violations[0] ?? '', /server[\\/]utils[\\/]active\.ts/)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
@@ -66,9 +66,10 @@ test('product-model guard scans locale copy and keeps retired upsell files delet
     writeFileSync(join(root, 'composables', 'useUpgradeModal.ts'), 'export const enabled = false\n')
 
     const violations = collectProductModelViolations(root)
-    assert.equal(violations.some(violation => violation.includes('i18n/locales/en.json')), true)
-    assert.equal(violations.some(violation => violation.includes('utils/template-registry.ts')), true)
-    assert.equal(violations.some(violation => violation.includes('composables/useUpgradeModal.ts')), true)
+    const normalized = violations.map(violation => violation.replaceAll('\\', '/'))
+    assert.equal(normalized.some(violation => violation.includes('i18n/locales/en.json')), true)
+    assert.equal(normalized.some(violation => violation.includes('utils/template-registry.ts')), true)
+    assert.equal(normalized.some(violation => violation.includes('composables/useUpgradeModal.ts')), true)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }

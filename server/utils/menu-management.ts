@@ -143,6 +143,7 @@ export function normalizeSectionOrder(sections: unknown): string[] {
 export function mapMenu(row: Record<string, unknown>): Menu {
   return {
     ...(row as unknown as Menu),
+    is_visible: Boolean(row.is_visible),
     section_order: normalizeSectionOrder(row.section_order),
   };
 }
@@ -395,7 +396,7 @@ export async function getMenus(
   locationId?: string | null,
 ): Promise<Menu[]> {
   let query = `
-    SELECT id, organization_id, site_id, location_id, name, description, status, section_order,
+    SELECT id, organization_id, site_id, location_id, name, description, is_visible, section_order,
            created_at, updated_at, created_by, updated_by
     FROM menus
     WHERE organization_id = ? AND site_id = ?
@@ -408,7 +409,7 @@ export async function getMenus(
     params.push(locationId);
   }
 
-  query += ` ORDER BY location_id IS NULL, (status = 'published') DESC, name`;
+  query += ` ORDER BY location_id IS NULL, is_visible DESC, name`;
 
   const results = await queryAll<Record<string, unknown>>(db, query, params);
   return (results || []).map((row) => mapMenu(row));
@@ -425,7 +426,7 @@ export async function getMenuWithItems(
   const menu = await queryFirst<Record<string, unknown>>(
     db,
     `
-    SELECT id, organization_id, site_id, location_id, name, description, status, section_order,
+    SELECT id, organization_id, site_id, location_id, name, description, is_visible, section_order,
            created_at, updated_at, created_by, updated_by
     FROM menus
     WHERE id = ? AND organization_id = ? AND site_id = ?
@@ -569,7 +570,7 @@ export async function getPublicMenuItem(
            mi.created_at, mi.updated_at, mi.created_by, mi.updated_by
     FROM menu_items mi
     JOIN menus m ON m.id = mi.menu_id
-    WHERE m.site_id = ? AND mi.slug = ? AND m.status = 'published'
+    WHERE m.site_id = ? AND mi.slug = ? AND m.is_visible = 1
     LIMIT 1
   `,
     [siteId, slug],
@@ -597,8 +598,8 @@ export async function createMenu(
   const result = await execute(
     db,
     `
-    INSERT INTO menus (id, organization_id, site_id, location_id, name, description, status, created_at, updated_at, created_by)
-    VALUES (?, ?, ?, ?, ?, ?, 'published', ?, ?, ?)
+    INSERT INTO menus (id, organization_id, site_id, location_id, name, description, is_visible, created_at, updated_at, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
   `,
     [
       id,
@@ -636,7 +637,7 @@ export async function createMenu(
     location_id: locationId,
     name: menu.name,
     description: menu.description || null,
-    status: "published",
+    is_visible: true,
     created_at: now,
     updated_at: now,
     created_by: createdBy,
@@ -668,9 +669,9 @@ export async function updateMenu(
     setParts.push("description = ?");
     params.push(updates.description);
   }
-  if (updates.status !== undefined) {
-    setParts.push("status = ?");
-    params.push(updates.status);
+  if (updates.is_visible !== undefined) {
+    setParts.push("is_visible = ?");
+    params.push(updates.is_visible ? 1 : 0);
   }
   if (updates.section_order !== undefined) {
     setParts.push("section_order = ?");
@@ -700,7 +701,7 @@ export async function updateMenu(
   const updatedMenu = await queryFirst<Record<string, unknown>>(
     db,
     `
-    SELECT id, organization_id, site_id, location_id, name, description, status, section_order,
+    SELECT id, organization_id, site_id, location_id, name, description, is_visible, section_order,
            created_at, updated_at, created_by, updated_by
     FROM menus
     WHERE id = ? AND organization_id = ? AND site_id = ?

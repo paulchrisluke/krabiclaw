@@ -22,7 +22,7 @@ const TENANT_PAGE_BLOCKS_SCHEMA = {
 
 const TENANT_PAGE_LIFECYCLE_OUTPUT = {
   type: 'object',
-  properties: { page: { type: 'object' }, replacement_confirmation: { type: 'object' }, revision_id: { type: ['string', 'null'] }, deleted: { type: 'boolean' }, id: { type: 'string' } },
+  properties: { page: { type: 'object' }, replacement_confirmation: { type: 'object' } },
 }
 
 export const CONTENT_TOOLS: McpToolDefinition[] = [
@@ -120,7 +120,6 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
         locale: { type: ['string', 'null'] },
         ...TENANT_PAGE_METADATA_SCHEMA,
         blocks: TENANT_PAGE_BLOCKS_SCHEMA,
-        publish: { type: 'boolean' },
       },
       required: ['path', 'title', 'blocks'],
       outputSchema: TENANT_PAGE_LIFECYCLE_OUTPUT,
@@ -143,26 +142,6 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       outputSchema: TENANT_PAGE_LIFECYCLE_OUTPUT,
     }),
   siteTool({
-      name: 'publish_tenant_page',
-      description: 'Publish the current canonical tenant-page draft after checking its revision timestamp.',
-      domain: 'content',
-      minimumRole: 'editor',
-      confirmRequired: true,
-      inputSchema: { variant_id: { type: 'string' }, expected_document_updated_at: { type: 'string' } },
-      required: ['variant_id', 'expected_document_updated_at'],
-      outputSchema: TENANT_PAGE_LIFECYCLE_OUTPUT,
-    }),
-  siteTool({
-      name: 'unpublish_tenant_page',
-      description: 'Remove the current published revision and leave the canonical tenant page as a draft.',
-      domain: 'content',
-      minimumRole: 'admin',
-      confirmRequired: true,
-      inputSchema: { variant_id: { type: 'string' }, expected_document_updated_at: { type: 'string' } },
-      required: ['variant_id', 'expected_document_updated_at'],
-      outputSchema: TENANT_PAGE_LIFECYCLE_OUTPUT,
-    }),
-  siteTool({
       name: 'change_tenant_page_path',
       description: 'Change a canonical tenant-page draft path. Publish the draft to activate the locale-scoped redirect; safe tenant-page redirect chains are flattened during publication.',
       domain: 'content',
@@ -170,36 +149,6 @@ export const CONTENT_TOOLS: McpToolDefinition[] = [
       confirmRequired: true,
       inputSchema: { variant_id: { type: 'string' }, new_path: { type: 'string' }, expected_document_updated_at: { type: 'string' } },
       required: ['variant_id', 'new_path', 'expected_document_updated_at'],
-      outputSchema: TENANT_PAGE_LIFECYCLE_OUTPUT,
-    }),
-  siteTool({
-      name: 'archive_tenant_page',
-      description: 'Archive a canonical tenant page. Supply a published replacement_path in the same locale or set gone=true for an explicit 410.',
-      domain: 'content',
-      minimumRole: 'admin',
-      confirmRequired: true,
-      inputSchema: { variant_id: { type: 'string' }, expected_document_updated_at: { type: 'string' }, replacement_path: { type: ['string', 'null'] }, gone: { type: 'boolean' } },
-      required: ['variant_id', 'expected_document_updated_at'],
-      outputSchema: TENANT_PAGE_LIFECYCLE_OUTPUT,
-    }),
-  siteTool({
-      name: 'restore_tenant_page',
-      description: 'Restore an archived canonical tenant-page variant to draft status.',
-      domain: 'content',
-      minimumRole: 'editor',
-      confirmRequired: false,
-      inputSchema: { variant_id: { type: 'string' }, expected_document_updated_at: { type: 'string' } },
-      required: ['variant_id', 'expected_document_updated_at'],
-      outputSchema: TENANT_PAGE_LIFECYCLE_OUTPUT,
-    }),
-  siteTool({
-      name: 'delete_tenant_page',
-      description: 'Permanently delete a never-published canonical tenant-page variant after checking its revision timestamp and references.',
-      domain: 'content',
-      minimumRole: 'admin',
-      confirmRequired: true,
-      inputSchema: { variant_id: { type: 'string' }, expected_document_updated_at: { type: 'string' } },
-      required: ['variant_id', 'expected_document_updated_at'],
       outputSchema: TENANT_PAGE_LIFECYCLE_OUTPUT,
     }),
   siteTool({

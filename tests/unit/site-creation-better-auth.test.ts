@@ -108,7 +108,12 @@ mock.module('better-auth/plugins', {
 })
 
 mock.module('../../server/utils/site-template.ts', { namedExports: { seedNewSite: async () => {} } })
-mock.module('../../server/utils/domains.ts', { namedExports: { createSystemSubdomain: async () => ({}) } })
+mock.module('../../server/utils/domains.ts', {
+  namedExports: {
+    createSystemSubdomain: async () => ({}),
+    isSystemSubdomainSpent: async () => false,
+  },
+})
 mock.module('../../server/utils/billing.ts', {
   namedExports: {
     getOrganizationBillingStatus: async () => ({ plan: organizationPlan }),

@@ -79,8 +79,7 @@ function row(index: number) {
     organization_id: 'org-1',
     site_id: 'site-1',
     locale: 'en',
-    published_path: path,
-    draft_path: path,
+    path,
     title: `Page ${index}`,
     summary: null,
     seo_title: null,
@@ -90,14 +89,8 @@ function row(index: number) {
     page_type: 'system',
     recipe: index === 0 ? 'home' : index === 1 ? 'about' : 'contact',
     sort_order: index,
-    status: 'published',
-    ever_published: 1,
-    draft_document_id: `document-${index}`,
-    published_revision_id: `revision-${index}`,
-    updated_at: '2026-08-08T00:00:00.000Z',
     document_id: `document-${index}`,
-    document_draft_revision_id: `draft-${index}`,
-    document_published_revision_id: `revision-${index}`,
+    updated_at: '2026-08-08T00:00:00.000Z',
     document_created_at: '2026-08-08T00:00:00.000Z',
     document_updated_at: '2026-08-08T00:00:00.000Z',
   }
@@ -148,7 +141,7 @@ test('onboarding page replacement keeps D1 reads and batches constant as pages g
   assert.equal(two.batchCount, 1)
   assert.equal(three.batchCount, 1)
   assert.ok(two.statementCount < 50, `two-page replacement emitted ${two.statementCount} statements`)
-  assert.equal(three.statementCount - two.statementCount, 7)
+  assert.equal(three.statementCount - two.statementCount, 6)
 })
 
 test('onboarding page replacement rejects duplicate normalized paths before D1 reads', async () => {

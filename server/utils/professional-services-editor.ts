@@ -238,8 +238,8 @@ export async function upsertProfessionalServiceContent(
         (id, organization_id, site_id, location_id, name, slug, label, summary, short_description, body,
          features, faqs, cta_label, cta_url, thumbnail_asset_id, hero_image_asset_id,
          media_asset_ids, schema_type, seo_title, seo_description, canonical_path,
-         status, sort_order, featured, source, source_ref, updated_at, updated_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+         sort_order, featured, source, source_ref, updated_at, updated_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
       ON CONFLICT(organization_id, site_id, slug) DO UPDATE SET
         location_id = excluded.location_id, name = excluded.name, label = excluded.label,
         summary = excluded.summary, short_description = excluded.short_description, body = excluded.body,
@@ -248,7 +248,7 @@ export async function upsertProfessionalServiceContent(
         hero_image_asset_id = excluded.hero_image_asset_id, media_asset_ids = excluded.media_asset_ids,
         schema_type = excluded.schema_type, seo_title = excluded.seo_title,
         seo_description = excluded.seo_description, canonical_path = excluded.canonical_path,
-        status = excluded.status, sort_order = excluded.sort_order, featured = excluded.featured,
+        sort_order = excluded.sort_order, featured = excluded.featured,
         source = excluded.source, source_ref = excluded.source_ref, updated_at = CURRENT_TIMESTAMP,
         updated_by = excluded.updated_by
     `,
@@ -274,7 +274,6 @@ export async function upsertProfessionalServiceContent(
         cleanString(item.seo_title, 200) || null,
         cleanString(item.seo_description, 500) || null,
         requiredStoredPath(item.canonical_path, `offerings.${slug}.canonical_path`, 300),
-        requiredText(item.status, `offerings.${slug}.status`, 30),
         Number(item.sort_order ?? 0),
         item.featured ? 1 : 0,
         requiredText(item.source, `offerings.${slug}.source`, 80),

@@ -7,7 +7,6 @@ import type { H3Event } from 'nitro';
 import { cloudflareEnv } from "~/server/utils/api-response";
 import { platformHostname } from "~/server/utils/domains";
 import { TENANT_TYPES } from "~/utils/tenant-routing";
-import { queryFirst } from "~/server/db";
 
 export default defineHandler(async (event) => {
   const tenantType = event.context.tenantType as string | undefined;
@@ -22,23 +21,6 @@ export default defineHandler(async (event) => {
 
   // Handle unknown tenant (404)
   if (tenantType === TENANT_TYPES.TENANT_404) {
-    if (!pathname.startsWith('/api/')) {
-      const env = cloudflareEnv(event)
-      const db = env.db
-      if (db) {
-        const host = (event.req.headers.get('host') || '').split(':')[0]
-        const spent = await queryFirst<{
-          successor_domain: string | null
-        }>(db, `SELECT successor_domain FROM spent_subdomains WHERE domain = ? LIMIT 1`, [host])
-        if (spent) {
-          if (spent.successor_domain) {
-            return redirect(`https://${spent.successor_domain}${url.pathname}${url.search}`, 301)
-          }
-          throw new HTTPError({ statusCode: 410, statusMessage: 'Gone' })
-        }
-      }
-    }
-
     if (shouldRenderWithNuxtErrorPage(event, pathname)) {
       return;
     }

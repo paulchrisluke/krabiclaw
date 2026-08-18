@@ -64,7 +64,7 @@ test.describe('canonical tenant blog lifecycle', () => {
         { type: 'heading', level: 2, data: { text: 'One document' } },
         { type: 'markdown', data: { markdown: 'Updated **visual** prose.', editor_mode: 'rich' } },
         { type: 'divider', data: {} },
-        { type: 'how_to', data: { steps: [{ name: 'First', text: 'Save blocks' }, { name: 'Second', text: 'Publish revision' }] } },
+        { type: 'how_to', data: { steps: [{ name: 'First', text: 'Save blocks' }, { name: 'Second', text: 'Publish the post' }] } },
       ]
       const updated = await request.patch(`${baseURL}/api/editor/sites/${SITE_ID}/blog/${postId}`, {
         data: { content_blocks: updatedBlocks, expected_document_updated_at: initialToken },
@@ -118,19 +118,18 @@ test.describe('canonical tenant blog lifecycle', () => {
       expect(publicBody.post.content_blocks[1]?.data.markdown).toBe('Updated **visual** prose.')
 
       const editorAfterPublish = await request.get(`${baseURL}/api/editor/sites/${SITE_ID}/blog/${postId}`)
-      const editorAfterPublishBody = await editorAfterPublish.json() as { post: { content_document: { document: { updated_at: string; draft_revision_id: string; published_revision_id: string } } } }
-      expect(editorAfterPublishBody.post.content_document.document.published_revision_id).toBe(editorAfterPublishBody.post.content_document.document.draft_revision_id)
-      const unpublishedDraftBlocks = updatedBlocks.map(block => block.type === 'markdown'
-        ? { ...block, data: { ...block.data, markdown: 'Unpublished draft prose.' } }
+      const editorAfterPublishBody = await editorAfterPublish.json() as { post: { content_document: { document: { updated_at: string } } } }
+      const currentBlocks = updatedBlocks.map(block => block.type === 'markdown'
+        ? { ...block, data: { ...block.data, markdown: 'Current published prose.' } }
         : block)
       const draftUpdate = await request.patch(`${baseURL}/api/editor/sites/${SITE_ID}/blog/${postId}`, {
-        data: { content_blocks: unpublishedDraftBlocks, expected_document_updated_at: editorAfterPublishBody.post.content_document.document.updated_at },
+        data: { content_blocks: currentBlocks, expected_document_updated_at: editorAfterPublishBody.post.content_document.document.updated_at },
       })
       expectWriteBudget(draftUpdate)
       expect(draftUpdate.status()).toBe(200)
       const stillPublished = await request.get(`${baseURL}/api/public/sites/${SITE_ID}/blog/${slug}`)
       const stillPublishedBody = await stillPublished.json() as { post: { content_blocks: Array<{ type: string; data: Record<string, unknown> }> } }
-      expect(stillPublishedBody.post.content_blocks[1]?.data.markdown).toBe('Updated **visual** prose.')
+      expect(stillPublishedBody.post.content_blocks[1]?.data.markdown).toBe('Current published prose.')
 
       const draftUpdateBody = await draftUpdate.json() as { post: { updated_at: string; content_document: { document: { updated_at: string } } } }
       const republished = await request.post(`${baseURL}/api/editor/sites/${SITE_ID}/blog/${postId}/publish`, {
@@ -145,7 +144,7 @@ test.describe('canonical tenant blog lifecycle', () => {
       const republishedBodyState = await republished.json() as { lifecycle: { updated_at: string; content_document_updated_at: string } }
       const republishedPublic = await request.get(`${baseURL}/api/public/sites/${SITE_ID}/blog/${slug}`)
       const republishedBody = await republishedPublic.json() as { post: { content_blocks: Array<{ type: string; data: Record<string, unknown> }> } }
-      expect(republishedBody.post.content_blocks[1]?.data.markdown).toBe('Unpublished draft prose.')
+      expect(republishedBody.post.content_blocks[1]?.data.markdown).toBe('Current published prose.')
 
       const unpublished = await request.post(`${baseURL}/api/editor/sites/${SITE_ID}/blog/${postId}/unpublish`, {
         data: {
@@ -160,10 +159,9 @@ test.describe('canonical tenant blog lifecycle', () => {
 
       const reopened = await request.get(`${baseURL}/api/editor/sites/${SITE_ID}/blog/${postId}`)
       expect(reopened.status()).toBe(200)
-      const reopenedBody = await reopened.json() as { post: { content_document: { document: { updated_at: string; published_revision_id: string | null }; blocks: Array<{ type: string }> } } }
+      const reopenedBody = await reopened.json() as { post: { content_document: { document: { updated_at: string }; blocks: Array<{ type: string }> } } }
       expect(reopenedBody.post.content_document.blocks.map(block => block.type)).toEqual(['heading', 'markdown', 'divider', 'how_to'])
       expect(reopenedBody.post.content_document.document.updated_at).not.toBe(updatedToken)
-      expect(reopenedBody.post.content_document.document.published_revision_id).toBeNull()
     } finally {
       if (postId) await request.delete(`${baseURL}/api/editor/sites/${SITE_ID}/blog/${postId}`)
     }

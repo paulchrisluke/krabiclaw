@@ -31,6 +31,6 @@ test('post-login sends platform admins to the admin console', async () => {
   assert.equal(destination, '/admin')
 })
 
-test('post-login sends new users without an org to onboarding', async () => {
-  assert.equal(await resolvePostLoginDestination(db, { id: 'new-1' }), '/dashboard/onboarding')
+test('post-login sends users without an organization to account settings', async () => {
+  assert.equal(await resolvePostLoginDestination(db, { id: 'new-1' }), '/dashboard/account')
 })

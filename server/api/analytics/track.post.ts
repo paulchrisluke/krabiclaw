@@ -179,7 +179,7 @@ export default defineHandler(async (event) => {
       const locationId = await resolveLocationIdFromPath(db, siteId, pagePath)
       const page = await resolvePageviewTenantPageIdentity(db, siteId, pagePath, locale)
       await insertPageviewEvent(db, {
-        siteId, locationId, pagePath, pageId: page?.page_id ?? null, pageType: page?.page_type ?? null, recipe: page?.recipe ?? null, locale: page?.locale ?? null, revisionId: page?.revision_id ?? null, referrer: referrer || null, userAgent: userAgent || null, ipHash, sessionId, visitorId, country: geo.country || null, region: geo.region || null, city: geo.city || null
+        siteId, locationId, pagePath, pageId: page?.page_id ?? null, pageType: page?.page_type ?? null, recipe: page?.recipe ?? null, locale: page?.locale ?? null, revisionId: null, referrer: referrer || null, userAgent: userAgent || null, ipHash, sessionId, visitorId, country: geo.country || null, region: geo.region || null, city: geo.city || null
       })
     }
 

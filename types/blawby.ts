@@ -26,7 +26,6 @@ export interface PublicOffering {
   seo_title: string | null
   seo_description: string | null
   canonical_path: string
-  status: string
   sort_order: number
   featured: boolean
   /** Real business_locations data for this offering's own location (offerings.location_id), when one is set. Null for site-wide offerings. */

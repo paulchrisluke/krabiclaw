@@ -1,7 +1,7 @@
 import { queryFirst } from '~/server/db'
 import { hasPlatformAdminPermission } from '~/utils/platform-admin-access'
 
-export type PostLoginDestination = '/admin' | '/dashboard/onboarding' | `/dashboard/${string}`
+export type PostLoginDestination = '/admin' | '/dashboard/account' | `/dashboard/${string}`
 
 export interface PostLoginUser {
   id: string
@@ -25,5 +25,5 @@ export async function resolvePostLoginDestination(
 
   if (row) return `/dashboard/${encodeURIComponent(row.slug)}`
 
-  return '/dashboard/onboarding'
+  return '/dashboard/account'
 }

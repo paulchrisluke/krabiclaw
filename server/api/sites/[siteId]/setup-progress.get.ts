@@ -101,7 +101,7 @@ export default defineHandler(async (event) => {
       SELECT COUNT(mi.id) as count
       FROM menu_items mi
       JOIN menus m ON mi.menu_id = m.id
-      WHERE m.site_id = ? AND m.organization_id = ? AND m.status = 'published' AND mi.available = 1
+      WHERE m.site_id = ? AND m.organization_id = ? AND m.is_visible = 1 AND mi.available = 1
     `, [siteId, orgId])
     const menuItemCount = menuItemsResult?.count ?? 0
 

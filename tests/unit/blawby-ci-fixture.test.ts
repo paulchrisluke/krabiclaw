@@ -8,7 +8,7 @@ test('NCLS fixture seeds the production public dataset through the canonical pag
 
   assert.match(sql, /INSERT INTO tenant_page_variants/)
   assert.match(sql, /INSERT INTO content_documents/)
-  assert.match(sql, /INSERT INTO content_revisions/)
+  assert.doesNotMatch(sql, /content_revisions|draft_revision_id|published_revision_id/)
   assert.match(sql, /INSERT INTO content_blocks/)
   assert.match(sql, /Access to Justice for All/)
   assert.match(sql, /North Carolina Legal Services/)

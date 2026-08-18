@@ -18,7 +18,7 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{ items: any[] }>()
+defineProps<{ items: Array<{ id: string; url: string; label: string }> }>()
 
 function isExternal(url: string) {
   return /^https?:\/\//i.test(url)

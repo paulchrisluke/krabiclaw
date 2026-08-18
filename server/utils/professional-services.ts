@@ -113,7 +113,6 @@ function mapOfferingRow(row: OfferingRow, mediaById: Map<string, ApiRecord>): Pu
     seo_title: typeof row.seo_title === 'string' ? row.seo_title : null,
     seo_description: typeof row.seo_description === 'string' ? row.seo_description : null,
     canonical_path: typeof row.canonical_path === 'string' ? row.canonical_path : null,
-    status: String(row.status),
     sort_order: Number(row.sort_order ?? 0),
     featured: asBoolean(row.featured),
     // Real business_locations data for the offering's own location, when one
@@ -137,7 +136,7 @@ export async function listPublicOfferings(db: DbClient, siteId: string): Promise
       LEFT JOIN media_assets thumb ON o.thumbnail_asset_id = thumb.id AND thumb.status = 'active'
       LEFT JOIN media_assets hero ON o.hero_image_asset_id = hero.id AND hero.status = 'active'
       LEFT JOIN business_locations loc ON o.location_id = loc.id AND loc.status = 'active'
-     WHERE o.site_id = ? AND o.status = 'published'
+     WHERE o.site_id = ?
      ORDER BY o.sort_order ASC, o.name ASC
   `, [siteId])
 
@@ -150,7 +149,7 @@ export async function listPublicOfferingLinks(db: DbClient, siteId: string): Pro
   const rows = await queryAll<ApiRecord>(db, `
     SELECT id, name, slug, canonical_path
       FROM offerings
-     WHERE site_id = ? AND status = 'published'
+     WHERE site_id = ?
      ORDER BY sort_order ASC, name ASC
   `, [siteId])
 
@@ -168,7 +167,7 @@ export async function listPublicOfferingSummaries(db: DbClient, siteId: string):
            thumb.public_url AS thumbnail_url, o.canonical_path, o.sort_order, o.featured
       FROM offerings o
       LEFT JOIN media_assets thumb ON o.thumbnail_asset_id = thumb.id AND thumb.status = 'active'
-     WHERE o.site_id = ? AND o.status = 'published'
+     WHERE o.site_id = ?
      ORDER BY o.sort_order ASC, o.name ASC
   `, [siteId])
   return rows.map(row => ({
@@ -229,7 +228,7 @@ export async function getPublicOfferingBySlug(db: DbClient, siteId: string, slug
       LEFT JOIN media_assets thumb ON o.thumbnail_asset_id = thumb.id AND thumb.status = 'active'
       LEFT JOIN media_assets hero ON o.hero_image_asset_id = hero.id AND hero.status = 'active'
       LEFT JOIN business_locations loc ON o.location_id = loc.id AND loc.status = 'active'
-     WHERE o.site_id = ? AND o.slug = ? AND o.status = 'published'
+     WHERE o.site_id = ? AND o.slug = ?
      LIMIT 1
   `, [siteId, slug])
   if (!row) return null

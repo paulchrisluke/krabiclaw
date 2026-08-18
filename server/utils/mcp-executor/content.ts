@@ -4,14 +4,9 @@ import type { McpExecutorContext } from './shared'
 import { applyBookingPolicyPatch, getDirectBookingPolicy, renderBookingPolicySummary, resolveBookingPolicy, upsertBookingPolicy, validateBookingPolicyPatch, validateBookingPolicyScope, type BookingPolicyScopeType, type BookingPolicyType } from '~/server/utils/booking-policies'
 import { buildTenantPageReplacementConfirmationToken, getEditorContent, updateHomeHero, updatePageContent } from '~/server/utils/mcp-workflows'
 import {
-  archiveTenantPage,
   createTenantPage,
-  deleteTenantPage,
   getTenantPageById,
   listTenantPages,
-  publishTenantPage,
-  restoreTenantPage,
-  unpublishTenantPage,
   updateTenantPageDraft,
 } from '~/server/utils/tenant-pages'
 import { getProfessionalServiceContent, upsertProfessionalServiceContent } from '~/server/utils/professional-services-editor'
@@ -183,7 +178,6 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
             recipe: nullableStringArg(args, "recipe", null),
             sortOrder: typeof args.sortOrder === 'number' ? args.sortOrder : null,
             blocks: args.blocks,
-            publish: args.publish === true,
           },
         });
         return tenantPageLifecycleResponse("Created", created);
@@ -207,29 +201,6 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }
-    case "publish_tenant_page":
-      try {
-        const variantId = requiredString(args, "variant_id");
-        const result = await publishTenantPage(site.db, variantId, {
-          userId: site.userId,
-          expectedDocumentUpdatedAt: requiredString(args, "expected_document_updated_at"),
-          scope: { siteId: site.siteId, organizationId: site.organizationId },
-        });
-        return tenantPageLifecycleResponse("Published", { page: result });
-      } catch (error) {
-        return rethrowAsInvalidParams(error);
-      }
-    case "unpublish_tenant_page":
-      try {
-        const result = await unpublishTenantPage(site.db, requiredString(args, "variant_id"), {
-          userId: site.userId,
-          expectedDocumentUpdatedAt: requiredString(args, "expected_document_updated_at"),
-          scope: { siteId: site.siteId, organizationId: site.organizationId },
-        });
-        return tenantPageLifecycleResponse("Unpublished", { page: result });
-      } catch (error) {
-        return rethrowAsInvalidParams(error);
-      }
     case "change_tenant_page_path":
       try {
         const variantId = requiredString(args, "variant_id");
@@ -243,39 +214,6 @@ export async function handleContentTools(ctx: McpExecutorContext): Promise<unkno
           data: tenantPageDraftData({ ...args, path: requiredString(args, "new_path") }, page),
         });
         return tenantPageLifecycleResponse("Changed path for", updated);
-      } catch (error) {
-        return rethrowAsInvalidParams(error);
-      }
-    case "archive_tenant_page":
-      try {
-        const result = await archiveTenantPage(site.db, requiredString(args, "variant_id"), {
-          userId: site.userId,
-          expectedDocumentUpdatedAt: requiredString(args, "expected_document_updated_at"),
-          replacementPath: optionalString(args, "replacement_path"),
-          gone: args.gone === true,
-          scope: { siteId: site.siteId, organizationId: site.organizationId },
-        });
-        return tenantPageLifecycleResponse("Archived", { page: result });
-      } catch (error) {
-        return rethrowAsInvalidParams(error);
-      }
-    case "restore_tenant_page":
-      try {
-        const result = await restoreTenantPage(site.db, requiredString(args, "variant_id"), {
-          userId: site.userId,
-          expectedDocumentUpdatedAt: requiredString(args, "expected_document_updated_at"),
-          scope: { siteId: site.siteId, organizationId: site.organizationId },
-        });
-        return tenantPageLifecycleResponse("Restored", { page: result });
-      } catch (error) {
-        return rethrowAsInvalidParams(error);
-      }
-    case "delete_tenant_page":
-      try {
-        return tenantPageLifecycleResponse("Deleted", await deleteTenantPage(site.db, requiredString(args, "variant_id"), {
-          expectedDocumentUpdatedAt: requiredString(args, "expected_document_updated_at"),
-          scope: { siteId: site.siteId, organizationId: site.organizationId },
-        }));
       } catch (error) {
         return rethrowAsInvalidParams(error);
       }

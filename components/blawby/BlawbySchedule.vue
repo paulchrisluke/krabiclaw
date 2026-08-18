@@ -61,12 +61,14 @@
 import type { PublicSiteQa } from '~/types/blawby'
 import { findTenantPageBlock } from '~/utils/tenant-page-blocks'
 
-const { data, error } = await useBlawbyRoute('schedule')
+const { data, error, shell } = await useBlawbyRoute('schedule')
 if (error.value) throw error.value
 const routeData = computed(() => data.value)
 const page = computed(() => routeData.value.page!)
 if (!routeData.value.page) throw createError({ statusCode: 404, statusMessage: 'Schedule content not found' })
-const { identity, consultation, compliance } = await useBlawbyShell()
+const identity = computed(() => shell.value.identity)
+const consultation = computed(() => shell.value.consultation)
+const compliance = computed(() => shell.value.compliance)
 const org = useBlawbyOrgIdentity(identity, compliance)
 
 function block(type: string) {

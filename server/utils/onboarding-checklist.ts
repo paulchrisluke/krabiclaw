@@ -103,13 +103,10 @@ export async function loadOnboardingChecklist(
       (
         SELECT COUNT(*)
         FROM tenant_page_variants v
-        JOIN content_revisions r ON r.id = v.published_revision_id
+        JOIN content_blocks b ON b.document_id = v.document_id
         WHERE v.site_id = s.id AND v.path = '/about'
-          AND EXISTS (
-            SELECT 1 FROM json_each(json_extract(r.snapshot_json, '$.blocks')) block
-            WHERE json_extract(block.value, '$.type') = 'markdown'
-              AND length(COALESCE(json_extract(block.value, '$.data.markdown'), '')) > 20
-          )
+          AND b.type = 'markdown'
+          AND length(COALESCE(json_extract(b.data_json, '$.markdown'), '')) > 20
       ) AS story,
       (
         SELECT COUNT(*) FROM posts

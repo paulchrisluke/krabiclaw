@@ -19,8 +19,6 @@ export interface DomainEnv {
 export type DomainStatus = 'pending' | 'verifying' | 'active' | 'blocked' | 'failed' | 'disabled' | 'deleted'
 export type DomainRole = 'canonical' | 'secondary'
 
-const PAGES_DOMAIN_REQUEST_TIMEOUT_MS = 10_000
-
 export interface DomainRecord {
   id: string
   organization_id: string
@@ -219,6 +217,20 @@ export async function ensureDomainAvailable(db: D1Database, domains: string[], e
   if (existing?.domain) throw new Error(`${existing.domain} is already in use`)
 }
 
+export async function isSystemSubdomainSpent(
+  env: DomainEnv,
+  db: D1Database,
+  subdomain: string,
+): Promise<boolean> {
+  const domain = `${subdomain}.${platformHostname(env)}`
+  const spent = await queryFirst<{ domain: string }>(
+    db,
+    'SELECT domain FROM spent_subdomains WHERE domain = ? LIMIT 1',
+    [domain],
+  )
+  return Boolean(spent)
+}
+
 export async function createSystemSubdomain(
   env: DomainEnv,
   db: D1Database,
@@ -228,33 +240,61 @@ export async function createSystemSubdomain(
 ): Promise<DomainRecord> {
   const now = new Date().toISOString()
   const domain = `${subdomain}.${platformHostname(env)}`
-  const id = `domain-${siteId}-subdomain`
-
-  const existing = await queryFirst<{ domain: string }>(
-    db, `SELECT domain FROM site_domains WHERE id = ? LIMIT 1`, [id]
+  const existing = await queryFirst<Pick<DomainRecord, 'id' | 'domain' | 'role' | 'created_at'>>(
+    db,
+    `SELECT id, domain, role, created_at
+       FROM site_domains
+      WHERE site_id = ? AND organization_id = ? AND type = 'subdomain' AND status = 'active'
+      ORDER BY created_at ASC
+      LIMIT 1`,
+    [siteId, organizationId],
   )
+
+  if (existing?.domain === domain) {
+    return (await queryFirst<DomainRecord>(db, 'SELECT * FROM site_domains WHERE id = ?', [existing.id])) as DomainRecord
+  }
+
+  if (await isSystemSubdomainSpent(env, db, subdomain)) {
+    throw new Error(`${domain} has already been used and cannot be reassigned`)
+  }
+
+  const role = existing?.role ?? 'canonical'
+  const id = existing
+    ? `domain-${siteId}-subdomain-${subdomain}`
+    : `domain-${siteId}-subdomain`
 
   const stmts: Array<{ sql: string; values: unknown[] }> = []
 
-  if (existing?.domain && existing.domain !== domain) {
-    stmts.push({
-      sql: `INSERT OR REPLACE INTO spent_subdomains (domain, site_id, successor_domain, spent_at) VALUES (?, ?, ?, ?)`,
-      values: [existing.domain, siteId, domain, now],
-    })
+  if (existing) {
+    stmts.push(
+      {
+        sql: 'INSERT INTO spent_subdomains (domain, site_id, successor_domain, spent_at) VALUES (?, ?, ?, ?)',
+        values: [existing.domain, siteId, domain, now],
+      },
+      {
+        sql: `UPDATE site_domains
+                SET role = 'secondary', status = 'disabled', updated_at = ?
+              WHERE id = ? AND site_id = ? AND organization_id = ? AND status = 'active'`,
+        values: [now, existing.id, siteId, organizationId],
+      },
+    )
   }
 
   stmts.push(
     {
-      sql: `INSERT OR REPLACE INTO site_domains
+      sql: `INSERT INTO site_domains
         (id, organization_id, site_id, domain, type, role, status, dns_status, dns_target, activated_at, created_at, updated_at)
-        VALUES (?, ?, ?, ?, 'subdomain', 'canonical', 'active', 'valid', ?, ?, ?, ?)`,
-      values: [id, organizationId, siteId, domain, platformHostname(env), now, now, now],
+        VALUES (?, ?, ?, ?, 'subdomain', ?, 'active', 'valid', ?, ?, ?, ?)`,
+      values: [id, organizationId, siteId, domain, role, platformHostname(env), now, now, now],
     },
-    {
+  )
+
+  if (role === 'canonical') {
+    stmts.push({
       sql: `UPDATE sites SET public_url = ?, updated_at = ? WHERE id = ? AND organization_id = ?`,
       values: [`https://${domain}`, now, siteId, organizationId],
-    }
-  )
+    })
+  }
 
   await db.batch(stmts.map(s => db.prepare(s.sql).bind(...s.values)))
 

@@ -50,15 +50,15 @@
         <div class="flex items-center gap-2">
           <AiMenuImport :site-id="props.siteId" :menu-id="currentMenu?.id" @imported="handleAiImport" />
           <UButton
-            v-if="currentMenu?.status === 'draft'"
+            v-if="currentMenu?.is_visible === false"
             size="sm"
             color="neutral"
             variant="soft"
             icon="i-lucide-upload"
             :loading="saving"
-            @click="handlePublish"
+            @click="handleShow"
           >
-            Publish
+            Show menu
           </UButton>
           <UButton
             v-else
@@ -67,9 +67,9 @@
             variant="soft"
             icon="i-lucide-archive"
             :loading="saving"
-            @click="handleUnpublish"
+            @click="handleHide"
           >
-            Unpublish
+            Hide menu
           </UButton>
           <UButton
             color="error"
@@ -344,25 +344,25 @@ const {
   updateMenu
 } = await useMenuEditor(props.siteId, props.locationId)
 
-const handlePublish = async () => {
+const handleShow = async () => {
   if (!currentMenu.value) return
   try {
-    await updateMenu(currentMenu.value.id, { status: 'published' })
-    toast.add({ description: 'Menu published', color: 'success' })
+    await updateMenu(currentMenu.value.id, { is_visible: true })
+    toast.add({ description: 'Menu shown', color: 'success' })
   } catch (err) {
-    console.error('handlePublish failed:', err)
-    toast.add({ description: 'Failed to publish menu', color: 'error' })
+    console.error('handleShow failed:', err)
+    toast.add({ description: 'Failed to show menu', color: 'error' })
   }
 }
 
-const handleUnpublish = async () => {
+const handleHide = async () => {
   if (!currentMenu.value) return
   try {
-    await updateMenu(currentMenu.value.id, { status: 'draft' })
-    toast.add({ description: 'Menu unpublished', color: 'success' })
+    await updateMenu(currentMenu.value.id, { is_visible: false })
+    toast.add({ description: 'Menu hidden', color: 'success' })
   } catch (err) {
-    console.error('handleUnpublish failed:', err)
-    toast.add({ description: 'Failed to unpublish menu', color: 'error' })
+    console.error('handleHide failed:', err)
+    toast.add({ description: 'Failed to hide menu', color: 'error' })
   }
 }
 

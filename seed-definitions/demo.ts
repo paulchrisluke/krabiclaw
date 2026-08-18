@@ -1538,7 +1538,7 @@ export function renderCompiledDemoMenuBlock(): string {
       sqlValue(menu.name),
       sqlValue(menu.description),
       sqlJson(menu.sectionOrder),
-      sqlValue(menu.status),
+      sqlValue(menu.status === 'published'),
     ].join(', ')})`)
     .join(',\n')
 
@@ -1581,7 +1581,7 @@ ${menuItemMediaRows};`
 
   return `-- BEGIN GENERATED: demo_menu
 -- Menus and menu items for the demo tenant.
-INSERT OR REPLACE INTO menus (id, organization_id, site_id, location_id, name, description, section_order, status)
+INSERT OR REPLACE INTO menus (id, organization_id, site_id, location_id, name, description, section_order, is_visible)
 VALUES
 ${menuRows};
 
@@ -1671,7 +1671,6 @@ export function renderCompiledDemoBlogBlock(): string {
   const publishedAt = '2026-07-08T00:00:00.000Z'
   const postId = 'blog-demo-wood-fired-guide'
   const documentId = 'content-document-demo-wood-fired-guide'
-  const revisionId = 'content-revision-demo-wood-fired-guide'
   const blockId = 'content-block-demo-wood-fired-guide'
   const body = `# How We Build a Wood-Fired Pizza Night
 
@@ -1689,7 +1688,6 @@ The menu, music, and pacing of service all revolve around the heat and rhythm of
 
 We want the room to feel energetic but never rushed, whether you come in for one pie or settle in for the evening.`
   const blockData = { markdown: body, editor_mode: 'source' }
-  const snapshot = { blocks: [{ id: blockId, parent_block_id: null, type: 'markdown', position: 0, level: null, data: blockData, updated_at: publishedAt }] }
 
   return `-- BEGIN GENERATED: demo_blog
 -- Tenant blog post for local demo verification.
@@ -1720,12 +1718,8 @@ VALUES (
 );
 
 INSERT OR REPLACE INTO content_documents
-  (id, owner_type, owner_id, draft_revision_id, published_revision_id, created_at, updated_at)
-VALUES (${sqlValue(documentId)}, 'tenant_blog', ${sqlValue(postId)}, ${sqlValue(revisionId)}, ${sqlValue(revisionId)}, ${sqlValue(publishedAt)}, ${sqlValue(publishedAt)});
-
-INSERT OR REPLACE INTO content_revisions
-  (id, document_id, snapshot_json, body_markdown, created_by, label, created_at)
-VALUES (${sqlValue(revisionId)}, ${sqlValue(documentId)}, ${sqlJson(snapshot)}, ${sqlValue(body)}, 'user-demo', 'Seed import', ${sqlValue(publishedAt)});
+  (id, owner_type, owner_id, created_at, updated_at)
+VALUES (${sqlValue(documentId)}, 'tenant_blog', ${sqlValue(postId)}, ${sqlValue(publishedAt)}, ${sqlValue(publishedAt)});
 
 INSERT OR REPLACE INTO content_blocks
   (id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at)
@@ -1820,80 +1814,6 @@ export function renderCompiledDemoTenantPagesBlock(): string {
     sqlValue,
     sqlJson,
   })
-}
-
-export function renderCompiledDemoLocaleVariantsBlock(): string {
-  const businessLocationTranslationRows = compiledDemoSeed.businessLocationTranslations
-    .map((entry) => `  (${[
-      sqlValue(entry.id),
-      sqlValue(entry.organizationId),
-      sqlValue(entry.siteId),
-      sqlValue(entry.locationId),
-      sqlValue(entry.locale),
-      sqlValue(entry.title),
-      sqlValue(entry.address),
-      sqlValue(entry.city),
-      sqlValue(entry.description),
-      sqlValue(entry.shortDescription),
-      sqlValue(entry.status),
-      sqlValue(entry.sourceHash),
-      sqlValue(entry.translatedAt),
-      sqlValue(entry.reviewedAt),
-    ].join(', ')})`)
-    .join(',\n')
-
-  const menuTranslationRows = compiledDemoSeed.menuTranslations
-    .map((entry) => `  (${[
-      sqlValue(entry.id),
-      sqlValue(entry.organizationId),
-      sqlValue(entry.siteId),
-      sqlValue(entry.menuId),
-      sqlValue(entry.locale),
-      sqlValue(entry.name),
-      sqlValue(entry.description),
-      sqlJson(entry.sectionOrder),
-      sqlValue(entry.status),
-      sqlValue(entry.sourceHash),
-      sqlValue(entry.translatedAt),
-      sqlValue(entry.reviewedAt),
-    ].join(', ')})`)
-    .join(',\n')
-
-  const menuItemTranslationRows = compiledDemoSeed.menuItemTranslations
-    .map((entry) => `  (${[
-      sqlValue(entry.id),
-      sqlValue(entry.organizationId),
-      sqlValue(entry.siteId),
-      sqlValue(entry.menuItemId),
-      sqlValue(entry.locale),
-      sqlValue(entry.section),
-      sqlValue(entry.name),
-      sqlValue(entry.description),
-      sqlValue(entry.allergens),
-      sqlValue(entry.dietaryNotes),
-      sqlValue(entry.status),
-      sqlValue(entry.sourceHash),
-      sqlValue(entry.translatedAt),
-      sqlValue(entry.reviewedAt),
-    ].join(', ')})`)
-    .join(',\n')
-
-  return `-- BEGIN GENERATED: demo_locale_variants
-INSERT OR IGNORE INTO business_location_translations
-  (id, organization_id, site_id, location_id, locale, title, address, city, description, short_description, status, source_hash, translated_at, reviewed_at)
-VALUES
-${businessLocationTranslationRows};
-
-INSERT OR IGNORE INTO menu_translations
-  (id, organization_id, site_id, menu_id, locale, name, description, section_order, status, source_hash, translated_at, reviewed_at)
-VALUES
-${menuTranslationRows};
-
-INSERT OR IGNORE INTO menu_item_translations
-  (id, organization_id, site_id, menu_item_id, locale, section, name, description, allergens, dietary_notes, status, source_hash, translated_at, reviewed_at)
-VALUES
-${menuItemTranslationRows};
--- END GENERATED: demo_locale_variants`
 }
 
 export function renderCompiledDemoBillingBlock(): string {

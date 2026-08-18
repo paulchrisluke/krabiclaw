@@ -24,8 +24,10 @@
 <script setup lang="ts">
 import { findTenantPageBlock } from '~/utils/tenant-page-blocks'
 
-const { data } = await useBlawbyRoute('services')
-const { identity, consultation, compliance } = await useBlawbyShell()
+const { data, shell } = await useBlawbyRoute('services')
+const identity = computed(() => shell.value.identity)
+const consultation = computed(() => shell.value.consultation)
+const compliance = computed(() => shell.value.compliance)
 const org = useBlawbyOrgIdentity(identity, compliance)
 const routeData = computed(() => data.value)
 const page = computed(() => routeData.value.page)

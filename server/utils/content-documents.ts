@@ -25,17 +25,6 @@ export interface ContentBlockRow {
   updated_at: string
 }
 
-export interface ContentRevisionRow {
-  id: string
-  document_id: string
-  snapshot_json: string
-  body_markdown: string
-  created_by: string | null
-  label: string | null
-  created_at: string
-  published_at: string | null
-}
-
 export interface ContentBlockSnapshot {
   id: string
   parent_block_id: string | null
@@ -56,16 +45,10 @@ export interface ContentBlockInput {
 
 type ContentBlockWriteInput = Omit<ContentBlockSnapshot, 'id'> & { id?: string; updated_at?: string | null }
 
-interface ContentRevisionWriteOptions {
-  revisionId?: string
-  snapshotMetadata?: Record<string, unknown>
+interface ContentDocumentWriteOptions {
   bodyMarkdown?: string
-  createdBy?: string | null
-  label?: string | null
-  publish?: boolean
   expectedBlock?: { id: string; updatedAt: string }
   expectedDocument?: { id: string; updatedAt: string }
-  publishOnly?: boolean
   additionalQueriesBefore?: BatchQuery[]
   additionalQueriesAfter?: BatchQuery[]
 }
@@ -226,21 +209,14 @@ export async function ensureContentDocument(db: DbClient, ownerType: ContentDocu
   }
 }
 
-// Every call rewrites the document's entire content_blocks set and stores a
-// full block snapshot on content_revisions, even for a single-block edit.
-// That's O(n) per write in a document's block count and revision history
-// size; intentional for now since documents are short-form (blog/doc posts,
-// not full books) and it keeps the optimistic-concurrency story in this file
-// simple (one guarded delete+reinsert instead of per-block diffing). Revisit
-// with per-block writes/diffed revisions if documents grow large enough for
-// this to matter.
-function buildRevisionBatch(
+// Every call rewrites the document's complete block set. Documents are short,
+// and the single guarded delete+reinsert keeps optimistic concurrency atomic.
+function buildDocumentWriteBatch(
   document: ContentDocumentRow,
   blocks: ContentBlockWriteInput[],
-  opts: ContentRevisionWriteOptions = {},
+  opts: ContentDocumentWriteOptions = {},
 ) {
   const now = new Date().toISOString()
-  const revisionId = opts.revisionId ?? crypto.randomUUID()
   const snapshots: Array<ContentBlockSnapshot & { updated_at: string }> = blocks.map((block, index) => ({
     id: block.id ?? crypto.randomUUID(),
     parent_block_id: block.parent_block_id ?? null,
@@ -308,7 +284,7 @@ function buildRevisionBatch(
       }]
     : []
 
-  const liveBlockQueries: { query: string; params: unknown[] }[] = opts.publishOnly ? [] : [
+  const liveBlockQueries: { query: string; params: unknown[] }[] = [
     deleteBlocksQuery,
     ...snapshots.map(block => ({
       query: `INSERT INTO content_blocks (id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at)
@@ -332,13 +308,13 @@ function buildRevisionBatch(
   return { queries, body_markdown: bodyMarkdown, blocks: snapshots }
 }
 
-async function writeRevisionFromBlocks(
+async function writeDocumentBlocks(
   db: DbClient,
   document: ContentDocumentRow,
   blocks: ContentBlockWriteInput[],
-  opts: ContentRevisionWriteOptions = {},
+  opts: ContentDocumentWriteOptions = {},
 ) {
-  const prepared = buildRevisionBatch(document, blocks, opts)
+  const prepared = buildDocumentWriteBatch(document, blocks, opts)
   try {
     await executeBatch(db, prepared.queries)
   } catch (error) {
@@ -366,14 +342,11 @@ export async function syncContentDocumentFromMarkdown(
     ownerType: ContentDocumentOwnerType
     ownerId: string
     bodyMarkdown: string
-    createdBy?: string | null
-    label?: string | null
-    publish?: boolean
   },
 ) {
   const document = await ensureContentDocument(db, opts.ownerType, opts.ownerId)
 
-  // Markdown only ever encodes heading/markdown blocks, but writeRevisionFromBlocks
+  // Markdown only ever encodes heading/markdown blocks, but the document writer
   // replaces the document's entire block set. Carry forward any existing
   // structured blocks (image, gallery, faq, etc.) so a plain-markdown sync
   // doesn't delete content the block editor or MCP tools already built.
@@ -392,15 +365,12 @@ export async function syncContentDocumentFromMarkdown(
   const blocks = [...markdownToContentBlocks(opts.bodyMarkdown), ...preservedStructuredBlocks]
     .map((block, index) => ({ ...block, position: index }))
 
-  const revision = await writeRevisionFromBlocks(db, document, blocks, {
+  const write = await writeDocumentBlocks(db, document, blocks, {
     bodyMarkdown: opts.bodyMarkdown,
-    createdBy: opts.createdBy,
-    label: opts.label,
-    
   })
   const currentDocument = await getContentDocumentById(db, document.id)
   if (!currentDocument) throw new HTTPError({ statusCode: 500, statusMessage: 'Content document disappeared after synchronization' })
-  return { document: currentDocument, ...revision }
+  return { document: currentDocument, ...write }
 }
 
 export async function syncContentDocumentFromBlocks(
@@ -409,13 +379,10 @@ export async function syncContentDocumentFromBlocks(
     ownerType: ContentDocumentOwnerType
     ownerId: string
     blocks: ContentBlockInput[]
-    createdBy?: string | null
-    label?: string | null
-    publish?: boolean
   },
 ) {
   const document = await ensureContentDocument(db, opts.ownerType, opts.ownerId)
-  const revision = await writeRevisionFromBlocks(db, document, opts.blocks.map((block, index) => ({
+  const write = await writeDocumentBlocks(db, document, opts.blocks.map((block, index) => ({
     id: block.id,
     parent_block_id: block.parent_block_id ?? null,
     type: block.type,
@@ -423,13 +390,10 @@ export async function syncContentDocumentFromBlocks(
     level: block.level ?? null,
     data: block.data,
   })), {
-    createdBy: opts.createdBy,
-    label: opts.label,
-    
   })
   const currentDocument = await getContentDocumentById(db, document.id)
   if (!currentDocument) throw new HTTPError({ statusCode: 500, statusMessage: 'Content document disappeared after synchronization' })
-  return { document: currentDocument, ...revision }
+  return { document: currentDocument, ...write }
 }
 
 export function prepareContentDocumentWithBlocks(
@@ -438,12 +402,7 @@ export function prepareContentDocumentWithBlocks(
   blocks: ContentBlockInput[],
   opts: {
     documentId?: string
-    revisionId?: string
-    snapshotMetadata?: Record<string, unknown>
     bodyMarkdown?: string
-    createdBy?: string | null
-    label?: string | null
-    publish?: boolean
     additionalQueriesBefore?: BatchQuery[]
     additionalQueriesAfter?: BatchQuery[]
   } = {},
@@ -454,8 +413,6 @@ export function prepareContentDocumentWithBlocks(
     id: documentId,
     owner_type: ownerType,
     owner_id: ownerId,
-    draft_revision_id: null,
-    published_revision_id: null,
     created_at: now,
     updated_at: now,
   }
@@ -463,7 +420,7 @@ export function prepareContentDocumentWithBlocks(
     query: 'INSERT INTO content_documents (id, owner_type, owner_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
     params: [documentId, ownerType, ownerId, now, now],
   }
-  const revision = buildRevisionBatch(document, blocks.map((block, index) => ({
+  const write = buildDocumentWriteBatch(document, blocks.map((block, index) => ({
     id: block.id,
     parent_block_id: block.parent_block_id ?? null,
     type: block.type,
@@ -471,24 +428,19 @@ export function prepareContentDocumentWithBlocks(
     level: block.level ?? null,
     data: block.data,
   })), {
-    revisionId: opts.revisionId,
-    snapshotMetadata: opts.snapshotMetadata,
     bodyMarkdown: opts.bodyMarkdown,
-    createdBy: opts.createdBy,
-    label: opts.label,
-    
     additionalQueriesBefore: [documentInsert, ...(opts.additionalQueriesBefore ?? [])],
     additionalQueriesAfter: opts.additionalQueriesAfter,
   })
-  return { document, ...revision }
+  return { document, ...write }
 }
 
 // Unlike syncContentDocumentFromBlocks, this never calls ensureContentDocument
 // (which INSERTs standalone, outside any batch). It folds the content_documents
 // INSERT into the same additionalQueriesBefore array as the caller's own
-// owner-row INSERT (e.g. blog_posts), so writeRevisionFromBlocks's single
+// owner-row INSERT (e.g. blog_posts), so the block writer's single
 // executeBatch call becomes the entire create operation: document, owner row,
-// blocks, and revision all commit or all fail together. Use this whenever a
+// and blocks all commit or all fail together. Use this whenever a
 // content document needs to be created atomically alongside the row it belongs
 // to — not for adding a document to an already-existing owner row (use
 // ensureContentDocument/syncContentDocumentFromBlocks for that).
@@ -499,12 +451,7 @@ export async function createContentDocumentWithBlocks(
   blocks: ContentBlockInput[],
   opts: {
     documentId?: string
-    revisionId?: string
-    snapshotMetadata?: Record<string, unknown>
     bodyMarkdown?: string
-    createdBy?: string | null
-    label?: string | null
-    publish?: boolean
     additionalQueriesBefore?: BatchQuery[]
     additionalQueriesAfter?: BatchQuery[]
   } = {},
@@ -572,7 +519,7 @@ export async function listBlocksForDocument(db: DbClient, documentId: string) {
 export async function appendContentBlock(
   db: DbClient,
   documentId: string,
-  input: ContentBlockInput & { after_block_id?: string | null; createdBy?: string | null; label?: string | null },
+  input: ContentBlockInput & { after_block_id?: string | null },
 ) {
   const document = await getContentDocumentById(db, documentId)
   if (!document) notFound('Content document not found')
@@ -615,9 +562,7 @@ export async function appendContentBlock(
   // detected instead of silently overwritten. An empty document has nothing
   // to race against, so no guard is needed there.
   const anchorBlock = afterIndex >= 0 ? existing[afterIndex] : undefined
-  return await writeRevisionFromBlocks(db, document, snapshots, {
-    createdBy: input.createdBy,
-    label: input.label,
+  return await writeDocumentBlocks(db, document, snapshots, {
     expectedBlock: anchorBlock ? { id: anchorBlock.id, updatedAt: anchorBlock.updated_at } : undefined,
   })
 }
@@ -625,7 +570,7 @@ export async function appendContentBlock(
 export async function replaceContentBlock(
   db: DbClient,
   blockId: string,
-  input: { data: Record<string, unknown>; expected_updated_at: string; createdBy?: string | null; label?: string | null },
+  input: { data: Record<string, unknown>; expected_updated_at: string },
 ) {
   const current = await getContentBlock(db, blockId)
   if (current.updated_at !== input.expected_updated_at) {
@@ -644,9 +589,7 @@ export async function replaceContentBlock(
     updated_at: block.id === blockId ? null : block.updated_at,
   }))
 
-  return await writeRevisionFromBlocks(db, document, snapshots, {
-    createdBy: input.createdBy,
-    label: input.label,
+  return await writeDocumentBlocks(db, document, snapshots, {
     expectedBlock: { id: blockId, updatedAt: input.expected_updated_at },
   })
 }
@@ -654,7 +597,7 @@ export async function replaceContentBlock(
 export async function deleteContentBlock(
   db: DbClient,
   blockId: string,
-  input: { expected_updated_at: string; createdBy?: string | null; label?: string | null },
+  input: { expected_updated_at: string },
 ) {
   const current = await getContentBlock(db, blockId)
   if (current.updated_at !== input.expected_updated_at) {
@@ -691,9 +634,7 @@ export async function deleteContentBlock(
       updated_at: block.updated_at,
     }))
 
-  return await writeRevisionFromBlocks(db, document, snapshots, {
-    createdBy: input.createdBy,
-    label: input.label,
+  return await writeDocumentBlocks(db, document, snapshots, {
     expectedBlock: { id: blockId, updatedAt: input.expected_updated_at },
   })
 }
@@ -712,7 +653,7 @@ export async function getContentEditorSnapshot(db: DbClient, ownerType: ContentD
   return { document, blocks: blocks.map(formatBlockOutline) }
 }
 
-export async function getPublishedContentSnapshot(db: DbClient, ownerType: ContentDocumentOwnerType, ownerId: string) {
+export async function getContentBlocksForOwner(db: DbClient, ownerType: ContentDocumentOwnerType, ownerId: string) {
   const document = await getContentDocumentByOwner(db, ownerType, ownerId)
   if (!document) return null
   const blocks = await listBlocksForDocument(db, document.id)
@@ -734,7 +675,7 @@ export async function replaceContentDocumentBlocks(
   ownerType: ContentDocumentOwnerType,
   ownerId: string,
   blocks: ContentBlockInput[],
-  opts: { expected_document_updated_at: string; createdBy?: string | null; label?: string | null;  revisionId?: string; snapshotMetadata?: Record<string, unknown>; additionalQueriesBefore?: BatchQuery[]; additionalQueriesAfter?: BatchQuery[] },
+  opts: { expected_document_updated_at: string; additionalQueriesBefore?: BatchQuery[]; additionalQueriesAfter?: BatchQuery[] },
 ) {
   const document = await getContentDocumentByOwner(db, ownerType, ownerId)
   if (!document) notFound('Content document not found')
@@ -752,12 +693,7 @@ export async function replaceContentDocumentBlocks(
     data: asObject(block.data, `content block ${index} data`),
     updated_at: null,
   }))
-  return await writeRevisionFromBlocks(db, document, snapshots, {
-    revisionId: opts.revisionId,
-    snapshotMetadata: opts.snapshotMetadata,
-    createdBy: opts.createdBy,
-    label: opts.label ?? 'Editor autosave',
-    
+  return await writeDocumentBlocks(db, document, snapshots, {
     expectedDocument: { id: document.id, updatedAt: opts.expected_document_updated_at },
     additionalQueriesBefore: opts.additionalQueriesBefore,
     additionalQueriesAfter: opts.additionalQueriesAfter,
@@ -765,23 +701,18 @@ export async function replaceContentDocumentBlocks(
 }
 
 /**
- * Prepare a published document replacement without doing any reads or writes.
+ * Prepare a document replacement without doing any reads or writes.
  *
  * Bulk domain services use this to prefetch their documents once and compose
  * one atomic D1 batch for several owners. The expected timestamp is preserved
  * in the document guard so a concurrent writer still turns the batch into a
- * conflict instead of silently overwriting a newer draft.
+ * conflict instead of silently overwriting newer content.
  */
 export function prepareContentDocumentBlocksReplacement(
   document: ContentDocumentRow,
   blocks: ContentBlockInput[],
   opts: {
     expected_document_updated_at: string
-    createdBy?: string | null
-    label?: string | null
-    publish?: boolean
-    revisionId?: string
-    snapshotMetadata?: Record<string, unknown>
     additionalQueriesBefore?: BatchQuery[]
     additionalQueriesAfter?: BatchQuery[]
   },
@@ -800,47 +731,10 @@ export function prepareContentDocumentBlocksReplacement(
     data: asObject(block.data, `content block ${index} data`),
     updated_at: null,
   }))
-  return buildRevisionBatch(document, snapshots, {
-    revisionId: opts.revisionId,
-    snapshotMetadata: opts.snapshotMetadata,
-    createdBy: opts.createdBy,
-    label: opts.label ?? 'Editor autosave',
-    
+  return buildDocumentWriteBatch(document, snapshots, {
     expectedDocument: { id: document.id, updatedAt: opts.expected_document_updated_at },
     additionalQueriesBefore: opts.additionalQueriesBefore,
     additionalQueriesAfter: opts.additionalQueriesAfter,
-  })
-}
-
-/** Writes a new published snapshot without replacing the live draft blocks or
- * draft revision. Used when migrating an already-published revision while a
- * newer, intentionally unpublished draft exists. */
-export async function replacePublishedContentDocumentBlocks(
-  db: DbClient,
-  ownerType: ContentDocumentOwnerType,
-  ownerId: string,
-  blocks: ContentBlockInput[],
-  opts: { expected_document_updated_at: string; createdBy?: string | null; label?: string | null },
-) {
-  const document = await getContentDocumentByOwner(db, ownerType, ownerId)
-  if (!document) notFound('Content document not found')
-  if (document.updated_at !== opts.expected_document_updated_at) {
-    throw new HTTPError({ statusCode: 409, statusMessage: 'Content document was updated by another writer' })
-  }
-  const snapshots = blocks.map((block, index) => ({
-    id: typeof block.id === 'string' ? block.id : undefined,
-    parent_block_id: block.parent_block_id ?? null,
-    type: assertBlockType(block.type),
-    position: index,
-    level: block.level ?? null,
-    data: asObject(block.data, `content block ${index} data`),
-    updated_at: null,
-  }))
-  return await writeRevisionFromBlocks(db, document, snapshots, {
-    createdBy: opts.createdBy,
-    label: opts.label ?? 'Published legacy structured-content backfill',
-    publishOnly: true,
-    expectedDocument: { id: document.id, updatedAt: opts.expected_document_updated_at },
   })
 }
 
@@ -850,7 +744,7 @@ export interface LegacyBlogBackfillFinding {
   type: 'faq' | 'how_to'
   action: 'insert' | 'skip_existing' | 'malformed' | 'unmatched_placeholder' | 'duplicate'
   detail?: string
-  target?: 'draft' | 'published'
+  target?: 'current'
 }
 
 const LEGACY_COMPONENT_PLACEHOLDER_RE = /\{\{\s*component\s+type\s*=\s*(?:"([^"]+)"|'([^']+)'|([a-zA-Z0-9_-]+))\s*\}\}/g
@@ -941,7 +835,7 @@ export async function backfillLegacyBlogStructuredBlocks(
     const ownerType: ContentDocumentOwnerType = first.site_id ? 'tenant_blog' : 'platform_blog'
     let snapshot = await getContentEditorSnapshot(db, ownerType, postId)
     if (!snapshot && opts.apply) {
-      await syncContentDocumentFromMarkdown(db, { ownerType, ownerId: postId, bodyMarkdown: first.body, label: 'Legacy structured-content backfill', publish: Boolean(first.published_at) })
+      await syncContentDocumentFromMarkdown(db, { ownerType, ownerId: postId, bodyMarkdown: first.body })
       snapshot = await getContentEditorSnapshot(db, ownerType, postId)
     }
     const sourceBlocks = (snapshot?.blocks ?? markdownToContentBlocks(first.body)) as Array<ContentBlockInput & { id?: string }>
@@ -966,37 +860,14 @@ export async function backfillLegacyBlogStructuredBlocks(
       }
       validComponents.push({ component_id: component.component_id, type, position: component.position, data })
     }
-    const draftMerged = mergeLegacyBlogComponents(blocks, validComponents)
-    blocks.splice(0, blocks.length, ...draftMerged.blocks)
-    findings.push(...draftMerged.findings.map(finding => ({ ...finding, post_id: postId, target: 'draft' as const })))
-
-    const hasPublishedRevision = Boolean(snapshot?.document.published_revision_id)
-    const distinctPublishedRevision = Boolean(
-      snapshot?.document.published_revision_id
-      && snapshot.document.published_revision_id !== snapshot.document.draft_revision_id,
-    )
-    let publishedMerged: ReturnType<typeof mergeLegacyBlogComponents> | null = null
-    if (snapshot && distinctPublishedRevision) {
-      const publishedBlocks = await getPublishedContentSnapshot(db, ownerType, postId)
-      if (publishedBlocks) {
-        publishedMerged = mergeLegacyBlogComponents(publishedBlocks, validComponents)
-        findings.push(...publishedMerged.findings.map(finding => ({ ...finding, post_id: postId, target: 'published' as const })))
-      }
-    }
+    const merged = mergeLegacyBlogComponents(blocks, validComponents)
+    blocks.splice(0, blocks.length, ...merged.blocks)
+    findings.push(...merged.findings.map(finding => ({ ...finding, post_id: postId, target: 'current' as const })))
 
     if (opts.apply && snapshot) {
-      const draftChanged = draftMerged.findings.some(finding => finding.action === 'insert')
-      const publishedChanged = publishedMerged?.findings.some(finding => finding.action === 'insert') === true
-      if (draftChanged) {
+      const changed = merged.findings.some(finding => finding.action === 'insert')
+      if (changed) {
         await replaceContentDocumentBlocks(db, ownerType, postId, blocks, {
-          expected_document_updated_at: snapshot.document.updated_at,
-          label: 'Legacy FAQ/How-To backfill',
-
-        })
-        snapshot = await getContentEditorSnapshot(db, ownerType, postId)
-      }
-      if (publishedChanged && publishedMerged && snapshot) {
-        await replacePublishedContentDocumentBlocks(db, ownerType, postId, publishedMerged.blocks, {
           expected_document_updated_at: snapshot.document.updated_at,
         })
       }
