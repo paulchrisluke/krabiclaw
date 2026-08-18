@@ -18,7 +18,7 @@ export interface PublicTenantPage {
   recipe: string | null
   locale: string
   blocks: TenantPageBlock[]
-  published_revision_id: string | null
+  
   updated_at: string
 }
 
@@ -193,7 +193,7 @@ async function hydrateBlocks(db: DbClient, siteId: string, pagePath: string, blo
 function mapPage(page: TenantPageDto, blocks: TenantPageBlock[], preview: boolean): PublicTenantPage {
   return {
     id: page.id,
-    path: preview ? page.draft_path : page.published_path,
+    path: page.path,
     title: page.title,
     summary: page.summary,
     seo_title: page.seo_title,
@@ -204,7 +204,6 @@ function mapPage(page: TenantPageDto, blocks: TenantPageBlock[], preview: boolea
     recipe: page.recipe,
     locale: page.locale,
     blocks,
-    published_revision_id: page.published_revision_id,
     updated_at: page.updated_at,
   }
 }
@@ -219,14 +218,14 @@ export async function getPublicTenantPageForPath(
     ? await getTenantPageForEditor(db, await resolveVariantId(db, siteId, path, options.locale))
     : await getPublishedTenantPage(db, siteId, path, options.locale)
   if (!page) return null
-  return mapPage(page, await hydrateBlocks(db, siteId, options.preview ? page.draft_path : page.published_path, page.blocks), Boolean(options.preview))
+  return mapPage(page, await hydrateBlocks(db, siteId, page.path, page.blocks), Boolean(options.preview))
 }
 
 async function resolveVariantId(db: DbClient, siteId: string, path: string, locale?: string | null): Promise<string> {
   const row = await queryFirst<{ id: string } | null>(db, `
     SELECT v.id
       FROM tenant_page_variants v
-     WHERE v.site_id = ? AND (v.published_path = ? OR v.draft_path = ?)
+     WHERE v.site_id = ? AND v.path = ?
        AND (? IS NULL OR v.locale = ?)
      ORDER BY v.locale ASC
      LIMIT 1

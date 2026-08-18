@@ -4,7 +4,6 @@ import { execute, executeBatch, queryAll, queryFirst, type BatchQuery, type DbCl
 import {
   createContentDocumentWithBlocks,
   deleteContentDocumentForOwner,
-  publishCurrentPlatformDocRevision,
   getContentEditorSnapshot,
   getPublishedContentSnapshot,
   markdownToContentBlocks,
@@ -13,7 +12,6 @@ import {
   replaceContentDocumentBlocks,
   renderContentBlocksToMarkdown,
   syncContentDocumentFromMarkdown,
-  unpublishContentDocument,
   type ContentDocumentOwnerType,
   type ContentBlockInput,
 } from '~/server/utils/content-documents'
@@ -1799,13 +1797,13 @@ export async function updatePlatformBlogLifecycle(
     id: string
     updated_at: string
     document_id: string | null
-    draft_revision_id: string | null
+    
     document_updated_at: string | null
   }
   const rows = await queryAll<LifecycleSource>(db, `
     SELECT p.id, p.updated_at,
            d.id AS document_id,
-           d.draft_revision_id,
+           
            d.updated_at AS document_updated_at
       FROM blog_posts p
       LEFT JOIN content_documents d
@@ -1822,7 +1820,7 @@ export async function updatePlatformBlogLifecycle(
   if (source.updated_at !== input.expected_updated_at) {
     throw new HTTPError({ statusCode: 409, statusMessage: 'Blog post was updated by another writer' })
   }
-  if (!source.document_id || !source.draft_revision_id || !source.document_updated_at) {
+  if (!source.document_id || !source.document_updated_at) {
     throw new HTTPError({ statusCode: 500, statusMessage: 'Blog content document is missing its draft revision' })
   }
   if (source.document_updated_at !== input.expected_document_updated_at) {
@@ -1840,7 +1838,7 @@ export async function updatePlatformBlogLifecycle(
   let rowAssignments: string
   if (input.action === 'publish' && scheduledFor) {
     rowAssignments = `scheduled_for = ?,
-      scheduled_revision_id = (SELECT draft_revision_id FROM content_documents WHERE id = ?),
+      
       published_at = NULL,
       status = 'scheduled',
       updated_at = ?`
@@ -1881,8 +1879,7 @@ export async function updatePlatformBlogLifecycle(
         input.expected_updated_at,
         source.document_id,
         input.expected_document_updated_at,
-        source.draft_revision_id,
-      ],
+        ],
     },
     {
       query: `UPDATE blog_posts SET ${rowAssignments} WHERE id = ? AND updated_at = ?`,
@@ -1913,8 +1910,8 @@ export async function updatePlatformBlogLifecycle(
   try {
     await executeBatch(db, queries)
   } catch (error) {
-    const latest = await queryFirst<{ updated_at: string; document_updated_at: string | null; draft_revision_id: string | null } | null>(db, `
-      SELECT p.updated_at, d.updated_at AS document_updated_at, d.draft_revision_id
+    const latest = await queryFirst<{ updated_at: string; document_updated_at: string | null;  } | null>(db, `
+      SELECT p.updated_at, d.updated_at AS document_updated_at
         FROM blog_posts p
         LEFT JOIN content_documents d ON d.id = ?
        WHERE p.id = ? LIMIT 1
@@ -1923,7 +1920,7 @@ export async function updatePlatformBlogLifecycle(
     if (latest.updated_at !== input.expected_updated_at) {
       throw new HTTPError({ statusCode: 409, statusMessage: 'Blog post was updated by another writer' })
     }
-    if (latest.document_updated_at !== input.expected_document_updated_at || latest.draft_revision_id !== source.draft_revision_id) {
+    if (latest.document_updated_at !== input.expected_document_updated_at ) {
       throw new HTTPError({ statusCode: 409, statusMessage: 'Content document was updated by another writer' })
     }
     throw error

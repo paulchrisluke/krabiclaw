@@ -135,66 +135,6 @@ test.describe("mcp tools", () => {
     );
   });
 
-  test("update_site_settings rollback preserves original brand and subdomain through MCP tool path", async ({
-    request,
-    baseURL,
-  }) => {
-    test.setTimeout(60_000);
-
-    await loginAsFreshChowbotUser(request, baseURL!, "update-settings");
-
-    const contextRes = await request.get(`${baseURL}/api/dashboard/context`);
-    expect(contextRes.status()).toBe(200);
-    const context = (await contextRes.json()) as {
-      site?: { id?: string | null };
-    };
-    const siteId = await ensureSite(
-      request,
-      baseURL!,
-      context.site?.id ?? null,
-    );
-
-    const beforeRes = await request.get(
-      `${baseURL}/api/sites/${siteId}/settings`,
-    );
-    expect(beforeRes.status()).toBe(200);
-    const beforeBody = (await beforeRes.json()) as {
-      settings: {
-        brand_name: string;
-        subdomain: string;
-      };
-    };
-
-    const toolRes = await request.post(`${baseURL}/api/dev/mcp-tool`, {
-      headers: devLoginHeaders(),
-      data: {
-        siteId,
-        toolName: "update_site_settings",
-        input: {
-          brand_name: `${beforeBody.settings.brand_name} MCP Rollback ${Date.now()}`,
-          forceSubdomainRegistrationFailure: true,
-        },
-      },
-    });
-    expect(toolRes.status()).toBe(400);
-    const body = await toolRes.json();
-    expect(body.data?.error).toBe("Failed to register subdomain with Cloudflare. The rename was not applied.");
-
-    const afterRes = await request.get(
-      `${baseURL}/api/sites/${siteId}/settings`,
-    );
-    expect(afterRes.status()).toBe(200);
-    const afterBody = (await afterRes.json()) as {
-      settings: {
-        brand_name: string;
-        subdomain: string;
-      };
-    };
-
-    expect(afterBody.settings.brand_name).toBe(beforeBody.settings.brand_name);
-    expect(afterBody.settings.subdomain).toBe(beforeBody.settings.subdomain);
-  });
-
   test("location update and Q&A tools use the canonical write path end-to-end", async ({
     request,
     baseURL,

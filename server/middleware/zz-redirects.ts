@@ -50,7 +50,7 @@ async function resolveTenantRedirectForRequest(event: H3Event) {
 
   const exactPage = await queryFirst<{ id: string } | null>(db, `
     SELECT id FROM tenant_page_variants
-     WHERE site_id = ? AND locale = ? AND published_path = ?
+     WHERE site_id = ? AND locale = ? AND path = ?
        AND status = 'published' AND published_revision_id IS NOT NULL
      LIMIT 1
   `, [siteId, locale, path])

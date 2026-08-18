@@ -224,24 +224,7 @@ export async function upsertProfessionalServiceContent(
       validationError(`${field} must be an object.`)
     }
   }
-  const navigationItems = recordArray(data.navigation, 'navigation')
-  const providedNavigationIds = Array.from(new Set(
-    navigationItems
-      .map(item => cleanString(item.id, 80))
-      .filter(Boolean),
-  ))
 
-  if (providedNavigationIds.length) {
-    const foreignNavigation = await queryAll<{ id: string }>(db, `
-      SELECT id
-        FROM tenant_navigation_items
-       WHERE id IN (${providedNavigationIds.map(() => '?').join(',')})
-         AND (organization_id <> ? OR site_id <> ?)
-    `, [...providedNavigationIds, organizationId, siteId])
-    if (foreignNavigation.length) {
-      validationError('Navigation item ids must belong to the current site.')
-    }
-  }
 
   for (const item of recordArray(data.offerings, 'offerings')) {
     const id = cleanString(item.id, 80) || idWith('offering')
@@ -426,34 +409,7 @@ export async function upsertProfessionalServiceContent(
     written.themeTokens = 1
   }
 
-  for (const item of navigationItems) {
-    const id = cleanString(item.id, 80) || idWith('nav')
-    statements.push({
-      query: `
-      INSERT INTO tenant_navigation_items
-        (id, organization_id, site_id, area, label, url, item_type, sort_order, status, metadata_json, updated_at, updated_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        area = excluded.area, label = excluded.label, url = excluded.url, item_type = excluded.item_type,
-        sort_order = excluded.sort_order, status = excluded.status, metadata_json = excluded.metadata_json,
-        updated_at = CURRENT_TIMESTAMP, updated_by = excluded.updated_by
-    `,
-      params: [
-        id,
-        organizationId,
-        siteId,
-        requiredText(item.area, `navigation.${id}.area`, 30),
-        requiredText(item.label, `navigation.${id}.label`, 120),
-        safeStoredUrl(item.url, 500) || validationError(`navigation.${id}.url must be a valid URL.`),
-        requiredText(item.item_type, `navigation.${id}.item_type`, 40),
-        Number(item.sort_order ?? 0),
-        requiredText(item.status, `navigation.${id}.status`, 30),
-        json(strictJsonRecord(item.metadata, `navigation.${id}.metadata`)),
-        updatedBy,
-      ],
-    })
-    written.navigation = (written.navigation ?? 0) + 1
-  }
+
 
   if (statements.length) {
     await executeBatch(db, statements)

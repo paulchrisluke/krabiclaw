@@ -114,17 +114,14 @@ export default defineHandler(async (event) => {
       : { count: 0 }
     const photoCount = photoCountResult?.count ?? 0
 
-    // Check About page content
+        // Check About page content
     const aboutContent = await queryFirst<{ id: string }>(db, `
       SELECT v.id
       FROM tenant_page_variants v
-      JOIN content_revisions r ON r.id = v.published_revision_id
-      WHERE v.site_id = ? AND v.organization_id = ? AND v.published_path = '/about'
-        AND EXISTS (
-          SELECT 1 FROM json_each(json_extract(r.snapshot_json, '$.blocks')) block
-          WHERE json_extract(block.value, '$.type') = 'markdown'
-            AND length(COALESCE(json_extract(block.value, '$.data.markdown'), '')) > 0
-        )
+      JOIN content_blocks b ON b.document_id = v.document_id
+      WHERE v.site_id = ? AND v.organization_id = ? AND v.path = '/about'
+        AND b.type = 'markdown'
+        AND length(COALESCE(json_extract(b.data_json, '$.markdown'), '')) > 0
       LIMIT 1
     `, [siteId, orgId])
 

@@ -69,11 +69,10 @@
 </template>
 
 <script setup lang="ts">
-import type { PublicBlawbyIdentity, PublicCompliance, PublicNavigationItem, PublicOfferingLink } from '~/types/blawby'
+import type { PublicBlawbyIdentity, PublicCompliance, PublicOfferingLink } from '~/types/blawby'
 
 const props = defineProps<{
   site: PublicBlawbyIdentity
-  navigation: PublicNavigationItem[]
   compliance: PublicCompliance | null
   offeringLinks: PublicOfferingLink[]
 }>()
@@ -84,23 +83,15 @@ const description = computed(() => props.compliance?.footer_disclaimer || props.
 const footerLogo = computed(() => typeof props.compliance?.metadata?.logo_dark_url === 'string'
   ? props.compliance.metadata.logo_dark_url
   : props.site.logo_url)
-const footerItems = computed(() => props.navigation.filter(item => item.area === 'footer'))
-const socialItems = computed(() => props.navigation.filter(item => item.area === 'social' && item.url !== '/none'))
-
-function groupItems(group: string) {
-  return footerItems.value.filter(item => item.metadata?.group === group)
+interface NavItem {
+  id: string
+  url: string
+  label: string
 }
 
-const supportItems = computed<PublicNavigationItem[]>(() => {
-  return groupItems('support')
-})
-
-const companyItems = computed<PublicNavigationItem[]>(() => {
-  return groupItems('company')
-})
-
-const legalItems = computed<PublicNavigationItem[]>(() => {
-  return props.navigation.filter(item => item.area === 'legal')
-})
+const socialItems = computed<NavItem[]>(() => [])
+const supportItems = computed<NavItem[]>(() => [])
+const companyItems = computed<NavItem[]>(() => [])
+const legalItems = computed<NavItem[]>(() => [])
 
 </script>

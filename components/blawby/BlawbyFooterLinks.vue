@@ -18,9 +18,7 @@
 </template>
 
 <script setup lang="ts">
-import type { PublicNavigationItem } from '~/types/blawby'
-
-defineProps<{ items: PublicNavigationItem[] }>()
+defineProps<{ items: any[] }>()
 
 function isExternal(url: string) {
   return /^https?:\/\//i.test(url)

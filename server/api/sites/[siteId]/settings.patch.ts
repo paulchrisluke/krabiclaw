@@ -24,8 +24,6 @@ function timingSafeEqualText(a: string, b: string): boolean {
 export default defineHandler(async (event) => {
   const siteId = getRouterParam(event, 'siteId')
   const body = await readBody(event) as UpdateSiteSettingsRequest
-  const forceSubdomainRegistrationFailure = (event.req.headers.get('x-e2e-force-subdomain-failure')) === 'true'
-  
   if (!siteId) {
     return jsonResponse({ 
       error: 'Site ID is required' 
@@ -40,14 +38,6 @@ export default defineHandler(async (event) => {
 
   const { env, db, session, site } = await requireSiteAccess(event, siteId)
 
-  if (forceSubdomainRegistrationFailure) {
-    const e2eOverride = env.E2E_ALLOW_DEV_ROUTES === 'true'
-    const expectedSecret = env.E2E_DEV_ROUTE_SECRET || ''
-    const providedSecret = (event.req.headers.get('x-dev-route-secret')) || ''
-    if (!e2eOverride || !expectedSecret || !providedSecret || !timingSafeEqualText(providedSecret, expectedSecret)) {
-      throw new HTTPError({ statusCode: 403, statusMessage: 'Forbidden' })
-    }
-  }
 
   try {
     // Demo org is read-only for everyone except platform admins
@@ -57,7 +47,7 @@ export default defineHandler(async (event) => {
     }
 
     const result = await updateSiteSettingsFields(
-      db, env, siteId, site.organization_id, body, session.user.id, { forceSubdomainRegistrationFailure }
+      db, env, siteId, site.organization_id, body, session.user.id
     )
 
     return jsonResponse(result.data, { status: result.status })

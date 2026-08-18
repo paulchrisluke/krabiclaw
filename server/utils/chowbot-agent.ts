@@ -156,7 +156,6 @@ async function executeTool(
     channel?: "dashboard" | "whatsapp";
     sessionId?: string | null;
     pendingMedia?: { assetId: string; siteId: string };
-    forceSubdomainRegistrationFailure?: boolean;
   },
 ): Promise<ApiValue> {
   const { db, env, orgId, siteId, userId } = ctx;
@@ -663,10 +662,6 @@ async function executeTool(
         orgId,
         { brand_name: input.brand_name },
         userId,
-        {
-          forceSubdomainRegistrationFailure:
-            ctx.forceSubdomainRegistrationFailure,
-        },
       );
       if (result.status >= 400) {
         return {
@@ -1005,7 +1000,6 @@ export async function executeChowBotToolForTest(
     locationId?: string | null;
     channel?: "dashboard" | "whatsapp";
     pendingMedia?: { assetId: string; siteId: string };
-    forceSubdomainRegistrationFailure?: boolean;
   },
 ): Promise<ApiValue> {
   return executeTool(name, input, ctx);

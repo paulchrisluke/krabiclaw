@@ -15,7 +15,7 @@ export type CopyEntityType =
 
 export interface CopyEntityConfig {
   type: CopyEntityType
-  include_translations?: boolean
+  
 }
 
 export interface CopyBatchInput {
@@ -186,10 +186,10 @@ export async function copyLocationBatch(
 
       switch (entityConfig.type) {
         case 'menus':
-          await copyMenus(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest, entityConfig.include_translations)
+          await copyMenus(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest)
           break
         case 'menu_items':
-          await copyMenuItems(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest, idMappings, entityConfig.include_translations)
+          await copyMenuItems(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest, idMappings)
           break
         case 'media_assets':
           await copyMediaAssets(db, source_location_id, targetLocationId, organizationId, siteId, now, statements, manifest)
@@ -251,8 +251,8 @@ async function copyMenus(
 
     statements.push({
       query: `
-        INSERT INTO menus (id, organization_id, site_id, location_id, name, description, status, section_order, created_at, updated_at, created_by, updated_by)
-        SELECT ?, organization_id, ?, ?, name, description, status, section_order, ?, updated_at, created_by, updated_by
+        INSERT INTO menus (id, organization_id, site_id, location_id, name, description, is_visible, section_order, created_at, updated_at, created_by, updated_by)
+        SELECT ?, organization_id, ?, ?, name, description, is_visible, section_order, ?, updated_at, created_by, updated_by
         FROM menus WHERE id = ?
       `,
       params: [newId, siteId, targetLocationId, now, menu.id],

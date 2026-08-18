@@ -81,11 +81,10 @@
 </template>
 
 <script setup lang="ts">
-import type { PublicBlawbyIdentity, PublicConsultationSettings, PublicNavigationItem } from '~/types/blawby'
+import type { PublicBlawbyIdentity, PublicConsultationSettings } from '~/types/blawby'
 
 const props = defineProps<{
   site: PublicBlawbyIdentity
-  navigation: PublicNavigationItem[]
   consultation: PublicConsultationSettings
 }>()
 
@@ -98,10 +97,14 @@ const headerCtaLabel = computed(() => typeof props.consultation.metadata.header_
   : 'Get Started')
 const mobileOpen = ref(false)
 const mobileNavDetails = ref<HTMLDetailsElement | null>(null)
-const headerItems = computed(() => {
-  return props.navigation.filter(item => item.area === 'header')
-})
-const mobileItems = headerItems
+interface NavItem {
+  id: string
+  url: string
+  label: string
+}
+
+const headerItems = computed<NavItem[]>(() => [])
+const mobileItems = computed<NavItem[]>(() => [])
 
 function syncMobileNavState(event: Event) {
   mobileOpen.value = (event.currentTarget as HTMLDetailsElement).open

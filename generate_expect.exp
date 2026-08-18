@@ -1,0 +1,19 @@
+#!/usr/bin/expect -f
+set timeout -1
+spawn yarn db:generate
+
+expect {
+    "Is onboarding_sessions table created or renamed from another table?" {
+        send "\033\[B\r"
+        exp_continue
+    }
+    "Is spent_subdomains table created or renamed from another table?" {
+        send "\r"
+        exp_continue
+    }
+    "You're about to delete" {
+        send "\r"
+        exp_continue
+    }
+    eof
+}

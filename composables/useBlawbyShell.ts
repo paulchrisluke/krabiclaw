@@ -9,7 +9,6 @@ export async function useBlawbyShell() {
     ...asyncData,
     data,
     identity: computed(() => data.value.identity),
-    navigation: computed(() => data.value.navigation),
     consultation: computed(() => data.value.consultation),
     compliance: computed(() => data.value.compliance),
     themeTokens: computed(() => data.value.themeTokens),

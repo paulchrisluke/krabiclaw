@@ -1,0 +1,73 @@
+#!/usr/bin/expect -f
+
+set timeout 60
+
+spawn env FORCE_COLOR=0 yarn db:generate
+
+# Wait for each interactive prompt and respond
+# Pattern: generic column prompt handler + specific rename handlers
+
+expect {
+    -re {onboarding_sessions.*table} {
+        after 200
+        # Move down once to select "rename from onboarding_drafts"
+        send "\033\[B"
+        send "\r"
+        exp_continue
+    }
+    -re {spent_subdomains.*table} {
+        after 200
+        # First option = create table, just Enter
+        send "\r"
+        exp_continue
+    }
+    -re {domain column in spent_subdomains} {
+        after 200
+        send "\r"
+        exp_continue
+    }
+    -re {site_id column in spent_subdomains} {
+        after 200
+        send "\r"
+        exp_continue
+    }
+    -re {successor_domain column} {
+        after 200
+        send "\r"
+        exp_continue
+    }
+    -re {spent_at column} {
+        after 200
+        send "\r"
+        exp_continue
+    }
+    -re {is_visible column in menus} {
+        after 200
+        send "\r"
+        exp_continue
+    }
+    -re {document_id column in tenant_page_variants} {
+        after 200
+        # Rename from draft_document_id (option 2)
+        send "\033\[B"
+        send "\r"
+        exp_continue
+    }
+    -re {path column in tenant_page_variants} {
+        after 200
+        # Rename from published_path (option 2)
+        send "\033\[B"
+        send "\r"
+        exp_continue
+    }
+    -re {Is \S+ column in \S+ table} {
+        after 200
+        # Default: create column
+        send "\r"
+        exp_continue
+    }
+    eof {}
+    timeout {
+        puts "\nExpect timed out"
+    }
+}

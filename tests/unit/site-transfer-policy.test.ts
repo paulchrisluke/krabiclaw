@@ -10,7 +10,7 @@ import {
 
 test('site transfer policy is disjoint and exhaustive by declared category', () => {
   const tables = Object.values(SITE_TRANSFER_POLICY).flat()
-  assert.equal(tables.length, 61)
+  assert.equal(tables.length, 60)
   assert.equal(new Set(tables).size, tables.length)
 })
 test('resource team generation has one strict shared JSON contract', () => {

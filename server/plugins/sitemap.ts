@@ -20,8 +20,8 @@ async function listPublishedTenantSitemapPages(db: DbClient, siteId: string) {
            COALESCE(r.published_at, r.created_at) AS lastmod,
            json_extract(r.snapshot_json, '$.metadata.robots') AS robots
       FROM tenant_page_variants v
-      JOIN content_revisions r ON r.id = v.published_revision_id AND r.document_id = v.draft_document_id
-     WHERE v.site_id = ? AND v.status = 'published' AND v.published_revision_id IS NOT NULL
+      JOIN content_revisions r ON r.id = v.published_revision_id AND r.document_id = v.document_id
+     WHERE v.site_id = ? AND v.(scheduled_for IS NULL OR scheduled_for <= datetime('now')) AND v.published_revision_id IS NOT NULL
        AND json_extract(r.snapshot_json, '$.metadata.locale') = v.locale
        AND json_extract(r.snapshot_json, '$.metadata.path') IS NOT NULL
      ORDER BY lastmod ASC, path ASC
@@ -71,14 +71,14 @@ export default definePlugin((nitroApp) => {
           db,
           `SELECT slug, category, updated_at
            FROM platform_docs
-           WHERE status = 'published'
+           WHERE (scheduled_for IS NULL OR scheduled_for <= datetime('now'))
              AND (robots IS NULL OR robots NOT LIKE '%noindex%')`,
         ),
         queryAll<ApiRecord>(
           db,
           `SELECT slug, category, updated_at
            FROM blog_posts
-           WHERE status = 'published'
+           WHERE (scheduled_for IS NULL OR scheduled_for <= datetime('now'))
              AND site_id IS NULL
              AND visibility = 'public'
              AND (robots IS NULL OR robots NOT LIKE '%noindex%')`,
@@ -144,7 +144,7 @@ export default definePlugin((nitroApp) => {
         queryAll<{ slug: string; canonical_path: string | null; updated_at: string | null }>(db, `
           SELECT slug, canonical_path, updated_at
             FROM offerings
-           WHERE site_id = ? AND status = 'published'
+           WHERE site_id = ? AND (scheduled_for IS NULL OR scheduled_for <= datetime('now'))
            ORDER BY sort_order ASC, name ASC
         `, [siteId]),
         listPublishedTenantSitemapPages(db, siteId),
@@ -153,7 +153,7 @@ export default definePlugin((nitroApp) => {
           `SELECT slug, updated_at
            FROM blog_posts
            WHERE site_id = ?
-             AND status = 'published'
+             AND (scheduled_for IS NULL OR scheduled_for <= datetime('now'))
              AND visibility = 'public'
              AND (robots IS NULL OR robots NOT LIKE '%noindex%')`,
           [siteId],
@@ -200,7 +200,7 @@ export default definePlugin((nitroApp) => {
          FROM menu_items mi
          JOIN menus m ON m.id = mi.menu_id
          WHERE m.site_id = ?
-           AND m.status = 'published'
+           AND m.(scheduled_for IS NULL OR scheduled_for <= datetime('now'))
            AND (mi.robots IS NULL OR mi.robots NOT LIKE '%noindex%')`,
         [siteId],
       ),
@@ -209,7 +209,7 @@ export default definePlugin((nitroApp) => {
         `SELECT slug, updated_at
          FROM blog_posts
          WHERE site_id = ?
-           AND status = 'published'
+           AND (scheduled_for IS NULL OR scheduled_for <= datetime('now'))
            AND visibility = 'public'
            AND (robots IS NULL OR robots NOT LIKE '%noindex%')`,
         [siteId],

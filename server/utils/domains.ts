@@ -12,7 +12,6 @@ export interface DomainEnv {
   CF_ZARAZ_API_TOKEN?: string
   CF_SAAS_CNAME_TARGET?: string
   CF_ACCOUNT_ID?: string
-  CF_PAGES_PROJECT_NAME?: string
   NUXT_PUBLIC_FREE_SITE_DOMAIN?: string
   NUXT_PUBLIC_PLATFORM_DOMAIN?: string
 }
@@ -220,46 +219,6 @@ export async function ensureDomainAvailable(db: D1Database, domains: string[], e
   if (existing?.domain) throw new Error(`${existing.domain} is already in use`)
 }
 
-/**
- * Registers a subdomain with the Cloudflare Pages project via the Pages Domains API.
- * This is what makes `*.krabiclaw.com` subdomains route to the Pages Worker automatically
- * without any manual Cloudflare dashboard interaction.
- */
-async function addPagesCustomDomain(env: DomainEnv, domain: string): Promise<void> {
-  const accountId = env.CF_ACCOUNT_ID
-  const projectName = env.CF_PAGES_PROJECT_NAME
-  const token = env.CF_CUSTOM_HOSTNAMES_API_TOKEN
-
-  if (!accountId || !projectName || !token) {
-    console.warn('addPagesCustomDomain: missing CF_ACCOUNT_ID, CF_PAGES_PROJECT_NAME, or CF_CUSTOM_HOSTNAMES_API_TOKEN — skipping Pages domain registration')
-    return
-  }
-
-  const response = await fetch(
-    `${CF_API_BASE}/accounts/${accountId}/pages/projects/${projectName}/domains`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ name: domain }),
-      signal: AbortSignal.timeout(PAGES_DOMAIN_REQUEST_TIMEOUT_MS),
-    }
-  )
-
-  const body = await response.json().catch(() => null) as ApiValue
-
-  // 409 means the domain is already registered — that is fine
-  if (response.status === 409) return
-
-  if (!response.ok || body?.success === false) {
-    const message = body?.errors?.map((e: ApiValue) => e.message).filter(Boolean).join('; ') || `Pages API HTTP ${response.status}`
-    console.error('addPagesCustomDomain: failed to register domain with Cloudflare Pages', { domain, message })
-    throw new Error(message)
-  }
-}
-
 export async function createSystemSubdomain(
   env: DomainEnv,
   db: D1Database,
@@ -271,21 +230,33 @@ export async function createSystemSubdomain(
   const domain = `${subdomain}.${platformHostname(env)}`
   const id = `domain-${siteId}-subdomain`
 
-  // Automatically provision this subdomain in the Cloudflare Pages project.
-  // This is the equivalent of clicking "Set up a custom domain" in the dashboard.
-  await addPagesCustomDomain(env, domain)
+  const existing = await queryFirst<{ domain: string }>(
+    db, `SELECT domain FROM site_domains WHERE id = ? LIMIT 1`, [id]
+  )
 
-  await execute(db, `
-    INSERT OR REPLACE INTO site_domains
-    (id, organization_id, site_id, domain, type, role, status, dns_status, dns_target, activated_at, created_at, updated_at)
-    VALUES (?, ?, ?, ?, 'subdomain', 'canonical', 'active', 'valid', ?, ?, ?, ?)
-  `, [id, organizationId, siteId, domain, platformHostname(env), now, now, now])
+  const stmts: Array<{ sql: string; values: unknown[] }> = []
 
-  await execute(db, `
-    UPDATE sites
-    SET public_url = ?, updated_at = ?
-    WHERE id = ? AND organization_id = ?
-  `, [`https://${domain}`, now, siteId, organizationId])
+  if (existing?.domain && existing.domain !== domain) {
+    stmts.push({
+      sql: `INSERT OR REPLACE INTO spent_subdomains (domain, site_id, successor_domain, spent_at) VALUES (?, ?, ?, ?)`,
+      values: [existing.domain, siteId, domain, now],
+    })
+  }
+
+  stmts.push(
+    {
+      sql: `INSERT OR REPLACE INTO site_domains
+        (id, organization_id, site_id, domain, type, role, status, dns_status, dns_target, activated_at, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 'subdomain', 'canonical', 'active', 'valid', ?, ?, ?, ?)`,
+      values: [id, organizationId, siteId, domain, platformHostname(env), now, now, now],
+    },
+    {
+      sql: `UPDATE sites SET public_url = ?, updated_at = ? WHERE id = ? AND organization_id = ?`,
+      values: [`https://${domain}`, now, siteId, organizationId],
+    }
+  )
+
+  await db.batch(stmts.map(s => db.prepare(s.sql).bind(...s.values)))
 
   return (await queryFirst<DomainRecord>(db, `SELECT * FROM site_domains WHERE id = ?`, [id])) as DomainRecord
 }

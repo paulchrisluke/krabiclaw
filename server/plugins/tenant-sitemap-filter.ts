@@ -27,8 +27,8 @@ async function publishedTenantPagePaths(event: H3Event, db: DbClient | undefined
   const rows = await queryAll<{ path: string | null }>(db, `
     SELECT json_extract(r.snapshot_json, '$.metadata.path') AS path
       FROM tenant_page_variants v
-      JOIN content_revisions r ON r.id = v.published_revision_id AND r.document_id = v.draft_document_id
-     WHERE v.site_id = ? AND v.status = 'published' AND v.published_revision_id IS NOT NULL
+      JOIN content_revisions r ON r.id = v.published_revision_id AND r.document_id = v.document_id
+     WHERE v.site_id = ? AND v.(scheduled_for IS NULL OR scheduled_for <= datetime('now')) AND v.published_revision_id IS NOT NULL
        AND json_extract(r.snapshot_json, '$.metadata.locale') = v.locale
   `, [siteId])
   return new Set(rows.map(row => row.path).filter((path): path is string => Boolean(path)))

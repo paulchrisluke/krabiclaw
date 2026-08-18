@@ -9,8 +9,6 @@ export interface ContentDocumentRow {
   id: string
   owner_type: ContentDocumentOwnerType
   owner_id: string
-  draft_revision_id: string | null
-  published_revision_id: string | null
   created_at: string
   updated_at: string
 }
@@ -181,7 +179,7 @@ export function renderContentBlocksToMarkdown(blocks: Array<Pick<ContentBlockRow
 export async function getContentDocumentByOwner(db: DbClient, ownerType: ContentDocumentOwnerType, ownerId: string) {
   return await queryFirst<ContentDocumentRow | null>(
     db,
-    `SELECT id, owner_type, owner_id, draft_revision_id, published_revision_id, created_at, updated_at
+    `SELECT id, owner_type, owner_id, created_at, updated_at
      FROM content_documents
      WHERE owner_type = ? AND owner_id = ?
      LIMIT 1`,
@@ -192,7 +190,7 @@ export async function getContentDocumentByOwner(db: DbClient, ownerType: Content
 export async function getContentDocumentById(db: DbClient, documentId: string) {
   return await queryFirst<ContentDocumentRow | null>(
     db,
-    `SELECT id, owner_type, owner_id, draft_revision_id, published_revision_id, created_at, updated_at
+    `SELECT id, owner_type, owner_id, created_at, updated_at
      FROM content_documents
      WHERE id = ?
      LIMIT 1`,
@@ -223,8 +221,6 @@ export async function ensureContentDocument(db: DbClient, ownerType: ContentDocu
     id,
     owner_type: ownerType,
     owner_id: ownerId,
-    draft_revision_id: null,
-    published_revision_id: null,
     created_at: now,
     updated_at: now,
   }
@@ -327,26 +323,13 @@ function buildRevisionBatch(
     ...documentGuardQueries,
     ...liveBlockQueries,
     {
-      query: `INSERT INTO content_revisions (id, document_id, snapshot_json, body_markdown, created_by, label, created_at, published_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      params: [revisionId, document.id, JSON.stringify({ ...(opts.snapshotMetadata ? { schemaVersion: 1, metadata: opts.snapshotMetadata } : {}), blocks: snapshots }), bodyMarkdown, opts.createdBy ?? null, opts.label ?? null, now, opts.publish || opts.publishOnly ? now : null],
-    },
-    {
-      query: opts.publishOnly
-        ? 'UPDATE content_documents SET published_revision_id = ?, updated_at = ? WHERE id = ?'
-        : opts.publish
-        ? 'UPDATE content_documents SET draft_revision_id = ?, published_revision_id = ?, updated_at = ? WHERE id = ?'
-        : 'UPDATE content_documents SET draft_revision_id = ?, updated_at = ? WHERE id = ?',
-      params: opts.publishOnly
-        ? [revisionId, now, document.id]
-        : opts.publish
-        ? [revisionId, revisionId, now, document.id]
-        : [revisionId, now, document.id],
+      query: 'UPDATE content_documents SET updated_at = ? WHERE id = ?',
+      params: [now, document.id],
     },
     ...(opts.additionalQueriesAfter ?? []).map(query => ({ query: query.query, params: query.params ?? [] })),
   ]
 
-  return { queries, revision_id: revisionId, body_markdown: bodyMarkdown, blocks: snapshots }
+  return { queries, body_markdown: bodyMarkdown, blocks: snapshots }
 }
 
 async function writeRevisionFromBlocks(
@@ -372,7 +355,6 @@ async function writeRevisionFromBlocks(
   }
 
   return {
-    revision_id: prepared.revision_id,
     body_markdown: prepared.body_markdown,
     blocks: prepared.blocks,
   }
@@ -414,7 +396,7 @@ export async function syncContentDocumentFromMarkdown(
     bodyMarkdown: opts.bodyMarkdown,
     createdBy: opts.createdBy,
     label: opts.label,
-    publish: opts.publish,
+    
   })
   const currentDocument = await getContentDocumentById(db, document.id)
   if (!currentDocument) throw new HTTPError({ statusCode: 500, statusMessage: 'Content document disappeared after synchronization' })
@@ -443,7 +425,7 @@ export async function syncContentDocumentFromBlocks(
   })), {
     createdBy: opts.createdBy,
     label: opts.label,
-    publish: opts.publish,
+    
   })
   const currentDocument = await getContentDocumentById(db, document.id)
   if (!currentDocument) throw new HTTPError({ statusCode: 500, statusMessage: 'Content document disappeared after synchronization' })
@@ -494,7 +476,7 @@ export function prepareContentDocumentWithBlocks(
     bodyMarkdown: opts.bodyMarkdown,
     createdBy: opts.createdBy,
     label: opts.label,
-    publish: opts.publish,
+    
     additionalQueriesBefore: [documentInsert, ...(opts.additionalQueriesBefore ?? [])],
     additionalQueriesAfter: opts.additionalQueriesAfter,
   })
@@ -533,50 +515,9 @@ export async function createContentDocumentWithBlocks(
   if (!currentDocument) throw new HTTPError({ statusCode: 500, statusMessage: 'Content document disappeared after synchronization' })
   return {
     document: currentDocument,
-    revision_id: prepared.revision_id,
     body_markdown: prepared.body_markdown,
     blocks: prepared.blocks,
   }
-}
-
-export async function publishCurrentPlatformDocRevision(db: DbClient, ownerId: string) {
-  const document = await getContentDocumentByOwner(db, 'platform_doc', ownerId)
-  if (!document?.draft_revision_id) return null
-  const revision = await queryFirst<Pick<ContentRevisionRow, 'body_markdown'> | null>(
-    db,
-    'SELECT body_markdown FROM content_revisions WHERE id = ? AND document_id = ? LIMIT 1',
-    [document.draft_revision_id, document.id],
-  )
-  if (!revision) notFound('Content revision not found')
-  const now = new Date().toISOString()
-  const queries: { query: string; params: unknown[] }[] = [
-    {
-      query: 'UPDATE content_revisions SET published_at = COALESCE(published_at, ?) WHERE id = ? AND document_id = ?',
-      params: [now, document.draft_revision_id, document.id],
-    },
-    {
-      query: 'UPDATE content_documents SET published_revision_id = ?, updated_at = ? WHERE id = ?',
-      params: [document.draft_revision_id, now, document.id],
-    },
-  ]
-  queries.push({
-    query: 'UPDATE platform_docs SET body = ?, updated_at = ? WHERE id = ?',
-    params: [revision.body_markdown, now, ownerId],
-  })
-  await executeBatch(db, queries)
-  return { ...document, published_revision_id: document.draft_revision_id, updated_at: now }
-}
-
-export async function unpublishContentDocument(db: DbClient, ownerType: ContentDocumentOwnerType, ownerId: string) {
-  const document = await getContentDocumentByOwner(db, ownerType, ownerId)
-  if (!document) return null
-  const now = new Date().toISOString()
-  await execute(
-    db,
-    'UPDATE content_documents SET published_revision_id = NULL, updated_at = ? WHERE id = ?',
-    [now, document.id],
-  )
-  return { ...document, published_revision_id: null, updated_at: now }
 }
 
 export async function deleteContentDocumentForOwner(db: DbClient, ownerType: ContentDocumentOwnerType, ownerId: string) {
@@ -617,7 +558,7 @@ export async function getContentBlock(db: DbClient, blockId: string) {
   return { ...block, data: parseBlockData(block) }
 }
 
-async function listBlocksForDocument(db: DbClient, documentId: string) {
+export async function listBlocksForDocument(db: DbClient, documentId: string) {
   return await queryAll<ContentBlockRow>(
     db,
     `SELECT id, document_id, parent_block_id, type, position, level, data_json, created_at, updated_at
@@ -772,31 +713,28 @@ export async function getContentEditorSnapshot(db: DbClient, ownerType: ContentD
 }
 
 export async function getPublishedContentSnapshot(db: DbClient, ownerType: ContentDocumentOwnerType, ownerId: string) {
-  const row = await queryFirst<{ snapshot_json: string } | null>(db, `
-    SELECT r.snapshot_json
-      FROM content_documents d
-      JOIN content_revisions r ON r.id = d.published_revision_id
-     WHERE d.owner_type = ? AND d.owner_id = ?
-     LIMIT 1
-  `, [ownerType, ownerId])
-  if (!row) return null
-  try {
-    const parsed = JSON.parse(row.snapshot_json) as unknown
-    if (!parsed || typeof parsed !== 'object' || !Array.isArray((parsed as { blocks?: unknown }).blocks)) {
-      throw new Error('Published revision must contain a blocks array')
-    }
-    return (parsed as { blocks: ContentBlockSnapshot[] }).blocks
-  } catch {
-    throw new HTTPError({ statusCode: 500, statusMessage: 'Published content revision is malformed' })
-  }
+  const document = await getContentDocumentByOwner(db, ownerType, ownerId)
+  if (!document) return null
+  const blocks = await listBlocksForDocument(db, document.id)
+  return blocks.map(b => ({
+    id: b.id,
+    parent_block_id: b.parent_block_id,
+    type: b.type,
+    position: b.position,
+    level: b.level,
+    data: b.data_json ? JSON.parse(b.data_json) : {},
+    created_at: b.created_at,
+    updated_at: b.updated_at
+  }))
 }
+
 
 export async function replaceContentDocumentBlocks(
   db: DbClient,
   ownerType: ContentDocumentOwnerType,
   ownerId: string,
   blocks: ContentBlockInput[],
-  opts: { expected_document_updated_at: string; createdBy?: string | null; label?: string | null; publish?: boolean; revisionId?: string; snapshotMetadata?: Record<string, unknown>; additionalQueriesBefore?: BatchQuery[]; additionalQueriesAfter?: BatchQuery[] },
+  opts: { expected_document_updated_at: string; createdBy?: string | null; label?: string | null;  revisionId?: string; snapshotMetadata?: Record<string, unknown>; additionalQueriesBefore?: BatchQuery[]; additionalQueriesAfter?: BatchQuery[] },
 ) {
   const document = await getContentDocumentByOwner(db, ownerType, ownerId)
   if (!document) notFound('Content document not found')
@@ -819,7 +757,7 @@ export async function replaceContentDocumentBlocks(
     snapshotMetadata: opts.snapshotMetadata,
     createdBy: opts.createdBy,
     label: opts.label ?? 'Editor autosave',
-    publish: opts.publish,
+    
     expectedDocument: { id: document.id, updatedAt: opts.expected_document_updated_at },
     additionalQueriesBefore: opts.additionalQueriesBefore,
     additionalQueriesAfter: opts.additionalQueriesAfter,
@@ -867,7 +805,7 @@ export function prepareContentDocumentBlocksReplacement(
     snapshotMetadata: opts.snapshotMetadata,
     createdBy: opts.createdBy,
     label: opts.label ?? 'Editor autosave',
-    publish: opts.publish,
+    
     expectedDocument: { id: document.id, updatedAt: opts.expected_document_updated_at },
     additionalQueriesBefore: opts.additionalQueriesBefore,
     additionalQueriesAfter: opts.additionalQueriesAfter,
@@ -1053,7 +991,7 @@ export async function backfillLegacyBlogStructuredBlocks(
         await replaceContentDocumentBlocks(db, ownerType, postId, blocks, {
           expected_document_updated_at: snapshot.document.updated_at,
           label: 'Legacy FAQ/How-To backfill',
-          publish: hasPublishedRevision && !distinctPublishedRevision,
+
         })
         snapshot = await getContentEditorSnapshot(db, ownerType, postId)
       }

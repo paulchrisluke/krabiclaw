@@ -159,7 +159,6 @@ export interface PublicTenantPage {
   canonical_url: string | null
   robots: string | null
   blocks: import('~/utils/tenant-page-blocks').TenantPageBlock[]
-  published_revision_id: string | null
   updated_at: string
 }
 
@@ -212,16 +211,6 @@ export interface PublicCompliance {
   metadata: ApiRecord
 }
 
-export interface PublicNavigationItem {
-  id: string
-  area: 'header' | 'footer' | 'legal' | 'social'
-  label: string
-  url: string
-  item_type: string
-  sort_order: number
-  metadata: ApiRecord
-}
-
 export interface PublicBlawbyIdentity {
   brand_name: string
   brand_description: string | null
@@ -237,7 +226,6 @@ export interface PublicBlawbyIdentity {
 
 export interface PublicBlawbyShellData {
   identity: PublicBlawbyIdentity
-  navigation: PublicNavigationItem[]
   consultation: PublicConsultationSettings
   compliance: PublicCompliance | null
   themeTokens: ApiRecord
@@ -249,6 +237,5 @@ export interface PublicBlawbyData {
   tenantPages: PublicTenantPage[]
   compliance: PublicCompliance | null
   consultation: PublicConsultationSettings
-  navigation: PublicNavigationItem[]
   themeTokens: ApiRecord
 }
