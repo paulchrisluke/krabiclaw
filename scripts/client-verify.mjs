@@ -22,6 +22,7 @@ import { writeFile, mkdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { isPreviewContext } from "../server/utils/tenant-hosts.ts";
 
 const { values: args } = parseArgs({
   options: {
@@ -48,6 +49,11 @@ if (!args.url) {
 const BASE = args.url.replace(/\/$/, "");
 const VERTICAL = args.vertical;
 const SITE_ID = args["site-id"];
+const TENANT_SLUG = args["tenant-slug"];
+const TENANT_HEADERS =
+  TENANT_SLUG && isPreviewContext(new URL(BASE).hostname)
+    ? { "x-preview-tenant": TENANT_SLUG, "cache-control": "no-store" }
+    : {};
 const OUT_DIR =
   args["out-dir"] ??
   (args.slug ? join(process.cwd(), "client-imports", args.slug) : null);
@@ -180,10 +186,15 @@ async function get(path, opts = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10_000);
   try {
+    const headers = new Headers(opts.headers);
+    for (const [name, value] of Object.entries(TENANT_HEADERS)) {
+      if (!headers.has(name)) headers.set(name, value);
+    }
     const res = await fetch(url, {
       signal: controller.signal,
       redirect: "follow",
       ...opts,
+      headers,
     });
     clearTimeout(timer);
     return res;
