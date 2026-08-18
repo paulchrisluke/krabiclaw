@@ -46,7 +46,7 @@ export default defineConfig({
       ? localWorkerCommand
       : `corepack yarn e2e:local:prepare && ${localWorkerCommand}`,
     url: `http://localhost:${port}/`,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: localPrepared ? 180_000 : 600_000,
     stdout: captureServerLogs ? 'pipe' : 'ignore',
     stderr: captureServerLogs ? 'pipe' : 'ignore'
