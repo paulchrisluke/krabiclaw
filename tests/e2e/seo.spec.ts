@@ -22,6 +22,9 @@ test.describe('platform SEO contracts', () => {
     if (nonProduction) {
       expect(robotsBody).toContain('Disallow: /')
       expect(robots.headers()['x-robots-tag']).toContain('noindex')
+
+      const homepage = await request.get('/')
+      expect(homepage.headers()['x-robots-tag']).toContain('noindex')
     } else {
       expect(robotsBody).toContain('Disallow: /admin')
       expect(robotsBody).toContain('Disallow: /dashboard')

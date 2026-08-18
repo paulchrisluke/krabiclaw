@@ -63,9 +63,9 @@ test('local tunnel and raw workers.dev hosts stay shared with explicit tenant he
       assert.deepEqual(
         [potteryHouseTestExtraHeaders(), kikuzukiTestExtraHeaders(), blawbyTestExtraHeaders()],
         [
-          { 'x-preview-tenant': 'pottery-house', 'cache-control': 'no-store' },
-          { 'x-preview-tenant': 'kikuzuki-krabi-thailand', 'cache-control': 'no-store' },
-          { 'x-preview-tenant': 'ncls', 'cache-control': 'no-store' },
+          { 'x-preview-tenant': 'pottery-house' },
+          { 'x-preview-tenant': 'kikuzuki-krabi-thailand' },
+          { 'x-preview-tenant': 'ncls' },
         ],
       )
     })

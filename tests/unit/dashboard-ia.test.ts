@@ -176,12 +176,15 @@ test('account surfaces use the mobile index and row-based account design', () =>
   assert.doesNotMatch(billing, /<UCard/)
 })
 
-test('account menu defers session-owned avatar text until client hydration', () => {
+test('account menu renders identity from the SSR-backed auth session', () => {
   const menu = source('lib/components/workspace/dashboard/DashboardAccountMenu.vue')
-  assert.match(menu, /const hydrated = ref\(false\)/)
-  assert.match(menu, /renderedUser = computed\(\(\) => hydrated\.value \? sessionData\.value\?\.user \?\? null : null\)/)
-  assert.match(menu, /onMounted\(\(\) => \{\s*hydrated\.value = true/)
+  const session = source('composables/useAuthSession.ts')
+  assert.match(menu, /const \{ sessionData \} = await useAuthSession\(\)/)
+  assert.match(menu, /renderedUser = computed\(\(\) => sessionData\.value\?\.user \?\? null\)/)
+  assert.doesNotMatch(menu, /const hydrated = ref\(false\)/)
   assert.doesNotMatch(menu, /:avatar="\{ src: sessionData\?\.user/)
+  assert.match(session, /if \(!clientSession\.value \|\| clientSession\.value\.isPending\) return/)
+  assert.match(session, /sessionState\.value = clientSession\.value\.data \?\? null/)
 })
 
 test('mobile account avatar opens the shared sheet from the bottom nav and moves to the header on account pages', () => {

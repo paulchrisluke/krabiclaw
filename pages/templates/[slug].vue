@@ -51,7 +51,6 @@
           :src="demoUrl"
           class="absolute inset-x-0 top-[113px] h-[calc(100dvh-113px)] w-full border-0 sm:top-[65px] sm:h-[calc(100dvh-65px)]"
           :title="`${template.displayName} template live demo`"
-          sandbox="allow-scripts allow-same-origin"
         />
       </div>
     </Teleport>
@@ -86,7 +85,6 @@
             :src="demoUrl"
             class="absolute inset-0 w-full h-full border-0"
             loading="lazy"
-            sandbox="allow-scripts allow-same-origin"
             :title="`${template.displayName} template live preview`"
           />
         </div>

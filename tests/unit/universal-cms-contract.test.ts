@@ -32,6 +32,12 @@ test('the Pages manager owns the complete block lifecycle', () => {
   assert.doesNotMatch(managerSource, /blockJson/)
 })
 
+test('the Pages manager previews against the Worker serving the dashboard', () => {
+  assert.match(managerSource, /const platformOrigin = useRequestURL\(\)\.origin/)
+  assert.match(managerSource, /`\$\{platformOrigin\}\/preview\/site\//)
+  assert.doesNotMatch(managerSource, /config\.public\.(?:platformDomain|freeSiteDomain)/)
+})
+
 test('legacy field-based dashboard editor paths are not referenced', () => {
   assert.doesNotMatch(managerSource, /content\/save/)
   assert.doesNotMatch(managerSource, /content-editor/)

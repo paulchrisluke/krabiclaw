@@ -37,7 +37,7 @@ export default defineConfig({
     baseURL,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure'
+    video: 'off'
   },
   // Remote suites target an already-deployed Worker. Local suites prepare the
   // local D1 fixtures, build the production Worker, and run it in workerd.

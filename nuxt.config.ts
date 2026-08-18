@@ -30,21 +30,6 @@ function pickIcons(collection: string, names: string[]) {
 const analyzeBundle = process.env.PERF_BUNDLE_ANALYZE === 'true'
 const publicPerfTestPage = process.env.PERF_PUBLIC_TEST_PAGE !== 'false'
 
-const deploymentHost = new URL(
-  process.env.NUXT_PUBLIC_PLATFORM_DOMAIN || 'http://localhost',
-).hostname
-const productionHtmlCacheHosts = new Set(['krabiclaw.com', 'www.krabiclaw.com'])
-const isNonProductionDeployment = !productionHtmlCacheHosts.has(deploymentHost)
-const publicHtmlCacheHeaders = isNonProductionDeployment
-  ? {
-      'cache-control': 'private, no-store, max-age=0',
-      pragma: 'no-cache',
-      expires: '0',
-    }
-  : {
-      'cache-control': 'public, s-maxage=60, stale-while-revalidate=300, max-age=0',
-  }
-
 const publicSurfaceCssPaths = {
   'platform-entry': 'surfaces/platform.css',
   'saya': 'surfaces/saya.css',
@@ -396,10 +381,6 @@ export default defineNuxtConfig({
     '/login':        { headers: { 'cache-control': 'no-store', 'x-frame-options': 'DENY', 'content-security-policy': "frame-ancestors 'none'" } },
     '/links':        { headers: { 'cache-control': 'private, no-store' } },
 
-    // Public pages are safe to cache at the HTML layer.
-    // The explicit '/' rule keeps the homepage policy visible and deliberate.
-    '/':   { headers: publicHtmlCacheHeaders },
-    '/**': { headers: publicHtmlCacheHeaders },
   },
 
   // Nitro configuration for Cloudflare deployment

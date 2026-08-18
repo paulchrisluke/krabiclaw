@@ -20,7 +20,7 @@ export function testBaseUrl() {
 }
 
 function previewWorkerHeaders(slug: string): Record<string, string> {
-  return { 'x-preview-tenant': slug, 'cache-control': 'no-store' }
+  return { 'x-preview-tenant': slug }
 }
 
 function usesSharedTenantHost(base: URL): boolean {

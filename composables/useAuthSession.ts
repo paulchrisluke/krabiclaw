@@ -18,9 +18,8 @@ export async function useAuthSession() {
   } else {
     const clientSession = authClient.useSession()
     watchEffect(() => {
-      if (clientSession.value !== undefined) {
-        sessionState.value = clientSession.value.data ?? null
-      }
+      if (!clientSession.value || clientSession.value.isPending) return
+      sessionState.value = clientSession.value.data ?? null
     })
   }
 
