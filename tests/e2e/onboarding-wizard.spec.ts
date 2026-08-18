@@ -45,7 +45,9 @@ async function completeManualWizard(
   await input.press('Enter')
   await expect(page.getByText('Where should guests find you?')).toBeVisible({ timeout: 15_000 })
   if (!skipVertical) {
-    await expect(page.locator('iframe[title="Site preview"]').first()).toHaveAttribute('src', /\/preview\/draft\/[^?]+\?preview=true&token=/, { timeout: 15_000 })
+    const draftPreview = page.locator('iframe[title="Site preview"]').first()
+    await expect(draftPreview).toHaveAttribute('src', /\/preview\/draft\/[^?]+\?preview=true&token=/, { timeout: 15_000 })
+    await expect(draftPreview.contentFrame().getByText(businessName).first()).toBeVisible({ timeout: 15_000 })
   }
   await expectNoHistoricalControls()
   await page.getByLabel('Street address').fill('123 Moo 5, Ao Nang, Krabi')

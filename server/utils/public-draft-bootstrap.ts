@@ -41,13 +41,16 @@ async function loadDraftPreviewSource(
   return parseOnboardingDraftPayload(row.payload_json)
 }
 
-function buildDraftShellPayload(payload: Awaited<ReturnType<typeof loadDraftPreviewSource>>) {
-  const config = {
+export function buildDraftShellPayload(payload: Awaited<ReturnType<typeof loadDraftPreviewSource>>) {
+  const rawConfig = {
     ...payload.preview.config,
     brand_name: payload.preview.brandName,
     logo_url: payload.preview.config.logo_url || payload.preview.draftMedia.logo?.publicUrl || null,
     og_image_url: payload.preview.config.hero_image_url || payload.preview.draftMedia.hero?.publicUrl || null,
   }
+  const config = Object.fromEntries(
+    Object.entries(rawConfig).map(([key, value]) => [key, value ?? '']),
+  )
   const draftPhone = typeof payload.preview.config.phone === 'string'
     ? payload.preview.config.phone
     : null
@@ -56,7 +59,7 @@ function buildDraftShellPayload(payload: Awaited<ReturnType<typeof loadDraftPrev
     site: {
       brand_name: payload.preview.brandName,
       brand_description: null,
-      logo_url: config.logo_url,
+      logo_url: rawConfig.logo_url,
       logo_mime_type: null,
       favicon_url: null,
       vertical: payload.preview.vertical,
