@@ -62,8 +62,24 @@ async function openSearchAfterHydration(page: Page, accessibleName: string) {
   }, `${accessibleName} should open after hydration`).toPass({ timeout: 10_000 })
 }
 
+async function mockPublicSearch(page: Page) {
+  await page.route('**/api/public/search**', async route => {
+    const requestUrl = new URL(route.request().url())
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        query: requestUrl.searchParams.get('q') ?? '',
+        surface: requestUrl.searchParams.get('surface') ?? 'public',
+        results: [],
+      }),
+    })
+  })
+}
+
 test.describe('platform command search modal', () => {
   test('teleports to <body> and never shows storage-shaped labels', async ({ page, baseURL }) => {
+    await mockPublicSearch(page)
     await page.goto(`${baseURL}/blog`, { waitUntil: 'load' })
     await openSearchAfterHydration(page, 'Open blog search')
 
@@ -86,6 +102,7 @@ test.describe('platform command search modal', () => {
 test.describe('Saya command search modal', () => {
   test.beforeEach(async ({ page }) => {
     await setupTenantHeaders(page, potteryHouseBaseURL, potteryHouseExtraHeaders)
+    await mockPublicSearch(page)
   })
 
   test('teleports into #saya-portal-root and keeps AA contrast in light and dark mode', async ({ page }) => {
@@ -119,6 +136,7 @@ test.describe('Saya command search modal', () => {
 test.describe('Blawby command search modal', () => {
   test.beforeEach(async ({ page }) => {
     await setupTenantHeaders(page, blawbyBaseURL, blawbyExtraHeaders)
+    await mockPublicSearch(page)
   })
 
   test('teleports into #blawby-portal-root, inherits tenant palette, and keeps AA contrast', async ({ page }) => {

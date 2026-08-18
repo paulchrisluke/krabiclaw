@@ -23,7 +23,6 @@ const THIRD_PARTY_REQUEST_DOMAINS = [
   'doubleclick.net',
   'media.krabiclaw.com',
   'gen_204',
-  'cloudflareinsights.com',
   'cdn-cgi',      // Cloudflare injected endpoints (Zaraz, Web Analytics beacon)
   'zaraz',
 ]
@@ -33,7 +32,6 @@ const THIRD_PARTY_REQUEST_DOMAINS = [
 // browser message — we rely on the requestfailed listener below for URL-aware filtering.
 const THIRD_PARTY_CONSOLE_PATTERNS = [
   'ERR_FAILED',
-  'cloudflareinsights.com',
   'Permissions policy violation: compute-pressure is not allowed',
 ]
 

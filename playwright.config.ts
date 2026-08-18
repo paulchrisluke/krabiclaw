@@ -5,10 +5,17 @@ const previewUrl = process.env.PLAYWRIGHT_PREVIEW_URL
 const port = 3000
 const baseURL = previewUrl || 'http://localhost:3000'
 const localPrepared = process.env.PLAYWRIGHT_LOCAL_PREPARED === 'true'
+const captureServerLogs = process.env.PLAYWRIGHT_SERVER_LOGS === 'true' || !!process.env.CI
+const localDevRouteSecret = previewUrl ? '' : 'local-playwright-dev-route-secret'
 
 if (!previewUrl && !process.env.E2E_TEST_PASSWORD) {
   process.env.E2E_TEST_PASSWORD = randomBytes(32).toString('hex')
 }
+if (!previewUrl) {
+  process.env.E2E_DEV_ROUTE_SECRET = localDevRouteSecret
+}
+
+const localWorkerCommand = `corepack yarn wrangler dev .output/server/index.mjs --assets .output/public --local --port ${port} --var E2E_ALLOW_DEV_ROUTES:true --var E2E_DEV_ROUTE_SECRET:${localDevRouteSecret}`
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -28,7 +35,7 @@ export default defineConfig({
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL,
-    trace: 'on-first-retry',
+    trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure'
   },
@@ -36,13 +43,13 @@ export default defineConfig({
   // local D1 fixtures, build the production Worker, and run it in workerd.
   webServer: previewUrl ? undefined : {
     command: localPrepared
-      ? `corepack yarn wrangler dev .output/server/index.mjs --assets .output/public --local --port ${port}`
-      : `corepack yarn e2e:local:prepare && corepack yarn wrangler dev .output/server/index.mjs --assets .output/public --local --port ${port}`,
+      ? localWorkerCommand
+      : `corepack yarn e2e:local:prepare && ${localWorkerCommand}`,
     url: `http://localhost:${port}/`,
     reuseExistingServer: !process.env.CI,
     timeout: localPrepared ? 180_000 : 600_000,
-    stdout: process.env.CI ? 'pipe' : 'ignore',
-    stderr: process.env.CI ? 'pipe' : 'ignore'
+    stdout: captureServerLogs ? 'pipe' : 'ignore',
+    stderr: captureServerLogs ? 'pipe' : 'ignore'
   },
   projects: [
     {

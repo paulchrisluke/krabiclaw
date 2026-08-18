@@ -16,20 +16,20 @@ import {
   setupTenantHeaders,
 } from './helpers'
 
-const expectNoHydrationOrScopeErrors = (errors: string[]) => {
-  expect(errors.filter(error =>
-    error.includes('Hydration')
-    || error.includes('onScopeDispose()')
-    || error.includes('onMounted is called')
-    || error.includes('onBeforeUnmount is called'),
-  )).toEqual([])
+const expectNoPageErrors = (errors: string[]) => {
+  expect(errors).toEqual([])
 }
 
 async function setupNavigationTest(page: Page) {
   // This suite validates live loader transitions. Persistent Miniflare HTML
   // cache can otherwise replay an SSR document from an earlier test run and
   // prevent the browser from exercising the current loader implementation.
-  await page.setExtraHTTPHeaders({ 'cache-control': 'no-cache' })
+  const tenantOrigin = new URL(tenantBaseURL).origin
+  await page.route(`${tenantOrigin}/**`, async route => {
+    await route.fallback({
+      headers: { ...route.request().headers(), 'cache-control': 'no-cache' },
+    })
+  })
 
   // Defeat NuxtLink's viewport-based prefetch so the page fetch only
   // happens on the actual click, not ahead of time.
@@ -52,7 +52,7 @@ async function navigateAndAssertAuthoritative(page: Page, opts: {
   afterText: string
   forbiddenTexts: string[]
 }) {
-  const errors = collectPageErrors(page)
+  const errors = collectPageErrors(page, { failOnAllWarnings: true })
   let releasePageRequest!: () => void
   const pageRequestPaused = new Promise<void>((resolve) => {
     releasePageRequest = resolve
@@ -115,7 +115,7 @@ async function navigateAndAssertAuthoritative(page: Page, opts: {
   for (const forbidden of opts.forbiddenTexts) {
     await expect(page.locator('main')).not.toContainText(forbidden)
   }
-  expectNoHydrationOrScopeErrors(errors)
+  expectNoPageErrors(errors)
 }
 
 test.describe('tenant client-side navigation does not show stale/fallback content', () => {
@@ -135,7 +135,7 @@ test.describe('tenant client-side navigation does not show stale/fallback conten
   })
 
   test('Home -> Menu', async ({ page }) => {
-    const errors = collectPageErrors(page)
+    const errors = collectPageErrors(page, { failOnAllWarnings: true })
     await page.goto(`${tenantBaseURL}/`, { waitUntil: 'load' })
 
     await page.locator('a[href="/menu"]').first().evaluate(
@@ -145,7 +145,7 @@ test.describe('tenant client-side navigation does not show stale/fallback conten
     await expect(page).toHaveURL(/\/menu\/?$/)
     await expect(page.locator('main')).toContainText('Margherita')
     await expect(page.locator('main')).not.toContainText('Menu coming soon.')
-    expectNoHydrationOrScopeErrors(errors)
+    expectNoPageErrors(errors)
   })
 
   for (const destination of [
@@ -155,7 +155,7 @@ test.describe('tenant client-side navigation does not show stale/fallback conten
     { path: '/photos', text: 'Gallery' },
   ]) {
     test(`Home -> ${destination.path}`, async ({ page }) => {
-      const errors = collectPageErrors(page)
+      const errors = collectPageErrors(page, { failOnAllWarnings: true })
       await page.goto(`${tenantBaseURL}/`, { waitUntil: 'load' })
 
       await page.locator(`a[href="${destination.path}"]`).last().evaluate(
@@ -165,7 +165,7 @@ test.describe('tenant client-side navigation does not show stale/fallback conten
       await expect(page).toHaveURL(new RegExp(`${destination.path}/?$`))
       await expect(page.locator('main')).toContainText(destination.text)
       await expect(page.locator('main')).not.toBeEmpty()
-      expectNoHydrationOrScopeErrors(errors)
+      expectNoPageErrors(errors)
     })
   }
 
@@ -200,7 +200,7 @@ test.describe('tenant client-side navigation does not show stale/fallback conten
   })
 
   test('Location detail -> Location reviews', async ({ page }) => {
-    const errors = collectPageErrors(page)
+    const errors = collectPageErrors(page, { failOnAllWarnings: true })
     await page.goto(`${tenantBaseURL}/locations/brooklyn`, { waitUntil: 'load' })
     await expect(page.locator('main')).toContainText('Weekend lunch now starts')
 
@@ -210,11 +210,11 @@ test.describe('tenant client-side navigation does not show stale/fallback conten
 
     await expect(page).toHaveURL(/\/locations\/brooklyn\/reviews\/?$/)
     await expect(page.locator('main')).toContainText('What guests are saying')
-    expectNoHydrationOrScopeErrors(errors)
+    expectNoPageErrors(errors)
   })
 
   test('Menu -> Menu item detail', async ({ page }) => {
-    const errors = collectPageErrors(page)
+    const errors = collectPageErrors(page, { failOnAllWarnings: true })
     await page.goto(`${tenantBaseURL}/menu`, { waitUntil: 'load' })
     await expect(page.locator('body')).toContainText('Margherita')
 
@@ -224,7 +224,7 @@ test.describe('tenant client-side navigation does not show stale/fallback conten
     await expect(page).toHaveURL(/\/menu\/margherita\/?$/)
     await expect(page.locator('main')).toContainText('Margherita')
     await expect(page.locator('[data-testid="error-page"]')).toHaveCount(0)
-    expectNoHydrationOrScopeErrors(errors)
+    expectNoPageErrors(errors)
   })
 
 })

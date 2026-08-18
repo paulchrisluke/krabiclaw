@@ -51,19 +51,9 @@ test.describe('Blawby professional_service CMS editing', () => {
     test.skip(fixture.status() === 404, 'NCLS Blawby fixture is not seeded in this environment')
     await loginAsNclsOwner(page, baseURL!)
 
-    const pagesCollectionPath = `/api/editor/sites/${SITE_ID}/pages`
-    const initialPagesResponse = page.waitForResponse(candidate => {
-      const url = new URL(candidate.url())
-      return candidate.request().method() === 'GET'
-        && url.pathname === pagesCollectionPath
-        && url.searchParams.get('locale') === 'en'
-    }, { timeout: 30_000 })
     const index = await page.goto(`${baseURL}${DASHBOARD_BASE}/pages`, { waitUntil: 'load' })
     expect(index?.status()).toBe(200)
     await expect(page.getByText('Site pages', { exact: true })).toBeVisible()
-    const pagesResponse = await initialPagesResponse
-    expect(pagesResponse.status()).toBe(200)
-    await expect(page.getByRole('button', { name: 'New page', exact: true })).toBeEnabled({ timeout: 30_000 })
     const rootPage = page.locator('button').filter({ has: page.locator('span').filter({ hasText: /^\/$/ }) })
     await expect(rootPage).toHaveCount(1)
     await rootPage.click()

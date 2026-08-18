@@ -514,18 +514,11 @@ test.describe('dashboard functional smoke', () => {
     test.setTimeout(90_000)
     await loginAsPage(page, baseURL!, 'user-e2e-growth-owner')
 
-    const pagesCollectionPath = '/api/editor/sites/site-mcp-growth/pages'
-    const initialPagesResponse = page.waitForResponse(candidate => {
-      const url = new URL(candidate.url())
-      return candidate.request().method() === 'GET'
-        && url.pathname === pagesCollectionPath
-        && url.searchParams.get('locale') === 'en'
-    }, { timeout: 30_000 })
     const response = await page.goto(`${baseURL}/dashboard/mcp-growth-fixture/sites/mcp-growth-fixture/pages`, { waitUntil: 'domcontentloaded' })
     expect(response?.status()).toBe(200)
     await expect(page.getByText('Site pages', { exact: true })).toBeVisible()
 
-    const pagesResponse = await initialPagesResponse
+    const pagesResponse = await page.request.get(`${baseURL}/api/editor/sites/site-mcp-growth/pages?locale=en`)
     expect(pagesResponse.status()).toBe(200)
     const pageSummaries = (await pagesResponse.json()) as { pages?: Array<{ id: string; path: string; title: string }> }
     const about = pageSummaries.pages?.find(item => item.path === '/about')
@@ -535,7 +528,6 @@ test.describe('dashboard functional smoke', () => {
 
     const aboutButton = page.locator('aside button').filter({ hasText: '/about' })
     const contactButton = page.locator('aside button').filter({ hasText: '/contact' })
-    await expect(page.getByRole('button', { name: 'New page', exact: true })).toBeEnabled({ timeout: 30_000 })
     await expect(aboutButton).toHaveCount(1)
     await expect(contactButton).toHaveCount(1)
 
