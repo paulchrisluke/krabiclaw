@@ -156,8 +156,27 @@ test.describe('dashboard functional smoke', () => {
     })
     await loginAsPage(page, baseURL!, 'user-e2e-growth-owner')
 
+    const pagesCollectionPath = '/api/editor/sites/site-mcp-growth/pages'
+    const waitForPagesManagerLoad = async () => {
+      const pagesResponse = page.waitForResponse(candidate => {
+        const url = new URL(candidate.url())
+        return candidate.request().method() === 'GET'
+          && url.pathname === pagesCollectionPath
+          && url.searchParams.get('locale') === 'en'
+      }, { timeout: 30_000 })
+      const pageResponse = page.waitForResponse(candidate => {
+        const url = new URL(candidate.url())
+        return candidate.request().method() === 'GET'
+          && url.pathname.startsWith(`${pagesCollectionPath}/`)
+      }, { timeout: 30_000 })
+      const [pagesResult, pageResult] = await Promise.all([pagesResponse, pageResponse])
+      expect(pagesResult.status()).toBe(200)
+      expect(pageResult.status()).toBe(200)
+    }
+    const initialLoad = waitForPagesManagerLoad()
     const response = await page.goto(`${baseURL}/dashboard/mcp-growth-fixture/sites/mcp-growth-fixture/pages`, { waitUntil: 'domcontentloaded' })
     expect(response?.status()).toBe(200)
+    await initialLoad
     await expect(page.getByText('Site pages', { exact: true })).toBeVisible()
     await expect(page.getByText('Blocks', { exact: true })).toBeVisible()
 
@@ -165,7 +184,9 @@ test.describe('dashboard functional smoke', () => {
       data: { locale: 'th', label: 'Thai', status: 'published' },
     })
     expect(localeResponse.status()).toBe(200)
+    const reloadLoad = waitForPagesManagerLoad()
     await page.reload({ waitUntil: 'domcontentloaded' })
+    await reloadLoad
     await expect(page.getByRole('combobox', { name: 'Page locale' })).toContainText('en')
 
     const blockCards = page.locator('[data-block-index]')
@@ -176,7 +197,6 @@ test.describe('dashboard functional smoke', () => {
       await page.getByRole('option', { name: label, exact: true }).click()
       await page.getByRole('button', { name: 'Add block', exact: true }).click()
     }
-    const pagesCollectionPath = '/api/editor/sites/site-mcp-growth/pages'
     const waitForPagesRefresh = () => page.waitForResponse(candidate => {
       const url = new URL(candidate.url())
       return candidate.request().method() === 'GET'
