@@ -71,9 +71,11 @@ Local Playwright runs build the production bundle and start it with
 `wrangler dev --local` with the built Nitro Worker at
 `.output/server/index.mjs`;
 without it Wrangler derives the upstream from the production route and rewrites
-local `Host` and same-origin `Origin` headers to `krabiclaw.com`. Local tenant
-tests use the same shared-host `x-preview-tenant` routing contract as preview
-and staging.
+local `Host` and same-origin `Origin` headers to `krabiclaw.com`. Local and raw
+`workers.dev` tenant tests carry `x-preview-tenant`; deployed preview and
+staging tests use direct first-level aliases such as
+`pottery-house-preview.krabiclaw.com` and
+`pottery-house-staging.krabiclaw.com`.
 
 ## Triage checklist when CI fails but local passes
 

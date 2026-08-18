@@ -3,6 +3,10 @@ import { chromium } from '@playwright/test'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import {
+  environmentTenantAliasHostname,
+  usesTenantHeader,
+} from '../server/utils/tenant-hosts.ts'
+import {
   BLAWBY_PARITY_ROUTES,
   BLAWBY_PARITY_VIEWPORTS,
   BLAWBY_REFERENCE_COMMIT,
@@ -234,6 +238,14 @@ async function markCaptureSections(page, routeName, expectedSections) {
 }
 
 const args = parseArgs(process.argv.slice(2))
+if (args.source === 'blawby' && args.tenantSlug) {
+  const url = new URL(args.url)
+  const environmentAlias = environmentTenantAliasHostname(url.hostname, args.tenantSlug)
+  if (environmentAlias) {
+    url.hostname = environmentAlias
+    args.url = url.toString().replace(/\/$/, '')
+  }
+}
 if (!args.url) {
   console.error('Usage: node scripts/capture-blawby-screenshots.mjs --url https://example.com --source reference|blawby [--source-revision sha] [--out-dir dir]')
   process.exit(2)
@@ -283,7 +295,9 @@ try {
       locale: 'en-US',
       reducedMotion: 'reduce',
       timezoneId: 'America/New_York',
-      extraHTTPHeaders: args.tenantSlug ? { 'x-preview-tenant': args.tenantSlug, 'cache-control': 'no-store' } : undefined,
+      extraHTTPHeaders: args.tenantSlug && usesTenantHeader(new URL(args.url).hostname)
+        ? { 'x-preview-tenant': args.tenantSlug, 'cache-control': 'no-store' }
+        : undefined,
     })
     await context.route(/(?:youtube\.com|youtu\.be|googlevideo\.com|vimeo\.com)/, route => route.abort())
     const page = await context.newPage()

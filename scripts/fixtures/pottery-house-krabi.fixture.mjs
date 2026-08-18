@@ -33,6 +33,10 @@
  */
 
 import { parseArgs } from 'node:util'
+import {
+  environmentTenantAliasHostname,
+  usesTenantHeader,
+} from '../../server/utils/tenant-hosts.ts'
 import { join } from 'node:path'
 import { existsSync, readFileSync } from 'node:fs'
 
@@ -57,6 +61,8 @@ const BLOG_SLUG = 'group-bookings-create-a-unique-pottery-experience-in-krabi'
 
 function normalizeFixtureBaseUrl(rawUrl, slug) {
   const url = new URL(rawUrl)
+  const environmentAlias = environmentTenantAliasHostname(url.hostname, slug)
+  if (environmentAlias) url.hostname = environmentAlias
   if (['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {
     url.hostname = `${slug}.localhost`
   }
@@ -65,14 +71,7 @@ function normalizeFixtureBaseUrl(rawUrl, slug) {
 
 const BASE = normalizeFixtureBaseUrl(inputBase, SLUG)
 
-// Mirrors the named shared hosts in server/utils/tenant-hosts.ts. Tenant
-// identity on these hosts is explicit in x-preview-tenant.
-function isPreviewContext(hostname) {
-  if (['local.krabiclaw.com', 'preview.krabiclaw.com', 'staging.krabiclaw.com'].includes(hostname)) return true
-  return /^krabiclaw-preview\.[a-z0-9-]+\.workers\.dev$/.test(hostname)
-}
-
-const PREVIEW_HEADERS = isPreviewContext(new URL(BASE).hostname)
+const PREVIEW_HEADERS = usesTenantHeader(new URL(BASE).hostname)
   ? { 'x-preview-tenant': SLUG, 'cache-control': 'no-store' }
   : {}
 

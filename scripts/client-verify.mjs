@@ -22,7 +22,10 @@ import { writeFile, mkdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { isPreviewContext } from "../server/utils/tenant-hosts.ts";
+import {
+  environmentTenantAliasHostname,
+  usesTenantHeader,
+} from "../server/utils/tenant-hosts.ts";
 
 const { values: args } = parseArgs({
   options: {
@@ -46,12 +49,17 @@ if (!args.url) {
   process.exit(1);
 }
 
-const BASE = args.url.replace(/\/$/, "");
 const VERTICAL = args.vertical;
 const SITE_ID = args["site-id"];
 const TENANT_SLUG = args["tenant-slug"];
+const inputUrl = new URL(args.url);
+const environmentAlias = TENANT_SLUG
+  ? environmentTenantAliasHostname(inputUrl.hostname, TENANT_SLUG)
+  : "";
+if (environmentAlias) inputUrl.hostname = environmentAlias;
+const BASE = inputUrl.toString().replace(/\/$/, "");
 const TENANT_HEADERS =
-  TENANT_SLUG && isPreviewContext(new URL(BASE).hostname)
+  TENANT_SLUG && usesTenantHeader(new URL(BASE).hostname)
     ? { "x-preview-tenant": TENANT_SLUG, "cache-control": "no-store" }
     : {};
 const OUT_DIR =
