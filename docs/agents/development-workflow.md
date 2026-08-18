@@ -30,6 +30,22 @@ deployed browser gate or the incident rules in that document.
 - Treat CodeRabbit rate limiting as a blocked/pending review state, never as success. A status like "review rate limited" means the review did not happen yet, usually because too many PRs or commits are competing for CodeRabbit at once.
 - When CodeRabbit is rate limited, do not push empty commits or ask for manual re-reviews. Reduce the active review queue where possible, wait for the cooldown window, then check once after about 20 minutes.
 
+### CI scope
+
+- `config/e2e-impact-map.mjs` is the executable source of truth for affected
+  preview and staging browser coverage. Do not rely on a prose claim that a
+  journey was affected; update the map when a new subsystem or dependency edge
+  is introduced.
+- Every runtime PR runs permanent core sentinels against a real preview Worker,
+  then every mapped spec. A changed Playwright spec always runs itself.
+- High-impact and unclassified runtime paths fail safe to the full inventory.
+  Documentation-only changes skip Worker deployment.
+- Do not broaden a narrow PR to unrelated browser suites merely to appear safe.
+  Do not narrow the map to make a failing required journey disappear.
+- The exact `staging` head runs the complete suite when the `staging` to `main`
+  release PR opens or updates. That full qualification remains mandatory before
+  production promotion.
+
 ## Local Dependencies
 
 Fresh worktrees usually do not have `node_modules`.

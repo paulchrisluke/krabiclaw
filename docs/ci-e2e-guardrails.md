@@ -4,10 +4,15 @@ This is the source of truth for avoiding local-vs-CI auth and billing drift in E
 
 ## Tier intent
 
-- The required PR lane builds for and deploys only isolated preview. Its
-  representative suite covers public routing and dashboard API behavior.
+- The required PR lane builds for and deploys only isolated preview. Permanent
+  core sentinels cover public routing, dashboard API behavior, the authenticated
+  Pages lifecycle, and authenticated inbox hydration. The executable impact map
+  adds the Playwright specs affected by the PR diff.
 - A push to `staging` deploys the staging Worker normally, applies migrations,
-  and then runs the full Playwright suite against that deployment.
+  and runs the same core-plus-affected selection against that deployment.
+- The ordinary `staging` to `main` pull request rebuilds and deploys its exact
+  staging head, then runs the full Playwright release qualification. The full
+  suite is required before production promotion, not after every staging commit.
 - A push to `main` deploys production normally, applies migrations, and then
   runs read-only public browser smoke. There is no scheduled release lane.
 
@@ -84,8 +89,13 @@ and staging.
 - Draft pull requests do not deploy or run remote E2E. Marking a PR ready, or pushing a new commit after it is ready, starts the preview deployment and smoke suite.
 - PR descriptions must include filled `Browser:` and `Static:` validation lines. `Browser` is for Playwright, CI E2E, or manual browser evidence; `Static` is for unit, lint, typecheck, build, and guardrail evidence.
 - Preview seeds are generated into one SQL bundle and applied with one remote D1 operation. The bundle remains idempotent and uses the same real preview D1, migration flow, fixed secrets, and deployed Worker as before.
-- Required preview coverage is one representative browser suite.
-- The full `yarn test:e2e:full` suite runs after every successful staging
-  deployment. Production runs only the read-only public rendering sentinel.
+- `config/e2e-impact-map.mjs` maps product paths to explicit specs. A changed
+  E2E spec selects itself, high-impact and unclassified runtime paths select the
+  full inventory, and documentation-only changes skip Worker deployment.
+- Required preview coverage is the permanent core plus every spec selected by
+  that impact map. Reporting only the core check is not affected-flow evidence.
+- The full `yarn test:e2e:full` suite runs on the exact staging head during the
+  `staging` to `main` release PR. Production runs only the read-only public
+  rendering sentinel.
 - CI defaults to two Playwright workers. Stateful notification, MCP, and client suites explicitly use one worker against shared remote D1.
 - The seed, migration, tool-parity, and script-syntax checks run together in one Node-only job, avoiding redundant dependency installations.

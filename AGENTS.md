@@ -232,19 +232,29 @@ The bodies in `server/utils/whatsapp.ts`'s `TEMPLATES` map must match approved t
 
 ## CI / E2E Architecture
 
-Three environment gates exist in `.github/workflows/ci.yml`:
+Four environment gates exist in `.github/workflows/ci.yml`:
 
 ### Required PR lane
 
 Runs checks, builds for preview, and may migrate, seed, and deploy only the
 isolated preview environment. Shared staging and production are never changed
-by a PR. One representative browser suite runs against the deployed preview.
+by a feature PR. Permanent core sentinels plus the specs selected from
+`config/e2e-impact-map.mjs` run against the deployed preview. High-impact and
+unclassified runtime changes fail safe to full coverage; documentation-only
+changes skip Worker deployment.
 
 ### Staging lane
 
 Runs on pushes to `staging`. It deploys the staging Worker normally, applies
-pending migrations, sweeps disposable E2E artifacts, and runs the full
-Playwright suite against `staging.krabiclaw.com`.
+pending migrations, sweeps disposable E2E artifacts, and runs permanent core
+plus affected Playwright coverage against `staging.krabiclaw.com`.
+
+### Staging release-qualification lane
+
+Runs when the ordinary `staging` to `main` pull request opens or updates. It
+rebuilds and deploys that exact staging head, provisions deterministic fixtures,
+and runs the complete Playwright suite. Production promotion is blocked until
+this exact-head qualification is green.
 
 ### Production lane
 

@@ -5,8 +5,9 @@ Cloudflare Workers.
 
 | Git event | Worker | Validation |
 | --- | --- | --- |
-| Pull request to `staging` or `main` | `krabiclaw-preview` | Representative Playwright coverage |
-| Push to `staging` | `krabiclaw-staging` | Full Playwright suite |
+| Pull request to `staging` | `krabiclaw-preview` | Core plus affected Playwright coverage selected from the diff |
+| Push to `staging` | `krabiclaw-staging` | Core plus affected Playwright coverage selected from the pushed commits |
+| `staging` to `main` pull request | `krabiclaw-staging` | Full Playwright release qualification |
 | Push to `main` | `krabiclaw` | Read-only production browser smoke |
 
 Each deployment is a normal `wrangler deploy` to its environment. Cloudflare
@@ -20,6 +21,18 @@ runs an older Worker against columns that have already been dropped.
 Preview fixtures are reset and seeded for PR isolation. Staging keeps its
 persistent fixtures and sweeps only disposable E2E artifacts. Production is
 never seeded by CI.
+
+`config/e2e-impact-map.mjs` is the executable impact map. Documentation-only
+changes do not deploy a Worker. Narrow changes run the permanent core browser
+sentinels plus the mapped subsystem specs. Schema, migration, Worker, test
+harness, and unclassified runtime changes fail safe to the full suite. Changing
+an E2E spec always selects that exact spec.
+
+The full suite is a release-candidate gate rather than a tax on every staging
+commit. Opening or updating the ordinary `staging` to `main` pull request
+rebuilds and deploys its exact staging head, provisions deterministic fixtures,
+and runs the complete suite against `staging.krabiclaw.com`. Production may not
+be promoted until that exact-head qualification passes.
 
 Releases enter staging and production through reviewed branch merges. During an
 outage, use Cloudflare's deployment history without changing D1 data, then
