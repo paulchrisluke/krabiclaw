@@ -13,6 +13,7 @@ export async function loginAs(request: APIRequestContext, baseURL: string, userI
     ? target.origin
     : new URL(process.env.NUXT_PUBLIC_PLATFORM_DOMAIN || target.origin).origin
   const res = await request.post(`${baseURL}/api/auth/sign-in/email`, {
+    maxRetries: 0,
     headers: { origin },
     data: {
       email: fixture.email,

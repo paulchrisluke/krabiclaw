@@ -73,6 +73,10 @@ test('editor autosave requires canonical documents and serializes draft creation
   assert.match(source, /if \(createDraftPromise\) return await createDraftPromise/)
   assert.match(source, /social_image_asset_id: form\.social_image_asset_id \|\| null/)
   assert.match(source, /flush: 'sync'/)
+  assert.match(source, /const persistedPostId = computed\(\(\) => post\.value\?\.id \|\| postId\.value\)/)
+  assert.match(source, /function buildSaveSnapshot\(id = persistedPostId\.value\)/)
+  assert.match(source, /async function flushSaveAndNavigate\(\) \{[\s\S]*await flushSave\(\)[\s\S]*!props\.isEdit && !postId\.value && saved\?\.id[\s\S]*repository\.editUrl\(saved\.id\)/)
+  assert.doesNotMatch(source, /await navigateTo\(props\.repository\.editUrl\(created\.id\)\)/)
 })
 
 test('editor creation persists one draft before any token-checked publish or schedule lifecycle', async () => {
@@ -147,6 +151,6 @@ test('block controls preserve writable content and persisted-post action boundar
   assert.match(editor, /if \(!last \|\| \(last\.type !== 'markdown' && last\.type !== 'heading'\)\)/)
   assert.match(editor, /function handleMergeBlock[\s\S]*ensureTrailingTextBlock\(\)/)
   assert.match(editor, /<UButton v-if="post" color="error"/)
-  assert.match(editor, /async function share\(\) \{ if \(!post\.value \|\| !postId\.value\) return/)
-  assert.match(editor, /async function remove\(\) \{ if \(!post\.value \|\| !postId\.value/)
+  assert.match(editor, /async function share\(\) \{ if \(!post\.value \|\| !persistedPostId\.value\) return/)
+  assert.match(editor, /async function remove\(\) \{ if \(!post\.value \|\| !persistedPostId\.value/)
 })

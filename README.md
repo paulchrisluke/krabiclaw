@@ -101,11 +101,11 @@ Cloudflare Worker, and starts it under local workerd. Authenticated tests sign
 in through Better Auth with those credentials; no email inbox or authentication
 bypass route is involved.
 
-Tenant sites use the same shared-host routing contract as preview and staging:
-the browser targets `localhost` and the test helper supplies
-`x-preview-tenant` for the selected fixture. This is the authoritative local
-browser path; do not rely on direct `*.localhost` navigation for Worker browser
-verification.
+Local tenant tests use a shared-host routing contract: the browser targets
+`localhost` and the test helper supplies `x-preview-tenant` for the selected
+fixture. Deployed preview and staging use direct first-level tenant aliases
+instead. This is the authoritative local browser path; do not rely on direct
+`*.localhost` navigation for Worker browser verification.
 
 ```text
 http://localhost:3000/                  (x-preview-tenant: ncls)

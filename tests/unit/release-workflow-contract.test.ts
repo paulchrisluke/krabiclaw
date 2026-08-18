@@ -89,6 +89,11 @@ test('each environment uses one normal Worker deploy before contract migrations 
   const jobs = await workflowJobs()
 
   assert.equal(
+    jobs['e2e-representative']?.env?.PLAYWRIGHT_PREVIEW_URL,
+    'https://preview.krabiclaw.com',
+  )
+
+  assert.equal(
     stepRun(jobs['e2e-representative']!, 'Deploy preview Worker'),
     'npx wrangler deploy --env preview --strict',
   )
@@ -133,6 +138,15 @@ test('each environment uses one normal Worker deploy before contract migrations 
   )
 })
 
+test('preview and staging route direct first-level tenant aliases to their Workers', async () => {
+  const wrangler = await repoFile('wrangler.toml')
+  const preview = tomlSection(wrangler, 'env.preview')
+  const staging = tomlSection(wrangler, 'env.staging')
+
+  assert.match(preview, /pattern = "\*-preview\.krabiclaw\.com\/\*"/)
+  assert.match(staging, /pattern = "\*-staging\.krabiclaw\.com\/\*"/)
+})
+
 test('preview core protects authenticated hydration and Pages manager regressions', async () => {
   const packageDocument = JSON.parse(await repoFile('package.json')) as {
     scripts?: Record<string, string>
@@ -163,6 +177,13 @@ test('Worker egress uses Cloudflare strict-public fetch for CIMD resolution', as
     wrangler,
     /^compatibility_flags = \["nodejs_compat_v2", "global_fetch_strictly_public"\]$/m,
   )
+})
+
+test('Worker execution is smart-placed near the regional databases', async () => {
+  const wrangler = await repoFile('wrangler.toml')
+  const placement = tomlSection(wrangler, 'placement')
+
+  assert.match(placement, /^\s*mode = "smart"\s*$/)
 })
 
 test('staging OAuth smoke exercises CIMD without restoring dynamic registration', async () => {

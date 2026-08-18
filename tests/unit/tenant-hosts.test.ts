@@ -2,6 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   deriveSubdomain,
+  environmentTenantAliasHostname,
+  environmentTenantAliasSlug,
   getFreeSiteDomain,
   getPlatformHtmlCacheHosts,
   getPlatformHosts,
@@ -9,6 +11,7 @@ import {
   isPlatformHost,
   isPreviewContext,
   normalizeHost,
+  usesTenantHeader,
   type TenantHostEnv,
 } from '../../server/utils/tenant-hosts.ts'
 
@@ -20,6 +23,11 @@ const prodEnv: TenantHostEnv = {
 const localEnv: TenantHostEnv = {
   NUXT_PUBLIC_FREE_SITE_DOMAIN: 'http://localhost:3000',
   NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://krabiclaw.com',
+}
+
+const stagingEnv: TenantHostEnv = {
+  NUXT_PUBLIC_FREE_SITE_DOMAIN: 'https://krabiclaw.com',
+  NUXT_PUBLIC_PLATFORM_DOMAIN: 'https://staging.krabiclaw.com',
 }
 
 const portedCustomEnv: TenantHostEnv = {
@@ -121,7 +129,7 @@ test('getFreeSiteDomain rejects an unconfigured domain', () => {
   assert.throws(() => getFreeSiteDomain({}), /NUXT_PUBLIC_FREE_SITE_DOMAIN is required/)
 })
 
-test('shared local and deployed test hosts use explicit tenant headers instead of nested hostnames', () => {
+test('preview contexts include platform hosts, direct tenant aliases, and raw shared hosts', () => {
   assert.equal(isPreviewContext('localhost'), true)
   assert.equal(isPreviewContext('localhost:3000'), true)
   assert.equal(isPreviewContext('127.0.0.1:3000'), true)
@@ -131,9 +139,41 @@ test('shared local and deployed test hosts use explicit tenant headers instead o
   assert.equal(isPreviewContext('demo.local.krabiclaw.com'), false)
   assert.equal(isPreviewContext('preview.krabiclaw.com'), true)
   assert.equal(isPreviewContext('staging.krabiclaw.com'), true)
+  assert.equal(isPreviewContext('pottery-house-preview.krabiclaw.com'), true)
+  assert.equal(isPreviewContext('pottery-house-staging.krabiclaw.com'), true)
   assert.equal(isPreviewContext('preview.customer.com'), false)
   assert.equal(isPreviewContext('ci-pr-1234567890-krabiclaw-preview.paulchrisluke.workers.dev'), false)
   assert.equal(isPreviewContext('some-other-worker.paulchrisluke.workers.dev'), false)
+})
+
+test('tenant headers are confined to local and raw workers.dev shared hosts', () => {
+  assert.equal(usesTenantHeader('localhost:3000'), true)
+  assert.equal(usesTenantHeader('local.krabiclaw.com'), true)
+  assert.equal(usesTenantHeader('krabiclaw-preview.paulchrisluke.workers.dev'), true)
+  assert.equal(usesTenantHeader('preview.krabiclaw.com'), false)
+  assert.equal(usesTenantHeader('staging.krabiclaw.com'), false)
+  assert.equal(usesTenantHeader('pottery-house-staging.krabiclaw.com'), false)
+})
+
+test('environment tenant aliases use first-level preview and staging hostnames', () => {
+  assert.equal(
+    environmentTenantAliasHostname('staging.krabiclaw.com', 'pottery-house'),
+    'pottery-house-staging.krabiclaw.com',
+  )
+  assert.equal(
+    environmentTenantAliasHostname('preview.krabiclaw.com', 'ncls'),
+    'ncls-preview.krabiclaw.com',
+  )
+  assert.equal(environmentTenantAliasHostname('krabiclaw.com', 'ncls'), '')
+  assert.equal(environmentTenantAliasHostname('staging.krabiclaw.com', '../ncls'), '')
+
+  assert.equal(
+    environmentTenantAliasSlug('pottery-house-staging.krabiclaw.com', stagingEnv),
+    'pottery-house',
+  )
+  assert.equal(environmentTenantAliasSlug('staging.krabiclaw.com', stagingEnv), '')
+  assert.equal(environmentTenantAliasSlug('pottery-house-preview.krabiclaw.com', stagingEnv), '')
+  assert.equal(environmentTenantAliasSlug('unknown.example.com', stagingEnv), '')
 })
 
 test('deriveSubdomain matches a subdomain of the configured platform domain', () => {

@@ -110,14 +110,14 @@ import { dashboardAccountRouteQueryKey } from './dashboardScopeHeaderContext'
 
 defineProps<{ collapsed?: boolean, mobileOnly?: boolean }>()
 
-const { data: sessionData, signOut } = useAuth()
+const { sessionData } = await useAuthSession()
+const { signOut } = useAuth()
 const route = useRoute()
 const dashboard = useDashboardSite()
 const { preference, setPreference } = usePlatformTheme()
 const config = useRuntimeConfig()
 const mobileOpen = ref(false)
-const hydrated = ref(false)
-const renderedUser = computed(() => hydrated.value ? sessionData.value?.user ?? null : null)
+const renderedUser = computed(() => sessionData.value?.user ?? null)
 const accountRouteQuery = inject(dashboardAccountRouteQueryKey, computed((): Record<string, string> => {
   const organization = dashboard.organization.value
   if (!organization?.slug) return {}
@@ -149,7 +149,6 @@ async function checkPlatformStatus() {
 }
 
 onMounted(() => {
-  hydrated.value = true
   checkPlatformStatus().catch(console.error)
 })
 

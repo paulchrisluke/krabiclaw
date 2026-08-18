@@ -63,6 +63,7 @@ const { default: tenantResolution, resolveTenantSite } = await import('../../ser
 test.beforeEach(() => {
   calls.length = 0
   queryResponder = () => null
+  runtimeEnv.NUXT_PUBLIC_PLATFORM_DOMAIN = 'https://krabiclaw.com'
 })
 
 test('shared tenant hosts fail closed when site_domains has no active row', async () => {
@@ -134,4 +135,68 @@ test('named local tunnel resolves x-preview-tenant through the registered subdom
   assert.equal(event.context.canonicalDomain, 'local.krabiclaw.com')
   assert.equal(calls.length, 1)
   assert.deepEqual(calls[0]?.params, ['pottery-house.krabiclaw.com'])
+})
+
+test('staging tenant alias resolves the registered subdomain without redirecting to production', async () => {
+  runtimeEnv.NUXT_PUBLIC_PLATFORM_DOMAIN = 'https://staging.krabiclaw.com'
+  queryResponder = (query, params) => {
+    if (
+      query.includes('JOIN site_domains requested')
+      && params[0] === 'pottery-house.krabiclaw.com'
+    ) return site
+    return null
+  }
+  const event = {
+    path: '/',
+    url: new URL('https://pottery-house-staging.krabiclaw.com/'),
+    context: {},
+    req: new Request('https://pottery-house-staging.krabiclaw.com/', {
+      headers: { host: 'pottery-house-staging.krabiclaw.com' },
+    }),
+  } as unknown as H3Event
+
+  await tenantResolution(event)
+
+  assert.equal(event.context.siteId, site.id)
+  assert.equal(event.context.canonicalDomain, 'pottery-house-staging.krabiclaw.com')
+  assert.equal(event.context.tenantHost, 'pottery-house-staging.krabiclaw.com')
+  assert.deepEqual(calls[0]?.params, ['pottery-house.krabiclaw.com'])
+})
+
+test('staging platform host ignores tenant headers and remains platform-scoped', async () => {
+  runtimeEnv.NUXT_PUBLIC_PLATFORM_DOMAIN = 'https://staging.krabiclaw.com'
+  const event = {
+    path: '/',
+    url: new URL('https://staging.krabiclaw.com/'),
+    context: {},
+    req: new Request('https://staging.krabiclaw.com/', {
+      headers: { host: 'staging.krabiclaw.com', 'x-preview-tenant': 'pottery-house' },
+    }),
+  } as unknown as H3Event
+
+  await tenantResolution(event)
+
+  assert.equal(event.context.tenantType, 'platform')
+  assert.equal(event.context.siteId, null)
+  assert.equal(calls.length, 0)
+})
+
+test('unknown staging aliases fail closed without falling through to custom-domain resolution', async () => {
+  runtimeEnv.NUXT_PUBLIC_PLATFORM_DOMAIN = 'https://staging.krabiclaw.com'
+  queryResponder = (query) => query.includes("sd.type IN ('custom', 'subdomain')") ? site : null
+  const event = {
+    path: '/',
+    url: new URL('https://unknown-staging.krabiclaw.com/'),
+    context: {},
+    req: new Request('https://unknown-staging.krabiclaw.com/', {
+      headers: { host: 'unknown-staging.krabiclaw.com' },
+    }),
+  } as unknown as H3Event
+
+  await tenantResolution(event)
+
+  assert.equal(event.context.tenantType, 'tenant-404')
+  assert.equal(event.context.siteId, null)
+  assert.equal(calls.length, 1)
+  assert.ok(calls[0]?.query.includes('JOIN site_domains requested'))
 })

@@ -58,11 +58,9 @@ test.describe('role permission matrix', () => {
     }
     await loginAs(ownerRequest, baseUrl, OWNER_USER_ID)
 
-    const [adminRequest, editorRequest, memberRequest] = await Promise.all([
-      authenticatedRequest('user-e2e-role-admin'),
-      authenticatedRequest('user-e2e-role-editor'),
-      authenticatedRequest('user-e2e-role-member'),
-    ])
+    const adminRequest = await authenticatedRequest('user-e2e-role-admin')
+    const editorRequest = await authenticatedRequest('user-e2e-role-editor')
+    const memberRequest = await authenticatedRequest('user-e2e-role-member')
     roleRequests = {
       owner: ownerRequest,
       admin: adminRequest,

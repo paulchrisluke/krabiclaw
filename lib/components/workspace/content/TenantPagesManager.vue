@@ -165,7 +165,7 @@ if (!siteId) throw createError({ statusCode: 503, statusMessage: 'Dashboard site
 const resolvedSiteId = siteId
 const dashboardApi = useDashboardApi()
 const toast = useToast()
-const config = useRuntimeConfig()
+const platformOrigin = useRequestURL().origin
 const pages = ref<PageSummary[]>([])
 const selected = ref<PageDetail | null>(null)
 const locale = ref(String(dashboard.site.value?.source_locale || 'en'))
@@ -192,9 +192,8 @@ const blockTypeOptions = computed(() => Object.values(TENANT_PAGE_BLOCK_REGISTRY
 const blockErrors = computed(() => selected.value?.blocks.map(block => validateTenantPageBlock(block)) ?? [])
 const previewUrl = computed(() => {
   if (!selected.value?.id || !previewToken.value) return ''
-  const base = String(config.public.platformDomain || config.public.freeSiteDomain).replace(/\/$/, '')
   const path = selected.value.path === '/' ? '' : selected.value.path
-  return `${base}/preview/site/${siteId}${path}?preview=true&locale=${encodeURIComponent(selected.value.locale)}&token=${encodeURIComponent(previewToken.value)}`
+  return `${platformOrigin}/preview/site/${siteId}${path}?preview=true&locale=${encodeURIComponent(selected.value.locale)}&token=${encodeURIComponent(previewToken.value)}`
 })
 const navigablePreviewUrl = computed(() => previewHrefForTenantPage(dirty.value, previewUrl.value))
 

@@ -131,6 +131,7 @@ const props = withDefaults(defineProps<{ repository: BlogPostRepository; initial
 const route = useRoute()
 const postId = computed(() => props.postId || String(route.params.postId || ''))
 const post = ref<BlogPost | null>(null)
+const persistedPostId = computed(() => post.value?.id || postId.value)
 const blocks = ref<BlogEditorBlock[]>(initialBlogEditorBlocks())
 const interactive = ref(false)
 const loadPending = ref(true)
@@ -345,11 +346,16 @@ function queueSave() {
   if (post.value) {
     saveQueue.mark(buildSaveSnapshot())
     saveTimer = setTimeout(() => {
-      void flushSave().catch((error: unknown) => {
+      void flushSaveAndNavigate().catch((error: unknown) => {
         actionError.value = getErrorMessage(error, 'Failed to save the draft.')
       })
     }, 900)
   }
+}
+async function flushSaveAndNavigate() {
+  const saved = await flushSave()
+  if (!props.isEdit && !postId.value && saved?.id) await navigateTo(props.repository.editUrl(saved.id))
+  return saved
 }
 async function flushSave() {
   if (!dirty) return post.value
@@ -368,7 +374,7 @@ async function flushSave() {
     throw error
   }
 }
-function buildSaveSnapshot(id = postId.value): SaveSnapshot {
+function buildSaveSnapshot(id = persistedPostId.value): SaveSnapshot {
   return { postId: id, payload: { title: form.title, category: form.category || null, tags: tagsText.value.split(',').map(v => v.trim()).filter(Boolean), excerpt: form.excerpt || null, seo_title: form.seo_title || null, seo_description: form.seo_description || null, social_image_asset_id: form.social_image_asset_id || null, slug: slugResetRequested.value ? null : form.slug !== post.value?.slug ? form.slug : undefined, reset_slug_override: slugResetRequested.value || undefined, redirect_old_slug: form.redirect_old_slug, canonical_url: form.canonical_url || null, robots: form.robots || null, visibility: form.visibility, content_blocks: structuredClone(toRaw(blocks.value)), site_author_id: form.site_author_id || null } }
 }
 function lifecycleVersionInput() {
@@ -414,7 +420,7 @@ async function publish() {
     if (!post.value) { await createDraft(true); return }
     if (dirty) saveQueue.mark(buildSaveSnapshot())
     await saveQueue.runExclusive(async () => {
-      const lifecycle = await props.repository.publish(postId.value, {
+      const lifecycle = await props.repository.publish(persistedPostId.value, {
         ...lifecycleVersionInput(),
         scheduled_for: scheduledLifecycleValue(publishTiming.value, form.scheduled_for),
       })
@@ -435,7 +441,7 @@ async function unpublish() {
   try {
     if (dirty) saveQueue.mark(buildSaveSnapshot())
     await saveQueue.runExclusive(async () => {
-      const lifecycle = await props.repository.unpublish(postId.value, lifecycleVersionInput())
+      const lifecycle = await props.repository.unpublish(persistedPostId.value, lifecycleVersionInput())
       applyLifecycle(lifecycle)
       return lifecycle
     })
@@ -479,7 +485,11 @@ async function createDraft(publishNow: boolean) {
     }
     dirty = false
     saveState.value = 'saved'
-    await navigateTo(props.repository.editUrl(created.id))
+    saveTimer = setTimeout(() => {
+      void flushSaveAndNavigate().catch((error: unknown) => {
+        actionError.value = getErrorMessage(error, 'Failed to save the draft.')
+      })
+    }, 900)
     return created
   })().catch((error: unknown) => {
     dirty = true
@@ -568,7 +578,7 @@ function handleMergeBlock(index: number, direction: 'back' | 'forward') {
   ensureTrailingTextBlock()
 }
 function changeImage(index: number, value: unknown) { const asset = value && typeof value === 'object' ? value as { id?: unknown; publicUrl?: unknown; thumbnailUrl?: unknown } : null; blocks.value[index] = { ...blocks.value[index]!, data: { ...blocks.value[index]!.data, asset_id: typeof asset?.id === 'string' ? asset.id : '', public_url: typeof asset?.publicUrl === 'string' ? asset.publicUrl : typeof asset?.thumbnailUrl === 'string' ? asset.thumbnailUrl : '' } } }
-async function share() { if (!post.value || !postId.value) return; const url = new URL(post.value.edit_url || props.repository.editUrl(postId.value), windowOrigin()).toString(); await navigator.clipboard?.writeText(url) }
+async function share() { if (!post.value || !persistedPostId.value) return; const url = new URL(post.value.edit_url || props.repository.editUrl(persistedPostId.value), windowOrigin()).toString(); await navigator.clipboard?.writeText(url) }
 async function goBack() { if (settingsOpen.value) { closeSettings(); return } try { await flushSave(); await navigateTo(props.backUrl) } catch { if (saveState.value !== 'conflict') saveState.value = 'failed' } }
 function openSettings() { settingsOpen.value = true; if (import.meta.client) history.pushState({ blogSettings: true }, '') }
 function closeSettings() { settingsOpen.value = false }
@@ -590,7 +600,7 @@ function onSettingsKeydown(event: KeyboardEvent) {
 }
 function onPopState() { if (settingsOpen.value) closeSettings() }
 function beforeUnload(event: BeforeUnloadEvent) { if (dirty) event.preventDefault() }
-async function remove() { if (!post.value || !postId.value || !confirm('Delete this post permanently?')) return; await props.repository.delete(postId.value); await navigateTo(props.backUrl) }
+async function remove() { if (!post.value || !persistedPostId.value || !confirm('Delete this post permanently?')) return; await props.repository.delete(persistedPostId.value); await navigateTo(props.backUrl) }
 function windowOrigin() { return import.meta.client ? window.location.origin : 'https://krabiclaw.com' }
 function toLocalDatetime(value?: string | null) { if (!value) return ''; const d = new Date(value); const offset = d.getTimezoneOffset() * 60_000; return new Date(d.getTime() - offset).toISOString().slice(0, 16) }
 function resetSlugOverride() { slugResetRequested.value = true; form.slug = generatedSlug.value }

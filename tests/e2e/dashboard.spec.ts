@@ -174,10 +174,17 @@ test.describe('dashboard functional smoke', () => {
       expect(pagesResult.status()).toBe(200)
       expect(pageResult.status()).toBe(200)
     }
+    const appManifestResponse = page.waitForResponse(candidate => {
+      const url = new URL(candidate.url())
+      return candidate.request().method() === 'GET'
+        && url.pathname.startsWith('/_nuxt/builds/meta/')
+        && url.pathname.endsWith('.json')
+    })
     const initialLoad = waitForPagesManagerLoad()
     const response = await page.goto(`${baseURL}/dashboard/mcp-growth-fixture/sites/mcp-growth-fixture/pages`, { waitUntil: 'domcontentloaded' })
     expect(response?.status()).toBe(200)
     await initialLoad
+    expect((await appManifestResponse).status()).toBe(200)
     await expect(page.getByText('Site pages', { exact: true })).toBeVisible()
     await expect(page.getByText('Blocks', { exact: true })).toBeVisible()
 

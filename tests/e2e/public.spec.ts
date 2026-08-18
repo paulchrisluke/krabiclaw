@@ -297,7 +297,7 @@ test.describe('platform public site', () => {
   })
 
   test('/templates/saya renders the Saya detail experience', async ({ page, baseURL }) => {
-    const errors = collectPageErrors(page)
+    const errors = collectPageErrors(page, { failOnAllWarnings: true })
     const response = await page.goto(`${baseURL}/templates/saya`, { waitUntil: 'load' })
 
     expect(response?.status()).toBeLessThan(400)
@@ -309,7 +309,7 @@ test.describe('platform public site', () => {
   })
 
   test('/templates/blawby renders the Blawby detail experience with the NCLS demo link', async ({ page, baseURL }) => {
-    const errors = collectPageErrors(page)
+    const errors = collectPageErrors(page, { failOnAllWarnings: true })
     const response = await page.goto(`${baseURL}/templates/blawby`, { waitUntil: 'load' })
 
     expect(response?.status()).toBeLessThan(400)

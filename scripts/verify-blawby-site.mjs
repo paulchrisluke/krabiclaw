@@ -9,7 +9,10 @@ import {
   NCLS_ARTICLE_SLUGS,
 } from './blawby-parity-config.mjs'
 import { isNonIndexableHost } from '../server/utils/seo-policy.ts'
-import { isPreviewContext } from '../server/utils/tenant-hosts.ts'
+import {
+  environmentTenantAliasHostname,
+  usesTenantHeader,
+} from '../server/utils/tenant-hosts.ts'
 
 const DEFAULT_ROUTES = [
   '/',
@@ -97,6 +100,10 @@ function resolveUrl(base, route) {
 
 function normalizeTenantBaseUrl(rawUrl, tenantSlug) {
   const url = new URL(rawUrl)
+  const environmentAlias = tenantSlug
+    ? environmentTenantAliasHostname(url.hostname, tenantSlug)
+    : ''
+  if (environmentAlias) url.hostname = environmentAlias
   if (tenantSlug && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {
     url.hostname = `${tenantSlug}.localhost`
   }
@@ -105,7 +112,7 @@ function normalizeTenantBaseUrl(rawUrl, tenantSlug) {
 
 function previewTenantHeaders(base, tenantSlug) {
   if (!tenantSlug) return {}
-  return isPreviewContext(new URL(base).hostname)
+  return usesTenantHeader(new URL(base).hostname)
     ? { 'x-preview-tenant': tenantSlug, 'cache-control': 'no-store' }
     : {}
 }
