@@ -3,6 +3,9 @@ main = ".output/server/index.mjs"
 compatibility_date = "2024-11-01"
 compatibility_flags = ["nodejs_compat_v2", "global_fetch_strictly_public"]
 
+[placement]
+mode = "smart"
+
 [assets]
 directory = ".output/public"
 

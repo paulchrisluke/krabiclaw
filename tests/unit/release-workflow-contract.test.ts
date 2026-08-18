@@ -179,6 +179,13 @@ test('Worker egress uses Cloudflare strict-public fetch for CIMD resolution', as
   )
 })
 
+test('Worker execution is smart-placed near the regional databases', async () => {
+  const wrangler = await repoFile('wrangler.toml')
+  const placement = tomlSection(wrangler, 'placement')
+
+  assert.match(placement, /^\s*mode = "smart"\s*$/)
+})
+
 test('staging OAuth smoke exercises CIMD without restoring dynamic registration', async () => {
   const smoke = await repoFile('scripts/test-mcp-oauth.mjs')
   assert.match(smoke, /client_id_metadata_document_supported === true/)
