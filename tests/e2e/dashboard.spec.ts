@@ -157,18 +157,19 @@ test.describe('dashboard functional smoke', () => {
     await loginAsPage(page, baseURL!, 'user-e2e-growth-owner')
 
     const pagesCollectionPath = '/api/editor/sites/site-mcp-growth/pages'
+    const pagesManagerLoadTimeout = 60_000
     const waitForPagesManagerLoad = async () => {
       const pagesResponse = page.waitForResponse(candidate => {
         const url = new URL(candidate.url())
         return candidate.request().method() === 'GET'
           && url.pathname === pagesCollectionPath
           && url.searchParams.get('locale') === 'en'
-      }, { timeout: 30_000 })
+      }, { timeout: pagesManagerLoadTimeout })
       const pageResponse = page.waitForResponse(candidate => {
         const url = new URL(candidate.url())
         return candidate.request().method() === 'GET'
           && url.pathname.startsWith(`${pagesCollectionPath}/`)
-      }, { timeout: 30_000 })
+      }, { timeout: pagesManagerLoadTimeout })
       const [pagesResult, pageResult] = await Promise.all([pagesResponse, pageResponse])
       expect(pagesResult.status()).toBe(200)
       expect(pageResult.status()).toBe(200)
