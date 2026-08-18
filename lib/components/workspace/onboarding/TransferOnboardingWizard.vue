@@ -207,6 +207,7 @@ interface Location {
 
 interface Props {
   interactive: boolean
+  organizationId: string
   siteId: string
   orgSlug: string
   siteSlug: string
@@ -280,8 +281,6 @@ const connectingFacebook = ref(false)
 const facebookConnected = ref(false)
 const socialError = ref<string | null>(null)
 
-const { data: session } = await authClient.useSession(useFetch)
-const activeOrgId = computed(() => session.value?.session?.activeOrganizationId ?? null)
 const toast = useToast()
 
 function renderMarkdown(text: string) {
@@ -397,7 +396,7 @@ async function saveNotifications() {
 }
 
 async function sendInvite() {
-  if (!activeOrgId.value || !inviteForm.email.trim()) return
+  if (!inviteForm.email.trim()) return
   inviting.value = true
   inviteSuccess.value = false
   inviteError.value = null
@@ -405,7 +404,7 @@ async function sendInvite() {
     const { error } = await authClient.organization.inviteMember({
       email: inviteForm.email.trim(),
       role: inviteForm.role as 'member' | 'admin',
-      organizationId: activeOrgId.value,
+      organizationId: props.organizationId,
     })
     if (error) {
       inviteError.value = error.message || 'Failed to send invite. Please try again.'

@@ -11,6 +11,7 @@
     >
       <TransferOnboardingWizard
         :interactive="hydrated"
+        :organization-id="organizationId"
         :site-id="siteId"
         :org-slug="orgSlug"
         :site-slug="subdomain"
@@ -105,6 +106,7 @@ const loaded = ref(false)
 const loadError = ref(false)
 const paymentPending = ref(false)
 const hydrated = ref(false)
+const organizationId = ref('')
 const siteId = ref('')
 const siteName = ref('')
 const siteVertical = ref<SiteVertical | null>(null)
@@ -163,6 +165,7 @@ function resetTransferContextState() {
   loaded.value = false
   loadError.value = false
   paymentPending.value = false
+  organizationId.value = ''
   siteId.value = ''
   siteName.value = ''
   siteVertical.value = null
@@ -180,6 +183,11 @@ function applyTransferContext(ctx: TransferOnboardingContext) {
     paymentPending.value = true
     return
   }
+  if (!ctx.organization?.id) {
+    loadError.value = true
+    return
+  }
+  organizationId.value = ctx.organization.id
   if (ctx.site) {
     if (!ctx.site.brand_name?.trim() || !ctx.site.vertical) {
       loadError.value = true
@@ -214,7 +222,7 @@ const isTransferOnboardingContext = (value: unknown): value is TransferOnboardin
   && value.success === true
   && (
     (value.state === 'payment_pending' && typeof value.transfer_id === 'string' && value.transfer_id.length > 0)
-    || (value.state === 'accepted' && isRecord(value.site) && Array.isArray(value.locations) && isRecord(value.notifications))
+    || (value.state === 'accepted' && isRecord(value.organization) && isRecord(value.site) && Array.isArray(value.locations) && isRecord(value.notifications))
   )
 
 const requestEvent = useRequestEvent()

@@ -462,6 +462,7 @@ test.describe('stateless MCP server', () => {
       const reorderMenu = await mcpRequest(request, baseURL!, {
         method: 'tools/call',
         toolName: 'reorder_menu_items',
+        idempotent: true,
         args: {
           site_id: siteId,
           menu_id: menuId,
@@ -472,6 +473,18 @@ test.describe('stateless MCP server', () => {
         },
       })
       expect(reorderMenu.status()).toBe(200)
+
+      const reorderedMenu = await mcpRequest(request, baseURL!, {
+        method: 'tools/call',
+        toolName: 'get_menu',
+        idempotent: true,
+        args: { site_id: siteId, menu_id: menuId },
+      })
+      expect(reorderedMenu.status()).toBe(200)
+      const reorderedMenuBody = await reorderedMenu.json()
+      const reorderedItems = mcpData<{ menu: { items: Array<{ id: string; sort_order: number }> } }>(reorderedMenuBody).menu.items
+      expect(reorderedItems.find(item => item.id === menuItemId)?.sort_order).toBe(2)
+      expect(reorderedItems.find(item => item.id === menuItemIdSecond)?.sort_order).toBe(1)
 
       const deleteDessertSection = await mcpRequest(request, baseURL!, {
         method: 'tools/call',

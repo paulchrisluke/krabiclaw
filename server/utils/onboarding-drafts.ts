@@ -1,5 +1,5 @@
 import type { SiteVertical } from '~/utils/vertical-copy'
-import { execute, queryFirst } from '~/server/db'
+import { queryFirst } from '~/server/db'
 import type { PlaceDetails } from '~/server/utils/google-places'
 import type { CurrencyCode } from '~/shared/currencies'
 
@@ -185,27 +185,6 @@ function nowIso() {
   return new Date().toISOString()
 }
 
-function isUniqueConstraintError(error: unknown) {
-  const messages: string[] = []
-  let current: unknown = error
-  while (current) {
-    if (current instanceof Error) {
-      messages.push(current.message)
-      current = current.cause
-      continue
-    }
-    if (typeof current === 'object' && current && 'cause' in current) {
-      const record = current as { message?: unknown; cause?: unknown }
-      if (typeof record.message === 'string') messages.push(record.message)
-      current = record.cause
-      continue
-    }
-    messages.push(String(current))
-    break
-  }
-  return messages.some(message => /UNIQUE constraint failed/i.test(message))
-}
-
 type DraftPlaceSource = PlaceDetails | PlaceDetailsSnapshot
 
 function asPlaceSnapshot(place: DraftPlaceSource): PlaceDetailsSnapshot {
@@ -380,70 +359,40 @@ export async function upsertActiveOnboardingDraft(db: D1Database, input: {
   const subdomainCandidate = input.payload.preview.subdomainCandidate
   const now = nowIso()
 
-  // Concurrency-safe upsert: try INSERT first, retry as UPDATE on UNIQUE constraint violation
   const id = crypto.randomUUID()
-  try {
-    await execute(db, `
-      INSERT INTO onboarding_drafts
-        (id, user_id, organization_id, name, vertical, subdomain_candidate, source_type, status, payload_json, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
-    `, [
-      id,
-      input.userId,
-      input.organizationId ?? null,
-      input.name,
-      input.vertical,
-      subdomainCandidate,
-      input.sourceType,
-      payloadJson,
-      now,
-      now,
-    ])
-    return {
-      id,
-      subdomainCandidate,
-      payload: input.payload,
-    }
-  } catch (err: unknown) {
-    if (!isUniqueConstraintError(err)) {
-      throw err
-    }
-    // UNIQUE constraint violation on (user_id, status = 'active') means another request inserted first
-    // Retry as UPDATE on the existing active draft
-    const existing = await queryFirst<{ id: string }>(db, `
-      SELECT id FROM onboarding_drafts
-      WHERE user_id = ? AND status = 'active'
-      LIMIT 1
-    `, [input.userId])
+  const draft = await queryFirst<{ id: string }>(db, `
+    INSERT INTO onboarding_drafts
+      (id, user_id, organization_id, name, vertical, subdomain_candidate, source_type, status, payload_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
+    ON CONFLICT(user_id) WHERE status = 'active'
+    DO UPDATE SET
+      organization_id = excluded.organization_id,
+      name = excluded.name,
+      vertical = excluded.vertical,
+      subdomain_candidate = excluded.subdomain_candidate,
+      source_type = excluded.source_type,
+      payload_json = excluded.payload_json,
+      updated_at = excluded.updated_at
+    RETURNING id
+  `, [
+    id,
+    input.userId,
+    input.organizationId ?? null,
+    input.name,
+    input.vertical,
+    subdomainCandidate,
+    input.sourceType,
+    payloadJson,
+    now,
+    now,
+  ])
+  if (!draft?.id) {
+    throw new Error('Failed to save active onboarding draft')
+  }
 
-    if (!existing) {
-      throw err // Re-throw if it's not a conflict we can handle
-    }
-
-    const updateResult = await execute(db, `
-      UPDATE onboarding_drafts
-      SET organization_id = ?, name = ?, vertical = ?, subdomain_candidate = ?, source_type = ?, payload_json = ?, updated_at = ?
-      WHERE id = ? AND status = 'active'
-    `, [
-      input.organizationId ?? null,
-      input.name,
-      input.vertical,
-      subdomainCandidate,
-      input.sourceType,
-      payloadJson,
-      now,
-      existing.id,
-    ])
-
-    // If no row was updated, the draft is no longer active - rethrow
-    if (updateResult.meta.changes === 0) {
-      throw err
-    }
-
-    return {
-      id: existing.id,
-      subdomainCandidate,
-      payload: input.payload,
-    }
+  return {
+    id: draft.id,
+    subdomainCandidate,
+    payload: input.payload,
   }
 }
