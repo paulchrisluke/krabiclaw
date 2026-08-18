@@ -64,8 +64,11 @@ test('one CI workflow owns preview, staging, and production lifecycle gates', as
 
   assert.deepEqual(document.on?.pull_request?.branches, ['main', 'staging'])
   assert.deepEqual(document.on?.push?.branches, ['main', 'staging'])
+  assert.ok(jobs['e2e-plan'])
   assert.ok(jobs['e2e-representative'])
-  assert.equal(jobs['e2e-staging']?.if, "github.event_name == 'push' && github.ref == 'refs/heads/staging'")
+  assert.match(jobs['e2e-staging']?.if || '', /github\.ref == 'refs\/heads\/staging'/)
+  assert.match(jobs['e2e-staging']?.if || '', /github\.base_ref == 'main'/)
+  assert.match(jobs['e2e-staging']?.if || '', /github\.head_ref == 'staging'/)
   assert.equal(jobs['deploy-production']?.if, "github.event_name == 'push' && github.ref == 'refs/heads/main'")
 })
 
@@ -84,8 +87,8 @@ test('each environment uses one normal Worker deploy before contract migrations 
   )
   assert.ok(stepIndex(jobs['e2e-representative']!, 'Deploy preview Worker') < stepIndex(jobs['e2e-representative']!, 'Migrate preview database'))
   assert.equal(
-    stepRun(jobs['e2e-representative']!, 'Run required representative browser coverage'),
-    'yarn test:e2e:representative',
+    stepRun(jobs['e2e-representative']!, 'Run core and affected preview browser coverage'),
+    'yarn test:e2e:preview:selected',
   )
 
   const stagingMigrations = stepRun(jobs['e2e-staging']!, 'Apply staging migrations')
@@ -107,7 +110,8 @@ test('each environment uses one normal Worker deploy before contract migrations 
   assert.ok(stepIndex(jobs['e2e-staging']!, 'Provision deterministic staging fixtures') < stepIndex(jobs['e2e-staging']!, 'Provision staging Better Auth fixtures'))
   assert.ok(stepIndex(jobs['e2e-staging']!, 'Provision staging Better Auth fixtures') < stepIndex(jobs['e2e-staging']!, 'Run OAuth bearer MCP smoke'))
   assert.equal(stepRun(jobs['e2e-staging']!, 'Run OAuth bearer MCP smoke'), 'yarn test:mcp')
-  assert.equal(stepRun(jobs['e2e-staging']!, 'Run full staging E2E suite'), 'yarn test:e2e:full')
+  assert.equal(stepRun(jobs['e2e-staging']!, 'Run affected staging browser coverage'), 'yarn test:e2e:preview:selected')
+  assert.equal(stepRun(jobs['e2e-staging']!, 'Run full staging release qualification'), 'yarn test:e2e:full')
 
   const productionMigrations = stepRun(jobs['deploy-production']!, 'Apply production migrations')
   assert.equal(productionMigrations, 'npx wrangler d1 migrations apply DB --remote')
@@ -120,6 +124,19 @@ test('each environment uses one normal Worker deploy before contract migrations 
     stepRun(jobs['deploy-production']!, 'Run read-only production browser smoke'),
     'yarn test:e2e:public-rendering',
   )
+})
+
+test('preview core protects authenticated hydration and Pages manager regressions', async () => {
+  const packageDocument = JSON.parse(await repoFile('package.json')) as {
+    scripts?: Record<string, string>
+  }
+  const core = packageDocument.scripts?.['test:e2e:preview:core'] || ''
+
+  assert.match(core, /tests\/e2e\/smoke\.spec\.ts/)
+  assert.match(core, /tests\/e2e\/dashboard-api\.spec\.ts/)
+  assert.match(core, /Pages manager runs one typed-block and custom-page lifecycle tracer journey/)
+  assert.match(core, /owner can send a reservation email reply from the deep-linked dashboard inbox/)
+  assert.equal(packageDocument.scripts?.['test:e2e:representative'], 'yarn test:e2e:preview:core')
 })
 
 test('Cloudflare credentials stay scoped to mutation steps', async () => {

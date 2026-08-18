@@ -33,15 +33,18 @@ inspection once to determine ownership, then report the actual result.
 
 1. Keep one coherent bugfix or feature in one ready pull request targeting
    `staging`. Split work only when the changes are independently releasable.
-2. Run focused validation locally. CI owns the single environment-specific
-   build, preview deployment, and representative preview E2E coverage.
+2. Run focused validation locally. CI owns the environment-specific build,
+   preview deployment, permanent core sentinels, and affected E2E coverage
+   selected from `config/e2e-impact-map.mjs`.
 3. When preview deploys, test the affected customer journey immediately.
 4. Merge to `staging` after required PR checks and preview validation pass.
 5. When staging deploys, begin credentialed MCP and tenant browser validation
-   immediately while the full staging E2E suite continues.
-6. Promote with the ordinary `staging` to `main` pull request only after the
-   required staging checks and scoped customer validation pass.
-7. After production deploys, repeat the affected read-only customer journeys
+   immediately while its core and affected staging suites continue.
+6. Open or update the ordinary `staging` to `main` pull request. Its exact
+   staging head must pass the complete staging Playwright release qualification.
+7. Promote only after the full release qualification, required checks, and
+   scoped customer validation pass.
+8. After production deploys, repeat the affected read-only customer journeys
    and production smoke. Use an explicit canary identity for any production
    action that writes or sends notifications.
 

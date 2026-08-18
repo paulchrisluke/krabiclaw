@@ -138,10 +138,13 @@ ulimit -n 65536
 
 Deployment follows the branches in `.github/workflows/ci.yml`:
 
-1. Pull requests deploy the isolated preview Worker and run representative E2E.
+1. Runtime pull requests deploy the isolated preview Worker and run permanent
+   core plus diff-selected affected E2E coverage.
 2. Merges to `staging` deploy the staging Worker, apply staging migrations, and
-   run the full Playwright suite.
-3. A reviewed `staging` to `main` merge deploys the production Worker, applies
+   run the same core plus affected coverage.
+3. The `staging` to `main` release PR runs the full Playwright suite against its
+   exact staging head.
+4. A reviewed `staging` to `main` merge deploys the production Worker, applies
    production migrations, and runs read-only production browser smoke.
 
 CI invokes native Wrangler commands only in the matching branch job. See
