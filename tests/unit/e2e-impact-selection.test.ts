@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import test from 'node:test'
 import { IMPACT_GROUPS } from '../../config/e2e-impact-map.mjs'
-import { listE2eSpecs, selectPreviewE2e } from '../../scripts/select-preview-e2e.mjs'
+import {
+  changedFilesBetween,
+  listE2eSpecs,
+  selectPreviewE2e
+} from '../../scripts/select-preview-e2e.mjs'
 
 const allSpecs = listE2eSpecs()
 
@@ -74,6 +82,51 @@ test('an unclassified application source file fails safe to full coverage', () =
   assert.equal(plan.scope, 'full')
   assert.deepEqual(plan.groups, ['unclassified-runtime'])
   assert.deepEqual(plan.unclassifiedFiles, ['server/utils/new-cross-cutting-runtime.ts'])
+})
+
+test('an unclassified root runtime file fails safe to full coverage', () => {
+  const plan = selectPreviewE2e(['app.config.ts'], allSpecs)
+
+  assert.equal(plan.scope, 'full')
+  assert.deepEqual(plan.groups, ['unclassified-runtime'])
+  assert.deepEqual(plan.unclassifiedFiles, ['app.config.ts'])
+  assert.deepEqual(plan.specs, allSpecs)
+})
+
+test('deleting a mapped runtime file still selects its preview coverage', async () => {
+  const repository = await mkdtemp(join(tmpdir(), 'krabiclaw-e2e-impact-'))
+  const git = (...args: string[]) => execFileSync('git', args, {
+    cwd: repository,
+    encoding: 'utf8'
+  }).trim()
+
+  try {
+    git('init')
+    git('config', 'user.name', 'E2E Impact Test')
+    git('config', 'user.email', 'e2e-impact@playwright.example')
+    await mkdir(join(repository, 'components/saya'), { recursive: true })
+    await writeFile(join(repository, 'components/saya/RemovedBanner.vue'), '<template />\n')
+    git('add', '.')
+    git('commit', '-m', 'add mapped runtime file')
+    const base = git('rev-parse', 'HEAD')
+    await rm(join(repository, 'components/saya/RemovedBanner.vue'))
+    git('add', '-A')
+    git('commit', '-m', 'delete mapped runtime file')
+    const head = git('rev-parse', 'HEAD')
+
+    const changedFiles = changedFilesBetween(base, head, repository)
+    assert.deepEqual(changedFiles, ['components/saya/RemovedBanner.vue'])
+
+    const plan = selectPreviewE2e(changedFiles, allSpecs)
+    assert.equal(plan.scope, 'affected')
+    assert.deepEqual(plan.groups, ['saya-public'])
+    assert.deepEqual(plan.specs, [
+      'tests/e2e/pottery-house.spec.ts',
+      'tests/e2e/tenant-client-navigation.spec.ts'
+    ])
+  } finally {
+    await rm(repository, { recursive: true, force: true })
+  }
 })
 
 test('every configured impact spec exists in the Playwright inventory', () => {

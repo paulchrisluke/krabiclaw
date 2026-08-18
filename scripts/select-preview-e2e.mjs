@@ -54,9 +54,7 @@ export function selectPreviewE2e(changedFiles, allSpecs = listE2eSpecs()) {
     matchesAny(file, CORE_ONLY_PATTERNS)
     || allSpecs.includes(file)
     || selectedGroups.some(group => matchesAny(file, group.patterns))))
-  const appSourcePattern = '{components,composables,config,layouts,middleware,pages,plugins,server,utils}/**'
-  const unclassifiedFiles = runtimeFiles.filter(file =>
-    matchesGlob(file, appSourcePattern) && !classifiedFiles.has(file))
+  const unclassifiedFiles = runtimeFiles.filter(file => !classifiedFiles.has(file))
 
   if (unclassifiedFiles.length > 0) {
     return {
@@ -84,13 +82,13 @@ export function selectPreviewE2e(changedFiles, allSpecs = listE2eSpecs()) {
   }
 }
 
-export function changedFilesBetween(base, head) {
+export function changedFilesBetween(base, head, cwd) {
   if (!base || !head) throw new Error('Both base and head commits are required')
   const isEmptyBase = /^0+$/.test(base)
   const args = isEmptyBase
     ? ['diff-tree', '--no-commit-id', '--name-only', '-r', head]
-    : ['diff', '--name-only', '--diff-filter=ACMR', `${base}...${head}`]
-  const output = execFileSync('git', args, { encoding: 'utf8' })
+    : ['diff', '--name-only', '--diff-filter=ACDMR', `${base}...${head}`]
+  const output = execFileSync('git', args, { cwd, encoding: 'utf8' })
   return output.split('\n').filter(Boolean)
 }
 

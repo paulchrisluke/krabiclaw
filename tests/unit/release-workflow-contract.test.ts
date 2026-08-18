@@ -7,8 +7,10 @@ const repoFile = async (path: string) => readFile(new URL(`../../${path}`, impor
 
 type WorkflowStep = {
   name?: string
+  uses?: string
   run?: string
   env?: Record<string, string>
+  with?: Record<string, string | boolean>
 }
 
 type WorkflowJob = {
@@ -69,6 +71,11 @@ test('one CI workflow owns preview, staging, and production lifecycle gates', as
   assert.match(jobs['e2e-staging']?.if || '', /github\.ref == 'refs\/heads\/staging'/)
   assert.match(jobs['e2e-staging']?.if || '', /github\.base_ref == 'main'/)
   assert.match(jobs['e2e-staging']?.if || '', /github\.head_ref == 'staging'/)
+  const stagingCheckout = jobs['e2e-staging']?.steps?.find(step => step.uses?.startsWith('actions/checkout@'))
+  assert.equal(
+    stagingCheckout?.with?.ref,
+    "${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}",
+  )
   assert.equal(jobs['deploy-production']?.if, "github.event_name == 'push' && github.ref == 'refs/heads/main'")
 })
 
