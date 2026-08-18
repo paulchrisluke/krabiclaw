@@ -3,8 +3,9 @@ import { HTTPError } from 'nitro';
 import type { H3Event } from 'nitro'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { queryFirst } from '~/server/db'
-import { parseOnboardingDraftPayload } from '~/server/utils/onboarding-drafts'
+import { parseOnboardingDraftPayload, type OnboardingDraftPayload } from '~/server/utils/onboarding-drafts'
 import { verifyScopedPreviewToken } from '~/server/utils/preview-token'
+import type { BlawbyRouteRecipe, PublicBlawbyRouteData, PublicBlawbyShellData } from '~/types/blawby'
 
 async function loadDraftPreviewSource(
   event: H3Event,
@@ -78,6 +79,105 @@ export function buildDraftShellPayload(payload: Awaited<ReturnType<typeof loadDr
     hasExperiences: payload.preview.hasExperiences,
     hasMenu: Boolean(payload.preview.menu?.items.length),
   }
+}
+
+export function buildPublicDraftBlawbyDocument(
+  payload: OnboardingDraftPayload,
+  recipe: BlawbyRouteRecipe,
+): { success: true; shell: PublicBlawbyShellData; route: PublicBlawbyRouteData } {
+  if (recipe !== 'home') {
+    throw new HTTPError({ statusCode: 404, statusMessage: 'Draft preview route not found' })
+  }
+
+  const primaryLocation = payload.preview.locations[0] ?? null
+  const heroContent = payload.preview.content.find(item => item.page === 'home' && item.field === 'hero') ?? null
+  const heroTitle = heroContent?.hero_title?.trim() || payload.preview.brandName
+  const heroDescription = heroContent?.hero_subtitle?.trim() || null
+  const heroUrl = heroContent?.hero_public_url
+    || payload.preview.config.hero_image_url
+    || payload.preview.draftMedia.hero?.publicUrl
+    || null
+  const logoUrl = payload.preview.config.logo_url || payload.preview.draftMedia.logo?.publicUrl || null
+  const brandColor = payload.preview.config.brand_color?.trim() || null
+
+  return {
+    success: true,
+    shell: {
+      identity: {
+        brand_name: payload.preview.brandName,
+        brand_description: heroDescription,
+        logo_url: logoUrl,
+        favicon_url: null,
+        phone: payload.source.details.phone ?? primaryLocation?.phone ?? null,
+        banner_content: null,
+        banner_dismissible: false,
+        primary_location_address_street: primaryLocation?.address ?? null,
+        primary_location_address_locality: primaryLocation?.city ?? null,
+      },
+      navigation: [],
+      consultation: {
+        mode: 'native_disabled',
+        cta_label: '',
+        external_url: null,
+        schedule_path: '/schedule',
+        confirmation_path: '/contact/confirmed',
+        tracking_enabled: false,
+        contact_form_enabled: false,
+        metadata: {},
+      },
+      compliance: null,
+      themeTokens: brandColor ? { primary: brandColor } : {},
+      offeringLinks: [],
+    },
+    route: {
+      recipe: 'home',
+      page: {
+        id: 'draft-home',
+        path: '/',
+        title: payload.preview.brandName,
+        page_type: 'recipe',
+        recipe: 'home',
+        locale: payload.preview.locales.find(locale => locale.is_source)?.code || 'en',
+        summary: heroDescription,
+        seo_title: heroTitle,
+        seo_description: heroDescription,
+        canonical_url: null,
+        robots: 'noindex',
+        blocks: [{
+          id: 'draft-home-hero',
+          type: 'hero',
+          position: 0,
+          data: {
+            section: 'hero',
+            title: heroTitle,
+            accent: '',
+            description: heroDescription,
+            cta_label: '',
+            cta_url: '',
+            background: heroUrl ? { url: heroUrl } : null,
+          },
+        }],
+        published_revision_id: null,
+        updated_at: heroContent?.updated_at || '',
+      },
+      offerings: [],
+      offering: null,
+      qa: [],
+      reviews: [],
+      posts: [],
+      post: null,
+    },
+  }
+}
+
+export async function loadPublicDraftBlawbyDocument(
+  event: H3Event,
+  draftId: string,
+  token: string | undefined,
+  recipe: BlawbyRouteRecipe,
+) {
+  const payload = await loadDraftPreviewSource(event, draftId, token)
+  return buildPublicDraftBlawbyDocument(payload, recipe)
 }
 
 export async function loadPublicDraftPage(

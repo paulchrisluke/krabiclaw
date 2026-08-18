@@ -29,7 +29,7 @@ import blawbyCriticalCss from '~/assets/css/blawby-critical.css?raw'
 import '~/assets/css/blawby-entry.css'
 
 const route = useRoute()
-const isHome = computed(() => route.path === '/' || /^\/preview\/site\/[^/]+\/?$/.test(route.path))
+const isHome = computed(() => route.path === '/' || /^\/preview\/(?:site|draft)\/[^/]+\/?$/.test(route.path))
 const blawbyStylesheetHref = '/_nuxt/surfaces/blawby.css'
 const blawbyStylesheetForRoute = computed(() => {
   return blawbyStylesheetHref

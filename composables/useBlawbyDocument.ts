@@ -7,7 +7,7 @@ export interface BlawbyDocumentPayload {
   route: PublicBlawbyRouteData
 }
 
-const isBlawbyDocumentPayload = (value: unknown): value is BlawbyDocumentPayload =>
+export const isBlawbyDocumentPayload = (value: unknown): value is BlawbyDocumentPayload =>
   isRecord(value)
   && value.success === true
   && isRecord(value.shell)
@@ -59,19 +59,27 @@ export async function useBlawbyDocument(
   slug?: string | null,
   options: { server?: boolean; lazy?: boolean } = {},
 ) {
-  const { siteId, isTenant } = useTenantSite()
-  if (!isTenant || !siteId) {
+  const { siteId, draftId, isTenant } = useTenantSite()
+  const entityId = siteId || draftId
+  if (!isTenant || !entityId) {
     throw createError({ statusCode: 404, statusMessage: 'Blawby site context is unavailable' })
   }
 
   const normalizedSlug = slug?.trim() || ''
-  const key = `blawby-document-${siteId}-${recipe}-${normalizedSlug || 'index'}`
+  const route = useRoute()
+  const previewToken = draftId && typeof route.query.token === 'string' ? route.query.token : null
+  const key = `blawby-document-${entityId}-${recipe}-${normalizedSlug || 'index'}`
   const asyncData = await useAsyncData<BlawbyDocumentPayload>(
     key,
     async () => {
       if (import.meta.server) {
         const requestEvent = useRequestEvent()
         if (!requestEvent) throw createError({ statusCode: 500, statusMessage: 'Request context unavailable' })
+        if (draftId) {
+          const { loadPublicDraftBlawbyDocument } = await import('~/server/utils/public-draft-bootstrap')
+          return await loadPublicDraftBlawbyDocument(requestEvent, draftId, previewToken ?? undefined, recipe)
+        }
+        if (!siteId) throw createError({ statusCode: 404, statusMessage: 'Blawby site context is unavailable' })
         const [{ cloudflareEnv }, { resolvePublicBlawbyDocumentOrThrow }] = await Promise.all([
           import('~/server/utils/api-response'),
           import('~/server/utils/professional-services'),
@@ -80,6 +88,13 @@ export async function useBlawbyDocument(
         if (!db) throw createError({ statusCode: 503, statusMessage: 'Database not available' })
         return await resolvePublicBlawbyDocumentOrThrow(db, siteId, recipe, { slug: normalizedSlug })
       }
+      if (draftId) {
+        return await publicApiRequest<BlawbyDocumentPayload>('/api/public/drafts/' + encodeURIComponent(draftId) + '/blawby/document', {
+          query: { recipe, ...(previewToken ? { token: previewToken } : {}) },
+          validate: isBlawbyDocumentPayload,
+        })
+      }
+      if (!siteId) throw createError({ statusCode: 404, statusMessage: 'Blawby site context is unavailable' })
       return await publicApiRequest<BlawbyDocumentPayload>('/api/public/sites/' + encodeURIComponent(siteId) + '/blawby/document', {
         query: { recipe, ...(normalizedSlug ? { slug: normalizedSlug } : {}) },
         validate: isBlawbyDocumentPayload,
