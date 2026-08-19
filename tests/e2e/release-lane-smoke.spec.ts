@@ -8,19 +8,17 @@ test('lane-local runtime config, dev routes, and tenant aliases resolve against 
 
   const platformResponse = await page.goto(baseURL!)
   expect(platformResponse?.status()).toBeLessThan(400)
-  const runtimeConfig = await page.evaluate(() => {
-    const nuxt = (window as typeof window & {
-      __NUXT__?: { config?: { public?: Record<string, unknown> } }
-    }).__NUXT__
-    return nuxt?.config?.public
-  })
-  expect(runtimeConfig).toMatchObject({
+  const runtimeConfigBootstrap = await platformResponse!.text()
+  const expectedRuntimeConfig = {
     platformDomain: platformUrl.origin,
     freeSiteDomain: 'https://krabiclaw.com',
     appName: `KrabiClaw ${lane}`,
     siteUrl: platformUrl.origin,
     helpUrl: `${platformUrl.origin}/help`,
-  })
+  }
+  for (const [key, value] of Object.entries(expectedRuntimeConfig)) {
+    expect(runtimeConfigBootstrap).toContain(`${key}:${JSON.stringify(value)}`)
+  }
 
   const billingState = await request.get(
     `${baseURL}/api/dev/billing-state?organization_id=org-pottery-house`,
