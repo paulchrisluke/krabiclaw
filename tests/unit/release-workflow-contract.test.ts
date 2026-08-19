@@ -147,8 +147,12 @@ test('each environment uses one normal Worker deploy before contract migrations 
 
   assert.match(stepRun(release, 'Generate ephemeral E2E credentials'), /E2E_DEV_ROUTE_SECRET=\$dev_route_secret/)
   assert.match(stepRun(release, 'Generate ephemeral E2E credentials'), /STRIPE_WEBHOOK_SECRET=\$stripe_webhook_secret/)
+  assert.doesNotMatch(stepRun(release, 'Generate ephemeral E2E credentials'), /BETTER_AUTH_SECRET/)
+  assert.match(stepRun(release, 'Deploy exact Worker artifact'), /wrangler secret list --env/)
+  assert.match(stepRun(release, 'Deploy exact Worker artifact'), /BETTER_AUTH_SECRET/)
   assert.match(stepRun(release, 'Deploy exact Worker artifact'), /E2E_DEV_ROUTE_SECRET: \$e2e_dev_route/)
   assert.match(stepRun(release, 'Deploy exact Worker artifact'), /STRIPE_WEBHOOK_SECRET: \$stripe_webhook/)
+  assert.doesNotMatch(stepRun(release, 'Deploy exact Worker artifact'), /BETTER_AUTH_SECRET: \$/)
   assert.doesNotMatch(
     release.steps?.map(step => step.run || '').join('\n') || '',
     /wrangler secret put/,

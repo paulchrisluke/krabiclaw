@@ -282,16 +282,13 @@ jobs:
       - name: Generate ephemeral E2E credentials
         shell: bash
         run: |
-          auth_secret="$(openssl rand -base64 32)"
           password="$(openssl rand -hex 32)Aa1!"
           dev_route_secret="$(openssl rand -hex 32)"
           stripe_webhook_secret="whsec_$(openssl rand -hex 32)"
-          echo "::add-mask::$auth_secret"
           echo "::add-mask::$password"
           echo "::add-mask::$dev_route_secret"
           echo "::add-mask::$stripe_webhook_secret"
           {
-            echo "BETTER_AUTH_SECRET=$auth_secret"
             echo "E2E_TEST_PASSWORD=$password"
             echo "E2E_DEV_ROUTE_SECRET=$dev_route_secret"
             echo "STRIPE_WEBHOOK_SECRET=$stripe_webhook_secret"
@@ -308,9 +305,11 @@ jobs:
         run: |
           set -euo pipefail
           secrets_file="$RUNNER_TEMP/e2e-lane-secrets.json"
-          trap 'rm -f "$secrets_file"' EXIT
+          remote_secrets_file="$RUNNER_TEMP/e2e-lane-remote-secrets.json"
+          trap 'rm -f "$secrets_file" "$remote_secrets_file"' EXIT
+          npx wrangler secret list --env "${{ matrix.lane }}" --format json > "$remote_secrets_file"
+          jq -e 'map(select(.name == "BETTER_AUTH_SECRET")) | length == 1' "$remote_secrets_file" >/dev/null
           jq -n \
-            --arg better_auth "$BETTER_AUTH_SECRET" \
             --arg e2e_dev_route "$E2E_DEV_ROUTE_SECRET" \
             --arg preview "$PREVIEW_SECRET_VALUE" \
             --arg email_reply "$EMAIL_REPLY_SECRET_VALUE" \
@@ -319,7 +318,6 @@ jobs:
             --arg stripe "$STRIPE_SECRET_KEY_VALUE" \
             --arg stripe_webhook "$STRIPE_WEBHOOK_SECRET" \
             '{
-              BETTER_AUTH_SECRET: $better_auth,
               E2E_DEV_ROUTE_SECRET: $e2e_dev_route,
               PREVIEW_SECRET: $preview,
               EMAIL_REPLY_SECRET: $email_reply,

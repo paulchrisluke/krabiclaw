@@ -64,10 +64,11 @@ and seeds only its own resources, provisions ephemeral auth, refreshes its
 lane-specific AI Search instance, verifies routing, dev-route access, credential
 login, active-organization selection, and session retrieval, and only then runs
 one Playwright shard with `workers=1`. Ephemeral auth provisioning clears the
-lane-local Better Auth JWKS rows whenever the lane secret rotates so retained
-encrypted signing keys cannot outlive their encryption secret. Staging remains
-the stable human-review deployment for the candidate. Production may not be
-promoted until all four exact-head shards pass.
+lane-local sessions and rotates the E2E credential password on every run. Each
+lane keeps one stable Cloudflare `BETTER_AUTH_SECRET` so its encrypted Better
+Auth signing keys remain decryptable across runs. Staging remains the stable
+human-review deployment for the candidate. Production may not be promoted until
+all four exact-head shards pass.
 
 Cloudflare's documented primitives are named Wrangler environments and
 per-environment bindings ([Workers environments](https://developers.cloudflare.com/workers/wrangler/environments/),

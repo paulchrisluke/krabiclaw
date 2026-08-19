@@ -70,8 +70,7 @@ VALUES (${sqlString(`account-${fixture.id}-credential`)}, ${sqlString(fixture.id
 ${memberships}${teamMemberships}`
 }).join('\n')
 
-const resetEphemeralSigningKeys = explicitEnvironment ? 'DELETE FROM jwks;\n' : ''
-const sql = `PRAGMA foreign_keys = ON;\n${resetEphemeralSigningKeys}${fixtureSql}`
+const sql = `PRAGMA foreign_keys = ON;\n${fixtureSql}`
 const directory = mkdtempSync(join(tmpdir(), 'krabiclaw-e2e-auth-'))
 const sqlPath = join(directory, 'e2e-auth.sql')
 
