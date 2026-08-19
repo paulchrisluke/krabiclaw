@@ -1,8 +1,6 @@
-// Shared auth-check logic behind GET /api/account/access and GET /api/admin/access,
-// reused as-is by middleware/account.ts's server-side branch
-// (per the nested SSR self-fetch boundary) so route
-// middleware never has to go through useRequestFetch()'s internal self-fetch just to
-// answer a question the request event can resolve directly.
+// Shared server-side auth-check logic for dashboard middleware and GET
+// /api/admin/access. Route middleware calls it directly so nested SSR does not
+// self-fetch and lose Cloudflare bindings.
 import type { H3Event } from 'nitro'
 import { cloudflareEnv } from '~/server/utils/api-response'
 import { getAuthSession } from '~/server/utils/auth'

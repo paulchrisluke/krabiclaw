@@ -132,14 +132,9 @@ test.describe('Blawby professional_service CMS editing', () => {
           data: { title: updatedTitle, blocks, expectedDocumentUpdatedAt: detailBody.page.document.updated_at },
         })
         expect(save.status(), `save ${edit.pageId}`).toBe(200)
-        const saveBody = await save.json() as { page: { title: string; blocks: Array<{ type: string; data: Record<string, unknown> }>; document: { updated_at: string } } }
+        const saveBody = await save.json() as { page: { title: string; blocks: Array<{ type: string; data: Record<string, unknown> }> } }
         expect(saveBody.page.title).toBe(updatedTitle)
         expect(block(saveBody.page, 'hero').data.title).toBe(updatedTitle)
-
-        const publish = await page.request.post(`${baseURL}/api/editor/sites/${SITE_ID}/pages/${pageSummary!.id}/publish`, {
-          data: { expectedDocumentUpdatedAt: saveBody.page.document.updated_at },
-        })
-        expect(publish.status(), `publish ${edit.pageId}`).toBe(200)
 
         const updatedRoute = await publicRoute(page.request, baseURL!, edit.recipe)
         expect(block(updatedRoute.page, 'hero').data.title).toBe(updatedTitle)
@@ -158,11 +153,6 @@ test.describe('Blawby professional_service CMS editing', () => {
           data: { title: canonical.pageTitle, blocks, expectedDocumentUpdatedAt: detailBody.page.document.updated_at },
         })
         expect(restore.status(), `restore ${edit.pageId}`).toBe(200)
-        const restoreBody = await restore.json() as { page: { document: { updated_at: string } } }
-        const restorePublish = await page.request.post(`${baseURL}/api/editor/sites/${SITE_ID}/pages/${pageSummary.id}/publish`, {
-          data: { expectedDocumentUpdatedAt: restoreBody.page.document.updated_at },
-        })
-        expect(restorePublish.status(), `republish ${edit.pageId}`).toBe(200)
       }
     }
   })

@@ -66,8 +66,7 @@ export default definePlugin((nitroApp) => {
           db,
           `SELECT slug, category, updated_at
            FROM platform_docs
-           WHERE (scheduled_for IS NULL OR scheduled_for <= datetime('now'))
-             AND (robots IS NULL OR robots NOT LIKE '%noindex%')`,
+           WHERE robots IS NULL OR robots NOT LIKE '%noindex%'`,
         ),
         queryAll<ApiRecord>(
           db,

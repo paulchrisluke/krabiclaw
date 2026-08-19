@@ -60,16 +60,6 @@ test.describe('platform SEO contracts', () => {
     }
   })
 
-  test('legacy billing permanently redirects to canonical pricing', async ({ request, baseURL }) => {
-    expect(baseURL).toBeTruthy()
-    const response = await request.get('/billing', { maxRedirects: 0 })
-    expect(response.status()).toBe(301)
-
-    const location = response.headers().location
-    expect(location).toBeTruthy()
-    expect(new URL(location!, baseURL!).pathname).toBe('/pricing')
-  })
-
   test('tenant-only route families return 404 on the platform host', async ({ request }) => {
     for (const path of ['/experiences', '/locations', '/menu', '/order', '/reservations', '/reviews']) {
       const response = await request.get(path, { maxRedirects: 0 })

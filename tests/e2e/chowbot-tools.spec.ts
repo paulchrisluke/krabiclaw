@@ -320,7 +320,7 @@ test.describe("mcp tools", () => {
     expect(deletedItem.result.error).toBeUndefined();
     expect(deletedItem.result.deleted).toBe(true);
 
-    // publish_menu is a ChowBot-only convenience over update_menu's status
+    // publish_menu is a ChowBot-only convenience over update_menu's visibility
     // field and is confirm-gated.
     const published = await execChowbotTool(
       request,
@@ -331,8 +331,8 @@ test.describe("mcp tools", () => {
       [{ role: "user", content: "yes please publish it" }],
     );
     expect(published.result.error).toBeUndefined();
-    const menu = published.result.menu as { status?: string } | undefined;
-    expect(menu?.status).toBe("published");
+    const menu = published.result.menu as { is_visible?: boolean } | undefined;
+    expect(menu?.is_visible).toBe(true);
 
     const deletedMenu = await execChowbotTool(
       request,
