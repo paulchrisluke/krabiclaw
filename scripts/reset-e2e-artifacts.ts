@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -120,23 +120,35 @@ const FIXTURE_USER_IDS = [
   'user-pottery-house',
   'user-kikuzuki',
   'user-ncls-blawby',
+  'user-staging-review',
 ]
 
 const isStaging = process.argv.includes('--staging')
 const isPreview = process.argv.includes('--preview')
 const isStdout = process.argv.includes('--stdout')
+const environmentIndex = process.argv.indexOf('--env')
+const explicitEnvironment = environmentIndex === -1 ? null : process.argv[environmentIndex + 1] ?? null
+const e2eEnvironmentNames = new Set<string>(
+  JSON.parse(readFileSync(join(process.cwd(), 'config/e2e-lanes.json'), 'utf8')).map((lane: { name: string }) => lane.name),
+)
 
-if (isStaging && isPreview) {
-  console.error('Only one of --staging or --preview may be provided.')
+if (isStaging && isPreview || isStaging && explicitEnvironment || isPreview && explicitEnvironment) {
+  console.error('Use exactly one of --staging, --preview, or --env <e2e-lane>.')
+  process.exit(1)
+}
+
+if (explicitEnvironment && !e2eEnvironmentNames.has(explicitEnvironment)) {
+  console.error(`--env must name a configured E2E lane: ${[...e2eEnvironmentNames].join(', ')}`)
   process.exit(1)
 }
 
 // Intentionally no standalone --remote: this script targets non-fixture organizations through
 // the fixed fixture allowlist and age guard, plus guest rows marked '@playwright.example'. That
-// scope is meaningless against production, so it must always be explicitly scoped to --preview
-// or --staging (or default to --local for testing the emitted SQL against a local D1 file).
-const envFlag = isStaging ? '--env staging' : isPreview ? '--env preview' : '--local'
-const remoteFlag = isStaging || isPreview ? '--remote' : ''
+// scope is meaningless against production, so it must always be explicitly scoped to --preview,
+// --staging, or a configured E2E lane (or default to --local for testing emitted SQL).
+const targetEnvironment = isStaging ? 'staging' : isPreview ? 'preview' : explicitEnvironment
+const envFlag = targetEnvironment ? `--env ${targetEnvironment}` : '--local'
+const remoteFlag = targetEnvironment ? '--remote' : ''
 
 const ageArg = process.argv.find((arg) => arg.startsWith('--older-than-hours='))
 const olderThanHours = ageArg ? Number(ageArg.split('=')[1]) : 2

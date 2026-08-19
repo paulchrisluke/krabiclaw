@@ -318,3 +318,303 @@ enabled = true
 enabled = true
 # CF_ZARAZ_API_TOKEN is a secret scoped to Zone > Zaraz > Edit. Configure it
 # with `wrangler secret put CF_ZARAZ_API_TOKEN` for each deployed environment.
+
+# BEGIN GENERATED E2E LANE ENVIRONMENTS
+# Generated from config/e2e-lanes.json; edit the canonical definition instead.
+[env."e2e-1"]
+workers_dev = true
+routes = [{ pattern = "e2e-1.krabiclaw.com/*", zone_name = "krabiclaw.com" }]
+
+[env."e2e-1".triggers]
+crons = []
+
+[env."e2e-1".vars]
+CF_SAAS_CNAME_TARGET = "customers.krabiclaw.com"
+BETTER_AUTH_URL = "https://e2e-1.krabiclaw.com"
+NUXT_PUBLIC_PLATFORM_DOMAIN = "https://e2e-1.krabiclaw.com"
+MEDIA_BASE_URL = "https://e2e-1.krabiclaw.com/__media"
+NUXT_PUBLIC_FREE_SITE_DOMAIN = "https://krabiclaw.com"
+NUXT_PUBLIC_APP_NAME = "KrabiClaw e2e-1"
+NUXT_PUBLIC_SITE_URL = "https://e2e-1.krabiclaw.com"
+NUXT_PUBLIC_HELP_URL = "https://e2e-1.krabiclaw.com/help"
+NUXT_PUBLIC_WHATSAPP_NUMBER = "16197200000"
+AI_SEARCH_NAMESPACE = "default"
+AI_SEARCH_INSTANCE_ID = "krabiclaw-platform-knowledge-e2e-1"
+GA4_MEASUREMENT_ID = ""
+EMAIL_DELIVERY_MODE = "log_only"
+WHATSAPP_DELIVERY_MODE = "log_only"
+DISCORD_DELIVERY_MODE = "log_only"
+E2E_ALLOW_DEV_ROUTES = "true"
+
+[[env."e2e-1".d1_databases]]
+binding = "DB"
+database_name = "krabiclaw-db-e2e-1"
+database_id = "0bc4e0d0-79dc-4387-aff2-bc2e109ad4f5"
+migrations_dir = "migrations"
+remote = false
+
+[[env."e2e-1".durable_objects.bindings]]
+name = "GUEST_THREAD_COMMANDS"
+class_name = "GuestThreadCommandObject"
+
+[[env."e2e-1".durable_objects.bindings]]
+name = "GUEST_INBOX_HUBS"
+class_name = "GuestInboxHubObject"
+
+[[env."e2e-1".migrations]]
+tag = "v1_guest_inbox_infra"
+new_sqlite_classes = ["GuestThreadCommandObject", "GuestInboxHubObject"]
+
+[[env."e2e-1".queues.producers]]
+binding = "GUEST_DELIVERY_QUEUE"
+queue = "krabiclaw-guest-delivery-e2e-1"
+
+[[env."e2e-1".queues.consumers]]
+queue = "krabiclaw-guest-delivery-e2e-1"
+dead_letter_queue = "krabiclaw-guest-delivery-e2e-1-dlq"
+max_retries = 5
+
+[[env."e2e-1".r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "krabiclaw-media-e2e-1"
+remote = false
+
+[[env."e2e-1".kv_namespaces]]
+binding = "SITE_CACHE"
+id = "aeff0c0382b04c96ba6e65d8a01342a1"
+remote = false
+
+[env."e2e-1".ai]
+binding = "AI"
+remote = true
+
+[[env."e2e-1".ai_search_namespaces]]
+binding = "AI_SEARCH"
+namespace = "default"
+remote = true
+
+[env."e2e-1".observability]
+enabled = false
+[env."e2e-2"]
+workers_dev = true
+routes = [{ pattern = "e2e-2.krabiclaw.com/*", zone_name = "krabiclaw.com" }]
+
+[env."e2e-2".triggers]
+crons = []
+
+[env."e2e-2".vars]
+CF_SAAS_CNAME_TARGET = "customers.krabiclaw.com"
+BETTER_AUTH_URL = "https://e2e-2.krabiclaw.com"
+NUXT_PUBLIC_PLATFORM_DOMAIN = "https://e2e-2.krabiclaw.com"
+MEDIA_BASE_URL = "https://e2e-2.krabiclaw.com/__media"
+NUXT_PUBLIC_FREE_SITE_DOMAIN = "https://krabiclaw.com"
+NUXT_PUBLIC_APP_NAME = "KrabiClaw e2e-2"
+NUXT_PUBLIC_SITE_URL = "https://e2e-2.krabiclaw.com"
+NUXT_PUBLIC_HELP_URL = "https://e2e-2.krabiclaw.com/help"
+NUXT_PUBLIC_WHATSAPP_NUMBER = "16197200000"
+AI_SEARCH_NAMESPACE = "default"
+AI_SEARCH_INSTANCE_ID = "krabiclaw-platform-knowledge-e2e-2"
+GA4_MEASUREMENT_ID = ""
+EMAIL_DELIVERY_MODE = "log_only"
+WHATSAPP_DELIVERY_MODE = "log_only"
+DISCORD_DELIVERY_MODE = "log_only"
+E2E_ALLOW_DEV_ROUTES = "true"
+
+[[env."e2e-2".d1_databases]]
+binding = "DB"
+database_name = "krabiclaw-db-e2e-2"
+database_id = "d0f4059c-e802-4987-b0c5-fb92f6c51d2f"
+migrations_dir = "migrations"
+remote = false
+
+[[env."e2e-2".durable_objects.bindings]]
+name = "GUEST_THREAD_COMMANDS"
+class_name = "GuestThreadCommandObject"
+
+[[env."e2e-2".durable_objects.bindings]]
+name = "GUEST_INBOX_HUBS"
+class_name = "GuestInboxHubObject"
+
+[[env."e2e-2".migrations]]
+tag = "v1_guest_inbox_infra"
+new_sqlite_classes = ["GuestThreadCommandObject", "GuestInboxHubObject"]
+
+[[env."e2e-2".queues.producers]]
+binding = "GUEST_DELIVERY_QUEUE"
+queue = "krabiclaw-guest-delivery-e2e-2"
+
+[[env."e2e-2".queues.consumers]]
+queue = "krabiclaw-guest-delivery-e2e-2"
+dead_letter_queue = "krabiclaw-guest-delivery-e2e-2-dlq"
+max_retries = 5
+
+[[env."e2e-2".r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "krabiclaw-media-e2e-2"
+remote = false
+
+[[env."e2e-2".kv_namespaces]]
+binding = "SITE_CACHE"
+id = "9599b7a8e0f845acaa0fc387a462b2ce"
+remote = false
+
+[env."e2e-2".ai]
+binding = "AI"
+remote = true
+
+[[env."e2e-2".ai_search_namespaces]]
+binding = "AI_SEARCH"
+namespace = "default"
+remote = true
+
+[env."e2e-2".observability]
+enabled = false
+[env."e2e-3"]
+workers_dev = true
+routes = [{ pattern = "e2e-3.krabiclaw.com/*", zone_name = "krabiclaw.com" }]
+
+[env."e2e-3".triggers]
+crons = []
+
+[env."e2e-3".vars]
+CF_SAAS_CNAME_TARGET = "customers.krabiclaw.com"
+BETTER_AUTH_URL = "https://e2e-3.krabiclaw.com"
+NUXT_PUBLIC_PLATFORM_DOMAIN = "https://e2e-3.krabiclaw.com"
+MEDIA_BASE_URL = "https://e2e-3.krabiclaw.com/__media"
+NUXT_PUBLIC_FREE_SITE_DOMAIN = "https://krabiclaw.com"
+NUXT_PUBLIC_APP_NAME = "KrabiClaw e2e-3"
+NUXT_PUBLIC_SITE_URL = "https://e2e-3.krabiclaw.com"
+NUXT_PUBLIC_HELP_URL = "https://e2e-3.krabiclaw.com/help"
+NUXT_PUBLIC_WHATSAPP_NUMBER = "16197200000"
+AI_SEARCH_NAMESPACE = "default"
+AI_SEARCH_INSTANCE_ID = "krabiclaw-platform-knowledge-e2e-3"
+GA4_MEASUREMENT_ID = ""
+EMAIL_DELIVERY_MODE = "log_only"
+WHATSAPP_DELIVERY_MODE = "log_only"
+DISCORD_DELIVERY_MODE = "log_only"
+E2E_ALLOW_DEV_ROUTES = "true"
+
+[[env."e2e-3".d1_databases]]
+binding = "DB"
+database_name = "krabiclaw-db-e2e-3"
+database_id = "ad1c3675-3e55-41be-b814-5914756e0d21"
+migrations_dir = "migrations"
+remote = false
+
+[[env."e2e-3".durable_objects.bindings]]
+name = "GUEST_THREAD_COMMANDS"
+class_name = "GuestThreadCommandObject"
+
+[[env."e2e-3".durable_objects.bindings]]
+name = "GUEST_INBOX_HUBS"
+class_name = "GuestInboxHubObject"
+
+[[env."e2e-3".migrations]]
+tag = "v1_guest_inbox_infra"
+new_sqlite_classes = ["GuestThreadCommandObject", "GuestInboxHubObject"]
+
+[[env."e2e-3".queues.producers]]
+binding = "GUEST_DELIVERY_QUEUE"
+queue = "krabiclaw-guest-delivery-e2e-3"
+
+[[env."e2e-3".queues.consumers]]
+queue = "krabiclaw-guest-delivery-e2e-3"
+dead_letter_queue = "krabiclaw-guest-delivery-e2e-3-dlq"
+max_retries = 5
+
+[[env."e2e-3".r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "krabiclaw-media-e2e-3"
+remote = false
+
+[[env."e2e-3".kv_namespaces]]
+binding = "SITE_CACHE"
+id = "7150b86da6d244e39dee78dcaac04e41"
+remote = false
+
+[env."e2e-3".ai]
+binding = "AI"
+remote = true
+
+[[env."e2e-3".ai_search_namespaces]]
+binding = "AI_SEARCH"
+namespace = "default"
+remote = true
+
+[env."e2e-3".observability]
+enabled = false
+[env."e2e-4"]
+workers_dev = true
+routes = [{ pattern = "e2e-4.krabiclaw.com/*", zone_name = "krabiclaw.com" }]
+
+[env."e2e-4".triggers]
+crons = []
+
+[env."e2e-4".vars]
+CF_SAAS_CNAME_TARGET = "customers.krabiclaw.com"
+BETTER_AUTH_URL = "https://e2e-4.krabiclaw.com"
+NUXT_PUBLIC_PLATFORM_DOMAIN = "https://e2e-4.krabiclaw.com"
+MEDIA_BASE_URL = "https://e2e-4.krabiclaw.com/__media"
+NUXT_PUBLIC_FREE_SITE_DOMAIN = "https://krabiclaw.com"
+NUXT_PUBLIC_APP_NAME = "KrabiClaw e2e-4"
+NUXT_PUBLIC_SITE_URL = "https://e2e-4.krabiclaw.com"
+NUXT_PUBLIC_HELP_URL = "https://e2e-4.krabiclaw.com/help"
+NUXT_PUBLIC_WHATSAPP_NUMBER = "16197200000"
+AI_SEARCH_NAMESPACE = "default"
+AI_SEARCH_INSTANCE_ID = "krabiclaw-platform-knowledge-e2e-4"
+GA4_MEASUREMENT_ID = ""
+EMAIL_DELIVERY_MODE = "log_only"
+WHATSAPP_DELIVERY_MODE = "log_only"
+DISCORD_DELIVERY_MODE = "log_only"
+E2E_ALLOW_DEV_ROUTES = "true"
+
+[[env."e2e-4".d1_databases]]
+binding = "DB"
+database_name = "krabiclaw-db-e2e-4"
+database_id = "e552d0b1-fc5a-40ea-a12a-97ee89394ea7"
+migrations_dir = "migrations"
+remote = false
+
+[[env."e2e-4".durable_objects.bindings]]
+name = "GUEST_THREAD_COMMANDS"
+class_name = "GuestThreadCommandObject"
+
+[[env."e2e-4".durable_objects.bindings]]
+name = "GUEST_INBOX_HUBS"
+class_name = "GuestInboxHubObject"
+
+[[env."e2e-4".migrations]]
+tag = "v1_guest_inbox_infra"
+new_sqlite_classes = ["GuestThreadCommandObject", "GuestInboxHubObject"]
+
+[[env."e2e-4".queues.producers]]
+binding = "GUEST_DELIVERY_QUEUE"
+queue = "krabiclaw-guest-delivery-e2e-4"
+
+[[env."e2e-4".queues.consumers]]
+queue = "krabiclaw-guest-delivery-e2e-4"
+dead_letter_queue = "krabiclaw-guest-delivery-e2e-4-dlq"
+max_retries = 5
+
+[[env."e2e-4".r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "krabiclaw-media-e2e-4"
+remote = false
+
+[[env."e2e-4".kv_namespaces]]
+binding = "SITE_CACHE"
+id = "920e73cbfe8c4da288c72349343acd06"
+remote = false
+
+[env."e2e-4".ai]
+binding = "AI"
+remote = true
+
+[[env."e2e-4".ai_search_namespaces]]
+binding = "AI_SEARCH"
+namespace = "default"
+remote = true
+
+[env."e2e-4".observability]
+enabled = false
+# END GENERATED E2E LANE ENVIRONMENTS

@@ -1,0 +1,46 @@
+[
+  {
+    "name": "e2e-1",
+    "hostname": "e2e-1.krabiclaw.com",
+    "databaseName": "krabiclaw-db-e2e-1",
+    "databaseId": "0bc4e0d0-79dc-4387-aff2-bc2e109ad4f5",
+    "queueName": "krabiclaw-guest-delivery-e2e-1",
+    "deadLetterQueueName": "krabiclaw-guest-delivery-e2e-1-dlq",
+    "bucketName": "krabiclaw-media-e2e-1",
+    "kvNamespaceId": "aeff0c0382b04c96ba6e65d8a01342a1",
+    "searchInstanceId": "krabiclaw-platform-knowledge-e2e-1"
+  },
+  {
+    "name": "e2e-2",
+    "hostname": "e2e-2.krabiclaw.com",
+    "databaseName": "krabiclaw-db-e2e-2",
+    "databaseId": "d0f4059c-e802-4987-b0c5-fb92f6c51d2f",
+    "queueName": "krabiclaw-guest-delivery-e2e-2",
+    "deadLetterQueueName": "krabiclaw-guest-delivery-e2e-2-dlq",
+    "bucketName": "krabiclaw-media-e2e-2",
+    "kvNamespaceId": "9599b7a8e0f845acaa0fc387a462b2ce",
+    "searchInstanceId": "krabiclaw-platform-knowledge-e2e-2"
+  },
+  {
+    "name": "e2e-3",
+    "hostname": "e2e-3.krabiclaw.com",
+    "databaseName": "krabiclaw-db-e2e-3",
+    "databaseId": "ad1c3675-3e55-41be-b814-5914756e0d21",
+    "queueName": "krabiclaw-guest-delivery-e2e-3",
+    "deadLetterQueueName": "krabiclaw-guest-delivery-e2e-3-dlq",
+    "bucketName": "krabiclaw-media-e2e-3",
+    "kvNamespaceId": "7150b86da6d244e39dee78dcaac04e41",
+    "searchInstanceId": "krabiclaw-platform-knowledge-e2e-3"
+  },
+  {
+    "name": "e2e-4",
+    "hostname": "e2e-4.krabiclaw.com",
+    "databaseName": "krabiclaw-db-e2e-4",
+    "databaseId": "e552d0b1-fc5a-40ea-a12a-97ee89394ea7",
+    "queueName": "krabiclaw-guest-delivery-e2e-4",
+    "deadLetterQueueName": "krabiclaw-guest-delivery-e2e-4-dlq",
+    "bucketName": "krabiclaw-media-e2e-4",
+    "kvNamespaceId": "920e73cbfe8c4da288c72349343acd06",
+    "searchInstanceId": "krabiclaw-platform-knowledge-e2e-4"
+  }
+]

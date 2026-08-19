@@ -60,7 +60,7 @@ function tomlSection(source: string, name: string): string {
   return nextHeader === -1 ? rest : rest.slice(0, nextHeader)
 }
 
-test('one CI workflow owns preview, staging, and production lifecycle gates', async () => {
+test('one CI workflow owns preview, staging, release-lane, and production lifecycle gates', async () => {
   const document = await workflowDocument()
   const jobs = await workflowJobs()
 
@@ -68,14 +68,10 @@ test('one CI workflow owns preview, staging, and production lifecycle gates', as
   assert.deepEqual(document.on?.push?.branches, ['main', 'staging'])
   assert.ok(jobs['e2e-plan'])
   assert.ok(jobs['e2e-representative'])
-  assert.match(jobs['e2e-staging']?.if || '', /github\.ref == 'refs\/heads\/staging'/)
-  assert.match(jobs['e2e-staging']?.if || '', /github\.base_ref == 'main'/)
-  assert.match(jobs['e2e-staging']?.if || '', /github\.head_ref == 'staging'/)
-  const stagingCheckout = jobs['e2e-staging']?.steps?.find(step => step.uses?.startsWith('actions/checkout@'))
-  assert.equal(
-    stagingCheckout?.with?.ref,
-    "${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}",
-  )
+  assert.ok(jobs['deploy-staging'])
+  assert.match(jobs['deploy-staging']?.if || '', /github\.ref == 'refs\/heads\/staging'/)
+  assert.match(jobs['e2e-lane-plan']?.if || '', /github\.base_ref == 'main'/)
+  assert.match(jobs['e2e-release-qualification']?.if || '', /github\.head_ref == 'staging'/)
   assert.equal(jobs['deploy-production']?.if, "github.event_name == 'push' && github.ref == 'refs/heads/main'")
 })
 
@@ -103,27 +99,25 @@ test('each environment uses one normal Worker deploy before contract migrations 
     'yarn test:e2e:preview:selected',
   )
 
-  const stagingMigrations = stepRun(jobs['e2e-staging']!, 'Apply staging migrations')
+  const stagingMigrations = stepRun(jobs['deploy-staging']!, 'Apply staging migrations')
   assert.equal(stagingMigrations, 'npx wrangler d1 migrations apply DB --env staging --remote')
   assert.equal(
-    stepRun(jobs['e2e-staging']!, 'Deploy staging Worker'),
+    stepRun(jobs['deploy-staging']!, 'Deploy staging Worker'),
     'npx wrangler deploy --env staging --strict',
   )
-  assert.ok(stepIndex(jobs['e2e-staging']!, 'Deploy staging Worker') < stepIndex(jobs['e2e-staging']!, 'Apply staging migrations'))
+  assert.ok(stepIndex(jobs['deploy-staging']!, 'Deploy staging Worker') < stepIndex(jobs['deploy-staging']!, 'Apply staging migrations'))
   assert.equal(
-    stepRun(jobs['e2e-staging']!, 'Provision deterministic staging fixtures'),
+    stepRun(jobs['deploy-staging']!, 'Provision deterministic staging fixtures'),
     'node --experimental-strip-types scripts/provision-staging-fixtures.ts --staging',
   )
-  assert.ok(stepIndex(jobs['e2e-staging']!, 'Sweep staging E2E artifacts') < stepIndex(jobs['e2e-staging']!, 'Provision deterministic staging fixtures'))
-  assert.equal(
-    stepRun(jobs['e2e-staging']!, 'Sweep staging E2E artifacts'),
-    'node --experimental-strip-types scripts/reset-e2e-artifacts.ts --staging --older-than-hours=0',
-  )
-  assert.ok(stepIndex(jobs['e2e-staging']!, 'Provision deterministic staging fixtures') < stepIndex(jobs['e2e-staging']!, 'Provision staging Better Auth fixtures'))
-  assert.ok(stepIndex(jobs['e2e-staging']!, 'Provision staging Better Auth fixtures') < stepIndex(jobs['e2e-staging']!, 'Run OAuth bearer MCP smoke'))
-  assert.equal(stepRun(jobs['e2e-staging']!, 'Run OAuth bearer MCP smoke'), 'yarn test:mcp')
-  assert.equal(stepRun(jobs['e2e-staging']!, 'Run affected staging browser coverage'), 'yarn test:e2e:preview:selected')
-  assert.equal(stepRun(jobs['e2e-staging']!, 'Run full staging release qualification'), 'yarn test:e2e:full')
+  assert.ok(stepIndex(jobs['deploy-staging']!, 'Provision deterministic staging fixtures') < stepIndex(jobs['deploy-staging']!, 'Provision durable staging-review identity'))
+
+  const release = jobs['e2e-release-qualification']!
+  assert.equal(release.steps?.find(step => step.name === 'Deploy exact Worker artifact')?.run, 'npx wrangler deploy --env "${{ matrix.lane }}" --strict')
+  assert.equal(release.steps?.find(step => step.name === 'Apply lane migrations')?.run, 'npx wrangler d1 migrations apply DB --env "${{ matrix.lane }}" --remote')
+  assert.equal(release.steps?.find(step => step.name === 'Sweep lane E2E artifacts')?.run, 'node --experimental-strip-types scripts/reset-e2e-artifacts.ts --env "${{ matrix.lane }}" --older-than-hours=0')
+  assert.equal(release.steps?.find(step => step.name === 'Run Playwright release shard')?.run, 'yarn test:e2e:full --shard=${{ matrix.shard }}/${{ matrix.total }} --workers=1')
+  assert.equal(release.steps?.find(step => step.name === 'Run full staging release qualification'), undefined)
 
   const productionMigrations = stepRun(jobs['deploy-production']!, 'Apply production migrations')
   assert.equal(productionMigrations, 'npx wrangler d1 migrations apply DB --remote')

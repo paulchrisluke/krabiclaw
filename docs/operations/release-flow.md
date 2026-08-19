@@ -1,13 +1,13 @@
 # Release flow
 
-KrabiClaw uses one branch-driven GitHub Actions workflow and three independent
-Cloudflare Workers.
+KrabiClaw uses one branch-driven GitHub Actions workflow, three long-lived
+Cloudflare Workers, and four fixed release-E2E Workers.
 
 | Git event | Worker | Validation |
 | --- | --- | --- |
 | Pull request to `staging` | `krabiclaw-preview` | Core plus affected Playwright coverage selected from the diff |
 | Push to `staging` | `krabiclaw-staging` | Core plus affected Playwright coverage selected from the pushed commits |
-| `staging` to `main` pull request | `krabiclaw-staging` | Full Playwright release qualification |
+| `staging` to `main` pull request | `krabiclaw-e2e-1` through `krabiclaw-e2e-4` | Four isolated Playwright shards |
 | Push to `main` | `krabiclaw` | Read-only production browser smoke |
 
 Each deployment is a normal `wrangler deploy` to its environment. Cloudflare
@@ -16,19 +16,32 @@ retains ordinary deployment history.
 The platform uses `preview.krabiclaw.com` and `staging.krabiclaw.com`. Public
 tenant verification uses `<subdomain>-preview.krabiclaw.com` and
 `<subdomain>-staging.krabiclaw.com`, routed to the same environment Worker.
-These direct hosts are the browser and manual-QA contract; deployed checks do
-not select tenants through request headers.
+Release E2E uses `e2e-1.krabiclaw.com` through `e2e-4.krabiclaw.com`, each
+with its own deployed Worker and mutable Cloudflare resources. These direct
+hosts are the browser and manual-QA contract; deployed checks do not select
+tenants through request headers.
 
 The checks job runs the repository's migration lint once. Each deployment job
 then builds, performs one normal Worker deploy, and uses native
 `wrangler d1 migrations apply`; Wrangler owns the applied-migration history.
 Runtime removals land before their contract migration so the environment never
 runs an older Worker against columns that have already been dropped.
-Preview and staging both sweep disposable E2E artifacts and deterministically
-reapply Demo, Pottery House, Kikuzuki, and NCLS from their typed definitions
-before fixture-dependent browser coverage. Staging provisioning is limited to
-protected fixed IDs, refuses unexpected ownership, and records D1 time-travel
-information before applying the fixtures. Production is never seeded by CI.
+Preview and the four E2E lanes sweep disposable E2E artifacts and
+deterministically reapply Demo, Pottery House, Kikuzuki, and NCLS from their
+typed definitions before fixture-dependent browser coverage. Staging receives
+deterministic deployment fixtures for human review but is not reset by release
+E2E. Staging provisioning is limited to protected fixed IDs, refuses unexpected
+ownership, and records D1 time-travel information before applying the fixtures.
+Production is never seeded by CI.
+
+The durable staging-review identity is `staging-review@staging.krabiclaw.test`.
+Its password is maintained in the team password manager and mirrored to the
+GitHub Environment secret `STAGING_REVIEW_PASSWORD` for the staging deployment
+job; GitHub is a delivery copy, not the human-retrievable source of truth. The
+identity is provisioned by `scripts/provision-staging-review-auth.ts` after the
+curated staging fixtures. Ordinary E2E credential rotation never deletes its
+sessions or credential account. To rotate it deliberately, update both secret
+stores and run the provisioner with `--rotate-password`.
 
 `config/e2e-impact-map.mjs` is the executable impact map. Documentation-only
 changes do not deploy a Worker. Narrow changes run the permanent core browser
@@ -37,10 +50,22 @@ harness, and unclassified runtime changes fail safe to the full suite. Changing
 an E2E spec always selects that exact spec.
 
 The full suite is a release-candidate gate rather than a tax on every staging
-commit. Opening or updating the ordinary `staging` to `main` pull request
-rebuilds and deploys its exact staging head, provisions deterministic fixtures,
-and runs the complete suite against `staging.krabiclaw.com`. Production may not
-be promoted until that exact-head qualification passes.
+commit. Opening or updating the ordinary `staging` to `main` pull request builds
+the exact candidate once, uploads that artifact, and deploys it to four fixed
+E2E environments. Each lane applies migrations, sweeps and seeds only its own
+resources, provisions ephemeral auth, refreshes its lane-specific AI Search
+instance, and runs one Playwright shard with `workers=1`. Staging remains the
+stable human-review deployment for the candidate. Production may not be
+promoted until all four exact-head shards pass.
+
+Cloudflare's documented primitives are named Wrangler environments and
+per-environment bindings ([Workers environments](https://developers.cloudflare.com/workers/wrangler/environments/),
+[Durable Object environments](https://developers.cloudflare.com/durable-objects/reference/environments/),
+[Wrangler configuration](https://developers.cloudflare.com/workers/wrangler/configuration/),
+and [AI Search bindings](https://developers.cloudflare.com/ai-search/api/instances/workers-binding/)).
+The fixed four-lane, shard-to-environment mapping and its lifecycle are
+KrabiClaw CI architecture built on those primitives, not a Cloudflare reference
+architecture.
 
 Releases enter staging and production through reviewed branch merges. During an
 outage, use Cloudflare's deployment history without changing D1 data, then

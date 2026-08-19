@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { hashPassword } from 'better-auth/crypto'
@@ -9,7 +9,17 @@ import { E2E_AUTH_FIXTURES } from '../config/e2e-auth-fixtures.ts'
 
 const isPreview = process.argv.includes('--preview')
 const isStaging = process.argv.includes('--staging')
-if (isPreview && isStaging) throw new Error('Choose only one of --preview or --staging.')
+const environmentIndex = process.argv.indexOf('--env')
+const explicitEnvironment = environmentIndex === -1 ? null : process.argv[environmentIndex + 1] ?? null
+const e2eEnvironmentNames = new Set<string>(
+  JSON.parse(readFileSync(join(process.cwd(), 'config/e2e-lanes.json'), 'utf8')).map((lane: { name: string }) => lane.name),
+)
+if (isPreview && isStaging || isPreview && explicitEnvironment || isStaging && explicitEnvironment) {
+  throw new Error('Choose only one of --preview, --staging, or --env <e2e-lane>.')
+}
+if (explicitEnvironment && !e2eEnvironmentNames.has(explicitEnvironment)) {
+  throw new Error(`--env must name a configured E2E lane: ${[...e2eEnvironmentNames].join(', ')}`)
+}
 
 const password = process.env.E2E_TEST_PASSWORD
 if (!password) {
@@ -66,10 +76,11 @@ try {
   const args = ['wrangler', 'd1', 'execute', 'DB']
   if (isPreview) args.push('--env', 'preview', '--remote')
   else if (isStaging) args.push('--env', 'staging', '--remote')
+  else if (explicitEnvironment) args.push('--env', explicitEnvironment, '--remote')
   else args.push('--local')
   args.push('--file', sqlPath)
   execFileSync('yarn', args, { cwd: process.cwd(), stdio: 'inherit' })
-  console.log(`Provisioned ${E2E_AUTH_FIXTURES.length} verified Better Auth E2E credentials (${isStaging ? 'staging' : isPreview ? 'preview' : 'local'}).`)
+  console.log(`Provisioned ${E2E_AUTH_FIXTURES.length} verified Better Auth E2E credentials (${isStaging ? 'staging' : isPreview ? 'preview' : explicitEnvironment ?? 'local'}).`)
 } finally {
   rmSync(directory, { recursive: true, force: true })
 }

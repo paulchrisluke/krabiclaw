@@ -1,14 +1,21 @@
 #!/usr/bin/env node
 
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-if (!process.argv.includes('--staging')) {
-  console.error('Usage: node --experimental-strip-types scripts/provision-staging-fixtures.ts --staging')
-  process.exit(1)
+const environmentIndex = process.argv.indexOf('--env')
+const explicitEnvironment = environmentIndex === -1 ? null : process.argv[environmentIndex + 1] ?? null
+const e2eEnvironmentNames = new Set<string>(
+  JSON.parse(readFileSync(join(process.cwd(), 'config/e2e-lanes.json'), 'utf8')).map((lane: { name: string }) => lane.name),
+)
+const targetEnvironment = process.argv.includes('--staging') ? 'staging' : explicitEnvironment
+
+if (!targetEnvironment || targetEnvironment === 'preview' || targetEnvironment !== 'staging' && !e2eEnvironmentNames.has(targetEnvironment)) {
+  throw new Error('Usage: node --experimental-strip-types scripts/provision-staging-fixtures.ts --staging | --env e2e-<n>')
 }
+const environment = targetEnvironment
 
 const root = process.cwd()
 const wrangler = resolve(root, 'node_modules/.bin/wrangler')
@@ -41,7 +48,7 @@ type D1Result<T> = Array<{ results: T[] }>
 
 function d1Json<T>(command: string): T[] {
   const output = execFileSync(wrangler, [
-    'd1', 'execute', 'DB', '--env', 'staging', '--remote', '--json', '--command', command,
+    'd1', 'execute', 'DB', '--env', environment, '--remote', '--json', '--command', command,
   ], { cwd: root, encoding: 'utf8', maxBuffer })
   const parsed = JSON.parse(output) as D1Result<T>
   return parsed[0]?.results ?? []
@@ -76,7 +83,7 @@ for (const row of namedRows) {
 }
 
 const bookmark = execFileSync(wrangler, [
-  'd1', 'time-travel', 'info', 'DB', '--env', 'staging', '--json',
+  'd1', 'time-travel', 'info', 'DB', '--env', environment, '--json',
 ], { cwd: root, encoding: 'utf8', maxBuffer }).trim()
 console.log(`[fixtures:staging] Pre-provision restore point: ${bookmark}`)
 
@@ -98,7 +105,7 @@ try {
     writeFileSync(sqlPath, sql, 'utf8')
     console.log(`[fixtures:staging] Applying deterministic ${label} fixture`)
     execFileSync(wrangler, [
-      'd1', 'execute', 'DB', '--env', 'staging', '--remote', '--file', sqlPath,
+      'd1', 'execute', 'DB', '--env', environment, '--remote', '--file', sqlPath,
     ], { cwd: root, stdio: 'inherit', maxBuffer })
   }
 } finally {
@@ -153,4 +160,4 @@ for (const row of contractRows) {
   }
 }
 
-console.log('[fixtures:staging] Deterministic fixture provisioning passed')
+console.log(`[fixtures:${environment}] Deterministic fixture provisioning passed`)

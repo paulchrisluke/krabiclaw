@@ -8,11 +8,13 @@ This is the source of truth for avoiding local-vs-CI auth and billing drift in E
   core sentinels cover public routing, dashboard API behavior, the authenticated
   Pages lifecycle, and authenticated inbox hydration. The executable impact map
   adds the Playwright specs affected by the PR diff.
-- A push to `staging` deploys the staging Worker normally, applies migrations,
-  and runs the same core-plus-affected selection against that deployment.
-- The ordinary `staging` to `main` pull request rebuilds and deploys its exact
-  staging head, then runs the full Playwright release qualification. The full
-  suite is required before production promotion, not after every staging commit.
+- A push to `staging` deploys the stable staging Worker normally, applies
+  migrations, provisions deterministic review fixtures, and restores the durable
+  staging-review identity. It does not reset the human-review database for E2E.
+- The ordinary `staging` to `main` pull request builds its exact head once and
+  fans the same artifact out to four isolated deployed Workers. Each lane runs
+  one Playwright shard with `workers=1`; all four shards are required before
+  production promotion.
 - A push to `main` deploys production normally, applies migrations, and then
   runs read-only public browser smoke. There is no scheduled release lane.
 
@@ -37,10 +39,10 @@ This is the source of truth for avoiding local-vs-CI auth and billing drift in E
   credential accounts, and attaches only their declared fixture memberships.
   A real inbox is not part of E2E setup.
 - Playwright generates a random `E2E_TEST_PASSWORD` in memory for each local
-  run and passes it to the local preparation process. Preview and staging do
-  the same in their GitHub Actions job, mask it immediately, provision it after
-  the curated seed, and expose it only to that run's Playwright process. No
-  test password is stored in the repository.
+  run and passes it to the local preparation process. Preview and each isolated
+  release-E2E lane do the same in their GitHub Actions job, mask it immediately,
+  provision it after the curated seed, and expose it only to that run's
+  Playwright process. No test password is stored in the repository.
 - Authenticated tests use `loginAs()` to call Better Auth's email sign-in API.
   If the fixture declares a membership, the helper then calls Better Auth's
   organization `set-active` endpoint; it never writes a session cookie itself.
@@ -50,6 +52,21 @@ This is the source of truth for avoiding local-vs-CI auth and billing drift in E
   inspection and deterministic trigger routes. They are not authentication.
 - In CI override mode, the dev-route secret is sent only through the
   `x-dev-route-secret` header, never a query parameter.
+
+### Durable staging-review identity
+
+- The fixed synthetic identity is defined in `config/staging-review-auth.ts`,
+  not in `E2E_AUTH_FIXTURES`.
+- Its organization role is `editor` for Pottery House, Kikuzuki, and NCLS, with
+  explicit site-team membership for those three sites. It has no platform-admin
+  role.
+- `scripts/provision-staging-review-auth.ts --staging` refuses preview, E2E, and
+  unscoped targets. It preserves the existing credential and sessions unless
+  `--rotate-password` is explicitly supplied.
+- The password lives in the team password manager and is mirrored only as the
+  GitHub Environment secret `STAGING_REVIEW_PASSWORD`. It is never committed,
+  placed in `.env.example`, emitted in logs, or written to D1 in plaintext.
+- `scripts/reset-e2e-artifacts.ts` explicitly excludes `user-staging-review`.
 
 ## CI env parity (required for dashboard E2E)
 
@@ -71,6 +88,14 @@ For local Miniflare-backed tests, keep bindings with `remote = false` in `wrangl
 - `[[r2_buckets]]`
 - `[[kv_namespaces]]`
 - `[ai]`
+
+The deployed release lanes are separate from this local contract. The canonical
+lane inventory is `config/e2e-lanes.json`; the generated Wrangler blocks are
+checked by `yarn lint:e2e-environments`. Each lane has unique D1, KV, R2, queue,
+and AI Search resources, explicit Durable Object bindings/migrations, and
+`crons = []`. Workers AI remains shared because the suite treats it as a
+read-only inference service; Stripe remains a shared test-mode provider and
+all app-owned mutable state is lane-scoped.
 
 Local Playwright runs build the production bundle and start it with
 `wrangler dev --local` with the built Nitro Worker at
@@ -105,11 +130,13 @@ staging tests use direct first-level aliases such as
   full inventory, and documentation-only changes skip Worker deployment.
 - Required preview coverage is the permanent core plus every spec selected by
   that impact map. Reporting only the core check is not affected-flow evidence.
-- The full `yarn test:e2e:full` suite runs on the exact staging head during the
-  `staging` to `main` release PR. Production runs only the read-only public
-  rendering sentinel.
-- Preview and staging set one Playwright worker because their suites share one
-  remote D1 environment. Do not raise parallelism without first isolating the
-  mutable data each worker owns.
+- The full `yarn test:e2e:full` suite runs as four shards on the exact staging
+  head during the `staging` to `main` release PR. Production runs only the
+  read-only public rendering sentinel.
+- Preview remains one-worker and staging is the stable human-review deployment.
+  Release qualification uses Playwright sharding across four isolated deployed
+  Workers instead of multiple workers sharing remote state. Do not raise
+  per-lane parallelism until that lane's mutable state is independently proven
+  safe.
 - Seed, migration, and tool-parity checks run in the shared checks job, avoiding
   redundant dependency installations.

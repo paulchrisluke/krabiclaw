@@ -34,6 +34,7 @@ jobs:
       - run: yarn lint:seeds
       - run: yarn lint:migrations
       - run: yarn lint:tool-parity
+      - run: yarn lint:e2e-environments
 
   e2e-plan:
     name: Plan affected browser coverage
@@ -166,19 +167,190 @@ jobs:
             test-results/
           retention-days: 7
 
-  e2e-staging:
-    name: Deploy and test staging
+  e2e-lane-plan:
+    name: Plan isolated release E2E lanes
     if: >-
-      (github.event_name == 'push'
-      && github.ref == 'refs/heads/staging'
-      && needs.e2e-plan.outputs.run_preview == 'true')
-      || (github.event_name == 'pull_request'
+      github.event_name == 'pull_request'
       && github.base_ref == 'main'
       && github.head_ref == 'staging'
-      && github.event.pull_request.head.repo.full_name == github.repository)
-    needs: [typecheck, e2e-plan]
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.18.1"
+          cache: yarn
+      - id: plan
+        run: node scripts/e2e-lane-matrix.mjs --github-output "$GITHUB_OUTPUT"
+
+  e2e-release-build:
+    name: Build release E2E artifact
+    if: >-
+      github.event_name == 'pull_request'
+      && github.base_ref == 'main'
+      && github.head_ref == 'staging'
+      && github.event.pull_request.head.repo.full_name == github.repository
+    needs: [typecheck, e2e-lane-plan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.18.1"
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - run: yarn build
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-e2e-worker-${{ github.event.pull_request.head.sha }}
+          path: .output
+          include-hidden-files: true
+          retention-days: 2
+
+  e2e-release-qualification:
+    name: Release E2E (${{ matrix.lane }}, shard ${{ matrix.shard }}/${{ matrix.total }})
+    if: >-
+      github.event_name == 'pull_request'
+      && github.base_ref == 'main'
+      && github.head_ref == 'staging'
+      && github.event.pull_request.head.repo.full_name == github.repository
+    needs: [typecheck, e2e-lane-plan, e2e-release-build]
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.e2e-lane-plan.outputs.matrix) }}
+    concurrency:
+      group: release-qualification-e2e-lanes
+      cancel-in-progress: false
+    env:
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET_STAGING }}
+      NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
+      NUXT_PUBLIC_PLATFORM_DOMAIN: ${{ matrix.url }}
+      NUXT_PUBLIC_FREE_SITE_DOMAIN: https://krabiclaw.com
+      NUXT_PUBLIC_APP_NAME: KrabiClaw E2E ${{ matrix.lane }}
+      NUXT_PUBLIC_SITE_URL: ${{ matrix.url }}
+      NUXT_PUBLIC_HELP_URL: ${{ matrix.url }}/help
+      NUXT_PUBLIC_WHATSAPP_NUMBER: "16197200000"
+      BETTER_AUTH_URL: ${{ matrix.url }}
+      E2E_ALLOW_DEV_ROUTES: "true"
+      E2E_DEV_ROUTE_SECRET: ${{ secrets.E2E_DEV_ROUTE_SECRET_STAGING }}
+      MCP_CREDENTIAL_LOGIN: "1"
+      MCP_CIMD_CLIENT_URL: ${{ matrix.url }}/api/auth/oauth2/test-client-metadata
+      MCP_PRIVATE_CIMD_CLIENT_URL: ${{ matrix.url }}/api/auth/oauth2/test-private-client-metadata
+      PLAYWRIGHT_PREVIEW_URL: ${{ matrix.url }}
+      PLAYWRIGHT_WORKERS: "1"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.18.1"
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - run: npx playwright install --with-deps chromium
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: release-e2e-worker-${{ github.event.pull_request.head.sha }}
+          path: .output
+      - name: Generate ephemeral E2E credentials
+        shell: bash
+        run: |
+          auth_secret="$(openssl rand -base64 32)"
+          password="$(openssl rand -hex 32)Aa1!"
+          echo "::add-mask::$auth_secret"
+          echo "::add-mask::$password"
+          {
+            echo "BETTER_AUTH_SECRET=$auth_secret"
+            echo "E2E_TEST_PASSWORD=$password"
+          } >> "$GITHUB_ENV"
+      - name: Sync isolated lane secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          E2E_DEV_ROUTE_SECRET_VALUE: ${{ secrets.E2E_DEV_ROUTE_SECRET_STAGING }}
+          PREVIEW_SECRET_VALUE: ${{ secrets.PREVIEW_SECRET_STAGING }}
+          EMAIL_REPLY_SECRET_VALUE: ${{ secrets.EMAIL_REPLY_SECRET_STAGING }}
+          EMAIL_INBOUND_SECRET_VALUE: ${{ secrets.EMAIL_INBOUND_SECRET_STAGING }}
+          PLATFORM_SEARCH_REINDEX_SECRET_VALUE: ${{ secrets.PLATFORM_SEARCH_REINDEX_SECRET }}
+          STRIPE_SECRET_KEY_VALUE: ${{ secrets.STRIPE_SECRET_KEY_TEST }}
+          STRIPE_WEBHOOK_SECRET_VALUE: ${{ secrets.STRIPE_WEBHOOK_SECRET_STAGING }}
+        run: |
+          set -euo pipefail
+          put_secret() {
+            local name="$1"
+            local value="$2"
+            printf '%s' "$value" | npx wrangler secret put "$name" --env "${{ matrix.lane }}"
+          }
+          put_secret BETTER_AUTH_SECRET "$BETTER_AUTH_SECRET"
+          put_secret E2E_DEV_ROUTE_SECRET "$E2E_DEV_ROUTE_SECRET_VALUE"
+          put_secret PREVIEW_SECRET "$PREVIEW_SECRET_VALUE"
+          put_secret EMAIL_REPLY_SECRET "$EMAIL_REPLY_SECRET_VALUE"
+          put_secret EMAIL_INBOUND_SECRET "$EMAIL_INBOUND_SECRET_VALUE"
+          put_secret PLATFORM_SEARCH_REINDEX_SECRET "$PLATFORM_SEARCH_REINDEX_SECRET_VALUE"
+          put_secret STRIPE_SECRET_KEY "$STRIPE_SECRET_KEY_VALUE"
+          put_secret STRIPE_WEBHOOK_SECRET "$STRIPE_WEBHOOK_SECRET_VALUE"
+      - name: Deploy exact Worker artifact
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy --env "${{ matrix.lane }}" --strict
+      - name: Apply lane migrations
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler d1 migrations apply DB --env "${{ matrix.lane }}" --remote
+      - name: Sweep lane E2E artifacts
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node --experimental-strip-types scripts/reset-e2e-artifacts.ts --env "${{ matrix.lane }}" --older-than-hours=0
+      - name: Provision deterministic lane fixtures
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node --experimental-strip-types scripts/provision-staging-fixtures.ts --env "${{ matrix.lane }}"
+      - name: Provision ephemeral Better Auth fixtures
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node --experimental-strip-types scripts/provision-e2e-auth.ts --env "${{ matrix.lane }}"
+      - name: Refresh lane AI Search index
+        env:
+          PLATFORM_SEARCH_REINDEX_SECRET: ${{ secrets.PLATFORM_SEARCH_REINDEX_SECRET }}
+        run: yarn ai-search:sync --base-url "${{ matrix.url }}"
+      - name: Run Playwright release shard
+        run: yarn test:e2e:full --shard=${{ matrix.shard }}/${{ matrix.total }} --workers=1
+      - name: Upload lane Playwright report
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: playwright-report-${{ matrix.lane }}
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  deploy-staging:
+    name: Deploy staging for human review
+    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+    needs: typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
     concurrency:
       group: staging-deployment
       cancel-in-progress: false
@@ -195,37 +367,16 @@ jobs:
       BETTER_AUTH_URL: https://staging.krabiclaw.com
       E2E_ALLOW_DEV_ROUTES: "true"
       E2E_DEV_ROUTE_SECRET: ${{ secrets.E2E_DEV_ROUTE_SECRET_STAGING }}
-      MCP_CREDENTIAL_LOGIN: "1"
-      MCP_CIMD_CLIENT_URL: https://staging.krabiclaw.com/api/auth/oauth2/test-client-metadata
-      MCP_PRIVATE_CIMD_CLIENT_URL: https://staging.krabiclaw.com/api/auth/oauth2/test-private-client-metadata
-      PLAYWRIGHT_PREVIEW_URL: https://staging.krabiclaw.com
-      PLAYWRIGHT_WORKERS: "1"
-      E2E_SELECTION_SCOPE: ${{ needs.e2e-plan.outputs.scope }}
-      E2E_SELECTED_SPECS: ${{ needs.e2e-plan.outputs.specs }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           persist-credentials: false
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "24.18.1"
           cache: yarn
       - run: yarn install --frozen-lockfile
-      - run: npx playwright install --with-deps chromium
-      - name: Generate ephemeral test credentials
-        shell: bash
-        run: |
-          auth_secret="$(openssl rand -base64 32)"
-          password="$(openssl rand -hex 32)Aa1!"
-          echo "::add-mask::$auth_secret"
-          echo "::add-mask::$password"
-          {
-            echo "BETTER_AUTH_SECRET=$auth_secret"
-            echo "E2E_TEST_PASSWORD=$password"
-          } >> "$GITHUB_ENV"
-      - name: Build staging Worker
-        run: yarn build
+      - run: yarn build
       - name: Sync staging search reindex secret
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -242,11 +393,6 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler d1 migrations apply DB --env staging --remote
-      - name: Sweep staging E2E artifacts
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: node --experimental-strip-types scripts/reset-e2e-artifacts.ts --staging --older-than-hours=0
       - name: Provision deterministic staging fixtures
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -258,34 +404,12 @@ jobs:
         run: yarn ai-search:sync:staging
       - name: Verify staging AI Search
         run: curl --fail-with-body --retry 5 --retry-all-errors --retry-delay 5 "https://staging.krabiclaw.com/api/public/search?q=booking&type=all&surface=public"
-      - name: Provision staging Better Auth fixtures
+      - name: Provision durable staging-review identity
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: node --experimental-strip-types scripts/provision-e2e-auth.ts --staging
-      - name: Run OAuth bearer MCP smoke
-        if: >-
-          github.event_name == 'pull_request'
-          || needs.e2e-plan.outputs.scope == 'full'
-          || contains(needs.e2e-plan.outputs.groups, 'auth-access')
-          || contains(needs.e2e-plan.outputs.groups, 'mcp-chowbot')
-        run: yarn test:mcp
-      - name: Run affected staging browser coverage
-        if: github.event_name == 'push'
-        run: yarn test:e2e:preview:selected
-      - name: Run full staging release qualification
-        if: github.event_name == 'pull_request'
-        run: yarn test:e2e:full
-      - name: Upload staging Playwright report
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: playwright-report-staging
-          path: |
-            playwright-report/
-            test-results/
-          retention-days: 14
-          if-no-files-found: ignore
+          STAGING_REVIEW_PASSWORD: ${{ secrets.STAGING_REVIEW_PASSWORD }}
+        run: node --experimental-strip-types scripts/provision-staging-review-auth.ts --staging
 
   deploy-production:
     name: Deploy and test production
