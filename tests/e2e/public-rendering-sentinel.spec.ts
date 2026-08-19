@@ -68,7 +68,7 @@ function expectFinalOrigin(page: Page, baseURL: string, journeyName: string) {
 }
 
 for (const journey of journeys) {
-  test(`${journey.name} deployed tenant routes keep real content and styles`, async ({ page }) => {
+  test(`${journey.name} deployed home navigation keeps real content and styles`, async ({ page }) => {
     if (isProductionRun) {
       expect(journey.baseURL, `${journey.name} production URL`).toBe(journey.productionBaseURL)
       expect(journey.headers, `${journey.name} production headers`).toEqual({})
